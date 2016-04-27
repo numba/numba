@@ -194,6 +194,10 @@ class Type(object):
         raise NotImplementedError
 
 
+# XXX we should distinguish between Dummy (no meaningful
+# representation, e.g. None or a builtin function) and Opaque (has a
+# meaningful representation, e.g. ExternalFunctionPointer)
+
 class Dummy(Type):
     """
     Base class for types that do not really have a representation and are

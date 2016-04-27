@@ -2,7 +2,8 @@ from __future__ import print_function, absolute_import, division
 
 from numba import types, cgutils
 
-from .imputils import lower_cast
+from .imputils import (lower_cast, lower_builtin, lower_getattr_generic,
+                       impl_ret_untracked)
 
 
 def always_return_true_impl(context, builder, sig, args):
@@ -11,6 +12,45 @@ def always_return_true_impl(context, builder, sig, args):
 
 def always_return_false_impl(context, builder, sig, args):
     return cgutils.false_bit
+
+
+def optional_is_none(context, builder, sig, args):
+    """
+    Check if an Optional value is invalid
+    """
+    [lty, rty] = sig.args
+    [lval, rval] = args
+
+    # Make sure None is on the right
+    if lty == types.none:
+        lty, rty = rty, lty
+        lval, rval = rval, lval
+
+    opt_type = lty
+    opt_val = lval
+
+    opt = context.make_helper(builder, opt_type, opt_val)
+    res = builder.not_(cgutils.as_bool_bit(builder, opt.valid))
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+# None is/not None
+lower_builtin('is', types.none, types.none)(always_return_true_impl)
+
+# Optional is None
+lower_builtin('is', types.Optional, types.none)(optional_is_none)
+lower_builtin('is', types.none, types.Optional)(optional_is_none)
+
+
+@lower_getattr_generic(types.Optional)
+def optional_getattr(context, builder, typ, value, attr):
+    """
+    Optional.__getattr__ => redirect to the wrapped type.
+    """
+    inner_type = typ.type
+    val = context.cast(builder, value, typ, inner_type)
+    imp = context.get_getattr(inner_type, attr)
+    return imp(context, builder, inner_type, val, attr)
 
 
 @lower_cast(types.Optional, types.Optional)
@@ -61,4 +101,4 @@ def optional_to_any(context, builder, fromty, toty, val):
         msg = "expected %s, got None" % (fromty.type,)
         context.call_conv.return_user_exc(builder, TypeError, (msg,))
 
-    return optval.data
+    return context.cast(builder, optval.data, fromty.type, toty)

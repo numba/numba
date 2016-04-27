@@ -23,14 +23,18 @@ a5 = a4[::-2]
 def getitem1(i):
     return a1[i]
 
+
 def getitem2(i):
     return a2[i]
+
 
 def getitem3(i):
     return a3[i]
 
+
 def getitem4(i):
     return a4[i]
+
 
 def getitem5(i):
     return a5[i]
@@ -78,6 +82,20 @@ class TestConstantArray(unittest.TestCase):
         pyfunc = write_to_global_array
         with self.assertRaises(TypingError):
             compile_isolated(pyfunc, ())
+
+    def test_issue_1850(self):
+        """
+        This issue is caused by an unresolved bug in numpy since version 1.6.
+        See numpy GH issue #3147.
+        """
+        constarr = np.array([86])
+
+        def pyfunc():
+            return constarr[0]
+
+        cres = compile_isolated(pyfunc, ())
+        out = cres.entry_point()
+        self.assertEqual(out, 86)
 
 
 if __name__ == '__main__':

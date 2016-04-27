@@ -1,9 +1,12 @@
 from __future__ import print_function, division, absolute_import
 
+import enum
+
 import numpy
 
 from .abstract import *
 from .. import npdatetime, utils
+from ..typeconv import Conversion
 
 
 class Boolean(Hashable):
@@ -110,3 +113,86 @@ class NPTimedelta(_NPDatetimeBase):
 @utils.total_ordering
 class NPDatetime(_NPDatetimeBase):
     type_name = 'datetime64'
+
+
+class EnumClass(Dummy):
+    """
+    Type class for Enum classes.
+    """
+    basename = "Enum class"
+
+    def __init__(self, cls, dtype):
+        assert isinstance(cls, type)
+        assert isinstance(dtype, Type)
+        self.instance_class = cls
+        self.dtype = dtype
+        name = "%s<%s>(%s)" % (self.basename, self.dtype, self.instance_class.__name__)
+        super(EnumClass, self).__init__(name)
+
+    @property
+    def key(self):
+        return self.instance_class, self.dtype
+
+    @utils.cached_property
+    def member_type(self):
+        """
+        The type of this class' members.
+        """
+        return EnumMember(self.instance_class, self.dtype)
+
+
+class IntEnumClass(EnumClass):
+    """
+    Type class for IntEnum classes.
+    """
+    basename = "IntEnum class"
+
+    @utils.cached_property
+    def member_type(self):
+        """
+        The type of this class' members.
+        """
+        return IntEnumMember(self.instance_class, self.dtype)
+
+
+class EnumMember(Type):
+    """
+    Type class for Enum members.
+    """
+    basename = "Enum"
+    class_type_class = EnumClass
+
+    def __init__(self, cls, dtype):
+        assert isinstance(cls, type)
+        assert isinstance(dtype, Type)
+        self.instance_class = cls
+        self.dtype = dtype
+        name = "%s<%s>(%s)" % (self.basename, self.dtype, self.instance_class.__name__)
+        super(EnumMember, self).__init__(name)
+
+    @property
+    def key(self):
+        return self.instance_class, self.dtype
+
+    @property
+    def class_type(self):
+        """
+        The type of this member's class.
+        """
+        return self.class_type_class(self.instance_class, self.dtype)
+
+
+class IntEnumMember(EnumMember):
+    """
+    Type class for IntEnum members.
+    """
+    basename = "IntEnum"
+    class_type_class = IntEnumClass
+
+    def can_convert_to(self, typingctx, other):
+        """
+        Convert IntEnum members to plain integers.
+        """
+        if issubclass(self.instance_class, enum.IntEnum):
+            conv = typingctx.can_convert(self.dtype, other)
+            return max(conv, Conversion.safe)

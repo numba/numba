@@ -5,6 +5,36 @@ from numba.six import reraise
 import numpy as np
 import sys
 import threading
+from contextlib import contextmanager
+
+
+"""
+Global variable to keep track of the current "kernel context", i.e the
+FakeCUDAModule.  We only support one kernel launch at a time.
+No support for concurrent kernel launch.
+"""
+_kernel_context = None
+
+
+@contextmanager
+def _push_kernel_context(mod):
+    """
+    Push the current kernel context.
+    """
+    global _kernel_context
+    assert _kernel_context is None, "conrrent simulated kernel not supported"
+    _kernel_context = mod
+    try:
+        yield
+    finally:
+        _kernel_context = None
+
+
+def _get_kernel_context():
+    """
+    Get the current kernel context. This is usually done by a device function.
+    """
+    return _kernel_context
 
 
 class FakeCUDAKernel(object):
@@ -22,23 +52,25 @@ class FakeCUDAKernel(object):
 
     def __call__(self, *args):
         if self._device:
-            return self.fn(*args)
+            with swapped_cuda_module(self.fn, _get_kernel_context()):
+                return self.fn(*args)
 
         fake_cuda_module = FakeCUDAModule(self.grid_dim, self.block_dim,
                                           self.dynshared_size)
-        # fake_args substitutes all numpy arrays for FakeCUDAArrays
-        # because they implement some semantics differently
-        def fake_arg(arg):
-            if isinstance(arg, np.ndarray) and arg.ndim > 0:
-                return to_device(arg)
-            return arg
-        fake_args = [fake_arg(arg) for arg in args]
+        with _push_kernel_context(fake_cuda_module):
+            # fake_args substitutes all numpy arrays for FakeCUDAArrays
+            # because they implement some semantics differently
+            def fake_arg(arg):
+                if isinstance(arg, np.ndarray) and arg.ndim > 0:
+                    return to_device(arg)
+                return arg
+            fake_args = [fake_arg(arg) for arg in args]
 
-        with swapped_cuda_module(self.fn, fake_cuda_module):
-            # Execute one block at a time
-            for grid_point in np.ndindex(*self.grid_dim):
-                bm = BlockManager(self.fn, self.grid_dim, self.block_dim)
-                bm.run(grid_point, *fake_args)
+            with swapped_cuda_module(self.fn, fake_cuda_module):
+                # Execute one block at a time
+                for grid_point in np.ndindex(*self.grid_dim):
+                    bm = BlockManager(self.fn, self.grid_dim, self.block_dim)
+                    bm.run(grid_point, *fake_args)
 
     def __getitem__(self, configuration):
         grid_dim = configuration[0]
