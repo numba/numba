@@ -2,8 +2,9 @@
 
 comment:
     layout: "header, changes, diff"
+    behavior: new
 
 coverage:
     ignore:
-        - numba/cuda/.*
-        - numba/hsa/.*
+        - numba/cuda/*
+        - numba/hsa/*
