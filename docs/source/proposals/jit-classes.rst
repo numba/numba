@@ -50,7 +50,7 @@ function value and each function type maps uniquely to each function
 implementation (this needs to be changed to support function value as argument).
 
 A class instance can contain other NRT reference-counted object as attributes.
-To properly clean up an instance, a desctruction is called when the reference
+To properly clean up an instance, a destructor is called when the reference
 count of the instance is dropped to zero.  This is described in the
 "Reference count and descructor" section.
 
@@ -97,7 +97,8 @@ attributes by one.
 
 At this time, there is no support for user defined ``__del__`` method.
 
-Cyclic reference is not handled at this time.  It will cause memory leak.
+Proper cleanup for cyclic reference is not handled at this time.
+Cycles will cause memory leak.
 
 Type inference
 ~~~~~~~~~~~~~~
@@ -141,8 +142,8 @@ Example: typing function using an OrderedDict
             self.x += dx
             self.y += dy
 
-Example: typing function using an list of 2-tuples
---------------------------------------------------
+Example: typing function using a list of 2-tuples
+-------------------------------------------------
 
 .. code-block:: python
 
@@ -153,6 +154,21 @@ Example: typing function using an list of 2-tuples
     class Vec(object):
         ...
 
+Creating multiple jitclasses from a single class object
+-------------------------------------------------------
+
+The `jitclass(spec)` decorator creates a new jitclass type even when applied to
+the same class object and the same type specification.
+
+.. code-block:: python
+
+    class Vec(object):
+      ...
+
+    Vec1 = jitclass(spec)(Vec)
+    Vec2 = jitclass(spec)(Vec)
+    # Vec1 and Vec2 are two different jitclass types
+
 Usage from the Interpreter
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -161,18 +177,26 @@ the underlying jitclass instance from numba.  Attributes and methods are
 accessible from the interpreter.  The actual implementation will be in numba
 compiled code.  Any Python object is converted to its native
 representation for consumption in numba.  Similarly, the returned value is
-converted to its Python representation.  As a result, there may be overhead
-in manipulating jitclass instances in the interpreter.
+converted to its Python representation.  As a result, there may be overhead in
+manipulating jitclass instances in the interpreter.  This overhead is minimal
+and should be easily amortized by more efficient computation in the compiled
+methods.
 
 Support for property, staticmethod and classmethod
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The use of ``property`` is accepted for getter and setter only.  Delter is not
+The use of ``property`` is accepted for getter and setter only.  Deleter is not
 supported.
 
 The use of ``staticmethod`` is not supported.
 
 The use of ``classmethod`` is not supported.
+
+Inheritance
+~~~~~~~~~~~
+
+Class inhertance is not considered in this proposal.  The only accepted base
+class for a jitclass is `object`.
 
 Supported targets
 ~~~~~~~~~~~~~~~~~~
@@ -198,3 +222,10 @@ Given:
 
 * ``isinstance(Vec(1, 2), Vec)`` is True.
 * ``type(Vec(1, 2))`` may not be ``Vec``.
+
+Future enhancements
+~~~~~~~~~~~~~~~~~~~
+
+This proposal has only described the basic semantic and functionality of a
+jitclass.  Additional features will be described in future enhancement
+proposals.
