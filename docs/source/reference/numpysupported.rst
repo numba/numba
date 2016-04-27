@@ -168,7 +168,12 @@ floating-point and complex numbers:
 * :func:`numpy.vdot`
 * On Python 3.5 and above, the matrix multiplication operator from
   :pep:`465` (i.e. ``a @ b`` where ``a`` and ``b`` are 1-D or 2-D arrays).
+* :func:`numpy.linalg.cholesky`
+* :func:`numpy.linalg.eig` (only running with data that does not cause a domain
+  change is supported e.g. real input -> real
+  output, complex input -> complex output).
 * :func:`numpy.linalg.inv`
+* :func:`numpy.linalg.svd` (only the 2 first arguments).
 
 .. note::
    The implementation of these functions needs Scipy 0.16+ to be installed.
@@ -195,7 +200,9 @@ The following top-level functions are supported:
 
 * :func:`numpy.arange`
 * :func:`numpy.array` (only the 2 first arguments)
+* :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.bincount` (only the 2 first arguments)
+* :func:`numpy.copy` (only the first argument)
 * :func:`numpy.diag`
 * :func:`numpy.digitize`
 * :func:`numpy.empty`
