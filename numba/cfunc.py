@@ -9,7 +9,8 @@ import ctypes
 from llvmlite import ir
 
 from . import config, sigutils, utils
-from .dispatcher import _FunctionCompiler, NullCache, FunctionCache
+from .caching import NullCache, FunctionCache
+from .dispatcher import _FunctionCompiler
 from .targets import registry
 from .typing import signature
 from .typing.ctypes_utils import to_ctypes
