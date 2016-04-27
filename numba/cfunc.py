@@ -19,6 +19,8 @@ class _CFuncCompiler(_FunctionCompiler):
 
     def _customize_flags(self, flags):
         flags.set('no_cpython_wrapper', True)
+        # Disable compilation of the IR module, because we first want to
+        # add the cfunc wrapper.
         flags.set('no_compile', True)
         return flags
 
@@ -30,10 +32,15 @@ class CFunc(object):
         args, return_type = sig
         if return_type is None:
             raise TypeError("C callback needs an explicit return type")
+        self.__name__ = pyfunc.__name__
+        self.__qualname__ = getattr(pyfunc, '__qualname__', self.__name__)
         self._pyfunc = pyfunc
         self._sig = signature(return_type, *args)
         self._compiler = _CFuncCompiler(pyfunc, self._targetdescr,
                                         options, locals)
+
+        self._wrapper_name = None
+        self._wrapper_address = None
 
     def compile(self):
         self._do_compile()
@@ -47,13 +54,11 @@ class CFunc(object):
             raise RuntimeError("object mode not allowed in cfuncs")
         fndesc = cres.fndesc
 
-        # Create a separate LLVM module for the C wrapper
-        #library = cres.library.codegen.create_library("cfunc")
+        # Compile C wrapper
+        # Note we reuse the same library to allow inlining the Numba
+        # function inside the wrapper.
         library = cres.library
         module = library.create_ir_module(fndesc.unique_name)
-
-        # Compile C wrapper
-        #typing_context = self._targetdescr.typing_context
         context = cres.target_context
         ll_argtypes = [context.get_value_type(ty) for ty in sig.args]
         ll_return_type = context.get_value_type(sig.return_type)
@@ -74,6 +79,7 @@ class CFunc(object):
 
     def _build_c_wrapper(self, context, builder, cres, c_args):
         sig = self._sig
+        pyapi = context.get_python_api(builder)
 
         fnty = context.call_conv.get_function_type(sig.return_type, sig.args)
         fn = builder.module.add_function(fnty, cres.fndesc.llvm_func_name)
@@ -82,26 +88,47 @@ class CFunc(object):
         status, out = context.call_conv.call_function(
             builder, fn, sig.return_type, sig.args, c_args, env=None)
 
-        # XXX what to do with the status?
+        with builder.if_then(status.is_error, likely=False):
+            gil_state = pyapi.gil_ensure()
+            context.call_conv.raise_error(builder, pyapi, status)
+            cstr = context.insert_const_string(builder.module, repr(self))
+            strobj = pyapi.string_from_string(cstr)
+            pyapi.err_write_unraisable(strobj)
+            pyapi.decref(strobj)
+            pyapi.gil_release(gil_state)
+
         builder.ret(out)
 
     @property
     def native_name(self):
         """
+        The process-wide symbol the C callback is exposed as.
         """
+        # Note from our point of view, the C callback is the wrapper around
+        # the native function.
         return self._wrapper_name
 
     @property
     def address(self):
         """
+        The address of the C callback.
         """
         return self._wrapper_address
 
     @utils.cached_property
     def ctypes(self):
         """
+        A ctypes function object representing the C callback.
         """
         ctypes_args = [to_ctypes(ty) for ty in self._sig.args]
         ctypes_restype = to_ctypes(self._sig.return_type)
         functype = ctypes.CFUNCTYPE(ctypes_restype, *ctypes_args)
         return functype(self.address)
+
+    def inspect_llvm(self):
+        """
+        """
+        return self._library.get_llvm_str()
+
+    def __repr__(self):
+        return "<Numba C callback %r>" % (self.__qualname__,)
