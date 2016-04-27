@@ -2,7 +2,6 @@
 
 comment:
     layout: "header, changes, diff"
-    behavior: spammy
 
 coverage:
     ignore:
