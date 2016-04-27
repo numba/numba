@@ -1,7 +1,7 @@
 # Configuration for codecov.io
 
 comment:
-    layout: header, changes, diff
+    layout: "header, changes, diff"
 
 coverage:
     ignore:
