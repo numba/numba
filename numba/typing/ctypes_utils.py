@@ -53,16 +53,22 @@ def from_ctypes(ctypeobj):
         raise TypeError("Unsupported ctypes type: %s" % ctypeobj)
     return ty
 
-def to_ctypes(typ):
+
+def to_ctypes(ty):
     """
     Convert the given Numba type to a ctypes type.
     """
-    if isinstance(typ, types.CPointer):
-        return ctypes.POINTER(to_ctypes(typ))
-    try:
-        return _TO_CTYPES[typ]
-    except KeyError:
-        raise TypeError("cannot convert Numba type '%s' to ctypes type")
+    def _convert_internal(ty):
+        if isinstance(ty, types.CPointer):
+            return ctypes.POINTER(_convert_internal(ty.dtype))
+        else:
+            return _TO_CTYPES.get(ty)
+
+    ctypeobj = _convert_internal(ty)
+    if ctypeobj is None:
+        raise TypeError("Cannot convert Numba type '%s' to ctypes type"
+                        % (ty,))
+    return ctypeobj
 
 
 def is_ctypes_funcptr(obj):
