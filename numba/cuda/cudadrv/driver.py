@@ -783,7 +783,7 @@ def _module_finalizer(context, handle):
 class MemoryPointer(object):
     __cuda_memory__ = True
 
-    def __init__(self, context, pointer, size, finalizer=None):
+    def __init__(self, context, pointer, size, finalizer=None, owner=None):
         self.context = context
         self.device_pointer = pointer
         self.size = size
@@ -792,9 +792,14 @@ class MemoryPointer(object):
         self.is_managed = finalizer is not None
         self.refct = 0
         self.handle = self.device_pointer
+        self._owner = owner
 
         if finalizer is not None:
             self._finalizer = utils.finalize(self, finalizer)
+
+    @property
+    def owner(self):
+        return self if self._owner is None else self._owner
 
     def own(self):
         return OwnedPointer(weakref.proxy(self))
@@ -825,8 +830,8 @@ class MemoryPointer(object):
             size = stop - start
         assert size > 0, "zero or negative memory size"
         pointer = drvapi.cu_device_ptr(base)
-        view = MemoryPointer(self.context, pointer, size)
-        return OwnedPointer(weakref.proxy(self), view)
+        view = MemoryPointer(self.context, pointer, size, owner=self.owner)
+        return OwnedPointer(weakref.proxy(self.owner), view)
 
     @property
     def device_ctypes_pointer(self):
@@ -885,7 +890,7 @@ class PinnedMemory(mviewbuf.MemAlloc):
 class OwnedPointer(object):
     def __init__(self, memptr, view=None):
         self._mem = memptr
-        self._mem.refct += 1
+
         if view is None:
             self._view = self._mem
         else:
@@ -900,6 +905,7 @@ class OwnedPointer(object):
             if mem.refct == 0:
                 mem.free()
 
+        self._mem.refct += 1
         utils.finalize(self, deref)
 
     def __getattr__(self, fname):
