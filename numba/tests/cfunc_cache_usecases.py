@@ -1,3 +1,9 @@
+"""
+This file will be copied to a temporary directory in order to
+exercise caching compiled C callbacks.
+
+See test_cfunc.py.
+"""
 from __future__ import division, print_function, absolute_import
 
 import sys

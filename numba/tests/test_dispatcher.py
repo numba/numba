@@ -562,15 +562,7 @@ class TestCache(BaseCacheTest):
 
             sys.path.insert(0, %(tempdir)r)
             mod = __import__(%(modname)r)
-            assert mod.add_usecase(2, 3) == 6
-            assert mod.add_objmode_usecase(2, 3) == 6
-            assert mod.outer_uncached(3, 2) == 2
-            assert mod.outer(3, 2) == 2
-            assert mod.generated_usecase(3, 2) == 1
-            packed_rec = mod.record_return(mod.packed_arr, 1)
-            assert tuple(packed_rec) == (2, 43.5), packed_rec
-            aligned_rec = mod.record_return(mod.aligned_arr, 1)
-            assert tuple(aligned_rec) == (2, 43.5), aligned_rec
+            mod.self_test()
             """ % dict(tempdir=self.tempdir, modname=self.modname)
 
         popen = subprocess.Popen([sys.executable, "-c", code],
@@ -593,6 +585,8 @@ class TestCache(BaseCacheTest):
         self.check_pycache(5)  # 2 index, 3 data
         self.assertPreciseEqual(f(2.5, 3), 6.5)
         self.check_pycache(6)  # 2 index, 4 data
+
+        mod.self_test()
 
     def check_hits(self, func, hits, misses=None):
         st = func.stats
