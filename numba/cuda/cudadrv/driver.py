@@ -144,6 +144,7 @@ def _build_reverse_error_map():
             map[code] = name
     return map
 
+
 def _getpid():
     return os.getpid()
 
@@ -479,6 +480,7 @@ class Context(object):
         modules = self.modules
         trashing = self.trashing
         external_finalizer = self.external_finalizer
+
         def finalize():
             allocations.clear()
             modules.clear()
@@ -1069,7 +1071,7 @@ class Function(object):
         while len(blockdim) < 3:
             blockdim += (1,)
 
-        inst = copy.copy(self) # shallow clone the object
+        inst = copy.copy(self)  # shallow clone the object
         inst.griddim = griddim
         inst.blockdim = blockdim
         inst.sharedmem = sharedmem
