@@ -104,15 +104,14 @@ class TestCache(BaseCacheTest):
 
             sys.path.insert(0, %(tempdir)r)
             mod = __import__(%(modname)r)
+            mod.self_test()
+
             f = mod.add_usecase
-            assert f.ctypes(2.0, 3.5) == 6.5
             assert f.cache_hits == 1
             f = mod.outer
-            assert f.ctypes(5.5, 2.0) == 4.5
             assert f.cache_hits == 1
             f = mod.div_usecase
             assert f.cache_hits == 1
-            assert f.ctypes(7, 2) == 3.5
             """ % dict(tempdir=self.tempdir, modname=self.modname)
 
         popen = subprocess.Popen([sys.executable, "-c", code],
@@ -123,14 +122,7 @@ class TestCache(BaseCacheTest):
                                  % (popen.returncode, err.decode()))
 
     def check_module(self, mod):
-        f = mod.add_usecase
-        self.assertPreciseEqual(f.ctypes(2.0, 3.0), 6.0)
-        f = mod.add_nocache_usecase
-        self.assertPreciseEqual(f.ctypes(2.0, 3.0), 6.0)
-        f = mod.outer
-        self.assertPreciseEqual(f.ctypes(5.0, 2.0), 4.0)
-        f = mod.div_usecase
-        self.assertPreciseEqual(f.ctypes(7, 2), 3.5)
+        mod.self_test()
 
     @tag('important')
     def test_caching(self):

@@ -1,6 +1,9 @@
 from __future__ import division, print_function, absolute_import
 
+import sys
+
 from numba import cfunc, jit
+from numba.tests.support import TestCase, captured_stderr
 
 
 Z = 1
@@ -30,3 +33,34 @@ def inner(x, y):
 @cfunc(add_sig, cache=True, nopython=True)
 def outer(x, y):
     return inner(-y, x)
+
+
+class _TestModule(TestCase):
+    """
+    Tests for functionality of this module's cfuncs.
+    Note this does not define any "test_*" method, instead check_module()
+    should be called by hand.
+    """
+
+    def check_module(self, mod):
+        f = mod.add_usecase
+        self.assertPreciseEqual(f.ctypes(2.0, 3.0), 6.0)
+        f = mod.add_nocache_usecase
+        self.assertPreciseEqual(f.ctypes(2.0, 3.0), 6.0)
+        f = mod.outer
+        self.assertPreciseEqual(f.ctypes(5.0, 2.0), 4.0)
+
+        f = mod.div_usecase
+        with captured_stderr() as err:
+            self.assertPreciseEqual(f.ctypes(7, 2), 3.5)
+        self.assertEqual(err.getvalue(), "")
+        with captured_stderr() as err:
+            f.ctypes(7, 0)
+        err = err.getvalue()
+        self.assertIn("Exception ignored in", err)
+        self.assertIn("ZeroDivisionError: division by zero", err)
+
+
+def self_test():
+    mod = sys.modules[__name__]
+    _TestModule().check_module(mod)
