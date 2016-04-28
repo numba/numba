@@ -4,6 +4,7 @@ Caching mechanism for compiled functions.
 
 from __future__ import print_function, division, absolute_import
 
+from abc import ABCMeta, abstractmethod, abstractproperty
 import contextlib
 import errno
 import hashlib
@@ -16,6 +17,7 @@ import tempfile
 import warnings
 
 from .appdirs import AppDirs
+from .six import add_metaclass
 
 import numba
 from . import compiler, config, utils
@@ -28,9 +30,49 @@ def _cache_log(msg, *args):
         print(msg)
 
 
-# XXX make this an ABC?
+@add_metaclass(ABCMeta)
+class _Cache(object):
 
-class NullCache(object):
+    @abstractproperty
+    def cache_path(self):
+        """
+        The base filesystem path of this cache (for example its root folder).
+        """
+
+    @abstractmethod
+    def load_overload(self, sig, target_context):
+        """
+        Load an overload for the given signature using the target context.
+        A CompileResult must be returned if successful, None if not found
+        in the cache.
+        """
+
+    @abstractmethod
+    def save_overload(self, sig, cres):
+        """
+        Save the overload for the given signature.
+        """
+
+    @abstractmethod
+    def enable(self):
+        """
+        Enable the cache.
+        """
+
+    @abstractmethod
+    def disable(self):
+        """
+        Disable the cache.
+        """
+
+    @abstractmethod
+    def flush(self):
+        """
+        Flush the cache.
+        """
+
+
+class NullCache(_Cache):
 
     @property
     def cache_path(self):
@@ -52,7 +94,11 @@ class NullCache(object):
         pass
 
 
+@add_metaclass(ABCMeta)
 class _CacheLocator(object):
+    """
+    A filesystem locator for caching a given function.
+    """
 
     def ensure_cache_path(self):
         path = self.get_cache_path()
@@ -64,17 +110,32 @@ class _CacheLocator(object):
         # Ensure the directory is writable by trying to write a temporary file
         tempfile.TemporaryFile(dir=path).close()
 
+    @abstractmethod
     def get_cache_path(self):
-        raise NotImplementedError
+        """
+        Return the directory the function is cached in.
+        """
 
+    @abstractmethod
     def get_source_stamp(self):
-        raise NotImplementedError
+        """
+        Get a timestamp representing the source code's freshness.
+        Can return any picklable Python object.
+        """
 
+    @abstractmethod
     def get_disambiguator(self):
-        raise NotImplementedError
+        """
+        Get a string disambiguator for this locator's function.
+        It should allow disambiguating different but similarly-named functions.
+        """
 
     @classmethod
     def from_function(cls, py_func, py_file):
+        """
+        Create a locator instance for the given function located in the
+        given file.
+        """
         raise NotImplementedError
 
 
@@ -197,7 +258,7 @@ class _IPythonCacheLocator(_CacheLocator):
         return cls(py_func, py_file)
 
 
-class FunctionCache(object):
+class FunctionCache(_Cache):
     """
     A per-function compilation cache.  The cache saves data in separate
     data files and maintains information in an index file.
