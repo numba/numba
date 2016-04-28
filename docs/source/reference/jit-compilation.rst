@@ -383,7 +383,7 @@ C callbacks
 
    The *signature* is a single signature representing the signature of the
    C callback.  It must have the same form as in :func:`~numba.jit`.
-   This decorator will not check that the types in the signature have
+   The decorator does not check that the types in the signature have
    a well-defined representation in C.
 
    *nopython* and *cache* are boolean flags.  *locals* is a mapping of
