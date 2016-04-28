@@ -50,7 +50,6 @@ class FunctionDescriptor(object):
                  typemap, restype, calltypes, args, kws, mangler=None,
                  argtypes=None, inline=False):
         self.native = native
-        # XXX modname is not useful
         self.modname = modname
         self.qualname = qualname
         self.unique_name = unique_name

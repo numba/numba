@@ -204,6 +204,15 @@ def njit(*args, **kws):
 
 def cfunc(sig, locals={}, cache=False, **options):
     """
+    This decorator is used to compile a Python function into a C callback
+    usable with foreign C libraries.
+
+    Usage::
+        @cfunc("float64(float64, float64)", nopython=True, cache=True)
+        def add(a, b):
+            return a, b
+
+    A C callback object is returned.
     """
     sig = sigutils.normalize_signature(sig)
 

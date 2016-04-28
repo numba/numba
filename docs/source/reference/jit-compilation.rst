@@ -92,7 +92,7 @@ JIT functions
       @jit()
       def f(x): ...
 
-   The decorator returns a Dispatcher object.
+   The decorator returns a :class:`Dispatcher` object.
 
    .. note::
       If no *signature* is given, compilation errors will be raised when
@@ -370,3 +370,52 @@ Vectorized functions (ufuncs and DUFuncs)
 .. _`ufunc.outer`: http://docs.scipy.org/doc/numpy/reference/generated/numpy.ufunc.outer.html#numpy.ufunc.outer
 
 .. _`ufunc.at`: http://docs.scipy.org/doc/numpy/reference/generated/numpy.ufunc.at.html#numpy.ufunc.at
+
+
+C callbacks
+-----------
+
+.. decorator:: numba.cfunc(signature, nopython=False, cache=False, locals={})
+
+   Compile the decorated function on-the-fly to produce efficient machine
+   code.  The compiled code is wrapped in a thin C callback that makes it
+   callable using the natural C ABI.
+
+   The *signature* is a single signature representing the signature of the
+   C callback.  It must have the same form as in :func:`~numba.jit`.
+   This decorator will not check that the types in the signature have
+   a well-defined representation in C.
+
+   *nopython* and *cache* are boolean flags.  *locals* is a mapping of
+   local variable names to :ref:`numba-types`.  They all have the same
+   meaning as in :func:`~numba.jit`.
+
+   The decorator returns a :class:`CFunc` object.
+
+   .. note::
+      C callbacks currently do not support :term:`object mode`.
+
+
+.. class:: CFunc
+
+   The class of objects created by :func:`~numba.cfunc`.  :class:`CFunc`
+   objects expose the following attributes and methods:
+
+   .. attribute:: address
+
+      The address of the compiled C callback, as an integer.
+
+   .. attribute:: ctypes
+
+      A :mod:`ctypes` callback instance, as if it were created using
+      :func:`ctypes.CFUNCTYPE`.
+
+   .. attribute:: native_name
+
+      The name of the compiled C callback.
+
+   .. method:: inspect_llvm()
+
+      Return the human-readable LLVM IR generated for the C callback.
+      :attr:`native_name` is the name under which this callback is defined
+      in the IR.
