@@ -71,8 +71,12 @@ class TestCFunc(TestCase):
             # stack variables, and could change in the future.
             self.assertPreciseEqual(res, 0.0)
         err = err.getvalue()
-        self.assertIn("Exception ignored", err)
-        self.assertIn("ZeroDivisionError: division by zero", err)
+        if sys.version_info >= (3,):
+            self.assertIn("Exception ignored", err)
+            self.assertIn("ZeroDivisionError: division by zero", err)
+        else:
+            self.assertIn("ZeroDivisionError('division by zero',)", err)
+            self.assertIn(" ignored", err)
 
     def test_llvm_ir(self):
         f = cfunc(add_sig)(add_usecase)

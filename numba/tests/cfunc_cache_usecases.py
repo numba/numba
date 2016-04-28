@@ -63,8 +63,11 @@ class _TestModule(TestCase):
         with captured_stderr() as err:
             f.ctypes(7, 0)
         err = err.getvalue()
-        self.assertIn("Exception ignored in", err)
-        self.assertIn("ZeroDivisionError: division by zero", err)
+        self.assertIn("ZeroDivisionError", err)
+
+    # For 2.x
+    def runTest(self):
+        raise NotImplementedError
 
 
 def self_test():
