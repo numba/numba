@@ -212,7 +212,6 @@ def cfunc(sig, locals={}, cache=False, **options):
         def add(a, b):
             return a, b
 
-    A C callback object is returned.
     """
     sig = sigutils.normalize_signature(sig)
 

@@ -484,6 +484,7 @@ class TestDispatcherMethods(TestCase):
 
 
 class BaseCacheTest(TestCase):
+    # This class is also used in test_cfunc.py.
 
     # The source file that will be copied
     usecases_file = None
