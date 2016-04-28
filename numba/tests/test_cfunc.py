@@ -5,16 +5,16 @@ Tests for @cfunc and friends.
 from __future__ import print_function, absolute_import
 
 import ctypes
-
-import llvmlite.binding as ll
-
-import numpy as np
+import os
+import subprocess
+import sys
 
 from numba import unittest_support as unittest
 from numba import cfunc, types, typing, utils
 from numba.types.abstract import _typecache
 from numba import jit, numpy_support
 from .support import TestCase, tag
+from .test_dispatcher import BaseCacheTest
 
 
 def add_usecase(a, b):
@@ -67,6 +67,65 @@ class TestCFunc(TestCase):
         with self.assertTypingError() as raises:
             cfunc(add_sig)(objmode_usecase)
         self.assertIn("Untyped global name 'object'", str(raises.exception))
+
+
+class TestCache(BaseCacheTest):
+
+    here = os.path.dirname(__file__)
+    usecases_file = os.path.join(here, "cfunc_cache_usecases.py")
+    modname = "cfunc_caching_test_fodder"
+
+    def run_in_separate_process(self):
+        # Cached functions can be run from a distinct process.
+        code = """if 1:
+            import sys
+
+            sys.path.insert(0, %(tempdir)r)
+            mod = __import__(%(modname)r)
+            f = mod.add_usecase
+            assert f.ctypes(2.0, 3.5) == 6.5
+            assert f.cache_hits == 1
+            f = mod.outer
+            assert f.ctypes(5.5, 2.0) == 4.5
+            assert f.cache_hits == 1
+            """ % dict(tempdir=self.tempdir, modname=self.modname)
+
+        popen = subprocess.Popen([sys.executable, "-c", code],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = popen.communicate()
+        if popen.returncode != 0:
+            raise AssertionError("process failed with code %s: stderr follows\n%s\n"
+                                 % (popen.returncode, err.decode()))
+
+    def check_module(self, mod):
+        f = mod.add_usecase
+        self.assertPreciseEqual(f.ctypes(2.0, 3.0), 6.0)
+        f = mod.add_nocache_usecase
+        self.assertPreciseEqual(f.ctypes(2.0, 3.0), 6.0)
+        f = mod.outer
+        self.assertPreciseEqual(f.ctypes(5.0, 2.0), 4.0)
+
+    @tag('important')
+    def test_caching(self):
+        self.check_pycache(0)
+        mod = self.import_module()
+        self.check_pycache(4)  # 2 index, 2 data
+
+        self.assertEqual(mod.add_usecase.cache_hits, 0)
+        self.assertEqual(mod.outer.cache_hits, 0)
+        self.assertEqual(mod.add_nocache_usecase.cache_hits, 0)
+        self.check_module(mod)
+
+        # Reload module to hit the cache
+        mod = self.import_module()
+        self.check_pycache(4)  # 2 index, 2 data
+
+        self.assertEqual(mod.add_usecase.cache_hits, 1)
+        self.assertEqual(mod.outer.cache_hits, 1)
+        self.assertEqual(mod.add_nocache_usecase.cache_hits, 0)
+        self.check_module(mod)
+
+        self.run_in_separate_process()
 
 
 if __name__ == "__main__":

@@ -33,7 +33,7 @@ class _CFuncCompiler(_FunctionCompiler):
 
 class CFunc(object):
     """
-    A compiled C callback.
+    A compiled C callback, as created by the @cfunc decorator.
     """
     _targetdescr = registry.cpu_target
 
@@ -53,6 +53,7 @@ class CFunc(object):
         self._wrapper_name = None
         self._wrapper_address = None
         self._cache = NullCache()
+        self._cache_hits = 0
 
     def enable_caching(self):
         self._cache = FunctionCache(self._pyfunc)
@@ -63,6 +64,8 @@ class CFunc(object):
         if cres is None:
             cres = self._compile_uncached()
             self._cache.save_overload(self._sig, cres)
+        else:
+            self._cache_hits += 1
 
         self._library = cres.library
         self._wrapper_name = cres.fndesc.llvm_cfunc_wrapper_name
@@ -151,6 +154,10 @@ class CFunc(object):
         Return the LLVM IR of the C callback definition.
         """
         return self._library.get_llvm_str()
+
+    @property
+    def cache_hits(self):
+        return self._cache_hits
 
     def __repr__(self):
         return "<Numba C callback %r>" % (self.__qualname__,)
