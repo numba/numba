@@ -5,5 +5,5 @@ comment:
 
 coverage:
     ignore:
-        - "numba/cuda/*"
-        - "numba/hsa/*"
+        - "numba/cuda/.*"
+        - "numba/hsa/.*"
