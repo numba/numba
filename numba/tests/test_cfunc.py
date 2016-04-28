@@ -21,7 +21,8 @@ def add_usecase(a, b):
     return a + b
 
 def div_usecase(a, b):
-    return a / b
+    c = a / b
+    return c
 
 add_sig = "float64(float64, float64)"
 
@@ -56,6 +57,12 @@ class TestCFunc(TestCase):
         self.assertEqual(ctypes.cast(ct, ctypes.c_void_p).value, addr)
 
         self.assertPreciseEqual(ct(2.0, 3.5), 5.5)
+
+    def test_locals(self):
+        # By forcing the intermediate result into an integer, we
+        # truncate the ultimate function result
+        f = cfunc(div_sig, locals={'c': types.int64})(div_usecase)
+        self.assertPreciseEqual(f.ctypes(8, 3), 2.0)
 
     @tag('important')
     def test_errors(self):
