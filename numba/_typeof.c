@@ -380,6 +380,20 @@ error:
     return NULL;
 }
 
+/*
+ * Getting the typecode from a Type object.
+ */
+static
+int _typecode_from_type_object(PyObject *tyobj) {
+    int typecode;
+    PyObject *tmpcode = PyObject_GetAttrString(tyobj, "_code");
+    if (tmpcode == NULL) {
+        return -1;
+    }
+    typecode = PyLong_AsLong(tmpcode);
+    Py_DECREF(tmpcode);
+    return typecode;
+}
 
 /* When we want to cache the type's typecode for later lookup, we need to
    keep a reference to the returned type object so that it cannot be
@@ -412,7 +426,7 @@ error:
 static
 int _typecode_fallback(PyObject *dispatcher, PyObject *val,
                        int retain_reference) {
-    PyObject *tmptype, *tmpcode;
+    PyObject *tmptype;
     int typecode;
 
     // Go back to the interpreter
@@ -421,17 +435,12 @@ int _typecode_fallback(PyObject *dispatcher, PyObject *val,
     if (!tmptype) {
         return -1;
     }
-
-    tmpcode = PyObject_GetAttrString(tmptype, "_code");
+    typecode = _typecode_from_type_object(tmptype);
     if (!retain_reference) {
         Py_DECREF(tmptype);
     }
-    if (tmpcode == NULL) {
-        return -1;
-    }
-    typecode = PyLong_AsLong(tmpcode);
-    Py_DECREF(tmpcode);
     return typecode;
+
 }
 
 /* Variations on _typecode_fallback for convenience */
@@ -716,6 +725,23 @@ int typecode_arrayscalar(PyObject *dispatcher, PyObject* aryscalar) {
     return BASIC_TYPECODES[typecode];
 }
 
+/*
+ * For values that defines "_numba_type_", which holds a numba Type instance
+ * that should be used as the type of the value.
+ */
+static
+int
+typeof_numba_type_shortcut(PyObject *dispatcher, PyObject *val)
+{
+    int typecode;
+    PyObject *numba_type = NULL;
+    numba_type = PyObject_GetAttrString(val, "_numba_type_");
+    if (!numba_type) return -1;
+    typecode = _typecode_from_type_object(numba_type);
+    Py_DECREF(numba_type);
+    return typecode;
+}
+
 int
 typeof_typecode(PyObject *dispatcher, PyObject *val)
 {
@@ -748,6 +774,10 @@ typeof_typecode(PyObject *dispatcher, PyObject *val)
     /* Array handling */
     else if (PyType_IsSubtype(tyobj, &PyArray_Type)) {
         return typecode_ndarray(dispatcher, (PyArrayObject*)val);
+    }
+    /* Special case for "_numba_type_" attribute */
+    else if (PyObject_HasAttrString(val, "_numba_type_")) {
+        return typeof_numba_type_shortcut(dispatcher, val);
     }
 
     return typecode_using_fingerprint(dispatcher, val);
