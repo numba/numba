@@ -37,12 +37,26 @@ _TO_CTYPES = {v: k for (k, v) in _FROM_CTYPES.items()}
 
 
 def from_ctypes(ctypeobj):
-    try:
-        return _FROM_CTYPES[ctypeobj]
-    except KeyError:
-        raise TypeError("unhandled ctypes type: %s" % ctypeobj)
+    """
+    Convert the given ctypes type to a Numba type.
+    """
+    def _convert_internal(ctypeobj):
+        if isinstance(ctypeobj, type) and issubclass(ctypeobj, ctypes._Pointer):
+            valuety = _convert_internal(ctypeobj._type_)
+            if valuety is not None:
+                return types.CPointer(valuety)
+        else:
+            return _FROM_CTYPES.get(ctypeobj)
+
+    ty = _convert_internal(ctypeobj)
+    if ty is None:
+        raise TypeError("Unsupported ctypes type: %s" % ctypeobj)
+    return ty
 
 def to_ctypes(typ):
+    """
+    Convert the given Numba type to a ctypes type.
+    """
     if isinstance(typ, types.CPointer):
         return ctypes.POINTER(to_ctypes(typ))
     try:

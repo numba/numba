@@ -136,7 +136,7 @@ class CPointer(Type):
 
     def __init__(self, dtype):
         self.dtype = dtype
-        name = "*%s" % dtype
+        name = "%s*" % dtype
         super(CPointer, self).__init__(name)
 
     @property

@@ -1,18 +1,47 @@
 from __future__ import print_function, absolute_import, division
 
-from ctypes import *
 import sys
 import threading
 import numpy
 
+from numba.ctypes_support import *
+
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba import jit, types
-from .support import MemoryLeakMixin, tag
+from numba import jit, types, errors
+from numba.typing import ctypes_utils
+from .support import MemoryLeakMixin, tag, TestCase
 from .ctypes_usecases import *
 
 
-class TestCTypes(MemoryLeakMixin, unittest.TestCase):
+class TestCTypesTypes(TestCase):
+
+    def test_from_ctypes(self):
+        """
+        Test converting a ctypes type to a Numba type.
+        """
+        def check(cty, expected):
+            got = ctypes_utils.from_ctypes(cty)
+            self.assertEqual(got, expected)
+
+        check(c_double, types.float64)
+        check(c_int, types.intc)
+        check(c_uint16, types.uint16)
+        check(c_size_t, types.uintp)
+        check(c_ssize_t, types.intp)
+
+        check(c_void_p, types.voidptr)
+        check(POINTER(c_float), types.CPointer(types.float32))
+        check(POINTER(POINTER(c_float)),
+              types.CPointer(types.CPointer(types.float32)))
+
+        # An unsupported type
+        with self.assertRaises(TypeError) as raises:
+            ctypes_utils.from_ctypes(c_wchar_p)
+        self.assertIn("Unsupported ctypes type", str(raises.exception))
+
+
+class TestCTypesUseCases(MemoryLeakMixin, TestCase):
 
     @tag('important')
     def test_c_sin(self):
@@ -130,6 +159,10 @@ class TestCTypes(MemoryLeakMixin, unittest.TestCase):
 
     @tag('important')
     def test_passing_array_ctypes_data(self):
+        """
+        Test the ".ctypes.data" attribute of an array can be passed
+        as a "void *" parameter.
+        """
         def pyfunc(arr):
             return c_take_array_ptr(arr.ctypes.data)
 
@@ -141,6 +174,37 @@ class TestCTypes(MemoryLeakMixin, unittest.TestCase):
         got = cfunc(arr)
 
         self.assertEqual(expected, got)
+
+    def check_array_ctypes(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        arr = numpy.linspace(0, 10, 5)
+        expected = arr ** 2.0
+        got = cfunc(arr)
+        self.assertPreciseEqual(expected, got)
+        return cfunc
+
+    @tag('important')
+    def test_passing_array_ctypes_voidptr(self):
+        """
+        Test the ".ctypes" attribute of an array can be passed
+        as a "void *" parameter.
+        """
+        self.check_array_ctypes(use_c_vsquare)
+
+    @tag('important')
+    def test_passing_array_ctypes_voidptr(self):
+        """
+        Test the ".ctypes" attribute of an array can be passed
+        as a pointer parameter of the right type.
+        """
+        cfunc = self.check_array_ctypes(use_c_vcube)
+
+        # Non-compatible pointers are not accepted (here float32* vs. float64*)
+        with self.assertRaises(errors.TypingError) as raises:
+            cfunc(numpy.float32([0.0]))
+        self.assertIn("Invalid usage of ExternalFunctionPointer",
+                      str(raises.exception))
 
 
 if __name__ == '__main__':
