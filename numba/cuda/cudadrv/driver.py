@@ -594,13 +594,6 @@ class Context(object):
                                finalizer=finalizer)
             return mem
 
-    def memfree(self, pointer):
-        try:
-            del self.allocations[pointer.value]
-        except KeyError:
-            raise DeadMemoryError
-        self.trashing.service()
-
     def mempin(self, owner, pointer, size, mapped=False):
         self.trashing.service()
 
