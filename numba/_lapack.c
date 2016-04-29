@@ -312,6 +312,19 @@ EMIT_GET_CLAPACK_FUNC(dgesdd)
 EMIT_GET_CLAPACK_FUNC(cgesdd)
 EMIT_GET_CLAPACK_FUNC(zgesdd)
 
+// Computes QR decompositions
+EMIT_GET_CLAPACK_FUNC(sgeqrf)
+EMIT_GET_CLAPACK_FUNC(dgeqrf)
+EMIT_GET_CLAPACK_FUNC(cgeqrf)
+EMIT_GET_CLAPACK_FUNC(zgeqrf)
+
+// Computes columns of Q from elementary reflectors produced by xgeqrf() (QR).
+EMIT_GET_CLAPACK_FUNC(sorgqr)
+EMIT_GET_CLAPACK_FUNC(dorgqr)
+EMIT_GET_CLAPACK_FUNC(cungqr)
+EMIT_GET_CLAPACK_FUNC(zungqr)
+
+
 
 #undef EMIT_GET_CLAPACK_FUNC
 
@@ -342,13 +355,21 @@ typedef void (*cgesdd_t)(char *jobz, F_INT *m, F_INT *n, void *a, F_INT *lda,
                          void *work, F_INT *lwork, void *rwork, F_INT *iwork,
                          F_INT *info);
 
+typedef void (*xgeqrf_t)(F_INT *m, F_INT *n, void *a, F_INT *lda, void *tau,
+                         void *work, F_INT *lwork, F_INT *info);
 
-#define CATCH_LAPACK_INVALID_ARG(info)                                 \
+typedef void (*xxxgqr_t)(F_INT *m, F_INT *n, F_INT *k, void *a, F_INT *lda,
+                         void *tau, void *work, F_INT *lwork, F_INT *info);
+
+
+
+#define CATCH_LAPACK_INVALID_ARG(__routine, info)                      \
     do {                                                               \
         if (info < 0) {                                                \
             PyGILState_STATE st = PyGILState_Ensure();                 \
             PyErr_Format(PyExc_RuntimeError,                           \
-                         "LAPACK Error: on input %d\n", -(int) info);  \
+            "LAPACK Error: Routine " #__routine ". On input %d\n",     \
+            -(int) info);                                              \
             PyGILState_Release(st);                                    \
             return -1;                                                 \
         }                                                              \
@@ -486,10 +507,50 @@ numba_xxpotrf(char kind, char uplo, Py_ssize_t n, void *a, Py_ssize_t lda)
     _lda = (F_INT) lda;
 
     (*(xxpotrf_t) raw_func)(&uplo, &_n, a, &_lda, &info);
-    CATCH_LAPACK_INVALID_ARG(info);
+    CATCH_LAPACK_INVALID_ARG("xxpotrf", info);
     return info;
 }
 
+
+/*
+ * kind_size()
+ * gets the data size appropriate for a specified kind.
+ *
+ * Input:
+ * kind - the kind, one of:
+ *         (s, d, c, z) = (float, double, complex, double complex).
+ *
+ * data_size - modified in place, on return contains the appropriate data size.
+ *
+ * Returns 0 on success, -1 else.
+ */
+static int kind_size(char kind, size_t * data_size)
+{
+    switch (kind)
+    {
+        case 's':
+            *data_size  = sizeof(float);
+            break;
+        case 'd':
+            *data_size  = sizeof(double);
+            break;
+        case 'c':
+            *data_size  = sizeof(npy_complex64);
+            break;
+        case 'z':
+            *data_size  = sizeof(npy_complex128);
+            break;
+        default:
+        {
+            PyGILState_STATE st = PyGILState_Ensure();
+            PyErr_SetString(PyExc_ValueError,\
+                            "Invalid kind found.");
+            PyGILState_Release(st);
+        }
+        return -1;
+    }
+    return 0;
+}
 
 /*
  * cast_from_X()
@@ -631,7 +692,7 @@ numba_ez_rgeev(char kind, char jobvl, char jobvr, Py_ssize_t n, void *a,
     work = &stack_slot;
     numba_raw_rgeev(kind, jobvl, jobvr, _n, a, _lda, wr, wi, vl, _ldvl,
                     vr, _ldvr, work, lwork, &info);
-    CATCH_LAPACK_INVALID_ARG(info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_rgeev", info);
 
     lwork = cast_from_X(kind, work);
     if (checked_PyMem_RawMalloc(&work, base_size * lwork))
@@ -642,7 +703,7 @@ numba_ez_rgeev(char kind, char jobvl, char jobvr, Py_ssize_t n, void *a,
                     vr, _ldvr, work, lwork, &info);
     PyMem_RawFree(work);
 
-    CATCH_LAPACK_INVALID_ARG(info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_rgeev", info);
 
     return ez_geev_return(info);
 }
@@ -733,7 +794,7 @@ numba_ez_cgeev(char kind, char jobvl, char jobvr,  Py_ssize_t n, void *a,
     work = &stack_slot;
     numba_raw_cgeev(kind, jobvl, jobvr, n, a, lda, w, vl, ldvl,
                     vr, ldvr, work, lwork, rwork, &info);
-    CATCH_LAPACK_INVALID_ARG(info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_cgeev", info);
 
     lwork = cast_from_X(kind, work);
     if (checked_PyMem_RawMalloc((void**)&rwork, 2*n*base_size))
@@ -749,7 +810,7 @@ numba_ez_cgeev(char kind, char jobvl, char jobvr,  Py_ssize_t n, void *a,
                     vr, _ldvr, work, lwork, rwork, &info);
     PyMem_RawFree(work);
     PyMem_RawFree(rwork);
-    CATCH_LAPACK_INVALID_ARG(info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_cgeev", info);
 
     return ez_geev_return(info);
 }
@@ -856,7 +917,7 @@ numba_ez_rgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
     /* Compute optimal work size (lwork) */
     numba_raw_rgesdd(kind, jobz, m, n, a, lda, s, u, ldu, vt, ldvt, work,
                      lwork, iwork, &info);
-    CATCH_LAPACK_INVALID_ARG(info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_rgesdd", info);
 
     /* Allocate work array */
     lwork = cast_from_X(kind, work);
@@ -872,7 +933,7 @@ numba_ez_rgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
                      iwork, &info);
     PyMem_RawFree(work);
     PyMem_RawFree(iwork);
-    CATCH_LAPACK_INVALID_ARG(info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_rgesdd", info);
 
     return ez_gesdd_return(info);
 }
@@ -968,7 +1029,7 @@ numba_ez_cgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
     /* Compute optimal work size (lwork) */
     numba_raw_cgesdd(kind, jobz, m, n, a, lda, s, u ,ldu, vt, ldvt, work, lwork,
                      rwork, iwork, &info);
-    CATCH_LAPACK_INVALID_ARG(info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_cgesdd", info);
 
     /* Allocate work array */
     lwork = cast_from_X(kind, work);
@@ -1006,7 +1067,7 @@ numba_ez_cgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
     PyMem_RawFree(work);
     PyMem_RawFree(rwork);
     PyMem_RawFree(iwork);
-    CATCH_LAPACK_INVALID_ARG(info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_cgesdd", info);
 
     return ez_gesdd_return(info);
 }
@@ -1025,10 +1086,12 @@ numba_ez_gesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
     {
         case 's':
         case 'd':
-            return numba_ez_rgesdd(kind, jobz, m, n, a, lda, s, u, ldu, vt, ldvt);
+            return numba_ez_rgesdd(kind, jobz, m, n, a, lda, s, u, ldu, vt,
+                                   ldvt);
         case 'c':
         case 'z':
-            return numba_ez_cgesdd(kind, jobz, m, n, a, lda, s, u, ldu, vt, ldvt);
+            return numba_ez_cgesdd(kind, jobz, m, n, a, lda, s, u, ldu, vt,
+                                   ldvt);
         default:
         {
             PyGILState_STATE st = PyGILState_Ensure();
@@ -1038,4 +1101,179 @@ numba_ez_gesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
         }
         return -1;
     }
+}
+
+
+/*
+ * Compute the QR factorization of a matrix.
+ * Return -1 on internal error, 0 on success, > 0 on failure.
+ */
+static int
+numba_raw_xgeqrf(char kind, Py_ssize_t m, Py_ssize_t n, void *a, Py_ssize_t
+                 lda, void *tau, void *work, Py_ssize_t lwork, Py_ssize_t *info)
+{
+    void *raw_func = NULL;
+    F_INT _m, _n, _lda, _lwork, _info;
+
+    switch (kind)
+    {
+        case 's':
+            raw_func = get_clapack_sgeqrf();
+            break;
+        case 'd':
+            raw_func = get_clapack_dgeqrf();
+            break;
+        case 'c':
+            raw_func = get_clapack_cgeqrf();
+            break;
+        case 'z':
+            raw_func = get_clapack_zgeqrf();
+            break;
+        default:
+        {
+            PyGILState_STATE st = PyGILState_Ensure();
+            PyErr_SetString(PyExc_ValueError,
+                            "invalid kind of QR factorization function");
+            PyGILState_Release(st);
+        }
+        return -1;
+    }
+    if (raw_func == NULL)
+        return -1;
+
+    _m = (F_INT) m;
+    _n = (F_INT) n;
+    _lda = (F_INT) lda;
+    _lwork = (F_INT) lwork;
+
+    (*(xgeqrf_t) raw_func)(&_m, &_n, a, &_lda, tau, work, &_lwork, &_info);
+    *info = (Py_ssize_t) _info;
+    return 0;
+}
+
+/*
+ * Compute the QR factorization of a matrix.
+ * This routine hides the type and general complexity involved with making the
+ * xgeqrf calls. The work space computation and error handling etc is hidden.
+ * Args are as per LAPACK.
+ */
+NUMBA_EXPORT_FUNC(int)
+numba_ez_geqrf(char kind, Py_ssize_t m, Py_ssize_t n, void *a, Py_ssize_t
+               lda, void *tau)
+{
+    Py_ssize_t info = 0;
+    Py_ssize_t lwork = -1;
+    size_t base_size = -1;
+    all_dtypes stack_slot;
+    void *work = NULL;
+
+    if (kind_size(kind, &base_size))
+        return -1;
+
+    work = &stack_slot;
+
+    /* Compute optimal work size (lwork) */
+    numba_raw_xgeqrf(kind, m, n, a, lda, tau, work, lwork, &info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_xgeqrf", info);
+
+    /* Allocate work array */
+    lwork = cast_from_X(kind, work);
+    if (checked_PyMem_RawMalloc(&work, base_size * lwork))
+        return -1;
+
+    numba_raw_xgeqrf(kind, m, n, a, lda, tau, work, lwork, &info);
+    PyMem_RawFree(work);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_xgeqrf", info);
+
+    return 0; // info cannot be >0
+
+}
+
+
+/*
+ * Compute the orthogonal Q matrix (in QR) from elementary relectors.
+ * Return -1 on internal error, 0 on success, > 0 on failure.
+ */
+static int
+numba_raw_xxxgqr(char kind, Py_ssize_t m, Py_ssize_t n, Py_ssize_t k, void *a,
+                 Py_ssize_t lda, void *tau, void * work, Py_ssize_t lwork, Py_ssize_t *info)
+{
+    void *raw_func = NULL;
+    F_INT _m, _n, _k, _lda, _lwork, _info;
+
+    switch (kind)
+    {
+        case 's':
+            raw_func = get_clapack_sorgqr();
+            break;
+        case 'd':
+            raw_func = get_clapack_dorgqr();
+            break;
+        case 'c':
+            raw_func = get_clapack_cungqr();
+            break;
+        case 'z':
+            raw_func = get_clapack_zungqr();
+            break;
+        default:
+        {
+            PyGILState_STATE st = PyGILState_Ensure();
+            PyErr_SetString(PyExc_ValueError,
+                            "invalid kind of Q matrix (QR) generation function");
+            PyGILState_Release(st);
+        }
+        return -1;
+    }
+    if (raw_func == NULL)
+        return -1;
+
+    _m = (F_INT) m;
+    _n = (F_INT) n;
+    _k = (F_INT) k;
+    _lda = (F_INT) lda;
+    _lwork = (F_INT) lwork;
+
+    (*(xxxgqr_t) raw_func)(&_m, &_n, &_k, a, &_lda, tau, work, &_lwork, &_info);
+    *info = (Py_ssize_t) _info;
+    return 0;
+}
+
+
+/*
+ * Compute the orthogonal Q matrix (in QR) from elementary reflectors.
+ * This routine hides the type and general complexity involved with making the
+ * x{or,un}qrf calls. The work space computation and error handling etc is
+ * hidden. Args are as per LAPACK.
+ */
+NUMBA_EXPORT_FUNC(int)
+numba_ez_xxgqr(char kind, Py_ssize_t m, Py_ssize_t n, Py_ssize_t k, void *a,
+               Py_ssize_t lda, void *tau)
+{
+    Py_ssize_t info = 0;
+    Py_ssize_t lwork = -1;
+    size_t base_size = -1;
+    all_dtypes stack_slot;
+    void *work = NULL;
+
+
+    work = &stack_slot;
+
+    /* Compute optimal work size (lwork) */
+    numba_raw_xxxgqr(kind, m, n, k, a, lda, tau, work, lwork, &info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_xxxgqr", info);
+
+    if (kind_size(kind, &base_size))
+        return -1;
+
+    /* Allocate work array */
+    lwork = cast_from_X(kind, work);
+    if (checked_PyMem_RawMalloc(&work, base_size * lwork))
+        return -1;
+
+    numba_raw_xxxgqr(kind, m, n, k, a, lda, tau, work, lwork, &info);
+    PyMem_RawFree(work);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_xxxgqr", info);
+
+    return 0; // info cannot be >0
+
 }

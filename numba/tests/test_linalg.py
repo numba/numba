@@ -320,6 +320,10 @@ def svd_matrix(a, full_matrices=1):
     return np.linalg.svd(a, full_matrices)
 
 
+def qr_matrix(a):
+    return np.linalg.qr(a)
+
+
 class TestLinalgBase(TestCase):
     """
     Provides setUp and common data/error modes for testing np.linalg functions.
@@ -706,6 +710,117 @@ class TestLinalgSvd(TestLinalgBase):
             check(a, full_matrices=fmat)
 
         rn = "svd"
+
+        # Wrong dtype
+        self.assert_wrong_dtype(rn, cfunc,
+                                (np.ones((2, 2), dtype=np.int32),))
+
+        # Dimension issue
+        self.assert_wrong_dimensions(rn, cfunc,
+                                     (np.ones(10, dtype=np.float64),))
+
+        # no nans or infs
+        self.assert_no_nan_or_inf(cfunc,
+                                  (np.array([[1., 2., ], [np.inf, np.nan]],
+                                            dtype=np.float64),))
+
+
+class TestLinalgQr(TestLinalgBase):
+    """
+    Tests for np.linalg.qr.
+    """
+
+    def sample_matrix(self, size, dtype, order):
+        break_at = 10
+        jmp = 0
+        # have a few attempts at shuffling to get the condition number down
+        # else not worry about it
+        mn = size[0] * size[1]
+        np.random.seed(0)  # repeatable seed
+        while jmp < break_at:
+            v = self.sample_vector(mn, dtype)
+            # shuffle to improve conditioning
+            np.random.shuffle(v)
+            A = np.reshape(v, size)
+            if np.linalg.cond(A) < mn:
+                return np.array(A, order=order, dtype=dtype)
+            jmp += 1
+
+    @needs_lapack
+    def test_linalg_qr(self):
+        """
+        Test np.linalg.qr
+        """
+        cfunc = jit(nopython=True)(qr_matrix)
+
+        def check(a, **kwargs):
+            expected = qr_matrix(a, **kwargs)
+            got = cfunc(a, **kwargs)
+
+            # check that the returned tuple is same length
+            self.assertEqual(len(expected), len(got))
+            # and that length is 2
+            self.assertEqual(len(got), 2)
+
+            use_reconstruction = False
+            # try plain match of each array to np first
+            for k in range(len(expected)):
+                try:
+                    np.testing.assert_array_almost_equal_nulp(
+                        got[k], expected[k], nulp=10)
+                except AssertionError:
+                    # plain match failed, test by reconstruction
+                    use_reconstruction = True
+
+            # if plain match fails then reconstruction is used.
+            # this checks that A ~= Q*R and that (Q^H)*Q = I
+            # i.e. QR decomposition ties out
+            # this is required as numpy uses only double precision lapack
+            # routines and computation of qr is numerically
+            # sensitive, numba using the type specific routines therefore
+            # sometimes comes out with a different answer (orthonormal bases
+            # are not unique etc.).
+            if use_reconstruction:
+                q, r = got
+
+                # check they are dimensionally correct
+                for k in range(len(expected)):
+                    self.assertEqual(got[k].shape, expected[k].shape)
+
+                # check A=q*r
+                rec = np.dot(q, r)
+                resolution = np.finfo(a.dtype).resolution
+                np.testing.assert_allclose(
+                    a,
+                    rec,
+                    rtol=10 * resolution,
+                    atol=100 * resolution  # zeros tend to be fuzzy
+                )
+
+                # check q is orthonormal
+                np.testing.assert_allclose(
+                    np.eye(min(a.shape), dtype=a.dtype),
+                    np.dot(np.conjugate(q.T), q),
+                    rtol=resolution,
+                    atol=resolution
+                )
+
+            # Ensure proper resource management
+            with self.assertNoNRTLeak():
+                cfunc(a, **kwargs)
+
+        # test: column vector, tall, wide, square, row vector
+        # prime sizes
+        sizes = [(7, 1), (11, 5), (5, 11), (3, 3), (1, 7)]
+
+        # test loop
+        for size, dtype, order in \
+                product(sizes, self.dtypes, 'FC'):
+
+            a = self.sample_matrix(size, dtype, order)
+            check(a)
+
+        rn = "qr"
 
         # Wrong dtype
         self.assert_wrong_dtype(rn, cfunc,

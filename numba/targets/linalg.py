@@ -1004,3 +1004,103 @@ if numpy_version >= (1, 8):
             return (u.T, s, vt.T)
 
         return svd_impl
+
+    @overload(numpy.linalg.qr)
+    def qr_impl(a):
+        ensure_lapack()
+
+        _check_linalg_matrix(a, "qr")
+
+        # Need two functions, the first computes R, storing it in the upper
+        # triangle of A with the below diagonal part of A containing elementary
+        # reflectors needed to construct Q. The second turns the below diagonal
+        # entries of A into Q, storing Q in A (creates orthonormal columns from
+        # the elementary reflectors).
+
+        numba_ez_geqrf_sig = types.intc(
+            types.char,  # kind
+            types.intp,  # m
+            types.intp,  # n
+            types.CPointer(a.dtype),  # a
+            types.intp,  # lda
+            types.CPointer(a.dtype),  # tau
+        )
+
+        numba_ez_geqrf = types.ExternalFunction("numba_ez_geqrf",
+                                                numba_ez_geqrf_sig)
+
+        numba_ez_xxgqr_sig = types.intc(
+            types.char,  # kind
+            types.intp,  # m
+            types.intp,  # n
+            types.intp,  # k
+            types.CPointer(a.dtype),  # a
+            types.intp,  # lda
+            types.CPointer(a.dtype),  # tau
+        )
+
+        numba_ez_xxgqr = types.ExternalFunction("numba_ez_xxgqr",
+                                                numba_ez_xxgqr_sig)
+
+        kind = ord(get_blas_kind(a.dtype, "qr"))
+
+        F_layout = a.layout == 'F'
+
+        def qr_impl(a):
+            n = a.shape[-1]
+            m = a.shape[-2]
+
+            _check_finite_matrix(a)
+
+            # copy A as it will be destroyed
+            if F_layout:
+                q = numpy.copy(a)
+            else:
+                q = numpy.asfortranarray(a)
+
+            lda = m
+
+            minmn = min(m, n)
+            tau = numpy.empty((minmn), dtype=a.dtype)
+
+            ret = numba_ez_geqrf(
+                kind,  # kind
+                m,  # m
+                n,  # n
+                q.ctypes,  # a
+                m,  # lda
+                tau.ctypes  # tau
+            )
+            if ret < 0:
+                fatal_error_func()
+                assert 0   # unreachable
+
+            # pull out R, there is undoubtedly a more elegant way
+            # this is transposed in memory because Fortran
+            r = numpy.zeros((minmn, n), dtype=a.dtype)
+
+            for i in range(minmn):
+                for j in range(i, n):
+                    r[i, j] = q[i, j]
+
+            # create Q in A.
+            ret = numba_ez_xxgqr(
+                kind,  # kind
+                m,  # m
+                minmn,  # n
+                minmn,  # k
+                q.ctypes,  # a
+                m,  # lda
+                tau.ctypes  # tau
+            )
+            if ret < 0:
+                fatal_error_func()
+                assert 0   # unreachable
+
+            # help liveness analysis
+            tau.size
+            q.size
+
+            return (q[:, :minmn], r)
+
+        return qr_impl
