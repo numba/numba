@@ -60,10 +60,6 @@ removing incref and decref pairs within each block.
 Quirks
 ------
 
-All NRT routines currently initializes refcount to 0, because the compiler
-relies on variable binding for doing incref/decref.  Every value is bound to
-a variable in the Numba IR.
-
 Since the `refcount optimization pass <nrt-refct-opt-pass_>`_ requires LLVM
 function optimization pass, the pass works on the LLVM IR as text.  The
 optimized IR is then materialized again as a new LLVM in-memory bitcode object.
