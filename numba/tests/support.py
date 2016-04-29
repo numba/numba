@@ -407,6 +407,15 @@ class TestCase(unittest.TestCase):
         self.assertPreciseEqual(got, expected)
         return got, expected
 
+    def runTest(self):
+        """
+        This method does nothing, it merely satisfies the need for a method
+        called 'runTest' to be present. This allows classes to extend 
+        TestCase to provide additional test functionality but without 
+        needing to have test methods present themselves.
+        """
+        pass
+
 # Various helpers
 
 @contextlib.contextmanager
