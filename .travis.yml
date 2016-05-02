@@ -6,61 +6,29 @@ dist: trusty
 matrix:
     include:
         # Longest build first
-        - env: PYTHON=3.5 NUMPY="numpy=1.11" RUN_COVERAGE=yes
-        - env: PYTHON=3.4 NUMPY="numpy=1.9" BUILD_DOC=yes
-        - env: PYTHON=2.7 NUMPY="numpy=1.7"
+        - env: PYTHON=3.5 NUMPY=1.11 RUN_COVERAGE=yes
+        - env: PYTHON=3.4 NUMPY=1.9 BUILD_DOC=yes
+        - env: PYTHON=2.7 NUMPY=1.7
 
 branches:
     only:
         - master
+        - travis
 
 before_install:
-    # Install Miniconda
-    - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
-    - chmod +x miniconda.sh
-    - ./miniconda.sh -b
+    - buildscripts/incremental/install_miniconda.sh
     - export PATH=$HOME/miniconda3/bin:$PATH
-    # Setup environment
-    - conda update --yes conda
-    # Scipy, CFFI and jinja2 are optional dependencies, but exercised in the test suite
-    - conda create -n travisci --yes python=$PYTHON $NUMPY cffi pip scipy jinja2
-    - source activate travisci
-    - CONDA_INSTALL="conda install --yes -q"
-    - PIP_INSTALL="pip install -q"
-    # Install llvmdev (separate channel, for now)
-    - $CONDA_INSTALL -c numba llvmdev="3.7*"
-    # Install enum34 and singledispatch for Python < 3.4
-    - if [ $PYTHON \< "3.4" ]; then $CONDA_INSTALL enum34; fi
-    - if [ $PYTHON \< "3.4" ]; then $PIP_INSTALL singledispatch; fi
-    # Install funcsigs for Python < 3.3
-    - if [ $PYTHON \< "3.3" ]; then $CONDA_INSTALL -c numba funcsigs; fi
-    # Install dependencies for building the documentation
-    - if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx pygments; fi
-    - if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL sphinxjp.themecore sphinxjp.themes.basicstrap; fi
-    # Install dependencies for code coverage (codecov.io)
-    - if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi
-
+    - buildscripts/incremental/create_conda_environment.sh
+    - buildscripts/incremental/setup_conda_environment.sh
 install:
-    # Build and install llvmlite from source
-    - git clone git://github.com/numba/llvmlite.git -q
-    - cd llvmlite && python setup.py build && python setup.py install -q >/dev/null && cd ..
+    - source activate travisci
     # Build numba extensions without silencing compile errors
     - python setup.py build_ext -q --inplace
     # Install numba
     - python setup.py install -q >/dev/null
 
 script:
-    # Ensure that the documentation builds without warnings
-    - cd $TRAVIS_BUILD_DIR/docs
-    - if [ "$BUILD_DOC" == "yes" ]; then make SPHINXOPTS=-W clean html; fi
-    - cd ~
-    # Run the Numba test suite
-    # Note that coverage is run from the checkout dir to match the "source"
-    # directive in .coveragerc
-    - if [ "$RUN_COVERAGE" == "yes" ]; then cd $TRAVIS_BUILD_DIR; coverage erase; coverage run runtests.py -b -m numba.tests; fi
-    - if [ "$RUN_COVERAGE" != "yes" ]; then NUMBA_ENABLE_CUDASIM=1 python -m numba.runtests -b -m numba.tests; fi
-    # Also run test_runtests individually, to make sure test discovery didn't break
-    - python -m numba.tests.test_runtests
+    - buildscripts/incremental/test.sh
 
 after_success:
     - if [ "$RUN_COVERAGE" == "yes" ]; then coverage combine; codecov; fi
