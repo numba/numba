@@ -7,7 +7,7 @@ import numpy as np
 
 from numba import (float32, float64, int16, int32, boolean, deferred_type,
                    optional)
-from numba import njit, typeof
+from numba import njit, typeof, errors
 from numba import unittest_support as unittest
 from numba import jitclass
 from .support import TestCase, MemoryLeakMixin, tag
@@ -510,6 +510,20 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(inst._protected_method(3), inst._value * 3)
         self.assertEqual(inst.check_private_method(3), inst.private_value * 3)
 
+        # test errors
+        @njit
+        def access_dunder(inst):
+            return inst.__value
+
+        with self.assertRaises(errors.UntypedAttributeError) as raises:
+            access_dunder(inst)
+        # It will appear as "_TestJitClass__value" because the `access_dunder`
+        # is under the scope of 'TestJitClass'.
+        self.assertIn('_TestJitClass__value', str(raises.exception))
+
+        with self.assertRaises(AttributeError) as raises:
+            access_dunder.py_func(inst)
+        self.assertIn('_TestJitClass__value', str(raises.exception))
 
 if __name__ == '__main__':
     unittest.main()
