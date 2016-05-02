@@ -1,4 +1,4 @@
-# Environment based on https://github.com/rmcgibbo/python-appveyor-conda-example
+# Environment loosely based on https://github.com/conda/conda/blob/master/appveyor.yml
 
 environment:
 
@@ -10,22 +10,32 @@ environment:
 
   matrix:
     # Since appveyor is quite slow, we only use a single configuration
-    # and a subset of the test suite (see build_and_test.bat)
-
-    - PYTHON: "C:\\Python35_64"
-      PYTHON_VERSION: "3.5"
+    # and a subset of the test suite (see test_script below)
+    - PYTHON_VERSION: "3.5"
       PYTHON_ARCH: "64"
-      CONDA_PY: "3.5"
-      CONDA_NPY: "1.11"
+      NUMPY_VERSION: "1.11"
+
+init:
+  # Use AppVeyor's provided Miniconda: https://www.appveyor.com/docs/installed-software#python
+  - if "%PYTHON_ARCH%" == "64" set MINICONDA=C:\Miniconda35-x64
+  - if "%PYTHON_ARCH%" == "32" set MINICONDA=C:\Miniconda35
+  - set PATH=%MINICONDA%;%MINICONDA%/Scripts;%MINICONDA%/Library/bin;%PATH%
 
 install:
-  # This installs the appropriate Miniconda (Py2/Py3, 32/64 bit)
-  - powershell .\\buildscripts\\appveyor\\install.ps1
-  - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
-  - conda config --set always_yes true
+  - conda config --set always_yes yes
+  - conda update -q conda
+  - conda info
+  - conda list
+  - conda config --add channels numba
+  - conda create -q -n testenv python=%PYTHON_VERSION% numpy=%NUMPY_VERSION% llvmlite cffi scipy
+  - call activate testenv
 
 build: false
 
 test_script:
   # Build and test the package
-  - cmd /C .\\buildscripts\\appveyor\\build_and_test.bat
+  - python setup.py build_ext -q --inplace
+  # Run a subset of the test suite, as AppVeyor is quite slow.
+  # %CMD_IN_ENV% is needed for distutils/setuptools-based tests
+  # on certain build configurations.
+  - "%CMD_IN_ENV% python runtests.py -b --tags important"

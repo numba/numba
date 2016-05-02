@@ -132,6 +132,25 @@ class DataModel(object):
         return not self.__eq__(other)
 
 
+@register_default(types.Omitted)
+class OmittedArgDataModel(DataModel):
+    """
+    A data model for omitted arguments.  Only the "argument" representation
+    is defined, other representations raise a NotImplementedError.
+    """
+    # Omitted arguments don't produce any LLVM function argument.
+
+    def get_argument_type(self):
+        return ()
+
+    def as_argument(self, builder, val):
+        return ()
+
+    def from_argument(self, builder, val):
+        assert val == (), val
+        return None
+
+
 @register_default(types.Boolean)
 class BooleanModel(DataModel):
     _bit_type = ir.IntType(1)
@@ -199,6 +218,53 @@ class PrimitiveModel(DataModel):
         return value
 
 
+class ProxyModel(DataModel):
+    """
+    Helper class for models which delegate to another model.
+    """
+
+    def get_value_type(self):
+        return self._proxied_model.get_value_type()
+
+    def get_data_type(self):
+        return self._proxied_model.get_data_type()
+
+    def get_return_type(self):
+        return self._proxied_model.get_return_type()
+
+    def get_argument_type(self):
+        return self._proxied_model.get_argument_type()
+
+    def as_data(self, builder, value):
+        return self._proxied_model.as_data(builder, value)
+
+    def as_argument(self, builder, value):
+        return self._proxied_model.as_argument(builder, value)
+
+    def as_return(self, builder, value):
+        return self._proxied_model.as_return(builder, value)
+
+    def from_data(self, builder, value):
+        return self._proxied_model.from_data(builder, value)
+
+    def from_argument(self, builder, value):
+        return self._proxied_model.from_argument(builder, value)
+
+    def from_return(self, builder, value):
+        return self._proxied_model.from_return(builder, value)
+
+
+@register_default(types.EnumMember)
+@register_default(types.IntEnumMember)
+class EnumModel(ProxyModel):
+    """
+    Enum members are represented exactly like their values.
+    """
+    def __init__(self, dmm, fe_type):
+        super(EnumModel, self).__init__(dmm, fe_type)
+        self._proxied_model = dmm.lookup(fe_type.dtype)
+
+
 @register_default(types.Opaque)
 @register_default(types.PyObject)
 @register_default(types.RawPointer)
@@ -216,6 +282,8 @@ class PrimitiveModel(DataModel):
 @register_default(types.ExternalFunction)
 @register_default(types.NumbaFunction)
 @register_default(types.Macro)
+@register_default(types.EnumClass)
+@register_default(types.IntEnumClass)
 @register_default(types.NumberClass)
 @register_default(types.NamedTupleClass)
 @register_default(types.DType)
@@ -1005,7 +1073,9 @@ class RangeIteratorType(StructModel):
 class GeneratorModel(CompositeModel):
     def __init__(self, dmm, fe_type):
         super(GeneratorModel, self).__init__(dmm, fe_type)
-        self._arg_models = [self._dmm.lookup(t) for t in fe_type.arg_types]
+        # XXX Fold this in DataPacker?
+        self._arg_models = [self._dmm.lookup(t) for t in fe_type.arg_types
+                            if not isinstance(t, types.Omitted)]
         self._state_models = [self._dmm.lookup(t) for t in fe_type.state_types]
 
         self._args_be_type = ir.LiteralStructType(
@@ -1058,7 +1128,7 @@ class GeneratorModel(CompositeModel):
 class ArrayCTypesModel(StructModel):
     def __init__(self, dmm, fe_type):
         # ndim = fe_type.ndim
-        members = [('data', types.uintp)]
+        members = [('data', types.CPointer(fe_type.dtype))]
         super(ArrayCTypesModel, self).__init__(dmm, fe_type, members)
 
 

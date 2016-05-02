@@ -60,10 +60,6 @@ removing incref and decref pairs within each block.
 Quirks
 ------
 
-All NRT routines currently initializes refcount to 0, because the compiler
-relies on variable binding for doing incref/decref.  Every value is bound to
-a variable in the Numba IR.
-
 Since the `refcount optimization pass <nrt-refct-opt-pass_>`_ requires LLVM
 function optimization pass, the pass works on the LLVM IR as text.  The
 optimized IR is then materialized again as a new LLVM in-memory bitcode object.
@@ -83,6 +79,28 @@ Checking that the allocation and deallocation counters are matching is the
 simplest way to know if the NRT is leaking.
 
 
+Debugging Leaks in C
+--------------------
+
+The start of `numba/runtime/nrt.h <https://github.com/numba/numba/blob/master/numba/runtime/nrt.h>`_
+has these lines:
+
+.. code-block:: C
+
+  /* Debugging facilities - enabled at compile-time */
+  /* #undef NDEBUG */
+  #if 0
+  #   define NRT_Debug(X) X
+  #else
+  #   define NRT_Debug(X) if (0) { X; }
+  #endif
+
+Undefining NDEBUG (uncomment the ``#undef NDEBUG`` line) enables the assertion
+check in NRT.
+
+Enabling the NRT_Debug (replace ``#if 0`` with ``#if 1``) turns on
+debug print inside NRT.
+
 Future Plan
 ===========
 
@@ -92,6 +110,3 @@ the Python interpreter.  To make that work, we will be doing some refactoring:
 
 * numba NPM code references statically compiled code in "helperlib.c".  Those
   functions should be moved to NRT.
-
-
-

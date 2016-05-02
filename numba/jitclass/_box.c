@@ -129,8 +129,7 @@ cleanup:
 static
 PyObject* box_get_dataptr(PyObject *self, PyObject *args) {
     BoxObject *box;
-    /* no type checking */
-    if (!PyArg_ParseTuple(args, "O", (PyObject*)&box))
+    if (!PyArg_ParseTuple(args, "O!", &BoxType, (PyObject*)&box))
         return NULL;
     return PyLong_FromVoidPtr(box->dataptr);
 }
@@ -141,8 +140,7 @@ PyObject* box_get_dataptr(PyObject *self, PyObject *args) {
 static
 PyObject* box_get_meminfoptr(PyObject *self, PyObject *args) {
     BoxObject *box;
-    /* no type checking */
-    if (!PyArg_ParseTuple(args, "O", (PyObject*)&box))
+    if (!PyArg_ParseTuple(args, "O!", &BoxType, (PyObject*)&box))
         return NULL;
     return PyLong_FromVoidPtr(box->meminfoptr);
 }
@@ -178,9 +176,9 @@ MOD_INIT(_box) {
 
     /* bind address to direct access utils */;
     PyModule_AddObject(m, "box_meminfoptr_offset",
-                       PyLong_FromLong(offsetof(BoxObject, meminfoptr)));
+                       PyLong_FromSsize_t(offsetof(BoxObject, meminfoptr)));
     PyModule_AddObject(m, "box_dataptr_offset",
-                       PyLong_FromLong(offsetof(BoxObject, dataptr)));
+                       PyLong_FromSsize_t(offsetof(BoxObject, dataptr)));
 
     return MOD_SUCCESS_VAL(m);
 }

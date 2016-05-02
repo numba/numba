@@ -151,6 +151,25 @@ def box_raw_pointer(typ, val, c):
     return c.box(types.uintp, addr)
 
 
+@box(types.EnumMember)
+def box_enum(typ, val, c):
+    """
+    Fetch an enum member given its native value.
+    """
+    valobj = c.box(typ.dtype, val)
+    # Call the enum class with the value object
+    cls_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ.instance_class))
+    return c.pyapi.call_function_objargs(cls_obj, (valobj,))
+
+@unbox(types.EnumMember)
+def unbox_enum(typ, obj, c):
+    """
+    Convert an enum member's value to its native value.
+    """
+    valobj = c.pyapi.object_getattr_string(obj, "value")
+    return c.unbox(typ.dtype, valobj)
+
+
 #
 # Composite types
 #

@@ -1,0 +1,9 @@
+# Configuration for codecov.io
+
+comment:
+    layout: "header, changes, diff"
+
+coverage:
+    ignore:
+        - "numba/cuda/.*"
+        - "numba/hsa/.*"

@@ -22,6 +22,7 @@ class Registry(object):
         self.getattrs = []
         self.setattrs = []
         self.casts = []
+        self.constants = []
 
     def lower(self, func, *argtys):
         """
@@ -103,12 +104,24 @@ class Registry(object):
             return impl
         return decorate
 
+    def lower_constant(self, ty):
+        """
+        Decorate the implementation for creating a constant of type *ty*.
+
+        The decorated implementation will have the signature
+        (context, builder, ty, pyval).
+        """
+        def decorate(impl):
+            self.constants.append((impl, (ty,)))
+            return impl
+        return decorate
+
 
 class RegistryLoader(BaseRegistryLoader):
     """
     An incremental loader for a target registry.
     """
-    registry_items = ('functions', 'getattrs', 'setattrs', 'casts')
+    registry_items = ('functions', 'getattrs', 'setattrs', 'casts', 'constants')
 
 
 # Global registry for implementations of builtin operations
@@ -121,6 +134,7 @@ lower_getattr_generic = builtin_registry.lower_getattr_generic
 lower_setattr = builtin_registry.lower_setattr
 lower_setattr_generic = builtin_registry.lower_setattr_generic
 lower_cast = builtin_registry.lower_cast
+lower_constant = builtin_registry.lower_constant
 
 
 def _decorate_getattr(impl, ty, attr):

@@ -276,7 +276,10 @@ class NamedUniTuple(_HomogenousTuple, BaseNamedTuple):
         self.instance_class = cls
         name = "%s(%s x %d)" % (cls.__name__, dtype, count)
         super(NamedUniTuple, self).__init__(name)
-        self._iterator_type = UniTupleIter(self)
+
+    @property
+    def iterator_type(self):
+        return UniTupleIter(self)
 
     @property
     def key(self):
