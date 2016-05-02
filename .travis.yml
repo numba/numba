@@ -6,9 +6,11 @@ dist: trusty
 matrix:
     include:
         # Longest build first
-        - env: PYTHON=3.5 NUMPY=1.11 RUN_COVERAGE=yes
-        - env: PYTHON=3.4 NUMPY=1.9 BUILD_DOC=yes
-        - env: PYTHON=2.7 NUMPY=1.7
+        # Parametrize the conda env name so multiple builds can
+        # work with multiple environments on the same machine in parallel.
+        - env: PYTHON=3.5 NUMPY=1.11 RUN_COVERAGE=yes CONDA_ENV=travisci
+        - env: PYTHON=3.4 NUMPY=1.9 BUILD_DOC=yes CONDA_ENV=travisci
+        - env: PYTHON=2.7 NUMPY=1.7 CONDA_ENV=travisci
 
 branches:
     only:
@@ -21,7 +23,7 @@ before_install:
     - buildscripts/incremental/create_conda_environment.sh
     - buildscripts/incremental/setup_conda_environment.sh
 install:
-    - source activate travisci
+    - source activate $CONDA_ENV
     # Build numba extensions without silencing compile errors
     - python setup.py build_ext -q --inplace
     # Install numba

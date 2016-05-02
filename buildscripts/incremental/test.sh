@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source activate travisci
+source activate $CONDA_ENV
 set -v
 # Ensure that the documentation builds without warnings
 pushd docs
