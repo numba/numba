@@ -10,9 +10,9 @@ from .errors import DeprecationError
 from .targets import registry
 
 
+
 # -----------------------------------------------------------------------------
 # Decorators
-
 
 def autojit(*args, **kws):
     """Deprecated.
@@ -31,10 +31,10 @@ class _DisableJitWrapper(object):
     def __call__(self, *args, **kwargs):
         return self.py_func(*args, **kwargs)
 
+
 _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "Signatures should be passed as the first "
                                  "positional argument.")
-
 
 def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **options):
     """
