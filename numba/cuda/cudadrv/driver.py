@@ -468,7 +468,7 @@ class Context(object):
                                      (self.device.id, self.handle.value))
         self.allocations = utils.UniqueDict()
         self.modules = utils.UniqueDict()
-        self.finalizer = utils.finalize(self, self._make_finalizer())
+        utils.finalize(self, self._make_finalizer())
         # For storing context specific data
         self.extras = {}
 
@@ -783,7 +783,6 @@ class MemoryPointer(object):
         self.device_pointer = pointer
         self.size = size
         self._cuda_memsize_ = size
-        self.finalizer = finalizer
         self.is_managed = finalizer is not None
         self.refct = 0
         self.handle = self.device_pointer
@@ -862,7 +861,6 @@ class PinnedMemory(mviewbuf.MemAlloc):
         self.size = size
         self.host_pointer = pointer
         self.is_managed = finalizer is not None
-        self.finalizer = finalizer
         self.handle = self.host_pointer
 
         # For buffer interface
@@ -871,12 +869,6 @@ class PinnedMemory(mviewbuf.MemAlloc):
 
         if finalizer is not None:
             utils.finalize(self, finalizer)
-
-    def unpin(self):
-        if not self.is_alive:
-            raise DeadMemoryError
-        self.finalizer()
-        self.is_alive = False
 
     def own(self):
         return self
@@ -917,7 +909,6 @@ class Stream(object):
     def __init__(self, context, handle, finalizer):
         self.context = context
         self.handle = handle
-        self.finalizer = finalizer
         if finalizer is not None:
             utils.finalize(self, finalizer)
 
@@ -948,7 +939,6 @@ class Event(object):
     def __init__(self, context, handle, finalizer=None):
         self.context = context
         self.handle = handle
-        self.finalizer = finalizer
         if finalizer is not None:
             utils.finalize(self, finalizer)
 
@@ -1011,8 +1001,7 @@ class Module(object):
         self.context = context
         self.handle = handle
         self.info_log = info_log
-        self.finalizer = finalizer
-        if self.finalizer is not None:
+        if finalizer is not None:
             self._finalizer = utils.finalize(self, finalizer)
 
     def unload(self):
