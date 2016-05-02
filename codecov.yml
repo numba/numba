@@ -1,7 +1,7 @@
 # Configuration for codecov.io
 
 comment:
-    layout: "header, changes, diff, suggestions, uncovered"
+    layout: "header, changes, diff"
 
 coverage:
     ignore:
@@ -9,11 +9,11 @@ coverage:
         - "numba/hsa/.*"
 
 status:
-    # Disable the "project" and "patch" statuses since they can mark
-    # a build as failed if too much code is not covered (which happens often
-    # with JITted functions).  The information is still available in
-    # the codecov.io UI.
     project:
-        enabled: no
+        # The build fails if total project coverage drops by more than 3%
+        target: auto
+        threshold: 3
     patch:
+        # This check can mark a build failed if too much new code
+        # is not covered (which happens often with JITted functions).
         enabled: no
