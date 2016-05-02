@@ -7,8 +7,8 @@ matrix:
     include:
         # Longest build first
         - env: PYTHON=3.5 NUMPY="numpy=1.11" RUN_COVERAGE=yes
-        - env: PYTHON=3.4 NUMPY="numpy=1.9" BUILD_DOC=yes
-        - env: PYTHON=2.7 NUMPY="numpy=1.7"
+        #- env: PYTHON=3.4 NUMPY="numpy=1.9" BUILD_DOC=yes
+        #- env: PYTHON=2.7 NUMPY="numpy=1.7"
 
 branches:
     only:
@@ -57,7 +57,7 @@ script:
     # Run the Numba test suite
     # Note that coverage is run from the checkout dir to match the "source"
     # directive in .coveragerc
-    - if [ "$RUN_COVERAGE" == "yes" ]; then cd $TRAVIS_BUILD_DIR; coverage erase; coverage run runtests.py -b -m numba.tests; fi
+    - if [ "$RUN_COVERAGE" == "yes" ]; then cd $TRAVIS_BUILD_DIR; coverage erase; coverage run runtests.py --tags important -b -m numba.tests; fi
     - if [ "$RUN_COVERAGE" != "yes" ]; then NUMBA_ENABLE_CUDASIM=1 python -m numba.runtests -b -m numba.tests; fi
     # Also run test_runtests individually, to make sure test discovery didn't break
     - python -m numba.tests.test_runtests
