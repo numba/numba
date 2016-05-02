@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source activate travisci
+source activate $ENV
 set -v
 # Setup environment
 CONDA_INSTALL="conda install --yes -q"
