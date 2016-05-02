@@ -1455,6 +1455,20 @@ API_PROTOTYPES = {
         'errcheck': _check_error
     },
 
+    # hsa_status_t HSA_API hsa_code_object_deserialize(
+    #     void *serialized_code_object,
+    #     size_t serialized_code_object_size,
+    #     const char *options,
+    #     hsa_code_object_t *code_object);
+    "hsa_code_object_deserialize": {
+        'restype': hsa_status_t,
+        'argtypes': [ctypes.c_void_p,
+                     ctypes.c_size_t,
+                     ctypes.c_char_p,
+                     ctypes.POINTER(hsa_code_object_t)],
+        'errcheck': _check_error,
+    },
+
     # hsa_status_t HSA_API hsa_executable_create(
     #     hsa_profile_t profile,
     #     hsa_executable_state_t executable_state,

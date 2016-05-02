@@ -5,7 +5,7 @@ from collections import namedtuple
 from numba.typing.templates import ConcreteTemplate
 from numba import types, compiler
 from .hlc import hlc
-from .hsadrv import devices, driver, enums
+from .hsadrv import devices, driver, enums, drvapi
 from numba.hsa.hsadrv.driver import hsa, dgpu_present
 from .hsadrv import devicearray
 from numba.typing.templates import AbstractTemplate
@@ -208,17 +208,26 @@ class _CachedProgram(object):
     def get(self):
         ctx = devices.get_context()
         result = self._cache.get(ctx)
-        # The program has not been finalized for this device
+        # The program does not exist as GCN yet.
         if result is None:
-            # Finalize
-            symbol = '&{0}'.format(self._entry_name)
+
+            # generate GCN
+            symbol = '{0}'.format(self._entry_name)
             agent = ctx.agent
 
-            brig_module = driver.BrigModule(self._binary)
-            prog = driver.Program()
-            prog.add_module(brig_module)
-            code = prog.finalize(agent.isa)
-            del prog
+            ba = bytearray(self._binary)
+            bblob = ctypes.c_byte * len(self._binary)
+            bas = bblob.from_buffer(ba)
+
+            code_ptr = drvapi.hsa_code_object_t();
+            driver.hsa.hsa_code_object_deserialize(
+                    ctypes.addressof(bas),
+                    len(self._binary),
+                    None,
+                    ctypes.byref(code_ptr)
+                    )
+
+            code = driver.CodeObject(code_ptr)
 
             ex = driver.Executable()
             ex.load(agent, code)
@@ -232,7 +241,7 @@ class _CachedProgram(object):
                         break
             assert kernarg_region is not None
 
-            # Cache the finalized program
+            # Cache the GCN program
             result = _CacheEntry(symbol=symobj, executable=ex,
                                  kernarg_region=kernarg_region)
             self._cache[ctx] = result
@@ -247,18 +256,18 @@ class HSAKernel(HSAKernelBase):
     def __init__(self, llvm_module, name, argtypes):
         super(HSAKernel, self).__init__()
         self._llvm_module = llvm_module
-        self.assembly, self.binary = self._finalize()
+        self.assembly, self.binary = self._generateGCN()
         self.entry_name = name
         self.argument_types = tuple(argtypes)
         self._argloc = []
-        # cached finalized program
+        # cached program
         self._cacheprog = _CachedProgram(entry_name=self.entry_name,
                                          binary=self.binary)
 
-    def _finalize(self):
+    def _generateGCN(self):
         hlcmod = hlc.Module()
         hlcmod.load_llvm(str(self._llvm_module))
-        return hlcmod.finalize()
+        return hlcmod.generateGCN()
 
     def bind(self):
         """

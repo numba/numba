@@ -6,6 +6,7 @@ from functools import reduce
 from llvmlite.llvmpy.core import Type
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
+from llvmlite import ir
 
 from numba.targets.imputils import Registry
 from numba import cgutils
@@ -237,7 +238,6 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace):
             raise ValueError("array length <= 0")
         else:
             gvmem.linkage = lc.LINKAGE_INTERNAL
-            gvmem.initializer = lc.Constant.null(laryty)
 
         if dtype not in types.number_domain:
             raise TypeError("unsupported type: %s" % dtype)
