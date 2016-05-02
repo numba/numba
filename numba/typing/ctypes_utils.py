@@ -35,10 +35,21 @@ CTYPES_MAP = {
 
 
 def convert_ctypes(ctypeobj):
-    try:
-        return CTYPES_MAP[ctypeobj]
-    except KeyError:
-        raise TypeError("unhandled ctypes type: %s" % ctypeobj)
+    """
+    Convert the given ctypes type to a Numba type.
+    """
+    def _convert_internal(ctypeobj):
+        if isinstance(ctypeobj, type) and issubclass(ctypeobj, ctypes._Pointer):
+            valuety = _convert_internal(ctypeobj._type_)
+            if valuety is not None:
+                return types.CPointer(valuety)
+        else:
+            return CTYPES_MAP.get(ctypeobj)
+
+    ty = _convert_internal(ctypeobj)
+    if ty is None:
+        raise TypeError("Unsupported ctypes type: %s" % ctypeobj)
+    return ty
 
 
 def is_ctypes_funcptr(obj):

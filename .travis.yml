@@ -5,9 +5,10 @@ dist: trusty
 
 matrix:
     include:
-        - env: PYTHON=2.7 NUMPY="1.7"
-        - env: PYTHON=3.4 NUMPY="1.9" BUILD_DOC=yes
-        - env: PYTHON=3.5 NUMPY="1.11" RUN_COVERAGE=yes
+        # Longest build first
+        - env: PYTHON=3.5 NUMPY=1.11 RUN_COVERAGE=yes
+        - env: PYTHON=3.4 NUMPY=1.9 BUILD_DOC=yes
+        - env: PYTHON=2.7 NUMPY=1.7
 
 branches:
     only:

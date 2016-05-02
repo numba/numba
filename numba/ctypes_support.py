@@ -1,6 +1,7 @@
 """
-This file fixes portability issues for ctypes
+This file fixes portability issues for ctypes.
 """
+
 from __future__ import absolute_import
 from numba.config import PYVERSION
 from ctypes import *

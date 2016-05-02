@@ -111,10 +111,15 @@ ext_nrt_python = Extension(name='numba.runtime._nrt_python',
                                     'numba/runtime/_nrt_python.c'],
                            include_dirs=["numba"] + npymath_info['include_dirs'])
 
+ext_jitclass_box = Extension(name='numba.jitclass._box',
+                             sources=['numba/jitclass/_box.c'],
+                             depends=['numba/_pymodule.h'],
+                             include_dirs=['numba'])
+
 ext_modules = [ext_dynfunc, ext_npymath_exports, ext_dispatcher,
                ext_helperlib, ext_typeconv,
                ext_npyufunc_ufunc, ext_npyufunc_workqueue, ext_mviewbuf,
-               ext_nrt_python]
+               ext_nrt_python, ext_jitclass_box]
 
 
 def find_packages(root_dir, root_name):
