@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source activate $ENV
+source activate $CONDA_ENV
 set -v
 # Setup environment
 CONDA_INSTALL="conda install --yes -q"
