@@ -35,6 +35,7 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "Signatures should be passed as the first "
                                  "positional argument.")
 
+
 def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **options):
     """
     This decorator is used to compile a Python function into native code.
