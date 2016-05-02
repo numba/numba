@@ -1,9 +1,19 @@
 # Configuration for codecov.io
 
 comment:
-    layout: "header, changes, diff"
+    layout: "header, changes, diff, suggestions, uncovered"
 
 coverage:
     ignore:
         - "numba/cuda/.*"
         - "numba/hsa/.*"
+
+status:
+    # Disable the "project" and "patch" statuses since they can mark
+    # a build as failed if too much code is not covered (which happens often
+    # with JITted functions).  The information is still available in
+    # the codecov.io UI.
+    project:
+        enabled: no
+    patch:
+        enabled: no
