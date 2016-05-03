@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import collections
+import ctypes
 import re
 
 import numpy
@@ -365,3 +366,46 @@ def from_struct_dtype(dtype):
     aligned = _is_aligned_struct(dtype)
 
     return types.Record(str(dtype.descr), fields, size, aligned, dtype)
+
+
+def _get_bytes_buffer(ptr, nbytes):
+    if isinstance(ptr, ctypes.c_void_p):
+        ptr = ptr.value
+    arrty = ctypes.c_byte * nbytes
+    return arrty.from_address(ptr)
+
+def _get_array_from_ptr(ptr, nbytes, dtype):
+    return numpy.frombuffer(_get_bytes_buffer(ptr, nbytes), dtype)
+
+def carray(ptr, shape, dtype=None):
+    from .typing.ctypes_utils import from_ctypes
+
+    try:
+        # Use ctypes parameter protocol if available
+        ptr = ptr._as_parameter_
+    except AttributeError:
+        pass
+
+    # Normalize dtype, to accept e.g. "int64" or np.int64
+    if dtype is not None:
+        dtype = numpy.dtype(dtype)
+
+    if isinstance(ptr, ctypes.c_void_p):
+        if dtype is None:
+            raise TypeError("carray(): explicit dtype required for void* argument")
+        p = ptr
+    elif isinstance(ptr, ctypes._Pointer):
+        ptrty = from_ctypes(ptr.__class__)
+        assert isinstance(ptrty, types.CPointer)
+        if dtype is None:
+            dtype = as_dtype(ptrty.dtype)
+        p = ctypes.cast(ptr, ctypes.c_void_p)
+    else:
+        raise TypeError("expected a ctypes pointer, got %r" % (ptr,))
+
+    nbytes = dtype.itemsize * numpy.product(shape, dtype=numpy.intp)
+    return _get_array_from_ptr(p, nbytes, dtype).reshape(shape)
+
+
+def farray(ptr, shape, dtype=None):
+    return carray(ptr, shape[::-1], dtype).T

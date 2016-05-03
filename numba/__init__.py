@@ -25,8 +25,8 @@ from .decorators import autojit, cfunc, generated_jit, jit, njit
 # Re-export vectorize decorators
 from .npyufunc import vectorize, guvectorize
 
-# Re-export from_dtype
-from .numpy_support import from_dtype
+# Re-export Numpy helpers
+from .numpy_support import carray, farray, from_dtype
 
 # Re-export jitclass
 from .jitclass import jitclass

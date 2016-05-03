@@ -10,7 +10,8 @@ from .templates import (AttributeTemplate, AbstractTemplate, CallableTemplate,
 
 from ..numpy_support import (ufunc_find_matching_loop,
                              supported_ufunc_loop, as_dtype,
-                             from_dtype, as_dtype, resolve_output_type)
+                             from_dtype, as_dtype, resolve_output_type,
+                             carray, farray)
 from ..numpy_support import version as numpy_version
 from ..errors import TypingError
 from ..config import PerformanceWarning
@@ -992,3 +993,40 @@ class DiagCtor(CallableTemplate):
                     return None
                 return types.Array(ndim=rdim, dtype=ref.dtype, layout='C')
         return typer
+
+
+# -----------------------------------------------------------------------------
+# Numba helpers
+
+@infer_global(carray)
+class NumbaCArray(CallableTemplate):
+    layout = 'C'
+
+    def generic(self):
+        def typer(ptr, shape, dtype=types.none):
+            if ptr is types.voidptr:
+                if dtype is types.none:
+                    raise TypeError("carray(): explicit dtype required for void* argument")
+            elif not isinstance(ptr, types.CPointer):
+                raise TypeError("carray(): pointer argument expected, got '%s'"
+                                % (ptr,))
+
+            if dtype is types.none:
+                dtype = ptr.dtype
+            elif isinstance(dtype, types.DTypeSpec):
+                dtype = dtype.dtype
+            else:
+                raise TypeError("carray(): invalid dtype spec '%s'" % (dtype,))
+
+            ndim = _parse_shape(shape)
+            if ndim is None:
+                raise TypeError("carray(): invalid shape '%s'" % (shape,))
+
+            return types.Array(dtype, ndim, self.layout)
+
+        return typer
+
+
+@infer_global(farray)
+class NumbaFArray(NumbaCArray):
+    layout = 'F'

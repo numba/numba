@@ -9,8 +9,10 @@ import os
 import subprocess
 import sys
 
+import numpy as np
+
 from numba import unittest_support as unittest
-from numba import cfunc, types, typing, utils
+from numba import cfunc, carray, farray, types, typing, utils
 from numba.types.abstract import _typecache
 from numba import jit, numpy_support
 from .support import TestCase, tag, captured_stderr
@@ -31,6 +33,51 @@ div_sig = "float64(int64, int64)"
 def objmode_usecase(a, b):
     object()
     return a + b
+
+# Test functions for carray() and farray()
+
+def add_pointers_c(in_ptr, out_ptr, m, n):
+    in_ = carray(in_ptr, (m, n))
+    out = carray(out_ptr, (m, n))
+    assert in_.flags.c_contiguous
+    assert out.flags.c_contiguous
+    for i in range(m):
+        for j in range(n):
+            out[i, j] = i - j + in_[i, j]
+
+def add_pointers_f(in_ptr, out_ptr, m, n):
+    in_ = farray(in_ptr, (m, n))
+    out = farray(out_ptr, (m, n))
+    assert in_.flags.f_contiguous
+    assert out.flags.f_contiguous
+    for i in range(m):
+        for j in range(n):
+            out[i, j] = i - j + in_[i, j]
+
+add_pointers_sig = types.void(types.CPointer(types.float32),
+                              types.CPointer(types.float32),
+                              types.intp, types.intp)
+
+def add_voidptr_c(in_ptr, out_ptr, m, n):
+    in_ = carray(in_ptr, (m, n), dtype=np.float32)
+    out = carray(out_ptr, (m, n), dtype=np.float32)
+    assert in_.flags.c_contiguous
+    assert out.flags.c_contiguous
+    for i in range(m):
+        for j in range(n):
+            out[i, j] = i - j + in_[i, j]
+
+def add_voidptr_f(in_ptr, out_ptr, m, n):
+    in_ = farray(in_ptr, (m, n), dtype=np.float32)
+    out = farray(out_ptr, (m, n), dtype=np.float32)
+    assert in_.flags.f_contiguous
+    assert out.flags.f_contiguous
+    for i in range(m):
+        for j in range(n):
+            out[i, j] = i - j + in_[i, j]
+
+add_voidptr_sig = types.void(types.voidptr, types.voidptr,
+                             types.intp, types.intp)
 
 
 class TestCFunc(TestCase):
@@ -102,7 +149,7 @@ class TestCFunc(TestCase):
         self.assertIn("Untyped global name 'object'", str(raises.exception))
 
 
-class TestCache(BaseCacheTest):
+class TestCFuncCache(BaseCacheTest):
 
     here = os.path.dirname(__file__)
     usecases_file = os.path.join(here, "cfunc_cache_usecases.py")
@@ -158,6 +205,36 @@ class TestCache(BaseCacheTest):
         self.check_module(mod)
 
         self.run_in_separate_process()
+
+
+class TestCArray(TestCase):
+    """
+    Tests for carray() and farray().
+    """
+
+    def run_add_pointers(self, pointer_factory, func):
+        a = np.linspace(0.5, 2.0, 6).reshape((2, 3)).astype(np.float32)
+        out = np.empty_like(a)
+        func(pointer_factory(a), pointer_factory(out), *a.shape)
+        return out
+
+    def make_typed_pointer(self, arr):
+        return arr.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+
+    def check_add_pointers(self, pointer_factory, pyfunc, cfunc):
+        expected = self.run_add_pointers(pointer_factory, pyfunc)
+        got = self.run_add_pointers(pointer_factory, cfunc)
+        self.assertPreciseEqual(expected, got)
+
+    def test_carray(self):
+        # TODO check pure Python carray() functionality
+        pass
+
+    def test_numba_carray(self):
+        # With typed pointers
+        pyfunc = add_pointers_c
+        f = cfunc(add_pointers_sig)(pyfunc)
+        self.check_add_pointers(self.make_typed_pointer, pyfunc, f.ctypes)
 
 
 if __name__ == "__main__":
