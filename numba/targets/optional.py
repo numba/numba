@@ -41,6 +41,9 @@ lower_builtin('is', types.none, types.none)(always_return_true_impl)
 lower_builtin('is', types.Optional, types.none)(optional_is_none)
 lower_builtin('is', types.none, types.Optional)(optional_is_none)
 
+# Using `is` on other types always return False
+lower_builtin('is', types.Any, types.Any)(always_return_false_impl)
+
 
 @lower_getattr_generic(types.Optional)
 def optional_getattr(context, builder, typ, value, attr):
