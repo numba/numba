@@ -15,6 +15,7 @@ from .support import TestCase, MemoryLeakMixin, tag
 from numba.jitclass import _box
 from numba.runtime.nrt import MemInfo
 from numba import errors
+from numba.six import assertRegex
 
 
 def _get_meminfo(box):
@@ -576,7 +577,7 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
             inst.call_hash()
         errmsg = str(raises.exception)
         regex = r"Invalid usage of Function\(<built-in function hash>\)"
-        self.assertRegex(errmsg, regex)
+        assertRegex(self, errmsg, regex)
 
     @tag('important')
     def test_eq(self):
