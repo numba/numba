@@ -775,8 +775,16 @@ def _module_finalizer(context, handle):
 
     def core():
         def cleanup():
-            if modules:
-                del modules[handle.value]
+            # All modules are owned by their parent Context.
+            # A Module is either released by a call to
+            # Context.unload_module, which clear the handle (pointer) mapping
+            # (checked by the following assertion), or, by Context.reset().
+            # Both releases the sole reference to the Module and trigger the
+            # finalizer for the Module instance.  The actual call to
+            # cuModuleUnload is deferred to the trashing service to avoid
+            # further corruption of the CUDA context if a fatal error has
+            # occurred in the CUDA driver.
+            assert handle.value not in modules
             driver.cuModuleUnload(handle)
 
         trashing.add_trash(cleanup)
@@ -1038,14 +1046,8 @@ class Module(object):
         self.handle = handle
         self.info_log = info_log
         self.finalizer = finalizer
-        self.is_managed = self.finalizer is not None
-
-    def __del__(self):
-        try:
-            if self.is_managed:
-                self.finalizer()
-        except:
-            traceback.print_exc()
+        if self.finalizer is not None:
+            self._finalizer = utils.finalize(self, finalizer)
 
     def unload(self):
         self.context.unload_module(self)
