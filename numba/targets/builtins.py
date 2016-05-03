@@ -25,6 +25,14 @@ def generic_is_not(context, builder, sig, args):
     return builder.not_(is_impl(builder, args))
 
 
+@lower_builtin('is', types.Any, types.Any)
+def generic_is(context, builder, sig, args):
+    """
+    Default implementation for `x is y`
+    """
+    return cgutils.false_bit
+
+
 #-------------------------------------------------------------------------------
 
 @lower_getattr_generic(types.DeferredType)
