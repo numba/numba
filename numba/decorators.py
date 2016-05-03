@@ -210,7 +210,7 @@ def cfunc(sig, locals={}, cache=False, **options):
     Usage::
         @cfunc("float64(float64, float64)", nopython=True, cache=True)
         def add(a, b):
-            return a, b
+            return a + b
 
     """
     sig = sigutils.normalize_signature(sig)

@@ -84,7 +84,7 @@ integration is made 18 times faster::
 Signature specification
 =======================
 
-The explicit ``@func`` signature can use any Numba types, but only a subset
+The explicit ``@cfunc`` signature can use any Numba types, but only a subset
 of them make sense for a C callback.  You should generally limit yourself
 to scalar types (such as ``int8`` or ``float64``) or pointers to them
 (for example ``types.CPointer(types.int8)``).
