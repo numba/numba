@@ -42,14 +42,36 @@ class OverloadSelector(object):
         self.versions = []
 
     def find(self, sig):
-        for ver_sig, impl in self.versions:
-            if ver_sig == sig:
-                return impl
+        def select():
+            for ver_sig, impl in self.versions:
+                if ver_sig == sig:
+                    yield ver_sig, impl
 
-            # As generic type
-            if self._match_arglist(ver_sig, sig):
-                return impl
+                # As generic type
+                if self._match_arglist(ver_sig, sig):
+                    yield ver_sig, impl
 
+        from pprint import pprint
+        from itertools import permutations
+        candidates = dict(select())
+        count = len(candidates)
+        if count == 0:
+            raise NotImplementedError(self, sig)
+        elif count == 1:
+            [item] = candidates.items()
+            return item[1]
+
+        scoring = defaultdict(int)
+        for a, b in permutations(candidates.keys(), r=2):
+            # print('---', a, b)
+            matched = self._match_arglist(formal_args=a, actual_args=b)
+            if matched:
+                scoring[a] += 1
+
+        ranked = sorted(candidates.keys(), key=lambda x: scoring[x])
+        # print(ranked)
+        # pprint(scoring)
+        return candidates[ranked[0]]
         raise NotImplementedError(self, sig)
 
     def _match_arglist(self, formal_args, actual_args):
