@@ -200,6 +200,20 @@ class TestOptional(TestCase):
         self.assertIsNone(foo(123, False))
         self.assertEqual(foo(231, True), 231)
 
+    def test_optional_thru_omitted_arg(self):
+        """
+        Issue 1868
+        """
+
+        def pyfunc(x=None):
+            if x is None:
+                x = 1
+            return x
+
+        cfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(), cfunc())
+        self.assertEqual(pyfunc(3), cfunc(3))
+
 
 if __name__ == '__main__':
     unittest.main()
