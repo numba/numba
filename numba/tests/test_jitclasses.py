@@ -450,6 +450,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             'value': int32,
             '_value': float32,
             '__value': int32,
+            '__value__': int32,
         }
 
         @jitclass(spec)
@@ -459,6 +460,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 self.value = value
                 self._value = value / 2
                 self.__value = value * 2
+                self.__value__ = value - 1
 
             @property
             def private_value(self):
@@ -494,6 +496,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             def check_private_method(self, factor):
                 return self.__private_method(factor)
 
+
         value = 123
         inst = MyClass(value)
         # test attributes
@@ -511,6 +514,10 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         # test methods
         self.assertEqual(inst._protected_method(3), inst._value * 3)
         self.assertEqual(inst.check_private_method(3), inst.private_value * 3)
+        # test special
+        self.assertEqual(inst.__value__, value - 1)
+        inst.__value__ -= 100
+        self.assertEqual(inst.__value__, value - 101)
 
         # test errors
         @njit

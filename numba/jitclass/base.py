@@ -120,7 +120,7 @@ def _fix_up_private_attr(clsname, spec):
     """
     out = OrderedDict()
     for k, v in spec.items():
-        if k.startswith('__'):
+        if k.startswith('__') and not k.endswith('__'):
             k = '_' + clsname + k
         out[k] = v
     return out
