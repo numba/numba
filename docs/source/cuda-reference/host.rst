@@ -23,7 +23,7 @@ Documentation on Context Management
 <http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__CTX.html>`_ and the
 `CUDA C Programming Guide Context Documentation
 <http://docs.nvidia.com/cuda/cuda-c-programming-guide/#context>`_. CUDA Contexts
-are instances of the :class:`Context` class:
+are instances of the :class:`~numba.cuda.cudadrv.driver.Context` class:
 
 .. autoclass:: numba.cuda.cudadrv.driver.Context
    :members: reset, get_memory_info, push, pop
