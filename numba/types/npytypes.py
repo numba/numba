@@ -321,6 +321,7 @@ class Array(Buffer):
                 and (self.aligned or not other.aligned)):
                 return Conversion.safe
 
+
 class SmartArrayType(Array):
 
     def __init__(self, dtype, ndim, layout, pyclass):
@@ -340,6 +341,7 @@ class SmartArrayType(Array):
             layout = self.layout
         return type(self)(dtype, ndim, layout, self.pyclass)
 
+
 class ArrayCTypes(Type):
     """
     This is the type for `numpy.ndarray.ctypes`.
@@ -347,13 +349,31 @@ class ArrayCTypes(Type):
     def __init__(self, arytype):
         # This depends on the ndim for the shape and strides attributes,
         # even though they are not implemented, yet.
+        self.dtype = arytype.dtype
         self.ndim = arytype.ndim
-        name = "ArrayCTypes(ndim={0})".format(self.ndim)
+        name = "ArrayCTypes(dtype={0}, ndim={1})".format(self.dtype, self.ndim)
         super(ArrayCTypes, self).__init__(name)
 
     @property
     def key(self):
-        return self.ndim
+        return self.dtype, self.ndim
+
+    def can_convert_to(self, typingctx, other):
+        """
+        Convert this type to the corresponding pointer type.
+        This allows passing a array.ctypes object to a C function taking
+        a raw pointer.
+
+        Note that in pure Python, the array.ctypes object can only be
+        passed to a ctypes function accepting a c_void_p, not a typed
+        pointer.
+        """
+        from . import CPointer, voidptr
+        # XXX what about readonly
+        if isinstance(other, CPointer) and other.dtype == self.dtype:
+            return Conversion.safe
+        elif other == voidptr:
+            return Conversion.safe
 
 
 class ArrayFlags(Type):

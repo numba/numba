@@ -14,7 +14,7 @@ from numba.datamodel import default_manager, models
 from numba.targets import imputils
 from numba import cgutils
 from numba.six import exec_
-from . import boxing
+from . import _box
 
 
 ##############################################################################
@@ -85,7 +85,7 @@ class JitClassType(type):
         cls._ctor = njit(ctor)
 
     def __instancecheck__(cls, instance):
-        if isinstance(instance, boxing.Box):
+        if isinstance(instance, _box.Box):
             return instance._numba_type_.class_type is cls.class_type
         return False
 

@@ -1,5 +1,5 @@
 ============================
-NBEP 3: Defining C callbacks
+NBEP 4: Defining C callbacks
 ============================
 
 :Author: Antoine Pitrou
@@ -84,9 +84,8 @@ provide a way to rebuild an array view of this data inside the callback.
 
 ::
 
-   from numba import cfunc
+   from numba import cfunc, carray
    from numba.types import float64, CPointer, void, intp
-   from numba.XXX import carray
 
    # A callback with the C signature `void(double *, double *, size_t)`
 
@@ -98,16 +97,16 @@ provide a way to rebuild an array view of this data inside the callback.
            out[i] = 1 / in_[i]
 
 
-The ``carray`` function takes ``(pointer, shape)`` arguments and
-returns a C-layout array view over the data *pointer*, with the
-given *shape*.  The array's dimensionality corresponds to the
-*shape* tuple's length.  The array's dtype corresponds to the
-*pointer*'s pointee type.
+The ``carray`` function takes ``(pointer, shape, dtype)`` arguments
+(``dtype`` being optional) and returns a C-layout array view over the
+data *pointer*, with the given *shape* and *dtype*.  *pointer* must
+be a ctypes pointer object (not a Python integer).  The array's
+dimensionality corresponds to the *shape* tuple's length.  If *dtype*
+is not given, the array's dtype corresponds to the *pointer*'s pointee
+type.
 
-The ``farray`` function is similar excepts that it returns a F-layout
+The ``farray`` function is similar except that it returns a F-layout
 array view.
-
-.. TODO:: from which module should ``carray`` be importable?
 
 
 Error handling
