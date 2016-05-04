@@ -4,6 +4,7 @@ from collections import namedtuple, defaultdict
 import copy
 import os
 import sys
+from itertools import permutations
 
 import numpy
 
@@ -42,39 +43,42 @@ class OverloadSelector(object):
         self.versions = []
 
     def find(self, sig):
-        def select():
-            for ver_sig, impl in self.versions:
-                if ver_sig == sig:
-                    yield ver_sig, impl
-
-                # As generic type
-                if self._match_arglist(ver_sig, sig):
-                    yield ver_sig, impl
-
-        from pprint import pprint
-        from itertools import permutations
-        candidates = dict(select())
-        count = len(candidates)
-        if count == 0:
+        candidates = dict(self._select_compatible(sig))
+        if candidates:
+            ranked = self._sort_signatures(candidates.keys())
+            return candidates[ranked[0]]
+        else:
             raise NotImplementedError(self, sig)
-        elif count == 1:
-            [item] = candidates.items()
-            return item[1]
 
+    def _select_compatible(self, sig):
+        """
+        Select all compatible signatures and their implementation.
+        """
+        out = {}
+        for ver_sig, impl in self.versions:
+            if self._match_arglist(ver_sig, sig):
+                out[ver_sig] = impl
+        return out
+
+    def _sort_signatures(self, candidates):
+        """
+        Sort signatures in ascending level of genericity.
+        """
         scoring = defaultdict(int)
-        for a, b in permutations(candidates.keys(), r=2):
-            # print('---', a, b)
-            matched = self._match_arglist(formal_args=a, actual_args=b)
+        for this, other in permutations(candidates, r=2):
+            matched = self._match_arglist(formal_args=this, actual_args=other)
             if matched:
-                scoring[a] += 1
-
-        ranked = sorted(candidates.keys(), key=lambda x: scoring[x])
-        # print(ranked)
-        # pprint(scoring)
-        return candidates[ranked[0]]
-        raise NotImplementedError(self, sig)
+                # increase genericity score everything another signature
+                # is compatible
+                scoring[this] += 1
+        return sorted(candidates, key=lambda x: scoring[x])
 
     def _match_arglist(self, formal_args, actual_args):
+        """
+        Returns True if the the signature is "matching".
+        A formal signature is "matching" if the actual signature matches exactly
+        or if the formal signature is a compatible generic signature.
+        """
         if formal_args and isinstance(formal_args[-1], types.VarArg):
             formal_args = (
                 formal_args[:-1] +
