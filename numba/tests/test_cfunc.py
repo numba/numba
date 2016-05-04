@@ -328,17 +328,18 @@ class TestCArray(TestCase):
         with self.assertRaises(TypeError):
             func(base.ctypes.data, base.shape)
 
-    def test_farray(self):
-        """
-        Test pure Python farray().
-        """
-        self.check_carray_farray(farray, 'F')
-
+    @tag('important')
     def test_carray(self):
         """
         Test pure Python carray().
         """
         self.check_carray_farray(carray, 'C')
+
+    def test_farray(self):
+        """
+        Test pure Python farray().
+        """
+        self.check_carray_farray(farray, 'F')
 
     def check_numba_carray_farray(self, usecase, dtype_usecase):
         # With typed pointers and implicit dtype
@@ -356,6 +357,7 @@ class TestCArray(TestCase):
         f = cfunc(carray_voidptr_usecase_sig)(pyfunc)
         self.check_carray_usecase(self.make_float32_pointer, pyfunc, f.ctypes)
 
+    @tag('important')
     def test_numba_carray(self):
         """
         Test Numba-compiled carray() against pure Python carray()
