@@ -6,7 +6,7 @@ import re
 
 import numpy
 
-from . import errors, types, config, npdatetime
+from . import errors, types, config, npdatetime, utils
 
 
 version = tuple(map(int, numpy.__version__.split('.')[:2]))
@@ -408,4 +408,6 @@ def carray(ptr, shape, dtype=None):
 
 
 def farray(ptr, shape, dtype=None):
-    return carray(ptr, shape[::-1], dtype).T
+    if not isinstance(shape, utils.INT_TYPES):
+        shape = shape[::-1]
+    return carray(ptr, shape, dtype).T

@@ -36,6 +36,67 @@ def objmode_usecase(a, b):
 
 # Test functions for carray() and farray()
 
+CARRAY_USECASE_OUT_LEN = 8
+
+def make_cfarray_usecase(func):
+
+    def cfarray_usecase(in_ptr, out_ptr, m, n):
+        # Tuple shape
+        in_ = func(in_ptr, (m, n))
+        # Integer shape
+        out = func(out_ptr, CARRAY_USECASE_OUT_LEN)
+        out[0] = in_.ndim
+        out[1:3] = in_.shape
+        out[3:5] = in_.strides
+        out[5] = in_.flags.c_contiguous
+        out[6] = in_.flags.f_contiguous
+        s = 0
+        for i, j in np.ndindex(m, n):
+            s += in_[i, j] * (i - j)
+        out[7] = s
+
+    return cfarray_usecase
+
+carray_usecase = make_cfarray_usecase(carray)
+farray_usecase = make_cfarray_usecase(farray)
+
+
+def make_cfarray_dtype_usecase(func):
+    # Same as make_cfarray_usecase(), but with explicit dtype.
+
+    def cfarray_usecase(in_ptr, out_ptr, m, n):
+        # Tuple shape
+        in_ = func(in_ptr, (m, n), dtype=np.float32)
+        # Integer shape
+        out = func(out_ptr, CARRAY_USECASE_OUT_LEN, np.float32)
+        out[0] = in_.ndim
+        out[1:3] = in_.shape
+        out[3:5] = in_.strides
+        out[5] = in_.flags.c_contiguous
+        out[6] = in_.flags.f_contiguous
+        s = 0
+        for i, j in np.ndindex(m, n):
+            s += in_[i, j] * (i - j)
+        out[7] = s
+
+    return cfarray_usecase
+
+carray_dtype_usecase = make_cfarray_dtype_usecase(carray)
+farray_dtype_usecase = make_cfarray_dtype_usecase(farray)
+
+
+carray_float32_usecase_sig = types.void(types.CPointer(types.float32),
+                                        types.CPointer(types.float32),
+                                        types.intp, types.intp)
+
+carray_float64_usecase_sig = types.void(types.CPointer(types.float64),
+                                        types.CPointer(types.float64),
+                                        types.intp, types.intp)
+
+carray_voidptr_usecase_sig = types.void(types.voidptr, types.voidptr,
+                                        types.intp, types.intp)
+
+
 def add_pointers_c(in_ptr, out_ptr, m, n):
     in_ = carray(in_ptr, (m, n))
     out = carray(out_ptr, (m, n))
@@ -212,22 +273,25 @@ class TestCArray(TestCase):
     Tests for carray() and farray().
     """
 
-    def run_add_pointers(self, pointer_factory, func):
-        a = np.linspace(0.5, 2.0, 6).reshape((2, 3)).astype(np.float32)
-        out = np.empty_like(a)
+    def run_carray_usecase(self, pointer_factory, func):
+        a = np.arange(10, 16).reshape((2, 3)).astype(np.float32)
+        out = np.empty(CARRAY_USECASE_OUT_LEN, dtype=np.float32)
         func(pointer_factory(a), pointer_factory(out), *a.shape)
         return out
+
+    def check_carray_usecase(self, pointer_factory, pyfunc, cfunc):
+        expected = self.run_carray_usecase(pointer_factory, pyfunc)
+        got = self.run_carray_usecase(pointer_factory, cfunc)
+        self.assertPreciseEqual(expected, got)
 
     def make_voidptr(self, arr):
         return arr.ctypes.data_as(ctypes.c_void_p)
 
-    def make_typed_pointer(self, arr):
+    def make_float32_pointer(self, arr):
         return arr.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
 
-    def check_add_pointers(self, pointer_factory, pyfunc, cfunc):
-        expected = self.run_add_pointers(pointer_factory, pyfunc)
-        got = self.run_add_pointers(pointer_factory, cfunc)
-        self.assertPreciseEqual(expected, got)
+    def make_float64_pointer(self, arr):
+        return arr.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
 
     def check_carray_farray(self, func, order):
         def eq(got, expected):
@@ -237,14 +301,20 @@ class TestCArray(TestCase):
             self.assertEqual(got.ctypes.data, expected.ctypes.data)
 
         base = np.arange(6).reshape((2, 3)).astype(np.float32).copy(order=order)
+
         # With typed pointer and implied dtype
-        a = func(self.make_typed_pointer(base), base.shape)
+        a = func(self.make_float32_pointer(base), base.shape)
         eq(a, base)
+        # Integer shape
+        a = func(self.make_float32_pointer(base), base.size)
+        eq(a, base.ravel('K'))
+
         # With typed pointer and explicit dtype
-        a = func(self.make_typed_pointer(base), base.shape, base.dtype)
+        a = func(self.make_float32_pointer(base), base.shape, base.dtype)
         eq(a, base)
-        a = func(self.make_typed_pointer(base), base.shape, np.int32)
+        a = func(self.make_float32_pointer(base), base.shape, np.int32)
         eq(a, base.view(np.int32))
+
         # With voidptr and explicit dtype
         a = func(self.make_voidptr(base), base.shape, base.dtype)
         eq(a, base)
@@ -260,24 +330,43 @@ class TestCArray(TestCase):
 
     def test_farray(self):
         """
-        Pure Python farray().
+        Test pure Python farray().
         """
         self.check_carray_farray(farray, 'F')
 
     def test_carray(self):
         """
-        Pure Python carray().
+        Test pure Python carray().
         """
         self.check_carray_farray(carray, 'C')
+
+    def check_numba_carray_farray(self, usecase, dtype_usecase):
+        # With typed pointers and implicit dtype
+        pyfunc = usecase
+        f = cfunc(carray_float32_usecase_sig)(pyfunc)
+        self.check_carray_usecase(self.make_float32_pointer, pyfunc, f.ctypes)
+
+        # With typed pointers and explicit (different) dtype
+        pyfunc = dtype_usecase
+        f = cfunc(carray_float64_usecase_sig)(pyfunc)
+        self.check_carray_usecase(self.make_float64_pointer, pyfunc, f.ctypes)
+
+        # With voidptr
+        pyfunc = dtype_usecase
+        f = cfunc(carray_voidptr_usecase_sig)(pyfunc)
+        self.check_carray_usecase(self.make_float32_pointer, pyfunc, f.ctypes)
 
     def test_numba_carray(self):
         """
         Test Numba-compiled carray() against pure Python carray()
         """
-        # With typed pointers
-        pyfunc = add_pointers_c
-        f = cfunc(add_pointers_sig)(pyfunc)
-        self.check_add_pointers(self.make_typed_pointer, pyfunc, f.ctypes)
+        self.check_numba_carray_farray(carray_usecase, carray_dtype_usecase)
+
+    def test_numba_farray(self):
+        """
+        Test Numba-compiled farray() against pure Python farray()
+        """
+        self.check_numba_carray_farray(farray_usecase, farray_dtype_usecase)
 
 
 if __name__ == "__main__":

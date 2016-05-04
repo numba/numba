@@ -3215,7 +3215,7 @@ def np_carray(context, builder, sig, args):
 
     off = ll_itemsize
     strides = []
-    if aryty.layout == 'C':
+    if aryty.layout == 'F':
         for s in shapes:
             strides.append(off)
             off = builder.mul(off, s)
