@@ -218,6 +218,9 @@ class TestCArray(TestCase):
         func(pointer_factory(a), pointer_factory(out), *a.shape)
         return out
 
+    def make_voidptr(self, arr):
+        return arr.ctypes.data_as(ctypes.c_void_p)
+
     def make_typed_pointer(self, arr):
         return arr.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
 
@@ -226,11 +229,51 @@ class TestCArray(TestCase):
         got = self.run_add_pointers(pointer_factory, cfunc)
         self.assertPreciseEqual(expected, got)
 
+    def check_carray_farray(self, func, order):
+        def eq(got, expected):
+            # Same layout, dtype, shape, etc.
+            self.assertPreciseEqual(got, expected)
+            # Same underlying data
+            self.assertEqual(got.ctypes.data, expected.ctypes.data)
+
+        base = np.arange(6).reshape((2, 3)).astype(np.float32).copy(order=order)
+        # With typed pointer and implied dtype
+        a = func(self.make_typed_pointer(base), base.shape)
+        eq(a, base)
+        # With typed pointer and explicit dtype
+        a = func(self.make_typed_pointer(base), base.shape, base.dtype)
+        eq(a, base)
+        a = func(self.make_typed_pointer(base), base.shape, np.int32)
+        eq(a, base.view(np.int32))
+        # With voidptr and explicit dtype
+        a = func(self.make_voidptr(base), base.shape, base.dtype)
+        eq(a, base)
+        a = func(self.make_voidptr(base), base.shape, np.int32)
+        eq(a, base.view(np.int32))
+
+        # voidptr without dtype
+        with self.assertRaises(TypeError):
+            func(self.make_voidptr(base), base.shape)
+        # Invalid pointer type
+        with self.assertRaises(TypeError):
+            func(base.ctypes.data, base.shape)
+
+    def test_farray(self):
+        """
+        Pure Python farray().
+        """
+        self.check_carray_farray(farray, 'F')
+
     def test_carray(self):
-        # TODO check pure Python carray() functionality
-        pass
+        """
+        Pure Python carray().
+        """
+        self.check_carray_farray(carray, 'C')
 
     def test_numba_carray(self):
+        """
+        Test Numba-compiled carray() against pure Python carray()
+        """
         # With typed pointers
         pyfunc = add_pointers_c
         f = cfunc(add_pointers_sig)(pyfunc)
