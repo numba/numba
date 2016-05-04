@@ -54,6 +54,8 @@ class FunctionDescriptor(object):
         self.qualname = qualname
         self.unique_name = unique_name
         self.doc = doc
+        # XXX typemap and calltypes should be on the compile result,
+        # not the FunctionDescriptor
         self.typemap = typemap
         self.calltypes = calltypes
         self.args = args
@@ -71,6 +73,7 @@ class FunctionDescriptor(object):
         # The mangled name *must* be unique, else the wrong function can
         # be chosen at link time.
         if self.modname:
+            # XXX choose a different convention for object mode
             self.mangled_name = mangler('%s.%s' % (self.modname, self.unique_name),
                                         self.argtypes)
         else:
@@ -101,13 +104,23 @@ class FunctionDescriptor(object):
         """
         return self.mangled_name
 
+    # XXX refactor this
+
     @property
     def llvm_cpython_wrapper_name(self):
         """
         The LLVM-registered name for a CPython-compatible wrapper of the
         raw function (i.e. a PyCFunctionWithKeywords).
         """
-        return 'wrapper.' + self.mangled_name
+        return 'cpython.' + self.mangled_name
+
+    @property
+    def llvm_cfunc_wrapper_name(self):
+        """
+        The LLVM-registered name for a C-compatible wrapper of the
+        raw function.
+        """
+        return 'cfunc.' + self.mangled_name
 
     def __repr__(self):
         return "<function descriptor %r>" % (self.unique_name)

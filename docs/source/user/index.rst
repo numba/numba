@@ -10,6 +10,7 @@ User Manual
    generated-jit.rst
    vectorize.rst
    jitclass.rst
+   cfunc.rst
    pycc.rst
    troubleshoot.rst
    faq.rst

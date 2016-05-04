@@ -6,11 +6,12 @@ from __future__ import print_function, division, absolute_import
 import re
 import sys
 
-from . import runtests, decorators
-from . import errors, special, types, config
+from . import config, errors, runtests, types
 
 # Re-export typeof
-from .special import *
+from .special import typeof
+
+# Re-export error classes
 from .errors import *
 
 # Re-export all type names
@@ -18,19 +19,16 @@ from .types import *
 
 from .smartarray import SmartArray
 
-# Re export decorators
-jit = decorators.jit
-autojit = decorators.autojit
-njit = decorators.njit
-generated_jit = decorators.generated_jit
+# Re-export decorators
+from .decorators import autojit, cfunc, generated_jit, jit, njit
 
-# Re export vectorize decorators
+# Re-export vectorize decorators
 from .npyufunc import vectorize, guvectorize
 
-# Re export from_dtype
+# Re-export from_dtype
 from .numpy_support import from_dtype
 
-# Re export jitclass
+# Re-export jitclass
 from .jitclass import jitclass
 
 # Keep this for backward compatibility.
@@ -38,14 +36,16 @@ test = runtests.main
 
 
 __all__ = """
-jit
-autojit
-njit
-vectorize
-guvectorize
-from_dtype
-jitclass
-""".split() + types.__all__ + special.__all__ + errors.__all__
+    autojit
+    cfunc
+    from_dtype
+    guvectorize
+    jit
+    jitclass
+    njit
+    typeof
+    vectorize
+    """.split() + types.__all__ + errors.__all__
 
 
 _min_llvmlite_version = (0, 9, 0)

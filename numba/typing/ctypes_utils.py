@@ -12,7 +12,7 @@ from . import templates
 from .typeof import typeof_impl
 
 
-CTYPES_MAP = {
+_FROM_CTYPES = {
     None: types.none,
     ctypes.c_bool: types.boolean,
     
@@ -33,8 +33,10 @@ CTYPES_MAP = {
     ctypes.py_object: types.ffi_forced_object,
 }
 
+_TO_CTYPES = {v: k for (k, v) in _FROM_CTYPES.items()}
 
-def convert_ctypes(ctypeobj):
+
+def from_ctypes(ctypeobj):
     """
     Convert the given ctypes type to a Numba type.
     """
@@ -44,12 +46,29 @@ def convert_ctypes(ctypeobj):
             if valuety is not None:
                 return types.CPointer(valuety)
         else:
-            return CTYPES_MAP.get(ctypeobj)
+            return _FROM_CTYPES.get(ctypeobj)
 
     ty = _convert_internal(ctypeobj)
     if ty is None:
         raise TypeError("Unsupported ctypes type: %s" % ctypeobj)
     return ty
+
+
+def to_ctypes(ty):
+    """
+    Convert the given Numba type to a ctypes type.
+    """
+    def _convert_internal(ty):
+        if isinstance(ty, types.CPointer):
+            return ctypes.POINTER(_convert_internal(ty.dtype))
+        else:
+            return _TO_CTYPES.get(ty)
+
+    ctypeobj = _convert_internal(ty)
+    if ctypeobj is None:
+        raise TypeError("Cannot convert Numba type '%s' to ctypes type"
+                        % (ty,))
+    return ctypeobj
 
 
 def is_ctypes_funcptr(obj):
@@ -79,9 +98,9 @@ def make_function_type(cfnptr):
         raise TypeError("ctypes function %r doesn't define its argument types; "
                         "consider setting the `argtypes` attribute"
                         % (cfnptr.__name__,))
-    cargs = [convert_ctypes(a)
+    cargs = [from_ctypes(a)
              for a in cfnptr.argtypes]
-    cret = convert_ctypes(cfnptr.restype)
+    cret = from_ctypes(cfnptr.restype)
     if sys.platform == 'win32' and not cfnptr._flags_ & ctypes._FUNCFLAG_CDECL:
         # 'stdcall' calling convention under Windows
         cconv = 'x86_stdcallcc'

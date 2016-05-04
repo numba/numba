@@ -16,14 +16,7 @@ from .ctypes_usecases import *
 
 class TestCTypesTypes(TestCase):
 
-    def test_convert(self):
-        """
-        Test converting a ctypes type to a Numba type.
-        """
-        def check(cty, expected):
-            got = ctypes_utils.convert_ctypes(cty)
-            self.assertEqual(got, expected)
-
+    def _conversion_tests(self, check):
         check(c_double, types.float64)
         check(c_int, types.intc)
         check(c_uint16, types.uint16)
@@ -35,10 +28,36 @@ class TestCTypesTypes(TestCase):
         check(POINTER(POINTER(c_float)),
               types.CPointer(types.CPointer(types.float32)))
 
+    def test_from_ctypes(self):
+        """
+        Test converting a ctypes type to a Numba type.
+        """
+        def check(cty, ty):
+            got = ctypes_utils.from_ctypes(cty)
+            self.assertEqual(got, ty)
+
+        self._conversion_tests(check)
+
         # An unsupported type
         with self.assertRaises(TypeError) as raises:
-            ctypes_utils.convert_ctypes(c_wchar_p)
+            ctypes_utils.from_ctypes(c_wchar_p)
         self.assertIn("Unsupported ctypes type", str(raises.exception))
+
+    def test_to_ctypes(self):
+        """
+        Test converting a Numba type to a ctypes type.
+        """
+        def check(cty, ty):
+            got = ctypes_utils.to_ctypes(ty)
+            self.assertEqual(got, cty)
+
+        self._conversion_tests(check)
+
+        # An unsupported type
+        with self.assertRaises(TypeError) as raises:
+            ctypes_utils.to_ctypes(types.ellipsis)
+        self.assertIn("Cannot convert Numba type '...' to ctypes type",
+                      str(raises.exception))
 
 
 class TestCTypesUseCases(MemoryLeakMixin, TestCase):
