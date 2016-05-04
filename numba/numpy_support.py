@@ -378,6 +378,8 @@ def _get_array_from_ptr(ptr, nbytes, dtype):
     return numpy.frombuffer(_get_bytes_buffer(ptr, nbytes), dtype)
 
 def carray(ptr, shape, dtype=None):
+    """
+    """
     from .typing.ctypes_utils import from_ctypes
 
     try:
@@ -408,6 +410,8 @@ def carray(ptr, shape, dtype=None):
 
 
 def farray(ptr, shape, dtype=None):
+    """
+    """
     if not isinstance(shape, utils.INT_TYPES):
         shape = shape[::-1]
     return carray(ptr, shape, dtype).T

@@ -97,50 +97,6 @@ carray_voidptr_usecase_sig = types.void(types.voidptr, types.voidptr,
                                         types.intp, types.intp)
 
 
-def add_pointers_c(in_ptr, out_ptr, m, n):
-    in_ = carray(in_ptr, (m, n))
-    out = carray(out_ptr, (m, n))
-    assert in_.flags.c_contiguous
-    assert out.flags.c_contiguous
-    for i in range(m):
-        for j in range(n):
-            out[i, j] = i - j + in_[i, j]
-
-def add_pointers_f(in_ptr, out_ptr, m, n):
-    in_ = farray(in_ptr, (m, n))
-    out = farray(out_ptr, (m, n))
-    assert in_.flags.f_contiguous
-    assert out.flags.f_contiguous
-    for i in range(m):
-        for j in range(n):
-            out[i, j] = i - j + in_[i, j]
-
-add_pointers_sig = types.void(types.CPointer(types.float32),
-                              types.CPointer(types.float32),
-                              types.intp, types.intp)
-
-def add_voidptr_c(in_ptr, out_ptr, m, n):
-    in_ = carray(in_ptr, (m, n), dtype=np.float32)
-    out = carray(out_ptr, (m, n), dtype=np.float32)
-    assert in_.flags.c_contiguous
-    assert out.flags.c_contiguous
-    for i in range(m):
-        for j in range(n):
-            out[i, j] = i - j + in_[i, j]
-
-def add_voidptr_f(in_ptr, out_ptr, m, n):
-    in_ = farray(in_ptr, (m, n), dtype=np.float32)
-    out = farray(out_ptr, (m, n), dtype=np.float32)
-    assert in_.flags.f_contiguous
-    assert out.flags.f_contiguous
-    for i in range(m):
-        for j in range(n):
-            out[i, j] = i - j + in_[i, j]
-
-add_voidptr_sig = types.void(types.voidptr, types.voidptr,
-                             types.intp, types.intp)
-
-
 class TestCFunc(TestCase):
 
     @tag('important')
