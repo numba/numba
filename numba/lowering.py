@@ -392,8 +392,12 @@ class Lower(BaseLower):
             argty = self.typeof("arg." + value.name)
             if isinstance(argty, types.Omitted):
                 pyval = argty.value
-                res = self.context.get_constant_generic(self.builder, ty,
-                                                        pyval)
+                # use the type of the constant value
+                valty = self.context.typing_context.resolve_value_type(pyval)
+                const = self.context.get_constant_generic(self.builder, valty,
+                                                          pyval)
+                # cast it to the variable type
+                res = self.context.cast(self.builder, const, valty, ty)
             else:
                 val = self.fnargs[value.index]
                 res = self.context.cast(self.builder, val, argty, ty)
