@@ -86,25 +86,22 @@ def _specialize_box(typ):
            '_numba_type_': typ}
     # Inject attributes as class properties
     for field in typ.struct:
-        if not field.startswith('_'):
-            getter = _generate_getter(field)
-            setter = _generate_setter(field)
-            dct[field] = property(getter, setter)
+        getter = _generate_getter(field)
+        setter = _generate_setter(field)
+        dct[field] = property(getter, setter)
     # Inject properties as class properties
     for field, impdct in typ.jitprops.items():
-        if not field.startswith('_'):
-            getter = None
-            setter = None
-            if 'get' in impdct:
-                getter = _generate_getter(field)
-            if 'set' in impdct:
-                setter = _generate_setter(field)
-            dct[field] = property(getter, setter)
+        getter = None
+        setter = None
+        if 'get' in impdct:
+            getter = _generate_getter(field)
+        if 'set' in impdct:
+            setter = _generate_setter(field)
+        dct[field] = property(getter, setter)
     # Inject methods as class members
     for name, func in typ.methods.items():
-        if not name.startswith('_'):
-            getter = _generate_method(name, func)
-            dct[name] = getter
+        if not (name.startswith('__') and name.endswith('__')):
+            dct[name] = _generate_method(name, func)
     # Create subclass
     subcls = type(typ.classname, (_box.Box,), dct)
     # Store to cache
