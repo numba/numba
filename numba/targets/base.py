@@ -35,7 +35,7 @@ class OverloadSelector(object):
 
     In the current implementation:
     - a "signature" is a tuple of type classes or type instances
-    - the "best candidate" is simply the first match
+    - the "best candidate" is the most specific match
     """
 
     def __init__(self):
@@ -71,7 +71,13 @@ class OverloadSelector(object):
                 # increase genericity score everything another signature
                 # is compatible
                 scoring[this] += 1
-        return sorted(candidates, key=lambda x: scoring[x])
+        ordered = sorted(candidates, key=lambda x: scoring[x])
+        if len(ordered) > 1:
+            x, y = map(scoring.get, ordered[:2])
+            if x == y:
+                msg = "ambiguous signatures {0}".format(ordered[:2])
+                raise TypeError(msg)
+        return ordered
 
     def _match_arglist(self, formal_args, actual_args):
         """
