@@ -86,9 +86,8 @@ class OverloadSelector(object):
         or if the formal signature is a compatible generic signature.
         """
         if formal_args and isinstance(formal_args[-1], types.VarArg):
-            formal_args = (
-                formal_args[:-1] +
-                (formal_args[-1].dtype,) * (len(actual_args) - len(formal_args) + 1))
+            ndiff = len(actual_args) - len(formal_args) + 1
+            formal_args = formal_args[:-1] + (formal_args[-1].dtype,) * ndiff
 
         if len(formal_args) != len(actual_args):
             return False
@@ -106,11 +105,13 @@ class OverloadSelector(object):
         elif types.Any == formal:
             # formal argument is any
             return True
-        elif (isinstance(formal, type) and
-              isinstance(actual, formal)):
-            # formal argument is a type class matching actual argument
-            assert issubclass(formal, types.Type)
-            return True
+        elif isinstance(formal, type) and issubclass(formal, types.Type):
+            if isinstance(actual, type) and issubclass(actual, formal):
+                # formal arg is a type class and actual arg is a subclass
+                return True
+            elif isinstance(actual, formal):
+                # formal arg is a type class of which actual arg is an instance
+                return True
 
     def append(self, value, sig):
         """
