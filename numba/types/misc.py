@@ -403,6 +403,15 @@ class DeferredType(Type):
             raise TypeError("arg is not a Type; got: {0}".format(type(typ)))
         self._define = typ
 
+        from numba.targets.imputils import lower_cast
+
+        @lower_cast(typ, DeferredType)
+        def any_to_deferred(context, builder, fromty, toty, val):
+            actual = context.cast(builder, val, fromty, toty.get())
+            model = context.data_model_manager[toty]
+            return model.set(builder, model.make_uninitialized(), actual)
+
+
     def unify(self, typingctx, other):
         return typingctx.unify_pairs(self.get(), other)
 
