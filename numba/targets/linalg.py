@@ -695,25 +695,26 @@ fatal_error_sig = types.intc()
 fatal_error_func = types.ExternalFunction("numba_fatal_error", fatal_error_sig)
 
 
+@jit(nopython=True)
+def _check_finite_matrix(a):
+    for v in numpy.nditer(a):
+        if not numpy.isfinite(v.item()):
+            raise numpy.linalg.LinAlgError(
+                "Array must not contain infs or NaNs.")
+
+
+def _check_linalg_matrix(a, func_name):
+    if not isinstance(a, types.Array):
+        raise TypingError("np.linalg.%s() only supported for array types"
+                          % func_name)
+    if not a.ndim == 2:
+        raise TypingError("np.linalg.%s() only supported on 2-D arrays."
+                          % func_name)
+    if not isinstance(a.dtype, (types.Float, types.Complex)):
+        raise TypingError("np.linalg.%s() only supported on "
+                          "float and complex arrays." % func_name)
+
 if numpy_version >= (1, 8):
-
-    @jit(nopython=True)
-    def _check_finite_matrix(a):
-        for v in numpy.nditer(a):
-            if not numpy.isfinite(v.item()):
-                raise numpy.linalg.LinAlgError(
-                    "Array must not contain infs or NaNs.")
-
-    def _check_linalg_matrix(a, func_name):
-        if not isinstance(a, types.Array):
-            raise TypingError("np.linalg.%s() only supported for array types"
-                              % func_name)
-        if not a.ndim == 2:
-            raise TypingError("np.linalg.%s() only supported on 2-D arrays."
-                              % func_name)
-        if not isinstance(a.dtype, (types.Float, types.Complex)):
-            raise TypingError("np.linalg.%s() only supported on "
-                              "float and complex arrays." % func_name)
 
     @overload(numpy.linalg.cholesky)
     def cho_impl(a):
@@ -822,8 +823,8 @@ if numpy_version >= (1, 8):
             ldvr = n
             wr = numpy.empty(n, dtype=a.dtype)
             wi = numpy.empty(n, dtype=a.dtype)
-            vl = numpy.empty((ldvl, n), dtype=a.dtype)
-            vr = numpy.empty((ldvr, n), dtype=a.dtype)
+            vl = numpy.empty((n, ldvl), dtype=a.dtype)
+            vr = numpy.empty((n, ldvr), dtype=a.dtype)
 
             r = numba_ez_rgeev(kind,
                                JOBVL,
@@ -883,8 +884,8 @@ if numpy_version >= (1, 8):
             ldvl = 1
             ldvr = n
             w = numpy.empty(n, dtype=a.dtype)
-            vl = numpy.empty((ldvl, n), dtype=a.dtype)
-            vr = numpy.empty((ldvr, n), dtype=a.dtype)
+            vl = numpy.empty((n, ldvl), dtype=a.dtype)
+            vr = numpy.empty((n, ldvr), dtype=a.dtype)
 
             r = numba_ez_cgeev(kind,
                                JOBVL,
@@ -1005,102 +1006,103 @@ if numpy_version >= (1, 8):
 
         return svd_impl
 
-    @overload(numpy.linalg.qr)
+
+@overload(numpy.linalg.qr)
+def qr_impl(a):
+    ensure_lapack()
+
+    _check_linalg_matrix(a, "qr")
+
+    # Need two functions, the first computes R, storing it in the upper
+    # triangle of A with the below diagonal part of A containing elementary
+    # reflectors needed to construct Q. The second turns the below diagonal
+    # entries of A into Q, storing Q in A (creates orthonormal columns from
+    # the elementary reflectors).
+
+    numba_ez_geqrf_sig = types.intc(
+        types.char,  # kind
+        types.intp,  # m
+        types.intp,  # n
+        types.CPointer(a.dtype),  # a
+        types.intp,  # lda
+        types.CPointer(a.dtype),  # tau
+    )
+
+    numba_ez_geqrf = types.ExternalFunction("numba_ez_geqrf",
+                                            numba_ez_geqrf_sig)
+
+    numba_ez_xxgqr_sig = types.intc(
+        types.char,  # kind
+        types.intp,  # m
+        types.intp,  # n
+        types.intp,  # k
+        types.CPointer(a.dtype),  # a
+        types.intp,  # lda
+        types.CPointer(a.dtype),  # tau
+    )
+
+    numba_ez_xxgqr = types.ExternalFunction("numba_ez_xxgqr",
+                                            numba_ez_xxgqr_sig)
+
+    kind = ord(get_blas_kind(a.dtype, "qr"))
+
+    F_layout = a.layout == 'F'
+
     def qr_impl(a):
-        ensure_lapack()
+        n = a.shape[-1]
+        m = a.shape[-2]
 
-        _check_linalg_matrix(a, "qr")
+        _check_finite_matrix(a)
 
-        # Need two functions, the first computes R, storing it in the upper
-        # triangle of A with the below diagonal part of A containing elementary
-        # reflectors needed to construct Q. The second turns the below diagonal
-        # entries of A into Q, storing Q in A (creates orthonormal columns from
-        # the elementary reflectors).
+        # copy A as it will be destroyed
+        if F_layout:
+            q = numpy.copy(a)
+        else:
+            q = numpy.asfortranarray(a)
 
-        numba_ez_geqrf_sig = types.intc(
-            types.char,  # kind
-            types.intp,  # m
-            types.intp,  # n
-            types.CPointer(a.dtype),  # a
-            types.intp,  # lda
-            types.CPointer(a.dtype),  # tau
+        lda = m
+
+        minmn = min(m, n)
+        tau = numpy.empty((minmn), dtype=a.dtype)
+
+        ret = numba_ez_geqrf(
+            kind,  # kind
+            m,  # m
+            n,  # n
+            q.ctypes,  # a
+            m,  # lda
+            tau.ctypes  # tau
         )
+        if ret < 0:
+            fatal_error_func()
+            assert 0   # unreachable
 
-        numba_ez_geqrf = types.ExternalFunction("numba_ez_geqrf",
-                                                numba_ez_geqrf_sig)
+        # pull out R, there is undoubtedly a more elegant way
+        # this is transposed in memory because Fortran
+        r = numpy.zeros((minmn, n), dtype=a.dtype)
 
-        numba_ez_xxgqr_sig = types.intc(
-            types.char,  # kind
-            types.intp,  # m
-            types.intp,  # n
-            types.intp,  # k
-            types.CPointer(a.dtype),  # a
-            types.intp,  # lda
-            types.CPointer(a.dtype),  # tau
+        for i in range(minmn):
+            for j in range(i, n):
+                r[i, j] = q[i, j]
+
+        # create Q in A.
+        ret = numba_ez_xxgqr(
+            kind,  # kind
+            m,  # m
+            minmn,  # n
+            minmn,  # k
+            q.ctypes,  # a
+            m,  # lda
+            tau.ctypes  # tau
         )
+        if ret < 0:
+            fatal_error_func()
+            assert 0   # unreachable
 
-        numba_ez_xxgqr = types.ExternalFunction("numba_ez_xxgqr",
-                                                numba_ez_xxgqr_sig)
+        # help liveness analysis
+        tau.size
+        q.size
 
-        kind = ord(get_blas_kind(a.dtype, "qr"))
+        return (q[:, :minmn], r)
 
-        F_layout = a.layout == 'F'
-
-        def qr_impl(a):
-            n = a.shape[-1]
-            m = a.shape[-2]
-
-            _check_finite_matrix(a)
-
-            # copy A as it will be destroyed
-            if F_layout:
-                q = numpy.copy(a)
-            else:
-                q = numpy.asfortranarray(a)
-
-            lda = m
-
-            minmn = min(m, n)
-            tau = numpy.empty((minmn), dtype=a.dtype)
-
-            ret = numba_ez_geqrf(
-                kind,  # kind
-                m,  # m
-                n,  # n
-                q.ctypes,  # a
-                m,  # lda
-                tau.ctypes  # tau
-            )
-            if ret < 0:
-                fatal_error_func()
-                assert 0   # unreachable
-
-            # pull out R, there is undoubtedly a more elegant way
-            # this is transposed in memory because Fortran
-            r = numpy.zeros((minmn, n), dtype=a.dtype)
-
-            for i in range(minmn):
-                for j in range(i, n):
-                    r[i, j] = q[i, j]
-
-            # create Q in A.
-            ret = numba_ez_xxgqr(
-                kind,  # kind
-                m,  # m
-                minmn,  # n
-                minmn,  # k
-                q.ctypes,  # a
-                m,  # lda
-                tau.ctypes  # tau
-            )
-            if ret < 0:
-                fatal_error_func()
-                assert 0   # unreachable
-
-            # help liveness analysis
-            tau.size
-            q.size
-
-            return (q[:, :minmn], r)
-
-        return qr_impl
+    return qr_impl

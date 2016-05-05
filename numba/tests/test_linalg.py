@@ -344,6 +344,23 @@ class TestLinalgBase(TestCase):
         else:
             return (base * 0.5 + 1).astype(dtype)
 
+    def orth_fact_sample_matrix(self, size, dtype, order):
+        break_at = 10
+        jmp = 0
+        # have a few attempts at shuffling to get the condition number down
+        # else not worry about it
+        mn = size[0] * size[1]
+        np.random.seed(0)  # repeatable seed
+        while jmp < break_at:
+            v = self.sample_vector(mn, dtype)
+            # shuffle to improve conditioning
+            np.random.shuffle(v)
+            A = np.reshape(v, size)
+            if np.linalg.cond(A) < mn:
+                return np.array(A, order=order, dtype=dtype)
+            jmp += 1
+        return A
+
     def assert_error(self, cfunc, args, msg, err=ValueError):
         with self.assertRaises(err) as raises:
             cfunc(*args)
@@ -454,6 +471,7 @@ class TestLinalgCholesky(TestLinalgBase):
             expected = cholesky_matrix(a)
             got = cfunc(a)
             use_reconstruction = False
+
             # try strict
             try:
                 np.testing.assert_array_almost_equal_nulp(got, expected,
@@ -621,22 +639,6 @@ class TestLinalgSvd(TestLinalgBase):
     Tests for np.linalg.svd.
     """
 
-    def sample_matrix(self, size, dtype, order):
-        break_at = 10
-        jmp = 0
-        # have a few attempts at shuffling to get the condition number down
-        # else not worry about it
-        mn = size[0] * size[1]
-        np.random.seed(0)  # repeatable seed
-        while jmp < break_at:
-            v = self.sample_vector(mn, dtype)
-            # shuffle to improve conditioning
-            np.random.shuffle(v)
-            A = np.reshape(v, size)
-            if np.linalg.cond(A) < mn:
-                return np.array(A, order=order, dtype=dtype)
-            jmp += 1
-
     @needs_lapack
     def test_linalg_svd(self):
         """
@@ -655,6 +657,7 @@ class TestLinalgSvd(TestLinalgBase):
             use_reconstruction = False
             # try plain match of each array to np first
             for k in range(len(expected)):
+
                 try:
                     np.testing.assert_array_almost_equal_nulp(
                         got[k], expected[k], nulp=10)
@@ -706,7 +709,7 @@ class TestLinalgSvd(TestLinalgBase):
         for size, dtype, fmat, order in \
                 product(sizes, self.dtypes, full_matrices, 'FC'):
 
-            a = self.sample_matrix(size, dtype, order)
+            a = self.orth_fact_sample_matrix(size, dtype, order)
             check(a, full_matrices=fmat)
 
         rn = "svd"
@@ -817,7 +820,7 @@ class TestLinalgQr(TestLinalgBase):
         for size, dtype, order in \
                 product(sizes, self.dtypes, 'FC'):
 
-            a = self.sample_matrix(size, dtype, order)
+            a = self.orth_fact_sample_matrix(size, dtype, order)
             check(a)
 
         rn = "qr"
