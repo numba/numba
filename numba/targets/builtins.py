@@ -46,6 +46,7 @@ def deferred_getattr(context, builder, typ, value, attr):
     return imp(context, builder, inner_type, val, attr)
 
 @lower_cast(types.Any, types.DeferredType)
+@lower_cast(types.Optional, types.DeferredType)
 def any_to_deferred(context, builder, fromty, toty, val):
     actual = context.cast(builder, val, fromty, toty.get())
     model = context.data_model_manager[toty]
