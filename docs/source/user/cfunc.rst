@@ -81,13 +81,48 @@ integration is made 18 times faster::
    100000 loops, best of 3: 13.5 µs per loop
 
 
+Dealing with pointers and array memory
+======================================
+
+A less trivial use case of C callbacks involves doing operation on some
+array of data passed by the caller.  As C doesn't have a high-level
+abstraction similar to Numpy arrays, the C callback's signature will pass
+low-level pointer and size arguments.  Nevertheless, the Python code for
+the callback will expect to exploit the power and expressiveness of Numpy
+arrays.
+
+In the following example, the C callback is expected to operate on 2-d arrays,
+with the signature ``void(double *input, double *output, int m, int n)``.
+You can implement such a callback thusly::
+
+   from numba import cfunc, types, carray
+
+   c_sig = types.void(types.CPointer(types.double),
+                      types.CPointer(types.double),
+                      types.intc, types.intc)
+
+   @cfunc(c_sig)
+   def my_callback(in_, out, m, n):
+       in_array = carray(in_, (m, n))
+       out_array = carray(out, (m, n))
+       for i in range(m):
+           for j in range(n):
+               out_array[i, j] = 2 * in_array[i, j]
+
+
+The :func:`numba.carray` function takes as input a data pointer and a shape
+and returns an array view of the given shape over that data.  The data is
+assumed to be laid out in C order.  If the data is laid out in Fortran order,
+the :func:`numba.farray` should be used instead.
+
+
 Signature specification
 =======================
 
-The explicit ``@cfunc`` signature can use any Numba types, but only a subset
-of them make sense for a C callback.  You should generally limit yourself
-to scalar types (such as ``int8`` or ``float64``) or pointers to them
-(for example ``types.CPointer(types.int8)``).
+The explicit ``@cfunc`` signature can use any :ref:`Numba types <numba-types>`,
+but only a subset of them make sense for a C callback.  You should
+generally limit yourself to scalar types (such as ``int8`` or ``float64``)
+or pointers to them (for example ``types.CPointer(types.int8)``).
 
 
 Compilation options
