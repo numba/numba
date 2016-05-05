@@ -369,6 +369,9 @@ def from_struct_dtype(dtype):
 
 
 def _get_bytes_buffer(ptr, nbytes):
+    """
+    Get a ctypes array of *nbytes* starting at *ptr*.
+    """
     if isinstance(ptr, ctypes.c_void_p):
         ptr = ptr.value
     arrty = ctypes.c_byte * nbytes
@@ -377,8 +380,12 @@ def _get_bytes_buffer(ptr, nbytes):
 def _get_array_from_ptr(ptr, nbytes, dtype):
     return numpy.frombuffer(_get_bytes_buffer(ptr, nbytes), dtype)
 
+
 def carray(ptr, shape, dtype=None):
     """
+    Return a Numpy array view over the data pointed to by *ptr* with the
+    given *shape*, in C order.  If *dtype* is given, it is used as the
+    array's dtype, otherwise the array's dtype is inferred from *ptr*'s type.
     """
     from .typing.ctypes_utils import from_ctypes
 
@@ -411,6 +418,9 @@ def carray(ptr, shape, dtype=None):
 
 def farray(ptr, shape, dtype=None):
     """
+    Return a Numpy array view over the data pointed to by *ptr* with the
+    given *shape*, in Fortran order.  If *dtype* is given, it is used as the
+    array's dtype, otherwise the array's dtype is inferred from *ptr*'s type.
     """
     if not isinstance(shape, utils.INT_TYPES):
         shape = shape[::-1]

@@ -113,7 +113,7 @@ You can implement such a callback thusly::
 The :func:`numba.carray` function takes as input a data pointer and a shape
 and returns an array view of the given shape over that data.  The data is
 assumed to be laid out in C order.  If the data is laid out in Fortran order,
-the :func:`numba.farray` should be used instead.
+:func:`numba.farray` should be used instead.
 
 
 Signature specification
