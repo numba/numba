@@ -1,6 +1,7 @@
 from __future__ import print_function
 
-from itertools import product
+from itertools import product, permutations
+from collections import defaultdict
 
 import numba.unittest_support as unittest
 from numba.targets.base import OverloadSelector
@@ -108,7 +109,7 @@ class TestValidateOverloads(unittest.TestCase):
         os = self.create_overload_selector(kind='casts')
         all_types = set(t for sig, impl in os.versions for t in sig)
         # ensure there are no ambiguous cast overloads
-        for sig in product(all_types, all_types):
+        for sig in permutations(all_types, r=2):
             try:
                 os.find(sig)
             except NotImplementedError:
