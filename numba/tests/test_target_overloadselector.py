@@ -91,7 +91,7 @@ class TestOverloadSelector(unittest.TestCase):
         self.assertEqual(os.find((lstty, lstty)), 2)
 
 
-class TestValidateOverloads(unittest.TestCase):
+class TestAmbiguousOverloads(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
@@ -109,11 +109,28 @@ class TestValidateOverloads(unittest.TestCase):
         os = self.create_overload_selector(kind='casts')
         all_types = set(t for sig, impl in os.versions for t in sig)
         # ensure there are no ambiguous cast overloads
+        # note: using permutations to avoid testing cast to the same type
         for sig in permutations(all_types, r=2):
             try:
                 os.find(sig)
             except NotImplementedError:
                 pass   # ignore not implemented cast
+
+    def test_ambiguous_functions(self):
+        loader = RegistryLoader(builtin_registry)
+        selectors = defaultdict(OverloadSelector)
+        for impl, fn, sig in loader.new_registrations('functions'):
+            os = selectors[fn]
+            os.append(impl, sig)
+
+        for fn, os in selectors.items():
+            all_types = set(t for sig, impl in os.versions for t in sig)
+            # ensure there are no ambiguous overloads
+            for sig in product(all_types, all_types):
+                try:
+                    os.find(sig)
+                except NotImplementedError:
+                    pass   # ignore not implemented cast
 
 
 
