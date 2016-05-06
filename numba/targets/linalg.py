@@ -1077,15 +1077,19 @@ def qr_impl(a):
             fatal_error_func()
             assert 0   # unreachable
 
-        # pull out R, there is undoubtedly a more elegant way
-        # this is transposed in memory because Fortran
-        r = numpy.zeros((minmn, n), dtype=a.dtype)
+        # pull out R, this is transposed because of Fortran
+        r = numpy.zeros((n, minmn), dtype=a.dtype).T
 
+        # the triangle in R
         for i in range(minmn):
-            for j in range(i, n):
-                r[i, j] = q[i, j]
+            for j in range(i + 1):
+                r[j, i] = q[j, i]
 
-        # create Q in A.
+        # and the possible square in R
+        for i in range(minmn, n):
+            for j in range(minmn):
+                r[j, i] = q[j, i]
+
         ret = numba_ez_xxgqr(
             kind,  # kind
             m,  # m

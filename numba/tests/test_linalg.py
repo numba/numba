@@ -382,6 +382,49 @@ class TestLinalgBase(TestCase):
         msg = "Array must not contain infs or NaNs."
         self.assert_error(cfunc, args, msg, np.linalg.LinAlgError)
 
+    def assert_contig_sanity(self, got, expected_contig):
+        """
+        This checks that in a computed result from numba (array, possibly tuple
+        of arrays) all the arrays are contiguous in memory and that they are
+        all at least one of "C_CONTIGUOUS" or "F_CONTIGUOUS". The computed
+        result of the contiguousness is then compared against a hardcoded
+        expected result.
+
+        got: is the computed results from numba
+        expected_contig: is "C" or "F" and is the expected type of
+                        contiguousness across all input values
+                        (and therefore tests).
+        """
+        flgc = "C_CONTIGUOUS"
+        flgf = "F_CONTIGUOUS"
+
+        if isinstance(got, tuple):
+            # tuple present, check all results
+            # find the contiguousness of the first result
+            c_contig = got[0].flags[flgc]
+            f_contig = got[0].flags[flgf]
+            # AND in the flags from other possible results
+            for k in range(1, len(got)):
+                c_contig &= got[k].flags[flgc]
+                f_contig &= got[k].flags[flgf]
+        else:
+            # else a single array is present
+            c_contig = got.flags[flgc]
+            f_contig = got.flags[flgf]
+
+        # check that the result (possible set of) is at least one of
+        # C or F contiguous.
+        msg = "Results are not at least one of all C or F contiguous."
+        self.assertTrue(c_contig | f_contig, msg)
+
+        msg = "Computed contiguousness does not match expected."
+        if expected_contig == "C":
+            self.assertTrue(c_contig, msg)
+        elif expected_contig == "F":
+            self.assertTrue(f_contig, msg)
+        else:
+            raise ValueError("Unknown contig")
+
 
 class TestLinalgInv(TestLinalgBase):
     """
@@ -414,6 +457,9 @@ class TestLinalgInv(TestLinalgBase):
                 # because of +0, -0 discrepancies
                 np.testing.assert_array_almost_equal_nulp(
                     got, expected, **kwargs)
+                # check that the computed results are contig and in the same
+                # way
+                self.assert_contig_sanity(got, "C")
                 del got, expected
 
         for dtype, order in product(self.dtypes, 'CF'):
@@ -471,6 +517,8 @@ class TestLinalgCholesky(TestLinalgBase):
             expected = cholesky_matrix(a)
             got = cfunc(a)
             use_reconstruction = False
+            # check that the computed results are contig and in the same way
+            self.assert_contig_sanity(got, "C")
 
             # try strict
             try:
@@ -551,6 +599,8 @@ class TestLinalgEig(TestLinalgBase):
             self.assertEqual(len(expected), len(got))
             # and that length is 2
             self.assertEqual(len(got), 2)
+            # and that the computed results are contig and in the same way
+            self.assert_contig_sanity(got, "F")
 
             use_reconstruction = False
             # try plain match of each array to np first
@@ -653,6 +703,8 @@ class TestLinalgSvd(TestLinalgBase):
             self.assertEqual(len(expected), len(got))
             # and that length is 3
             self.assertEqual(len(got), 3)
+            # and that the computed results are contig and in the same way
+            self.assert_contig_sanity(got, "F")
 
             use_reconstruction = False
             # try plain match of each array to np first
@@ -764,6 +816,8 @@ class TestLinalgQr(TestLinalgBase):
             self.assertEqual(len(expected), len(got))
             # and that length is 2
             self.assertEqual(len(got), 2)
+            # and that the computed results are contig and in the same way
+            self.assert_contig_sanity(got, "F")
 
             use_reconstruction = False
             # try plain match of each array to np first
@@ -819,7 +873,6 @@ class TestLinalgQr(TestLinalgBase):
         # test loop
         for size, dtype, order in \
                 product(sizes, self.dtypes, 'FC'):
-
             a = self.orth_fact_sample_matrix(size, dtype, order)
             check(a)
 
