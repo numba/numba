@@ -295,3 +295,22 @@ def not_in(context, builder, sig, args):
 
     res = context.compile_internal(builder, in_impl, sig, args)
     return builder.not_(res)
+
+
+# -----------------------------------------------------------------------------
+
+@lower_builtin(len, types.ConstSized)
+def constsized_len(context, builder, sig, args):
+    [ty] = sig.args
+    retty = sig.return_type
+    res = context.get_constant(retty, len(ty.types))
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+@lower_builtin(bool, types.Sized)
+def sized_bool(context, builder, sig, args):
+    [ty] = sig.args
+    if len(ty):
+        return cgutils.true_bit
+    else:
+        return cgutils.false_bit

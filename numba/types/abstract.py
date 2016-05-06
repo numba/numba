@@ -280,6 +280,15 @@ class Sized(Type):
     """
 
 
+class ConstSized(Sized):
+    """
+    For types that has a constant size
+    """
+    @abstractmethod
+    def __len__(self):
+        pass
+
+
 class IteratorType(IterableType):
     """
     Base class for all iterator types.
