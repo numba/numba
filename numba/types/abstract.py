@@ -274,6 +274,12 @@ class IterableType(Type):
         """
 
 
+class Sized(Type):
+    """
+    Base class for object that supports len()
+    """
+
+
 class IteratorType(IterableType):
     """
     Base class for all iterator types.
@@ -296,7 +302,7 @@ class IteratorType(IterableType):
         return self
 
 
-class Container(IterableType):
+class Container(Sized, IterableType):
     """
     Base class for container types.
     """

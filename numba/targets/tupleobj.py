@@ -25,7 +25,7 @@ def tuple_len(context, builder, sig, args):
     res = context.get_constant(retty, len(tupty.types))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin(bool, types.BaseTuple)
+@lower_builtin(bool, types.Sized)
 def tuple_bool(context, builder, sig, args):
     tupty, = sig.args
     if len(tupty):
