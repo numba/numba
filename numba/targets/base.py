@@ -4,7 +4,7 @@ from collections import namedtuple, defaultdict
 import copy
 import os
 import sys
-from itertools import permutations
+from itertools import permutations, takewhile
 
 import numpy
 
@@ -45,7 +45,7 @@ class OverloadSelector(object):
     def find(self, sig):
         candidates = dict(self._select_compatible(sig))
         if candidates:
-            ranked = self._sort_signatures(candidates.keys())
+            ranked = self._sort_signatures(candidates)
             return candidates[ranked[0]]
         else:
             raise NotImplementedError(self, sig)
@@ -64,19 +64,24 @@ class OverloadSelector(object):
         """
         Sort signatures in ascending level of genericity.
         """
+        # score by genericity
         scoring = defaultdict(int)
-        for this, other in permutations(candidates, r=2):
+        for this, other in permutations(candidates.keys(), r=2):
             matched = self._match_arglist(formal_args=this, actual_args=other)
             if matched:
-                # increase genericity score everything another signature
-                # is compatible
+                # genericity score +1 for every another compatible signature
                 scoring[this] += 1
-        ordered = sorted(candidates, key=lambda x: scoring[x])
+        # order candidates in ascending level of genericity
+        ordered = sorted(candidates.keys(), key=lambda x: scoring[x])
+        # check for ambiguous signatures
         if len(ordered) > 1:
-            x, y = map(scoring.get, ordered[:2])
-            if x == y:
-                msg = "ambiguous signatures {0}".format(ordered[:2])
-                raise TypeError(msg)
+            firstscore = scoring[ordered[0]]
+            same = list(takewhile(lambda x: scoring[x] == firstscore, ordered))
+            if len(same) > 1:
+                msg = ["{n} ambiguous signatures".format(n=len(same))]
+                for sig in same:
+                    msg += ["{0} => {1}".format(sig, candidates[sig])]
+                raise TypeError('\n'.join(msg))
         return ordered
 
     def _match_arglist(self, formal_args, actual_args):
@@ -85,6 +90,7 @@ class OverloadSelector(object):
         A formal signature is "matching" if the actual signature matches exactly
         or if the formal signature is a compatible generic signature.
         """
+        # normalize VarArg
         if formal_args and isinstance(formal_args[-1], types.VarArg):
             ndiff = len(actual_args) - len(formal_args) + 1
             formal_args = formal_args[:-1] + (formal_args[-1].dtype,) * ndiff
