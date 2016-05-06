@@ -43,10 +43,9 @@ class OverloadSelector(object):
         self.versions = []
 
     def find(self, sig):
-        candidates = dict(self._select_compatible(sig))
+        candidates = self._select_compatible(sig)
         if candidates:
-            ranked = self._sort_signatures(candidates)
-            return candidates[ranked[0]]
+            return candidates[self._best_signature(candidates)]
         else:
             raise NotImplementedError(self, sig)
 
@@ -60,29 +59,42 @@ class OverloadSelector(object):
                 out[ver_sig] = impl
         return out
 
-    def _sort_signatures(self, candidates):
+    def _best_signature(self, candidates):
         """
-        Sort signatures in ascending level of genericity.
+        Returns the best signature out of the candidates
         """
-        # score by genericity
-        scoring = defaultdict(int)
-        for this, other in permutations(candidates.keys(), r=2):
-            matched = self._match_arglist(formal_args=this, actual_args=other)
-            if matched:
-                # genericity score +1 for every another compatible signature
-                scoring[this] += 1
-        # order candidates in ascending level of genericity
-        ordered = sorted(candidates.keys(), key=lambda x: scoring[x])
+        ordered, genericity = self._sort_signatures(candidates)
         # check for ambiguous signatures
         if len(ordered) > 1:
-            firstscore = scoring[ordered[0]]
-            same = list(takewhile(lambda x: scoring[x] == firstscore, ordered))
+            firstscore = genericity[ordered[0]]
+            same = list(takewhile(lambda x: genericity[x] == firstscore,
+                                  ordered))
             if len(same) > 1:
                 msg = ["{n} ambiguous signatures".format(n=len(same))]
                 for sig in same:
                     msg += ["{0} => {1}".format(sig, candidates[sig])]
                 raise TypeError('\n'.join(msg))
-        return ordered
+        return ordered[0]
+
+    def _sort_signatures(self, candidates):
+        """
+        Sort signatures in ascending level of genericity.
+
+        Returns a 2-tuple:
+
+            * ordered list of signatures
+            * dictionary containing genericity scores
+        """
+        # score by genericity
+        genericity = defaultdict(int)
+        for this, other in permutations(candidates.keys(), r=2):
+            matched = self._match_arglist(formal_args=this, actual_args=other)
+            if matched:
+                # genericity score +1 for every another compatible signature
+                genericity[this] += 1
+        # order candidates in ascending level of genericity
+        ordered = sorted(candidates.keys(), key=lambda x: genericity[x])
+        return ordered, genericity
 
     def _match_arglist(self, formal_args, actual_args):
         """
