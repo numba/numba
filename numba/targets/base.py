@@ -41,8 +41,16 @@ class OverloadSelector(object):
     def __init__(self):
         # A list of (formal args tuple, value)
         self.versions = []
+        self._cache = {}
 
     def find(self, sig):
+        out = self._cache.get(sig)
+        if out is None:
+            out = self._find(sig)
+            self._cache[sig] = out
+        return out
+
+    def _find(self, sig):
         candidates = self._select_compatible(sig)
         if candidates:
             return candidates[self._best_signature(candidates)]
@@ -137,7 +145,7 @@ class OverloadSelector(object):
         """
         assert isinstance(sig, tuple), (value, sig)
         self.versions.append((sig, value))
-
+        self._cache.clear()
 
 @utils.runonce
 def _load_global_helpers():

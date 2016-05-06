@@ -90,6 +90,17 @@ class TestOverloadSelector(unittest.TestCase):
         os.append(2, (types.Container, types.Sequence,))
         self.assertEqual(os.find((lstty, lstty)), 2)
 
+    def test_cache(self):
+        os = OverloadSelector()
+        self.assertEqual(len(os._cache), 0)
+        os.append(1, (types.Any,))
+        self.assertEqual(os.find((types.int32,)), 1)
+        self.assertEqual(len(os._cache), 1)
+        os.append(2, (types.Integer,))
+        self.assertEqual(len(os._cache), 0)
+        self.assertEqual(os.find((types.int32,)), 2)
+        self.assertEqual(len(os._cache), 1)
+
 
 class TestAmbiguousOverloads(unittest.TestCase):
 
