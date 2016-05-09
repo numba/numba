@@ -14,6 +14,7 @@ environment:
     - PYTHON_VERSION: "3.5"
       PYTHON_ARCH: "64"
       NUMPY_VERSION: "1.11"
+      CONDA_ENV: testenv
 
 init:
   # Use AppVeyor's provided Miniconda: https://www.appveyor.com/docs/installed-software#python
@@ -27,8 +28,8 @@ install:
   - conda info
   - conda list
   - conda config --add channels numba
-  - conda create -q -n testenv python=%PYTHON_VERSION% numpy=%NUMPY_VERSION% llvmlite cffi scipy
-  - call activate testenv
+  - conda create -q -n %CONDA_ENV% python=%PYTHON_VERSION% numpy=%NUMPY_VERSION% llvmlite cffi scipy
+  - call activate %CONDA_ENV%
 
 build: false
 
