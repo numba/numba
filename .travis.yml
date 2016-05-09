@@ -20,7 +20,6 @@ branches:
 before_install:
     - buildscripts/incremental/install_miniconda.sh
     - export PATH=$HOME/miniconda3/bin:$PATH
-    - buildscripts/incremental/create_conda_environment.sh
     - buildscripts/incremental/setup_conda_environment.sh
 install:
     - source activate $CONDA_ENV

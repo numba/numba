@@ -7,11 +7,19 @@ try:
 except ImportError:
     from distutils.core import setup, Extension
 
+from distutils.command import build
+from distutils.spawn import spawn
 import sys
 import os
 import numpy
 import numpy.distutils.misc_util as np_misc
 import versioneer
+
+class build_doc(build.build):
+    description = "build documentation"
+
+    def run(self):
+        spawn(['make', '-C', 'docs', 'html'])
 
 versioneer.VCS = 'git'
 versioneer.versionfile_source = 'numba/_version.py'
@@ -20,6 +28,7 @@ versioneer.tag_prefix = ''
 versioneer.parentdir_prefix = 'numba-'
 
 cmdclass = versioneer.get_cmdclass()
+cmdclass['build_doc'] = build_doc
 
 setup_args = {
     'long_description': open('README.rst').read(),

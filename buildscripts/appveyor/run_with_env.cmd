@@ -39,11 +39,11 @@ SET WIN_WDK=c:\Program Files (x86)\Windows Kits\10\Include\wdf
 
 :: Extract the major and minor versions, and allow for the minor version to be
 :: more than 9.  This requires the version number to have two dots in it.
-SET MAJOR_PYTHON_VERSION=%PYTHON_VERSION:~0,1%
-IF "%PYTHON_VERSION:~3,1%" == "." (
-    SET MINOR_PYTHON_VERSION=%PYTHON_VERSION:~2,1%
+SET MAJOR_PYTHON_VERSION=%PYTHON:~0,1%
+IF "%PYTHON:~3,1%" == "." (
+    SET MINOR_PYTHON_VERSION=%PYTHON:~2,1%
 ) ELSE (
-    SET MINOR_PYTHON_VERSION=%PYTHON_VERSION:~2,2%
+    SET MINOR_PYTHON_VERSION=%PYTHON:~2,2%
 )
 
 :: Based on the Python version, determine what SDK version to use, and whether
@@ -69,7 +69,7 @@ IF %MAJOR_PYTHON_VERSION% == 2 (
     )
 )
 
-IF %PYTHON_ARCH% == 64 (
+IF %ARCH% == 64 (
     IF %SET_SDK_64% == Y (
         ECHO Configuring Windows SDK %WINDOWS_SDK_VERSION% for Python %MAJOR_PYTHON_VERSION% on a 64 bit architecture
         SET DISTUTILS_USE_SDK=1
