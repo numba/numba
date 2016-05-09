@@ -11,15 +11,15 @@ environment:
   matrix:
     # Since appveyor is quite slow, we only use a single configuration
     # and a subset of the test suite (see test_script below)
-    - PYTHON_VERSION: "3.5"
-      PYTHON_ARCH: "64"
-      NUMPY_VERSION: "1.11"
+    - PYTHON: "3.5"
+      ARCH: "64"
+      NUMPY: "1.11"
       CONDA_ENV: testenv
 
 init:
   # Use AppVeyor's provided Miniconda: https://www.appveyor.com/docs/installed-software#python
-  - if "%PYTHON_ARCH%" == "64" set MINICONDA=C:\Miniconda35-x64
-  - if "%PYTHON_ARCH%" == "32" set MINICONDA=C:\Miniconda35
+  - if "%ARCH%" == "64" set MINICONDA=C:\Miniconda35-x64
+  - if "%ARCH%" == "32" set MINICONDA=C:\Miniconda35
   - set PATH=%MINICONDA%;%MINICONDA%/Scripts;%MINICONDA%/Library/bin;%PATH%
 
 install:
@@ -28,7 +28,7 @@ install:
   - conda info
   - conda list
   - conda config --add channels numba
-  - conda create -q -n %CONDA_ENV% python=%PYTHON_VERSION% numpy=%NUMPY_VERSION% llvmlite cffi scipy
+  - conda create -q -n %CONDA_ENV% python=%PYTHON% numpy=%NUMPY% llvmlite cffi scipy
   - call activate %CONDA_ENV%
 
 build: false
