@@ -9,7 +9,7 @@ from numba.npyufunc.ufuncbuilder import GUFuncBuilder
 from numba import vectorize, guvectorize
 from numba.npyufunc import PyUFunc_One
 from numba.npyufunc.dufunc import DUFunc as UFuncBuilder
-from ..support import tag
+from ..support import tag, TestCase
 
 
 def add(a, b):
@@ -71,7 +71,7 @@ def guerror(a, b, c):
     raise MyException
 
 
-class TestUfuncBuilding(unittest.TestCase):
+class TestUfuncBuilding(TestCase):
 
     @tag('important')
     def test_basic_ufunc(self):
@@ -159,7 +159,7 @@ class TestUfuncBuildingJitDisabled(TestUfuncBuilding):
         config.DISABLE_JIT = self.old_disable_jit
 
 
-class TestGUfuncBuilding(unittest.TestCase):
+class TestGUfuncBuilding(TestCase):
 
     def test_basic_gufunc(self):
         gufb = GUFuncBuilder(guadd, "(x, y),(x, y)->(x, y)")
@@ -214,7 +214,7 @@ class TestGUfuncBuildingJitDisabled(TestGUfuncBuilding):
         config.DISABLE_JIT = self.old_disable_jit
 
 
-class TestVectorizeDecor(unittest.TestCase):
+class TestVectorizeDecor(TestCase):
 
     _supported_identities = [0, 1, None, "reorderable"]
 
@@ -271,6 +271,25 @@ class TestVectorizeDecor(unittest.TestCase):
         b = numpy.linspace(1,2,10)
         ufunc = vectorize(identity=PyUFunc_One, nopython=True)(mul)
         self.assertTrue(numpy.all(ufunc(a,b) == (a * b)))
+
+    def test_vectorize_output_kwarg(self):
+        """
+        Passing the output array as a keyword argument (issue #1867).
+        """
+        def check(ufunc):
+            a = numpy.arange(10, 16, dtype='int32')
+            out = numpy.zeros_like(a)
+            got = ufunc(a, a, out=out)
+            self.assertIs(got, out)
+            self.assertPreciseEqual(out, a + a)
+
+        # With explicit sigs
+        ufunc = vectorize(['int32(int32, int32)'], nopython=True)(add)
+        check(ufunc)
+        # With implicit sig
+        ufunc = vectorize(nopython=True)(add)
+        check(ufunc)  # compiling
+        check(ufunc)  # after compiling
 
     @tag('important')
     def test_guvectorize(self):

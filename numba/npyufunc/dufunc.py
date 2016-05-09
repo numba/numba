@@ -132,6 +132,14 @@ class DUFunc(_internal._DUFunc):
 
     def _compile_for_args(self, *args, **kws):
         nin = self.ufunc.nin
+        if kws:
+            if 'out' in kws:
+                out = kws.pop('out')
+                args += (out,)
+            if kws:
+                raise TypeError("unexpected keyword arguments to ufunc: %s"
+                                % ", ".join(repr(k) for k in sorted(kws)))
+
         args_len = len(args)
         assert (args_len == nin) or (args_len == nin + self.ufunc.nout)
         assert not kws
