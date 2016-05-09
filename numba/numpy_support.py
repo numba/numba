@@ -401,13 +401,16 @@ def carray(ptr, shape, dtype=None):
 
     if isinstance(ptr, ctypes.c_void_p):
         if dtype is None:
-            raise TypeError("carray(): explicit dtype required for void* argument")
+            raise TypeError("explicit dtype required for void* argument")
         p = ptr
     elif isinstance(ptr, ctypes._Pointer):
         ptrty = from_ctypes(ptr.__class__)
         assert isinstance(ptrty, types.CPointer)
-        if dtype is None:
-            dtype = as_dtype(ptrty.dtype)
+        ptr_dtype = as_dtype(ptrty.dtype)
+        if dtype is not None and dtype != ptr_dtype:
+            raise TypeError("mismatching dtype '%s' for pointer %s"
+                            % (dtype, ptr))
+        dtype = ptr_dtype
         p = ctypes.cast(ptr, ctypes.c_void_p)
     else:
         raise TypeError("expected a ctypes pointer, got %r" % (ptr,))

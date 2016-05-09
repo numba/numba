@@ -268,8 +268,8 @@ class TestCArray(TestCase):
         # With typed pointer and explicit dtype
         a = func(self.make_float32_pointer(base), base.shape, base.dtype)
         eq(a, base)
-        a = func(self.make_float32_pointer(base), base.shape, np.int32)
-        eq(a, base.view(np.int32))
+        a = func(self.make_float32_pointer(base), base.shape, np.float32)
+        eq(a, base)
 
         # With voidptr and explicit dtype
         a = func(self.make_voidptr(base), base.shape, base.dtype)
@@ -283,6 +283,11 @@ class TestCArray(TestCase):
         # Invalid pointer type
         with self.assertRaises(TypeError):
             func(base.ctypes.data, base.shape)
+        # Mismatching dtype
+        with self.assertRaises(TypeError) as raises:
+            func(self.make_float32_pointer(base), base.shape, np.int32)
+        self.assertIn("mismatching dtype 'int32' for pointer",
+                      str(raises.exception))
 
     @tag('important')
     def test_carray(self):
@@ -303,10 +308,15 @@ class TestCArray(TestCase):
         f = cfunc(carray_float32_usecase_sig)(pyfunc)
         self.check_carray_usecase(self.make_float32_pointer, pyfunc, f.ctypes)
 
-        # With typed pointers and explicit (different) dtype
+        # With typed pointers and explicit (matching) dtype
         pyfunc = dtype_usecase
-        f = cfunc(carray_float64_usecase_sig)(pyfunc)
-        self.check_carray_usecase(self.make_float64_pointer, pyfunc, f.ctypes)
+        f = cfunc(carray_float32_usecase_sig)(pyfunc)
+        self.check_carray_usecase(self.make_float32_pointer, pyfunc, f.ctypes)
+        # With typed pointers and mismatching dtype
+        with self.assertTypingError() as raises:
+            f = cfunc(carray_float64_usecase_sig)(pyfunc)
+        self.assertIn("mismatching dtype 'float32' for pointer type 'float64*'",
+                      str(raises.exception))
 
         # With voidptr
         pyfunc = dtype_usecase

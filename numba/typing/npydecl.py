@@ -1003,24 +1003,35 @@ class NumbaCArray(CallableTemplate):
     layout = 'C'
 
     def generic(self):
+        func_name = self.key.__name__
+
         def typer(ptr, shape, dtype=types.none):
             if ptr is types.voidptr:
-                if dtype is types.none:
-                    raise TypeError("carray(): explicit dtype required for void* argument")
-            elif not isinstance(ptr, types.CPointer):
-                raise TypeError("carray(): pointer argument expected, got '%s'"
-                                % (ptr,))
+                ptr_dtype = None
+            elif isinstance(ptr, types.CPointer):
+                ptr_dtype = ptr.dtype
+            else:
+                raise TypeError("%s(): pointer argument expected, got '%s'"
+                                % (func_name, ptr))
 
             if dtype is types.none:
-                dtype = ptr.dtype
+                if ptr_dtype is None:
+                    raise TypeError("%s(): explicit dtype required for void* argument"
+                                    % (func_name,))
+                dtype = ptr_dtype
             elif isinstance(dtype, types.DTypeSpec):
                 dtype = dtype.dtype
+                if ptr_dtype is not None and dtype != ptr_dtype:
+                    raise TypeError("%s(): mismatching dtype '%s' for pointer type '%s'"
+                                    % (func_name, dtype, ptr))
             else:
-                raise TypeError("carray(): invalid dtype spec '%s'" % (dtype,))
+                raise TypeError("%s(): invalid dtype spec '%s'"
+                                % (func_name, dtype))
 
             ndim = _parse_shape(shape)
             if ndim is None:
-                raise TypeError("carray(): invalid shape '%s'" % (shape,))
+                raise TypeError("%s(): invalid shape '%s'"
+                                % (func_name, shape))
 
             return types.Array(dtype, ndim, self.layout)
 
