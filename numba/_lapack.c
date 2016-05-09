@@ -1,4 +1,7 @@
 /*
+ * This file contains wrappers of BLAS and LAPACK functions
+ */
+/*
  * BLAS calling helpers.  The helpers can be called without the GIL held.
  * The caller is responsible for checking arguments (especially dimensions).
  */
