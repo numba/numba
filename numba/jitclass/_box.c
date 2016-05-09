@@ -104,8 +104,8 @@ static
 void* import_meminfo_release() {
     PyObject *nrtmod = NULL;
     PyObject *helperdct = NULL;
-    PyObject *mi_rel_fn = NULL;;
-    void *fnptr = NULL;;
+    PyObject *mi_rel_fn = NULL;
+    void *fnptr = NULL;
     /* from numba.runtime import _nrt_python */
     nrtmod = PyImport_ImportModule("numba.runtime._nrt_python");
     if (!nrtmod) goto cleanup;
