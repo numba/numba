@@ -28,6 +28,9 @@ class TestCTypesTypes(TestCase):
         check(POINTER(POINTER(c_float)),
               types.CPointer(types.CPointer(types.float32)))
 
+        check(None, types.void)
+
+    @tag('important')
     def test_from_ctypes(self):
         """
         Test converting a ctypes type to a Numba type.
@@ -43,6 +46,7 @@ class TestCTypesTypes(TestCase):
             ctypes_utils.from_ctypes(c_wchar_p)
         self.assertIn("Unsupported ctypes type", str(raises.exception))
 
+    @tag('important')
     def test_to_ctypes(self):
         """
         Test converting a Numba type to a ctypes type.

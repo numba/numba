@@ -14,7 +14,7 @@ from llvmlite.llvmpy.core import Constant
 
 import numpy
 from numba import types, cgutils, typing, utils
-from numba.numpy_support import as_dtype
+from numba.numpy_support import as_dtype, carray, farray
 from numba.numpy_support import version as numpy_version
 from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     lower_getattr_generic,
@@ -3185,6 +3185,60 @@ def np_frombuffer(context, builder, sig, args):
 
     res = out_ary._getvalue()
     return impl_ret_borrowed(context, builder, sig.return_type, res)
+
+
+@lower_builtin(carray, types.Any, types.Any)
+@lower_builtin(carray, types.Any, types.Any, types.DTypeSpec)
+@lower_builtin(farray, types.Any, types.Any)
+@lower_builtin(farray, types.Any, types.Any, types.DTypeSpec)
+def np_cfarray(context, builder, sig, args):
+    """
+    numba.numpy_support.carray(...) and
+    numba.numpy_support.farray(...).
+    """
+    ptrty, shapety = sig.args[:2]
+    ptr, shape = args[:2]
+
+    aryty = sig.return_type
+    dtype = aryty.dtype
+    assert aryty.layout in 'CF'
+
+    out_ary = make_array(aryty)(context, builder)
+
+    itemsize = get_itemsize(context, aryty)
+    ll_itemsize = cgutils.intp_t(itemsize)
+
+    if isinstance(shapety, types.BaseTuple):
+        shapes = cgutils.unpack_tuple(builder, shape)
+    else:
+        shapes = (shape,)
+
+    off = ll_itemsize
+    strides = []
+    if aryty.layout == 'F':
+        for s in shapes:
+            strides.append(off)
+            off = builder.mul(off, s)
+    else:
+        for s in reversed(shapes):
+            strides.append(off)
+            off = builder.mul(off, s)
+        strides.reverse()
+
+    data = builder.bitcast(ptr,
+                           context.get_data_type(aryty.dtype).as_pointer())
+
+    populate_array(out_ary,
+                   data=data,
+                   shape=shapes,
+                   strides=strides,
+                   itemsize=ll_itemsize,
+                   # Array is not memory-managed
+                   meminfo=None,
+                   )
+
+    res = out_ary._getvalue()
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
 def _get_seq_size(context, builder, seqty, seq):

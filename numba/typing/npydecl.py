@@ -10,7 +10,8 @@ from .templates import (AttributeTemplate, AbstractTemplate, CallableTemplate,
 
 from ..numpy_support import (ufunc_find_matching_loop,
                              supported_ufunc_loop, as_dtype,
-                             from_dtype, as_dtype, resolve_output_type)
+                             from_dtype, as_dtype, resolve_output_type,
+                             carray, farray)
 from ..numpy_support import version as numpy_version
 from ..errors import TypingError
 from ..config import PerformanceWarning
@@ -992,3 +993,51 @@ class DiagCtor(CallableTemplate):
                     return None
                 return types.Array(ndim=rdim, dtype=ref.dtype, layout='C')
         return typer
+
+
+# -----------------------------------------------------------------------------
+# Numba helpers
+
+@infer_global(carray)
+class NumbaCArray(CallableTemplate):
+    layout = 'C'
+
+    def generic(self):
+        func_name = self.key.__name__
+
+        def typer(ptr, shape, dtype=types.none):
+            if ptr is types.voidptr:
+                ptr_dtype = None
+            elif isinstance(ptr, types.CPointer):
+                ptr_dtype = ptr.dtype
+            else:
+                raise TypeError("%s(): pointer argument expected, got '%s'"
+                                % (func_name, ptr))
+
+            if dtype is types.none:
+                if ptr_dtype is None:
+                    raise TypeError("%s(): explicit dtype required for void* argument"
+                                    % (func_name,))
+                dtype = ptr_dtype
+            elif isinstance(dtype, types.DTypeSpec):
+                dtype = dtype.dtype
+                if ptr_dtype is not None and dtype != ptr_dtype:
+                    raise TypeError("%s(): mismatching dtype '%s' for pointer type '%s'"
+                                    % (func_name, dtype, ptr))
+            else:
+                raise TypeError("%s(): invalid dtype spec '%s'"
+                                % (func_name, dtype))
+
+            ndim = _parse_shape(shape)
+            if ndim is None:
+                raise TypeError("%s(): invalid shape '%s'"
+                                % (func_name, shape))
+
+            return types.Array(dtype, ndim, self.layout)
+
+        return typer
+
+
+@infer_global(farray)
+class NumbaFArray(NumbaCArray):
+    layout = 'F'
