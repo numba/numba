@@ -75,9 +75,11 @@ def format_function_infos(fninfos):
             print('-' * len(header_line))
             print()
 
-            for info in impinfos:
-                sig_line = 'signature {0}'.format(
-                    format_signature(info['sig']))
+            formatted_sigs = map(lambda x: format_signature(x['sig']), impinfos)
+            sorted_impinfos = zip(formatted_sigs, impinfos)
+
+            for fmtsig, info in sorted(sorted_impinfos, key=lambda x: x[0]):
+                sig_line = 'signature {0}'.format(fmtsig)
                 print(sig_line)
                 print('~' * len(sig_line))
                 print()
