@@ -3191,7 +3191,7 @@ def np_frombuffer(context, builder, sig, args):
 @lower_builtin(carray, types.Any, types.Any, types.DTypeSpec)
 @lower_builtin(farray, types.Any, types.Any)
 @lower_builtin(farray, types.Any, types.Any, types.DTypeSpec)
-def np_carray(context, builder, sig, args):
+def np_cfarray(context, builder, sig, args):
     """
     numba.numpy_support.carray(...) and
     numba.numpy_support.farray(...).
