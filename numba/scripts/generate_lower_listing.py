@@ -76,9 +76,17 @@ def format_function_infos(fninfos):
             print()
 
             formatted_sigs = map(lambda x: format_signature(x['sig']), impinfos)
-            sorted_impinfos = zip(formatted_sigs, impinfos)
+            sorted_impinfos = sorted(zip(formatted_sigs, impinfos),
+                                     key=lambda x: x[0])
 
-            for fmtsig, info in sorted(sorted_impinfos, key=lambda x: x[0]):
+            # generate summary
+            print('Signatures\n')
+
+            for fmtsig, info in sorted_impinfos:
+                print('* `{0}`'.format(fmtsig))
+            print()
+
+            for fmtsig, info in sorted_impinfos:
                 sig_line = 'signature {0}'.format(fmtsig)
                 print(sig_line)
                 print('~' * len(sig_line))
