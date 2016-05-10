@@ -345,6 +345,15 @@ class TestLinalgBase(TestCase):
             return (base * 0.5 + 1).astype(dtype)
 
     def orth_fact_sample_matrix(self, size, dtype, order):
+        """
+        Provides a sample matrix for use in orthogonal factorization tests.
+
+        size: (rows, columns), the dimensions of the returned matrix.
+        dtype: the dtype for the returned matrix.
+        order: the memory layout for the returned matrix, 'F' or 'C'.
+        """
+        # May be worth just explicitly constructing this system at some point
+        # with a kwarg for condition number?
         break_at = 10
         jmp = 0
         # have a few attempts at shuffling to get the condition number down
@@ -395,22 +404,15 @@ class TestLinalgBase(TestCase):
                         contiguousness across all input values
                         (and therefore tests).
         """
-        flgc = "C_CONTIGUOUS"
-        flgf = "F_CONTIGUOUS"
 
         if isinstance(got, tuple):
             # tuple present, check all results
-            # find the contiguousness of the first result
-            c_contig = got[0].flags[flgc]
-            f_contig = got[0].flags[flgf]
-            # AND in the flags from other possible results
-            for k in range(1, len(got)):
-                c_contig &= got[k].flags[flgc]
-                f_contig &= got[k].flags[flgf]
+            c_contig = {a.flags.c_contiguous for a in got} == {True}
+            f_contig = {a.flags.f_contiguous for a in got} == {True}
         else:
             # else a single array is present
-            c_contig = got.flags[flgc]
-            f_contig = got.flags[flgf]
+            c_contig = got.flags.c_contiguous
+            f_contig = got.flags.f_contiguous
 
         # check that the result (possible set of) is at least one of
         # C or F contiguous.
