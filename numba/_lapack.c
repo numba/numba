@@ -76,6 +76,116 @@ static int checked_PyMem_RawMalloc(void** var, size_t bytes)
 }
 
 /*
+ * Checks that the char kind is valid (one of [s,d,c,z]) for use in blas/lapack.
+ * Returns zero on success for status checking.
+ */
+static int check_kind(char kind)
+{
+    switch (kind)
+    {
+        case 's':
+        case 'd':
+        case 'c':
+        case 'z':
+            break;
+        default:
+        {
+            PyGILState_STATE st = PyGILState_Ensure();
+            PyErr_SetString(PyExc_ValueError,
+                            "invalid data type (kind) found");
+            PyGILState_Release(st);
+        }
+        return 1;
+    }
+    return 0;
+}
+
+/*
+ * Guard macro for ensuring a valid data "kind" is being used.
+ * Place at the top of all routines with switches on "kind" that accept
+ * one of [s,d,c,z].
+ */
+#define ENSURE_VALID_KIND(__KIND) \
+if (check_kind( __KIND ))         \
+{                                 \
+    return -1;                    \
+}                                 \
+
+/*
+ * Checks that the char kind is valid for the real domain (one of [s,d])
+ * for use in blas/lapack.
+ * Returns zero on success for status checking.
+ */
+static int check_real_kind(char kind)
+{
+    switch (kind)
+    {
+        case 's':
+        case 'd':
+            break;
+        default:
+        {
+            PyGILState_STATE st = PyGILState_Ensure();
+            PyErr_SetString(PyExc_ValueError,
+                            "invalid data type (kind) found");
+            PyGILState_Release(st);
+        }
+        return 1;
+    }
+    return 0;
+}
+
+/*
+ * Guard macro for ensuring a valid data "kind" is being used for the
+ * real domain routines.
+ * Place at the top of all routines with switches on "kind" that accept
+ * one of [s,d].
+ */
+#define ENSURE_VALID_REAL_KIND(__KIND) \
+if (check_real_kind( __KIND ))         \
+{                                 \
+    return -1;                    \
+}                                 \
+
+
+/*
+ * Checks that the char kind is valid for the complex domain (one of [c,z])
+ * for use in blas/lapack.
+ * Returns zero on success for status checking.
+ */
+static int check_complex_kind(char kind)
+{
+    switch (kind)
+    {
+        case 'c':
+        case 'z':
+            break;
+        default:
+        {
+            PyGILState_STATE st = PyGILState_Ensure();
+            PyErr_SetString(PyExc_ValueError,
+                            "invalid data type (kind) found");
+            PyGILState_Release(st);
+        }
+        return 1;
+    }
+    return 0;
+}
+
+/*
+ * Guard macro for ensuring a valid data "kind" is being used for the
+ * real domain routines.
+ * Place at the top of all routines with switches on "kind" that accept
+ * one of [c,z].
+ */
+#define ENSURE_VALID_COMPLEX_KIND(__KIND) \
+if (check_complex_kind( __KIND ))         \
+{                                 \
+    return -1;                    \
+}                                 \
+
+
+/*
  * Define what a Fortran "int" is, some LAPACKs have 64 bit integer support
  * numba presently opts for a 32 bit C int.
  * This definition allows scope for later configuration time magic to adjust
@@ -112,6 +222,8 @@ numba_xxdot(char kind, char conjugate, Py_ssize_t n, void *dx, void *dy,
     F_INT _n;
     F_INT inc = 1;
 
+    ENSURE_VALID_KIND(kind)
+
     switch (kind)
     {
         case 's':
@@ -126,14 +238,6 @@ numba_xxdot(char kind, char conjugate, Py_ssize_t n, void *dx, void *dy,
         case 'z':
             raw_func = conjugate ? get_cblas_zdotc() : get_cblas_zdotu();
             break;
-        default:
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,
-                            "invalid kind of *DOT function");
-            PyGILState_Release(st);
-        }
-        return -1;
     }
     if (raw_func == NULL)
         return -1;
@@ -172,6 +276,8 @@ numba_xxgemv(char kind, char *trans, Py_ssize_t m, Py_ssize_t n,
     F_INT _lda;
     F_INT inc = 1;
 
+    ENSURE_VALID_KIND(kind)
+
     switch (kind)
     {
         case 's':
@@ -186,14 +292,6 @@ numba_xxgemv(char kind, char *trans, Py_ssize_t m, Py_ssize_t n,
         case 'z':
             raw_func = get_cblas_zgemv();
             break;
-        default:
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,
-                            "invalid kind of *GEMV function");
-            PyGILState_Release(st);
-        }
-        return -1;
     }
     if (raw_func == NULL)
         return -1;
@@ -219,6 +317,8 @@ numba_xxgemm(char kind, char *transa, char *transb,
     F_INT _m, _n, _k;
     F_INT _lda, _ldb, _ldc;
 
+    ENSURE_VALID_KIND(kind)
+
     switch (kind)
     {
         case 's':
@@ -233,14 +333,6 @@ numba_xxgemm(char kind, char *transa, char *transb,
         case 'z':
             raw_func = get_cblas_zgemm();
             break;
-        default:
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,
-                            "invalid kind of *GEMM function");
-            PyGILState_Release(st);
-        }
-        return -1;
     }
     if (raw_func == NULL)
         return -1;
@@ -310,6 +402,19 @@ EMIT_GET_CLAPACK_FUNC(dgesdd)
 EMIT_GET_CLAPACK_FUNC(cgesdd)
 EMIT_GET_CLAPACK_FUNC(zgesdd)
 
+// Computes QR decompositions
+EMIT_GET_CLAPACK_FUNC(sgeqrf)
+EMIT_GET_CLAPACK_FUNC(dgeqrf)
+EMIT_GET_CLAPACK_FUNC(cgeqrf)
+EMIT_GET_CLAPACK_FUNC(zgeqrf)
+
+// Computes columns of Q from elementary reflectors produced by xgeqrf() (QR).
+EMIT_GET_CLAPACK_FUNC(sorgqr)
+EMIT_GET_CLAPACK_FUNC(dorgqr)
+EMIT_GET_CLAPACK_FUNC(cungqr)
+EMIT_GET_CLAPACK_FUNC(zungqr)
+
+
 
 #undef EMIT_GET_CLAPACK_FUNC
 
@@ -340,13 +445,21 @@ typedef void (*cgesdd_t)(char *jobz, F_INT *m, F_INT *n, void *a, F_INT *lda,
                          void *work, F_INT *lwork, void *rwork, F_INT *iwork,
                          F_INT *info);
 
+typedef void (*xgeqrf_t)(F_INT *m, F_INT *n, void *a, F_INT *lda, void *tau,
+                         void *work, F_INT *lwork, F_INT *info);
 
-#define CATCH_LAPACK_INVALID_ARG(info)                                 \
+typedef void (*xxxgqr_t)(F_INT *m, F_INT *n, F_INT *k, void *a, F_INT *lda,
+                         void *tau, void *work, F_INT *lwork, F_INT *info);
+
+
+
+#define CATCH_LAPACK_INVALID_ARG(__routine, info)                      \
     do {                                                               \
         if (info < 0) {                                                \
             PyGILState_STATE st = PyGILState_Ensure();                 \
             PyErr_Format(PyExc_RuntimeError,                           \
-                         "LAPACK Error: on input %d\n", -(int) info);  \
+                 "LAPACK Error: Routine " #__routine ". On input %d\n",\
+                  -(int) info);                                        \
             PyGILState_Release(st);                                    \
             return -1;                                                 \
         }                                                              \
@@ -363,6 +476,8 @@ numba_xxgetrf(char kind, Py_ssize_t m, Py_ssize_t n, void *a, Py_ssize_t lda,
     void *raw_func = NULL;
     F_INT _m, _n, _lda, _info;
 
+    ENSURE_VALID_KIND(kind)
+
     switch (kind)
     {
         case 's':
@@ -377,14 +492,6 @@ numba_xxgetrf(char kind, Py_ssize_t m, Py_ssize_t n, void *a, Py_ssize_t lda,
         case 'z':
             raw_func = get_clapack_zgetrf();
             break;
-        default:
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,
-                            "invalid kind of *LU factorization function");
-            PyGILState_Release(st);
-        }
-        return -1;
     }
     if (raw_func == NULL)
         return -1;
@@ -409,6 +516,8 @@ numba_xxgetri(char kind, Py_ssize_t n, void *a, Py_ssize_t lda,
     void *raw_func = NULL;
     F_INT _n, _lda, _lwork, _info;
 
+    ENSURE_VALID_KIND(kind)
+
     switch (kind)
     {
         case 's':
@@ -423,15 +532,6 @@ numba_xxgetri(char kind, Py_ssize_t n, void *a, Py_ssize_t lda,
         case 'z':
             raw_func = get_clapack_zgetri();
             break;
-        default:
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,
-                            "invalid kind of *inversion from LU "
-                            "factorization function");
-            PyGILState_Release(st);
-        }
-        return -1;
     }
     if (raw_func == NULL)
         return -1;
@@ -454,6 +554,8 @@ numba_xxpotrf(char kind, char uplo, Py_ssize_t n, void *a, Py_ssize_t lda)
     void *raw_func = NULL;
     F_INT _n, _lda, info;
 
+    ENSURE_VALID_KIND(kind)
+
     switch (kind)
     {
         case 's':
@@ -468,14 +570,6 @@ numba_xxpotrf(char kind, char uplo, Py_ssize_t n, void *a, Py_ssize_t lda)
         case 'z':
             raw_func = get_clapack_zpotrf();
             break;
-        default:
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,
-                            "invalid kind of Cholesky factorization function");
-            PyGILState_Release(st);
-        }
-        return -1;
     }
     if (raw_func == NULL)
         return -1;
@@ -484,10 +578,44 @@ numba_xxpotrf(char kind, char uplo, Py_ssize_t n, void *a, Py_ssize_t lda)
     _lda = (F_INT) lda;
 
     (*(xxpotrf_t) raw_func)(&uplo, &_n, a, &_lda, &info);
-    CATCH_LAPACK_INVALID_ARG(info);
+    CATCH_LAPACK_INVALID_ARG("xxpotrf", info);
     return info;
 }
 
+
+/*
+ * kind_size()
+ * gets the data size appropriate for a specified kind.
+ *
+ * Input:
+ * kind - the kind, one of:
+ *         (s, d, c, z) = (float, double, complex, double complex).
+ *
+ * data_size - modified in place, on return contains the appropriate data size.
+ *
+ * Returns 0 on success, -1 else.
+ */
+static size_t kind_size(char kind)
+{
+    size_t data_size = 0;
+    switch (kind)
+    {
+        case 's':
+            data_size  = sizeof(float);
+            break;
+        case 'd':
+            data_size  = sizeof(double);
+            break;
+        case 'c':
+            data_size  = sizeof(npy_complex64);
+            break;
+        case 'z':
+            data_size  = sizeof(npy_complex128);
+            break;
+    }
+    return data_size;
+
+}
 
 /*
  * cast_from_X()
@@ -555,6 +683,8 @@ numba_raw_rgeev(char kind, char jobvl, char jobvr,
     void *raw_func = NULL;
     F_INT _n, _lda, _ldvl, _ldvr, _lwork, _info;
 
+    ENSURE_VALID_REAL_KIND(kind)
+
     switch (kind)
     {
         case 's':
@@ -563,14 +693,6 @@ numba_raw_rgeev(char kind, char jobvl, char jobvr,
         case 'd':
             raw_func = get_clapack_dgeev();
             break;
-        default:
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,
-                            "invalid kind of real space *geev call");
-            PyGILState_Release(st);
-        }
-        return -1;
     }
     if (raw_func == NULL)
         return -1;
@@ -602,34 +724,20 @@ numba_ez_rgeev(char kind, char jobvl, char jobvr, Py_ssize_t n, void *a,
     void * work = NULL;
     all_dtypes stack_slot;
 
+    ENSURE_VALID_REAL_KIND(kind)
+
     _n = (F_INT) n;
     _lda = (F_INT) lda;
     _ldvl = (F_INT) ldvl;
     _ldvr = (F_INT) ldvr;
 
-    // find the function to call, decide on a base type size
-    switch (kind)
-    {
-        case 's':
-            base_size = sizeof(float);
-            break;
-        case 'd':
-            base_size = sizeof(double);
-            break;
-        default:
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,
-                            "Invalid kind in numba_ez_rgeev");
-            PyGILState_Release(st);
-        }
-        return -1;
-    }
+    // decide on a base type size
+    base_size = kind_size(kind);
 
     work = &stack_slot;
     numba_raw_rgeev(kind, jobvl, jobvr, _n, a, _lda, wr, wi, vl, _ldvl,
                     vr, _ldvr, work, lwork, &info);
-    CATCH_LAPACK_INVALID_ARG(info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_rgeev", info);
 
     lwork = cast_from_X(kind, work);
     if (checked_PyMem_RawMalloc(&work, base_size * lwork))
@@ -640,7 +748,7 @@ numba_ez_rgeev(char kind, char jobvl, char jobvr, Py_ssize_t n, void *a,
                     vr, _ldvr, work, lwork, &info);
     PyMem_RawFree(work);
 
-    CATCH_LAPACK_INVALID_ARG(info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_rgeev", info);
 
     return ez_geev_return(info);
 }
@@ -656,6 +764,8 @@ numba_raw_cgeev(char kind, char jobvl, char jobvr,
     void *raw_func = NULL;
     F_INT _n, _lda, _ldvl, _ldvr, _lwork, _info;
 
+    ENSURE_VALID_COMPLEX_KIND(kind)
+
     _n = (F_INT) n;
     _lda = (F_INT) lda;
     _ldvl = (F_INT) ldvl;
@@ -670,14 +780,6 @@ numba_raw_cgeev(char kind, char jobvl, char jobvr,
         case 'z':
             raw_func = get_clapack_zgeev();
             break;
-        default:
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,\
-                            "invalid kind of complex space *geev call");
-            PyGILState_Release(st);
-        }
-        return -1;
     }
     if (raw_func == NULL)
         return -1;
@@ -705,33 +807,20 @@ numba_ez_cgeev(char kind, char jobvl, char jobvr,  Py_ssize_t n, void *a,
     void * work = NULL;
     double * rwork = NULL;
 
+    ENSURE_VALID_COMPLEX_KIND(kind)
+
     _n = (F_INT) n;
     _lda = (F_INT) lda;
     _ldvl = (F_INT) ldvl;
     _ldvr = (F_INT) ldvr;
 
-    // find the function to call, decide on a base type size
-    switch (kind)
-    {
-        case 'c':
-            base_size = sizeof(npy_complex64);
-            break;
-        case 'z':
-            base_size = sizeof(npy_complex128);
-            break;
-        default:
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,\
-                            "Invalid kind in numba_ez_cgeev");
-            PyGILState_Release(st);
-        }
-        return -1;
-    }
+    // decide on a base type size
+    base_size = kind_size(kind);
+
     work = &stack_slot;
     numba_raw_cgeev(kind, jobvl, jobvr, n, a, lda, w, vl, ldvl,
                     vr, ldvr, work, lwork, rwork, &info);
-    CATCH_LAPACK_INVALID_ARG(info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_cgeev", info);
 
     lwork = cast_from_X(kind, work);
     if (checked_PyMem_RawMalloc((void**)&rwork, 2*n*base_size))
@@ -747,7 +836,7 @@ numba_ez_cgeev(char kind, char jobvl, char jobvr,  Py_ssize_t n, void *a,
                     vr, _ldvr, work, lwork, rwork, &info);
     PyMem_RawFree(work);
     PyMem_RawFree(rwork);
-    CATCH_LAPACK_INVALID_ARG(info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_cgeev", info);
 
     return ez_geev_return(info);
 }
@@ -780,6 +869,8 @@ numba_raw_rgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
     void *raw_func = NULL;
     F_INT _m, _n, _lda, _ldu, _ldvt, _lwork, _info;
 
+    ENSURE_VALID_REAL_KIND(kind)
+
     _m = (F_INT) m;
     _n = (F_INT) n;
     _lda = (F_INT) lda;
@@ -795,14 +886,6 @@ numba_raw_rgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
         case 'd':
             raw_func = get_clapack_dgesdd();
             break;
-        default:
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,\
-                            "invalid kind of real space *gesdd call");
-            PyGILState_Release(st);
-        }
-        return -1;
     }
     if (raw_func == NULL)
         return -1;
@@ -830,31 +913,17 @@ numba_ez_rgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
     size_t base_size = -1;
     void *work = NULL;
 
-    // find the function to call, decide on a base type size
-    switch (kind)
-    {
-        case 's':
-            base_size = sizeof(float);
-            break;
-        case 'd':
-            base_size = sizeof(double);
-            break;
-        default:
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,\
-                            "Invalid kind in numba_ez_rgesdd");
-            PyGILState_Release(st);
-        }
-        return -1;
-    }
+    ENSURE_VALID_REAL_KIND(kind)
+
+    // decide on a base type size
+    base_size = kind_size(kind);
 
     work = &stack_slot;
 
     /* Compute optimal work size (lwork) */
     numba_raw_rgesdd(kind, jobz, m, n, a, lda, s, u, ldu, vt, ldvt, work,
                      lwork, iwork, &info);
-    CATCH_LAPACK_INVALID_ARG(info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_rgesdd", info);
 
     /* Allocate work array */
     lwork = cast_from_X(kind, work);
@@ -870,7 +939,7 @@ numba_ez_rgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
                      iwork, &info);
     PyMem_RawFree(work);
     PyMem_RawFree(iwork);
-    CATCH_LAPACK_INVALID_ARG(info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_rgesdd", info);
 
     return ez_gesdd_return(info);
 }
@@ -885,6 +954,8 @@ numba_raw_cgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
 {
     void *raw_func = NULL;
     F_INT _m, _n, _lda, _ldu, _ldvt, _lwork, _info;
+
+    ENSURE_VALID_COMPLEX_KIND(kind)
 
     _m = (F_INT) m;
     _n = (F_INT) n;
@@ -901,14 +972,6 @@ numba_raw_cgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
         case 'z':
             raw_func = get_clapack_zgesdd();
             break;
-        default:
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,\
-                            "invalid kind of complex space *gesdd call");
-            PyGILState_Release(st);
-        }
-        return -1;
     }
     if (raw_func == NULL)
         return -1;
@@ -940,6 +1003,8 @@ numba_ez_cgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
     void *rwork = NULL;
     F_INT *iwork = NULL;
 
+    ENSURE_VALID_COMPLEX_KIND(kind)
+
     // find the function to call, decide on a base type size
     switch (kind)
     {
@@ -966,7 +1031,7 @@ numba_ez_cgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
     /* Compute optimal work size (lwork) */
     numba_raw_cgesdd(kind, jobz, m, n, a, lda, s, u ,ldu, vt, ldvt, work, lwork,
                      rwork, iwork, &info);
-    CATCH_LAPACK_INVALID_ARG(info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_cgesdd", info);
 
     /* Allocate work array */
     lwork = cast_from_X(kind, work);
@@ -1004,7 +1069,7 @@ numba_ez_cgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
     PyMem_RawFree(work);
     PyMem_RawFree(rwork);
     PyMem_RawFree(iwork);
-    CATCH_LAPACK_INVALID_ARG(info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_cgesdd", info);
 
     return ez_gesdd_return(info);
 }
@@ -1019,21 +1084,179 @@ numba_ez_gesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
                Py_ssize_t lda, void *s, void *u, Py_ssize_t ldu, void *vt,
                Py_ssize_t ldvt)
 {
+    ENSURE_VALID_KIND(kind)
+
     switch (kind)
     {
         case 's':
         case 'd':
-            return numba_ez_rgesdd(kind, jobz, m, n, a, lda, s, u, ldu, vt, ldvt);
+            return numba_ez_rgesdd(kind, jobz, m, n, a, lda, s, u, ldu, vt,
+                                   ldvt);
         case 'c':
         case 'z':
-            return numba_ez_cgesdd(kind, jobz, m, n, a, lda, s, u, ldu, vt, ldvt);
-        default:
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,\
-                            "invalid kind in numba_ez_gesdd call");
-            PyGILState_Release(st);
-        }
-        return -1;
+            return numba_ez_cgesdd(kind, jobz, m, n, a, lda, s, u, ldu, vt,
+                                   ldvt);
     }
+    return -1; // unreachable
+}
+
+
+/*
+ * Compute the QR factorization of a matrix.
+ * Return -1 on internal error, 0 on success, > 0 on failure.
+ */
+static int
+numba_raw_xgeqrf(char kind, Py_ssize_t m, Py_ssize_t n, void *a, Py_ssize_t
+                 lda, void *tau, void *work, Py_ssize_t lwork, Py_ssize_t *info)
+{
+    void *raw_func = NULL;
+    F_INT _m, _n, _lda, _lwork, _info;
+
+    ENSURE_VALID_KIND(kind)
+
+    switch (kind)
+    {
+        case 's':
+            raw_func = get_clapack_sgeqrf();
+            break;
+        case 'd':
+            raw_func = get_clapack_dgeqrf();
+            break;
+        case 'c':
+            raw_func = get_clapack_cgeqrf();
+            break;
+        case 'z':
+            raw_func = get_clapack_zgeqrf();
+            break;
+    }
+    if (raw_func == NULL)
+        return -1;
+
+    _m = (F_INT) m;
+    _n = (F_INT) n;
+    _lda = (F_INT) lda;
+    _lwork = (F_INT) lwork;
+
+    (*(xgeqrf_t) raw_func)(&_m, &_n, a, &_lda, tau, work, &_lwork, &_info);
+    *info = (Py_ssize_t) _info;
+    return 0;
+}
+
+/*
+ * Compute the QR factorization of a matrix.
+ * This routine hides the type and general complexity involved with making the
+ * xgeqrf calls. The work space computation and error handling etc is hidden.
+ * Args are as per LAPACK.
+ */
+NUMBA_EXPORT_FUNC(int)
+numba_ez_geqrf(char kind, Py_ssize_t m, Py_ssize_t n, void *a, Py_ssize_t
+               lda, void *tau)
+{
+    Py_ssize_t info = 0;
+    Py_ssize_t lwork = -1;
+    size_t base_size = -1;
+    all_dtypes stack_slot;
+    void *work = NULL;
+
+    base_size = kind_size(kind);
+
+    work = &stack_slot;
+
+    /* Compute optimal work size (lwork) */
+    numba_raw_xgeqrf(kind, m, n, a, lda, tau, work, lwork, &info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_xgeqrf", info);
+
+    /* Allocate work array */
+    lwork = cast_from_X(kind, work);
+    if (checked_PyMem_RawMalloc(&work, base_size * lwork))
+        return -1;
+
+    numba_raw_xgeqrf(kind, m, n, a, lda, tau, work, lwork, &info);
+    PyMem_RawFree(work);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_xgeqrf", info);
+
+    return 0; // info cannot be >0
+
+}
+
+
+/*
+ * Compute the orthogonal Q matrix (in QR) from elementary relectors.
+ * Return -1 on internal error, 0 on success, > 0 on failure.
+ */
+static int
+numba_raw_xxxgqr(char kind, Py_ssize_t m, Py_ssize_t n, Py_ssize_t k, void *a,
+                 Py_ssize_t lda, void *tau, void * work, Py_ssize_t lwork, Py_ssize_t *info)
+{
+    void *raw_func = NULL;
+    F_INT _m, _n, _k, _lda, _lwork, _info;
+
+    ENSURE_VALID_KIND(kind)
+
+    switch (kind)
+    {
+        case 's':
+            raw_func = get_clapack_sorgqr();
+            break;
+        case 'd':
+            raw_func = get_clapack_dorgqr();
+            break;
+        case 'c':
+            raw_func = get_clapack_cungqr();
+            break;
+        case 'z':
+            raw_func = get_clapack_zungqr();
+            break;
+    }
+    if (raw_func == NULL)
+        return -1;
+
+    _m = (F_INT) m;
+    _n = (F_INT) n;
+    _k = (F_INT) k;
+    _lda = (F_INT) lda;
+    _lwork = (F_INT) lwork;
+
+    (*(xxxgqr_t) raw_func)(&_m, &_n, &_k, a, &_lda, tau, work, &_lwork, &_info);
+    *info = (Py_ssize_t) _info;
+    return 0;
+}
+
+
+/*
+ * Compute the orthogonal Q matrix (in QR) from elementary reflectors.
+ * This routine hides the type and general complexity involved with making the
+ * x{or,un}qrf calls. The work space computation and error handling etc is
+ * hidden. Args are as per LAPACK.
+ */
+NUMBA_EXPORT_FUNC(int)
+numba_ez_xxgqr(char kind, Py_ssize_t m, Py_ssize_t n, Py_ssize_t k, void *a,
+               Py_ssize_t lda, void *tau)
+{
+    Py_ssize_t info = 0;
+    Py_ssize_t lwork = -1;
+    size_t base_size = -1;
+    all_dtypes stack_slot;
+    void *work = NULL;
+
+
+    work = &stack_slot;
+
+    /* Compute optimal work size (lwork) */
+    numba_raw_xxxgqr(kind, m, n, k, a, lda, tau, work, lwork, &info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_xxxgqr", info);
+
+    base_size = kind_size(kind);
+
+    /* Allocate work array */
+    lwork = cast_from_X(kind, work);
+    if (checked_PyMem_RawMalloc(&work, base_size * lwork))
+        return -1;
+
+    numba_raw_xxxgqr(kind, m, n, k, a, lda, tau, work, lwork, &info);
+    PyMem_RawFree(work);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_xxxgqr", info);
+
+    return 0; // info cannot be >0
+
 }

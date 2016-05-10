@@ -320,6 +320,10 @@ def svd_matrix(a, full_matrices=1):
     return np.linalg.svd(a, full_matrices)
 
 
+def qr_matrix(a):
+    return np.linalg.qr(a)
+
+
 class TestLinalgBase(TestCase):
     """
     Provides setUp and common data/error modes for testing np.linalg functions.
@@ -339,6 +343,32 @@ class TestLinalgBase(TestCase):
             return (base * (1 - 0.5j) + 2j).astype(dtype)
         else:
             return (base * 0.5 + 1).astype(dtype)
+
+    def orth_fact_sample_matrix(self, size, dtype, order):
+        """
+        Provides a sample matrix for use in orthogonal factorization tests.
+
+        size: (rows, columns), the dimensions of the returned matrix.
+        dtype: the dtype for the returned matrix.
+        order: the memory layout for the returned matrix, 'F' or 'C'.
+        """
+        # May be worth just explicitly constructing this system at some point
+        # with a kwarg for condition number?
+        break_at = 10
+        jmp = 0
+        # have a few attempts at shuffling to get the condition number down
+        # else not worry about it
+        mn = size[0] * size[1]
+        np.random.seed(0)  # repeatable seed
+        while jmp < break_at:
+            v = self.sample_vector(mn, dtype)
+            # shuffle to improve conditioning
+            np.random.shuffle(v)
+            A = np.reshape(v, size)
+            if np.linalg.cond(A) < mn:
+                return np.array(A, order=order, dtype=dtype)
+            jmp += 1
+        return A
 
     def assert_error(self, cfunc, args, msg, err=ValueError):
         with self.assertRaises(err) as raises:
@@ -360,6 +390,42 @@ class TestLinalgBase(TestCase):
     def assert_no_nan_or_inf(self, cfunc, args):
         msg = "Array must not contain infs or NaNs."
         self.assert_error(cfunc, args, msg, np.linalg.LinAlgError)
+
+    def assert_contig_sanity(self, got, expected_contig):
+        """
+        This checks that in a computed result from numba (array, possibly tuple
+        of arrays) all the arrays are contiguous in memory and that they are
+        all at least one of "C_CONTIGUOUS" or "F_CONTIGUOUS". The computed
+        result of the contiguousness is then compared against a hardcoded
+        expected result.
+
+        got: is the computed results from numba
+        expected_contig: is "C" or "F" and is the expected type of
+                        contiguousness across all input values
+                        (and therefore tests).
+        """
+
+        if isinstance(got, tuple):
+            # tuple present, check all results
+            c_contig = {a.flags.c_contiguous for a in got} == {True}
+            f_contig = {a.flags.f_contiguous for a in got} == {True}
+        else:
+            # else a single array is present
+            c_contig = got.flags.c_contiguous
+            f_contig = got.flags.f_contiguous
+
+        # check that the result (possible set of) is at least one of
+        # C or F contiguous.
+        msg = "Results are not at least one of all C or F contiguous."
+        self.assertTrue(c_contig | f_contig, msg)
+
+        msg = "Computed contiguousness does not match expected."
+        if expected_contig == "C":
+            self.assertTrue(c_contig, msg)
+        elif expected_contig == "F":
+            self.assertTrue(f_contig, msg)
+        else:
+            raise ValueError("Unknown contig")
 
 
 class TestLinalgInv(TestLinalgBase):
@@ -393,6 +459,9 @@ class TestLinalgInv(TestLinalgBase):
                 # because of +0, -0 discrepancies
                 np.testing.assert_array_almost_equal_nulp(
                     got, expected, **kwargs)
+                # check that the computed results are contig and in the same
+                # way
+                self.assert_contig_sanity(got, "C")
                 del got, expected
 
         for dtype, order in product(self.dtypes, 'CF'):
@@ -450,6 +519,9 @@ class TestLinalgCholesky(TestLinalgBase):
             expected = cholesky_matrix(a)
             got = cfunc(a)
             use_reconstruction = False
+            # check that the computed results are contig and in the same way
+            self.assert_contig_sanity(got, "C")
+
             # try strict
             try:
                 np.testing.assert_array_almost_equal_nulp(got, expected,
@@ -529,6 +601,8 @@ class TestLinalgEig(TestLinalgBase):
             self.assertEqual(len(expected), len(got))
             # and that length is 2
             self.assertEqual(len(got), 2)
+            # and that the computed results are contig and in the same way
+            self.assert_contig_sanity(got, "F")
 
             use_reconstruction = False
             # try plain match of each array to np first
@@ -617,22 +691,6 @@ class TestLinalgSvd(TestLinalgBase):
     Tests for np.linalg.svd.
     """
 
-    def sample_matrix(self, size, dtype, order):
-        break_at = 10
-        jmp = 0
-        # have a few attempts at shuffling to get the condition number down
-        # else not worry about it
-        mn = size[0] * size[1]
-        np.random.seed(0)  # repeatable seed
-        while jmp < break_at:
-            v = self.sample_vector(mn, dtype)
-            # shuffle to improve conditioning
-            np.random.shuffle(v)
-            A = np.reshape(v, size)
-            if np.linalg.cond(A) < mn:
-                return np.array(A, order=order, dtype=dtype)
-            jmp += 1
-
     @needs_lapack
     def test_linalg_svd(self):
         """
@@ -647,10 +705,13 @@ class TestLinalgSvd(TestLinalgBase):
             self.assertEqual(len(expected), len(got))
             # and that length is 3
             self.assertEqual(len(got), 3)
+            # and that the computed results are contig and in the same way
+            self.assert_contig_sanity(got, "F")
 
             use_reconstruction = False
             # try plain match of each array to np first
             for k in range(len(expected)):
+
                 try:
                     np.testing.assert_array_almost_equal_nulp(
                         got[k], expected[k], nulp=10)
@@ -702,10 +763,106 @@ class TestLinalgSvd(TestLinalgBase):
         for size, dtype, fmat, order in \
                 product(sizes, self.dtypes, full_matrices, 'FC'):
 
-            a = self.sample_matrix(size, dtype, order)
+            a = self.orth_fact_sample_matrix(size, dtype, order)
             check(a, full_matrices=fmat)
 
         rn = "svd"
+
+        # Wrong dtype
+        self.assert_wrong_dtype(rn, cfunc,
+                                (np.ones((2, 2), dtype=np.int32),))
+
+        # Dimension issue
+        self.assert_wrong_dimensions(rn, cfunc,
+                                     (np.ones(10, dtype=np.float64),))
+
+        # no nans or infs
+        self.assert_no_nan_or_inf(cfunc,
+                                  (np.array([[1., 2., ], [np.inf, np.nan]],
+                                            dtype=np.float64),))
+
+
+class TestLinalgQr(TestLinalgBase):
+    """
+    Tests for np.linalg.qr.
+    """
+    
+    @needs_lapack
+    def test_linalg_qr(self):
+        """
+        Test np.linalg.qr
+        """
+        cfunc = jit(nopython=True)(qr_matrix)
+
+        def check(a, **kwargs):
+            expected = qr_matrix(a, **kwargs)
+            got = cfunc(a, **kwargs)
+
+            # check that the returned tuple is same length
+            self.assertEqual(len(expected), len(got))
+            # and that length is 2
+            self.assertEqual(len(got), 2)
+            # and that the computed results are contig and in the same way
+            self.assert_contig_sanity(got, "F")
+
+            use_reconstruction = False
+            # try plain match of each array to np first
+            for k in range(len(expected)):
+                try:
+                    np.testing.assert_array_almost_equal_nulp(
+                        got[k], expected[k], nulp=10)
+                except AssertionError:
+                    # plain match failed, test by reconstruction
+                    use_reconstruction = True
+
+            # if plain match fails then reconstruction is used.
+            # this checks that A ~= Q*R and that (Q^H)*Q = I
+            # i.e. QR decomposition ties out
+            # this is required as numpy uses only double precision lapack
+            # routines and computation of qr is numerically
+            # sensitive, numba using the type specific routines therefore
+            # sometimes comes out with a different answer (orthonormal bases
+            # are not unique etc.).
+            if use_reconstruction:
+                q, r = got
+
+                # check they are dimensionally correct
+                for k in range(len(expected)):
+                    self.assertEqual(got[k].shape, expected[k].shape)
+
+                # check A=q*r
+                rec = np.dot(q, r)
+                resolution = np.finfo(a.dtype).resolution
+                np.testing.assert_allclose(
+                    a,
+                    rec,
+                    rtol=10 * resolution,
+                    atol=100 * resolution  # zeros tend to be fuzzy
+                )
+
+                # check q is orthonormal
+                np.testing.assert_allclose(
+                    np.eye(min(a.shape), dtype=a.dtype),
+                    np.dot(np.conjugate(q.T), q),
+                    rtol=resolution,
+                    atol=resolution
+                )
+
+            # Ensure proper resource management
+            with self.assertNoNRTLeak():
+                cfunc(a, **kwargs)
+
+        # test: column vector, tall, wide, square, row vector
+        # prime sizes
+        sizes = [(7, 1), (11, 5), (5, 11), (3, 3), (1, 7)]
+
+        # test loop
+        for size, dtype, order in \
+                product(sizes, self.dtypes, 'FC'):
+            a = self.orth_fact_sample_matrix(size, dtype, order)
+            check(a)
+
+        rn = "qr"
 
         # Wrong dtype
         self.assert_wrong_dtype(rn, cfunc,
