@@ -816,7 +816,7 @@ def complex_power_impl(context, builder, sig, args):
     pb = b._getpointer()
     pc = c._getpointer()
 
-    # Optimize for square because cpow loses a lot of precsiion
+    # Optimize for square because cpow loses a lot of precision
     TWO = context.get_constant(fty, 2)
     ZERO = context.get_constant(fty, 0)
 
