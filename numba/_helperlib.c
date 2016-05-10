@@ -1249,3 +1249,9 @@ Define bridge for all math functions
 
 #undef MATH_UNARY
 #undef MATH_BINARY
+
+/*
+ * BLAS and LAPACK wrappers
+ */
+
+#include "_lapack.c"
