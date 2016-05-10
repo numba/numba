@@ -262,6 +262,9 @@ def _fill_ufunc_db(ufunc_db):
         'LL->L': numbers.int_power_impl,
         'qq->q': numbers.int_power_impl,
         'QQ->Q': numbers.int_power_impl,
+        # XXX we would like to use `int_power_impl` for real ** integer
+        # as well (for better performance), but the current ufunc typing
+        # rules forbid that
         'ff->f': numbers.real_power_impl,
         'dd->d': numbers.real_power_impl,
         'FF->F': npyfuncs.np_complex_power_impl,
