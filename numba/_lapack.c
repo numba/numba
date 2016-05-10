@@ -693,14 +693,6 @@ numba_raw_rgeev(char kind, char jobvl, char jobvr,
         case 'd':
             raw_func = get_clapack_dgeev();
             break;
-        default:
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,
-                            "invalid kind of real space *geev call");
-            PyGILState_Release(st);
-        }
-        return -1;
     }
     if (raw_func == NULL)
         return -1;
@@ -788,14 +780,6 @@ numba_raw_cgeev(char kind, char jobvl, char jobvr,
         case 'z':
             raw_func = get_clapack_zgeev();
             break;
-        default:
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,\
-                            "invalid kind of complex space *geev call");
-            PyGILState_Release(st);
-        }
-        return -1;
     }
     if (raw_func == NULL)
         return -1;
@@ -902,14 +886,6 @@ numba_raw_rgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
         case 'd':
             raw_func = get_clapack_dgesdd();
             break;
-        default:
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,\
-                            "invalid kind of real space *gesdd call");
-            PyGILState_Release(st);
-        }
-        return -1;
     }
     if (raw_func == NULL)
         return -1;
@@ -996,14 +972,6 @@ numba_raw_cgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
         case 'z':
             raw_func = get_clapack_zgesdd();
             break;
-        default:
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,\
-                            "invalid kind of complex space *gesdd call");
-            PyGILState_Release(st);
-        }
-        return -1;
     }
     if (raw_func == NULL)
         return -1;

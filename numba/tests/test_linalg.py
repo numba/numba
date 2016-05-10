@@ -786,23 +786,7 @@ class TestLinalgQr(TestLinalgBase):
     """
     Tests for np.linalg.qr.
     """
-
-    def sample_matrix(self, size, dtype, order):
-        break_at = 10
-        jmp = 0
-        # have a few attempts at shuffling to get the condition number down
-        # else not worry about it
-        mn = size[0] * size[1]
-        np.random.seed(0)  # repeatable seed
-        while jmp < break_at:
-            v = self.sample_vector(mn, dtype)
-            # shuffle to improve conditioning
-            np.random.shuffle(v)
-            A = np.reshape(v, size)
-            if np.linalg.cond(A) < mn:
-                return np.array(A, order=order, dtype=dtype)
-            jmp += 1
-
+    
     @needs_lapack
     def test_linalg_qr(self):
         """
