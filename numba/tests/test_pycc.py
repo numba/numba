@@ -21,6 +21,7 @@ from numba import unittest_support as unittest
 from numba.pycc import main
 from numba.pycc.decorators import clear_export_registry
 from numba.pycc.platform import find_shared_ending, find_pyext_ending
+from .matmul_usecase import has_blas
 from .support import TestCase, tag, import_dynamic, temp_directory
 
 
@@ -244,13 +245,19 @@ class TestCC(BasePYCCTest):
             self.assertPreciseEqual(lib.zero_scalar(1), 0.0)
             res = lib.zeros(3)
             self.assertEqual(list(res), [0, 0, 0])
+            if has_blas:
+                res = lib.vector_dot(4)
+                self.assertPreciseEqual(res, 30.0)
 
             code = """if 1:
                 res = lib.zero_scalar(1)
                 assert res == 0.0
                 res = lib.zeros(3)
                 assert list(res) == [0, 0, 0]
-                """
+                if %(has_blas)s:
+                    res = lib.vector_dot(4)
+                    assert res == 30.0
+                """ % dict(has_blas=has_blas)
             self.check_cc_compiled_in_subprocess(lib, code)
 
 
