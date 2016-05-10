@@ -90,7 +90,7 @@ def dotrace(*args, **kwds):
         spec = None
         logger = logging.getLogger('trace')
         def wrapper(*args, **kwds):
-            if not logger.isEnabledFor(logging.INFO) or tls.tracing:
+            if not logger.isEnabledFor(logging.INFO) or getattr(tls, 'tracing', False):
                 return func(*args, **kwds)
 
             fname, ftype = find_function_info(func, spec, args)

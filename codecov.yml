@@ -11,11 +11,12 @@ coverage:
         - "numba/hsa/.*"
 
     status:
-        # This check can mark a build failed if too much new code
-        # is not covered (which happens often with JITted functions).
-        patch: false
         project:
             default:
                 # The build fails if total project coverage drops by more than 3%
                 target: auto
                 threshold: "3%"
+        # These checks can mark a build failed if too much new code
+        # is not covered (which happens often with JITted functions).
+        changes: false
+        patch: false

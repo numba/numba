@@ -1,4 +1,4 @@
-from __future__ import absolute_import, print_function
+from __future__ import absolute_import, print_function, division
 
 from collections import OrderedDict
 import ctypes
@@ -7,7 +7,7 @@ import numpy as np
 
 from numba import (float32, float64, int16, int32, boolean, deferred_type,
                    optional)
-from numba import njit, typeof
+from numba import njit, typeof, errors
 from numba import unittest_support as unittest
 from numba import jitclass
 from .support import TestCase, MemoryLeakMixin, tag
@@ -27,6 +27,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
     def _check_spec(self, spec):
         @jitclass(spec)
         class Test(object):
+
             def __init__(self):
                 pass
 
@@ -54,6 +55,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec2 = [(1, int32), ('y', float32[:])]
 
         class Test(object):
+
             def __init__(self):
                 pass
 
@@ -74,6 +76,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
         @jitclass(spec)
         class Float2AndArray(object):
+
             def __init__(self, x, y, arr):
                 self.x = x
                 self.y = y
@@ -93,6 +96,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
         @jitclass(spec)
         class Vector2(object):
+
             def __init__(self, x, y):
                 self.x = x
                 self.y = y
@@ -184,6 +188,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
         @jitclass(spec)
         class Foo(object):
+
             def __init__(self, val):
                 self.val = val
 
@@ -204,6 +209,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
         @jitclass(spec)
         class LinkedNode(object):
+
             def __init__(self, data, next):
                 self.data = data
                 self.next = next
@@ -244,6 +250,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
         @jitclass(spec)
         class Struct(object):
+
             def __init__(self, a, b, c):
                 self.a = a
                 self.b = b
@@ -279,11 +286,13 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
     def test_base_class(self):
         class Base(object):
+
             def what(self):
                 return self.attr
 
         @jitclass([('attr', int32)])
         class Test(Base):
+
             def __init__(self, attr):
                 self.attr = attr
 
@@ -308,6 +317,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
     def test_user_getter_setter(self):
         @jitclass([('attr', int32)])
         class Foo(object):
+
             def __init__(self, attr):
                 self.attr = attr
 
@@ -344,6 +354,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
     def test_user_deleter_error(self):
         class Foo(object):
+
             def __init__(self):
                 pass
 
@@ -362,6 +373,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
     def test_name_shadowing_error(self):
         class Foo(object):
+
             def __init__(self):
                 pass
 
@@ -384,6 +396,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         # Different classes with the same names shouldn't confuse the compiler
         @jitclass([('x', int32)])
         class Foo(object):
+
             def __init__(self, x):
                 self.x = x + 2
 
@@ -394,6 +407,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
         @jitclass([('x', int32)])
         class Foo(object):
+
             def __init__(self, x):
                 self.x = x - 2
 
@@ -410,6 +424,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
     def test_parameterized(self):
         class MyClass(object):
+
             def __init__(self, value):
                 self.value = value
 
@@ -429,6 +444,95 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         d = create_my_class(np.array([12.3]))
         np.testing.assert_equal(d.value, [12.3])
 
+    @tag('important')
+    def test_protected_attrs(self):
+        spec = {
+            'value': int32,
+            '_value': float32,
+            '__value': int32,
+            '__value__': int32,
+        }
+
+        @jitclass(spec)
+        class MyClass(object):
+
+            def __init__(self, value):
+                self.value = value
+                self._value = value / 2
+                self.__value = value * 2
+                self.__value__ = value - 1
+
+            @property
+            def private_value(self):
+                return self.__value
+
+            @property
+            def _inner_value(self):
+                return self._value
+
+            @_inner_value.setter
+            def _inner_value(self, v):
+                self._value = v
+
+            @property
+            def __private_value(self):
+                return self.__value
+
+            @__private_value.setter
+            def __private_value(self, v):
+                self.__value = v
+
+            def swap_private_value(self, new):
+                old = self.__private_value
+                self.__private_value = new
+                return old
+
+            def _protected_method(self, factor):
+                return self._value * factor
+
+            def __private_method(self, factor):
+                return self.__value * factor
+
+            def check_private_method(self, factor):
+                return self.__private_method(factor)
+
+
+        value = 123
+        inst = MyClass(value)
+        # test attributes
+        self.assertEqual(inst.value, value)
+        self.assertEqual(inst._value, value / 2)
+        self.assertEqual(inst.private_value, value * 2)
+        # test properties
+        self.assertEqual(inst._inner_value, inst._value)
+        freeze_inst_value = inst._value
+        inst._inner_value -= 1
+        self.assertEqual(inst._inner_value, freeze_inst_value - 1)
+
+        self.assertEqual(inst.swap_private_value(321), value * 2)
+        self.assertEqual(inst.swap_private_value(value * 2), 321)
+        # test methods
+        self.assertEqual(inst._protected_method(3), inst._value * 3)
+        self.assertEqual(inst.check_private_method(3), inst.private_value * 3)
+        # test special
+        self.assertEqual(inst.__value__, value - 1)
+        inst.__value__ -= 100
+        self.assertEqual(inst.__value__, value - 101)
+
+        # test errors
+        @njit
+        def access_dunder(inst):
+            return inst.__value
+
+        with self.assertRaises(errors.UntypedAttributeError) as raises:
+            access_dunder(inst)
+        # It will appear as "_TestJitClass__value" because the `access_dunder`
+        # is under the scope of 'TestJitClass'.
+        self.assertIn('_TestJitClass__value', str(raises.exception))
+
+        with self.assertRaises(AttributeError) as raises:
+            access_dunder.py_func(inst)
+        self.assertIn('_TestJitClass__value', str(raises.exception))
 
 if __name__ == '__main__':
     unittest.main()

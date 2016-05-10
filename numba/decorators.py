@@ -202,3 +202,27 @@ def njit(*args, **kws):
         warnings.warn('forceobj is set for njit and is ignored', RuntimeWarning)
     kws.update({'nopython': True})
     return jit(*args, **kws)
+
+
+def cfunc(sig, locals={}, cache=False, **options):
+    """
+    This decorator is used to compile a Python function into a C callback
+    usable with foreign C libraries.
+
+    Usage::
+        @cfunc("float64(float64, float64)", nopython=True, cache=True)
+        def add(a, b):
+            return a + b
+
+    """
+    sig = sigutils.normalize_signature(sig)
+
+    def wrapper(func):
+        from .ccallback import CFunc
+        res = CFunc(func, sig, locals=locals, options=options)
+        if cache:
+            res.enable_caching()
+        res.compile()
+        return res
+
+    return wrapper

@@ -1,11 +1,12 @@
 from __future__ import print_function, division, absolute_import
 
 import collections
+import ctypes
 import re
 
 import numpy
 
-from . import errors, types, config, npdatetime
+from . import errors, types, config, npdatetime, utils
 
 
 version = tuple(map(int, numpy.__version__.split('.')[:2]))
@@ -365,3 +366,65 @@ def from_struct_dtype(dtype):
     aligned = _is_aligned_struct(dtype)
 
     return types.Record(str(dtype.descr), fields, size, aligned, dtype)
+
+
+def _get_bytes_buffer(ptr, nbytes):
+    """
+    Get a ctypes array of *nbytes* starting at *ptr*.
+    """
+    if isinstance(ptr, ctypes.c_void_p):
+        ptr = ptr.value
+    arrty = ctypes.c_byte * nbytes
+    return arrty.from_address(ptr)
+
+def _get_array_from_ptr(ptr, nbytes, dtype):
+    return numpy.frombuffer(_get_bytes_buffer(ptr, nbytes), dtype)
+
+
+def carray(ptr, shape, dtype=None):
+    """
+    Return a Numpy array view over the data pointed to by *ptr* with the
+    given *shape*, in C order.  If *dtype* is given, it is used as the
+    array's dtype, otherwise the array's dtype is inferred from *ptr*'s type.
+    """
+    from .typing.ctypes_utils import from_ctypes
+
+    try:
+        # Use ctypes parameter protocol if available
+        ptr = ptr._as_parameter_
+    except AttributeError:
+        pass
+
+    # Normalize dtype, to accept e.g. "int64" or np.int64
+    if dtype is not None:
+        dtype = numpy.dtype(dtype)
+
+    if isinstance(ptr, ctypes.c_void_p):
+        if dtype is None:
+            raise TypeError("explicit dtype required for void* argument")
+        p = ptr
+    elif isinstance(ptr, ctypes._Pointer):
+        ptrty = from_ctypes(ptr.__class__)
+        assert isinstance(ptrty, types.CPointer)
+        ptr_dtype = as_dtype(ptrty.dtype)
+        if dtype is not None and dtype != ptr_dtype:
+            raise TypeError("mismatching dtype '%s' for pointer %s"
+                            % (dtype, ptr))
+        dtype = ptr_dtype
+        p = ctypes.cast(ptr, ctypes.c_void_p)
+    else:
+        raise TypeError("expected a ctypes pointer, got %r" % (ptr,))
+
+    nbytes = dtype.itemsize * numpy.product(shape, dtype=numpy.intp)
+    return _get_array_from_ptr(p, nbytes, dtype).reshape(shape)
+
+
+def farray(ptr, shape, dtype=None):
+    """
+    Return a Numpy array view over the data pointed to by *ptr* with the
+    given *shape*, in Fortran order.  If *dtype* is given, it is used as the
+    array's dtype, otherwise the array's dtype is inferred from *ptr*'s type.
+    """
+    if not isinstance(shape, utils.INT_TYPES):
+        shape = shape[::-1]
+    return carray(ptr, shape, dtype).T

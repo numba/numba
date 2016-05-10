@@ -395,12 +395,12 @@ def get_null_value(ltype):
 
 def is_null(builder, val):
     null = get_null_value(val.type)
-    return builder.icmp(lc.ICMP_EQ, null, val)
+    return builder.icmp_unsigned('==', null, val)
 
 
 def is_not_null(builder, val):
     null = get_null_value(val.type)
-    return builder.icmp(lc.ICMP_NE, null, val)
+    return builder.icmp_unsigned('!=', null, val)
 
 
 def if_unlikely(builder, pred):

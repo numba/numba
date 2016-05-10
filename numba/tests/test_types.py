@@ -14,11 +14,11 @@ import weakref
 
 import numpy as np
 
+from numba import unittest_support as unittest
 from numba.utils import IS_PY3
-from numba import types, typing
+from numba import sigutils, types, typing
 from numba.types.abstract import _typecache
 from numba import jit, numpy_support
-from numba import unittest_support as unittest
 from .support import TestCase, tag
 from .enum_usecases import *
 
@@ -442,6 +442,36 @@ class TestPickling(TestCase):
             ty = ctypes_utils.make_function_type(fnptr)
             self.assertIsInstance(ty, types.ExternalFunctionPointer)
             self.check_pickling(ty)
+
+
+class TestSignatures(TestCase):
+
+    def test_normalize_signature(self):
+        f = sigutils.normalize_signature
+
+        def check(sig, args, return_type):
+            self.assertEqual(f(sig), (args, return_type))
+
+        def check_error(sig, msg):
+            with self.assertRaises(TypeError) as raises:
+                f(sig)
+            self.assertIn(msg, str(raises.exception))
+
+        f32 = types.float32
+        c64 = types.complex64
+        i16 = types.int16
+        a = types.Array(f32, 1, "C")
+
+        check((c64,), (c64,), None)
+        check((f32, i16), (f32, i16), None)
+        check(a(i16), (i16,), a)
+        check("int16(complex64)", (c64,), i16)
+        check("(complex64, int16)", (c64, i16), None)
+        check(typing.signature(i16, c64), (c64,), i16)
+
+        check_error((types.Integer,), "invalid signature")
+        check_error((None,), "invalid signature")
+        check_error([], "invalid signature")
 
 
 if __name__ == '__main__':

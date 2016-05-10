@@ -483,16 +483,16 @@ class TestDispatcherMethods(TestCase):
         self.assertEqual(exp_f, got_f)
 
 
-class TestCache(TestCase):
+class BaseCacheTest(TestCase):
+    # This class is also used in test_cfunc.py.
 
-    here = os.path.dirname(__file__)
     # The source file that will be copied
-    usecases_file = os.path.join(here, "cache_usecases.py")
+    usecases_file = None
     # Make sure this doesn't conflict with another module
-    modname = "caching_test_fodder"
+    modname = None
 
     def setUp(self):
-        self.tempdir = temp_directory('test_dispatcher_cache')
+        self.tempdir = temp_directory('test_cache')
         sys.path.insert(0, self.tempdir)
         self.modfile = os.path.join(self.tempdir, self.modname + ".py")
         self.cache_dir = os.path.join(self.tempdir, "__pycache__")
@@ -547,6 +547,13 @@ class TestCache(TestCase):
     def dummy_test(self):
         pass
 
+
+class TestCache(BaseCacheTest):
+
+    here = os.path.dirname(__file__)
+    usecases_file = os.path.join(here, "cache_usecases.py")
+    modname = "dispatcher_caching_test_fodder"
+
     def run_in_separate_process(self):
         # Cached functions can be run from a distinct process.
         # Also stresses issue #1603: uncached function calling cached function
@@ -556,17 +563,8 @@ class TestCache(TestCase):
 
             sys.path.insert(0, %(tempdir)r)
             mod = __import__(%(modname)r)
-            assert mod.add_usecase(2, 3) == 6
-            assert mod.add_objmode_usecase(2, 3) == 6
-            assert mod.outer_uncached(3, 2) == 2
-            assert mod.outer(3, 2) == 2
-            assert mod.generated_usecase(3, 2) == 1
-            packed_rec = mod.record_return(mod.packed_arr, 1)
-            assert tuple(packed_rec) == (2, 43.5), packed_rec
-            aligned_rec = mod.record_return(mod.aligned_arr, 1)
-            assert tuple(aligned_rec) == (2, 43.5), aligned_rec
-            """ % dict(tempdir=self.tempdir, modname=self.modname,
-                       test_class=self.__class__.__name__)
+            mod.self_test()
+            """ % dict(tempdir=self.tempdir, modname=self.modname)
 
         popen = subprocess.Popen([sys.executable, "-c", code],
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -588,6 +586,8 @@ class TestCache(TestCase):
         self.check_pycache(5)  # 2 index, 3 data
         self.assertPreciseEqual(f(2.5, 3), 6.5)
         self.check_pycache(6)  # 2 index, 4 data
+
+        mod.self_test()
 
     def check_hits(self, func, hits, misses=None):
         st = func.stats

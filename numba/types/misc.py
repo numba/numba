@@ -31,7 +31,7 @@ class Undefined(Dummy):
         return False
 
 
-class RawPointer(Dummy):
+class RawPointer(Opaque):
     """
     A raw pointer without any specific meaning.
     """
