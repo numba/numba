@@ -282,6 +282,8 @@ class TestVectorizeDecor(TestCase):
             got = ufunc(a, a, out=out)
             self.assertIs(got, out)
             self.assertPreciseEqual(out, a + a)
+            with self.assertRaises(TypeError):
+                ufunc(a, a, zzz=out)
 
         # With explicit sigs
         ufunc = vectorize(['int32(int32, int32)'], nopython=True)(add)
