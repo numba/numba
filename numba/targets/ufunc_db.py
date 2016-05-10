@@ -252,18 +252,21 @@ def _fill_ufunc_db(ufunc_db):
     }
 
     ufunc_db[np.power] = {
-        'bb->b': npyfuncs.np_int_power_impl,
-        'BB->B': npyfuncs.np_int_power_impl,
-        'hh->h': npyfuncs.np_int_power_impl,
-        'HH->H': npyfuncs.np_int_power_impl,
-        'ii->i': npyfuncs.np_int_power_impl,
-        'II->I': npyfuncs.np_int_power_impl,
-        'll->l': npyfuncs.np_int_power_impl,
-        'LL->L': npyfuncs.np_int_power_impl,
-        'qq->q': npyfuncs.np_int_power_impl,
-        'QQ->Q': npyfuncs.np_int_power_impl,
-        'ff->f': npyfuncs.np_real_power_impl,
-        'dd->d': npyfuncs.np_real_power_impl,
+        'bb->b': numbers.int_power_impl,
+        'BB->B': numbers.int_power_impl,
+        'hh->h': numbers.int_power_impl,
+        'HH->H': numbers.int_power_impl,
+        'ii->i': numbers.int_power_impl,
+        'II->I': numbers.int_power_impl,
+        'll->l': numbers.int_power_impl,
+        'LL->L': numbers.int_power_impl,
+        'qq->q': numbers.int_power_impl,
+        'QQ->Q': numbers.int_power_impl,
+        # XXX we would like to use `int_power_impl` for real ** integer
+        # as well (for better performance), but the current ufunc typing
+        # rules forbid that
+        'ff->f': numbers.real_power_impl,
+        'dd->d': numbers.real_power_impl,
         'FF->F': npyfuncs.np_complex_power_impl,
         'DD->D': npyfuncs.np_complex_power_impl,
     }

@@ -804,7 +804,7 @@ for cls in (types.Float, types.Integer):
 
 @lower_builtin("**", types.Complex, types.Complex)
 @lower_builtin(pow, types.Complex, types.Complex)
-def complex128_power_impl(context, builder, sig, args):
+def complex_power_impl(context, builder, sig, args):
     [ca, cb] = args
     ty = sig.args[0]
     fty = ty.underlying_float
@@ -816,7 +816,7 @@ def complex128_power_impl(context, builder, sig, args):
     pb = b._getpointer()
     pc = c._getpointer()
 
-    # Optimize for square because cpow looses a lot of precsiion
+    # Optimize for square because cpow loses a lot of precision
     TWO = context.get_constant(fty, 2)
     ZERO = context.get_constant(fty, 0)
 
