@@ -10,26 +10,23 @@ import functools
 import re
 
 from llvmlite import ir
-from llvmlite.llvmpy.core import Constant, Type
-import llvmlite.llvmpy.core as lc
 
 from . import utils
 
 
-true_bit = Constant.int(Type.int(1), 1)
-false_bit = Constant.int(Type.int(1), 0)
-true_byte = Constant.int(Type.int(8), 1)
-false_byte = Constant.int(Type.int(8), 0)
+bool_t = ir.IntType(1)
+int8_t = ir.IntType(8)
+int32_t = ir.IntType(32)
+intp_t = ir.IntType(utils.MACHINE_BITS)
 
-intp_t = Type.int(utils.MACHINE_BITS)
-
-
-def as_bool_byte(builder, value):
-    return builder.zext(value, Type.int(8))
+true_bit = bool_t(1)
+false_bit = bool_t(0)
+true_byte = int8_t(1)
+false_byte = int8_t(0)
 
 
 def as_bool_bit(builder, value):
-    return builder.icmp(lc.ICMP_NE, value, Constant.null(value.type))
+    return builder.icmp_unsigned('!=', value, value.type(0))
 
 
 def make_anonymous_struct(builder, values, struct_type=None):
@@ -37,8 +34,8 @@ def make_anonymous_struct(builder, values, struct_type=None):
     Create an anonymous struct containing the given LLVM *values*.
     """
     if struct_type is None:
-        struct_type = Type.struct([v.type for v in values])
-    struct_val = Constant.undef(struct_type)
+        struct_type = ir.LiteralStructType([v.type for v in values])
+    struct_val = struct_type(ir.Undefined)
     for i, v in enumerate(values):
         struct_val = builder.insert_value(struct_val, v, i)
     return struct_val
@@ -259,7 +256,7 @@ class Structure(object):
             assert is_pointer(ref.type)
             if self._type != ref.type.pointee:
                 if cast_ref:
-                    ref = builder.bitcast(ref, Type.pointer(self._type))
+                    ref = builder.bitcast(ref, self._type.as_pointer())
                 else:
                     raise TypeError(
                         "mismatching pointer type: got %s, expected %s"
@@ -269,10 +266,10 @@ class Structure(object):
         self._namemap = {}
         self._fdmap = []
         self._typemap = []
-        base = Constant.int(Type.int(), 0)
+        base = int32_t(0)
         for i, (k, tp) in enumerate(self._fields):
             self._namemap[k] = i
-            self._fdmap.append((base, Constant.int(Type.int(), i)))
+            self._fdmap.append((base, int32_t(i)))
             self._typemap.append(tp)
 
     def _get_ptr_by_index(self, index):
@@ -357,7 +354,7 @@ def alloca_once(builder, ty, size=None, name='', zfill=False):
     with builder.goto_entry_block():
         ptr = builder.alloca(ty, size=size, name=name)
         if zfill:
-            builder.store(Constant.null(ty), ptr)
+            builder.store(ty(None), ptr)
         return ptr
 
 
@@ -390,7 +387,7 @@ def terminate(builder, bbend):
 
 
 def get_null_value(ltype):
-    return Constant.null(ltype)
+    return ltype(None)
 
 
 def is_null(builder, val):
@@ -415,24 +412,11 @@ def ifnot(builder, pred):
     return builder.if_then(builder.not_(pred))
 
 
-class IfBranchObj(object):
-    def __init__(self, builder, bbenter, bbend):
-        self.builder = builder
-        self.bbenter = bbenter
-        self.bbend = bbend
-
-    def __enter__(self):
-        self.builder.position_at_end(self.bbenter)
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        terminate(self.builder, self.bbend)
-
-
 def increment_index(builder, val):
     """
     Increment an index *val*.
     """
-    one = Constant.int(val.type, 1)
+    one = val.type(1)
     # We pass the "nsw" flag in the hope that LLVM understands the index
     # never changes sign.  Unfortunately this doesn't always work
     # (e.g. ndindex()).
@@ -454,7 +438,7 @@ def for_range(builder, count, start=None, intp=None):
     if intp is None:
         intp = count.type
     if start is None:
-        start = Constant.int(intp, 0)
+        start = intp(0)
     stop = count
 
     bbcond = builder.append_basic_block("for.cond")
@@ -469,7 +453,7 @@ def for_range(builder, count, start=None, intp=None):
 
     with builder.goto_block(bbcond):
         index = builder.phi(intp, name="loop.index")
-        pred = builder.icmp(lc.ICMP_SLT, index, stop)
+        pred = builder.icmp_signed('<', index, stop)
         builder.cbranch(pred, bbbody, bbend)
 
     with builder.goto_block(bbbody):
@@ -524,9 +508,9 @@ def for_range_slice(builder, start, stop, step, intp=None, inc=True):
         index = builder.phi(intp, name="loop.index")
         count = builder.phi(intp, name="loop.count")
         if (inc):
-            pred = builder.icmp(lc.ICMP_SLT, index, stop)
+            pred = builder.icmp_signed('<', index, stop)
         else:
-            pred = builder.icmp(lc.ICMP_SGT, index, stop)
+            pred = builder.icmp_signed('>', index, stop)
         builder.cbranch(pred, bbbody, bbend)
 
     with builder.goto_block(bbbody):
@@ -606,7 +590,7 @@ def pack_array(builder, values, ty=None):
     n = len(values)
     if ty is None:
         ty = values[0].type
-    ary = Constant.undef(Type.array(ty, n))
+    ary = ir.ArrayType(ty, n)(ir.Undefined)
     for i, v in enumerate(values):
         ary = builder.insert_value(ary, v, i)
     return ary
@@ -638,8 +622,7 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
         # Wraparound
         indices = []
         for ind, dimlen in zip(inds, shape):
-            ZERO = Constant.null(ind.type)
-            negative = builder.icmp(lc.ICMP_SLT, ind, ZERO)
+            negative = builder.icmp_signed('<', ind, ind.type(0))
             wrapped = builder.add(dimlen, ind)
             selected = builder.select(negative, wrapped, ind)
             indices.append(selected)
@@ -647,7 +630,7 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
         indices = inds
     if not indices:
         # Indexing with empty tuple
-        return builder.gep(data, [get_null_value(Type.int(32))])
+        return builder.gep(data, [int32_t(0)])
     intp = indices[0].type
     # Indexing code
     if layout in 'CF':
@@ -656,14 +639,14 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
         if layout == 'C':
             # C contiguous
             for i in range(len(shape)):
-                last = Constant.int(intp, 1)
+                last = intp(1)
                 for j in shape[i + 1:]:
                     last = builder.mul(last, j)
                 steps.append(last)
         elif layout == 'F':
             # F contiguous
             for i in range(len(shape)):
-                last = Constant.int(intp, 1)
+                last = intp(1)
                 for j in shape[:i]:
                     last = builder.mul(last, j)
                 steps.append(last)
@@ -671,7 +654,7 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
             raise Exception("unreachable")
 
         # Compute index
-        loc = Constant.int(intp, 0)
+        loc = intp(0)
         for i, s in zip(indices, steps):
             tmp = builder.mul(i, s)
             loc = builder.add(loc, tmp)
@@ -684,12 +667,12 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
         return pointer_add(builder, data, offset)
 
 
-def _scalar_pred_against_zero(builder, value, fcond, icond):
-    nullval = Constant.null(value.type)
+def _scalar_pred_against_zero(builder, value, fpred, icond):
+    nullval = value.type(0)
     if isinstance(value.type, (ir.FloatType, ir.DoubleType)):
-        isnull = builder.fcmp(fcond, value, nullval)
+        isnull = fpred(value, nullval)
     elif isinstance(value.type, ir.IntType):
-        isnull = builder.icmp(icond, value, nullval)
+        isnull = builder.icmp_signed(icond, value, nullval)
     else:
         raise TypeError("unexpected value type %s" % (value.type,))
     return isnull
@@ -699,7 +682,8 @@ def is_scalar_zero(builder, value):
     """
     Return a predicate representing whether *value* is equal to zero.
     """
-    return _scalar_pred_against_zero(builder, value, lc.FCMP_OEQ, lc.ICMP_EQ)
+    return _scalar_pred_against_zero(
+        builder, value, functools.partial(builder.fcmp_ordered, '=='), '==')
 
 
 def is_not_scalar_zero(builder, value):
@@ -707,7 +691,8 @@ def is_not_scalar_zero(builder, value):
     Return a predicate representin whether a *value* is not equal to zero.
     (not exactly "not is_scalar_zero" because of nans)
     """
-    return _scalar_pred_against_zero(builder, value, lc.FCMP_UNE, lc.ICMP_NE)
+    return _scalar_pred_against_zero(
+        builder, value, functools.partial(builder.fcmp_unordered, '!='), '!=')
 
 
 def is_scalar_zero_or_nan(builder, value):
@@ -715,7 +700,8 @@ def is_scalar_zero_or_nan(builder, value):
     Return a predicate representing whether *value* is equal to either zero
     or NaN.
     """
-    return _scalar_pred_against_zero(builder, value, lc.FCMP_UEQ, lc.ICMP_EQ)
+    return _scalar_pred_against_zero(
+        builder, value, functools.partial(builder.fcmp_unordered, '=='), '==')
 
 is_true = is_not_scalar_zero
 is_false = is_scalar_zero
@@ -725,7 +711,8 @@ def is_scalar_neg(builder, value):
     """
     Is *value* negative?  Assumes *value* is signed.
     """
-    return _scalar_pred_against_zero(builder, value, lc.FCMP_OLT, lc.ICMP_SLT)
+    return _scalar_pred_against_zero(
+        builder, value, functools.partial(builder.fcmp_ordered, '<'), '<')
 
 
 def guard_null(context, builder, value, exc_tuple):
@@ -769,11 +756,11 @@ def is_pointer(ltyp):
 def get_record_member(builder, record, offset, typ):
     pval = gep_inbounds(builder, record, 0, offset)
     assert not is_pointer(pval.type.pointee)
-    return builder.bitcast(pval, Type.pointer(typ))
+    return builder.bitcast(pval, typ.as_pointer())
 
 
 def is_neg_int(builder, val):
-    return builder.icmp(lc.ICMP_SLT, val, get_null_value(val.type))
+    return builder.icmp_signed('<', val, val.type(0))
 
 
 def gep_inbounds(builder, ptr, *inds, **kws):
@@ -793,9 +780,9 @@ def gep(builder, ptr, *inds, **kws):
     assert not kws
     idx = []
     for i in inds:
-        if isinstance(i, int):
+        if isinstance(i, utils.INT_TYPES):
             # NOTE: llvm only accepts int32 inside structs, not int64
-            ind = Constant.int(Type.int(32), i)
+            ind = int32_t(i)
         else:
             ind = i
         idx.append(ind)
@@ -811,8 +798,8 @@ def pointer_add(builder, ptr, offset, return_type=None):
     the pointed item type.
     """
     intptr = builder.ptrtoint(ptr, intp_t)
-    if isinstance(offset, int):
-        offset = Constant.int(intp_t, offset)
+    if isinstance(offset, utils.INT_TYPES):
+        offset = intp_t(offset)
     intptr = builder.add(intptr, offset)
     return builder.inttoptr(intptr, return_type or ptr.type)
 
@@ -823,23 +810,19 @@ def memset(builder, ptr, size, value):
     """
     sizety = size.type
     memset = "llvm.memset.p0i8.i%d" % (sizety.width)
-    i32 = lc.Type.int(32)
-    i8 = lc.Type.int(8)
-    i8_star = i8.as_pointer()
-    i1 = lc.Type.int(1)
+    i8_star = int8_t.as_pointer()
     fn = builder.module.declare_intrinsic('llvm.memset', (i8_star, size.type))
     ptr = builder.bitcast(ptr, i8_star)
     if isinstance(value, int):
-        value = Constant.int(i8, value)
-    builder.call(fn, [ptr, value, size,
-                      Constant.int(i32, 0), Constant.int(i1, 0)])
+        value = int8_t(value)
+    builder.call(fn, [ptr, value, size, int32_t(0), bool_t(0)])
 
 
-def global_constant(builder_or_module, name, value, linkage=lc.LINKAGE_INTERNAL):
+def global_constant(builder_or_module, name, value, linkage='internal'):
     """
     Get or create a (LLVM module-)global constant with *name* or *value*.
     """
-    if isinstance(builder_or_module, lc.Module):
+    if isinstance(builder_or_module, ir.Module):
         module = builder_or_module
     else:
         module = builder_or_module.module
@@ -858,8 +841,8 @@ def divmod_by_constant(builder, val, divisor):
     The difference lies with a negative *val*.
     """
     assert divisor > 0
-    divisor = Constant.int(val.type, divisor)
-    one = Constant.int(val.type, 1)
+    divisor = val.type(divisor)
+    one = val.type(1)
 
     quot = alloca_once(builder, val.type)
 
@@ -976,7 +959,7 @@ def printf(builder, format, *args):
     cstring = ir.IntType(8).as_pointer()
     fmt_bytes = make_bytearray((format + '\00').encode('ascii'))
     global_fmt = global_constant(mod, "printf_format", fmt_bytes)
-    fnty = ir.FunctionType(Type.int(), [cstring], var_arg=True)
+    fnty = ir.FunctionType(int32_t, [cstring], var_arg=True)
     # Insert printf()
     fn = mod.get_global('printf')
     if fn is None:
