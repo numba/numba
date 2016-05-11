@@ -8,7 +8,7 @@ from ctypes import (c_void_p, c_int, POINTER, c_char_p, c_size_t, byref,
 import threading
 from numba import config
 from .error import NvvmError, NvvmSupportError
-from .libs import open_libdevice, open_cudalib
+from .libs import get_libdevice, open_libdevice, open_cudalib
 
 logger = logging.getLogger(__name__)
 
@@ -306,7 +306,14 @@ def get_arch_option(major, minor):
 MISSING_LIBDEVICE_MSG = '''
 Please define environment variable NUMBAPRO_LIBDEVICE=/path/to/libdevice
 /path/to/libdevice -- is the path to the directory containing the libdevice.*.bc
-files in the installation of CUDA.  (requires CUDA >=5.5)
+files in the installation of CUDA.  (requires CUDA >=7.5)
+'''
+
+MISSING_LIBDEVICE_FILE_MSG = '''Missing libdevice file for {arch}.
+Please ensure you have package cudatoolkit 7.5.
+Install package by:
+
+    conda install cudatoolkit=7.5
 '''
 
 
@@ -325,6 +332,8 @@ class LibDevice(object):
         """
         if arch not in self._cache_:
             arch = self._get_closest_arch(arch)
+            if get_libdevice(arch) is None:
+                raise RuntimeError(MISSING_LIBDEVICE_FILE_MSG.format(arch=arch))
             self._cache_[arch] = open_libdevice(arch)
 
         self.arch = arch
