@@ -5,7 +5,7 @@ import copy
 import os
 import sys
 
-import numpy
+import numpy as np
 
 from llvmlite import ir as llvmir
 import llvmlite.llvmpy.core as lc
@@ -805,7 +805,7 @@ class BaseContext(object):
         cshape = Constant.array(llintp, shapevals)
 
         # Handle strides: use strides of the equivalent C-contiguous array.
-        contig = numpy.ascontiguousarray(ary)
+        contig = np.ascontiguousarray(ary)
         stridevals = [self.get_constant(types.intp, s) for s in contig.strides]
         cstrides = Constant.array(llintp, stridevals)
 

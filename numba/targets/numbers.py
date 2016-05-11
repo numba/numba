@@ -2,7 +2,7 @@ from __future__ import print_function, absolute_import, division
 
 import math
 
-import numpy
+import numpy as np
 
 from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant

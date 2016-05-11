@@ -1,12 +1,14 @@
 from __future__ import print_function, division, absolute_import
-import numpy
+
+import numpy as np
+
 from numba.cuda.testing import unittest
 from numba import cuda
 
 
 class TestCudaArray(unittest.TestCase):
     def test_gpu_array_zero_length(self):
-        x = numpy.arange(0)
+        x = np.arange(0)
         dx = cuda.to_device(x)
         hx = dx.copy_to_host()
         self.assertEqual(x.shape, dx.shape)
@@ -22,11 +24,11 @@ class TestCudaArray(unittest.TestCase):
             if i < x.shape[0]:
                 x[i] = i
 
-        x = numpy.arange(10, dtype=numpy.double)
-        y = numpy.ndarray(shape=10 * 8, buffer=x, dtype=numpy.byte)
-        z = numpy.ndarray(9, buffer=y[4:-4], dtype=numpy.double)
+        x = np.arange(10, dtype=np.double)
+        y = np.ndarray(shape=10 * 8, buffer=x, dtype=np.byte)
+        z = np.ndarray(9, buffer=y[4:-4], dtype=np.double)
         kernel[10, 10](z)
-        self.assertTrue(numpy.allclose(z, list(range(9))))
+        self.assertTrue(np.allclose(z, list(range(9))))
 
     def test_gpu_array_interleaved(self):
 
@@ -37,7 +39,7 @@ class TestCudaArray(unittest.TestCase):
                 x[i] = i
                 y[i] = i
 
-        x = numpy.arange(10, dtype=numpy.double)
+        x = np.arange(10, dtype=np.double)
         y = x[:-1:2]
         # z = x[1::2]
         # n = y.size
@@ -52,8 +54,8 @@ class TestCudaArray(unittest.TestCase):
             # assert z.size == y.size
             # copykernel[1, n](y, x)
             # print(y, z)
-            # assert numpy.all(y == z)
-            # assert numpy.all(y == list(range(n)))
+            # assert np.all(y == z)
+            # assert np.all(y == list(range(n)))
 
 
 if __name__ == '__main__':

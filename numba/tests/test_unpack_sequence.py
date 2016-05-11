@@ -1,6 +1,6 @@
 from __future__ import print_function
 
-import numpy
+import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
@@ -83,8 +83,8 @@ def unpack_arbitrary(seq):
 
 
 def unpack_nrt():
-    a = numpy.zeros(1)
-    b = numpy.zeros(2)
+    a = np.zeros(1)
+    b = np.zeros(2)
     tup = b, a
     alpha, beta = tup
     return alpha, beta
@@ -120,7 +120,7 @@ class TestUnpack(MemoryLeakMixin, TestCase):
                                                         layout='C')],
                               flags=flags)
         cfunc = cr.entry_point
-        a = numpy.zeros(shape=(1, 2, 3))
+        a = np.zeros(shape=(1, 2, 3))
         self.assertPreciseEqual(cfunc(a), pyfunc(a))
 
     @tag('important')
@@ -218,7 +218,7 @@ class TestUnpack(MemoryLeakMixin, TestCase):
         self.check_conditional_swap(no_pyobj_flags)
 
     def test_unpack_tuple_of_arrays(self):
-        tup = tuple(numpy.zeros(i + 1) for i in range(2))
+        tup = tuple(np.zeros(i + 1) for i in range(2))
         tupty = typeof(tup)
         pyfunc = unpack_arbitrary
         cr = compile_isolated(pyfunc, (tupty,),

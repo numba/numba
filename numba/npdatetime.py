@@ -1,5 +1,5 @@
 """
-Helper functions for numpy.timedelta64 and numpy.datetime64.
+Helper functions for np.timedelta64 and np.datetime64.
 For now, multiples-of-units (for example timedeltas expressed in tens
 of seconds) are not supported.
 """

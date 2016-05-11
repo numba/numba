@@ -1,10 +1,13 @@
 from __future__ import print_function, absolute_import
-from numba import void, float32, float64
+
+from timeit import default_timer as time
+
 import numpy as np
 import numpy.core.umath_tests as ut
+
+from numba import void, float32, float64
 from numba import guvectorize
 from numba import cuda
-from timeit import default_timer as time
 from numba import unittest_support as unittest
 from numba.cuda.testing import skip_on_cudasim
 

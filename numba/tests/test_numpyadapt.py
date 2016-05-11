@@ -1,6 +1,6 @@
 from __future__ import print_function
 
-import numpy
+import numpy as np
 
 import numba.unittest_support as unittest
 from numba.ctypes_support import *
@@ -27,7 +27,7 @@ class TestArrayAdaptor(unittest.TestCase):
         adaptorptr = _helperlib.c_helpers['adapt_ndarray']
         adaptor = PYFUNCTYPE(c_int, py_object, c_void_p)(adaptorptr)
 
-        ary = numpy.arange(60).reshape(2, 3, 10)
+        ary = np.arange(60).reshape(2, 3, 10)
         status = adaptor(ary, byref(arystruct))
         self.assertEqual(status, 0)
         self.assertEqual(arystruct.data, ary.ctypes.data)

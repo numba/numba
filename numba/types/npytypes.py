@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import collections
 
-import numpy
+import numpy as np
 
 from .abstract import *
 from .common import *
@@ -344,7 +344,7 @@ class SmartArrayType(Array):
 
 class ArrayCTypes(Type):
     """
-    This is the type for `numpy.ndarray.ctypes`.
+    This is the type for `np.ndarray.ctypes`.
     """
     def __init__(self, arytype):
         # This depends on the ndim for the shape and strides attributes,
@@ -378,7 +378,7 @@ class ArrayCTypes(Type):
 
 class ArrayFlags(Type):
     """
-    This is the type for `numpy.ndarray.flags`.
+    This is the type for `np.ndarray.flags`.
     """
     def __init__(self, arytype):
         self.array_type = arytype

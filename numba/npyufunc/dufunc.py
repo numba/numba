@@ -1,5 +1,6 @@
 from __future__ import absolute_import, print_function, division
-import numpy
+
+import numpy as np
 
 from .. import jit, typeof, utils, types, numpy_support, sigutils
 from ..typing import npydecl
@@ -147,7 +148,7 @@ class DUFunc(_internal._DUFunc):
         # To avoid a mismatch in how Numba types values as opposed to
         # Numpy, we need to first check for scalars.  For example, on
         # 64-bit systems, numba.typeof(3) => int32, but
-        # numpy.array(3).dtype => int64.
+        # np.array(3).dtype => int64.
         for arg in args[:nin]:
             if numpy_support.is_arrayscalar(arg):
                 argtys.append(numpy_support.map_arrayscalar_type(arg))
