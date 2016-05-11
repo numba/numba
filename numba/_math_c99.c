@@ -253,9 +253,9 @@ double m_round(double x) {
 /* Hand written */
 float m_roundf(float x) {
     if (x < 0.0) {
-        return (float) ceilf(x - 0.5);
+        return (float) ceilf(x - 0.5f);
     } else {
-        return (float) floorf(x + 0.5);
+        return (float) floorf(x + 0.5f);
     }
 }
 

@@ -383,7 +383,7 @@ numba_poisson_ptrs(rnd_state_t *state, double lam)
             continue;
         }
         if ((log(V) + log(invalpha) - log(a/(us*us)+b)) <=
-            (-lam + k*loglam - loggam(k+1)))
+            (-lam + (double) k*loglam - loggam((double) k+1)))
         {
             return k;
         }
