@@ -1,5 +1,7 @@
 from __future__ import print_function, absolute_import, division
 
+import contextlib
+import gc
 import pickle
 import subprocess
 import sys
@@ -7,7 +9,7 @@ import sys
 from numba import unittest_support as unittest
 from numba.errors import TypingError
 from numba.targets import registry
-from .support import TestCase
+from .support import TestCase, tag
 from .serialize_usecases import *
 
 
@@ -17,10 +19,18 @@ class TestDispatcherPickling(TestCase):
         for proto in range(pickle.HIGHEST_PROTOCOL + 1):
             meth(proto, *args, **kwargs)
 
+    @contextlib.contextmanager
     def simulate_fresh_target(self):
         dispatcher_cls = registry.dispatcher_registry['cpu']
+        old_descr = dispatcher_cls.targetdescr
         # Simulate fresh targetdescr
         dispatcher_cls.targetdescr = type(dispatcher_cls.targetdescr)()
+        try:
+            yield
+        finally:
+            # Be sure to reinstantiate old descriptor, otherwise other
+            # objects may be out of sync.
+            dispatcher_cls.targetdescr = old_descr
 
     def check_call(self, proto, func, expected_result, args):
         def check_result(func):
@@ -33,21 +43,24 @@ class TestDispatcherPickling(TestCase):
         # Control
         check_result(func)
         pickled = pickle.dumps(func, proto)
-        self.simulate_fresh_target()
-        new_func = pickle.loads(pickled)
-        check_result(new_func)
+        with self.simulate_fresh_target():
+            new_func = pickle.loads(pickled)
+            check_result(new_func)
 
+    @tag('important')
     def test_call_with_sig(self):
         self.run_with_protocols(self.check_call, add_with_sig, 5, (1, 4))
         # Compilation has been disabled => float inputs will be coerced to int
         self.run_with_protocols(self.check_call, add_with_sig, 5, (1.2, 4.2))
 
+    @tag('important')
     def test_call_without_sig(self):
         self.run_with_protocols(self.check_call, add_without_sig, 5, (1, 4))
         self.run_with_protocols(self.check_call, add_without_sig, 5.5, (1.2, 4.3))
         # Object mode is enabled
         self.run_with_protocols(self.check_call, add_without_sig, "abc", ("a", "bc"))
 
+    @tag('important')
     def test_call_nopython(self):
         self.run_with_protocols(self.check_call, add_nopython, 5.5, (1.2, 4.3))
         # Object mode is disabled
@@ -103,6 +116,7 @@ class TestDispatcherPickling(TestCase):
         self.run_with_protocols(self.check_call, generated_add,
                                 1j + 7, (1j, 2))
 
+    @tag('important')
     def test_other_process(self):
         """
         Check that reconstructing doesn't depend on resources already
@@ -119,6 +133,44 @@ class TestDispatcherPickling(TestCase):
             assert res == 8.0, res
             """.format(**locals())
         subprocess.check_call([sys.executable, "-c", code])
+
+    @tag('important')
+    def test_reuse(self):
+        """
+        Check that deserializing the same function multiple times re-uses
+        the same dispatcher object.
+
+        Note that "same function" is intentionally under-specified.
+        """
+        func = closure(5)
+        pickled = pickle.dumps(func)
+        func2 = closure(6)
+        pickled2 = pickle.dumps(func2)
+
+        f = pickle.loads(pickled)
+        g = pickle.loads(pickled)
+        h = pickle.loads(pickled2)
+        self.assertIs(f, g)
+        self.assertEqual(f(2, 3), 10)
+        g.disable_compile()
+        self.assertEqual(g(2, 4), 11)
+
+        self.assertIsNot(f, h)
+        self.assertEqual(h(2, 3), 11)
+
+        # Now make sure the original object doesn't exist when deserializing
+        func = closure(7)
+        func(42, 43)
+        pickled = pickle.dumps(func)
+        del func
+        gc.collect()
+
+        f = pickle.loads(pickled)
+        g = pickle.loads(pickled)
+        self.assertIs(f, g)
+        self.assertEqual(f(2, 3), 12)
+        g.disable_compile()
+        self.assertEqual(g(2, 4), 13)
 
 
 if __name__ == '__main__':

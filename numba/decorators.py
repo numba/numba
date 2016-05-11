@@ -8,11 +8,11 @@ import warnings
 from . import config, sigutils
 from .errors import DeprecationError
 from .targets import registry
-from . import cuda
+
+
 
 # -----------------------------------------------------------------------------
 # Decorators
-
 
 def autojit(*args, **kws):
     """Deprecated.
@@ -30,6 +30,7 @@ class _DisableJitWrapper(object):
 
     def __call__(self, *args, **kwargs):
         return self.py_func(*args, **kwargs)
+
 
 _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "Signatures should be passed as the first "
@@ -156,6 +157,7 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
 
     def wrapper(func):
         if config.ENABLE_CUDASIM and target == 'cuda':
+            from . import cuda
             return cuda.jit(func)
         if config.DISABLE_JIT and not target == 'npyufunc':
             return _DisableJitWrapper(func)
@@ -200,3 +202,27 @@ def njit(*args, **kws):
         warnings.warn('forceobj is set for njit and is ignored', RuntimeWarning)
     kws.update({'nopython': True})
     return jit(*args, **kws)
+
+
+def cfunc(sig, locals={}, cache=False, **options):
+    """
+    This decorator is used to compile a Python function into a C callback
+    usable with foreign C libraries.
+
+    Usage::
+        @cfunc("float64(float64, float64)", nopython=True, cache=True)
+        def add(a, b):
+            return a + b
+
+    """
+    sig = sigutils.normalize_signature(sig)
+
+    def wrapper(func):
+        from .ccallback import CFunc
+        res = CFunc(func, sig, locals=locals, options=options)
+        if cache:
+            res.enable_caching()
+        res.compile()
+        return res
+
+    return wrapper

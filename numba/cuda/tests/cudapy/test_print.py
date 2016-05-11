@@ -1,6 +1,6 @@
 from __future__ import print_function
 
-import numpy
+import numpy as np
 
 from numba import cuda
 from numba import unittest_support as unittest
@@ -57,7 +57,7 @@ class TestPrint(unittest.TestCase):
         Eyeballing required
         """
         jcuprintary = cuda.jit('void(float32[:])')(cuprintary)
-        A = numpy.arange(10, dtype=numpy.float32)
+        A = np.arange(10, dtype=np.float32)
         jcuprintary[2, 5](A)
         cuda.synchronize()
 

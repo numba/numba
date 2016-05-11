@@ -1,5 +1,5 @@
 """
-Typing declarations for numpy.timedelta64.
+Typing declarations for np.timedelta64.
 """
 
 from __future__ import print_function, division, absolute_import

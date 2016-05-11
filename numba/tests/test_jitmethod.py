@@ -46,6 +46,7 @@ class TestJITMethod(unittest.TestCase):
         something = Something(3)
         self.assertEquals(Something.method(something), 3)
 
+
 class TestDisabledJIT(unittest.TestCase):
     def test_decorated_function(self):
         with override_config('DISABLE_JIT', True):

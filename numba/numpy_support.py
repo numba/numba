@@ -1,15 +1,15 @@
 from __future__ import print_function, division, absolute_import
 
 import collections
+import ctypes
 import re
 
-import numpy
+import numpy as np
 
-from . import errors, types, config, npdatetime
-from .targets import ufunc_db
+from . import errors, types, config, npdatetime, utils
 
 
-version = tuple(map(int, numpy.__version__.split('.')[:2]))
+version = tuple(map(int, np.__version__.split('.')[:2]))
 int_divbyzero_returns_zero = config.PYVERSION <= (3, 0)
 
 # Starting from Numpy 1.10, ufuncs accept argument conversion according
@@ -18,28 +18,28 @@ strict_ufunc_typing = version >= (1, 10)
 
 
 FROM_DTYPE = {
-    numpy.dtype('bool'): types.boolean,
-    numpy.dtype('int8'): types.int8,
-    numpy.dtype('int16'): types.int16,
-    numpy.dtype('int32'): types.int32,
-    numpy.dtype('int64'): types.int64,
+    np.dtype('bool'): types.boolean,
+    np.dtype('int8'): types.int8,
+    np.dtype('int16'): types.int16,
+    np.dtype('int32'): types.int32,
+    np.dtype('int64'): types.int64,
 
-    numpy.dtype('uint8'): types.uint8,
-    numpy.dtype('uint16'): types.uint16,
-    numpy.dtype('uint32'): types.uint32,
-    numpy.dtype('uint64'): types.uint64,
+    np.dtype('uint8'): types.uint8,
+    np.dtype('uint16'): types.uint16,
+    np.dtype('uint32'): types.uint32,
+    np.dtype('uint64'): types.uint64,
 
-    numpy.dtype('float32'): types.float32,
-    numpy.dtype('float64'): types.float64,
+    np.dtype('float32'): types.float32,
+    np.dtype('float64'): types.float64,
 
-    numpy.dtype('complex64'): types.complex64,
-    numpy.dtype('complex128'): types.complex128,
+    np.dtype('complex64'): types.complex64,
+    np.dtype('complex128'): types.complex128,
 }
 
 re_typestr = re.compile(r'[<>=\|]([a-z])(\d+)?$', re.I)
 re_datetimestr = re.compile(r'[<>=\|]([mM])8?(\[([a-z]+)\])?$', re.I)
 
-sizeof_unicode_char = numpy.dtype('U1').itemsize
+sizeof_unicode_char = np.dtype('U1').itemsize
 
 
 def _from_str_dtype(dtype):
@@ -93,7 +93,7 @@ def from_dtype(dtype):
         except KeyError:
             if dtype.char in 'SU':
                 return _from_str_dtype(dtype)
-            if dtype.char in 'mM' and npdatetime.NPDATETIME_SUPPORTED:
+            if dtype.char in 'mM':
                 return _from_datetime_dtype(dtype)
             if dtype.char in 'V':
                 subtype = from_dtype(dtype.subdtype[0])
@@ -116,18 +116,18 @@ def as_dtype(nbtype):
     NotImplementedError is if no correspondence is known.
     """
     if isinstance(nbtype, (types.Complex, types.Integer, types.Float)):
-        return numpy.dtype(str(nbtype))
+        return np.dtype(str(nbtype))
     if nbtype is types.bool_:
-        return numpy.dtype('?')
+        return np.dtype('?')
     if isinstance(nbtype, (types.NPDatetime, types.NPTimedelta)):
         letter = _as_dtype_letters[type(nbtype)]
         if nbtype.unit:
-            return numpy.dtype('%s[%s]' % (letter, nbtype.unit))
+            return np.dtype('%s[%s]' % (letter, nbtype.unit))
         else:
-            return numpy.dtype(letter)
+            return np.dtype(letter)
     if isinstance(nbtype, (types.CharSeq, types.UnicodeCharSeq)):
         letter = _as_dtype_letters[type(nbtype)]
-        return numpy.dtype('%s%d' % (letter, nbtype.count))
+        return np.dtype('%s%d' % (letter, nbtype.count))
     if isinstance(nbtype, types.Record):
         return nbtype.dtype
     raise NotImplementedError("%r cannot be represented as a Numpy dtype"
@@ -135,24 +135,24 @@ def as_dtype(nbtype):
 
 
 def is_arrayscalar(val):
-    return numpy.dtype(type(val)) in FROM_DTYPE
+    return np.dtype(type(val)) in FROM_DTYPE
 
 
 def map_arrayscalar_type(val):
-    if isinstance(val, numpy.generic):
-        # We can't blindly call numpy.dtype() as it loses information
+    if isinstance(val, np.generic):
+        # We can't blindly call np.dtype() as it loses information
         # on some types, e.g. datetime64 and timedelta64.
         dtype = val.dtype
     else:
         try:
-            dtype = numpy.dtype(type(val))
+            dtype = np.dtype(type(val))
         except TypeError:
             raise NotImplementedError("no corresponding numpy dtype for %r" % type(val))
     return from_dtype(dtype)
 
 
 def is_array(val):
-    return isinstance(val, numpy.ndarray)
+    return isinstance(val, np.ndarray)
 
 
 def map_layout(val):
@@ -223,6 +223,7 @@ def supported_ufunc_loop(ufunc, loop):
     legacy and when implementing new ufuncs the ufunc_db should be preferred,
     as it allows for a more fine-grained incremental support.
     """
+    from .targets import ufunc_db
     loop_sig = loop.ufunc_sig
     try:
         # check if the loop has a codegen description in the
@@ -296,10 +297,10 @@ def ufunc_find_matching_loop(ufunc, arg_types):
         in which case the type is taken from *numba_types*.
         """
         assert len(ufunc_letters) >= len(numba_types)
-        types = [tp if letter in 'mM' else from_dtype(numpy.dtype(letter))
+        types = [tp if letter in 'mM' else from_dtype(np.dtype(letter))
                  for tp, letter in zip(numba_types, ufunc_letters)]
         # Add missing types (presumably implicit outputs)
-        types += [from_dtype(numpy.dtype(letter))
+        types += [from_dtype(np.dtype(letter))
                   for letter in ufunc_letters[len(numba_types):]]
         return types
 
@@ -326,14 +327,14 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                 if outer.char != inner:
                     found = False
                     break
-            elif not numpy.can_cast(outer.char, inner, 'safe'):
+            elif not np.can_cast(outer.char, inner, 'safe'):
                 found = False
                 break
         if found and strict_ufunc_typing:
             # Can we cast the inner result to the outer result type?
             for outer, inner in zip(np_output_types, ufunc_outputs):
                 if (outer.char not in 'mM' and not
-                    numpy.can_cast(inner, outer.char, 'same_kind')):
+                    np.can_cast(inner, outer.char, 'same_kind')):
                     found = False
                     break
         if found:
@@ -346,23 +347,8 @@ def ufunc_find_matching_loop(ufunc, arg_types):
     return None
 
 
-if numpy.__version__ <= '1.7':
-    # Numpy 1.6 and below does not have the isalignedstruct attribute
-    # for dtype.  We implement the behavior of the function here.
-    def _is_aligned_struct(struct):
-        for (dtype, offset) in struct.fields.values():
-            # Make sure all attributes can only appear at offsets equal
-            # to the alignment of the attribute dtype.
-            if offset % dtype.alignment:
-                return False
-            if struct.itemsize % dtype.alignment:
-                return False
-        return True
-
-else:
-    # NumPy 1.7 and above uses the isalignedstruct property.
-    def _is_aligned_struct(struct):
-        return struct.isalignedstruct
+def _is_aligned_struct(struct):
+    return struct.isalignedstruct
 
 
 def from_struct_dtype(dtype):
@@ -380,3 +366,65 @@ def from_struct_dtype(dtype):
     aligned = _is_aligned_struct(dtype)
 
     return types.Record(str(dtype.descr), fields, size, aligned, dtype)
+
+
+def _get_bytes_buffer(ptr, nbytes):
+    """
+    Get a ctypes array of *nbytes* starting at *ptr*.
+    """
+    if isinstance(ptr, ctypes.c_void_p):
+        ptr = ptr.value
+    arrty = ctypes.c_byte * nbytes
+    return arrty.from_address(ptr)
+
+def _get_array_from_ptr(ptr, nbytes, dtype):
+    return np.frombuffer(_get_bytes_buffer(ptr, nbytes), dtype)
+
+
+def carray(ptr, shape, dtype=None):
+    """
+    Return a Numpy array view over the data pointed to by *ptr* with the
+    given *shape*, in C order.  If *dtype* is given, it is used as the
+    array's dtype, otherwise the array's dtype is inferred from *ptr*'s type.
+    """
+    from .typing.ctypes_utils import from_ctypes
+
+    try:
+        # Use ctypes parameter protocol if available
+        ptr = ptr._as_parameter_
+    except AttributeError:
+        pass
+
+    # Normalize dtype, to accept e.g. "int64" or np.int64
+    if dtype is not None:
+        dtype = np.dtype(dtype)
+
+    if isinstance(ptr, ctypes.c_void_p):
+        if dtype is None:
+            raise TypeError("explicit dtype required for void* argument")
+        p = ptr
+    elif isinstance(ptr, ctypes._Pointer):
+        ptrty = from_ctypes(ptr.__class__)
+        assert isinstance(ptrty, types.CPointer)
+        ptr_dtype = as_dtype(ptrty.dtype)
+        if dtype is not None and dtype != ptr_dtype:
+            raise TypeError("mismatching dtype '%s' for pointer %s"
+                            % (dtype, ptr))
+        dtype = ptr_dtype
+        p = ctypes.cast(ptr, ctypes.c_void_p)
+    else:
+        raise TypeError("expected a ctypes pointer, got %r" % (ptr,))
+
+    nbytes = dtype.itemsize * np.product(shape, dtype=np.intp)
+    return _get_array_from_ptr(p, nbytes, dtype).reshape(shape)
+
+
+def farray(ptr, shape, dtype=None):
+    """
+    Return a Numpy array view over the data pointed to by *ptr* with the
+    given *shape*, in Fortran order.  If *dtype* is given, it is used as the
+    array's dtype, otherwise the array's dtype is inferred from *ptr*'s type.
+    """
+    if not isinstance(shape, utils.INT_TYPES):
+        shape = shape[::-1]
+    return carray(ptr, shape, dtype).T

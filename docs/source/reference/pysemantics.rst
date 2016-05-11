@@ -10,6 +10,20 @@ functions get a fixed size (either through :term:`type inference`, or
 from an explicit specification by the user).  This means that arithmetic
 operations can wrapround or produce undefined results or overflow.
 
+Boolean inversion
+-----------------
+
+Calling the bitwise complement operator (the ``~`` operator) on a Python
+boolean returns an integer, while the same operator on a Numpy boolean
+returns another boolean::
+
+   >>> ~True
+   -2
+   >>> ~np.bool_(True)
+   False
+
+Numba follows the Numpy semantics.
+
 Global and closure variables
 ----------------------------
 

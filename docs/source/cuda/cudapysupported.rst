@@ -123,9 +123,13 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.sinh`
 * :func:`math.tanh`
 * :func:`math.atan2`
+* :func:`math.erf`
+* :func:`math.erfc`
 * :func:`math.exp`
-* :func:`math.expm1`             not available in Python 2.6
+* :func:`math.expm1`
 * :func:`math.fabs`
+* :func:`math.gamma`
+* :func:`math.lgamma`
 * :func:`math.log`
 * :func:`math.log10`
 * :func:`math.log1p`

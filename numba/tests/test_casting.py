@@ -65,8 +65,6 @@ class TestCasting(unittest.TestCase):
 
         Cast C to A array
         """
-        from numba import njit
-
         @njit("f8(f8[:])")
         def inner(x):
             return x[0]
@@ -80,6 +78,24 @@ class TestCasting(unittest.TestCase):
         x = np.array([1234], dtype=np.float64)
         self.assertEqual(driver(x), x[0])
         self.assertEqual(len(inner.overloads), 1)
+
+    def test_optional_to_optional(self):
+        """
+        Test error due mishandling of Optional to Optional casting
+
+        Related issue: https://github.com/numba/numba/issues/1718
+        """
+        # Attempt to cast optional(intp) to optional(float64)
+        opt_int = types.Optional(types.intp)
+        opt_flt = types.Optional(types.float64)
+        sig = opt_flt(opt_int)
+
+        @njit(sig)
+        def foo(a):
+            return a
+
+        self.assertEqual(foo(2), 2)
+        self.assertIsNone(foo(None))
 
 
 if __name__ == '__main__':

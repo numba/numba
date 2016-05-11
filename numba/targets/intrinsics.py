@@ -2,7 +2,7 @@
 LLVM pass that converts intrinsic into other math calls
 """
 from __future__ import print_function, absolute_import
-import llvmlite.llvmpy.core as lc
+
 from llvmlite import ir
 
 
@@ -28,61 +28,6 @@ def fix_divmod(mod):
     """
     _DivmodFixer().visit(mod)
 
-
-class IntrinsicMapping(object):
-    def __init__(self, context, mapping=None, availintr=None):
-        """
-        Args
-        ----
-        mapping:
-            Optional. Intrinsic name to alternative implementation.
-            Default to global MAPPING
-
-        availintr:
-            Optional.  Available intrinsic set.
-            Default to global AVAILINTR
-
-        """
-        self.context = context
-        self.mapping = mapping or MAPPING
-        self.availintr = availintr or AVAILINTR
-
-    def run(self, module):
-        self.apply_mapping(module)
-        self.translate_intrinsic_to_cmath(module)
-
-    def apply_mapping(self, module):
-        modified = []
-        for fn in module.functions:
-            if fn.is_declaration and fn.name in self.mapping:
-                imp = self.mapping[fn.name]
-                imp(self.context, fn)
-                modified.append(fn)
-
-        # Rename all modified functions
-        for fn in modified:
-            fn.name = "numba." + fn.name
-
-        if __debug__:
-            module.verify()
-
-    def translate_intrinsic_to_cmath(self, module):
-        for fn in self._iter_unavail(module):
-            # Rename unavailable intrinsic to libc calls
-            # Ignore unrecognized llvm intrinsic
-            fn.name = INTR_TO_CMATH.get(fn.name, fn.name)
-
-        if __debug__:
-            module.verify()
-
-    def _iter_unavail(self, module):
-        for fn in module.functions:
-            if fn.is_declaration and fn.name.startswith('llvm.'):
-                if fn.name not in self.availintr:
-                    yield fn
-
-
-AVAILINTR = ()
 
 INTR_TO_CMATH = {
     "llvm.pow.f32": "powf",

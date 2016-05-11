@@ -10,11 +10,12 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba import config, numpy_support, types
-from .support import TestCase, skip_on_numpy_16
+from .support import TestCase, tag
 
 
 class TestFromDtype(TestCase):
 
+    @tag('important')
     def test_number_types(self):
         """
         Test from_dtype() and as_dtype() with the various scalar number types.
@@ -80,7 +81,6 @@ class TestFromDtype(TestCase):
         check('a11', types.CharSeq(11))
         check('U12', types.UnicodeCharSeq(12))
 
-    @skip_on_numpy_16
     def check_datetime_types(self, letter, nb_class):
         def check(dtype, numba_type, code):
             tp = numpy_support.from_dtype(dtype)
@@ -92,18 +92,21 @@ class TestFromDtype(TestCase):
         # Unit-less ("generic") type
         check(np.dtype(letter), nb_class(''), 14)
 
+    @tag('important')
     def test_datetime_types(self):
         """
         Test from_dtype() and as_dtype() with the datetime types.
         """
         self.check_datetime_types('M', types.NPDatetime)
 
+    @tag('important')
     def test_timedelta_types(self):
         """
         Test from_dtype() and as_dtype() with the timedelta types.
         """
         self.check_datetime_types('m', types.NPTimedelta)
 
+    @tag('important')
     def test_struct_types(self):
         def check(dtype, fields, size, aligned):
             tp = numpy_support.from_dtype(dtype)
@@ -173,14 +176,12 @@ class ValueTypingTestBase(object):
             # This ensures the unit hasn't been lost
             self.assertEqual(tp, nb_type(unit))
 
-    @skip_on_numpy_16
     def check_datetime_values(self, func):
         """
         Test *func*() with np.datetime64 values.
         """
         self._base_check_datetime_values(func, np.datetime64, types.NPDatetime)
 
-    @skip_on_numpy_16
     def check_timedelta_values(self, func):
         """
         Test *func*() with np.timedelta64 values.
@@ -190,12 +191,14 @@ class ValueTypingTestBase(object):
 
 class TestArrayScalars(ValueTypingTestBase, TestCase):
 
+    @tag('important')
     def test_number_values(self):
         """
         Test map_arrayscalar_type() with scalar number values.
         """
         self.check_number_values(numpy_support.map_arrayscalar_type)
 
+    @tag('important')
     def test_datetime_values(self):
         """
         Test map_arrayscalar_type() with np.datetime64 values.
@@ -207,6 +210,7 @@ class TestArrayScalars(ValueTypingTestBase, TestCase):
         with self.assertRaises(NotImplementedError):
             f(t)
 
+    @tag('important')
     def test_timedelta_values(self):
         """
         Test map_arrayscalar_type() with np.timedelta64 values.

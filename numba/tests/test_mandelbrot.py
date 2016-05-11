@@ -1,8 +1,8 @@
 from __future__ import print_function
+
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types, utils
-from numba.tests import usecases
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -32,6 +32,6 @@ class TestMandelbrot(unittest.TestCase):
         for p in points:
             self.assertEqual(cfunc(p), pyfunc(p))
 
+
 if __name__ == '__main__':
     unittest.main()
-

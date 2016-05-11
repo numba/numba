@@ -58,11 +58,13 @@ class BaseGeneratorLower(object):
         self.gentype = self.get_generator_type()
         self.gendesc = GeneratorDescriptor.from_generator_fndesc(
             lower.interp, self.fndesc, self.gentype, self.context.mangler)
+        # Helps packing non-omitted arguments into a structure
+        self.arg_packer = self.context.get_data_packer(self.fndesc.argtypes)
 
         self.resume_blocks = {}
 
-    def get_arg_ptr(self, builder, genptr, arg_index):
-        return cgutils.gep_inbounds(builder, genptr, 0, 1, arg_index)
+    def get_args_ptr(self, builder, genptr):
+        return cgutils.gep_inbounds(builder, genptr, 0, 1)
 
     def get_resume_index_ptr(self, builder, genptr):
         return cgutils.gep_inbounds(builder, genptr, 0, 0,
@@ -104,8 +106,8 @@ class BaseGeneratorLower(object):
             for argty, argval in zip(self.fndesc.argtypes, lower.fnargs):
                 self.context.nrt_incref(builder, argty, argval)
 
-        argsval = cgutils.make_anonymous_struct(builder, lower.fnargs,
-                                                argsty)
+        # Filter out omitted arguments
+        argsval = self.arg_packer.as_data(builder, lower.fnargs)
 
         # Zero initialize states
         statesval = Constant.null(statesty)
@@ -134,9 +136,10 @@ class BaseGeneratorLower(object):
 
         # Extract argument values and other information from generator struct
         genptr, = self.call_conv.get_arguments(function)
-        for i, ty in enumerate(self.gentype.arg_types):
-            argptr = self.get_arg_ptr(builder, genptr, i)
-            lower.fnargs[i] = self.context.unpack_value(builder, ty, argptr)
+        self.arg_packer.load_into(builder,
+                                  self.get_args_ptr(builder, genptr),
+                                  lower.fnargs)
+
         self.resume_index_ptr = self.get_resume_index_ptr(builder, genptr)
         self.gen_state_ptr = self.get_state_ptr(builder, genptr)
 
@@ -174,7 +177,7 @@ class BaseGeneratorLower(object):
         function = lower.module.get_or_insert_function(
             fnty, name=self.gendesc.llvm_finalizer_name)
         entry_block = function.append_basic_block('entry')
-        builder = Builder.new(entry_block)
+        builder = Builder(entry_block)
 
         genptrty = self.context.get_value_type(self.gentype)
         genptr = builder.bitcast(function.args[0], genptrty)
@@ -219,10 +222,9 @@ class GeneratorLower(BaseGeneratorLower):
 
             # Always dereference all arguments
             # self.debug_print(builder, "# generator: clear args")
-            for elem_idx, argty in enumerate(self.fndesc.argtypes):
-                argptr = self.get_arg_ptr(builder, genptr, elem_idx)
-                argval = builder.load(argptr)
-                self.context.nrt_decref(builder, argty, argval)
+            args_ptr = self.get_args_ptr(builder, genptr)
+            for ty, val in self.arg_packer.load(builder, args_ptr):
+                self.context.nrt_decref(builder, ty, val)
 
         self.debug_print(builder, "# generator: finalize end")
         builder.ret_void()
@@ -318,7 +320,7 @@ class LowerYield(object):
             val = self.lower.loadvar(name)
             # IncRef newly stored value
             if self.context.enable_nrt:
-                self.lower.incref(ty, val)
+                self.context.nrt_incref(self.builder, ty, val)
 
             self.context.pack_value(self.builder, ty, val, state_slot)
         # Save resume index
@@ -340,5 +342,5 @@ class LowerYield(object):
             self.lower.storevar(val, name)
             # Previous storevar is making an extra incref
             if self.context.enable_nrt:
-                self.lower.decref(ty, val)
+                self.context.nrt_decref(self.builder, ty, val)
         self.lower.debug_print("# generator resume end")

@@ -2,53 +2,50 @@
 Expose top-level symbols that are safe for import *
 """
 from __future__ import print_function, division, absolute_import
-import re
 
-from . import runtests, decorators
-from . import errors, special, types, config
+import re
+import sys
+
+from . import config, errors, runtests, types
 
 # Re-export typeof
-from .special import *
+from .special import typeof
+
+# Re-export error classes
 from .errors import *
-from .pycc.decorators import export, exportmany
 
 # Re-export all type names
 from .types import *
 
-# Re export decorators
-jit = decorators.jit
-autojit = decorators.autojit
-njit = decorators.njit
-generated_jit = decorators.generated_jit
+from .smartarray import SmartArray
 
-# Re export vectorize decorators
+# Re-export decorators
+from .decorators import autojit, cfunc, generated_jit, jit, njit
+
+# Re-export vectorize decorators
 from .npyufunc import vectorize, guvectorize
 
-# Re export from_dtype
-from .numpy_support import from_dtype
+# Re-export Numpy helpers
+from .numpy_support import carray, farray, from_dtype
 
-# Re export jitclass
+# Re-export jitclass
 from .jitclass import jitclass
 
 # Keep this for backward compatibility.
 test = runtests.main
 
-# Try to initialize cuda
-from . import cuda
-
 
 __all__ = """
-jit
-autojit
-njit
-vectorize
-guvectorize
-export
-exportmany
-cuda
-from_dtype
-jitclass
-""".split() + types.__all__ + special.__all__ + errors.__all__
+    autojit
+    cfunc
+    from_dtype
+    guvectorize
+    jit
+    jitclass
+    njit
+    typeof
+    vectorize
+    """.split() + types.__all__ + errors.__all__
 
 
 _min_llvmlite_version = (0, 9, 0)
@@ -88,14 +85,26 @@ def _ensure_llvm():
 
     check_jit_execution()
 
+
+def _ensure_pynumpy():
+    """
+    Make sure Python and Numpy have supported versions.
+    """
+    import warnings
+    from . import numpy_support
+
+    pyver = sys.version_info[:2]
+    if pyver < (2, 7) or ((3,) <= pyver < (3, 4)):
+        raise ImportError("Numba needs Python 2.7 or greater, or 3.4 or greater")
+
+    np_version = numpy_support.version[:2]
+    if np_version < (1, 7):
+        raise ImportError("Numba needs Numpy 1.7 or greater")
+
+
 _ensure_llvm()
+_ensure_pynumpy()
 
-
-# Process initialization
-# Should this be hooked into CPUContext instead?
-from .targets.randomimpl import random_init
-random_init()
-del random_init
 
 from ._version import get_versions
 __version__ = get_versions()['version']

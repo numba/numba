@@ -7,14 +7,14 @@ import inspect
 import numpy as np
 
 from numba.decorators import jit
-from numba.targets.registry import dispatcher_registry
+from numba.targets.descriptors import TargetDescriptor
 from numba.targets.options import TargetOptions
+from numba.targets.registry import dispatcher_registry, cpu_target
 from numba import utils, compiler, types, sigutils
 from numba.numpy_support import as_dtype
 from . import _internal
 from .sigparse import parse_signature
 from .wrappers import build_ufunc_wrapper, build_gufunc_wrapper
-from numba.targets import registry
 
 
 import llvmlite.llvmpy.core as lc
@@ -26,15 +26,25 @@ class UFuncTargetOptions(TargetOptions):
     }
 
 
-class UFuncTarget(registry.CPUTarget):
+class UFuncTarget(TargetDescriptor):
     options = UFuncTargetOptions
+
+    @property
+    def typing_context(self):
+        return cpu_target.typing_context
+
+    @property
+    def target_context(self):
+        return cpu_target.target_context
+
+ufunc_target = UFuncTarget()
 
 
 class UFuncDispatcher(object):
     """
     An object handling compilation of various signatures for a ufunc.
     """
-    targetdescr = UFuncTarget()
+    targetdescr = ufunc_target
 
     def __init__(self, py_func, locals={}, targetoptions={}):
         self.py_func = py_func
@@ -131,9 +141,8 @@ _identities = {
     0: _internal.PyUFunc_Zero,
     1: _internal.PyUFunc_One,
     None: _internal.PyUFunc_None,
+    "reorderable": _internal.PyUFunc_ReorderableNone,
     }
-if np.__version__ >= '1.7':
-    _identities["reorderable"] = _internal.PyUFunc_ReorderableNone
 
 def parse_identity(identity):
     """

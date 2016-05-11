@@ -1,5 +1,5 @@
 """
-Implement the random and numpy.random module functions.
+Implement the random and np.random module functions.
 """
 
 from __future__ import print_function, absolute_import, division
@@ -12,9 +12,11 @@ import numpy as np
 
 from llvmlite import ir
 
-from numba.targets.imputils import Registry, impl_ret_untracked
+from numba.extending import overload
+from numba.targets.imputils import (Registry, impl_ret_untracked,
+                                    impl_ret_new_ref)
 from numba.typing import signature
-from numba import _helperlib, cgutils, types
+from numba import _helperlib, cgutils, types, jit
 
 
 registry = Registry()
@@ -30,13 +32,18 @@ N = 624
 N_const = ir.Constant(int32_t, N)
 
 
+_pid = None
+
 def random_init():
     """
     Initialize the random states with system entropy.
     """
-    b = os.urandom(N * 4)
-    for n in ('py_random_state', 'np_random_state'):
-        _helperlib.rnd_seed(_helperlib.c_helpers[n], b)
+    global _pid
+    if _pid != os.getpid():
+        b = os.urandom(N * 4)
+        for n in ('py_random_state', 'np_random_state'):
+            _helperlib.rnd_seed(_helperlib.c_helpers[n], b)
+        _pid = os.getpid()
 
 
 # This is the same struct as rnd_state_t in _helperlib.c.
@@ -159,7 +166,7 @@ def _fill_defaults(context, builder, sig, args, defaults):
     """
     ty = sig.return_type
     llty = context.get_data_type(ty)
-    args = args + [ir.Constant(llty, d) for d in defaults[len(args):]]
+    args = tuple(args) + tuple(ir.Constant(llty, d) for d in defaults[len(args):])
     sig = signature(*(ty,) * (len(args) + 1))
     return sig, args
 
@@ -189,7 +196,6 @@ def random_impl(context, builder, sig, args):
     res = get_next_double(context, builder, state_ptr)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower("np.random.rand")
 @lower("np.random.random")
 def random_impl(context, builder, sig, args):
     state_ptr = get_state_ptr(context, builder, "np")
@@ -204,7 +210,6 @@ def gauss_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower("np.random.randn")
 @lower("np.random.standard_normal")
 @lower("np.random.normal")
 @lower("np.random.normal", types.Float)
@@ -761,23 +766,45 @@ def binomial_impl(context, builder, sig, args):
             raise ValueError("binomial(): n <= 0")
         if not (0.0 <= p <= 1.0):
             raise ValueError("binomial(): p outside of [0, 1]")
+        if p == 0.0:
+            return 0
+        if p == 1.0:
+            return n
+
         flipped = p > 0.5
         if flipped:
             p = 1.0 - p
         q = 1.0 - p
+
+        niters = 1
         qn = q ** n
+        while qn <= 1e-308:
+            # Underflow => split into several iterations
+            # Note this is much slower than Numpy's BTPE
+            niters <<= 2
+            n >>= 2
+            qn = q ** n
+            assert n > 0
+
         np = n * p
         bound = min(n, np + 10.0 * math.sqrt(np * q + 1))
-        while 1:
+
+        finished = False
+        total = 0
+        while niters > 0:
             X = 0
             U = _random()
             px = qn
             while X <= bound:
                 if U <= px:
-                    return n - X if flipped else X
+                    total += n - X if flipped else X
+                    niters -= 1
+                    break
                 U -= px
                 X += 1
                 px = ((n - X + 1) * p * px) / (X * q)
+
+        return total
 
     res = context.compile_internal(builder, binomial_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -1128,3 +1155,263 @@ def _shuffle_impl(context, builder, sig, args, _randrange):
             i -= 1
 
     return context.compile_internal(builder, shuffle_impl, sig, args)
+
+
+# ------------------------------------------------------------------------
+# Array-producing variants of scalar random functions
+
+for typing_key, arity in [
+    ("np.random.beta", 3),
+    ("np.random.binomial", 3),
+    ("np.random.chisquare", 2),
+    ("np.random.exponential", 2),
+    ("np.random.f", 3),
+    ("np.random.gamma", 3),
+    ("np.random.geometric", 2),
+    ("np.random.gumbel", 3),
+    ("np.random.hypergeometric", 4),
+    ("np.random.laplace", 3),
+    ("np.random.logistic", 3),
+    ("np.random.lognormal", 3),
+    ("np.random.logseries", 2),
+    ("np.random.negative_binomial", 3),
+    ("np.random.normal", 3),
+    ("np.random.pareto", 2),
+    ("np.random.poisson", 2),
+    ("np.random.power", 2),
+    ("np.random.random", 1),
+    ("np.random.randint", 3),
+    ("np.random.rayleigh", 2),
+    ("np.random.standard_cauchy", 1),
+    ("np.random.standard_exponential", 1),
+    ("np.random.standard_gamma", 2),
+    ("np.random.standard_normal", 1),
+    ("np.random.standard_t", 2),
+    ("np.random.triangular", 4),
+    ("np.random.uniform", 3),
+    ("np.random.vonmises", 3),
+    ("np.random.wald", 3),
+    ("np.random.weibull", 2),
+    ("np.random.zipf", 2),
+    ]:
+
+    @lower(typing_key, *(types.Any,) * arity)
+    def random_arr(context, builder, sig, args, typing_key=typing_key):
+        from . import arrayobj
+
+        arrty = sig.return_type
+        dtype = arrty.dtype
+        scalar_sig = signature(dtype, *sig.args[:-1])
+        scalar_args = args[:-1]
+
+        # Allocate array...
+        shapes = arrayobj._parse_shape(context, builder, sig.args[-1], args[-1])
+        arr = arrayobj._empty_nd_impl(context, builder, arrty, shapes)
+
+        # ... and populate it in natural order
+        scalar_impl = context.get_function(typing_key, scalar_sig)
+        with cgutils.for_range(builder, arr.nitems) as loop:
+            val = scalar_impl(builder, scalar_args)
+            ptr = cgutils.gep(builder, arr.data, loop.index)
+            arrayobj.store_item(context, builder, arrty, val, ptr)
+
+        return impl_ret_new_ref(context, builder, sig.return_type, arr._getvalue())
+
+
+# ------------------------------------------------------------------------
+# Irregular aliases: np.random.rand, np.random.randn
+
+@overload(np.random.rand)
+def rand(*size):
+    if len(size) == 0:
+        # Scalar output
+        def rand_impl():
+            return np.random.random()
+
+    else:
+        # Array output
+        def rand_impl(*size):
+            return np.random.random(size)
+
+    return rand_impl
+
+@overload(np.random.randn)
+def randn(*size):
+    if len(size) == 0:
+        # Scalar output
+        def randn_impl():
+            return np.random.standard_normal()
+
+    else:
+        # Array output
+        def randn_impl(*size):
+            return np.random.standard_normal(size)
+
+    return randn_impl
+
+
+# ------------------------------------------------------------------------
+# np.random.choice
+
+@overload(np.random.choice)
+def choice(a, size=None, replace=True):
+
+    if isinstance(a, types.Array):
+        # choice() over an array population
+        assert a.ndim == 1
+        dtype = a.dtype
+
+        @jit(nopython=True)
+        def get_source_size(a):
+            return len(a)
+
+        @jit(nopython=True)
+        def copy_source(a):
+            return a.copy()
+
+        @jit(nopython=True)
+        def getitem(a, a_i):
+            return a[a_i]
+
+    elif isinstance(a, types.Integer):
+        # choice() over an implied arange() population
+        dtype = np.intp
+
+        @jit(nopython=True)
+        def get_source_size(a):
+            return a
+
+        @jit(nopython=True)
+        def copy_source(a):
+            return np.arange(a)
+
+        @jit(nopython=True)
+        def getitem(a, a_i):
+            return a_i
+
+    else:
+        raise TypeError("np.random.choice() first argument should be "
+                        "int or array, got %s" % (a,))
+
+    if size in (None, types.none):
+        def choice_impl(a, size=None, replace=True):
+            """
+            choice() implementation returning a single sample
+            (note *replace* is ignored)
+            """
+            n = get_source_size(a)
+            i = np.random.randint(0, n)
+            return getitem(a, i)
+
+    else:
+        def choice_impl(a, size=None, replace=True):
+            """
+            choice() implementation returning an array of samples
+            """
+            n = get_source_size(a)
+            if replace:
+                out = np.empty(size, dtype)
+                fl = out.flat
+                for i in range(len(fl)):
+                    j = np.random.randint(0, n)
+                    fl[i] = getitem(a, j)
+                return out
+            else:
+                # Note we have to construct the array to compute out.size
+                # (`size` can be an arbitrary int or tuple of ints)
+                out = np.empty(size, dtype)
+                if out.size > n:
+                    raise ValueError("Cannot take a larger sample than "
+                                     "population when 'replace=False'")
+                # Get a contiguous copy of the source so as to permute it
+                src = copy_source(a)
+                fl = out.flat
+                for i in range(len(fl)):
+                    j = np.random.randint(i, n)
+                    fl[i] = src[j]
+                    # Move away selected element
+                    src[j] = src[i]
+                return out
+
+    return choice_impl
+
+
+# ------------------------------------------------------------------------
+# np.random.multinomial
+
+@overload(np.random.multinomial)
+def multinomial(n, pvals, size=None):
+
+    dtype = np.intp
+
+    @jit(nopython=True)
+    def multinomial_inner(n, pvals, out):
+        # Numpy's algorithm for multinomial()
+        fl = out.flat
+        sz = out.size
+        plen = len(pvals)
+
+        for i in range(0, sz, plen):
+            # Loop body: take a set of n experiments and fill up
+            # fl[i:i + plen] with the distribution of results.
+
+            # Current sum of outcome probabilities
+            p_sum = 1.0
+            # Current remaining number of experiments
+            n_experiments = n
+            # For each possible outcome `j`, compute the number of results
+            # with this outcome.  This is done by considering the
+            # conditional probability P(X=j | X>=j) and running a binomial
+            # distribution over the remaining number of experiments.
+            for j in range(0, plen - 1):
+                p_j = pvals[j]
+                n_j = fl[i + j] = np.random.binomial(n_experiments, p_j / p_sum)
+                n_experiments -= n_j
+                if n_experiments <= 0:
+                    # Note the output was initialized to zero
+                    break
+                p_sum -= p_j
+            if n_experiments > 0:
+                # The remaining experiments end up in the last bucket
+                fl[i + plen - 1] = n_experiments
+
+    if not isinstance(n, types.Integer):
+        raise TypeError("np.random.multinomial(): n should be an "
+                        "integer, got %s" % (n,))
+
+    if not isinstance(pvals, (types.Sequence, types.Array)):
+        raise TypeError("np.random.multinomial(): pvals should be an "
+                        "array or sequence, got %s" % (pvals,))
+
+    if size in (None, types.none):
+        def multinomial_impl(n, pvals, size=None):
+            """
+            multinomial(..., size=None)
+            """
+            out = np.zeros(len(pvals), dtype)
+            multinomial_inner(n, pvals, out)
+            return out
+
+    elif isinstance(size, types.Integer):
+        def multinomial_impl(n, pvals, size=None):
+            """
+            multinomial(..., size=int)
+            """
+            out = np.zeros((size, len(pvals)), dtype)
+            multinomial_inner(n, pvals, out)
+            return out
+
+    elif isinstance(size, types.BaseTuple):
+        def multinomial_impl(n, pvals, size=None):
+            """
+            multinomial(..., size=tuple)
+            """
+            out = np.zeros(size + (len(pvals),), dtype)
+            multinomial_inner(n, pvals, out)
+            return out
+
+    else:
+        raise TypeError("np.random.multinomial(): size should be int or "
+                        "tuple or None, got %s" % (size,))
+
+    return multinomial_impl

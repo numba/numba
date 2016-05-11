@@ -2,9 +2,10 @@ from __future__ import print_function
 
 from collections import namedtuple, defaultdict
 import copy
+import os
 import sys
 
-import numpy
+import numpy as np
 
 from llvmlite import ir as llvmir
 import llvmlite.llvmpy.core as lc
@@ -14,18 +15,11 @@ import llvmlite.binding as ll
 from numba import types, utils, cgutils, typing
 from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
-from numba.targets.imputils import (user_function, user_generator,
-                                    builtin_registry, impl_ret_borrowed,
-                                    RegistryLoader)
-from . import (
-    arrayobj, arraymath, builtins, iterators, linalg, rangeobj, optional,
-    slicing, tupleobj, imputils)
+from . import arrayobj, builtins, imputils
+from .imputils import (user_function, user_generator,
+                       builtin_registry, impl_ret_borrowed,
+                       RegistryLoader)
 from numba import datamodel
-
-try:
-    from . import npdatetime
-except NotImplementedError:
-    pass
 
 
 GENERIC_POINTER = Type.pointer(Type.int(8))
@@ -162,10 +156,12 @@ class BaseContext(object):
         self._getattrs = defaultdict(OverloadSelector)
         self._setattrs = defaultdict(OverloadSelector)
         self._casts = OverloadSelector()
+        self._get_constants = OverloadSelector()
         # Other declarations
         self._generators = {}
         self.special_ops = {}
         self.cached_internal_func = {}
+        self._pid = None
 
         self.data_model_manager = datamodel.default_manager
 
@@ -182,8 +178,18 @@ class BaseContext(object):
         Refresh context with new declarations from known registries.
         Useful for third-party extensions.
         """
+        # Populate built-in registry
+        from . import (arraymath, enumimpl, iterators, linalg, numbers,
+                       optional, rangeobj, slicing, smartarray, tupleobj)
+        try:
+            from . import npdatetime
+        except NotImplementedError:
+            pass
         self.install_registry(builtin_registry)
         self.load_additional_registries()
+        # Also refresh typing context, since @overload declarations can
+        # affect it.
+        self.typing_context.refresh()
 
     def load_additional_registries(self):
         """
@@ -192,6 +198,9 @@ class BaseContext(object):
 
     def get_arg_packer(self, fe_args):
         return datamodel.ArgPacker(self.data_model_manager, fe_args)
+
+    def get_data_packer(self, fe_types):
+        return datamodel.DataPacker(self.data_model_manager, fe_types)
 
     @property
     def target_data(self):
@@ -222,6 +231,7 @@ class BaseContext(object):
         self._insert_getattr_defn(loader.new_registrations('getattrs'))
         self._insert_setattr_defn(loader.new_registrations('setattrs'))
         self._insert_cast_defn(loader.new_registrations('casts'))
+        self._insert_get_constant_defn(loader.new_registrations('constants'))
 
     def insert_func_defn(self, defns):
         for impl, func, sig in defns:
@@ -238,6 +248,10 @@ class BaseContext(object):
     def _insert_cast_defn(self, defns):
         for impl, sig in defns:
             self._casts.append(impl, sig)
+
+    def _insert_get_constant_defn(self, defns):
+        for impl, sig in defns:
+            self._get_constants.append(impl, sig)
 
     def insert_user_function(self, func, fndesc, libs=()):
         impl = user_function(fndesc, libs)
@@ -345,95 +359,23 @@ class BaseContext(object):
         dm = self.data_model_manager[ty]
         return dm.load_from_data_pointer(builder, ptr, align)
 
-    def is_struct_type(self, ty):
-        return isinstance(self.data_model_manager[ty], datamodel.CompositeModel)
-
     def get_constant_generic(self, builder, ty, val):
         """
         Return a LLVM constant representing value *val* of Numba type *ty*.
         """
-        if isinstance(ty, types.ExternalFunctionPointer):
-            ptrty = self.get_function_pointer_type(ty)
-            ptrval = ty.get_pointer(val)
-            return builder.inttoptr(self.get_constant(types.intp, ptrval),
-                                    ptrty)
-
-        elif isinstance(ty, types.Array):
-            return self.make_constant_array(builder, ty, val)
-
-        elif isinstance(ty, types.Dummy):
-            return self.get_dummy_value()
-
-        elif self.is_struct_type(ty):
-            struct = self.get_constant_struct(builder, ty, val)
-            if isinstance(ty, types.Record):
-                ptrty = self.data_model_manager[ty].get_data_type()
-                ptr = cgutils.alloca_once(builder, ptrty)
-                builder.store(struct, ptr)
-                return ptr
-            return struct
-
-        else:
-            return self.get_constant(ty, val)
-
-    def get_constant_struct(self, builder, ty, val):
-        assert self.is_struct_type(ty)
-
-        if ty in types.complex_domain:
-            if ty == types.complex64:
-                innertype = types.float32
-            elif ty == types.complex128:
-                innertype = types.float64
-            else:
-                raise Exception("unreachable")
-
-            real = self.get_constant(innertype, val.real)
-            imag = self.get_constant(innertype, val.imag)
-            const = Constant.struct([real, imag])
-            return const
-
-        elif isinstance(ty, (types.Tuple, types.NamedTuple)):
-            consts = [self.get_constant_generic(builder, ty.types[i], v)
-                      for i, v in enumerate(val)]
-            return Constant.struct(consts)
-
-        elif isinstance(ty, types.Record):
-            consts = [self.get_constant(types.int8, b)
-                      for b in bytearray(val.tostring())]
-            return Constant.array(consts[0].type, consts)
-
-        else:
-            raise NotImplementedError("%s as constant unsupported" % ty)
+        try:
+            impl = self._get_constants.find((ty,))
+            return impl(self, builder, ty, val)
+        except NotImplementedError:
+            raise NotImplementedError("cannot lower constant of type '%s'" % (ty,))
 
     def get_constant(self, ty, val):
-        assert not self.is_struct_type(ty)
-
-        lty = self.get_value_type(ty)
-
-        if ty == types.none:
-            assert val is None
-            return self.get_dummy_value()
-
-        elif ty == types.boolean:
-            return Constant.int(Type.int(1), int(val))
-
-        elif ty in types.signed_domain:
-            return Constant.int_signextend(lty, val)
-
-        elif ty in types.unsigned_domain:
-            return Constant.int(lty, val)
-
-        elif ty in types.real_domain:
-            return Constant.real(lty, val)
-
-        elif isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
-            return Constant.real(lty, val.astype(numpy.int64))
-
-        elif isinstance(ty, (types.UniTuple, types.NamedUniTuple)):
-            consts = [self.get_constant(ty.dtype, v) for v in val]
-            return Constant.array(consts[0].type, consts)
-
-        raise NotImplementedError("cannot lower constant of type '%s'" % (ty,))
+        """
+        Same as get_constant_generic(), but without specifying *builder*.
+        Works only for simple types.
+        """
+        # HACK: pass builder=None to preserve get_constant() API
+        return self.get_constant_generic(None, ty, val)
 
     def get_constant_undef(self, ty):
         lty = self.get_value_type(ty)
@@ -585,16 +527,14 @@ class BaseContext(object):
         """
         Extract the first element of a heterogenous pair.
         """
-        paircls = self.make_pair(ty.first_type, ty.second_type)
-        pair = paircls(self, builder, value=val)
+        pair = self.make_helper(builder, ty, val)
         return pair.first
 
     def pair_second(self, builder, val, ty):
         """
         Extract the second element of a heterogenous pair.
         """
-        paircls = self.make_pair(ty.first_type, ty.second_type)
-        pair = paircls(self, builder, value=val)
+        pair = self.make_helper(builder, ty, val)
         return pair.second
 
     def cast(self, builder, val, fromty, toty):
@@ -609,8 +549,8 @@ class BaseContext(object):
             impl = self._casts.find((fromty, toty))
             return impl(self, builder, fromty, toty, val)
         except NotImplementedError:
-            # Re-raise below
-            raise NotImplementedError("cast", val, fromty, toty)
+            raise NotImplementedError(
+                "Cannot cast %s to %s: %s" % (fromty, toty, val))
 
     def generic_compare(self, builder, key, argtypes, args):
         """
@@ -621,24 +561,20 @@ class BaseContext(object):
         at, bt = argtypes
         av, bv = args
         ty = self.typing_context.unify_types(at, bt)
+        assert ty is not None
         cav = self.cast(builder, av, at, ty)
         cbv = self.cast(builder, bv, bt, ty)
         cmpsig = typing.signature(types.boolean, ty, ty)
         cmpfunc = self.get_function(key, cmpsig)
         return cmpfunc(builder, (cav, cbv))
 
-    def make_optional(self, optionaltype):
-        return optional.make_optional(optionaltype.type)
-
     def make_optional_none(self, builder, valtype):
-        optcls = optional.make_optional(valtype)
-        optval = optcls(self, builder)
+        optval = self.make_helper(builder, types.Optional(valtype))
         optval.valid = cgutils.false_bit
         return optval._getvalue()
 
     def make_optional_value(self, builder, valtype, value):
-        optcls = optional.make_optional(valtype)
-        optval = optcls(self, builder)
+        optval = self.make_helper(builder, types.Optional(valtype))
         optval.valid = cgutils.true_bit
         optval.data = value
         return optval._getvalue()
@@ -679,7 +615,7 @@ class BaseContext(object):
         return builder.call(funcptr, args, cconv=cconv)
 
     def print_string(self, builder, text):
-        mod = builder.basic_block.function.module
+        mod = builder.module
         cstring = GENERIC_POINTER
         fnty = Type.function(Type.int(), [cstring])
         puts = mod.get_or_insert_function(fnty, "puts")
@@ -689,6 +625,16 @@ class BaseContext(object):
         mod = builder.module
         cstr = self.insert_const_string(mod, str(text))
         self.print_string(builder, cstr)
+
+    def printf(self, builder, format_string, *args):
+        mod = builder.module
+        if isinstance(format_string, str):
+            cstr = self.insert_const_string(mod, format_string)
+        else:
+            cstr = format_string
+        fnty = Type.function(Type.int(), (GENERIC_POINTER,), var_arg=True)
+        fn = mod.get_or_insert_function(fnty, "printf")
+        return builder.call(fn, (cstr,) + tuple(args))
 
     def get_struct_type(self, struct):
         """
@@ -703,7 +649,7 @@ class BaseContext(object):
     def get_dummy_type(self):
         return GENERIC_POINTER
 
-    def compile_only_no_cache(self, builder, impl, sig, locals={}):
+    def compile_only_no_cache(self, builder, impl, sig, locals={}, flags=None):
         """Invoke the compiler to compile a function to be used inside a
         nopython function, but without generating code to call that
         function.
@@ -713,7 +659,8 @@ class BaseContext(object):
 
         codegen = self.codegen()
         library = codegen.create_library(impl.__name__)
-        flags = compiler.Flags()
+        if flags is None:
+            flags = compiler.Flags()
         flags.set('no_compile')
         flags.set('no_cpython_wrapper')
         cres = compiler.compile_internal(self.typing_context, self,
@@ -786,6 +733,32 @@ class BaseContext(object):
                     rec=rectyp, attr=attr, type=elemty)
                 raise TypeError(msg)
 
+    def get_helper_class(self, typ, kind='value'):
+        """
+        Get a helper class for the given *typ*.
+        """
+        # XXX handle all types: complex, array, etc.
+        # XXX should it be a method on the model instead? this would allow a default kind...
+        return cgutils.create_struct_proxy(typ, kind)
+
+    def _make_helper(self, builder, typ, value=None, ref=None, kind='value'):
+        cls = self.get_helper_class(typ, kind)
+        return cls(self, builder, value=value, ref=ref)
+
+    def make_helper(self, builder, typ, value=None, ref=None):
+        """
+        Get a helper object to access the *typ*'s members,
+        for the given value or reference.
+        """
+        return self._make_helper(builder, typ, value, ref, kind='value')
+
+    def make_data_helper(self, builder, typ, ref=None):
+        """
+        As make_helper(), but considers the value as stored in memory,
+        rather than a live value.
+        """
+        return self._make_helper(builder, typ, ref=ref, kind='data')
+
     def make_array(self, typ):
         return arrayobj.make_array(typ)
 
@@ -795,15 +768,12 @@ class BaseContext(object):
         """
         return arrayobj.populate_array(arr, **kwargs)
 
-    def make_complex(self, typ):
-        cls, _ = builtins.get_complex_info(typ)
-        return cls
-
-    def make_pair(self, first_type, second_type):
+    def make_complex(self, builder, typ, value=None):
         """
-        Create a heterogenous pair class parametered for the given types.
+        Get a helper object to access the given complex numbers' members.
         """
-        return builtins.make_pair(first_type, second_type)
+        assert isinstance(typ, types.Complex), typ
+        return self.make_helper(builder, typ, value)
 
     def make_tuple(self, builder, typ, values):
         """
@@ -815,20 +785,18 @@ class BaseContext(object):
         return tup
 
     def make_constant_array(self, builder, typ, ary):
+        """
+        Create an array structure reifying the given constant array.
+        A low-level contiguous array constant is created in the LLVM IR.
+        """
         assert typ.layout == 'C'                # assumed in typeinfer.py
-        ary = numpy.ascontiguousarray(ary)
+
+        # Handle data: reify the flattened array in "C" order as a
+        # global array of bytes.
         flat = ary.flatten()
-
-        # Handle data
-        if self.is_struct_type(typ.dtype):
-            values = [self.get_constant_struct(builder, typ.dtype, flat[i])
-                      for i in range(flat.size)]
-        else:
-            values = [self.get_constant(typ.dtype, flat[i])
-                      for i in range(flat.size)]
-
-        lldtype = values[0].type
-        consts = Constant.array(lldtype, values)
+        # Note: we use `bytearray(flat.data)` instead of `bytearray(flat)` to
+        #       workaround issue #1850 which is due to numpy issue #3147
+        consts = Constant.array(Type.int(8), bytearray(flat.data))
         data = cgutils.global_constant(builder, ".const.array.data", consts)
 
         # Handle shape
@@ -836,9 +804,9 @@ class BaseContext(object):
         shapevals = [self.get_constant(types.intp, s) for s in ary.shape]
         cshape = Constant.array(llintp, shapevals)
 
-
-        # Handle strides
-        stridevals = [self.get_constant(types.intp, s) for s in ary.strides]
+        # Handle strides: use strides of the equivalent C-contiguous array.
+        contig = np.ascontiguousarray(ary)
+        stridevals = [self.get_constant(types.intp, s) for s in contig.strides]
         cstrides = Constant.array(llintp, stridevals)
 
         # Create array structure
@@ -881,7 +849,11 @@ class BaseContext(object):
     def create_module(self, name):
         """Create a LLVM module
         """
-        return lc.Module.new(name)
+        return lc.Module(name)
+
+    def _require_nrt(self):
+        if not self.enable_nrt:
+            raise RuntimeError("Require NRT")
 
     def nrt_meminfo_alloc(self, builder, size):
         """
@@ -889,8 +861,8 @@ class BaseContext(object):
 
         A pointer to the MemInfo is returned.
         """
-        if not self.enable_nrt:
-            raise Exception("Require NRT")
+        self._require_nrt()
+
         mod = builder.module
         fnty = llvmir.FunctionType(void_ptr,
                                    [self.get_value_type(types.intp)])
@@ -899,8 +871,8 @@ class BaseContext(object):
         return builder.call(fn, [size])
 
     def nrt_meminfo_alloc_dtor(self, builder, size, dtor):
-        if not self.enable_nrt:
-            raise Exception("Require NRT")
+        self._require_nrt()
+
         mod = builder.module
         ll_void_ptr = self.get_value_type(types.voidptr)
         fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(),
@@ -919,8 +891,8 @@ class BaseContext(object):
 
         A pointer to the MemInfo is returned.
         """
-        if not self.enable_nrt:
-            raise Exception("Require NRT")
+        self._require_nrt()
+
         mod = builder.module
         intp = self.get_value_type(types.intp)
         u32 = self.get_value_type(types.uint32)
@@ -934,7 +906,7 @@ class BaseContext(object):
             assert align.type == u32, "align must be a uint32"
         return builder.call(fn, [size, align])
 
-    def nrt_meminfo_varsize_alloc(self, builder, size):
+    def nrt_meminfo_new_varsize(self, builder, size):
         """
         Allocate a MemInfo pointing to a variable-sized data area.  The area
         is separately allocated (i.e. two allocations are made) so that
@@ -942,26 +914,57 @@ class BaseContext(object):
 
         A pointer to the MemInfo is returned.
         """
-        if not self.enable_nrt:
-            raise Exception("Require NRT")
+        self._require_nrt()
+
         mod = builder.module
         fnty = llvmir.FunctionType(void_ptr,
                                    [self.get_value_type(types.intp)])
-        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_varsize_alloc")
+        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_new_varsize")
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [size])
 
+    def nrt_meminfo_varsize_alloc(self, builder, meminfo, size):
+        """
+        Allocate a new data area for a MemInfo created by nrt_meminfo_new_varsize().
+        The new data pointer is returned, for convenience.
+
+        Contrary to realloc(), this always allocates a new area and doesn't
+        copy the old data.  This is useful if resizing a container needs
+        more than simply copying the data area (e.g. for hash tables).
+
+        The old pointer will have to be freed with nrt_meminfo_varsize_free().
+        """
+        return self._call_nrt_varsize_alloc(builder, meminfo, size,
+                                            "NRT_MemInfo_varsize_alloc")
+
     def nrt_meminfo_varsize_realloc(self, builder, meminfo, size):
         """
-        Reallocate a data area allocated by nrt_meminfo_varsize_alloc().
+        Reallocate a data area allocated by nrt_meminfo_new_varsize().
         The new data pointer is returned, for convenience.
         """
-        if not self.enable_nrt:
-            raise Exception("Require NRT")
+        return self._call_nrt_varsize_alloc(builder, meminfo, size,
+                                            "NRT_MemInfo_varsize_realloc")
+
+    def nrt_meminfo_varsize_free(self, builder, meminfo, ptr):
+        """
+        Free a memory area allocated for a NRT varsize object.
+        Note this does *not* free the NRT object itself!
+        """
+        self._require_nrt()
+
+        mod = builder.module
+        fnty = llvmir.FunctionType(llvmir.VoidType(),
+                                   [void_ptr, void_ptr])
+        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_varsize_free")
+        return builder.call(fn, (meminfo, ptr))
+
+    def _call_nrt_varsize_alloc(self, builder, meminfo, size, funcname):
+        self._require_nrt()
+
         mod = builder.module
         fnty = llvmir.FunctionType(void_ptr,
                                    [void_ptr, self.get_value_type(types.intp)])
-        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_varsize_realloc")
+        fn = mod.get_or_insert_function(fnty, name=funcname)
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [meminfo, size])
 
@@ -971,8 +974,8 @@ class BaseContext(object):
         managed by it.  This works for MemInfos allocated with all the
         above methods.
         """
-        if not self.enable_nrt:
-            raise Exception("Require NRT")
+        self._require_nrt()
+
         from numba.runtime.atomicops import meminfo_data_ty
 
         mod = builder.module
@@ -980,22 +983,28 @@ class BaseContext(object):
                                         name="NRT_MemInfo_data_fast")
         return builder.call(fn, [meminfo])
 
-    def _call_nrt_incref_decref(self, builder, root_type, typ, value, funcname):
-        if not self.enable_nrt:
-            raise Exception("Require NRT")
+    def _call_nrt_incref_decref(self, builder, root_type, typ, value,
+                                funcname, getters=()):
+        self._require_nrt()
+
         from numba.runtime.atomicops import incref_decref_ty
 
         data_model = self.data_model_manager[typ]
 
-        members = data_model.traverse(builder, value)
-        for mt, mv in members:
-            self._call_nrt_incref_decref(builder, root_type, mt, mv, funcname)
+        members = data_model.traverse(builder)
+        for mtyp, getter in members:
+            self._call_nrt_incref_decref(builder, root_type, mtyp, value,
+                                         funcname, getters + (getter,))
 
-        try:
-            meminfo = data_model.get_nrt_meminfo(builder, value)
-        except NotImplementedError as e:
-            raise NotImplementedError("%s: %s" % (root_type, str(e)))
-        if meminfo:
+        if data_model.has_nrt_meminfo():
+            # Call the chain of getters to compute the member value
+            for getter in getters:
+                value = getter(value)
+            try:
+                meminfo = data_model.get_nrt_meminfo(builder, value)
+            except NotImplementedError as e:
+                raise NotImplementedError("%s: %s" % (root_type, str(e)))
+            assert meminfo is not None  # since has_nrt_meminfo()
             mod = builder.module
             fn = mod.get_or_insert_function(incref_decref_ty, name=funcname)
             # XXX "nonnull" causes a crash in test_dyn_array: can this

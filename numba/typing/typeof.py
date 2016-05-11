@@ -7,8 +7,7 @@ import sys
 
 import numpy as np
 
-from numba import numpy_support, types, utils
-from . import bufproto, cffi_utils
+from numba import numpy_support, types, utils, smartarray
 
 
 class Purpose(enum.Enum):
@@ -40,6 +39,7 @@ def typeof_impl(val, c):
 
     # cffi is handled here as it does not expose a public base class
     # for exported functions or CompiledFFI instances.
+    from . import cffi_utils
     if cffi_utils.SUPPORTED:
         if cffi_utils.is_cffi_func(val):
             return cffi_utils.make_function_type(val)
@@ -50,21 +50,27 @@ def typeof_impl(val, c):
 
 
 def _typeof_buffer(val, c):
-    if sys.version_info >= (2, 7):
-        try:
-            m = memoryview(val)
-        except TypeError:
-            return
-        # Object has the buffer protocol
-        try:
-            dtype = bufproto.decode_pep3118_format(m.format, m.itemsize)
-        except ValueError:
-            return
-        type_class = bufproto.get_type_class(type(val))
-        layout = bufproto.infer_layout(m)
-        return type_class(dtype, m.ndim, layout=layout,
-                          readonly=m.readonly)
+    from . import bufproto
+    try:
+        m = memoryview(val)
+    except TypeError:
+        return
+    # Object has the buffer protocol
+    try:
+        dtype = bufproto.decode_pep3118_format(m.format, m.itemsize)
+    except ValueError:
+        return
+    type_class = bufproto.get_type_class(type(val))
+    layout = bufproto.infer_layout(m)
+    return type_class(dtype, m.ndim, layout=layout,
+                      readonly=m.readonly)
 
+
+@typeof_impl.register(ctypes._CFuncPtr)
+def typeof_ctypes_function(val, c):
+    from .ctypes_utils import is_ctypes_funcptr, make_function_type
+    if is_ctypes_funcptr(val):
+        return make_function_type(val)
 
 @typeof_impl.register(bool)
 def _typeof_bool(val, c):
@@ -127,9 +133,40 @@ def _typeof_list(val, c):
     ty = typeof_impl(val[0], c)
     return types.List(ty, reflected=True)
 
+@typeof_impl.register(set)
+def _typeof_set(val, c):
+    if len(val) == 0:
+        raise ValueError("Cannot type empty set")
+    item = next(iter(val))
+    ty = typeof_impl(item, c)
+    return types.Set(ty, reflected=True)
+
 @typeof_impl.register(slice)
 def _typeof_slice(val, c):
     return types.slice2_type if val.step in (None, 1) else types.slice3_type
+
+@typeof_impl.register(enum.Enum)
+@typeof_impl.register(enum.IntEnum)
+def _typeof_enum(val, c):
+    clsty = typeof_impl(type(val), c)
+    return clsty.member_type
+
+@typeof_impl.register(enum.EnumMeta)
+def _typeof_enum_class(val, c):
+    cls = val
+    members = list(cls.__members__.values())
+    if len(members) == 0:
+        raise ValueError("Cannot type enum with no members")
+    dtypes = {typeof_impl(mem.value, c) for mem in members}
+    if len(dtypes) > 1:
+        raise ValueError("Cannot type heterogenous enum: "
+                         "got value types %s"
+                         % ", ".join(sorted(str(ty) for ty in dtypes)))
+    if issubclass(val, enum.IntEnum):
+        typecls = types.IntEnumClass
+    else:
+        typecls = types.EnumClass
+    return typecls(cls, dtypes.pop())
 
 @typeof_impl.register(np.dtype)
 def _typeof_dtype(val, c):
@@ -145,3 +182,9 @@ def _typeof_ndarray(val, c):
     layout = numpy_support.map_layout(val)
     readonly = not val.flags.writeable
     return types.Array(dtype, val.ndim, layout, readonly=readonly)
+
+@typeof_impl.register(smartarray.SmartArray)
+def typeof_array(val, c):
+    arrty = typeof_impl(val.host(), c)
+    return types.SmartArrayType(arrty.dtype, arrty.ndim, arrty.layout, type(val))
+

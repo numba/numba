@@ -9,12 +9,7 @@ from numba.typeconv import Conversion, rules
 from . import templates
 from .typeof import typeof, Purpose
 
-# Initialize declarations
-from . import (
-    builtins, arraydecl, cmathdecl, listdecl, mathdecl, npdatetime, npydecl,
-    operatordecl, randomdecl)
 from numba import utils
-from . import ctypes_utils, cffi_utils, bufproto
 
 
 class Rating(object):
@@ -66,8 +61,9 @@ class BaseContext(object):
         Refresh context with new declarations from known registries.
         Useful for third-party extensions.
         """
-        self._load_builtins()
         self.load_additional_registries()
+        # Some extensions may have augmented the builtin registry
+        self._load_builtins()
 
     def explain_function_type(self, func):
         """
@@ -86,9 +82,8 @@ class BaseContext(object):
                 defns.extend(getattr(tpl, 'cases', []))
 
         else:
-            msg = "No type info available for {func} as a callable."
+            msg = "No type info available for {func!r} as a callable."
             desc.append(msg.format(func=func))
-            return desc
 
         if defns:
             desc = ['Known signatures:']
@@ -249,6 +244,9 @@ class BaseContext(object):
                 raise
 
     def _load_builtins(self):
+        # Initialize declarations
+        from . import builtins, arraydecl, npdatetime
+        from . import ctypes_utils, bufproto
         self.install_registry(templates.builtin_registry)
 
     def load_additional_registries(self):
@@ -466,14 +464,14 @@ class BaseContext(object):
         unified = typelist[0]
         for tp in typelist[1:]:
             unified = self.unify_pairs(unified, tp)
-            if unified is types.pyobject:
+            if unified is None:
                 break
         return unified
 
     def unify_pairs(self, first, second):
         """
         Try to unify the two given types.  A third type is returned,
-        or pyobject in case of failure.
+        or None in case of failure.
         """
         if first == second:
             return first
@@ -504,16 +502,20 @@ class BaseContext(object):
             return first
 
         # Cannot unify
-        return types.pyobject
+        return None
 
 
 class Context(BaseContext):
 
     def load_additional_registries(self):
+        from . import (cffi_utils, cmathdecl, enumdecl, listdecl, mathdecl,
+                       npydecl, operatordecl, randomdecl, setdecl)
+        self.install_registry(cffi_utils.registry)
         self.install_registry(cmathdecl.registry)
+        self.install_registry(enumdecl.registry)
         self.install_registry(listdecl.registry)
         self.install_registry(mathdecl.registry)
         self.install_registry(npydecl.registry)
         self.install_registry(operatordecl.registry)
         self.install_registry(randomdecl.registry)
-        self.install_registry(cffi_utils.registry)
+        self.install_registry(setdecl.registry)

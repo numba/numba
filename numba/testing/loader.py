@@ -5,7 +5,6 @@ from os.path import isdir, isfile, join, dirname, basename
 
 class TestLoader(loader.TestLoader):
 
-
     def __init__(self, topleveldir=None):
         super(TestLoader, self).__init__()
         self._top_level_dir = topleveldir or dirname(dirname(dirname(__file__)))
@@ -17,7 +16,7 @@ class TestLoader(loader.TestLoader):
             name = self._get_name_from_path(start_dir)
             package = self._get_module_from_name(name)
             load_tests = getattr(package, 'load_tests', None)
-            tests = self.loadTestsFromModule(package, use_load_tests=False)
+            tests = self.loadTestsFromModule(package)
             if load_tests is not None:
                 try:
                     yield load_tests(self, tests, pattern)

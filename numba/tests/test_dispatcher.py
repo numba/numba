@@ -4,6 +4,7 @@ import errno
 import imp
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -13,9 +14,9 @@ import warnings
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import utils, vectorize, jit, generated_jit, types
+from numba import utils, vectorize, jit, generated_jit, types, appdirs
 from numba.errors import NumbaWarning
-from .support import TestCase
+from .support import TestCase, tag, temp_directory, import_dynamic
 
 
 def dummy(x):
@@ -205,12 +206,50 @@ class TestDispatcher(BaseTest):
                          "No matching definition for argument type(s) "
                          "complex128, complex128")
 
+    def test_disabled_compilation(self):
+        @jit
+        def foo(a):
+            return a
+
+        foo.compile("(float32,)")
+        foo.disable_compile()
+        with self.assertRaises(RuntimeError) as raises:
+            foo.compile("(int32,)")
+        self.assertEqual(str(raises.exception), "compilation disabled")
+        self.assertEqual(len(foo.signatures), 1)
+
+    def test_disabled_compilation_through_list(self):
+        @jit(["(float32,)", "(int32,)"])
+        def foo(a):
+            return a
+
+        with self.assertRaises(RuntimeError) as raises:
+            foo.compile("(complex64,)")
+        self.assertEqual(str(raises.exception), "compilation disabled")
+        self.assertEqual(len(foo.signatures), 2)
+
+    def test_disabled_compilation_nested_call(self):
+        @jit(["(intp,)"])
+        def foo(a):
+            return a
+
+        @jit
+        def bar():
+            foo(1)
+            foo(np.ones(1))  # no matching definition
+
+        with self.assertRaises(TypeError) as raises:
+            bar()
+        m = "No matching definition for argument type(s) array(float64, 1d, C)"
+        self.assertEqual(str(raises.exception), m)
+
 
 class TestSignatureHandling(BaseTest):
     """
     Test support for various parameter passing styles.
     """
 
+    @tag('important')
     def test_named_args(self):
         """
         Test passing named arguments to a dispatcher.
@@ -298,6 +337,7 @@ class TestGeneratedDispatcher(TestCase):
     Tests for @generated_jit.
     """
 
+    @tag('important')
     def test_generated(self):
         f = generated_jit(nopython=True)(generated_usecase)
         self.assertEqual(f(8), 8 - 5)
@@ -361,6 +401,7 @@ class TestDispatcherMethods(TestCase):
         self.assertPreciseEqual(foo(1), 3)
         self.assertPreciseEqual(foo(1.5), 3)
 
+    @tag('important')
     def test_inspect_llvm(self):
         # Create a jited function
         @jit
@@ -442,16 +483,16 @@ class TestDispatcherMethods(TestCase):
         self.assertEqual(exp_f, got_f)
 
 
-class TestCache(TestCase):
+class BaseCacheTest(TestCase):
+    # This class is also used in test_cfunc.py.
 
-    here = os.path.dirname(__file__)
     # The source file that will be copied
-    usecases_file = os.path.join(here, "cache_usecases.py")
+    usecases_file = None
     # Make sure this doesn't conflict with another module
-    modname = "caching_test_fodder"
+    modname = None
 
     def setUp(self):
-        self.tempdir = tempfile.mkdtemp()
+        self.tempdir = temp_directory('test_cache')
         sys.path.insert(0, self.tempdir)
         self.modfile = os.path.join(self.tempdir, self.modname + ".py")
         self.cache_dir = os.path.join(self.tempdir, "__pycache__")
@@ -461,7 +502,6 @@ class TestCache(TestCase):
     def tearDown(self):
         sys.modules.pop(self.modname, None)
         sys.path.remove(self.tempdir)
-        shutil.rmtree(self.tempdir)
 
     def import_module(self):
         # Import a fresh version of the test module.  All jitted functions
@@ -483,7 +523,7 @@ class TestCache(TestCase):
                 except OSError as e:
                     if e.errno != errno.ENOENT:
                         raise
-        mod = __import__(self.modname)
+        mod = import_dynamic(self.modname)
         self.assertEqual(mod.__file__.rstrip('co'), self.modfile)
         return mod
 
@@ -500,12 +540,19 @@ class TestCache(TestCase):
         return dict((fn, os.path.getmtime(os.path.join(self.cache_dir, fn)))
                     for fn in sorted(self.cache_contents()))
 
-    def check_cache(self, n):
+    def check_pycache(self, n):
         c = self.cache_contents()
         self.assertEqual(len(c), n, c)
 
     def dummy_test(self):
         pass
+
+
+class TestCache(BaseCacheTest):
+
+    here = os.path.dirname(__file__)
+    usecases_file = os.path.join(here, "cache_usecases.py")
+    modname = "dispatcher_caching_test_fodder"
 
     def run_in_separate_process(self):
         # Cached functions can be run from a distinct process.
@@ -516,17 +563,8 @@ class TestCache(TestCase):
 
             sys.path.insert(0, %(tempdir)r)
             mod = __import__(%(modname)r)
-            assert mod.add_usecase(2, 3) == 6
-            assert mod.add_objmode_usecase(2, 3) == 6
-            assert mod.outer_uncached(3, 2) == 2
-            assert mod.outer(3, 2) == 2
-            assert mod.generated_usecase(3, 2) == 1
-            packed_rec = mod.record_return(mod.packed_arr, 1)
-            assert tuple(packed_rec) == (2, 43.5), packed_rec
-            aligned_rec = mod.record_return(mod.aligned_arr, 1)
-            assert tuple(aligned_rec) == (2, 43.5), aligned_rec
-            """ % dict(tempdir=self.tempdir, modname=self.modname,
-                       test_class=self.__class__.__name__)
+            mod.self_test()
+            """ % dict(tempdir=self.tempdir, modname=self.modname)
 
         popen = subprocess.Popen([sys.executable, "-c", code],
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -536,42 +574,55 @@ class TestCache(TestCase):
                                  % (popen.returncode, err.decode()))
 
     def check_module(self, mod):
-        self.check_cache(0)
+        self.check_pycache(0)
         f = mod.add_usecase
         self.assertPreciseEqual(f(2, 3), 6)
-        self.check_cache(2)  # 1 index, 1 data
+        self.check_pycache(2)  # 1 index, 1 data
         self.assertPreciseEqual(f(2.5, 3), 6.5)
-        self.check_cache(3)  # 1 index, 2 data
+        self.check_pycache(3)  # 1 index, 2 data
 
         f = mod.add_objmode_usecase
         self.assertPreciseEqual(f(2, 3), 6)
-        self.check_cache(5)  # 2 index, 3 data
+        self.check_pycache(5)  # 2 index, 3 data
         self.assertPreciseEqual(f(2.5, 3), 6.5)
-        self.check_cache(6)  # 2 index, 4 data
+        self.check_pycache(6)  # 2 index, 4 data
 
+        mod.self_test()
+
+    def check_hits(self, func, hits, misses=None):
+        st = func.stats
+        self.assertEqual(sum(st.cache_hits.values()), hits, st.cache_hits)
+        if misses is not None:
+            self.assertEqual(sum(st.cache_misses.values()), misses,
+                             st.cache_misses)
+
+    @tag('important')
     def test_caching(self):
-        self.check_cache(0)
+        self.check_pycache(0)
         mod = self.import_module()
-        self.check_cache(0)
+        self.check_pycache(0)
 
         f = mod.add_usecase
         self.assertPreciseEqual(f(2, 3), 6)
-        self.check_cache(2)  # 1 index, 1 data
+        self.check_pycache(2)  # 1 index, 1 data
         self.assertPreciseEqual(f(2.5, 3), 6.5)
-        self.check_cache(3)  # 1 index, 2 data
+        self.check_pycache(3)  # 1 index, 2 data
+        self.check_hits(f, 0, 2)
 
         f = mod.add_objmode_usecase
         self.assertPreciseEqual(f(2, 3), 6)
-        self.check_cache(5)  # 2 index, 3 data
+        self.check_pycache(5)  # 2 index, 3 data
         self.assertPreciseEqual(f(2.5, 3), 6.5)
-        self.check_cache(6)  # 2 index, 4 data
+        self.check_pycache(6)  # 2 index, 4 data
+        self.check_hits(f, 0, 2)
 
         f = mod.record_return
         rec = f(mod.aligned_arr, 1)
         self.assertPreciseEqual(tuple(rec), (2, 43.5))
         rec = f(mod.packed_arr, 1)
         self.assertPreciseEqual(tuple(rec), (2, 43.5))
-        self.check_cache(9)  # 3 index, 6 data
+        self.check_pycache(9)  # 3 index, 6 data
+        self.check_hits(f, 0, 2)
 
         f = mod.generated_usecase
         self.assertPreciseEqual(f(3, 2), 1)
@@ -584,42 +635,42 @@ class TestCache(TestCase):
         # Caching inner then outer function is ok
         mod = self.import_module()
         self.assertPreciseEqual(mod.inner(3, 2), 6)
-        self.check_cache(2)  # 1 index, 1 data
+        self.check_pycache(2)  # 1 index, 1 data
         # Uncached outer function shouldn't fail (issue #1603)
         f = mod.outer_uncached
         self.assertPreciseEqual(f(3, 2), 2)
-        self.check_cache(2)  # 1 index, 1 data
+        self.check_pycache(2)  # 1 index, 1 data
         mod = self.import_module()
         f = mod.outer_uncached
         self.assertPreciseEqual(f(3, 2), 2)
-        self.check_cache(2)  # 1 index, 1 data
+        self.check_pycache(2)  # 1 index, 1 data
         # Cached outer will create new cache entries
         f = mod.outer
         self.assertPreciseEqual(f(3, 2), 2)
-        self.check_cache(4)  # 2 index, 2 data
+        self.check_pycache(4)  # 2 index, 2 data
         self.assertPreciseEqual(f(3.5, 2), 2.5)
-        self.check_cache(6)  # 2 index, 4 data
+        self.check_pycache(6)  # 2 index, 4 data
 
     def test_outer_then_inner(self):
         # Caching outer then inner function is ok
         mod = self.import_module()
         self.assertPreciseEqual(mod.outer(3, 2), 2)
-        self.check_cache(4)  # 2 index, 2 data
+        self.check_pycache(4)  # 2 index, 2 data
         self.assertPreciseEqual(mod.outer_uncached(3, 2), 2)
-        self.check_cache(4)  # same
+        self.check_pycache(4)  # same
         mod = self.import_module()
         f = mod.inner
         self.assertPreciseEqual(f(3, 2), 6)
-        self.check_cache(4)  # same
+        self.check_pycache(4)  # same
         self.assertPreciseEqual(f(3.5, 2), 6.5)
-        self.check_cache(5)  # 2 index, 3 data
+        self.check_pycache(5)  # 2 index, 3 data
 
     def test_no_caching(self):
         mod = self.import_module()
 
         f = mod.add_nocache_usecase
         self.assertPreciseEqual(f(2, 3), 6)
-        self.check_cache(0)
+        self.check_pycache(0)
 
     def test_looplifted(self):
         # Loop-lifted functions can't be cached and raise a warning
@@ -630,7 +681,7 @@ class TestCache(TestCase):
 
             f = mod.looplifted
             self.assertPreciseEqual(f(4), 6)
-            self.check_cache(0)
+            self.check_pycache(0)
 
         self.assertEqual(len(w), 1)
         self.assertEqual(str(w[0].message),
@@ -647,7 +698,7 @@ class TestCache(TestCase):
 
             f = mod.use_c_sin
             self.assertPreciseEqual(f(0.0), 0.0)
-            self.check_cache(0)
+            self.check_pycache(0)
 
         self.assertEqual(len(w), 1)
         self.assertIn('Cannot cache compiled function "use_c_sin"',
@@ -663,7 +714,7 @@ class TestCache(TestCase):
             self.assertPreciseEqual(f(3), 6)
             f = mod.closure2
             self.assertPreciseEqual(f(3), 8)
-            self.check_cache(0)
+            self.check_pycache(0)
 
         self.assertEqual(len(w), 2)
         for item in w:
@@ -673,6 +724,7 @@ class TestCache(TestCase):
     def test_cache_reuse(self):
         mod = self.import_module()
         mod.add_usecase(2, 3)
+        mod.add_usecase(2.5, 3.5)
         mod.add_objmode_usecase(2, 3)
         mod.outer_uncached(2, 3)
         mod.outer(2, 3)
@@ -680,11 +732,19 @@ class TestCache(TestCase):
         mod.record_return(mod.aligned_arr, 1)
         mod.generated_usecase(2, 3)
         mtimes = self.get_cache_mtimes()
+        # Two signatures compiled
+        self.check_hits(mod.add_usecase, 0, 2)
 
         mod2 = self.import_module()
         self.assertIsNot(mod, mod2)
-        mod.add_usecase(2, 3)
-        mod.add_objmode_usecase(2, 3)
+        f = mod2.add_usecase
+        f(2, 3)
+        self.check_hits(f, 1, 0)
+        f(2.5, 3.5)
+        self.check_hits(f, 2, 0)
+        f = mod2.add_objmode_usecase
+        f(2, 3)
+        self.check_hits(f, 1, 0)
 
         # The files haven't changed
         self.assertEqual(self.get_cache_mtimes(), mtimes)
@@ -732,6 +792,53 @@ class TestCache(TestCase):
         self.assertPreciseEqual(f(2), 4)
         f = mod.renamed_function2
         self.assertPreciseEqual(f(2), 8)
+
+    def _test_pycache_fallback(self):
+        """
+        With a disabled __pycache__, test there is a working fallback
+        (e.g. on the user-wide cache dir)
+        """
+        mod = self.import_module()
+        f = mod.add_usecase
+        # Remove this function's cache files at the end, to avoid accumulation
+        # accross test calls.
+        self.addCleanup(shutil.rmtree, f.stats.cache_path, ignore_errors=True)
+
+        self.assertPreciseEqual(f(2, 3), 6)
+        # It's a cache miss since the file was copied to a new temp location
+        self.check_hits(f, 0, 1)
+
+        # Test re-use
+        mod2 = self.import_module()
+        f = mod2.add_usecase
+        self.assertPreciseEqual(f(2, 3), 6)
+        self.check_hits(f, 1, 0)
+
+        # The __pycache__ is empty (otherwise the test's preconditions
+        # wouldn't be met)
+        self.check_pycache(0)
+
+    @unittest.skipIf(os.name == "nt",
+                     "cannot easily make a directory read-only on Windows")
+    def test_non_creatable_pycache(self):
+        # Make it impossible to create the __pycache__ directory
+        old_perms = os.stat(self.tempdir).st_mode
+        os.chmod(self.tempdir, 0o500)
+        self.addCleanup(os.chmod, self.tempdir, old_perms)
+
+        self._test_pycache_fallback()
+
+    @unittest.skipIf(os.name == "nt",
+                     "cannot easily make a directory read-only on Windows")
+    def test_non_writable_pycache(self):
+        # Make it impossible to write to the __pycache__ directory
+        pycache = os.path.join(self.tempdir, '__pycache__')
+        os.mkdir(pycache)
+        old_perms = os.stat(pycache).st_mode
+        os.chmod(pycache, 0o500)
+        self.addCleanup(os.chmod, pycache, old_perms)
+
+        self._test_pycache_fallback()
 
 
 if __name__ == '__main__':

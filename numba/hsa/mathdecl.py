@@ -142,9 +142,8 @@ class Math_exp(Math_unary):
     key = math.exp
 
 
-if utils.PYVERSION > (2, 6):
-    class Math_expm1(Math_unary):
-        key = math.expm1
+class Math_expm1(Math_unary):
+    key = math.expm1
 
 
 class Math_sqrt(Math_unary):
@@ -251,18 +250,17 @@ class Math_degrees(Math_unary):
 #     ]
 
 
-if utils.PYVERSION > (2, 6):
-    class Math_erf(Math_unary):
-        key = math.erf
+class Math_erf(Math_unary):
+    key = math.erf
 
-    class Math_erfc(Math_unary):
-        key = math.erfc
+class Math_erfc(Math_unary):
+    key = math.erfc
 
-    class Math_gamma(Math_unary):
-        key = math.gamma
+class Math_gamma(Math_unary):
+    key = math.gamma
 
-    class Math_lgamma(Math_unary):
-        key = math.lgamma
+class Math_lgamma(Math_unary):
+    key = math.lgamma
 
 
 class Math_binary(ConcreteTemplate):
@@ -313,8 +311,7 @@ class Math_isinf(ConcreteTemplate):
 infer_global(math, types.Module(math))
 infer_global(math.fabs, types.Function(Math_fabs))
 infer_global(math.exp, types.Function(Math_exp))
-if utils.PYVERSION > (2, 6):
-    infer_global(math.expm1, types.Function(Math_expm1))
+infer_global(math.expm1, types.Function(Math_expm1))
 infer_global(math.sqrt, types.Function(Math_sqrt))
 infer_global(math.log, types.Function(Math_log))
 infer_global(math.log1p, types.Function(Math_log1p))
@@ -343,8 +340,7 @@ infer_global(math.radians, types.Function(Math_radians))
 infer_global(math.copysign, types.Function(Math_copysign))
 infer_global(math.fmod, types.Function(Math_fmod))
 infer_global(math.pow, types.Function(Math_pow))
-if utils.PYVERSION > (2, 6):
-    infer_global(math.erf, types.Function(Math_erf))
-    infer_global(math.erfc, types.Function(Math_erfc))
-    infer_global(math.gamma, types.Function(Math_gamma))
-    infer_global(math.lgamma, types.Function(Math_lgamma))
+infer_global(math.erf, types.Function(Math_erf))
+infer_global(math.erfc, types.Function(Math_erfc))
+infer_global(math.gamma, types.Function(Math_gamma))
+infer_global(math.lgamma, types.Function(Math_lgamma))

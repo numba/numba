@@ -10,15 +10,20 @@ UFuncCore also defines a work-stealing mechanism that allows idle threads
 to steal works from other threads.
 """
 from __future__ import print_function, absolute_import
+
 import sys
 import os
 import multiprocessing
+
 import numpy as np
+
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
+
 from numba.npyufunc import ufuncbuilder
 from numba.numpy_support import as_dtype
 from numba import types, utils, cgutils
+
 
 NUM_CPU = max(1, multiprocessing.cpu_count())
 
@@ -26,6 +31,7 @@ NUM_CPU = max(1, multiprocessing.cpu_count())
 class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
     def build(self, cres, sig):
         _launch_threads()
+        _init()
 
         # Buider wrapper for ufunc entry point
         ctx = cres.target_context
@@ -95,7 +101,7 @@ def build_ufunc_kernel(library, ctx, innerfunc, sig):
     bb_entry = lfunc.append_basic_block('')
 
     # Function body starts
-    builder = lc.Builder.new(bb_entry)
+    builder = lc.Builder(bb_entry)
 
     args, dimensions, steps, data = lfunc.args
 
@@ -191,6 +197,8 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
         Returns (dtype numbers, function ptr, EnvironmentObject)
         """
         _launch_threads()
+        _init()
+
         # Build wrapper for ufunc entry point
         ctx = cres.target_context
         library = cres.library
@@ -277,7 +285,7 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
     bb_entry = lfunc.append_basic_block('')
 
     # Function body starts
-    builder = lc.Builder.new(bb_entry)
+    builder = lc.Builder(bb_entry)
 
     args, dimensions, steps, data = lfunc.args
 
@@ -382,28 +390,33 @@ def _make_cas_function():
     """
     Generate a compare-and-swap function for portability sake.
     """
+    from numba.targets.registry import cpu_target
+
+    codegen = cpu_target.target_context.codegen()
+
     # Generate IR
-    mod = lc.Module.new('generate-cas')
+    library = codegen.create_library('cas_for_parallel_ufunc')
+    mod = library.create_ir_module('cas_module')
+
     llint = lc.Type.int()
     llintp = lc.Type.pointer(llint)
     fnty = lc.Type.function(llint, [llintp, llint, llint])
     fn = mod.add_function(fnty, name='.numba.parallel.ufunc.cas')
     ptr, old, repl = fn.args
     bb = fn.append_basic_block('')
-    builder = lc.Builder.new(bb)
+    builder = lc.Builder(bb)
     outpack = builder.cmpxchg(ptr, old, repl, ordering='monotonic')
     out = builder.extract_value(outpack, 0)
     failed = builder.extract_value(outpack, 1)
     builder.ret(builder.select(failed, old, out))
 
     # Build & Link
-    llmod = ll.parse_assembly(str(mod))
+    library.add_ir_module(mod)
+    library.finalize()
 
-    target = ll.Target.from_default_triple()
-    tm = target.create_target_machine()
-    engine = ll.create_mcjit_compiler(llmod, tm)
-    ptr = engine.get_function_address(fn.name)
-    return engine, ptr
+    ptr = library.get_pointer_to_function(fn.name)
+
+    return library, ptr
 
 
 def _launch_threads():
@@ -417,9 +430,15 @@ def _launch_threads():
     launch_threads(NUM_CPU)
 
 
+_is_initialized = False
+
 def _init():
     from . import workqueue as lib
     from ctypes import CFUNCTYPE, c_void_p
+
+    global _is_initialized
+    if _is_initialized:
+        return
 
     ll.add_symbol('numba_add_task', lib.add_task)
     ll.add_symbol('numba_synchronize', lib.synchronize)
@@ -427,23 +446,16 @@ def _init():
 
     set_cas = CFUNCTYPE(None, c_void_p)(lib.set_cas)
 
-    engine, cas_ptr = _make_cas_function()
+    library, cas_ptr = _make_cas_function()
     set_cas(c_void_p(cas_ptr))
 
-    _keepalive.append(_ProtectEngineDestroy(set_cas, engine))
+    _keepalive.append(_ProtectEngineDestroy(set_cas, library))
 
+    _is_initialized = True
 
-_init()
 
 _DYLD_WORKAROUND_SET = 'NUMBA_DYLD_WORKAROUND' in os.environ
 _DYLD_WORKAROUND_VAL = int(os.environ.get('NUMBA_DYLD_WORKAROUND', 0))
 
 if _DYLD_WORKAROUND_SET and _DYLD_WORKAROUND_VAL:
     _launch_threads()
-
-elif not _DYLD_WORKAROUND_SET:
-    # Do it automatically for python2.6 linux
-    if (sys.version_info[:2] == (2, 6) and
-            sys.platform.startswith('linux') and
-                utils.MACHINE_BITS == 64):
-        _launch_threads()

@@ -82,26 +82,37 @@ class CUDATargetContext(BaseContext):
                                           for a in argtypes)
         return self.mangle_name(qualified)
 
-    def prepare_cuda_kernel(self, func, argtypes):
-        # Adapt to CUDA LLVM
-        module = func.module
-        wrapper = self.generate_kernel_wrapper(func, argtypes)
-        func.linkage = LINKAGE_INTERNAL
-        nvvm.fix_data_layout(module)
-        return wrapper
+    def prepare_cuda_kernel(self, codelib, fname, argtypes):
+        """
+        Adapt a code library ``codelib`` with the numba compiled CUDA kernel
+        with name ``fname`` and arguments ``argtypes`` for NVVM.
+        A new library is created with a wrapper function that can be used as
+        the kernel entry point for the given kernel.
 
-    def generate_kernel_wrapper(self, func, argtypes):
-        module = func.module
+        Returns the new code library and the wrapper function.
+        """
+        library = self.codegen().create_library('')
+        library.add_linking_library(codelib)
+        wrapper = self.generate_kernel_wrapper(library, fname, argtypes)
+        nvvm.fix_data_layout(library._final_module)
+        return library, wrapper
 
+    def generate_kernel_wrapper(self, library, fname, argtypes):
+        """
+        Generate the kernel wrapper in the given ``library``.
+        The function being wrapped have the name ``fname`` and argument types
+        ``argtypes``.  The wrapper function is returned.
+        """
         arginfo = self.get_arg_packer(argtypes)
         argtys = list(arginfo.argument_types)
         wrapfnty = Type.function(Type.void(), argtys)
         wrapper_module = self.create_module("cuda.kernel.wrapper")
         fnty = Type.function(Type.int(),
                              [self.call_conv.get_return_type(types.pyobject)] + argtys)
-        func = wrapper_module.add_function(fnty, name=func.name)
+        func = wrapper_module.add_function(fnty, name=fname)
+
         wrapfn = wrapper_module.add_function(wrapfnty, name="cudaPy_" + func.name)
-        builder = Builder.new(wrapfn.append_basic_block(''))
+        builder = Builder(wrapfn.append_basic_block(''))
 
         # Define error handling variables
         def define_error_gv(postfix):
@@ -152,13 +163,11 @@ class CUDATargetContext(BaseContext):
                     builder.store(val, ptr)
 
         builder.ret_void()
-        # force inline
-        # inline_function(status.code)
-        nvvm.set_cuda_kernel(wrapfn)
-        module.link_in(ll.parse_assembly(str(wrapper_module)))
-        module.verify()
 
-        wrapfn = module.get_function(wrapfn.name)
+        nvvm.set_cuda_kernel(wrapfn)
+        library.add_ir_module(wrapper_module)
+        library.finalize()
+        wrapfn = library.get_function(wrapfn.name)
         return wrapfn
 
     def make_constant_array(self, builder, typ, ary):
@@ -230,4 +239,3 @@ class CUDATargetContext(BaseContext):
 
 class CUDACallConv(MinimalCallConv):
     pass
-

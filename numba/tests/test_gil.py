@@ -12,7 +12,7 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import config, jit
-from .support import TestCase
+from .support import TestCase, tag
 
 
 # This CPython API function is a portable way to get the current thread id.
@@ -118,6 +118,7 @@ class TestGILRelease(TestCase):
         cfunc = jit(f_sig, nopython=True)(f)
         self.check_gil_held(cfunc)
 
+    @tag('important')
     def test_gil_released(self):
         """
         Test releasing the GIL, by checking parallel runs produce

@@ -20,11 +20,6 @@
 
 #include "_arraystruct.h"
 
-/* For Numpy 1.6 */
-#ifndef NPY_ARRAY_BEHAVED
-    #define NPY_ARRAY_BEHAVED NPY_BEHAVED
-#endif
-
 /*
  * PRNG support.
  */
@@ -844,17 +839,19 @@ numba_attempt_nocopy_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *
 
     return 1;
 }
+
 /*
  * Cython utilities.
  */
 
 /* Fetch the address of the given function, as exposed by
    a cython module */
- static void *
- import_cython_function(const char *module_name, const char *function_name)
+static void *
+import_cython_function(const char *module_name, const char *function_name)
 {
     PyObject *module, *capi, *cobj;
     void *res = NULL;
+    const char *capsule_name;
 
     module = PyImport_ImportModule(module_name);
     if (module == NULL)
@@ -867,343 +864,14 @@ numba_attempt_nocopy_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *
     Py_DECREF(capi);
     if (cobj == NULL)
         return NULL;
-#if PY_MAJOR_VERSION >= 3 || (PY_MINOR_VERSION >= 7)
-    {
-        /* 2.7+ => Cython exports a PyCapsule */
-        const char *capsule_name = PyCapsule_GetName(cobj);
-        if (capsule_name != NULL) {
-            res = PyCapsule_GetPointer(cobj, capsule_name);
-        }
-        Py_DECREF(cobj);
+    /* 2.7+ => Cython exports a PyCapsule */
+    capsule_name = PyCapsule_GetName(cobj);
+    if (capsule_name != NULL) {
+        res = PyCapsule_GetPointer(cobj, capsule_name);
     }
-#else
-    {
-        /* 2.6 => Cython exports a legacy PyCObject */
-        res = PyCObject_AsVoidPtr(cobj);
-        Py_DECREF(cobj);
-    }
-#endif
+    Py_DECREF(cobj);
     return res;
 }
-
-/*
- * BLAS calling helpers.  The helpers can be called without the GIL held.
- * The caller is responsible for checking arguments (especially dimensions).
- */
-
-
-/* Fast getters caching the value of a function's address after
-   the first call to import_cblas_function(). */
-
-#define EMIT_GET_CBLAS_FUNC(name)                                 \
-    static void *cblas_ ## name = NULL;                           \
-    static void *get_cblas_ ## name(void) {                       \
-        if (cblas_ ## name == NULL) {                             \
-            PyGILState_STATE st = PyGILState_Ensure();            \
-            const char *mod = "scipy.linalg.cython_blas";         \
-            cblas_ ## name = import_cython_function(mod, # name); \
-            PyGILState_Release(st);                               \
-        }                                                         \
-        return cblas_ ## name;                                    \
-    }
-
-EMIT_GET_CBLAS_FUNC(dgemm)
-EMIT_GET_CBLAS_FUNC(sgemm)
-EMIT_GET_CBLAS_FUNC(cgemm)
-EMIT_GET_CBLAS_FUNC(zgemm)
-EMIT_GET_CBLAS_FUNC(dgemv)
-EMIT_GET_CBLAS_FUNC(sgemv)
-EMIT_GET_CBLAS_FUNC(cgemv)
-EMIT_GET_CBLAS_FUNC(zgemv)
-EMIT_GET_CBLAS_FUNC(ddot)
-EMIT_GET_CBLAS_FUNC(sdot)
-EMIT_GET_CBLAS_FUNC(cdotu)
-EMIT_GET_CBLAS_FUNC(zdotu)
-EMIT_GET_CBLAS_FUNC(cdotc)
-EMIT_GET_CBLAS_FUNC(zdotc)
-
-#undef EMIT_GET_CBLAS_FUNC
-
-typedef float (*sdot_t)(int *n, void *dx, int *incx, void *dy, int *incy);
-typedef double (*ddot_t)(int *n, void *dx, int *incx, void *dy, int *incy);
-typedef npy_complex64 (*cdot_t)(int *n, void *dx, int *incx, void *dy, int *incy);
-typedef npy_complex128 (*zdot_t)(int *n, void *dx, int *incx, void *dy, int *incy);
-
-typedef void (*xxgemv_t)(char *trans, int *m, int *n,
-                         void *alpha, void *a, int *lda,
-                         void *x, int *incx, void *beta,
-                         void *y, int *incy);
-
-typedef void (*xxgemm_t)(char *transa, char *transb,
-                         int *m, int *n, int *k,
-                         void *alpha, void *a, int *lda,
-                         void *b, int *ldb, void *beta,
-                         void *c, int *ldc);
-
-/* Vector * vector: result = dx * dy */
-NUMBA_EXPORT_FUNC(int)
-numba_xxdot(char kind, char conjugate, Py_ssize_t n, void *dx, void *dy,
-            void *result)
-{
-    void *raw_func = NULL;
-    int _n;
-    int inc = 1;
-
-    switch (kind) {
-        case 'd':
-            raw_func = get_cblas_ddot();
-            break;
-        case 's':
-            raw_func = get_cblas_sdot();
-            break;
-        case 'c':
-            raw_func = conjugate ? get_cblas_cdotc() : get_cblas_cdotu();
-            break;
-        case 'z':
-            raw_func = conjugate ? get_cblas_zdotc() : get_cblas_zdotu();
-            break;
-        default:
-            {
-                PyGILState_STATE st = PyGILState_Ensure();
-                PyErr_SetString(PyExc_ValueError,
-                                "invalid kind of *DOT function");
-                PyGILState_Release(st);
-            }
-            return -1;
-    }
-    if (raw_func == NULL)
-        return -1;
-
-    _n = (int) n;
-
-    switch (kind) {
-        case 'd':
-            *(double *) result = (*(ddot_t) raw_func)(&_n, dx, &inc, dy, &inc);;
-            break;
-        case 's':
-            *(float *) result = (*(sdot_t) raw_func)(&_n, dx, &inc, dy, &inc);;
-            break;
-        case 'c':
-            *(npy_complex64 *) result = (*(cdot_t) raw_func)(&_n, dx, &inc, dy, &inc);;
-            break;
-        case 'z':
-            *(npy_complex128 *) result = (*(zdot_t) raw_func)(&_n, dx, &inc, dy, &inc);;
-            break;
-    }
-
-    return 0;
-}
-
-/* Matrix * vector: y = alpha * a * x + beta * y */
-NUMBA_EXPORT_FUNC(int)
-numba_xxgemv(char kind, char *trans, Py_ssize_t m, Py_ssize_t n,
-             void *alpha, void *a, Py_ssize_t lda,
-             void *x, void *beta, void *y)
-{
-    void *raw_func = NULL;
-    int _m, _n;
-    int _lda;
-    int inc = 1;
-
-    switch (kind) {
-        case 'd':
-            raw_func = get_cblas_dgemv();
-            break;
-        case 's':
-            raw_func = get_cblas_sgemv();
-            break;
-        case 'c':
-            raw_func = get_cblas_cgemv();
-            break;
-        case 'z':
-            raw_func = get_cblas_zgemv();
-            break;
-        default:
-            {
-                PyGILState_STATE st = PyGILState_Ensure();
-                PyErr_SetString(PyExc_ValueError,
-                                "invalid kind of *GEMV function");
-                PyGILState_Release(st);
-            }
-            return -1;
-    }
-    if (raw_func == NULL)
-        return -1;
-
-    _m = (int) m;
-    _n = (int) n;
-    _lda = (int) lda;
-
-    (*(xxgemv_t) raw_func)(trans, &_m, &_n, alpha, a, &_lda,
-                           x, &inc, beta, y, &inc);
-    return 0;
-}
-
-/* Matrix * matrix: c = alpha * a * b + beta * c */
-NUMBA_EXPORT_FUNC(int)
-numba_xxgemm(char kind, char *transa, char *transb,
-             Py_ssize_t m, Py_ssize_t n, Py_ssize_t k,
-             void *alpha, void *a, Py_ssize_t lda,
-             void *b, Py_ssize_t ldb, void *beta,
-             void *c, Py_ssize_t ldc)
-{
-    void *raw_func = NULL;
-    int _m, _n, _k;
-    int _lda, _ldb, _ldc;
-
-    switch (kind) {
-        case 'd':
-            raw_func = get_cblas_dgemm();
-            break;
-        case 's':
-            raw_func = get_cblas_sgemm();
-            break;
-        case 'c':
-            raw_func = get_cblas_cgemm();
-            break;
-        case 'z':
-            raw_func = get_cblas_zgemm();
-            break;
-        default:
-            {
-                PyGILState_STATE st = PyGILState_Ensure();
-                PyErr_SetString(PyExc_ValueError,
-                                "invalid kind of *GEMM function");
-                PyGILState_Release(st);
-            }
-            return -1;
-    }
-    if (raw_func == NULL)
-        return -1;
-
-    _m = (int) m;
-    _n = (int) n;
-    _k = (int) k;
-    _lda = (int) lda;
-    _ldb = (int) ldb;
-    _ldc = (int) ldc;
-
-    (*(xxgemm_t) raw_func)(transa, transb, &_m, &_n, &_k, alpha, a, &_lda,
-                           b, &_ldb, beta, c, &_ldc);
-    return 0;
-}
-
-/*
- * LAPACK calling helpers.  The helpers can be called without the GIL held.
- * The caller is responsible for checking arguments (especially dimensions).
- */
-
-/* Fast getters caching the value of a function's address after
-   the first call to import_clapack_function(). */
-
-#define EMIT_GET_CLAPACK_FUNC(name)                                 \
-    static void *clapack_ ## name = NULL;                           \
-    static void *get_clapack_ ## name(void) {                       \
-        if (clapack_ ## name == NULL) {                             \
-            PyGILState_STATE st = PyGILState_Ensure();              \
-            const char *mod = "scipy.linalg.cython_lapack";         \
-            clapack_ ## name = import_cython_function(mod, # name); \
-            PyGILState_Release(st);                                 \
-        }                                                           \
-        return clapack_ ## name;                                    \
-    }
-
-EMIT_GET_CLAPACK_FUNC(sgetrf)
-EMIT_GET_CLAPACK_FUNC(dgetrf)
-EMIT_GET_CLAPACK_FUNC(cgetrf)
-EMIT_GET_CLAPACK_FUNC(zgetrf)
-EMIT_GET_CLAPACK_FUNC(sgetri)
-EMIT_GET_CLAPACK_FUNC(dgetri)
-EMIT_GET_CLAPACK_FUNC(cgetri)
-EMIT_GET_CLAPACK_FUNC(zgetri)
-
-
-#undef EMIT_GET_CLAPACK_FUNC
-
-typedef void (*xxgetrf_t)(int *m, int *n, void *a, int *lda, int *ipiv, int *info);
-
-typedef void (*xxgetri_t)(int *n, void *a, int *lda, int *ipiv, void *work, int *lwork, int*info);
-
-/* Compute LU decomposition of a*/
-NUMBA_EXPORT_FUNC(int)
-numba_xxgetrf(char kind, Py_ssize_t m, Py_ssize_t n, void *a, Py_ssize_t lda, int *ipiv, int *info)  /* XXX should these be int * or Pyssize_t */
-{
-    void *raw_func = NULL;
-    int _m, _n, _lda;
-
-    switch (kind) {
-        case 's':
-            raw_func = get_clapack_sgetrf();
-            break;
-        case 'd':
-            raw_func = get_clapack_dgetrf();
-            break;
-        case 'c':
-            raw_func = get_clapack_cgetrf();
-            break;
-        case 'z':
-            raw_func = get_clapack_zgetrf();
-            break;
-        default:
-            {
-                PyGILState_STATE st = PyGILState_Ensure();
-                PyErr_SetString(PyExc_ValueError,
-                                "invalid kind of *LU factorization function");
-                PyGILState_Release(st);
-            }
-            return -1;
-    }
-    if (raw_func == NULL)
-        return -1;
-
-    _m = (int) m;
-    _n = (int) n;
-    _lda = (int) lda;
-
-    (*(xxgetrf_t) raw_func)(&_m, &_n, a, &_lda, ipiv, info);
-    return 0;
-}
-
-
-/* Compute the inverse of a  matrix given its LU decomposition*/
-NUMBA_EXPORT_FUNC(int)
-numba_xxgetri(char kind, Py_ssize_t n, void *a, Py_ssize_t lda, int *ipiv, void *work, int *lwork, int *info) /* XXX int * */
-{
-    void *raw_func = NULL;
-    int _n, _lda;
-
-    switch (kind) {
-        case 's':
-            raw_func = get_clapack_sgetri();
-            break;
-        case 'd':
-            raw_func = get_clapack_dgetri();
-            break;
-        case 'c':
-            raw_func = get_clapack_cgetri();
-            break;
-        case 'z':
-            raw_func = get_clapack_zgetri();
-            break;
-        default:
-            {
-                PyGILState_STATE st = PyGILState_Ensure();
-                PyErr_SetString(PyExc_ValueError,
-                                "invalid kind of *inversion from LU factorization function");
-                PyGILState_Release(st);
-            }
-            return -1;
-    }
-    if (raw_func == NULL)
-        return -1;
-
-    _n = (int) n;
-    _lda = (int) lda;
-
-    (*(xxgetri_t) raw_func)(&_n, a, &_lda, ipiv, work, lwork, info);
-    return 0;
-}
-
 
 /* We use separate functions for datetime64 and timedelta64, to ensure
  * proper type checking.
@@ -1327,6 +995,84 @@ numba_reset_list_private_data(PyListObject *listobj)
         listobj->allocated = PyList_GET_SIZE(listobj);
 }
 
+/*
+ * Functions for tagging an arbitrary Python object with an arbitrary pointer.
+ * These functions make strong lifetime assumptions, see below.
+ */
+
+static PyObject *private_data_dict = NULL;
+
+static PyObject *
+_get_private_data_dict(void)
+{
+    if (private_data_dict == NULL)
+        private_data_dict = PyDict_New();
+    return private_data_dict;
+}
+
+NUMBA_EXPORT_FUNC(void)
+numba_set_pyobject_private_data(PyObject *obj, void *ptr)
+{
+    PyObject *dct = _get_private_data_dict();
+    /* This assumes the reference to setobj is kept alive until the
+       call to numba_reset_set_private_data()! */
+    PyObject *key = PyLong_FromVoidPtr((void *) obj);
+    PyObject *value = PyLong_FromVoidPtr(ptr);
+
+    if (!dct || !value || !key)
+        goto error;
+    if (PyDict_SetItem(dct, key, value))
+        goto error;
+    Py_DECREF(key);
+    Py_DECREF(value);
+    return;
+
+error:
+    Py_FatalError("unable to set private data");
+}
+
+NUMBA_EXPORT_FUNC(void *)
+numba_get_pyobject_private_data(PyObject *obj)
+{
+    PyObject *dct = _get_private_data_dict();
+    PyObject *value, *key = PyLong_FromVoidPtr((void *) obj);
+    void *ptr;
+    if (!dct || !key)
+        goto error;
+
+    value = PyDict_GetItem(dct, key);
+    Py_DECREF(key);
+    if (!value)
+        return NULL;
+    else {
+        ptr = PyLong_AsVoidPtr(value);
+        if (ptr == NULL && PyErr_Occurred())
+            goto error;
+        return ptr;
+    }
+
+error:
+    Py_FatalError("unable to get private data");
+    return NULL;
+}
+
+NUMBA_EXPORT_FUNC(void)
+numba_reset_pyobject_private_data(PyObject *obj)
+{
+    PyObject *dct = _get_private_data_dict();
+    PyObject *key = PyLong_FromVoidPtr((void *) obj);
+
+    if (!key)
+        goto error;
+    if (PyDict_DelItem(dct, key))
+        PyErr_Clear();
+    Py_DECREF(key);
+    return;
+
+error:
+    Py_FatalError("unable to reset private data");
+}
+
 NUMBA_EXPORT_FUNC(int)
 numba_unpack_slice(PyObject *obj,
                    Py_ssize_t *start, Py_ssize_t *stop, Py_ssize_t *step)
@@ -1338,20 +1084,37 @@ numba_unpack_slice(PyObject *obj,
                      Py_TYPE(slice)->tp_name);
         return -1;
     }
-#define FETCH_MEMBER(NAME)                                      \
+#define FETCH_MEMBER(NAME, DEFAULT)                             \
     if (slice->NAME != Py_None) {                               \
         Py_ssize_t v = PyNumber_AsSsize_t(slice->NAME,          \
                                           PyExc_OverflowError); \
         if (v == -1 && PyErr_Occurred())                        \
             return -1;                                          \
         *NAME = v;                                              \
+    }                                                           \
+    else {                                                      \
+        *NAME = DEFAULT;                                        \
     }
-    FETCH_MEMBER(start)
-    FETCH_MEMBER(stop)
-    FETCH_MEMBER(step)
+    FETCH_MEMBER(step, 1)
+    FETCH_MEMBER(stop, (*step > 0) ? PY_SSIZE_T_MAX : PY_SSIZE_T_MIN)
+    FETCH_MEMBER(start, (*step > 0) ? 0 : PY_SSIZE_T_MAX)
     return 0;
 
 #undef FETCH_MEMBER
+}
+
+NUMBA_EXPORT_FUNC(int)
+numba_fatal_error(void)
+{
+    PyGILState_Ensure();
+#if PY_MAJOR_VERSION < 3
+    /* Py_FatalError doesn't print the current error on Python 2, do it
+       ourselves. */
+    if (PyErr_Occurred())
+        PyErr_Print();
+#endif
+    Py_FatalError("in Numba-compiled function");
+    return 0; /* unreachable */
 }
 
 /* Logic for raising an arbitrary object.  Adapted from CPython's ceval.c.
@@ -1486,3 +1249,9 @@ Define bridge for all math functions
 
 #undef MATH_UNARY
 #undef MATH_BINARY
+
+/*
+ * BLAS and LAPACK wrappers
+ */
+
+#include "_lapack.c"

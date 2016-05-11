@@ -5,7 +5,7 @@ import sys
 import numpy as np
 
 from numba import cffi_support
-from numba.tests.support import static_temp_directory
+from numba.tests.support import import_dynamic, temp_directory
 from numba.types import complex128
 
 
@@ -96,11 +96,11 @@ def load_ool_module():
     ffi = FFI()
     ffi.set_source('cffi_usecases_ool', source)
     ffi.cdef(defs, override=True)
-    tmpdir = static_temp_directory('test_cffi')
+    tmpdir = temp_directory('test_cffi')
     ffi.compile(tmpdir=tmpdir)
     sys.path.append(tmpdir)
     try:
-        import cffi_usecases_ool as mod
+        mod = import_dynamic('cffi_usecases_ool')
         cffi_support.register_module(mod)
         cffi_support.register_type(mod.ffi.typeof('struct _numba_complex'),
                                    complex128)

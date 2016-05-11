@@ -1,5 +1,7 @@
 from __future__ import print_function, absolute_import
-import numpy
+
+import numpy as np
+
 from numba import config, cuda, jit
 from numba.cuda.testing import unittest
 
@@ -21,10 +23,10 @@ class TestException(unittest.TestCase):
         if not config.ENABLE_CUDASIM:
             # Simulator throws exceptions regardless of debug
             # setting
-            unsafe_foo[1, 2](numpy.array([0, 1]))
+            unsafe_foo[1, 2](np.array([0, 1]))
 
         with self.assertRaises(IndexError) as cm:
-            safe_foo[1, 2](numpy.array([0, 1]))
+            safe_foo[1, 2](np.array([0, 1]))
         self.assertIn("tuple index out of range", str(cm.exception))
 
     def test_user_raise(self):

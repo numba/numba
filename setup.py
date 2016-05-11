@@ -7,11 +7,22 @@ try:
 except ImportError:
     from distutils.core import setup, Extension
 
+from distutils.command import build
+from distutils.spawn import spawn
 import sys
 import os
-import numpy
+
+import numpy as np
 import numpy.distutils.misc_util as np_misc
+
 import versioneer
+
+
+class build_doc(build.build):
+    description = "build documentation"
+
+    def run(self):
+        spawn(['make', '-C', 'docs', 'html'])
 
 versioneer.VCS = 'git'
 versioneer.versionfile_source = 'numba/_version.py'
@@ -20,6 +31,7 @@ versioneer.tag_prefix = ''
 versioneer.parentdir_prefix = 'numba-'
 
 cmdclass = versioneer.get_cmdclass()
+cmdclass['build_doc'] = build_doc
 
 setup_args = {
     'long_description': open('README.rst').read(),
@@ -33,10 +45,7 @@ else:
     CFLAGS = []
 
 
-if sys.platform == 'darwin' and sys.version_info[:2] == (2, 6):
-    cpp_link_args = ['-lstdc++']
-else:
-    cpp_link_args = []
+cpp_link_args = []
 
 
 install_name_tool_fixer = []
@@ -62,7 +71,7 @@ ext_npymath_exports = Extension(name='numba._npymath_exports',
 
 
 ext_dispatcher = Extension(name="numba._dispatcher",
-                           include_dirs=[numpy.get_include()],
+                           include_dirs=[np.get_include()],
                            sources=['numba/_dispatcher.c',
                                     'numba/_typeof.c',
                                     'numba/_hashtable.c',
@@ -75,7 +84,7 @@ ext_dispatcher = Extension(name="numba._dispatcher",
                            extra_link_args=cpp_link_args)
 
 ext_helperlib = Extension(name="numba._helperlib",
-                          include_dirs=[numpy.get_include()],
+                          include_dirs=[np.get_include()],
                           sources=["numba/_helpermod.c", "numba/_math_c99.c"],
                           extra_compile_args=CFLAGS,
                           extra_link_args=install_name_tool_fixer,
@@ -92,7 +101,7 @@ ext_typeconv = Extension(name="numba.typeconv._typeconv",
 
 ext_npyufunc_ufunc = Extension(name="numba.npyufunc._internal",
                                sources=["numba/npyufunc/_internal.c"],
-                               include_dirs=[numpy.get_include()],
+                               include_dirs=[np.get_include()],
                                depends=["numba/npyufunc/_ufunc.c",
                                         "numba/npyufunc/_internal.h",
                                         "numba/_pymodule.h"])
@@ -114,10 +123,15 @@ ext_nrt_python = Extension(name='numba.runtime._nrt_python',
                                     'numba/runtime/_nrt_python.c'],
                            include_dirs=["numba"] + npymath_info['include_dirs'])
 
+ext_jitclass_box = Extension(name='numba.jitclass._box',
+                             sources=['numba/jitclass/_box.c'],
+                             depends=['numba/_pymodule.h'],
+                             include_dirs=['numba'])
+
 ext_modules = [ext_dynfunc, ext_npymath_exports, ext_dispatcher,
                ext_helperlib, ext_typeconv,
                ext_npyufunc_ufunc, ext_npyufunc_workqueue, ext_mviewbuf,
-               ext_nrt_python]
+               ext_nrt_python, ext_jitclass_box]
 
 
 def find_packages(root_dir, root_name):
@@ -154,10 +168,9 @@ setup(name='numba',
         "License :: OSI Approved :: BSD License",
         "Operating System :: OS Independent",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 2.6",
         "Programming Language :: Python :: 2.7",
-        "Programming Language :: Python :: 3.3",
         "Programming Language :: Python :: 3.4",
+        "Programming Language :: Python :: 3.5",
         "Topic :: Software Development :: Compilers",
       ],
       package_data={

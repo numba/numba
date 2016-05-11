@@ -22,8 +22,7 @@ _type_map = {
     array.array: types.PyArray,
     }
 
-if sys.version_info >= (2, 7):
-    _type_map[memoryview] = types.MemoryView
+_type_map[memoryview] = types.MemoryView
 if sys.version_info >= (3,):
     _type_map[bytes] = types.Bytes
 
@@ -33,7 +32,7 @@ def decode_pep3118_format(fmt, itemsize):
     Return the Numba type for an item with format string *fmt* and size
     *itemsize* (in bytes).
     """
-    # XXX reuse _dtype_from_pep3118() from numpy.core._internal?
+    # XXX reuse _dtype_from_pep3118() from np.core._internal?
     if fmt in _pep3118_int_types:
         # Determine int width and signedness
         name = 'int%d' % (itemsize * 8,)

@@ -1,5 +1,8 @@
 from __future__ import print_function, division, absolute_import
 
+import contextlib
+import threading
+
 from . import cpu
 from .descriptors import TargetDescriptor
 from .. import dispatcher, utils, typing
@@ -7,15 +10,74 @@ from .. import dispatcher, utils, typing
 # -----------------------------------------------------------------------------
 # Default CPU target descriptors
 
+class _ThreadLocalContext(threading.local):
+    """
+    Thread-local helper for CPUTarget.
+    """
+    _nested_typing_context = None
+    _nested_target_context = None
+
+    @contextlib.contextmanager
+    def nested(self, typing_context, target_context):
+        old_nested = self._nested_typing_context, self._nested_target_context
+        try:
+            self._nested_typing_context = typing_context
+            self._nested_target_context = target_context
+            yield
+        finally:
+            self._nested_typing_context, self._nested_target_context = old_nested
+
 
 class CPUTarget(TargetDescriptor):
     options = cpu.CPUTargetOptions
-    typing_context = typing.Context()
-    target_context = cpu.CPUContext(typing_context)
+    _tls = _ThreadLocalContext()
+
+    @utils.cached_property
+    def _toplevel_target_context(self):
+        # Lazily-initialized top-level target context, for all threads
+        return cpu.CPUContext(self.typing_context)
+
+    @utils.cached_property
+    def _toplevel_typing_context(self):
+        # Lazily-initialized top-level typing context, for all threads
+        return typing.Context()
+
+    @property
+    def target_context(self):
+        """
+        The target context for CPU targets.
+        """
+        nested = self._tls._nested_target_context
+        if nested is not None:
+            return nested
+        else:
+            return self._toplevel_target_context
+
+    @property
+    def typing_context(self):
+        """
+        The typing context for CPU targets.
+        """
+        nested = self._tls._nested_typing_context
+        if nested is not None:
+            return nested
+        else:
+            return self._toplevel_typing_context
+
+    def nested_context(self, typing_context, target_context):
+        """
+        A context manager temporarily replacing the contexts with the
+        given ones, for the current thread of execution.
+        """
+        return self._tls.nested(typing_context, target_context)
+
+
+# The global CPU target
+cpu_target = CPUTarget()
 
 
 class CPUDispatcher(dispatcher.Dispatcher):
-    targetdescr = CPUTarget()
+    targetdescr = cpu_target
 
 
 class TargetRegistry(utils.UniqueDict):

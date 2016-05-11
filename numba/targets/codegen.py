@@ -2,7 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 import functools
 import locale
-import sys
 import weakref
 
 import llvmlite.llvmpy.core as lc
@@ -391,8 +390,11 @@ class JITCodeLibrary(CodeLibrary):
 
 
 class BaseCPUCodegen(object):
+    _llvm_initialized = False
 
     def __init__(self, module_name):
+        initialize_llvm()
+
         self._libraries = set()
         self._data_layout = None
         self._llvm_module = ll.parse_assembly(
@@ -403,8 +405,9 @@ class BaseCPUCodegen(object):
     def _init(self, llvm_module):
         assert list(llvm_module.global_variables) == [], "Module isn't empty"
 
-        target = ll.Target.from_default_triple()
-        tm_options = dict(cpu='', features='', opt=config.OPT)
+        target = ll.Target.from_triple(ll.get_process_triple())
+        tm_options = dict(opt=config.OPT)
+        self._tm_features = self._customize_tm_features()
         self._customize_tm_options(tm_options)
         tm = target.create_target_machine(**tm_options)
         engine = ll.create_mcjit_compiler(llvm_module, tm)
@@ -419,8 +422,8 @@ class BaseCPUCodegen(object):
                                       self._library_class._object_getbuffer_hook)
 
     def _create_empty_module(self, name):
-        ir_module = lc.Module.new(name)
-        ir_module.triple = ll.get_default_triple()
+        ir_module = lc.Module(name)
+        ir_module.triple = ll.get_process_triple()
         if self._data_layout:
             ir_module.data_layout = self._data_layout
         return ir_module
@@ -515,7 +518,7 @@ class BaseCPUCodegen(object):
         Return a tuple unambiguously describing the codegen behaviour.
         """
         return (self._llvm_module.triple, ll.get_host_cpu_name(),
-                config.ENABLE_AVX)
+                self._tm_features)
 
 
 class AOTCPUCodegen(BaseCPUCodegen):
@@ -526,9 +529,24 @@ class AOTCPUCodegen(BaseCPUCodegen):
 
     _library_class = AOTCodeLibrary
 
+    def __init__(self, module_name, cpu_name=None):
+        # By default, use generic cpu model for the arch
+        self._cpu_name = cpu_name or ''
+        BaseCPUCodegen.__init__(self, module_name)
+
     def _customize_tm_options(self, options):
+        cpu_name = self._cpu_name
+        if cpu_name == 'host':
+            cpu_name = ll.get_host_cpu_name()
+        options['cpu'] = cpu_name
         options['reloc'] = 'pic'
         options['codemodel'] = 'default'
+        options['features'] = self._tm_features
+
+    def _customize_tm_features(self):
+        # ISA features are selected according to the requested CPU model
+        # in _customize_tm_options()
+        return ''
 
     def _add_module(self, module):
         pass
@@ -542,8 +560,6 @@ class JITCPUCodegen(BaseCPUCodegen):
     _library_class = JITCodeLibrary
 
     def _customize_tm_options(self, options):
-        features = []
-
         # As long as we don't want to ship the code to another machine,
         # we can specialize for this CPU.
         options['cpu'] = ll.get_host_cpu_name()
@@ -551,19 +567,38 @@ class JITCPUCodegen(BaseCPUCodegen):
         options['reloc'] = 'default'
         options['codemodel'] = 'jitdefault'
 
-        # There are various performance issues with AVX and LLVM 3.5
-        # (list at http://llvm.org/bugs/buglist.cgi?quicksearch=avx).
-        # For now we'd rather disable it, since it can pessimize the code.
-        if not config.ENABLE_AVX:
-            features.append('-avx')
-
-        # Set feature attributes
-        options['features'] = ','.join(features)
+        # Set feature attributes (such as ISA extensions)
+        # This overrides default feature selection by CPU model above
+        options['features'] = self._tm_features
 
         # Enable JIT debug
         options['jitdebug'] = True
+
+    def _customize_tm_features(self):
+        # For JIT target, we will use LLVM to get the feature map
+        features = ll.get_host_cpu_features()
+
+        if not config.ENABLE_AVX:
+            # Disable all features with name starting with 'avx'
+            for k in features:
+                if k.startswith('avx'):
+                    features[k] = False
+
+        # Set feature attributes
+        return features.flatten()
 
     def _add_module(self, module):
         self._engine.add_module(module)
         # Early bind the engine method to avoid keeping a reference to self.
         return functools.partial(self._engine.remove_module, module)
+
+
+_llvm_initialized = False
+
+def initialize_llvm():
+    global _llvm_initialized
+    if not _llvm_initialized:
+        ll.initialize()
+        ll.initialize_native_target()
+        ll.initialize_native_asmprinter()
+        _llvm_initialized = True

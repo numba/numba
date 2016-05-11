@@ -6,6 +6,96 @@
 
 #include "_dispatcher.h"
 #include "_typeof.h"
+#include "frameobject.h"
+
+/*
+ * The following call_trace and call_trace_protected functions
+ * as well as the C_TRACE macro are taken from ceval.c
+ *
+ */
+
+static int
+call_trace(Py_tracefunc func, PyObject *obj,
+           PyThreadState *tstate, PyFrameObject *frame,
+           int what, PyObject *arg)
+{
+    int result;
+    if (tstate->tracing)
+        return 0;
+    tstate->tracing++;
+    tstate->use_tracing = 0;
+    result = func(obj, frame, what, arg);
+    tstate->use_tracing = ((tstate->c_tracefunc != NULL)
+                           || (tstate->c_profilefunc != NULL));
+    tstate->tracing--;
+    return result;
+}
+
+static int
+call_trace_protected(Py_tracefunc func, PyObject *obj,
+                     PyThreadState *tstate, PyFrameObject *frame,
+                     int what, PyObject *arg)
+{
+    PyObject *type, *value, *traceback;
+    int err;
+    PyErr_Fetch(&type, &value, &traceback);
+    err = call_trace(func, obj, tstate, frame, what, arg);
+    if (err == 0)
+    {
+        PyErr_Restore(type, value, traceback);
+        return 0;
+    }
+    else
+    {
+        Py_XDECREF(type);
+        Py_XDECREF(value);
+        Py_XDECREF(traceback);
+        return -1;
+    }
+}
+
+/*
+ * The original C_TRACE macro (from ceval.c) would call
+ * PyTrace_C_CALL et al., for which the frame argument wouldn't
+ * be usable. Since we explicitly synthesize a frame using the
+ * original Python code object, we call PyTrace_CALL instead so
+ * the profiler can report the correct source location.
+ *
+ * Likewise, while ceval.c would call PyTrace_C_EXCEPTION in case
+ * of error, the profiler would simply expect a RETURN in case of
+ * a Python function, so we generate that here (making sure the
+ * exception state is preserved correctly).
+ */
+#define C_TRACE(x, call)                                        \
+if (call_trace(tstate->c_profilefunc, tstate->c_profileobj,     \
+               tstate, tstate->frame, PyTrace_CALL, cfunc))	\
+    x = NULL;                                                   \
+else                                                            \
+{                                                               \
+    x = call;                                                   \
+    if (tstate->c_profilefunc != NULL)                          \
+    {                                                           \
+        if (x == NULL)                                          \
+        {                                                       \
+            call_trace_protected(tstate->c_profilefunc,         \
+                                 tstate->c_profileobj,          \
+                                 tstate, tstate->frame,         \
+                                 PyTrace_RETURN, cfunc);	\
+            /* XXX should pass (type, value, tb) */             \
+        }                                                       \
+        else                                                    \
+        {                                                       \
+            if (call_trace(tstate->c_profilefunc,               \
+                           tstate->c_profileobj,                \
+                           tstate, tstate->frame,               \
+                           PyTrace_RETURN, cfunc))		\
+            {                                                   \
+                Py_DECREF(x);                                   \
+                x = NULL;                                       \
+            }                                                   \
+        }                                                       \
+    }                                                           \
+}
 
 
 typedef struct DispatcherObject{
@@ -191,18 +281,67 @@ int search_new_conversions(PyObject *dispatcher, PyObject *args, PyObject *kws)
 
 /* A custom, fast, inlinable version of PyCFunction_Call() */
 static PyObject *
-call_cfunc(PyObject *cfunc, PyObject *args, PyObject *kws)
+call_cfunc(DispatcherObject *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObject *locals)
 {
     PyCFunctionWithKeywords fn;
+    PyThreadState *tstate;
     assert(PyCFunction_Check(cfunc));
     assert(PyCFunction_GET_FLAGS(cfunc) == METH_VARARGS | METH_KEYWORDS);
     fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
-    return fn(PyCFunction_GET_SELF(cfunc), args, kws);
+    tstate = PyThreadState_GET();
+    if (tstate->use_tracing && tstate->c_profilefunc)
+    {
+        /*
+         * The following code requires some explaining:
+         *
+         * We want the jit-compiled function to be visible to the profiler, so we
+         * need to synthesize a frame for it. 
+         * The PyFrame_New() constructor doesn't do anything with the 'locals' value if the 'code's
+         * 'CO_NEWLOCALS' flag is set (which is always the case nowadays).
+         * So, to get local variables into the frame, we have to manually set the 'f_locals'
+         * member, then call `PyFrame_LocalsToFast`, where a subsequent call to the `frame.f_locals`
+         * property (by virtue of the `frame_getlocals` function in frameobject.c) will find them.
+         */
+        PyCodeObject *code = (PyCodeObject*)PyObject_GetAttrString((PyObject*)self, "__code__");
+        PyObject *globals = PyDict_New();
+        PyObject *builtins = PyEval_GetBuiltins();
+        PyFrameObject *frame = NULL;
+        PyObject *result = NULL;
+
+        if (!code) {
+            PyErr_Format(PyExc_RuntimeError, "No __code__ attribute found.");
+            goto error;
+        }
+        /* Populate builtins, which is required by some JITted functions */
+        if (PyDict_SetItemString(globals, "__builtins__", builtins)) {
+            goto error;
+        }
+        frame = PyFrame_New(tstate, code, globals, NULL);
+        if (frame == NULL) {
+            goto error;
+        }
+        /* Populate the 'fast locals' in `frame` */
+        Py_XDECREF(frame->f_locals);
+        frame->f_locals = locals;
+        Py_XINCREF(frame->f_locals);
+        PyFrame_LocalsToFast(frame, 0);
+        tstate->frame = frame;
+        C_TRACE(result, fn(PyCFunction_GET_SELF(cfunc), args, kws));
+        tstate->frame = frame->f_back;
+
+    error:
+        Py_XDECREF(frame);
+        Py_XDECREF(globals);
+        Py_XDECREF(code);
+        return result;
+    }
+    else
+        return fn(PyCFunction_GET_SELF(cfunc), args, kws);
 }
 
 static
 PyObject*
-compile_and_invoke(DispatcherObject *self, PyObject *args, PyObject *kws)
+compile_and_invoke(DispatcherObject *self, PyObject *args, PyObject *kws, PyObject *locals)
 {
     /* Compile a new one */
     PyObject *cfa, *cfunc, *retval;
@@ -220,9 +359,9 @@ compile_and_invoke(DispatcherObject *self, PyObject *args, PyObject *kws)
         return NULL;
 
     if (PyObject_TypeCheck(cfunc, &PyCFunction_Type)) {
-        retval = call_cfunc(cfunc, args, kws);
+        retval = call_cfunc(self, cfunc, args, kws, locals);
     } else {
-        // Re-enter interpreter
+        /* Re-enter interpreter */
         retval = PyObject_Call(cfunc, args, kws);
     }
     Py_DECREF(cfunc);
@@ -354,7 +493,10 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     int prealloc[24];
     int matches;
     PyObject *cfunc;
-
+    PyThreadState *ts = PyThreadState_Get();
+    PyObject *locals = NULL;
+    if (ts->use_tracing && ts->c_profilefunc)
+        locals = PyEval_GetLocals();
     if (self->fold_args) {
         if (find_named_args(self, &args, &kws))
             return NULL;
@@ -402,14 +544,14 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
 
     if (matches == 1) {
         /* Definition is found */
-        retval = call_cfunc(cfunc, args, kws);
+        retval = call_cfunc(self, cfunc, args, kws, locals);
     } else if (matches == 0) {
         /* No matching definition */
         if (self->can_compile) {
-            retval = compile_and_invoke(self, args, kws);
+            retval = compile_and_invoke(self, args, kws, locals);
         } else if (self->fallbackdef) {
             /* Have object fallback */
-            retval = call_cfunc(self->fallbackdef, args, kws);
+            retval = call_cfunc(self, self->fallbackdef, args, kws, locals);
         } else {
             /* Raise TypeError */
             explain_matching_error((PyObject *) self, args, kws);
@@ -417,7 +559,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
         }
     } else if (self->can_compile) {
         /* Ambiguous, but are allowed to compile */
-        retval = compile_and_invoke(self, args, kws);
+        retval = compile_and_invoke(self, args, kws, locals);
     } else {
         /* Ambiguous */
         explain_ambiguous((PyObject *) self, args, kws);

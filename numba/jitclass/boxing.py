@@ -3,14 +3,18 @@ Implement logic relating to wrapping (box) and unwrapping (unbox) instances
 of jitclasses for use inside the python interpreter.
 """
 from __future__ import print_function, absolute_import
-from numba import types, cgutils
-from numba.pythonapi import box, unbox, NativeValue
-from numba.runtime.nrt import MemInfo
-from numba import njit
-from numba.six import exec_
-from llvmlite import ir
+
 import inspect
 from functools import wraps, partial
+
+from llvmlite import ir
+
+from numba import types, cgutils
+from numba.pythonapi import box, unbox, NativeValue
+from numba import njit
+from numba.six import exec_
+from . import _box
+
 
 _getter_code_template = """
 def accessor(__numba_self_):
@@ -82,45 +86,41 @@ def _specialize_box(typ):
            '_numba_type_': typ}
     # Inject attributes as class properties
     for field in typ.struct:
-        if not field.startswith('_'):
-            getter = _generate_getter(field)
-            setter = _generate_setter(field)
-            dct[field] = property(getter, setter)
+        getter = _generate_getter(field)
+        setter = _generate_setter(field)
+        dct[field] = property(getter, setter)
     # Inject properties as class properties
     for field, impdct in typ.jitprops.items():
-        if not field.startswith('_'):
-            getter = None
-            setter = None
-            if 'get' in impdct:
-                getter = _generate_getter(field)
-            if 'set' in impdct:
-                setter = _generate_setter(field)
-            dct[field] = property(getter, setter)
+        getter = None
+        setter = None
+        if 'get' in impdct:
+            getter = _generate_getter(field)
+        if 'set' in impdct:
+            setter = _generate_setter(field)
+        dct[field] = property(getter, setter)
     # Inject methods as class members
     for name, func in typ.methods.items():
-        if not name.startswith('_'):
-            getter = _generate_method(name, func)
-            dct[name] = getter
+        if not (name.startswith('__') and name.endswith('__')):
+            dct[name] = _generate_method(name, func)
     # Create subclass
-    subcls = type(typ.classname, (Box,), dct)
+    subcls = type(typ.classname, (_box.Box,), dct)
     # Store to cache
     _cache_specialized_box[typ] = subcls
 
+    # Pre-compile attribute getter.
+    # Note: This must be done after the "box" class is created because
+    #       compiling the getter requires the "box" class to be defined.
+    for k, v in dct.items():
+        if isinstance(v, property):
+            prop = getattr(subcls, k)
+            if prop.fget is not None:
+                fget = prop.fget
+                fast_fget = fget.compile((typ,))
+                fget.disable_compile()
+                setattr(subcls, k,
+                        property(fast_fget, prop.fset, prop.fdel))
+
     return subcls
-
-
-class Box(object):
-    """
-    A box for numba created jit-class instance
-    """
-    __slots__ = '_meminfo', '_meminfoptr', '_dataptr'
-
-    def __init__(self, meminfoptr, dataptr):
-        # MemInfo is used to acquire a reference to `meminfoptr`.
-        # When the MemInfo is destroyed, the reference is released.
-        self._meminfo = MemInfo(meminfoptr)
-        self._meminfoptr = meminfoptr
-        self._dataptr = dataptr
 
 
 ###############################################################################
@@ -130,45 +130,49 @@ class Box(object):
 def _box_class_instance(typ, val, c):
     meminfo, dataptr = cgutils.unpack_tuple(c.builder, val)
 
-    lluintp = c.context.get_data_type(types.uintp)
-
-    addr_meminfo = c.pyapi.from_native_value(types.uintp,
-                                             c.builder.ptrtoint(meminfo,
-                                                                lluintp))
-    addr_dataptr = c.pyapi.from_native_value(types.uintp,
-                                             c.builder.ptrtoint(dataptr,
-                                                                lluintp))
-
+    # Create Box instance
     box_subclassed = _specialize_box(typ)
     # Note: the ``box_subclassed`` is kept alive by the cache
     int_addr_boxcls = c.context.get_constant(types.uintp, id(box_subclassed))
 
     box_cls = c.builder.inttoptr(int_addr_boxcls, c.pyapi.pyobj)
+    box = c.pyapi.call_function_objargs(box_cls, ())
 
-    args = [addr_meminfo, addr_dataptr]
-    res = c.pyapi.call_function_objargs(box_cls, args)
+    # Initialize Box instance
+    llvoidptr = ir.IntType(8).as_pointer()
+    addr_meminfo = c.builder.bitcast(meminfo, llvoidptr)
+    addr_data = c.builder.bitcast(dataptr, llvoidptr)
 
-    # Clean up
-    c.pyapi.decref(addr_meminfo)
-    c.pyapi.decref(addr_dataptr)
+    def set_member(member_offset, value):
+        # Access member by byte offset
+        offset = c.context.get_constant(types.uintp, member_offset)
+        ptr = cgutils.pointer_add(c.builder, box, offset)
+        casted = c.builder.bitcast(ptr, llvoidptr.as_pointer())
+        c.builder.store(value, casted)
 
-    return res
+    set_member(_box.box_meminfoptr_offset, addr_meminfo)
+    set_member(_box.box_dataptr_offset, addr_data)
+    return box
 
 
 @unbox(types.ClassInstanceType)
 def _unbox_class_instance(typ, val, c):
+    def access_member(member_offset):
+        # Access member by byte offset
+        offset = c.context.get_constant(types.uintp, member_offset)
+        llvoidptr = ir.IntType(8).as_pointer()
+        ptr = cgutils.pointer_add(c.builder, val, offset)
+        casted = c.builder.bitcast(ptr, llvoidptr.as_pointer())
+        return c.builder.load(casted)
+
     struct_cls = cgutils.create_struct_proxy(typ)
     inst = struct_cls(c.context, c.builder)
 
-    int_meminfo = c.pyapi.object_getattr_string(val, "_meminfoptr")
-    int_dataptr = c.pyapi.object_getattr_string(val, "_dataptr")
+    # load from Python object
+    ptr_meminfo = access_member(_box.box_meminfoptr_offset)
+    ptr_dataptr = access_member(_box.box_dataptr_offset)
 
-    ptr_meminfo = c.pyapi.long_as_voidptr(int_meminfo)
-    ptr_dataptr = c.pyapi.long_as_voidptr(int_dataptr)
-
-    c.pyapi.decref(int_meminfo)
-    c.pyapi.decref(int_dataptr)
-
+    # store to native structure
     inst.meminfo = c.builder.bitcast(ptr_meminfo, inst.meminfo.type)
     inst.data = c.builder.bitcast(ptr_dataptr, inst.data.type)
 
@@ -177,4 +181,3 @@ def _unbox_class_instance(typ, val, c):
     c.context.nrt_incref(c.builder, typ, ret)
 
     return NativeValue(ret, is_error=c.pyapi.c_api_error())
-

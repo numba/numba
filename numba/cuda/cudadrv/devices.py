@@ -114,7 +114,7 @@ class _Runtime(object):
         self._mainthread = threading.current_thread()
 
         # Avoid mutation of runtime state in multithreaded programs
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     @property
     def current_context(self):
@@ -198,7 +198,8 @@ class _Runtime(object):
         if self.context_stack:
             return self.current_context
         else:
-            return _runtime.push_context(self.gpus[devnum])
+            with self._lock:
+                return self.push_context(self.gpus[devnum])
 
     def reset(self):
         """Clear all contexts in the thread.  Destroy the context if and only

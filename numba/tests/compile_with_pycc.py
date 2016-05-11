@@ -2,9 +2,9 @@ import cmath
 
 import numpy as np
 
-from numba import exportmany, export
 from numba import float32
-from numba.pycc import CC
+from numba.pycc import CC, exportmany, export
+from numba.tests.matmul_usecase import has_blas
 
 
 #
@@ -52,6 +52,7 @@ def sqrt(u):
 def size(arr):
     return arr.size
 
+
 # This one clashes with libc random() unless pycc is careful with naming.
 @cc_helperlib.export('random', 'f8(i4)')
 def random_impl(seed):
@@ -66,6 +67,13 @@ cc_nrt = CC('pycc_test_nrt')
 def zero_scalar(n):
     arr = np.zeros(n)
     return arr[-1]
+
+if has_blas:
+    # This one also needs BLAS
+    @cc_nrt.export('vector_dot', 'f8(i4)')
+    def vector_dot(n):
+        a = np.linspace(1, n, n)
+        return np.dot(a, a)
 
 # This one needs an environment
 @cc_nrt.export('zeros', 'f8[:](i4)')

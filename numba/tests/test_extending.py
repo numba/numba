@@ -9,7 +9,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import jit, types, errors, typeof, numpy_support, cgutils
 from numba.compiler import compile_isolated
-from .support import TestCase, captured_stdout
+from .support import TestCase, captured_stdout, tag
 
 from numba.extending import (typeof_impl, type_callable,
                              lower_builtin, lower_cast,
@@ -317,12 +317,14 @@ class TestPandasLike(TestCase):
             got = cfunc(i)
             self.assertEqual(got, expected)
 
+    @tag('important')
     def test_series_len(self):
         i = Index(np.int32([2, 4, 3]))
         s = Series(np.float64([1.5, 4.0, 2.5]), i)
         cfunc = jit(nopython=True)(len_usecase)
         self.assertPreciseEqual(cfunc(s), 3)
 
+    @tag('important')
     def test_series_get_index(self):
         i = Index(np.int32([2, 4, 3]))
         s = Series(np.float64([1.5, 4.0, 2.5]), i)
@@ -344,6 +346,7 @@ class TestPandasLike(TestCase):
         self.assertIs(ss._index._data, i._data)
         self.assertPreciseEqual(ss._values, np.cos(np.sin(s._values)))
 
+    @tag('important')
     def test_series_constructor(self):
         i = Index(np.int32([42, 8, -5]))
         d = np.float64([1.5, 4.0, 2.5])
@@ -354,6 +357,7 @@ class TestPandasLike(TestCase):
         self.assertIs(got._index._data, i._data)
         self.assertIs(got._values, d)
 
+    @tag('important')
     def test_series_clip(self):
         i = Index(np.int32([42, 8, -5]))
         s = Series(np.float64([1.5, 4.0, 2.5]), i)
@@ -370,6 +374,7 @@ class TestHighLevelExtending(TestCase):
     Test the high-level combined API.
     """
 
+    @tag('important')
     def test_where(self):
         """
         Test implementing a function with @overload.
@@ -393,6 +398,7 @@ class TestHighLevelExtending(TestCase):
         self.assertIn("x and y should have the same dtype",
                       str(raises.exception))
 
+    @tag('important')
     def test_len(self):
         """
         Test re-implementing len() for a custom type with @overload.

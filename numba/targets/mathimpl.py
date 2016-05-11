@@ -12,7 +12,6 @@ from llvmlite.llvmpy.core import Type
 from numba.targets.imputils import Registry, impl_ret_untracked
 from numba import types, cgutils, utils
 from numba.typing import signature
-from . import builtins
 
 
 registry = Registry()
@@ -181,12 +180,11 @@ unary_math_intr(math.cos, lc.INTR_COS)
 #unary_math_intr(math.ceil, lc.INTR_CEIL)
 #unary_math_intr(math.trunc, lc.INTR_TRUNC)
 unary_math_extern(math.log1p, "log1pf", "log1p")
-if utils.PYVERSION > (2, 6):
-    unary_math_extern(math.expm1, "expm1f", "expm1")
-    unary_math_extern(math.erf, "numba_erff", "numba_erf")
-    unary_math_extern(math.erfc, "numba_erfcf", "numba_erfc")
-    unary_math_extern(math.gamma, "numba_gammaf", "numba_gamma")
-    unary_math_extern(math.lgamma, "numba_lgammaf", "numba_lgamma")
+unary_math_extern(math.expm1, "expm1f", "expm1")
+unary_math_extern(math.erf, "numba_erff", "numba_erf")
+unary_math_extern(math.erfc, "numba_erfcf", "numba_erfc")
+unary_math_extern(math.gamma, "numba_gammaf", "numba_gamma")
+unary_math_extern(math.lgamma, "numba_lgammaf", "numba_lgamma")
 unary_math_extern(math.tan, "tanf", "tan")
 unary_math_extern(math.asin, "asinf", "asin")
 unary_math_extern(math.acos, "acosf", "acos")
@@ -389,11 +387,8 @@ unary_math_int_impl(math.degrees, degrees_float_impl)
 
 # -----------------------------------------------------------------------------
 
-for ty in types.unsigned_domain:
-    lower(math.pow, types.float64, ty)(builtins.int_power_impl)
-for ty in types.signed_domain:
-    lower(math.pow, types.float64, ty)(builtins.int_power_impl)
-
-ty = types.Float
-lower(math.pow, ty, ty)(builtins.real_power_impl)
-
+@lower(math.pow, types.Float, types.Float)
+@lower(math.pow, types.Float, types.Integer)
+def pow_impl(context, builder, sig, args):
+    impl = context.get_function("**", sig)
+    return impl(builder, args)

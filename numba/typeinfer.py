@@ -45,7 +45,7 @@ class TypeVar(object):
         else:
             if self.type is not None:
                 unified = self.context.unify_pairs(self.type, tp)
-                if unified is types.pyobject:
+                if unified is None:
                     msg = "cannot unify %s and %s for '%s', defined at %s"
                     raise TypingError(msg % (self.type, tp, self.var,
                                              self.define_loc),
@@ -197,7 +197,8 @@ class BuildTupleConstraint(object):
                 typeinfer.add_type(self.target, tup, loc=self.loc)
 
 
-class BuildListConstraint(object):
+class _BuildContainerConstraint(object):
+
     def __init__(self, target, items, loc):
         self.target = target
         self.items = items
@@ -209,13 +210,25 @@ class BuildListConstraint(object):
             oset = typevars[self.target]
             tsets = [typevars[i.name].get() for i in self.items]
             if not tsets:
-                typeinfer.add_type(self.target, types.List(types.undefined),
+                typeinfer.add_type(self.target,
+                                   self.container_type(types.undefined),
                                    loc=self.loc)
             else:
                 for typs in itertools.product(*tsets):
                     unified = typeinfer.context.unify_types(*typs)
-                    typeinfer.add_type(self.target, types.List(unified),
-                                       loc=self.loc)
+                    if unified is not None:
+                        typeinfer.add_type(self.target,
+                                           self.container_type(unified),
+                                           loc=self.loc)
+
+
+class BuildListConstraint(_BuildContainerConstraint):
+    container_type = types.List
+
+
+class BuildSetConstraint(_BuildContainerConstraint):
+    container_type = types.Set
+
 
 
 class ExhaustIterConstraint(object):
@@ -360,16 +373,31 @@ class CallConstraint(object):
             head = headtemp.format(fnty, ', '.join(map(str, args)))
             msg = '\n'.join([head, desc])
             raise TypingError(msg, loc=self.loc)
+
         typeinfer.add_type(self.target, sig.return_type, loc=self.loc)
+
         # If the function is a bound function and its receiver type
         # was refined, propagate it.
         if (isinstance(fnty, types.BoundFunction)
             and sig.recvr is not None
             and sig.recvr != fnty.this):
             refined_this = context.unify_pairs(sig.recvr, fnty.this)
-            if refined_this.is_precise():
+            if refined_this is not None and refined_this.is_precise():
                 refined_fnty = fnty.copy(this=refined_this)
                 typeinfer.propagate_refined_type(self.func, refined_fnty)
+
+        # If the return type is imprecise but can be unified with the
+        # target variable's inferred type, use the latter.
+        # Useful for code such as::
+        #    s = set()
+        #    s.add(1)
+        # (the set() call must be typed as int64(), not undefined())
+        if not sig.return_type.is_precise():
+            target = typevars[self.target]
+            if target.defined:
+                targetty = target.getone()
+                if context.unify_pairs(targetty, sig.return_type) == targetty:
+                    sig.return_type = targetty
 
         self.signature = sig
 
@@ -687,6 +715,9 @@ class TypeInferer(object):
         if not yield_types:
             raise TypingError("Cannot type generator: it does not yield any value")
         yield_type = self.context.unify_types(*yield_types)
+        if yield_type is None:
+            raise TypingError("Cannot type generator: cannot unify yielded types "
+                              "%s" % (yield_types,))
         return types.Generator(self.py_func, yield_type, arg_types, state_types,
                                has_finalizer=True)
 
@@ -709,7 +740,7 @@ class TypeInferer(object):
 
         if rettypes:
             unified = self.context.unify_types(*rettypes)
-            if not unified.is_precise():
+            if unified is None or not unified.is_precise():
                 raise TypingError("Can't unify return type from the "
                                   "following types: %s"
                                   % ", ".join(sorted(map(str, rettypes))))
@@ -895,6 +926,10 @@ class TypeInferer(object):
         elif expr.op == 'build_list':
             constraint = BuildListConstraint(target.name, items=expr.items,
                                              loc=inst.loc)
+            self.constraints.append(constraint)
+        elif expr.op == 'build_set':
+            constraint = BuildSetConstraint(target.name, items=expr.items,
+                                            loc=inst.loc)
             self.constraints.append(constraint)
         elif expr.op == 'cast':
             self.constraints.append(Propagate(dst=target.name,

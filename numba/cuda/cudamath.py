@@ -18,9 +18,14 @@ infer_global = registry.register_global
 @infer_global(math.cos)
 @infer_global(math.cosh)
 @infer_global(math.degrees)
+@infer_global(math.erf)
+@infer_global(math.erfc)
 @infer_global(math.exp)
+@infer_global(math.expm1)
 @infer_global(math.fabs)
 @infer_global(math.floor)
+@infer_global(math.gamma)
+@infer_global(math.lgamma)
 @infer_global(math.log)
 @infer_global(math.log10)
 @infer_global(math.log1p)
@@ -38,10 +43,6 @@ class Math_unary(ConcreteTemplate):
         signature(types.float32, types.float32),
         signature(types.float64, types.float64),
     ]
-
-
-if utils.PYVERSION > (2, 6):
-    infer_global(math.expm1)(Math_unary)
 
 
 @infer_global(math.atan2)

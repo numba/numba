@@ -1,8 +1,13 @@
 from __future__ import absolute_import, print_function, division
-from numba import unittest_support as unittest
-from numba import vectorize, float64, float32
+
 import math
+
 import numpy as np
+
+from numba import unittest_support as unittest
+from numba import int32, uint32, float32, float64, vectorize
+from ..support import tag
+
 
 pi = math.pi
 
@@ -18,6 +23,9 @@ def scaled_sinc(x, scale):
         return scale
     else:
         return scale * (math.sin(x * pi) / (pi * x))
+
+def vector_add(a, b):
+    return a + b
 
 
 class BaseVectorizeDecor(unittest.TestCase):
@@ -49,26 +57,59 @@ class BaseVectorizeDecor(unittest.TestCase):
         gold = numpy_scaled_sinc(A, scale)
         self.assertTrue(np.allclose(result, gold))
 
+    def _test_template_4(self, target):
+        sig = [int32(int32, int32),
+               uint32(uint32, uint32),
+               float32(float32, float32),
+               float64(float64, float64)]
+        basic_ufunc = vectorize(sig, target=target)(vector_add)
+        np_ufunc = np.add
+
+        def test(ty):
+            data = np.linspace(0., 100., 500).astype(ty)
+            result = basic_ufunc(data, data)
+            gold = np_ufunc(data, data)
+            self.assertTrue(np.allclose(gold, result))
+
+        test(np.double)
+        test(np.float32)
+        test(np.int32)
+        test(np.uint32)
+
 
 class TestVectorizeDecor(BaseVectorizeDecor):
 
+    @tag('important')
     def test_cpu_1(self):
         self._test_template_1('cpu')
 
+    @tag('important')
     def test_parallel_1(self):
         self._test_template_1('parallel')
 
+    @tag('important')
     def test_cpu_2(self):
         self._test_template_2('cpu')
 
+    @tag('important')
     def test_parallel_2(self):
         self._test_template_2('parallel')
 
+    @tag('important')
     def test_cpu_3(self):
         self._test_template_3('cpu')
 
+    @tag('important')
     def test_parallel_3(self):
         self._test_template_3('parallel')
+
+    @tag('important')
+    def test_cpu_4(self):
+        self._test_template_4('cpu')
+
+    @tag('important')
+    def test_parallel_4(self):
+        self._test_template_4('parallel')
 
 
 if __name__ == '__main__':

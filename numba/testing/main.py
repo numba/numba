@@ -1,17 +1,20 @@
 from __future__ import print_function, division, absolute_import
 
-import sys
-import os
-import warnings
-import time
-import gc
+import numba.unittest_support as unittest
+
 import collections
 import contextlib
 import cProfile
+import gc
 import multiprocessing
+import os
+import random
+import sys
+import time
+import warnings
 
-import numba.unittest_support as unittest
 from unittest import result, runner, signals, suite, loader, case
+
 from .loader import TestLoader
 from numba.utils import PYVERSION, StringIO
 from numba import config
@@ -20,6 +23,36 @@ try:
     from multiprocessing import TimeoutError
 except ImportError:
     from Queue import Empty as TimeoutError
+
+
+def make_tag_decorator(known_tags):
+    """
+    Create a decorator allowing tests to be tagged with the *known_tags*.
+    """
+
+    def tag(*tags):
+        """
+        Tag a test method with the given tags.
+        Can be used in conjunction with the --tags command-line argument
+        for runtests.py.
+        """
+        for t in tags:
+            if t not in known_tags:
+                raise ValueError("unknown tag: %r" % (t,))
+
+        def decorate(func):
+            if (not callable(func) or isinstance(func, type)
+                or not func.__name__.startswith('test_')):
+                raise TypeError("@tag(...) should be used on test methods")
+            try:
+                s = func.tags
+            except AttributeError:
+                s = func.tags = set()
+            s.update(tags)
+            return func
+        return decorate
+
+    return tag
 
 
 class TestLister(object):
@@ -74,6 +107,9 @@ class NumbaTestProgram(unittest.main):
     profile = False
     multiprocess = False
     list = False
+    tags = None
+    random_select = None
+    random_seed = 42
 
     def __init__(self, *args, **kwargs):
         # Disable interpreter fallback if we are running the test suite
@@ -105,6 +141,11 @@ class NumbaTestProgram(unittest.main):
         parser.add_argument('-l', '--list', dest='list',
                             action='store_true',
                             help='List tests without running them')
+        parser.add_argument('--tags', dest='tags', type=str,
+                            help='Comma-separated list of tags to select '
+                                 'a subset of the test suite')
+        parser.add_argument('--random', dest='random_select', type=float,
+                            help='Random proportion of tests to select')
         parser.add_argument('--profile', dest='profile',
                             action='store_true',
                             help='Profile the test run')
@@ -119,11 +160,20 @@ class NumbaTestProgram(unittest.main):
             argv.remove('-m')
             self.multiprocess = True
         super(NumbaTestProgram, self).parseArgs(argv)
+
         # If at this point self.test doesn't exist, it is because
         # no test ID was given in argv. Use the default instead.
         if not hasattr(self, 'test') or not self.test.countTestCases():
             self.testNames = (self.defaultTest,)
             self.createTests()
+
+        if self.tags:
+            tags = [s.strip() for s in self.tags.split(',')]
+            self.test = _choose_tagged_tests(self.test, tags)
+
+        if self.random_select:
+            self.test = _choose_random_tests(self.test, self.random_select,
+                                             self.random_seed)
 
         if self.verbosity <= 0:
             # We aren't interested in informational messages / warnings when
@@ -175,6 +225,55 @@ class NumbaTestProgram(unittest.main):
                 p.dump_stats(filename)
         else:
             run_tests_real()
+
+
+def _flatten_suite(test):
+    """
+    Expand nested suite into list of test cases.
+    """
+    if isinstance(test, (unittest.TestSuite, list, tuple)):
+        tests = []
+        for x in test:
+            tests.extend(_flatten_suite(x))
+        return tests
+    else:
+        return [test]
+
+
+def _choose_tagged_tests(tests, tags):
+    """
+    Select tests that are tagged with at least one of the given tags.
+    """
+    selected = []
+    tags = set(tags)
+    for test in _flatten_suite(tests):
+        assert isinstance(test, unittest.TestCase)
+        func = getattr(test, test._testMethodName)
+        try:
+            # Look up the method's underlying function (Python 2)
+            func = func.im_func
+        except AttributeError:
+            pass
+        try:
+            if func.tags & tags:
+                selected.append(test)
+        except AttributeError:
+            # Test method doesn't have any tags
+            pass
+    return unittest.TestSuite(selected)
+
+
+def _choose_random_tests(tests, ratio, seed):
+    """
+    Choose a given proportion of tests at random.
+    """
+    rnd = random.Random()
+    rnd.seed(seed)
+    if isinstance(tests, unittest.TestSuite):
+        tests = _flatten_suite(tests)
+    tests = rnd.sample(tests, int(len(tests) * ratio))
+    tests = sorted(tests, key=lambda case: case.id())
+    return unittest.TestSuite(tests)
 
 
 # The reference leak detection code is liberally taken and adapted from
@@ -292,18 +391,6 @@ class RefleakTestRunner(runner.TextTestRunner):
     resultclass = RefleakTestResult
 
 
-def _flatten_suite(test):
-    """Expand suite into list of tests
-    """
-    if isinstance(test, unittest.TestSuite):
-        tests = []
-        for x in test:
-            tests.extend(_flatten_suite(x))
-        return tests
-    else:
-        return [test]
-
-
 class ParallelTestResult(runner.TextTestResult):
     """
     A TestResult able to inject results from other results.
@@ -417,13 +504,24 @@ def _split_nonparallel_tests(test):
     """
     ptests = []
     stests = []
+
+    def is_parallelizable_test_case(test):
+        # Guard for the fake test case created by unittest when test
+        # discovery fails, as it isn't picklable (e.g. "LoadTestsFailure")
+        method_name = test._testMethodName
+        method = getattr(test, method_name)
+        if method.__name__ != method_name and method.__name__ == "testFailure":
+            return False
+        # Was parallel execution explicitly disabled?
+        return getattr(test, "_numba_parallel_test_", True)
+
     if isinstance(test, unittest.TestSuite):
         # It's a sub-suite, recurse
         for t in test:
             p, s = _split_nonparallel_tests(t)
             ptests.extend(p)
             stests.extend(s)
-    elif getattr(test, "_numba_parallel_test_", True):
+    elif is_parallelizable_test_case(test):
         # Test case is suitable for parallel execution (default)
         ptests = [test]
     else:
@@ -455,9 +553,17 @@ class ParallelTestRunner(runner.TextTestRunner):
 
         try:
             self._run_parallel_tests(result, pool, child_runner)
-        finally:
-            # Kill the still active workers
+        except:
+            # On exception, kill still active workers immediately
             pool.terminate()
+        else:
+            # Close the pool cleanly unless asked to early out
+            if result.shouldStop:
+                pool.terminate()
+            else:
+                pool.close()
+        finally:
+            # Always join the pool (this is necessary for coverage.py)
             pool.join()
         if not result.shouldStop:
             stests = SerialSuite(self._stests)

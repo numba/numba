@@ -4,6 +4,7 @@ Tests for numba.types.
 
 from __future__ import print_function, absolute_import
 
+from collections import namedtuple
 import gc
 try:
     import cPickle as pickle
@@ -13,17 +14,21 @@ import weakref
 
 import numpy as np
 
-from numba.utils import IS_PY3
-from numba import abstracttypes, types, typing
-from numba import jit, numpy_support
 from numba import unittest_support as unittest
-from numba.npdatetime import NPDATETIME_SUPPORTED
-from .support import TestCase
+from numba.utils import IS_PY3
+from numba import sigutils, types, typing
+from numba.types.abstract import _typecache
+from numba import jit, numpy_support
+from .support import TestCase, tag
+from .enum_usecases import *
 
+
+Point = namedtuple('Point', ('x', 'y'))
+
+Rect = namedtuple('Rect', ('width', 'height'))
 
 def gen(x):
     yield x + 1
-
 
 class Dummy(object):
     pass
@@ -31,6 +36,7 @@ class Dummy(object):
 
 class TestTypes(TestCase):
 
+    @tag('important')
     def test_equality(self):
         self.assertEqual(types.int32, types.int32)
         self.assertEqual(types.uint32, types.uint32)
@@ -151,6 +157,7 @@ class TestTypes(TestCase):
         self.assertTrue(b != c)
         self.assertTrue(a != z)
 
+    @tag('important')
     def test_interning(self):
         # Test interning and lifetime of dynamic types.
         a = types.Dummy('xyzzyx')
@@ -174,7 +181,7 @@ class TestTypes(TestCase):
     def test_cache_trimming(self):
         # Test that the cache doesn't grow in size when types are
         # created and disposed of.
-        cache = abstracttypes._typecache
+        cache = _typecache
         gc.collect()
         # Keep strong references to existing types, to avoid spurious failures
         existing_types = [wr() for wr in cache]
@@ -186,6 +193,7 @@ class TestTypes(TestCase):
         gc.collect()
         self.assertEqual(len(cache), cache_len)
 
+    @tag('important')
     def test_array_notation(self):
         def check(arrty, scalar, ndim, layout):
             self.assertIs(arrty.dtype, scalar)
@@ -198,6 +206,7 @@ class TestTypes(TestCase):
         check(scalar[:,::1], scalar, 2, 'C')
         check(scalar[::1,:], scalar, 2, 'F')
 
+    @tag('important')
     def test_call_notation(self):
         # Function call signature
         i = types.int32
@@ -208,16 +217,15 @@ class TestTypes(TestCase):
         # Value cast
         self.assertPreciseEqual(i(42.5), 42)
         self.assertPreciseEqual(d(-5), -5.0)
-        if NPDATETIME_SUPPORTED:
-            ty = types.NPDatetime('Y')
-            self.assertPreciseEqual(ty('1900'), np.datetime64('1900', 'Y'))
-            self.assertPreciseEqual(ty('NaT'), np.datetime64('NaT', 'Y'))
-            ty = types.NPTimedelta('s')
-            self.assertPreciseEqual(ty(5), np.timedelta64(5, 's'))
-            self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT', 's'))
-            ty = types.NPTimedelta('')
-            self.assertPreciseEqual(ty(5), np.timedelta64(5))
-            self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT'))
+        ty = types.NPDatetime('Y')
+        self.assertPreciseEqual(ty('1900'), np.datetime64('1900', 'Y'))
+        self.assertPreciseEqual(ty('NaT'), np.datetime64('NaT', 'Y'))
+        ty = types.NPTimedelta('s')
+        self.assertPreciseEqual(ty(5), np.timedelta64(5, 's'))
+        self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT', 's'))
+        ty = types.NPTimedelta('')
+        self.assertPreciseEqual(ty(5), np.timedelta64(5))
+        self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT'))
 
     def test_bitwidth_number_types(self):
         """
@@ -230,6 +238,115 @@ class TestTypes(TestCase):
         f = types.Integer.from_bitwidth
         self.assertIs(f(32), types.int32)
         self.assertIs(f(8, signed=False), types.uint8)
+
+
+class TestNdIter(TestCase):
+
+    def test_properties(self):
+        def check(ty, dtypes, ndim, layout, indexers=None):
+            self.assertEqual(ty.ndim, ndim)
+            self.assertEqual(ty.layout, layout)
+            self.assertEqual(ty.dtypes, dtypes)
+            views = [types.Array(dtype, 0, "C") for dtype in dtypes]
+            if len(views) > 1:
+                self.assertEqual(ty.yield_type, types.BaseTuple.from_types(views))
+            else:
+                self.assertEqual(ty.yield_type, views[0])
+            if indexers is not None:
+                self.assertEqual(ty.indexers, indexers)
+
+        f32 = types.float32
+        c64 = types.complex64
+        i16 = types.int16
+        a = types.Array(f32, 1, "C")
+        b = types.Array(f32, 2, "C")
+        c = types.Array(c64, 2, "F")
+        d = types.Array(i16, 2, "A")
+        e = types.Array(i16, 0, "C")
+        f = types.Array(f32, 1, "A")
+        g = types.Array(f32, 0, "C")
+
+        # 0-dim iterator
+        ty = types.NumpyNdIterType((e,))
+        check(ty, (i16,), 0, "C", [('0d', 0, 0, [0])])
+        self.assertFalse(ty.need_shaped_indexing)
+        ty = types.NumpyNdIterType((e, g))
+        check(ty, (i16, f32), 0, "C", [('0d', 0, 0, [0, 1])])
+        self.assertFalse(ty.need_shaped_indexing)
+        ty = types.NumpyNdIterType((e, c64))
+        check(ty, (i16, c64), 0, "C",
+              [('0d', 0, 0, [0]), ('scalar', 0, 0, [1])])
+        self.assertFalse(ty.need_shaped_indexing)
+
+        # 1-dim iterator
+        ty = types.NumpyNdIterType((a,))
+        check(ty, (f32,), 1, "C",
+              [('flat', 0, 1, [0])])
+        self.assertFalse(ty.need_shaped_indexing)
+        ty = types.NumpyNdIterType((a, a))
+        check(ty, (f32, f32), 1, "C",
+              [('flat', 0, 1, [0, 1])])
+        self.assertFalse(ty.need_shaped_indexing)
+        ty = types.NumpyNdIterType((a, e, e, c64))
+        check(ty, (f32, i16, i16, c64), 1, "C",
+              [('flat', 0, 1, [0]), # a
+               ('0d', 0, 0, [1, 2]), # e, e
+               ('scalar', 0, 0, [3]), # c64
+               ])
+        self.assertFalse(ty.need_shaped_indexing)
+        ty = types.NumpyNdIterType((a, f))
+        check(ty, (f32, f32), 1, "C",
+              [('flat', 0, 1, [0]), ('indexed', 0, 1, [1])])
+        self.assertTrue(ty.need_shaped_indexing)
+        ty = types.NumpyNdIterType((f,))
+        check(ty, (f32,), 1, "C", [('indexed', 0, 1, [0])])
+        self.assertTrue(ty.need_shaped_indexing)
+
+        # 2-dim C-order iterator
+        ty = types.NumpyNdIterType((b,))
+        check(ty, (f32,), 2, "C", [('flat', 0, 2, [0])])
+        self.assertFalse(ty.need_shaped_indexing)
+        ty = types.NumpyNdIterType((b, c))
+        check(ty, (f32, c64), 2, "C", [('flat', 0, 2, [0]), ('indexed', 0, 2, [1])])
+        self.assertTrue(ty.need_shaped_indexing)
+        ty = types.NumpyNdIterType((d,))
+        check(ty, (i16,), 2, "C", [('indexed', 0, 2, [0])])
+        self.assertTrue(ty.need_shaped_indexing)
+        ty = types.NumpyNdIterType((b, c, d, d, e))
+        check(ty, (f32, c64, i16, i16, i16), 2, "C",
+              [('flat', 0, 2, [0]), # b
+               ('indexed', 0, 2, [1, 2, 3]), # c, d, d
+               ('0d', 0, 0, [4]), # e
+               ])
+        self.assertTrue(ty.need_shaped_indexing)
+        ty = types.NumpyNdIterType((a, b, c, d, d, f))
+        check(ty, (f32, f32, c64, i16, i16, f32), 2, "C",
+              [('flat', 1, 2, [0]), # a
+               ('flat', 0, 2, [1]), # b
+               ('indexed', 0, 2, [2, 3, 4]), # c, d, d
+               ('indexed', 1, 2, [5]), # f
+               ])
+        self.assertTrue(ty.need_shaped_indexing)
+
+        # 2-dim F-order iterator
+        ty = types.NumpyNdIterType((c,))
+        check(ty, (c64,), 2, "F", [('flat', 0, 2, [0])])
+        self.assertFalse(ty.need_shaped_indexing)
+        ty = types.NumpyNdIterType((c, b, c, f))
+        check(ty, (c64, f32, c64, f32), 2, "F",
+              [('flat', 0, 2, [0, 2]), # c, c
+               ('indexed', 0, 2, [1]), # b
+               ('indexed', 0, 1, [3]), # f
+               ])
+        self.assertTrue(ty.need_shaped_indexing)
+        ty = types.NumpyNdIterType((b, c, c, d, d, a, e))
+        check(ty, (f32, c64, c64, i16, i16, f32, i16), 2, "F",
+              [('indexed', 0, 2, [0, 3, 4]), # b, d, d
+               ('flat', 0, 2, [1, 2]), # c, c
+               ('flat', 0, 1, [5]), # a
+               ('0d', 0, 0, [6]), # e
+              ])
+        self.assertTrue(ty.need_shaped_indexing)
 
 
 class TestPickling(TestCase):
@@ -291,6 +408,20 @@ class TestPickling(TestCase):
         ty2 = types.Tuple((types.int32, ty1))
         self.check_pickling(ty2)
 
+    def test_namedtuples(self):
+        ty1 = types.NamedUniTuple(types.intp, 2, Point)
+        self.check_pickling(ty1)
+        ty2 = types.NamedTuple((types.intp, types.float64), Point)
+        self.check_pickling(ty2)
+
+    def test_enums(self):
+        ty1 = types.EnumMember(Color, types.int32)
+        self.check_pickling(ty1)
+        ty2 = types.EnumMember(Shake, types.int64)
+        self.check_pickling(ty2)
+        ty3 = types.IntEnumMember(Shape, types.int64)
+        self.check_pickling(ty3)
+
     def test_lists(self):
         ty = types.List(types.int32)
         self.check_pickling(ty)
@@ -311,6 +442,36 @@ class TestPickling(TestCase):
             ty = ctypes_utils.make_function_type(fnptr)
             self.assertIsInstance(ty, types.ExternalFunctionPointer)
             self.check_pickling(ty)
+
+
+class TestSignatures(TestCase):
+
+    def test_normalize_signature(self):
+        f = sigutils.normalize_signature
+
+        def check(sig, args, return_type):
+            self.assertEqual(f(sig), (args, return_type))
+
+        def check_error(sig, msg):
+            with self.assertRaises(TypeError) as raises:
+                f(sig)
+            self.assertIn(msg, str(raises.exception))
+
+        f32 = types.float32
+        c64 = types.complex64
+        i16 = types.int16
+        a = types.Array(f32, 1, "C")
+
+        check((c64,), (c64,), None)
+        check((f32, i16), (f32, i16), None)
+        check(a(i16), (i16,), a)
+        check("int16(complex64)", (c64,), i16)
+        check("(complex64, int16)", (c64, i16), None)
+        check(typing.signature(i16, c64), (c64,), i16)
+
+        check_error((types.Integer,), "invalid signature")
+        check_error((None,), "invalid signature")
+        check_error([], "invalid signature")
 
 
 if __name__ == '__main__':

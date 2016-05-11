@@ -116,6 +116,8 @@ Calculation
 The following methods of Numpy arrays are supported in their basic form
 (without any optional arguments):
 
+* :meth:`~numpy.ndarray.all`
+* :meth:`~numpy.ndarray.any`
 * :meth:`~numpy.ndarray.argmax`
 * :meth:`~numpy.ndarray.argmin`
 * :meth:`~numpy.ndarray.cumprod`
@@ -137,11 +139,17 @@ Other methods
 
 The following methods of Numpy arrays are supported:
 
+* :meth:`~numpy.ndarray.astype` (only the 1-argument form)
 * :meth:`~numpy.ndarray.copy` (without arguments)
+* :meth:`~numpy.ndarray.flatten` (no order argument; 'C' order only)
+* :meth:`~numpy.ndarray.item` (without arguments)
+* :meth:`~numpy.ndarray.itemset` (only the 1-argument form)
+* :meth:`~numpy.ndarray.ravel` (no order argument; 'C' order only)
 * :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
 * :meth:`~numpy.ndarray.sort` (without arguments)
 * :meth:`~numpy.ndarray.transpose` (without arguments, and without copying)
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
+
 
 .. warning::
    Sorting may be slightly slower than Numpy's implementation.
@@ -154,16 +162,37 @@ Linear algebra
 --------------
 
 Basic linear algebra is supported on 1-D and 2-D contiguous arrays of
-floating-point and complex numbers.
+floating-point and complex numbers:
 
 * :func:`numpy.dot`
 * :func:`numpy.vdot`
 * On Python 3.5 and above, the matrix multiplication operator from
   :pep:`465` (i.e. ``a @ b`` where ``a`` and ``b`` are 1-D or 2-D arrays).
+* :func:`numpy.linalg.cholesky`
+* :func:`numpy.linalg.eig` (only running with data that does not cause a domain
+  change is supported e.g. real input -> real
+  output, complex input -> complex output).
 * :func:`numpy.linalg.inv`
+* :func:`numpy.linalg.qr` (only the first argument).
+* :func:`numpy.linalg.svd` (only the 2 first arguments).
 
 .. note::
    The implementation of these functions needs Scipy 0.16+ to be installed.
+
+Reductions
+----------
+
+The following reduction functions are supported:
+
+* :func:`numpy.diff` (only the 2 first arguments)
+* :func:`numpy.median` (only the first argument)
+* :func:`numpy.nanmax` (only the first argument)
+* :func:`numpy.nanmean` (only the first argument)
+* :func:`numpy.nanmedian` (only the first argument)
+* :func:`numpy.nanmin` (only the first argument)
+* :func:`numpy.nanstd` (only the first argument)
+* :func:`numpy.nansum` (only the first argument)
+* :func:`numpy.nanvar` (only the first argument)
 
 Other functions
 ---------------
@@ -172,26 +201,35 @@ The following top-level functions are supported:
 
 * :func:`numpy.arange`
 * :func:`numpy.array` (only the 2 first arguments)
+* :func:`numpy.asfortranarray` (only the first argument)
+* :func:`numpy.bincount` (only the 2 first arguments)
+* :func:`numpy.copy` (only the first argument)
 * :func:`numpy.diag`
+* :func:`numpy.digitize`
 * :func:`numpy.empty`
 * :func:`numpy.empty_like`
 * :func:`numpy.eye`
+* :func:`numpy.flatten` (no order argument; 'C' order only)
 * :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full`
 * :func:`numpy.full_like`
+* :func:`numpy.histogram` (only the 3 first arguments)
 * :func:`numpy.identity`
 * :func:`numpy.linspace` (only the 3-argument form)
-* :func:`numpy.median` (only the first argument)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
+* :class:`numpy.nditer` (only the first argument)
 * :func:`numpy.ones`
 * :func:`numpy.ones_like`
+* :func:`numpy.ravel` (no order argument; 'C' order only)
 * :func:`numpy.round_`
+* :func:`numpy.searchsorted` (only the 2 first arguments)
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
 * :func:`numpy.where`
 * :func:`numpy.zeros`
 * :func:`numpy.zeros_like`
+
 
 The following constructors are supported, both with a numeric input (to
 construct a scalar) or a sequence (to construct an array):
@@ -243,8 +281,7 @@ random module <pysupported-random>` (and therefore the same notes apply),
 but with an independent internal state: seeding or drawing numbers from
 one generator won't affect the other.
 
-The following functions are supported, but only with scalar output: you can't
-pass a *size* argument.
+The following functions are supported.
 
 Initialization
 ''''''''''''''
@@ -254,9 +291,9 @@ Initialization
 Simple random data
 ''''''''''''''''''
 
-* :func:`numpy.random.rand`: only without argument
+* :func:`numpy.random.rand`
 * :func:`numpy.random.randint`
-* :func:`numpy.random.randn`: only without argument
+* :func:`numpy.random.randn`
 * :func:`numpy.random.random`
 * :func:`numpy.random.random_sample`
 * :func:`numpy.random.ranf`
@@ -264,6 +301,9 @@ Simple random data
 
 Permutations
 ''''''''''''
+
+* :func:`numpy.random.choice`: the optional *p* argument (probabilities
+  array) is not supported
 
 * :func:`numpy.random.shuffle`: the sequence argument must be a one-dimension
   Numpy array or buffer-providing object (such as a :class:`bytearray`
@@ -285,6 +325,7 @@ Distributions
 * :func:`numpy.random.logistic`
 * :func:`numpy.random.lognormal`
 * :func:`numpy.random.logseries`
+* :func:`numpy.random.multibinomial`
 * :func:`numpy.random.negative_binomial`
 * :func:`numpy.random.normal`
 * :func:`numpy.random.pareto`

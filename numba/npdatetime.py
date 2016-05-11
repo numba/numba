@@ -1,14 +1,11 @@
 """
-Helper functions for numpy.timedelta64 and numpy.datetime64.
+Helper functions for np.timedelta64 and np.datetime64.
 For now, multiples-of-units (for example timedeltas expressed in tens
 of seconds) are not supported.
 """
 
 
 import numpy as np
-
-# Numpy 1.6 has broken datetime64 support
-NPDATETIME_SUPPORTED = not np.__version__.startswith('1.6.')
 
 
 DATETIME_UNITS = {
@@ -29,9 +26,7 @@ DATETIME_UNITS = {
     '': 14,   # "generic", i.e. unit-less
 }
 
-# Numpy's special "Not a Time" value (should be equal to -2**63)
-if NPDATETIME_SUPPORTED:
-    NAT = np.timedelta64('nat').astype(np.int64)
+NAT = np.timedelta64('nat').astype(np.int64)
 
 # NOTE: numpy has several inconsistent functions for timedelta casting:
 # - can_cast_timedelta64_{metadata,units}() disallows "safe" casting
@@ -203,4 +198,3 @@ def get_best_unit(unit_a, unit_b):
     if b > a:
         return unit_b
     return unit_a
-

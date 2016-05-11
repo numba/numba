@@ -36,7 +36,7 @@ class JITHSACodegen(BaseCPUCodegen):
         self._target_data = ll.create_target_data(self._data_layout)
 
     def _create_empty_module(self, name):
-        ir_module = lc.Module.new(name)
+        ir_module = lc.Module(name)
         ir_module.triple = TRIPLE
         return ir_module
 

@@ -2,9 +2,10 @@ from __future__ import print_function, division, absolute_import
 
 import itertools
 
-import numpy
+import numpy as np
 
-from numba import types, intrinsics
+from numba import types
+
 from numba.utils import PYVERSION, RANGE_ITER_OBJECTS, operator_map
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, infer_global, infer,
@@ -245,7 +246,8 @@ class BitwiseRightShift(BitwiseShiftOperation):
 
 
 class BitwiseLogicOperation(BinOp):
-    cases = list(integer_binop_cases)
+    cases = [signature(types.boolean, types.boolean, types.boolean)]
+    cases += list(integer_binop_cases)
 
 
 @infer
@@ -271,7 +273,10 @@ class BitwiseXor(BitwiseLogicOperation):
 class BitwiseInvert(ConcreteTemplate):
     key = "~"
 
-    cases = [signature(types.int8, types.boolean)]
+    # Note Numba follows the Numpy semantics of returning a bool,
+    # while Python returns an int.  This makes it consistent with
+    # np.invert() and makes array expressions correct.
+    cases = [signature(types.boolean, types.boolean)]
     cases += [signature(choose_result_int(op), op) for op in types.unsigned_domain]
     cases += [signature(choose_result_int(op), op) for op in types.signed_domain]
 
@@ -494,6 +499,16 @@ class StaticGetItemTuple(AbstractTemplate):
             return types.BaseTuple.from_types(tup.types[idx])
 
 
+# Generic implementation for "not in"
+
+@infer
+class GenericNotIn(AbstractTemplate):
+    key = "not in"
+
+    def generic(self, args, kws):
+        return self.context.resolve_function_type("in", args, kws)
+
+
 #-------------------------------------------------------------------------------
 
 @infer_getattr
@@ -539,6 +554,12 @@ class BooleanAttribute(AttributeTemplate):
     def resolve___class__(self, ty):
         return types.NumberClass(ty)
 
+    @bound_function("number.item")
+    def resolve_item(self, ty, args, kws):
+        assert not kws
+        if not args:
+            return signature(ty)
+
 
 @infer_getattr
 class NumberAttribute(AttributeTemplate):
@@ -558,6 +579,12 @@ class NumberAttribute(AttributeTemplate):
         assert not args
         assert not kws
         return signature(ty)
+
+    @bound_function("number.item")
+    def resolve_item(self, ty, args, kws):
+        assert not kws
+        if not args:
+            return signature(ty)
 
 
 @infer_getattr
@@ -591,7 +618,7 @@ class NumberClassAttribute(AttributeTemplate):
             if isinstance(val, (types.BaseTuple, types.Sequence)):
                 # Array constructor, e.g. np.int32([1, 2])
                 sig = self.context.resolve_function_type(
-                    numpy.array, (val,), {'dtype': types.DType(ty)})
+                    np.array, (val,), {'dtype': types.DType(ty)})
                 return sig.return_type
             else:
                 # Scalar constructor, e.g. np.int32(42)
@@ -666,6 +693,16 @@ class Round(ConcreteTemplate):
         signature(types.float32, types.float32, types.intp),
         signature(types.float64, types.float64, types.intp),
     ]
+
+
+@infer_global(hash)
+class Hash(AbstractTemplate):
+
+    def generic(self, args, kws):
+        assert not kws
+        arg, = args
+        if isinstance(arg, types.Hashable):
+            return signature(types.intp, *args)
 
 
 #------------------------------------------------------------------------------
@@ -776,15 +813,26 @@ class Zip(AbstractTemplate):
             return signature(zip_type, *args)
 
 
-@infer_global(intrinsics.array_ravel)
-class Intrinsic_array_ravel(AbstractTemplate):
-    key = intrinsics.array_ravel
+@infer_global(iter)
+class Iter(AbstractTemplate):
 
     def generic(self, args, kws):
         assert not kws
-        [arr] = args
-        if arr.layout in 'CF' and arr.ndim >= 1:
-            return signature(arr.copy(ndim=1), arr)
+        if len(args) == 1:
+            it = args[0]
+            if isinstance(it, types.IterableType):
+                return signature(it.iterator_type, *args)
+
+
+@infer_global(next)
+class Next(AbstractTemplate):
+
+    def generic(self, args, kws):
+        assert not kws
+        if len(args) == 1:
+            it = args[0]
+            if isinstance(it, types.IteratorType):
+                return signature(it.yield_type, *args)
 
 
 #------------------------------------------------------------------------------

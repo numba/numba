@@ -4,10 +4,13 @@ import itertools
 import functools
 import sys
 
+import numpy as np
+
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import jit, typeof, errors, types, utils
-from .support import TestCase
+from .support import TestCase, tag
+
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -77,11 +80,17 @@ def format_usecase(x, y):
 def globals_usecase():
     return globals()
 
+# NOTE: hash() is tested in test_hashing
+
 def hex_usecase(x):
     return hex(x)
 
 def int_usecase(x, base):
     return int(x, base=base)
+
+def iter_next_usecase(x):
+    it = iter(x)
+    return next(it), next(it)
 
 def locals_usecase(x):
     y = 5
@@ -202,6 +211,7 @@ class TestBuiltins(TestCase):
         for x in complex_values:
             self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
+    @tag('important')
     def test_abs_npm(self):
         self.test_abs(flags=no_pyobj_flags)
 
@@ -309,6 +319,7 @@ class TestBuiltins(TestCase):
         for x, y in itertools.product(x_operands, y_operands):
             self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
+    @tag('important')
     def test_complex_npm(self):
         self.test_complex(flags=no_pyobj_flags)
 
@@ -358,6 +369,7 @@ class TestBuiltins(TestCase):
         for x in ['-1.1', '0.0', '1.1']:
             self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
+    @tag('important')
     def test_float_npm(self):
         with self.assertTypingError():
             self.test_float(flags=no_pyobj_flags)
@@ -435,9 +447,27 @@ class TestBuiltins(TestCase):
         for x, y in itertools.product(x_operands, y_operands):
             self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
+    @tag('important')
     def test_int_npm(self):
         with self.assertTypingError():
             self.test_int(flags=no_pyobj_flags)
+
+    def test_iter_next(self, flags=enable_pyobj_flags):
+        pyfunc = iter_next_usecase
+        cr = compile_isolated(pyfunc, (types.UniTuple(types.int32, 3),),
+                              flags=flags)
+        cfunc = cr.entry_point
+        self.assertPreciseEqual(cfunc((1, 42, 5)), (1, 42))
+
+        cr = compile_isolated(pyfunc, (types.UniTuple(types.int32, 1),),
+                              flags=flags)
+        cfunc = cr.entry_point
+        with self.assertRaises(StopIteration):
+            cfunc((1,))
+
+    @tag('important')
+    def test_iter_next_npm(self):
+        self.test_iter_next(flags=no_pyobj_flags)
 
     def test_locals(self, flags=enable_pyobj_flags):
         pyfunc = locals_usecase
@@ -504,6 +534,7 @@ class TestBuiltins(TestCase):
         for x, y in itertools.product(x_operands, y_operands):
             self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
+    @tag('important')
     def test_max_npm_1(self):
         self.test_max_1(flags=no_pyobj_flags)
 
@@ -531,6 +562,7 @@ class TestBuiltins(TestCase):
         for x, y in itertools.product(x_operands, y_operands):
             self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
+    @tag('important')
     def test_min_npm_1(self):
         self.test_min_1(flags=no_pyobj_flags)
 
@@ -673,6 +705,7 @@ class TestBuiltins(TestCase):
                         self.assertPreciseEqual(cfunc(-x, n), pyfunc(-x, n),
                                                 prec=prec)
 
+    @tag('important')
     def test_round2_npm(self):
         self.test_round2(flags=no_pyobj_flags)
 
@@ -710,7 +743,7 @@ class TestBuiltins(TestCase):
         check(True, 2)
         check(2.5j, False)
 
-    @unittest.skipIf(utils.IS_PY3, "cmp not available as global is Py3")
+    @unittest.skipIf(utils.IS_PY3, "unichr not available as global is Py3")
     def test_unichr(self, flags=enable_pyobj_flags):
         pyfunc = unichr_usecase
 
@@ -719,7 +752,7 @@ class TestBuiltins(TestCase):
         for x in range(0, 1000, 10):
             self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
-    @unittest.skipIf(utils.IS_PY3, "cmp not available as global is Py3")
+    @unittest.skipIf(utils.IS_PY3, "unichr not available as global is Py3")
     def test_unichr_npm(self):
         with self.assertTypingError():
             self.test_unichr(flags=no_pyobj_flags)
@@ -727,18 +760,21 @@ class TestBuiltins(TestCase):
     def test_zip(self, flags=forceobj_flags):
         self.run_nullary_func(zip_usecase, flags)
 
+    @tag('important')
     def test_zip_npm(self):
         self.test_zip(flags=no_pyobj_flags)
 
     def test_zip_1(self, flags=forceobj_flags):
         self.run_nullary_func(zip_1_usecase, flags)
 
+    @tag('important')
     def test_zip_1_npm(self):
         self.test_zip_1(flags=no_pyobj_flags)
 
     def test_zip_3(self, flags=forceobj_flags):
         self.run_nullary_func(zip_3_usecase, flags)
 
+    @tag('important')
     def test_zip_3_npm(self):
         self.test_zip_3(flags=no_pyobj_flags)
 
@@ -762,6 +798,7 @@ class TestBuiltins(TestCase):
             r = cres.entry_point(x, y)
             self.assertPreciseEqual(r, pow_op_usecase(x, y))
 
+    @tag('important')
     def test_pow_usecase(self):
         args = [
             (2, 3),
@@ -776,6 +813,6 @@ class TestBuiltins(TestCase):
             r = cres.entry_point(x, y)
             self.assertPreciseEqual(r, pow_usecase(x, y))
 
+
 if __name__ == '__main__':
     unittest.main()
-

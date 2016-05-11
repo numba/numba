@@ -4,9 +4,10 @@ import itertools
 
 import numpy as np
 
-from numba import utils
+from numba import jit, utils
 from numba import unittest_support as unittest
-from .support import TestCase, skip_on_numpy_16
+from .support import TestCase, forbid_codegen
+from .enum_usecases import *
 
 DBL_EPSILON = 2**-52
 FLT_EPSILON = 2**-23
@@ -27,6 +28,7 @@ class TestAssertPreciseEqual(TestCase):
     float_types = [float] + np_float_types
     np_complex_types = [np.complex64, np.complex128]
     complex_types = [complex] + np_complex_types
+    bool_types = [bool, np.bool_]
 
     def eq(self, left, right, **kwargs):
         def assert_succeed(left, right):
@@ -62,6 +64,9 @@ class TestAssertPreciseEqual(TestCase):
         # int and long are compatible between each other
         for u, v in itertools.product(self.int_types, self.int_types):
             self.eq(u(1), v(1))
+        # int and bool are not compatible between each other
+        for u, v in itertools.product(self.int_types, self.bool_types):
+            self.ne(u(1), v(1))
         # NumPy float types are not compatible between each other
         for u, v in itertools.product(self.np_float_types, self.np_float_types):
             if u is v:
@@ -82,6 +87,12 @@ class TestAssertPreciseEqual(TestCase):
                 self.ne(tp(0), tp(1), prec=prec)
                 self.ne(tp(-1), tp(1), prec=prec)
                 self.ne(tp(2**80), tp(1+2**80), prec=prec)
+
+    def test_bool_values(self):
+        for tpa, tpb in itertools.product(self.bool_types, self.bool_types):
+            self.eq(tpa(True), tpb(True))
+            self.eq(tpa(False), tpb(False))
+            self.ne(tpa(True), tpb(False))
 
     def test_abs_tol_parse(self):
         # check invalid values in abs_tol kwarg raises
@@ -166,7 +177,6 @@ class TestAssertPreciseEqual(TestCase):
         self.eq(tp(1e-7), tp(1e-8), prec='single', abs_tol=1e-7)
         self.ne(tp(1e-7), tp(3e-7), prec='single', abs_tol=1e-7)
 
-
     def test_complex_values(self):
         # Complex literals with signed zeros are confusing, better use
         # the explicit constructor.
@@ -249,6 +259,15 @@ class TestAssertPreciseEqual(TestCase):
             self.eq(tp(ac), tp(cc), prec='single', ulps=2)
             self.eq(tp(aa), tp(cc), prec='single', ulps=2)
 
+    def test_enums(self):
+        values = [Color.red, Color.green, Color.blue, Shake.mint,
+                  Shape.circle, Shape.square, Planet.EARTH, Planet.MERCURY]
+        for val in values:
+            self.eq(val, val)
+            self.ne(val, val.value)
+        for a, b in itertools.combinations(values, 2):
+            self.ne(a, b)
+
     def test_arrays(self):
         a = np.arange(1, 7, dtype=np.int16).reshape((2, 3))
         b = a.copy()
@@ -274,7 +293,6 @@ class TestAssertPreciseEqual(TestCase):
         self.eq(a, b, prec='double')
         self.ne(a, c, prec='double')
 
-    @skip_on_numpy_16
     def test_npdatetime(self):
         a = np.datetime64('1900', 'Y')
         b = np.datetime64('1900', 'Y')
@@ -286,7 +304,6 @@ class TestAssertPreciseEqual(TestCase):
         # Different value
         self.ne(a, d)
 
-    @skip_on_numpy_16
     def test_nptimedelta(self):
         a = np.timedelta64(1, 'h')
         b = np.timedelta64(1, 'h')
@@ -313,6 +330,19 @@ class TestMisc(TestCase):
             with self.assertRefCount(x, y):
                 l.append(y)
         self.assertIn("66", str(cm.exception))
+
+    def test_forbid_codegen(self):
+        """
+        Test that forbid_codegen() prevents code generation using the @jit
+        decorator.
+        """
+        def f():
+            return 1
+        with forbid_codegen():
+            with self.assertRaises(RuntimeError) as raises:
+                cfunc = jit(nopython=True)(f)
+                cfunc()
+        self.assertIn("codegen forbidden by test case", str(raises.exception))
 
 
 if __name__ == '__main__':

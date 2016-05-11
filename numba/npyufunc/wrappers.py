@@ -158,7 +158,7 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, envptr, env)
     arg_steps.name = "steps"
     arg_data.name = "data"
 
-    builder = Builder.new(wrapper.append_basic_block("entry"))
+    builder = Builder(wrapper.append_basic_block("entry"))
 
     loopcount = builder.load(arg_dims, name="loopcount")
 
@@ -302,7 +302,7 @@ class _GufuncWrapper(object):
         arg_steps.name = "steps"
         arg_data.name = "data"
 
-        builder = Builder.new(wrapper.append_basic_block("entry"))
+        builder = Builder(wrapper.append_basic_block("entry"))
         loopcount = builder.load(arg_dims, name="loopcount")
         pyapi = self.context.get_python_api(builder)
 
@@ -441,46 +441,55 @@ def _prepare_call_to_object_mode(context, builder, pyapi, func,
     # Convert each llarray into pyobject
     error_pointer = cgutils.alloca_once(builder, Type.int(1), name='error')
     builder.store(cgutils.true_bit, error_pointer)
-    ndarray_pointers = []
-    ndarray_objects = []
-    for i, (arr, arrtype) in enumerate(zip(args, signature.args)):
-        ptr = cgutils.alloca_once(builder, ll_pyobj)
-        ndarray_pointers.append(ptr)
 
-        builder.store(Constant.null(ll_pyobj), ptr)   # initialize to NULL
+    # The PyObject* arguments to the kernel function
+    object_args = []
+    object_pointers = []
 
-        arycls = context.make_array(arrtype)
-        array = arycls(context, builder, value=arr)
+    for i, (arg, argty) in enumerate(zip(args, signature.args)):
+        # Allocate NULL-initialized slot for this argument
+        objptr = cgutils.alloca_once(builder, ll_pyobj, zfill=True)
+        object_pointers.append(objptr)
 
-        zero = Constant.int(ll_int, 0)
+        if isinstance(argty, types.Array):
+            # Special case arrays: we don't need full-blown NRT reflection
+            # since the argument will be gone at the end of the kernel
+            arycls = context.make_array(argty)
+            array = arycls(context, builder, value=arg)
 
-        # Extract members of the llarray
-        nd = Constant.int(ll_int, arrtype.ndim)
-        dims = builder.gep(array._get_ptr_by_name('shape'), [zero, zero])
-        strides = builder.gep(array._get_ptr_by_name('strides'), [zero, zero])
-        data = builder.bitcast(array.data, ll_voidptr)
-        dtype = np.dtype(str(arrtype.dtype))
+            zero = Constant.int(ll_int, 0)
 
-        # Prepare other info for reconstruction of the PyArray
-        type_num = Constant.int(ll_int, dtype.num)
-        itemsize = Constant.int(ll_int, dtype.itemsize)
+            # Extract members of the llarray
+            nd = Constant.int(ll_int, argty.ndim)
+            dims = builder.gep(array._get_ptr_by_name('shape'), [zero, zero])
+            strides = builder.gep(array._get_ptr_by_name('strides'), [zero, zero])
+            data = builder.bitcast(array.data, ll_voidptr)
+            dtype = np.dtype(str(argty.dtype))
 
-        # Call helper to reconstruct PyArray objects
-        obj = builder.call(fn_array_new, [nd, dims, strides, data,
-                                          type_num, itemsize])
-        builder.store(obj, ptr)
-        ndarray_objects.append(obj)
+            # Prepare other info for reconstruction of the PyArray
+            type_num = Constant.int(ll_int, dtype.num)
+            itemsize = Constant.int(ll_int, dtype.itemsize)
+
+            # Call helper to reconstruct PyArray objects
+            obj = builder.call(fn_array_new, [nd, dims, strides, data,
+                                              type_num, itemsize])
+        else:
+            # Other argument types => use generic boxing
+            obj = pyapi.from_native_value(argty, arg)
+
+        builder.store(obj, objptr)
+        object_args.append(obj)
 
         obj_is_null = cgutils.is_null(builder, obj)
         builder.store(obj_is_null, error_pointer)
         cgutils.cbranch_or_continue(builder, obj_is_null, bb_core_return)
 
     # Call ufunc core function
-    object_sig = [types.pyobject] * len(ndarray_objects)
+    object_sig = [types.pyobject] * len(object_args)
 
     status, retval = context.call_conv.call_function(
         builder, func, types.pyobject, object_sig,
-        ndarray_objects, env=env)
+        object_args, env=env)
     builder.store(status.is_error, error_pointer)
 
     # Release returned object
@@ -490,9 +499,9 @@ def _prepare_call_to_object_mode(context, builder, pyapi, func,
     # At return block
     builder.position_at_end(bb_core_return)
 
-    # Release argument object
-    for ndary_ptr in ndarray_pointers:
-        pyapi.decref(builder.load(ndary_ptr))
+    # Release argument objects
+    for objptr in object_pointers:
+        pyapi.decref(builder.load(objptr))
 
     innercall = status.code
     return innercall, builder.load(error_pointer)

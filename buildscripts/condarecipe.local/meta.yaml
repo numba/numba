@@ -1,13 +1,12 @@
 package:
    name: numba
-   # We need to provide a default version
-   version: {{ environ.get('GIT_DESCRIBE_TAG','devel') }}
+   version: {{ GIT_DESCRIBE_TAG }}
 
 source:
    path: ../..
 
 build:
-  number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
+  number: {{ GIT_DESCRIBE_NUMBER|int }}
   entry_points:
     - pycc = numba.pycc:main
     - numba = numba.numba_entry:main
@@ -17,24 +16,20 @@ requirements:
   # when we also set install_requires in setup.py
   build:
     - python
-    - argparse        [py26]
     - numpy x.x
     # On channel https://anaconda.org/numba/
-    - llvmlite 0.9.*
-    - funcsigs       [py26 or py27]
-    - singledispatch [py26 or py27 or py33]
+    - llvmlite 0.11.*
+    - funcsigs       [py27]
+    - singledispatch [py27]
   run:
     - python
-    - argparse        [py26]
     - numpy x.x
     # On channel https://anaconda.org/numba/
-    - llvmlite 0.9.*
-    - funcsigs       [py26 or py27]
-    - singledispatch [py26 or py27 or py33]
+    - llvmlite 0.11.*
+    - funcsigs       [py27]
+    - singledispatch [py27]
 test:
   requires:
-    - argparse       [py26]
-    - unittest2      [py26]
     - jinja2
     # Required to test optional Numba features
     - cffi
@@ -44,3 +39,4 @@ test:
   commands:
     - pycc -h
     - numba -h
+    - python -m numba.runtests -m -b

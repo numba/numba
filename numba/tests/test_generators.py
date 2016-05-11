@@ -3,10 +3,10 @@ from __future__ import print_function
 import sys
 import numpy as np
 
+import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import jit, types
-from numba.tests.support import TestCase, MemoryLeakMixin
-import numba.unittest_support as unittest
+from .support import TestCase, MemoryLeakMixin, tag
 from numba import testing
 
 enable_pyobj_flags = Flags()
@@ -77,6 +77,16 @@ def gen7(arr):
         yield arr[i]
 
 
+# Optional arguments and boolean state members
+def gen8(x=1, y=2, b=False):
+    bb = not b
+    yield x
+    if bb:
+        yield y
+    if b:
+        yield x + y
+
+
 def genobj(x):
     object()
     yield x
@@ -119,6 +129,7 @@ class TestGenerators(MemoryLeakMixin, TestCase):
         cgen = cr.entry_point(8)
         self.check_generator(pygen, cgen)
 
+    @tag('important')
     def test_gen1(self):
         self.check_gen1()
 
@@ -132,6 +143,7 @@ class TestGenerators(MemoryLeakMixin, TestCase):
         cgen = cr.entry_point(8)
         self.check_generator(pygen, cgen)
 
+    @tag('important')
     def test_gen2(self):
         self.check_gen2()
 
@@ -145,6 +157,7 @@ class TestGenerators(MemoryLeakMixin, TestCase):
         cgen = cr.entry_point(8)
         self.check_generator(pygen, cgen)
 
+    @tag('important')
     def test_gen3(self):
         self.check_gen3()
 
@@ -158,6 +171,7 @@ class TestGenerators(MemoryLeakMixin, TestCase):
         cgen = cr.entry_point(5, 6, 7)
         self.check_generator(pygen, cgen)
 
+    @tag('important')
     def test_gen4(self):
         self.check_gen4()
 
@@ -186,6 +200,7 @@ class TestGenerators(MemoryLeakMixin, TestCase):
             l.append(next(cgen))
         self.assertEqual(l, [14] * 3)
 
+    @tag('important')
     def test_gen6(self):
         self.check_gen6()
 
@@ -201,11 +216,32 @@ class TestGenerators(MemoryLeakMixin, TestCase):
         cgen = cr.entry_point(arr)
         self.check_generator(pygen, cgen)
 
+    @tag('important')
     def test_gen7(self):
         self.check_gen7()
 
     def test_gen7_objmode(self):
         self.check_gen7(flags=forceobj_flags)
+
+    def check_gen8(self, **jit_args):
+        pyfunc = gen8
+        cfunc = jit(**jit_args)(pyfunc)
+
+        def check(*args, **kwargs):
+            self.check_generator(pyfunc(*args, **kwargs),
+                                 cfunc(*args, **kwargs))
+
+        check(2, 3)
+        check(4)
+        check(y=5)
+        check(x=6, b=True)
+
+    @tag('important')
+    def test_gen8(self):
+        self.check_gen8(nopython=True)
+
+    def test_gen8_objmode(self):
+        self.check_gen8(forceobj=True)
 
     def check_consume_generator(self, gen_func):
         cgen = jit(nopython=True)(gen_func)
@@ -221,6 +257,7 @@ class TestGenerators(MemoryLeakMixin, TestCase):
     def test_consume_gen2(self):
         self.check_consume_generator(gen2)
 
+    @tag('important')
     def test_consume_gen3(self):
         self.check_consume_generator(gen3)
 

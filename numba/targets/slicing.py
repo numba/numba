@@ -120,37 +120,50 @@ def guard_invalid_slice(context, builder, typ, slicestruct):
 
 def get_defaults(context):
     """
-    Get the default values for a slice's three members.
+    Get the default values for a slice's members:
+    (start for positive step, start for negative step,
+     stop for positive step, stop for negative step, step)
     """
     maxint = (1 << (context.address_size - 1)) - 1
-    return (0, maxint, 1)
+    return (0, maxint, maxint, - maxint - 1, 1)
 
 
 #---------------------------------------------------------------------------
 # The slice structure
 
-def make_slice(context, builder, typ, value=None):
-    """
-    Create a slice structure, optionally initialized from the given LLVM
-    *value*.
-    """
-    cls = cgutils.create_struct_proxy(typ)
-    return cls(context, builder, value=value)
-
-
 @lower_builtin(slice, types.VarArg(types.Any))
 def slice_constructor_impl(context, builder, sig, args):
-    slice_args = []
-    for ty, val, default in zip_longest(sig.args, args, get_defaults(context)):
-        if ty in (types.none, None):
-            # Omitted or None
-            slice_args.append(context.get_constant(types.intp, default))
+    default_start_pos, default_start_neg, default_stop_pos, default_stop_neg, default_step = \
+        [context.get_constant(types.intp, x) for x in get_defaults(context)]
+
+    # Fetch non-None arguments
+    slice_args = [None] * 3
+    for i, (ty, val) in enumerate(zip(sig.args, args)):
+        if ty is types.none:
+            slice_args[i] = None
         else:
-            slice_args.append(val)
-    start, stop, step = slice_args
+            slice_args[i] = val
+
+    # Fill omitted arguments
+    def get_arg_value(i, default):
+        val = slice_args[i]
+        if val is None:
+            return default
+        else:
+            return val
+
+    step = get_arg_value(2, default_step)
+    is_step_negative = builder.icmp_signed('<', step,
+                                           context.get_constant(types.intp, 0))
+    default_stop = builder.select(is_step_negative,
+                                  default_stop_neg, default_stop_pos)
+    default_start = builder.select(is_step_negative,
+                                   default_start_neg, default_start_pos)
+    stop = get_arg_value(1, default_stop)
+    start = get_arg_value(0, default_start)
 
     ty = sig.return_type
-    sli = make_slice(context, builder, sig.return_type)
+    sli = context.make_helper(builder, sig.return_type)
     sli.start = start
     sli.stop = stop
     sli.step = step
@@ -161,18 +174,18 @@ def slice_constructor_impl(context, builder, sig, args):
 
 @lower_getattr(types.SliceType, "start")
 def slice_start_impl(context, builder, typ, value):
-    sli = make_slice(context, builder, typ, value)
+    sli = context.make_helper(builder, typ, value)
     return sli.start
 
 @lower_getattr(types.SliceType, "stop")
 def slice_stop_impl(context, builder, typ, value):
-    sli = make_slice(context, builder, typ, value)
+    sli = context.make_helper(builder, typ, value)
     return sli.stop
 
 @lower_getattr(types.SliceType, "step")
 def slice_step_impl(context, builder, typ, value):
     if typ.has_step:
-        sli = make_slice(context, builder, typ, value)
+        sli = context.make_helper(builder, typ, value)
         return sli.step
     else:
         return context.get_constant(types.intp, 1)

@@ -99,7 +99,7 @@ class PyCallWrapper(object):
         self.release_gil = release_gil
 
     def build(self):
-        wrapname = "wrapper.%s" % self.func.name
+        wrapname = self.fndesc.llvm_cpython_wrapper_name
 
         # This is the signature of PyCFunctionWithKeywords
         # (see CPython's methodobject.h)
@@ -107,7 +107,7 @@ class PyCallWrapper(object):
         wrapty = Type.function(pyobj, [pyobj, pyobj, pyobj])
         wrapper = self.module.add_function(wrapty, name=wrapname)
 
-        builder = Builder.new(wrapper.append_basic_block('entry'))
+        builder = Builder(wrapper.append_basic_block('entry'))
 
         # - `closure` will receive the `self` pointer stored in the
         #   PyCFunction object (see _dynfunc.c)

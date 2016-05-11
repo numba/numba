@@ -105,13 +105,26 @@ contains a :class:`int` and a :class:`float`).
 
 .. note::
    When passing a list into a JIT-compiled function, any modifications
-   made to the list will not be visible by the Python interpreter until
+   made to the list will not be visible to the Python interpreter until
    the function returns.
 
 .. warning::
    List sorting currently uses a quicksort algorithm, which has different
    performance characterics than the algorithm used by Python.
 
+set
+---
+
+All methods and operations on sets are supported in JIT-compiled functions.
+
+Sets must be strictly homogenous: Numba will reject any set containing
+objects of different types, even if the types are compatible (for example,
+``{1, 2.5}`` is rejected as it contains a :class:`int` and a :class:`float`).
+
+.. note::
+   When passing a set into a JIT-compiled function, any modifications
+   made to the set will not be visible to the Python interpreter until
+   the function returns.
 
 None
 ----
@@ -150,9 +163,11 @@ The following built-in functions are supported:
 * :func:`enumerate`
 * :class:`float`
 * :class:`int`: only the one-argument form
+* :func:`iter`: only the one-argument form
 * :func:`len`
 * :func:`min`: only the multiple-argument form
 * :func:`max`: only the multiple-argument form
+* :func:`next`: only the one-argument form
 * :func:`print`: only numbers and strings; no ``file`` or ``sep`` argument
 * :class:`range`: semantics are similar to those of Python 3 even in Python 2:
   a range object is returned instead of an array of values.
@@ -228,6 +243,11 @@ and return types:
 * :class:`ctypes.c_float`
 * :class:`ctypes.c_double`
 * :class:`ctypes.c_void_p`
+
+``enum``
+--------
+
+Both :class:`enum.Enum` and :class:`enum.IntEnum` subclasses are supported.
 
 ``math``
 --------

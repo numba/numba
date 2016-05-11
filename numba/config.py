@@ -85,14 +85,6 @@ class _EnvReloader(object):
             self.old_environ = dict(new_environ)
 
     def process_environ(self, environ):
-        for env_name, value in environ.items():
-            config_name = env_name[6:]
-            meth = getattr(self, 'parse_' + config_name)
-            globals()[config_name] = meth(value)
-        # Store a copy
-        self.old_environ = dict(os.environ)
-
-    def process_environ(self, environ):
         def _readenv(name, ctor, default):
             value = environ.get(name)
             if value is None:
@@ -119,6 +111,9 @@ class _EnvReloader(object):
 
         # Enable debugging of front-end operation (up to and including IR generation)
         DEBUG_FRONTEND = _readenv("NUMBA_DEBUG_FRONTEND", int, 0)
+
+        # Enable logging of cache operation
+        DEBUG_CACHE = _readenv("NUMBA_DEBUG_CACHE", int, DEBUG)
 
         # Enable tracing support
         TRACE = _readenv("NUMBA_TRACE", int, 0)
@@ -182,8 +177,13 @@ class _EnvReloader(object):
                               "some numerical code", PerformanceWarning)
                 return False
             else:
+                # There are various performance issues with AVX and LLVM
+                # on some CPUs (list at
+                # http://llvm.org/bugs/buglist.cgi?quicksearch=avx).
+                # For now we'd rather disable it, since it can pessimize the code.
                 cpu_name = ll.get_host_cpu_name()
-                return cpu_name not in ('corei7-avx', 'core-avx-i')
+                return cpu_name not in ('corei7-avx', 'core-avx-i',
+                                        'sandybridge', 'ivybridge')
 
         ENABLE_AVX = _readenv("NUMBA_ENABLE_AVX", int, avx_default)
 

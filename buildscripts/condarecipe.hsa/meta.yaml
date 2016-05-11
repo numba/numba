@@ -16,26 +16,25 @@ requirements:
   # when we also set install_requires in setup.py
   build:
     - python
-    - argparse        [py26]
     - numpy x.x
     # On channel https://binstar.org/numba/
     - llvmlite 0.9.*
-    - funcsigs       [py26 or py27]
-    - singledispatch [py26 or py27 or py33]
+    - funcsigs       [py27]
+    - singledispatch [py27]
   run:
     - python
-    - argparse        [py26]
     - numpy x.x
     # On channel https://binstar.org/numba/
     - llvmlite 0.9.*
-    - funcsigs       [py26 or py27]
-    - singledispatch [py26 or py27 or py33]
+    - funcsigs       [py27]
+    - singledispatch [py27]
     - libhlc
 test:
   requires:
-    - argparse       [py26]
-    - unittest2      [py26]
     - jinja2
+    # Required to test optional Numba features
+    - cffi
+    - scipy
   files:
     - mandel.py
   commands:

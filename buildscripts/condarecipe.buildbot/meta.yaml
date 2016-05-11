@@ -1,0 +1,43 @@
+package:
+   name: numba
+   version: {{ GIT_DESCRIBE_TAG }}
+
+source:
+   path: ../..
+
+build:
+  number: {{ GIT_DESCRIBE_NUMBER|int }}
+  entry_points:
+    - pycc = numba.pycc:main
+    - numba = numba.numba_entry:main
+
+requirements:
+  # build and run dependencies are duplicated to avoid setuptools issues
+  # when we also set install_requires in setup.py
+  build:
+    - python
+    - numpy x.x
+    # On channel https://anaconda.org/numba/
+    - llvmlite 0.11.*
+    - funcsigs       [py27]
+    - singledispatch [py27]
+  run:
+    - python
+    - numpy x.x
+    # On channel https://anaconda.org/numba/
+    - llvmlite 0.11.*
+    - funcsigs       [py27]
+    - singledispatch [py27]
+test:
+  requires:
+    - jinja2
+    # Required to test optional Numba features
+    - cffi
+    - scipy
+    - cudatoolkit
+  files:
+    - mandel.py
+  commands:
+    - pycc -h
+    - numba -h
+    - python -m numba.runtests -v -m -b numba.cuda.tests

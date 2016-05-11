@@ -3,7 +3,6 @@ from __future__ import print_function, absolute_import
 import sys
 
 import llvmlite.llvmpy.core as lc
-import llvmlite.llvmpy.ee as le
 import llvmlite.binding as ll
 
 from numba import _dynfunc, config
@@ -11,9 +10,7 @@ from numba.callwrapper import PyCallWrapper
 from .base import BaseContext, PYOBJECT
 from numba import utils, cgutils, types
 from numba.utils import cached_property
-from numba.targets import (
-    callconv, cffiimpl, codegen, externals, intrinsics, listobj, cmathimpl,
-    mathimpl, npyimpl, operatorimpl, printimpl, randomimpl)
+from numba.targets import callconv, codegen, externals, intrinsics, listobj, setobj
 from .options import TargetOptions
 from numba.runtime import rtsys
 
@@ -51,6 +48,8 @@ class CPUContext(BaseContext):
 
     def load_additional_registries(self):
         # Add target specific implementations
+        from . import (cffiimpl, cmathimpl, mathimpl, npyimpl, operatorimpl,
+                       printimpl, randomimpl)
         self.install_registry(cmathimpl.registry)
         self.install_registry(cffiimpl.registry)
         self.install_registry(mathimpl.registry)
@@ -58,13 +57,16 @@ class CPUContext(BaseContext):
         self.install_registry(operatorimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(randomimpl.registry)
+        # Initialize PRNG state
+        randomimpl.random_init()
 
     @property
     def target_data(self):
         return self._internal_codegen.target_data
 
-    def with_aot_codegen(self, name):
-        return self.subtarget(_internal_codegen=codegen.AOTCPUCodegen(name),
+    def with_aot_codegen(self, name, **aot_options):
+        aot_codegen = codegen.AOTCPUCodegen(name, **aot_options)
+        return self.subtarget(_internal_codegen=aot_codegen,
                               aot_mode=True)
 
     def codegen(self):
@@ -111,6 +113,12 @@ class CPUContext(BaseContext):
         Build a list from the Numba *list_type* and its initial *items*.
         """
         return listobj.build_list(self, builder, list_type, items)
+
+    def build_set(self, builder, set_type, items):
+        """
+        Build a set from the Numba *set_type* and its initial *items*.
+        """
+        return setobj.build_set(self, builder, set_type, items)
 
     def post_lowering(self, mod, library):
         if self.is32bit:

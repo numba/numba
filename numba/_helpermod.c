@@ -64,6 +64,7 @@ build_c_helpers_dict(void)
     declmethod(fptouif);
     declmethod(gil_ensure);
     declmethod(gil_release);
+    declmethod(fatal_error);
     declmethod(py_type);
     declmethod(unpack_slice);
     declmethod(do_raise);
@@ -75,11 +76,20 @@ build_c_helpers_dict(void)
     declmethod(get_list_private_data);
     declmethod(set_list_private_data);
     declmethod(reset_list_private_data);
+    declmethod(get_pyobject_private_data);
+    declmethod(set_pyobject_private_data);
+    declmethod(reset_pyobject_private_data);
     declmethod(xxgemm);
     declmethod(xxgemv);
     declmethod(xxdot);
     declmethod(xxgetrf);
     declmethod(xxgetri);
+    declmethod(xxpotrf);
+    declmethod(ez_rgeev);
+    declmethod(ez_cgeev);
+    declmethod(ez_gesdd);
+    declmethod(ez_geqrf);
+    declmethod(ez_xxgqr);
 
     declpointer(py_random_state);
     declpointer(np_random_state);
@@ -113,6 +123,7 @@ static PyMethodDef ext_methods[] = {
 PyAPI_FUNC(double) _numba_test_sin(double x);
 PyAPI_FUNC(double) _numba_test_cos(double x);
 PyAPI_FUNC(double) _numba_test_exp(double x);
+PyAPI_FUNC(void) _numba_test_vsquare(int n, double *x, double *out);
 
 double _numba_test_sin(double x)
 {
@@ -127,6 +138,20 @@ double _numba_test_cos(double x)
 double _numba_test_exp(double x)
 {
     return exp(x);
+}
+
+void _numba_test_vsquare(int n, double *x, double *out)
+{
+    int i;
+    for (i = 0; i < n; i++)
+        out[i] = pow(x[i], 2.0);
+}
+
+void _numba_test_vcube(int n, double *x, double *out)
+{
+    int i;
+    for (i = 0; i < n; i++)
+        out[i] = pow(x[i], 3.0);
 }
 
 

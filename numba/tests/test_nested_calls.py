@@ -8,7 +8,7 @@ from __future__ import print_function, division, absolute_import
 from numba import int32, int64
 from numba import jit, generated_jit, types
 from numba import unittest_support as unittest
-from .support import TestCase
+from .support import TestCase, tag
 
 
 @jit(nopython=True)
@@ -85,6 +85,7 @@ class TestNestedCall(TestCase):
         self.assertFalse(outer(True))
         self.assertTrue(outer(False))
 
+    @tag('important')
     def test_named_args(self, objmode=False):
         """
         Test a nested function call with named (keyword) arguments.
@@ -96,6 +97,7 @@ class TestNestedCall(TestCase):
     def test_named_args_objmode(self):
         self.test_named_args(objmode=True)
 
+    @tag('important')
     def test_default_args(self, objmode=False):
         """
         Test a nested function call using default argument values.
@@ -107,6 +109,7 @@ class TestNestedCall(TestCase):
     def test_default_args_objmode(self):
         self.test_default_args(objmode=True)
 
+    @tag('important')
     def test_star_args(self):
         """
         Test a nested function call to a function with *args in its signature.
@@ -114,6 +117,7 @@ class TestNestedCall(TestCase):
         cfunc, check = self.compile_func(star)
         check(1, 2, 3)
 
+    @tag('important')
     def test_star_call(self, objmode=False):
         """
         Test a function call with a *args.
@@ -133,6 +137,7 @@ class TestNestedCall(TestCase):
         check(1, 0)
         check(1, 1)
 
+    @tag('important')
     def test_call_generated(self):
         """
         Test a nested function call to a generated jit function.

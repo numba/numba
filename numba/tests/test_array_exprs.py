@@ -8,7 +8,7 @@ from numba import unittest_support as unittest
 from numba import compiler, typing, typeof, ir
 from numba.compiler import Pipeline, _PipelineManager, Flags
 from numba.targets import cpu
-from .support import MemoryLeakMixin
+from .support import MemoryLeakMixin, TestCase
 
 
 class Namespace(dict):
@@ -43,6 +43,10 @@ def call_stuff(a0, a1):
 
 def are_roots_imaginary(As, Bs, Cs):
     return (Bs ** 2 - 4 * As * Cs) < 0
+
+def div_add(As, Bs, Cs):
+    return As / Bs + Cs
+
 
 # From issue #1264
 def distance_matrix(vectors):
@@ -80,7 +84,7 @@ class RewritesTester(Pipeline):
         return cls.mk_pipeline(args, return_type, flags, locals, library, **kws)
 
 
-class TestArrayExpressions(MemoryLeakMixin, unittest.TestCase):
+class TestArrayExpressions(MemoryLeakMixin, TestCase):
 
     def test_simple_expr(self):
         '''
@@ -261,7 +265,8 @@ class TestArrayExpressions(MemoryLeakMixin, unittest.TestCase):
                                    ns.test_pipeline.interp.blocks)
 
 
-class TestRewriteIssues(MemoryLeakMixin, unittest.TestCase):
+class TestRewriteIssues(MemoryLeakMixin, TestCase):
+
     def test_issue_1184(self):
         from numba import jit
         import numpy as np
@@ -316,9 +321,40 @@ class TestRewriteIssues(MemoryLeakMixin, unittest.TestCase):
 
         expect = foo.py_func(a, b)
         got = foo(a, b)
+        self.assertPreciseEqual(got, expect)
 
-        self.assertEqual(got.dtype, np.float64)
-        np.testing.assert_allclose(got, expect)
+    def test_bitwise_arrayexpr(self):
+        """
+        Typing of bitwise boolean array expression can be incorrect
+        (issue #1813).
+        """
+        @njit
+        def foo(a, b):
+            return ~(a & (~b))
+
+        a = np.array([True, True, False, False])
+        b = np.array([False, True, False, True])
+
+        expect = foo.py_func(a, b)
+        got = foo(a, b)
+        self.assertPreciseEqual(got, expect)
+
+
+class TestSemantics(MemoryLeakMixin, unittest.TestCase):
+
+    def test_division_by_zero(self):
+        # Array expressions should follow the Numpy error model
+        # i.e. 1./0. returns +inf instead of raising ZeroDivisionError
+        pyfunc = div_add
+        cfunc = njit(pyfunc)
+
+        a = np.float64([0.0, 1.0, float('inf')])
+        b = np.float64([0.0, 0.0, 1.0])
+        c = np.ones_like(a)
+
+        expect = pyfunc(a, b, c)
+        got = cfunc(a, b, c)
+        np.testing.assert_array_equal(expect, got)
 
 
 if __name__ == "__main__":

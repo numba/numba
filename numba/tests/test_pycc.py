@@ -15,12 +15,15 @@ try:
 except ImportError:
     setuptools = None
 
-from numba import unittest_support as unittest
-from numba.pycc import find_shared_ending, find_pyext_ending, main
-from numba.pycc.decorators import clear_export_registry
-from .support import TestCase
+import llvmlite.binding as ll
 
-from numba.tests.support import static_temp_directory
+from numba import unittest_support as unittest
+from numba.pycc import main
+from numba.pycc.decorators import clear_export_registry
+from numba.pycc.platform import find_shared_ending, find_pyext_ending
+from .matmul_usecase import has_blas
+from .support import TestCase, tag, import_dynamic, temp_directory
+
 
 base_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -37,7 +40,7 @@ def unset_macosx_deployment_target():
 class BasePYCCTest(TestCase):
 
     def setUp(self):
-        self.tmpdir = static_temp_directory('test_pycc')
+        self.tmpdir = temp_directory('test_pycc')
         # Make sure temporary files and directories created by
         # distutils don't clutter the top-level /tmp
         tempfile.tempdir = self.tmpdir
@@ -53,7 +56,7 @@ class BasePYCCTest(TestCase):
     def check_c_ext(self, extdir, name):
         sys.path.append(extdir)
         try:
-            lib = __import__(name)
+            lib = import_dynamic(name)
             yield lib
         finally:
             sys.path.remove(extdir)
@@ -193,6 +196,23 @@ class TestCC(BasePYCCTest):
             with self.assertRaises(ZeroDivisionError):
                 lib.div(1, 0)
 
+    def check_compile_for_cpu(self, cpu_name):
+        cc = self._test_module.cc
+        cc.target_cpu = cpu_name
+
+        with self.check_cc_compiled(cc) as lib:
+            res = lib.multi(123, 321)
+            self.assertPreciseEqual(res, 123 * 321)
+
+    def test_compile_for_cpu(self):
+        # Compiling for the host CPU should always succeed
+        self.check_compile_for_cpu(ll.get_host_cpu_name())
+
+    def test_compile_for_cpu_host(self):
+        # Compiling for the host CPU should always succeed
+        self.check_compile_for_cpu("host")
+
+    @tag('important')
     def test_compile_helperlib(self):
         with self.check_cc_compiled(self._test_module.cc_helperlib) as lib:
             res = lib.power(2, 7)
@@ -218,19 +238,26 @@ class TestCC(BasePYCCTest):
                 """ % {'expected': expected}
             self.check_cc_compiled_in_subprocess(lib, code)
 
+    @tag('important')
     def test_compile_nrt(self):
         with self.check_cc_compiled(self._test_module.cc_nrt) as lib:
             # Sanity check
             self.assertPreciseEqual(lib.zero_scalar(1), 0.0)
             res = lib.zeros(3)
             self.assertEqual(list(res), [0, 0, 0])
+            if has_blas:
+                res = lib.vector_dot(4)
+                self.assertPreciseEqual(res, 30.0)
 
             code = """if 1:
                 res = lib.zero_scalar(1)
                 assert res == 0.0
                 res = lib.zeros(3)
                 assert list(res) == [0, 0, 0]
-                """
+                if %(has_blas)s:
+                    res = lib.vector_dot(4)
+                    assert res == 30.0
+                """ % dict(has_blas=has_blas)
             self.check_cc_compiled_in_subprocess(lib, code)
 
 
@@ -239,13 +266,10 @@ class TestDistutilsSupport(TestCase):
     def setUp(self):
         # Copy the test project into a temp directory to avoid
         # keeping any build leftovers in the source tree
-        self.tmpdir = tempfile.mkdtemp(prefix='test_pycc_distutils-')
+        self.tmpdir = temp_directory('test_pycc_distutils')
         source_dir = os.path.join(base_path, 'pycc_distutils_usecase')
         self.usecase_dir = os.path.join(self.tmpdir, 'work')
         shutil.copytree(source_dir, self.usecase_dir)
-
-    def tearDown(self):
-        shutil.rmtree(self.tmpdir)
 
     def check_setup_py(self, setup_py_file):
         # Compute PYTHONPATH to ensure the child processes see this Numba

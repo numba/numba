@@ -90,7 +90,7 @@ def dotrace(*args, **kwds):
         spec = None
         logger = logging.getLogger('trace')
         def wrapper(*args, **kwds):
-            if not logger.isEnabledFor(logging.INFO) or tls.tracing:
+            if not logger.isEnabledFor(logging.INFO) or getattr(tls, 'tracing', False):
                 return func(*args, **kwds)
 
             fname, ftype = find_function_info(func, spec, args)
@@ -196,10 +196,20 @@ def notrace(*args, **kwds):
     else:
         return decorator
 
+def doevent(msg):
+    msg = ['== ', tls.indent * ' ', msg]
+    logger = logging.getLogger('trace')
+    logger.info(''.join(msg))
+
+def noevent(msg):
+    pass
+
 if config.TRACE:
     logger = logging.getLogger('trace')
     logger.setLevel(logging.INFO)
     logger.handlers = [logging.StreamHandler()]
     trace = dotrace
+    event = doevent
 else:
     trace = notrace
+    event = noevent
