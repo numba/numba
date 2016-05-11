@@ -166,7 +166,7 @@ class UFuncMechanism(object):
 
     def _get_actual_args(self):
         """Return the actual arguments
-        Casts scalar arguments to numpy.array.
+        Casts scalar arguments to np.array.
         """
         for i in self.scalarpos:
             self.arrays[i] = np.array([self.args[i]], dtype=self.argtypes[i])

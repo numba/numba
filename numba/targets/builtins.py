@@ -3,7 +3,7 @@ from __future__ import print_function, absolute_import, division
 import math
 from functools import reduce
 
-import numpy
+import numpy as np
 
 from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant
@@ -221,7 +221,7 @@ def number_constructor(context, builder, sig, args):
     """
     if isinstance(sig.return_type, types.Array):
         # Array constructor
-        impl = context.get_function(numpy.array, sig)
+        impl = context.get_function(np.array, sig)
         return impl(builder, args)
     else:
         # Scalar constructor

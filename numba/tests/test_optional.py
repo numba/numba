@@ -2,7 +2,7 @@ from __future__ import print_function, absolute_import
 
 import itertools
 
-import numpy
+import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
@@ -145,10 +145,10 @@ class TestOptional(TestCase):
                 return y[0]
 
         cfunc = njit("(float32, optional(float32[:]))")(pyfunc)
-        cy = numpy.array([12.3], dtype=numpy.float32)
+        cy = np.array([12.3], dtype=np.float32)
         py = cy.copy()
         self.assertAlmostEqual(pyfunc(1., py), cfunc(1., cy))
-        numpy.testing.assert_almost_equal(py, cy)
+        np.testing.assert_almost_equal(py, cy)
         self.assertAlmostEqual(pyfunc(1., None), cfunc(1., None))
 
     def test_optional_array_error(self):
@@ -161,7 +161,7 @@ class TestOptional(TestCase):
         self.assertIn('expected array(int32, 1d, A), got None',
                       str(raised.exception))
 
-        y = numpy.array([0xabcd], dtype=numpy.int32)
+        y = np.array([0xabcd], dtype=np.int32)
         self.assertEqual(cfunc(y), pyfunc(y))
 
     def test_optional_array_attribute(self):
@@ -175,7 +175,7 @@ class TestOptional(TestCase):
             return opt.shape[0]
 
         cfunc = njit(pyfunc)
-        arr = numpy.arange(5)
+        arr = np.arange(5)
         self.assertEqual(pyfunc(arr, True), cfunc(arr, True))
 
     def test_assign_to_optional(self):

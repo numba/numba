@@ -1,6 +1,8 @@
 from numba.tracing import trace
-import numpy
+
 import sys
+
+import numpy as np
 
 def _o2s(dtype, shape, order):
     # convert order parameter to strides
@@ -121,7 +123,7 @@ class SmartArray(object):
     def __array__(self, *args):
 
         self._sync('host')
-        return numpy.array(self._host, *args)
+        return np.array(self._host, *args)
 
     def _sync(self, where):
         """Sync the data in one memory space with the other."""
@@ -150,12 +152,12 @@ class SmartArray(object):
     def _allocate(self, where, obj=None, dtype=None, shape=None, strides=None,
                   copy=True):
         if dtype:
-            dtype = numpy.dtype(dtype)
+            dtype = np.dtype(dtype)
         if where == 'host':
             if obj is not None:
-                self._host = numpy.array(obj, dtype, copy=copy)
+                self._host = np.array(obj, dtype, copy=copy)
             else:
-                self._host = numpy.empty(shape, dtype, _s2o(dtype, shape, strides))
+                self._host = np.empty(shape, dtype, _s2o(dtype, shape, strides))
         else:
             # Don't import this at module-scope as it may not be available
             # in all environments (e.g., CUDASIM)
@@ -163,8 +165,8 @@ class SmartArray(object):
             if obj is not None:
                 # If 'obj' is an array-like object but not an ndarray,
                 # construct an ndarray first to extract all the parameters we need.
-                if not isinstance(obj, numpy.ndarray):
-                    obj = numpy.array(obj, copy=False)
+                if not isinstance(obj, np.ndarray):
+                    obj = np.array(obj, copy=False)
                 self._gpu = da.from_array_like(obj)
             else:
                 if strides is None:
@@ -186,7 +188,7 @@ class SmartArray(object):
         """If `value` is an ndarray, wrap it in a SmartArray,
         otherwise return `value` itself."""
 
-        if isinstance(value, numpy.ndarray):
+        if isinstance(value, np.ndarray):
             return SmartArray(value, copy=False)
         else:
             return value

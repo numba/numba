@@ -4,11 +4,14 @@ on the object.  If it exists and evaluate to True, it must define shape,
 strides, dtype and size attributes similar to a NumPy ndarray.
 """
 from __future__ import print_function, absolute_import, division
+
 import warnings
 import math
 import copy
 from ctypes import c_void_p
+
 import numpy as np
+
 from . import driver as _driver
 from . import devices
 from numba import dummyarray, types, numpy_support
@@ -63,7 +66,7 @@ class DeviceNDArrayBase(object):
         strides
             array strides.
         dtype
-            data type as numpy.dtype.
+            data type as np.dtype.
         stream
             cuda stream.
         writeback
@@ -276,7 +279,7 @@ class DeviceNDArray(DeviceNDArrayBase):
     def reshape(self, *newshape, **kws):
         """
         Reshape the array without changing its contents, similarly to
-        :meth:`numpy.ndarray.reshape`. Example::
+        :meth:`np.ndarray.reshape`. Example::
 
             d_arr = d_arr.reshape(20, 50, order='F')
         """
@@ -300,7 +303,7 @@ class DeviceNDArray(DeviceNDArrayBase):
     def ravel(self, order='C', stream=0):
         '''
         Flatten the array without changing its contents, similar to
-        :meth:`numpy.ndarray.ravel`.
+        :meth:`np.ndarray.ravel`.
         '''
         stream = self._default_stream(stream)
         cls = type(self)

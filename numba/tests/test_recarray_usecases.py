@@ -2,7 +2,7 @@ from __future__ import print_function, absolute_import, division
 
 import sys
 
-import numpy
+import numpy as np
 
 from numba import numpy_support, types
 from numba.compiler import compile_isolated
@@ -66,32 +66,32 @@ class TestRecordUsecase(unittest.TestCase):
 
     def setUp(self):
         fields = [('f1', '<f8'), ('s1', '|S3'), ('f2', '<f8')]
-        self.unaligned_dtype = numpy.dtype(fields)
-        self.aligned_dtype = numpy.dtype(fields, align=True)
+        self.unaligned_dtype = np.dtype(fields)
+        self.aligned_dtype = np.dtype(fields, align=True)
 
     @tag('important')
     def test_usecase1(self):
         pyfunc = usecase1
 
         # This is an unaligned dtype
-        mystruct_dt = numpy.dtype([('p', numpy.float64),
-                           ('row', numpy.float64),
-                           ('col', numpy.float64)])
+        mystruct_dt = np.dtype([('p', np.float64),
+                           ('row', np.float64),
+                           ('col', np.float64)])
         mystruct = numpy_support.from_dtype(mystruct_dt)
 
         cres = compile_isolated(pyfunc, (mystruct[:], mystruct[:]))
         cfunc = cres.entry_point
 
-        st1 = numpy.recarray(3, dtype=mystruct_dt)
-        st2 = numpy.recarray(3, dtype=mystruct_dt)
+        st1 = np.recarray(3, dtype=mystruct_dt)
+        st2 = np.recarray(3, dtype=mystruct_dt)
 
-        st1.p = numpy.arange(st1.size) + 1
-        st1.row = numpy.arange(st1.size) + 1
-        st1.col = numpy.arange(st1.size) + 1
+        st1.p = np.arange(st1.size) + 1
+        st1.row = np.arange(st1.size) + 1
+        st1.col = np.arange(st1.size) + 1
 
-        st2.p = numpy.arange(st2.size) + 1
-        st2.row = numpy.arange(st2.size) + 1
-        st2.col = numpy.arange(st2.size) + 1
+        st2.p = np.arange(st2.size) + 1
+        st2.row = np.arange(st2.size) + 1
+        st2.col = np.arange(st2.size) + 1
 
         expect1 = st1.copy()
         expect2 = st2.copy()
@@ -102,15 +102,15 @@ class TestRecordUsecase(unittest.TestCase):
         pyfunc(expect1, expect2)
         cfunc(got1, got2)
 
-        self.assertTrue(numpy.all(expect1 == got1))
-        self.assertTrue(numpy.all(expect2 == got2))
+        self.assertTrue(np.all(expect1 == got1))
+        self.assertTrue(np.all(expect2 == got2))
 
     def _setup_usecase2to5(self, dtype):
         N = 5
-        a = numpy.recarray(N, dtype=dtype)
-        a.f1 = numpy.arange(N)
-        a.f2 = numpy.arange(2, N + 2)
-        a.s1 = numpy.array(['abc'] * a.shape[0], dtype='|S3')
+        a = np.recarray(N, dtype=dtype)
+        a.f1 = np.arange(N)
+        a.f2 = np.arange(2, N + 2)
+        a.s1 = np.array(['abc'] * a.shape[0], dtype='|S3')
         return a
 
     def _test_usecase2to5(self, pyfunc, dtype):
