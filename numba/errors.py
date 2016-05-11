@@ -174,7 +174,7 @@ class ConstantInferenceError(NumbaError):
 
 class InternalError(NumbaError):
     """
-    For wrapping internal error occured with in the compiler
+    For wrapping internal error occured within the compiler
     """
     def __init__(self, exception):
         super(InternalError, self).__init__(str(exception))
@@ -187,6 +187,17 @@ def _format_msg(fmt, args, kwargs):
 
 @contextlib.contextmanager
 def new_error_context(fmt_, *args, **kwargs):
+    """
+    A contextmanager that prepend contextual information to any exception
+    raised within.  If the exception type is not an instance of NumbaError,
+    it will be wrapped into a InternalError.   The exception class can be
+    changed by providing a "errcls_" keyword argument with the exception
+    constructor.
+
+    The first argument is a message that describes the context.  It can be a
+    format string.  If there are additional arguments, it will be used as
+    ``fmt_.format(*args, **kwargs)`` to produce the final message string.
+    """
     errcls = kwargs.pop('errcls_', InternalError)
     try:
         yield
