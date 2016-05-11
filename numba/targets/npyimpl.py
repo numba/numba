@@ -4,13 +4,14 @@ Implementation of functions in the Numpy package.
 
 from __future__ import print_function, division, absolute_import
 
-import numpy
 import math
 import sys
 import itertools
 from collections import namedtuple
 
 from llvmlite.llvmpy import core as lc
+
+import numpy as np
 
 from . import builtins, callconv, ufunc_db, arrayobj
 from .imputils import Registry, impl_ret_new_ref, force_error_model
@@ -521,7 +522,7 @@ def array_positive_impl(context, builder, sig, args):
 for _op_map in (npydecl.NumpyRulesUnaryArrayOperator._op_map,
                 npydecl.NumpyRulesArrayOperator._op_map):
     for operator, ufunc_name in _op_map.items():
-        ufunc = getattr(numpy, ufunc_name)
+        ufunc = getattr(np, ufunc_name)
         kernel = _kernels[ufunc]
         if ufunc.nin == 1:
             register_unary_operator_kernel(operator, kernel)

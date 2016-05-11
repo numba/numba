@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import enum
 
-import numpy
+import numpy as np
 
 from .abstract import *
 from .. import npdatetime, utils
@@ -32,7 +32,7 @@ class Integer(Number):
         return cls(name)
 
     def cast_python_value(self, value):
-        return getattr(numpy, self.name)(value)
+        return getattr(np, self.name)(value)
 
     def __lt__(self, other):
         if self.__class__ is not other.__class__:
@@ -52,7 +52,7 @@ class Float(Number):
         self.bitwidth = bitwidth
 
     def cast_python_value(self, value):
-        return getattr(numpy, self.name)(value)
+        return getattr(np, self.name)(value)
 
     def __lt__(self, other):
         if self.__class__ is not other.__class__:
@@ -71,7 +71,7 @@ class Complex(Number):
         self.bitwidth = bitwidth
 
     def cast_python_value(self, value):
-        return getattr(numpy, self.name)(value)
+        return getattr(np, self.name)(value)
 
     def __lt__(self, other):
         if self.__class__ is not other.__class__:
@@ -81,7 +81,7 @@ class Complex(Number):
 
 class _NPDatetimeBase(Type):
     """
-    Common base class for numpy.datetime64 and numpy.timedelta64.
+    Common base class for np.datetime64 and np.timedelta64.
     """
 
     def __init__(self, unit, *args, **kws):
@@ -99,7 +99,7 @@ class _NPDatetimeBase(Type):
         return self.unit_code < other.unit_code
 
     def cast_python_value(self, value):
-        cls = getattr(numpy, self.type_name)
+        cls = getattr(np, self.type_name)
         if self.unit:
             return cls(value, self.unit)
         else:

@@ -1,13 +1,15 @@
 from __future__ import print_function
-import numpy
+
+import numpy as np
+
 from numba import cuda
 from numba.cuda.testing import unittest
 
 
-CONST1D = numpy.arange(10, dtype=numpy.float64) / 2.
-CONST2D = numpy.asfortranarray(
-                numpy.arange(100, dtype=numpy.int32).reshape(10, 10))
-CONST3D = ((numpy.arange(5*5*5, dtype=numpy.complex64).reshape(5, 5, 5) + 1j) /
+CONST1D = np.arange(10, dtype=np.float64) / 2.
+CONST2D = np.asfortranarray(
+                np.arange(100, dtype=np.int32).reshape(10, 10))
+CONST3D = ((np.arange(5*5*5, dtype=np.complex64).reshape(5, 5, 5) + 1j) /
             2j)
 
 
@@ -35,23 +37,23 @@ class TestCudaConstantMemory(unittest.TestCase):
     def test_const_array(self):
         jcuconst = cuda.jit('void(float64[:])')(cuconst)
         self.assertTrue('.const' in jcuconst.ptx)
-        A = numpy.empty_like(CONST1D)
+        A = np.empty_like(CONST1D)
         jcuconst[2, 5](A)
-        self.assertTrue(numpy.all(A == CONST1D))
+        self.assertTrue(np.all(A == CONST1D))
 
     def test_const_array_2d(self):
         jcuconst2d = cuda.jit('void(int32[:,:])')(cuconst2d)
         self.assertTrue('.const' in jcuconst2d.ptx)
-        A = numpy.empty_like(CONST2D, order='C')
+        A = np.empty_like(CONST2D, order='C')
         jcuconst2d[(2,2), (5,5)](A)
-        self.assertTrue(numpy.all(A == CONST2D))
+        self.assertTrue(np.all(A == CONST2D))
 
     def test_const_array_3d(self):
         jcuconst3d = cuda.jit('void(complex64[:,:,:])')(cuconst3d)
         self.assertTrue('.const' in jcuconst3d.ptx)
-        A = numpy.empty_like(CONST3D, order='F')
+        A = np.empty_like(CONST3D, order='F')
         jcuconst3d[1, (5, 5, 5)](A)
-        self.assertTrue(numpy.all(A == CONST3D))
+        self.assertTrue(np.all(A == CONST3D))
 
 
 if __name__ == '__main__':

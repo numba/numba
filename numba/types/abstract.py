@@ -4,7 +4,7 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 import itertools
 import weakref
 
-import numpy
+import numpy as np
 
 from ..six import add_metaclass
 from ..utils import cached_property
@@ -226,7 +226,7 @@ class Number(Hashable):
             # e.g. would unify {int64, uint64} to float64
             a = numpy_support.as_dtype(self)
             b = numpy_support.as_dtype(other)
-            sel = numpy.promote_types(a, b)
+            sel = np.promote_types(a, b)
             return numpy_support.from_dtype(sel)
 
 

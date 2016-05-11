@@ -7,8 +7,8 @@ from __future__ import print_function, absolute_import, division
 import contextlib
 
 from llvmlite import ir
-import numpy
 
+import numpy as np
 
 from numba import jit, types, cgutils
 
@@ -244,8 +244,8 @@ def dot_2_mm(context, builder, sig, args):
     def dot_impl(a, b):
         m, k = a.shape
         _k, n = b.shape
-        out = numpy.empty((m, n), a.dtype)
-        return numpy.dot(a, b, out)
+        out = np.empty((m, n), a.dtype)
+        return np.dot(a, b, out)
 
     res = context.compile_internal(builder, dot_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
@@ -258,8 +258,8 @@ def dot_2_vm(context, builder, sig, args):
     def dot_impl(a, b):
         m, = a.shape
         _m, n = b.shape
-        out = numpy.empty((n, ), a.dtype)
-        return numpy.dot(a, b, out)
+        out = np.empty((n, ), a.dtype)
+        return np.dot(a, b, out)
 
     res = context.compile_internal(builder, dot_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
@@ -272,8 +272,8 @@ def dot_2_mv(context, builder, sig, args):
     def dot_impl(a, b):
         m, n = a.shape
         _n, = b.shape
-        out = numpy.empty((m, ), a.dtype)
-        return numpy.dot(a, b, out)
+        out = np.empty((m, ), a.dtype)
+        return np.dot(a, b, out)
 
     res = context.compile_internal(builder, dot_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
@@ -306,7 +306,7 @@ def dot_2_vv(context, builder, sig, args, conjugate=False):
     return builder.load(out)
 
 
-@lower_builtin(numpy.dot, types.Array, types.Array)
+@lower_builtin(np.dot, types.Array, types.Array)
 @lower_builtin('@', types.Array, types.Array)
 def dot_2(context, builder, sig, args):
     """
@@ -329,7 +329,7 @@ def dot_2(context, builder, sig, args):
             assert 0
 
 
-@lower_builtin(numpy.vdot, types.Array, types.Array)
+@lower_builtin(np.vdot, types.Array, types.Array)
 def vdot(context, builder, sig, args):
     """
     np.vdot(a, b)
@@ -479,7 +479,7 @@ def dot_3_mm(context, builder, sig, args):
                              out._getvalue())
 
 
-@lower_builtin(numpy.dot, types.Array, types.Array,
+@lower_builtin(np.dot, types.Array, types.Array,
                types.Array)
 def dot_3(context, builder, sig, args):
     """
@@ -578,7 +578,7 @@ def mat_inv(context, builder, sig, args):
     def create_out(a):
         m, n = a.shape
         if m != n:
-            raise numpy.linalg.LinAlgError("Last 2 dimensions of "
+            raise np.linalg.LinAlgError("Last 2 dimensions of "
                                            "the array must be square.")
         return a.copy()
 
@@ -637,7 +637,7 @@ def mat_inv(context, builder, sig, args):
 
         """
         size = int(1.01 * size.real)
-        return numpy.empty((size,), dtype=x.dtype)
+        return np.empty((size,), dtype=x.dtype)
 
     wty = types.Array(dtype, 1, 'C')
     work = context.compile_internal(builder, allocate_work,
@@ -677,7 +677,7 @@ def mat_inv(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, out)
 
 
-@lower_builtin(numpy.linalg.inv, types.Array)
+@lower_builtin(np.linalg.inv, types.Array)
 def inv(context, builder, sig, args):
     """
     np.linalg.inv(a)
@@ -697,9 +697,9 @@ fatal_error_func = types.ExternalFunction("numba_fatal_error", fatal_error_sig)
 
 @jit(nopython=True)
 def _check_finite_matrix(a):
-    for v in numpy.nditer(a):
-        if not numpy.isfinite(v.item()):
-            raise numpy.linalg.LinAlgError(
+    for v in np.nditer(a):
+        if not np.isfinite(v.item()):
+            raise np.linalg.LinAlgError(
                 "Array must not contain infs or NaNs.")
 
 
@@ -716,7 +716,7 @@ def _check_linalg_matrix(a, func_name):
 
 if numpy_version >= (1, 8):
 
-    @overload(numpy.linalg.cholesky)
+    @overload(np.linalg.cholesky)
     def cho_impl(a):
         ensure_lapack()
 
@@ -734,7 +734,7 @@ if numpy_version >= (1, 8):
             n = a.shape[-1]
             if a.shape[-2] != n:
                 msg = "Last 2 dimensions of the array must be square."
-                raise numpy.linalg.LinAlgError(msg)
+                raise np.linalg.LinAlgError(msg)
 
             # The output is allocated in C order
             out = a.copy()
@@ -748,7 +748,7 @@ if numpy_version >= (1, 8):
                 fatal_error_func()
                 assert 0   # unreachable
             if r > 0:
-                raise numpy.linalg.LinAlgError(
+                raise np.linalg.LinAlgError(
                     "Matrix is not positive definite.")
             # Zero out upper triangle, in F order
             for col in range(n):
@@ -757,7 +757,7 @@ if numpy_version >= (1, 8):
 
         return cho_impl
 
-    @overload(numpy.linalg.eig)
+    @overload(np.linalg.eig)
     def eig_impl(a):
         ensure_lapack()
 
@@ -810,21 +810,21 @@ if numpy_version >= (1, 8):
             n = a.shape[-1]
             if a.shape[-2] != n:
                 msg = "Last 2 dimensions of the array must be square."
-                raise numpy.linalg.LinAlgError(msg)
+                raise np.linalg.LinAlgError(msg)
 
             _check_finite_matrix(a)
 
             if F_layout:
-                acpy = numpy.copy(a)
+                acpy = np.copy(a)
             else:
-                acpy = numpy.asfortranarray(a)
+                acpy = np.asfortranarray(a)
 
             ldvl = 1
             ldvr = n
-            wr = numpy.empty(n, dtype=a.dtype)
-            wi = numpy.empty(n, dtype=a.dtype)
-            vl = numpy.empty((n, ldvl), dtype=a.dtype)
-            vr = numpy.empty((n, ldvr), dtype=a.dtype)
+            wr = np.empty(n, dtype=a.dtype)
+            wi = np.empty(n, dtype=a.dtype)
+            vl = np.empty((n, ldvl), dtype=a.dtype)
+            vr = np.empty((n, ldvr), dtype=a.dtype)
 
             r = numba_ez_rgeev(kind,
                                JOBVL,
@@ -852,7 +852,7 @@ if numpy_version >= (1, 8):
             # values present in the system matrix). As numba cannot handle
             # the case of a runtime decision based domain change relative to
             # the input type, if it is required numba raises as below.
-            if numpy.any(wi):
+            if np.any(wi):
                 raise ValueError(
                     "eig() argument must not cause a domain change.")
 
@@ -872,20 +872,20 @@ if numpy_version >= (1, 8):
             n = a.shape[-1]
             if a.shape[-2] != n:
                 msg = "Last 2 dimensions of the array must be square."
-                raise numpy.linalg.LinAlgError(msg)
+                raise np.linalg.LinAlgError(msg)
 
             _check_finite_matrix(a)
 
             if F_layout:
-                acpy = numpy.copy(a)
+                acpy = np.copy(a)
             else:
-                acpy = numpy.asfortranarray(a)
+                acpy = np.asfortranarray(a)
 
             ldvl = 1
             ldvr = n
-            w = numpy.empty(n, dtype=a.dtype)
-            vl = numpy.empty((n, ldvl), dtype=a.dtype)
-            vr = numpy.empty((n, ldvr), dtype=a.dtype)
+            w = np.empty(n, dtype=a.dtype)
+            vl = np.empty((n, ldvl), dtype=a.dtype)
+            vr = np.empty((n, ldvr), dtype=a.dtype)
 
             r = numba_ez_cgeev(kind,
                                JOBVL,
@@ -915,7 +915,7 @@ if numpy_version >= (1, 8):
         else:
             return real_eig_impl
 
-    @overload(numpy.linalg.svd)
+    @overload(np.linalg.svd)
     def svd_impl(a, full_matrices=1):
         ensure_lapack()
 
@@ -926,9 +926,9 @@ if numpy_version >= (1, 8):
         # convert typing floats to numpy floats for use in the impl
         s_type = getattr(a.dtype, "underlying_float", a.dtype)
         if s_type.bitwidth == 32:
-            s_dtype = numpy.float32
+            s_dtype = np.float32
         else:
-            s_dtype = numpy.float64
+            s_dtype = np.float64
 
         numba_ez_gesdd_sig = types.intc(
             types.char,  # kind
@@ -959,9 +959,9 @@ if numpy_version >= (1, 8):
             _check_finite_matrix(a)
 
             if F_layout:
-                acpy = numpy.copy(a)
+                acpy = np.copy(a)
             else:
-                acpy = numpy.asfortranarray(a)
+                acpy = np.asfortranarray(a)
 
             ldu = m
             minmn = min(m, n)
@@ -975,9 +975,9 @@ if numpy_version >= (1, 8):
                 ucol = minmn
                 ldvt = minmn
 
-            u = numpy.empty((ucol, ldu), dtype=a.dtype)
-            s = numpy.empty(minmn, dtype=s_dtype)
-            vt = numpy.empty((n, ldvt), dtype=a.dtype)
+            u = np.empty((ucol, ldu), dtype=a.dtype)
+            s = np.empty(minmn, dtype=s_dtype)
+            vt = np.empty((n, ldvt), dtype=a.dtype)
 
             r = numba_ez_gesdd(
                 kind,  # kind
@@ -1007,7 +1007,7 @@ if numpy_version >= (1, 8):
         return svd_impl
 
 
-@overload(numpy.linalg.qr)
+@overload(np.linalg.qr)
 def qr_impl(a):
     ensure_lapack()
 
@@ -1056,14 +1056,14 @@ def qr_impl(a):
 
         # copy A as it will be destroyed
         if F_layout:
-            q = numpy.copy(a)
+            q = np.copy(a)
         else:
-            q = numpy.asfortranarray(a)
+            q = np.asfortranarray(a)
 
         lda = m
 
         minmn = min(m, n)
-        tau = numpy.empty((minmn), dtype=a.dtype)
+        tau = np.empty((minmn), dtype=a.dtype)
 
         ret = numba_ez_geqrf(
             kind,  # kind
@@ -1078,7 +1078,7 @@ def qr_impl(a):
             assert 0   # unreachable
 
         # pull out R, this is transposed because of Fortran
-        r = numpy.zeros((n, minmn), dtype=a.dtype).T
+        r = np.zeros((n, minmn), dtype=a.dtype).T
 
         # the triangle in R
         for i in range(minmn):

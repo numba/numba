@@ -2,7 +2,8 @@ from __future__ import print_function, absolute_import, division
 
 import sys
 import threading
-import numpy
+
+import numpy as np
 
 from numba.ctypes_support import *
 
@@ -138,7 +139,7 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
             return what
 
         cfunc = jit(nopython=True, nogil=True)(pyfunc)
-        arr = numpy.array(["what"], dtype='S10')
+        arr = np.array(["what"], dtype='S10')
         self.assertEqual(pyfunc(arr), cfunc(arr))
 
     def test_python_call_back_threaded(self):
@@ -150,7 +151,7 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
 
         cfunc = jit(nopython=True, nogil=True)(pyfunc)
 
-        arr = numpy.array(["what"], dtype='S10')
+        arr = np.array(["what"], dtype='S10')
         repeat = 1000
 
         expected = pyfunc(arr, repeat)
@@ -191,7 +192,7 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
 
         cfunc = jit(nopython=True, nogil=True)(pyfunc)
 
-        arr = numpy.arange(5)
+        arr = np.arange(5)
 
         expected = pyfunc(arr)
         got = cfunc(arr)
@@ -201,7 +202,7 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
     def check_array_ctypes(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
 
-        arr = numpy.linspace(0, 10, 5)
+        arr = np.linspace(0, 10, 5)
         expected = arr ** 2.0
         got = cfunc(arr)
         self.assertPreciseEqual(expected, got)
@@ -225,7 +226,7 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
 
         # Non-compatible pointers are not accepted (here float32* vs. float64*)
         with self.assertRaises(errors.TypingError) as raises:
-            cfunc(numpy.float32([0.0]))
+            cfunc(np.float32([0.0]))
         self.assertIn("Invalid usage of ExternalFunctionPointer",
                       str(raises.exception))
 

@@ -115,7 +115,7 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
 # In NumPy, a division by zero does not raise an exception, but instead
 # generated a known value. Note that a division by zero in any of the
 # operations of a vector may raise an exception or issue a warning
-# depending on the numpy.seterr configuration. This is not supported
+# depending on the np.seterr configuration. This is not supported
 # right now (and in any case, it won't be handled by these functions
 # either)
 

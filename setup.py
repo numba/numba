@@ -11,9 +11,12 @@ from distutils.command import build
 from distutils.spawn import spawn
 import sys
 import os
-import numpy
+
+import numpy as np
 import numpy.distutils.misc_util as np_misc
+
 import versioneer
+
 
 class build_doc(build.build):
     description = "build documentation"
@@ -68,7 +71,7 @@ ext_npymath_exports = Extension(name='numba._npymath_exports',
 
 
 ext_dispatcher = Extension(name="numba._dispatcher",
-                           include_dirs=[numpy.get_include()],
+                           include_dirs=[np.get_include()],
                            sources=['numba/_dispatcher.c',
                                     'numba/_typeof.c',
                                     'numba/_hashtable.c',
@@ -81,7 +84,7 @@ ext_dispatcher = Extension(name="numba._dispatcher",
                            extra_link_args=cpp_link_args)
 
 ext_helperlib = Extension(name="numba._helperlib",
-                          include_dirs=[numpy.get_include()],
+                          include_dirs=[np.get_include()],
                           sources=["numba/_helpermod.c", "numba/_math_c99.c"],
                           extra_compile_args=CFLAGS,
                           extra_link_args=install_name_tool_fixer,
@@ -98,7 +101,7 @@ ext_typeconv = Extension(name="numba.typeconv._typeconv",
 
 ext_npyufunc_ufunc = Extension(name="numba.npyufunc._internal",
                                sources=["numba/npyufunc/_internal.c"],
-                               include_dirs=[numpy.get_include()],
+                               include_dirs=[np.get_include()],
                                depends=["numba/npyufunc/_ufunc.c",
                                         "numba/npyufunc/_internal.h",
                                         "numba/_pymodule.h"])

@@ -11,7 +11,7 @@ import timeit
 import math
 import sys
 
-import numpy
+import numpy as np
 
 from .six import *
 from numba.config import PYVERSION, MACHINE_BITS
@@ -329,8 +329,8 @@ class BenchmarkResult(object):
     def __init__(self, func, records, loop):
         self.func = func
         self.loop = loop
-        self.records = numpy.array(records) / loop
-        self.best = numpy.min(self.records)
+        self.records = np.array(records) / loop
+        self.best = np.min(self.records)
 
     def __repr__(self):
         name = getattr(self.func, "__name__", self.func)
