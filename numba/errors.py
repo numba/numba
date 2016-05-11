@@ -187,13 +187,14 @@ def _format_msg(fmt, args, kwargs):
 
 @contextlib.contextmanager
 def new_error_context(fmt_, *args, **kwargs):
+    errcls = kwargs.pop('errcls_', InternalError)
     try:
         yield
     except NumbaError as e:
         e.add_context(_format_msg(fmt_, args, kwargs))
         raise
     except Exception as e:
-        newerr = InternalError(e).add_context(_format_msg(fmt_, args, kwargs))
+        newerr = errcls(e).add_context(_format_msg(fmt_, args, kwargs))
         six.reraise(InternalError, newerr, sys.exc_info()[2])
 
 

@@ -2,13 +2,14 @@ from __future__ import print_function, division, absolute_import
 
 from collections import namedtuple
 import sys
+from functools import partial
 
 from llvmlite.ir import Value
 from llvmlite.llvmpy.core import Constant, Type, Builder
 
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
-from .errors import LoweringError
+from .errors import LoweringError, new_error_context
 
 
 class Environment(_dynfunc.Environment):
@@ -192,13 +193,10 @@ class BaseLower(object):
         self.pre_block(block)
         for inst in block.body:
             self.loc = inst.loc
-            try:
+            defaulterrcls = partial(LoweringError, loc=self.loc)
+            with new_error_context('lowering "{inst}" at {loc}', inst=inst,
+                                   loc=self.loc, errcls_=defaulterrcls):
                 self.lower_inst(inst)
-            except LoweringError:
-                raise
-            except Exception as e:
-                msg = "Internal error:\n%s: %s" % (type(e).__name__, e)
-                raise LoweringError(msg, inst.loc)
 
     def create_cpython_wrapper(self, release_gil=False):
         """
