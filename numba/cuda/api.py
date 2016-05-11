@@ -66,7 +66,7 @@ def to_device(obj, stream=0, copy=True, to=None):
 def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
     """device_array(shape, dtype=np.float, strides=None, order='C', stream=0)
 
-    Allocate an empty device ndarray. Similar to :meth:`np.empty`.
+    Allocate an empty device ndarray. Similar to :meth:`numpy.empty`.
     """
     shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
                                                          order)

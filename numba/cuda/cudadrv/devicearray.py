@@ -279,7 +279,7 @@ class DeviceNDArray(DeviceNDArrayBase):
     def reshape(self, *newshape, **kws):
         """
         Reshape the array without changing its contents, similarly to
-        :meth:`np.ndarray.reshape`. Example::
+        :meth:`numpy.ndarray.reshape`. Example::
 
             d_arr = d_arr.reshape(20, 50, order='F')
         """
@@ -303,7 +303,7 @@ class DeviceNDArray(DeviceNDArrayBase):
     def ravel(self, order='C', stream=0):
         '''
         Flatten the array without changing its contents, similar to
-        :meth:`np.ndarray.ravel`.
+        :meth:`numpy.ndarray.ravel`.
         '''
         stream = self._default_stream(stream)
         cls = type(self)
