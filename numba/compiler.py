@@ -278,16 +278,7 @@ class Pipeline(object):
         targetctx.refresh()
 
         self.typingctx = typingctx
-
-        subtargetoptions = {}
-        if flags.boundcheck:
-            subtargetoptions['enable_boundcheck'] = True
-        if flags.nrt:
-            subtargetoptions['enable_nrt'] = True
-        error_model = callconv.error_models[flags.error_model](targetctx.call_conv)
-        subtargetoptions['error_model'] = error_model
-
-        self.targetctx = targetctx.subtarget(**subtargetoptions)
+        self.targetctx = _make_subtarget(targetctx, flags)
         self.library = library
         self.args = args
         self.return_type = return_type
@@ -677,6 +668,21 @@ class Pipeline(object):
             return self.cr
 
 
+def _make_subtarget(targetctx, flags):
+    """
+    Make a new target context from the given target context and flags.
+    """
+    subtargetoptions = {}
+    if flags.boundcheck:
+        subtargetoptions['enable_boundcheck'] = True
+    if flags.nrt:
+        subtargetoptions['enable_nrt'] = True
+    error_model = callconv.create_error_model(flags.error_model, targetctx)
+    subtargetoptions['error_model'] = error_model
+
+    return targetctx.subtarget(**subtargetoptions)
+
+
 def compile_extra(typingctx, targetctx, func, args, return_type, flags,
                   locals, library=None):
     """
@@ -701,7 +707,9 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
 
 def compile_internal(typingctx, targetctx, library,
                      func, args, return_type, flags, locals):
-    # For now this is the same thing as compile_extra().
+    """
+    For internal use only.
+    """
     pipeline = Pipeline(typingctx, targetctx, library,
                         args, return_type, flags, locals)
     return pipeline.compile_extra(func)
