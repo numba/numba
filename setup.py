@@ -91,6 +91,7 @@ ext_helperlib = Extension(name="numba._helperlib",
                           depends=["numba/_pymodule.h",
                                    "numba/_math_c99.h",
                                    "numba/_helperlib.c",
+                                   "numba/_lapack.c",
                                    "numba/mathnames.inc"])
 
 ext_typeconv = Extension(name="numba.typeconv._typeconv",

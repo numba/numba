@@ -100,8 +100,8 @@ static PyTypeObject BoxType = {
 /* Import MemInfo_Release from numba.runtime._nrt_python once for use in
  * Box_dealloc.
  */
-static
-void* import_meminfo_release() {
+static void *
+import_meminfo_release(void) {
     PyObject *nrtmod = NULL;
     PyObject *helperdct = NULL;
     PyObject *mi_rel_fn = NULL;

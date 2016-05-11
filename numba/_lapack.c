@@ -987,8 +987,9 @@ numba_raw_cgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
 // user
 // Args are as per LAPACK.
 static int
-numba_ez_cgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
-                void *s, void *u, F_INT ldu, void *vt,  F_INT ldvt)
+numba_ez_cgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
+                Py_ssize_t lda, void *s, void *u, Py_ssize_t ldu, void *vt,
+                Py_ssize_t ldvt)
 {
     Py_ssize_t info = 0;
     Py_ssize_t lwork = -1;

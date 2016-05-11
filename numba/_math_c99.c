@@ -253,9 +253,9 @@ double m_round(double x) {
 /* Hand written */
 float m_roundf(float x) {
     if (x < 0.0) {
-        return ceilf(x - 0.5);
+        return (float) ceilf(x - 0.5);
     } else {
-        return floorf(x + 0.5);
+        return (float) floorf(x + 0.5);
     }
 }
 
@@ -298,7 +298,7 @@ double m_atan2(double y, double x)
 
 /* Map to double version directly */
 float m_atan2f(float y, float x) {
-    return m_atan2(y, x);
+    return (float) m_atan2(y, x);
 }
 
 
