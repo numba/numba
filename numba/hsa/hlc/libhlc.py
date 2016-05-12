@@ -6,10 +6,17 @@ from collections import namedtuple
 from ctypes import (c_size_t, byref, c_char_p, c_void_p, Structure, CDLL,
                     POINTER, create_string_buffer, c_int, addressof,
                     c_byte)
-
+import tempfile
+import os
 from numba import utils, config
 from .utils import adapt_llvm_version
-from .config import BUILTIN_PATH
+from .config import BUILTIN_PATH, WRAPPER_PATH
+
+
+from numba.hsa.hlc.hlc import CmdLine
+
+# the CLI tooling is needed for the linking phase at present
+cli = CmdLine()
 
 
 class OpaqueModuleRef(Structure):
@@ -54,6 +61,7 @@ class HLC(object):
 
             else:
                 hlc.HLC_ParseModule.restype = moduleref_ptr
+                hlc.HLC_ParseBitcode.restype = moduleref_ptr
                 hlc.HLC_ModuleEmitBRIG.restype = c_size_t
                 hlc.HLC_Initialize()
                 utils.finalize(hlc, hlc.HLC_Finalize)
@@ -89,7 +97,7 @@ class HLC(object):
         if not self.hlc.HLC_ModuleLinkIn(dst, src):
             raise Error("Failed to link modules")
 
-    def to_hsail(self, mod, opt=3):
+    def to_hsail(self, mod, opt=0):
         buf = c_char_p(0)
         if not self.hlc.HLC_ModuleEmitHSAIL(mod, int(opt), byref(buf)):
             raise Error("Failed to emit HSAIL")
@@ -97,7 +105,10 @@ class HLC(object):
         self.hlc.HLC_DisposeString(buf)
         return ret
 
-    def to_brig(self, mod, opt=3):
+    def _link_brig(self, upbrig_loc, patchedbrig_loc):
+        cli.link_brig(upbrig_loc, patchedbrig_loc)
+
+    def to_brig(self, mod, opt=0):
         bufptr = c_void_p(0)
         size = self.hlc.HLC_ModuleEmitBRIG(mod, int(opt), byref(bufptr))
         if not size:
@@ -110,7 +121,43 @@ class HLC(object):
         else:
             ret = bytes(buffer(buf))
         self.hlc.HLC_DisposeString(buf)
-        return ret
+        # Now we have an ELF, this needs patching with ld.lld which doesn't
+        # have an API. So we write out `ret` to a temporary file, then call
+        # the ld.lld ELF linker main() on it to generate a patched ELF
+        # temporary file output, which we read back in.
+
+        # tmpdir
+        tmpdir = tempfile.mkdtemp()
+        tmp_files = []
+
+        # write out unpatched BRIG
+        upbrig_file = "unpatched.brig"
+        upbrig_loc = os.path.join(tmpdir, upbrig_file)
+        with open(upbrig_loc, "wb") as up_brig_fobj:
+            up_brig_fobj.write(ret)
+            up_brig_fobj.close()
+            tmp_files.append(upbrig_loc)
+
+        # record the location of the patched ELF
+        patchedbrig_file = "patched.brig"
+        patchedbrig_loc = os.path.join(tmpdir, patchedbrig_file)
+
+        # call out to ld.lld to patch
+        self._link_brig(upbrig_loc, patchedbrig_loc)
+
+        # read back in brig temporary.
+        with open(patchedbrig_loc, "rb") as p_brig_fobj:
+            patchedBrig = p_brig_fobj.read()
+            p_brig_fobj.close()
+            tmp_files.append(patchedbrig_loc)
+
+        # Remove all temporary files
+        for afile in tmp_files:
+            os.unlink(afile)
+        # Remove directory
+        os.rmdir(tmpdir)
+
+        return patchedBrig
 
     def to_string(self, mod):
         buf = c_char_p(0)
@@ -147,13 +194,13 @@ class Module(object):
 
         self._llvm_modules.append(mod)
 
-    def finalize(self):
+    def generateGCN(self):
         """
         Finalize module and return the HSAIL code
         """
         assert not self._finalized, "Module finalized already"
 
-        # Link dependencies libraries
+        # Link dependencies
         main = self._llvm_modules[0]
         for dep in self._llvm_modules[1:]:
             self._hlc.link(main, dep)
@@ -164,13 +211,19 @@ class Module(object):
         builtin_mod = self._hlc.parse_bitcode(builtin_buf)
         self._hlc.link(main, builtin_mod)
 
+        # link library with the builtin hsail-amdgpu-wrapper.ll
+        with open(WRAPPER_PATH, 'rb') as builtin_fin:
+            builtin_buf = builtin_fin.read()
+        builtin_mod = self._hlc.parse_assembly(builtin_buf)
+        self._hlc.link(main, builtin_mod)
+
         # Optimize
         self._hlc.optimize(main)
 
         if config.DUMP_OPTIMIZED:
             print(self._hlc.to_string(main))
 
-        # Finalize the llvm to HSAIL
+        # create HSAIL
         hsail = self._hlc.to_hsail(main)
 
         # Finalize the llvm to BRIG

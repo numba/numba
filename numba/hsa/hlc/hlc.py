@@ -39,8 +39,8 @@ class CmdLine(object):
 
     CMD_VERIFY = ("$HSAILBIN/opt "
                   "-verify "
-                  "-mtriple amdgcn--amdhsa "
-                  "-mcpu=fiji "
+#                  "-mtriple amdgcn--amdhsa "
+#                  "-mcpu=fiji "
                   "-S "
                   "-o {fout} "
                   "{fin}")
@@ -73,6 +73,12 @@ class CmdLine(object):
                      "-S "
                      "-o {fout} "
                      "{fin} ")
+
+    CMD_LINK_BRIG = ("$HSAILBIN/ld.lld "
+                        "-shared "
+                        "-o {fout} "
+                        "{fin} ")
+
 
     def verify(self, ipath, opath):
         check_call(self.CMD_VERIFY.format(fout=opath, fin=ipath), shell=True)
@@ -108,6 +114,9 @@ class CmdLine(object):
         cmdline = self.CMD_LINK_LIBS.format(fout=opath, fin=ipath)
         cmdline += ' '.join(["{0}".format(lib) for lib in libpaths])
         check_call(cmdline, shell=True)
+
+    def link_brig(self, ipath, opath):
+        check_call(self.CMD_LINK_BRIG.format(fout=opath, fin=ipath), shell=True)
 
 
 class Module(object):
@@ -203,9 +212,13 @@ class Module(object):
         brig_path = self._track_temp_file("create-brig")
         self._cmd.generate_brig(ipath=opt_path, opath=brig_path)
 
+        end_brig_path = self._track_temp_file("patched-brig")
+        self._cmd.link_brig(ipath = brig_path, opath=end_brig_path)
+
+        # the old way...
         # Patch the BRIG ELF
-        patched_brig_path = self._track_temp_file("patched-brig")
-        self._cmd.patch_brig(ipath=brig_path, opath=patched_brig_path)
+   #     self._cmd.patch_brig(ipath=brig_path, opath=end_brig_path)
+
 
         self._GCNgenerated = True
 
@@ -215,7 +228,7 @@ class Module(object):
 
 
         # Read BRIG
-        with open(patched_brig_path, 'rb') as fin:
+        with open(end_brig_path, 'rb') as fin:
             brig = fin.read()
 
         if config.DUMP_ASSEMBLY:
