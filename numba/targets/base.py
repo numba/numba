@@ -1072,21 +1072,6 @@ class BaseContext(object):
             fn.args[0].add_attribute("nocapture")
             builder.call(fn, [meminfo])
 
-    def get_nrt_meminfo_recur(self, builder, typ, val):
-        """
-        Returns a list of MemInfo pointers (i8*) from the given value by
-        traversing recursively in nested structures.
-        """
-        data_model = self.data_model_manager[typ]
-        members = data_model.traverse(builder)
-        out = []
-        if data_model.has_nrt_meminfo():
-            mi = data_model.get_nrt_meminfo(builder, val)
-            out.append(mi)
-        for mtyp, getter in members:
-            out += self.get_nrt_meminfo_recur(builder, mtyp, getter(val))
-        return out
-
     def nrt_incref(self, builder, typ, value):
         """
         Recursively incref the given *value* and its members.
