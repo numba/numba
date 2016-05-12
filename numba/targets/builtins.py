@@ -30,8 +30,32 @@ def generic_is(context, builder, sig, args):
     """
     Default implementation for `x is y`
     """
-    return cgutils.false_bit
-
+    lhs_type, rhs_type = sig.args
+    lhs, rhs = args
+    # the lhs and rhs have the same type
+    if lhs_type == rhs_type:
+        lhs_mis = context.get_nrt_meminfo_recur(builder, lhs_type, lhs)
+        rhs_mis = context.get_nrt_meminfo_recur(builder, rhs_type, rhs)
+        if context.enable_nrt and lhs_mis and rhs_mis:
+            # check that the meminfo pointer matches
+            assert len(lhs_mis) == len(rhs_mis)
+            matches = [builder.icmp_unsigned('==', a, b)
+                       for a, b in zip(lhs_mis, rhs_mis)]
+            res = matches[0]
+            for m in matches[1:]:
+                res = builder.and_(res, m)
+            return res
+        else:
+            # non NRT managed object fallbacks to `==`
+            try:
+                eq_impl = context.get_function('==', sig)
+            except NotImplementedError:
+                # no `==` implemented for this type
+                return cgutils.false_bit
+            else:
+                return eq_impl(builder, args)
+    else:
+        return cgutils.false_bit
 
 #-------------------------------------------------------------------------------
 

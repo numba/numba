@@ -119,15 +119,17 @@ class TestOptional(TestCase):
         pyfunc = a_is_b
         cres = compile_isolated(pyfunc, [types.intp, types.intp])
         cfunc = cres.entry_point
-        # object identity is not the same in numba
-        self.assertFalse(cfunc(1, 1))
+        # integer identity relies on `==`
+        self.assertTrue(cfunc(1, 1))
+        self.assertFalse(cfunc(1, 2))
 
     def test_a_is_not_b_intp(self):
         pyfunc = a_is_not_b
         cres = compile_isolated(pyfunc, [types.intp, types.intp])
         cfunc = cres.entry_point
-        # object identity is not the same in numba
-        self.assertTrue(cfunc(1, 1))
+        # integer identity relies on `==`
+        self.assertFalse(cfunc(1, 1))
+        self.assertTrue(cfunc(1, 2))
 
     def test_optional_float(self):
         def pyfunc(x, y):

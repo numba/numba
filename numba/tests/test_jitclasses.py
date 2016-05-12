@@ -264,6 +264,18 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(cstruct.b, st.b)
         self.assertEqual(cstruct.c, st.c)
 
+    def test_is(self):
+        Vector = self._make_Vector2()
+        vec_a = Vector(1, 2)
+        vec_b = Vector(1, 2)
+
+        @njit
+        def do_is(a, b):
+            return a is b
+
+        self.assertTrue(do_is(vec_a, vec_a))
+        self.assertFalse(do_is(vec_a, vec_b))
+
     def test_isinstance(self):
         Vector2 = self._make_Vector2()
         vec = Vector2(1, 2)
