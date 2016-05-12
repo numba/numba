@@ -649,10 +649,13 @@ class BaseContext(object):
     def get_dummy_type(self):
         return GENERIC_POINTER
 
-    def compile_only_no_cache(self, builder, impl, sig, locals={}, flags=None):
-        """Invoke the compiler to compile a function to be used inside a
+    def compile_subroutine_no_cache(self, builder, impl, sig, locals={}, flags=None):
+        """
+        Invoke the compiler to compile a function to be used inside a
         nopython function, but without generating code to call that
         function.
+
+        Note this context's flags are not inherited.
         """
         # Compile
         from numba import compiler
@@ -679,15 +682,15 @@ class BaseContext(object):
         Return a placeholder object that's callable from another Numba
         function.
         """
-        cache_key = (impl.__code__, sig)
+        cache_key = (impl.__code__, sig, type(self.error_model))
         if impl.__closure__:
             # XXX This obviously won't work if a cell's value is
             # unhashable.
             cache_key += tuple(c.cell_contents for c in impl.__closure__)
         ty = self.cached_internal_func.get(cache_key)
         if ty is None:
-            cres = self.compile_only_no_cache(builder, impl, sig,
-                                              locals=locals)
+            cres = self.compile_subroutine_no_cache(builder, impl, sig,
+                                                    locals=locals)
             ty = types.NumbaFunction(cres.fndesc, sig)
             self.cached_internal_func[cache_key] = ty
         return ty
@@ -701,7 +704,8 @@ class BaseContext(object):
         return self.call_internal(builder, ty.fndesc, sig, args)
 
     def call_internal(self, builder, fndesc, sig, args):
-        """Given the function descriptor of an internally compiled function,
+        """
+        Given the function descriptor of an internally compiled function,
         emit a call to that function with the given arguments.
         """
         # Add call to the generated function

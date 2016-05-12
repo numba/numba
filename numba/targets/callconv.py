@@ -491,3 +491,10 @@ error_models = {
     'python': PythonErrorModel,
     'numpy': NumpyErrorModel,
     }
+
+
+def create_error_model(model_name, context):
+    """
+    Create an error model instance for the given target context.
+    """
+    return error_models[model_name](context.call_conv)
