@@ -1194,7 +1194,7 @@ def complex_to_complex(context, builder, fromty, toty, val):
 def any_to_boolean(context, builder, fromty, toty, val):
     return context.is_true(builder, fromty, val)
 
-@lower_cast(types.Boolean, types.Any)
+@lower_cast(types.Boolean, types.Number)
 def boolean_to_any(context, builder, fromty, toty, val):
     # Casting from boolean to anything first casts to int32
     asint = builder.zext(val, Type.int())

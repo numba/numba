@@ -85,7 +85,6 @@ def optional_to_optional(context, builder, fromty, toty, val):
 
 
 @lower_cast(types.Any, types.Optional)
-@lower_cast(types.Boolean, types.Optional)
 def any_to_optional(context, builder, fromty, toty, val):
     if fromty == types.none:
         return context.make_optional_none(builder, toty.type)
