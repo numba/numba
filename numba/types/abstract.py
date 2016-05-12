@@ -276,13 +276,13 @@ class IterableType(Type):
 
 class Sized(Type):
     """
-    Base class for object that supports len()
+    Base class for objects that support len()
     """
 
 
 class ConstSized(Sized):
     """
-    For types that has a constant size
+    For types that have a constant size
     """
     @abstractmethod
     def __len__(self):
