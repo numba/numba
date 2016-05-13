@@ -206,3 +206,5 @@ class SmartArray(object):
         return self._maybe_wrap(self.get('host').__getitem__(*args))
     def __setitem__(self, *args):
         return self._maybe_wrap(self.get('host').__setitem__(*args))
+    def astype(self, *args):
+        return self._maybe_wrap(self.get('host').astype(*args))

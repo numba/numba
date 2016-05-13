@@ -23,6 +23,8 @@ def shape_usecase(x):
 def npyufunc_usecase(x):
     return np.cos(np.sin(x))
 
+def astype_usecase(x, dtype):
+    return x.astype(dtype)
 
 def identity(x): return x
 
@@ -59,6 +61,12 @@ class TestJIT(TestCase):
         self.assertIsInstance(aa, SmartArray)
         self.assertPreciseEqual(aa.get('host'), np.cos(np.sin(a.get('host'))))
 
+    def test_astype(self):
+        a = SmartArray(np.int32([42, 8, -5]))
+        #cfunc = jit(nopython=True)(astype_usecase)
+        aa = a.astype(np.float64)
+        self.assertIsInstance(aa, SmartArray)
+        self.assertPreciseEqual(aa.get('host'), a.get('host').astype(np.float64))
 
 class TestInterface(TestCase):
 
