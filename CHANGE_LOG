@@ -1,3 +1,32 @@
+Version 0.26.0
+--------------
+
+This release adds support for ``cfunc`` decorator for exporting numba jitted
+functions to 3rd party API that takes C callbacks.  Most of the overhead of
+using jitclasses inside the interpreter are eliminated.  Support for
+decompositions in ``numpy.linalg`` are added.  Finally, numpy 1.11 is supported.
+
+Improvements:
+
+* PR #1889: export BLAS and LAPACK wrappers for pycc
+* PR #1888: faster array power
+* Issue #1867: allow "out" keyword arg for dufuncs
+* PR #1871: carray() and farray() for creating arrays from pointers
+* PR #1855: `@cfunc` decorator for exporting as ctypes function
+* PR #1862: add support for numpy.linalg.qr
+* PR #1851: jitclass support for '_' and '__' prefixed attributes
+* PR #1842: optimize jitclass in python interpreter
+* Issue #1837: cudasim issues with device function
+* PR #1839: add support for decompositions from ``numpy.linalg``
+* PR #1829: support enums
+* PR #1828: add support for ``numpy.random.rand()``` and
+  ``numpy.random.randn()``
+* Issue #1825: use of 0-darray in place of scalar index
+* Issue #1824: scalar arguments to object mode gufuncs
+* Issue #1813: let bitwise bool operators return booleans, not integers
+* Issue #1760: optional arguments in generators
+* PR #1780: numpy 1.11 support
+
 
 Version 0.25.0
 --------------
