@@ -102,7 +102,7 @@ class MemoryView(Buffer):
     """
 
 
-class BaseTuple(Hashable):
+class BaseTuple(ConstSized, Hashable):
     """
     The base class for all tuple types (with a known size).
     """

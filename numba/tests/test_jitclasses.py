@@ -13,6 +13,7 @@ from numba import jitclass
 from .support import TestCase, MemoryLeakMixin, tag
 from numba.jitclass import _box
 from numba.runtime.nrt import MemInfo
+from numba.errors import LoweringError
 
 
 def _get_meminfo(box):
@@ -270,6 +271,20 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(cstruct.a, st.a)
         self.assertEqual(cstruct.b, st.b)
         self.assertEqual(cstruct.c, st.c)
+
+    def test_is(self):
+        Vector = self._make_Vector2()
+        vec_a = Vector(1, 2)
+        vec_b = Vector(1, 2)
+
+        @njit
+        def do_is(a, b):
+            return a is b
+
+        with self.assertRaises(LoweringError) as raises:
+            # trigger compilation
+            do_is(vec_a, vec_a)
+        self.assertIn('no default `is` implementation', str(raises.exception))
 
     def test_isinstance(self):
         Vector2 = self._make_Vector2()
