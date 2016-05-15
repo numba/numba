@@ -23,14 +23,19 @@ init:
   - set PATH=%MINICONDA%;%MINICONDA%/Scripts;%MINICONDA%/Library/bin;%PATH%
 
 install:
-  - buildscripts\\incremental\\setup_conda_environment.cmd
-  # Build the package
+  - conda config --set always_yes yes
+  - conda update -q conda
+  - conda info
+  - conda list
+  - conda config --add channels numba
+  - conda create -q -n %CONDA_ENV% python=%PYTHON% numpy=%NUMPY% llvmlite cffi scipy
   - call activate %CONDA_ENV%
-  - python setup.py build_ext -q --inplace
 
 build: false
 
 test_script:
+  # Build and test the package
+  - python setup.py build_ext -q --inplace
   # Run a subset of the test suite, as AppVeyor is quite slow.
   # %CMD_IN_ENV% is needed for distutils/setuptools-based tests
   # on certain build configurations.
