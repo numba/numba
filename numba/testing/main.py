@@ -559,6 +559,8 @@ class ParallelTestRunner(runner.TextTestRunner):
         except:
             # On exception, kill still active workers immediately
             pool.terminate()
+            result.shouldStop = True
+            raise  # propagate error
         else:
             # Close the pool cleanly unless asked to early out
             if result.shouldStop:
