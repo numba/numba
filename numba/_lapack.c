@@ -433,7 +433,7 @@ typedef void (*rgeev_t)(char *jobvl, char *jobvr, F_INT *n, void *a, F_INT *lda,
 
 typedef void (*cgeev_t)(char *jobvl, char *jobvr, F_INT *n, void *a, F_INT
                         *lda, void *w, void *vl, F_INT *ldvl, void *vr,
-                        F_INT *ldvr, void *work, F_INT *lwork, double *rwork,
+                        F_INT *ldvr, void *work, F_INT *lwork, void *rwork,
                         F_INT *info);
 
 typedef void (*rgesdd_t)(char *jobz, F_INT *m, F_INT *n, void *a, F_INT *lda,
@@ -759,7 +759,7 @@ static int
 numba_raw_cgeev(char kind, char jobvl, char jobvr,
                 Py_ssize_t n, void *a, Py_ssize_t lda, void *w, void *vl,
                 Py_ssize_t ldvl, void *vr, Py_ssize_t ldvr, void *work,
-                Py_ssize_t lwork, double *rwork, Py_ssize_t *info)
+                Py_ssize_t lwork, void *rwork, Py_ssize_t *info)
 {
     void *raw_func = NULL;
     F_INT _n, _lda, _ldvl, _ldvr, _lwork, _info;
@@ -803,9 +803,9 @@ numba_ez_cgeev(char kind, char jobvl, char jobvr,  Py_ssize_t n, void *a,
     F_INT lwork = -1;
     F_INT _n, _lda, _ldvl, _ldvr;
     size_t base_size = -1;
-    all_dtypes stack_slot;
+    all_dtypes stack_slot, wk;
     void * work = NULL;
-    double * rwork = NULL;
+    void * rwork = (void *)&wk;
 
     ENSURE_VALID_COMPLEX_KIND(kind)
 
@@ -908,9 +908,9 @@ numba_ez_rgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
     Py_ssize_t info = 0;
     Py_ssize_t minmn = -1;
     Py_ssize_t lwork = -1;
-    F_INT *iwork = NULL;
-    all_dtypes stack_slot;
+    all_dtypes stack_slot, wk;
     size_t base_size = -1;
+    F_INT *iwork = (F_INT *)&wk;
     void *work = NULL;
 
     ENSURE_VALID_REAL_KIND(kind)
@@ -999,10 +999,10 @@ numba_ez_cgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
     Py_ssize_t maxmn = -1;
     size_t real_base_size = -1;
     size_t complex_base_size = -1;
-    all_dtypes stack_slot;
+    all_dtypes stack_slot, wk1, wk2;
     void *work = NULL;
-    void *rwork = NULL;
-    F_INT *iwork = NULL;
+    void *rwork = (void *)&wk1;
+    F_INT *iwork = (F_INT *)&wk2;
 
     ENSURE_VALID_COMPLEX_KIND(kind)
 
