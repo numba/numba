@@ -24,8 +24,11 @@ try:
 except ImportError:
     from Queue import Empty as TimeoutError
 
-# Use our patched Pool
-from .pool import Pool
+if PYVERSION[0] >= 3:
+    # Use our patched Pool in python 3
+    from .pool import Pool
+else:
+    from multiprocessing import Pool
 
 
 def make_tag_decorator(known_tags):
