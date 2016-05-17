@@ -338,12 +338,14 @@ def box_smart_array(typ, value, c):
     with c.builder.if_else(cgutils.is_not_null(c.builder, obj)) as (has_parent, otherwise):
         with has_parent:
             c.pyapi.incref(obj)
-            retn = c.pyapi.call_method(obj, "host_changed")
+            host = c.pyapi.string_from_constant_string('host')
+            retn = c.pyapi.call_method(obj, 'mark_changed', [host])
             with c.builder.if_else(cgutils.is_not_null(c.builder, retn)) as (success, failure):
                 with success:
                     c.pyapi.decref(retn)
                 with failure:
-                    c.pyapi.raise_object()
+                    c.builder.store(c.pyapi.get_null_object(), res)
+            c.pyapi.decref(host)
         with otherwise:
             # box into a new array:
             classobj = c.pyapi.unserialize(c.pyapi.serialize_object(typ.pyclass))
@@ -410,7 +412,8 @@ def unbox_array(typ, obj, c):
 @unbox(types.SmartArrayType)
 def unbox_smart_array(typ, obj, c):
     a = c.context.make_helper(c.builder, typ)
-    arr = c.pyapi.call_method(obj, "host")
+    host = c.pyapi.string_from_constant_string('host')
+    arr = c.pyapi.call_method(obj, 'get', [host])
     with c.builder.if_else(cgutils.is_not_null(c.builder, arr)) as (success, failure):
         with success:
             a.data = c.unbox(typ.as_array, arr).value
@@ -419,6 +422,7 @@ def unbox_smart_array(typ, obj, c):
         with failure:
             c.pyapi.raise_object()
 
+    c.pyapi.decref(host)
     return NativeValue(a._getvalue())
 
 
@@ -426,12 +430,15 @@ def unbox_smart_array(typ, obj, c):
 def reflect_smart_array(typ, value, c):
     a = c.context.make_helper(c.builder, typ, value)
     arr = a.parent
-    retn = c.pyapi.call_method(arr, "host_changed")
+    host = c.pyapi.string_from_constant_string('host')
+    retn = c.pyapi.call_method(arr, 'mark_changed', [host])
     with c.builder.if_else(cgutils.is_not_null(c.builder, retn)) as (success, failure):
         with success:
             c.pyapi.decref(retn)
         with failure:
             c.pyapi.raise_object()
+
+    c.pyapi.decref(host)
 
 @box(types.Tuple)
 @box(types.UniTuple)

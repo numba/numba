@@ -604,8 +604,8 @@ class CUDAKernel(CUDAKernelBase):
         """
         if isinstance(ty, types.Array):
             if isinstance(ty, types.SmartArrayType):
-                devary = val.gpu()
-                retr.append(lambda: val.gpu_changed())
+                devary = val.get('gpu')
+                retr.append(lambda: val.mark_changed('gpu'))
                 outer_parent = ctypes.c_void_p(0)
                 kernelargs.append(outer_parent)
             else:

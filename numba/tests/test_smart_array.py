@@ -57,7 +57,7 @@ class TestJIT(TestCase):
         cfunc = jit(nopython=True)(npyufunc_usecase)
         aa = cfunc(a)
         self.assertIsInstance(aa, SmartArray)
-        self.assertPreciseEqual(aa.host(), np.cos(np.sin(a.host())))
+        self.assertPreciseEqual(aa.get('host'), np.cos(np.sin(a.get('host'))))
 
 
 class TestInterface(TestCase):
