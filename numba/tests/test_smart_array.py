@@ -23,9 +23,6 @@ def shape_usecase(x):
 def npyufunc_usecase(x):
     return np.cos(np.sin(x))
 
-def astype_usecase(x, dtype):
-    return x.astype(dtype)
-
 def identity(x): return x
 
 class TestJIT(TestCase):
