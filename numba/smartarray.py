@@ -40,6 +40,8 @@ def _s2o(dtype, shape, strides):
 class SmartArray(object):
     """An array type that supports host and GPU storage."""
 
+    _targets = ('host', 'gpu')
+
     def __init__(self, obj=None, copy=True,
                  shape=None, dtype=None, order=None, where='host'):
         """Construct a SmartArray in the memory space defined by 'where'.
@@ -59,7 +61,8 @@ class SmartArray(object):
         initially. (Default: 'host')
         """
 
-        assert where in ('host', 'gpu')
+        if where not in self._targets:
+            raise ValueError('"%s" is not a valid target'%where)
         # we need either a prototype or proper type info
         assert obj is not None or (shape and dtype)
         self._host = self._gpu = None
@@ -95,6 +98,8 @@ class SmartArray(object):
     def get(self, where='host'):
         """Return the representation of 'self' in the given memory space."""
 
+        if where not in self._targets:
+            raise ValueError('"%s" is not a valid target'%where)
         self._sync(where)
         if where == 'host': return self._host
         elif where == 'gpu': return self._gpu
@@ -103,6 +108,8 @@ class SmartArray(object):
     def mark_changed(self, where='host'):
         """Mark the given location as changed, broadcast updates if needed."""
 
+        if where not in self._targets:
+            raise ValueError('"%s" is not a valid target'%where)
         if where == 'host':
             self._invalidate('gpu')
             # only sync if there are active views
