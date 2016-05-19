@@ -88,7 +88,7 @@ def _find_driver():
 
 
 PLATFORM_NOT_SUPPORTED_ERROR = """
-HSA is not currently ussported in this platform ({0}).
+HSA is not currently supported on this platform ({0}).
 """
 
 
