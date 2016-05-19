@@ -63,6 +63,7 @@ class TestJIT(TestCase):
         aa = a.astype(np.float64)
         self.assertIsInstance(aa, SmartArray)
         self.assertPreciseEqual(aa.get('host'), a.get('host').astype(np.float64))
+        self.assertIs(aa.dtype.type, np.float64)
 
 class TestInterface(TestCase):
 
