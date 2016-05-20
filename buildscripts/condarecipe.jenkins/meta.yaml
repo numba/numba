@@ -4,6 +4,7 @@ package:
 
 source:
   git_url: https://github.com/numba/numba
+  git_tag: release0.26.0
 
 build:
   number: {{ GIT_DESCRIBE_NUMBER|int }}
