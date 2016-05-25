@@ -32,13 +32,13 @@ class TestCodeGeneration(unittest.TestCase):
     def test_copy_kernel(self):
         arytype = types.float32[:]
         kernel = compiler.compile_kernel(copy_kernel, [arytype] * 2)
-        self.assertIn("prog kernel &{0}".format(kernel.entry_name),
+        self.assertIn(".globl\t{0}".format(kernel.entry_name),
                       kernel.assembly)
 
     def test_copy_kernel_1d(self):
         arytype = types.float32[:]
         kernel = compiler.compile_kernel(copy_kernel_1d, [arytype] * 2)
-        self.assertIn("prog kernel &{0}".format(kernel.entry_name),
+        self.assertIn(".globl\t{0}".format(kernel.entry_name),
                       kernel.assembly)
 
 
@@ -54,6 +54,7 @@ class _TestBase(unittest.TestCase):
         del self.cpu
 
 
+@unittest.skip("Test uses invalid BRIG based execution path.")
 class TestCodeLoading(_TestBase):
     def _check(self, brig_module, symbol):
         prog = Program()
