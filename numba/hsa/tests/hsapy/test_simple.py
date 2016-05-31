@@ -100,6 +100,8 @@ class TestSimple(unittest.TestCase):
         self.assertEqual(out[0], 0)
         self.assertEqual(out[-1], 0)
 
+
+    @unittest.skip("Missing impl __hsail_get_work_dim")
     def test_workdim(self):
         @hsa.jit
         def udt(output):

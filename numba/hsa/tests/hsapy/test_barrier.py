@@ -22,7 +22,7 @@ class TestBarrier(unittest.TestCase):
         twice[2, 128](arr)
 
         # Assembly contains barrier instruction?
-        self.assertIn("barrier;", twice.assembly)
+        self.assertIn("s_barrier", twice.assembly)
         # The computation is correct?
         np.testing.assert_allclose(orig * 2, arr)
 
@@ -43,7 +43,7 @@ class TestBarrier(unittest.TestCase):
         twice[2, 128](arr)
 
         # Assembly contains barrier instruction?
-        self.assertIn("barrier;", twice.assembly)
+        self.assertIn("s_barrier", twice.assembly)
         # The computation is correct?
         np.testing.assert_allclose(orig * 2, arr)
 
