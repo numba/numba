@@ -435,7 +435,6 @@ class TestDeviceLoop(_TestBase):
             return math.cos(arg)
 
         def test(ty):
-                print("Test %s" % ty)
                 data = np.array(np.random.random(100), dtype=ty)
                 out = np.empty_like(data)
                 device_data = hsaapi.to_device(data)
