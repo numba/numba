@@ -261,6 +261,15 @@ class _SetPayload(object):
             builder.branch(bb_body)
 
         with builder.goto_block(bb_not_found):
+            if for_insert:
+                # Not found => for insertion, return the index of the first
+                # deleted entry (if any), to avoid creating an infinite
+                # lookup chain (issue #1913).
+                i = builder.load(index)
+                j = builder.load(free_index)
+                i = builder.select(builder.icmp_unsigned('==', j, free_index_sentinel),
+                                   i, j)
+                builder.store(i, index)
             builder.branch(bb_end)
 
         with builder.goto_block(bb_found):
@@ -272,16 +281,7 @@ class _SetPayload(object):
         found.add_incoming(cgutils.true_bit, bb_found)
         found.add_incoming(cgutils.false_bit, bb_not_found)
 
-        i = builder.load(index)
-        if for_insert:
-            # For insertion, return the index of the first deleted entry
-            # (if any), to avoid creating an infinite lookup chain
-            # (issue #1913).
-            j = builder.load(free_index)
-            i = builder.select(builder.icmp_unsigned('==', j, free_index_sentinel),
-                               i, j)
-
-        return found, i
+        return found, builder.load(index)
 
     @contextlib.contextmanager
     def _iterate(self, start=None):
