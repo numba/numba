@@ -19,6 +19,9 @@ def complex_constant(n):
 def long_constant(n):
     return n + 100000000000000000000000000000000000000000000000
 
+def delitem_usecase(x):
+    del x[:]
+
 
 forceobj = Flags()
 forceobj.set("force_pyobject")
@@ -92,6 +95,17 @@ class TestObjectMode(TestCase):
             foo(None, None)
 
         self.assertIn("is not iterable", str(raises.exception))
+
+    def test_delitem(self):
+        pyfunc = delitem_usecase
+        cres = compile_isolated(pyfunc, (), flags=forceobj)
+        cfunc = cres.entry_point
+
+        l = [3, 4, 5]
+        cfunc(l)
+        self.assertPreciseEqual(l, [])
+        with self.assertRaises(TypeError):
+            cfunc(42)
 
 
 if __name__ == '__main__':
