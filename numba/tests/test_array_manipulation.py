@@ -44,6 +44,19 @@ def squeeze_array(a):
     return a.squeeze()
 
 
+def as_strided1(a):
+    # as_strided() with implicit shape
+    strides = (a.strides[0] // 2,) + a.strides[1:]
+    return np.lib.stride_tricks.as_strided(a, strides=strides)
+
+def as_strided2(a):
+    # Rolling window example as in https://github.com/numba/numba/issues/1884
+    window = 3
+    shape = a.shape[:-1] + (a.shape[-1] - window + 1, window)
+    strides = a.strides + (a.strides[-1],)
+    return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
+
+
 def add_axis1(a):
     return np.expand_dims(a, axis=0)
 
@@ -146,6 +159,24 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         # Exceptions leak references
         self.disable_leak_check()
+
+    def check_as_strided(self, pyfunc):
+        def run(arr):
+            cres = self.ccache.compile(pyfunc, (typeof(arr),))
+            return cres.entry_point(arr)
+        def check(arr):
+            expected = pyfunc(arr)
+            got = run(arr)
+            self.assertPreciseEqual(got, expected)
+
+        arr = np.arange(24)
+        check(arr)
+        check(arr.reshape((6, 4)))
+        check(arr.reshape((4, 1, 6)))
+
+    def test_as_strided(self):
+        self.check_as_strided(as_strided1)
+        self.check_as_strided(as_strided2)
 
     def test_flatten_array(self, flags=enable_pyobj_flags, layout='C'):
         a = np.arange(9).reshape(3, 3)

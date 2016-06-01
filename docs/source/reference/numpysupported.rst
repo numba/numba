@@ -359,6 +359,16 @@ Distributions
    and later).
 
 
+``stride_tricks``
+-----------------
+
+The following function from the :mod:`numpy.lib.stride_tricks` module
+is supported:
+
+* :func:`~numpy.lib.stride_tricks.as_strided` (the *strides* argument
+  is mandatory, the *subok* argument is not supported)
+
+
 Standard ufuncs
 ===============
 

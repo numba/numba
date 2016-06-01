@@ -14,7 +14,7 @@ from llvmlite.llvmpy.core import Constant
 
 import numpy as np
 
-from numba import types, cgutils, typing, utils
+from numba import types, cgutils, typing, utils, extending
 from numba.numpy_support import as_dtype, carray, farray
 from numba.numpy_support import version as numpy_version
 from numba.targets.imputils import (lower_builtin, lower_getattr,
@@ -3457,3 +3457,82 @@ def array_to_array(context, builder, fromty, toty, val):
     # Type inference should have prevented illegal array casting.
     assert toty.layout == 'A'
     return val
+
+
+# -----------------------------------------------------------------------------
+# Stride tricks
+
+def reshape_unchecked(a, shape, strides):
+    """
+    An intrinsic returning a derived array with the given shape and strides.
+    """
+    raise NotImplementedError
+
+@extending.type_callable(reshape_unchecked)
+def type_reshape_unchecked(context):
+    def check_shape(shape):
+        return (isinstance(shape, types.BaseTuple) and
+                all(isinstance(v, types.Integer) for v in shape))
+
+    def typer(a, shape, strides):
+        if not isinstance(a, types.Array):
+            return
+        if not check_shape(shape) or not check_shape(strides):
+            return
+        if len(shape) != len(strides):
+            return
+        return a.copy(ndim=len(shape), layout='A')
+
+    return typer
+
+@lower_builtin(reshape_unchecked, types.Array, types.BaseTuple, types.BaseTuple)
+def impl_shape_unchecked(context, builder, sig, args):
+    aryty = sig.args[0]
+    retty = sig.return_type
+
+    ary = make_array(aryty)(context, builder, args[0])
+    out = make_array(retty)(context, builder)
+    shape = cgutils.unpack_tuple(builder, args[1])
+    strides = cgutils.unpack_tuple(builder, args[2])
+
+    populate_array(out,
+                   data=ary.data,
+                   shape=shape,
+                   strides=strides,
+                   itemsize=ary.itemsize,
+                   meminfo=ary.meminfo,
+                   )
+
+    res = out._getvalue()
+    return impl_ret_borrowed(context, builder, retty, res)
+
+
+@extending.overload(np.lib.stride_tricks.as_strided)
+def as_strided(x, shape=None, strides=None):
+    from numba import jit
+
+    if shape in (None, types.none):
+        @jit(nopython=True)
+        def get_shape(x, shape):
+            return x.shape
+    else:
+        @jit(nopython=True)
+        def get_shape(x, shape):
+            return shape
+
+    if strides in (None, types.none):
+        # When *strides* is not passed, as_strided() does a non-size-checking
+        # reshape(), possibly changing the original strides.  This is too
+        # cumbersome to support right now, and a Web search shows all example
+        # use cases of as_strided() pass explicit *strides*.
+        raise NotImplementedError("as_strided() strides argument is mandatory")
+    else:
+        @jit(nopython=True)
+        def get_strides(x, strides):
+            return strides
+
+    def as_strided_impl(x, shape=None, strides=None):
+        x = reshape_unchecked(x, get_shape(x, shape), get_strides(x, strides))
+        return x
+
+    return as_strided_impl
