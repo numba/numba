@@ -1061,14 +1061,28 @@ class PythonAPI(object):
         return self.object_setattr(obj, attr, self.get_null_object())
 
     def object_getitem(self, obj, key):
+        """
+        Return obj[key]
+        """
         fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyObject_GetItem")
         return self.builder.call(fn, (obj, key))
 
     def object_setitem(self, obj, key, val):
+        """
+        obj[key] = val
+        """
         fnty = Type.function(Type.int(), [self.pyobj, self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyObject_SetItem")
         return self.builder.call(fn, (obj, key, val))
+
+    def object_delitem(self, obj, key):
+        """
+        del obj[key]
+        """
+        fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="PyObject_DelItem")
+        return self.builder.call(fn, (obj, key))
 
     def string_as_string(self, strobj):
         fnty = Type.function(self.cstring, [self.pyobj])
