@@ -2,6 +2,7 @@ from __future__ import absolute_import, print_function, division
 
 from collections import OrderedDict
 import ctypes
+import sys
 
 import numpy as np
 
@@ -548,6 +549,21 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         with self.assertRaises(AttributeError) as raises:
             access_dunder.py_func(inst)
         self.assertIn('_TestJitClass__value', str(raises.exception))
+
+    @unittest.skipIf(sys.version_info < (3,), "Python 3-specific test")
+    def test_annotations(self):
+        """
+        Methods with annotations should compile fine (issue #1911).
+        """
+        from .annotation_usecases import AnnotatedClass
+
+        spec = {'x': int32}
+        cls = jitclass(spec)(AnnotatedClass)
+
+        obj = cls(5)
+        self.assertEqual(obj.x, 5)
+        self.assertEqual(obj.add(2), 7)
+
 
 if __name__ == '__main__':
     unittest.main()
