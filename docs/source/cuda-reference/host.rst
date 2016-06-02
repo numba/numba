@@ -94,6 +94,8 @@ the functionality of the selected device:
 Measurement
 -----------
 
+.. _cuda-profiling:
+
 Profiling
 ~~~~~~~~~
 
