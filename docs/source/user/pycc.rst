@@ -125,3 +125,11 @@ centered difference on a 1d array::
        return D
 
 .. (example from http://nbviewer.ipython.org/gist/ketch/ae87a94f4ef0793d5d52)
+
+You can also omit the return type, which will then be inferred by Numba::
+
+   @cc.export('centdiff_1d', '(f8[:], f8)')
+   def centdiff_1d(u, dx):
+       # Same code as above
+       ...
+
