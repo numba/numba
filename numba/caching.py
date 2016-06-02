@@ -188,8 +188,8 @@ class _InTreeCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
 
 class _UserWideCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
     """
-    A locator for functions backed by a regular Python module, cached
-    into a user-wide cache directory.
+    A locator for functions backed by a regular Python module or a 
+    frozen executable, cached into a user-wide cache directory. 
     """
 
     def __init__(self, py_func, py_file):
