@@ -14,6 +14,7 @@ from numba.tests.matmul_usecase import has_blas
 cc = CC('pycc_test_simple')
 cc.use_nrt = False
 
+# Note the first signature omits the return type
 @cc.export('multf', (float32, float32))
 @cc.export('multi', 'i4(i4, i4)')
 def mult(a, b):
