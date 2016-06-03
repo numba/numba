@@ -13,17 +13,33 @@ from functools import wraps
 # Filled at the end
 __all__ = []
 
-def deprecated(subst):
+def deprecated(arg):
+    """Define a deprecation decorator.
+    An optional string should refer to the new API to be used instead.
 
+    Example:
+      @deprecated
+      def old_func(): ...
+
+      @deprecated('new_func')
+      def old_func(): ..."""
+
+    subst = arg if isinstance(arg, str) else None
     def decorator(func):
         def wrapper(*args, **kwargs):
-            warnings.warn("Call to deprecated function \"{}\".\n Use \"{}\" instead.".format(func.__name__, subst),
+            msg = "Call to deprecated function \"{}\"."
+            if subst:
+                msg += "\n Use \"{}\" instead."
+            warnings.warn(msg.format(func.__name__, subst),
                           category=DeprecationWarning, stacklevel=2)
             return func(*args, **kwargs)
 
         return wraps(func)(wrapper)
 
-    return decorator
+    if callable(arg) or type(arg) in (classmethod, staticmethod):
+        return decorator(arg)
+    else:
+        return decorator
 
 
 class NumbaWarning(Warning):
