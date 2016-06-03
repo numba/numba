@@ -123,7 +123,7 @@ and from the device automatically. It can be used as drop-in replacement for
                                shape=None, dtype=None, order=None, where='host')
 
 .. autoclass:: numba.SmartArray
-   :members: __init__, host, host_changed, gpu, gpu_changed
+   :members: __init__, get, mark_changed
 	       
 
 Thus, `SmartArray` objects may be passed as function arguments to jit-compiled
