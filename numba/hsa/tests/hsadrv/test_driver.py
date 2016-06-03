@@ -229,7 +229,8 @@ class TestMemory(_TestBase):
         hsa.hsa_memory_free(gpu_only_ptr)
         hsa.hsa_memory_free(gpu_host_accessible_ptr)
 
-    @unittest.skipIf(not dgpu_present(), "no discrete GPU present")
+    #@unittest.skipIf(not dgpu_present(), "no discrete GPU present")
+    @unittest.skip("BRIG format unsupported.")
     def test_coarse_grained_kernel_execution(self):
         """
         This tests the execution of a kernel on a dGPU using coarse memory
