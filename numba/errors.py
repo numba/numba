@@ -7,10 +7,23 @@ from __future__ import print_function, division, absolute_import
 import contextlib
 from collections import defaultdict
 import warnings
+from functools import wraps
 
 
 # Filled at the end
 __all__ = []
+
+def deprecated(subst):
+
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            warnings.warn("Call to deprecated function \"{}\".\n Use \"{}\" instead.".format(func.__name__, subst),
+                          category=DeprecationWarning, stacklevel=2)
+            return func(*args, **kwargs)
+
+        return wraps(func)(wrapper)
+
+    return decorator
 
 
 class NumbaWarning(Warning):

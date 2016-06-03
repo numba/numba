@@ -1,4 +1,5 @@
 from numba.tracing import trace
+from numba.errors import deprecated
 
 import sys
 
@@ -105,6 +106,11 @@ class SmartArray(object):
         elif where == 'gpu': return self._gpu
         else: raise ValueError('unknown memory space "%s"'%where)
 
+    @deprecated("get('host')")
+    def host(self): return self.get('host')
+    @deprecated("get('gpu')")
+    def gpu(self): return self.get('gpu')
+
     def mark_changed(self, where='host'):
         """Mark the given location as changed, broadcast updates if needed."""
 
@@ -120,6 +126,11 @@ class SmartArray(object):
             # only sync if there are active views
             if self._host is not None and sys.getrefcount(self._host) > 2:
                 self._sync('host')
+
+    @deprecated("mark_changed('host')")
+    def host_changed(self): return self.mark_changed('host')
+    @deprecated("mark_changed('gpu')")
+    def gpu_changed(self): return self.mark_changed('gpu')
 
     def __array__(self, *args):
 
