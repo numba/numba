@@ -55,12 +55,17 @@ class CompilationCache(object):
         Compile the function or retrieve an already compiled result
         from the cache.
         """
+        from numba.targets.registry import cpu_target
+
         cache_key = (func, args, return_type, flags)
         try:
             cr = self.cr_cache[cache_key]
         except KeyError:
-            cr = compile_extra(self.typingctx, self.targetctx, func,
-                               args, return_type, flags, locals={})
+            # Register the contexts in case for nested @jit or @overload calls
+            # (same as compile_isolated())
+            with cpu_target.nested_context(self.typingctx, self.targetctx):
+                cr = compile_extra(self.typingctx, self.targetctx, func,
+                                   args, return_type, flags, locals={})
             self.cr_cache[cache_key] = cr
         return cr
 
