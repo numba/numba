@@ -3212,7 +3212,10 @@ def np_cfarray(context, builder, sig, args):
     if isinstance(shapety, types.BaseTuple):
         shapes = cgutils.unpack_tuple(builder, shape)
     else:
+        shapety = (shapety,)
         shapes = (shape,)
+    shapes = [context.cast(builder, value, fromty, types.intp)
+              for fromty, value in zip(shapety, shapes)]
 
     off = ll_itemsize
     strides = []
