@@ -24,6 +24,12 @@ try:
 except ImportError:
     from Queue import Empty as TimeoutError
 
+if PYVERSION[0] >= 3:
+    # Use our patched Pool in python 3
+    from .pool import Pool
+else:
+    from multiprocessing import Pool
+
 
 def make_tag_decorator(known_tags):
     """
@@ -549,13 +555,15 @@ class ParallelTestRunner(runner.TextTestRunner):
         # We hijack TextTestRunner.run()'s inner logic by passing this
         # method as if it were a test case.
         child_runner = _MinimalRunner(self.runner_cls, self.runner_args)
-        pool = multiprocessing.Pool()
+        pool = Pool()
 
         try:
             self._run_parallel_tests(result, pool, child_runner)
         except:
             # On exception, kill still active workers immediately
             pool.terminate()
+            result.shouldStop = True
+            raise  # propagate error
         else:
             # Close the pool cleanly unless asked to early out
             if result.shouldStop:
