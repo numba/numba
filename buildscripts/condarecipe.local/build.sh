@@ -1,5 +1,4 @@
 #!/bin/bash
 
-# Hack to workaround https://github.com/testing-cabal/funcsigs/issues/18
-$PYTHON -m pip install ordereddict
-$PYTHON setup.py install
+$PYTHON buildscripts/remove_unwanted_files.py
+$PYTHON setup.py build install
