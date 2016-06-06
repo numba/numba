@@ -556,6 +556,8 @@ class ParallelTestRunner(runner.TextTestRunner):
         except:
             # On exception, kill still active workers immediately
             pool.terminate()
+            # Make sure exception is reported and not ignored
+            raise
         else:
             # Close the pool cleanly unless asked to early out
             if result.shouldStop:
@@ -580,16 +582,17 @@ class ParallelTestRunner(runner.TextTestRunner):
                 return
             except TimeoutError as e:
                 # Diagnose the names of unfinished tests
-                msg = ("%s [unfinished tests: %s]"
-                       % (str(e), ", ".join(map(repr, sorted(remaining_ids))))
+                msg = ("Tests didn't finish before timeout (or crashed):\n%s"
+                       % "".join("- %r\n" % tid for tid in sorted(remaining_ids))
                        )
                 e.args = (msg,) + e.args[1:]
                 raise e
-            result.add_results(child_result)
-            remaining_ids.discard(child_result.test_id)
-            if child_result.shouldStop:
-                result.shouldStop = True
-                return
+            else:
+                result.add_results(child_result)
+                remaining_ids.discard(child_result.test_id)
+                if child_result.shouldStop:
+                    result.shouldStop = True
+                    return
 
     def run(self, test):
         self._ptests, self._stests = _split_nonparallel_tests(test)
