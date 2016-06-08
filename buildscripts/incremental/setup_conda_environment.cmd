@@ -4,8 +4,8 @@ set PIP_INSTALL=pip install -q
 conda update -q -y conda
 @rem Clean up any left-over from a previous build
 conda env remove -q -y -n %CONDA_ENV%
-@rem Scipy, CFFI and jinja2 are optional dependencies, but exercised in the test suite
-conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip scipy jinja2
+@rem Scipy, CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
+conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip scipy jinja2 ipython
 call activate %CONDA_ENV%
 @rem Install llvmdev (separate channel, for now)
 %CONDA_INSTALL% -c numba llvmdev="3.7*" llvmlite
