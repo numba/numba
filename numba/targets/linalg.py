@@ -536,7 +536,7 @@ def _inv_err_handler(r):
             assert 0   # unreachable
         if r > 0:
             raise np.linalg.LinAlgError(
-                "Matrix is singular and cannot be inverted.")
+                "Matrix is singular to machine precision.")
 
 
 @overload(np.linalg.inv)
@@ -608,6 +608,18 @@ def _handle_err_maybe_convergence_problem(r):
         if r > 0:
             raise ValueError("Internal algorithm failed to converge.")
 
+
+def _check_linalg_1_or_2d_matrix(a, func_name):
+    # checks that a matrix is 1 or 2D
+    if not isinstance(a, types.Array):
+        raise TypingError("np.linalg.%s() only supported for array types "
+                          % func_name)
+    if not a.ndim <= 2:
+        raise TypingError("np.linalg.%s() only supported on 1 and 2-D arrays "
+                          % func_name)
+    if not isinstance(a.dtype, (types.Float, types.Complex)):
+        raise TypingError("np.linalg.%s() only supported on "
+                          "float and complex arrays." % func_name)
 
 if numpy_version >= (1, 8):
 
@@ -1001,20 +1013,68 @@ def qr_impl(a):
 
 
 # helpers and jitted specialisations required for np.linalg.lstsq
-def _check_linalg_1_or_2d_matrix(a, func_name):
-    # checks that a matrix is 1 or 2D
-    if not isinstance(a, types.Array):
-        raise TypingError("np.linalg.%s() only supported for array types "
-                          % func_name)
-    if not a.ndim <= 2:
-        raise TypingError("np.linalg.%s() only supported on 1 and 2-D arrays "
-                          % func_name)
-    if not isinstance(a.dtype, (types.Float, types.Complex)):
-        raise TypingError("np.linalg.%s() only supported on "
-                          "float and complex arrays." % func_name)
+# and np.linalg.solve. These functions have "system" in their name
+# as a differentiator.
+
+def _get_system_copy_in_b_impl(b):
+    # gets an implementation for correctly copying 'b' into the
+    # scratch space for 'b'
+    ndim = b.ndim
+    if ndim == 1:
+        @jit(nopython=True)
+        def oneD_impl(bcpy, b, nrhs):
+            bcpy[:b.shape[-1], 0] = b
+        return oneD_impl
+    else:
+        @jit(nopython=True)
+        def twoD_impl(bcpy, b, nrhs):
+            bcpy[:b.shape[-2], :nrhs] = b
+        return twoD_impl
 
 
-def _get_res_impl(dtype, real_dtype, b):
+def _get_system_compute_nrhs(b):
+    # gets and implementation for computing the number of right hand
+    # sides in the system of equations
+    ndim = b.ndim
+    if ndim == 1:
+        @jit(nopython=True)
+        def oneD_impl(b):
+            return 1
+        return oneD_impl
+    else:
+        @jit(nopython=True)
+        def twoD_impl(b):
+            return b.shape[-1]
+        return twoD_impl
+
+
+def _get_system_check_dimensionally_valid_impl(a, b):
+    # gets and implementation for checking that AX=B style system
+    # input is dimensionally valid
+    ndim = b.ndim
+    if ndim == 1:
+        @jit(nopython=True)
+        def oneD_impl(a, b):
+            am = a.shape[-2]
+            bm = b.shape[-1]
+            if am != bm:
+                raise np.linalg.LinAlgError(
+                    "Incompatible array sizes, system is not dimensionally valid.")
+        return oneD_impl
+    else:
+        @jit(nopython=True)
+        def twoD_impl(a, b):
+            am = a.shape[-2]
+            bm = b.shape[-2]
+            if am != bm:
+                raise np.linalg.LinAlgError(
+                    "Incompatible array sizes, system is not dimensionally valid.")
+        return twoD_impl
+
+# jitted specialisations for np.linalg.lstsq()
+
+
+def _get_lstsq_res_impl(dtype, real_dtype, b):
     # gets an implementation for computing the residual
     ndim = b.ndim
     if ndim == 1:
@@ -1051,23 +1111,7 @@ def _get_res_impl(dtype, real_dtype, b):
             return real_impl
 
 
-def _get_copy_in_b_impl(b):
-    # gets an implementation for correctly copying 'b' into the
-    # scratch space for 'b'
-    ndim = b.ndim
-    if ndim == 1:
-        @jit(nopython=True)
-        def oneD_impl(bcpy, b, nrhs):
-            bcpy[:b.shape[-1], 0] = b
-        return oneD_impl
-    else:
-        @jit(nopython=True)
-        def twoD_impl(bcpy, b, nrhs):
-            bcpy[:b.shape[-2], :nrhs] = b
-        return twoD_impl
-
-
-def _get_compute_return_impl(b):
+def _get_lstsq_compute_return_impl(b):
     # gets an implementation for extracting 'x' (the solution) from
     # the 'b' scratch space
     ndim = b.ndim
@@ -1080,46 +1124,6 @@ def _get_compute_return_impl(b):
         @jit(nopython=True)
         def twoD_impl(b, n):
             return b[:n, :].copy()
-        return twoD_impl
-
-
-def _get_compute_nrhs(b):
-    # gets and implementation for computing the number of right hand
-    # sides in the system of equations
-    ndim = b.ndim
-    if ndim == 1:
-        @jit(nopython=True)
-        def oneD_impl(b):
-            return 1
-        return oneD_impl
-    else:
-        @jit(nopython=True)
-        def twoD_impl(b):
-            return b.shape[-1]
-        return twoD_impl
-
-
-def _get_check_lstsq_dimensionally_valid_impl(a, b):
-    # gets and implementation for checking that the least squares system
-    # input is dimensionally valid
-    ndim = b.ndim
-    if ndim == 1:
-        @jit(nopython=True)
-        def oneD_impl(a, b):
-            am = a.shape[-2]
-            bm = b.shape[-1]
-            if am != bm:
-                raise np.linalg.LinAlgError(
-                    "Incompatible array sizes for np.linalg.lstsq().")
-        return oneD_impl
-    else:
-        @jit(nopython=True)
-        def twoD_impl(a, b):
-            am = a.shape[-2]
-            bm = b.shape[-2]
-            if am != bm:
-                raise np.linalg.LinAlgError(
-                    "Incompatible array sizes for np.linalg.lstsq().")
         return twoD_impl
 
 
@@ -1178,19 +1182,20 @@ def lstsq_impl(a, b, rcond=-1.0):
     # space.
 
     # get a specialisation for computing the number of RHS
-    b_nrhs = _get_compute_nrhs(b)
+    b_nrhs = _get_system_compute_nrhs(b)
 
     # get a specialised residual computation based on the dtype
-    compute_res = _get_res_impl(nb_shared_dt, real_dtype, b)
+    compute_res = _get_lstsq_res_impl(nb_shared_dt, real_dtype, b)
 
     # b copy function
-    b_copy_in = _get_copy_in_b_impl(b)
+    b_copy_in = _get_system_copy_in_b_impl(b)
 
     # return blob function
-    b_ret = _get_compute_return_impl(b)
+    b_ret = _get_lstsq_compute_return_impl(b)
 
     # check system is dimensionally valid function
-    check_dimensionally_valid = _get_check_lstsq_dimensionally_valid_impl(a, b)
+    check_dimensionally_valid = _get_system_check_dimensionally_valid_impl(
+        a, b)
 
     def lstsq_impl(a, b, rcond=-1.0):
         n = a.shape[-1]
@@ -1261,3 +1266,117 @@ def lstsq_impl(a, b, rcond=-1.0):
         return (x, res, rank, s[:minmn])
 
     return lstsq_impl
+
+# specialisations for np.linalg.solve
+
+
+def _get_solve_compute_return_impl(b):
+    # gets an implementation for extracting 'x' (the solution) from
+    # the 'b' scratch space
+    ndim = b.ndim
+    if ndim == 1:
+        @jit(nopython=True)
+        def oneD_impl(b):
+            return b.T.ravel()
+        return oneD_impl
+    else:
+        @jit(nopython=True)
+        def twoD_impl(b):
+            return b
+        return twoD_impl
+
+
+@overload(np.linalg.solve)
+def solve_impl(a, b):
+    ensure_lapack()
+
+    _check_linalg_matrix(a, "solve")
+    _check_linalg_1_or_2d_matrix(b, "solve")
+
+    a_F_layout = a.layout == 'F'
+    b_F_layout = b.layout == 'F'
+
+    # the typing context is not easily accessible in `@overload` mode
+    # so type unification etc. is done manually below
+    a_np_dt = np_support.as_dtype(a.dtype)
+    b_np_dt = np_support.as_dtype(b.dtype)
+
+    np_shared_dt = np.promote_types(a_np_dt, b_np_dt)
+    nb_shared_dt = np_support.from_dtype(np_shared_dt)
+
+    # the lapack wrapper signature
+    numba_xgesv_sig = types.intc(
+        types.char,  # kind
+        types.intp,  # n
+        types.intp,  # nhrs
+        types.CPointer(nb_shared_dt),  # a
+        types.intp,  # lda
+        types.CPointer(F_INT_nbtype),  # ipiv
+        types.CPointer(nb_shared_dt),  # b
+        types.intp  # ldb
+    )
+
+    # the lapack wrapper function
+    numba_xgesv = types.ExternalFunction("numba_xgesv", numba_xgesv_sig)
+
+    kind = ord(get_blas_kind(nb_shared_dt, "solve"))
+
+    # get a specialisation for computing the number of RHS
+    b_nrhs = _get_system_compute_nrhs(b)
+
+    # check system is valid
+    check_dimensionally_valid = _get_system_check_dimensionally_valid_impl(
+        a, b)
+
+    # b copy function
+    b_copy_in = _get_system_copy_in_b_impl(b)
+
+    # b return function
+    b_ret = _get_solve_compute_return_impl(b)
+
+    def solve_impl(a, b):
+        n = a.shape[-1]
+        nrhs = b_nrhs(b)
+
+        # check the systems have no inf or NaN
+        _check_finite_matrix(a)
+        _check_finite_matrix(b)
+
+        # check the systems are dimensionally valid
+        check_dimensionally_valid(a, b)
+
+        # a is destroyed on exit, copy it
+        acpy = a.astype(np_shared_dt)
+        if a_F_layout:
+            acpy = np.copy(acpy)
+        else:
+            acpy = np.asfortranarray(acpy)
+
+        # b is overwritten on exit with the solution, copy allocate
+        bcpy = np.empty((nrhs, n), dtype=np_shared_dt).T
+        # specialised copy in due to b being 1 or 2D
+        b_copy_in(bcpy, b, nrhs)
+
+        # allocate pivot array (needs to be fortran int size)
+        ipiv = np.empty(n, dtype=F_INT_nptype)
+
+        r = numba_xgesv(
+            kind,        # kind
+            n,           # n
+            nrhs,        # nhrs
+            acpy.ctypes,  # a
+            n,           # lda
+            ipiv.ctypes,  # ipiv
+            bcpy.ctypes,  # b
+            n            # ldb
+        )
+        _inv_err_handler(r)
+
+        # help liveness analysis
+        acpy.size
+        bcpy.size
+        ipiv.size
+
+        return b_ret(bcpy)
+
+    return solve_impl

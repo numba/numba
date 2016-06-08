@@ -175,6 +175,7 @@ floating-point and complex numbers:
 * :func:`numpy.linalg.inv`
 * :func:`numpy.linalg.lstsq`
 * :func:`numpy.linalg.qr` (only the first argument).
+* :func:`numpy.linalg.solve`
 * :func:`numpy.linalg.svd` (only the 2 first arguments).
 
 .. note::

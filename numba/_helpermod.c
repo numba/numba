@@ -91,6 +91,7 @@ build_c_helpers_dict(void)
     declmethod(ez_geqrf);
     declmethod(ez_xxgqr);
     declmethod(ez_gelsd);
+    declmethod(xgesv);
     
     declpointer(py_random_state);
     declpointer(np_random_state);
