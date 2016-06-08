@@ -10,9 +10,9 @@ python -m numba.tests.test_runtests
 @rem directive in .coveragerc
 if "%RUN_COVERAGE%" == "yes" (
     coverage erase
-    coverage run runtests.py -b -m -v numba.tests.test_dispatcher
+    coverage run runtests.py -b -m -v numba.tests
 ) else (
     set NUMBA_ENABLE_CUDASIM=1
-    python -m numba.runtests -b -m -v numba.tests.test_dispatcher
+    python -m numba.runtests -b -m -v numba.tests
 )
 
