@@ -222,6 +222,9 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         self._insert(sig, cres.entry_point, cres.objectmode, cres.interpmode)
         self.overloads[args] = cres
 
+    def fold_argument_types(self, args, kws):
+        return self._compiler.fold_argument_types(args, kws)
+
     def get_call_template(self, args, kws):
         """
         Get a typing.ConcreteTemplate for this dispatcher and the given
@@ -403,7 +406,8 @@ class Dispatcher(_DispatcherBase):
         self._cache_hits = collections.Counter()
         self._cache_misses = collections.Counter()
 
-        self.typingctx.insert_global(self, types.Dispatcher(self))
+        self._type = types.Dispatcher(self)
+        self.typingctx.insert_global(self, self._type)
 
     def enable_caching(self):
         self._cache = FunctionCache(self.py_func)

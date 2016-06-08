@@ -9,6 +9,7 @@ from llvmlite.llvmpy.core import Constant, Type, Builder
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
 from .errors import LoweringError
+from .targets import imputils
 
 
 class Environment(_dynfunc.Environment):
@@ -573,6 +574,11 @@ class Lower(BaseLower):
             else:
                 res = self.context.call_function_pointer(self.builder, pointer,
                                                          argvals, fnty.cconv)
+
+        elif isinstance(fnty, types.RecursiveCall):
+            # XXX Assume self-recursion
+            impl = imputils.user_function(self.fndesc, ())
+            res = impl(self.context, self.builder, signature, argvals)
 
         else:
             # Normal function resolution (for Numba-compiled functions)

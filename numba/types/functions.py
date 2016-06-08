@@ -141,6 +141,7 @@ class WeakType(Type):
         return Type.__hash__(self)
 
 
+# XXX DispatcherType
 class Dispatcher(WeakType, Callable, Dummy):
     """
     Type class for @jit-compiled functions.
@@ -309,3 +310,14 @@ class NumberClass(Callable, DTypeSpec, Opaque):
     @property
     def dtype(self):
         return self.instance_type
+
+
+class RecursiveCall(Opaque):
+    """
+    """
+
+    def __init__(self, dispatcher_type):
+        assert isinstance(dispatcher_type, Dispatcher)
+        self.dispatcher_type = dispatcher_type
+        name = "recursive(%s)" % (dispatcher_type,)
+        super(RecursiveCall, self).__init__(name)

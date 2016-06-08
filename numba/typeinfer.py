@@ -18,7 +18,7 @@ from pprint import pprint
 import itertools
 import traceback
 
-from numba import ir, types, utils, config, six
+from numba import ir, types, utils, config, six, typing
 from .errors import TypingError, UntypedAttributeError
 
 
@@ -320,6 +320,7 @@ class CallConstraint(object):
         assert fnty
         context = typeinfer.context
 
+        # Fetch all argument types, bail if any is unknown
         n_pos_args = len(self.args)
         kwds = [kw for (kw, var) in self.kws]
         argtypes = [typevars[a.name] for a in self.args]
@@ -341,7 +342,9 @@ class CallConstraint(object):
             pos_args += args[-1].types
             args = args[:-1]
         kw_args = dict(zip(kwds, args[n_pos_args:]))
-        sig = context.resolve_function_type(fnty, pos_args, kw_args)
+
+        # Resolve call type
+        sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
         if sig is None:
             desc = context.explain_function_type(fnty)
             headtemp = "Invalid usage of {0} with parameters ({1})"
@@ -554,7 +557,7 @@ class TypeInferer(object):
 
         # { index: mangled name }
         self.arg_names = {}
-        self.return_type = None
+        #self.return_type = None
         # Set of assumed immutable globals
         self.assumed_immutables = set()
         # Track all calls and associated constraints
@@ -573,6 +576,14 @@ class TypeInferer(object):
         # Disambiguise argument name
         return "arg.%s" % (name,)
 
+    def _get_return_vars(self):
+        rets = []
+        for blk in utils.itervalues(self.blocks):
+            inst = blk.terminator
+            if isinstance(inst, ir.Return):
+                rets.append(inst.value)
+        return rets
+
     def seed_argument(self, name, index, typ):
         name = self._mangle_arg_name(name)
         self.seed_type(name, typ)
@@ -586,10 +597,8 @@ class TypeInferer(object):
     def seed_return(self, typ):
         """Seeding of return value is optional.
         """
-        for blk in utils.itervalues(self.blocks):
-            inst = blk.terminator
-            if isinstance(inst, ir.Return):
-                self.lock_type(inst.value.name, typ)
+        for var in self._get_return_vars():
+            self.lock_type(var.name, typ)
 
     def build_constraint(self):
         for blk in utils.itervalues(self.blocks):
@@ -697,13 +706,7 @@ class TypeInferer(object):
             calltypes[call] = constraint.get_call_signature()
         return calltypes
 
-    def get_return_type(self, typemap):
-        rettypes = set()
-        for blk in utils.itervalues(self.blocks):
-            term = blk.terminator
-            if isinstance(term, ir.Return):
-                rettypes.add(typemap[term.value.name])
-
+    def _unify_return_types(self, rettypes):
         if rettypes:
             unified = self.context.unify_types(*rettypes)
             if unified is None or not unified.is_precise():
@@ -712,7 +715,14 @@ class TypeInferer(object):
                                   % ", ".join(sorted(map(str, rettypes))))
             return unified
         else:
+            # Function without a successful return path
             return types.none
+
+    def get_return_type(self, typemap):
+        rettypes = set()
+        for var in self._get_return_vars():
+            rettypes.add(typemap[var.name])
+        return self._unify_return_types(rettypes)
 
     def get_state_token(self):
         """The algorithm is monotonic.  It can only grow or "refine" the
@@ -812,7 +822,7 @@ class TypeInferer(object):
         Ensure that builtins are not modified.
         """
         if (gvar.name in ('range', 'xrange') and
-                    gvar.value not in utils.RANGE_ITER_OBJECTS):
+            gvar.value not in utils.RANGE_ITER_OBJECTS):
             bad = True
         elif gvar.name == 'slice' and gvar.value is not slice:
             bad = True
@@ -825,8 +835,50 @@ class TypeInferer(object):
             raise TypingError("Modified builtin '%s'" % gvar.name,
                               loc=inst.loc)
 
+    def resolve_call(self, fnty, pos_args, kw_args):
+        """
+        Resolve a call to a given function type.  A signature is returned.
+        """
+        if isinstance(fnty, types.RecursiveCall):
+            # Self-recursive call
+            disp = fnty.dispatcher_type.dispatcher
+            pysig, args = disp.fold_argument_types(pos_args, kw_args)
+
+            # Fetch the return type as given by the user
+            rettypes = set()
+            for retvar in self._get_return_vars():
+                typevar = self.typevars[retvar.name]
+                if not typevar.defined:
+                    raise TypeError("recursive calls need an explicit signature in jit()")
+                rettypes.add(typevar.getone())
+            return_type = self._unify_return_types(rettypes)
+
+            # Match call arguments with current inference arguments
+            assert len(args) == len(self.arg_names)
+            formal_args = [self.typevars[self.arg_names[i]].getone()
+                           for i in range(len(args))]
+            for formal_ty, actual_ty in zip(formal_args, args):
+                if not self.context.can_convert(actual_ty, formal_ty):
+                    raise TypeError("bad self-recursive call with argument types %s" % (args,))
+
+            sig = typing.signature(return_type, *formal_args)
+            sig.pysig = pysig
+            return sig
+        else:
+            return self.context.resolve_function_type(fnty, pos_args, kw_args)
+
     def typeof_global(self, inst, target, gvar):
         typ = self.context.resolve_value_type(gvar.value)
+        #print("-- global:", gvar, typ)
+        if (isinstance(typ, types.Dispatcher)
+            and typ.dispatcher.is_compiling):
+            #print("Recursing:", typ.dispatcher.py_func, self.py_func)
+            # Recursive call
+            if typ.dispatcher.py_func is self.py_func:
+                typ = types.RecursiveCall(typ)
+            else:
+                raise NotImplementedError("non-self recursion not supported")
+
         if isinstance(typ, types.Array):
             # Global array in nopython mode is constant
             # XXX why layout='C'?
