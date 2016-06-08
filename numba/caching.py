@@ -250,12 +250,13 @@ class _IPythonCacheLocator(_CacheLocator):
     def from_function(cls, py_func, py_file):
         if not py_file.startswith("<ipython-"):
             return
+        self = cls(py_func, py_file)
         try:
             self.ensure_cache_path()
         except OSError:
             # Cannot ensure the cache directory exists
             return
-        return cls(py_func, py_file)
+        return self
 
 
 class FunctionCache(_Cache):

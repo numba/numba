@@ -35,6 +35,7 @@ test:
     # Required to test optional Numba features
     - cffi
     - scipy
+    - ipython
   files:
     - mandel.py
   commands:
