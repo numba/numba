@@ -407,8 +407,9 @@ C callbacks
 
    .. attribute:: cffi
 
-      A `cffi`_ function pointer instance, suitable for passing as an
-      argument to `cffi`_-wrapped functions.
+      A `cffi`_ function pointer instance, to be passed as an argument to
+      `cffi`_-wrapped functions.  The pointer's type is ``void *``, so
+      only minimal type checking will happen when passing it to `cffi`_.
 
    .. attribute:: ctypes
 
