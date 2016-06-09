@@ -576,7 +576,7 @@ class Lower(BaseLower):
                                                          argvals, fnty.cconv)
 
         elif isinstance(fnty, types.RecursiveCall):
-            # XXX Assume self-recursion
+            # Self-recursive call
             impl = imputils.user_function(self.fndesc, ())
             res = impl(self.context, self.builder, signature, argvals)
 
