@@ -4,7 +4,6 @@ Define @jit and related decorators.
 
 from __future__ import print_function, division, absolute_import
 
-import sys
 import warnings
 
 from . import config, sigutils

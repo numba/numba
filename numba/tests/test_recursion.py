@@ -18,6 +18,7 @@ class TestSelfRecursion(TestCase):
     def check_fib(self, cfunc):
         self.assertPreciseEqual(cfunc(10), 55)
 
+    @tag('important')
     def test_global_explicit_sig(self):
         self.check_fib(self.mod.fib1)
 
