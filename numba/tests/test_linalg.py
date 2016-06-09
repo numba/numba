@@ -496,7 +496,8 @@ class TestTestLinalgBase(TestCase):
 
     def test_specific_sample_matrix(self):
 
-        inst = TestLinalgBase()
+        # add a default test to the ctor, it never runs so doesn't matter
+        inst = TestLinalgBase('specific_sample_matrix')
 
         sizes = [(7, 1), (11, 5), (5, 11), (3, 3), (1, 7)]
 
