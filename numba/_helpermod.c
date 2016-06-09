@@ -154,6 +154,11 @@ void _numba_test_vcube(int n, double *x, double *out)
         out[i] = pow(x[i], 3.0);
 }
 
+double _numba_test_funcptr(double (*func)(double))
+{
+    return func(1.5);
+}
+
 
 MOD_INIT(_helperlib) {
     PyObject *m;
