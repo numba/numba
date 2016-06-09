@@ -31,15 +31,15 @@ That compile-time logic is easily implemented using the
    from numba import generated_jit, types
 
    @generated_jit(nopython=True)
-   def is_missing(value):
+   def is_missing(x):
        """
        Return True if the value is missing, False otherwise.
        """
-       if isinstance(value, types.Float):
+       if isinstance(x, types.Float):
            return lambda x: np.isnan(x)
-       elif isinstance(value, (types.NPDatetime, types.NPTimedelta)):
+       elif isinstance(x, (types.NPDatetime, types.NPTimedelta)):
            # The corresponding Not-a-Time value
-           missing = value('NaT')
+           missing = x('NaT')
            return lambda x: x == missing
        else:
            return lambda x: False
