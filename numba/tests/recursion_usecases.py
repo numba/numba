@@ -11,7 +11,8 @@ from numba import jit
 def fib1(n):
     if n < 2:
         return n
-    return fib1(n - 1) + fib1(n - 2)
+    # Note the second call uses a named argument
+    return fib1(n - 1) + fib1(n=n - 2)
 
 
 def make_fib2():
@@ -19,7 +20,7 @@ def make_fib2():
     def fib2(n):
         if n < 2:
             return n
-        return fib2(n - 1) + fib2(n - 2)
+        return fib2(n - 1) + fib2(n=n - 2)
 
     return fib2
 
