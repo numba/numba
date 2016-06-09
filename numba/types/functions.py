@@ -321,3 +321,7 @@ class RecursiveCall(Opaque):
         self.dispatcher_type = dispatcher_type
         name = "recursive(%s)" % (dispatcher_type,)
         super(RecursiveCall, self).__init__(name)
+
+    @property
+    def key(self):
+        return self.dispatcher_type

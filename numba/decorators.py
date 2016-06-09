@@ -154,36 +154,6 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **opti
         return wrapper
 
 
-def _temporarily_set_user_local(name, value):
-    # HACK: find user frame and store dispatcher object
-    # NOTE: we cannot use contextlib.contextmanager as it can create
-    # an arbitrary number of in-between frames.
-    this_frame = sys._getframe(0)
-    frame = this_frame
-    while frame.f_code.co_filename == this_frame.f_code.co_filename:
-        frame = frame.f_back
-
-    ns = frame.f_locals
-    if ns is not frame.f_globals:
-        def restore():
-            pass
-        return restore
-    else:
-        del frame
-        sentinel = object()
-        old = ns.get(name, sentinel)
-        ns[name] = value
-
-        def restore(ns=ns, old=old, sentinel=sentinel):
-            if old is sentinel:
-                del ns[name]
-            else:
-                ns[name] = old
-            del ns, old, sentinel
-
-        return restore
-
-
 def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
     dispatcher = registry.dispatcher_registry[target]
 
@@ -199,15 +169,13 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
         if cache:
             disp.enable_caching()
         if sigs is not None:
-            # For recursion, we expose the Dispatcher to the caller's
-            # namespace, even though the decorator hasn't returned yet
-            restore = _temporarily_set_user_local(func.__name__, disp)
-            try:
+            # Register the Dispatcher to the type inference mechanism,
+            # even though the decorator hasn't returned yet.
+            from . import typeinfer
+            with typeinfer.register_dispatcher(disp):
                 for sig in sigs:
                     disp.compile(sig)
                 disp.disable_compile()
-            finally:
-                restore()
         return disp
 
     return wrapper

@@ -14,8 +14,9 @@ Constraints push types forward following the dataflow.
 
 from __future__ import print_function, division, absolute_import
 
-from pprint import pprint
+import contextlib
 import itertools
+from pprint import pprint
 import traceback
 
 from numba import ir, types, utils, config, six, typing
@@ -540,6 +541,27 @@ class TypeVarMap(dict):
             super(TypeVarMap, self).__setitem__(name, value)
 
 
+# A temporary mapping of {function name: dispatcher object}
+_temporary_dispatcher_map = {}
+
+@contextlib.contextmanager
+def register_dispatcher(disp):
+    """
+    Register a Dispatcher for inference while it is not yet stored
+    as global or closure variable (e.g. during execution of the @jit()
+    call).  This allows resolution of recursive calls with eager
+    compilation.
+    """
+    assert callable(disp)
+    assert callable(disp.py_func)
+    name = disp.py_func.__name__
+    _temporary_dispatcher_map[name] = disp
+    try:
+        yield
+    finally:
+        del _temporary_dispatcher_map[name]
+
+
 class TypeInferer(object):
     """
     Operates on block that shares the same ir.Scope.
@@ -865,19 +887,26 @@ class TypeInferer(object):
             sig.pysig = pysig
             return sig
         else:
+            # Normal non-recursive call
             return self.context.resolve_function_type(fnty, pos_args, kw_args)
 
     def typeof_global(self, inst, target, gvar):
         typ = self.context.resolve_value_type(gvar.value)
-        #print("-- global:", gvar, typ)
-        if (isinstance(typ, types.Dispatcher)
-            and typ.dispatcher.is_compiling):
-            #print("Recursing:", typ.dispatcher.py_func, self.py_func)
+
+        if (typ is None and gvar.name == self.py_func.__name__
+            and gvar.name in _temporary_dispatcher_map):
+            # Self-recursion case where the dispatcher is not (yet?) known
+            # as a global variable
+            typ = types.Dispatcher(_temporary_dispatcher_map[gvar.name])
+
+        if isinstance(typ, types.Dispatcher) and typ.dispatcher.is_compiling:
             # Recursive call
             if typ.dispatcher.py_func is self.py_func:
                 typ = types.RecursiveCall(typ)
             else:
-                raise NotImplementedError("non-self recursion not supported")
+                raise NotImplementedError(
+                    "call to %s: mutual recursion not supported"
+                    % typ.dispatcher)
 
         if isinstance(typ, types.Array):
             # Global array in nopython mode is constant
