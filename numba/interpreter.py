@@ -516,8 +516,13 @@ class Interpreter(object):
     def get_closure_value(self, index):
         """
         Get a value from the cell contained in this function's closure.
+        If not set, return a ir.UNDEFINED.
         """
-        return self.bytecode.func.__closure__[index].cell_contents
+        cell = self.bytecode.func.__closure__[index]
+        try:
+            return cell.cell_contents
+        except ValueError:
+            return ir.UNDEFINED
 
     @property
     def current_scope(self):
