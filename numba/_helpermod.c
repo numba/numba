@@ -124,6 +124,7 @@ PyAPI_FUNC(double) _numba_test_sin(double x);
 PyAPI_FUNC(double) _numba_test_cos(double x);
 PyAPI_FUNC(double) _numba_test_exp(double x);
 PyAPI_FUNC(void) _numba_test_vsquare(int n, double *x, double *out);
+PyAPI_FUNC(double) _numba_test_funcptr(double (*func)(double));
 
 double _numba_test_sin(double x)
 {
