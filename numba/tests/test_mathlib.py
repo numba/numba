@@ -539,7 +539,7 @@ class TestMathLib(TestCase):
             self.assertTrue(np.isfinite(nb_ans))
             with warnings.catch_warnings():
                 warnings.simplefilter("error")
-                self.assertRaisesRegex(RuntimeWarning,
+                self.assertRaisesRegexp(RuntimeWarning,
                 'overflow encountered in .*_scalars',
                 naive_hypot, val, val)
 
