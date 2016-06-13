@@ -149,3 +149,16 @@ GPU support
 
    If set, don't compile and execute code for the GPU, but use the CUDA
    Simulator instead. For debugging purposes.
+
+Threading Control
+-----------------
+
+.. envvar:: NUMBA_NUM_THREADS
+
+   If set, the number of threads in the thread pool for the parallel CPU target 
+   will take this value. Must be greater than zero. This value is independent
+   of ``OMP_NUM_THREADS`` and ``MKL_NUM_THREADS``.
+
+   *Default value:* The number of CPU cores on the system as determined at run
+   time, this can be accessed via ``numba.config.NUMBA_DEFAULT_NUM_THREADS``.
+
