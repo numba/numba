@@ -524,8 +524,15 @@ class TestMathLib(TestCase):
         x_values = [1, 2, 3, 4, 5, 6, .21, .34]
         y_values = [x + 2 for x in x_values]
         # Issue #563: precision issues with math.hypot() under Windows.
-        prec = 'single' if sys.platform == 'win32' else 'exact'
+        prec = 'single' if sys.platform == 'win32' else 'double'
         self.run_binary(pyfunc, x_types, x_values, y_values, prec=prec)
+        # Test that hypot() is immune to internal overflow
+        for ty, bigval in [(types.float32, 1e38), (types.float64, 5e307)]:
+            values = [0, 1.5, bigval, -bigval,
+                      float('inf'), float('-inf'), float('nan')]
+            x_values, y_values = zip(*itertools.product(values, values))
+            x_types = y_types = [ty] * len(x_values)
+            self.run_binary(pyfunc, x_types, x_values, y_values, prec=prec)
 
     @tag('important')
     def test_hypot_npm(self):

@@ -439,8 +439,8 @@ def _fill_ufunc_db(ufunc_db):
     }
 
     ufunc_db[np.hypot] = {
-        'ff->f': npyfuncs.np_real_hypot_impl,
-        'dd->d': npyfuncs.np_real_hypot_impl,
+        'ff->f': mathimpl.hypot_float_impl,
+        'dd->d': mathimpl.hypot_float_impl,
     }
 
     ufunc_db[np.sinh] = {

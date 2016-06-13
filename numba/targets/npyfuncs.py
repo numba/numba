@@ -720,8 +720,8 @@ def np_complex_log1p_impl(context, builder, sig, args):
     in1 = context.make_complex(builder, ty, value=args[0])
     out = context.make_complex(builder, ty)
     real_plus_one = builder.fadd(in1.real, ONE)
-    l = np_real_hypot_impl(context, builder, float_binary_sig,
-                           [real_plus_one, in1.imag])
+    l = mathimpl.hypot_float_impl(context, builder, float_binary_sig,
+                                  [real_plus_one, in1.imag])
     out.imag = np_real_atan2_impl(context, builder, float_binary_sig,
                                   [in1.imag, real_plus_one])
     out.real = np_real_log_impl(context, builder, float_unary_sig, [l])
@@ -1137,21 +1137,6 @@ def np_real_atan2_impl(context, builder, sig, args):
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
                                        dispatch_table, 'arctan2')
-
-
-########################################################################
-# NumPy hypot
-
-def np_real_hypot_impl(context, builder, sig, args):
-    _check_arity_and_homogeneity(sig, args, 2)
-
-    dispatch_table = {
-        types.float32: 'numba.npymath.hypotf',
-        types.float64: 'numba.npymath.hypot',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'hypot')
 
 
 ########################################################################

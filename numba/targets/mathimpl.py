@@ -353,11 +353,24 @@ def hypot_u64_impl(context, builder, sig, args):
 @lower(math.hypot, types.Float, types.Float)
 def hypot_float_impl(context, builder, sig, args):
     def hypot(x, y):
+        # This particular algorithm avoids intermediate overflow in the
+        # computation.  See
+        # http://www.johndcook.com/blog/2010/06/02/whats-so-hard-about-finding-a-hypotenuse/
+        x, y = abs(x), abs(y)
+        if x < y:
+            x, y = y, x
         if math.isinf(x):
-            return abs(x)
-        elif math.isinf(y):
-            return abs(y)
-        return math.sqrt(x * x + y * y)
+            return x
+        if math.isinf(y):
+            return y
+        if math.isnan(x):
+            return x
+        if math.isnan(y):
+            return y
+        if x == 0.0:
+            return 0.0
+        r = y / x
+        return x * math.sqrt(1.0 + r * r)
 
     res = context.compile_internal(builder, hypot, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
