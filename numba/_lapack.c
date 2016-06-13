@@ -1326,25 +1326,27 @@ numba_raw_rgelsd(char kind, Py_ssize_t m, Py_ssize_t n, Py_ssize_t nrhs,
 static int
 numba_ez_rgelsd(char kind, Py_ssize_t m, Py_ssize_t n, Py_ssize_t nrhs,
                 void *a, Py_ssize_t lda, void *b, Py_ssize_t ldb, void *S,
-                void * rcond, Py_ssize_t * rank)
+                double rcond, Py_ssize_t * rank)
 {
     Py_ssize_t info = 0;
     Py_ssize_t lwork = -1;
     size_t base_size = -1;
     all_dtypes stack_slot;
-    void *work = NULL;
+    void *work = NULL, *rcond_cast = NULL;
     F_INT *iwork = NULL;
     F_INT iwork_tmp;
+    float tmpf;
 
     ENSURE_VALID_REAL_KIND(kind)
 
     base_size = kind_size(kind);
 
     work = &stack_slot;
+    rcond_cast = work; /* stop checks on null ptr complaining */
 
     /* Compute optimal work size (lwork) */
-    numba_raw_rgelsd(kind, m, n, nrhs, a, lda, b, ldb, S, rcond, rank, work,
-                     lwork, &iwork_tmp, &info);
+    numba_raw_rgelsd(kind, m, n, nrhs, a, lda, b, ldb, S, rcond_cast, rank,
+                     work, lwork, &iwork_tmp, &info);
     CATCH_LAPACK_INVALID_ARG("numba_raw_rgelsd", info);
 
     /* Allocate work array */
@@ -1359,8 +1361,20 @@ numba_ez_rgelsd(char kind, Py_ssize_t m, Py_ssize_t n, Py_ssize_t nrhs,
         return -1;
     }
 
-    numba_raw_rgelsd(kind, m, n, nrhs, a, lda, b, ldb, S, rcond, rank, work,
-                     lwork, iwork, &info);
+    /* cast rcond to the right type */
+    switch (kind)
+    {
+        case 's':
+            tmpf = (float)rcond;
+            rcond_cast = (void * )&tmpf;
+            break;
+        case 'd':
+            rcond_cast = (void * )&rcond;
+            break;
+    }
+
+    numba_raw_rgelsd(kind, m, n, nrhs, a, lda, b, ldb, S, rcond_cast, rank,
+                     work, lwork, iwork, &info);
     PyMem_RawFree(work);
     PyMem_RawFree(iwork);
     CATCH_LAPACK_INVALID_ARG("numba_raw_rgelsd", info);
@@ -1376,7 +1390,7 @@ numba_ez_rgelsd(char kind, Py_ssize_t m, Py_ssize_t n, Py_ssize_t nrhs,
 static int
 numba_raw_cgelsd(char kind, Py_ssize_t m, Py_ssize_t n, Py_ssize_t nrhs,
                  void *a, Py_ssize_t lda, void *b, Py_ssize_t ldb, void *S,
-                 void * rcond, Py_ssize_t * rank, void * work,
+                 void *rcond, Py_ssize_t * rank, void * work,
                  Py_ssize_t lwork, void * rwork, F_INT *iwork, Py_ssize_t *info)
 {
     void *raw_func = NULL;
@@ -1420,18 +1434,19 @@ numba_raw_cgelsd(char kind, Py_ssize_t m, Py_ssize_t n, Py_ssize_t nrhs,
 static int
 numba_ez_cgelsd(char kind, Py_ssize_t m, Py_ssize_t n, Py_ssize_t nrhs,
                 void *a, Py_ssize_t lda, void *b, Py_ssize_t ldb, void *S,
-                void * rcond, Py_ssize_t * rank)
+                double rcond, Py_ssize_t * rank)
 {
     Py_ssize_t info = 0;
     Py_ssize_t lwork = -1;
     size_t base_size = -1;
     all_dtypes stack_slot1, stack_slot2;
     size_t real_base_size = 0;
-    void *work = NULL, *rwork = NULL;
+    void *work = NULL, *rwork = NULL, *rcond_cast = NULL;
     Py_ssize_t lrwork;
     F_INT *iwork = NULL;
     F_INT iwork_tmp;
     char real_kind = '-';
+    float tmpf;
 
     ENSURE_VALID_COMPLEX_KIND(kind)
 
@@ -1439,10 +1454,11 @@ numba_ez_cgelsd(char kind, Py_ssize_t m, Py_ssize_t n, Py_ssize_t nrhs,
 
     work = &stack_slot1;
     rwork = &stack_slot2;
+    rcond_cast = work; /* stop checks on null ptr complaining */
 
     /* Compute optimal work size */
-    numba_raw_cgelsd(kind, m, n, nrhs, a, lda, b, ldb, S, rcond, rank, work,
-                     lwork, rwork, &iwork_tmp, &info);
+    numba_raw_cgelsd(kind, m, n, nrhs, a, lda, b, ldb, S, rcond_cast, rank,
+                     work, lwork, rwork, &iwork_tmp, &info);
     CATCH_LAPACK_INVALID_ARG("numba_raw_cgelsd", info);
 
     /* Allocate work array */
@@ -1463,9 +1479,12 @@ numba_ez_cgelsd(char kind, Py_ssize_t m, Py_ssize_t n, Py_ssize_t nrhs,
     {
         case 'c':
             real_kind = 's';
+            tmpf = (float)rcond;
+            rcond_cast = (void * )&tmpf;
             break;
         case 'z':
             real_kind = 'd';
+            rcond_cast = (void * )&rcond;
             break;
     }
 
@@ -1479,8 +1498,8 @@ numba_ez_cgelsd(char kind, Py_ssize_t m, Py_ssize_t n, Py_ssize_t nrhs,
         return -1;
     }
 
-    numba_raw_cgelsd(kind, m, n, nrhs, a, lda, b, ldb, S, rcond, rank, work,
-                     lwork, rwork, iwork, &info);
+    numba_raw_cgelsd(kind, m, n, nrhs, a, lda, b, ldb, S, rcond_cast, rank,
+                     work, lwork, rwork, iwork, &info);
     PyMem_RawFree(work);
     PyMem_RawFree(rwork);
     PyMem_RawFree(iwork);
@@ -1499,7 +1518,7 @@ numba_ez_cgelsd(char kind, Py_ssize_t m, Py_ssize_t n, Py_ssize_t nrhs,
 NUMBA_EXPORT_FUNC(int)
 numba_ez_gelsd(char kind, Py_ssize_t m, Py_ssize_t n, Py_ssize_t nrhs,
                void *a, Py_ssize_t lda, void *b, Py_ssize_t ldb, void *S,
-               void * rcond, Py_ssize_t * rank)
+               double rcond, Py_ssize_t * rank)
 {
     ENSURE_VALID_KIND(kind)
 

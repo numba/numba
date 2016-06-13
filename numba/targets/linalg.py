@@ -18,6 +18,7 @@ from numba.typing import signature
 from numba.extending import overload
 from numba.numpy_support import version as numpy_version
 from numba import types
+from numba import numpy_support as np_support
 from .arrayobj import make_array, _empty_nd_impl, array_copy
 from ..errors import TypingError
 
@@ -1211,9 +1212,9 @@ def _get_compute_nrhs(b):
         return twoD_impl
 
 
-def _get_check_lstsq_commutes_impl(a, b):
+def _get_check_lstsq_dimensionally_valid_impl(a, b):
     # gets and implementation for checking that the least squares system
-    # input commutes
+    # input is dimensionally valid
     ndim = b.ndim
     if ndim == 1:
         @jit(nopython=True)
@@ -1236,7 +1237,7 @@ def _get_check_lstsq_commutes_impl(a, b):
 
 
 @overload(np.linalg.lstsq)
-def lstsq_impl(a, b, rcond=-1):
+def lstsq_impl(a, b, rcond=-1.0):
     ensure_lapack()
 
     _check_linalg_matrix(a, "lstsq")
@@ -1249,22 +1250,11 @@ def lstsq_impl(a, b, rcond=-1):
 
     # the typing context is not easily accessible in `@overload` mode
     # so type unification etc. is done manually below
-    type_table = {
-        types.float32: np.float32,
-        types.float64: np.float64,
-        types.complex64: np.complex64,
-        types.complex128: np.complex128
-    }
+    a_np_dt = np_support.as_dtype(a.dtype)
+    b_np_dt = np_support.as_dtype(b.dtype)
 
-    inv_type_table = {
-        np.dtype('float32'): types.float32,
-        np.dtype('float64'): types.float64,
-        np.dtype('complex64'): types.complex64,
-        np.dtype('complex128'): types.complex128
-    }
-
-    np_shared_dt = np.promote_types(type_table[a.dtype], type_table[b.dtype])
-    nb_shared_dt = inv_type_table[np_shared_dt]
+    np_shared_dt = np.promote_types(a_np_dt, b_np_dt)
+    nb_shared_dt = np_support.from_dtype(np_shared_dt)
 
     # convert typing floats to np floats for use in the impl
     r_type = getattr(nb_shared_dt, "underlying_float", nb_shared_dt)
@@ -1284,7 +1274,7 @@ def lstsq_impl(a, b, rcond=-1):
         types.CPointer(nb_shared_dt),  # b
         types.intp,  # ldb
         types.CPointer(r_type),  # S
-        types.CPointer(r_type),  # rcond
+        types.float64,  # rcond
         types.CPointer(types.intc)  # rank
     )
 
@@ -1312,10 +1302,10 @@ def lstsq_impl(a, b, rcond=-1):
     # return blob function
     b_ret = _get_compute_return_impl(b)
 
-    # check system commutes function
-    check_commutes = _get_check_lstsq_commutes_impl(a, b)
+    # check system is dimensionally valid function
+    check_dimensionally_valid = _get_check_lstsq_dimensionally_valid_impl(a, b)
 
-    def lstsq_impl(a, b, rcond=-1):
+    def lstsq_impl(a, b, rcond=-1.0):
         n = a.shape[-1]
         m = a.shape[-2]
         nrhs = b_nrhs(b)
@@ -1324,8 +1314,8 @@ def lstsq_impl(a, b, rcond=-1):
         _check_finite_matrix(a)
         _check_finite_matrix(b)
 
-        # check the systems commute
-        check_commutes(a, b)
+        # check the systems is dimensionally valid
+        check_dimensionally_valid(a, b)
 
         minmn = min(m, n)
         maxmn = max(m, n)
@@ -1347,9 +1337,6 @@ def lstsq_impl(a, b, rcond=-1):
         rcond_ptr = np.empty(1, dtype=real_dtype)
         rank_ptr = np.empty(1, dtype=np.int32)
 
-        # set rcond
-        rcond_ptr[0] = rcond
-
         r = numba_ez_gelsd(
             kind,  # kind
             m,  # m
@@ -1360,7 +1347,7 @@ def lstsq_impl(a, b, rcond=-1):
             bcpy.ctypes,  # a
             maxmn,  # ldb
             s.ctypes,  # s
-            rcond_ptr.ctypes,  # rcond
+            rcond,  # rcond
             rank_ptr.ctypes  # rank
         )
 
@@ -1386,7 +1373,6 @@ def lstsq_impl(a, b, rcond=-1):
         acpy.size
         bcpy.size
         s.size
-        rcond_ptr.size
         rank_ptr.size
 
         return (x, res, rank, s[:minmn])

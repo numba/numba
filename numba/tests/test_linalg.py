@@ -1067,8 +1067,8 @@ class TestLinalgLstsq(TestLinalgBase):
         msg = "np.linalg.%s() only supported on 1 and 2-D arrays" % name
         self.assert_error(cfunc, args, msg, errors.TypingError)
 
-    # check that a non-commuting system raises
-    def assert_non_commuting(self, name, cfunc, args):
+    # check that a dimensionally invalid system raises
+    def assert_dimensionally_invalid(self, name, cfunc, args):
         msg = "Incompatible array sizes for np.linalg.%s()." % name
         self.assert_error(cfunc, args, msg, np.linalg.LinAlgError)
 
@@ -1200,8 +1200,7 @@ class TestLinalgLstsq(TestLinalgBase):
 
                 # check 1D B
                 b_order = next(cycle_order)
-                tmp = np.empty(A.shape[0], dtype=dt, order=b_order)
-                tmp[:] = B[:, 0]
+                tmp = B[:, 0].copy(order=b_order)
                 check(A, tmp, **kwargs)
 
         # test loop
@@ -1275,11 +1274,12 @@ class TestLinalgLstsq(TestLinalgBase):
         bad = np.array([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], dtype=np.float64)
         self.assert_wrong_dimensions_1D(rn, cfunc, (ok, bad))
 
-        # check a non-commuting system raises (1D and 2D cases checked)
+        # check a dimensionally invalid system raises (1D and 2D cases
+        # checked)
         bad1D = np.array([1.], dtype=np.float64)
         bad2D = np.array([[1.], [2.], [3.]], dtype=np.float64)
-        self.assert_non_commuting(rn, cfunc, (ok, bad1D))
-        self.assert_non_commuting(rn, cfunc, (ok, bad2D))
+        self.assert_dimensionally_invalid(rn, cfunc, (ok, bad1D))
+        self.assert_dimensionally_invalid(rn, cfunc, (ok, bad2D))
 
 if __name__ == '__main__':
     unittest.main()
