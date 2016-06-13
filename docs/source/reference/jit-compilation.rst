@@ -405,6 +405,12 @@ C callbacks
 
       The address of the compiled C callback, as an integer.
 
+   .. attribute:: cffi
+
+      A `cffi`_ function pointer instance, to be passed as an argument to
+      `cffi`_-wrapped functions.  The pointer's type is ``void *``, so
+      only minimal type checking will happen when passing it to `cffi`_.
+
    .. attribute:: ctypes
 
       A :mod:`ctypes` callback instance, as if it were created using
@@ -419,3 +425,6 @@ C callbacks
       Return the human-readable LLVM IR generated for the C callback.
       :attr:`native_name` is the name under which this callback is defined
       in the IR.
+
+
+.. _cffi: https://cffi.readthedocs.org/

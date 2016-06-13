@@ -13,6 +13,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import cfunc, carray, farray, types, typing, utils
+from numba import cffi_support
 from .support import TestCase, tag, captured_stderr
 from .test_dispatcher import BaseCacheTest
 
@@ -24,9 +25,14 @@ def div_usecase(a, b):
     c = a / b
     return c
 
+def square_usecase(a):
+    return a ** 2
+
 add_sig = "float64(float64, float64)"
 
 div_sig = "float64(int64, int64)"
+
+square_sig = "float64(float64)"
 
 def objmode_usecase(a, b):
     object()
@@ -118,6 +124,18 @@ class TestCFunc(TestCase):
         self.assertEqual(ctypes.cast(ct, ctypes.c_void_p).value, addr)
 
         self.assertPreciseEqual(ct(2.0, 3.5), 5.5)
+
+    @tag('important')
+    @unittest.skipUnless(cffi_support.SUPPORTED,
+                         "CFFI not supported -- please install the cffi module")
+    def test_cffi(self):
+        from . import cffi_usecases
+        ffi, lib = cffi_usecases.load_inline_module()
+
+        f = cfunc(square_sig)(square_usecase)
+
+        res = lib._numba_test_funcptr(f.cffi)
+        self.assertPreciseEqual(res, 2.25)  # 1.5 ** 2
 
     def test_locals(self):
         # By forcing the intermediate result into an integer, we
