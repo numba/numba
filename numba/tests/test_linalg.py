@@ -2,7 +2,7 @@ from __future__ import division, print_function
 
 import contextlib
 import gc
-from itertools import product
+from itertools import product, cycle
 import sys
 import warnings
 from numbers import Number, Integral
@@ -404,13 +404,6 @@ class TestLinalgBase(TestCase):
             if rank > minmn:
                 raise ValueError("Rank given greater than full rank.")
 
-        # Build a sample matrix via combining SVD like inputs
-        # this ought to use MGS
-        tmp = self.sample_vector(m * m, dtype).reshape(m, m)
-        U, _ = np.linalg.qr(tmp)
-        tmp = self.sample_vector(n * n, dtype).reshape(n, n)
-        V, _ = np.linalg.qr(tmp)
-
         if m == 1 or n == 1:
             # vector, must be rank 1 (enforced above)
             # condition of vector is also 1
@@ -420,6 +413,17 @@ class TestLinalgBase(TestCase):
             maxmn = max(m, n)
             Q = self.sample_vector(maxmn, dtype).reshape(m, n)
         else:
+            # Build a sample matrix via combining SVD like inputs.
+
+            # Create matrices of left and right singular vectors.
+            # This could use Modified Gram–Schmidt and perhaps be quicker,
+            # at present it uses QR decompositions to obtain orthonormal
+            # matrices.
+            tmp = self.sample_vector(m * m, dtype).reshape(m, m)
+            U, _ = np.linalg.qr(tmp)
+            tmp = self.sample_vector(n * n, dtype).reshape(n, n)
+            V, _ = np.linalg.qr(tmp)
+            # create singular values.
             sv = np.linspace(d_cond, condition, rv)
             S = np.zeros((m, n))
             idx = np.nonzero(np.eye(m, n))
@@ -516,8 +520,8 @@ class TestTestLinalgBase(TestCase):
             if minmn > 1:
                 rank = minmn - 1
                 A = inst.specific_sample_matrix(size, dtype, order, rank=rank)
-                self.assertTrue(A.shape == size)
-                self.assertTrue(np.linalg.matrix_rank(A) == rank)
+                self.assertEqual(A.shape, size)
+                self.assertEqual(np.linalg.matrix_rank(A), rank)
 
             resolution = 5 * np.finfo(dtype).resolution
 
@@ -1049,14 +1053,14 @@ class TestLinalgLstsq(TestLinalgBase):
     Tests for np.linalg.lstsq.
     """
 
-   # NOTE: The testing of this routine is hard as it has to handle numpy
-   # using double precision routines on single precision input, this has
-   # a knock on effect especially in rank deficient cases and cases where
-   # conditioning is generally poor. As a result computed ranks can differ
-   # and consequently the calculated residual can differ.
-   # The tests try and deal with this as best as they can through the use
-   # of reconstruction and measures like residual norms.
-   # Suggestions for improvements are welcomed!
+    # NOTE: The testing of this routine is hard as it has to handle numpy
+    # using double precision routines on single precision input, this has
+    # a knock on effect especially in rank deficient cases and cases where
+    # conditioning is generally poor. As a result computed ranks can differ
+    # and consequently the calculated residual can differ.
+    # The tests try and deal with this as best as they can through the use
+    # of reconstruction and measures like residual norms.
+    # Suggestions for improvements are welcomed!
 
     # check for B with dimension > 2 raises
     def assert_wrong_dimensions_1D(self, name, cfunc, args):
@@ -1148,7 +1152,7 @@ class TestLinalgLstsq(TestLinalgBase):
                         except AssertionError:
                             # check the fail is likely due to bad conditioning
                             c = np.linalg.cond(A)
-                            self.assertTrue(10 * c > (1. / resolution))
+                            self.assertGreater(10 * c, (1. / resolution))
 
                         # make sure the residual 2-norm is ok
                         # if this fails its probably due to numpy using double
@@ -1169,30 +1173,12 @@ class TestLinalgLstsq(TestLinalgBase):
 
         # This test takes ages! So combinations are trimmed via cycling
 
-        # these globals are used to create a cyclic effect in the combination
-        # space of dtype and order
-        global odr_ptr
-        odr_ptr = 0
-        global dt_ptr
-        dt_ptr = 0
-
         # gets a dtype
-        def cycle_dt():
-            global dt_ptr
-            mx = len(self.dtypes)
-            ret = self.dtypes[dt_ptr % mx]
-            dt_ptr += 1
-            return ret
+        cycle_dt = cycle(self.dtypes)
 
         orders = ['F', 'C']
         # gets a memory order flag
-
-        def cycle_order():
-            global odr_ptr
-            mx = len(orders)
-            ret = orders[odr_ptr % mx]
-            odr_ptr += 1
-            return ret
+        cycle_order = cycle(orders)
 
         # a specific condition number to use in the following tests
         # there is nothing special about it other than it is not magic
@@ -1207,13 +1193,13 @@ class TestLinalgLstsq(TestLinalgBase):
             for b_size in b_sizes:
 
                 # check 2D B
-                b_order = cycle_order()
+                b_order = next(cycle_order)
                 B = self.specific_sample_matrix(
                     (A.shape[0], b_size), dt, b_order)
                 check(A, B, **kwargs)
 
                 # check 1D B
-                b_order = cycle_order()
+                b_order = next(cycle_order)
                 tmp = np.empty(A.shape[0], dtype=dt, order=b_order)
                 tmp[:] = B[:, 0]
                 check(A, tmp, **kwargs)
@@ -1222,8 +1208,8 @@ class TestLinalgLstsq(TestLinalgBase):
         for a_size in sizes:
 
             # order and dtype
-            a_dtype = cycle_dt()
-            a_order = cycle_order()
+            a_dtype = next(cycle_dt)
+            a_order = next(cycle_order)
 
             # A full rank, well conditioned system
             A = self.specific_sample_matrix(a_size, a_dtype, a_order)
@@ -1235,13 +1221,13 @@ class TestLinalgLstsq(TestLinalgBase):
             minmn = min(m, n)
 
             # operations that only make sense with a 2D matrix system
-            if not (m == 1 or n == 1):
+            if m != 1 and n != 1:
 
                 # Test a rank deficient system
                 r = minmn - 1
                 # order and dtype
-                a_dtype = cycle_dt()
-                a_order = cycle_order()
+                a_dtype = next(cycle_dt)
+                a_order = next(cycle_order)
                 A = self.specific_sample_matrix(
                     a_size, a_dtype, a_order, rank=r)
                 # run the test loop
@@ -1252,8 +1238,8 @@ class TestLinalgLstsq(TestLinalgBase):
                 # This works because the singular values in the
                 # specific_sample_matrix code are linspace (1, cond, [0... if
                 # rank deficient])
-                a_dtype = cycle_dt()
-                a_order = cycle_order()
+                a_dtype = next(cycle_dt)
+                a_order = next(cycle_order)
                 A = self.specific_sample_matrix(
                     a_size, a_dtype, a_order, condition=specific_cond)
                 # run the test loop
@@ -1263,9 +1249,7 @@ class TestLinalgLstsq(TestLinalgBase):
         ok = np.array([[1., 2.], [3., 4.]], dtype=np.float64)
 
         # check ok input is ok
-        msg = "blank"
-        with self.assertRaises(AssertionError):
-            self.assert_error(cfunc, (ok, ok), msg, errors.TypingError)
+        cfunc, (ok, ok)
 
         # check bad inputs
         rn = "lstsq"
@@ -1286,9 +1270,8 @@ class TestLinalgLstsq(TestLinalgBase):
 
         # check 1D is accepted for B (2D is done previously)
         # and then that anything of higher dimension raises
-        with self.assertRaises(AssertionError):
-            oneD = np.array([1., 2.], dtype=np.float64)
-            self.assert_error(cfunc, (ok, oneD), msg, errors.TypingError)
+        oneD = np.array([1., 2.], dtype=np.float64)
+        cfunc, (ok, oneD)
         bad = np.array([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], dtype=np.float64)
         self.assert_wrong_dimensions_1D(rn, cfunc, (ok, bad))
 
