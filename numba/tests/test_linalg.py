@@ -513,8 +513,8 @@ class TestTestLinalgBase(TestCase):
 
             # test default full rank
             A = inst.specific_sample_matrix(size, dtype, order)
-            self.assertTrue(A.shape == size)
-            self.assertTrue(np.linalg.matrix_rank(A) == minmn)
+            self.assertEqual(A.shape, size)
+            self.assertEqual(np.linalg.matrix_rank(A), minmn)
 
             # test reduced rank if a reduction is possible
             if minmn > 1:
@@ -527,7 +527,7 @@ class TestTestLinalgBase(TestCase):
 
             # test default condition
             A = inst.specific_sample_matrix(size, dtype, order)
-            self.assertTrue(A.shape == size)
+            self.assertEqual(A.shape, size)
             np.testing.assert_allclose(np.linalg.cond(A),
                                        1.,
                                        rtol=resolution,
@@ -538,7 +538,7 @@ class TestTestLinalgBase(TestCase):
                 condition = 10.
                 A = inst.specific_sample_matrix(
                     size, dtype, order, condition=condition)
-                self.assertTrue(A.shape == size)
+                self.assertEqual(A.shape, size)
                 np.testing.assert_allclose(np.linalg.cond(A),
                                            10.,
                                            rtol=resolution,
