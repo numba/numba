@@ -1334,7 +1334,6 @@ def lstsq_impl(a, b, rcond=-1.0):
 
         # Allocate returns
         s = np.empty(minmn, dtype=real_dtype)
-        rcond_ptr = np.empty(1, dtype=real_dtype)
         rank_ptr = np.empty(1, dtype=np.int32)
 
         r = numba_ez_gelsd(
