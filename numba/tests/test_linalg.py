@@ -416,7 +416,7 @@ class TestLinalgBase(TestCase):
             # Build a sample matrix via combining SVD like inputs.
 
             # Create matrices of left and right singular vectors.
-            # This could use Modified Gram–Schmidt and perhaps be quicker,
+            # This could use Modified Gram-Schmidt and perhaps be quicker,
             # at present it uses QR decompositions to obtain orthonormal
             # matrices.
             tmp = self.sample_vector(m * m, dtype).reshape(m, m)
