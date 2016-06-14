@@ -10,6 +10,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags, utils
 from numba import types, numpy_support
+from numba.config import PYVERSION
 from .support import TestCase, CompilationCache, tag
 
 enable_pyobj_flags = Flags()
@@ -527,6 +528,7 @@ class TestMathLib(TestCase):
         self.run_binary(pyfunc, x_types, x_values, y_values, flags, prec)
         # Check that values that overflow in naive implementations do not
         # in the numba impl
+
         def naive_hypot(x, y):
             return math.sqrt(x * x + y * y)
         for fltty in (types.float32, types.float64):
@@ -537,11 +539,18 @@ class TestMathLib(TestCase):
             nb_ans = cfunc(val, val)
             self.assertPreciseEqual(nb_ans, pyfunc(val, val), prec='single')
             self.assertTrue(np.isfinite(nb_ans))
+
+            # select regex based assertion function (name changed in 2->3).
+            if PYVERSION < (3, 0):
+                regex_asserter = self.assertRaisesRegexp
+            else:
+                regex_asserter = self.assertRaisesRegex
+
             with warnings.catch_warnings():
                 warnings.simplefilter("error")
-                self.assertRaisesRegexp(RuntimeWarning,
-                'overflow encountered in .*_scalars',
-                naive_hypot, val, val)
+                regex_asserter(RuntimeWarning,
+                               'overflow encountered in .*_scalars',
+                               naive_hypot, val, val)
 
     @tag('important')
     def test_hypot_npm(self):
