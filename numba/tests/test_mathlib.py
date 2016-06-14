@@ -535,7 +535,7 @@ class TestMathLib(TestCase):
             cr = self.ccache.compile(pyfunc, (fltty, fltty), flags=flags)
             cfunc = cr.entry_point
             dt = numpy_support.as_dtype(fltty).type
-            val = dt(np.finfo(dt).max / 10.)
+            val = dt(np.finfo(dt).max / 30.)
             nb_ans = cfunc(val, val)
             self.assertPreciseEqual(nb_ans, pyfunc(val, val), prec='single')
             self.assertTrue(np.isfinite(nb_ans))
