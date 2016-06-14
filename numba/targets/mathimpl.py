@@ -340,6 +340,7 @@ def hypot_s64_impl(context, builder, sig, args):
     res = hypot_float_impl(context, builder, fsig, (x, y))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 @lower(math.hypot, types.uint64, types.uint64)
 def hypot_u64_impl(context, builder, sig, args):
     [x, y] = args
@@ -352,14 +353,17 @@ def hypot_u64_impl(context, builder, sig, args):
 
 @lower(math.hypot, types.Float, types.Float)
 def hypot_float_impl(context, builder, sig, args):
-    def hypot(x, y):
-        if math.isinf(x):
-            return abs(x)
-        elif math.isinf(y):
-            return abs(y)
-        return math.sqrt(x * x + y * y)
-
-    res = context.compile_internal(builder, hypot, sig, args)
+    x, y = args
+    # Base function selection on first arg, typing layer will raise
+    # if they are not of the same type.
+    fltty1, fltty2 = map(context.get_data_type, sig.args)
+    fnty = Type.function(fltty1, (fltty1, fltty1))
+    fname = {
+        "float": "hypotf",
+        "double": "hypot",
+    }[str(fltty1)]
+    fn = cgutils.insert_pure_function(builder.module, fnty, name=fname)
+    res = builder.call(fn, (x, y))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
