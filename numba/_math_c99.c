@@ -301,11 +301,6 @@ float m_atan2f(float y, float x) {
     return (float) m_atan2(y, x);
 }
 
-/* Map to double version directly */
-float m_hypotf(float x, float y) {
-    return (float) m_hypotf(x, y);
-}
-
 
 /* provide gamma() and lgamma(); code borrowed from CPython */
 

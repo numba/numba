@@ -540,17 +540,11 @@ class TestMathLib(TestCase):
             self.assertPreciseEqual(nb_ans, pyfunc(val, val), prec='single')
             self.assertTrue(np.isfinite(nb_ans))
 
-            # select regex based assertion function (name changed in 2->3).
-            if PYVERSION < (3, 0):
-                regex_asserter = self.assertRaisesRegexp
-            else:
-                regex_asserter = self.assertRaisesRegex
-
             with warnings.catch_warnings():
-                warnings.simplefilter("error")
-                regex_asserter(RuntimeWarning,
-                               'overflow encountered in .*_scalars',
-                               naive_hypot, val, val)
+                warnings.simplefilter("error", RuntimeWarning)
+                self.assertRaisesRegexp(RuntimeWarning,
+                                        'overflow encountered in .*_scalars',
+                                        naive_hypot, val, val)
 
     @tag('important')
     def test_hypot_npm(self):
