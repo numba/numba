@@ -40,4 +40,4 @@ test:
   commands:
     - pycc -h
     - numba -h
-    - python -m numba.runtests -m -b numba.tests
+    - python -m numba.runtests -m -b

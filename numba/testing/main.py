@@ -181,12 +181,11 @@ class NumbaTestProgram(unittest.main):
             self.buffer = True
 
     def _do_discovery(self, argv, Loader=None):
-        # Upstream uses a default start_dir of '.', which assumes we only ever
-        # run the tests from the top-level directory.
-        # So, if no 'start' argument is given in argv, inject one, to satisfy our CI builders.
-        if argv == []:
-            argv = [self.testLoader._top_level_dir]
-            super(NumbaTestProgram, self)._do_discovery(argv, Loader)
+        # Disable unittest's implicit test discovery when parsing
+        # CLI arguments, as it can select other tests than Numba's
+        # (e.g. some test_xxx module that may happen to be directly
+        #  reachable from sys.path)
+        return
 
     def runTests(self):
         if self.refleak:
