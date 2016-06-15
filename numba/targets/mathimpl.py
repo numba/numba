@@ -10,7 +10,7 @@ import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type
 
 from numba.targets.imputils import Registry, impl_ret_untracked
-from numba import types, cgutils, utils
+from numba import types, cgutils, utils, config
 from numba.typing import signature
 
 
@@ -354,19 +354,29 @@ def hypot_u64_impl(context, builder, sig, args):
 @lower(math.hypot, types.Float, types.Float)
 def hypot_float_impl(context, builder, sig, args):
     xty, yty = sig.args
-    assert xty == yty
+    assert xty == yty == sig.return_type
     x, y = args
 
-    fltty = context.get_data_type(xty)
-    fnty = Type.function(fltty, (fltty, fltty))
     # Windows has alternate names for hypot/hypotf, see
     # https://msdn.microsoft.com/fr-fr/library/a9yb3dbt%28v=vs.80%29.aspx
     fname = {
         types.float32: "_hypotf" if sys.platform == 'win32' else "hypotf",
         types.float64: "_hypot" if sys.platform == 'win32' else "hypot",
     }[xty]
-    fn = cgutils.insert_pure_function(builder.module, fnty, name=fname)
-    res = builder.call(fn, (x, y))
+    plat_hypot = types.ExternalFunction(fname, sig)
+
+    if sys.platform == 'win32' and config.MACHINE_BITS == 32:
+        inf = xty(float('inf'))
+
+        def hypot_impl(x, y):
+            if math.isinf(x) or math.isinf(y):
+                return inf
+            return plat_hypot(x, y)
+    else:
+        def hypot_impl(x, y):
+            return plat_hypot(x, y)
+
+    res = context.compile_internal(builder, hypot_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
