@@ -2,9 +2,10 @@ from __future__ import division, print_function
 
 import contextlib
 import gc
-from itertools import product
+from itertools import product, cycle
 import sys
 import warnings
+from numbers import Number, Integral
 
 import numpy as np
 
@@ -324,14 +325,19 @@ def qr_matrix(a):
     return np.linalg.qr(a)
 
 
+def lstsq_system(A, B, rcond=-1):
+    return np.linalg.lstsq(A, B, rcond)
+
+
 class TestLinalgBase(TestCase):
     """
     Provides setUp and common data/error modes for testing np.linalg functions.
     """
 
-    def setUp(self):
-        self.dtypes = (np.float64, np.float32, np.complex128, np.complex64)
+    # supported dtypes
+    dtypes = (np.float64, np.float32, np.complex128, np.complex64)
 
+    def setUp(self):
         # Collect leftovers from previous test cases before checking for leaks
         gc.collect()
 
@@ -344,31 +350,88 @@ class TestLinalgBase(TestCase):
         else:
             return (base * 0.5 + 1).astype(dtype)
 
-    def orth_fact_sample_matrix(self, size, dtype, order):
+    def specific_sample_matrix(
+            self, size, dtype, order, rank=None, condition=None):
         """
-        Provides a sample matrix for use in orthogonal factorization tests.
+        Provides a sample matrix with an optionally specified rank or condition
+        number.
 
         size: (rows, columns), the dimensions of the returned matrix.
         dtype: the dtype for the returned matrix.
         order: the memory layout for the returned matrix, 'F' or 'C'.
+        rank: the rank of the matrix, an integer value, defaults to full rank.
+        condition: the condition number of the matrix (defaults to 1.)
+
+        NOTE: Only one of rank or condition may be set.
         """
-        # May be worth just explicitly constructing this system at some point
-        # with a kwarg for condition number?
-        break_at = 10
-        jmp = 0
-        # have a few attempts at shuffling to get the condition number down
-        # else not worry about it
-        mn = size[0] * size[1]
+
+        # default condition
+        d_cond = 1.
+
+        if len(size) != 2:
+            raise ValueError("size must be a length 2 tuple.")
+
+        if order not in ['F', 'C']:
+            raise ValueError("order must be one of 'F' or 'C'.")
+
+        if dtype not in [np.float32, np.float64, np.complex64, np.complex128]:
+            raise ValueError("dtype must be a numpy floating point type.")
+
+        if rank is not None and condition is not None:
+            raise ValueError("Only one of rank or condition can be specified.")
+
+        if condition is None:
+            condition = d_cond
+
+        if condition < 1:
+            raise ValueError("Condition number must be >=1.")
+
         np.random.seed(0)  # repeatable seed
-        while jmp < break_at:
-            v = self.sample_vector(mn, dtype)
-            # shuffle to improve conditioning
-            np.random.shuffle(v)
-            A = np.reshape(v, size)
-            if np.linalg.cond(A) < mn:
-                return np.array(A, order=order, dtype=dtype)
-            jmp += 1
-        return A
+        m, n = size
+
+        if m < 0 or n < 0:
+            raise ValueError("Negative dimensions given for matrix shape.")
+
+        minmn = min(m, n)
+        if rank is None:
+            rv = minmn
+        else:
+            if rank <= 0:
+                raise ValueError("Rank must be greater than zero.")
+            if not isinstance(rank, Integral):
+                raise ValueError("Rank must an integer.")
+            rv = rank
+            if rank > minmn:
+                raise ValueError("Rank given greater than full rank.")
+
+        if m == 1 or n == 1:
+            # vector, must be rank 1 (enforced above)
+            # condition of vector is also 1
+            if condition != d_cond:
+                raise ValueError(
+                    "Condition number was specified for a vector (always 1.).")
+            maxmn = max(m, n)
+            Q = self.sample_vector(maxmn, dtype).reshape(m, n)
+        else:
+            # Build a sample matrix via combining SVD like inputs.
+
+            # Create matrices of left and right singular vectors.
+            # This could use Modified Gram-Schmidt and perhaps be quicker,
+            # at present it uses QR decompositions to obtain orthonormal
+            # matrices.
+            tmp = self.sample_vector(m * m, dtype).reshape(m, m)
+            U, _ = np.linalg.qr(tmp)
+            tmp = self.sample_vector(n * n, dtype).reshape(n, n)
+            V, _ = np.linalg.qr(tmp)
+            # create singular values.
+            sv = np.linspace(d_cond, condition, rv)
+            S = np.zeros((m, n))
+            idx = np.nonzero(np.eye(m, n))
+            S[idx[0][:rv], idx[1][:rv]] = sv
+            Q = np.dot(np.dot(U, S), V.T)  # construct
+            Q = np.array(Q, dtype=dtype, order=order)  # sort out order/type
+
+        return Q
 
     def assert_error(self, cfunc, args, msg, err=ValueError):
         with self.assertRaises(err) as raises:
@@ -407,25 +470,132 @@ class TestLinalgBase(TestCase):
 
         if isinstance(got, tuple):
             # tuple present, check all results
-            c_contig = {a.flags.c_contiguous for a in got} == {True}
-            f_contig = {a.flags.f_contiguous for a in got} == {True}
+            for a in got:
+                self.assert_contig_sanity(a, expected_contig)
         else:
-            # else a single array is present
-            c_contig = got.flags.c_contiguous
-            f_contig = got.flags.f_contiguous
+            if not isinstance(got, Number):
+                # else a single array is present
+                c_contig = got.flags.c_contiguous
+                f_contig = got.flags.f_contiguous
 
-        # check that the result (possible set of) is at least one of
-        # C or F contiguous.
-        msg = "Results are not at least one of all C or F contiguous."
-        self.assertTrue(c_contig | f_contig, msg)
+                # check that the result (possible set of) is at least one of
+                # C or F contiguous.
+                msg = "Results are not at least one of all C or F contiguous."
+                self.assertTrue(c_contig | f_contig, msg)
 
-        msg = "Computed contiguousness does not match expected."
-        if expected_contig == "C":
-            self.assertTrue(c_contig, msg)
-        elif expected_contig == "F":
-            self.assertTrue(f_contig, msg)
-        else:
-            raise ValueError("Unknown contig")
+                msg = "Computed contiguousness does not match expected."
+                if expected_contig == "C":
+                    self.assertTrue(c_contig, msg)
+                elif expected_contig == "F":
+                    self.assertTrue(f_contig, msg)
+                else:
+                    raise ValueError("Unknown contig")
+
+
+class TestTestLinalgBase(TestCase):
+    """
+    The sample matrix code TestLinalgBase.specific_sample_matrix()
+    is a bit involved, this class tests it works as intended.
+    """
+
+    def test_specific_sample_matrix(self):
+
+        # add a default test to the ctor, it never runs so doesn't matter
+        inst = TestLinalgBase('specific_sample_matrix')
+
+        sizes = [(7, 1), (11, 5), (5, 11), (3, 3), (1, 7)]
+
+        # test loop
+        for size, dtype, order in product(sizes, inst.dtypes, 'FC'):
+
+            m, n = size
+            minmn = min(m, n)
+
+            # test default full rank
+            A = inst.specific_sample_matrix(size, dtype, order)
+            self.assertEqual(A.shape, size)
+            self.assertEqual(np.linalg.matrix_rank(A), minmn)
+
+            # test reduced rank if a reduction is possible
+            if minmn > 1:
+                rank = minmn - 1
+                A = inst.specific_sample_matrix(size, dtype, order, rank=rank)
+                self.assertEqual(A.shape, size)
+                self.assertEqual(np.linalg.matrix_rank(A), rank)
+
+            resolution = 5 * np.finfo(dtype).resolution
+
+            # test default condition
+            A = inst.specific_sample_matrix(size, dtype, order)
+            self.assertEqual(A.shape, size)
+            np.testing.assert_allclose(np.linalg.cond(A),
+                                       1.,
+                                       rtol=resolution,
+                                       atol=resolution)
+
+            # test specified condition if matrix is > 1D
+            if minmn > 1:
+                condition = 10.
+                A = inst.specific_sample_matrix(
+                    size, dtype, order, condition=condition)
+                self.assertEqual(A.shape, size)
+                np.testing.assert_allclose(np.linalg.cond(A),
+                                           10.,
+                                           rtol=resolution,
+                                           atol=resolution)
+
+        # check errors are raised appropriately
+        def check_error(args, msg, err=ValueError):
+            with self.assertRaises(err) as raises:
+                inst.specific_sample_matrix(*args)
+            self.assertIn(msg, str(raises.exception))
+
+        # check the checker runs ok
+        with self.assertRaises(AssertionError) as raises:
+            msg = "blank"
+            check_error(((2, 3), np.float64, 'F'), msg, err=ValueError)
+
+        # check invalid inputs...
+
+        # bad size
+        msg = "size must be a length 2 tuple."
+        check_error(((1,), np.float64, 'F'), msg, err=ValueError)
+
+        # bad order
+        msg = "order must be one of 'F' or 'C'."
+        check_error(((2, 3), np.float64, 'z'), msg, err=ValueError)
+
+        # bad type
+        msg = "dtype must be a numpy floating point type."
+        check_error(((2, 3), np.int32, 'F'), msg, err=ValueError)
+
+        # specifying both rank and condition
+        msg = "Only one of rank or condition can be specified."
+        check_error(((2, 3), np.float64, 'F', 1, 1), msg, err=ValueError)
+
+        # specifying negative condition
+        msg = "Condition number must be >=1."
+        check_error(((2, 3), np.float64, 'F', None, -1), msg, err=ValueError)
+
+        # specifying negative matrix dimension
+        msg = "Negative dimensions given for matrix shape."
+        check_error(((2, -3), np.float64, 'F'), msg, err=ValueError)
+
+        # specifying negative rank
+        msg = "Rank must be greater than zero."
+        check_error(((2, 3), np.float64, 'F', -1), msg, err=ValueError)
+
+        # specifying a rank greater than maximum rank
+        msg = "Rank given greater than full rank."
+        check_error(((2, 3), np.float64, 'F', 4), msg, err=ValueError)
+
+        # specifying a condition number for a vector
+        msg = "Condition number was specified for a vector (always 1.)."
+        check_error(((1, 3), np.float64, 'F', None, 10), msg, err=ValueError)
+
+        # specifying a non integer rank
+        msg = "Rank must an integer."
+        check_error(((2, 3), np.float64, 'F', 1.5), msg, err=ValueError)
 
 
 class TestLinalgInv(TestLinalgBase):
@@ -763,7 +933,7 @@ class TestLinalgSvd(TestLinalgBase):
         for size, dtype, fmat, order in \
                 product(sizes, self.dtypes, full_matrices, 'FC'):
 
-            a = self.orth_fact_sample_matrix(size, dtype, order)
+            a = self.specific_sample_matrix(size, dtype, order)
             check(a, full_matrices=fmat)
 
         rn = "svd"
@@ -786,7 +956,7 @@ class TestLinalgQr(TestLinalgBase):
     """
     Tests for np.linalg.qr.
     """
-    
+
     @needs_lapack
     def test_linalg_qr(self):
         """
@@ -859,7 +1029,7 @@ class TestLinalgQr(TestLinalgBase):
         # test loop
         for size, dtype, order in \
                 product(sizes, self.dtypes, 'FC'):
-            a = self.orth_fact_sample_matrix(size, dtype, order)
+            a = self.specific_sample_matrix(size, dtype, order)
             check(a)
 
         rn = "qr"
@@ -876,6 +1046,243 @@ class TestLinalgQr(TestLinalgBase):
         self.assert_no_nan_or_inf(cfunc,
                                   (np.array([[1., 2., ], [np.inf, np.nan]],
                                             dtype=np.float64),))
+
+
+class TestLinalgLstsq(TestLinalgBase):
+    """
+    Tests for np.linalg.lstsq.
+    """
+
+    # NOTE: The testing of this routine is hard as it has to handle numpy
+    # using double precision routines on single precision input, this has
+    # a knock on effect especially in rank deficient cases and cases where
+    # conditioning is generally poor. As a result computed ranks can differ
+    # and consequently the calculated residual can differ.
+    # The tests try and deal with this as best as they can through the use
+    # of reconstruction and measures like residual norms.
+    # Suggestions for improvements are welcomed!
+
+    # check for B with dimension > 2 raises
+    def assert_wrong_dimensions_1D(self, name, cfunc, args):
+        msg = "np.linalg.%s() only supported on 1 and 2-D arrays" % name
+        self.assert_error(cfunc, args, msg, errors.TypingError)
+
+    # check that a dimensionally invalid system raises
+    def assert_dimensionally_invalid(self, name, cfunc, args):
+        msg = "Incompatible array sizes for np.linalg.%s()." % name
+        self.assert_error(cfunc, args, msg, np.linalg.LinAlgError)
+
+    @needs_lapack
+    def test_linalg_lstsq(self):
+        """
+        Test np.linalg.lstsq
+        """
+        cfunc = jit(nopython=True)(lstsq_system)
+
+        def check(A, B, **kwargs):
+            expected = lstsq_system(A, B, **kwargs)
+            got = cfunc(A, B, **kwargs)
+
+            # check that the returned tuple is same length
+            self.assertEqual(len(expected), len(got))
+            # and that length is 4
+            self.assertEqual(len(got), 4)
+            # and that the computed results are contig and in the same way
+            self.assert_contig_sanity(got, "C")
+
+            use_reconstruction = False
+
+            # check the ranks are the same and continue to a standard
+            # match if that is the case (if ranks differ, then output
+            # in e.g. residual array is of different size!).
+            try:
+                self.assertEqual(got[2], expected[2])
+                # try plain match of each array to np first
+                for k in range(len(expected)):
+                    try:
+                        np.testing.assert_array_almost_equal_nulp(
+                            got[k], expected[k], nulp=10)
+                    except AssertionError:
+                        # plain match failed, test by reconstruction
+                        use_reconstruction = True
+            except AssertionError:
+                use_reconstruction = True
+
+            if use_reconstruction:
+                x, res, rank, s = got
+
+                # indicies in the output which are ndarrays
+                out_array_idx = [0, 1, 3]
+
+                try:
+                    # check the ranks are the same
+                    self.assertEqual(rank, expected[2])
+                    # check they are dimensionally correct, skip [2] = rank.
+                    for k in out_array_idx:
+                        if isinstance(expected[k], np.ndarray):
+                            self.assertEqual(got[k].shape, expected[k].shape)
+                except AssertionError:
+                    # check the rank differs by 1. (numerical fuzz)
+                    self.assertTrue(abs(rank - expected[2]) < 2)
+
+                # check if A*X = B
+                resolution = np.finfo(A.dtype).resolution
+                try:
+                    # this will work so long as the conditioning is
+                    # ok and the rank is full
+                    rec = np.dot(A, x)
+                    np.testing.assert_allclose(
+                        B,
+                        rec,
+                        rtol=10 * resolution,
+                        atol=10 * resolution
+                    )
+                except AssertionError:
+                    # system is probably under/over determined and/or
+                    # poorly conditioned. Check slackened equality
+                    # and that the residual norm is the same.
+                    for k in out_array_idx:
+                        try:
+                            np.testing.assert_allclose(
+                                expected[k],
+                                got[k],
+                                rtol=100 * resolution,
+                                atol=100 * resolution
+                            )
+                        except AssertionError:
+                            # check the fail is likely due to bad conditioning
+                            c = np.linalg.cond(A)
+                            self.assertGreater(10 * c, (1. / resolution))
+
+                        # make sure the residual 2-norm is ok
+                        # if this fails its probably due to numpy using double
+                        # precision LAPACK routines for singles.
+                        res_expected = np.linalg.norm(
+                            B - np.dot(A, expected[0]))
+                        res_got = np.linalg.norm(B - np.dot(A, x))
+                        # rtol = 10. as all the systems are products of orthonormals
+                        # and on the small side (rows, cols) < 100.
+                        np.testing.assert_allclose(
+                            res_expected, res_got, rtol=10.)
+
+        # test: column vector, tall, wide, square, row vector
+        # prime sizes, the A's
+        sizes = [(7, 1), (11, 5), (5, 11), (3, 3), (1, 7)]
+        # compatible B's for Ax=B must have same number of rows and 1 or more
+        # columns
+
+        # This test takes ages! So combinations are trimmed via cycling
+
+        # gets a dtype
+        cycle_dt = cycle(self.dtypes)
+
+        orders = ['F', 'C']
+        # gets a memory order flag
+        cycle_order = cycle(orders)
+
+        # a specific condition number to use in the following tests
+        # there is nothing special about it other than it is not magic
+        specific_cond = 10.
+
+        # inner test loop, extracted as there's additional logic etc required
+        # that'd end up with this being repeated a lot
+        def inner_test_loop_fn(A, dt, **kwargs):
+            # test solve Ax=B for (column, matrix) B, same dtype as A
+            b_sizes = (1, 13)
+
+            for b_size in b_sizes:
+
+                # check 2D B
+                b_order = next(cycle_order)
+                B = self.specific_sample_matrix(
+                    (A.shape[0], b_size), dt, b_order)
+                check(A, B, **kwargs)
+
+                # check 1D B
+                b_order = next(cycle_order)
+                tmp = B[:, 0].copy(order=b_order)
+                check(A, tmp, **kwargs)
+
+        # test loop
+        for a_size in sizes:
+
+            # order and dtype
+            a_dtype = next(cycle_dt)
+            a_order = next(cycle_order)
+
+            # A full rank, well conditioned system
+            A = self.specific_sample_matrix(a_size, a_dtype, a_order)
+
+            # run the test loop
+            inner_test_loop_fn(A, a_dtype)
+
+            m, n = a_size
+            minmn = min(m, n)
+
+            # operations that only make sense with a 2D matrix system
+            if m != 1 and n != 1:
+
+                # Test a rank deficient system
+                r = minmn - 1
+                # order and dtype
+                a_dtype = next(cycle_dt)
+                a_order = next(cycle_order)
+                A = self.specific_sample_matrix(
+                    a_size, a_dtype, a_order, rank=r)
+                # run the test loop
+                inner_test_loop_fn(A, a_dtype)
+
+                # Test a system with a given condition number for use in
+                # testing the rcond parameter.
+                # This works because the singular values in the
+                # specific_sample_matrix code are linspace (1, cond, [0... if
+                # rank deficient])
+                a_dtype = next(cycle_dt)
+                a_order = next(cycle_order)
+                A = self.specific_sample_matrix(
+                    a_size, a_dtype, a_order, condition=specific_cond)
+                # run the test loop
+                rcond = 1. / specific_cond
+                approx_half_rank_rcond = minmn * rcond
+                inner_test_loop_fn(A, a_dtype,
+                                   rcond=approx_half_rank_rcond)
+
+        # Test input validation
+        ok = np.array([[1., 2.], [3., 4.]], dtype=np.float64)
+
+        # check ok input is ok
+        cfunc, (ok, ok)
+
+        # check bad inputs
+        rn = "lstsq"
+
+        # Wrong dtype
+        bad = np.array([[1, 2], [3, 4]], dtype=np.int32)
+        self.assert_wrong_dtype(rn, cfunc, (ok, bad))
+        self.assert_wrong_dtype(rn, cfunc, (bad, ok))
+
+        # Dimension issue
+        bad = np.array([1, 2], dtype=np.float64)
+        self.assert_wrong_dimensions(rn, cfunc, (bad, ok))
+
+        # no nans or infs
+        bad = np.array([[1., 2., ], [np.inf, np.nan]], dtype=np.float64)
+        self.assert_no_nan_or_inf(cfunc, (ok, bad))
+        self.assert_no_nan_or_inf(cfunc, (bad, ok))
+
+        # check 1D is accepted for B (2D is done previously)
+        # and then that anything of higher dimension raises
+        oneD = np.array([1., 2.], dtype=np.float64)
+        cfunc, (ok, oneD)
+        bad = np.array([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], dtype=np.float64)
+        self.assert_wrong_dimensions_1D(rn, cfunc, (ok, bad))
+
+        # check a dimensionally invalid system raises (1D and 2D cases
+        # checked)
+        bad1D = np.array([1.], dtype=np.float64)
+        bad2D = np.array([[1.], [2.], [3.]], dtype=np.float64)
+        self.assert_dimensionally_invalid(rn, cfunc, (ok, bad1D))
+        self.assert_dimensionally_invalid(rn, cfunc, (ok, bad2D))
 
 if __name__ == '__main__':
     unittest.main()
