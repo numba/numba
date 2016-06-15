@@ -3,14 +3,15 @@ from __future__ import print_function, absolute_import, division
 import itertools
 import math
 import sys
+import warnings
 
 import numpy as np
 
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags, utils
-from numba import types
+from numba import types, numpy_support
+from numba.config import PYVERSION
 from .support import TestCase, CompilationCache, tag
-
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -518,14 +519,32 @@ class TestMathLib(TestCase):
 
     def test_hypot(self, flags=enable_pyobj_flags):
         pyfunc = hypot
-        x_types = [types.int16, types.int32, types.int64,
-                   types.uint16, types.uint32, types.uint64,
+        x_types = [types.int64, types.uint64,
                    types.float32, types.float64]
         x_values = [1, 2, 3, 4, 5, 6, .21, .34]
         y_values = [x + 2 for x in x_values]
         # Issue #563: precision issues with math.hypot() under Windows.
         prec = 'single' if sys.platform == 'win32' else 'exact'
-        self.run_binary(pyfunc, x_types, x_values, y_values, prec=prec)
+        self.run_binary(pyfunc, x_types, x_values, y_values, flags, prec)
+        # Check that values that overflow in naive implementations do not
+        # in the numba impl
+
+        def naive_hypot(x, y):
+            return math.sqrt(x * x + y * y)
+        for fltty in (types.float32, types.float64):
+            cr = self.ccache.compile(pyfunc, (fltty, fltty), flags=flags)
+            cfunc = cr.entry_point
+            dt = numpy_support.as_dtype(fltty).type
+            val = dt(np.finfo(dt).max / 30.)
+            nb_ans = cfunc(val, val)
+            self.assertPreciseEqual(nb_ans, pyfunc(val, val), prec='single')
+            self.assertTrue(np.isfinite(nb_ans))
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", RuntimeWarning)
+                self.assertRaisesRegexp(RuntimeWarning,
+                                        'overflow encountered in .*_scalars',
+                                        naive_hypot, val, val)
 
     @tag('important')
     def test_hypot_npm(self):

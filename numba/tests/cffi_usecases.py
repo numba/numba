@@ -21,14 +21,7 @@ def load_inline_module():
     defs = """
     double _numba_test_sin(double x);
     double _numba_test_cos(double x);
-    int foo(int a, int b, int c);
-    """
-
-    source = """
-    static int foo(int a, int b, int c)
-    {
-        return a + b * c;
-    }
+    double _numba_test_funcptr(double (*func)(double));
     """
 
     ffi = FFI()

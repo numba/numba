@@ -90,7 +90,8 @@ build_c_helpers_dict(void)
     declmethod(ez_gesdd);
     declmethod(ez_geqrf);
     declmethod(ez_xxgqr);
-
+    declmethod(ez_gelsd);
+    
     declpointer(py_random_state);
     declpointer(np_random_state);
 
@@ -124,6 +125,7 @@ PyAPI_FUNC(double) _numba_test_sin(double x);
 PyAPI_FUNC(double) _numba_test_cos(double x);
 PyAPI_FUNC(double) _numba_test_exp(double x);
 PyAPI_FUNC(void) _numba_test_vsquare(int n, double *x, double *out);
+PyAPI_FUNC(double) _numba_test_funcptr(double (*func)(double));
 
 double _numba_test_sin(double x)
 {
@@ -152,6 +154,11 @@ void _numba_test_vcube(int n, double *x, double *out)
     int i;
     for (i = 0; i < n; i++)
         out[i] = pow(x[i], 3.0);
+}
+
+double _numba_test_funcptr(double (*func)(double))
+{
+    return func(1.5);
 }
 
 

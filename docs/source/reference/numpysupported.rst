@@ -173,6 +173,7 @@ floating-point and complex numbers:
   change is supported e.g. real input -> real
   output, complex input -> complex output).
 * :func:`numpy.linalg.inv`
+* :func:`numpy.linalg.lstsq`
 * :func:`numpy.linalg.qr` (only the first argument).
 * :func:`numpy.linalg.svd` (only the 2 first arguments).
 

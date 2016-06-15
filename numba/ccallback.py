@@ -140,6 +140,17 @@ class CFunc(object):
         return self._wrapper_address
 
     @utils.cached_property
+    def cffi(self):
+        """
+        A cffi function pointer representing the C callback.
+        """
+        import cffi
+        ffi = cffi.FFI()
+        # cffi compares types by name, so using precise types would risk
+        # spurious mismatches (such as "int32_t" vs. "int").
+        return ffi.cast("void *", self.address)
+
+    @utils.cached_property
     def ctypes(self):
         """
         A ctypes function object representing the C callback.
