@@ -57,6 +57,10 @@ There are several things to note here:
 * It is possible to pre-compute some data at compile-time (the ``missing``
   variable above) to have them reused inside the compiled implementation.
 
+* The function definitions use the same names for arguments as in the
+  decorated function, this is required to ensure passing arguments by
+  name works as expected.
+
 
 Compilation options
 ===================
