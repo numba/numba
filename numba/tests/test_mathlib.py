@@ -535,22 +535,16 @@ class TestMathLib(TestCase):
             cr = self.ccache.compile(pyfunc, (fltty, fltty), flags=flags)
             cfunc = cr.entry_point
             dt = numpy_support.as_dtype(fltty).type
-            val = dt(np.finfo(dt).max / 10.)
+            val = dt(np.finfo(dt).max / 30.)
             nb_ans = cfunc(val, val)
             self.assertPreciseEqual(nb_ans, pyfunc(val, val), prec='single')
             self.assertTrue(np.isfinite(nb_ans))
 
-            # select regex based assertion function (name changed in 2->3).
-            if PYVERSION < (3, 0):
-                regex_asserter = self.assertRaisesRegexp
-            else:
-                regex_asserter = self.assertRaisesRegex
-
             with warnings.catch_warnings():
-                warnings.simplefilter("error")
-                regex_asserter(RuntimeWarning,
-                               'overflow encountered in .*_scalars',
-                               naive_hypot, val, val)
+                warnings.simplefilter("error", RuntimeWarning)
+                self.assertRaisesRegexp(RuntimeWarning,
+                                        'overflow encountered in .*_scalars',
+                                        naive_hypot, val, val)
 
     @tag('important')
     def test_hypot_npm(self):

@@ -353,15 +353,18 @@ def hypot_u64_impl(context, builder, sig, args):
 
 @lower(math.hypot, types.Float, types.Float)
 def hypot_float_impl(context, builder, sig, args):
+    xty, yty = sig.args
+    assert xty == yty
     x, y = args
-    # Base function selection on first arg, typing layer will raise
-    # if they are not of the same type.
-    fltty1, fltty2 = map(context.get_data_type, sig.args)
-    fnty = Type.function(fltty1, (fltty1, fltty1))
+
+    fltty = context.get_data_type(xty)
+    fnty = Type.function(fltty, (fltty, fltty))
+    # Windows has alternate names for hypot/hypotf, see
+    # https://msdn.microsoft.com/fr-fr/library/a9yb3dbt%28v=vs.80%29.aspx
     fname = {
-        "float": "hypotf",
-        "double": "hypot",
-    }[str(fltty1)]
+        types.float32: "_hypotf" if sys.platform == 'win32' else "hypotf",
+        types.float64: "_hypot" if sys.platform == 'win32' else "hypot",
+    }[xty]
     fn = cgutils.insert_pure_function(builder.module, fnty, name=fname)
     res = builder.call(fn, (x, y))
     return impl_ret_untracked(context, builder, sig.return_type, res)
