@@ -1242,7 +1242,10 @@ class TestLinalgLstsq(TestLinalgBase):
                 A = self.specific_sample_matrix(
                     a_size, a_dtype, a_order, condition=specific_cond)
                 # run the test loop
-                inner_test_loop_fn(A, a_dtype, rcond=specific_cond / 3.)
+                rcond = 1. / specific_cond
+                approx_half_rank_rcond = minmn * rcond
+                inner_test_loop_fn(A, a_dtype,
+                                   rcond=approx_half_rank_rcond)
 
         # Test input validation
         ok = np.array([[1., 2.], [3., 4.]], dtype=np.float64)
