@@ -83,7 +83,7 @@ build_c_helpers_dict(void)
     declmethod(xxgemv);
     declmethod(xxdot);
     declmethod(xxgetrf);
-    declmethod(xxgetri);
+    declmethod(ez_xxgetri);
     declmethod(xxpotrf);
     declmethod(ez_rgeev);
     declmethod(ez_cgeev);
