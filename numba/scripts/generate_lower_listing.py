@@ -8,7 +8,10 @@ from __future__ import print_function
 from subprocess import check_output
 
 import os.path
-from io import StringIO
+try:
+    from StringIO import StringIO       # py2
+except ImportError:
+    from io import StringIO
 from collections import defaultdict
 import inspect
 from functools import partial
@@ -20,6 +23,10 @@ from numba.targets.registry import cpu_target
 def git_hash():
     out = check_output(['git', 'log', "--pretty=format:'%H'", '-n', '1'])
     return out.decode('ascii').strip("'\"")
+
+
+def get_func_name(fn):
+    return getattr(fn, '__qualname__', fn.__name__)
 
 
 def gather_function_info(backend):
@@ -34,7 +41,7 @@ def gather_function_info(backend):
             code, firstlineno = inspect.getsourcelines(impl)
             path = inspect.getsourcefile(impl)
             info['impl'] = {
-                'name': impl.__qualname__,
+                'name': get_func_name(impl),
                 'filename': os.path.relpath(path, start=basepath),
                 'lines': (firstlineno, firstlineno + len(code) - 1),
                 'docstring': impl.__doc__
@@ -69,7 +76,8 @@ from all overloads.
 
 
 def format_function_infos(fninfos):
-    with StringIO() as buf:
+    buf = StringIO()
+    try:
         print = bind_file_to_print(buf)
 
         title_line = "Lowering Listing"
@@ -82,7 +90,7 @@ def format_function_infos(fninfos):
 
         def format_fname(fn):
             try:
-                fname = "{0}.{1}".format(fn.__module__, fn.__qualname__)
+                fname = "{0}.{1}".format(fn.__module__, get_func_name(fn))
             except AttributeError:
                 fname = repr(fn)
             return fn, fname
@@ -134,6 +142,8 @@ def format_function_infos(fninfos):
             print()
 
         return buf.getvalue()
+    finally:
+        buf.close()
 
 
 # Main routine for this module:
