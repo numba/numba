@@ -3,6 +3,7 @@ from __future__ import absolute_import, print_function, division
 from collections import OrderedDict
 import ctypes
 import sys
+import warnings
 
 import numpy as np
 
@@ -657,6 +658,86 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
         # notice the asymmetric __eq__ due to the instancecheck in MyClass
         self.assertFalse(check_equality(ai, di))
         self.assertTrue(check_equality(di, ai))
+
+        @njit
+        def check_inequality(a, b):
+            # not_equal provided via default __eq__
+            return a != b
+        
+        self.assertFalse(check_inequality(ai, bi))
+        self.assertTrue(check_inequality(ai, ci))
+        # notice the asymmetric __eq__ due to the instancecheck in MyClass
+        self.assertTrue(check_inequality(ai, di))
+        self.assertFalse(check_inequality(di, ai))
+
+
+    @tag('important')
+    def test_ne(self):
+        spec = [('_value', int32)]
+
+        @jitclass(spec)
+        class MyClass(object):
+
+            def __init__(self, value):
+                self._value = value
+
+            def __ne__(self, other):
+                if isinstance(other, MyClass):
+                    return self._value != other._value
+                return True                
+
+        @jitclass(spec)
+        class MyOtherClass(object):
+
+            def __init__(self, value):
+                self._value = value
+
+            def __ne__(self, other):
+                return self._value != other._value
+
+        ai = MyClass(value=123)
+        bi = MyClass(value=123)
+        ci = MyClass(value=321)
+        di = MyOtherClass(value=ai._value)
+        
+        # there're no default __eq__ that uses __ne__; it will fallback to `is`
+        self.assertFalse(ai == bi)
+        self.assertFalse(ai != bi)
+        self.assertNotEqual(ai, ci)
+        
+        # notice the asymmetric __eq__ due to the instancecheck in MyClass
+        self.assertNotEqual(ai, di)
+        self.assertFalse(di != ai)
+
+        @njit
+        def check_equality(a, b):
+            return a == b
+
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            with self.assertRaises(errors.LoweringError) as raises:
+                self.assertTrue(check_equality(ai, bi))
+            # Check exception
+            self.assertIn('no default `is` implementation', 
+                          str(raises.exception))
+
+            # Check warnings
+            self.assertEqual(len(w), 1)
+            self.assertTrue(issubclass(w[-1].category, UserWarning))
+            self.assertIn("Possible unintentional usage of default __eq__",
+                          str(w[-1].message))
+            
+        @njit
+        def check_inequality(a, b):
+            # not_equal provided via default __eq__
+            return a != b
+        
+        self.assertFalse(check_inequality(ai, bi))
+        self.assertTrue(check_inequality(ai, ci))
+        # notice the asymmetric __eq__ due to the instancecheck in MyClass
+        self.assertTrue(check_inequality(ai, di))
+        self.assertFalse(check_inequality(di, ai))
 
 
 if __name__ == '__main__':

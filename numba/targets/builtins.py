@@ -2,6 +2,7 @@ from __future__ import print_function, absolute_import, division
 
 import math
 from functools import reduce
+import warnings
 
 import numpy as np
 
@@ -343,10 +344,38 @@ def not_in(context, builder, sig, args):
 @lower_builtin("==", types.UserEq, types.Any)
 def user_eq(context, builder, sig, args):
     self_type = sig.args[0]
-    call, callsig = self_type.get_user_eq(context, sig)
-    out = call(builder, args)
+    eq_impl = self_type.get_user_eq(context, sig)
+    if eq_impl is NotImplemented:
+        # there's no default __eq__ that uses __ne__; fallback to `is`
+        warnings.warn("Possible unintentional usage of default __eq__ on "
+                      "object that implements __ne__", UserWarning)
+
+        def default_impl(a, b):
+            return a is b
+
+        out = context.compile_internal(builder, default_impl, sig, args)
+    else:
+        call, callsig = eq_impl 
+        out = call(builder, args)
     # Cast return value to match the expected return_type
     out = context.cast(builder, out, callsig.return_type, sig.return_type)
+    return impl_ret_new_ref(context, builder, sig.return_type, out)
+
+
+@lower_builtin("!=", types.UserEq, types.Any)
+def user_ne(context, builder, sig, args):
+    self_type = sig.args[0]
+    ne_impl = self_type.get_user_ne(context, sig)
+    if ne_impl is NotImplemented:
+        def default_impl(a, b):
+            return not (a == b)
+
+        out = context.compile_internal(builder, default_impl, sig, args)
+    else:
+        call, callsig = ne_impl
+        out = call(builder, args)
+        # Cast return value to match the expected return_type
+        out = context.cast(builder, out, callsig.return_type, sig.return_type)
     return impl_ret_new_ref(context, builder, sig.return_type, out)
 
 

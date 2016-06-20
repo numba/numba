@@ -363,13 +363,24 @@ class ClassInstanceType(UserHashable, UserEq):
     def supports_eq(self):
         return '__eq__' in self.methods or '__ne__' in self.methods
 
-    def get_user_eq(self, context, sig):
-        method = self.jitmethods["__eq__"]
+    def _get_user_equality_fn(self, context, sig, method):
         disp_type = Dispatcher(method)
         # Get call signature, which may have different return type
         callsig = disp_type.get_call_type(context.typing_context, sig.args, {})
         call = context.get_function(disp_type, callsig)
         return call, callsig
+
+    def get_user_eq(self, context, sig):
+        eq = self.jitmethods.get('__eq__')
+        if eq is None:
+            return NotImplemented
+        return self._get_user_equality_fn(context, sig, eq)
+
+    def get_user_ne(self, context, sig):
+        ne = self.jitmethods.get('__ne__')
+        if ne is None:
+            return NotImplemented
+        return self._get_user_equality_fn(context, sig, ne)
 
 
 class ClassType(Callable, Opaque):

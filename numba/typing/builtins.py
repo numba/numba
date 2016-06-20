@@ -881,11 +881,18 @@ class DeferredAttribute(AttributeTemplate):
 
 #------------------------------------------------------------------------------
 
-@infer
-class UserCmpEq(AbstractTemplate):
-    key = '=='
 
+class UserCmpEqualityBase(AbstractTemplate):
     def generic(self, args, kws):
         [lhs, rhs] = args
         if isinstance(lhs, types.Eq):
             return signature(types.boolean, lhs, rhs)
+
+@infer
+class UserCmpEq(UserCmpEqualityBase):
+    key = '=='
+
+
+@infer
+class UserCmpNe(UserCmpEqualityBase):
+    key = '!='

@@ -73,7 +73,7 @@ _ignored_special_methods = set(['__init__'])
 def _handle_special_methods(dct, name, func):
     if name in _ignored_special_methods:
         return
-    elif name in ['__hash__', '__eq__']:
+    elif name in ['__hash__', '__eq__', '__ne__']:
         dct[name] = _generate_method(name, func)
     else:
         msg = "unsupported special method: {0}".format(name)
