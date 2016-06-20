@@ -12,7 +12,7 @@ from numba import njit
 from numba.typing import templates
 from numba.datamodel import default_manager, models
 from numba.targets import imputils
-from numba import cgutils
+from numba import cgutils, utils
 from numba.six import exec_
 from . import _box
 
@@ -59,9 +59,20 @@ def _mangle_attr(name):
 # Class object
 
 _ctor_template = """
-def ctor(*args):
-    return __numba_cls_(*args)
+def ctor({args}):
+    return __numba_cls_({args})
 """
+
+
+def _getargs(fn):
+    """
+    Returns list of positional and keyword argument names in order. 
+    """
+    sig = utils.pysignature(fn)
+    params = sig.parameters
+    args = [k for k, v in params.items() 
+            if (v.kind & v.POSITIONAL_OR_KEYWORD) == v.POSITIONAL_OR_KEYWORD]
+    return args
 
 
 class JitClassType(type):
@@ -84,7 +95,11 @@ class JitClassType(type):
         Generate a wrapper for calling the constructor from pure Python.
         Note the wrapper will only accept positional arguments.
         """
-        ctor_source = _ctor_template
+        init = cls.class_type.instance_type.methods['__init__']
+        # get postitional and keyword arguments
+        # offset by one to exclude the `self` arg
+        args = _getargs(init)[1:]
+        ctor_source = _ctor_template.format(args=', '.join(args))
         glbls = {"__numba_cls_": cls}
         exec_(ctor_source, glbls)
         ctor = glbls['ctor']
