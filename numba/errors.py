@@ -36,7 +36,7 @@ def deprecated(arg):
 
         return wraps(func)(wrapper)
 
-    if callable(arg) or type(arg) in (classmethod, staticmethod):
+    if not subst:
         return decorator(arg)
     else:
         return decorator
