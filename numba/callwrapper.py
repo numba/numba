@@ -99,7 +99,7 @@ class PyCallWrapper(object):
         self.release_gil = release_gil
 
     def build(self):
-        wrapname = "wrapper.%s" % self.func.name
+        wrapname = self.fndesc.llvm_cpython_wrapper_name
 
         # This is the signature of PyCFunctionWithKeywords
         # (see CPython's methodobject.h)

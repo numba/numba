@@ -167,7 +167,7 @@ class _SetPayload(object):
                                                ref=entry_ptr)
         return entry
 
-    def _lookup(self, item, h):
+    def _lookup(self, item, h, for_insert=False):
         """
         Lookup the *item* with the given hash values in the entries.
 
@@ -175,7 +175,7 @@ class _SetPayload(object):
         - If found is true, <entry index> points to the entry containing
           the item.
         - If found is false, <entry index> points to the empty entry that
-          the item can be written to.
+          the item can be written to (only if *for_insert* is true)
         """
         context = self._context
         builder = self._builder
@@ -195,6 +195,10 @@ class _SetPayload(object):
         # The index of the entry being considered: start with (hash & mask)
         index = cgutils.alloca_once_value(builder,
                                           builder.and_(h, mask))
+        if for_insert:
+            # The index of the first deleted entry in the lookup chain
+            free_index_sentinel = mask.type(-1)  # highest unsigned index
+            free_index = cgutils.alloca_once_value(builder, free_index_sentinel)
 
         bb_body = builder.append_basic_block("lookup.body")
         bb_found = builder.append_basic_block("lookup.found")
@@ -217,6 +221,14 @@ class _SetPayload(object):
 
             with builder.if_then(is_hash_empty(context, builder, entry_hash)):
                 builder.branch(bb_not_found)
+
+            if for_insert:
+                # Memorize the index of the first deleted entry
+                with builder.if_then(is_hash_deleted(context, builder, entry_hash)):
+                    j = builder.load(free_index)
+                    j = builder.select(builder.icmp_unsigned('==', j, free_index_sentinel),
+                                       i, j)
+                    builder.store(j, free_index)
 
         # First linear probing.  When the number of collisions is small,
         # the lineary probing loop achieves better cache locality and
@@ -249,6 +261,15 @@ class _SetPayload(object):
             builder.branch(bb_body)
 
         with builder.goto_block(bb_not_found):
+            if for_insert:
+                # Not found => for insertion, return the index of the first
+                # deleted entry (if any), to avoid creating an infinite
+                # lookup chain (issue #1913).
+                i = builder.load(index)
+                j = builder.load(free_index)
+                i = builder.select(builder.icmp_unsigned('==', j, free_index_sentinel),
+                                   i, j)
+                builder.store(i, index)
             builder.branch(bb_end)
 
         with builder.goto_block(bb_found):
@@ -398,7 +419,7 @@ class SetInstance(object):
         context = self._context
         builder = self._builder
 
-        found, i = payload._lookup(item, h)
+        found, i = payload._lookup(item, h, for_insert=True)
         not_found = builder.not_(found)
 
         with builder.if_then(not_found):
@@ -579,7 +600,7 @@ class SetInstance(object):
             h = loop.entry.hash
             # We must reload our payload as it may be resized during the loop
             payload = self.payload
-            found, i = payload._lookup(key, h)
+            found, i = payload._lookup(key, h, for_insert=True)
             entry = payload.get_entry(i)
             with builder.if_else(found) as (if_common, if_not_common):
                 with if_common:

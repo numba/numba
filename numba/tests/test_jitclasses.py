@@ -2,6 +2,7 @@ from __future__ import absolute_import, print_function, division
 
 from collections import OrderedDict
 import ctypes
+import sys
 
 import numpy as np
 
@@ -14,7 +15,6 @@ from numba import jitclass
 from .support import TestCase, MemoryLeakMixin, tag
 from numba.jitclass import _box
 from numba.runtime.nrt import MemInfo
-from numba import errors
 from numba.six import assertRegex
 
 
@@ -274,6 +274,20 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(cstruct.b, st.b)
         self.assertEqual(cstruct.c, st.c)
 
+    def test_is(self):
+        Vector = self._make_Vector2()
+        vec_a = Vector(1, 2)
+        vec_b = Vector(1, 2)
+
+        @njit
+        def do_is(a, b):
+            return a is b
+
+        with self.assertRaises(errors.LoweringError) as raises:
+            # trigger compilation
+            do_is(vec_a, vec_a)
+        self.assertIn('no default `is` implementation', str(raises.exception))
+
     def test_isinstance(self):
         Vector2 = self._make_Vector2()
         vec = Vector2(1, 2)
@@ -453,6 +467,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             'value': int32,
             '_value': float32,
             '__value': int32,
+            '__value__': int32,
         }
 
         @jitclass(spec)
@@ -462,6 +477,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 self.value = value
                 self._value = value / 2
                 self.__value = value * 2
+                self.__value__ = value - 1
 
             @property
             def private_value(self):
@@ -497,6 +513,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             def check_private_method(self, factor):
                 return self.__private_method(factor)
 
+
         value = 123
         inst = MyClass(value)
         # test attributes
@@ -514,6 +531,10 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         # test methods
         self.assertEqual(inst._protected_method(3), inst._value * 3)
         self.assertEqual(inst.check_private_method(3), inst.private_value * 3)
+        # test special
+        self.assertEqual(inst.__value__, value - 1)
+        inst.__value__ -= 100
+        self.assertEqual(inst.__value__, value - 101)
 
         # test errors
         @njit
@@ -529,6 +550,21 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         with self.assertRaises(AttributeError) as raises:
             access_dunder.py_func(inst)
         self.assertIn('_TestJitClass__value', str(raises.exception))
+
+    @unittest.skipIf(sys.version_info < (3,), "Python 3-specific test")
+    def test_annotations(self):
+        """
+        Methods with annotations should compile fine (issue #1911).
+        """
+        from .annotation_usecases import AnnotatedClass
+
+        spec = {'x': int32}
+        cls = jitclass(spec)(AnnotatedClass)
+
+        obj = cls(5)
+        self.assertEqual(obj.x, 5)
+        self.assertEqual(obj.add(2), 7)
+
 
 class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
 

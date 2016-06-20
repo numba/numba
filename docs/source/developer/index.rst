@@ -5,6 +5,7 @@ Developer Manual
 ================
 
 .. toctree::
+   :maxdepth: 2
 
    contributing.rst
    architecture.rst
@@ -13,3 +14,4 @@ Developer Manual
    numba-runtime.rst
    rewrites.rst
    live_variable_analysis.rst
+   listings.rst

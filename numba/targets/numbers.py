@@ -2,7 +2,7 @@ from __future__ import print_function, absolute_import, division
 
 import math
 
-import numpy
+import numpy as np
 
 from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant
@@ -804,7 +804,7 @@ for cls in (types.Float, types.Integer):
 
 @lower_builtin("**", types.Complex, types.Complex)
 @lower_builtin(pow, types.Complex, types.Complex)
-def complex128_power_impl(context, builder, sig, args):
+def complex_power_impl(context, builder, sig, args):
     [ca, cb] = args
     ty = sig.args[0]
     fty = ty.underlying_float
@@ -816,7 +816,7 @@ def complex128_power_impl(context, builder, sig, args):
     pb = b._getpointer()
     pc = c._getpointer()
 
-    # Optimize for square because cpow looses a lot of precsiion
+    # Optimize for square because cpow loses a lot of precision
     TWO = context.get_constant(fty, 2)
     ZERO = context.get_constant(fty, 0)
 
@@ -1194,7 +1194,7 @@ def complex_to_complex(context, builder, fromty, toty, val):
 def any_to_boolean(context, builder, fromty, toty, val):
     return context.is_true(builder, fromty, val)
 
-@lower_cast(types.Boolean, types.Any)
+@lower_cast(types.Boolean, types.Number)
 def boolean_to_any(context, builder, fromty, toty, val):
     # Casting from boolean to anything first casts to int32
     asint = builder.zext(val, Type.int())

@@ -483,16 +483,16 @@ class TestDispatcherMethods(TestCase):
         self.assertEqual(exp_f, got_f)
 
 
-class TestCache(TestCase):
+class BaseCacheTest(TestCase):
+    # This class is also used in test_cfunc.py.
 
-    here = os.path.dirname(__file__)
     # The source file that will be copied
-    usecases_file = os.path.join(here, "cache_usecases.py")
+    usecases_file = None
     # Make sure this doesn't conflict with another module
-    modname = "caching_test_fodder"
+    modname = None
 
     def setUp(self):
-        self.tempdir = temp_directory('test_dispatcher_cache')
+        self.tempdir = temp_directory('test_cache')
         sys.path.insert(0, self.tempdir)
         self.modfile = os.path.join(self.tempdir, self.modname + ".py")
         self.cache_dir = os.path.join(self.tempdir, "__pycache__")
@@ -547,6 +547,13 @@ class TestCache(TestCase):
     def dummy_test(self):
         pass
 
+
+class TestCache(BaseCacheTest):
+
+    here = os.path.dirname(__file__)
+    usecases_file = os.path.join(here, "cache_usecases.py")
+    modname = "dispatcher_caching_test_fodder"
+
     def run_in_separate_process(self):
         # Cached functions can be run from a distinct process.
         # Also stresses issue #1603: uncached function calling cached function
@@ -556,17 +563,8 @@ class TestCache(TestCase):
 
             sys.path.insert(0, %(tempdir)r)
             mod = __import__(%(modname)r)
-            assert mod.add_usecase(2, 3) == 6
-            assert mod.add_objmode_usecase(2, 3) == 6
-            assert mod.outer_uncached(3, 2) == 2
-            assert mod.outer(3, 2) == 2
-            assert mod.generated_usecase(3, 2) == 1
-            packed_rec = mod.record_return(mod.packed_arr, 1)
-            assert tuple(packed_rec) == (2, 43.5), packed_rec
-            aligned_rec = mod.record_return(mod.aligned_arr, 1)
-            assert tuple(aligned_rec) == (2, 43.5), aligned_rec
-            """ % dict(tempdir=self.tempdir, modname=self.modname,
-                       test_class=self.__class__.__name__)
+            mod.self_test()
+            """ % dict(tempdir=self.tempdir, modname=self.modname)
 
         popen = subprocess.Popen([sys.executable, "-c", code],
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -588,6 +586,8 @@ class TestCache(TestCase):
         self.check_pycache(5)  # 2 index, 3 data
         self.assertPreciseEqual(f(2.5, 3), 6.5)
         self.check_pycache(6)  # 2 index, 4 data
+
+        mod.self_test()
 
     def check_hits(self, func, hits, misses=None):
         st = func.stats
@@ -839,6 +839,59 @@ class TestCache(TestCase):
         self.addCleanup(os.chmod, pycache, old_perms)
 
         self._test_pycache_fallback()
+
+    def test_ipython(self):
+        # Test caching in an IPython session
+        base_cmd = [sys.executable, '-m', 'IPython']
+        base_cmd += ['--quiet', '--quick', '--no-banner', '--colors=NoColor']
+        try:
+            ver = subprocess.check_output(base_cmd + ['--version'])
+        except subprocess.CalledProcessError as e:
+            self.skipTest("ipython not available: return code %d"
+                          % e.returncode)
+        print("ipython version:", ver.strip().decode())
+        # Create test input
+        inputfn = os.path.join(self.tempdir, "ipython_cache_usecase.txt")
+        with open(inputfn, "w") as f:
+            f.write(r"""
+                import os
+                import sys
+
+                from numba import jit
+
+                @jit(cache=True)
+                def f():
+                    return 42
+
+                res = f()
+                # IPython writes on stdout, so use stderr instead
+                sys.stderr.write(u"cache hits = %d\n" % f.stats.cache_hits[()])
+
+                # IPython hijacks sys.exit(), bypass it
+                sys.stdout.flush()
+                sys.stderr.flush()
+                os._exit(res)
+                """)
+
+        def execute_with_input():
+            # Feed the test input as stdin, to execute it in REPL context
+            with open(inputfn, "rb") as stdin:
+                p = subprocess.Popen(base_cmd, stdin=stdin,
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE,
+                                     universal_newlines=True)
+                out, err = p.communicate()
+                if p.returncode != 42:
+                    self.fail("unexpected return code %d\n"
+                              "-- stdout:\n%s\n"
+                              "-- stderr:\n%s\n"
+                              % (p.returncode, out, err))
+                return err
+
+        execute_with_input()
+        # Run a second time and check caching
+        err = execute_with_input()
+        self.assertEqual(err.strip(), "cache hits = 1")
 
 
 if __name__ == '__main__':

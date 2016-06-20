@@ -115,7 +115,7 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
 # In NumPy, a division by zero does not raise an exception, but instead
 # generated a known value. Note that a division by zero in any of the
 # operations of a vector may raise an exception or issue a warning
-# depending on the numpy.seterr configuration. This is not supported
+# depending on the np.seterr configuration. This is not supported
 # right now (and in any case, it won't be handled by these functions
 # either)
 
@@ -454,31 +454,6 @@ def np_complex_floor_div_impl(context, builder, sig, args):
 
 ########################################################################
 # numpy power funcs
-
-def np_int_power_impl(context, builder, sig, args):
-    # In NumPy ufunc loops, integer power is performed using the double
-    # version of power with the appropriate casts
-    assert len(args) == 2
-    assert len(sig.args) == 2
-    ty = sig.args[0]
-    # must have homogeneous args
-    assert all(arg==ty for arg in sig.args) and sig.return_type == ty
-
-    return _call_func_by_name_with_cast(context, builder, sig, args,
-                                        'numba.npymath.pow', types.float64)
-
-
-def np_real_power_impl(context, builder, sig, args):
-    _check_arity_and_homogeneity(sig, args, 2)
-
-    dispatch_table = {
-        types.float32: 'numba.npymath.powf',
-        types.float64: 'numba.npymath.pow',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'power')
-
 
 def np_complex_power_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)

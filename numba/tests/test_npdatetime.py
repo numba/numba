@@ -1,5 +1,5 @@
 """
-Test numpy.datetime64 and numpy.timedelta64 support.
+Test np.datetime64 and np.timedelta64 support.
 """
 
 # NOTE: datetime64 and timedelta64 ufuncs are tested in test_ufuncs.

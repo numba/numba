@@ -59,8 +59,8 @@ def _mangle_attr(name):
 # Class object
 
 _ctor_template = """
-def ctor({args}):
-    return __numba_cls_({args})
+def ctor(*args):
+    return __numba_cls_(*args)
 """
 
 
@@ -80,14 +80,11 @@ class JitClassType(type):
         return outcls
 
     def _set_init(cls):
-        # make ctor
-        init = cls.class_type.instance_type.methods['__init__']
-        argspec = inspect.getargspec(init)
-        assert not argspec.varargs, 'varargs not supported'
-        assert not argspec.keywords, 'keywords not supported'
-        assert not argspec.defaults, 'defaults not supported'
-        args = ', '.join(argspec.args[1:])
-        ctor_source = _ctor_template.format(args=args)
+        """
+        Generate a wrapper for calling the constructor from pure Python.
+        Note the wrapper will only accept positional arguments.
+        """
+        ctor_source = _ctor_template
         glbls = {"__numba_cls_": cls}
         exec_(ctor_source, glbls)
         ctor = glbls['ctor']
@@ -120,7 +117,7 @@ def _fix_up_private_attr(clsname, spec):
     """
     out = OrderedDict()
     for k, v in spec.items():
-        if k.startswith('__'):
+        if k.startswith('__') and not k.endswith('__'):
             k = '_' + clsname + k
         out[k] = v
     return out

@@ -13,7 +13,6 @@ from __future__ import print_function, absolute_import
 
 import sys
 import os
-import multiprocessing
 
 import numpy as np
 
@@ -22,10 +21,18 @@ import llvmlite.binding as ll
 
 from numba.npyufunc import ufuncbuilder
 from numba.numpy_support import as_dtype
-from numba import types, utils, cgutils
+from numba import types, utils, cgutils, config
 
+def get_thread_count():
+    """
+    Gets the available thread count.
+    """
+    t = config.NUMBA_NUM_THREADS
+    if t < 1:
+        raise ValueError("Number of threads specified must be > 0.")
+    return t
 
-NUM_CPU = max(1, multiprocessing.cpu_count())
+NUM_THREADS = get_thread_count()
 
 
 class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
@@ -107,18 +114,18 @@ def build_ufunc_kernel(library, ctx, innerfunc, sig):
 
     # Distribute work
     total = builder.load(dimensions)
-    ncpu = lc.Constant.int(total.type, NUM_CPU)
+    ncpu = lc.Constant.int(total.type, NUM_THREADS)
 
     count = builder.udiv(total, ncpu)
 
     count_list = []
     remain = total
 
-    for i in range(NUM_CPU):
+    for i in range(NUM_THREADS):
         space = builder.alloca(intp_t)
         count_list.append(space)
 
-        if i == NUM_CPU - 1:
+        if i == NUM_THREADS - 1:
             # Last thread takes all leftover
             builder.store(remain, space)
         else:
@@ -137,7 +144,7 @@ def build_ufunc_kernel(library, ctx, innerfunc, sig):
 
     # Get the array argument set for each thread
     args_list = []
-    for i in range(NUM_CPU):
+    for i in range(NUM_THREADS):
         space = builder.alloca(byte_ptr_t,
                                size=lc.Constant.int(lc.Type.int(), array_count))
         args_list.append(space)
@@ -291,20 +298,20 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
 
     # Distribute work
     total = builder.load(dimensions)
-    ncpu = lc.Constant.int(total.type, NUM_CPU)
+    ncpu = lc.Constant.int(total.type, NUM_THREADS)
 
     count = builder.udiv(total, ncpu)
 
     count_list = []
     remain = total
 
-    for i in range(NUM_CPU):
+    for i in range(NUM_THREADS):
         space = cgutils.alloca_once(builder, intp_t, size=inner_ndim + 1)
         cgutils.memcpy(builder, space, dimensions,
                        count=lc.Constant.int(intp_t, inner_ndim + 1))
         count_list.append(space)
 
-        if i == NUM_CPU - 1:
+        if i == NUM_THREADS - 1:
             # Last thread takes all leftover
             builder.store(remain, space)
         else:
@@ -323,7 +330,7 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
 
     # Get the array argument set for each thread
     args_list = []
-    for i in range(NUM_CPU):
+    for i in range(NUM_THREADS):
         space = builder.alloca(byte_ptr_t,
                                size=lc.Constant.int(lc.Type.int(), array_count))
         args_list.append(space)
@@ -427,7 +434,7 @@ def _launch_threads():
     from ctypes import CFUNCTYPE, c_int
 
     launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
-    launch_threads(NUM_CPU)
+    launch_threads(NUM_THREADS)
 
 
 _is_initialized = False

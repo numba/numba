@@ -1,8 +1,10 @@
 from __future__ import print_function
+
+import numpy as np
+
 import numba.unittest_support as unittest
 from numba import compiler, types, utils
 from numba.targets import registry
-import numpy
 
 
 def overhead(x):
@@ -56,7 +58,7 @@ class TestWrapper(unittest.TestCase):
 
         self.assertEqual(cr.signature.args[0].layout, 'C')
 
-        x = numpy.zeros(shape=2, dtype='int32')
+        x = np.zeros(shape=2, dtype='int32')
 
         def python():
             array_overhead(x)

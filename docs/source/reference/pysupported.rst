@@ -44,6 +44,17 @@ as arguments with default values and ``*args`` (note the argument for
 ``*args`` can only be a tuple, not a list).  Explicit ``**kwargs`` are
 not supported.
 
+Recursive calls
+'''''''''''''''
+
+Only a very limited form of recursion is supported:
+
+* only self-recursion is allowed (mutual recursion is unsupported)
+* you must specify an explicit signature in the :func:`~numba.jit`
+  decorator
+* the signature in the recursive call must be compatible with the signature
+  being compiled
+
 Generators
 ----------
 

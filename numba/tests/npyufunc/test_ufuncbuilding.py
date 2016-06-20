@@ -2,14 +2,14 @@ from __future__ import print_function, absolute_import, division
 
 import sys
 
-import numpy
+import numpy as np
 
 from numba import config, unittest_support as unittest
 from numba.npyufunc.ufuncbuilder import GUFuncBuilder
 from numba import vectorize, guvectorize
 from numba.npyufunc import PyUFunc_One
 from numba.npyufunc.dufunc import DUFunc as UFuncBuilder
-from ..support import tag
+from ..support import tag, TestCase
 
 
 def add(a, b):
@@ -71,7 +71,7 @@ def guerror(a, b, c):
     raise MyException
 
 
-class TestUfuncBuilding(unittest.TestCase):
+class TestUfuncBuilding(TestCase):
 
     @tag('important')
     def test_basic_ufunc(self):
@@ -84,10 +84,10 @@ class TestUfuncBuilding(unittest.TestCase):
 
         def check(a):
             b = ufunc(a, a)
-            self.assertTrue(numpy.all(a + a == b))
+            self.assertTrue(np.all(a + a == b))
             self.assertEqual(b.dtype, a.dtype)
 
-        a = numpy.arange(12, dtype='int32')
+        a = np.arange(12, dtype='int32')
         check(a)
         # Non-contiguous dimension
         a = a[::2]
@@ -107,10 +107,10 @@ class TestUfuncBuilding(unittest.TestCase):
 
         def check(a):
             b = ufunc(a, a)
-            self.assertTrue(numpy.all(a + a == b))
+            self.assertTrue(np.all(a + a == b))
             self.assertEqual(b.dtype, a.dtype)
 
-        a = numpy.arange(12, dtype='complex64') + 1j
+        a = np.arange(12, dtype='complex64') + 1j
         check(a)
         # Non-contiguous dimension
         a = a[::2]
@@ -124,9 +124,9 @@ class TestUfuncBuilding(unittest.TestCase):
         self.assertTrue(cres.objectmode)
         ufunc = ufb.build_ufunc()
 
-        a = numpy.arange(10, dtype='int32')
+        a = np.arange(10, dtype='int32')
         b = ufunc(a, a)
-        self.assertTrue(numpy.all(a + a == b))
+        self.assertTrue(np.all(a + a == b))
 
     def test_nested_call(self):
         """
@@ -159,7 +159,7 @@ class TestUfuncBuildingJitDisabled(TestUfuncBuilding):
         config.DISABLE_JIT = self.old_disable_jit
 
 
-class TestGUfuncBuilding(unittest.TestCase):
+class TestGUfuncBuilding(TestCase):
 
     def test_basic_gufunc(self):
         gufb = GUFuncBuilder(guadd, "(x, y),(x, y)->(x, y)")
@@ -167,11 +167,11 @@ class TestGUfuncBuilding(unittest.TestCase):
         self.assertFalse(cres.objectmode)
         ufunc = gufb.build_ufunc()
 
-        a = numpy.arange(10, dtype="int32").reshape(2, 5)
+        a = np.arange(10, dtype="int32").reshape(2, 5)
         b = ufunc(a, a)
 
-        self.assertTrue(numpy.all(a + a == b))
-        self.assertEqual(b.dtype, numpy.dtype('int32'))
+        self.assertTrue(np.all(a + a == b))
+        self.assertEqual(b.dtype, np.dtype('int32'))
 
         # Metadata
         self.assertEqual(ufunc.__name__, "guadd")
@@ -184,10 +184,10 @@ class TestGUfuncBuilding(unittest.TestCase):
         self.assertFalse(cres.objectmode)
         ufunc = gufb.build_ufunc()
 
-        a = numpy.arange(10, dtype="complex64").reshape(2, 5) + 1j
+        a = np.arange(10, dtype="complex64").reshape(2, 5) + 1j
         b = ufunc(a, a)
 
-        self.assertTrue(numpy.all(a + a == b))
+        self.assertTrue(np.all(a + a == b))
 
     def test_gufunc_struct_forceobj(self):
         gufb = GUFuncBuilder(guadd, "(x, y),(x, y)->(x, y)",
@@ -197,11 +197,11 @@ class TestGUfuncBuilding(unittest.TestCase):
         self.assertTrue(cres.objectmode)
         ufunc = gufb.build_ufunc()
 
-        a = numpy.arange(10, dtype="complex64").reshape(2, 5) + 1j
+        a = np.arange(10, dtype="complex64").reshape(2, 5) + 1j
         b = ufunc(a, a)
 
-        self.assertTrue(numpy.all(a + a == b))
-        self.assertEqual(b.dtype, numpy.dtype('complex64'))
+        self.assertTrue(np.all(a + a == b))
+        self.assertEqual(b.dtype, np.dtype('complex64'))
 
 
 class TestGUfuncBuildingJitDisabled(TestGUfuncBuilding):
@@ -214,31 +214,31 @@ class TestGUfuncBuildingJitDisabled(TestGUfuncBuilding):
         config.DISABLE_JIT = self.old_disable_jit
 
 
-class TestVectorizeDecor(unittest.TestCase):
+class TestVectorizeDecor(TestCase):
 
     _supported_identities = [0, 1, None, "reorderable"]
 
     def test_vectorize(self):
         ufunc = vectorize(['int32(int32, int32)'])(add)
-        a = numpy.arange(10, dtype='int32')
+        a = np.arange(10, dtype='int32')
         b = ufunc(a, a)
-        self.assertTrue(numpy.all(a + a == b))
-        self.assertEqual(b.dtype, numpy.dtype('int32'))
+        self.assertTrue(np.all(a + a == b))
+        self.assertEqual(b.dtype, np.dtype('int32'))
 
     def test_vectorize_objmode(self):
         ufunc = vectorize(['int32(int32, int32)'], forceobj=True)(add)
-        a = numpy.arange(10, dtype='int32')
+        a = np.arange(10, dtype='int32')
         b = ufunc(a, a)
-        self.assertTrue(numpy.all(a + a == b))
-        self.assertEqual(b.dtype, numpy.dtype('int32'))
+        self.assertTrue(np.all(a + a == b))
+        self.assertEqual(b.dtype, np.dtype('int32'))
 
     @tag('important')
     def test_vectorize_bool_return(self):
         ufunc = vectorize(['bool_(int32, int32)'])(equals)
-        a = numpy.arange(10, dtype='int32')
+        a = np.arange(10, dtype='int32')
         r = ufunc(a,a)
-        self.assertTrue(numpy.all(r))
-        self.assertEqual(r.dtype, numpy.dtype('bool_'))
+        self.assertTrue(np.all(r))
+        self.assertEqual(r.dtype, np.dtype('bool_'))
 
     @tag('important')
     def test_vectorize_identity(self):
@@ -257,45 +257,66 @@ class TestVectorizeDecor(unittest.TestCase):
             vectorize([sig], identity=2)(add)
 
     def test_vectorize_no_args(self):
-        a = numpy.linspace(0,1,10)
-        b = numpy.linspace(1,2,10)
+        a = np.linspace(0,1,10)
+        b = np.linspace(1,2,10)
         ufunc = vectorize(add)
-        self.assertTrue(numpy.all(ufunc(a,b) == (a + b)))
+        self.assertTrue(np.all(ufunc(a,b) == (a + b)))
         ufunc2 = vectorize(add)
-        c = numpy.empty(10)
+        c = np.empty(10)
         ufunc2(a, b, c)
-        self.assertTrue(numpy.all(c == (a + b)))
+        self.assertTrue(np.all(c == (a + b)))
 
     def test_vectorize_only_kws(self):
-        a = numpy.linspace(0,1,10)
-        b = numpy.linspace(1,2,10)
+        a = np.linspace(0,1,10)
+        b = np.linspace(1,2,10)
         ufunc = vectorize(identity=PyUFunc_One, nopython=True)(mul)
-        self.assertTrue(numpy.all(ufunc(a,b) == (a * b)))
+        self.assertTrue(np.all(ufunc(a,b) == (a * b)))
+
+    def test_vectorize_output_kwarg(self):
+        """
+        Passing the output array as a keyword argument (issue #1867).
+        """
+        def check(ufunc):
+            a = np.arange(10, 16, dtype='int32')
+            out = np.zeros_like(a)
+            got = ufunc(a, a, out=out)
+            self.assertIs(got, out)
+            self.assertPreciseEqual(out, a + a)
+            with self.assertRaises(TypeError):
+                ufunc(a, a, zzz=out)
+
+        # With explicit sigs
+        ufunc = vectorize(['int32(int32, int32)'], nopython=True)(add)
+        check(ufunc)
+        # With implicit sig
+        ufunc = vectorize(nopython=True)(add)
+        check(ufunc)  # compiling
+        check(ufunc)  # after compiling
 
     @tag('important')
     def test_guvectorize(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
                             "(x,y),(x,y)->(x,y)")(guadd)
-        a = numpy.arange(10, dtype='int32').reshape(2, 5)
+        a = np.arange(10, dtype='int32').reshape(2, 5)
         b = ufunc(a, a)
-        self.assertTrue(numpy.all(a + a == b))
-        self.assertEqual(b.dtype, numpy.dtype('int32'))
+        self.assertTrue(np.all(a + a == b))
+        self.assertEqual(b.dtype, np.dtype('int32'))
 
     @tag('important')
     def test_guvectorize_no_output(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
                             "(x,y),(x,y),(x,y)")(guadd)
-        a = numpy.arange(10, dtype='int32').reshape(2, 5)
-        out = numpy.zeros_like(a)
+        a = np.arange(10, dtype='int32').reshape(2, 5)
+        out = np.zeros_like(a)
         ufunc(a, a, out)
-        self.assertTrue(numpy.all(a + a == out))
+        self.assertTrue(np.all(a + a == out))
 
     def test_guvectorize_objectmode(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
                             "(x,y),(x,y)->(x,y)")(guadd_obj)
-        a = numpy.arange(10, dtype='int32').reshape(2, 5)
+        a = np.arange(10, dtype='int32').reshape(2, 5)
         b = ufunc(a, a)
-        self.assertTrue(numpy.all(a + a == b))
+        self.assertTrue(np.all(a + a == b))
 
     def test_guvectorize_scalar_objectmode(self):
         """
@@ -303,14 +324,14 @@ class TestVectorizeDecor(unittest.TestCase):
         """
         ufunc = guvectorize(['(int32[:,:], int32, int32[:,:])'],
                             "(x,y),()->(x,y)")(guadd_scalar_obj)
-        a = numpy.arange(10, dtype='int32').reshape(2, 5)
+        a = np.arange(10, dtype='int32').reshape(2, 5)
         b = ufunc(a, 3)
-        self.assertTrue(numpy.all(a + 3 == b))
+        self.assertTrue(np.all(a + 3 == b))
 
     def test_guvectorize_error_in_objectmode(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
                             "(x,y),(x,y)->(x,y)", forceobj=True)(guerror)
-        a = numpy.arange(10, dtype='int32').reshape(2, 5)
+        a = np.arange(10, dtype='int32').reshape(2, 5)
         with self.assertRaises(MyException):
             ufunc(a, a)
 

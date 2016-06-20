@@ -14,7 +14,6 @@ system to freeze in some cases.
 from __future__ import absolute_import, print_function, division
 import sys
 import os
-import traceback
 import ctypes
 import weakref
 import functools
@@ -144,6 +143,7 @@ def _build_reverse_error_map():
             code = getattr(enums, name)
             map[code] = name
     return map
+
 
 def _getpid():
     return os.getpid()
@@ -359,7 +359,7 @@ class Device(object):
         driver.cuDeviceGet(byref(got_devnum), devnum)
         assert devnum == got_devnum.value, "Driver returned another device"
         self.id = got_devnum.value
-        self.trashing = TrashService("cuda.device%d.trash" % self.id)
+        self.trashing = trashing = TrashService("cuda.device%d.trash" % self.id)
         self.attributes = {}
         # Read compute capability
         cc_major = c_int()
@@ -373,6 +373,11 @@ class Device(object):
         driver.cuDeviceGetName(buf, bufsz, self.id)
         self.name = buf.value
 
+        def finalizer():
+            trashing.clear()
+
+        utils.finalize(self, finalizer)
+
     @property
     def COMPUTE_CAPABILITY(self):
         """
@@ -381,12 +386,6 @@ class Device(object):
         warnings.warn("Deprecated attribute 'COMPUTE_CAPABILITY'; use lower "
                       "case version", DeprecationWarning)
         return self.compute_capability
-
-    def __del__(self):
-        try:
-            self.reset()
-        except:
-            traceback.print_exc()
 
     def __repr__(self):
         return "<CUDA device %d '%s'>" % (self.id, self.name)
@@ -469,7 +468,7 @@ class Context(object):
                                      (self.device.id, self.handle.value))
         self.allocations = utils.UniqueDict()
         self.modules = utils.UniqueDict()
-        self.finalizer = utils.finalize(self, self._make_finalizer())
+        utils.finalize(self, self._make_finalizer())
         # For storing context specific data
         self.extras = {}
 
@@ -481,6 +480,7 @@ class Context(object):
         modules = self.modules
         trashing = self.trashing
         external_finalizer = self.external_finalizer
+
         def finalize():
             allocations.clear()
             modules.clear()
@@ -523,7 +523,7 @@ class Context(object):
     def get_max_potential_block_size(self, func, b2d_func, memsize, blocksizelimit, flags=None):
         """Suggest a launch configuration with reasonable occupancy.
         :param func: kernel for which occupancy is calculated
-        :param b2d_func: function that calculates how much per-block dynamic shared memory 'func' 
+        :param b2d_func: function that calculates how much per-block dynamic shared memory 'func'
           uses based on the block size.
         :param memsize: per-block dynamic shared memory usage intended, in bytes
         :param blocksizelimit: maximum block size the kernel is designed to handle"""
@@ -596,13 +596,6 @@ class Context(object):
                                finalizer=finalizer)
             return mem
 
-    def memfree(self, pointer):
-        try:
-            del self.allocations[pointer.value]
-        except KeyError:
-            raise DeadMemoryError
-        self.trashing.service()
-
     def mempin(self, owner, pointer, size, mapped=False):
         self.trashing.service()
 
@@ -634,7 +627,6 @@ class Context(object):
                                finalizer=_pinned_finalizer(self.trashing,
                                                            pointer))
             return mem
-
 
     def memunpin(self, pointer):
         raise NotImplementedError
@@ -795,23 +787,22 @@ def _module_finalizer(context, handle):
 class MemoryPointer(object):
     __cuda_memory__ = True
 
-    def __init__(self, context, pointer, size, finalizer=None):
+    def __init__(self, context, pointer, size, finalizer=None, owner=None):
         self.context = context
         self.device_pointer = pointer
         self.size = size
         self._cuda_memsize_ = size
-        self.finalizer = finalizer
         self.is_managed = finalizer is not None
-        self.is_alive = True
         self.refct = 0
         self.handle = self.device_pointer
+        self._owner = owner
 
-    def __del__(self):
-        try:
-            if self.is_managed and self.is_alive:
-                self.finalizer()
-        except:
-            traceback.print_exc()
+        if finalizer is not None:
+            self._finalizer = utils.finalize(self, finalizer)
+
+    @property
+    def owner(self):
+        return self if self._owner is None else self._owner
 
     def own(self):
         return OwnedPointer(weakref.proxy(self))
@@ -821,10 +812,10 @@ class MemoryPointer(object):
         Forces the device memory to the trash.
         """
         if self.is_managed:
-            if not self.is_alive:
+            if not self._finalizer.alive:
                 raise RuntimeError("Freeing dead memory")
-            self.finalizer()
-            self.is_alive = False
+            self._finalizer()
+            assert not self._finalizer.alive
 
     def memset(self, byte, count=None, stream=0):
         count = self.size if count is None else count
@@ -842,8 +833,8 @@ class MemoryPointer(object):
             size = stop - start
         assert size > 0, "zero or negative memory size"
         pointer = drvapi.cu_device_ptr(base)
-        view = MemoryPointer(self.context, pointer, size)
-        return OwnedPointer(weakref.proxy(self), view)
+        view = MemoryPointer(self.context, pointer, size, owner=self.owner)
+        return OwnedPointer(weakref.proxy(self.owner), view)
 
     @property
     def device_ctypes_pointer(self):
@@ -879,26 +870,14 @@ class PinnedMemory(mviewbuf.MemAlloc):
         self.size = size
         self.host_pointer = pointer
         self.is_managed = finalizer is not None
-        self.finalizer = finalizer
-        self.is_alive = True
         self.handle = self.host_pointer
 
         # For buffer interface
         self._buflen_ = self.size
         self._bufptr_ = self.host_pointer.value
 
-    def __del__(self):
-        try:
-            if self.is_managed and self.is_alive:
-                self.finalizer()
-        except:
-            traceback.print_exc()
-
-    def unpin(self):
-        if not self.is_alive:
-            raise DeadMemoryError
-        self.finalizer()
-        self.is_alive = False
+        if finalizer is not None:
+            utils.finalize(self, finalizer)
 
     def own(self):
         return self
@@ -907,23 +886,23 @@ class PinnedMemory(mviewbuf.MemAlloc):
 class OwnedPointer(object):
     def __init__(self, memptr, view=None):
         self._mem = memptr
-        self._mem.refct += 1
+
         if view is None:
             self._view = self._mem
         else:
             assert not view.is_managed
             self._view = view
 
-    def __del__(self):
-        try:
-            self._mem.refct -= 1
-            assert self._mem.refct >= 0
-            if self._mem.refct == 0:
-                self._mem.free()
-        except ReferenceError:
-            pass
-        except:
-            traceback.print_exc()
+        mem = self._mem
+
+        def deref():
+            mem.refct -= 1
+            assert mem.refct >= 0
+            if mem.refct == 0:
+                mem.free()
+
+        self._mem.refct += 1
+        utils.finalize(self, deref)
 
     def __getattr__(self, fname):
         """Proxy MemoryPointer methods
@@ -939,15 +918,8 @@ class Stream(object):
     def __init__(self, context, handle, finalizer):
         self.context = context
         self.handle = handle
-        self.finalizer = finalizer
-        self.is_managed = finalizer is not None
-
-    def __del__(self):
-        try:
-            if self.is_managed:
-                self.finalizer()
-        except:
-            traceback.print_exc()
+        if finalizer is not None:
+            utils.finalize(self, finalizer)
 
     def __int__(self):
         return self.handle.value
@@ -976,15 +948,8 @@ class Event(object):
     def __init__(self, context, handle, finalizer=None):
         self.context = context
         self.handle = handle
-        self.finalizer = finalizer
-        self.is_managed = self.finalizer is not None
-
-    def __del__(self):
-        try:
-            if self.is_managed:
-                self.finalizer()
-        except:
-            traceback.print_exc()
+        if finalizer is not None:
+            utils.finalize(self, finalizer)
 
     def query(self):
         """
@@ -1045,8 +1010,7 @@ class Module(object):
         self.context = context
         self.handle = handle
         self.info_log = info_log
-        self.finalizer = finalizer
-        if self.finalizer is not None:
+        if finalizer is not None:
             self._finalizer = utils.finalize(self, finalizer)
 
     def unload(self):
@@ -1105,7 +1069,7 @@ class Function(object):
         while len(blockdim) < 3:
             blockdim += (1,)
 
-        inst = copy.copy(self) # shallow clone the object
+        inst = copy.copy(self)  # shallow clone the object
         inst.griddim = griddim
         inst.blockdim = blockdim
         inst.sharedmem = sharedmem
@@ -1206,7 +1170,7 @@ class Linker(object):
         driver.cuLinkCreate(len(raw_keys), option_keys, option_vals,
                             byref(self.handle))
 
-        self.finalizer = lambda: driver.cuLinkDestroy(handle)
+        utils.finalize(self, driver.cuLinkDestroy, handle)
 
         self.linker_info_buf = linkerinfo
         self.linker_errors_buf = linkererrors
@@ -1220,12 +1184,6 @@ class Linker(object):
     @property
     def error_log(self):
         return self.linker_errors_buf.value.decode('utf8')
-
-    def __del__(self):
-        try:
-            self.finalizer()
-        except:
-            traceback.print_exc()
 
     def add_ptx(self, ptx, name='<cudapy-ptx>'):
         ptxbuf = c_char_p(ptx)

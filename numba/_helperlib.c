@@ -121,7 +121,11 @@ _numba_rnd_random_seed(rnd_state_t *state)
 {
     PyObject *timemod, *timeobj;
     double timeval;
-    unsigned int seed, rshift;
+    Py_uintptr_t seed;
+    unsigned int seed32;
+    void *dummy;
+
+    /* XXX we could get a seed using _PyOS_URandom() instead */
 
     timemod = PyImport_ImportModuleNoBlock("time");
     if (!timemod)
@@ -133,18 +137,21 @@ _numba_rnd_random_seed(rnd_state_t *state)
     if (timeval == -1 && PyErr_Occurred())
         return -1;
     /* Mix in seconds and nanoseconds */
-    seed = (unsigned) timeval ^ (unsigned) (timeval * 1e9);
+    seed = (Py_uintptr_t) timeval ^ (Py_uintptr_t) (timeval * 1e9);
 #ifndef _WIN32
     seed ^= getpid();
 #endif
-    /* Address space randomization bits: take MSBs of various pointers.
-     * It is counter-productive to shift by 32, since the virtual address
-     * space width is usually less than 64 bits (48 on x86-64).
-     */
-    rshift = sizeof(void *) > 4 ? 16 : 0;
-    seed ^= (Py_uintptr_t) &timemod >> rshift;
-    seed += (Py_uintptr_t) &PyObject_CallMethod >> rshift;
-    numba_rnd_init(state, seed);
+    /* Address space randomization bits: mix in various pointers. */
+    seed ^= (Py_uintptr_t) &timemod;
+    seed += (Py_uintptr_t) &PyObject_CallMethod >> 3;
+    seed += (Py_uintptr_t) &rnd_init_by_array;
+    dummy = malloc(1);
+    free(dummy);
+    seed += (Py_uintptr_t) &dummy;
+
+    /* Reduce to 32 bits for Mersenne Twisted seeding */
+    seed32 = (unsigned int) (seed ^ (seed >> 16));
+    numba_rnd_init(state, seed32);
     return 0;
 }
 
@@ -376,7 +383,7 @@ numba_poisson_ptrs(rnd_state_t *state, double lam)
             continue;
         }
         if ((log(V) + log(invalpha) - log(a/(us*us)+b)) <=
-            (-lam + k*loglam - loggam(k+1)))
+            (-lam + (double) k*loglam - loggam((double) k+1)))
         {
             return k;
         }
@@ -1249,3 +1256,9 @@ Define bridge for all math functions
 
 #undef MATH_UNARY
 #undef MATH_BINARY
+
+/*
+ * BLAS and LAPACK wrappers
+ */
+
+#include "_lapack.c"

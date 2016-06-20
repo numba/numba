@@ -6,7 +6,7 @@ from __future__ import print_function, absolute_import, division
 
 import math
 
-import numpy
+import numpy as np
 
 from llvmlite import ir
 import llvmlite.llvmpy.core as lc
@@ -25,14 +25,14 @@ from .arrayobj import make_array, load_item, store_item, _empty_nd_impl
 #----------------------------------------------------------------------------
 # Basic stats and aggregates
 
-@lower_builtin(numpy.sum, types.Array)
+@lower_builtin(np.sum, types.Array)
 @lower_builtin("array.sum", types.Array)
 def array_sum(context, builder, sig, args):
     zero = sig.return_type(0)
 
     def array_sum_impl(arr):
         c = zero
-        for v in numpy.nditer(arr):
+        for v in np.nditer(arr):
             c += v.item()
         return c
 
@@ -40,13 +40,13 @@ def array_sum(context, builder, sig, args):
                                     locals=dict(c=sig.return_type))
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.prod, types.Array)
+@lower_builtin(np.prod, types.Array)
 @lower_builtin("array.prod", types.Array)
 def array_prod(context, builder, sig, args):
 
     def array_prod_impl(arr):
         c = 1
-        for v in numpy.nditer(arr):
+        for v in np.nditer(arr):
             c *= v.item()
         return c
 
@@ -54,7 +54,7 @@ def array_prod(context, builder, sig, args):
                                     locals=dict(c=sig.return_type))
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.cumsum, types.Array)
+@lower_builtin(np.cumsum, types.Array)
 @lower_builtin("array.cumsum", types.Array)
 def array_cumsum(context, builder, sig, args):
     scalar_dtype = sig.return_type.dtype
@@ -65,7 +65,7 @@ def array_cumsum(context, builder, sig, args):
         size = 1
         for i in arr.shape:
             size = size * i
-        out = numpy.empty(size, dtype)
+        out = np.empty(size, dtype)
         c = zero
         for idx, v in enumerate(arr.flat):
             c += v
@@ -78,7 +78,7 @@ def array_cumsum(context, builder, sig, args):
 
 
 
-@lower_builtin(numpy.cumprod, types.Array)
+@lower_builtin(np.cumprod, types.Array)
 @lower_builtin("array.cumprod", types.Array)
 def array_cumprod(context, builder, sig, args):
     scalar_dtype = sig.return_type.dtype
@@ -88,7 +88,7 @@ def array_cumprod(context, builder, sig, args):
         size = 1
         for i in arr.shape:
             size = size * i
-        out = numpy.empty(size, dtype)
+        out = np.empty(size, dtype)
         c = 1
         for idx, v in enumerate(arr.flat):
             c *= v
@@ -99,7 +99,7 @@ def array_cumprod(context, builder, sig, args):
                                    locals=dict(c=scalar_dtype))
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.mean, types.Array)
+@lower_builtin(np.mean, types.Array)
 @lower_builtin("array.mean", types.Array)
 def array_mean(context, builder, sig, args):
     zero = sig.return_type(0)
@@ -108,7 +108,7 @@ def array_mean(context, builder, sig, args):
         # Can't use the naive `arr.sum() / arr.size`, as it would return
         # a wrong result on integer sum overflow.
         c = zero
-        for v in numpy.nditer(arr):
+        for v in np.nditer(arr):
             c += v.item()
         return c / arr.size
 
@@ -116,7 +116,7 @@ def array_mean(context, builder, sig, args):
                                    locals=dict(c=sig.return_type))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.var, types.Array)
+@lower_builtin(np.var, types.Array)
 @lower_builtin("array.var", types.Array)
 def array_var(context, builder, sig, args):
     def array_var_impl(arr):
@@ -125,7 +125,7 @@ def array_var(context, builder, sig, args):
 
         # Compute the sum of square diffs
         ssd = 0
-        for v in numpy.nditer(arr):
+        for v in np.nditer(arr):
             ssd += (v.item() - m) ** 2
         return ssd / arr.size
 
@@ -133,7 +133,7 @@ def array_var(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(numpy.std, types.Array)
+@lower_builtin(np.std, types.Array)
 @lower_builtin("array.std", types.Array)
 def array_std(context, builder, sig, args):
     def array_std_impl(arry):
@@ -142,7 +142,7 @@ def array_std(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(numpy.min, types.Array)
+@lower_builtin(np.min, types.Array)
 @lower_builtin("array.min", types.Array)
 def array_min(context, builder, sig, args):
     ty = sig.args[0].dtype
@@ -153,7 +153,7 @@ def array_min(context, builder, sig, args):
 
         def array_min_impl(arry):
             min_value = nat
-            it = numpy.nditer(arry)
+            it = np.nditer(arry)
             for view in it:
                 v = view.item()
                 if v != nat:
@@ -168,7 +168,7 @@ def array_min(context, builder, sig, args):
 
     else:
         def array_min_impl(arry):
-            it = numpy.nditer(arry)
+            it = np.nditer(arry)
             for view in it:
                 min_value = view.item()
                 break
@@ -182,11 +182,11 @@ def array_min(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@lower_builtin(numpy.max, types.Array)
+@lower_builtin(np.max, types.Array)
 @lower_builtin("array.max", types.Array)
 def array_max(context, builder, sig, args):
     def array_max_impl(arry):
-        it = numpy.nditer(arry)
+        it = np.nditer(arry)
         for view in it:
             max_value = view.item()
             break
@@ -200,7 +200,7 @@ def array_max(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@lower_builtin(numpy.argmin, types.Array)
+@lower_builtin(np.argmin, types.Array)
 @lower_builtin("array.argmin", types.Array)
 def array_argmin(context, builder, sig, args):
     ty = sig.args[0].dtype
@@ -251,7 +251,7 @@ def array_argmin(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(numpy.argmax, types.Array)
+@lower_builtin(np.argmax, types.Array)
 @lower_builtin("array.argmax", types.Array)
 def array_argmax(context, builder, sig, args):
     def array_argmax_impl(arry):
@@ -271,22 +271,22 @@ def array_argmax(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@overload(numpy.all)
+@overload(np.all)
 @overload_method(types.Array, "all")
 def np_all(a):
     def flat_all(a):
-        for v in numpy.nditer(a):
+        for v in np.nditer(a):
             if not v.item():
                 return False
         return True
 
     return flat_all
 
-@overload(numpy.any)
+@overload(np.any)
 @overload_method(types.Array, "any")
 def np_any(a):
     def flat_any(a):
-        for v in numpy.nditer(a):
+        for v in np.nditer(a):
             if v.item():
                 return True
         return False
@@ -299,7 +299,7 @@ def get_isnan(dtype):
     A generic isnan() function
     """
     if isinstance(dtype, (types.Float, types.Complex)):
-        return numpy.isnan
+        return np.isnan
     else:
         @jit(nopython=True)
         def _trivial_isnan(x):
@@ -307,7 +307,7 @@ def get_isnan(dtype):
         return _trivial_isnan
 
 
-@overload(numpy.nanmin)
+@overload(np.nanmin)
 def np_nanmin(a):
     if not isinstance(a, types.Array):
         return
@@ -316,10 +316,10 @@ def np_nanmin(a):
     def nanmin_impl(a):
         if a.size == 0:
             raise ValueError("nanmin(): empty array")
-        for view in numpy.nditer(a):
+        for view in np.nditer(a):
             minval = view.item()
             break
-        for view in numpy.nditer(a):
+        for view in np.nditer(a):
             v = view.item()
             if not minval < v and not isnan(v):
                 minval = v
@@ -327,7 +327,7 @@ def np_nanmin(a):
 
     return nanmin_impl
 
-@overload(numpy.nanmax)
+@overload(np.nanmax)
 def np_nanmax(a):
     if not isinstance(a, types.Array):
         return
@@ -336,10 +336,10 @@ def np_nanmax(a):
     def nanmax_impl(a):
         if a.size == 0:
             raise ValueError("nanmin(): empty array")
-        for view in numpy.nditer(a):
+        for view in np.nditer(a):
             maxval = view.item()
             break
-        for view in numpy.nditer(a):
+        for view in np.nditer(a):
             v = view.item()
             if not maxval > v and not isnan(v):
                 maxval = v
@@ -348,7 +348,7 @@ def np_nanmax(a):
     return nanmax_impl
 
 if numpy_version >= (1, 8):
-    @overload(numpy.nanmean)
+    @overload(np.nanmean)
     def np_nanmean(a):
         if not isinstance(a, types.Array):
             return
@@ -357,17 +357,17 @@ if numpy_version >= (1, 8):
         def nanmean_impl(arr):
             c = 0.0
             count = 0
-            for view in numpy.nditer(arr):
+            for view in np.nditer(arr):
                 v = view.item()
                 if not isnan(v):
                     c += v.item()
                     count += 1
             # np.divide() doesn't raise ZeroDivisionError
-            return numpy.divide(c, count)
+            return np.divide(c, count)
 
         return nanmean_impl
 
-    @overload(numpy.nanvar)
+    @overload(np.nanvar)
     def np_nanvar(a):
         if not isinstance(a, types.Array):
             return
@@ -375,32 +375,32 @@ if numpy_version >= (1, 8):
 
         def nanvar_impl(arr):
             # Compute the mean
-            m = numpy.nanmean(arr)
+            m = np.nanmean(arr)
 
             # Compute the sum of square diffs
             ssd = 0.0
             count = 0
-            for view in numpy.nditer(arr):
+            for view in np.nditer(arr):
                 v = view.item()
                 if not isnan(v):
                     ssd += (v.item() - m) ** 2
                     count += 1
             # np.divide() doesn't raise ZeroDivisionError
-            return numpy.divide(ssd, count)
+            return np.divide(ssd, count)
 
         return nanvar_impl
 
-    @overload(numpy.nanstd)
+    @overload(np.nanstd)
     def np_nanstd(a):
         if not isinstance(a, types.Array):
             return
 
         def nanstd_impl(arr):
-            return numpy.nanvar(arr) ** 0.5
+            return np.nanvar(arr) ** 0.5
 
         return nanstd_impl
 
-@overload(numpy.nansum)
+@overload(np.nansum)
 def np_nansum(a):
     if not isinstance(a, types.Array):
         return
@@ -413,7 +413,7 @@ def np_nansum(a):
 
     def nansum_impl(arr):
         c = zero
-        for view in numpy.nditer(arr):
+        for view in np.nditer(arr):
             v = view.item()
             if not isnan(v):
                 c += v
@@ -507,7 +507,7 @@ def _median_inner(temp_arry, n):
     else:
         return _select(temp_arry, half, low, high)
 
-@overload(numpy.median)
+@overload(np.median)
 def np_median(a):
     if not isinstance(a, types.Array):
         return
@@ -522,7 +522,7 @@ def np_median(a):
     return median_impl
 
 if numpy_version >= (1, 9):
-    @overload(numpy.nanmedian)
+    @overload(np.nanmedian)
     def np_nanmedian(a):
         if not isinstance(a, types.Array):
             return
@@ -530,9 +530,9 @@ if numpy_version >= (1, 9):
 
         def nanmedian_impl(arry):
             # Create a temporary workspace with only non-NaN values
-            temp_arry = numpy.empty(arry.size, arry.dtype)
+            temp_arry = np.empty(arry.size, arry.dtype)
             n = 0
-            for view in numpy.nditer(arry):
+            for view in np.nditer(arry):
                 v = view.item()
                 if not isnan(v):
                     temp_arry[n] = v
@@ -556,17 +556,17 @@ def _np_round_float(context, builder, tp, val):
     fn = module.get_or_insert_function(fnty, name=_np_round_intrinsic(tp))
     return builder.call(fn, (val,))
 
-@lower_builtin(numpy.round, types.Float)
+@lower_builtin(np.round, types.Float)
 def scalar_round_unary(context, builder, sig, args):
     res =  _np_round_float(context, builder, sig.args[0], args[0])
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.round, types.Integer)
+@lower_builtin(np.round, types.Integer)
 def scalar_round_unary(context, builder, sig, args):
     res = args[0]
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.round, types.Complex)
+@lower_builtin(np.round, types.Complex)
 def scalar_round_unary_complex(context, builder, sig, args):
     fltty = sig.args[0].underlying_float
     z = context.make_complex(builder, sig.args[0], args[0])
@@ -575,8 +575,8 @@ def scalar_round_unary_complex(context, builder, sig, args):
     res = z._getvalue()
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.round, types.Float, types.Integer)
-@lower_builtin(numpy.round, types.Integer, types.Integer)
+@lower_builtin(np.round, types.Float, types.Integer)
+@lower_builtin(np.round, types.Integer, types.Integer)
 def scalar_round_binary_float(context, builder, sig, args):
     def round_ndigits(x, ndigits):
         if math.isinf(x) or math.isnan(x):
@@ -596,72 +596,72 @@ def scalar_round_binary_float(context, builder, sig, args):
             y = (x * pow1) * pow2
             if math.isinf(y):
                 return x
-            return (numpy.round(y) / pow2) / pow1
+            return (np.round(y) / pow2) / pow1
 
         else:
             pow1 = 10.0 ** (-ndigits)
             y = x / pow1
-            return numpy.round(y) * pow1
+            return np.round(y) * pow1
 
     res = context.compile_internal(builder, round_ndigits, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.round, types.Complex, types.Integer)
+@lower_builtin(np.round, types.Complex, types.Integer)
 def scalar_round_binary_complex(context, builder, sig, args):
     def round_ndigits(z, ndigits):
-        return complex(numpy.round(z.real, ndigits),
-                       numpy.round(z.imag, ndigits))
+        return complex(np.round(z.real, ndigits),
+                       np.round(z.imag, ndigits))
 
     res = context.compile_internal(builder, round_ndigits, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(numpy.round, types.Array, types.Integer,
+@lower_builtin(np.round, types.Array, types.Integer,
            types.Array)
 def array_round(context, builder, sig, args):
     def array_round_impl(arr, decimals, out):
         if arr.shape != out.shape:
             raise ValueError("invalid output shape")
-        for index, val in numpy.ndenumerate(arr):
-            out[index] = numpy.round(val, decimals)
+        for index, val in np.ndenumerate(arr):
+            out[index] = np.round(val, decimals)
         return out
 
     res = context.compile_internal(builder, array_round_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@lower_builtin(numpy.sinc, types.Array)
+@lower_builtin(np.sinc, types.Array)
 def array_sinc(context, builder, sig, args):
     def array_sinc_impl(arr):
-        out = numpy.zeros_like(arr)
-        for index, val in numpy.ndenumerate(arr):
-            out[index] = numpy.sinc(val)
+        out = np.zeros_like(arr)
+        for index, val in np.ndenumerate(arr):
+            out[index] = np.sinc(val)
         return out
     res = context.compile_internal(builder, array_sinc_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.sinc, types.Number)
+@lower_builtin(np.sinc, types.Number)
 def scalar_sinc(context, builder, sig, args):
     scalar_dtype = sig.return_type
     def scalar_sinc_impl(val):
         if val == 0.e0: # to match np impl
             val = 1e-20
-        val *= numpy.pi # np sinc is the normalised variant
-        return numpy.sin(val)/val
+        val *= np.pi # np sinc is the normalised variant
+        return np.sin(val)/val
     res = context.compile_internal(builder, scalar_sinc_impl, sig, args,
                                    locals=dict(c=scalar_dtype))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(numpy.angle, types.Number)
-@lower_builtin(numpy.angle, types.Number, types.Boolean)
+@lower_builtin(np.angle, types.Number)
+@lower_builtin(np.angle, types.Number, types.Boolean)
 def scalar_angle_kwarg(context, builder, sig, args):
-    deg_mult = sig.return_type(180 / numpy.pi)
+    deg_mult = sig.return_type(180 / np.pi)
     def scalar_angle_impl(val, deg):
         if deg:
-            return numpy.arctan2(val.imag, val.real) * deg_mult
+            return np.arctan2(val.imag, val.real) * deg_mult
         else:
-            return numpy.arctan2(val.imag, val.real)
+            return np.arctan2(val.imag, val.real)
 
     if len(args) == 1:
         args = args + (cgutils.false_bit,)
@@ -670,16 +670,16 @@ def scalar_angle_kwarg(context, builder, sig, args):
                                    sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.angle, types.Array)
-@lower_builtin(numpy.angle, types.Array, types.Boolean)
+@lower_builtin(np.angle, types.Array)
+@lower_builtin(np.angle, types.Array, types.Boolean)
 def array_angle_kwarg(context, builder, sig, args):
     arg = sig.args[0]
     ret_dtype = sig.return_type.dtype
 
     def array_angle_impl(arr, deg):
-        out = numpy.zeros_like(arr, dtype=ret_dtype)
-        for index, val in numpy.ndenumerate(arr):
-            out[index] = numpy.angle(val, deg)
+        out = np.zeros_like(arr, dtype=ret_dtype)
+        for index, val in np.ndenumerate(arr):
+            out[index] = np.angle(val, deg)
         return out
 
     if len(args) == 1:
@@ -690,9 +690,9 @@ def array_angle_kwarg(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@lower_builtin(numpy.nonzero, types.Array)
+@lower_builtin(np.nonzero, types.Array)
 @lower_builtin("array.nonzero", types.Array)
-@lower_builtin(numpy.where, types.Array)
+@lower_builtin(np.where, types.Array)
 def array_nonzero(context, builder, sig, args):
     aryty = sig.args[0]
     # Return type is a N-tuple of 1D C-contiguous arrays
@@ -761,7 +761,7 @@ def array_where(context, builder, sig, args):
             shape = cond.shape
             if x.shape != shape or y.shape != shape:
                 raise ValueError("all inputs should have the same shape")
-            res = numpy.empty_like(x)
+            res = np.empty_like(x)
             cf = cond.flat
             xf = x.flat
             yf = y.flat
@@ -775,8 +775,8 @@ def array_where(context, builder, sig, args):
             shape = cond.shape
             if x.shape != shape or y.shape != shape:
                 raise ValueError("all inputs should have the same shape")
-            res = numpy.empty_like(x)
-            for idx, c in numpy.ndenumerate(cond):
+            res = np.empty_like(x)
+            for idx, c in np.ndenumerate(cond):
                 res[idx] = x[idx] if c else y[idx]
             return res
 
@@ -784,7 +784,7 @@ def array_where(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(numpy.where, types.Any, types.Any, types.Any)
+@lower_builtin(np.where, types.Any, types.Any, types.Any)
 def any_where(context, builder, sig, args):
     cond = sig.args[0]
     if isinstance(cond, types.Array):
@@ -795,9 +795,9 @@ def any_where(context, builder, sig, args):
         np.where(scalar, scalar, scalar): return a 0-dim array
         """
         scal = x if cond else y
-        # This is the equivalent of numpy.full_like(scal, scal),
+        # This is the equivalent of np.full_like(scal, scal),
         # for compatibility with Numpy < 1.8
-        arr = numpy.empty_like(scal)
+        arr = np.empty_like(scal)
         arr[()] = scal
         return arr
 
@@ -808,7 +808,7 @@ def any_where(context, builder, sig, args):
 #----------------------------------------------------------------------------
 # Misc functions
 
-@overload(numpy.diff)
+@overload(np.diff)
 def np_diff_impl(a, n=1):
     if not isinstance(a, types.Array) or a.ndim == 0:
         return
@@ -820,7 +820,7 @@ def np_diff_impl(a, n=1):
             raise ValueError("diff(): order must be non-negative")
         size = a.shape[-1]
         out_shape = a.shape[:-1] + (max(size - n, 0),)
-        out = numpy.empty(out_shape, a.dtype)
+        out = np.empty(out_shape, a.dtype)
         if out.size == 0:
             return out
 
@@ -829,7 +829,7 @@ def np_diff_impl(a, n=1):
         a2 = a.reshape((-1, size))
         out2 = out.reshape((-1, out.shape[-1]))
         # A scratchpad for subarrays
-        work = numpy.empty(size, a.dtype)
+        work = np.empty(size, a.dtype)
 
         for major in range(a2.shape[0]):
             # First iteration: diff a2 into work
@@ -857,7 +857,7 @@ def validate_1d_array_like(func_name, seq):
                         .format(func_name))
 
 
-@overload(numpy.bincount)
+@overload(np.bincount)
 def np_bincount(a, weights=None):
     validate_1d_array_like("bincount", a)
     if not isinstance(a.dtype, types.Integer):
@@ -897,7 +897,7 @@ def np_bincount(a, weights=None):
                 raise ValueError("bincount(): first argument must be non-negative")
             a_max = max(a_max, a[i])
 
-        out = numpy.zeros(a_max + 1, out_dtype)
+        out = np.zeros(a_max + 1, out_dtype)
         for i in range(n):
             count_item(out, i, a[i], weights)
         return out
@@ -905,15 +905,15 @@ def np_bincount(a, weights=None):
     return bincount_impl
 
 
-@overload(numpy.searchsorted)
+@overload(np.searchsorted)
 def searchsorted(a, v):
     if isinstance(v, types.Array):
         # N-d array and output
 
         def searchsorted_impl(a, v):
-            out = numpy.empty(v.shape, numpy.intp)
-            for view, outview in numpy.nditer((v, out)):
-                index = numpy.searchsorted(a, view.item())
+            out = np.empty(v.shape, np.intp)
+            for view, outview in np.nditer((v, out)):
+                index = np.searchsorted(a, view.item())
                 outview.itemset(index)
             return out
 
@@ -923,9 +923,9 @@ def searchsorted(a, v):
         # 1-d sequence and output
 
         def searchsorted_impl(a, v):
-            out = numpy.empty(len(v), numpy.intp)
+            out = np.empty(len(v), np.intp)
             for i in range(len(v)):
-                out[i] = numpy.searchsorted(a, v[i])
+                out[i] = np.searchsorted(a, v[i])
             return out
 
         return searchsorted_impl
@@ -936,11 +936,11 @@ def searchsorted(a, v):
 
         def searchsorted_impl(a, v):
             n = len(a)
-            if numpy.isnan(v):
+            if np.isnan(v):
                 # Find the first nan (i.e. the last from the end of a,
                 # since there shouldn't be many of them in practice)
                 for i in range(n, 0, -1):
-                    if not numpy.isnan(a[i - 1]):
+                    if not np.isnan(a[i - 1]):
                         return i
                 return 0
             lo = 0
@@ -958,7 +958,7 @@ def searchsorted(a, v):
         return searchsorted_impl
 
 
-@overload(numpy.digitize)
+@overload(np.digitize)
 def np_digitize(x, bins, right=False):
     @jit(nopython=True)
     def are_bins_increasing(bins):
@@ -987,11 +987,11 @@ def np_digitize(x, bins, right=False):
         hi = n
 
         if right:
-            if numpy.isnan(x):
+            if np.isnan(x):
                 # Find the first nan (i.e. the last from the end of bins,
                 # since there shouldn't be many of them in practice)
                 for i in range(n, 0, -1):
-                    if not numpy.isnan(bins[i - 1]):
+                    if not np.isnan(bins[i - 1]):
                         return i
                 return 0
             while hi > lo:
@@ -1003,7 +1003,7 @@ def np_digitize(x, bins, right=False):
                     # mid is too high, or is a NaN => narrow to lower bins
                     hi = mid
         else:
-            if numpy.isnan(x):
+            if np.isnan(x):
                 # NaNs end up in the last bin
                 return n
             while hi > lo:
@@ -1025,10 +1025,10 @@ def np_digitize(x, bins, right=False):
         hi = n
 
         if right:
-            if numpy.isnan(x):
+            if np.isnan(x):
                 # Find the last nan
                 for i in range(0, n):
-                    if not numpy.isnan(bins[i]):
+                    if not np.isnan(bins[i]):
                         return i
                 return n
             while hi > lo:
@@ -1040,7 +1040,7 @@ def np_digitize(x, bins, right=False):
                     # mid is too low, or is a NaN => narrow to upper bins
                     lo = mid + 1
         else:
-            if numpy.isnan(x):
+            if np.isnan(x):
                 # NaNs end up in the first bin
                 return 0
             while hi > lo:
@@ -1059,8 +1059,8 @@ def np_digitize(x, bins, right=False):
 
         def digitize_impl(x, bins, right=False):
             is_increasing = are_bins_increasing(bins)
-            out = numpy.empty(x.shape, numpy.intp)
-            for view, outview in numpy.nditer((x, out)):
+            out = np.empty(x.shape, np.intp)
+            for view, outview in np.nditer((x, out)):
                 if is_increasing:
                     index = digitize_scalar(view.item(), bins, right)
                 else:
@@ -1075,7 +1075,7 @@ def np_digitize(x, bins, right=False):
 
         def digitize_impl(x, bins, right=False):
             is_increasing = are_bins_increasing(bins)
-            out = numpy.empty(len(x), numpy.intp)
+            out = np.empty(len(x), np.intp)
             for i in range(len(x)):
                 if is_increasing:
                     out[i] = digitize_scalar(x[i], bins, right)
@@ -1088,7 +1088,7 @@ def np_digitize(x, bins, right=False):
 
 _range = range
 
-@overload(numpy.histogram)
+@overload(np.histogram)
 def np_histogram(a, bins=10, range=None):
     if isinstance(bins, (int, types.Integer)):
         # With a uniform distribution of bins, use a fast algorithm
@@ -1099,13 +1099,13 @@ def np_histogram(a, bins=10, range=None):
             def histogram_impl(a, bins=10, range=None):
                 bin_min = inf
                 bin_max = -inf
-                for view in numpy.nditer(a):
+                for view in np.nditer(a):
                     v = view.item()
                     if bin_min > v:
                         bin_min = v
                     if bin_max < v:
                         bin_max = v
-                return numpy.histogram(a, bins, (bin_min, bin_max))
+                return np.histogram(a, bins, (bin_min, bin_max))
 
         else:
             def histogram_impl(a, bins=10, range=None):
@@ -1115,10 +1115,10 @@ def np_histogram(a, bins=10, range=None):
                 if not bin_min <= bin_max:
                     raise ValueError("histogram(): max must be larger than min in range parameter")
 
-                hist = numpy.zeros(bins, numpy.intp)
+                hist = np.zeros(bins, np.intp)
                 if bin_max > bin_min:
                     bin_ratio = bins / (bin_max - bin_min)
-                    for view in numpy.nditer(a):
+                    for view in np.nditer(a):
                         v = view.item()
                         b = math.floor((v - bin_min) * bin_ratio)
                         if 0 <= b < bins:
@@ -1126,7 +1126,7 @@ def np_histogram(a, bins=10, range=None):
                         elif v == bin_max:
                             hist[bins - 1] += 1
 
-                bins_array = numpy.linspace(bin_min, bin_max, bins + 1)
+                bins_array = np.linspace(bin_min, bin_max, bins + 1)
                 return hist, bins_array
 
     else:
@@ -1141,10 +1141,10 @@ def np_histogram(a, bins=10, range=None):
 
             bin_min = bins[0]
             bin_max = bins[nbins]
-            hist = numpy.zeros(nbins, numpy.intp)
+            hist = np.zeros(nbins, np.intp)
 
             if nbins > 0:
-                for view in numpy.nditer(a):
+                for view in np.nditer(a):
                     v = view.item()
                     if not bin_min <= v <= bin_max:
                         # Value is out of bounds, ignore (this also catches NaNs)

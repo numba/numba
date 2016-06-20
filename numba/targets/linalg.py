@@ -7,8 +7,8 @@ from __future__ import print_function, absolute_import, division
 import contextlib
 
 from llvmlite import ir
-import numpy
 
+import numpy as np
 
 from numba import jit, types, cgutils
 
@@ -18,6 +18,7 @@ from numba.typing import signature
 from numba.extending import overload
 from numba.numpy_support import version as numpy_version
 from numba import types
+from numba import numpy_support as np_support
 from .arrayobj import make_array, _empty_nd_impl, array_copy
 from ..errors import TypingError
 
@@ -244,8 +245,8 @@ def dot_2_mm(context, builder, sig, args):
     def dot_impl(a, b):
         m, k = a.shape
         _k, n = b.shape
-        out = numpy.empty((m, n), a.dtype)
-        return numpy.dot(a, b, out)
+        out = np.empty((m, n), a.dtype)
+        return np.dot(a, b, out)
 
     res = context.compile_internal(builder, dot_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
@@ -258,8 +259,8 @@ def dot_2_vm(context, builder, sig, args):
     def dot_impl(a, b):
         m, = a.shape
         _m, n = b.shape
-        out = numpy.empty((n, ), a.dtype)
-        return numpy.dot(a, b, out)
+        out = np.empty((n, ), a.dtype)
+        return np.dot(a, b, out)
 
     res = context.compile_internal(builder, dot_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
@@ -272,8 +273,8 @@ def dot_2_mv(context, builder, sig, args):
     def dot_impl(a, b):
         m, n = a.shape
         _n, = b.shape
-        out = numpy.empty((m, ), a.dtype)
-        return numpy.dot(a, b, out)
+        out = np.empty((m, ), a.dtype)
+        return np.dot(a, b, out)
 
     res = context.compile_internal(builder, dot_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
@@ -306,7 +307,7 @@ def dot_2_vv(context, builder, sig, args, conjugate=False):
     return builder.load(out)
 
 
-@lower_builtin(numpy.dot, types.Array, types.Array)
+@lower_builtin(np.dot, types.Array, types.Array)
 @lower_builtin('@', types.Array, types.Array)
 def dot_2(context, builder, sig, args):
     """
@@ -329,7 +330,7 @@ def dot_2(context, builder, sig, args):
             assert 0
 
 
-@lower_builtin(numpy.vdot, types.Array, types.Array)
+@lower_builtin(np.vdot, types.Array, types.Array)
 def vdot(context, builder, sig, args):
     """
     np.vdot(a, b)
@@ -479,7 +480,7 @@ def dot_3_mm(context, builder, sig, args):
                              out._getvalue())
 
 
-@lower_builtin(numpy.dot, types.Array, types.Array,
+@lower_builtin(np.dot, types.Array, types.Array,
                types.Array)
 def dot_3(context, builder, sig, args):
     """
@@ -578,8 +579,8 @@ def mat_inv(context, builder, sig, args):
     def create_out(a):
         m, n = a.shape
         if m != n:
-            raise numpy.linalg.LinAlgError("Last 2 dimensions of "
-                                           "the array must be square.")
+            raise np.linalg.LinAlgError("Last 2 dimensions of "
+                                        "the array must be square.")
         return a.copy()
 
     out = context.compile_internal(builder, create_out,
@@ -637,7 +638,7 @@ def mat_inv(context, builder, sig, args):
 
         """
         size = int(1.01 * size.real)
-        return numpy.empty((size,), dtype=x.dtype)
+        return np.empty((size,), dtype=x.dtype)
 
     wty = types.Array(dtype, 1, 'C')
     work = context.compile_internal(builder, allocate_work,
@@ -677,7 +678,7 @@ def mat_inv(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, out)
 
 
-@lower_builtin(numpy.linalg.inv, types.Array)
+@lower_builtin(np.linalg.inv, types.Array)
 def inv(context, builder, sig, args):
     """
     np.linalg.inv(a)
@@ -695,27 +696,28 @@ fatal_error_sig = types.intc()
 fatal_error_func = types.ExternalFunction("numba_fatal_error", fatal_error_sig)
 
 
+@jit(nopython=True)
+def _check_finite_matrix(a):
+    for v in np.nditer(a):
+        if not np.isfinite(v.item()):
+            raise np.linalg.LinAlgError(
+                "Array must not contain infs or NaNs.")
+
+
+def _check_linalg_matrix(a, func_name):
+    if not isinstance(a, types.Array):
+        raise TypingError("np.linalg.%s() only supported for array types"
+                          % func_name)
+    if not a.ndim == 2:
+        raise TypingError("np.linalg.%s() only supported on 2-D arrays."
+                          % func_name)
+    if not isinstance(a.dtype, (types.Float, types.Complex)):
+        raise TypingError("np.linalg.%s() only supported on "
+                          "float and complex arrays." % func_name)
+
 if numpy_version >= (1, 8):
 
-    @jit(nopython=True)
-    def _check_finite_matrix(a):
-        for v in numpy.nditer(a):
-            if not numpy.isfinite(v.item()):
-                raise numpy.linalg.LinAlgError(
-                    "Array must not contain infs or NaNs.")
-
-    def _check_linalg_matrix(a, func_name):
-        if not isinstance(a, types.Array):
-            raise TypingError("np.linalg.%s() only supported for array types"
-                              % func_name)
-        if not a.ndim == 2:
-            raise TypingError("np.linalg.%s() only supported on 2-D arrays."
-                              % func_name)
-        if not isinstance(a.dtype, (types.Float, types.Complex)):
-            raise TypingError("np.linalg.%s() only supported on "
-                              "float and complex arrays." % func_name)
-
-    @overload(numpy.linalg.cholesky)
+    @overload(np.linalg.cholesky)
     def cho_impl(a):
         ensure_lapack()
 
@@ -733,7 +735,7 @@ if numpy_version >= (1, 8):
             n = a.shape[-1]
             if a.shape[-2] != n:
                 msg = "Last 2 dimensions of the array must be square."
-                raise numpy.linalg.LinAlgError(msg)
+                raise np.linalg.LinAlgError(msg)
 
             # The output is allocated in C order
             out = a.copy()
@@ -747,7 +749,7 @@ if numpy_version >= (1, 8):
                 fatal_error_func()
                 assert 0   # unreachable
             if r > 0:
-                raise numpy.linalg.LinAlgError(
+                raise np.linalg.LinAlgError(
                     "Matrix is not positive definite.")
             # Zero out upper triangle, in F order
             for col in range(n):
@@ -756,7 +758,7 @@ if numpy_version >= (1, 8):
 
         return cho_impl
 
-    @overload(numpy.linalg.eig)
+    @overload(np.linalg.eig)
     def eig_impl(a):
         ensure_lapack()
 
@@ -809,21 +811,21 @@ if numpy_version >= (1, 8):
             n = a.shape[-1]
             if a.shape[-2] != n:
                 msg = "Last 2 dimensions of the array must be square."
-                raise numpy.linalg.LinAlgError(msg)
+                raise np.linalg.LinAlgError(msg)
 
             _check_finite_matrix(a)
 
             if F_layout:
-                acpy = numpy.copy(a)
+                acpy = np.copy(a)
             else:
-                acpy = numpy.asfortranarray(a)
+                acpy = np.asfortranarray(a)
 
             ldvl = 1
             ldvr = n
-            wr = numpy.empty(n, dtype=a.dtype)
-            wi = numpy.empty(n, dtype=a.dtype)
-            vl = numpy.empty((ldvl, n), dtype=a.dtype)
-            vr = numpy.empty((ldvr, n), dtype=a.dtype)
+            wr = np.empty(n, dtype=a.dtype)
+            wi = np.empty(n, dtype=a.dtype)
+            vl = np.empty((n, ldvl), dtype=a.dtype)
+            vr = np.empty((n, ldvr), dtype=a.dtype)
 
             r = numba_ez_rgeev(kind,
                                JOBVL,
@@ -851,7 +853,7 @@ if numpy_version >= (1, 8):
             # values present in the system matrix). As numba cannot handle
             # the case of a runtime decision based domain change relative to
             # the input type, if it is required numba raises as below.
-            if numpy.any(wi):
+            if np.any(wi):
                 raise ValueError(
                     "eig() argument must not cause a domain change.")
 
@@ -871,20 +873,20 @@ if numpy_version >= (1, 8):
             n = a.shape[-1]
             if a.shape[-2] != n:
                 msg = "Last 2 dimensions of the array must be square."
-                raise numpy.linalg.LinAlgError(msg)
+                raise np.linalg.LinAlgError(msg)
 
             _check_finite_matrix(a)
 
             if F_layout:
-                acpy = numpy.copy(a)
+                acpy = np.copy(a)
             else:
-                acpy = numpy.asfortranarray(a)
+                acpy = np.asfortranarray(a)
 
             ldvl = 1
             ldvr = n
-            w = numpy.empty(n, dtype=a.dtype)
-            vl = numpy.empty((ldvl, n), dtype=a.dtype)
-            vr = numpy.empty((ldvr, n), dtype=a.dtype)
+            w = np.empty(n, dtype=a.dtype)
+            vl = np.empty((n, ldvl), dtype=a.dtype)
+            vr = np.empty((n, ldvr), dtype=a.dtype)
 
             r = numba_ez_cgeev(kind,
                                JOBVL,
@@ -914,7 +916,7 @@ if numpy_version >= (1, 8):
         else:
             return real_eig_impl
 
-    @overload(numpy.linalg.svd)
+    @overload(np.linalg.svd)
     def svd_impl(a, full_matrices=1):
         ensure_lapack()
 
@@ -925,9 +927,9 @@ if numpy_version >= (1, 8):
         # convert typing floats to numpy floats for use in the impl
         s_type = getattr(a.dtype, "underlying_float", a.dtype)
         if s_type.bitwidth == 32:
-            s_dtype = numpy.float32
+            s_dtype = np.float32
         else:
-            s_dtype = numpy.float64
+            s_dtype = np.float64
 
         numba_ez_gesdd_sig = types.intc(
             types.char,  # kind
@@ -958,9 +960,9 @@ if numpy_version >= (1, 8):
             _check_finite_matrix(a)
 
             if F_layout:
-                acpy = numpy.copy(a)
+                acpy = np.copy(a)
             else:
-                acpy = numpy.asfortranarray(a)
+                acpy = np.asfortranarray(a)
 
             ldu = m
             minmn = min(m, n)
@@ -974,9 +976,9 @@ if numpy_version >= (1, 8):
                 ucol = minmn
                 ldvt = minmn
 
-            u = numpy.empty((ucol, ldu), dtype=a.dtype)
-            s = numpy.empty(minmn, dtype=s_dtype)
-            vt = numpy.empty((n, ldvt), dtype=a.dtype)
+            u = np.empty((ucol, ldu), dtype=a.dtype)
+            s = np.empty(minmn, dtype=s_dtype)
+            vt = np.empty((n, ldvt), dtype=a.dtype)
 
             r = numba_ez_gesdd(
                 kind,  # kind
@@ -1004,3 +1006,374 @@ if numpy_version >= (1, 8):
             return (u.T, s, vt.T)
 
         return svd_impl
+
+
+@overload(np.linalg.qr)
+def qr_impl(a):
+    ensure_lapack()
+
+    _check_linalg_matrix(a, "qr")
+
+    # Need two functions, the first computes R, storing it in the upper
+    # triangle of A with the below diagonal part of A containing elementary
+    # reflectors needed to construct Q. The second turns the below diagonal
+    # entries of A into Q, storing Q in A (creates orthonormal columns from
+    # the elementary reflectors).
+
+    numba_ez_geqrf_sig = types.intc(
+        types.char,  # kind
+        types.intp,  # m
+        types.intp,  # n
+        types.CPointer(a.dtype),  # a
+        types.intp,  # lda
+        types.CPointer(a.dtype),  # tau
+    )
+
+    numba_ez_geqrf = types.ExternalFunction("numba_ez_geqrf",
+                                            numba_ez_geqrf_sig)
+
+    numba_ez_xxgqr_sig = types.intc(
+        types.char,  # kind
+        types.intp,  # m
+        types.intp,  # n
+        types.intp,  # k
+        types.CPointer(a.dtype),  # a
+        types.intp,  # lda
+        types.CPointer(a.dtype),  # tau
+    )
+
+    numba_ez_xxgqr = types.ExternalFunction("numba_ez_xxgqr",
+                                            numba_ez_xxgqr_sig)
+
+    kind = ord(get_blas_kind(a.dtype, "qr"))
+
+    F_layout = a.layout == 'F'
+
+    def qr_impl(a):
+        n = a.shape[-1]
+        m = a.shape[-2]
+
+        _check_finite_matrix(a)
+
+        # copy A as it will be destroyed
+        if F_layout:
+            q = np.copy(a)
+        else:
+            q = np.asfortranarray(a)
+
+        lda = m
+
+        minmn = min(m, n)
+        tau = np.empty((minmn), dtype=a.dtype)
+
+        ret = numba_ez_geqrf(
+            kind,  # kind
+            m,  # m
+            n,  # n
+            q.ctypes,  # a
+            m,  # lda
+            tau.ctypes  # tau
+        )
+        if ret < 0:
+            fatal_error_func()
+            assert 0   # unreachable
+
+        # pull out R, this is transposed because of Fortran
+        r = np.zeros((n, minmn), dtype=a.dtype).T
+
+        # the triangle in R
+        for i in range(minmn):
+            for j in range(i + 1):
+                r[j, i] = q[j, i]
+
+        # and the possible square in R
+        for i in range(minmn, n):
+            for j in range(minmn):
+                r[j, i] = q[j, i]
+
+        ret = numba_ez_xxgqr(
+            kind,  # kind
+            m,  # m
+            minmn,  # n
+            minmn,  # k
+            q.ctypes,  # a
+            m,  # lda
+            tau.ctypes  # tau
+        )
+        if ret < 0:
+            fatal_error_func()
+            assert 0   # unreachable
+
+        # help liveness analysis
+        tau.size
+        q.size
+
+        return (q[:, :minmn], r)
+
+    return qr_impl
+
+
+# helpers and jitted specialisations required for np.linalg.lstsq
+def _check_linalg_1_or_2d_matrix(a, func_name):
+    # checks that a matrix is 1 or 2D
+    if not isinstance(a, types.Array):
+        raise TypingError("np.linalg.%s() only supported for array types "
+                          % func_name)
+    if not a.ndim <= 2:
+        raise TypingError("np.linalg.%s() only supported on 1 and 2-D arrays "
+                          % func_name)
+    if not isinstance(a.dtype, (types.Float, types.Complex)):
+        raise TypingError("np.linalg.%s() only supported on "
+                          "float and complex arrays." % func_name)
+
+
+def _get_res_impl(dtype, real_dtype, b):
+    # gets an implementation for computing the residual
+    ndim = b.ndim
+    if ndim == 1:
+        if isinstance(dtype, (types.Complex)):
+            @jit(nopython=True)
+            def cmplx_impl(b, n, nrhs):
+                res = np.empty((1,), dtype=real_dtype)
+                res[0] = np.sum(np.abs(b[n:, 0])**2)
+                return res
+            return cmplx_impl
+        else:
+            @jit(nopython=True)
+            def real_impl(b, n, nrhs):
+                res = np.empty((1,), dtype=real_dtype)
+                res[0] = np.sum(b[n:, 0]**2)
+                return res
+            return real_impl
+    else:
+        if isinstance(dtype, (types.Complex)):
+            @jit(nopython=True)
+            def cmplx_impl(b, n, nrhs):
+                res = np.empty((nrhs), dtype=real_dtype)
+                for k in range(nrhs):
+                    res[k] = np.sum(np.abs(b[n:, k])**2)
+                return res
+            return cmplx_impl
+        else:
+            @jit(nopython=True)
+            def real_impl(b, n, nrhs):
+                res = np.empty((nrhs), dtype=real_dtype)
+                for k in range(nrhs):
+                    res[k] = np.sum(b[n:, k]**2)
+                return res
+            return real_impl
+
+
+def _get_copy_in_b_impl(b):
+    # gets an implementation for correctly copying 'b' into the
+    # scratch space for 'b'
+    ndim = b.ndim
+    if ndim == 1:
+        @jit(nopython=True)
+        def oneD_impl(bcpy, b, nrhs):
+            bcpy[:b.shape[-1], 0] = b
+        return oneD_impl
+    else:
+        @jit(nopython=True)
+        def twoD_impl(bcpy, b, nrhs):
+            bcpy[:b.shape[-2], :nrhs] = b
+        return twoD_impl
+
+
+def _get_compute_return_impl(b):
+    # gets an implementation for extracting 'x' (the solution) from
+    # the 'b' scratch space
+    ndim = b.ndim
+    if ndim == 1:
+        @jit(nopython=True)
+        def oneD_impl(b, n):
+            return b.T.ravel()[:n]
+        return oneD_impl
+    else:
+        @jit(nopython=True)
+        def twoD_impl(b, n):
+            return b[:n, :].copy()
+        return twoD_impl
+
+
+def _get_compute_nrhs(b):
+    # gets and implementation for computing the number of right hand
+    # sides in the system of equations
+    ndim = b.ndim
+    if ndim == 1:
+        @jit(nopython=True)
+        def oneD_impl(b):
+            return 1
+        return oneD_impl
+    else:
+        @jit(nopython=True)
+        def twoD_impl(b):
+            return b.shape[-1]
+        return twoD_impl
+
+
+def _get_check_lstsq_dimensionally_valid_impl(a, b):
+    # gets and implementation for checking that the least squares system
+    # input is dimensionally valid
+    ndim = b.ndim
+    if ndim == 1:
+        @jit(nopython=True)
+        def oneD_impl(a, b):
+            am = a.shape[-2]
+            bm = b.shape[-1]
+            if am != bm:
+                raise np.linalg.LinAlgError(
+                    "Incompatible array sizes for np.linalg.lstsq().")
+        return oneD_impl
+    else:
+        @jit(nopython=True)
+        def twoD_impl(a, b):
+            am = a.shape[-2]
+            bm = b.shape[-2]
+            if am != bm:
+                raise np.linalg.LinAlgError(
+                    "Incompatible array sizes for np.linalg.lstsq().")
+        return twoD_impl
+
+
+@overload(np.linalg.lstsq)
+def lstsq_impl(a, b, rcond=-1.0):
+    ensure_lapack()
+
+    _check_linalg_matrix(a, "lstsq")
+
+    # B can be 1D or 2D.
+    _check_linalg_1_or_2d_matrix(b, "lstsq")
+
+    a_F_layout = a.layout == 'F'
+    b_F_layout = b.layout == 'F'
+
+    # the typing context is not easily accessible in `@overload` mode
+    # so type unification etc. is done manually below
+    a_np_dt = np_support.as_dtype(a.dtype)
+    b_np_dt = np_support.as_dtype(b.dtype)
+
+    np_shared_dt = np.promote_types(a_np_dt, b_np_dt)
+    nb_shared_dt = np_support.from_dtype(np_shared_dt)
+
+    # convert typing floats to np floats for use in the impl
+    r_type = getattr(nb_shared_dt, "underlying_float", nb_shared_dt)
+    if r_type.bitwidth == 32:
+        real_dtype = np.float32
+    else:
+        real_dtype = np.float64
+
+    # the lapack wrapper signature
+    numba_ez_gelsd_sig = types.intc(
+        types.char,  # kind
+        types.intp,  # m
+        types.intp,  # n
+        types.intp,  # nrhs
+        types.CPointer(nb_shared_dt),  # a
+        types.intp,  # lda
+        types.CPointer(nb_shared_dt),  # b
+        types.intp,  # ldb
+        types.CPointer(r_type),  # S
+        types.float64,  # rcond
+        types.CPointer(types.intc)  # rank
+    )
+
+    # the lapack wrapper function
+    numba_ez_gelsd = types.ExternalFunction("numba_ez_gelsd",
+                                            numba_ez_gelsd_sig)
+
+    kind = ord(get_blas_kind(nb_shared_dt, "lstsq"))
+
+    # The following functions select specialisations based on
+    # information around 'b', a lot of this effort is required
+    # as 'b' can be either 1D or 2D, and then there are
+    # some optimisations available depending on real or complex
+    # space.
+
+    # get a specialisation for computing the number of RHS
+    b_nrhs = _get_compute_nrhs(b)
+
+    # get a specialised residual computation based on the dtype
+    compute_res = _get_res_impl(nb_shared_dt, real_dtype, b)
+
+    # b copy function
+    b_copy_in = _get_copy_in_b_impl(b)
+
+    # return blob function
+    b_ret = _get_compute_return_impl(b)
+
+    # check system is dimensionally valid function
+    check_dimensionally_valid = _get_check_lstsq_dimensionally_valid_impl(a, b)
+
+    def lstsq_impl(a, b, rcond=-1.0):
+        n = a.shape[-1]
+        m = a.shape[-2]
+        nrhs = b_nrhs(b)
+
+        # check the systems have no inf or NaN
+        _check_finite_matrix(a)
+        _check_finite_matrix(b)
+
+        # check the systems is dimensionally valid
+        check_dimensionally_valid(a, b)
+
+        minmn = min(m, n)
+        maxmn = max(m, n)
+
+        # a is destroyed on exit, copy it
+        acpy = a.astype(np_shared_dt)
+        if a_F_layout:
+            acpy = np.copy(acpy)
+        else:
+            acpy = np.asfortranarray(acpy)
+
+        # b is overwritten on exit with the solution, copy allocate
+        bcpy = np.empty((nrhs, maxmn), dtype=np_shared_dt).T
+        # specialised copy in due to b being 1 or 2D
+        b_copy_in(bcpy, b, nrhs)
+
+        # Allocate returns
+        s = np.empty(minmn, dtype=real_dtype)
+        rank_ptr = np.empty(1, dtype=np.int32)
+
+        r = numba_ez_gelsd(
+            kind,  # kind
+            m,  # m
+            n,  # n
+            nrhs,  # nrhs
+            acpy.ctypes,  # a
+            m,  # lda
+            bcpy.ctypes,  # a
+            maxmn,  # ldb
+            s.ctypes,  # s
+            rcond,  # rcond
+            rank_ptr.ctypes  # rank
+        )
+
+        if r < 0:
+            fatal_error_func()
+            assert 0   # unreachable
+
+        # set rank to that which was computed
+        rank = rank_ptr[0]
+
+        # compute residuals
+        if rank < n or m <= n:
+            res = np.empty((0), dtype=real_dtype)
+        else:
+            # this requires additional dispatch as there's a faster
+            # impl if the result is in the real domain (no abs() required)
+            res = compute_res(bcpy, n, nrhs)
+
+        # extract 'x', the solution
+        x = b_ret(bcpy, n)
+
+        # help liveness analysis
+        acpy.size
+        bcpy.size
+        s.size
+        rank_ptr.size
+
+        return (x, res, rank, s[:minmn])
+
+    return lstsq_impl

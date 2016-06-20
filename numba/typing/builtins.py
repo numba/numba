@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import itertools
 
-import numpy
+import numpy as np
 
 from numba import types
 
@@ -618,7 +618,7 @@ class NumberClassAttribute(AttributeTemplate):
             if isinstance(val, (types.BaseTuple, types.Sequence)):
                 # Array constructor, e.g. np.int32([1, 2])
                 sig = self.context.resolve_function_type(
-                    numpy.array, (val,), {'dtype': types.DType(ty)})
+                    np.array, (val,), {'dtype': types.DType(ty)})
                 return sig.return_type
             else:
                 # Scalar constructor, e.g. np.int32(42)

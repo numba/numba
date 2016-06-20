@@ -148,7 +148,7 @@ class Dispatcher(WeakType, Callable, Dummy):
 
     def __init__(self, dispatcher):
         self._store_object(dispatcher)
-        super(Dispatcher, self).__init__("Dispatcher(%s)" % dispatcher)
+        super(Dispatcher, self).__init__("type(%s)" % dispatcher)
 
     def get_call_type(self, context, args, kws):
         """
@@ -309,3 +309,19 @@ class NumberClass(Callable, DTypeSpec, Opaque):
     @property
     def dtype(self):
         return self.instance_type
+
+
+class RecursiveCall(Opaque):
+    """
+    Recursive call to a Dispatcher.
+    """
+
+    def __init__(self, dispatcher_type):
+        assert isinstance(dispatcher_type, Dispatcher)
+        self.dispatcher_type = dispatcher_type
+        name = "recursive(%s)" % (dispatcher_type,)
+        super(RecursiveCall, self).__init__(name)
+
+    @property
+    def key(self):
+        return self.dispatcher_type

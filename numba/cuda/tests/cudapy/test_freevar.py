@@ -1,5 +1,7 @@
 from __future__ import print_function, absolute_import
-import numpy
+
+import numpy as np
+
 from numba import cuda
 from numba.cuda.testing import unittest
 
@@ -20,7 +22,7 @@ class TestFreeVar(unittest.TestCase):
                                       dtype=nbtype)  # nbtype is freevar
             A[i] = sdata[i]
 
-        A = numpy.arange(2, dtype="float32")
+        A = np.arange(2, dtype="float32")
         foo(A, 0)
 
 

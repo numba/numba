@@ -1,8 +1,10 @@
 from __future__ import print_function, absolute_import
+
+import numpy as np
+
 from numba import cuda
 import numba.unittest_support as unittest
 from numba.cuda.testing import skip_on_cudasim
-import numpy
 
 @skip_on_cudasim('forall API unsupported in the simulator')
 class TestForAll(unittest.TestCase):
@@ -14,10 +16,10 @@ class TestForAll(unittest.TestCase):
             if i < x.size:
                 x[i] += 1
 
-        arr = numpy.arange(11)
+        arr = np.arange(11)
         orig = arr.copy()
         foo.forall(arr.size)(arr)
-        self.assertTrue(numpy.all(arr == orig + 1))
+        self.assertTrue(np.all(arr == orig + 1))
 
     def test_forall_2(self):
 
@@ -27,12 +29,12 @@ class TestForAll(unittest.TestCase):
             if i < x.size:
                 y[i] = a * x[i] + y[i]
 
-        x = numpy.arange(13, dtype=numpy.float32)
-        y = numpy.arange(13, dtype=numpy.float32)
+        x = np.arange(13, dtype=np.float32)
+        y = np.arange(13, dtype=np.float32)
         oldy = y.copy()
         a = 1.234
         bar.forall(y.size)(a, x, y)
-        self.assertTrue(numpy.all(y == (a * x + oldy)))
+        self.assertTrue(np.all(y == (a * x + oldy)))
 
 
 if __name__ == '__main__':

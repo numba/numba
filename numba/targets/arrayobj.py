@@ -12,9 +12,10 @@ from llvmlite import ir
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Constant
 
-import numpy
-from numba import types, cgutils, typing, utils
-from numba.numpy_support import as_dtype
+import numpy as np
+
+from numba import types, cgutils, typing, utils, extending
+from numba.numpy_support import as_dtype, carray, farray
 from numba.numpy_support import version as numpy_version
 from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     lower_getattr_generic,
@@ -1271,7 +1272,7 @@ def array_ravel(context, builder, sig, args):
     return res
 
 
-@lower_builtin(numpy.ravel, types.Array)
+@lower_builtin(np.ravel, types.Array)
 def np_ravel(context, builder, sig, args):
     def np_ravel_impl(a):
         return a.ravel()
@@ -1749,7 +1750,7 @@ def array_is(context, builder, sig, args):
 
 
 #-------------------------------------------------------------------------------
-# builtin `numpy.flat` implementation
+# builtin `np.flat` implementation
 
 def make_array_flat_cls(flatiterty):
     """
@@ -2474,7 +2475,7 @@ def iternext_numpy_getitem(context, builder, sig, args):
     return arr.nitems
 
 
-@lower_builtin(numpy.ndenumerate, types.Array)
+@lower_builtin(np.ndenumerate, types.Array)
 def make_array_ndenumerate(context, builder, sig, args):
     arrty, = sig.args
     arr, = args
@@ -2509,7 +2510,7 @@ def iternext_numpy_nditer(context, builder, sig, args, result):
     nditer.iternext_specific(context, builder, arrty, arr, result)
 
 
-@lower_builtin(numpy.ndindex, types.VarArg(types.Integer))
+@lower_builtin(np.ndindex, types.VarArg(types.Integer))
 def make_array_ndindex(context, builder, sig, args):
     """ndindex(*shape)"""
     shape = [context.cast(builder, arg, argty, types.intp)
@@ -2522,7 +2523,7 @@ def make_array_ndindex(context, builder, sig, args):
     res = nditer._getvalue()
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.ndindex, types.BaseTuple)
+@lower_builtin(np.ndindex, types.BaseTuple)
 def make_array_ndindex(context, builder, sig, args):
     """ndindex(shape)"""
     ndim = sig.return_type.ndim
@@ -2555,7 +2556,7 @@ def iternext_numpy_ndindex(context, builder, sig, args, result):
     nditer.iternext_specific(context, builder, result)
 
 
-@lower_builtin(numpy.nditer, types.Any)
+@lower_builtin(np.nditer, types.Any)
 def make_array_nditer(context, builder, sig, args):
     """
     nditer(...)
@@ -2696,23 +2697,23 @@ def _parse_empty_like_args(context, builder, sig, args):
         return sig.return_type, ()
 
 
-@lower_builtin(numpy.empty, types.Any)
-@lower_builtin(numpy.empty, types.Any, types.Any)
+@lower_builtin(np.empty, types.Any)
+@lower_builtin(np.empty, types.Any, types.Any)
 def numpy_empty_nd(context, builder, sig, args):
     arrtype, shapes = _parse_empty_args(context, builder, sig, args)
     ary = _empty_nd_impl(context, builder, arrtype, shapes)
     return impl_ret_new_ref(context, builder, sig.return_type, ary._getvalue())
 
-@lower_builtin(numpy.empty_like, types.Any)
-@lower_builtin(numpy.empty_like, types.Any, types.DTypeSpec)
+@lower_builtin(np.empty_like, types.Any)
+@lower_builtin(np.empty_like, types.Any, types.DTypeSpec)
 def numpy_empty_like_nd(context, builder, sig, args):
     arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
     ary = _empty_nd_impl(context, builder, arrtype, shapes)
     return impl_ret_new_ref(context, builder, sig.return_type, ary._getvalue())
 
 
-@lower_builtin(numpy.zeros, types.Any)
-@lower_builtin(numpy.zeros, types.Any, types.Any)
+@lower_builtin(np.zeros, types.Any)
+@lower_builtin(np.zeros, types.Any, types.Any)
 def numpy_zeros_nd(context, builder, sig, args):
     arrtype, shapes = _parse_empty_args(context, builder, sig, args)
     ary = _empty_nd_impl(context, builder, arrtype, shapes)
@@ -2720,8 +2721,8 @@ def numpy_zeros_nd(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, ary._getvalue())
 
 
-@lower_builtin(numpy.zeros_like, types.Any)
-@lower_builtin(numpy.zeros_like, types.Any, types.DTypeSpec)
+@lower_builtin(np.zeros_like, types.Any)
+@lower_builtin(np.zeros_like, types.Any, types.DTypeSpec)
 def numpy_zeros_like_nd(context, builder, sig, args):
     arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
     ary = _empty_nd_impl(context, builder, arrtype, shapes)
@@ -2730,24 +2731,24 @@ def numpy_zeros_like_nd(context, builder, sig, args):
 
 
 if numpy_version >= (1, 8):
-    @lower_builtin(numpy.full, types.Any, types.Any)
+    @lower_builtin(np.full, types.Any, types.Any)
     def numpy_full_nd(context, builder, sig, args):
 
         def full(shape, value):
-            arr = numpy.empty(shape)
-            for idx in numpy.ndindex(arr.shape):
+            arr = np.empty(shape)
+            for idx in np.ndindex(arr.shape):
                 arr[idx] = value
             return arr
 
         res = context.compile_internal(builder, full, sig, args)
         return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-    @lower_builtin(numpy.full, types.Any, types.Any, types.DTypeSpec)
+    @lower_builtin(np.full, types.Any, types.Any, types.DTypeSpec)
     def numpy_full_dtype_nd(context, builder, sig, args):
 
         def full(shape, value, dtype):
-            arr = numpy.empty(shape, dtype)
-            for idx in numpy.ndindex(arr.shape):
+            arr = np.empty(shape, dtype)
+            for idx in np.ndindex(arr.shape):
                 arr[idx] = value
             return arr
 
@@ -2755,12 +2756,12 @@ if numpy_version >= (1, 8):
         return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-    @lower_builtin(numpy.full_like, types.Any, types.Any)
+    @lower_builtin(np.full_like, types.Any, types.Any)
     def numpy_full_like_nd(context, builder, sig, args):
 
         def full_like(arr, value):
-            arr = numpy.empty_like(arr)
-            for idx in numpy.ndindex(arr.shape):
+            arr = np.empty_like(arr)
+            for idx in np.ndindex(arr.shape):
                 arr[idx] = value
             return arr
 
@@ -2768,12 +2769,12 @@ if numpy_version >= (1, 8):
         return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-    @lower_builtin(numpy.full_like, types.Any, types.Any, types.DTypeSpec)
+    @lower_builtin(np.full_like, types.Any, types.Any, types.DTypeSpec)
     def numpy_full_like_nd(context, builder, sig, args):
 
         def full_like(arr, value, dtype):
-            arr = numpy.empty_like(arr, dtype)
-            for idx in numpy.ndindex(arr.shape):
+            arr = np.empty_like(arr, dtype)
+            for idx in np.ndindex(arr.shape):
                 arr[idx] = value
             return arr
 
@@ -2781,12 +2782,12 @@ if numpy_version >= (1, 8):
         return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@lower_builtin(numpy.ones, types.Any)
+@lower_builtin(np.ones, types.Any)
 def numpy_ones_nd(context, builder, sig, args):
 
     def ones(shape):
-        arr = numpy.empty(shape)
-        for idx in numpy.ndindex(arr.shape):
+        arr = np.empty(shape)
+        for idx in np.ndindex(arr.shape):
             arr[idx] = 1
         return arr
 
@@ -2795,36 +2796,36 @@ def numpy_ones_nd(context, builder, sig, args):
                                    locals={'c': valty})
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.ones, types.Any, types.DTypeSpec)
+@lower_builtin(np.ones, types.Any, types.DTypeSpec)
 def numpy_ones_dtype_nd(context, builder, sig, args):
 
     def ones(shape, dtype):
-        arr = numpy.empty(shape, dtype)
-        for idx in numpy.ndindex(arr.shape):
+        arr = np.empty(shape, dtype)
+        for idx in np.ndindex(arr.shape):
             arr[idx] = 1
         return arr
 
     res = context.compile_internal(builder, ones, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.ones_like, types.Any)
+@lower_builtin(np.ones_like, types.Any)
 def numpy_ones_like_nd(context, builder, sig, args):
 
     def ones_like(arr):
-        arr = numpy.empty_like(arr)
-        for idx in numpy.ndindex(arr.shape):
+        arr = np.empty_like(arr)
+        for idx in np.ndindex(arr.shape):
             arr[idx] = 1
         return arr
 
     res = context.compile_internal(builder, ones_like, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.ones_like, types.Any, types.DTypeSpec)
+@lower_builtin(np.ones_like, types.Any, types.DTypeSpec)
 def numpy_ones_like_dtype_nd(context, builder, sig, args):
 
     def ones_like(arr, dtype):
-        arr = numpy.empty_like(arr, dtype)
-        for idx in numpy.ndindex(arr.shape):
+        arr = np.empty_like(arr, dtype)
+        for idx in np.ndindex(arr.shape):
             arr[idx] = 1
         return arr
 
@@ -2832,11 +2833,11 @@ def numpy_ones_like_dtype_nd(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@lower_builtin(numpy.identity, types.Integer)
+@lower_builtin(np.identity, types.Integer)
 def numpy_identity(context, builder, sig, args):
 
     def identity(n):
-        arr = numpy.zeros((n, n))
+        arr = np.zeros((n, n))
         for i in range(n):
             arr[i, i] = 1
         return arr
@@ -2844,11 +2845,11 @@ def numpy_identity(context, builder, sig, args):
     res = context.compile_internal(builder, identity, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.identity, types.Integer, types.DTypeSpec)
+@lower_builtin(np.identity, types.Integer, types.DTypeSpec)
 def numpy_identity(context, builder, sig, args):
 
     def identity(n, dtype):
-        arr = numpy.zeros((n, n), dtype)
+        arr = np.zeros((n, n), dtype)
         for i in range(n):
             arr[i, i] = 1
         return arr
@@ -2857,40 +2858,40 @@ def numpy_identity(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@lower_builtin(numpy.eye, types.Integer)
+@lower_builtin(np.eye, types.Integer)
 def numpy_eye(context, builder, sig, args):
 
     def eye(n):
-        return numpy.identity(n)
+        return np.identity(n)
 
     res = context.compile_internal(builder, eye, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.eye, types.Integer, types.Integer)
+@lower_builtin(np.eye, types.Integer, types.Integer)
 def numpy_eye(context, builder, sig, args):
 
     def eye(n, m):
-        return numpy.eye(n, m, 0, numpy.float64)
+        return np.eye(n, m, 0, np.float64)
 
     res = context.compile_internal(builder, eye, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.eye, types.Integer, types.Integer,
+@lower_builtin(np.eye, types.Integer, types.Integer,
            types.Integer)
 def numpy_eye(context, builder, sig, args):
 
     def eye(n, m, k):
-        return numpy.eye(n, m, k, numpy.float64)
+        return np.eye(n, m, k, np.float64)
 
     res = context.compile_internal(builder, eye, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.eye, types.Integer, types.Integer,
+@lower_builtin(np.eye, types.Integer, types.Integer,
            types.Integer, types.DTypeSpec)
 def numpy_eye(context, builder, sig, args):
 
     def eye(n, m, k, dtype):
-        arr = numpy.zeros((n, m), dtype)
+        arr = np.zeros((n, m), dtype)
         if k >= 0:
             d = min(n, m - k)
             for i in range(d):
@@ -2904,13 +2905,13 @@ def numpy_eye(context, builder, sig, args):
     res = context.compile_internal(builder, eye, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.diag, types.Array)
+@lower_builtin(np.diag, types.Array)
 def numpy_diag(context, builder, sig, args):
     def diag_impl(val):
-        return numpy.diag(val, k=0)
+        return np.diag(val, k=0)
     return context.compile_internal(builder, diag_impl, sig, args)
 
-@lower_builtin(numpy.diag, types.Array, types.Integer)
+@lower_builtin(np.diag, types.Array, types.Integer)
 def numpy_diag_kwarg(context, builder, sig, args):
     arg = sig.args[0]
     if arg.ndim == 1:
@@ -2918,7 +2919,7 @@ def numpy_diag_kwarg(context, builder, sig, args):
         def diag_impl(arr, k=0):
             s = arr.shape
             n = s[0] + abs(k)
-            ret = numpy.zeros((n, n), arr.dtype)
+            ret = np.zeros((n, n), arr.dtype)
             if k >= 0:
                 for i in range(n - k):
                     ret[i, k + i] = arr[i]
@@ -2938,7 +2939,7 @@ def numpy_diag_kwarg(context, builder, sig, args):
             if k > 0:
                 cols = cols - k
             n = max(min(rows, cols), 0)
-            ret = numpy.empty(n, arr.dtype)
+            ret = np.empty(n, arr.dtype)
             if k >= 0:
                 for i in range(n):
                     ret[i] = arr[i, k + i]
@@ -2953,39 +2954,39 @@ def numpy_diag_kwarg(context, builder, sig, args):
     res = context.compile_internal(builder, diag_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.arange, types.Number)
+@lower_builtin(np.arange, types.Number)
 def numpy_arange_1(context, builder, sig, args):
     dtype = as_dtype(sig.return_type.dtype)
 
     def arange(stop):
-        return numpy.arange(0, stop, 1, dtype)
+        return np.arange(0, stop, 1, dtype)
 
     res = context.compile_internal(builder, arange, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.arange, types.Number, types.Number)
+@lower_builtin(np.arange, types.Number, types.Number)
 def numpy_arange_2(context, builder, sig, args):
     dtype = as_dtype(sig.return_type.dtype)
 
     def arange(start, stop):
-        return numpy.arange(start, stop, 1, dtype)
+        return np.arange(start, stop, 1, dtype)
 
     res = context.compile_internal(builder, arange, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@lower_builtin(numpy.arange, types.Number, types.Number,
+@lower_builtin(np.arange, types.Number, types.Number,
            types.Number)
 def numpy_arange_3(context, builder, sig, args):
     dtype = as_dtype(sig.return_type.dtype)
 
     def arange(start, stop, step):
-        return numpy.arange(start, stop, step, dtype)
+        return np.arange(start, stop, step, dtype)
 
     res = context.compile_internal(builder, arange, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.arange, types.Number, types.Number,
+@lower_builtin(np.arange, types.Number, types.Number,
            types.Number, types.DTypeSpec)
 def numpy_arange_4(context, builder, sig, args):
 
@@ -2995,7 +2996,7 @@ def numpy_arange_4(context, builder, sig, args):
             nitems_r = math.ceil(nitems_c.real)
             nitems_i = math.ceil(nitems_c.imag)
             nitems = max(min(nitems_i, nitems_r), 0)
-            arr = numpy.empty(nitems, dtype)
+            arr = np.empty(nitems, dtype)
             val = start
             for i in range(nitems):
                 arr[i] = val
@@ -3005,7 +3006,7 @@ def numpy_arange_4(context, builder, sig, args):
         def arange(start, stop, step, dtype):
             nitems_r = math.ceil((stop - start) / step)
             nitems = max(nitems_r, 0)
-            arr = numpy.empty(nitems, dtype)
+            arr = np.empty(nitems, dtype)
             val = start
             for i in range(nitems):
                 arr[i] = val
@@ -3016,22 +3017,22 @@ def numpy_arange_4(context, builder, sig, args):
                                    locals={'nitems': types.intp})
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.linspace, types.Number, types.Number)
+@lower_builtin(np.linspace, types.Number, types.Number)
 def numpy_linspace_2(context, builder, sig, args):
 
     def linspace(start, stop):
-        return numpy.linspace(start, stop, 50)
+        return np.linspace(start, stop, 50)
 
     res = context.compile_internal(builder, linspace, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.linspace, types.Number, types.Number,
+@lower_builtin(np.linspace, types.Number, types.Number,
            types.Integer)
 def numpy_linspace_3(context, builder, sig, args):
     dtype = as_dtype(sig.return_type.dtype)
 
     def linspace(start, stop, num):
-        arr = numpy.empty(num, dtype)
+        arr = np.empty(num, dtype)
         div = num - 1
         delta = stop - start
         arr[0] = start
@@ -3084,11 +3085,11 @@ def _array_copy(context, builder, sig, args):
 def array_copy(context, builder, sig, args):
     return _array_copy(context, builder, sig, args)
 
-@lower_builtin(numpy.copy, types.Array)
+@lower_builtin(np.copy, types.Array)
 def numpy_copy(context, builder, sig, args):
     return _array_copy(context, builder, sig, args)
 
-@lower_builtin(numpy.asfortranarray, types.Array)
+@lower_builtin(np.asfortranarray, types.Array)
 def array_asfortranarray(context, builder, sig, args):
     retty = sig.return_type
     aryty = sig.args[0]
@@ -3148,8 +3149,8 @@ def array_astype(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, ret._getvalue())
 
 
-@lower_builtin(numpy.frombuffer, types.Buffer)
-@lower_builtin(numpy.frombuffer, types.Buffer, types.DTypeSpec)
+@lower_builtin(np.frombuffer, types.Buffer)
+@lower_builtin(np.frombuffer, types.Buffer, types.DTypeSpec)
 def np_frombuffer(context, builder, sig, args):
     bufty = sig.args[0]
     aryty = sig.return_type
@@ -3185,6 +3186,63 @@ def np_frombuffer(context, builder, sig, args):
 
     res = out_ary._getvalue()
     return impl_ret_borrowed(context, builder, sig.return_type, res)
+
+
+@lower_builtin(carray, types.Any, types.Any)
+@lower_builtin(carray, types.Any, types.Any, types.DTypeSpec)
+@lower_builtin(farray, types.Any, types.Any)
+@lower_builtin(farray, types.Any, types.Any, types.DTypeSpec)
+def np_cfarray(context, builder, sig, args):
+    """
+    numba.numpy_support.carray(...) and
+    numba.numpy_support.farray(...).
+    """
+    ptrty, shapety = sig.args[:2]
+    ptr, shape = args[:2]
+
+    aryty = sig.return_type
+    dtype = aryty.dtype
+    assert aryty.layout in 'CF'
+
+    out_ary = make_array(aryty)(context, builder)
+
+    itemsize = get_itemsize(context, aryty)
+    ll_itemsize = cgutils.intp_t(itemsize)
+
+    if isinstance(shapety, types.BaseTuple):
+        shapes = cgutils.unpack_tuple(builder, shape)
+    else:
+        shapety = (shapety,)
+        shapes = (shape,)
+    shapes = [context.cast(builder, value, fromty, types.intp)
+              for fromty, value in zip(shapety, shapes)]
+
+    off = ll_itemsize
+    strides = []
+    if aryty.layout == 'F':
+        for s in shapes:
+            strides.append(off)
+            off = builder.mul(off, s)
+    else:
+        for s in reversed(shapes):
+            strides.append(off)
+            off = builder.mul(off, s)
+        strides.reverse()
+
+    data = builder.bitcast(ptr,
+                           context.get_data_type(aryty.dtype).as_pointer())
+
+    populate_array(out_ary,
+                   data=data,
+                   shape=shapes,
+                   strides=strides,
+                   itemsize=ll_itemsize,
+                   # Array is not memory-managed
+                   meminfo=None,
+                   )
+
+    res = out_ary._getvalue()
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
 def _get_seq_size(context, builder, seqty, seq):
@@ -3324,8 +3382,8 @@ def assign_sequence_to_array(context, builder, data, shapes, strides,
     assign(seqty, seq, shapes, ())
 
 
-@lower_builtin(numpy.array, types.Any)
-@lower_builtin(numpy.array, types.Any, types.DTypeSpec)
+@lower_builtin(np.array, types.Any)
+@lower_builtin(np.array, types.Any, types.DTypeSpec)
 def np_array(context, builder, sig, args):
     arrty = sig.return_type
     ndim = arrty.ndim
@@ -3383,7 +3441,7 @@ def array_sort(context, builder, sig, args):
     return context.compile_internal(builder, array_sort_impl, sig, args)
 
 
-@lower_builtin(numpy.sort, types.Array)
+@lower_builtin(np.sort, types.Array)
 def np_sort(context, builder, sig, args):
 
     def np_sort_impl(a):
@@ -3402,3 +3460,82 @@ def array_to_array(context, builder, fromty, toty, val):
     # Type inference should have prevented illegal array casting.
     assert toty.layout == 'A'
     return val
+
+
+# -----------------------------------------------------------------------------
+# Stride tricks
+
+def reshape_unchecked(a, shape, strides):
+    """
+    An intrinsic returning a derived array with the given shape and strides.
+    """
+    raise NotImplementedError
+
+@extending.type_callable(reshape_unchecked)
+def type_reshape_unchecked(context):
+    def check_shape(shape):
+        return (isinstance(shape, types.BaseTuple) and
+                all(isinstance(v, types.Integer) for v in shape))
+
+    def typer(a, shape, strides):
+        if not isinstance(a, types.Array):
+            return
+        if not check_shape(shape) or not check_shape(strides):
+            return
+        if len(shape) != len(strides):
+            return
+        return a.copy(ndim=len(shape), layout='A')
+
+    return typer
+
+@lower_builtin(reshape_unchecked, types.Array, types.BaseTuple, types.BaseTuple)
+def impl_shape_unchecked(context, builder, sig, args):
+    aryty = sig.args[0]
+    retty = sig.return_type
+
+    ary = make_array(aryty)(context, builder, args[0])
+    out = make_array(retty)(context, builder)
+    shape = cgutils.unpack_tuple(builder, args[1])
+    strides = cgutils.unpack_tuple(builder, args[2])
+
+    populate_array(out,
+                   data=ary.data,
+                   shape=shape,
+                   strides=strides,
+                   itemsize=ary.itemsize,
+                   meminfo=ary.meminfo,
+                   )
+
+    res = out._getvalue()
+    return impl_ret_borrowed(context, builder, retty, res)
+
+
+@extending.overload(np.lib.stride_tricks.as_strided)
+def as_strided(x, shape=None, strides=None):
+    from numba import jit
+
+    if shape in (None, types.none):
+        @jit(nopython=True)
+        def get_shape(x, shape):
+            return x.shape
+    else:
+        @jit(nopython=True)
+        def get_shape(x, shape):
+            return shape
+
+    if strides in (None, types.none):
+        # When *strides* is not passed, as_strided() does a non-size-checking
+        # reshape(), possibly changing the original strides.  This is too
+        # cumbersome to support right now, and a Web search shows all example
+        # use cases of as_strided() pass explicit *strides*.
+        raise NotImplementedError("as_strided() strides argument is mandatory")
+    else:
+        @jit(nopython=True)
+        def get_strides(x, strides):
+            return strides
+
+    def as_strided_impl(x, shape=None, strides=None):
+        x = reshape_unchecked(x, get_shape(x, shape), get_strides(x, strides))
+        return x
+
+    return as_strided_impl

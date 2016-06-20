@@ -2,7 +2,7 @@ from __future__ import print_function, absolute_import
 
 import itertools
 
-import numpy
+import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
@@ -117,13 +117,19 @@ class TestOptional(TestCase):
 
     def test_a_is_b_intp(self):
         pyfunc = a_is_b
-        with self.assertRaises(lowering.LoweringError):
-            cres = compile_isolated(pyfunc, [types.intp, types.intp])
+        cres = compile_isolated(pyfunc, [types.intp, types.intp])
+        cfunc = cres.entry_point
+        # integer identity relies on `==`
+        self.assertTrue(cfunc(1, 1))
+        self.assertFalse(cfunc(1, 2))
 
     def test_a_is_not_b_intp(self):
         pyfunc = a_is_not_b
-        with self.assertRaises(lowering.LoweringError):
-            cres = compile_isolated(pyfunc, [types.intp, types.intp])
+        cres = compile_isolated(pyfunc, [types.intp, types.intp])
+        cfunc = cres.entry_point
+        # integer identity relies on `==`
+        self.assertFalse(cfunc(1, 1))
+        self.assertTrue(cfunc(1, 2))
 
     def test_optional_float(self):
         def pyfunc(x, y):
@@ -145,10 +151,10 @@ class TestOptional(TestCase):
                 return y[0]
 
         cfunc = njit("(float32, optional(float32[:]))")(pyfunc)
-        cy = numpy.array([12.3], dtype=numpy.float32)
+        cy = np.array([12.3], dtype=np.float32)
         py = cy.copy()
         self.assertAlmostEqual(pyfunc(1., py), cfunc(1., cy))
-        numpy.testing.assert_almost_equal(py, cy)
+        np.testing.assert_almost_equal(py, cy)
         self.assertAlmostEqual(pyfunc(1., None), cfunc(1., None))
 
     def test_optional_array_error(self):
@@ -161,7 +167,7 @@ class TestOptional(TestCase):
         self.assertIn('expected array(int32, 1d, A), got None',
                       str(raised.exception))
 
-        y = numpy.array([0xabcd], dtype=numpy.int32)
+        y = np.array([0xabcd], dtype=np.int32)
         self.assertEqual(cfunc(y), pyfunc(y))
 
     def test_optional_array_attribute(self):
@@ -175,7 +181,7 @@ class TestOptional(TestCase):
             return opt.shape[0]
 
         cfunc = njit(pyfunc)
-        arr = numpy.arange(5)
+        arr = np.arange(5)
         self.assertEqual(pyfunc(arr, True), cfunc(arr, True))
 
     def test_assign_to_optional(self):
@@ -199,6 +205,20 @@ class TestOptional(TestCase):
 
         self.assertIsNone(foo(123, False))
         self.assertEqual(foo(231, True), 231)
+
+    def test_optional_thru_omitted_arg(self):
+        """
+        Issue 1868
+        """
+
+        def pyfunc(x=None):
+            if x is None:
+                x = 1
+            return x
+
+        cfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(), cfunc())
+        self.assertEqual(pyfunc(3), cfunc(3))
 
 
 if __name__ == '__main__':

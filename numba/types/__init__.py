@@ -2,6 +2,8 @@ from __future__ import print_function, division, absolute_import
 
 import struct
 
+import numpy as np
+
 from .abstract import *
 from .containers import *
 from .functions import *
@@ -87,21 +89,21 @@ float_ = float32
 double = float64
 void = none
 
-_make_signed = lambda x: globals()["int%d" % (numpy.dtype(x).itemsize * 8)]
-_make_unsigned = lambda x: globals()["uint%d" % (numpy.dtype(x).itemsize * 8)]
+_make_signed = lambda x: globals()["int%d" % (np.dtype(x).itemsize * 8)]
+_make_unsigned = lambda x: globals()["uint%d" % (np.dtype(x).itemsize * 8)]
 
-char = _make_signed(numpy.byte)
-uchar = byte = _make_unsigned(numpy.byte)
-short = _make_signed(numpy.short)
-ushort = _make_unsigned(numpy.short)
-int_ = _make_signed(numpy.int_)
-uint = _make_unsigned(numpy.int_)
-intc = _make_signed(numpy.intc) # C-compat int
-uintc = _make_unsigned(numpy.uintc) # C-compat uint
-long_ = _make_signed(numpy.long)
-ulong = _make_unsigned(numpy.long)
-longlong = _make_signed(numpy.longlong)
-ulonglong = _make_unsigned(numpy.longlong)
+char = _make_signed(np.byte)
+uchar = byte = _make_unsigned(np.byte)
+short = _make_signed(np.short)
+ushort = _make_unsigned(np.short)
+int_ = _make_signed(np.int_)
+uint = _make_unsigned(np.int_)
+intc = _make_signed(np.intc) # C-compat int
+uintc = _make_unsigned(np.uintc) # C-compat uint
+long_ = _make_signed(np.long)
+ulong = _make_unsigned(np.long)
+longlong = _make_signed(np.longlong)
+ulonglong = _make_unsigned(np.longlong)
 
 # optional types
 optional = Optional

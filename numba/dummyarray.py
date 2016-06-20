@@ -1,9 +1,12 @@
 from __future__ import print_function, division
+
+from collections import namedtuple
 import itertools
 import functools
 import operator
-import numpy
-from collections import namedtuple
+
+import numpy as np
+
 
 Extent = namedtuple("Extent", ["begin", "end"])
 
@@ -160,7 +163,7 @@ class Array(object):
         self.shape = tuple(dim.size for dim in self.dims)
         self.strides = tuple(dim.stride for dim in self.dims)
         self.itemsize = itemsize
-        self.size = numpy.prod(self.shape)
+        self.size = np.prod(self.shape)
         self.extent = self._compute_extent()
         self.flags = self._compute_layout()
 

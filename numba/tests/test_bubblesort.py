@@ -1,5 +1,7 @@
 from __future__ import print_function
-import numpy
+
+import numpy as np
+
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba import types
@@ -23,7 +25,7 @@ class TestBubbleSort(unittest.TestCase):
         cr = compile_isolated(pyfunc, (aryty,))
         cfunc = cr.entry_point
 
-        array = numpy.array(list(reversed(range(8))), dtype="int64")
+        array = np.array(list(reversed(range(8))), dtype="int64")
         control = array.copy()
 
         cfunc(array)

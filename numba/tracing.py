@@ -9,10 +9,13 @@ from functools import wraps
 from itertools import chain
 from . import config
 
-tls = threading.local()
-# Prevent tracing while we are tracing...
-tls.tracing = False
-tls.indent = 0
+class TLS(threading.local):
+    """Use a subclass to properly initialize the TLS variables in all threads."""
+    def __init__(self):
+        self.tracing = False
+        self.indent = 0
+
+tls = TLS()
 
 def find_function_info(func, spec, args):
     """Return function meta-data in a tuple.

@@ -1,5 +1,6 @@
 from __future__ import absolute_import, print_function, division
-import numpy
+
+import numpy as np
 
 from .. import jit, typeof, utils, types, numpy_support, sigutils
 from ..typing import npydecl
@@ -132,6 +133,14 @@ class DUFunc(_internal._DUFunc):
 
     def _compile_for_args(self, *args, **kws):
         nin = self.ufunc.nin
+        if kws:
+            if 'out' in kws:
+                out = kws.pop('out')
+                args += (out,)
+            if kws:
+                raise TypeError("unexpected keyword arguments to ufunc: %s"
+                                % ", ".join(repr(k) for k in sorted(kws)))
+
         args_len = len(args)
         assert (args_len == nin) or (args_len == nin + self.ufunc.nout)
         assert not kws
@@ -139,7 +148,7 @@ class DUFunc(_internal._DUFunc):
         # To avoid a mismatch in how Numba types values as opposed to
         # Numpy, we need to first check for scalars.  For example, on
         # 64-bit systems, numba.typeof(3) => int32, but
-        # numpy.array(3).dtype => int64.
+        # np.array(3).dtype => int64.
         for arg in args[:nin]:
             if numpy_support.is_arrayscalar(arg):
                 argtys.append(numpy_support.map_arrayscalar_type(arg))

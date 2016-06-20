@@ -1,13 +1,12 @@
 package:
    name: numba
-   # We need to provide a default version
-   version: {{ environ.get('GIT_DESCRIBE_TAG','devel') }}
+   version: {{ GIT_DESCRIBE_TAG }}
 
 source:
    path: ../..
 
 build:
-  number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
+  number: {{ GIT_DESCRIBE_NUMBER|int }}
   entry_points:
     - pycc = numba.pycc:main
     - numba = numba.numba_entry:main
@@ -35,6 +34,7 @@ test:
     # Required to test optional Numba features
     - cffi
     - scipy
+    - ipython
   files:
     - mandel.py
   commands:

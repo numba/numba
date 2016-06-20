@@ -105,6 +105,7 @@ def optional_to_bool(context, builder, fromty, toty, val):
 
 
 @lower_cast(types.Optional, types.Any)
+@lower_cast(types.Optional, types.Boolean)
 def optional_to_any(context, builder, fromty, toty, val):
     optval = context.make_helper(builder, fromty, value=val)
     validbit = cgutils.as_bool_bit(builder, optval.valid)

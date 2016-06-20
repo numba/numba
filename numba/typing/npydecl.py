@@ -2,7 +2,7 @@ from __future__ import absolute_import, print_function
 
 import warnings
 
-import numpy
+import numpy as np
 
 from .. import types, utils
 from .templates import (AttributeTemplate, AbstractTemplate, CallableTemplate,
@@ -10,7 +10,8 @@ from .templates import (AttributeTemplate, AbstractTemplate, CallableTemplate,
 
 from ..numpy_support import (ufunc_find_matching_loop,
                              supported_ufunc_loop, as_dtype,
-                             from_dtype, as_dtype, resolve_output_type)
+                             from_dtype, as_dtype, resolve_output_type,
+                             carray, farray)
 from ..numpy_support import version as numpy_version
 from ..errors import TypingError
 from ..config import PerformanceWarning
@@ -111,7 +112,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
         explicit_outputs_np = [as_dtype(tp.dtype) for tp in explicit_outputs]
 
         # Numpy will happily use unsafe conversions (although it will actually warn)
-        if not all (numpy.can_cast(fromty, toty, 'unsafe') for (fromty, toty) in
+        if not all (np.can_cast(fromty, toty, 'unsafe') for (fromty, toty) in
                     zip(ufunc_loop.numpy_outputs, explicit_outputs_np)):
             msg = "ufunc '{0}' can't cast result to explicit result type"
             raise TypingError(msg=msg.format(ufunc.__name__))
@@ -181,7 +182,7 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
 
     @property
     def ufunc(self):
-        return getattr(numpy, self._op_map[self.key])
+        return getattr(np, self._op_map[self.key])
 
     @classmethod
     def install_operations(cls):
@@ -299,12 +300,12 @@ _unsupported = set([ 'frexp', # this one is tricky, as it has 2 returns
 # resolve method, but not register the ufunc itself
 _aliases = set(["bitwise_not", "mod", "abs"])
 
-# In python3 numpy.divide is mapped to numpy.true_divide
-if numpy.divide == numpy.true_divide:
+# In python3 np.divide is mapped to np.true_divide
+if np.divide == np.true_divide:
     _aliases.add("divide")
 
 def _numpy_ufunc(name):
-    func = getattr(numpy, name)
+    func = getattr(np, name)
     class typing_class(Numpy_rules_ufunc):
         key = func
 
@@ -322,8 +323,8 @@ supported_ufuncs = [x for x in all_ufuncs if x not in _unsupported]
 for func in supported_ufuncs:
     _numpy_ufunc(func)
 
-all_ufuncs = [getattr(numpy, name) for name in all_ufuncs]
-supported_ufuncs = [getattr(numpy, name) for name in supported_ufuncs]
+all_ufuncs = [getattr(np, name) for name in all_ufuncs]
+supported_ufuncs = [getattr(np, name) for name in supported_ufuncs]
 
 NumpyRulesUnaryArrayOperator.install_operations()
 NumpyRulesArrayOperator.install_operations()
@@ -360,7 +361,7 @@ class Numpy_method_redirection(AbstractTemplate):
 
 # Function to glue attributes onto the numpy-esque object
 def _numpy_redirect(fname):
-    numpy_function = getattr(numpy, fname)
+    numpy_function = getattr(np, fname)
     cls = type("Numpy_redirect_{0}".format(fname), (Numpy_method_redirection,),
                dict(key=numpy_function, method_name=fname))
     infer_global(numpy_function, types.Function(cls))
@@ -373,14 +374,14 @@ for func in ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
 # -----------------------------------------------------------------------------
 # Numpy scalar constructors
 
-# Register numpy.int8, etc. as convertors to the equivalent Numba types
-np_types = set(getattr(numpy, str(nb_type)) for nb_type in types.number_domain)
-np_types.add(numpy.bool_)
+# Register np.int8, etc. as convertors to the equivalent Numba types
+np_types = set(getattr(np, str(nb_type)) for nb_type in types.number_domain)
+np_types.add(np.bool_)
 # Those may or may not be aliases (depending on the Numpy build / version)
-np_types.add(numpy.intc)
-np_types.add(numpy.intp)
-np_types.add(numpy.uintc)
-np_types.add(numpy.uintp)
+np_types.add(np.intc)
+np_types.add(np.intp)
+np_types.add(np.uintc)
+np_types.add(np.uintp)
 
 
 def register_number_classes(register_global):
@@ -443,7 +444,7 @@ def _parse_nested_sequence(context, typ):
 
 
 
-@infer_global(numpy.array)
+@infer_global(np.array)
 class NpArray(CallableTemplate):
     """
     Typing template for np.array().
@@ -463,9 +464,9 @@ class NpArray(CallableTemplate):
         return typer
 
 
-@infer_global(numpy.empty)
-@infer_global(numpy.zeros)
-@infer_global(numpy.ones)
+@infer_global(np.empty)
+@infer_global(np.zeros)
+@infer_global(np.ones)
 class NdConstructor(CallableTemplate):
     """
     Typing template for np.empty(), .zeros(), .ones().
@@ -485,8 +486,8 @@ class NdConstructor(CallableTemplate):
         return typer
 
 
-@infer_global(numpy.empty_like)
-@infer_global(numpy.zeros_like)
+@infer_global(np.empty_like)
+@infer_global(np.zeros_like)
 class NdConstructorLike(CallableTemplate):
     """
     Typing template for np.empty_like(), .zeros_like(), .ones_like().
@@ -514,11 +515,11 @@ class NdConstructorLike(CallableTemplate):
         return typer
 
 
-infer_global(numpy.ones_like)(NdConstructorLike)
+infer_global(np.ones_like)(NdConstructorLike)
 
 
 if numpy_version >= (1, 8):
-    @infer_global(numpy.full)
+    @infer_global(np.full)
     class NdFull(CallableTemplate):
 
         def generic(self):
@@ -534,7 +535,7 @@ if numpy_version >= (1, 8):
 
             return typer
 
-    @infer_global(numpy.full_like)
+    @infer_global(np.full_like)
     class NdFullLike(CallableTemplate):
 
         def generic(self):
@@ -558,7 +559,7 @@ if numpy_version >= (1, 8):
             return typer
 
 
-@infer_global(numpy.identity)
+@infer_global(np.identity)
 class NdIdentity(AbstractTemplate):
 
     def generic(self, args, kws):
@@ -580,7 +581,7 @@ def _infer_dtype_from_inputs(inputs):
     return dtype
 
 
-@infer_global(numpy.eye)
+@infer_global(np.eye)
 class NdEye(CallableTemplate):
 
     def generic(self):
@@ -595,7 +596,7 @@ class NdEye(CallableTemplate):
         return typer
 
 
-@infer_global(numpy.arange)
+@infer_global(np.arange)
 class NdArange(AbstractTemplate):
 
     def generic(self, args, kws):
@@ -617,7 +618,7 @@ class NdArange(AbstractTemplate):
         return signature(return_type, *args)
 
 
-@infer_global(numpy.linspace)
+@infer_global(np.linspace)
 class NdLinspace(AbstractTemplate):
 
     def generic(self, args, kws):
@@ -641,7 +642,7 @@ class NdLinspace(AbstractTemplate):
         return signature(return_type, *args)
 
 
-@infer_global(numpy.frombuffer)
+@infer_global(np.frombuffer)
 class NdFromBuffer(CallableTemplate):
 
     def generic(self):
@@ -660,7 +661,7 @@ class NdFromBuffer(CallableTemplate):
         return typer
 
 
-@infer_global(numpy.sort)
+@infer_global(np.sort)
 class NdSort(CallableTemplate):
 
     def generic(self):
@@ -671,7 +672,7 @@ class NdSort(CallableTemplate):
         return typer
 
 
-@infer_global(numpy.asfortranarray)
+@infer_global(np.asfortranarray)
 class AsFortranArray(CallableTemplate):
 
     def generic(self):
@@ -682,7 +683,7 @@ class AsFortranArray(CallableTemplate):
         return typer
 
 
-@infer_global(numpy.copy)
+@infer_global(np.copy)
 class NdCopy(CallableTemplate):
 
     def generic(self):
@@ -750,7 +751,7 @@ class MatMulTyperMixin(object):
             return a.dtype
 
 
-@infer_global(numpy.dot)
+@infer_global(np.dot)
 class Dot(MatMulTyperMixin, CallableTemplate):
     func_name = "np.dot()"
 
@@ -763,7 +764,7 @@ class Dot(MatMulTyperMixin, CallableTemplate):
         return typer
 
 
-@infer_global(numpy.vdot)
+@infer_global(np.vdot)
 class VDot(CallableTemplate):
 
     def generic(self):
@@ -809,7 +810,7 @@ def _check_linalg_matrix(a, func_name):
                           "float and complex arrays" % func_name)
 
 
-@infer_global(numpy.linalg.inv)
+@infer_global(np.linalg.inv)
 class LinalgInv(CallableTemplate):
 
     def generic(self):
@@ -823,7 +824,7 @@ class LinalgInv(CallableTemplate):
 # -----------------------------------------------------------------------------
 # Miscellaneous functions
 
-@infer_global(numpy.ndenumerate)
+@infer_global(np.ndenumerate)
 class NdEnumerate(AbstractTemplate):
 
     def generic(self, args, kws):
@@ -835,7 +836,7 @@ class NdEnumerate(AbstractTemplate):
             return signature(enumerate_type, *args)
 
 
-@infer_global(numpy.nditer)
+@infer_global(np.nditer)
 class NdIter(AbstractTemplate):
 
     def generic(self, args, kws):
@@ -854,7 +855,7 @@ class NdIter(AbstractTemplate):
         return signature(nditerty, *args)
 
 
-@infer_global(numpy.ndindex)
+@infer_global(np.ndindex)
 class NdIndex(AbstractTemplate):
 
     def generic(self, args, kws):
@@ -877,8 +878,8 @@ class NdIndex(AbstractTemplate):
 
 # We use the same typing key for np.round() and np.around() to
 # re-use the implementations automatically.
-@infer_global(numpy.round)
-@infer_global(numpy.around, typing_key=numpy.round)
+@infer_global(np.round)
+@infer_global(np.around, typing_key=np.round)
 class Round(AbstractTemplate):
 
     def generic(self, args, kws):
@@ -909,7 +910,7 @@ class Round(AbstractTemplate):
                 return signature(out, *args)
 
 
-@infer_global(numpy.where)
+@infer_global(np.where)
 class Where(AbstractTemplate):
 
     def generic(self, args, kws):
@@ -938,7 +939,7 @@ class Where(AbstractTemplate):
                     return signature(retty, *args)
 
 
-@infer_global(numpy.sinc)
+@infer_global(np.sinc)
 class Sinc(AbstractTemplate):
 
     def generic(self, args, kws):
@@ -952,7 +953,7 @@ class Sinc(AbstractTemplate):
             return signature(arg, arg)
 
 
-@infer_global(numpy.angle)
+@infer_global(np.angle)
 class Angle(CallableTemplate):
     """
     Typing template for np.angle()
@@ -976,7 +977,7 @@ class Angle(CallableTemplate):
         return typer
 
 
-@infer_global(numpy.diag)
+@infer_global(np.diag)
 class DiagCtor(CallableTemplate):
     """
     Typing template for np.diag()
@@ -992,3 +993,51 @@ class DiagCtor(CallableTemplate):
                     return None
                 return types.Array(ndim=rdim, dtype=ref.dtype, layout='C')
         return typer
+
+
+# -----------------------------------------------------------------------------
+# Numba helpers
+
+@infer_global(carray)
+class NumbaCArray(CallableTemplate):
+    layout = 'C'
+
+    def generic(self):
+        func_name = self.key.__name__
+
+        def typer(ptr, shape, dtype=types.none):
+            if ptr is types.voidptr:
+                ptr_dtype = None
+            elif isinstance(ptr, types.CPointer):
+                ptr_dtype = ptr.dtype
+            else:
+                raise TypeError("%s(): pointer argument expected, got '%s'"
+                                % (func_name, ptr))
+
+            if dtype is types.none:
+                if ptr_dtype is None:
+                    raise TypeError("%s(): explicit dtype required for void* argument"
+                                    % (func_name,))
+                dtype = ptr_dtype
+            elif isinstance(dtype, types.DTypeSpec):
+                dtype = dtype.dtype
+                if ptr_dtype is not None and dtype != ptr_dtype:
+                    raise TypeError("%s(): mismatching dtype '%s' for pointer type '%s'"
+                                    % (func_name, dtype, ptr))
+            else:
+                raise TypeError("%s(): invalid dtype spec '%s'"
+                                % (func_name, dtype))
+
+            ndim = _parse_shape(shape)
+            if ndim is None:
+                raise TypeError("%s(): invalid shape '%s'"
+                                % (func_name, shape))
+
+            return types.Array(dtype, ndim, self.layout)
+
+        return typer
+
+
+@infer_global(farray)
+class NumbaFArray(NumbaCArray):
+    layout = 'F'

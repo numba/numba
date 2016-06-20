@@ -3,14 +3,14 @@ from __future__ import print_function, absolute_import, division
 import math
 from functools import reduce
 
-import numpy
+import numpy as np
 
 from llvmlite.llvmpy.core import Type
 
 from .imputils import (lower_builtin, lower_getattr_generic,
                        lower_cast, lower_constant, call_getiter, call_iternext,
                        impl_ret_borrowed, impl_ret_untracked, impl_ret_new_ref)
-from .. import typing, types, utils
+from .. import typing, types, cgutils, utils
 
 
 @lower_builtin('is not', types.Any, types.Any)
@@ -21,6 +21,30 @@ def generic_is_not(context, builder, sig, args):
     is_impl = context.get_function('is', sig)
     return builder.not_(is_impl(builder, args))
 
+
+@lower_builtin('is', types.Any, types.Any)
+def generic_is(context, builder, sig, args):
+    """
+    Default implementation for `x is y`
+    """
+    lhs_type, rhs_type = sig.args
+    # the lhs and rhs have the same type
+    if lhs_type == rhs_type:
+            # mutable types
+            if lhs_type.mutable:
+                raise NotImplementedError('no default `is` implementation')
+            # immutable types
+            else:
+                # fallbacks to `==`
+                try:
+                    eq_impl = context.get_function('==', sig)
+                except NotImplementedError:
+                    # no `==` implemented for this type
+                    return cgutils.false_bit
+                else:
+                    return eq_impl(builder, args)
+    else:
+        return cgutils.false_bit
 
 #-------------------------------------------------------------------------------
 
@@ -35,12 +59,16 @@ def deferred_getattr(context, builder, typ, value, attr):
     return imp(context, builder, inner_type, val, attr)
 
 @lower_cast(types.Any, types.DeferredType)
+@lower_cast(types.Optional, types.DeferredType)
+@lower_cast(types.Boolean, types.DeferredType)
 def any_to_deferred(context, builder, fromty, toty, val):
     actual = context.cast(builder, val, fromty, toty.get())
     model = context.data_model_manager[toty]
     return model.set(builder, model.make_uninitialized(), actual)
 
 @lower_cast(types.DeferredType, types.Any)
+@lower_cast(types.DeferredType, types.Boolean)
+@lower_cast(types.DeferredType, types.Optional)
 def deferred_to_any(context, builder, fromty, toty, val):
     model = context.data_model_manager[fromty]
     val = model.get(builder, val)
@@ -243,7 +271,7 @@ def number_constructor(context, builder, sig, args):
     """
     if isinstance(sig.return_type, types.Array):
         # Array constructor
-        impl = context.get_function(numpy.array, sig)
+        impl = context.get_function(np.array, sig)
         return impl(builder, args)
     else:
         # Scalar constructor
@@ -320,3 +348,21 @@ def user_eq(context, builder, sig, args):
     # Cast return value to match the expected return_type
     out = context.cast(builder, out, callsig.return_type, sig.return_type)
     return impl_ret_new_ref(context, builder, sig.return_type, out)
+
+
+@lower_builtin(len, types.ConstSized)
+def constsized_len(context, builder, sig, args):
+    [ty] = sig.args
+    retty = sig.return_type
+    res = context.get_constant(retty, len(ty.types))
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+@lower_builtin(bool, types.Sized)
+def sized_bool(context, builder, sig, args):
+    [ty] = sig.args
+    if len(ty):
+        return cgutils.true_bit
+    else:
+        return cgutils.false_bit
+

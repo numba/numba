@@ -4,13 +4,16 @@ exercise caching compiled Numba functions.
 
 See test_dispatcher.py.
 """
+from __future__ import division, print_function, absolute_import
 
+import sys
 
 import numpy as np
 
 from numba import jit, generated_jit, types
 
 from numba.tests.ctypes_usecases import c_sin
+from numba.tests.support import TestCase, captured_stderr
 
 
 @jit(cache=True, nopython=True)
@@ -109,3 +112,32 @@ aligned_arr = np.array(packed_arr, dtype=aligned_record_type)
 @jit(cache=True, nopython=True)
 def record_return(ary, i):
     return ary[i]
+
+
+class _TestModule(TestCase):
+    """
+    Tests for functionality of this module's functions.
+    Note this does not define any "test_*" method, instead check_module()
+    should be called by hand.
+    """
+
+    def check_module(self, mod):
+        self.assertPreciseEqual(mod.add_usecase(2, 3), 6)
+        self.assertPreciseEqual(mod.add_objmode_usecase(2, 3), 6)
+        self.assertPreciseEqual(mod.outer_uncached(3, 2), 2)
+        self.assertPreciseEqual(mod.outer(3, 2), 2)
+        self.assertPreciseEqual(mod.generated_usecase(3, 2), 1)
+
+        packed_rec = mod.record_return(mod.packed_arr, 1)
+        self.assertPreciseEqual(tuple(packed_rec), (2, 43.5))
+        aligned_rec = mod.record_return(mod.aligned_arr, 1)
+        self.assertPreciseEqual(tuple(aligned_rec), (2, 43.5))
+
+    # For 2.x
+    def runTest(self):
+        raise NotImplementedError
+
+
+def self_test():
+    mod = sys.modules[__name__]
+    _TestModule().check_module(mod)

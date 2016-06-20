@@ -4,7 +4,6 @@ Implementation of functions in the Numpy package.
 
 from __future__ import print_function, division, absolute_import
 
-import numpy
 import math
 import sys
 import itertools
@@ -12,8 +11,10 @@ from collections import namedtuple
 
 from llvmlite.llvmpy import core as lc
 
-from . import builtins, ufunc_db, arrayobj
-from .imputils import Registry, impl_ret_new_ref
+import numpy as np
+
+from . import builtins, callconv, ufunc_db, arrayobj
+from .imputils import Registry, impl_ret_new_ref, force_error_model
 from .. import typing, types, cgutils, numpy_support, utils
 from ..config import PYVERSION
 from ..numpy_support import ufunc_find_matching_loop, select_array_wrapper
@@ -409,7 +410,8 @@ def _ufunc_db_function(ufunc):
             cast_args = [self.cast(val, inty, outty)
                          for val, inty, outty in zip(args, osig.args,
                                                      isig.args)]
-            res = self.fn(self.context, self.builder, isig, cast_args)
+            with force_error_model(self.context, 'numpy'):
+                res = self.fn(self.context, self.builder, isig, cast_args)
             dmm = self.context.data_model_manager
             res = dmm[isig.return_type].from_return(self.builder, res)
             return self.cast(res, isig.return_type, osig.return_type)
@@ -520,7 +522,7 @@ def array_positive_impl(context, builder, sig, args):
 for _op_map in (npydecl.NumpyRulesUnaryArrayOperator._op_map,
                 npydecl.NumpyRulesArrayOperator._op_map):
     for operator, ufunc_name in _op_map.items():
-        ufunc = getattr(numpy, ufunc_name)
+        ufunc = getattr(np, ufunc_name)
         kernel = _kernels[ufunc]
         if ufunc.nin == 1:
             register_unary_operator_kernel(operator, kernel)

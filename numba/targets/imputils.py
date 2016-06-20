@@ -405,3 +405,18 @@ def impl_ret_untracked(ctx, builder, retty, ret):
     The return type is not a NRT object.
     """
     return ret
+
+
+@contextlib.contextmanager
+def force_error_model(context, model_name='numpy'):
+    """
+    Temporarily change the context's error model.
+    """
+    from . import callconv
+
+    old_error_model = context.error_model
+    context.error_model = callconv.create_error_model(model_name, context)
+    try:
+        yield
+    finally:
+        context.error_model = old_error_model

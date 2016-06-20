@@ -19,3 +19,4 @@ htmlcov/
 .ipynb_checkpoints/
 __pycache__/
 
+docs/source/developer/autogen*
