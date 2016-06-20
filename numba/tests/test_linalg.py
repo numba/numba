@@ -603,14 +603,9 @@ class TestLinalgInv(TestLinalgBase):
     Tests for np.linalg.inv.
     """
 
-    def sample_matrix(self, m, dtype, order):
-        a = np.zeros((m, m), dtype, order)
-        a += np.diag(self.sample_vector(m, dtype))
-        return a
-
     def assert_singular_matrix(self, cfunc, args):
-        msg = "Matrix is singular and cannot be inverted"
-        self.assert_error(cfunc, args, msg)
+        msg = "Matrix is singular and cannot be inverted."
+        self.assert_error(cfunc, args, msg, err=np.linalg.LinAlgError)
 
     @tag('important')
     @needs_lapack
@@ -622,27 +617,40 @@ class TestLinalgInv(TestLinalgBase):
         cfunc = jit(nopython=True)(invert_matrix)
 
         def check(a, **kwargs):
+            expected = invert_matrix(a)
+            got = cfunc(a)
+            self.assert_contig_sanity(got, "F")
+
+            use_reconstruction = False
+
+            # try strict
+            try:
+                np.testing.assert_array_almost_equal_nulp(got, expected,
+                                                          nulp=10)
+            except AssertionError:
+                # fall back to reconstruction
+                use_reconstruction = True
+
+            if use_reconstruction:
+                rec = np.dot(got, a)
+                eye = np.eye(a.shape[0], dtype=a.dtype)
+                resolution = 5 * np.finfo(a.dtype).resolution
+                np.testing.assert_allclose(
+                    rec,
+                    eye,
+                    rtol=resolution,
+                    atol=resolution
+                )
+
+            # Ensure proper resource management
             with self.assertNoNRTLeak():
-                expected = invert_matrix(a).copy(order='C')
-                got = cfunc(a)
-                # XXX had to use that function otherwise comparison fails
-                # because of +0, -0 discrepancies
-                np.testing.assert_array_almost_equal_nulp(
-                    got, expected, **kwargs)
-                # check that the computed results are contig and in the same
-                # way
-                self.assert_contig_sanity(got, "C")
-                del got, expected
+                cfunc(a)
 
         for dtype, order in product(self.dtypes, 'CF'):
-            a = self.sample_matrix(n, dtype, order)
-            check(a, nulp=3)
-
-        for order in 'CF':
-            a = np.array(((2, 1), (2, 3)), dtype=np.float64, order=order)
+            a = self.specific_sample_matrix((n, n), dtype, order)
             check(a)
 
-        # Non square matrices
+        # Non square matrix
         self.assert_non_square(cfunc, (np.ones((2, 3)),))
 
         # Wrong dtype
@@ -1164,6 +1172,10 @@ class TestLinalgLstsq(TestLinalgBase):
                         # and on the small side (rows, cols) < 100.
                         np.testing.assert_allclose(
                             res_expected, res_got, rtol=10.)
+
+            # Ensure proper resource management
+            with self.assertNoNRTLeak():
+                cfunc(A, B, **kwargs)
 
         # test: column vector, tall, wide, square, row vector
         # prime sizes, the A's
