@@ -216,9 +216,9 @@ static int check_func(void *func)
         PyErr_SetString(PyExc_RuntimeError,
                         "Specified LAPACK function could not be found.");
         PyGILState_Release(st);
-        return 1;
+        return STATUS_ERROR;
     }
-    return 0;
+    return STATUS_SUCCESS;
 }
 
 
@@ -523,9 +523,9 @@ typedef void (*cgelsd_t)(F_INT *m, F_INT *n, F_INT *nrhs, void *a, F_INT *lda,
  * kind - the kind, one of:
  *         (s, d, c, z) = (float, double, complex, double complex).
  *
- * data_size - modified in place, on return contains the appropriate data size.
+ * Returns:
+ * data_size - the appropriate data size.
  *
- * Returns 0 on success, -1 else.
  */
 static size_t kind_size(char kind)
 {
@@ -698,7 +698,7 @@ numba_ez_xxgetri(char kind, Py_ssize_t n, void *a, Py_ssize_t lda,
     work = &stack_slot;
 
     numba_raw_xxgetri(kind, _n, a, _lda, ipiv, work, &lwork, &info);
-    CATCH_LAPACK_INVALID_ARG("xxgetrf", info);
+    CATCH_LAPACK_INVALID_ARG("xxgetri", info);
 
     lwork = cast_from_X(kind, work);
 
@@ -708,9 +708,9 @@ numba_ez_xxgetri(char kind, Py_ssize_t n, void *a, Py_ssize_t lda,
     }
 
     numba_raw_xxgetri(kind, _n, a, _lda, ipiv, work, &lwork, &info);
-    CATCH_LAPACK_INVALID_ARG("xxgetrf", info);
-
     PyMem_RawFree(work);
+    CATCH_LAPACK_INVALID_ARG("xxgetri", info);
+
     return (int)info;
 }
 

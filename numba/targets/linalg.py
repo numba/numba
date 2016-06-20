@@ -534,7 +534,7 @@ def _inv_err_handler(r):
         if r < 0:
             fatal_error_func()
             assert 0   # unreachable
-        if r > 0:  # this condition should be caught already above!
+        if r > 0:
             raise np.linalg.LinAlgError(
                 "Matrix is singular and cannot be inverted.")
 
