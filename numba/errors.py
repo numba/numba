@@ -69,7 +69,12 @@ class WarningsFixer(object):
 
 
 class NumbaError(Exception):
-    pass
+
+    def patch_message(self, new_message):
+        """
+        Change the error message to the given new message.
+        """
+        self.args = (new_message,) + self.args[1:]
 
 
 class IRError(NumbaError):
