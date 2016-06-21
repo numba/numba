@@ -76,7 +76,10 @@ ext_dispatcher = Extension(name="numba._dispatcher",
                            extra_link_args=cpp_link_args)
 
 ext_helperlib = Extension(name="numba._helperlib",
-                          include_dirs=[np.get_include()],
+                          include_dirs=npymath_info['include_dirs'],
+                          libraries=npymath_info['libraries'],
+                          library_dirs=npymath_info['library_dirs'],
+                          define_macros=npymath_info['define_macros'],
                           sources=["numba/_helpermod.c", "numba/_math_c99.c"],
                           extra_compile_args=CFLAGS,
                           extra_link_args=install_name_tool_fixer,
