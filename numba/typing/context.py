@@ -189,13 +189,16 @@ class BaseContext(object):
         return self.resolve_function_type("delitem", args, kws)
 
     def resolve_module_constants(self, typ, attr):
-        """Resolve module-level global constants
+        """
+        Resolve module-level global constants.
         Return None or the attribute type
         """
-        if isinstance(typ, types.Module):
-            attrval = getattr(typ.pymod, attr)
-            ty = self.resolve_value_type(attrval)
-            return ty
+        assert isinstance(typ, types.Module)
+        attrval = getattr(typ.pymod, attr)
+        try:
+            return self.resolve_value_type(attrval)
+        except ValueError:
+            pass
 
     def resolve_argument_type(self, val):
         """
@@ -203,7 +206,7 @@ class BaseContext(object):
         as a function argument.  Integer types will all be considered
         int64, regardless of size.
 
-        None is returned for unsupported types.
+        ValueError is raised for unsupported types.
         """
         return typeof(val, Purpose.argument)
 
@@ -211,22 +214,18 @@ class BaseContext(object):
         """
         Return the numba type of a Python value that is being used
         as a runtime constant.
-        None is returned for unsupported types.
+        ValueError is raised for unsupported types.
         """
-        # XXX some typeof() implementations raise a ValueError for
-        # better diagnostics, perhaps we should always do it?
-        tp = typeof(val, Purpose.constant)
-        if tp is not None:
-            return tp
+        try:
+            ty = typeof(val, Purpose.constant)
+        except ValueError as e:
+            typeof_exc = e
+        else:
+            if ty is not None:
+                return ty
 
         if isinstance(val, (types.ExternalFunction, types.NumbaFunction)):
             return val
-
-        if isinstance(val, type):
-            if issubclass(val, BaseException):
-                return types.ExceptionClass(val)
-            if issubclass(val, tuple) and hasattr(val, "_asdict"):
-                return types.NamedTupleClass(val)
 
         try:
             # Try to look up target specific typing information
@@ -234,7 +233,8 @@ class BaseContext(object):
         except KeyError:
             pass
 
-        return None
+        del val
+        raise typeof_exc
 
     def _get_global_type(self, gv):
         try:

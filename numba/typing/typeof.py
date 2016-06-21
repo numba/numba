@@ -25,7 +25,12 @@ def typeof(val, purpose=Purpose.argument):
     """
     # Note the behaviour for Purpose.argument must match _typeof.c.
     c = _TypeofContext(purpose)
-    return typeof_impl(val, c)
+    ty = typeof_impl(val, c)
+    if ty is None:
+        msg = "cannot determine Numba type of value %r" % (val,)
+        del val
+        raise ValueError(msg)
+    return ty
 
 
 @utils.singledispatch
@@ -46,7 +51,6 @@ def typeof_impl(val, c):
         if cffi_utils.is_ffi_instance(val):
             return types.ffi
 
-    # XXX should raise ValueError instead?
     return getattr(val, "_numba_type_", None)
 
 
@@ -72,6 +76,16 @@ def typeof_ctypes_function(val, c):
     from .ctypes_utils import is_ctypes_funcptr, make_function_type
     if is_ctypes_funcptr(val):
         return make_function_type(val)
+
+@typeof_impl.register(type)
+def typeof_type(val, c):
+    """
+    Type various specific Python types.
+    """
+    if issubclass(val, BaseException):
+        return types.ExceptionClass(val)
+    if issubclass(val, tuple) and hasattr(val, "_asdict"):
+        return types.NamedTupleClass(val)
 
 @typeof_impl.register(bool)
 def _typeof_bool(val, c):
