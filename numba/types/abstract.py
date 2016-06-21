@@ -244,10 +244,21 @@ class UserHashable(Type):
         """
         raise NotImplementedError
 
+    @classmethod
+    def instancecheck(cls, instance):
+        if cls is UserHashable and issubclass(type(instance), UserHashable):
+            return instance.is_hashable()
+        else:
+            return issubclass(type(instance), cls)
+
 
 class Eq(Type):
     """
     Base class for Eq types.
+    Subclass must implement:
+    
+    - at least __eq__
+    - and __ne__ optionally
     """
     @classmethod
     def instancecheck(cls, instance):
@@ -258,6 +269,7 @@ class Eq(Type):
 class UserEq(Type):
     """
     For user-defined types that may define __eq__ and __ne__.
+    Virtually subclass Eq if `self.supports_eq()` returns True.
     """
     def supports_eq(self):
         raise NotImplementedError

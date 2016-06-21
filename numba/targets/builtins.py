@@ -403,7 +403,8 @@ def user_ne(context, builder, sig, args):
             call, callsig = ne_impl
             out = call(builder, args)
             # Cast return value to match the expected return_type
-            out = context.cast(builder, out, callsig.return_type, sig.return_type)
+            out = context.cast(builder, out, callsig.return_type, 
+                               sig.return_type)
         return impl_ret_new_ref(context, builder, sig.return_type, out)
 
     return _reflectable_equality(context, builder, sig, args, inequality)
