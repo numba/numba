@@ -341,33 +341,10 @@ def not_in(context, builder, sig, args):
 
 # -----------------------------------------------------------------------------
 
-
-def _equality(context, builder, sig, args):
-    self_type = sig.args[0]
-    assert isinstance(self_type, types.UserEq)
-    # get user implementation
-    eq_impl = self_type.get_user_eq(context, sig)
-    # Still no implementation
-    if eq_impl is NotImplemented:
-        # there's no default __eq__ that uses __ne__; fallback to `is`
-        warnings.warn("Possible unintentional usage of default __eq__ on "
-                      "object that implements __ne__", UserWarning)
-
-        is_impl = context.get_function("is", sig)
-        out = is_impl(builder, args)
-    # one of the operand provided an implementation
-    else:
-        call, callsig = eq_impl 
-        out = call(builder, args)
-        # Cast return value to match the expected return_type
-        out = context.cast(builder, out, callsig.return_type, sig.return_type)
-    return impl_ret_new_ref(context, builder, sig.return_type, out)
-
-
-@lower_builtin("==", types.UserEq, types.Any)
-@lower_builtin("==", types.Any, types.UserEq)
-@lower_builtin("==", types.UserEq, types.UserEq)
-def user_eq(context, builder, sig, args):
+def _reflectable_equality(context, builder, sig, args, comparison):
+    """
+    Implement reflection logic for (in)equality operator 
+    """
     self_type, other_type = sig.args[:2]
     # check if we need reflection version
     if not isinstance(self_type, types.UserEq):
@@ -375,26 +352,61 @@ def user_eq(context, builder, sig, args):
         # reflected signature
         reflected_sig = typing.signature(sig.return_type, other_type, self_type)
         [this, other] = args
-        return _equality(context, builder, reflected_sig, [other, this])
+        return comparison(context, builder, reflected_sig, [other, this])
     else:
-        return _equality(context, builder, sig, args)
+        return comparison(context, builder, sig, args)
+
+
+@lower_builtin("==", types.UserEq, types.Any)
+@lower_builtin("==", types.Any, types.UserEq)
+@lower_builtin("==", types.UserEq, types.UserEq)
+def user_eq(context, builder, sig, args):
+
+    def equality(context, builder, sig, args):
+        self_type = sig.args[0]
+        assert isinstance(self_type, types.UserEq)
+        # get user implementation
+        eq_impl = self_type.get_user_eq(context, sig)
+        # Still no implementation
+        if eq_impl is NotImplemented:
+            # there's no default __eq__ that uses __ne__; fallback to `is`
+            warnings.warn("Possible unintentional usage of default __eq__ on "
+                          "object that implements __ne__", UserWarning)
+
+            is_impl = context.get_function("is", sig)
+            out = is_impl(builder, args)
+        # one of the operand provided an implementation
+        else:
+            call, callsig = eq_impl 
+            out = call(builder, args)
+            # Cast return value to match the expected return_type
+            out = context.cast(builder, out, callsig.return_type, 
+                              sig.return_type)
+        return impl_ret_new_ref(context, builder, sig.return_type, out)
+
+    return _reflectable_equality(context, builder, sig, args, equality)
 
 
 @lower_builtin("!=", types.UserEq, types.Any)
+@lower_builtin("!=", types.Any, types.UserEq)
+@lower_builtin("!=", types.UserEq, types.UserEq)
 def user_ne(context, builder, sig, args):
-    self_type = sig.args[0]
-    ne_impl = self_type.get_user_ne(context, sig)
-    if ne_impl is NotImplemented:
-        def default_impl(a, b):
-            return not (a == b)
+        
+    def inequality(context, builder, sig, args):
+        self_type = sig.args[0]
+        ne_impl = self_type.get_user_ne(context, sig)
+        if ne_impl is NotImplemented:
+            # fallback to equality operator
+            default_impl = context.get_function("==", sig)
+            out = builder.not_(default_impl(builder, args))
+        else:
+            call, callsig = ne_impl
+            out = call(builder, args)
+            # Cast return value to match the expected return_type
+            out = context.cast(builder, out, callsig.return_type, sig.return_type)
+        return impl_ret_new_ref(context, builder, sig.return_type, out)
 
-        out = context.compile_internal(builder, default_impl, sig, args)
-    else:
-        call, callsig = ne_impl
-        out = call(builder, args)
-        # Cast return value to match the expected return_type
-        out = context.cast(builder, out, callsig.return_type, sig.return_type)
-    return impl_ret_new_ref(context, builder, sig.return_type, out)
+    return _reflectable_equality(context, builder, sig, args, inequality)
 
 
 @lower_builtin(len, types.ConstSized)
