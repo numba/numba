@@ -329,6 +329,10 @@ def lstsq_system(A, B, rcond=-1):
     return np.linalg.lstsq(A, B, rcond)
 
 
+def solve_system(A, B):
+    return np.linalg.solve(A, B)
+
+
 class TestLinalgBase(TestCase):
     """
     Provides setUp and common data/error modes for testing np.linalg functions.
@@ -491,6 +495,10 @@ class TestLinalgBase(TestCase):
                 else:
                     raise ValueError("Unknown contig")
 
+    def assert_raise_on_singular(self, cfunc, args):
+        msg = "Matrix is singular to machine precision."
+        self.assert_error(cfunc, args, msg, err=np.linalg.LinAlgError)
+
 
 class TestTestLinalgBase(TestCase):
     """
@@ -603,10 +611,6 @@ class TestLinalgInv(TestLinalgBase):
     Tests for np.linalg.inv.
     """
 
-    def assert_singular_matrix(self, cfunc, args):
-        msg = "Matrix is singular and cannot be inverted."
-        self.assert_error(cfunc, args, msg, err=np.linalg.LinAlgError)
-
     @tag('important')
     @needs_lapack
     def test_linalg_inv(self):
@@ -661,7 +665,7 @@ class TestLinalgInv(TestLinalgBase):
         self.assert_wrong_dimensions("inv", cfunc, (np.ones(10),))
 
         # Singular matrix
-        self.assert_singular_matrix(cfunc, (np.zeros((2, 2)),))
+        self.assert_raise_on_singular(cfunc, (np.zeros((2, 2)),))
 
 
 class TestLinalgCholesky(TestLinalgBase):
@@ -1056,7 +1060,24 @@ class TestLinalgQr(TestLinalgBase):
                                             dtype=np.float64),))
 
 
-class TestLinalgLstsq(TestLinalgBase):
+class TestLinalgSystems(TestLinalgBase):
+    """
+    Base class for testing "system" solvers from np.linalg.
+    Namely np.linalg.solve() and np.linalg.lstsq().
+    """
+
+    # check for RHS with dimension > 2 raises
+    def assert_wrong_dimensions_1D(self, name, cfunc, args):
+        msg = "np.linalg.%s() only supported on 1 and 2-D arrays" % name
+        self.assert_error(cfunc, args, msg, errors.TypingError)
+
+    # check that a dimensionally invalid system raises
+    def assert_dimensionally_invalid(self, cfunc, args):
+        msg = "Incompatible array sizes, system is not dimensionally valid."
+        self.assert_error(cfunc, args, msg, np.linalg.LinAlgError)
+
+
+class TestLinalgLstsq(TestLinalgSystems):
     """
     Tests for np.linalg.lstsq.
     """
@@ -1069,16 +1090,6 @@ class TestLinalgLstsq(TestLinalgBase):
     # The tests try and deal with this as best as they can through the use
     # of reconstruction and measures like residual norms.
     # Suggestions for improvements are welcomed!
-
-    # check for B with dimension > 2 raises
-    def assert_wrong_dimensions_1D(self, name, cfunc, args):
-        msg = "np.linalg.%s() only supported on 1 and 2-D arrays" % name
-        self.assert_error(cfunc, args, msg, errors.TypingError)
-
-    # check that a dimensionally invalid system raises
-    def assert_dimensionally_invalid(self, name, cfunc, args):
-        msg = "Incompatible array sizes for np.linalg.%s()." % name
-        self.assert_error(cfunc, args, msg, np.linalg.LinAlgError)
 
     @needs_lapack
     def test_linalg_lstsq(self):
@@ -1293,8 +1304,103 @@ class TestLinalgLstsq(TestLinalgBase):
         # checked)
         bad1D = np.array([1.], dtype=np.float64)
         bad2D = np.array([[1.], [2.], [3.]], dtype=np.float64)
-        self.assert_dimensionally_invalid(rn, cfunc, (ok, bad1D))
-        self.assert_dimensionally_invalid(rn, cfunc, (ok, bad2D))
+        self.assert_dimensionally_invalid(cfunc, (ok, bad1D))
+        self.assert_dimensionally_invalid(cfunc, (ok, bad2D))
+
+
+class TestLinalgSolve(TestLinalgSystems):
+    """
+    Tests for np.linalg.solve.
+    """
+
+    @needs_lapack
+    def test_linalg_solve(self):
+        """
+        Test np.linalg.solve
+        """
+        cfunc = jit(nopython=True)(solve_system)
+
+        def check(a, b, **kwargs):
+            expected = solve_system(a, b, **kwargs)
+            got = cfunc(a, b, **kwargs)
+
+            # check that the computed results are contig and in the same way
+            self.assert_contig_sanity(got, "F")
+
+            np.testing.assert_array_almost_equal_nulp(got, expected, nulp=20)
+
+            # Ensure proper resource management
+            with self.assertNoNRTLeak():
+                cfunc(a, b, **kwargs)
+
+        # test: prime size squares
+        sizes = [(1, 1), (3, 3), (7, 7)]
+
+        # There are a lot of combinations to test across all the different
+        # dtypes, especially when type promotion comes into play, to
+        # reduce the effort the dtype of "b" is cycled.
+        cycle_dt = cycle(self.dtypes)
+
+        # test loop
+        for size, dtype, order in \
+                product(sizes, self.dtypes, 'FC'):
+            A = self.specific_sample_matrix(size, dtype, order)
+
+            b_sizes = (1, 13)
+
+            for b_size, b_order in product(b_sizes, 'FC'):
+                # dtype for b
+                dt = next(cycle_dt)
+
+                # check 2D B
+                B = self.specific_sample_matrix(
+                    (A.shape[0], b_size), dt, b_order)
+                check(A, B)
+
+                # check 1D B
+                tmp = B[:, 0].copy(order=b_order)
+                check(A, tmp)
+
+        # Test input validation
+        ok = np.array([[1., 0.], [0., 1.]], dtype=np.float64)
+
+        # check ok input is ok
+        cfunc(ok, ok)
+
+        # check bad inputs
+        rn = "solve"
+
+        # Wrong dtype
+        bad = np.array([[1, 0], [0, 1]], dtype=np.int32)
+        self.assert_wrong_dtype(rn, cfunc, (ok, bad))
+        self.assert_wrong_dtype(rn, cfunc, (bad, ok))
+
+        # Dimension issue
+        bad = np.array([1, 0], dtype=np.float64)
+        self.assert_wrong_dimensions(rn, cfunc, (bad, ok))
+
+        # no nans or infs
+        bad = np.array([[1., 0., ], [np.inf, np.nan]], dtype=np.float64)
+        self.assert_no_nan_or_inf(cfunc, (ok, bad))
+        self.assert_no_nan_or_inf(cfunc, (bad, ok))
+
+        # check 1D is accepted for B (2D is done previously)
+        # and then that anything of higher dimension raises
+        ok_oneD = np.array([1., 2.], dtype=np.float64)
+        cfunc(ok, ok_oneD)
+        bad = np.array([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], dtype=np.float64)
+        self.assert_wrong_dimensions_1D(rn, cfunc, (ok, bad))
+
+        # check an invalid system raises (1D and 2D cases checked)
+        bad1D = np.array([1.], dtype=np.float64)
+        bad2D = np.array([[1.], [2.], [3.]], dtype=np.float64)
+        self.assert_dimensionally_invalid(cfunc, (ok, bad1D))
+        self.assert_dimensionally_invalid(cfunc, (ok, bad2D))
+
+        # check that a singular system raises
+        bad2D = self.specific_sample_matrix((2, 2), np.float64, 'C', rank=1)
+        self.assert_raise_on_singular(cfunc, (bad2D, ok))
+
 
 if __name__ == '__main__':
     unittest.main()
