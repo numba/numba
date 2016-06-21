@@ -739,6 +739,51 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
         self.assertTrue(check_inequality(ai, di))
         self.assertFalse(check_inequality(di, ai))
 
+    def test_reflected_eq(self):
+        spec = [('_value', int32),
+                ('use_count', int32)]
+
+        @jitclass(spec)
+        class Apple(object):
+
+            def __init__(self, value):
+                self._value = value
+                self.use_count = 0
+
+            def __eq__(self, other):
+                self.use_count += 1
+                return self._value == other._value
+
+        @jitclass(spec)
+        class Berry(object):
+
+            def __init__(self, value):
+                self._value = value
+
+        ai = Apple(value=123)
+        bi = Berry(value=123)
+
+        # the values are equal 
+        self.assertEqual(ai._value, bi._value)
+        self.assertEqual(ai.use_count, 0)
+        # equality is provided in this direction
+        self.assertEqual(ai, bi)
+        self.assertEqual(ai.use_count, 1)
+        # reflected equality
+        self.assertEqual(bi, ai)
+        self.assertEqual(ai.use_count, 2)
+
+        # check reflected equality in jitted code
+        @njit
+        def check_equality(x, y):
+            return x == y
+
+        self.assertTrue(check_equality(ai, bi))
+        self.assertEqual(ai.use_count, 3)
+        
+        self.assertTrue(check_equality(bi, ai))
+        self.assertEqual(ai.use_count, 4)
+
 
 if __name__ == '__main__':
     unittest.main()

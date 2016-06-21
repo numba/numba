@@ -251,10 +251,8 @@ class Eq(Type):
     """
     @classmethod
     def instancecheck(cls, instance):
-        if cls is Eq and issubclass(type(instance), UserEq):
-            return instance.supports_eq()
-        else:
-            return issubclass(type(instance), cls)
+        return ((cls is Eq and isinstance(instance, UserEq)) or 
+                issubclass(type(instance), cls))
 
 
 class UserEq(Type):
@@ -270,6 +268,13 @@ class UserEq(Type):
     def get_user_ne(self, context, sig):
         raise NotImplementedError
 
+    @classmethod
+    def instancecheck(cls, instance):
+        if cls is UserEq and issubclass(type(instance), UserEq):
+            return instance.supports_eq()
+        else:
+            return issubclass(type(instance), cls)
+    
 
 class SimpleScalar(Hashable, Eq):
     """

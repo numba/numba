@@ -877,7 +877,7 @@ class DeferredAttribute(AttributeTemplate):
 class UserCmpEqualityBase(AbstractTemplate):
     def generic(self, args, kws):
         [lhs, rhs] = args
-        if isinstance(lhs, types.Eq):
+        if isinstance(lhs, types.Eq) or isinstance(rhs, types.Eq):
             # if both side are of SimpleScalar types
             if (isinstance(lhs, types.SimpleScalar) and 
                     isinstance(rhs, types.SimpleScalar)):
