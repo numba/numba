@@ -301,7 +301,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                     % "\n".join("- argument %d: %s" % (i, err)
                                 for i, err in failed_args))
                 e.patch_message(msg)
-            raise
+            raise e
 
     def inspect_llvm(self, signature=None):
         if signature is not None:
