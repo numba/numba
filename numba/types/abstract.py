@@ -271,7 +271,14 @@ class UserEq(Type):
         raise NotImplementedError
 
 
-class Number(Hashable):
+class SimpleScalar(Hashable, Eq):
+    """
+    A simple scalar type is allowed to coerce with other arguments during a call
+    """
+    pass
+
+
+class Number(SimpleScalar):
     """
     Base class for number types.
     """

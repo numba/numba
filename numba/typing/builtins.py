@@ -336,14 +336,6 @@ class CmpOpGt(OrderedCmpOp):
 class CmpOpGe(OrderedCmpOp):
     key = '>='
 
-@infer
-class CmpOpEq(UnorderedCmpOp):
-    key = '=='
-
-@infer
-class CmpOpNe(UnorderedCmpOp):
-    key = '!='
-
 
 class TupleCompare(AbstractTemplate):
     def generic(self, args, kws):
@@ -886,7 +878,16 @@ class UserCmpEqualityBase(AbstractTemplate):
     def generic(self, args, kws):
         [lhs, rhs] = args
         if isinstance(lhs, types.Eq):
-            return signature(types.boolean, lhs, rhs)
+            # if both side are of SimpleScalar types
+            if (isinstance(lhs, types.SimpleScalar) and 
+                    isinstance(rhs, types.SimpleScalar)):
+                # coerce to a common type
+                common = self.context.unify_types(lhs, rhs)
+                # return new signature 
+                return signature(types.boolean, common, common)
+            # otherwise, use the equality function from the type
+            else:
+                return signature(types.boolean, lhs, rhs)
 
 @infer
 class UserCmpEq(UserCmpEqualityBase):

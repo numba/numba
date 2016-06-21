@@ -9,7 +9,7 @@ from .. import npdatetime, utils
 from ..typeconv import Conversion
 
 
-class Boolean(Hashable):
+class Boolean(SimpleScalar):
 
     def cast_python_value(self, value):
         return bool(value)
