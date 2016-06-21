@@ -1049,7 +1049,7 @@ def _get_system_compute_nrhs(b):
 
 
 def _get_system_check_dimensionally_valid_impl(a, b):
-    # gets and implementation for checking that AX=B style system
+    # gets an implementation for checking that AX=B style system
     # input is dimensionally valid
     ndim = b.ndim
     if ndim == 1:

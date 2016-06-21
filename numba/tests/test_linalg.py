@@ -495,6 +495,10 @@ class TestLinalgBase(TestCase):
                 else:
                     raise ValueError("Unknown contig")
 
+    def assert_raise_on_singular(self, cfunc, args):
+        msg = "Matrix is singular to machine precision."
+        self.assert_error(cfunc, args, msg, err=np.linalg.LinAlgError)
+
 
 class TestTestLinalgBase(TestCase):
     """
@@ -607,10 +611,6 @@ class TestLinalgInv(TestLinalgBase):
     Tests for np.linalg.inv.
     """
 
-    def assert_singular_matrix(self, cfunc, args):
-        msg = "Matrix is singular to machine precision."
-        self.assert_error(cfunc, args, msg, err=np.linalg.LinAlgError)
-
     @tag('important')
     @needs_lapack
     def test_linalg_inv(self):
@@ -665,7 +665,7 @@ class TestLinalgInv(TestLinalgBase):
         self.assert_wrong_dimensions("inv", cfunc, (np.ones(10),))
 
         # Singular matrix
-        self.assert_singular_matrix(cfunc, (np.zeros((2, 2)),))
+        self.assert_raise_on_singular(cfunc, (np.zeros((2, 2)),))
 
 
 class TestLinalgCholesky(TestLinalgBase):
@@ -1061,8 +1061,12 @@ class TestLinalgQr(TestLinalgBase):
 
 
 class TestLinalgSystems(TestLinalgBase):
-    # check for B with dimension > 2 raises
+    """
+    Base class for testing "system" solvers from np.linalg.
+    Namely np.linalg.solve() and np.linalg.lstsq().
+    """
 
+    # check for RHS with dimension > 2 raises
     def assert_wrong_dimensions_1D(self, name, cfunc, args):
         msg = "np.linalg.%s() only supported on 1 and 2-D arrays" % name
         self.assert_error(cfunc, args, msg, errors.TypingError)
@@ -1309,11 +1313,6 @@ class TestLinalgSolve(TestLinalgSystems):
     Tests for np.linalg.solve.
     """
 
-    # check that a singular system raises
-    def assert_raise_on_singular(self, cfunc, args):
-        msg = "Matrix is singular to machine precision."
-        self.assert_error(cfunc, args, msg, np.linalg.LinAlgError)
-
     @needs_lapack
     def test_linalg_solve(self):
         """
@@ -1328,30 +1327,7 @@ class TestLinalgSolve(TestLinalgSystems):
             # check that the computed results are contig and in the same way
             self.assert_contig_sanity(got, "F")
 
-            use_reconstruction = False
-            # try plain match of the result first
-            try:
-                np.testing.assert_array_almost_equal_nulp(
-                    got, expected, nulp=10)
-            except Exception:
-                # plain match failed, test by reconstruction
-                use_reconstruction = True
-
-            # if plain match fails then reconstruction is used.
-            # this checks that AX ~= B
-            if use_reconstruction:
-                # check they are dimensionally correct
-                self.assertEqual(got.shape, expected.shape)
-
-                # check AX=B
-                rec = np.dot(a, got)
-                resolution = np.finfo(a.dtype).resolution
-                np.testing.assert_allclose(
-                    b,
-                    rec,
-                    rtol=10 * resolution,
-                    atol=100 * resolution  # zeros tend to be fuzzy
-                )
+            np.testing.assert_array_almost_equal_nulp(got, expected, nulp=20)
 
             # Ensure proper resource management
             with self.assertNoNRTLeak():
