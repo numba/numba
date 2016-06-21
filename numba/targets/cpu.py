@@ -41,7 +41,6 @@ class CPUContext(BaseContext):
 
         # Map external C functions.
         externals.c_math_functions.install(self)
-        externals.c_numpy_functions.install(self)
 
         # Initialize NRT runtime
         rtsys.initialize(self)

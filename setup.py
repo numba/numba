@@ -62,14 +62,6 @@ ext_dynfunc = Extension(name='numba._dynfunc',
                         depends=['numba/_pymodule.h',
                                  'numba/_dynfunc.c'])
 
-ext_npymath_exports = Extension(name='numba._npymath_exports',
-                                sources=['numba/_npymath_exports.c'],
-                                include_dirs=npymath_info['include_dirs'],
-                                libraries=npymath_info['libraries'],
-                                library_dirs=npymath_info['library_dirs'],
-                                define_macros=npymath_info['define_macros'])
-
-
 ext_dispatcher = Extension(name="numba._dispatcher",
                            include_dirs=[np.get_include()],
                            sources=['numba/_dispatcher.c',
@@ -92,6 +84,7 @@ ext_helperlib = Extension(name="numba._helperlib",
                                    "numba/_math_c99.h",
                                    "numba/_helperlib.c",
                                    "numba/_lapack.c",
+                                   "numba/_npymath_exports.c",
                                    "numba/mathnames.inc"])
 
 ext_typeconv = Extension(name="numba.typeconv._typeconv",
@@ -129,7 +122,7 @@ ext_jitclass_box = Extension(name='numba.jitclass._box',
                              depends=['numba/_pymodule.h'],
                              include_dirs=['numba'])
 
-ext_modules = [ext_dynfunc, ext_npymath_exports, ext_dispatcher,
+ext_modules = [ext_dynfunc, ext_dispatcher,
                ext_helperlib, ext_typeconv,
                ext_npyufunc_ufunc, ext_npyufunc_workqueue, ext_mviewbuf,
                ext_nrt_python, ext_jitclass_box]

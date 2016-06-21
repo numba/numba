@@ -1262,3 +1262,8 @@ Define bridge for all math functions
  */
 
 #include "_lapack.c"
+
+/*
+ * Numpy C math function exports
+ */
+#include "_npymath_exports.c"

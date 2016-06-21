@@ -352,8 +352,8 @@ def np_real_logaddexp_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.logaddexpf',
-        types.float64: 'numba.npymath.logaddexp',
+        types.float32: 'numba_npymath_logaddexpf',
+        types.float64: 'numba_npymath_logaddexp',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -366,8 +366,8 @@ def np_real_logaddexp2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.logaddexp2f',
-        types.float64: 'numba.npymath.logaddexp2',
+        types.float32: 'numba_npymath_logaddexp2f',
+        types.float64: 'numba_npymath_logaddexp2',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -459,8 +459,8 @@ def np_complex_power_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
     dispatch_table = {
-        types.complex64: 'numba.npymath.cpowf',
-        types.complex128: 'numba.npymath.cpow',
+        types.complex64: 'numba_npymath_cpowf',
+        types.complex128: 'numba_npymath_cpow',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -531,8 +531,8 @@ def np_real_exp_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.expf',
-        types.float64: 'numba.npymath.exp',
+        types.float32: 'numba_npymath_expf',
+        types.float64: 'numba_npymath_exp',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -543,8 +543,8 @@ def np_complex_exp_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.complex64: 'numba.npymath.cexpf',
-        types.complex128: 'numba.npymath.cexp',
+        types.complex64: 'numba_npymath_cexpf',
+        types.complex128: 'numba_npymath_cexp',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -557,8 +557,8 @@ def np_real_exp2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.exp2f',
-        types.float64: 'numba.npymath.exp2',
+        types.float32: 'numba_npymath_exp2f',
+        types.float64: 'numba_npymath_exp2',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -584,8 +584,8 @@ def np_real_log_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.logf',
-        types.float64: 'numba.npymath.log',
+        types.float32: 'numba_npymath_logf',
+        types.float64: 'numba_npymath_log',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -596,8 +596,8 @@ def np_complex_log_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.complex64: 'numba.npymath.clogf',
-        types.complex128: 'numba.npymath.clog',
+        types.complex64: 'numba_npymath_clogf',
+        types.complex128: 'numba_npymath_clog',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -610,8 +610,8 @@ def np_real_log2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.log2f',
-        types.float64: 'numba.npymath.log2',
+        types.float32: 'numba_npymath_log2f',
+        types.float64: 'numba_npymath_log2',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -637,8 +637,8 @@ def np_real_log10_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.log10f',
-        types.float64: 'numba.npymath.log10',
+        types.float32: 'numba_npymath_log10f',
+        types.float64: 'numba_npymath_log10',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -665,8 +665,8 @@ def np_real_expm1_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.expm1f',
-        types.float64: 'numba.npymath.expm1',
+        types.float32: 'numba_npymath_expm1f',
+        types.float64: 'numba_npymath_expm1',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -700,8 +700,8 @@ def np_real_log1p_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.log1pf',
-        types.float64: 'numba.npymath.log1p',
+        types.float32: 'numba_npymath_log1pf',
+        types.float64: 'numba_npymath_log1p',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -736,8 +736,8 @@ def np_real_sqrt_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.sqrtf',
-        types.float64: 'numba.npymath.sqrt',
+        types.float32: 'numba_npymath_sqrtf',
+        types.float64: 'numba_npymath_sqrt',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -746,8 +746,8 @@ def np_real_sqrt_impl(context, builder, sig, args):
 
 def np_complex_sqrt_impl(context, builder, sig, args):
     dispatch_table = {
-        types.complex64: 'numba.npymath.csqrtf',
-        types.complex128: 'numba.npymath.csqrt',
+        types.complex64: 'numba_npymath_csqrtf',
+        types.complex128: 'numba_npymath_csqrt',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -842,8 +842,8 @@ def np_real_sin_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.sinf',
-        types.float64: 'numba.npymath.sin',
+        types.float32: 'numba_npymath_sinf',
+        types.float64: 'numba_npymath_sin',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -854,8 +854,8 @@ def np_complex_sin_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.complex64: 'numba.npymath.csinf',
-        types.complex128: 'numba.npymath.csin',
+        types.complex64: 'numba_npymath_csinf',
+        types.complex128: 'numba_npymath_csin',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -869,8 +869,8 @@ def np_real_cos_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.cosf',
-        types.float64: 'numba.npymath.cos',
+        types.float32: 'numba_npymath_cosf',
+        types.float64: 'numba_npymath_cos',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -881,8 +881,8 @@ def np_complex_cos_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.complex64: 'numba.npymath.ccosf',
-        types.complex128: 'numba.npymath.ccos',
+        types.complex64: 'numba_npymath_ccosf',
+        types.complex128: 'numba_npymath_ccos',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -896,8 +896,8 @@ def np_real_tan_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.tanf',
-        types.float64: 'numba.npymath.tan',
+        types.float32: 'numba_npymath_tanf',
+        types.float64: 'numba_npymath_tan',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -949,8 +949,8 @@ def np_real_asin_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.asinf',
-        types.float64: 'numba.npymath.asin',
+        types.float32: 'numba_npymath_asinf',
+        types.float64: 'numba_npymath_asin',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -1047,8 +1047,8 @@ def np_real_acos_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.acosf',
-        types.float64: 'numba.npymath.acos',
+        types.float32: 'numba_npymath_acosf',
+        types.float64: 'numba_npymath_acos',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -1062,8 +1062,8 @@ def np_real_atan_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.atanf',
-        types.float64: 'numba.npymath.atan',
+        types.float32: 'numba_npymath_atanf',
+        types.float64: 'numba_npymath_atan',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -1131,8 +1131,8 @@ def np_real_atan2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.atan2f',
-        types.float64: 'numba.npymath.atan2',
+        types.float32: 'numba_npymath_atan2f',
+        types.float64: 'numba_npymath_atan2',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -1146,8 +1146,8 @@ def np_real_hypot_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.hypotf',
-        types.float64: 'numba.npymath.hypot',
+        types.float32: 'numba_npymath_hypotf',
+        types.float64: 'numba_npymath_hypot',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -1161,8 +1161,8 @@ def np_real_sinh_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.sinhf',
-        types.float64: 'numba.npymath.sinh',
+        types.float32: 'numba_npymath_sinhf',
+        types.float64: 'numba_npymath_sinh',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -1201,8 +1201,8 @@ def np_real_cosh_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.coshf',
-        types.float64: 'numba.npymath.cosh',
+        types.float32: 'numba_npymath_coshf',
+        types.float64: 'numba_npymath_cosh',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -1240,8 +1240,8 @@ def np_real_tanh_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.tanhf',
-        types.float64: 'numba.npymath.tanh',
+        types.float32: 'numba_npymath_tanhf',
+        types.float64: 'numba_npymath_tanh',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -1293,8 +1293,8 @@ def np_real_asinh_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.asinhf',
-        types.float64: 'numba.npymath.asinh',
+        types.float32: 'numba_npymath_asinhf',
+        types.float64: 'numba_npymath_asinh',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -1359,8 +1359,8 @@ def np_real_acosh_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.acoshf',
-        types.float64: 'numba.npymath.acosh',
+        types.float32: 'numba_npymath_acoshf',
+        types.float64: 'numba_npymath_acosh',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -1401,8 +1401,8 @@ def np_real_atanh_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.atanhf',
-        types.float64: 'numba.npymath.atanh',
+        types.float32: 'numba_npymath_atanhf',
+        types.float64: 'numba_npymath_atanh',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -1950,8 +1950,8 @@ def np_real_signbit_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.signbitf',
-        types.float64: 'numba.npymath.signbit',
+        types.float32: 'numba_npymath_signbitf',
+        types.float64: 'numba_npymath_signbit',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -1967,8 +1967,8 @@ def np_real_nextafter_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.nextafterf',
-        types.float64: 'numba.npymath.nextafter',
+        types.float32: 'numba_npymath_nextafterf',
+        types.float64: 'numba_npymath_nextafter',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -1978,8 +1978,8 @@ def np_real_spacing_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'numba.npymath.spacingf',
-        types.float64: 'numba.npymath.spacing',
+        types.float32: 'numba_npymath_spacingf',
+        types.float64: 'numba_npymath_spacing',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -1992,8 +1992,8 @@ def np_real_ldexp_impl(context, builder, sig, args):
     # an 'i' or an 'l'.
 
     dispatch_table = {
-        types.float32: 'numba.npymath.ldexpf',
-        types.float64: 'numba.npymath.ldexp',
+        types.float32: 'numba_npymath_ldexpf',
+        types.float64: 'numba_npymath_ldexp',
     }
 
     # the functions expect the second argument to be have a C int type

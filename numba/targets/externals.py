@@ -8,7 +8,7 @@ from llvmlite import ir
 import llvmlite.binding as ll
 
 from numba import utils
-from numba import _helperlib, _npymath_exports
+from numba import _helperlib
 from . import intrinsics
 
 
@@ -125,8 +125,6 @@ class _ExternalMathFunctions(_Installer):
     def _do_install(self, context):
         is32bit = utils.MACHINE_BITS == 32
         c_helpers = _helperlib.c_helpers
-        for name in ['cpow', 'sdiv', 'srem', 'udiv', 'urem']:
-            ll.add_symbol("numba.math.%s" % name, c_helpers[name])
 
         if sys.platform.startswith('win32') and is32bit:
             # For Windows XP _ftol2 is not defined, we will just use
@@ -155,16 +153,4 @@ class _ExternalMathFunctions(_Installer):
             ll.add_symbol(fname, c_helpers[fname])
 
 
-class _ExternalNumpyFunctions(_Installer):
-    """
-    Map Numpy's C math functions into the LLVM execution environment.
-    """
-
-    def _do_install(self, context):
-        # add the symbols for numpy math to the execution environment.
-        for sym in _npymath_exports.symbols:
-            ll.add_symbol(*sym)
-
-
 c_math_functions = _ExternalMathFunctions()
-c_numpy_functions = _ExternalNumpyFunctions()

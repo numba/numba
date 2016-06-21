@@ -1,8 +1,5 @@
 /*
- * This is a sample module exposing numpy math functions needed by numba.
- *
- * The module unique content will be a property containing a vector of tuples.
- * Each tuple will hold (symbol_name, function_pointer).
+ * This file contains exports of Numpy math functions needed by numba.
  */
 
 
@@ -31,13 +28,13 @@
 /* signbit is actually a macro, two versions will be exported as to let the
    macro do whatever magic it does for floats and for doubles */
 
-npy_bool
+static npy_bool
 ufunc_signbitf(npy_float a)
 {
     return npy_signbit(a) != 0;
 }
 
-npy_bool
+static npy_bool
 ufunc_signbit(npy_double a)
 {
     return npy_signbit(a) != 0;
@@ -51,7 +48,7 @@ ufunc_signbit(npy_double a)
    funcs.inc.src.
 */
 
-void
+static void
 ufunc_cpowf(npy_cfloat *dst, npy_cfloat *a, npy_cfloat *b)
 {
     float br = npy_crealf(*b);
@@ -93,7 +90,7 @@ ufunc_cpowf(npy_cfloat *dst, npy_cfloat *a, npy_cfloat *b)
 }
 
 
-void
+static void
 ufunc_cpow(npy_cdouble *dst, npy_cdouble *a, npy_cdouble *b)
 {
     double br = npy_creal(*b);
@@ -165,22 +162,22 @@ NUMBA_UNARY_FUNC_WRAP(ccosf, npy_cfloat);
 NUMBA_UNARY_FUNC_WRAP(ccos, npy_cdouble);
 
 
-struct npy_math_entry {
+struct npymath_entry {
     const char* name;
     void* func;
 };
 
 
-#define NPYMATH_SYMBOL_EXPLICIT(name,function) \
-    { "numba.npymath." #name, (void*) function }
+#define NPYMATH_SYMBOL_EXPLICIT(name, function) \
+    { "npymath_" #name, (void*) function }
 
 #define NPYMATH_SYMBOL(name) \
-    { "numba.npymath." #name, (void*) npy_##name }
+    { "npymath_" #name, (void*) npy_##name }
 
 #define NPYMATH_SYMBOL_WRAPPED(name) \
-    { "numba.npymath." #name, (void*) npy_##name##_wrapped }
+    { "npymath_" #name, (void*) npy_##name##_wrapped }
 
-struct npy_math_entry exports[] = {
+static struct npymath_entry npymath_exports[] = {
     /* double functions */
     NPYMATH_SYMBOL(sin),
     NPYMATH_SYMBOL(cos),
@@ -220,36 +217,39 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL_EXPLICIT(ldexp, ldexp),
     NPYMATH_SYMBOL_EXPLICIT(frexp, frexp),
     NPYMATH_SYMBOL_EXPLICIT(signbit, ufunc_signbit),
+
     NPYMATH_SYMBOL(modf),
 
     /* float functions */
-    NPYMATH_SYMBOL(powf),
-    NPYMATH_SYMBOL(expf),
-    NPYMATH_SYMBOL(exp2f),
-    NPYMATH_SYMBOL(logf),
-    NPYMATH_SYMBOL(log2f),
-    NPYMATH_SYMBOL(log10f),
-    NPYMATH_SYMBOL(expm1f),
-    NPYMATH_SYMBOL(log1pf),
     NPYMATH_SYMBOL(sinf),
     NPYMATH_SYMBOL(cosf),
     NPYMATH_SYMBOL(tanf),
-    NPYMATH_SYMBOL(atan2f),
-    NPYMATH_SYMBOL(hypotf),
-    NPYMATH_SYMBOL(sqrtf),
-    NPYMATH_SYMBOL(sinhf),
-    NPYMATH_SYMBOL(coshf),
     NPYMATH_SYMBOL(asinf),
     NPYMATH_SYMBOL(acosf),
     NPYMATH_SYMBOL(atanf),
-    NPYMATH_SYMBOL(atan2f),
-    NPYMATH_SYMBOL(hypotf),
+
     NPYMATH_SYMBOL(sinhf),
     NPYMATH_SYMBOL(coshf),
     NPYMATH_SYMBOL(tanhf),
     NPYMATH_SYMBOL(asinhf),
     NPYMATH_SYMBOL(acoshf),
     NPYMATH_SYMBOL(atanhf),
+    NPYMATH_SYMBOL(hypotf),
+
+    NPYMATH_SYMBOL(expf),
+    NPYMATH_SYMBOL(exp2f),
+    NPYMATH_SYMBOL(expm1f),
+
+    NPYMATH_SYMBOL(logf),
+    NPYMATH_SYMBOL(log2f),
+    NPYMATH_SYMBOL(log10f),
+    NPYMATH_SYMBOL(log1pf),
+
+    NPYMATH_SYMBOL(powf),
+    NPYMATH_SYMBOL(sqrtf),
+
+    NPYMATH_SYMBOL(atan2f),
+
     NPYMATH_SYMBOL(logaddexpf),
     NPYMATH_SYMBOL(logaddexp2f),
     NPYMATH_SYMBOL(nextafterf),
@@ -262,7 +262,7 @@ struct npy_math_entry exports[] = {
 
     NPYMATH_SYMBOL(modff),
 
-    /* complex functions */
+    /* complex128 functions */
     NPYMATH_SYMBOL_EXPLICIT(cpow, ufunc_cpow),
     NPYMATH_SYMBOL_WRAPPED(cexp),
     NPYMATH_SYMBOL_WRAPPED(clog),
@@ -270,7 +270,7 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL_WRAPPED(csin),
     NPYMATH_SYMBOL_WRAPPED(ccos),
 
-    /* complex float functions */
+    /* complex64 functions */
     NPYMATH_SYMBOL_EXPLICIT(cpowf, ufunc_cpowf),
     NPYMATH_SYMBOL_WRAPPED(cexpf),
     NPYMATH_SYMBOL_WRAPPED(clogf),
@@ -278,38 +278,6 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL_WRAPPED(csinf),
     NPYMATH_SYMBOL_WRAPPED(ccosf),
 };
-#undef NPY_MATH_SYMBOL
-
-PyObject*
-create_symbol_list(void)
-{
-    /*
-     * note: reference stealing at its best
-     * returns a PyList with a tuple for each symbol. The PyList has one reference.
-     */
-    size_t count = sizeof(exports) / sizeof(exports[0]);
-    PyObject* pylist = PyList_New(count);
-    size_t i;
-
-    for (i = 0; i < count; ++i) {
-        /* create the tuple */
-        PyObject* ptr = PyLong_FromVoidPtr(exports[i].func);
-        PyObject* tuple = Py_BuildValue("(s,O)", exports[i].name, ptr);
-        PyList_SET_ITEM(pylist, i, tuple);
-        Py_XDECREF(ptr);
-    }
-
-    return pylist;
-}
-
-MOD_INIT(_npymath_exports) {
-    PyObject *module;
-    MOD_DEF(module, "_npymath_exports", "No docs", NULL)
-    if (!module) {
-        return MOD_ERROR_VAL;
-    }
-
-    PyModule_AddObject(module, "symbols", create_symbol_list());
-
-    return MOD_SUCCESS_VAL(module);
-}
+#undef NPYMATH_SYMBOL
+#undef NPYMATH_SYMBOL_EXPLICIT
+#undef NPYMATH_SYMBOL_WRAPPED

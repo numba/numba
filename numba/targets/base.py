@@ -157,10 +157,10 @@ def _load_global_helpers():
     ll.add_symbol("_Py_NoneStruct", id(None))
 
     # Add C helper functions
-    for c_helpers in (_helperlib.c_helpers, _dynfunc.c_helpers):
-        for py_name in c_helpers:
+    for c_helpers in (_helperlib.c_helpers, _dynfunc.c_helpers,
+                      _helperlib.npymath_exports):
+        for py_name, c_address in c_helpers.items():
             c_name = "numba_" + py_name
-            c_address = c_helpers[py_name]
             ll.add_symbol(c_name, c_address)
 
     # Add all built-in exception classes
