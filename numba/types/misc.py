@@ -306,7 +306,7 @@ class SliceType(Type):
         return self.members
 
 
-class ClassInstanceType(UserHashable, UserEq, UserLt, UserGt):
+class ClassInstanceType(UserHashable, UserEq, UserLt, UserGt, UserLe, UserGe):
     """
     The type of a jitted class *instance*.  It will be the return-type
     of the constructor of the class.
@@ -399,6 +399,25 @@ class ClassInstanceType(UserHashable, UserEq, UserLt, UserGt):
         if gt is None:
             return NotImplemented
         return self._get_user_equality_fn(context, sig, gt)
+
+    def supports_le(self):
+        return '__le__' in self.methods
+
+    def get_user_le(self, context, sig):
+        le = self.jitmethods.get('__le__')
+        if le is None:
+            return NotImplemented
+        return self._get_user_equality_fn(context, sig, le)
+
+    def supports_ge(self):
+        return '__ge__' in self.methods
+
+    def get_user_ge(self, context, sig):
+        ge = self.jitmethods.get('__ge__')
+        if ge is None:
+            return NotImplemented
+        return self._get_user_equality_fn(context, sig, ge)
+
 
 class ClassType(Callable, Opaque):
     """

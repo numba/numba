@@ -916,3 +916,23 @@ class UserCmpGtBase(AbstractTemplate):
         [lhs, rhs] = args
         if isinstance(lhs, types.UserGt) or isinstance(rhs, types.UserLt):
             return signature(types.boolean, lhs, rhs)
+
+
+@infer
+class UserCmpLeBase(AbstractTemplate):
+    key = '<='
+
+    def generic(self, args, kws):
+        [lhs, rhs] = args
+        if isinstance(lhs, types.UserLe) or isinstance(rhs, types.UserGe):
+            return signature(types.boolean, lhs, rhs)
+
+
+@infer
+class UserCmpGeBase(AbstractTemplate):
+    key = '>='
+
+    def generic(self, args, kws):
+        [lhs, rhs] = args
+        if isinstance(lhs, types.UserGe) or isinstance(rhs, types.UserLe):
+            return signature(types.boolean, lhs, rhs)

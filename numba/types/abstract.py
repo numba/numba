@@ -339,6 +339,57 @@ class UserGt(Type):
             return issubclass(type(instance), cls)
 
 
+
+class Le(Type):
+    """
+    Base class for Le types.    
+    """
+    @classmethod
+    def instancecheck(cls, instance):
+        return ((cls is Le and isinstance(instance, UserLe)) or 
+                issubclass(type(instance), cls))
+
+
+class UserLe(Type):
+    def supports_le(self):
+        raise NotImplementedError
+
+    def get_user_le(self, context, sig):
+        raise NotImplementedError
+
+    @classmethod
+    def instancecheck(cls, instance):
+        if cls is UserLe and issubclass(type(instance), UserLe):
+            return instance.supports_le()
+        else:
+            return issubclass(type(instance), cls)
+
+
+class Ge(Type):
+    """
+    Base class for Ge types.    
+    """
+    @classmethod
+    def instancecheck(cls, instance):
+        return ((cls is Ge and isinstance(instance, UserGe)) or 
+                issubclass(type(instance), cls))
+
+
+class UserGe(Type):
+    def supports_ge(self):
+        raise NotImplementedError
+
+    def get_user_ge(self, context, sig):
+        raise NotImplementedError
+
+    @classmethod
+    def instancecheck(cls, instance):
+        if cls is UserGe and issubclass(type(instance), UserGe):
+            return instance.supports_ge()
+        else:
+            return issubclass(type(instance), cls)
+
+
 class SimpleScalar(Hashable, Eq):
     """
     A simple scalar type is allowed to coerce with other arguments during a call

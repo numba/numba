@@ -441,6 +441,11 @@ def _user_ordered_cmp(forward_type, reflected_type,
 user_lt = _user_ordered_cmp(types.UserLt, types.UserGt, "<", ">", 'get_user_lt')
 user_gt = _user_ordered_cmp(types.UserGt, types.UserLt, ">", "<", 'get_user_gt')
 
+user_le = _user_ordered_cmp(types.UserLe, types.UserGe, "<=", ">=", 
+                            'get_user_le')
+user_ge = _user_ordered_cmp(types.UserGe, types.UserLe, ">=", "<=", 
+                            'get_user_ge')
+
 
 @lower_builtin(len, types.ConstSized)
 def constsized_len(context, builder, sig, args):

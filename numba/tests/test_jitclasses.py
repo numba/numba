@@ -932,5 +932,108 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
         self.assertEqual(ai.use_count, 4)
 
 
+    def test_le(self):
+        spec = [('_value', int32),
+                ('use_count', int32)]
+
+        @jitclass(spec)
+        class Apple(object):
+            def __init__(self, value):
+                self._value = value
+                self.use_count = 0
+
+            def __le__(self, other):
+                self.use_count += 1
+                return self._value <= other._value
+    
+        @jitclass(spec)
+        class Berry(object):
+            def __init__(self, value):
+                self._value = value
+
+
+        ai = Apple(123)
+        bi = Berry(124)
+
+        self.assertTrue(isinstance(typeof(ai), types.UserLe))
+        self.assertTrue(isinstance(typeof(ai), types.Le))
+
+        self.assertFalse(isinstance(typeof(bi), types.UserLe))
+        self.assertFalse(isinstance(typeof(bi), types.Le))
+
+        self.assertEqual(ai.use_count, 0)
+        self.assertTrue(ai <= bi)
+        self.assertEqual(ai.use_count, 1)
+        self.assertTrue(bi >= ai)
+        self.assertEqual(ai.use_count, 2)
+
+        @njit
+        def check_lessequal(x, y):
+            return x <= y
+
+        self.assertTrue(check_lessequal(ai, bi))
+        self.assertEqual(ai.use_count, 3)
+
+        # test reflection
+        # __ge__ is the reflection of __le__
+        @njit
+        def check_greaterequal(x, y):
+            return x >= y
+
+        self.assertTrue(check_greaterequal(bi, ai))
+        self.assertEqual(ai.use_count, 4)
+
+    def test_ge(self):
+        spec = [('_value', int32),
+                ('use_count', int32)]
+
+        @jitclass(spec)
+        class Apple(object):
+            def __init__(self, value):
+                self._value = value
+                self.use_count = 0
+
+            def __ge__(self, other):
+                self.use_count += 1
+                return self._value >= other._value
+    
+        @jitclass(spec)
+        class Berry(object):
+            def __init__(self, value):
+                self._value = value
+
+
+        ai = Apple(123)
+        bi = Berry(122)
+
+        self.assertTrue(isinstance(typeof(ai), types.UserGe))
+        self.assertTrue(isinstance(typeof(ai), types.Ge))
+
+        self.assertFalse(isinstance(typeof(bi), types.UserGe))
+        self.assertFalse(isinstance(typeof(bi), types.Ge))
+
+        self.assertEqual(ai.use_count, 0)
+        self.assertTrue(ai >= bi)
+        self.assertEqual(ai.use_count, 1)
+        self.assertTrue(bi <= ai)
+        self.assertEqual(ai.use_count, 2)
+
+        @njit
+        def check_greaterequal(x, y):
+            return x >= y
+
+        self.assertTrue(check_greaterequal(ai, bi))
+        self.assertEqual(ai.use_count, 3)
+
+        # test reflection
+        # __le__ is the reflection of __ge__
+        @njit
+        def check_lessequal(x, y):
+            return x <= y
+
+        self.assertTrue(check_lessequal(bi, ai))
+        self.assertEqual(ai.use_count, 4)
+
+
 if __name__ == '__main__':
     unittest.main()

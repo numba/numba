@@ -71,7 +71,7 @@ _ignored_special_methods = frozenset(['__init__'])
 
 
 _supported_special_methods = frozenset(['__hash__', '__eq__', '__ne__',
-                                        '__lt__', '__gt__'])
+                                        '__lt__', '__gt__', '__le__', '__ge__'])
 
 
 
