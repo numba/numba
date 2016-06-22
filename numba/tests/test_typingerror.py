@@ -127,7 +127,7 @@ class TestArgumentTypingError(unittest.TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc(1, a, a)
         expected = textwrap.dedent("""\
-            This error may be caused by the following argument(s):
+            This error may have been caused by the following argument(s):
             - argument 1: Unsupported array dtype: {0}
             - argument 2: Unsupported array dtype: {0}"""
             ).format(a.dtype)
@@ -139,7 +139,7 @@ class TestArgumentTypingError(unittest.TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc(1, foo, 1)
         expected = textwrap.dedent("""\
-            This error may be caused by the following argument(s):
+            This error may have been caused by the following argument(s):
             - argument 1: cannot determine Numba type of value <Foo instance>"""
             )
         self.assertIn(expected, str(raises.exception))
