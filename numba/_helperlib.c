@@ -476,7 +476,7 @@ numba_cpowf(npy_cfloat *a, npy_cfloat *b, npy_cfloat *out) {
     _b.real = npy_crealf(*b);
     _b.imag = npy_cimagf(*b);
     numba_cpow(&_a, &_b, &_out);
-    *out = npy_cpackf(_out.real, _out.imag);
+    *out = npy_cpackf((float) _out.real, (float) _out.imag);
 }
 
 /* C99 math functions: redirect to system implementations

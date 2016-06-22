@@ -1397,6 +1397,7 @@ class _LoopTypesTester(TestCase):
     _skip_types = 'OegG'
 
     _ulps = {('arccos', 'F'): 2,
+             ('arcsin', 'F'): 4,
              ('tanh', 'F'): 2,
              }
 
