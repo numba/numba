@@ -897,3 +897,22 @@ class UserCmpEq(UserCmpEqualityBase):
 @infer
 class UserCmpNe(UserCmpEqualityBase):
     key = '!='
+
+
+@infer
+class UserCmpLtBase(AbstractTemplate):
+    key = '<'
+
+    def generic(self, args, kws):
+        [lhs, rhs] = args
+        if isinstance(lhs, types.UserLt) or isinstance(rhs, types.UserGt):
+            return signature(types.boolean, lhs, rhs)
+
+@infer
+class UserCmpGtBase(AbstractTemplate):
+    key = '>'
+
+    def generic(self, args, kws):
+        [lhs, rhs] = args
+        if isinstance(lhs, types.UserGt) or isinstance(rhs, types.UserLt):
+            return signature(types.boolean, lhs, rhs)

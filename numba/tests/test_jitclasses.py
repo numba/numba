@@ -784,7 +784,6 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
         self.assertTrue(check_equality(bi, ai))
         self.assertEqual(ai.use_count, 4)
 
-
     def test_reflected_ne(self):
         spec = [('_value', int32),
                 ('use_count', int32)]
@@ -828,6 +827,108 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
         self.assertEqual(ai.use_count, 3)
         
         self.assertTrue(check_inequality(bi, ai))
+        self.assertEqual(ai.use_count, 4)
+
+    def test_lt(self):
+        spec = [('_value', int32),
+                ('use_count', int32)]
+
+        @jitclass(spec)
+        class Apple(object):
+            def __init__(self, value):
+                self._value = value
+                self.use_count = 0
+
+            def __lt__(self, other):
+                self.use_count += 1
+                return self._value < other._value
+    
+        @jitclass(spec)
+        class Berry(object):
+            def __init__(self, value):
+                self._value = value
+
+
+        ai = Apple(123)
+        bi = Berry(124)
+
+        self.assertTrue(isinstance(typeof(ai), types.UserLt))
+        self.assertTrue(isinstance(typeof(ai), types.Lt))
+
+        self.assertFalse(isinstance(typeof(bi), types.UserLt))
+        self.assertFalse(isinstance(typeof(bi), types.Lt))
+
+        self.assertEqual(ai.use_count, 0)
+        self.assertTrue(ai < bi)
+        self.assertEqual(ai.use_count, 1)
+        self.assertTrue(bi > ai)
+        self.assertEqual(ai.use_count, 2)
+
+        @njit
+        def check_lessthan(x, y):
+            return x < y
+
+        self.assertTrue(check_lessthan(ai, bi))
+        self.assertEqual(ai.use_count, 3)
+
+        # test reflection
+        # __gt__ is the reflection of __lt__
+        @njit
+        def check_greaterthan(x, y):
+            return x > y
+
+        self.assertTrue(check_greaterthan(bi, ai))
+        self.assertEqual(ai.use_count, 4)
+
+    def test_gt(self):
+        spec = [('_value', int32),
+                ('use_count', int32)]
+
+        @jitclass(spec)
+        class Apple(object):
+            def __init__(self, value):
+                self._value = value
+                self.use_count = 0
+
+            def __gt__(self, other):
+                self.use_count += 1
+                return self._value > other._value
+    
+        @jitclass(spec)
+        class Berry(object):
+            def __init__(self, value):
+                self._value = value
+
+
+        ai = Apple(123)
+        bi = Berry(122)
+
+        self.assertTrue(isinstance(typeof(ai), types.UserGt))
+        self.assertTrue(isinstance(typeof(ai), types.Gt))
+
+        self.assertFalse(isinstance(typeof(bi), types.UserGt))
+        self.assertFalse(isinstance(typeof(bi), types.Gt))
+
+        self.assertEqual(ai.use_count, 0)
+        self.assertTrue(ai > bi)
+        self.assertEqual(ai.use_count, 1)
+        self.assertTrue(bi < ai)
+        self.assertEqual(ai.use_count, 2)
+
+        @njit
+        def check_greaterthan(x, y):
+            return x > y
+
+        self.assertTrue(check_greaterthan(ai, bi))
+        self.assertEqual(ai.use_count, 3)
+
+        # test reflection
+        # __lt__ is the reflection of __gt__
+        @njit
+        def check_lessthan(x, y):
+            return x < y
+
+        self.assertTrue(check_lessthan(bi, ai))
         self.assertEqual(ai.use_count, 4)
 
 

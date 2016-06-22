@@ -410,6 +410,45 @@ def user_ne(context, builder, sig, args):
     return _reflectable_equality(context, builder, sig, args, inequality)
 
 
+@lower_builtin("<", types.UserLt, types.Any)
+@lower_builtin("<", types.Any, types.UserGt)
+def user_lt(context, builder, sig, args):
+    [self_type, other_type] = sig.args[:2]
+    if isinstance(self_type, types.UserLt):
+        self_type = sig.args[0]
+        lt_impl = self_type.get_user_lt(context, sig)
+        call, callsig = lt_impl
+        out = call(builder, args)
+        out = context.cast(builder, out, callsig.return_type, sig.return_type)
+        return impl_ret_new_ref(context, builder, sig.return_type, out)
+    else:
+        # reflected version
+        [this, other] = args
+        reflected_sig = typing.signature(sig.return_type, other_type, self_type)
+        gt_impl = context.get_function(">", reflected_sig)
+        out = gt_impl(builder, [other, this])
+        return impl_ret_new_ref(context, builder, sig.return_type, out)
+
+
+@lower_builtin(">", types.UserGt, types.Any)
+@lower_builtin(">", types.Any, types.UserLt)  # reflection
+def user_gt(context, builder, sig, args):
+    [self_type, other_type] = sig.args[:2]
+    if isinstance(self_type, types.UserGt):
+        gt_impl = self_type.get_user_gt(context, sig)
+        call, callsig = gt_impl
+        out = call(builder, args)
+        out = context.cast(builder, out, callsig.return_type, sig.return_type)
+        return impl_ret_new_ref(context, builder, sig.return_type, out)
+    else:
+        # reflected version
+        [this, other] = args
+        reflected_sig = typing.signature(sig.return_type, other_type, self_type)
+        lt_impl = context.get_function("<", reflected_sig)
+        out = lt_impl(builder, [other, this])
+        return impl_ret_new_ref(context, builder, sig.return_type, out)
+
+
 @lower_builtin(len, types.ConstSized)
 def constsized_len(context, builder, sig, args):
     [ty] = sig.args

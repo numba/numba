@@ -255,10 +255,11 @@ class UserHashable(Type):
 class Eq(Type):
     """
     Base class for Eq types.
-    Subclass must implement:
-    
-    - at least __eq__
-    - and __ne__ optionally
+    Subclass must provide ``__eq__`` or ``__ne__``.
+
+    If __eq__ is implemented and not __ne__, python semantic provides a 
+    default __ne__ implementation that uses __eq__.
+    If __ne__ is implemented and not __eq__, __eq__ fallbacks to `is`.    
     """
     @classmethod
     def instancecheck(cls, instance):
@@ -286,7 +287,57 @@ class UserEq(Type):
             return instance.supports_eq()
         else:
             return issubclass(type(instance), cls)
-    
+
+
+class Lt(Type):
+    """
+    Base class for Lt types.    
+    """
+    @classmethod
+    def instancecheck(cls, instance):
+        return ((cls is Lt and isinstance(instance, UserLt)) or 
+                issubclass(type(instance), cls))
+
+
+class UserLt(Type):
+    def supports_lt(self):
+        raise NotImplementedError
+
+    def get_user_lt(self, context, sig):
+        raise NotImplementedError
+
+    @classmethod
+    def instancecheck(cls, instance):
+        if cls is UserLt and issubclass(type(instance), UserLt):
+            return instance.supports_lt()
+        else:
+            return issubclass(type(instance), cls)
+
+
+class Gt(Type):
+    """
+    Base class for Gt types.    
+    """
+    @classmethod
+    def instancecheck(cls, instance):
+        return ((cls is Gt and isinstance(instance, UserGt)) or 
+                issubclass(type(instance), cls))
+
+
+class UserGt(Type):
+    def supports_gt(self):
+        raise NotImplementedError
+
+    def get_user_gt(self, context, sig):
+        raise NotImplementedError
+
+    @classmethod
+    def instancecheck(cls, instance):
+        if cls is UserGt and issubclass(type(instance), UserGt):
+            return instance.supports_gt()
+        else:
+            return issubclass(type(instance), cls)
+
 
 class SimpleScalar(Hashable, Eq):
     """

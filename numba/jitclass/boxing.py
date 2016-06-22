@@ -67,13 +67,18 @@ def _generate_method(name, func):
 _cache_specialized_box = {}
 
 
-_ignored_special_methods = set(['__init__'])
+_ignored_special_methods = frozenset(['__init__'])
+
+
+_supported_special_methods = frozenset(['__hash__', '__eq__', '__ne__',
+                                        '__lt__', '__gt__'])
+
 
 
 def _handle_special_methods(dct, name, func):
     if name in _ignored_special_methods:
         return
-    elif name in ['__hash__', '__eq__', '__ne__']:
+    elif name in _supported_special_methods:
         dct[name] = _generate_method(name, func)
     else:
         msg = "unsupported special method: {0}".format(name)
