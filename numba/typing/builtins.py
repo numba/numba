@@ -902,8 +902,8 @@ class CmpNe(AbstractTemplate):
 
     def generic(self, args, kws):
         [lhs, rhs] = args
-        if isinstance(lhs, types.Ne) or isinstance(rhs, types.Ne):
-            return signature(types.boolean, lhs, rhs)
+        # use the inequality function from the type; or fallback to `is not`
+        return signature(types.boolean, lhs, rhs)
 
 
 @infer

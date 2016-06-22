@@ -17,6 +17,7 @@ from .support import TestCase, MemoryLeakMixin, tag
 from numba.jitclass import _box
 from numba.runtime.nrt import MemInfo
 from numba.six import assertRegex
+from numba.utils import IS_PY3
 
 
 def _get_meminfo(box):
@@ -719,12 +720,12 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
         self.assertTrue(isinstance(myotherclass_insttype, types.UserEq))
         self.assertTrue(isinstance(myotherclass_insttype, types.Eq))
 
-        self.assertTrue(isinstance(myclass_insttype, types.UserNe))
-        self.assertTrue(isinstance(myclass_insttype, types.Ne))
+        self.assertEqual(isinstance(myclass_insttype, types.UserNe), IS_PY3)
+        self.assertEqual(isinstance(myclass_insttype, types.Ne), IS_PY3)
 
-        self.assertTrue(isinstance(myotherclass_insttype, types.UserNe))
-        self.assertTrue(isinstance(myotherclass_insttype, types.Ne))
-
+        self.assertEqual(isinstance(myotherclass_insttype, types.UserNe), IS_PY3)
+        self.assertEqual(isinstance(myotherclass_insttype, types.Ne), IS_PY3)
+    
         ai = MyClass(value=123)
         bi = MyClass(value=123)
         ci = MyClass(value=321)
@@ -738,13 +739,7 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
         self.assertEqual(ai, bi)
         self.assertEqual(ai.use_count, 1)
 
-        self.assertNotEqual(ai, ci)  # __ne__ fallbacks to __eq__ 
-        self.assertEqual(ai.use_count, 2)
         # notice the asymmetric __eq__ due to the instancecheck in MyClass
-        self.assertNotEqual(ai, di)
-        self.assertEqual(ai.use_count, 3)
-        self.assertEqual(di.use_count, 0)
-
         self.assertEqual(di, ai)
         self.assertEqual(di.use_count, 1)
 
@@ -753,14 +748,14 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
             return a == b
 
         self.assertTrue(check_equality(ai, bi))
-        self.assertEqual(ai.use_count, 4)
+        self.assertEqual(ai.use_count, 2)
 
         self.assertFalse(check_equality(ai, ci))
-        self.assertEqual(ai.use_count, 5)
+        self.assertEqual(ai.use_count, 3)
 
         # notice the asymmetric __eq__ due to the instancecheck in MyClass
         self.assertFalse(check_equality(ai, di))
-        self.assertEqual(ai.use_count, 6)
+        self.assertEqual(ai.use_count, 4)
 
         self.assertTrue(check_equality(di, ai))
         self.assertEqual(di.use_count, 2)
@@ -770,18 +765,26 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
             # not_equal provided via default __eq__
             return a != b
         
-        self.assertFalse(check_inequality(ai, bi))
-        self.assertEqual(ai.use_count, 7)
+        if IS_PY3:
+            # Only python3 have fallbacks to `==`  
+            self.assertFalse(check_inequality(ai, bi))
+            self.assertEqual(ai.use_count, 5)
 
-        self.assertTrue(check_inequality(ai, ci))
-        self.assertEqual(ai.use_count, 8)
+            self.assertTrue(check_inequality(ai, ci))
+            self.assertEqual(ai.use_count, 6)
 
-        # notice the asymmetric __eq__ due to the instancecheck in MyClass
-        self.assertTrue(check_inequality(ai, di))
-        self.assertEqual(ai.use_count, 9)
+            # notice the asymmetric __eq__ due to the instancecheck in MyClass
+            self.assertTrue(check_inequality(ai, di))
+            self.assertEqual(ai.use_count, 7)
 
-        self.assertFalse(check_inequality(di, ai))
-        self.assertEqual(di.use_count, 3)
+            self.assertFalse(check_inequality(di, ai))
+            self.assertEqual(di.use_count, 3)
+        else:
+            with self.assertRaises(errors.LoweringError) as raises:
+                check_inequality(ai, bi)
+
+            self.assertIn("no default `is` implementation", 
+                          str(raises.exception))
 
         self.assertEqual(bi.use_count, 0)
         self.assertEqual(ci.use_count, 0)

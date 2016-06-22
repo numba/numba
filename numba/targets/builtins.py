@@ -62,6 +62,21 @@ def generic_eq(context, builder, sig, args):
     out = is_impl(builder, args)
     return impl_ret_new_ref(context, builder, sig.return_type, out)
 
+
+@lower_builtin('!=', types.Any, types.Any)
+def generic_ne(context, builder, sig, args):
+    """
+    Default implementation for `x != y` that fallback to `is not`
+    """
+    lhs_type, rhs_type = sig.args
+    if isinstance(lhs_type, types.UserEq) or isinstance(rhs_type, types.UserEq):
+        warnings.warn("Possible unintentional usage of default __ne__ on "
+                      "object that implements __eq__", UserWarning)
+
+    is_impl = context.get_function("is not", sig)
+    out = is_impl(builder, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, out)
+
 #-------------------------------------------------------------------------------
 
 @lower_getattr_generic(types.DeferredType)

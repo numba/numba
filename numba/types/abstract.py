@@ -7,7 +7,7 @@ import weakref
 import numpy as np
 
 from ..six import add_metaclass
-from ..utils import cached_property
+from ..utils import cached_property, IS_PY3
 
 
 # Types are added to a global registry (_typecache) in order to assign
@@ -287,14 +287,17 @@ class Ne(Type):
     """
     @classmethod
     def interface_check(cls, instance):
-        return cls.virtual_subclass_check(instance, [UserNe, UserEq])
+        if IS_PY3:
+            return cls.virtual_subclass_check(instance, [UserNe, UserEq])
+        else:
+            return cls.virtual_subclass_check(instance, [UserNe])
 
 
-class Eq(Ne):
+class Eq(Type):
     """
     Base class for Eq types.
     Subclass must provide ``__eq__``
-    Provides ``__ne__`` via inversion of ``__eq__``.
+    In Py3, provides ``__ne__`` via inversion of ``__eq__``.
     
     If __eq__ is implemented and not __ne__, python semantic provides a 
     default __ne__ implementation that uses __eq__.
@@ -337,8 +340,11 @@ class UserNe(Type):
     @classmethod
     def interface_check(cls, instance):
         typ = type(instance)
-        return ((issubclass(typ, UserNe) and instance.supports_ne()) or
-                (issubclass(typ, UserEq) and instance.supports_eq()))
+        if IS_PY3:
+            return ((issubclass(typ, UserNe) and instance.supports_ne()) or
+                    (issubclass(typ, UserEq) and instance.supports_eq()))
+        else:
+            return issubclass(typ, UserNe) and instance.supports_ne()
 
 
 class Lt(Type):
@@ -449,7 +455,7 @@ class UserGe(Type):
         return issubclass(type(instance), cls) and instance.supports_ge()
 
 
-class SimpleScalar(Hashable, Eq, Lt, Gt, Le, Ge):
+class SimpleScalar(Hashable, Eq, Ne, Lt, Gt, Le, Ge):
     """
     A simple scalar type is allowed to coerce with other arguments during a call
     """
