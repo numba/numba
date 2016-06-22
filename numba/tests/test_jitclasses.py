@@ -639,6 +639,21 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
             def __eq__(self, other):
                 return self._value == other._value
 
+        myclass_insttype = MyClass.class_type.instance_type
+        myotherclass_insttype = MyOtherClass.class_type.instance_type
+
+        self.assertTrue(isinstance(myclass_insttype, types.UserEq))
+        self.assertTrue(isinstance(myclass_insttype, types.Eq))
+
+        self.assertTrue(isinstance(myotherclass_insttype, types.UserEq))
+        self.assertTrue(isinstance(myotherclass_insttype, types.Eq))
+
+        self.assertTrue(isinstance(myclass_insttype, types.UserNe))
+        self.assertTrue(isinstance(myclass_insttype, types.Ne))
+
+        self.assertTrue(isinstance(myotherclass_insttype, types.UserNe))
+        self.assertTrue(isinstance(myotherclass_insttype, types.Ne))
+
         ai = MyClass(value=123)
         bi = MyClass(value=123)
         ci = MyClass(value=321)
@@ -670,7 +685,6 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
         self.assertTrue(check_inequality(ai, di))
         self.assertFalse(check_inequality(di, ai))
 
-
     @tag('important')
     def test_ne(self):
         spec = [('_value', int32)]
@@ -694,6 +708,21 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
 
             def __ne__(self, other):
                 return self._value != other._value
+
+        myclass_insttype = MyClass.class_type.instance_type
+        myotherclass_insttype = MyOtherClass.class_type.instance_type
+
+        self.assertTrue(isinstance(myclass_insttype, types.UserNe))
+        self.assertTrue(isinstance(myclass_insttype, types.Ne))
+
+        self.assertTrue(isinstance(myotherclass_insttype, types.UserNe))
+        self.assertTrue(isinstance(myotherclass_insttype, types.Ne))
+
+        self.assertFalse(isinstance(myclass_insttype, types.UserEq))
+        self.assertFalse(isinstance(myclass_insttype, types.Eq))
+
+        self.assertFalse(isinstance(myotherclass_insttype, types.UserEq))
+        self.assertFalse(isinstance(myotherclass_insttype, types.Eq))
 
         ai = MyClass(value=123)
         bi = MyClass(value=123)

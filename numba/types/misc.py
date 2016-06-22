@@ -306,7 +306,8 @@ class SliceType(Type):
         return self.members
 
 
-class ClassInstanceType(UserHashable, UserEq, UserLt, UserGt, UserLe, UserGe):
+class ClassInstanceType(UserHashable, UserEq, UserNe, UserLt, UserGt, UserLe, 
+                        UserGe):
     """
     The type of a jitted class *instance*.  It will be the return-type
     of the constructor of the class.
@@ -360,9 +361,6 @@ class ClassInstanceType(UserHashable, UserEq, UserLt, UserGt, UserLe, UserGe):
         call = context.get_function(disp_type, callsig)
         return call, callsig
 
-    def supports_eq(self):
-        return '__eq__' in self.methods or '__ne__' in self.methods
-
     def _get_user_equality_fn(self, context, sig, method):
         disp_type = Dispatcher(method)
         # Get call signature, which may have different return type
@@ -370,52 +368,46 @@ class ClassInstanceType(UserHashable, UserEq, UserLt, UserGt, UserLe, UserGe):
         call = context.get_function(disp_type, callsig)
         return call, callsig
 
+    def supports_eq(self):
+        return '__eq__' in self.methods
+
     def get_user_eq(self, context, sig):
-        eq = self.jitmethods.get('__eq__')
-        if eq is None:
-            return NotImplemented
+        eq = self.jitmethods['__eq__']
         return self._get_user_equality_fn(context, sig, eq)
 
+    def supports_ne(self):
+        return '__ne__' in self.methods 
+
     def get_user_ne(self, context, sig):
-        ne = self.jitmethods.get('__ne__')
-        if ne is None:
-            return NotImplemented
+        ne = self.jitmethods['__ne__']
         return self._get_user_equality_fn(context, sig, ne)
 
     def supports_lt(self):
         return '__lt__' in self.methods
 
     def get_user_lt(self, context, sig):
-        lt = self.jitmethods.get('__lt__')
-        if lt is None:
-            return NotImplemented
+        lt = self.jitmethods['__lt__']
         return self._get_user_equality_fn(context, sig, lt)
 
     def supports_gt(self):
         return '__gt__' in self.methods
 
     def get_user_gt(self, context, sig):
-        gt = self.jitmethods.get('__gt__')
-        if gt is None:
-            return NotImplemented
+        gt = self.jitmethods['__gt__']
         return self._get_user_equality_fn(context, sig, gt)
 
     def supports_le(self):
         return '__le__' in self.methods
 
     def get_user_le(self, context, sig):
-        le = self.jitmethods.get('__le__')
-        if le is None:
-            return NotImplemented
+        le = self.jitmethods['__le__']
         return self._get_user_equality_fn(context, sig, le)
 
     def supports_ge(self):
         return '__ge__' in self.methods
 
     def get_user_ge(self, context, sig):
-        ge = self.jitmethods.get('__ge__')
-        if ge is None:
-            return NotImplemented
+        ge = self.jitmethods['__ge__']
         return self._get_user_equality_fn(context, sig, ge)
 
 

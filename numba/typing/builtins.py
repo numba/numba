@@ -874,10 +874,32 @@ class DeferredAttribute(AttributeTemplate):
 #------------------------------------------------------------------------------
 
 
-class UserCmpEqualityBase(AbstractTemplate):
+@infer
+class UserCmpEq(AbstractTemplate):
+    key = '=='
     def generic(self, args, kws):
         [lhs, rhs] = args
-        if isinstance(lhs, types.Eq) or isinstance(rhs, types.Eq):
+    
+        # if both side are of SimpleScalar types
+        if (isinstance(lhs, types.SimpleScalar) and 
+                isinstance(rhs, types.SimpleScalar)):
+            # coerce to a common type
+            common = self.context.unify_types(lhs, rhs)
+            # return new signature 
+            return signature(types.boolean, common, common)
+        # otherwise, use the equality function from the type; 
+        # or fallback to `is`
+        else:
+            return signature(types.boolean, lhs, rhs)
+
+
+
+@infer
+class UserCmpNe(AbstractTemplate):
+    key = '!='
+    def generic(self, args, kws):
+        [lhs, rhs] = args
+        if isinstance(lhs, types.Ne) or isinstance(rhs, types.Ne):
             # if both side are of SimpleScalar types
             if (isinstance(lhs, types.SimpleScalar) and 
                     isinstance(rhs, types.SimpleScalar)):
@@ -888,15 +910,6 @@ class UserCmpEqualityBase(AbstractTemplate):
             # otherwise, use the equality function from the type
             else:
                 return signature(types.boolean, lhs, rhs)
-
-@infer
-class UserCmpEq(UserCmpEqualityBase):
-    key = '=='
-
-
-@infer
-class UserCmpNe(UserCmpEqualityBase):
-    key = '!='
 
 
 @infer

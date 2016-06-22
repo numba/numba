@@ -31,6 +31,14 @@ def _on_type_disposal(wr, _pop=_typecache.pop):
     _pop(wr, None)
 
 
+def _get_defining_class(meth):
+    for base in reversed(meth.__self__.__mro__):
+        imp = getattr(base, meth.__name__, None)
+        if imp is not None and imp.__func__ is meth.__func__:
+            return base
+    raise RuntimeError('unreachable')
+
+
 class _TypeMetaclass(ABCMeta):
     """
     A metaclass that will intern instances after they are created.
@@ -60,11 +68,37 @@ class _TypeMetaclass(ABCMeta):
         inst = type.__call__(cls, *args, **kwargs)
         return cls._intern(inst)
 
-    def __instancecheck__(self, other):
-        if hasattr(self, 'instancecheck'):
-            return self.instancecheck(other)
+    def __instancecheck__(cls, instance):
+        """
+        Override ``isinstance()`` to check for interface compatability.
+        When doing instance check against an interface type, any subclass of 
+        Type that defines ``interface_check()``, we uses the classmethod for
+        the test. 
+        """
+        if (hasattr(cls, 'interface_check') and 
+                cls is _get_defining_class(cls.interface_check)): 
+            return cls.interface_check(instance)
         else:
-            return issubclass(type(other), self)
+            return issubclass(type(instance), cls)
+
+    def virtual_subclass_check(cls, instance, virtclasses):
+        """
+        A helper for subclasses to determine if an instance is a virtual 
+        subclass.  This also performs regular subclass test if the type of 
+        the given instance is not a virtual subclass. 
+        
+        This is for use inside ``interface_check()``.  
+
+        Types in ``virtclasses`` should implements ``interface_check()``.
+        """
+        typ = type(instance)
+        for vcls in virtclasses:
+            # issubclass() will not check for whether the instance provides
+            # the necessary functionality, but isinstance() will.
+            if isinstance(instance, vcls):
+                return True 
+        # perform regular subclass test
+        return issubclass(type(instance), cls)
 
 
 def _type_reconstructor(reconstructor, reconstructor_args, state):
@@ -216,11 +250,8 @@ class Hashable(Type):
     Base class for hashable types.
     """
     @classmethod
-    def instancecheck(cls, instance):
-        if cls is Hashable and issubclass(type(instance), UserHashable):
-            return instance.is_hashable()
-        else:
-            return issubclass(type(instance), cls)
+    def interface_check(cls, instance):
+        return cls.virtual_subclass_check(instance, [UserHashable])
 
 
 class UserHashable(Type):
@@ -245,31 +276,38 @@ class UserHashable(Type):
         raise NotImplementedError
 
     @classmethod
-    def instancecheck(cls, instance):
-        if cls is UserHashable and issubclass(type(instance), UserHashable):
-            return instance.is_hashable()
-        else:
-            return issubclass(type(instance), cls)
+    def interface_check(cls, instance):
+        return issubclass(type(instance), cls) and instance.is_hashable()
 
 
-class Eq(Type):
+class Ne(Type):
+    """
+    Base class for Ne types.
+    Subclass must provide ``__ne__``    
+    """
+    @classmethod
+    def interface_check(cls, instance):
+        return cls.virtual_subclass_check(instance, [UserNe, UserEq])
+
+
+class Eq(Ne):
     """
     Base class for Eq types.
-    Subclass must provide ``__eq__`` or ``__ne__``.
-
+    Subclass must provide ``__eq__``
+    Provides ``__ne__`` via inversion of ``__eq__``.
+    
     If __eq__ is implemented and not __ne__, python semantic provides a 
     default __ne__ implementation that uses __eq__.
     If __ne__ is implemented and not __eq__, __eq__ fallbacks to `is`.    
     """
     @classmethod
-    def instancecheck(cls, instance):
-        return ((cls is Eq and isinstance(instance, UserEq)) or 
-                issubclass(type(instance), cls))
+    def interface_check(cls, instance):
+        return cls.virtual_subclass_check(instance, [UserEq])
 
 
 class UserEq(Type):
     """
-    For user-defined types that may define __eq__ and __ne__.
+    For user-defined types that may define ``__eq__`` and ``__ne__``.
     Virtually subclass Eq if `self.supports_eq()` returns True.
     """
     def supports_eq(self):
@@ -278,28 +316,47 @@ class UserEq(Type):
     def get_user_eq(self, context, sig):
         raise NotImplementedError
 
+    @classmethod
+    def interface_check(cls, instance):
+        return issubclass(type(instance), cls) and instance.supports_eq()
+        
+
+class UserNe(Type):
+    """
+    For user-defined types that may provide ``__ne__``.
+    Note that ``__ne__`` may be provided indirectly via ``__eq__``.
+    Virtually subclass Ne if `self.supports_ne()` returns True.
+    """
+
+    def supports_ne(self):
+        raise NotImplementedError
+
     def get_user_ne(self, context, sig):
         raise NotImplementedError
 
     @classmethod
-    def instancecheck(cls, instance):
-        if cls is UserEq and issubclass(type(instance), UserEq):
-            return instance.supports_eq()
-        else:
-            return issubclass(type(instance), cls)
+    def interface_check(cls, instance):
+        typ = type(instance)
+        return ((issubclass(typ, UserNe) and instance.supports_ne()) or
+                (issubclass(typ, UserEq) and instance.supports_eq()))
 
 
 class Lt(Type):
     """
     Base class for Lt types.    
+    Subclass must provide ``__lt__``
     """
     @classmethod
-    def instancecheck(cls, instance):
-        return ((cls is Lt and isinstance(instance, UserLt)) or 
-                issubclass(type(instance), cls))
+    def interface_check(cls, instance):
+        return cls.virtual_subclass_check(instance, [UserLt])
 
 
 class UserLt(Type):
+    """
+    For user-defined types that may provide ``__lt__``.
+    Virtually subclass Lt if `self.supports_lt()` returns True.
+    """
+
     def supports_lt(self):
         raise NotImplementedError
 
@@ -307,24 +364,26 @@ class UserLt(Type):
         raise NotImplementedError
 
     @classmethod
-    def instancecheck(cls, instance):
-        if cls is UserLt and issubclass(type(instance), UserLt):
-            return instance.supports_lt()
-        else:
-            return issubclass(type(instance), cls)
+    def interface_check(cls, instance):
+        return issubclass(type(instance), cls) and instance.supports_lt()
 
 
 class Gt(Type):
     """
-    Base class for Gt types.    
+    Base class for Gt types.   
+    Subclass must provide ``__gt__`` 
     """
     @classmethod
-    def instancecheck(cls, instance):
-        return ((cls is Gt and isinstance(instance, UserGt)) or 
-                issubclass(type(instance), cls))
+    def interface_check(cls, instance):
+        return cls.virtual_subclass_check(instance, [UserGt])
 
 
 class UserGt(Type):
+    """
+    For user-defined types that may provide ``__gt__``.
+    Virtually subclass Gt if `self.supports_gt()` returns True.
+    """
+
     def supports_gt(self):
         raise NotImplementedError
 
@@ -332,25 +391,26 @@ class UserGt(Type):
         raise NotImplementedError
 
     @classmethod
-    def instancecheck(cls, instance):
-        if cls is UserGt and issubclass(type(instance), UserGt):
-            return instance.supports_gt()
-        else:
-            return issubclass(type(instance), cls)
-
+    def interface_check(cls, instance):
+        return issubclass(type(instance), cls) and instance.supports_gt()
 
 
 class Le(Type):
     """
-    Base class for Le types.    
+    Base class for Le types.   
+    Subclass must provide ``__le__`` 
     """
     @classmethod
-    def instancecheck(cls, instance):
-        return ((cls is Le and isinstance(instance, UserLe)) or 
-                issubclass(type(instance), cls))
+    def interface_check(cls, instance):
+        return cls.virtual_subclass_check(instance, [UserLe])
 
 
 class UserLe(Type):
+    """
+    For user-defined types that may provide ``__le__``.
+    Virtually subclass Le if `self.supports_le()` returns True.
+    """
+
     def supports_le(self):
         raise NotImplementedError
 
@@ -358,24 +418,26 @@ class UserLe(Type):
         raise NotImplementedError
 
     @classmethod
-    def instancecheck(cls, instance):
-        if cls is UserLe and issubclass(type(instance), UserLe):
-            return instance.supports_le()
-        else:
-            return issubclass(type(instance), cls)
+    def interface_check(cls, instance):
+        return issubclass(type(instance), cls) and instance.supports_le()
 
 
 class Ge(Type):
     """
-    Base class for Ge types.    
+    Base class for Ge types.
+    Subclass must provide ``__ge__``    
     """
     @classmethod
-    def instancecheck(cls, instance):
-        return ((cls is Ge and isinstance(instance, UserGe)) or 
-                issubclass(type(instance), cls))
+    def interface_check(cls, instance):
+        return cls.virtual_subclass_check(instance, [UserGe])
 
 
 class UserGe(Type):
+    """
+    For user-defined types that may provide ``__ge__``.
+    Virtually subclass Ge if `self.supports_ge()` returns True.
+    """
+
     def supports_ge(self):
         raise NotImplementedError
 
@@ -383,11 +445,8 @@ class UserGe(Type):
         raise NotImplementedError
 
     @classmethod
-    def instancecheck(cls, instance):
-        if cls is UserGe and issubclass(type(instance), UserGe):
-            return instance.supports_ge()
-        else:
-            return issubclass(type(instance), cls)
+    def interface_check(cls, instance):
+        return issubclass(type(instance), cls) and instance.supports_ge()
 
 
 class SimpleScalar(Hashable, Eq):
