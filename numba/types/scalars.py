@@ -182,7 +182,7 @@ class EnumMember(Type):
         return self.class_type_class(self.instance_class, self.dtype)
 
 
-class IntEnumMember(EnumMember):
+class IntEnumMember(EnumMember, SimpleScalar):
     """
     Type class for IntEnum members.
     """

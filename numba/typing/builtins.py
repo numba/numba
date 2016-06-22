@@ -308,35 +308,6 @@ class UnaryNot(ConcreteTemplate):
     cases += [signature(types.boolean, op) for op in sorted(types.complex_domain)]
 
 
-class OrderedCmpOp(ConcreteTemplate):
-    cases = [signature(types.boolean, types.boolean, types.boolean)]
-    cases += [signature(types.boolean, op, op) for op in sorted(types.signed_domain)]
-    cases += [signature(types.boolean, op, op) for op in sorted(types.unsigned_domain)]
-    cases += [signature(types.boolean, op, op) for op in sorted(types.real_domain)]
-
-
-class UnorderedCmpOp(ConcreteTemplate):
-    cases = OrderedCmpOp.cases + [
-        signature(types.boolean, op, op) for op in sorted(types.complex_domain)]
-
-
-@infer
-class CmpOpLt(OrderedCmpOp):
-    key = '<'
-
-@infer
-class CmpOpLe(OrderedCmpOp):
-    key = '<='
-
-@infer
-class CmpOpGt(OrderedCmpOp):
-    key = '>'
-
-@infer
-class CmpOpGe(OrderedCmpOp):
-    key = '>='
-
-
 class TupleCompare(AbstractTemplate):
     def generic(self, args, kws):
         [lhs, rhs] = args
@@ -874,12 +845,9 @@ class DeferredAttribute(AttributeTemplate):
 #------------------------------------------------------------------------------
 
 
-@infer
-class UserCmpEq(AbstractTemplate):
-    key = '=='
+class SimpleScalarCmpBase(AbstractTemplate):
     def generic(self, args, kws):
         [lhs, rhs] = args
-    
         # if both side are of SimpleScalar types
         if (isinstance(lhs, types.SimpleScalar) and 
                 isinstance(rhs, types.SimpleScalar)):
@@ -887,65 +855,91 @@ class UserCmpEq(AbstractTemplate):
             common = self.context.unify_types(lhs, rhs)
             # return new signature 
             return signature(types.boolean, common, common)
-        # otherwise, use the equality function from the type; 
-        # or fallback to `is`
-        else:
-            return signature(types.boolean, lhs, rhs)
 
+@infer
+class SimpleScalarCmpEq(SimpleScalarCmpBase):
+    key = '=='
 
 
 @infer
-class UserCmpNe(AbstractTemplate):
+class SimpleScalarCmpEq(SimpleScalarCmpBase):
     key = '!='
+
+
+@infer
+class SimpleScalarCmpLt(SimpleScalarCmpBase):
+    key = '<'
+
+
+@infer
+class SimpleScalarCmpGt(SimpleScalarCmpBase):
+    key = '>'
+
+
+@infer
+class SimpleScalarCmpLe(SimpleScalarCmpBase):
+    key = '<='
+
+
+@infer
+class SimpleScalarCmpGe(SimpleScalarCmpBase):
+    key = '>='
+
+
+@infer
+class CmpEq(AbstractTemplate):
+    key = '=='
+
+    def generic(self, args, kws):
+        [lhs, rhs] = args
+        # use the equality function from the type; or fallback to `is`
+        return signature(types.boolean, lhs, rhs)
+
+
+@infer
+class CmpNe(AbstractTemplate):
+    key = '!='
+
     def generic(self, args, kws):
         [lhs, rhs] = args
         if isinstance(lhs, types.Ne) or isinstance(rhs, types.Ne):
-            # if both side are of SimpleScalar types
-            if (isinstance(lhs, types.SimpleScalar) and 
-                    isinstance(rhs, types.SimpleScalar)):
-                # coerce to a common type
-                common = self.context.unify_types(lhs, rhs)
-                # return new signature 
-                return signature(types.boolean, common, common)
-            # otherwise, use the equality function from the type
-            else:
-                return signature(types.boolean, lhs, rhs)
+            return signature(types.boolean, lhs, rhs)
 
 
 @infer
-class UserCmpLtBase(AbstractTemplate):
+class CmpLtBase(AbstractTemplate):
     key = '<'
 
     def generic(self, args, kws):
         [lhs, rhs] = args
-        if isinstance(lhs, types.UserLt) or isinstance(rhs, types.UserGt):
+        if isinstance(lhs, types.Lt) or isinstance(rhs, types.Gt):
             return signature(types.boolean, lhs, rhs)
 
 @infer
-class UserCmpGtBase(AbstractTemplate):
+class CmpGtBase(AbstractTemplate):
     key = '>'
 
     def generic(self, args, kws):
         [lhs, rhs] = args
-        if isinstance(lhs, types.UserGt) or isinstance(rhs, types.UserLt):
+        if isinstance(lhs, types.Gt) or isinstance(rhs, types.Lt):
             return signature(types.boolean, lhs, rhs)
 
 
 @infer
-class UserCmpLeBase(AbstractTemplate):
+class CmpLeBase(AbstractTemplate):
     key = '<='
 
     def generic(self, args, kws):
         [lhs, rhs] = args
-        if isinstance(lhs, types.UserLe) or isinstance(rhs, types.UserGe):
+        if isinstance(lhs, types.Le) or isinstance(rhs, types.Ge):
             return signature(types.boolean, lhs, rhs)
 
 
 @infer
-class UserCmpGeBase(AbstractTemplate):
+class CmpGeBase(AbstractTemplate):
     key = '>='
 
     def generic(self, args, kws):
         [lhs, rhs] = args
-        if isinstance(lhs, types.UserGe) or isinstance(rhs, types.UserLe):
+        if isinstance(lhs, types.Ge) or isinstance(rhs, types.Le):
             return signature(types.boolean, lhs, rhs)

@@ -449,7 +449,7 @@ class UserGe(Type):
         return issubclass(type(instance), cls) and instance.supports_ge()
 
 
-class SimpleScalar(Hashable, Eq):
+class SimpleScalar(Hashable, Eq, Lt, Gt, Le, Ge):
     """
     A simple scalar type is allowed to coerce with other arguments during a call
     """
