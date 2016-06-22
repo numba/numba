@@ -1332,12 +1332,18 @@ class TestLinalgSolve(TestLinalgSystems):
             try:
                 np.testing.assert_array_almost_equal_nulp(
                     got, expected, nulp=10)
-            except Exception:
+            except AssertionError:
                 # plain match failed, test by reconstruction
                 use_reconstruction = True
 
-            # if plain match fails then reconstruction is used.
-            # this checks that AX ~= B
+            # If plain match fails then reconstruction is used,
+            # this checks that AX ~= B.
+            # Plain match can fail due to numerical fuzziness associated
+            # with system size and conditioning, or more simply from
+            # numpy using double precision routines for computation that
+            # could be done in single precision (which is what numba does).
+            # Therefore minor differences in results can appear due to
+            # e.g. numerical roundoff being different between two precisions.
             if use_reconstruction:
                 # check they are dimensionally correct
                 self.assertEqual(got.shape, expected.shape)
