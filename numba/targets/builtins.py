@@ -410,43 +410,36 @@ def user_ne(context, builder, sig, args):
     return _reflectable_equality(context, builder, sig, args, inequality)
 
 
-@lower_builtin("<", types.UserLt, types.Any)
-@lower_builtin("<", types.Any, types.UserGt)
-def user_lt(context, builder, sig, args):
-    [self_type, other_type] = sig.args[:2]
-    if isinstance(self_type, types.UserLt):
-        self_type = sig.args[0]
-        lt_impl = self_type.get_user_lt(context, sig)
-        call, callsig = lt_impl
-        out = call(builder, args)
-        out = context.cast(builder, out, callsig.return_type, sig.return_type)
+def _user_ordered_cmp(forward_type, reflected_type, 
+                      forward_op, reflected_op,
+                      forward_imp_name):
+    @lower_builtin(forward_op, forward_type, types.Any)
+    @lower_builtin(forward_op, forward_type, reflected_type)
+    @lower_builtin(forward_op, types.Any, reflected_type)
+    def imp(context, builder, sig, args):
+        [self_type, other_type] = sig.args[:2]
+        if isinstance(self_type, forward_type):
+            # forward version
+            self_type = sig.args[0]
+            fwd_impl = getattr(self_type, forward_imp_name)(context, sig)
+            call, callsig = fwd_impl
+            out = call(builder, args)
+            out = context.cast(builder, out, callsig.return_type, 
+                               sig.return_type)
+        else:
+            # reflected version
+            assert isinstance(other_type, reflected_type)
+            [this, other] = args
+            reflected_sig = typing.signature(sig.return_type, other_type, 
+                                             self_type)
+            rfl_impl = context.get_function(reflected_op, reflected_sig)
+            out = rfl_impl(builder, [other, this])
         return impl_ret_new_ref(context, builder, sig.return_type, out)
-    else:
-        # reflected version
-        [this, other] = args
-        reflected_sig = typing.signature(sig.return_type, other_type, self_type)
-        gt_impl = context.get_function(">", reflected_sig)
-        out = gt_impl(builder, [other, this])
-        return impl_ret_new_ref(context, builder, sig.return_type, out)
+    return imp
 
 
-@lower_builtin(">", types.UserGt, types.Any)
-@lower_builtin(">", types.Any, types.UserLt)  # reflection
-def user_gt(context, builder, sig, args):
-    [self_type, other_type] = sig.args[:2]
-    if isinstance(self_type, types.UserGt):
-        gt_impl = self_type.get_user_gt(context, sig)
-        call, callsig = gt_impl
-        out = call(builder, args)
-        out = context.cast(builder, out, callsig.return_type, sig.return_type)
-        return impl_ret_new_ref(context, builder, sig.return_type, out)
-    else:
-        # reflected version
-        [this, other] = args
-        reflected_sig = typing.signature(sig.return_type, other_type, self_type)
-        lt_impl = context.get_function("<", reflected_sig)
-        out = lt_impl(builder, [other, this])
-        return impl_ret_new_ref(context, builder, sig.return_type, out)
+user_lt = _user_ordered_cmp(types.UserLt, types.UserGt, "<", ">", 'get_user_lt')
+user_gt = _user_ordered_cmp(types.UserGt, types.UserLt, ">", "<", 'get_user_gt')
 
 
 @lower_builtin(len, types.ConstSized)
