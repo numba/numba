@@ -13,7 +13,7 @@ python -m numba.tests.test_runtests
 # directive in .coveragerc
 if [ "$RUN_COVERAGE" == "yes" ]; then
     coverage erase
-    coverage run runtests.py -b -m -v numba.tests
+    coverage run runtests.py -b -m numba.tests
 else
-    NUMBA_ENABLE_CUDASIM=1 python -m numba.runtests -b -m -v numba.tests
+    NUMBA_ENABLE_CUDASIM=1 python -m numba.runtests -b -m numba.tests
 fi
