@@ -617,16 +617,85 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
         assertRegex(self, errmsg, regex)
 
     @tag('important')
+    def test_cmp_interface(self):
+        @jitclass([])
+        class Cmp(object):
+            def __init__(self):
+                pass
+            
+            def __eq__(self):
+                pass
+
+            def __ne__(self):
+                pass
+
+            def __lt__(self):
+                pass
+
+            def __gt__(self):
+                pass
+
+            def __le__(self):
+                pass
+
+            def __ge__(self):
+                pass
+
+        jctype = Cmp.class_type.instance_type
+        self.assertTrue(isinstance(jctype, types.Eq))
+        self.assertTrue(isinstance(jctype, types.Ne))
+        self.assertTrue(isinstance(jctype, types.Lt))
+        self.assertTrue(isinstance(jctype, types.Gt))
+        self.assertTrue(isinstance(jctype, types.Le))
+        self.assertTrue(isinstance(jctype, types.Ge))
+
+        self.assertTrue(isinstance(jctype, types.UserEq))
+        self.assertTrue(isinstance(jctype, types.UserNe))
+        self.assertTrue(isinstance(jctype, types.UserLt))
+        self.assertTrue(isinstance(jctype, types.UserGt))
+        self.assertTrue(isinstance(jctype, types.UserLe))
+        self.assertTrue(isinstance(jctype, types.UserGe))
+
+        self.assertTrue(isinstance(jctype, types.ClassInstanceType))
+
+    @tag('important')
+    def test_not_cmp_interface(self):
+        @jitclass([])
+        class NotCmp(object):
+            def __init__(self):
+                pass
+            
+        jctype = NotCmp.class_type.instance_type
+        self.assertFalse(isinstance(jctype, types.Eq))
+        self.assertFalse(isinstance(jctype, types.Ne))
+        self.assertFalse(isinstance(jctype, types.Lt))
+        self.assertFalse(isinstance(jctype, types.Gt))
+        self.assertFalse(isinstance(jctype, types.Le))
+        self.assertFalse(isinstance(jctype, types.Ge))
+
+        self.assertFalse(isinstance(jctype, types.UserEq))
+        self.assertFalse(isinstance(jctype, types.UserNe))
+        self.assertFalse(isinstance(jctype, types.UserLt))
+        self.assertFalse(isinstance(jctype, types.UserGt))
+        self.assertFalse(isinstance(jctype, types.UserLe))
+        self.assertFalse(isinstance(jctype, types.UserGe))
+
+        self.assertTrue(isinstance(jctype, types.ClassInstanceType))
+
+    @tag('important')
     def test_eq(self):
-        spec = [('_value', int32)]
+        spec = [('_value', int32),
+                ('use_count', int32)]
 
         @jitclass(spec)
         class MyClass(object):
 
             def __init__(self, value):
                 self._value = value
+                self.use_count = 0
 
             def __eq__(self, other):
+                self.use_count += 1
                 if isinstance(other, MyClass):
                     return self._value == other._value
 
@@ -635,8 +704,10 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
 
             def __init__(self, value):
                 self._value = value
+                self.use_count = 0
 
             def __eq__(self, other):
+                self.use_count += 1
                 return self._value == other._value
 
         myclass_insttype = MyClass.class_type.instance_type
@@ -658,21 +729,41 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
         bi = MyClass(value=123)
         ci = MyClass(value=321)
         di = MyOtherClass(value=ai._value)
+
+        self.assertEqual(ai.use_count, 0)
+        self.assertEqual(bi.use_count, 0)
+        self.assertEqual(ci.use_count, 0)
+        self.assertEqual(di.use_count, 0)
+
         self.assertEqual(ai, bi)
-        self.assertNotEqual(ai, ci)
+        self.assertEqual(ai.use_count, 1)
+
+        self.assertNotEqual(ai, ci)  # __ne__ fallbacks to __eq__ 
+        self.assertEqual(ai.use_count, 2)
         # notice the asymmetric __eq__ due to the instancecheck in MyClass
         self.assertNotEqual(ai, di)
+        self.assertEqual(ai.use_count, 3)
+        self.assertEqual(di.use_count, 0)
+
         self.assertEqual(di, ai)
+        self.assertEqual(di.use_count, 1)
 
         @njit
         def check_equality(a, b):
             return a == b
 
         self.assertTrue(check_equality(ai, bi))
+        self.assertEqual(ai.use_count, 4)
+
         self.assertFalse(check_equality(ai, ci))
+        self.assertEqual(ai.use_count, 5)
+
         # notice the asymmetric __eq__ due to the instancecheck in MyClass
         self.assertFalse(check_equality(ai, di))
+        self.assertEqual(ai.use_count, 6)
+
         self.assertTrue(check_equality(di, ai))
+        self.assertEqual(di.use_count, 2)
 
         @njit
         def check_inequality(a, b):
@@ -680,22 +771,35 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
             return a != b
         
         self.assertFalse(check_inequality(ai, bi))
+        self.assertEqual(ai.use_count, 7)
+
         self.assertTrue(check_inequality(ai, ci))
+        self.assertEqual(ai.use_count, 8)
+
         # notice the asymmetric __eq__ due to the instancecheck in MyClass
         self.assertTrue(check_inequality(ai, di))
+        self.assertEqual(ai.use_count, 9)
+
         self.assertFalse(check_inequality(di, ai))
+        self.assertEqual(di.use_count, 3)
+
+        self.assertEqual(bi.use_count, 0)
+        self.assertEqual(ci.use_count, 0)
 
     @tag('important')
     def test_ne(self):
-        spec = [('_value', int32)]
+        spec = [('_value', int32),
+                ('use_count', int32)]
 
         @jitclass(spec)
         class MyClass(object):
 
             def __init__(self, value):
                 self._value = value
+                self.use_count = 0
 
             def __ne__(self, other):
+                self.use_count += 1
                 if isinstance(other, MyClass):
                     return self._value != other._value
                 return True                
@@ -705,8 +809,10 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
 
             def __init__(self, value):
                 self._value = value
+                self.use_count = 0
 
             def __ne__(self, other):
+                self.use_count += 1
                 return self._value != other._value
 
         myclass_insttype = MyClass.class_type.instance_type
@@ -728,25 +834,40 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
         bi = MyClass(value=123)
         ci = MyClass(value=321)
         di = MyOtherClass(value=ai._value)
+
+        self.assertEqual(ai.use_count, 0)
+        self.assertEqual(bi.use_count, 0)
+        self.assertEqual(ci.use_count, 0)
+        self.assertEqual(di.use_count, 0)
         
         # there're no default __eq__ that uses __ne__; it will fallback to `is`
         self.assertFalse(ai == bi)
+        self.assertEqual(ai.use_count, 0)
+        self.assertEqual(bi.use_count, 0)
+
         self.assertFalse(ai != bi)
+        self.assertEqual(ai.use_count, 1)
+
         self.assertNotEqual(ai, ci)
+        self.assertEqual(ai.use_count, 2)
         
         # notice the asymmetric __eq__ due to the instancecheck in MyClass
         self.assertNotEqual(ai, di)
+        self.assertEqual(ai.use_count, 3)
         self.assertFalse(di != ai)
+        self.assertEqual(di.use_count, 1)
 
         @njit
         def check_equality(a, b):
             return a == b
 
-
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             with self.assertRaises(errors.LoweringError) as raises:
                 self.assertTrue(check_equality(ai, bi))
+
+            self.assertEqual(ai.use_count, 3)  # use_count stays the same
+
             # Check exception
             self.assertIn('no default `is` implementation', 
                           str(raises.exception))
@@ -763,10 +884,17 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
             return a != b
         
         self.assertFalse(check_inequality(ai, bi))
+        self.assertEqual(ai.use_count, 4)
+
         self.assertTrue(check_inequality(ai, ci))
+        self.assertEqual(ai.use_count, 5)
+
         # notice the asymmetric __eq__ due to the instancecheck in MyClass
         self.assertTrue(check_inequality(ai, di))
+        self.assertEqual(ai.use_count, 6)
+
         self.assertFalse(check_inequality(di, ai))
+        self.assertEqual(di.use_count, 2)
 
     def test_reflected_eq(self):
         spec = [('_value', int32),
