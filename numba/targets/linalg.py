@@ -163,7 +163,7 @@ def call_xxgemv(context, builder, do_trans,
     Call the BLAS matrix * vector product function for the given arguments.
     """
     fnty = ir.FunctionType(ir.IntType(32),
-                           [ll_char, ll_char_p,               # kind, trans
+                           [ll_char, ll_char,                 # kind, trans
                             intp_t, intp_t,                   # m, n
                             ll_void_p, ll_void_p, intp_t,     # alpha, a, lda
                             ll_void_p, ll_void_p, ll_void_p,  # x, beta, y
@@ -183,8 +183,7 @@ def call_xxgemv(context, builder, do_trans,
 
     kind = get_blas_kind(dtype)
     kind_val = ir.Constant(ll_char, ord(kind))
-    trans = context.insert_const_string(builder.module,
-                                        "t" if do_trans else "n")
+    trans = ir.Constant(ll_char, ord('t') if do_trans else ord('n'))
 
     res = builder.call(fn, (kind_val, trans, m, n,
                             builder.bitcast(alpha, ll_void_p),
@@ -204,7 +203,7 @@ def call_xxgemm(context, builder,
     """
     fnty = ir.FunctionType(ir.IntType(32),
                            [ll_char,                       # kind
-                            ll_char_p, ll_char_p,          # transa, transb
+                            ll_char, ll_char,              # transa, transb
                             intp_t, intp_t, intp_t,        # m, n, k
                             ll_void_p, ll_void_p, intp_t,  # alpha, a, lda
                             ll_void_p, intp_t, ll_void_p,  # b, ldb, beta
@@ -218,8 +217,8 @@ def call_xxgemm(context, builder,
     alpha = make_constant_slot(context, builder, dtype, 1.0)
     beta = make_constant_slot(context, builder, dtype, 0.0)
 
-    trans = context.insert_const_string(builder.module, "t")
-    notrans = context.insert_const_string(builder.module, "n")
+    trans = ir.Constant(ll_char, ord('t'))
+    notrans = ir.Constant(ll_char, ord('n'))
 
     def get_array_param(ty, shapes, data):
         return (
@@ -1380,3 +1379,201 @@ def solve_impl(a, b):
         return b_ret(bcpy)
 
     return solve_impl
+
+
+@overload(np.linalg.pinv)
+def pinv_impl(a, rcond=1.e-15):
+    ensure_lapack()
+
+    _check_linalg_matrix(a, "pinv")
+
+    # convert typing floats to numpy floats for use in the impl
+    s_type = getattr(a.dtype, "underlying_float", a.dtype)
+    s_dtype = np_support.as_dtype(s_type)
+
+    numba_ez_gesdd_sig = types.intc(
+        types.char,               # kind
+        types.char,               # jobz
+        types.intp,               # m
+        types.intp,               # n
+        types.CPointer(a.dtype),  # a
+        types.intp,               # lda
+        types.CPointer(s_type),   # s
+        types.CPointer(a.dtype),  # u
+        types.intp,               # ldu
+        types.CPointer(a.dtype),  # vt
+        types.intp                # ldvt
+    )
+
+    numba_ez_gesdd = types.ExternalFunction("numba_ez_gesdd",
+                                            numba_ez_gesdd_sig)
+
+    numba_xxgemm_sig = types.intc(
+        types.char,               # kind
+        types.char,               # TRANSA
+        types.char,               # TRANSB
+        types.intp,               # M
+        types.intp,               # N
+        types.intp,               # K
+        types.CPointer(a.dtype),  # ALPHA
+        types.CPointer(a.dtype),  # A
+        types.intp,               # LDA
+        types.CPointer(a.dtype),  # B
+        types.intp,               # LDB
+        types.CPointer(a.dtype),  # BETA
+        types.CPointer(a.dtype),  # C
+        types.intp                # LDC
+    )
+
+    numba_xxgemm = types.ExternalFunction("numba_xxgemm",
+                                          numba_xxgemm_sig)
+
+    F_layout = a.layout == 'F'
+
+    kind = ord(get_blas_kind(a.dtype, "pinv"))
+    JOB = ord('S')
+
+    # need conjugate transposes
+    TRANSA = ord('C')
+    TRANSB = ord('C')
+
+    # scalar constants
+    dt = np_support.as_dtype(a.dtype)
+    zero = np.array([0.], dtype=dt)
+    one = np.array([1.], dtype=dt)
+
+    def pinv_impl(a, rcond=1.e-15):
+
+        # The idea is to build the pseudo-inverse via inverting the singular
+        # value decomposition of a matrix `A`. Mathematically, this is roughly
+        # A = U*S*V^H        [The SV decomposition of A]
+        # A^+ = V*(S^+)*U^H  [The inverted SV decomposition of A]
+        # where ^+ is pseudo inversion and ^H is Hermitian transpose.
+        # As V and U are unitary, their inverses are simply their Hermitian
+        # transpose. S has singular values on its diagonal and zero elsewhere,
+        # it is inverted trivially by reciprocal of the diagonal values with
+        # the exception that zero singular values remain as zero.
+        #
+        # The practical implementation can take advantage of a few things to
+        # gain a few % performance increase:
+        # * A is destroyed by the SVD algorithm from LAPACK so a copy is
+        #   required, this memory is exactly the right size in which to return
+        #   the pseudo-inverse and so can be resued for this purpose.
+        # * The pseudo-inverse of S can be applied to either V or U^H, this
+        #   then leaves a GEMM operation to compute the inverse via either:
+        #   A^+ = (V*(S^+))*U^H
+        #   or
+        #   A^+ = V*((S^+)*U^H)
+        #   however application of S^+ to V^H or U is more convenient as they
+        #   are the result of the SVD algorithm. The application of the
+        #   diagonal system is just a matrix multiplication which results in a
+        #   row/column scaling (direction depending). To save effort, this
+        #   "matrix multiplication" is applied to the smallest of U or V^H and
+        #   only up to the point of "cut-off" (see next note) just as a direct
+        #   scaling.
+        # * The cut-off level for application of S^+ can be used to reduce
+        #   total effort, this cut-off can come via rcond or may just naturally
+        #   be present as a result of zeros in the singular values. Regardless
+        #   there's no need to multiply by zeros in the application of S^+ to
+        #   V^H or U as above. Further, the GEMM operation can be shrunk in
+        #   effort by noting that the possible zero block generated by the
+        #   presence of zeros in S^+ has no effect apart from wasting cycles as
+        #   it is all fmadd()s where one operand is zero. The inner dimension
+        #   of the GEMM operation can therefore be set as shrunk accordingly!
+
+        n = a.shape[-1]
+        m = a.shape[-2]
+
+        _check_finite_matrix(a)
+
+        if F_layout:
+            acpy = np.copy(a)
+        else:
+            acpy = np.asfortranarray(a)
+
+        minmn = min(m, n)
+
+        u = np.empty((minmn, m), dtype=a.dtype)
+        s = np.empty(minmn, dtype=s_dtype)
+        vt = np.empty((n, minmn), dtype=a.dtype)
+
+        r = numba_ez_gesdd(
+            kind,         # kind
+            JOB,          # job
+            m,            # m
+            n,            # n
+            acpy.ctypes,  # a
+            m,            # lda
+            s.ctypes,     # s
+            u.ctypes,     # u
+            m,            # ldu
+            vt.ctypes,    # vt
+            minmn         # ldvt
+        )
+        _handle_err_maybe_convergence_problem(r)
+
+        # Invert singular values under threshold. Also find the index of
+        # the threshold value as this is the upper limit for the application
+        # of the inverted singular values. Finding this value saves
+        # multiplication by a block of zeros that would be created by the
+        # application of these values to either U or V^H ahead of multiplying
+        # them together. This is done by simply in BLAS parlance via
+        # restricting the `k` dimension to `cut_idx` in `xgemm` whilst keeping
+        # the leading dimensions correct.
+
+        cut_at = s[0] * rcond
+        cut_idx = 0
+        for k in range(minmn):
+            if s[k] > cut_at:
+                s[k] = 1. / s[k]
+                cut_idx = k
+        cut_idx += 1
+
+        # Use cut_idx so there's no scaling by 0.
+        if m >= n:
+            # U is largest so apply S^+ to V^H.
+            for i in range(n):
+                for j in range(cut_idx):
+                    vt[i, j] = vt[i, j] * s[j]
+        else:
+            # V^H is largest so apply S^+ to U.
+            for i in range(cut_idx):
+                s_local = s[i]
+                for j in range(minmn):
+                    u[i, j] = u[i, j] * s_local
+
+        # Do (v^H)^H*U^H (obviously one of the matrices includes the S^+
+        # scaling) and write back to acpy. Note the innner dimension of cut_idx
+        # taking account of the possible zero block.
+        # We can store the result in acpy, given we had to create it
+        # for use in the SVD, and it is now redundant and the right size
+        # but wrong shape.
+
+        r = numba_xxgemm(
+            kind,
+            TRANSA,       # TRANSA
+            TRANSB,       # TRANSB
+            n,            # M
+            m,            # N
+            cut_idx,      # K
+            one.ctypes,   # ALPHA
+            vt.ctypes,    # A
+            minmn,        # LDA
+            u.ctypes,     # B
+            m,            # LDB
+            zero.ctypes,  # BETA
+            acpy.ctypes,  # C
+            n             # LDC
+        )
+
+        # help liveness analysis
+        acpy.size
+        vt.size
+        u.size
+        s.size
+        one.size
+        zero.size
+
+        return acpy.T.ravel().reshape(a.shape).T
+
+    return pinv_impl
