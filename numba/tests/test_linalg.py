@@ -503,6 +503,22 @@ class TestLinalgBase(TestCase):
         msg = "Matrix is singular to machine precision."
         self.assert_error(cfunc, args, msg, err=np.linalg.LinAlgError)
 
+    def assert_is_identity_matrix(self, got, rtol=None, atol=None):
+        """
+        Checks if a matrix is equal to the identity matrix.
+        """
+        # check it is square
+        self.assertEqual(got.shape[-1], got.shape[-2])
+        # create identity matrix
+        eye = np.eye(got.shape[-1], dtype=got.dtype)
+        resolution = 5 * np.finfo(got.dtype).resolution
+        if rtol is None:
+            rtol = 10 * resolution
+        if atol is None:
+            atol = 100 * resolution  # zeros tend to be fuzzy
+        # check it matches
+        np.testing.assert_allclose(got, eye, rtol, atol)
+
 
 class TestTestLinalgBase(TestCase):
     """
@@ -641,14 +657,7 @@ class TestLinalgInv(TestLinalgBase):
 
             if use_reconstruction:
                 rec = np.dot(got, a)
-                eye = np.eye(a.shape[0], dtype=a.dtype)
-                resolution = 5 * np.finfo(a.dtype).resolution
-                np.testing.assert_allclose(
-                    rec,
-                    eye,
-                    rtol=resolution,
-                    atol=resolution
-                )
+                self.assert_is_identity_matrix(rec)
 
             # Ensure proper resource management
             with self.assertNoNRTLeak():
@@ -1027,12 +1036,7 @@ class TestLinalgQr(TestLinalgBase):
                 )
 
                 # check q is orthonormal
-                np.testing.assert_allclose(
-                    np.eye(min(a.shape), dtype=a.dtype),
-                    np.dot(np.conjugate(q.T), q),
-                    rtol=resolution,
-                    atol=resolution
-                )
+                self.assert_is_identity_matrix(np.dot(np.conjugate(q.T), q))
 
             # Ensure proper resource management
             with self.assertNoNRTLeak():
@@ -1468,7 +1472,7 @@ class TestLinalgPinv(TestLinalgBase):
             # This can occur due to numpy using double precision
             # LAPACK when single can be used, this creates round off
             # problems. Also, if the matrix has machine precision level
-            # zeros in its singular values then the singular vectors are 
+            # zeros in its singular values then the singular vectors are
             # likely to vary depending on round off.
             if use_reconstruction:
 
@@ -1479,17 +1483,11 @@ class TestLinalgPinv(TestLinalgBase):
                 # if the problem is numerical fuzz then this will probably
                 # work, if the problem is rank deficiency then it won't!
                 rec = np.dot(got, a)
-                eye = np.eye(a.shape[-1], dtype=a.dtype)
-                resolution = 5 * np.finfo(a.dtype).resolution
                 try:
-                    np.testing.assert_allclose(
-                        rec,
-                        eye,
-                        rtol=10 * resolution,
-                        atol=100 * resolution  # zeros tend to be fuzzy
-                    )
+                    self.assert_is_identity_matrix(rec)
                 except AssertionError:
                     # check A=pinv(pinv(A))
+                    resolution = 5 * np.finfo(a.dtype).resolution
                     rec = cfunc(got)
                     np.testing.assert_allclose(
                         rec,

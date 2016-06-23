@@ -1389,10 +1389,7 @@ def pinv_impl(a, rcond=1.e-15):
 
     # convert typing floats to numpy floats for use in the impl
     s_type = getattr(a.dtype, "underlying_float", a.dtype)
-    if s_type.bitwidth == 32:
-        s_dtype = np.float32
-    else:
-        s_dtype = np.float64
+    s_dtype = np_support.as_dtype(s_type)
 
     numba_ez_gesdd_sig = types.intc(
         types.char,               # kind
