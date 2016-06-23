@@ -370,6 +370,10 @@ class ClassType(Callable, Opaque):
         super(ClassType, self).__init__(name)
         self.instance_type = self.instance_type_class(self)
 
+        # bind jitmethods
+        for fn in self.jitmethods.values():
+            fn.bind(self.instance_type)
+
     def get_call_type(self, context, args, kws):
         return self.ctor_template(context).apply(args, kws)
 

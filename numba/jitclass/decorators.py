@@ -1,7 +1,7 @@
 from __future__ import absolute_import, print_function
 
-from numba import config, types
-from .base import register_class_type, ClassBuilder
+from numba import config, types, sigutils
+from .base import register_class_type, ClassBuilder, JitMethod
 
 
 def jitclass(spec):
@@ -27,3 +27,18 @@ def jitclass(spec):
             return register_class_type(cls, spec, types.ClassType, ClassBuilder)
 
     return wrap
+
+
+def jitmethod(signatures=None, **kwargs):
+    if sigutils.is_signature(signatures):
+        signatures = [signatures]
+
+    if signatures is None:
+        signatures = []
+
+    def wrap(fn):
+        norm_sigs = [sigutils.normalize_signature(s) for s in signatures]
+        return JitMethod(fn, norm_sigs, **kwargs)
+
+    return wrap
+
