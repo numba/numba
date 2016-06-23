@@ -308,6 +308,43 @@ class UnaryNot(ConcreteTemplate):
     cases += [signature(types.boolean, op) for op in sorted(types.complex_domain)]
 
 
+class OrderedCmpOp(ConcreteTemplate):
+    cases = [signature(types.boolean, types.boolean, types.boolean)]
+    cases += [signature(types.boolean, op, op) for op in sorted(types.signed_domain)]
+    cases += [signature(types.boolean, op, op) for op in sorted(types.unsigned_domain)]
+    cases += [signature(types.boolean, op, op) for op in sorted(types.real_domain)]
+
+
+class UnorderedCmpOp(ConcreteTemplate):
+    cases = OrderedCmpOp.cases + [
+        signature(types.boolean, op, op) for op in sorted(types.complex_domain)]
+
+
+@infer
+class CmpOpLt(OrderedCmpOp):
+    key = '<'
+
+@infer
+class CmpOpLe(OrderedCmpOp):
+    key = '<='
+
+@infer
+class CmpOpGt(OrderedCmpOp):
+    key = '>'
+
+@infer
+class CmpOpGe(OrderedCmpOp):
+    key = '>='
+
+@infer
+class CmpOpEq(UnorderedCmpOp):
+    key = '=='
+
+@infer
+class CmpOpNe(UnorderedCmpOp):
+    key = '!='
+
+
 class TupleCompare(AbstractTemplate):
     def generic(self, args, kws):
         [lhs, rhs] = args
@@ -843,47 +880,6 @@ class DeferredAttribute(AttributeTemplate):
 
 
 #------------------------------------------------------------------------------
-
-
-class SimpleScalarCmpBase(AbstractTemplate):
-    def generic(self, args, kws):
-        [lhs, rhs] = args
-        # if both side are of SimpleScalar types
-        if (isinstance(lhs, types.SimpleScalar) and 
-                isinstance(rhs, types.SimpleScalar)):
-            # coerce to a common type
-            common = self.context.unify_types(lhs, rhs)
-            # return new signature 
-            return signature(types.boolean, common, common)
-
-@infer
-class SimpleScalarCmpEq(SimpleScalarCmpBase):
-    key = '=='
-
-
-@infer
-class SimpleScalarCmpEq(SimpleScalarCmpBase):
-    key = '!='
-
-
-@infer
-class SimpleScalarCmpLt(SimpleScalarCmpBase):
-    key = '<'
-
-
-@infer
-class SimpleScalarCmpGt(SimpleScalarCmpBase):
-    key = '>'
-
-
-@infer
-class SimpleScalarCmpLe(SimpleScalarCmpBase):
-    key = '<='
-
-
-@infer
-class SimpleScalarCmpGe(SimpleScalarCmpBase):
-    key = '>='
 
 
 @infer

@@ -9,7 +9,7 @@ from .. import npdatetime, utils
 from ..typeconv import Conversion
 
 
-class Boolean(SimpleScalar):
+class Boolean(Hashable, Eq, Ne, Lt, Gt, Le, Ge):
 
     def cast_python_value(self, value):
         return bool(value)
@@ -182,7 +182,7 @@ class EnumMember(Type):
         return self.class_type_class(self.instance_class, self.dtype)
 
 
-class IntEnumMember(EnumMember, SimpleScalar):
+class IntEnumMember(EnumMember):
     """
     Type class for IntEnum members.
     """
