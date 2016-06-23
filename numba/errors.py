@@ -7,10 +7,39 @@ from __future__ import print_function, division, absolute_import
 import contextlib
 from collections import defaultdict
 import warnings
+from functools import wraps
 
 
 # Filled at the end
 __all__ = []
+
+def deprecated(arg):
+    """Define a deprecation decorator.
+    An optional string should refer to the new API to be used instead.
+
+    Example:
+      @deprecated
+      def old_func(): ...
+
+      @deprecated('new_func')
+      def old_func(): ..."""
+
+    subst = arg if isinstance(arg, str) else None
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            msg = "Call to deprecated function \"{}\"."
+            if subst:
+                msg += "\n Use \"{}\" instead."
+            warnings.warn(msg.format(func.__name__, subst),
+                          category=DeprecationWarning, stacklevel=2)
+            return func(*args, **kwargs)
+
+        return wraps(func)(wrapper)
+
+    if not subst:
+        return decorator(arg)
+    else:
+        return decorator
 
 
 class NumbaWarning(Warning):
