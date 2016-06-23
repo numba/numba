@@ -294,7 +294,7 @@ def atan2_s64_impl(context, builder, sig, args):
     y = builder.sitofp(y, Type.double())
     x = builder.sitofp(x, Type.double())
     fsig = signature(types.float64, types.float64, types.float64)
-    return atan2_impl(context, builder, fsig, (y, x))
+    return atan2_float_impl(context, builder, fsig, (y, x))
 
 @lower(math.atan2, types.uint64, types.uint64)
 def atan2_u64_impl(context, builder, sig, args):
@@ -302,7 +302,7 @@ def atan2_u64_impl(context, builder, sig, args):
     y = builder.uitofp(y, Type.double())
     x = builder.uitofp(x, Type.double())
     fsig = signature(types.float64, types.float64, types.float64)
-    return atan2_impl(context, builder, fsig, (y, x))
+    return atan2_float_impl(context, builder, fsig, (y, x))
 
 @lower(math.atan2, types.Float, types.Float)
 def atan2_float_impl(context, builder, sig, args):
