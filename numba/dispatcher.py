@@ -376,7 +376,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         cannot decide the type.
         """
         # Not going through the resolve_argument_type() indirection
-        # can shape a couple µs.
+        # can save a couple µs.
         try:
             tp = typeof(val, Purpose.argument)
         except ValueError:
