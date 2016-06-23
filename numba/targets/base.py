@@ -867,9 +867,13 @@ class BaseContext(object):
         shapevals = [self.get_constant(types.intp, s) for s in ary.shape]
         cshape = Constant.array(llintp, shapevals)
 
-        # Handle strides: use strides of the equivalent C-contiguous array.
-        contig = np.ascontiguousarray(ary)
-        stridevals = [self.get_constant(types.intp, s) for s in contig.strides]
+        # Handle strides
+        if ary.ndim > 0:
+            # Use strides of the equivalent C-contiguous array.
+            contig = np.ascontiguousarray(ary)
+            stridevals = [self.get_constant(types.intp, s) for s in contig.strides]
+        else:
+            stridevals = []
         cstrides = Constant.array(llintp, stridevals)
 
         # Create array structure

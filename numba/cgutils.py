@@ -171,9 +171,10 @@ class _StructProxy(object):
             else:
                 raise TypeError("Invalid store of {value.type} to "
                                 "{ptr.type.pointee} in "
-                                "{self._datamodel}".format(value=value,
-                                                           ptr=ptr,
-                                                           self=self))
+                                "{self._datamodel} "
+                                "(trying to write member #{index})"
+                                .format(value=value, ptr=ptr, self=self,
+                                        index=index))
         self._builder.store(value, ptr)
 
     def __len__(self):
