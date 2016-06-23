@@ -37,6 +37,23 @@ class TestJitMethod(TestCase, MemoryLeakMixin):
         self.assertFalse(a.foo(None))
         self.assertEqual(a.value, 123 + 321)
 
+    @tag('important')
+    def test_init(self):
+        from numba import int32
+
+        spec = [
+            ("value", int32),
+        ]
+
+        @jitclass(spec)
+        class Apple(object):
+            @jitmethod((int32, int32))
+            def __init__(self, value, div):
+                self.value = value * div
+
+        a = Apple(123, 0.5)  # 0.5 will be truncated to 0
+        self.assertEqual(a.value, 0)
+
 
 if __name__ == '__main__':
     unittest.main()
