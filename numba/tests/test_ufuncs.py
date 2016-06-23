@@ -1396,7 +1396,10 @@ class _LoopTypesTester(TestCase):
     """
     _skip_types = 'OegG'
 
+    # Allowed deviation between Numpy and Numba results
     _ulps = {('arccos', 'F'): 2,
+             ('arcsin', 'F'): 4,
+             ('log10', 'D'): 5,
              ('tanh', 'F'): 2,
              }
 

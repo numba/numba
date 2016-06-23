@@ -17,6 +17,7 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/ndarrayobject.h>
 #include <numpy/arrayscalars.h>
+#include <numpy/npy_math.h>
 
 #include "_arraystruct.h"
 
@@ -457,8 +458,25 @@ numba_ldexpf(float x, int exp)
 
 /* provide complex power */
 NUMBA_EXPORT_FUNC(void)
-numba_cpow(Py_complex *a, Py_complex *b, Py_complex *c) {
-    *c = _Py_c_pow(*a, *b);
+numba_cpow(Py_complex *a, Py_complex *b, Py_complex *out) {
+    errno = 0;
+    *out = _Py_c_pow(*a, *b);
+    if (errno == EDOM) {
+        /* _Py_c_pow() doesn't bother returning the right value
+           in this case, as Python raises ZeroDivisionError */
+        out->real = out->imag = Py_NAN;
+    }
+}
+
+NUMBA_EXPORT_FUNC(void)
+numba_cpowf(npy_cfloat *a, npy_cfloat *b, npy_cfloat *out) {
+    Py_complex _a, _b, _out;
+    _a.real = npy_crealf(*a);
+    _a.imag = npy_cimagf(*a);
+    _b.real = npy_crealf(*b);
+    _b.imag = npy_cimagf(*b);
+    numba_cpow(&_a, &_b, &_out);
+    *out = npy_cpackf((float) _out.real, (float) _out.imag);
 }
 
 /* C99 math functions: redirect to system implementations
@@ -512,7 +530,21 @@ numba_erfcf(float x)
     return erfcf(x);
 }
 
+/* Note npy_signbit() is actually a polymorphic macro */
+NUMBA_EXPORT_FUNC(int)
+numba_signbitf(float a)
+{
+    return npy_signbit(a);
+}
 
+NUMBA_EXPORT_FUNC(int)
+numba_signbit(npy_double a)
+{
+    return npy_signbit(a);
+}
+
+
+/* Unpack any Python complex-like object into a Py_complex structure */
 NUMBA_EXPORT_FUNC(int)
 numba_complex_adaptor(PyObject* obj, Py_complex *out) {
     PyObject* fobj;
@@ -1244,8 +1276,8 @@ numba_unpickle(const char *data, int n)
 
 
 /*
-Define bridge for all math functions
-*/
+ * Define bridge for all math functions
+ */
 
 #define MATH_UNARY(F, R, A) \
     NUMBA_EXPORT_FUNC(R) numba_##F(A a) { return F(a); }
@@ -1262,8 +1294,3 @@ Define bridge for all math functions
  */
 
 #include "_lapack.c"
-
-/*
- * Numpy C math function exports
- */
-#include "_npymath_exports.c"

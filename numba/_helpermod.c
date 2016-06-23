@@ -8,7 +8,12 @@ Expose all functions as pointers in a dedicated C extension.
 /* Import _pymodule.h first, for a recent _POSIX_C_SOURCE */
 #include "_pymodule.h"
 #include <math.h>
+
+/* Numba C helpers */
 #include "_helperlib.c"
+
+/* Numpy C math function exports */
+#include "_npymath_exports.c"
 
 static PyObject *
 build_c_helpers_dict(void)
@@ -40,6 +45,7 @@ build_c_helpers_dict(void)
     declmethod(ldexp);
     declmethod(ldexpf);
     declmethod(cpow);
+    declmethod(cpowf);
     declmethod(erf);
     declmethod(erff);
     declmethod(erfc);
@@ -48,6 +54,8 @@ build_c_helpers_dict(void)
     declmethod(gammaf);
     declmethod(lgamma);
     declmethod(lgammaf);
+    declmethod(signbit);
+    declmethod(signbitf);
     declmethod(complex_adaptor);
     declmethod(adapt_ndarray);
     declmethod(ndarray_new);
