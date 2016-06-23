@@ -835,7 +835,7 @@ def complex_power_impl(context, builder, sig, args):
         with otherwise:
             # Lower with call to external function
             fnty = Type.function(Type.void(), [pa.type] * 3)
-            cpow = module.get_or_insert_function(fnty, name="numba.math.cpow")
+            cpow = module.get_or_insert_function(fnty, name="numba_cpow")
             builder.call(cpow, (pa, pb, pc))
 
     res = builder.load(pc)
