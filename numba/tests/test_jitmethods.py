@@ -2,7 +2,7 @@ from __future__ import absolute_import, print_function, division
 
 import unittest
 
-from numba import jitmethod, jitclass
+from numba import jitmethod, jitclass, njit
 from .support import TestCase, MemoryLeakMixin, tag
 
 
@@ -37,7 +37,6 @@ class TestJitMethod(TestCase, MemoryLeakMixin):
         self.assertFalse(a.foo(None))
         self.assertEqual(a.value, 123 + 321)
 
-    @tag('important')
     def test_init(self):
         from numba import int32
 
@@ -53,6 +52,46 @@ class TestJitMethod(TestCase, MemoryLeakMixin):
 
         a = Apple(123, 0.5)  # 0.5 will be truncated to 0
         self.assertEqual(a.value, 0)
+
+    def test_nogil(self):
+        from numba import float64
+
+        spec = [
+            ("value", float64),
+        ]
+
+        @jitclass(spec)
+        class Apple(object):
+            def __init__(self, value):
+                self.value = value
+
+            @jitmethod(nogil=True)
+            def method(self):
+                return self.value
+
+        @njit(nogil=True)
+        def func(self):
+            return self.value
+
+        a = Apple(3.14)
+
+        # compile the jitmethod
+        a.method()
+        # get the dispatcher object of the jitmethod from the class object
+        method = Apple.method.dispatcher
+        # load the llvm ir
+        method_llvm_list = list(method.inspect_llvm().values())
+        # ensure it references PyEval_SaveThread to release the GIL
+        self.assertIn("PyEval_SaveThread", method_llvm_list[0])
+        self.assertEqual(len(method_llvm_list), 1)
+
+        # check the non jitmethod
+        func(a)
+        func_llvm_list = list(func.inspect_llvm().values())
+        # ensure it references PyEval_SaveThread to release the GIL
+        self.assertIn("PyEval_SaveThread", func_llvm_list[0])
+        self.assertEqual(len(func_llvm_list), 1)
+
 
 
 if __name__ == '__main__':

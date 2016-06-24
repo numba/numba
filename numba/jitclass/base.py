@@ -496,11 +496,7 @@ class JitMethod(object):
         if self._dispatcher is not None:
             return
 
-        if self._signatures:
-            decor = jit(self._pad_signatures(), **self._kwargs)
-        else:
-            decor = jit
-
+        decor = jit(self._pad_signatures(), **self._kwargs)
         self._dispatcher = decor(self._fn)
 
     def _pad_signatures(self):
@@ -512,7 +508,7 @@ class JitMethod(object):
             padded_args = [self._self_type] + list(argtys)
             sig = _create_signature(retty, *padded_args)
             sigs.append(sig)
-        return sigs
+        return sigs if sigs else None
 
     #
     # For compatibiliy with Dispatcher objects
