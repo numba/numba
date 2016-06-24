@@ -97,7 +97,7 @@ class HLC(object):
         if not self.hlc.HLC_ModuleLinkIn(dst, src):
             raise Error("Failed to link modules")
 
-    def to_hsail(self, mod, opt=0):
+    def to_hsail(self, mod, opt=2):
         buf = c_char_p(0)
         if not self.hlc.HLC_ModuleEmitHSAIL(mod, int(opt), byref(buf)):
             raise Error("Failed to emit HSAIL")
@@ -108,7 +108,7 @@ class HLC(object):
     def _link_brig(self, upbrig_loc, patchedbrig_loc):
         cli.link_brig(upbrig_loc, patchedbrig_loc)
 
-    def to_brig(self, mod, opt=0):
+    def to_brig(self, mod, opt=2):
         bufptr = c_void_p(0)
         size = self.hlc.HLC_ModuleEmitBRIG(mod, int(opt), byref(bufptr))
         if not size:
@@ -151,11 +151,11 @@ class HLC(object):
             p_brig_fobj.close()
             tmp_files.append(patchedbrig_loc)
 
-        # Remove all temporary files
-        for afile in tmp_files:
-            os.unlink(afile)
-        # Remove directory
-        os.rmdir(tmpdir)
+#        # Remove all temporary files
+#        for afile in tmp_files:
+#            os.unlink(afile)
+#        # Remove directory
+#        os.rmdir(tmpdir)
 
         return patchedBrig
 
@@ -207,15 +207,15 @@ class Module(object):
 
         # Link library with the builtin modules
         with open(BUILTIN_PATH, 'rb') as builtin_fin:
-            builtin_buf = builtin_fin.read()
-        builtin_mod = self._hlc.parse_bitcode(builtin_buf)
-        self._hlc.link(main, builtin_mod)
+            builtin_buf1 = builtin_fin.read()
+        builtin_mod1 = self._hlc.parse_bitcode(builtin_buf1)
+        self._hlc.link(main, builtin_mod1)
 
         # link library with the builtin hsail-amdgpu-wrapper.ll
         with open(WRAPPER_PATH, 'rb') as builtin_fin:
-            builtin_buf = builtin_fin.read()
-        builtin_mod = self._hlc.parse_assembly(builtin_buf)
-        self._hlc.link(main, builtin_mod)
+            builtin_buf2 = builtin_fin.read()
+        builtin_mod2 = self._hlc.parse_assembly(builtin_buf2)
+        self._hlc.link(main, builtin_mod2)
 
         # Optimize
         self._hlc.optimize(main)
