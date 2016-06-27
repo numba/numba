@@ -501,7 +501,8 @@ class JitMethod(object):
 
     def _pad_signatures(self):
         """
-        Return signatures with the type of self added
+        Return signatures with the type of self added; or None if no user
+        defined signatures.
         """
         sigs = []
         for argtys, retty in self._signatures:

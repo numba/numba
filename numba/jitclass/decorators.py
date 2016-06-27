@@ -30,6 +30,16 @@ def jitclass(spec):
 
 
 def jitmethod(signatures=None, **kwargs):
+    """
+    A decorator for methods in jitclasses.
+
+    It allows user to specify the function signature and other compiler options.
+    User can provide the function signature(s) similar to the ``numba.jit``.
+    Note, the type for ``self`` (the first argument of the method) should be
+    omitted, so that the signature starts with the 2nd argument.  This decorator
+    accept the same keyword arguments as ``numba.jit``.  They are propagated
+    to ``numba.jit`` under-the-hood.
+    """
     if sigutils.is_signature(signatures):
         signatures = [signatures]
 
