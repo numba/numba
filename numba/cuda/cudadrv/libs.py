@@ -66,7 +66,7 @@ def test(_platform=None):
                 # NOTE: ignore failure of dlopen on cuBlas on OSX 10.5
                 failed = True if not _if_osx_10_5() else False
 
-    archs = 'compute_20', 'compute_30', 'compute_35'
+    archs = 'compute_20', 'compute_30', 'compute_35', 'compute_50'
     for arch in archs:
         print('\tfinding libdevice for', arch, end='...')
         path = get_libdevice(arch)

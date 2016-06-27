@@ -101,7 +101,7 @@ class TestLibDevice(unittest.TestCase):
         self._libdevice_load('compute_21', 'compute_20')
         self._libdevice_load('compute_30', 'compute_30')
         self._libdevice_load('compute_35', 'compute_35')
-        self._libdevice_load('compute_52', 'compute_35')
+        self._libdevice_load('compute_52', 'compute_50')
 
 
 gpu64 = '''
