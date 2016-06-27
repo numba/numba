@@ -79,6 +79,7 @@ class TestJitMethod(TestCase, MemoryLeakMixin):
         a.method()
         # get the dispatcher object of the jitmethod from the class object
         method = Apple.method.dispatcher
+        self.assertIs(a.method.dispatcher, method)
         # load the llvm ir
         method_llvm_list = list(method.inspect_llvm().values())
         # ensure it references PyEval_SaveThread to release the GIL
@@ -91,7 +92,6 @@ class TestJitMethod(TestCase, MemoryLeakMixin):
         # ensure it references PyEval_SaveThread to release the GIL
         self.assertIn("PyEval_SaveThread", func_llvm_list[0])
         self.assertEqual(len(func_llvm_list), 1)
-
 
 
 if __name__ == '__main__':

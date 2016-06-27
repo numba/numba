@@ -489,6 +489,10 @@ class JitMethod(object):
         self._finalize()
         return self._dispatcher
 
+    @property
+    def compiler_options(self):
+        return self._kwargs
+
     def _finalize(self):
         """
         Delayed instantiation of the dispatcher.
