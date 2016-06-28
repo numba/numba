@@ -207,6 +207,8 @@ def box_charseq(typ, val, c):
     bbend = c.builder.append_basic_block("end.string.count")
 
     # Find the length of the string
+    # FIXME: this searches for the first null byte, while Numpy searches
+    # for the last non-null byte.
     with cgutils.loop_nest(c.builder, [fullsize], fullsize.type) as [idx]:
         # Get char at idx
         ch = c.builder.load(c.builder.gep(strptr, [idx]))
