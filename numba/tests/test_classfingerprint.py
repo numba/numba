@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
+import pickle
+import copy
 from pprint import pprint
 
 from numba.classfingerprint import ClassFingerPrint
@@ -95,7 +97,78 @@ class TestClassFingerprint(unittest.TestCase):
         self.assertEqual(ccm['__doc__'], "a docstring")
         self.assertEqual(ccm['__module__'], __name__)
 
+    def test_deep_copy(self):
+        # parent
+        parent_cloned = copy.deepcopy(Parent)
+        self.assertEqual(ClassFingerPrint(Parent),
+                         ClassFingerPrint(parent_cloned))
+        # child
+        child_cloned = copy.deepcopy(Child)
+        self.assertEqual(ClassFingerPrint(Child),
+                         ClassFingerPrint(child_cloned))
 
+    def test_shallow_copy(self):
+        # parent
+        parent_cloned = copy.copy(Parent)
+        self.assertEqual(ClassFingerPrint(Parent),
+                         ClassFingerPrint(parent_cloned))
+        # child
+        child_cloned = copy.copy(Child)
+        self.assertEqual(ClassFingerPrint(Child),
+                         ClassFingerPrint(child_cloned))
+
+    def test_pickled_class(self):
+        # parent
+        parent_cloned = pickle.loads(pickle.dumps(Parent))
+        self.assertEqual(ClassFingerPrint(Parent),
+                         ClassFingerPrint(parent_cloned))
+        # child
+        child_cloned = pickle.loads(pickle.dumps(Child))
+        self.assertEqual(ClassFingerPrint(Child),
+                         ClassFingerPrint(child_cloned))
+
+    def test_patching_parent(self):
+        # dynamically create a clone of Parent class
+        parent_cloned = type('Parent', Parent.__bases__, Parent.__dict__.copy())
+        child_cloned = type('Child', (parent_cloned,), Child.__dict__.copy())
+        # equal initially
+        self.assertEqual(ClassFingerPrint(Parent).hexdigest(),
+                         ClassFingerPrint(parent_cloned).hexdigest())
+        self.assertEqual(ClassFingerPrint(Child).hexdigest(),
+                         ClassFingerPrint(child_cloned).hexdigest())
+        # monkey patch
+        def newfoo(self):
+            pass
+        parent_cloned.foo = newfoo
+        self.assertIs(parent_cloned.foo, newfoo)
+        self.assertIsNot(parent_cloned.foo, Parent.foo)
+        # not equal after patching
+        self.assertNotEqual(ClassFingerPrint(Parent).hexdigest(),
+                            ClassFingerPrint(parent_cloned).hexdigest())
+        self.assertNotEqual(ClassFingerPrint(Child).hexdigest(),
+                            ClassFingerPrint(child_cloned).hexdigest())
+
+    def test_patching_child(self):
+        # dynamically create a clone of Child class
+        parent_cloned = type('Parent', Parent.__bases__, Parent.__dict__.copy())
+        child_cloned = type('Child', (parent_cloned,), Child.__dict__.copy())
+        # equal initially
+        self.assertEqual(ClassFingerPrint(Parent).hexdigest(),
+                         ClassFingerPrint(parent_cloned).hexdigest())
+        self.assertEqual(ClassFingerPrint(Child).hexdigest(),
+                         ClassFingerPrint(child_cloned).hexdigest())
+        # monkey patch
+        def newbar(self):
+            pass
+        child_cloned.bar = newbar
+        self.assertIs(child_cloned.bar, newbar)
+        self.assertIsNot(child_cloned.bar, Child.bar)
+        # not equal after patching
+        self.assertNotEqual(ClassFingerPrint(Child).hexdigest(),
+                            ClassFingerPrint(child_cloned).hexdigest())
+        # parent is still equal
+        self.assertEqual(ClassFingerPrint(Parent).hexdigest(),
+                         ClassFingerPrint(parent_cloned).hexdigest())
 
 if __name__ == '__main__':
     unittest.main()
