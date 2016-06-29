@@ -27,7 +27,7 @@ class RewritePrintCalls(Rewrite):
                 try:
                     callee = interp.infer_constant(expr.func)
                 except errors.ConstantInferenceError:
-                    pass
+                    continue
                 if callee is print:
                     prints[inst] = expr
         return len(prints) > 0

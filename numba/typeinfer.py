@@ -359,9 +359,12 @@ class CallConstraint(object):
         # Resolve call type
         sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
         if sig is None:
-            desc = context.explain_function_type(fnty)
+            # Arguments are invalid => explain why
             headtemp = "Invalid usage of {0} with parameters ({1})"
+            args = [str(a) for a in pos_args]
+            args += ["%s=%s" % (k, v) for k, v in sorted(kw_args.items())]
             head = headtemp.format(fnty, ', '.join(map(str, args)))
+            desc = context.explain_function_type(fnty)
             msg = '\n'.join([head, desc])
             raise TypingError(msg, loc=self.loc)
         typeinfer.add_type(self.target, sig.return_type)

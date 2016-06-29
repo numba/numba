@@ -68,12 +68,13 @@ class TestTypingError(unittest.TestCase):
         type inference because TimeDeltaMixOp always assumed at least one of
         its operands was an NPTimeDelta in its generic() method.
         '''
-        try:
+        with self.assertRaises(TypingError) as raises:
             compile_isolated(issue_868, (types.Array(types.int32, 1, 'C'),))
-        except TypingError as e:
-            self.assertTrue(e.msg.startswith('Invalid usage of * '))
-        else:
-            self.fail('Should raise error')
+
+        expected = (
+            "Invalid usage of * with parameters (({0} x 1), {0})"
+            .format(str(types.intp)))
+        self.assertIn(expected, str(raises.exception))
 
     def test_return_type_unification(self):
         with self.assertRaises(TypingError) as raises:
