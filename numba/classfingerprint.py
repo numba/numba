@@ -113,5 +113,8 @@ class ClassFingerPrint(object):
 
 
 def _dump_function(fn):
-    return marshal.dumps(fn.__code__)
+    # only consider the attributes that startswith 'co_'
+    co = fn.__code__
+    out = tuple((k, getattr(co, k)) for k in dir(co) if k.startswith('co_'))
+    return pickle.dumps(out)
 
