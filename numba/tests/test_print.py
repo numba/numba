@@ -29,6 +29,13 @@ def print_values(a, b, c):
 def print_empty():
     print()
 
+def print_string(x):
+    print(x, "hop!", 3.5)
+
+def print_vararg(a, b, c):
+    print(a, b, *c)
+
+
 def make_print_closure(x):
     def print_closure():
         return x
@@ -127,6 +134,24 @@ class TestPrint(TestCase):
         with captured_stdout():
             cfunc()
             self.assertEqual(sys.stdout.getvalue(), '\n')
+
+    @tag('important')
+    def test_print_strings(self):
+        pyfunc = print_string
+        cr = compile_isolated(pyfunc, (types.int32,))
+        cfunc = cr.entry_point
+        with captured_stdout():
+            cfunc(1)
+            self.assertEqual(sys.stdout.getvalue(), '1 hop! 3.5\n')
+
+    def test_print_vararg(self):
+        # Test *args support for print().  This is desired since
+        # print() can use a dedicated IR node.
+        pyfunc = print_vararg
+        cfunc = jit(nopython=True)(pyfunc)
+        with captured_stdout():
+            cfunc(1, (2, 3), (4, 5j))
+            self.assertEqual(sys.stdout.getvalue(), '1 (2, 3) 4 5j\n')
 
 
 if __name__ == '__main__':

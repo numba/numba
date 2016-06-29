@@ -524,6 +524,27 @@ class SetAttrConstraint(object):
         return self.signature
 
 
+class PrintConstraint(object):
+    def __init__(self, args, loc):
+        self.args = args
+        self.loc = loc
+
+    def __call__(self, typeinfer):
+        typevars = typeinfer.typevars
+        if not all(typevars[var.name].defined
+                   for var in self.args):
+            return
+        argtys = [typevars[var.name].getone() for var in self.args]
+        fnty = typeinfer.context.resolve_value_type(print)
+        assert fnty is not None
+
+        sig = typeinfer.resolve_call(fnty, argtys, {})
+        self.signature = sig
+
+    def get_call_signature(self):
+        return self.signature
+
+
 class TypeVarMap(dict):
     def set_context(self, context):
         self.context = context
@@ -763,6 +784,8 @@ class TypeInferer(object):
             self.typeof_delitem(inst)
         elif isinstance(inst, ir.SetAttr):
             self.typeof_setattr(inst)
+        elif isinstance(inst, ir.Print):
+            self.typeof_print(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
             pass
         elif isinstance(inst, ir.StaticRaise):
@@ -793,6 +816,11 @@ class TypeInferer(object):
     def typeof_setattr(self, inst):
         constraint = SetAttrConstraint(target=inst.target, attr=inst.attr,
                                        value=inst.value, loc=inst.loc)
+        self.constraints.append(constraint)
+        self.calls.append((inst, constraint))
+
+    def typeof_print(self, inst):
+        constraint = PrintConstraint(args=inst.args, loc=inst.loc)
         self.constraints.append(constraint)
         self.calls.append((inst, constraint))
 
