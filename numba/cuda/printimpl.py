@@ -11,12 +11,11 @@ lower = registry.lower
 
 voidptr = Type.pointer(Type.int(8))
 
+
 @lower("print_item", types.Integer)
 def int_print_impl(context, builder, sig, args):
     [x] = args
     [srctype] = sig.args
-    mod = builder.module
-    vprint = nvvmutils.declare_vprint(mod)
     if srctype in types.unsigned_domain:
         rawfmt = "%llu"
         dsttype = types.uint64
@@ -25,42 +24,27 @@ def int_print_impl(context, builder, sig, args):
         dsttype = types.int64
     fmt = context.insert_string_const_addrspace(builder, rawfmt)
     lld = context.cast(builder, x, srctype, dsttype)
-    valptr = cgutils.alloca_once(builder, context.get_value_type(dsttype))
-    builder.store(lld, valptr)
-    builder.call(vprint, [fmt, builder.bitcast(valptr, voidptr)])
-    return context.get_dummy_value()
+    return rawfmt, [lld]
 
 
 @lower("print_item", types.Float)
 def real_print_impl(context, builder, sig, args):
     [x] = args
     [srctype] = sig.args
-    mod = builder.module
-    vprint = nvvmutils.declare_vprint(mod)
     rawfmt = "%f"
     dsttype = types.float64
-    fmt = context.insert_string_const_addrspace(builder, rawfmt)
     lld = context.cast(builder, x, srctype, dsttype)
-    valptr = cgutils.alloca_once(builder, context.get_value_type(dsttype))
-    builder.store(lld, valptr)
-    builder.call(vprint, [fmt, builder.bitcast(valptr, voidptr)])
-    return context.get_dummy_value()
+    return rawfmt, [lld]
 
 
 @lower("print_item", types.Const)
 def const_print_impl(context, builder, sig, args):
     ty, = sig.args
     pyval = ty.value
-    # This is ensured by lowering
-    assert isinstance(pyval, str)
-
-    vprint = nvvmutils.declare_vprint(builder.module)
+    assert isinstance(pyval, str)  # Ensured by lowering
     rawfmt = "%s"
-    fmt = context.insert_string_const_addrspace(builder, rawfmt)
     val = context.insert_string_const_addrspace(builder, pyval)
-    valptr = cgutils.alloca_once_value(builder, val)
-    builder.call(vprint, (fmt, builder.bitcast(valptr, voidptr)))
-    return context.get_dummy_value()
+    return rawfmt, [val]
 
 
 @lower(print, types.VarArg(types.Any))
@@ -69,18 +53,26 @@ def print_varargs(context, builder, sig, args):
     It dispatches to the appropriate 'print' implementations above
     depending on the detected real types in the signature."""
 
-    mod = builder.module
-    vprint = nvvmutils.declare_vprint(mod)
-    sep = context.insert_string_const_addrspace(builder, " ")
-    eol = context.insert_string_const_addrspace(builder, "\n")
+    vprint = nvvmutils.declare_vprint(builder.module)
+
+    formats = []
+    values = []
 
     for i, (argtype, argval) in enumerate(zip(sig.args, args)):
+        # XXX The return type is a lie: "print_item" doesn't return
+        # a LLVM value at all.
         signature = typing.signature(types.none, argtype)
-        imp = context.get_function("print_item", signature)
-        imp(builder, [argval])
-        if i < len(args) - 1:
-            builder.call(vprint, (sep, Constant.null(voidptr)))
+        impl = context.get_function("print_item", signature)
+        argfmt, argvals = impl(builder, (argval,))
+        formats.append(argfmt)
+        values.extend(argvals)
 
-    builder.call(vprint, (eol, Constant.null(voidptr)))
+    rawfmt = " ".join(formats) + "\n"
+    fmt = context.insert_string_const_addrspace(builder, rawfmt)
+    array = cgutils.make_anonymous_struct(builder, values)
+    arrayptr = cgutils.alloca_once_value(builder, array)
+
+    vprint = nvvmutils.declare_vprint(builder.module)
+    builder.call(vprint, (fmt, builder.bitcast(arrayptr, voidptr)))
 
     return context.get_dummy_value()

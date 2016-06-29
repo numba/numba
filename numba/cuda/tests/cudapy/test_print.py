@@ -10,6 +10,7 @@ from numba.cuda.testing import captured_cuda_stdout
 def cuhello():
     i = cuda.grid(1)
     print(i, 999)
+    print(-42)
 
 
 def printfloat():
@@ -32,10 +33,12 @@ class TestPrint(unittest.TestCase):
         jcuhello = cuda.jit('void()', debug=False)(cuhello)
         with captured_cuda_stdout() as stdout:
             jcuhello[2, 3]()
-        # The output of GPU threads is intermingled, just sanity check it
+        # The output of GPU threads is intermingled, but each print()
+        # call is still atomic
         out = stdout.getvalue()
-        expected = ''.join('%d 999\n' % i for i in range(6))
-        self.assertEqual(sorted(out), sorted(expected))
+        lines = sorted(out.splitlines(True))
+        expected = ['-42\n'] * 6 + ['%d 999\n' % i for i in range(6)]
+        self.assertEqual(lines, expected)
 
     def test_printfloat(self):
         jprintfloat = cuda.jit('void()', debug=False)(printfloat)
@@ -54,8 +57,11 @@ class TestPrint(unittest.TestCase):
     def test_string(self):
         cufunc = cuda.jit('void()', debug=False)(printstring)
         with captured_cuda_stdout() as stdout:
-            cufunc()
-        self.assertEqual(stdout.getvalue(), "0 hop! 999\n")
+            cufunc[1, 3]()
+        out = stdout.getvalue()
+        lines = sorted(out.splitlines(True))
+        expected = ['%d hop! 999\n' % i for i in range(3)]
+        self.assertEqual(lines, expected)
 
 
 if __name__ == '__main__':
