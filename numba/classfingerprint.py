@@ -80,9 +80,13 @@ class ClassFingerPrint(object):
             if isinstance(value, kind):
                 return key, self._handle(kind, value)
         else:
-            # unknown class attributes
-            fmt = "fail to handle {0} of {1}"
-            raise TypeError(fmt.format(key, type(value)))
+            # accept anything that defines `.py_func` to avoid circular import
+            if hasattr(value, 'py_func'):
+                return key, ('other', _dump_function(value.py_func))
+            else:
+                # unknown class attributes
+                fmt = "fail to handle {0} of {1}"
+                raise TypeError(fmt.format(key, type(value)))
 
     def _handle(self, kind, value):
         fn = getattr(self, '_handle_' + kind.__name__)
