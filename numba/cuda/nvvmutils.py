@@ -61,6 +61,8 @@ def declare_string(builder, value):
 
 def declare_vprint(lmod):
     voidptrty = lc.Type.pointer(lc.Type.int(8))
+    # NOTE: the second argument to vprintf() points to the variable-length
+    # array of arguments (after the format)
     vprintfty = lc.Type.function(lc.Type.int(), [voidptrty, voidptrty])
     vprintf = lmod.get_or_insert_function(vprintfty, "vprintf")
     return vprintf
