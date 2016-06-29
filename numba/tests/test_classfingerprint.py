@@ -140,8 +140,9 @@ class TestClassFingerprint(unittest.TestCase):
         def newfoo(self):
             pass
         parent_cloned.foo = newfoo
-        self.assertIs(parent_cloned.foo, newfoo)
-        self.assertIsNot(parent_cloned.foo, Parent.foo)
+        self.assertIs(_unwrap_method(parent_cloned.foo), newfoo)
+        self.assertIsNot(_unwrap_method(parent_cloned.foo),
+                         _unwrap_method(Parent.foo))
         # not equal after patching
         self.assertNotEqual(ClassFingerPrint(Parent).hexdigest(),
                             ClassFingerPrint(parent_cloned).hexdigest())
@@ -161,14 +162,21 @@ class TestClassFingerprint(unittest.TestCase):
         def newbar(self):
             pass
         child_cloned.bar = newbar
-        self.assertIs(child_cloned.bar, newbar)
-        self.assertIsNot(child_cloned.bar, Child.bar)
+        self.assertIs(_unwrap_method(child_cloned.bar), newbar)
+        self.assertIsNot(_unwrap_method(child_cloned.bar),
+                         _unwrap_method(Child.bar))
         # not equal after patching
         self.assertNotEqual(ClassFingerPrint(Child).hexdigest(),
                             ClassFingerPrint(child_cloned).hexdigest())
         # parent is still equal
         self.assertEqual(ClassFingerPrint(Parent).hexdigest(),
                          ClassFingerPrint(parent_cloned).hexdigest())
+
+
+def _unwrap_method(method):
+    # for python2 unbound method
+    return getattr(method, '__func__', method)
+
 
 if __name__ == '__main__':
     unittest.main()
