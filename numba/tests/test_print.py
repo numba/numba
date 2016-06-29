@@ -35,6 +35,9 @@ def print_string(x):
 def print_vararg(a, b, c):
     print(a, b, *c)
 
+def print_string_vararg(a, b, c):
+    print(a, "hop!", b, *c)
+
 
 def make_print_closure(x):
     def print_closure():
@@ -152,6 +155,12 @@ class TestPrint(TestCase):
         with captured_stdout():
             cfunc(1, (2, 3), (4, 5j))
             self.assertEqual(sys.stdout.getvalue(), '1 (2, 3) 4 5j\n')
+
+        pyfunc = print_string_vararg
+        cfunc = jit(nopython=True)(pyfunc)
+        with captured_stdout():
+            cfunc(1, (2, 3), (4, 5j))
+            self.assertEqual(sys.stdout.getvalue(), '1 hop! (2, 3) 4 5j\n')
 
 
 if __name__ == '__main__':

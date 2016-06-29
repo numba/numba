@@ -540,7 +540,7 @@ class Lower(BaseLower):
         fixed_sig = typing.signature(sig.return_type, *pos_tys)
         fixed_sig.pysig = sig.pysig
 
-        argvals = self.fold_call_args(fnty, sig, pos_args, None, {})
+        argvals = self.fold_call_args(fnty, sig, pos_args, inst.vararg, {})
         impl = self.context.get_function(print, fixed_sig)
         impl(self.builder, argvals)
 

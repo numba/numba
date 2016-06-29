@@ -21,8 +21,8 @@ class RewritePrintCalls(Rewrite):
         for inst in block.find_insts(ir.Assign):
             if isinstance(inst.value, ir.Expr) and inst.value.op == 'call':
                 expr = inst.value
-                if expr.vararg or expr.kws:
-                    # Only plain positional args are supported
+                if expr.kws:
+                    # Only positional args are supported
                     continue
                 try:
                     callee = interp.infer_constant(expr.func)
@@ -42,7 +42,8 @@ class RewritePrintCalls(Rewrite):
         for inst in self.block.body:
             if inst in self.prints:
                 expr = self.prints[inst]
-                print_node = ir.Print(args=expr.args, loc=expr.loc)
+                print_node = ir.Print(args=expr.args, vararg=expr.vararg,
+                                      loc=expr.loc)
                 new_block.append(print_node)
                 assign_node = ir.Assign(value=ir.Const(None, loc=expr.loc),
                                         target=inst.target,

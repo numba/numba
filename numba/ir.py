@@ -435,8 +435,9 @@ class Print(Stmt):
     """
     Print some values.
     """
-    def __init__(self, args, loc):
+    def __init__(self, args, vararg, loc):
         self.args = args
+        self.vararg = vararg
         # Constant-inferred arguments
         self.consts = {}
         self.loc = loc
