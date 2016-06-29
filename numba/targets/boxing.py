@@ -201,31 +201,20 @@ def box_charseq(typ, val, c):
     rawptr = cgutils.alloca_once_value(c.builder, value=val)
     strptr = c.builder.bitcast(rawptr, c.pyapi.cstring)
     fullsize = c.context.get_constant(types.intp, typ.count)
-    zero = c.context.get_constant(types.intp, 0)
+    zero = fullsize.type(0)
+    one = fullsize.type(1)
     count = cgutils.alloca_once_value(c.builder, zero)
 
-    bbend = c.builder.append_basic_block("end.string.count")
-
-    # Find the length of the string
+    # Find the length of the string, mimicking Numpy's behaviour:
+    # search for the last non-null byte in the underlying storage
+    # (e.g. b'A\0\0B\0\0\0' will return the logical string b'A\0\0B')
     with cgutils.loop_nest(c.builder, [fullsize], fullsize.type) as [idx]:
         # Get char at idx
         ch = c.builder.load(c.builder.gep(strptr, [idx]))
-        # Store the current index as count
-        c.builder.store(idx, count)
-        # Check if the char is a null-byte
-        ch_is_null = cgutils.is_null(c.builder, ch)
-        # If the char is a null-byte
-        with c.builder.if_then(ch_is_null):
-            # Jump to the end
-            c.builder.branch(bbend)
+        # If the char is a non-null-byte, store the next index as count
+        with c.builder.if_then(cgutils.is_not_null(c.builder, ch)):
+            c.builder.store(c.builder.add(idx, one), count)
 
-    # This is reached if there is no null-byte in the string
-    # Then, set count to the fullsize
-    c.builder.store(fullsize, count)
-    # Jump to the end
-    c.builder.branch(bbend)
-
-    c.builder.position_at_end(bbend)
     strlen = c.builder.load(count)
     return c.pyapi.bytes_from_string_and_size(strptr, strlen)
 

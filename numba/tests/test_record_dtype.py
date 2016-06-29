@@ -714,6 +714,7 @@ class TestRecordDtypeWithStructArraysAndDispatcher(TestRecordDtypeWithStructArra
 
 
 class TestRecordDtypeWithCharSeq(unittest.TestCase):
+
     def _createSampleaArray(self):
         self.refsample1d = np.recarray(3, dtype=recordwithcharseq)
         self.nbsample1d = np.zeros(3, dtype=recordwithcharseq)
@@ -721,9 +722,10 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
     def _fillData(self, arr):
         for i in range(arr.size):
             arr[i]['m'] = i
-            arr[i]['n'] = "%d" % i
 
         arr[0]['n'] = 'abcde'  # no null-byte
+        arr[1]['n'] = 'xyz'  # null-byte
+        arr[2]['n'] = 'u\x00v\x00\x00'  # null-byte at the middle and then at end
 
     def setUp(self):
         self._createSampleaArray()

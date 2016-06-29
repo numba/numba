@@ -1323,6 +1323,10 @@ class PythonAPI(object):
         return cgutils.is_not_null(self.builder, self.err_occurred())
 
     def to_native_value(self, typ, obj):
+        """
+        Unbox the Python object as the given Numba type.
+        A NativeValue instance is returned.
+        """
         impl = _unboxers.lookup(typ.__class__)
         if impl is None:
             raise NotImplementedError("cannot convert %s to native value" % (typ,))
@@ -1338,6 +1342,11 @@ class PythonAPI(object):
         return out
 
     def from_native_value(self, typ, val, env_manager=None):
+        """
+        Box the native value of the given Numba type.  A Python object
+        pointer is returned (NULL if an error occurred).
+        This method steals any native (NRT) reference embedded in *val*.
+        """
         impl = _boxers.lookup(typ.__class__)
         if impl is None:
             raise NotImplementedError("cannot convert native %s to Python object" % (typ,))
