@@ -32,6 +32,26 @@ class ClassFingerPrint(object):
         return dict(self._gen_body_info())
 
     #
+    # Comparisons
+    #
+
+    def __hash__(self):
+        return hex(self.digest())
+
+    def __eq__(self, other):
+        if isinstance(other, ClassFingerPrint):
+            return self.digest() == other.digest()
+        else:
+            return NotImplemented
+
+    def __ne__(self, other):
+        res = self == other
+        if res is NotImplemented:
+            return res
+        else:
+            return not res
+
+    #
     # Internal API
     #
 
