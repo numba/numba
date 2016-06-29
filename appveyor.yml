@@ -23,7 +23,9 @@ init:
   - set PATH=%MINICONDA%;%MINICONDA%/Scripts;%MINICONDA%/Library/bin;%PATH%
 
 install:
-  - conda update -q -y conda
+  # Update to a known good conda
+  # (to workaround http://help.appveyor.com/discussions/problems/4910)
+  - conda install -q -y conda=4.1.4
   - buildscripts\\incremental\\setup_conda_environment.cmd
   # Build the package
   - call activate %CONDA_ENV%
