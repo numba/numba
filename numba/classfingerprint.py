@@ -78,8 +78,7 @@ class ClassFingerPrint(object):
         data = []
         for attr in ['fget', 'fset', 'fdel']:
             fn = getattr(value, attr, None)
-            if fn:
-                data.append(_dump_function(fn))
+            data.append(_dump_function(fn) if fn else None)
         return data
 
     def _handle_staticmethod(self, value):

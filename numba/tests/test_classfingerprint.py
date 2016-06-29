@@ -28,6 +28,7 @@ class Parent(object):
 
 
 class Child(Parent):
+    "a docstring"
     def bar(self):
         return
 
@@ -56,6 +57,43 @@ class TestClassFingerprint(unittest.TestCase):
         digest1 = ClassFingerPrint(Parent).hexdigest()
         digest2 = ClassFingerPrint(Child).hexdigest()
         self.assertNotEqual(digest1, digest2)
+
+    def test_considered_members_parent(self):
+        cfp = ClassFingerPrint(Parent)
+        ccm = cfp.considered_class_members()
+        expected_members = ['__doc__', '__module__', '__weakref__',
+                            '__dict__', 'a_classmethod', 'a_staticmethod',
+                            'foo', 'prop']
+        self.assertEqual(set(ccm.keys()), set(expected_members))
+        # check member types
+        self.assertEqual(ccm['a_classmethod'][0], 'classmethod')
+        self.assertIsInstance(ccm['a_classmethod'][1], bytes)
+
+        self.assertEqual(ccm['a_staticmethod'][0], 'staticmethod')
+        self.assertIsInstance(ccm['a_staticmethod'][1], bytes)
+
+        self.assertEqual(ccm['foo'][0], 'function')
+        self.assertIsInstance(ccm['foo'][1], bytes)
+
+        self.assertEqual(ccm['prop'][0], 'property')
+        fget, fset, fdel = ccm['prop'][1]
+        self.assertIsInstance(fget, bytes)
+        self.assertIsInstance(fset, bytes)
+        self.assertIsNone(fdel)
+
+        self.assertEqual(ccm['__weakref__'][0], 'getset_descriptor')
+        self.assertEqual(ccm['__doc__'], None)
+        self.assertEqual(ccm['__module__'], __name__)
+
+    def test_considered_members_child(self):
+        cfp = ClassFingerPrint(Child)
+        ccm = cfp.considered_class_members()
+        expected_members = ['__doc__', '__module__', 'bar']
+        self.assertEqual(set(ccm.keys()), set(expected_members))
+        self.assertEqual(ccm['bar'][0], 'function')
+        self.assertIsInstance(ccm['bar'][1], bytes)
+        self.assertEqual(ccm['__doc__'], "a docstring")
+        self.assertEqual(ccm['__module__'], __name__)
 
 
 
