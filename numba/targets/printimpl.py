@@ -10,15 +10,33 @@ registry = Registry()
 lower = registry.lower
 
 
-# FIXME: the current implementation relies on CPython API even in
-#        nopython mode.
+# NOTE: the current implementation relies on CPython API even in
+#       nopython mode.
+
+
+@lower("print_item", types.Const)
+def print_item_impl(context, builder, sig, args):
+    """
+    Print a single constant value.
+    """
+    ty, = sig.args
+    val = ty.value
+
+    pyapi = context.get_python_api(builder)
+
+    strobj = pyapi.unserialize(pyapi.serialize_object(val))
+    pyapi.print_object(strobj)
+    pyapi.decref(strobj)
+
+    res = context.get_dummy_value()
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 @lower("print_item", types.Any)
-def bool_print_impl(context, builder, sig, args):
+def print_item_impl(context, builder, sig, args):
     """
-    Print a single value by boxing it in a Python object and invoking
-    the Python interpreter's print routine.
+    Print a single native value by boxing it in a Python object and
+    invoking the Python interpreter's print routine.
     """
     ty, = sig.args
     val, = args
@@ -45,7 +63,10 @@ def bool_print_impl(context, builder, sig, args):
 
 
 @lower(print, types.VarArg(types.Any))
-def print_varargs(context, builder, sig, args):
+def print_varargs_impl(context, builder, sig, args):
+    """
+    A entire print() call.
+    """
     pyapi = context.get_python_api(builder)
     gil = pyapi.gil_ensure()
 
