@@ -1239,12 +1239,12 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
             context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
         # Check for array overlap
-        dest_start, dest_end = get_array_memory_extents(context, builder, aryty, ary,
-                                                        dest_shapes, dest_strides, dest_data)
+        src_start, src_end = get_array_memory_extents(context, builder, srcty, src,
+                                                      src_shapes, src_strides, src_data)
 
-        src_lower, src_upper = indexer.get_offset_bounds(src_strides, src.itemsize)
-        src_start, src_end = compute_memory_extents(context, builder,
-                                                    src_lower, src_upper, src_data)
+        dest_lower, dest_upper = indexer.get_offset_bounds(dest_strides, ary.itemsize)
+        dest_start, dest_end = compute_memory_extents(context, builder,
+                                                      dest_lower, dest_upper, dest_data)
 
         use_copy = extents_may_overlap(context, builder, src_start, src_end, dest_start, dest_end)
 
