@@ -925,6 +925,30 @@ class BaseContext(object):
         if not self.enable_nrt:
             raise RuntimeError("Require NRT")
 
+    def nrt_allocate(self, builder, size):
+        """
+        Low-level allocate a new memory area of `size` bytes.
+        """
+        self._require_nrt()
+
+        mod = builder.module
+        fnty = llvmir.FunctionType(void_ptr,
+                                   [self.get_value_type(types.intp)])
+        fn = mod.get_or_insert_function(fnty, name="NRT_Allocate")
+        fn.return_value.add_attribute("noalias")
+        return builder.call(fn, [size])
+
+    def nrt_free(self, builder, ptr):
+        """
+        Low-level free a memory area allocated with nrt_allocate().
+        """
+        self._require_nrt()
+
+        mod = builder.module
+        fnty = llvmir.FunctionType(llvmir.VoidType(), [void_ptr])
+        fn = mod.get_or_insert_function(fnty, name="NRT_Free")
+        return builder.call(fn, [ptr])
+
     def nrt_meminfo_alloc(self, builder, size):
         """
         Allocate a new MemInfo with a data payload of `size` bytes.
