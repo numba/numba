@@ -562,7 +562,8 @@ class Indexer(object):
 
     def get_index_bounds(self):
         """
-        XXX
+        Return a half-open [lower, upper) range of indices this dimension
+        is guaranteed not to step out of.
         """
         raise NotImplementedError
 
@@ -946,12 +947,15 @@ class FancyIndexer(object):
 
     def get_shape(self):
         """
-        Get the resulting shape as Python tuple.
+        Get the resulting data shape as Python tuple.
         """
         return self.indexers_shape
 
     def get_offset_bounds(self, strides, itemsize):
         """
+        Get a half-open [lower, upper) range of byte offsets spanned by
+        the indexer with the given strides and itemsize.  The indexer is
+        guaranteed to not go past those bounds.
         """
         assert len(strides) == self.aryty.ndim
         builder = self.builder
@@ -1098,6 +1102,8 @@ def offset_bounds_from_strides(context, builder, arrty, arr, shapes, strides):
 
 def compute_memory_extents(context, builder, lower, upper, data):
     """
+    Given [lower, upper) byte offsets and a base data pointer,
+    compute the memory pointer bounds as pointer-sized integers.
     """
     data_ptr_as_int = builder.ptrtoint(data, lower.type)
     start = builder.add(data_ptr_as_int, lower)
