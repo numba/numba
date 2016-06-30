@@ -14,6 +14,7 @@ from numba.tests.matmul_usecase import has_blas
 cc = CC('pycc_test_simple')
 cc.use_nrt = False
 
+# Note the first signature omits the return type
 @cc.export('multf', (float32, float32))
 @cc.export('multi', 'i4(i4, i4)')
 def mult(a, b):
@@ -51,6 +52,15 @@ def sqrt(u):
 @cc_helperlib.export('size', 'i8(f8[:])')
 def size(arr):
     return arr.size
+
+# Exercise linking to Numpy math functions
+@cc_helperlib.export('np_sqrt', 'f8(f8)')
+def np_sqrt(u):
+    return np.sqrt(u)
+
+@cc_helperlib.export('spacing', 'f8(f8)')
+def np_spacing(u):
+    return np.spacing(u)
 
 
 # This one clashes with libc random() unless pycc is careful with naming.

@@ -13,8 +13,8 @@ from llvmlite.llvmpy import core as lc
 
 import numpy as np
 
-from . import builtins, ufunc_db, arrayobj
-from .imputils import Registry, impl_ret_new_ref
+from . import builtins, callconv, ufunc_db, arrayobj
+from .imputils import Registry, impl_ret_new_ref, force_error_model
 from .. import typing, types, cgutils, numpy_support, utils
 from ..config import PYVERSION
 from ..numpy_support import ufunc_find_matching_loop, select_array_wrapper
@@ -410,7 +410,8 @@ def _ufunc_db_function(ufunc):
             cast_args = [self.cast(val, inty, outty)
                          for val, inty, outty in zip(args, osig.args,
                                                      isig.args)]
-            res = self.fn(self.context, self.builder, isig, cast_args)
+            with force_error_model(self.context, 'numpy'):
+                res = self.fn(self.context, self.builder, isig, cast_args)
             dmm = self.context.data_model_manager
             res = dmm[isig.return_type].from_return(self.builder, res)
             return self.cast(res, isig.return_type, osig.return_type)

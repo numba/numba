@@ -3,6 +3,7 @@ Define @jit and related decorators.
 """
 
 from __future__ import print_function, division, absolute_import
+
 import warnings
 
 from . import config, sigutils
@@ -167,9 +168,13 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
         if cache:
             disp.enable_caching()
         if sigs is not None:
-            for sig in sigs:
-                disp.compile(sig)
-            disp.disable_compile()
+            # Register the Dispatcher to the type inference mechanism,
+            # even though the decorator hasn't returned yet.
+            from . import typeinfer
+            with typeinfer.register_dispatcher(disp):
+                for sig in sigs:
+                    disp.compile(sig)
+                disp.disable_compile()
         return disp
 
     return wrapper

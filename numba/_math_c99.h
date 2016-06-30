@@ -49,6 +49,7 @@ VISIBILITY_HIDDEN float m_truncf(float x);
 VISIBILITY_HIDDEN double m_atan2(double y, double x);
 VISIBILITY_HIDDEN float m_atan2f(float y, float x);
 
+
 #if !HAVE_C99_MATH
 
 /* Define missing math functions */
@@ -79,7 +80,6 @@ VISIBILITY_HIDDEN float m_atan2f(float y, float x);
 #define roundf(x) m_roundf(x)
 #define trunc(x) m_trunc(x)
 #define truncf(x) m_truncf(x)
-
 
 #define atan2f(x, y) m_atan2f(x, y)
 

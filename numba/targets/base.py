@@ -4,6 +4,7 @@ from collections import namedtuple, defaultdict
 import copy
 import os
 import sys
+from itertools import permutations, takewhile
 
 import numpy as np
 
@@ -34,29 +35,85 @@ class OverloadSelector(object):
 
     In the current implementation:
     - a "signature" is a tuple of type classes or type instances
-    - the "best candidate" is simply the first match
+    - the "best candidate" is the most specific match
     """
 
     def __init__(self):
         # A list of (formal args tuple, value)
         self.versions = []
+        self._cache = {}
 
     def find(self, sig):
+        out = self._cache.get(sig)
+        if out is None:
+            out = self._find(sig)
+            self._cache[sig] = out
+        return out
+
+    def _find(self, sig):
+        candidates = self._select_compatible(sig)
+        if candidates:
+            return candidates[self._best_signature(candidates)]
+        else:
+            raise NotImplementedError(self, sig)
+
+    def _select_compatible(self, sig):
+        """
+        Select all compatible signatures and their implementation.
+        """
+        out = {}
         for ver_sig, impl in self.versions:
-            if ver_sig == sig:
-                return impl
-
-            # As generic type
             if self._match_arglist(ver_sig, sig):
-                return impl
+                out[ver_sig] = impl
+        return out
 
-        raise NotImplementedError(self, sig)
+    def _best_signature(self, candidates):
+        """
+        Returns the best signature out of the candidates
+        """
+        ordered, genericity = self._sort_signatures(candidates)
+        # check for ambiguous signatures
+        if len(ordered) > 1:
+            firstscore = genericity[ordered[0]]
+            same = list(takewhile(lambda x: genericity[x] == firstscore,
+                                  ordered))
+            if len(same) > 1:
+                msg = ["{n} ambiguous signatures".format(n=len(same))]
+                for sig in same:
+                    msg += ["{0} => {1}".format(sig, candidates[sig])]
+                raise TypeError('\n'.join(msg))
+        return ordered[0]
+
+    def _sort_signatures(self, candidates):
+        """
+        Sort signatures in ascending level of genericity.
+
+        Returns a 2-tuple:
+
+            * ordered list of signatures
+            * dictionary containing genericity scores
+        """
+        # score by genericity
+        genericity = defaultdict(int)
+        for this, other in permutations(candidates.keys(), r=2):
+            matched = self._match_arglist(formal_args=this, actual_args=other)
+            if matched:
+                # genericity score +1 for every another compatible signature
+                genericity[this] += 1
+        # order candidates in ascending level of genericity
+        ordered = sorted(candidates.keys(), key=lambda x: genericity[x])
+        return ordered, genericity
 
     def _match_arglist(self, formal_args, actual_args):
+        """
+        Returns True if the the signature is "matching".
+        A formal signature is "matching" if the actual signature matches exactly
+        or if the formal signature is a compatible generic signature.
+        """
+        # normalize VarArg
         if formal_args and isinstance(formal_args[-1], types.VarArg):
-            formal_args = (
-                formal_args[:-1] +
-                (formal_args[-1].dtype,) * (len(actual_args) - len(formal_args) + 1))
+            ndiff = len(actual_args) - len(formal_args) + 1
+            formal_args = formal_args[:-1] + (formal_args[-1].dtype,) * ndiff
 
         if len(formal_args) != len(actual_args):
             return False
@@ -74,11 +131,13 @@ class OverloadSelector(object):
         elif types.Any == formal:
             # formal argument is any
             return True
-        elif (isinstance(formal, type) and
-              isinstance(actual, formal)):
-            # formal argument is a type class matching actual argument
-            assert issubclass(formal, types.Type)
-            return True
+        elif isinstance(formal, type) and issubclass(formal, types.Type):
+            if isinstance(actual, type) and issubclass(actual, formal):
+                # formal arg is a type class and actual arg is a subclass
+                return True
+            elif isinstance(actual, formal):
+                # formal arg is a type class of which actual arg is an instance
+                return True
 
     def append(self, value, sig):
         """
@@ -86,6 +145,7 @@ class OverloadSelector(object):
         """
         assert isinstance(sig, tuple), (value, sig)
         self.versions.append((sig, value))
+        self._cache.clear()
 
 
 @utils.runonce
@@ -96,12 +156,15 @@ def _load_global_helpers():
     # This is Py_None's real C name
     ll.add_symbol("_Py_NoneStruct", id(None))
 
-    # Add C helper functions
+    # Add Numba C helper functions
     for c_helpers in (_helperlib.c_helpers, _dynfunc.c_helpers):
-        for py_name in c_helpers:
+        for py_name, c_address in c_helpers.items():
             c_name = "numba_" + py_name
-            c_address = c_helpers[py_name]
             ll.add_symbol(c_name, c_address)
+
+    # Add Numpy C helpers (npy_XXX)
+    for c_name, c_address in _helperlib.npymath_exports.items():
+        ll.add_symbol(c_name, c_address)
 
     # Add all built-in exception classes
     for obj in utils.builtins.__dict__.values():
@@ -287,7 +350,6 @@ class BaseContext(object):
     def declare_function(self, module, fndesc):
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
         fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
-        assert fn.is_declaration
         self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes)
         if fndesc.inline:
             fn.attributes.add('alwaysinline')
@@ -649,10 +711,13 @@ class BaseContext(object):
     def get_dummy_type(self):
         return GENERIC_POINTER
 
-    def compile_only_no_cache(self, builder, impl, sig, locals={}, flags=None):
-        """Invoke the compiler to compile a function to be used inside a
+    def compile_subroutine_no_cache(self, builder, impl, sig, locals={}, flags=None):
+        """
+        Invoke the compiler to compile a function to be used inside a
         nopython function, but without generating code to call that
         function.
+
+        Note this context's flags are not inherited.
         """
         # Compile
         from numba import compiler
@@ -679,15 +744,15 @@ class BaseContext(object):
         Return a placeholder object that's callable from another Numba
         function.
         """
-        cache_key = (impl.__code__, sig)
+        cache_key = (impl.__code__, sig, type(self.error_model))
         if impl.__closure__:
             # XXX This obviously won't work if a cell's value is
             # unhashable.
             cache_key += tuple(c.cell_contents for c in impl.__closure__)
         ty = self.cached_internal_func.get(cache_key)
         if ty is None:
-            cres = self.compile_only_no_cache(builder, impl, sig,
-                                              locals=locals)
+            cres = self.compile_subroutine_no_cache(builder, impl, sig,
+                                                    locals=locals)
             ty = types.NumbaFunction(cres.fndesc, sig)
             self.cached_internal_func[cache_key] = ty
         return ty
@@ -701,7 +766,8 @@ class BaseContext(object):
         return self.call_internal(builder, ty.fndesc, sig, args)
 
     def call_internal(self, builder, fndesc, sig, args):
-        """Given the function descriptor of an internally compiled function,
+        """
+        Given the function descriptor of an internally compiled function,
         emit a call to that function with the given arguments.
         """
         # Add call to the generated function
@@ -804,9 +870,13 @@ class BaseContext(object):
         shapevals = [self.get_constant(types.intp, s) for s in ary.shape]
         cshape = Constant.array(llintp, shapevals)
 
-        # Handle strides: use strides of the equivalent C-contiguous array.
-        contig = np.ascontiguousarray(ary)
-        stridevals = [self.get_constant(types.intp, s) for s in contig.strides]
+        # Handle strides
+        if ary.ndim > 0:
+            # Use strides of the equivalent C-contiguous array.
+            contig = np.ascontiguousarray(ary)
+            stridevals = [self.get_constant(types.intp, s) for s in contig.strides]
+        else:
+            stridevals = []
         cstrides = Constant.array(llintp, stridevals)
 
         # Create array structure

@@ -8,7 +8,12 @@ Expose all functions as pointers in a dedicated C extension.
 /* Import _pymodule.h first, for a recent _POSIX_C_SOURCE */
 #include "_pymodule.h"
 #include <math.h>
+
+/* Numba C helpers */
 #include "_helperlib.c"
+
+/* Numpy C math function exports */
+#include "_npymath_exports.c"
 
 static PyObject *
 build_c_helpers_dict(void)
@@ -40,6 +45,7 @@ build_c_helpers_dict(void)
     declmethod(ldexp);
     declmethod(ldexpf);
     declmethod(cpow);
+    declmethod(cpowf);
     declmethod(erf);
     declmethod(erff);
     declmethod(erfc);
@@ -48,6 +54,8 @@ build_c_helpers_dict(void)
     declmethod(gammaf);
     declmethod(lgamma);
     declmethod(lgammaf);
+    declmethod(signbit);
+    declmethod(signbitf);
     declmethod(complex_adaptor);
     declmethod(adapt_ndarray);
     declmethod(ndarray_new);
@@ -83,14 +91,16 @@ build_c_helpers_dict(void)
     declmethod(xxgemv);
     declmethod(xxdot);
     declmethod(xxgetrf);
-    declmethod(xxgetri);
+    declmethod(ez_xxgetri);
     declmethod(xxpotrf);
     declmethod(ez_rgeev);
     declmethod(ez_cgeev);
     declmethod(ez_gesdd);
     declmethod(ez_geqrf);
     declmethod(ez_xxgqr);
-
+    declmethod(ez_gelsd);
+    declmethod(xgesv);
+    
     declpointer(py_random_state);
     declpointer(np_random_state);
 
@@ -105,6 +115,37 @@ build_c_helpers_dict(void)
 error:
     Py_XDECREF(dct);
     return NULL;
+}
+
+static int
+register_npymath_exports(PyObject *dct)
+{
+    size_t count = sizeof(npymath_exports) / sizeof(npymath_exports[0]);
+    size_t i;
+
+    for (i = 0; i < count; ++i) {
+        PyObject *ptr = PyLong_FromVoidPtr(npymath_exports[i].func);
+        if (ptr == NULL)
+            return -1;
+        if (PyDict_SetItemString(dct, npymath_exports[i].name, ptr) < 0) {
+            Py_DECREF(ptr);
+            return -1;
+        }
+        Py_DECREF(ptr);
+    }
+
+    return 0;
+}
+
+static PyObject *
+build_npymath_exports_dict(void)
+{
+    PyObject *dct = PyDict_New();
+    if (dct != NULL) {
+        if (register_npymath_exports(dct) < 0)
+            Py_CLEAR(dct);
+    }
+    return dct;
 }
 
 static PyMethodDef ext_methods[] = {
@@ -124,6 +165,7 @@ PyAPI_FUNC(double) _numba_test_sin(double x);
 PyAPI_FUNC(double) _numba_test_cos(double x);
 PyAPI_FUNC(double) _numba_test_exp(double x);
 PyAPI_FUNC(void) _numba_test_vsquare(int n, double *x, double *out);
+PyAPI_FUNC(double) _numba_test_funcptr(double (*func)(double));
 
 double _numba_test_sin(double x)
 {
@@ -154,6 +196,11 @@ void _numba_test_vcube(int n, double *x, double *out)
         out[i] = pow(x[i], 3.0);
 }
 
+double _numba_test_funcptr(double (*func)(double))
+{
+    return func(1.5);
+}
+
 
 MOD_INIT(_helperlib) {
     PyObject *m;
@@ -164,6 +211,7 @@ MOD_INIT(_helperlib) {
     import_array();
 
     PyModule_AddObject(m, "c_helpers", build_c_helpers_dict());
+    PyModule_AddObject(m, "npymath_exports", build_npymath_exports_dict());
     PyModule_AddIntConstant(m, "long_min", LONG_MIN);
     PyModule_AddIntConstant(m, "long_max", LONG_MAX);
     PyModule_AddIntConstant(m, "py_buffer_size", sizeof(Py_buffer));

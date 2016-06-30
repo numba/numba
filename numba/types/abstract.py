@@ -274,6 +274,21 @@ class IterableType(Type):
         """
 
 
+class Sized(Type):
+    """
+    Base class for objects that support len()
+    """
+
+
+class ConstSized(Sized):
+    """
+    For types that have a constant size
+    """
+    @abstractmethod
+    def __len__(self):
+        pass
+
+
 class IteratorType(IterableType):
     """
     Base class for all iterator types.
@@ -296,7 +311,7 @@ class IteratorType(IterableType):
         return self
 
 
-class Container(IterableType):
+class Container(Sized, IterableType):
     """
     Base class for container types.
     """

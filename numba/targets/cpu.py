@@ -41,7 +41,6 @@ class CPUContext(BaseContext):
 
         # Map external C functions.
         externals.c_math_functions.install(self)
-        externals.c_numpy_functions.install(self)
 
         # Initialize NRT runtime
         rtsys.initialize(self)
@@ -156,9 +155,12 @@ class CPUContext(BaseContext):
         baseptr = library.get_pointer_to_function(fndesc.llvm_func_name)
         fnptr = library.get_pointer_to_function(fndesc.llvm_cpython_wrapper_name)
 
+        # Note: we avoid reusing the original docstring to avoid encoding
+        # issues on Python 2, see issue #1908
+        doc = "compiled wrapper for %r" % (fndesc.qualname,)
         cfunc = _dynfunc.make_function(fndesc.lookup_module(),
                                        fndesc.qualname.split('.')[-1],
-                                       fndesc.doc, fnptr, env,
+                                       doc, fnptr, env,
                                        # objects to keepalive with the function
                                        (library,)
                                        )

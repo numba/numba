@@ -4,7 +4,6 @@ of jitclasses for use inside the python interpreter.
 """
 from __future__ import print_function, absolute_import
 
-import inspect
 from functools import wraps, partial
 
 from llvmlite import ir
@@ -27,8 +26,8 @@ def mutator(__numba_self_, __numba_val):
 """
 
 _method_code_template = """
-def method(__numba_self_, {args}):
-    return __numba_self_.{method}({args})
+def method(__numba_self_, *args):
+    return __numba_self_.{method}(*args)
 """
 
 
@@ -50,15 +49,10 @@ _generate_setter = partial(_generate_property, template=_setter_code_template,
 
 def _generate_method(name, func):
     """
-    Generate a wrapper for calling a method
+    Generate a wrapper for calling a method.  Note the wrapper will only
+    accept positional arguments.
     """
-    argspec = inspect.getargspec(func)
-    assert not argspec.varargs, 'varargs not supported'
-    assert not argspec.keywords, 'keywords not supported'
-    assert not argspec.defaults, 'defaults not supported'
-
-    args = ', '.join(argspec.args[1:])  # skipped self arg
-    source = _method_code_template.format(method=name, args=args)
+    source = _method_code_template.format(method=name)
     glbls = {}
     exec_(source, glbls)
     method = njit(glbls['method'])

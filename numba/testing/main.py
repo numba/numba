@@ -181,12 +181,11 @@ class NumbaTestProgram(unittest.main):
             self.buffer = True
 
     def _do_discovery(self, argv, Loader=None):
-        # Upstream uses a default start_dir of '.', which assumes we only ever
-        # run the tests from the top-level directory.
-        # So, if no 'start' argument is given in argv, inject one, to satisfy our CI builders.
-        if argv == []:
-            argv = [self.testLoader._top_level_dir]
-            super(NumbaTestProgram, self)._do_discovery(argv, Loader)
+        # Disable unittest's implicit test discovery when parsing
+        # CLI arguments, as it can select other tests than Numba's
+        # (e.g. some test_xxx module that may happen to be directly
+        #  reachable from sys.path)
+        return
 
     def runTests(self):
         if self.refleak:
@@ -556,6 +555,8 @@ class ParallelTestRunner(runner.TextTestRunner):
         except:
             # On exception, kill still active workers immediately
             pool.terminate()
+            # Make sure exception is reported and not ignored
+            raise
         else:
             # Close the pool cleanly unless asked to early out
             if result.shouldStop:
@@ -580,16 +581,17 @@ class ParallelTestRunner(runner.TextTestRunner):
                 return
             except TimeoutError as e:
                 # Diagnose the names of unfinished tests
-                msg = ("%s [unfinished tests: %s]"
-                       % (str(e), ", ".join(map(repr, sorted(remaining_ids))))
+                msg = ("Tests didn't finish before timeout (or crashed):\n%s"
+                       % "".join("- %r\n" % tid for tid in sorted(remaining_ids))
                        )
                 e.args = (msg,) + e.args[1:]
                 raise e
-            result.add_results(child_result)
-            remaining_ids.discard(child_result.test_id)
-            if child_result.shouldStop:
-                result.shouldStop = True
-                return
+            else:
+                result.add_results(child_result)
+                remaining_ids.discard(child_result.test_id)
+                if child_result.shouldStop:
+                    result.shouldStop = True
+                    return
 
     def run(self, test):
         self._ptests, self._stests = _split_nonparallel_tests(test)

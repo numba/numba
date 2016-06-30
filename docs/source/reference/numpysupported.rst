@@ -173,7 +173,10 @@ floating-point and complex numbers:
   change is supported e.g. real input -> real
   output, complex input -> complex output).
 * :func:`numpy.linalg.inv`
+* :func:`numpy.linalg.lstsq`
+* :func:`numpy.linalg.pinv`
 * :func:`numpy.linalg.qr` (only the first argument).
+* :func:`numpy.linalg.solve`
 * :func:`numpy.linalg.svd` (only the 2 first arguments).
 
 .. note::
@@ -357,6 +360,16 @@ Distributions
    the parent's state and will therefore produce the same sequence of
    numbers (except when using the "forkserver" start method under Python 3.4
    and later).
+
+
+``stride_tricks``
+-----------------
+
+The following function from the :mod:`numpy.lib.stride_tricks` module
+is supported:
+
+* :func:`~numpy.lib.stride_tricks.as_strided` (the *strides* argument
+  is mandatory, the *subok* argument is not supported)
 
 
 Standard ufuncs

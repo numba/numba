@@ -1,4 +1,5 @@
 from numba.tracing import trace
+from numba.errors import deprecated
 
 import sys
 
@@ -40,6 +41,8 @@ def _s2o(dtype, shape, strides):
 class SmartArray(object):
     """An array type that supports host and GPU storage."""
 
+    _targets = ('host', 'gpu')
+
     def __init__(self, obj=None, copy=True,
                  shape=None, dtype=None, order=None, where='host'):
         """Construct a SmartArray in the memory space defined by 'where'.
@@ -59,7 +62,8 @@ class SmartArray(object):
         initially. (Default: 'host')
         """
 
-        assert where in ('host', 'gpu')
+        if where not in self._targets:
+            raise ValueError('"%s" is not a valid target'%where)
         # we need either a prototype or proper type info
         assert obj is not None or (shape and dtype)
         self._host = self._gpu = None
@@ -92,33 +96,41 @@ class SmartArray(object):
     @property
     def size(self): return self._size
 
-    def host(self):
-        """Return the host representation of 'self'."""
+    def get(self, where='host'):
+        """Return the representation of 'self' in the given memory space."""
 
-        self._sync('host')
-        return self._host
+        if where not in self._targets:
+            raise ValueError('"%s" is not a valid target'%where)
+        self._sync(where)
+        if where == 'host': return self._host
+        elif where == 'gpu': return self._gpu
+        else: raise ValueError('unknown memory space "%s"'%where)
 
-    def host_changed(self):
-        """Mark the host array as changed, broadcast updates if needed."""
+    @deprecated("get('host')")
+    def host(self): return self.get('host')
+    @deprecated("get('gpu')")
+    def gpu(self): return self.get('gpu')
 
-        self._invalidate('gpu')
-        # only sync if there are active views
-        if self._gpu is not None and sys.getrefcount(self._gpu) > 2:
-            self._sync('gpu')
+    def mark_changed(self, where='host'):
+        """Mark the given location as changed, broadcast updates if needed."""
 
-    def gpu(self):
-        """Return the GPU representation of 'self'."""
+        if where not in self._targets:
+            raise ValueError('"%s" is not a valid target'%where)
+        if where == 'host':
+            self._invalidate('gpu')
+            # only sync if there are active views
+            if self._gpu is not None and sys.getrefcount(self._gpu) > 2:
+                self._sync('gpu')
+        elif where == 'gpu':
+            self._invalidate('host')
+            # only sync if there are active views
+            if self._host is not None and sys.getrefcount(self._host) > 2:
+                self._sync('host')
 
-        self._sync('gpu')
-        return self._gpu
-
-    def gpu_changed(self):
-        """Mark the gpu array as changed, broadcast updates if needed."""
-
-        self._invalidate('host')
-        # only sync if there are active views
-        if self._host is not None and sys.getrefcount(self._host) > 2:
-            self._sync('host')
+    @deprecated("mark_changed('host')")
+    def host_changed(self): return self.mark_changed('host')
+    @deprecated("mark_changed('gpu')")
+    def gpu_changed(self): return self.mark_changed('gpu')
 
     def __array__(self, *args):
 
@@ -207,8 +219,10 @@ class SmartArray(object):
     def __eq__(self, other):
         if type(self) is not type(other): return False
         # FIXME: If both arrays have valid GPU data, compare there.
-        return self._maybe_wrap(self.host() == other.host())
+        return self._maybe_wrap(self.get('host') == other.get('host'))
     def __getitem__(self, *args):
-        return self._maybe_wrap(self.host().__getitem__(*args))
+        return self._maybe_wrap(self.get('host').__getitem__(*args))
     def __setitem__(self, *args):
-        return self._maybe_wrap(self.host().__setitem__(*args))
+        return self._maybe_wrap(self.get('host').__setitem__(*args))
+    def astype(self, *args):
+        return self._maybe_wrap(self.get('host').astype(*args))

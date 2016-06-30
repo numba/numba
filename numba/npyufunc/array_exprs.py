@@ -340,7 +340,7 @@ def _lower_array_expr(lowerer, expr):
     # division (issue #1223).
     flags = compiler.Flags()
     flags.set('error_model', 'numpy')
-    cres = context.compile_only_no_cache(builder, impl, inner_sig, flags=flags)
+    cres = context.compile_subroutine_no_cache(builder, impl, inner_sig, flags=flags)
 
     # Create kernel subclass calling our native function
     from ..targets import npyimpl

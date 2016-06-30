@@ -47,6 +47,22 @@ def real_print_impl(context, builder, sig, args):
     return context.get_dummy_value()
 
 
+@lower("print_item", types.Const)
+def const_print_impl(context, builder, sig, args):
+    ty, = sig.args
+    pyval = ty.value
+    # This is ensured by lowering
+    assert isinstance(pyval, str)
+
+    vprint = nvvmutils.declare_vprint(builder.module)
+    rawfmt = "%s"
+    fmt = context.insert_string_const_addrspace(builder, rawfmt)
+    val = context.insert_string_const_addrspace(builder, pyval)
+    valptr = cgutils.alloca_once_value(builder, val)
+    builder.call(vprint, (fmt, builder.bitcast(valptr, voidptr)))
+    return context.get_dummy_value()
+
+
 @lower(print, types.VarArg(types.Any))
 def print_varargs(context, builder, sig, args):
     """This function is a generic 'print' wrapper for arbitrary types.

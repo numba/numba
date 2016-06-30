@@ -283,3 +283,16 @@ intersphinx_mapping = {
     'numpy': ('https://docs.scipy.org/doc/numpy', None),
     'llvmlite': ('http://llvmlite.pydata.org/en/latest/', None),
     }
+
+
+# -- Custom autogeneration ------------------------------------------------
+
+def _autogenerate():
+    from numba.scripts.generate_lower_listing import gen_lower_listing
+
+    basedir = os.path.dirname(__file__)
+    gen_lower_listing(os.path.join(basedir,
+                                   'developer/autogen_lower_listing.rst'))
+
+
+_autogenerate()

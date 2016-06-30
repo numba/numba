@@ -76,6 +76,13 @@ def discard_usecase(a, b):
         s.discard(v)
     return list(s)
 
+def add_discard_usecase(a, u, v):
+    s = set(a)
+    for i in range(1000):
+        s.add(u)
+        s.discard(v)
+    return list(s)
+
 def pop_usecase(a):
     s = set(a)
     l = []
@@ -429,6 +436,17 @@ class TestSets(BaseTest):
         a = self.sparse_array(50)
         b = self.sparse_array(50)
         check(a, b)
+
+    def test_add_discard(self):
+        """
+        Check that the insertion logic does not create an infinite lookup
+        chain with deleted entries (insertion should happen at the first
+        deleted entry, not at the free entry at the end of the chain).
+        See issue #1913.
+        """
+        pyfunc = add_discard_usecase
+        check = self.unordered_checker(pyfunc)
+        check((1,), 5, 5)
 
     @tag('important')
     def test_pop(self):

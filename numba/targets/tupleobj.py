@@ -18,21 +18,6 @@ def namedtuple_constructor(context, builder, sig, args):
     # The tuple's contents are borrowed
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
-@lower_builtin(len, types.BaseTuple)
-def tuple_len(context, builder, sig, args):
-    tupty, = sig.args
-    retty = sig.return_type
-    res = context.get_constant(retty, len(tupty.types))
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-@lower_builtin(bool, types.BaseTuple)
-def tuple_bool(context, builder, sig, args):
-    tupty, = sig.args
-    if len(tupty):
-        return cgutils.true_bit
-    else:
-        return cgutils.false_bit
-
 @lower_builtin('+', types.BaseTuple, types.BaseTuple)
 def tuple_add(context, builder, sig, args):
     left, right = [cgutils.unpack_tuple(builder, x) for x in args]

@@ -27,7 +27,7 @@ class TestJIT(unittest.TestCase):
         event("checkpoint")
         transpose(b, c)
         event("done")
-        self.assertTrue((c.host() == a.host()).all())
+        self.assertTrue((c.get('host') == a.get('host')).all())
 
 if __name__ == '__main__':
     unittest.main()

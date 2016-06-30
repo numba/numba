@@ -10,6 +10,7 @@ from llvmlite.llvmpy.core import Constant, Type, Builder
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
 from .errors import LoweringError, new_error_context
+from .targets import imputils
 
 
 class Environment(_dynfunc.Environment):
@@ -282,6 +283,9 @@ class Lower(BaseLower):
                                           signature.args[2])
                 return impl(self.builder, (target, inst.index, value))
 
+        elif isinstance(inst, ir.Print):
+            self.lower_print(inst)
+
         elif isinstance(inst, ir.SetItem):
             signature = self.fndesc.calltypes[inst]
             assert signature is not None
@@ -471,6 +475,73 @@ class Lower(BaseLower):
             val = self.loadvar(var.name)
         return self.context.cast(self.builder, val, varty, ty)
 
+    def fold_call_args(self, fnty, signature, pos_args, vararg, kw_args):
+        if vararg:
+            # Inject *args from function call
+            # The lowering will be done in _cast_var() above.
+            tp_vararg = self.typeof(vararg.name)
+            assert isinstance(tp_vararg, types.BaseTuple)
+            pos_args = pos_args + [_VarArgItem(vararg, i)
+                                   for i in range(len(tp_vararg))]
+
+        # Fold keyword arguments and resolve default argument values
+        pysig = signature.pysig
+        if pysig is None:
+            if kw_args:
+                raise NotImplementedError("unsupported keyword arguments "
+                                          "when calling %s" % (fnty,))
+            argvals = [self._cast_var(var, sigty)
+                       for var, sigty in zip(pos_args, signature.args)]
+        else:
+            def normal_handler(index, param, var):
+                return self._cast_var(var, signature.args[index])
+
+            def default_handler(index, param, default):
+                return self.context.get_constant_generic(
+                    self.builder, signature.args[index], default)
+
+            def stararg_handler(index, param, vars):
+                values = [self._cast_var(var, sigty)
+                          for var, sigty in
+                          zip(vars, signature.args[index])]
+                return cgutils.make_anonymous_struct(self.builder, values)
+
+            argvals = typing.fold_arguments(pysig,
+                                            pos_args, dict(kw_args),
+                                            normal_handler,
+                                            default_handler,
+                                            stararg_handler)
+        return argvals
+
+    def lower_print(self, inst):
+        """
+        Lower a ir.Print()
+        """
+        # We handle this, as far as possible, as a normal call to built-in
+        # print().  This will make it easy to undo the special ir.Print
+        # rewrite when it becomes unnecessary (e.g. when we have native
+        # strings).
+        sig = self.fndesc.calltypes[inst]
+        assert sig.return_type == types.none
+        fnty = self.context.typing_context.resolve_value_type(print)
+
+        # Fix the call signature to inject any constant-inferred
+        # string argument
+        pos_tys = list(sig.args)
+        pos_args = list(inst.args)
+        for i in range(len(pos_args)):
+            if i in inst.consts:
+                pyval = inst.consts[i]
+                if isinstance(pyval, str):
+                    pos_tys[i] = types.Const(pyval)
+
+        fixed_sig = typing.signature(sig.return_type, *pos_tys)
+        fixed_sig.pysig = sig.pysig
+
+        argvals = self.fold_call_args(fnty, sig, pos_args, inst.vararg, {})
+        impl = self.context.get_function(print, fixed_sig)
+        impl(self.builder, argvals)
+
     def lower_call(self, resty, expr):
         signature = self.fndesc.calltypes[expr]
         if isinstance(signature.return_type, types.Phantom):
@@ -481,42 +552,8 @@ class Lower(BaseLower):
             argvals = expr.func.args
         else:
             fnty = self.typeof(expr.func.name)
-            pos_args = expr.args
-            if expr.vararg:
-                # Inject *args from function call
-                # The lowering will be done in _cast_var() above.
-                tp_vararg = self.typeof(expr.vararg.name)
-                assert isinstance(tp_vararg, types.BaseTuple)
-                pos_args = pos_args + [_VarArgItem(expr.vararg, i)
-                                       for i in range(len(tp_vararg))]
-
-            # Fold keyword arguments and resolve default argument values
-            pysig = signature.pysig
-            if pysig is None:
-                if expr.kws:
-                    raise NotImplementedError("unsupported keyword arguments "
-                                              "when calling %s" % (fnty,))
-                argvals = [self._cast_var(var, sigty)
-                           for var, sigty in zip(pos_args, signature.args)]
-            else:
-                def normal_handler(index, param, var):
-                    return self._cast_var(var, signature.args[index])
-
-                def default_handler(index, param, default):
-                    return self.context.get_constant_generic(
-                        self.builder, signature.args[index], default)
-
-                def stararg_handler(index, param, vars):
-                    values = [self._cast_var(var, sigty)
-                              for var, sigty in
-                              zip(vars, signature.args[index])]
-                    return cgutils.make_anonymous_struct(self.builder, values)
-
-                argvals = typing.fold_arguments(pysig,
-                                                pos_args, dict(expr.kws),
-                                                normal_handler,
-                                                default_handler,
-                                                stararg_handler)
+            argvals = self.fold_call_args(fnty, signature,
+                                          expr.args, expr.vararg, expr.kws)
 
         if isinstance(fnty, types.ExternalFunction):
             # Handle a named external function
@@ -572,8 +609,13 @@ class Lower(BaseLower):
                 res = self.context.call_function_pointer(self.builder, pointer,
                                                          argvals, fnty.cconv)
 
+        elif isinstance(fnty, types.RecursiveCall):
+            # Self-recursive call
+            impl = imputils.user_function(self.fndesc, ())
+            res = impl(self.context, self.builder, signature, argvals)
+
         else:
-            # Normal function resolution (for Numba-compiled functions)
+            # Normal function resolution
             self.debug_print("# calling normal function: {0}".format(fnty))
             impl = self.context.get_function(fnty, signature)
             if signature.recvr:

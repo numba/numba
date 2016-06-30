@@ -820,8 +820,8 @@ def complex_power_impl(context, builder, sig, args):
     TWO = context.get_constant(fty, 2)
     ZERO = context.get_constant(fty, 0)
 
-    b_real_is_two = builder.fcmp(lc.FCMP_OEQ, b.real, TWO)
-    b_imag_is_zero = builder.fcmp(lc.FCMP_OEQ, b.imag, ZERO)
+    b_real_is_two = builder.fcmp_ordered('==', b.real, TWO)
+    b_imag_is_zero = builder.fcmp_ordered('==', b.imag, ZERO)
     b_is_two = builder.and_(b_real_is_two, b_imag_is_zero)
 
     with builder.if_else(b_is_two) as (then, otherwise):
@@ -834,8 +834,12 @@ def complex_power_impl(context, builder, sig, args):
 
         with otherwise:
             # Lower with call to external function
+            func_name = {
+                types.complex64: "numba_cpowf",
+                types.complex128: "numba_cpow",
+                }[ty]
             fnty = Type.function(Type.void(), [pa.type] * 3)
-            cpow = module.get_or_insert_function(fnty, name="numba.math.cpow")
+            cpow = module.get_or_insert_function(fnty, name=func_name)
             builder.call(cpow, (pa, pb, pc))
 
     res = builder.load(pc)
@@ -1194,7 +1198,7 @@ def complex_to_complex(context, builder, fromty, toty, val):
 def any_to_boolean(context, builder, fromty, toty, val):
     return context.is_true(builder, fromty, val)
 
-@lower_cast(types.Boolean, types.Any)
+@lower_cast(types.Boolean, types.Number)
 def boolean_to_any(context, builder, fromty, toty, val):
     # Casting from boolean to anything first casts to int32
     asint = builder.zext(val, Type.int())

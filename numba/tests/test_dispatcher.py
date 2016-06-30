@@ -840,6 +840,59 @@ class TestCache(BaseCacheTest):
 
         self._test_pycache_fallback()
 
+    def test_ipython(self):
+        # Test caching in an IPython session
+        base_cmd = [sys.executable, '-m', 'IPython']
+        base_cmd += ['--quiet', '--quick', '--no-banner', '--colors=NoColor']
+        try:
+            ver = subprocess.check_output(base_cmd + ['--version'])
+        except subprocess.CalledProcessError as e:
+            self.skipTest("ipython not available: return code %d"
+                          % e.returncode)
+        print("ipython version:", ver.strip().decode())
+        # Create test input
+        inputfn = os.path.join(self.tempdir, "ipython_cache_usecase.txt")
+        with open(inputfn, "w") as f:
+            f.write(r"""
+                import os
+                import sys
+
+                from numba import jit
+
+                @jit(cache=True)
+                def f():
+                    return 42
+
+                res = f()
+                # IPython writes on stdout, so use stderr instead
+                sys.stderr.write(u"cache hits = %d\n" % f.stats.cache_hits[()])
+
+                # IPython hijacks sys.exit(), bypass it
+                sys.stdout.flush()
+                sys.stderr.flush()
+                os._exit(res)
+                """)
+
+        def execute_with_input():
+            # Feed the test input as stdin, to execute it in REPL context
+            with open(inputfn, "rb") as stdin:
+                p = subprocess.Popen(base_cmd, stdin=stdin,
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE,
+                                     universal_newlines=True)
+                out, err = p.communicate()
+                if p.returncode != 42:
+                    self.fail("unexpected return code %d\n"
+                              "-- stdout:\n%s\n"
+                              "-- stderr:\n%s\n"
+                              % (p.returncode, out, err))
+                return err
+
+        execute_with_input()
+        # Run a second time and check caching
+        err = execute_with_input()
+        self.assertEqual(err.strip(), "cache hits = 1")
+
 
 if __name__ == '__main__':
     unittest.main()

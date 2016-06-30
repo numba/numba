@@ -14,11 +14,12 @@ Constraints push types forward following the dataflow.
 
 from __future__ import print_function, division, absolute_import
 
-from pprint import pprint
+import contextlib
 import itertools
+from pprint import pprint
 import traceback
 
-from numba import ir, types, utils, config, six
+from numba import ir, types, utils, config, six, typing
 from .errors import TypingError, UntypedAttributeError, new_error_context
 
 
@@ -320,6 +321,35 @@ class StaticGetItemConstraint(object):
         return self.fallback and self.fallback.get_call_signature()
 
 
+def fold_arg_vars(typevars, args, vararg, kws):
+    """
+    Fold and resolve the argument variables of a function call.
+    """
+    # Fetch all argument types, bail if any is unknown
+    n_pos_args = len(args)
+    kwds = [kw for (kw, var) in kws]
+    argtypes = [typevars[a.name] for a in args]
+    argtypes += [typevars[var.name] for (kw, var) in kws]
+    if vararg is not None:
+        argtypes.append(typevars[vararg.name])
+
+    if not all(a.defined for a in argtypes):
+        return
+
+    args = tuple(a.getone() for a in argtypes)
+    pos_args = args[:n_pos_args]
+    if vararg is not None:
+        if not isinstance(args[-1], types.BaseTuple):
+            # Unsuitable for *args
+            # (Python is more lenient and accepts all iterables)
+            raise TypeError("*args in function call should be a tuple, got %s"
+                            % (args[-1],))
+        pos_args += args[-1].types
+        args = args[:-1]
+    kw_args = dict(zip(kwds, args[n_pos_args:]))
+    return pos_args, kw_args
+
+
 class CallConstraint(object):
     """Constraint for calling functions.
     Perform case analysis foreach combinations of argument types.
@@ -345,32 +375,21 @@ class CallConstraint(object):
         assert fnty
         context = typeinfer.context
 
-        n_pos_args = len(self.args)
-        kwds = [kw for (kw, var) in self.kws]
-        argtypes = [typevars[a.name] for a in self.args]
-        argtypes += [typevars[var.name] for (kw, var) in self.kws]
-        if self.vararg is not None:
-            argtypes.append(typevars[self.vararg.name])
-
-        if not all(a.defined for a in argtypes):
+        r = fold_arg_vars(typevars, self.args, self.vararg, self.kws)
+        if r is None:
             # Cannot resolve call type until all argument types are known
             return
+        pos_args, kw_args = r
 
-        args = tuple(a.getone() for a in argtypes)
-        pos_args = args[:n_pos_args]
-        if self.vararg is not None:
-            if not isinstance(args[-1], types.BaseTuple):
-                # Unsuitable for *args
-                # (Python is more lenient and accepts all iterables)
-                return
-            pos_args += args[-1].types
-            args = args[:-1]
-        kw_args = dict(zip(kwds, args[n_pos_args:]))
-        sig = context.resolve_function_type(fnty, pos_args, kw_args)
+        # Resolve call type
+        sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
         if sig is None:
-            desc = context.explain_function_type(fnty)
+            # Arguments are invalid => explain why
             headtemp = "Invalid usage of {0} with parameters ({1})"
+            args = [str(a) for a in pos_args]
+            args += ["%s=%s" % (k, v) for k, v in sorted(kw_args.items())]
             head = headtemp.format(fnty, ', '.join(map(str, args)))
+            desc = context.explain_function_type(fnty)
             msg = '\n'.join([head, desc])
             raise TypingError(msg, loc=self.loc)
 
@@ -554,6 +573,30 @@ class SetAttrConstraint(object):
         return self.signature
 
 
+class PrintConstraint(object):
+    def __init__(self, args, vararg, loc):
+        self.args = args
+        self.vararg = vararg
+        self.loc = loc
+
+    def __call__(self, typeinfer):
+        typevars = typeinfer.typevars
+
+        r = fold_arg_vars(typevars, self.args, self.vararg, {})
+        if r is None:
+            # Cannot resolve call type until all argument types are known
+            return
+        pos_args, kw_args = r
+
+        fnty = typeinfer.context.resolve_value_type(print)
+        assert fnty is not None
+        sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
+        self.signature = sig
+
+    def get_call_signature(self):
+        return self.signature
+
+
 class TypeVarMap(dict):
     def set_context(self, context):
         self.context = context
@@ -569,6 +612,27 @@ class TypeVarMap(dict):
             raise KeyError("Cannot redefine typevar %s" % name)
         else:
             super(TypeVarMap, self).__setitem__(name, value)
+
+
+# A temporary mapping of {function name: dispatcher object}
+_temporary_dispatcher_map = {}
+
+@contextlib.contextmanager
+def register_dispatcher(disp):
+    """
+    Register a Dispatcher for inference while it is not yet stored
+    as global or closure variable (e.g. during execution of the @jit()
+    call).  This allows resolution of recursive calls with eager
+    compilation.
+    """
+    assert callable(disp)
+    assert callable(disp.py_func)
+    name = disp.py_func.__name__
+    _temporary_dispatcher_map[name] = disp
+    try:
+        yield
+    finally:
+        del _temporary_dispatcher_map[name]
 
 
 class TypeInferer(object):
@@ -588,7 +652,7 @@ class TypeInferer(object):
 
         # { index: mangled name }
         self.arg_names = {}
-        self.return_type = None
+        #self.return_type = None
         # Set of assumed immutable globals
         self.assumed_immutables = set()
         # Track all calls and associated constraints
@@ -607,6 +671,14 @@ class TypeInferer(object):
         # Disambiguise argument name
         return "arg.%s" % (name,)
 
+    def _get_return_vars(self):
+        rets = []
+        for blk in utils.itervalues(self.blocks):
+            inst = blk.terminator
+            if isinstance(inst, ir.Return):
+                rets.append(inst.value)
+        return rets
+
     def seed_argument(self, name, index, typ):
         name = self._mangle_arg_name(name)
         self.seed_type(name, typ)
@@ -620,10 +692,8 @@ class TypeInferer(object):
     def seed_return(self, typ):
         """Seeding of return value is optional.
         """
-        for blk in utils.itervalues(self.blocks):
-            inst = blk.terminator
-            if isinstance(inst, ir.Return):
-                self.lock_type(inst.value.name, typ, loc=None)
+        for var in self._get_return_vars():
+            self.lock_type(var.name, typ, loc=None)
 
     def build_constraint(self):
         for blk in utils.itervalues(self.blocks):
@@ -731,13 +801,7 @@ class TypeInferer(object):
             calltypes[call] = constraint.get_call_signature()
         return calltypes
 
-    def get_return_type(self, typemap):
-        rettypes = set()
-        for blk in utils.itervalues(self.blocks):
-            term = blk.terminator
-            if isinstance(term, ir.Return):
-                rettypes.add(typemap[term.value.name])
-
+    def _unify_return_types(self, rettypes):
         if rettypes:
             unified = self.context.unify_types(*rettypes)
             if unified is None or not unified.is_precise():
@@ -746,7 +810,14 @@ class TypeInferer(object):
                                   % ", ".join(sorted(map(str, rettypes))))
             return unified
         else:
+            # Function without a successful return path
             return types.none
+
+    def get_return_type(self, typemap):
+        rettypes = set()
+        for var in self._get_return_vars():
+            rettypes.add(typemap[var.name])
+        return self._unify_return_types(rettypes)
 
     def get_state_token(self):
         """The algorithm is monotonic.  It can only grow or "refine" the
@@ -765,6 +836,8 @@ class TypeInferer(object):
             self.typeof_delitem(inst)
         elif isinstance(inst, ir.SetAttr):
             self.typeof_setattr(inst)
+        elif isinstance(inst, ir.Print):
+            self.typeof_print(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
             pass
         elif isinstance(inst, ir.StaticRaise):
@@ -795,6 +868,12 @@ class TypeInferer(object):
     def typeof_setattr(self, inst):
         constraint = SetAttrConstraint(target=inst.target, attr=inst.attr,
                                        value=inst.value, loc=inst.loc)
+        self.constraints.append(constraint)
+        self.calls.append((inst, constraint))
+
+    def typeof_print(self, inst):
+        constraint = PrintConstraint(args=inst.args, vararg=inst.vararg,
+                                     loc=inst.loc)
         self.constraints.append(constraint)
         self.calls.append((inst, constraint))
 
@@ -847,7 +926,7 @@ class TypeInferer(object):
         Ensure that builtins are not modified.
         """
         if (gvar.name in ('range', 'xrange') and
-                    gvar.value not in utils.RANGE_ITER_OBJECTS):
+            gvar.value not in utils.RANGE_ITER_OBJECTS):
             bad = True
         elif gvar.name == 'slice' and gvar.value is not slice:
             bad = True
@@ -860,8 +939,57 @@ class TypeInferer(object):
             raise TypingError("Modified builtin '%s'" % gvar.name,
                               loc=inst.loc)
 
+    def resolve_call(self, fnty, pos_args, kw_args):
+        """
+        Resolve a call to a given function type.  A signature is returned.
+        """
+        if isinstance(fnty, types.RecursiveCall):
+            # Self-recursive call
+            disp = fnty.dispatcher_type.dispatcher
+            pysig, args = disp.fold_argument_types(pos_args, kw_args)
+
+            # Fetch the return type as given by the user
+            rettypes = set()
+            for retvar in self._get_return_vars():
+                typevar = self.typevars[retvar.name]
+                if not typevar.defined:
+                    raise TypeError("recursive calls need an explicit signature in jit()")
+                rettypes.add(typevar.getone())
+            return_type = self._unify_return_types(rettypes)
+
+            # Match call arguments with current inference arguments
+            assert len(args) == len(self.arg_names)
+            formal_args = [self.typevars[self.arg_names[i]].getone()
+                           for i in range(len(args))]
+            for formal_ty, actual_ty in zip(formal_args, args):
+                if not self.context.can_convert(actual_ty, formal_ty):
+                    raise TypeError("bad self-recursive call with argument types %s" % (args,))
+
+            sig = typing.signature(return_type, *formal_args)
+            sig.pysig = pysig
+            return sig
+        else:
+            # Normal non-recursive call
+            return self.context.resolve_function_type(fnty, pos_args, kw_args)
+
     def typeof_global(self, inst, target, gvar):
         typ = self.context.resolve_value_type(gvar.value)
+
+        if (typ is None and gvar.name == self.py_func.__name__
+            and gvar.name in _temporary_dispatcher_map):
+            # Self-recursion case where the dispatcher is not (yet?) known
+            # as a global variable
+            typ = types.Dispatcher(_temporary_dispatcher_map[gvar.name])
+
+        if isinstance(typ, types.Dispatcher) and typ.dispatcher.is_compiling:
+            # Recursive call
+            if typ.dispatcher.py_func is self.py_func:
+                typ = types.RecursiveCall(typ)
+            else:
+                raise NotImplementedError(
+                    "call to %s: mutual recursion not supported"
+                    % typ.dispatcher)
+
         if isinstance(typ, types.Array):
             # Global array in nopython mode is constant
             # XXX why layout='C'?

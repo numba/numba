@@ -2,6 +2,7 @@ from __future__ import absolute_import, print_function, division
 
 from collections import OrderedDict
 import ctypes
+import sys
 
 import numpy as np
 
@@ -13,6 +14,7 @@ from numba import jitclass
 from .support import TestCase, MemoryLeakMixin, tag
 from numba.jitclass import _box
 from numba.runtime.nrt import MemInfo
+from numba.errors import LoweringError
 
 
 def _get_meminfo(box):
@@ -270,6 +272,20 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(cstruct.a, st.a)
         self.assertEqual(cstruct.b, st.b)
         self.assertEqual(cstruct.c, st.c)
+
+    def test_is(self):
+        Vector = self._make_Vector2()
+        vec_a = Vector(1, 2)
+        vec_b = Vector(1, 2)
+
+        @njit
+        def do_is(a, b):
+            return a is b
+
+        with self.assertRaises(LoweringError) as raises:
+            # trigger compilation
+            do_is(vec_a, vec_a)
+        self.assertIn('no default `is` implementation', str(raises.exception))
 
     def test_isinstance(self):
         Vector2 = self._make_Vector2()
@@ -533,6 +549,21 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         with self.assertRaises(AttributeError) as raises:
             access_dunder.py_func(inst)
         self.assertIn('_TestJitClass__value', str(raises.exception))
+
+    @unittest.skipIf(sys.version_info < (3,), "Python 3-specific test")
+    def test_annotations(self):
+        """
+        Methods with annotations should compile fine (issue #1911).
+        """
+        from .annotation_usecases import AnnotatedClass
+
+        spec = {'x': int32}
+        cls = jitclass(spec)(AnnotatedClass)
+
+        obj = cls(5)
+        self.assertEqual(obj.x, 5)
+        self.assertEqual(obj.add(2), 7)
+
 
 if __name__ == '__main__':
     unittest.main()

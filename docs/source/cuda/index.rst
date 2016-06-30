@@ -15,3 +15,4 @@ Numba for CUDA GPUs
    simulator.rst
    reduction.rst
    ufunc.rst
+   faq.rst

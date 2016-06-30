@@ -13,8 +13,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import cfunc, carray, farray, types, typing, utils
-from numba.types.abstract import _typecache
-from numba import jit, numpy_support
+from numba import cffi_support
 from .support import TestCase, tag, captured_stderr
 from .test_dispatcher import BaseCacheTest
 
@@ -26,9 +25,14 @@ def div_usecase(a, b):
     c = a / b
     return c
 
+def square_usecase(a):
+    return a ** 2
+
 add_sig = "float64(float64, float64)"
 
 div_sig = "float64(int64, int64)"
+
+square_sig = "float64(float64)"
 
 def objmode_usecase(a, b):
     object()
@@ -84,7 +88,6 @@ def make_cfarray_dtype_usecase(func):
 carray_dtype_usecase = make_cfarray_dtype_usecase(carray)
 farray_dtype_usecase = make_cfarray_dtype_usecase(farray)
 
-
 carray_float32_usecase_sig = types.void(types.CPointer(types.float32),
                                         types.CPointer(types.float32),
                                         types.intp, types.intp)
@@ -121,6 +124,18 @@ class TestCFunc(TestCase):
         self.assertEqual(ctypes.cast(ct, ctypes.c_void_p).value, addr)
 
         self.assertPreciseEqual(ct(2.0, 3.5), 5.5)
+
+    @tag('important')
+    @unittest.skipUnless(cffi_support.SUPPORTED,
+                         "CFFI not supported -- please install the cffi module")
+    def test_cffi(self):
+        from . import cffi_usecases
+        ffi, lib = cffi_usecases.load_inline_module()
+
+        f = cfunc(square_sig)(square_usecase)
+
+        res = lib._numba_test_funcptr(f.cffi)
+        self.assertPreciseEqual(res, 2.25)  # 1.5 ** 2
 
     def test_locals(self):
         # By forcing the intermediate result into an integer, we
@@ -302,16 +317,29 @@ class TestCArray(TestCase):
         """
         self.check_carray_farray(farray, 'F')
 
+    def make_carray_sigs(self, formal_sig):
+        """
+        Generate a bunch of concrete signatures by varying the width
+        and signedness of size arguments (see issue #1923).
+        """
+        for actual_size in (types.intp, types.int32, types.intc,
+                            types.uintp, types.uint32, types.uintc):
+            args = tuple(actual_size if a == types.intp else a
+                         for a in formal_sig.args)
+            yield formal_sig.return_type(*args)
+
     def check_numba_carray_farray(self, usecase, dtype_usecase):
         # With typed pointers and implicit dtype
         pyfunc = usecase
-        f = cfunc(carray_float32_usecase_sig)(pyfunc)
-        self.check_carray_usecase(self.make_float32_pointer, pyfunc, f.ctypes)
+        for sig in self.make_carray_sigs(carray_float32_usecase_sig):
+            f = cfunc(sig)(pyfunc)
+            self.check_carray_usecase(self.make_float32_pointer, pyfunc, f.ctypes)
 
         # With typed pointers and explicit (matching) dtype
         pyfunc = dtype_usecase
-        f = cfunc(carray_float32_usecase_sig)(pyfunc)
-        self.check_carray_usecase(self.make_float32_pointer, pyfunc, f.ctypes)
+        for sig in self.make_carray_sigs(carray_float32_usecase_sig):
+            f = cfunc(sig)(pyfunc)
+            self.check_carray_usecase(self.make_float32_pointer, pyfunc, f.ctypes)
         # With typed pointers and mismatching dtype
         with self.assertTypingError() as raises:
             f = cfunc(carray_float64_usecase_sig)(pyfunc)
@@ -320,8 +348,9 @@ class TestCArray(TestCase):
 
         # With voidptr
         pyfunc = dtype_usecase
-        f = cfunc(carray_voidptr_usecase_sig)(pyfunc)
-        self.check_carray_usecase(self.make_float32_pointer, pyfunc, f.ctypes)
+        for sig in self.make_carray_sigs(carray_voidptr_usecase_sig):
+            f = cfunc(sig)(pyfunc)
+            self.check_carray_usecase(self.make_float32_pointer, pyfunc, f.ctypes)
 
     @tag('important')
     def test_numba_carray(self):
