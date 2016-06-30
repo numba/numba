@@ -235,7 +235,7 @@ def new_error_context(fmt_, *args, **kwargs):
         raise
     except Exception as e:
         newerr = errcls(e).add_context(_format_msg(fmt_, args, kwargs))
-        six.reraise(InternalError, newerr, sys.exc_info()[2])
+        six.reraise(type(newerr), newerr, sys.exc_info()[2])
 
 
 __all__ += [name for (name, value) in globals().items()
