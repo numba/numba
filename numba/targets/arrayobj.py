@@ -841,11 +841,7 @@ class SliceIndexer(Indexer):
 
     def get_index_bounds(self):
         lower, upper = slicing.get_slice_bounds(self.builder, self.slice)
-        #self.context.printf(self.builder,
-                       #"slice bounds(%zd:%zd:%zd) => [%zd, %zd)\n",
-                       #self.slice.start, self.slice.stop, self.slice.step,
-                       #lower, upper)
-        return (lower, upper)
+        return lower, upper
 
     def loop_head(self):
         builder = self.builder
@@ -983,9 +979,6 @@ class FancyIndexer(object):
         # Adjust for empty shape
         lower = builder.select(is_empty, zero, lower)
         upper = builder.select(is_empty, zero, upper)
-        #self.context.printf(builder,
-                            #"get_offset_bounds({}) => lower = %zd, upper %zd\n"
-                            #.format(self.indexers), lower, upper)
         return lower, upper
 
     def begin_loops(self):
@@ -1117,9 +1110,6 @@ def get_array_memory_extents(context, builder, arrty, arr, shapes, strides, data
     """
     lower, upper = offset_bounds_from_strides(context, builder, arrty, arr,
                                               shapes, strides)
-    #context.printf(builder,
-                   #"offset_bounds_from_strides({0}): itemsize = %zd, nitems = %zd => lower = %zd, upper = %zd\n"
-                   #.format(arrty), arr.itemsize, arr.nitems, lower, upper)
     return compute_memory_extents(context, builder, lower, upper, data)
 
 
@@ -1133,8 +1123,6 @@ def extents_may_overlap(context, builder, a_start, a_end, b_start, b_end):
         builder.icmp_unsigned('<', a_start, b_end),
         builder.icmp_unsigned('<', b_start, a_end),
         )
-    #context.printf(builder, "[%p, %p) vs. [%p, %p) => may_overlap = %d\n",
-                   #a_start, a_end, b_start, b_end, may_overlap)
     return may_overlap
 
 
