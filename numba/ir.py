@@ -374,6 +374,9 @@ class StaticRaise(Stmt):
 
 
 class Return(Stmt):
+    """
+    Return to caller.
+    """
     is_terminator = True
     is_exit = True
 
@@ -386,6 +389,9 @@ class Return(Stmt):
 
 
 class Jump(Stmt):
+    """
+    Unconditional branch.
+    """
     is_terminator = True
 
     def __init__(self, target, loc):
@@ -397,6 +403,9 @@ class Jump(Stmt):
 
 
 class Branch(Stmt):
+    """
+    Conditional branch.
+    """
     is_terminator = True
 
     def __init__(self, cond, truebr, falsebr, loc):
@@ -410,6 +419,9 @@ class Branch(Stmt):
 
 
 class Assign(Stmt):
+    """
+    Assign to a variable.
+    """
     def __init__(self, value, target, loc):
         self.value = value
         self.target = target
@@ -417,6 +429,21 @@ class Assign(Stmt):
 
     def __str__(self):
         return '%s = %s' % (self.target, self.value)
+
+
+class Print(Stmt):
+    """
+    Print some values.
+    """
+    def __init__(self, args, vararg, loc):
+        self.args = args
+        self.vararg = vararg
+        # Constant-inferred arguments
+        self.consts = {}
+        self.loc = loc
+
+    def __str__(self):
+        return 'print(%s)' % ', '.join(str(v) for v in self.args)
 
 
 class Yield(Inst):

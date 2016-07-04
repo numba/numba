@@ -17,9 +17,9 @@ def printfloat():
     print(i, 23, 34.75, 321)
 
 
-def cuprintary(A):
+def printstring():
     i = cuda.grid(1)
-    print("A[", i, "]", A[i])
+    print(i, "hop!", 999)
 
 
 def printempty():
@@ -51,15 +51,11 @@ class TestPrint(unittest.TestCase):
             cufunc()
         self.assertEqual(stdout.getvalue(), "\n")
 
-    @unittest.skipIf(True, "Print string not implemented yet")
-    def test_print_array(self):
-        """
-        Eyeballing required
-        """
-        jcuprintary = cuda.jit('void(float32[:])')(cuprintary)
-        A = np.arange(10, dtype=np.float32)
-        jcuprintary[2, 5](A)
-        cuda.synchronize()
+    def test_string(self):
+        cufunc = cuda.jit('void()', debug=False)(printstring)
+        with captured_cuda_stdout() as stdout:
+            cufunc()
+        self.assertEqual(stdout.getvalue(), "0 hop! 999\n")
 
 
 if __name__ == '__main__':

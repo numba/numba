@@ -298,6 +298,35 @@ class StaticGetItemConstraint(object):
         return self.fallback and self.fallback.get_call_signature()
 
 
+def fold_arg_vars(typevars, args, vararg, kws):
+    """
+    Fold and resolve the argument variables of a function call.
+    """
+    # Fetch all argument types, bail if any is unknown
+    n_pos_args = len(args)
+    kwds = [kw for (kw, var) in kws]
+    argtypes = [typevars[a.name] for a in args]
+    argtypes += [typevars[var.name] for (kw, var) in kws]
+    if vararg is not None:
+        argtypes.append(typevars[vararg.name])
+
+    if not all(a.defined for a in argtypes):
+        return
+
+    args = tuple(a.getone() for a in argtypes)
+    pos_args = args[:n_pos_args]
+    if vararg is not None:
+        if not isinstance(args[-1], types.BaseTuple):
+            # Unsuitable for *args
+            # (Python is more lenient and accepts all iterables)
+            raise TypeError("*args in function call should be a tuple, got %s"
+                            % (args[-1],))
+        pos_args += args[-1].types
+        args = args[:-1]
+    kw_args = dict(zip(kwds, args[n_pos_args:]))
+    return pos_args, kw_args
+
+
 class CallConstraint(object):
     """Constraint for calling functions.
     Perform case analysis foreach combinations of argument types.
@@ -321,35 +350,21 @@ class CallConstraint(object):
         assert fnty
         context = typeinfer.context
 
-        # Fetch all argument types, bail if any is unknown
-        n_pos_args = len(self.args)
-        kwds = [kw for (kw, var) in self.kws]
-        argtypes = [typevars[a.name] for a in self.args]
-        argtypes += [typevars[var.name] for (kw, var) in self.kws]
-        if self.vararg is not None:
-            argtypes.append(typevars[self.vararg.name])
-
-        if not all(a.defined for a in argtypes):
+        r = fold_arg_vars(typevars, self.args, self.vararg, self.kws)
+        if r is None:
             # Cannot resolve call type until all argument types are known
             return
-
-        args = tuple(a.getone() for a in argtypes)
-        pos_args = args[:n_pos_args]
-        if self.vararg is not None:
-            if not isinstance(args[-1], types.BaseTuple):
-                # Unsuitable for *args
-                # (Python is more lenient and accepts all iterables)
-                return
-            pos_args += args[-1].types
-            args = args[:-1]
-        kw_args = dict(zip(kwds, args[n_pos_args:]))
+        pos_args, kw_args = r
 
         # Resolve call type
         sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
         if sig is None:
-            desc = context.explain_function_type(fnty)
+            # Arguments are invalid => explain why
             headtemp = "Invalid usage of {0} with parameters ({1})"
+            args = [str(a) for a in pos_args]
+            args += ["%s=%s" % (k, v) for k, v in sorted(kw_args.items())]
             head = headtemp.format(fnty, ', '.join(map(str, args)))
+            desc = context.explain_function_type(fnty)
             msg = '\n'.join([head, desc])
             raise TypingError(msg, loc=self.loc)
         typeinfer.add_type(self.target, sig.return_type)
@@ -518,6 +533,30 @@ class SetAttrConstraint(object):
         if sig is None:
             raise TypingError("Cannot resolve setattr: (%s).%s = %s" %
                               (targetty, self.attr, valty), loc=self.loc)
+        self.signature = sig
+
+    def get_call_signature(self):
+        return self.signature
+
+
+class PrintConstraint(object):
+    def __init__(self, args, vararg, loc):
+        self.args = args
+        self.vararg = vararg
+        self.loc = loc
+
+    def __call__(self, typeinfer):
+        typevars = typeinfer.typevars
+
+        r = fold_arg_vars(typevars, self.args, self.vararg, {})
+        if r is None:
+            # Cannot resolve call type until all argument types are known
+            return
+        pos_args, kw_args = r
+
+        fnty = typeinfer.context.resolve_value_type(print)
+        assert fnty is not None
+        sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
         self.signature = sig
 
     def get_call_signature(self):
@@ -763,6 +802,8 @@ class TypeInferer(object):
             self.typeof_delitem(inst)
         elif isinstance(inst, ir.SetAttr):
             self.typeof_setattr(inst)
+        elif isinstance(inst, ir.Print):
+            self.typeof_print(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
             pass
         elif isinstance(inst, ir.StaticRaise):
@@ -793,6 +834,12 @@ class TypeInferer(object):
     def typeof_setattr(self, inst):
         constraint = SetAttrConstraint(target=inst.target, attr=inst.attr,
                                        value=inst.value, loc=inst.loc)
+        self.constraints.append(constraint)
+        self.calls.append((inst, constraint))
+
+    def typeof_print(self, inst):
+        constraint = PrintConstraint(args=inst.args, vararg=inst.vararg,
+                                     loc=inst.loc)
         self.constraints.append(constraint)
         self.calls.append((inst, constraint))
 
