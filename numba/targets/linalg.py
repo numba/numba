@@ -94,7 +94,7 @@ def make_contiguous(context, builder, sig, args):
         newargs.append(newval)
     yield signature(sig.return_type, *newtys), tuple(newargs)
     for ty, val in copies:
-        context.nrt_decref(builder, ty, val)
+        context.nrt.decref(builder, ty, val)
 
 
 def check_c_int(context, builder, n):

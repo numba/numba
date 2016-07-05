@@ -893,10 +893,10 @@ class Lower(BaseLower):
         if not self.context.enable_nrt:
             return
 
-        self.context.nrt_incref(self.builder, typ, val)
+        self.context.nrt.incref(self.builder, typ, val)
 
     def decref(self, typ, val):
         if not self.context.enable_nrt:
             return
 
-        self.context.nrt_decref(self.builder, typ, val)
+        self.context.nrt.decref(self.builder, typ, val)

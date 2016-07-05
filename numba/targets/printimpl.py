@@ -44,7 +44,7 @@ def print_item_impl(context, builder, sig, args):
     pyapi = context.get_python_api(builder)
 
     if context.enable_nrt:
-        context.nrt_incref(builder, ty, val)
+        context.nrt.incref(builder, ty, val)
     # XXX unfortunately, we don't have access to the env manager from here
     obj = pyapi.from_native_value(ty, val)
     with builder.if_else(cgutils.is_not_null(builder, obj), likely=True) as (if_ok, if_error):

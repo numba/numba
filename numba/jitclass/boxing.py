@@ -172,6 +172,6 @@ def _unbox_class_instance(typ, val, c):
 
     ret = inst._getvalue()
 
-    c.context.nrt_incref(c.builder, typ, ret)
+    c.context.nrt.incref(c.builder, typ, ret)
 
     return NativeValue(ret, is_error=c.pyapi.c_api_error())
