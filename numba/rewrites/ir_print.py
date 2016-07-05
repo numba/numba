@@ -7,17 +7,13 @@ from . import register_rewrite, Rewrite
 @register_rewrite('before-inference')
 class RewritePrintCalls(Rewrite):
     """
-    Rewrite IR expressions of the kind `getitem(value=arr, index=$constXX)`
-    where `$constXX` is a known constant as
-    `static_getitem(value=arr, index=<constant value>)`.
-
     Rewrite calls to the print() global function to dedicated IR print() nodes.
     """
 
     def match(self, interp, block, typemap, calltypes):
         self.prints = prints = {}
         self.block = block
-        # Find all assignments with a right-hand print() calls
+        # Find all assignments with a right-hand print() call
         for inst in block.find_insts(ir.Assign):
             if isinstance(inst.value, ir.Expr) and inst.value.op == 'call':
                 expr = inst.value
