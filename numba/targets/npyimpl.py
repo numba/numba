@@ -166,7 +166,7 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
     elif tyinp in types.number_domain | set([types.boolean]):
         return _ScalarHelper(ctxt, bld, inp, tyinp)
     else:
-        raise TypeError('unknown type for {0}: {1}'.format(where, str(tyinp)))
+        raise TypeError('unsupported type for {0}: {1}'.format(where, str(tyinp)))
 
 
 _broadcast_onto_sig = types.intp(types.intp, types.CPointer(types.intp),
