@@ -68,7 +68,8 @@ Array types
 
 `Numpy arrays <http://docs.scipy.org/doc/numpy/reference/arrays.ndarray.html>`_
 of any of the scalar types above are supported, regardless of the shape
-or layout.
+or layout.  Note however that the `order` parameter to the various array
+constructors is not supported.
 
 Array access
 ------------
