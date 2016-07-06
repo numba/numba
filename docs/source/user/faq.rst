@@ -49,6 +49,22 @@ supported from Numba-compiled code.  However, you can temporarily disable
 compilation by setting the :envvar:`NUMBA_DISABLE_JIT` environment
 variable.
 
+How do I create a Fortran-ordered array?
+----------------------------------------
+
+Numba currently doesn't support the ``order`` argument to most Numpy
+functions such as :func:`numpy.empty` (because of limitations in the
+:term:`type inference` algorithm).  You can work around this issue by
+creating a C-ordered array and then transposing it.  For example::
+
+   a = np.empty((3, 5))
+   b = np.zeros(some_shape)
+
+can be rewritten as::
+
+   a = np.empty((5, 3)).T
+   b = np.zeros(some_shape[::-1]).T
+
 
 Performance
 ===========
