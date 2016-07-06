@@ -1398,6 +1398,7 @@ class _LoopTypesTester(TestCase):
 
     # Allowed deviation between Numpy and Numba results
     _ulps = {('arccos', 'F'): 2,
+             ('arcsin', 'D'): 4,
              ('arcsin', 'F'): 4,
              ('log10', 'D'): 5,
              ('tanh', 'F'): 2,

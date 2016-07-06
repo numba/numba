@@ -912,6 +912,13 @@ class BaseContext(object):
         assert isinstance(ty, llvmir.Type), "Expected LLVM type"
         return ty.get_abi_alignment(self.target_data)
 
+    def get_preferred_array_alignment(context, ty):
+        """
+        Get preferred array alignment for Numba type *ty*.
+        """
+        # AVX prefers 32-byte alignment
+        return 32
+
     def post_lowering(self, mod, library):
         """Run target specific post-lowering transformation here.
         """
@@ -924,6 +931,30 @@ class BaseContext(object):
     def _require_nrt(self):
         if not self.enable_nrt:
             raise RuntimeError("Require NRT")
+
+    def nrt_allocate(self, builder, size):
+        """
+        Low-level allocate a new memory area of `size` bytes.
+        """
+        self._require_nrt()
+
+        mod = builder.module
+        fnty = llvmir.FunctionType(void_ptr,
+                                   [self.get_value_type(types.intp)])
+        fn = mod.get_or_insert_function(fnty, name="NRT_Allocate")
+        fn.return_value.add_attribute("noalias")
+        return builder.call(fn, [size])
+
+    def nrt_free(self, builder, ptr):
+        """
+        Low-level free a memory area allocated with nrt_allocate().
+        """
+        self._require_nrt()
+
+        mod = builder.module
+        fnty = llvmir.FunctionType(llvmir.VoidType(), [void_ptr])
+        fn = mod.get_or_insert_function(fnty, name="NRT_Free")
+        return builder.call(fn, [ptr])
 
     def nrt_meminfo_alloc(self, builder, size):
         """

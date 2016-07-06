@@ -108,6 +108,13 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         a4.flags.writeable = False
         check(a4, 0, 'C', False, True)
 
+        # Unsupported dtype
+        a5 = a1.astype(a1.dtype.newbyteorder())
+        with self.assertRaises(ValueError) as raises:
+            typeof(a5)
+        self.assertIn("Unsupported array dtype: %s" % (a5.dtype,),
+                      str(raises.exception))
+
     @tag('important')
     def test_structured_arrays(self):
         def check(arr, dtype, ndim, layout, aligned):
