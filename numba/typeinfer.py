@@ -185,7 +185,7 @@ class BuildTupleConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of build tuple at {0}", self.loc):
+        with new_error_context("typing of tuple at {0}", self.loc):
             typevars = typeinfer.typevars
             tsets = [typevars[i.name].get() for i in self.items]
             oset = typevars[self.target]
@@ -206,7 +206,7 @@ class _BuildContainerConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of build list at {0}", self.loc):
+        with new_error_context("typing of list at {0}", self.loc):
             typevars = typeinfer.typevars
             oset = typevars[self.target]
             tsets = [typevars[i.name].get() for i in self.items]

@@ -109,6 +109,10 @@ class NumbaError(Exception):
             return lst
 
     def add_context(self, msg):
+        """
+        Add contextual info.  The execption message is expanded with the new
+        contextual info.
+        """
         self.contexts.append(msg)
         newmsg = '{0}\n[{1}] During: {2}'.format(self, len(self.contexts), msg)
         self.args = (newmsg,)
