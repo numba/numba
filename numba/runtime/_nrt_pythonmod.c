@@ -167,6 +167,8 @@ declmethod(MemInfo_varsize_alloc);
 declmethod(MemInfo_varsize_free);
 declmethod(MemInfo_varsize_realloc);
 declmethod(MemInfo_release);
+declmethod(Allocate);
+declmethod(Free);
 
 
 #undef declmethod
