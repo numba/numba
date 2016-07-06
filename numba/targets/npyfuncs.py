@@ -459,13 +459,6 @@ def np_complex_power_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
     return numbers.complex_power_impl(context, builder, sig, args)
-    #dispatch_table = {
-        #types.complex64: 'npy_cpowf',
-        #types.complex128: 'npy_cpow',
-    #}
-
-    #return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       #dispatch_table, 'power')
 
 
 ########################################################################
@@ -530,14 +523,7 @@ def np_complex_rint_impl(context, builder, sig, args):
 
 def np_real_exp_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-
-    dispatch_table = {
-        types.float32: 'npy_expf',
-        types.float64: 'npy_exp',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'exp')
+    return mathimpl.exp_impl(context, builder, sig, args)
 
 
 def np_complex_exp_impl(context, builder, sig, args):
@@ -576,14 +562,7 @@ def np_complex_exp2_impl(context, builder, sig, args):
 
 def np_real_log_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-
-    dispatch_table = {
-        types.float32: 'npy_logf',
-        types.float64: 'npy_log',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'log')
+    return mathimpl.log_impl(context, builder, sig, args)
 
 
 def np_complex_log_impl(context, builder, sig, args):
@@ -622,14 +601,7 @@ def np_complex_log2_impl(context, builder, sig, args):
 
 def np_real_log10_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-
-    dispatch_table = {
-        types.float32: 'npy_log10f',
-        types.float64: 'npy_log10',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'log10')
+    return mathimpl.log10_impl(context, builder, sig, args)
 
 
 def np_complex_log10_impl(context, builder, sig, args):
@@ -650,14 +622,7 @@ def np_complex_log10_impl(context, builder, sig, args):
 
 def np_real_expm1_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-
-    dispatch_table = {
-        types.float32: 'npy_expm1f',
-        types.float64: 'npy_expm1',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'expm1')
+    return mathimpl.expm1_impl(context, builder, sig, args)
 
 def np_complex_expm1_impl(context, builder, sig, args):
     # this is based on nc_expm1 in funcs.inc.src
@@ -685,14 +650,7 @@ def np_complex_expm1_impl(context, builder, sig, args):
 
 def np_real_log1p_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-
-    dispatch_table = {
-        types.float32: 'npy_log1pf',
-        types.float64: 'npy_log1p',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'log1p')
+    return mathimpl.log1p_impl(context, builder, sig, args)
 
 def np_complex_log1p_impl(context, builder, sig, args):
     # base on NumPy's nc_log1p in funcs.inc.src
@@ -721,14 +679,7 @@ def np_complex_log1p_impl(context, builder, sig, args):
 
 def np_real_sqrt_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-
-    dispatch_table = {
-        types.float32: 'npy_sqrtf',
-        types.float64: 'npy_sqrt',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'sqrt')
+    return mathimpl.sqrt_impl(context, builder, sig, args)
 
 
 def np_complex_sqrt_impl(context, builder, sig, args):
@@ -822,14 +773,7 @@ def np_complex_reciprocal_impl(context, builder, sig, args):
 
 def np_real_sin_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-
-    dispatch_table = {
-        types.float32: 'npy_sinf',
-        types.float64: 'npy_sin',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'sin')
+    return mathimpl.sin_impl(context, builder, sig, args)
 
 
 def np_complex_sin_impl(context, builder, sig, args):
@@ -842,14 +786,7 @@ def np_complex_sin_impl(context, builder, sig, args):
 
 def np_real_cos_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-
-    dispatch_table = {
-        types.float32: 'npy_cosf',
-        types.float64: 'npy_cos',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'cos')
+    return mathimpl.cos_impl(context, builder, sig, args)
 
 
 def np_complex_cos_impl(context, builder, sig, args):
@@ -862,14 +799,7 @@ def np_complex_cos_impl(context, builder, sig, args):
 
 def np_real_tan_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-
-    dispatch_table = {
-        types.float32: 'npy_tanf',
-        types.float64: 'npy_tan',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'tan')
+    return mathimpl.tan_impl(context, builder, sig, args)
 
 
 def np_complex_tan_impl(context, builder, sig, args):
@@ -915,14 +845,7 @@ def np_complex_tan_impl(context, builder, sig, args):
 
 def np_real_asin_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-
-    dispatch_table = {
-        types.float32: 'npy_asinf',
-        types.float64: 'npy_asin',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'arcsin')
+    return mathimpl.asin_impl(context, builder, sig, args)
 
 
 def _complex_expand_series(context, builder, ty, initial, x, coefs):
@@ -1013,14 +936,7 @@ def np_complex_asin_impl(context, builder, sig, args):
 
 def np_real_acos_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-
-    dispatch_table = {
-        types.float32: 'npy_acosf',
-        types.float64: 'npy_acos',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'arccos')
+    return mathimpl.acos_impl(context, builder, sig, args)
 
 
 ########################################################################
@@ -1028,14 +944,7 @@ def np_real_acos_impl(context, builder, sig, args):
 
 def np_real_atan_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-
-    dispatch_table = {
-        types.float32: 'npy_atanf',
-        types.float64: 'npy_atan',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'arctan')
+    return mathimpl.atan_impl(context, builder, sig, args)
 
 
 def np_complex_atan_impl(context, builder, sig, args):
@@ -1097,14 +1006,7 @@ def np_complex_atan_impl(context, builder, sig, args):
 
 def np_real_atan2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
-
-    dispatch_table = {
-        types.float32: 'npy_atan2f',
-        types.float64: 'npy_atan2',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'arctan2')
+    return mathimpl.atan2_float_impl(context, builder, sig, args)
 
 
 ########################################################################
@@ -1112,14 +1014,7 @@ def np_real_atan2_impl(context, builder, sig, args):
 
 def np_real_hypot_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
-
-    dispatch_table = {
-        types.float32: 'npy_hypotf',
-        types.float64: 'npy_hypot',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'hypot')
+    return mathimpl.hypot_float_impl(context, builder, sig, args)
 
 
 ########################################################################
@@ -1127,14 +1022,7 @@ def np_real_hypot_impl(context, builder, sig, args):
 
 def np_real_sinh_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-
-    dispatch_table = {
-        types.float32: 'npy_sinhf',
-        types.float64: 'npy_sinh',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'sinh')
+    return mathimpl.sinh_impl(context, builder, sig, args)
 
 
 def np_complex_sinh_impl(context, builder, sig, args):
@@ -1167,14 +1055,7 @@ def np_complex_sinh_impl(context, builder, sig, args):
 
 def np_real_cosh_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-
-    dispatch_table = {
-        types.float32: 'npy_coshf',
-        types.float64: 'npy_cosh',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'cosh')
+    return mathimpl.cosh_impl(context, builder, sig, args)
 
 
 def np_complex_cosh_impl(context, builder, sig, args):
@@ -1206,14 +1087,7 @@ def np_complex_cosh_impl(context, builder, sig, args):
 
 def np_real_tanh_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-
-    dispatch_table = {
-        types.float32: 'npy_tanhf',
-        types.float64: 'npy_tanh',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'tanh')
+    return mathimpl.tanh_impl(context, builder, sig, args)
 
 
 def np_complex_tanh_impl(context, builder, sig, args):
@@ -1259,14 +1133,7 @@ def np_complex_tanh_impl(context, builder, sig, args):
 
 def np_real_asinh_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-
-    dispatch_table = {
-        types.float32: 'npy_asinhf',
-        types.float64: 'npy_asinh',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'arcsinh')
+    return mathimpl.asinh_impl(context, builder, sig, args)
 
 
 def np_complex_asinh_impl(context, builder, sig, args):
@@ -1325,14 +1192,7 @@ def np_complex_asinh_impl(context, builder, sig, args):
 
 def np_real_acosh_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-
-    dispatch_table = {
-        types.float32: 'npy_acoshf',
-        types.float64: 'npy_acosh',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'arccosh')
+    return mathimpl.acosh_impl(context, builder, sig, args)
 
 
 def np_complex_acosh_impl(context, builder, sig, args):
@@ -1367,14 +1227,7 @@ def np_complex_acosh_impl(context, builder, sig, args):
 
 def np_real_atanh_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-
-    dispatch_table = {
-        types.float32: 'npy_atanhf',
-        types.float64: 'npy_atanh',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'arctanh')
+    return mathimpl.atanh_impl(context, builder, sig, args)
 
 
 def np_complex_atanh_impl(context, builder, sig, args):

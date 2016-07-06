@@ -2,10 +2,13 @@ from __future__ import print_function
 
 import math
 import re
+import textwrap
+
+import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba import types
+from numba import jit, types
 from numba.errors import TypingError
 from .support import TestCase
 
@@ -37,6 +40,14 @@ def imprecise_list():
 
 def unknown_module():
     return numpyz.int32(0)
+
+def nop(x, y, z):
+    pass
+
+
+class Foo(object):
+    def __repr__(self):
+        return "<Foo instance>"
 
 
 class TestTypingError(unittest.TestCase):
@@ -96,7 +107,7 @@ class TestTypingError(unittest.TestCase):
         # Check contextual msg
         last_two = errmsg.splitlines()[-2:]
         self.assertTrue(re.search(r'\[1\] During: resolving callee type: Function.*hypot', last_two[0]))
-        self.assertTrue(re.search(r'\[2\] During: typing of call .*test_typingerror.py \(32\)', last_two[1]))
+        self.assertTrue(re.search(r'\[2\] During: typing of call .*test_typingerror.py', last_two[1]))
 
 
     def test_imprecise_list(self):
@@ -110,6 +121,37 @@ class TestTypingError(unittest.TestCase):
         errmsg = str(raises.exception)
         self.assertIn("Can't infer type of variable 'l': list(undefined)",
                       errmsg)
+
+
+class TestArgumentTypingError(unittest.TestCase):
+    """
+    Test diagnostics of typing errors caused by argument inference failure.
+    """
+
+    def test_unsupported_array_dtype(self):
+        # See issue #1943
+        cfunc = jit(nopython=True)(nop)
+        a = np.ones(3)
+        a = a.astype(a.dtype.newbyteorder())
+        with self.assertRaises(TypingError) as raises:
+            cfunc(1, a, a)
+        expected = textwrap.dedent("""\
+            This error may have been caused by the following argument(s):
+            - argument 1: Unsupported array dtype: {0}
+            - argument 2: Unsupported array dtype: {0}"""
+            ).format(a.dtype)
+        self.assertIn(expected, str(raises.exception))
+
+    def test_unsupported_type(self):
+        cfunc = jit(nopython=True)(nop)
+        foo = Foo()
+        with self.assertRaises(TypingError) as raises:
+            cfunc(1, foo, 1)
+        expected = textwrap.dedent("""\
+            This error may have been caused by the following argument(s):
+            - argument 1: cannot determine Numba type of value <Foo instance>"""
+            )
+        self.assertIn(expected, str(raises.exception))
 
 
 if __name__ == '__main__':

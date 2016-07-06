@@ -118,6 +118,13 @@ class NumbaError(Exception):
         self.args = (newmsg,)
         return self
 
+    def patch_message(self, new_message):
+        """
+        Change the error message to the given new message.
+        """
+        self.args = (new_message,) + self.args[1:]
+
+
 class IRError(NumbaError):
     """
     An error occurred during Numba IR generation.
