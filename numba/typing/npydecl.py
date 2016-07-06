@@ -809,18 +809,6 @@ def _check_linalg_matrix(a, func_name):
         raise TypingError("np.linalg.%s() only supported on "
                           "float and complex arrays" % func_name)
 
-
-@infer_global(np.linalg.inv)
-class LinalgInv(CallableTemplate):
-
-    def generic(self):
-        def typer(a):
-            _check_linalg_matrix(a, "inv")
-            return a.copy(layout='C')
-
-        return typer
-
-
 # -----------------------------------------------------------------------------
 # Miscellaneous functions
 

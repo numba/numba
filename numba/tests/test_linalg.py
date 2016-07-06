@@ -329,6 +329,14 @@ def lstsq_system(A, B, rcond=-1):
     return np.linalg.lstsq(A, B, rcond)
 
 
+def solve_system(A, B):
+    return np.linalg.solve(A, B)
+
+
+def pinv_matrix(A, rcond=1e-15):  # 1e-15 from numpy impl
+    return np.linalg.pinv(A)
+
+
 class TestLinalgBase(TestCase):
     """
     Provides setUp and common data/error modes for testing np.linalg functions.
@@ -491,6 +499,26 @@ class TestLinalgBase(TestCase):
                 else:
                     raise ValueError("Unknown contig")
 
+    def assert_raise_on_singular(self, cfunc, args):
+        msg = "Matrix is singular to machine precision."
+        self.assert_error(cfunc, args, msg, err=np.linalg.LinAlgError)
+
+    def assert_is_identity_matrix(self, got, rtol=None, atol=None):
+        """
+        Checks if a matrix is equal to the identity matrix.
+        """
+        # check it is square
+        self.assertEqual(got.shape[-1], got.shape[-2])
+        # create identity matrix
+        eye = np.eye(got.shape[-1], dtype=got.dtype)
+        resolution = 5 * np.finfo(got.dtype).resolution
+        if rtol is None:
+            rtol = 10 * resolution
+        if atol is None:
+            atol = 100 * resolution  # zeros tend to be fuzzy
+        # check it matches
+        np.testing.assert_allclose(got, eye, rtol, atol)
+
 
 class TestTestLinalgBase(TestCase):
     """
@@ -603,15 +631,6 @@ class TestLinalgInv(TestLinalgBase):
     Tests for np.linalg.inv.
     """
 
-    def sample_matrix(self, m, dtype, order):
-        a = np.zeros((m, m), dtype, order)
-        a += np.diag(self.sample_vector(m, dtype))
-        return a
-
-    def assert_singular_matrix(self, cfunc, args):
-        msg = "Matrix is singular and cannot be inverted"
-        self.assert_error(cfunc, args, msg)
-
     @tag('important')
     @needs_lapack
     def test_linalg_inv(self):
@@ -622,27 +641,33 @@ class TestLinalgInv(TestLinalgBase):
         cfunc = jit(nopython=True)(invert_matrix)
 
         def check(a, **kwargs):
+            expected = invert_matrix(a)
+            got = cfunc(a)
+            self.assert_contig_sanity(got, "F")
+
+            use_reconstruction = False
+
+            # try strict
+            try:
+                np.testing.assert_array_almost_equal_nulp(got, expected,
+                                                          nulp=10)
+            except AssertionError:
+                # fall back to reconstruction
+                use_reconstruction = True
+
+            if use_reconstruction:
+                rec = np.dot(got, a)
+                self.assert_is_identity_matrix(rec)
+
+            # Ensure proper resource management
             with self.assertNoNRTLeak():
-                expected = invert_matrix(a).copy(order='C')
-                got = cfunc(a)
-                # XXX had to use that function otherwise comparison fails
-                # because of +0, -0 discrepancies
-                np.testing.assert_array_almost_equal_nulp(
-                    got, expected, **kwargs)
-                # check that the computed results are contig and in the same
-                # way
-                self.assert_contig_sanity(got, "C")
-                del got, expected
+                cfunc(a)
 
         for dtype, order in product(self.dtypes, 'CF'):
-            a = self.sample_matrix(n, dtype, order)
-            check(a, nulp=3)
-
-        for order in 'CF':
-            a = np.array(((2, 1), (2, 3)), dtype=np.float64, order=order)
+            a = self.specific_sample_matrix((n, n), dtype, order)
             check(a)
 
-        # Non square matrices
+        # Non square matrix
         self.assert_non_square(cfunc, (np.ones((2, 3)),))
 
         # Wrong dtype
@@ -653,7 +678,7 @@ class TestLinalgInv(TestLinalgBase):
         self.assert_wrong_dimensions("inv", cfunc, (np.ones(10),))
 
         # Singular matrix
-        self.assert_singular_matrix(cfunc, (np.zeros((2, 2)),))
+        self.assert_raise_on_singular(cfunc, (np.zeros((2, 2)),))
 
 
 class TestLinalgCholesky(TestLinalgBase):
@@ -1011,12 +1036,7 @@ class TestLinalgQr(TestLinalgBase):
                 )
 
                 # check q is orthonormal
-                np.testing.assert_allclose(
-                    np.eye(min(a.shape), dtype=a.dtype),
-                    np.dot(np.conjugate(q.T), q),
-                    rtol=resolution,
-                    atol=resolution
-                )
+                self.assert_is_identity_matrix(np.dot(np.conjugate(q.T), q))
 
             # Ensure proper resource management
             with self.assertNoNRTLeak():
@@ -1048,7 +1068,24 @@ class TestLinalgQr(TestLinalgBase):
                                             dtype=np.float64),))
 
 
-class TestLinalgLstsq(TestLinalgBase):
+class TestLinalgSystems(TestLinalgBase):
+    """
+    Base class for testing "system" solvers from np.linalg.
+    Namely np.linalg.solve() and np.linalg.lstsq().
+    """
+
+    # check for RHS with dimension > 2 raises
+    def assert_wrong_dimensions_1D(self, name, cfunc, args):
+        msg = "np.linalg.%s() only supported on 1 and 2-D arrays" % name
+        self.assert_error(cfunc, args, msg, errors.TypingError)
+
+    # check that a dimensionally invalid system raises
+    def assert_dimensionally_invalid(self, cfunc, args):
+        msg = "Incompatible array sizes, system is not dimensionally valid."
+        self.assert_error(cfunc, args, msg, np.linalg.LinAlgError)
+
+
+class TestLinalgLstsq(TestLinalgSystems):
     """
     Tests for np.linalg.lstsq.
     """
@@ -1061,16 +1098,6 @@ class TestLinalgLstsq(TestLinalgBase):
     # The tests try and deal with this as best as they can through the use
     # of reconstruction and measures like residual norms.
     # Suggestions for improvements are welcomed!
-
-    # check for B with dimension > 2 raises
-    def assert_wrong_dimensions_1D(self, name, cfunc, args):
-        msg = "np.linalg.%s() only supported on 1 and 2-D arrays" % name
-        self.assert_error(cfunc, args, msg, errors.TypingError)
-
-    # check that a dimensionally invalid system raises
-    def assert_dimensionally_invalid(self, name, cfunc, args):
-        msg = "Incompatible array sizes for np.linalg.%s()." % name
-        self.assert_error(cfunc, args, msg, np.linalg.LinAlgError)
 
     @needs_lapack
     def test_linalg_lstsq(self):
@@ -1164,6 +1191,10 @@ class TestLinalgLstsq(TestLinalgBase):
                         # and on the small side (rows, cols) < 100.
                         np.testing.assert_allclose(
                             res_expected, res_got, rtol=10.)
+
+            # Ensure proper resource management
+            with self.assertNoNRTLeak():
+                cfunc(A, B, **kwargs)
 
         # test: column vector, tall, wide, square, row vector
         # prime sizes, the A's
@@ -1281,8 +1312,250 @@ class TestLinalgLstsq(TestLinalgBase):
         # checked)
         bad1D = np.array([1.], dtype=np.float64)
         bad2D = np.array([[1.], [2.], [3.]], dtype=np.float64)
-        self.assert_dimensionally_invalid(rn, cfunc, (ok, bad1D))
-        self.assert_dimensionally_invalid(rn, cfunc, (ok, bad2D))
+        self.assert_dimensionally_invalid(cfunc, (ok, bad1D))
+        self.assert_dimensionally_invalid(cfunc, (ok, bad2D))
+
+
+class TestLinalgSolve(TestLinalgSystems):
+    """
+    Tests for np.linalg.solve.
+    """
+
+    @needs_lapack
+    def test_linalg_solve(self):
+        """
+        Test np.linalg.solve
+        """
+        cfunc = jit(nopython=True)(solve_system)
+
+        def check(a, b, **kwargs):
+            expected = solve_system(a, b, **kwargs)
+            got = cfunc(a, b, **kwargs)
+
+            # check that the computed results are contig and in the same way
+            self.assert_contig_sanity(got, "F")
+
+            use_reconstruction = False
+            # try plain match of the result first
+            try:
+                np.testing.assert_array_almost_equal_nulp(
+                    got, expected, nulp=10)
+            except AssertionError:
+                # plain match failed, test by reconstruction
+                use_reconstruction = True
+
+            # If plain match fails then reconstruction is used,
+            # this checks that AX ~= B.
+            # Plain match can fail due to numerical fuzziness associated
+            # with system size and conditioning, or more simply from
+            # numpy using double precision routines for computation that
+            # could be done in single precision (which is what numba does).
+            # Therefore minor differences in results can appear due to
+            # e.g. numerical roundoff being different between two precisions.
+            if use_reconstruction:
+                # check they are dimensionally correct
+                self.assertEqual(got.shape, expected.shape)
+
+                # check AX=B
+                rec = np.dot(a, got)
+                resolution = np.finfo(a.dtype).resolution
+                np.testing.assert_allclose(
+                    b,
+                    rec,
+                    rtol=10 * resolution,
+                    atol=100 * resolution  # zeros tend to be fuzzy
+                )
+
+            # Ensure proper resource management
+            with self.assertNoNRTLeak():
+                cfunc(a, b, **kwargs)
+
+        # test: prime size squares
+        sizes = [(1, 1), (3, 3), (7, 7)]
+
+        # There are a lot of combinations to test across all the different
+        # dtypes, especially when type promotion comes into play, to
+        # reduce the effort the dtype of "b" is cycled.
+        cycle_dt = cycle(self.dtypes)
+
+        # test loop
+        for size, dtype, order in \
+                product(sizes, self.dtypes, 'FC'):
+            A = self.specific_sample_matrix(size, dtype, order)
+
+            b_sizes = (1, 13)
+
+            for b_size, b_order in product(b_sizes, 'FC'):
+                # dtype for b
+                dt = next(cycle_dt)
+
+                # check 2D B
+                B = self.specific_sample_matrix(
+                    (A.shape[0], b_size), dt, b_order)
+                check(A, B)
+
+                # check 1D B
+                tmp = B[:, 0].copy(order=b_order)
+                check(A, tmp)
+
+        # Test input validation
+        ok = np.array([[1., 0.], [0., 1.]], dtype=np.float64)
+
+        # check ok input is ok
+        cfunc(ok, ok)
+
+        # check bad inputs
+        rn = "solve"
+
+        # Wrong dtype
+        bad = np.array([[1, 0], [0, 1]], dtype=np.int32)
+        self.assert_wrong_dtype(rn, cfunc, (ok, bad))
+        self.assert_wrong_dtype(rn, cfunc, (bad, ok))
+
+        # Dimension issue
+        bad = np.array([1, 0], dtype=np.float64)
+        self.assert_wrong_dimensions(rn, cfunc, (bad, ok))
+
+        # no nans or infs
+        bad = np.array([[1., 0., ], [np.inf, np.nan]], dtype=np.float64)
+        self.assert_no_nan_or_inf(cfunc, (ok, bad))
+        self.assert_no_nan_or_inf(cfunc, (bad, ok))
+
+        # check 1D is accepted for B (2D is done previously)
+        # and then that anything of higher dimension raises
+        ok_oneD = np.array([1., 2.], dtype=np.float64)
+        cfunc(ok, ok_oneD)
+        bad = np.array([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], dtype=np.float64)
+        self.assert_wrong_dimensions_1D(rn, cfunc, (ok, bad))
+
+        # check an invalid system raises (1D and 2D cases checked)
+        bad1D = np.array([1.], dtype=np.float64)
+        bad2D = np.array([[1.], [2.], [3.]], dtype=np.float64)
+        self.assert_dimensionally_invalid(cfunc, (ok, bad1D))
+        self.assert_dimensionally_invalid(cfunc, (ok, bad2D))
+
+        # check that a singular system raises
+        bad2D = self.specific_sample_matrix((2, 2), np.float64, 'C', rank=1)
+        self.assert_raise_on_singular(cfunc, (bad2D, ok))
+
+
+class TestLinalgPinv(TestLinalgBase):
+    """
+    Tests for np.linalg.pinv.
+    """
+
+    @needs_lapack
+    def test_linalg_pinv(self):
+        """
+        Test np.linalg.pinv
+        """
+        cfunc = jit(nopython=True)(pinv_matrix)
+
+        def check(a, **kwargs):
+            expected = pinv_matrix(a, **kwargs)
+            got = cfunc(a, **kwargs)
+
+            # check that the computed results are contig and in the same way
+            self.assert_contig_sanity(got, "F")
+
+            use_reconstruction = False
+            # try plain match of each array to np first
+
+            try:
+                np.testing.assert_array_almost_equal_nulp(
+                    got, expected, nulp=10)
+            except AssertionError:
+                # plain match failed, test by reconstruction
+                use_reconstruction = True
+
+            # If plain match fails then reconstruction is used.
+            # This can occur due to numpy using double precision
+            # LAPACK when single can be used, this creates round off
+            # problems. Also, if the matrix has machine precision level
+            # zeros in its singular values then the singular vectors are
+            # likely to vary depending on round off.
+            if use_reconstruction:
+
+                # check they are dimensionally correct
+                self.assertEqual(got.shape, expected.shape)
+
+                # check pinv(A)*A~=eye
+                # if the problem is numerical fuzz then this will probably
+                # work, if the problem is rank deficiency then it won't!
+                rec = np.dot(got, a)
+                try:
+                    self.assert_is_identity_matrix(rec)
+                except AssertionError:
+                    # check A=pinv(pinv(A))
+                    resolution = 5 * np.finfo(a.dtype).resolution
+                    rec = cfunc(got)
+                    np.testing.assert_allclose(
+                        rec,
+                        a,
+                        rtol=10 * resolution,
+                        atol=100 * resolution  # zeros tend to be fuzzy
+                    )
+                    if a.shape[0] >= a.shape[1]:
+                        # if it is overdetermined or fully determined
+                        # use numba lstsq function (which is type specific) to
+                        # compute the inverse and check against that.
+                        lstsq = jit(nopython=True)(lstsq_system)
+                        lstsq_pinv = lstsq(
+                            a, np.eye(
+                                a.shape[0]).astype(
+                                a.dtype), **kwargs)[0]
+                        np.testing.assert_allclose(
+                            got,
+                            lstsq_pinv,
+                            rtol=10 * resolution,
+                            atol=100 * resolution  # zeros tend to be fuzzy
+                        )
+                    # check the 2 norm of the difference is small
+                    self.assertLess(np.linalg.norm(got - expected), resolution)
+
+            # Ensure proper resource management
+            with self.assertNoNRTLeak():
+                cfunc(a, **kwargs)
+
+        # test: column vector, tall, wide, square, row vector
+        # prime sizes
+        sizes = [(7, 1), (11, 5), (5, 11), (3, 3), (1, 7)]
+
+        # When required, a specified condition number
+        specific_cond = 10.
+
+        # test loop
+        for size, dtype, order in \
+                product(sizes, self.dtypes, 'FC'):
+            # check a full rank matrix
+            a = self.specific_sample_matrix(size, dtype, order)
+            check(a)
+
+            m, n = size
+            if m != 1 and n != 1:
+                # check a rank deficient matrix
+                minmn = min(m, n)
+                a = self.specific_sample_matrix(size, dtype, order,
+                                                condition=specific_cond)
+                rcond = 1. / specific_cond
+                approx_half_rank_rcond = minmn * rcond
+                check(a, rcond=approx_half_rank_rcond)
+
+        rn = "pinv"
+
+        # Wrong dtype
+        self.assert_wrong_dtype(rn, cfunc,
+                                (np.ones((2, 2), dtype=np.int32),))
+
+        # Dimension issue
+        self.assert_wrong_dimensions(rn, cfunc,
+                                     (np.ones(10, dtype=np.float64),))
+
+        # no nans or infs
+        self.assert_no_nan_or_inf(cfunc,
+                                  (np.array([[1., 2., ], [np.inf, np.nan]],
+                                            dtype=np.float64),))
+
 
 if __name__ == '__main__':
     unittest.main()

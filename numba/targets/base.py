@@ -156,12 +156,15 @@ def _load_global_helpers():
     # This is Py_None's real C name
     ll.add_symbol("_Py_NoneStruct", id(None))
 
-    # Add C helper functions
+    # Add Numba C helper functions
     for c_helpers in (_helperlib.c_helpers, _dynfunc.c_helpers):
-        for py_name in c_helpers:
+        for py_name, c_address in c_helpers.items():
             c_name = "numba_" + py_name
-            c_address = c_helpers[py_name]
             ll.add_symbol(c_name, c_address)
+
+    # Add Numpy C helpers (npy_XXX)
+    for c_name, c_address in _helperlib.npymath_exports.items():
+        ll.add_symbol(c_name, c_address)
 
     # Add all built-in exception classes
     for obj in utils.builtins.__dict__.values():
@@ -867,9 +870,13 @@ class BaseContext(object):
         shapevals = [self.get_constant(types.intp, s) for s in ary.shape]
         cshape = Constant.array(llintp, shapevals)
 
-        # Handle strides: use strides of the equivalent C-contiguous array.
-        contig = np.ascontiguousarray(ary)
-        stridevals = [self.get_constant(types.intp, s) for s in contig.strides]
+        # Handle strides
+        if ary.ndim > 0:
+            # Use strides of the equivalent C-contiguous array.
+            contig = np.ascontiguousarray(ary)
+            stridevals = [self.get_constant(types.intp, s) for s in contig.strides]
+        else:
+            stridevals = []
         cstrides = Constant.array(llintp, stridevals)
 
         # Create array structure
@@ -905,6 +912,13 @@ class BaseContext(object):
         assert isinstance(ty, llvmir.Type), "Expected LLVM type"
         return ty.get_abi_alignment(self.target_data)
 
+    def get_preferred_array_alignment(context, ty):
+        """
+        Get preferred array alignment for Numba type *ty*.
+        """
+        # AVX prefers 32-byte alignment
+        return 32
+
     def post_lowering(self, mod, library):
         """Run target specific post-lowering transformation here.
         """
@@ -917,6 +931,30 @@ class BaseContext(object):
     def _require_nrt(self):
         if not self.enable_nrt:
             raise RuntimeError("Require NRT")
+
+    def nrt_allocate(self, builder, size):
+        """
+        Low-level allocate a new memory area of `size` bytes.
+        """
+        self._require_nrt()
+
+        mod = builder.module
+        fnty = llvmir.FunctionType(void_ptr,
+                                   [self.get_value_type(types.intp)])
+        fn = mod.get_or_insert_function(fnty, name="NRT_Allocate")
+        fn.return_value.add_attribute("noalias")
+        return builder.call(fn, [size])
+
+    def nrt_free(self, builder, ptr):
+        """
+        Low-level free a memory area allocated with nrt_allocate().
+        """
+        self._require_nrt()
+
+        mod = builder.module
+        fnty = llvmir.FunctionType(llvmir.VoidType(), [void_ptr])
+        fn = mod.get_or_insert_function(fnty, name="NRT_Free")
+        return builder.call(fn, [ptr])
 
     def nrt_meminfo_alloc(self, builder, size):
         """

@@ -10,73 +10,74 @@ registry = Registry()
 lower = registry.lower
 
 
-# FIXME: the current implementation relies on CPython API even in
-#        nopython mode.
+# NOTE: the current implementation relies on CPython API even in
+#       nopython mode.
 
 
-@lower("print_item", types.Integer)
-def int_print_impl(context, builder, sig, args):
-    [x] = args
-    py = context.get_python_api(builder)
-    if sig.args[0].signed:
-        intobj = py.long_from_signed_int(x)
-    else:
-        intobj = py.long_from_unsigned_int(x)
-    py.print_object(intobj)
-    py.decref(intobj)
+@lower("print_item", types.Const)
+def print_item_impl(context, builder, sig, args):
+    """
+    Print a single constant value.
+    """
+    ty, = sig.args
+    val = ty.value
+
+    pyapi = context.get_python_api(builder)
+
+    strobj = pyapi.unserialize(pyapi.serialize_object(val))
+    pyapi.print_object(strobj)
+    pyapi.decref(strobj)
+
     res = context.get_dummy_value()
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower("print_item", types.Float)
-def real_print_impl(context, builder, sig, args):
-    [x] = args
-    py = context.get_python_api(builder)
-    szval = context.cast(builder, x, sig.args[0], types.float64)
-    intobj = py.float_from_double(szval)
-    py.print_object(intobj)
-    py.decref(intobj)
-    res = context.get_dummy_value()
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+@lower("print_item", types.Any)
+def print_item_impl(context, builder, sig, args):
+    """
+    Print a single native value by boxing it in a Python object and
+    invoking the Python interpreter's print routine.
+    """
+    ty, = sig.args
+    val, = args
 
+    pyapi = context.get_python_api(builder)
 
-@lower("print_item", types.Boolean)
-def bool_print_impl(context, builder, sig, args):
-    [x] = args
-    py = context.get_python_api(builder)
-    boolobj = py.bool_from_bool(x)
-    py.print_object(boolobj)
-    py.decref(boolobj)
-    res = context.get_dummy_value()
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+    if context.enable_nrt:
+        context.nrt_incref(builder, ty, val)
+    # XXX unfortunately, we don't have access to the env manager from here
+    obj = pyapi.from_native_value(ty, val)
+    with builder.if_else(cgutils.is_not_null(builder, obj), likely=True) as (if_ok, if_error):
+        with if_ok:
+            pyapi.print_object(obj)
+            pyapi.decref(obj)
+        with if_error:
+            cstr = context.insert_const_string(builder.module,
+                                               "the print() function")
+            strobj = pyapi.string_from_string(cstr)
+            pyapi.err_write_unraisable(strobj)
+            pyapi.decref(strobj)
 
-
-@lower("print_item", types.CharSeq)
-def print_charseq(context, builder, sig, args):
-    [tx] = sig.args
-    [x] = args
-    py = context.get_python_api(builder)
-    xp = cgutils.alloca_once(builder, x.type)
-    builder.store(x, xp)
-    byteptr = builder.bitcast(xp, Type.pointer(Type.int(8)))
-    size = context.get_constant(types.intp, tx.count)
-    cstr = py.bytes_from_string_and_size(byteptr, size)
-    py.print_object(cstr)
-    py.decref(cstr)
     res = context.get_dummy_value()
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 @lower(print, types.VarArg(types.Any))
-def print_varargs(context, builder, sig, args):
-    py = context.get_python_api(builder)
+def print_varargs_impl(context, builder, sig, args):
+    """
+    A entire print() call.
+    """
+    pyapi = context.get_python_api(builder)
+    gil = pyapi.gil_ensure()
+
     for i, (argtype, argval) in enumerate(zip(sig.args, args)):
         signature = typing.signature(types.none, argtype)
         imp = context.get_function("print_item", signature)
         imp(builder, [argval])
         if i < len(args) - 1:
-            py.print_string(' ')
-    py.print_string('\n')
+            pyapi.print_string(' ')
+    pyapi.print_string('\n')
 
+    pyapi.gil_release(gil)
     res = context.get_dummy_value()
     return impl_ret_untracked(context, builder, sig.return_type, res)

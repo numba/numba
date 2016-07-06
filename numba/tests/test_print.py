@@ -6,8 +6,8 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types
-from .support import captured_stdout, tag
+from numba import jit, types
+from .support import captured_stdout, tag, TestCase
 
 
 enable_pyobj_flags = Flags()
@@ -20,17 +20,38 @@ force_pyobj_flags.set("force_pyobject")
 def print_value(x):
     print(x)
 
+def print_array_item(arr, i):
+    print(arr[i].x)
+
 def print_values(a, b, c):
     print(a, b, c)
 
 def print_empty():
     print()
 
+def print_string(x):
+    print(x, "hop!", 3.5)
 
-class TestPrint(unittest.TestCase):
+def print_vararg(a, b, c):
+    print(a, b, *c)
+
+def print_string_vararg(a, b, c):
+    print(a, "hop!", b, *c)
+
+
+def make_print_closure(x):
+    def print_closure():
+        return x
+    return jit(nopython=True)(x)
+
+
+class TestPrint(TestCase):
 
     @tag('important')
-    def test_print(self):
+    def test_print_values(self):
+        """
+        Test printing a single argument value.
+        """
         pyfunc = print_value
 
         def check_values(typ, values):
@@ -41,12 +62,16 @@ class TestPrint(unittest.TestCase):
                     cfunc(val)
                     self.assertEqual(sys.stdout.getvalue(), str(val) + '\n')
 
+        # Various scalars
         check_values(types.int32, (1, -234))
         check_values(types.int64, (1, -234,
                                    123456789876543210, -123456789876543210))
         check_values(types.uint64, (1, 234,
                                    123456789876543210, 2**63 + 123))
         check_values(types.boolean, (True, False))
+        check_values(types.float64, (1.5, 100.0**10.0, float('nan')))
+        check_values(types.complex64, (1+1j,))
+        check_values(types.NPTimedelta('ms'), (np.timedelta64(100, 'ms'),))
 
         cr = compile_isolated(pyfunc, (types.float32,))
         cfunc = cr.entry_point
@@ -58,11 +83,11 @@ class TestPrint(unittest.TestCase):
             self.assertTrue(got.startswith(expect))
             self.assertTrue(got.endswith('\n'))
 
-        cr = compile_isolated(pyfunc, (types.float64,))
-        cfunc = cr.entry_point
-        with captured_stdout():
-            cfunc(100.0**10.0)
-            self.assertEqual(sys.stdout.getvalue(), '1e+20\n')
+        # NRT-enabled type
+        with self.assertNoNRTLeak():
+            x = [1, 3, 5, 7]
+            with self.assertRefCount(x):
+                check_values(types.List(types.int32), (x,))
 
         # Array will have to use object mode
         arraytype = types.Array(types.int32, 1, 'C')
@@ -74,10 +99,32 @@ class TestPrint(unittest.TestCase):
                              '[0 1 2 3 4 5 6 7 8 9]\n')
 
     @tag('important')
+    def test_print_array_item(self):
+        """
+        Test printing a Numpy character sequence
+        """
+        dtype = np.dtype([('x', 'S4')])
+        arr = np.frombuffer(bytearray(range(1, 9)), dtype=dtype)
+
+        pyfunc = print_array_item
+        cfunc = jit(nopython=True)(pyfunc)
+        for i in range(len(arr)):
+            with captured_stdout():
+                cfunc(arr, i)
+                self.assertEqual(sys.stdout.getvalue(), str(arr[i]['x']) + '\n')
+
+    @tag('important')
     def test_print_multiple_values(self):
         pyfunc = print_values
         cr = compile_isolated(pyfunc, (types.int32,) * 3)
         cfunc = cr.entry_point
+        with captured_stdout():
+            cfunc(1, 2, 3)
+            self.assertEqual(sys.stdout.getvalue(), '1 2 3\n')
+
+    def test_print_nogil(self):
+        pyfunc = print_values
+        cfunc = jit(nopython=True, nogil=True)(pyfunc)
         with captured_stdout():
             cfunc(1, 2, 3)
             self.assertEqual(sys.stdout.getvalue(), '1 2 3\n')
@@ -90,6 +137,30 @@ class TestPrint(unittest.TestCase):
         with captured_stdout():
             cfunc()
             self.assertEqual(sys.stdout.getvalue(), '\n')
+
+    @tag('important')
+    def test_print_strings(self):
+        pyfunc = print_string
+        cr = compile_isolated(pyfunc, (types.int32,))
+        cfunc = cr.entry_point
+        with captured_stdout():
+            cfunc(1)
+            self.assertEqual(sys.stdout.getvalue(), '1 hop! 3.5\n')
+
+    def test_print_vararg(self):
+        # Test *args support for print().  This is desired since
+        # print() can use a dedicated IR node.
+        pyfunc = print_vararg
+        cfunc = jit(nopython=True)(pyfunc)
+        with captured_stdout():
+            cfunc(1, (2, 3), (4, 5j))
+            self.assertEqual(sys.stdout.getvalue(), '1 (2, 3) 4 5j\n')
+
+        pyfunc = print_string_vararg
+        cfunc = jit(nopython=True)(pyfunc)
+        with captured_stdout():
+            cfunc(1, (2, 3), (4, 5j))
+            self.assertEqual(sys.stdout.getvalue(), '1 hop! (2, 3) 4 5j\n')
 
 
 if __name__ == '__main__':

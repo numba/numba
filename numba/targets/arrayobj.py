@@ -553,6 +553,13 @@ class Indexer(object):
         """
         raise NotImplementedError
 
+    def get_index_bounds(self):
+        """
+        Return a half-open [lower, upper) range of indices this dimension
+        is guaranteed not to step out of.
+        """
+        raise NotImplementedError
+
     def loop_head(self):
         """
         Start indexation loop.  Return a (index, count) tuple.
@@ -597,6 +604,10 @@ class EntireIndexer(Indexer):
     def get_shape(self):
         return (self.size,)
 
+    def get_index_bounds(self):
+        # [0, size)
+        return (self.ll_intp(0), self.size)
+
     def loop_head(self):
         builder = self.builder
         # Initialize loop variable
@@ -637,6 +648,10 @@ class IntegerIndexer(Indexer):
     def get_shape(self):
         return ()
 
+    def get_index_bounds(self):
+        # [idx, idx+1)
+        return (self.idx, self.builder.add(self.idx, self.get_size()))
+
     def loop_head(self):
         return self.idx, None
 
@@ -670,6 +685,10 @@ class IntegerArrayIndexer(Indexer):
 
     def get_shape(self):
         return (self.idx_size,)
+
+    def get_index_bounds(self):
+        # Pessimal heuristic, as we don't want to scan for the min and max
+        return (self.ll_intp(0), self.size)
 
     def loop_head(self):
         builder = self.builder
@@ -737,6 +756,11 @@ class BooleanArrayIndexer(Indexer):
 
     def get_shape(self):
         return (self.get_size(),)
+
+    def get_index_bounds(self):
+        # Pessimal heuristic, as we don't want to scan for the
+        # first and last true items
+        return (self.ll_intp(0), self.size)
 
     def loop_head(self):
         builder = self.builder
@@ -808,6 +832,10 @@ class SliceIndexer(Indexer):
     def get_shape(self):
         return (self.get_size(),)
 
+    def get_index_bounds(self):
+        lower, upper = slicing.get_slice_bounds(self.builder, self.slice)
+        return lower, upper
+
     def loop_head(self):
         builder = self.builder
         # Initialize loop variable
@@ -828,7 +856,8 @@ class SliceIndexer(Indexer):
 
     def loop_tail(self):
         builder = self.builder
-        next_index = builder.add(builder.load(self.index), self.slice.step)
+        next_index = builder.add(builder.load(self.index), self.slice.step,
+                                 flags=['nsw'])
         builder.store(next_index, self.index)
         next_count = cgutils.increment_index(builder, builder.load(self.count))
         builder.store(next_count, self.count)
@@ -844,9 +873,10 @@ class FancyIndexer(object):
     def __init__(self, context, builder, aryty, ary, index_types, indices):
         self.context = context
         self.builder = builder
-        self.aryty = ary
+        self.aryty = aryty
         self.shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
         self.strides = cgutils.unpack_tuple(builder, ary.strides, aryty.ndim)
+        self.ll_intp = self.context.get_value_type(types.intp)
 
         indexers = []
 
@@ -901,12 +931,48 @@ class FancyIndexer(object):
     def prepare(self):
         for i in self.indexers:
             i.prepare()
+        # Compute the resulting shape
+        self.indexers_shape = sum([i.get_shape() for i in self.indexers], ())
 
     def get_shape(self):
         """
-        Get the resulting shape as Python tuple.
+        Get the resulting data shape as Python tuple.
         """
-        return sum([i.get_shape() for i in self.indexers], ())
+        return self.indexers_shape
+
+    def get_offset_bounds(self, strides, itemsize):
+        """
+        Get a half-open [lower, upper) range of byte offsets spanned by
+        the indexer with the given strides and itemsize.  The indexer is
+        guaranteed to not go past those bounds.
+        """
+        assert len(strides) == self.aryty.ndim
+        builder = self.builder
+        is_empty = cgutils.false_bit
+        zero = self.ll_intp(0)
+        one = self.ll_intp(1)
+        lower = zero
+        upper = zero
+        for indexer, shape, stride in zip(self.indexers, self.indexers_shape,
+                                          strides):
+            is_empty = builder.or_(is_empty,
+                                   builder.icmp_unsigned('==', shape, zero))
+            # Compute [lower, upper) indices on this dimension
+            lower_index, upper_index = indexer.get_index_bounds()
+            lower_offset = builder.mul(stride, lower_index)
+            upper_offset = builder.mul(stride, builder.sub(upper_index, one))
+            # Adjust total interval
+            is_downwards = builder.icmp_signed('<', stride, zero)
+            lower = builder.add(lower,
+                                builder.select(is_downwards, upper_offset, lower_offset))
+            upper = builder.add(upper,
+                                builder.select(is_downwards, lower_offset, upper_offset))
+        # Make interval half-open
+        upper = builder.add(upper, itemsize)
+        # Adjust for empty shape
+        lower = builder.select(is_empty, zero, lower)
+        upper = builder.select(is_empty, zero, upper)
+        return lower, upper
 
     def begin_loops(self):
         indices, counts = zip(*(i.loop_head() for i in self.indexers))
@@ -979,6 +1045,141 @@ def fancy_getitem_array(context, builder, sig, args):
                              aryty, ary, (idxty,), (idx,))
 
 
+def offset_bounds_from_strides(context, builder, arrty, arr, shapes, strides):
+    """
+    Compute a half-open range [lower, upper) of byte offsets from the
+    array's data pointer, that bound the in-memory extent of the array.
+
+    This mimicks offset_bounds_from_strides() from numpy/core/src/private/mem_overlap.c
+    """
+    itemsize = arr.itemsize
+    zero = itemsize.type(0)
+    one = zero.type(1)
+    if arrty.layout in 'CF':
+        # Array is contiguous: contents are laid out sequentially
+        # starting from arr.data and upwards
+        lower = zero
+        upper = builder.mul(itemsize, arr.nitems)
+    else:
+        # Non-contiguous array: need to examine strides
+        lower = zero
+        upper = zero
+        for i in range(arrty.ndim):
+            # Compute the largest byte offset on this dimension
+            #   max_axis_offset = strides[i] * (shapes[i] - 1)
+            # (shapes[i] == 0 is catered for by the empty array case below)
+            max_axis_offset = builder.mul(strides[i],
+                                          builder.sub(shapes[i], one))
+            is_upwards = builder.icmp_signed('>=', max_axis_offset, zero)
+            # Expand either upwards or downwards depending on stride
+            upper = builder.select(is_upwards,
+                                   builder.add(upper, max_axis_offset), upper)
+            lower = builder.select(is_upwards,
+                                   lower, builder.add(lower, max_axis_offset))
+        # Return a half-open range
+        upper = builder.add(upper, itemsize)
+        # Adjust for empty arrays
+        is_empty = builder.icmp_signed('==', arr.nitems, zero)
+        upper = builder.select(is_empty, zero, upper)
+        lower = builder.select(is_empty, zero, lower)
+
+    return lower, upper
+
+
+def compute_memory_extents(context, builder, lower, upper, data):
+    """
+    Given [lower, upper) byte offsets and a base data pointer,
+    compute the memory pointer bounds as pointer-sized integers.
+    """
+    data_ptr_as_int = builder.ptrtoint(data, lower.type)
+    start = builder.add(data_ptr_as_int, lower)
+    end = builder.add(data_ptr_as_int, upper)
+    return start, end
+
+def get_array_memory_extents(context, builder, arrty, arr, shapes, strides, data):
+    """
+    Compute a half-open range [start, end) of pointer-sized integers
+    which fully contain the array data.
+    """
+    lower, upper = offset_bounds_from_strides(context, builder, arrty, arr,
+                                              shapes, strides)
+    return compute_memory_extents(context, builder, lower, upper, data)
+
+
+def extents_may_overlap(context, builder, a_start, a_end, b_start, b_end):
+    """
+    Whether two memory extents [a_start, a_end) and [b_start, b_end)
+    may overlap.
+    """
+    # Comparisons are unsigned, since we are really comparing pointers
+    may_overlap = builder.and_(
+        builder.icmp_unsigned('<', a_start, b_end),
+        builder.icmp_unsigned('<', b_start, a_end),
+        )
+    return may_overlap
+
+
+def maybe_copy_source(context, builder, use_copy,
+                      srcty, src, src_shapes, src_strides, src_data):
+    ptrty = src_data.type
+
+    copy_layout = 'C'
+    copy_data = cgutils.alloca_once_value(builder, src_data)
+    copy_shapes = src_shapes
+    copy_strides = None  # unneeded for contiguous arrays
+
+    with builder.if_then(use_copy, likely=False):
+        # Allocate temporary scratchpad
+        # XXX: should we use a stack-allocated array for very small
+        # data sizes?
+        allocsize = builder.mul(src.itemsize, src.nitems)
+        data = context.nrt_allocate(builder, allocsize)
+        voidptrty = data.type
+        data = builder.bitcast(data, ptrty)
+        builder.store(data, copy_data)
+
+        # Copy source data into scratchpad
+        intp_t = context.get_value_type(types.intp)
+
+        with cgutils.loop_nest(builder, src_shapes, intp_t) as indices:
+            src_ptr = cgutils.get_item_pointer2(builder, src_data,
+                                                src_shapes, src_strides,
+                                                srcty.layout, indices)
+            dest_ptr = cgutils.get_item_pointer2(builder, data,
+                                                 copy_shapes, copy_strides,
+                                                 copy_layout, indices)
+            builder.store(builder.load(src_ptr), dest_ptr)
+
+    def src_getitem(source_indices):
+        assert len(source_indices) == srcty.ndim
+        src_ptr = cgutils.alloca_once(builder, ptrty)
+        with builder.if_else(use_copy, likely=False) as (if_copy, otherwise):
+            with if_copy:
+                builder.store(
+                    cgutils.get_item_pointer2(builder, builder.load(copy_data),
+                                              copy_shapes, copy_strides,
+                                              copy_layout, source_indices,
+                                              wraparound=False),
+                    src_ptr)
+            with otherwise:
+                builder.store(
+                    cgutils.get_item_pointer2(builder, src_data,
+                                              src_shapes, src_strides,
+                                              srcty.layout, source_indices,
+                                              wraparound=False),
+                    src_ptr)
+        return load_item(context, builder, srcty, builder.load(src_ptr))
+
+    def src_cleanup():
+        # Deallocate memory
+        with builder.if_then(use_copy, likely=False):
+            data = builder.load(copy_data)
+            data = builder.bitcast(data, voidptrty)
+            context.nrt_free(builder, data)
+
+    return src_getitem, src_cleanup
+
+
 def fancy_setslice(context, builder, sig, args, index_types, indices):
     """
     Implement slice assignment for arrays.  This implementation works for
@@ -999,11 +1200,11 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 
     if isinstance(srcty, types.Buffer):
         # Source is an array
+        src_dtype = srcty.dtype
         src = make_array(srcty)(context, builder, src)
         src_shapes = cgutils.unpack_tuple(builder, src.shape)
         src_strides = cgutils.unpack_tuple(builder, src.strides)
         src_data = src.data
-        src_dtype = srcty.dtype
 
         # Check shapes are equal
         index_shape = indexer.get_shape()
@@ -1018,13 +1219,19 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
             msg = "cannot assign slice from input of different size"
             context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
-        def src_getitem(source_indices):
-            assert len(source_indices) == srcty.ndim
-            src_ptr = cgutils.get_item_pointer2(builder, src_data,
-                                                src_shapes, src_strides,
-                                                srcty.layout, source_indices,
-                                                wraparound=False)
-            return load_item(context, builder, srcty, src_ptr)
+        # Check for array overlap
+        src_start, src_end = get_array_memory_extents(context, builder, srcty, src,
+                                                      src_shapes, src_strides, src_data)
+
+        dest_lower, dest_upper = indexer.get_offset_bounds(dest_strides, ary.itemsize)
+        dest_start, dest_end = compute_memory_extents(context, builder,
+                                                      dest_lower, dest_upper, dest_data)
+
+        use_copy = extents_may_overlap(context, builder, src_start, src_end, dest_start, dest_end)
+
+        src_getitem, src_cleanup = maybe_copy_source(context, builder, use_copy,
+                                                     srcty, src, src_shapes,
+                                                     src_strides, src_data)
 
     elif isinstance(srcty, types.Sequence):
         src_dtype = srcty.dtype
@@ -1047,6 +1254,9 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
                                                 signature(src_dtype, srcty, types.intp))
             return getitem_impl(builder, (src, idx))
 
+        def src_cleanup():
+            pass
+
     else:
         # Source is a scalar (broadcast or not, depending on destination
         # shape).
@@ -1054,6 +1264,9 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 
         def src_getitem(source_indices):
             return src
+
+        def src_cleanup():
+            pass
 
     # Loop on destination and copy from source to destination
     dest_indices, counts = indexer.begin_loops()
@@ -1074,6 +1287,8 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     store_item(context, builder, aryty, val, dest_ptr)
 
     indexer.end_loops()
+
+    src_cleanup()
 
     return context.get_dummy_value()
 
@@ -2623,9 +2838,9 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
                 arrtype.layout))
 
     allocsize = builder.mul(itemsize, arrlen)
-    # NOTE: AVX prefer 32-byte alignment
+    align = context.get_preferred_array_alignment(arrtype.dtype)
     meminfo = context.nrt_meminfo_alloc_aligned(builder, size=allocsize,
-                                                align=32)
+                                                align=align)
 
     data = context.nrt_meminfo_data(builder, meminfo)
 

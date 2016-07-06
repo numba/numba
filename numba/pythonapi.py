@@ -948,11 +948,14 @@ class PythonAPI(object):
         args.append(self.context.get_constant_null(types.pyobject))
         return self.builder.call(fn, args)
 
-    def call_method(self, callee, method, objargs = None):
-        cstr = self.context.insert_const_string(self.module, method)
-        fnty = Type.function(self.pyobj, [self.pyobj, self.cstring], var_arg=True)
+    def call_method(self, callee, method, objargs=()):
+        cname = self.context.insert_const_string(self.module, method)
+        fnty = Type.function(self.pyobj, [self.pyobj, self.cstring, self.cstring],
+                             var_arg=True)
         fn = self._get_function(fnty, name="PyObject_CallMethod")
-        args = [callee, cstr]
+        fmt = 'O' * len(objargs)
+        cfmt = self.context.insert_const_string(self.module, fmt)
+        args = [callee, cname, cfmt]
         if objargs:
             args.extend(objargs)
         args.append(self.context.get_constant_null(types.pyobject))
@@ -1320,6 +1323,10 @@ class PythonAPI(object):
         return cgutils.is_not_null(self.builder, self.err_occurred())
 
     def to_native_value(self, typ, obj):
+        """
+        Unbox the Python object as the given Numba type.
+        A NativeValue instance is returned.
+        """
         impl = _unboxers.lookup(typ.__class__)
         if impl is None:
             raise NotImplementedError("cannot convert %s to native value" % (typ,))
@@ -1335,6 +1342,11 @@ class PythonAPI(object):
         return out
 
     def from_native_value(self, typ, val, env_manager=None):
+        """
+        Box the native value of the given Numba type.  A Python object
+        pointer is returned (NULL if an error occurred).
+        This method steals any native (NRT) reference embedded in *val*.
+        """
         impl = _boxers.lookup(typ.__class__)
         if impl is None:
             raise NotImplementedError("cannot convert native %s to Python object" % (typ,))

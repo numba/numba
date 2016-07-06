@@ -4,8 +4,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba import jit
-from numba.errors import NumbaWarning
-
+from numba.errors import NumbaWarning, deprecated
 
 class TestBuiltins(unittest.TestCase):
     def test_type_infer_warning(self):
@@ -106,6 +105,19 @@ class TestBuiltins(unittest.TestCase):
             self.assertIn('object mode', str(w[2].message))
             self.assertIn('lifted loops', str(w[2].message))
 
+
+    def test_deprecated(self):
+        @deprecated('foo')
+        def bar(): pass
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            bar()
+
+            self.assertEqual(len(w), 1)
+            self.assertEqual(w[0].category, DeprecationWarning)
+            self.assertIn('bar', str(w[0].message))
+            self.assertIn('foo', str(w[0].message))
 
 if __name__ == '__main__':
     unittest.main()
