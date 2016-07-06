@@ -912,6 +912,13 @@ class BaseContext(object):
         assert isinstance(ty, llvmir.Type), "Expected LLVM type"
         return ty.get_abi_alignment(self.target_data)
 
+    def get_preferred_array_alignment(context, ty):
+        """
+        Get preferred array alignment for Numba type *ty*.
+        """
+        # AVX prefers 32-byte alignment
+        return 32
+
     def post_lowering(self, mod, library):
         """Run target specific post-lowering transformation here.
         """
