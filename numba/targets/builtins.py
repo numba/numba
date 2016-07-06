@@ -23,27 +23,35 @@ def generic_is_not(context, builder, sig, args):
     return builder.not_(is_impl(builder, args))
 
 
+# used to avoid recursion on `is` impl due to fallback to `==` and the reverse
+_using_is_fallback = False
+
+
 @lower_builtin('is', types.Any, types.Any)
 def generic_is(context, builder, sig, args):
     """
     Default implementation for `x is y`
     """
+    global _using_is_fallback
     lhs_type, rhs_type = sig.args
     # the lhs and rhs have the same type
     if lhs_type == rhs_type:
-            # mutable types
-            if lhs_type.mutable:
+            # mutable types (or recursing due to sequence of fallback)
+            if lhs_type.mutable or _using_is_fallback:
                 raise NotImplementedError('no default `is` implementation')
             # immutable types
             else:
                 # fallbacks to `==`
                 try:
+                    _using_is_fallback = True   # mark start of fallback
                     eq_impl = context.get_function('==', sig)
                 except NotImplementedError:
                     # no `==` implemented for this type
                     return cgutils.false_bit
                 else:
                     return eq_impl(builder, args)
+                finally:
+                    _using_is_fallback = False
     else:
         return cgutils.false_bit
 
