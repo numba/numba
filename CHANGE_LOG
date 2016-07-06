@@ -1,10 +1,9 @@
 Version 0.27.0
 --------------
 
-Support for more ``numpy.linalg`` was added, amongst other additions.
-
 Improvements:
 
+* PR #1710: Improve contextual information for compiler errors.
 * PR #1961: Support printing constant strings.
 * PR #1959: Support more types in the print() function.
 * PR #1823: Support ``compute_50`` in CUDA backend.
@@ -23,6 +22,8 @@ Improvements:
 
 Fixes:
 
+* Issue #1960: Fix sliced assignment when source and destination areas are
+  overlapping.
 * PR #1963: Make CUDA print() atomic.
 * PR #1956: Allow 0d array constants.
 * Issue #1945: Allow using Numpy ufuncs in AOT compiled code.
