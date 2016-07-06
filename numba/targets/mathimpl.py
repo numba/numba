@@ -99,17 +99,15 @@ def call_fp_intrinsic(builder, name, args):
 def _unary_int_input_wrapper_impl(wrapped_impl):
     """
     Return an implementation factory to convert the single integral input
-    argument to a float, then defer to the *wrapped_impl*.
+    argument to a float64, then defer to the *wrapped_impl*.
     """
     def implementer(context, builder, sig, args):
-        [val] = args
+        val, = args
         input_type = sig.args[0]
-        if input_type.signed:
-            fpval = builder.sitofp(val, Type.double())
-        else:
-            fpval = builder.uitofp(val, Type.double())
-        sig = signature(types.float64, types.float64)
-        return wrapped_impl(context, builder, sig, [fpval])
+        fpval = context.cast(builder, val, input_type, types.float64)
+        inner_sig = signature(types.float64, types.float64)
+        res = wrapped_impl(context, builder, inner_sig, (fpval,))
+        return context.cast(builder, res, types.float64, sig.return_type)
 
     return implementer
 
@@ -118,31 +116,16 @@ def unary_math_int_impl(fn, float_impl):
     lower(fn, types.Integer)(impl)
 
 def unary_math_intr(fn, intrcode):
+    """
+    Implement the math function *fn* using the LLVM intrinsic *intrcode*.
+    """
     @lower(fn, types.Float)
     def float_impl(context, builder, sig, args):
         res = call_fp_intrinsic(builder, intrcode, args)
         return impl_ret_untracked(context, builder, sig.return_type, res)
 
     unary_math_int_impl(fn, float_impl)
-
-
-def _float_input_unary_math_extern_impl(extern_func, input_type, restype=None):
-    """
-    Return an implementation factory to call unary *extern_func* with the
-    given argument *input_type*.
-    """
-    def implementer(context, builder, sig, args):
-        [val] = args
-        mod = builder.module
-        lty = context.get_value_type(input_type)
-        fnty = Type.function(lty, [lty])
-        fn = cgutils.insert_pure_function(builder.module, fnty, name=extern_func)
-        res = builder.call(fn, (val,))
-        if restype is not None:
-            res = context.cast(builder, res, input_type, restype)
-        return impl_ret_untracked(context, builder, sig.return_type, res)
-
-    return implementer
+    return float_impl
 
 def unary_math_extern(fn, f32extern, f64extern, int_restype=False):
     """
@@ -153,48 +136,63 @@ def unary_math_extern(fn, f32extern, f64extern, int_restype=False):
     integral, otherwise floating-point.
     """
     f_restype = types.int64 if int_restype else None
-    f32impl = _float_input_unary_math_extern_impl(f32extern, types.float32, f_restype)
-    f64impl = _float_input_unary_math_extern_impl(f64extern, types.float64, f_restype)
-    lower(fn, types.float32)(f32impl)
-    lower(fn, types.float64)(f64impl)
 
-    if int_restype:
-        # If asked for an integral return type, we choose the input type
-        # as the return type.
-        for input_type in [types.intp, types.uintp, types.int64, types.uint64]:
-            impl = _unary_int_input_wrapper_impl(
-                _float_input_unary_math_extern_impl(f64extern, types.float64, input_type))
-            lower(fn, input_type)(impl)
-    else:
-        unary_math_int_impl(fn, f64impl)
+    def float_impl(context, builder, sig, args):
+        """
+        Implement *fn* for a types.Float input.
+        """
+        [val] = args
+        mod = builder.module
+        input_type = sig.args[0]
+        lty = context.get_value_type(input_type)
+        func_name = {
+            types.float32: f32extern,
+            types.float64: f64extern,
+            }[input_type]
+        fnty = Type.function(lty, [lty])
+        fn = cgutils.insert_pure_function(builder.module, fnty, name=func_name)
+        res = builder.call(fn, (val,))
+        res = context.cast(builder, res, input_type, sig.return_type)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
+
+    lower(fn, types.Float)(float_impl)
+
+    # Implement wrapper for integer inputs
+    unary_math_int_impl(fn, float_impl)
+
+    return float_impl
 
 
 unary_math_intr(math.fabs, lc.INTR_FABS)
 #unary_math_intr(math.sqrt, lc.INTR_SQRT)
-unary_math_intr(math.exp, lc.INTR_EXP)
-unary_math_intr(math.log, lc.INTR_LOG)
-unary_math_intr(math.log10, lc.INTR_LOG10)
-unary_math_intr(math.sin, lc.INTR_SIN)
-unary_math_intr(math.cos, lc.INTR_COS)
+exp_impl = unary_math_intr(math.exp, lc.INTR_EXP)
+log_impl = unary_math_intr(math.log, lc.INTR_LOG)
+log10_impl = unary_math_intr(math.log10, lc.INTR_LOG10)
+sin_impl = unary_math_intr(math.sin, lc.INTR_SIN)
+cos_impl = unary_math_intr(math.cos, lc.INTR_COS)
 #unary_math_intr(math.floor, lc.INTR_FLOOR)
 #unary_math_intr(math.ceil, lc.INTR_CEIL)
 #unary_math_intr(math.trunc, lc.INTR_TRUNC)
-unary_math_extern(math.log1p, "log1pf", "log1p")
-unary_math_extern(math.expm1, "expm1f", "expm1")
+
+log1p_impl = unary_math_extern(math.log1p, "log1pf", "log1p")
+expm1_impl = unary_math_extern(math.expm1, "expm1f", "expm1")
 unary_math_extern(math.erf, "numba_erff", "numba_erf")
 unary_math_extern(math.erfc, "numba_erfcf", "numba_erfc")
 unary_math_extern(math.gamma, "numba_gammaf", "numba_gamma")
 unary_math_extern(math.lgamma, "numba_lgammaf", "numba_lgamma")
-unary_math_extern(math.tan, "tanf", "tan")
-unary_math_extern(math.asin, "asinf", "asin")
-unary_math_extern(math.acos, "acosf", "acos")
-unary_math_extern(math.atan, "atanf", "atan")
-unary_math_extern(math.asinh, "asinhf", "asinh")
-unary_math_extern(math.acosh, "acoshf", "acosh")
-unary_math_extern(math.atanh, "atanhf", "atanh")
-unary_math_extern(math.sinh, "sinhf", "sinh")
-unary_math_extern(math.cosh, "coshf", "cosh")
-unary_math_extern(math.tanh, "tanhf", "tanh")
+
+tan_impl = unary_math_extern(math.tan, "tanf", "tan")
+asin_impl = unary_math_extern(math.asin, "asinf", "asin")
+acos_impl = unary_math_extern(math.acos, "acosf", "acos")
+atan_impl = unary_math_extern(math.atan, "atanf", "atan")
+
+asinh_impl = unary_math_extern(math.asinh, "asinhf", "asinh")
+acosh_impl = unary_math_extern(math.acosh, "acoshf", "acosh")
+atanh_impl = unary_math_extern(math.atanh, "atanhf", "atanh")
+sinh_impl = unary_math_extern(math.sinh, "sinhf", "sinh")
+cosh_impl = unary_math_extern(math.cosh, "coshf", "cosh")
+tanh_impl = unary_math_extern(math.tanh, "tanhf", "tanh")
+
 # math.floor and math.ceil return float on 2.x, int on 3.x
 if utils.PYVERSION > (3, 0):
     unary_math_extern(math.ceil, "ceilf", "ceil", True)
@@ -202,7 +200,7 @@ if utils.PYVERSION > (3, 0):
 else:
     unary_math_extern(math.ceil, "ceilf", "ceil")
     unary_math_extern(math.floor, "floorf", "floor")
-unary_math_extern(math.sqrt, "sqrtf", "sqrt")
+sqrt_impl = unary_math_extern(math.sqrt, "sqrtf", "sqrt")
 unary_math_extern(math.trunc, "truncf", "trunc", True)
 
 
@@ -296,7 +294,7 @@ def atan2_s64_impl(context, builder, sig, args):
     y = builder.sitofp(y, Type.double())
     x = builder.sitofp(x, Type.double())
     fsig = signature(types.float64, types.float64, types.float64)
-    return atan2_f64_impl(context, builder, fsig, (y, x))
+    return atan2_float_impl(context, builder, fsig, (y, x))
 
 @lower(math.atan2, types.uint64, types.uint64)
 def atan2_u64_impl(context, builder, sig, args):
@@ -304,26 +302,21 @@ def atan2_u64_impl(context, builder, sig, args):
     y = builder.uitofp(y, Type.double())
     x = builder.uitofp(x, Type.double())
     fsig = signature(types.float64, types.float64, types.float64)
-    return atan2_f64_impl(context, builder, fsig, (y, x))
+    return atan2_float_impl(context, builder, fsig, (y, x))
 
-
-@lower(math.atan2, types.float32, types.float32)
-def atan2_f32_impl(context, builder, sig, args):
+@lower(math.atan2, types.Float, types.Float)
+def atan2_float_impl(context, builder, sig, args):
     assert len(args) == 2
     mod = builder.module
-    fnty = Type.function(Type.float(), [Type.float(), Type.float()])
-    fn = cgutils.insert_pure_function(builder.module, fnty, name="atan2f")
-    res = builder.call(fn, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-@lower(math.atan2, types.float64, types.float64)
-def atan2_f64_impl(context, builder, sig, args):
-    assert len(args) == 2
-    mod = builder.module
-    fnty = Type.function(Type.double(), [Type.double(), Type.double()])
-    # Workaround atan2() issues under Windows
-    fname = "atan2_fixed" if sys.platform == "win32" else "atan2"
-    fn = cgutils.insert_pure_function(builder.module, fnty, name=fname)
+    ty = sig.args[0]
+    lty = context.get_value_type(ty)
+    func_name = {
+        types.float32: "atan2f",
+        # Workaround atan2() issues under Windows
+        types.float64: "atan2_fixed" if sys.platform == "win32" else "atan2"
+        }[ty]
+    fnty = Type.function(lty, (lty, lty))
+    fn = cgutils.insert_pure_function(builder.module, fnty, name=func_name)
     res = builder.call(fn, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
