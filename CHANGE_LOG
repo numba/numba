@@ -1,31 +1,70 @@
+Version 0.27.0
+--------------
+
+Support for more ``numpy.linalg`` was added, amongst other additions.
+
+Improvements:
+
+* PR #1961: Support printing constant strings.
+* PR #1959: Support more types in the print() function.
+* PR #1823: Support ``compute_50`` in CUDA backend.
+* PR #1955: Support ``np.linalg.pinv``.
+* PR #1896: Improve the ``SmartArray`` API.
+* PR #1947: Support ``np.linalg.solve``.
+* Issue #1943: Improve error message when an argument fails typing.4
+* PR #1927: Support ``np.linalg.lstsq``.
+* PR #1934: Use system functions for hypot() where possible, instead of our
+  own implementation.
+* PR #1929: Add cffi support to ``@cfunc`` objects.
+* PR #1932: Add user-controllable thread pool limits for parallel CPU target.
+* PR #1928: Support self-recursion when the signature is explicit.
+* PR #1890: List all lowering implementations in the developer docs.
+* Issue #1884: Support ``np.lib.stride_tricks.as_strided()``.
+
+Fixes:
+
+* PR #1963: Make CUDA print() atomic.
+* PR #1956: Allow 0d array constants.
+* Issue #1945: Allow using Numpy ufuncs in AOT compiled code.
+* Issue #1916: Fix documentation example for ``@generated_jit``.
+* Issue #1926: Fix regression when caching functions in an IPython session.
+* Issue #1923: Allow non-intp integer arguments to carray() and farray().
+* Issue #1908: Accept non-ASCII unicode docstrings on Python 2.
+* Issue #1874: Allow ``del container[key]`` in object mode.
+* Issue #1913: Fix set insertion bug when the lookup chain contains deleted
+  entries.
+* Issue #1911: Allow function annotations on jitclass methods.
+
+
 Version 0.26.0
 --------------
 
 This release adds support for ``cfunc`` decorator for exporting numba jitted
 functions to 3rd party API that takes C callbacks.  Most of the overhead of
 using jitclasses inside the interpreter are eliminated.  Support for
-decompositions in ``numpy.linalg`` are added.  Finally, numpy 1.11 is supported.
+decompositions in ``numpy.linalg`` are added.  Finally, Numpy 1.11 is
+supported.
 
 Improvements:
 
-* PR #1889: export BLAS and LAPACK wrappers for pycc
-* PR #1888: faster array power
-* Issue #1867: allow "out" keyword arg for dufuncs
-* PR #1871: carray() and farray() for creating arrays from pointers
-* PR #1855: `@cfunc` decorator for exporting as ctypes function
-* PR #1862: add support for numpy.linalg.qr
-* PR #1851: jitclass support for '_' and '__' prefixed attributes
-* PR #1842: optimize jitclass in python interpreter
-* Issue #1837: cudasim issues with device function
-* PR #1839: add support for decompositions from ``numpy.linalg``
-* PR #1829: support enums
-* PR #1828: add support for ``numpy.random.rand()``` and
+* PR #1889: Export BLAS and LAPACK wrappers for pycc.
+* PR #1888: Faster array power.
+* Issue #1867: Allow "out" keyword arg for dufuncs.
+* PR #1871: ``carray()`` and ``farray()`` for creating arrays from pointers.
+* PR #1855: ``@cfunc`` decorator for exporting as ctypes function.
+* PR #1862: Add support for ``numpy.linalg.qr``.
+* PR #1851: jitclass support for '_' and '__' prefixed attributes.
+* PR #1842: Optimize jitclass in Python interpreter.
+* Issue #1837: Fix CUDA simulator issues with device function.
+* PR #1839: Add support for decompositions from ``numpy.linalg``.
+* PR #1829: Support Python enums.
+* PR #1828: Add support for ``numpy.random.rand()``` and
   ``numpy.random.randn()``
-* Issue #1825: use of 0-darray in place of scalar index
-* Issue #1824: scalar arguments to object mode gufuncs
-* Issue #1813: let bitwise bool operators return booleans, not integers
-* Issue #1760: optional arguments in generators
-* PR #1780: numpy 1.11 support
+* Issue #1825: Use of 0-darray in place of scalar index.
+* Issue #1824: Scalar arguments to object mode gufuncs.
+* Issue #1813: Let bitwise bool operators return booleans, not integers.
+* Issue #1760: Optional arguments in generators.
+* PR #1780: Numpy 1.11 support.
 
 
 Version 0.25.0
