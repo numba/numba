@@ -1,12 +1,13 @@
 from __future__ import print_function
 
+import math
+import re
+
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba import types
 from numba.errors import TypingError
 from .support import TestCase
-
-import math
 
 
 def what():
@@ -75,6 +76,7 @@ class TestTypingError(unittest.TestCase):
             "Invalid usage of * with parameters (({0} x 1), {0})"
             .format(str(types.intp)))
         self.assertIn(expected, str(raises.exception))
+        self.assertIn("[1] During: typing of", str(raises.exception))
 
     def test_return_type_unification(self):
         with self.assertRaises(TypingError) as raises:
@@ -90,6 +92,12 @@ class TestTypingError(unittest.TestCase):
         # Make sure it listed the known signatures.
         # This is sensitive to the formatting of the error message.
         self.assertIn(" * (float64, float64) -> float64", errmsg)
+
+        # Check contextual msg
+        last_two = errmsg.splitlines()[-2:]
+        self.assertTrue(re.search(r'\[1\] During: resolving callee type: Function.*hypot', last_two[0]))
+        self.assertTrue(re.search(r'\[2\] During: typing of call .*test_typingerror.py \(32\)', last_two[1]))
+
 
     def test_imprecise_list(self):
         """
