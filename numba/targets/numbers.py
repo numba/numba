@@ -191,7 +191,6 @@ def int_power_impl(context, builder, sig, args):
     is_integer = isinstance(sig.args[0], types.Integer)
     tp = sig.return_type
     zerodiv_return = _get_power_zerodiv_return(context, tp)
-    print("int_power_impl:", tp, zerodiv_return)
 
     def int_power(a, b):
         # Ensure computations are done with a large enough width
