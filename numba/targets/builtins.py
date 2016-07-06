@@ -66,15 +66,21 @@ def generic_eq(context, builder, sig, args):
 @lower_builtin('!=', types.Any, types.Any)
 def generic_ne(context, builder, sig, args):
     """
-    Default implementation for `x != y` that fallback to `is not`
+    On Py2, Default implementation for `x != y` that fallback to `is not`
+    On Py3, fallback to not equal
     """
     lhs_type, rhs_type = sig.args
     if isinstance(lhs_type, types.UserEq) or isinstance(rhs_type, types.UserEq):
         warnings.warn("Possible unintentional usage of default __ne__ on "
                       "object that implements __eq__", UserWarning)
-
-    is_impl = context.get_function("is not", sig)
-    out = is_impl(builder, args)
+    if utils.IS_PY3:
+        # use inverted equal
+        eq_impl = context.get_function("==", sig)
+        out = builder.not_(eq_impl(builder, args))
+    else:
+        # use `is not`
+        is_impl = context.get_function("is not", sig)
+        out = is_impl(builder, args)
     return impl_ret_new_ref(context, builder, sig.return_type, out)
 
 #-------------------------------------------------------------------------------
@@ -373,7 +379,7 @@ def not_in(context, builder, sig, args):
 
 def _reflectable_equality(context, builder, sig, args, comparison, cmp_type):
     """
-    Implement reflection logic for (in)equality operator 
+    Implement reflection logic for (in)equality operator
     """
     self_type, other_type = sig.args[:2]
     # check if we need reflection version
@@ -395,14 +401,14 @@ def user_eq(context, builder, sig, args):
     def equality(context, builder, sig, args):
         self_type = sig.args[0]
         # get user implementation
-        call, callsig = self_type.get_user_eq(context, sig) 
+        call, callsig = self_type.get_user_eq(context, sig)
         out = call(builder, args)
         # cast return value to match the expected return_type
-        out = context.cast(builder, out, callsig.return_type, 
+        out = context.cast(builder, out, callsig.return_type,
                             sig.return_type)
         return impl_ret_new_ref(context, builder, sig.return_type, out)
 
-    return _reflectable_equality(context, builder, sig, args, equality, 
+    return _reflectable_equality(context, builder, sig, args, equality,
                                  types.UserEq)
 
 
@@ -410,29 +416,29 @@ def user_eq(context, builder, sig, args):
 @lower_builtin("!=", types.Any, types.UserNe)
 @lower_builtin("!=", types.UserNe, types.UserNe)
 def user_ne(context, builder, sig, args):
-        
+
     def inequality(context, builder, sig, args):
         self_type = sig.args[0]
-        
+
         if self_type.supports_ne():
             # get user implementation
             call, callsig = self_type.get_user_ne(context, sig)
             out = call(builder, args)
             # cast return value to match the expected return_type
-            out = context.cast(builder, out, callsig.return_type, 
+            out = context.cast(builder, out, callsig.return_type,
                                sig.return_type)
         else:
             # fallback to equality operator
             default_impl = context.get_function("==", sig)
             out = builder.not_(default_impl(builder, args))
-            
+
         return impl_ret_new_ref(context, builder, sig.return_type, out)
 
     return _reflectable_equality(context, builder, sig, args, inequality,
                                  types.UserNe)
 
 
-def _user_ordered_cmp(forward_type, reflected_type, 
+def _user_ordered_cmp(forward_type, reflected_type,
                       forward_op, reflected_op,
                       forward_imp_name):
     @lower_builtin(forward_op, forward_type, types.Any)
@@ -446,13 +452,13 @@ def _user_ordered_cmp(forward_type, reflected_type,
             fwd_impl = getattr(self_type, forward_imp_name)(context, sig)
             call, callsig = fwd_impl
             out = call(builder, args)
-            out = context.cast(builder, out, callsig.return_type, 
+            out = context.cast(builder, out, callsig.return_type,
                                sig.return_type)
         else:
             # reflected version
             assert isinstance(other_type, reflected_type)
             [this, other] = args
-            reflected_sig = typing.signature(sig.return_type, other_type, 
+            reflected_sig = typing.signature(sig.return_type, other_type,
                                              self_type)
             rfl_impl = context.get_function(reflected_op, reflected_sig)
             out = rfl_impl(builder, [other, this])
@@ -463,9 +469,9 @@ def _user_ordered_cmp(forward_type, reflected_type,
 user_lt = _user_ordered_cmp(types.UserLt, types.UserGt, "<", ">", 'get_user_lt')
 user_gt = _user_ordered_cmp(types.UserGt, types.UserLt, ">", "<", 'get_user_gt')
 
-user_le = _user_ordered_cmp(types.UserLe, types.UserGe, "<=", ">=", 
+user_le = _user_ordered_cmp(types.UserLe, types.UserGe, "<=", ">=",
                             'get_user_le')
-user_ge = _user_ordered_cmp(types.UserGe, types.UserLe, ">=", "<=", 
+user_ge = _user_ordered_cmp(types.UserGe, types.UserLe, ">=", "<=",
                             'get_user_ge')
 
 
