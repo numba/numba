@@ -127,7 +127,7 @@ def deferred_to_any(context, builder, fromty, toty, val):
 @lower_builtin(hash, types.UserHashable)
 def hash_user_hashable(context, builder, sig, args):
     self_type = sig.args[0]
-    call, callsig = self_type.get_user_hash(context, sig)
+    call, callsig = self_type.get_operator('hash', context, sig)
     out = call(builder, args)
     # Cast return value to match the expected return_type
     out = context.cast(builder, out, callsig.return_type, sig.return_type)
@@ -409,7 +409,7 @@ def user_eq(context, builder, sig, args):
     def equality(context, builder, sig, args):
         self_type = sig.args[0]
         # get user implementation
-        call, callsig = self_type.get_user_eq(context, sig)
+        call, callsig = self_type.get_operator('==', context, sig)
         out = call(builder, args)
         # cast return value to match the expected return_type
         out = context.cast(builder, out, callsig.return_type,
@@ -428,9 +428,9 @@ def user_ne(context, builder, sig, args):
     def inequality(context, builder, sig, args):
         self_type = sig.args[0]
 
-        if self_type.supports_ne():
+        if self_type.supports_operator('!='):
             # get user implementation
-            call, callsig = self_type.get_user_ne(context, sig)
+            call, callsig = self_type.get_operator('!=', context, sig)
             out = call(builder, args)
             # cast return value to match the expected return_type
             out = context.cast(builder, out, callsig.return_type,
@@ -446,9 +446,7 @@ def user_ne(context, builder, sig, args):
                                  types.UserNe)
 
 
-def _user_ordered_cmp(forward_type, reflected_type,
-                      forward_op, reflected_op,
-                      forward_imp_name):
+def _user_ordered_cmp(forward_type, reflected_type, forward_op, reflected_op):
     @lower_builtin(forward_op, forward_type, types.Any)
     @lower_builtin(forward_op, forward_type, reflected_type)
     @lower_builtin(forward_op, types.Any, reflected_type)
@@ -457,7 +455,7 @@ def _user_ordered_cmp(forward_type, reflected_type,
         if isinstance(self_type, forward_type):
             # forward version
             self_type = sig.args[0]
-            fwd_impl = getattr(self_type, forward_imp_name)(context, sig)
+            fwd_impl = self_type.get_operator(forward_op, context, sig)
             call, callsig = fwd_impl
             out = call(builder, args)
             out = context.cast(builder, out, callsig.return_type,
@@ -474,13 +472,11 @@ def _user_ordered_cmp(forward_type, reflected_type,
     return imp
 
 
-user_lt = _user_ordered_cmp(types.UserLt, types.UserGt, "<", ">", 'get_user_lt')
-user_gt = _user_ordered_cmp(types.UserGt, types.UserLt, ">", "<", 'get_user_gt')
+user_lt = _user_ordered_cmp(types.UserLt, types.UserGt, "<", ">")
+user_gt = _user_ordered_cmp(types.UserGt, types.UserLt, ">", "<")
 
-user_le = _user_ordered_cmp(types.UserLe, types.UserGe, "<=", ">=",
-                            'get_user_le')
-user_ge = _user_ordered_cmp(types.UserGe, types.UserLe, ">=", "<=",
-                            'get_user_ge')
+user_le = _user_ordered_cmp(types.UserLe, types.UserGe, "<=", ">=")
+user_ge = _user_ordered_cmp(types.UserGe, types.UserLe, ">=", "<=")
 
 
 @lower_builtin(len, types.ConstSized)

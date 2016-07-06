@@ -306,7 +306,7 @@ class SliceType(Type):
         return self.members
 
 
-class ClassInstanceType(UserHashable, UserEq, UserNe, UserLt, UserGt, UserLe, 
+class ClassInstanceType(UserHashable, UserEq, UserNe, UserLt, UserGt, UserLe,
                         UserGe):
     """
     The type of a jitted class *instance*.  It will be the return-type
@@ -314,6 +314,16 @@ class ClassInstanceType(UserHashable, UserEq, UserNe, UserLt, UserGt, UserLe,
     """
     mutable = True
     name_prefix = "instance"
+
+    _op_method_map = {
+        'hash': '__hash__',
+        '==': '__eq__',
+        '!=': '__ne__',
+        '<': '__lt__',
+        '>': '__gt__',
+        '<=': '__le__',
+        '>=': '__ge__',
+    }
 
     def __init__(self, class_type):
         self.class_type = class_type
@@ -350,65 +360,17 @@ class ClassInstanceType(UserHashable, UserEq, UserNe, UserLt, UserGt, UserLe,
     def methods(self):
         return self.class_type.methods
 
-    def is_hashable(self):
-        return '__hash__' in self.methods
+    def supports_operator(self, opname):
+        return self._op_method_map[opname] in self.methods
 
-    def get_user_hash(self, context, sig):
-        method = self.jitmethods["__hash__"]
+    def get_operator(self, op, context, sig):
+        name = self._op_method_map[op]
+        method = self.jitmethods[name]
         disp_type = Dispatcher(method)
         # Get call signature, which may have different return type
         callsig = disp_type.get_call_type(context.typing_context, sig.args, {})
         call = context.get_function(disp_type, callsig)
         return call, callsig
-
-    def _get_user_equality_fn(self, context, sig, method):
-        disp_type = Dispatcher(method)
-        # Get call signature, which may have different return type
-        callsig = disp_type.get_call_type(context.typing_context, sig.args, {})
-        call = context.get_function(disp_type, callsig)
-        return call, callsig
-
-    def supports_eq(self):
-        return '__eq__' in self.methods
-
-    def get_user_eq(self, context, sig):
-        eq = self.jitmethods['__eq__']
-        return self._get_user_equality_fn(context, sig, eq)
-
-    def supports_ne(self):
-        return '__ne__' in self.methods 
-
-    def get_user_ne(self, context, sig):
-        ne = self.jitmethods['__ne__']
-        return self._get_user_equality_fn(context, sig, ne)
-
-    def supports_lt(self):
-        return '__lt__' in self.methods
-
-    def get_user_lt(self, context, sig):
-        lt = self.jitmethods['__lt__']
-        return self._get_user_equality_fn(context, sig, lt)
-
-    def supports_gt(self):
-        return '__gt__' in self.methods
-
-    def get_user_gt(self, context, sig):
-        gt = self.jitmethods['__gt__']
-        return self._get_user_equality_fn(context, sig, gt)
-
-    def supports_le(self):
-        return '__le__' in self.methods
-
-    def get_user_le(self, context, sig):
-        le = self.jitmethods['__le__']
-        return self._get_user_equality_fn(context, sig, le)
-
-    def supports_ge(self):
-        return '__ge__' in self.methods
-
-    def get_user_ge(self, context, sig):
-        ge = self.jitmethods['__ge__']
-        return self._get_user_equality_fn(context, sig, ge)
 
 
 class ClassType(Callable, Opaque):

@@ -71,23 +71,23 @@ class _TypeMetaclass(ABCMeta):
     def __instancecheck__(cls, instance):
         """
         Override ``isinstance()`` to check for interface compatability.
-        When doing instance check against an interface type, any subclass of 
+        When doing instance check against an interface type, any subclass of
         Type that defines ``interface_check()``, we uses the classmethod for
-        the test. 
+        the test.
         """
-        if (hasattr(cls, 'interface_check') and 
-                cls is _get_defining_class(cls.interface_check)): 
+        if (hasattr(cls, 'interface_check') and
+                cls is _get_defining_class(cls.interface_check)):
             return cls.interface_check(instance)
         else:
             return issubclass(type(instance), cls)
 
     def virtual_subclass_check(cls, instance, virtclasses):
         """
-        A helper for subclasses to determine if an instance is a virtual 
-        subclass.  This also performs regular subclass test if the type of 
-        the given instance is not a virtual subclass. 
-        
-        This is for use inside ``interface_check()``.  
+        A helper for subclasses to determine if an instance is a virtual
+        subclass.  This also performs regular subclass test if the type of
+        the given instance is not a virtual subclass.
+
+        This is for use inside ``interface_check()``.
 
         Types in ``virtclasses`` should implements ``interface_check()``.
         """
@@ -96,7 +96,7 @@ class _TypeMetaclass(ABCMeta):
             # issubclass() will not check for whether the instance provides
             # the necessary functionality, but isinstance() will.
             if isinstance(instance, vcls):
-                return True 
+                return True
         # perform regular subclass test
         return issubclass(type(instance), cls)
 
@@ -254,36 +254,41 @@ class Hashable(Type):
         return cls.virtual_subclass_check(instance, [UserHashable])
 
 
-class UserHashable(Type):
+class UserOp(Type):
     """
-    For user-defined types that may define __hash__.
+    Base class for user-defined types that may define certain operators.
+    Valid operator names are: "hash", "==", "!=", "<", "<=", ">", ">=".
     """
-    def is_hashable(self):
+    def supports_operator(self, op):
         """
-        Returns True if the type is hashable.
-        `isinstance(self, Hasable)` will be True.
-        Must be overriden in subclass
+        Returns True iff the operator ``op`` is supported by this type.
         """
-        raise NotImplementedError
+        return False
 
-    def get_user_hash(self, context, sig):
+    def get_operator(self, op, context, sig):
         """
-        Returns (call, callsig) where
-            * `res = call(builder, args)` emits the hashing operation to
-               `builder` with `args` and returns to `res`;
+        Given the operator ``op``, returns (call, callsig) where
+            * `res = call(builder, args)` emits the operator implementation to
+                `builder` with `args` and returns to `res`;
             * `callsig` is the signature of `call`.
         """
         raise NotImplementedError
 
+
+class UserHashable(UserOp):
+    """
+    For user-defined types that may define __hash__.
+    Virtually subclass Hashable if ``self.supports_operator('hash')`` return True.
+    """
     @classmethod
     def interface_check(cls, instance):
-        return issubclass(type(instance), cls) and instance.is_hashable()
+        return issubclass(type(instance), cls) and instance.supports_operator('hash')
 
 
 class Ne(Type):
     """
     Base class for Ne types.
-    Subclass must provide ``__ne__``    
+    Subclass must provide ``__ne__``
     """
     @classmethod
     def interface_check(cls, instance):
@@ -298,58 +303,45 @@ class Eq(Type):
     Base class for Eq types.
     Subclass must provide ``__eq__``
     In Py3, provides ``__ne__`` via inversion of ``__eq__``.
-    
-    If __eq__ is implemented and not __ne__, python semantic provides a 
+
+    If __eq__ is implemented and not __ne__, python semantic provides a
     default __ne__ implementation that uses __eq__.
-    If __ne__ is implemented and not __eq__, __eq__ fallbacks to `is`.    
+    If __ne__ is implemented and not __eq__, __eq__ fallbacks to `is`.
     """
     @classmethod
     def interface_check(cls, instance):
         return cls.virtual_subclass_check(instance, [UserEq])
 
 
-class UserEq(Type):
+class UserEq(UserOp):
     """
     For user-defined types that may define ``__eq__`` and ``__ne__``.
-    Virtually subclass Eq if `self.supports_eq()` returns True.
+    Virtually subclass Eq if `self.supports_operator('==')` returns True.
     """
-    def supports_eq(self):
-        raise NotImplementedError
-
-    def get_user_eq(self, context, sig):
-        raise NotImplementedError
-
     @classmethod
     def interface_check(cls, instance):
-        return issubclass(type(instance), cls) and instance.supports_eq()
-        
+        return issubclass(type(instance), cls) and instance.supports_operator('==')
 
-class UserNe(Type):
+
+class UserNe(UserOp):
     """
     For user-defined types that may provide ``__ne__``.
     Note that ``__ne__`` may be provided indirectly via ``__eq__``.
-    Virtually subclass Ne if `self.supports_ne()` returns True.
+    Virtually subclass Ne if `self.supports_operator('!=')` returns True.
     """
-
-    def supports_ne(self):
-        raise NotImplementedError
-
-    def get_user_ne(self, context, sig):
-        raise NotImplementedError
-
     @classmethod
     def interface_check(cls, instance):
         typ = type(instance)
         if IS_PY3:
-            return ((issubclass(typ, UserNe) and instance.supports_ne()) or
-                    (issubclass(typ, UserEq) and instance.supports_eq()))
+            return ((issubclass(typ, UserNe) and instance.supports_operator('!=')) or
+                    (issubclass(typ, UserEq) and instance.supports_operator('==')))
         else:
-            return issubclass(typ, UserNe) and instance.supports_ne()
+            return issubclass(typ, UserNe) and instance.supports_operator('!=')
 
 
 class Lt(Type):
     """
-    Base class for Lt types.    
+    Base class for Lt types.
     Subclass must provide ``__lt__``
     """
     @classmethod
@@ -357,102 +349,75 @@ class Lt(Type):
         return cls.virtual_subclass_check(instance, [UserLt])
 
 
-class UserLt(Type):
+class UserLt(UserOp):
     """
     For user-defined types that may provide ``__lt__``.
-    Virtually subclass Lt if `self.supports_lt()` returns True.
+    Virtually subclass Lt if `self.supports_operator('<')` returns True.
     """
-
-    def supports_lt(self):
-        raise NotImplementedError
-
-    def get_user_lt(self, context, sig):
-        raise NotImplementedError
 
     @classmethod
     def interface_check(cls, instance):
-        return issubclass(type(instance), cls) and instance.supports_lt()
+        return issubclass(type(instance), cls) and instance.supports_operator('<')
 
 
 class Gt(Type):
     """
-    Base class for Gt types.   
-    Subclass must provide ``__gt__`` 
+    Base class for Gt types.
+    Subclass must provide ``__gt__``
     """
     @classmethod
     def interface_check(cls, instance):
         return cls.virtual_subclass_check(instance, [UserGt])
 
 
-class UserGt(Type):
+class UserGt(UserOp):
     """
     For user-defined types that may provide ``__gt__``.
-    Virtually subclass Gt if `self.supports_gt()` returns True.
+    Virtually subclass Gt if `self.supports_operator('>')` returns True.
     """
-
-    def supports_gt(self):
-        raise NotImplementedError
-
-    def get_user_gt(self, context, sig):
-        raise NotImplementedError
-
     @classmethod
     def interface_check(cls, instance):
-        return issubclass(type(instance), cls) and instance.supports_gt()
+        return issubclass(type(instance), cls) and instance.supports_operator('>')
 
 
 class Le(Type):
     """
-    Base class for Le types.   
-    Subclass must provide ``__le__`` 
+    Base class for Le types.
+    Subclass must provide ``__le__``
     """
     @classmethod
     def interface_check(cls, instance):
         return cls.virtual_subclass_check(instance, [UserLe])
 
 
-class UserLe(Type):
+class UserLe(UserOp):
     """
     For user-defined types that may provide ``__le__``.
-    Virtually subclass Le if `self.supports_le()` returns True.
+    Virtually subclass Le if `self.supports_operator('<=')` returns True.
     """
-
-    def supports_le(self):
-        raise NotImplementedError
-
-    def get_user_le(self, context, sig):
-        raise NotImplementedError
-
     @classmethod
     def interface_check(cls, instance):
-        return issubclass(type(instance), cls) and instance.supports_le()
+        return issubclass(type(instance), cls) and instance.supports_operator('<=')
 
 
 class Ge(Type):
     """
     Base class for Ge types.
-    Subclass must provide ``__ge__``    
+    Subclass must provide ``__ge__``
     """
     @classmethod
     def interface_check(cls, instance):
         return cls.virtual_subclass_check(instance, [UserGe])
 
 
-class UserGe(Type):
+class UserGe(UserOp):
     """
     For user-defined types that may provide ``__ge__``.
-    Virtually subclass Ge if `self.supports_ge()` returns True.
+    Virtually subclass Ge if `self.supports_operator('>=')` returns True.
     """
-
-    def supports_ge(self):
-        raise NotImplementedError
-
-    def get_user_ge(self, context, sig):
-        raise NotImplementedError
-
     @classmethod
     def interface_check(cls, instance):
-        return issubclass(type(instance), cls) and instance.supports_ge()
+        return issubclass(type(instance), cls) and instance.supports_operator('>=')
 
 
 class Number(Hashable, Eq, Ne, Lt, Gt, Le, Ge):
