@@ -11,11 +11,11 @@ import uuid
 import weakref
 
 import numba
-from numba import _dispatcher, compiler, utils, types, config
+from numba import _dispatcher, compiler, utils, types, config, errors
 from numba.typeconv.rules import default_type_manager
 from numba import sigutils, serialize, typing
 from numba.typing.templates import fold_arguments
-from numba.typing.typeof import typeof
+from numba.typing.typeof import typeof, Purpose
 from numba.bytecode import get_code_object
 from numba.six import create_bound_method, next
 from .caching import NullCache, FunctionCache
@@ -271,13 +271,37 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         for the given *args* and *kws*, and return the resulting callable.
         """
         assert not kws
-        real_args = []
+        argtypes = []
         for a in args:
             if isinstance(a, OmittedArg):
-                real_args.append(types.Omitted(a.value))
+                argtypes.append(types.Omitted(a.value))
             else:
-                real_args.append(self.typeof_pyval(a))
-        return self.compile(tuple(real_args))
+                argtypes.append(self.typeof_pyval(a))
+        try:
+            return self.compile(tuple(argtypes))
+        except errors.TypingError as e:
+            # Intercept typing error that may be due to an argument
+            # that failed inferencing as a Numba type
+            failed_args = []
+            for i, arg in enumerate(args):
+                val = arg.value if isinstance(arg, OmittedArg) else arg
+                try:
+                    tp = typeof(val, Purpose.argument)
+                except ValueError as typeof_exc:
+                    failed_args.append((i, str(typeof_exc)))
+                else:
+                    if tp is None:
+                        failed_args.append(
+                            (i,
+                             "cannot determine Numba type of value %r" % (val,)))
+            if failed_args:
+                # Patch error message to ease debugging
+                msg = str(e).rstrip() + (
+                    "\n\nThis error may have been caused by the following argument(s):\n%s\n"
+                    % "\n".join("- argument %d: %s" % (i, err)
+                                for i, err in failed_args))
+                e.patch_message(msg)
+            raise e
 
     def inspect_llvm(self, signature=None):
         if signature is not None:
@@ -352,10 +376,14 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         cannot decide the type.
         """
         # Not going through the resolve_argument_type() indirection
-        # can shape a couple µs.
-        tp = typeof(val)
-        if tp is None:
+        # can save a couple µs.
+        try:
+            tp = typeof(val, Purpose.argument)
+        except ValueError:
             tp = types.pyobject
+        else:
+            if tp is None:
+                tp = types.pyobject
         return tp
 
 
