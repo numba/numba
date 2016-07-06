@@ -57,8 +57,8 @@ functions such as :func:`numpy.empty` (because of limitations in the
 :term:`type inference` algorithm).  You can work around this issue by
 creating a C-ordered array and then transposing it.  For example::
 
-   a = np.empty((3, 5))
-   b = np.zeros(some_shape)
+   a = np.empty((3, 5), order='F')
+   b = np.zeros(some_shape, order='F')
 
 can be rewritten as::
 
