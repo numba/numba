@@ -20,12 +20,12 @@ class TestJitErrors(unittest.TestCase):
 
         with self.assertRaises(ValueError) as raises:
             kernfunc[(1, 2, 3, 4), (5, 6)]
-        self.assertIn("griddim must be a sequence of three integers, got [1, 2, 3, 4]",
+        self.assertIn("griddim must be a sequence of 1, 2 or 3 integers, got [1, 2, 3, 4]",
                       str(raises.exception))
 
         with self.assertRaises(ValueError) as raises:
             kernfunc[(1, 2,), (3, 4, 5, 6)]
-        self.assertIn("blockdim must be a sequence of three integers, got [3, 4, 5, 6]",
+        self.assertIn("blockdim must be a sequence of 1, 2 or 3 integers, got [3, 4, 5, 6]",
                       str(raises.exception))
 
     def test_non_integral_dims(self):
