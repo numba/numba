@@ -1,10 +1,11 @@
 from __future__ import absolute_import, print_function
+
 import copy
-import sys
-import warnings
-import operator
 from functools import reduce, wraps
+import operator
+import sys
 import threading
+import warnings
 
 from numba import ctypes_support as ctypes
 from numba.typing.templates import AbstractTemplate
@@ -15,7 +16,7 @@ from numba import funcdesc, typing, utils, serialize
 from .cudadrv.autotune import AutoTuner
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
-from .errors import KernelRuntimeError
+from .errors import KernelRuntimeError, normalize_kernel_dimensions
 from .api import get_current_device
 
 
@@ -255,6 +256,7 @@ class ForAll(object):
         return kernel.configure(blkct, tpb, stream=self.stream,
                                 sharedmem=self.sharedmem)(*args)
 
+
 class CUDAKernelBase(object):
     """Define interface for configurable kernels
     """
@@ -278,23 +280,7 @@ class CUDAKernelBase(object):
         return new
 
     def configure(self, griddim, blockdim, stream=0, sharedmem=0):
-        if not isinstance(griddim, (tuple, list)):
-            griddim = [griddim]
-        else:
-            griddim = list(griddim)
-        if len(griddim) > 3:
-            raise ValueError('griddim must be a tuple/list of three ints')
-        while len(griddim) < 3:
-            griddim.append(1)
-
-        if not isinstance(blockdim, (tuple, list)):
-            blockdim = [blockdim]
-        else:
-            blockdim = list(blockdim)
-        if len(blockdim) > 3:
-            raise ValueError('blockdim must be tuple/list of three ints')
-        while len(blockdim) < 3:
-            blockdim.append(1)
+        griddim, blockdim = normalize_kernel_dimensions(griddim, blockdim)
 
         clone = self.copy()
         clone.griddim = tuple(griddim)
