@@ -3,6 +3,7 @@ Version 0.27.0
 
 Improvements:
 
+* PR #1970: Optimize the power operator with a static exponent.
 * PR #1710: Improve contextual information for compiler errors.
 * PR #1961: Support printing constant strings.
 * PR #1959: Support more types in the print() function.
