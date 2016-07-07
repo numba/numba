@@ -256,7 +256,7 @@ def getiter_array(context, builder, sig, args):
 
     # Incref array
     if context.enable_nrt:
-        context.nrt_incref(builder, arrayty, array)
+        context.nrt.incref(builder, arrayty, array)
 
     res = iterobj._getvalue()
 
@@ -1133,7 +1133,7 @@ def maybe_copy_source(context, builder, use_copy,
         # XXX: should we use a stack-allocated array for very small
         # data sizes?
         allocsize = builder.mul(src.itemsize, src.nitems)
-        data = context.nrt_allocate(builder, allocsize)
+        data = context.nrt.allocate(builder, allocsize)
         voidptrty = data.type
         data = builder.bitcast(data, ptrty)
         builder.store(data, copy_data)
@@ -1175,7 +1175,7 @@ def maybe_copy_source(context, builder, use_copy,
         with builder.if_then(use_copy, likely=False):
             data = builder.load(copy_data)
             data = builder.bitcast(data, voidptrty)
-            context.nrt_free(builder, data)
+            context.nrt.free(builder, data)
 
     return src_getitem, src_cleanup
 
@@ -2839,10 +2839,10 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
 
     allocsize = builder.mul(itemsize, arrlen)
     align = context.get_preferred_array_alignment(arrtype.dtype)
-    meminfo = context.nrt_meminfo_alloc_aligned(builder, size=allocsize,
+    meminfo = context.nrt.meminfo_alloc_aligned(builder, size=allocsize,
                                                 align=align)
 
-    data = context.nrt_meminfo_data(builder, meminfo)
+    data = context.nrt.meminfo_data(builder, meminfo)
 
     intp_t = context.get_value_type(types.intp)
     shape_array = cgutils.pack_array(builder, shapes, ty=intp_t)
@@ -3479,7 +3479,7 @@ def _get_borrowing_getitem(context, seqty):
     def wrap(builder, args):
         ret = getitem_impl(builder, args)
         if context.enable_nrt:
-            context.nrt_decref(builder, retty, ret)
+            context.nrt.decref(builder, retty, ret)
         return ret
 
     return wrap

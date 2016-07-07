@@ -104,7 +104,7 @@ class BaseGeneratorLower(object):
         # Incref all NRT arguments before storing into generator states
         if self.context.enable_nrt:
             for argty, argval in zip(self.fndesc.argtypes, lower.fnargs):
-                self.context.nrt_incref(builder, argty, argval)
+                self.context.nrt.incref(builder, argty, argval)
 
         # Filter out omitted arguments
         argsval = self.arg_packer.as_data(builder, lower.fnargs)
@@ -224,7 +224,7 @@ class GeneratorLower(BaseGeneratorLower):
             # self.debug_print(builder, "# generator: clear args")
             args_ptr = self.get_args_ptr(builder, genptr)
             for ty, val in self.arg_packer.load(builder, args_ptr):
-                self.context.nrt_decref(builder, ty, val)
+                self.context.nrt.decref(builder, ty, val)
 
         self.debug_print(builder, "# generator: finalize end")
         builder.ret_void()
@@ -320,7 +320,7 @@ class LowerYield(object):
             val = self.lower.loadvar(name)
             # IncRef newly stored value
             if self.context.enable_nrt:
-                self.context.nrt_incref(self.builder, ty, val)
+                self.context.nrt.incref(self.builder, ty, val)
 
             self.context.pack_value(self.builder, ty, val, state_slot)
         # Save resume index
@@ -342,5 +342,5 @@ class LowerYield(object):
             self.lower.storevar(val, name)
             # Previous storevar is making an extra incref
             if self.context.enable_nrt:
-                self.context.nrt_decref(self.builder, ty, val)
+                self.context.nrt.decref(self.builder, ty, val)
         self.lower.debug_print("# generator resume end")

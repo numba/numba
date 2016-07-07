@@ -18,6 +18,7 @@ bool_t = ir.IntType(1)
 int8_t = ir.IntType(8)
 int32_t = ir.IntType(32)
 intp_t = ir.IntType(utils.MACHINE_BITS)
+voidptr_t = int8_t.as_pointer()
 
 true_bit = bool_t(1)
 false_bit = bool_t(0)
@@ -811,9 +812,8 @@ def memset(builder, ptr, size, value):
     """
     sizety = size.type
     memset = "llvm.memset.p0i8.i%d" % (sizety.width)
-    i8_star = int8_t.as_pointer()
-    fn = builder.module.declare_intrinsic('llvm.memset', (i8_star, size.type))
-    ptr = builder.bitcast(ptr, i8_star)
+    fn = builder.module.declare_intrinsic('llvm.memset', (voidptr_t, size.type))
+    ptr = builder.bitcast(ptr, voidptr_t)
     if isinstance(value, int):
         value = int8_t(value)
     builder.call(fn, [ptr, value, size, int32_t(0), bool_t(0)])
@@ -900,17 +900,16 @@ def memcpy(builder, dst, src, count):
 
 
 def _raw_memcpy(builder, func_name, dst, src, count, itemsize, align):
-    ptr_t = ir.IntType(8).as_pointer()
     size_t = count.type
     if isinstance(itemsize, utils.INT_TYPES):
         itemsize = ir.Constant(size_t, itemsize)
 
     memcpy = builder.module.declare_intrinsic(func_name,
-                                              [ptr_t, ptr_t, size_t])
+                                              [voidptr_t, voidptr_t, size_t])
     align = ir.Constant(ir.IntType(32), align)
     is_volatile = false_bit
-    builder.call(memcpy, [builder.bitcast(dst, ptr_t),
-                          builder.bitcast(src, ptr_t),
+    builder.call(memcpy, [builder.bitcast(dst, voidptr_t),
+                          builder.bitcast(src, voidptr_t),
                           builder.mul(count, itemsize),
                           align,
                           is_volatile])
@@ -957,7 +956,7 @@ def printf(builder, format, *args):
     assert isinstance(format, str)
     mod = builder.module
     # Make global constant for format string
-    cstring = ir.IntType(8).as_pointer()
+    cstring = voidptr_t
     fmt_bytes = make_bytearray((format + '\00').encode('ascii'))
     global_fmt = global_constant(mod, "printf_format", fmt_bytes)
     fnty = ir.FunctionType(int32_t, [cstring], var_arg=True)

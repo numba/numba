@@ -537,7 +537,7 @@ def box_list(typ, val, c):
             c.builder.store(obj, res)
 
     # Steal NRT ref
-    c.context.nrt_decref(c.builder, typ, val)
+    c.context.nrt.decref(c.builder, typ, val)
     return c.builder.load(res)
 
 
@@ -589,7 +589,7 @@ def _python_list_to_native(typ, obj, c, size, listptr, errorptr):
 
     # If an error occurred, drop the whole native list
     with c.builder.if_then(c.builder.load(errorptr)):
-        c.context.nrt_decref(c.builder, typ, list.value)
+        c.context.nrt.decref(c.builder, typ, list.value)
 
 
 @unbox(types.List)
@@ -732,7 +732,7 @@ def _python_set_to_native(typ, obj, c, size, setptr, errorptr):
 
     # If an error occurred, drop the whole native set
     with c.builder.if_then(c.builder.load(errorptr)):
-        c.context.nrt_decref(c.builder, typ, inst.value)
+        c.context.nrt.decref(c.builder, typ, inst.value)
 
 
 @unbox(types.Set)
@@ -820,7 +820,7 @@ def box_set(typ, val, c):
                 c.builder.store(obj, res)
 
     # Steal NRT ref
-    c.context.nrt_decref(c.builder, typ, val)
+    c.context.nrt.decref(c.builder, typ, val)
     return c.builder.load(res)
 
 @reflect(types.Set)
