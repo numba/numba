@@ -1,5 +1,7 @@
 from __future__ import absolute_import, print_function
+
 import copy
+import numbers
 import sys
 import warnings
 import operator
@@ -278,23 +280,24 @@ class CUDAKernelBase(object):
         return new
 
     def configure(self, griddim, blockdim, stream=0, sharedmem=0):
-        if not isinstance(griddim, (tuple, list)):
-            griddim = [griddim]
-        else:
-            griddim = list(griddim)
-        if len(griddim) > 3:
-            raise ValueError('griddim must be a tuple/list of three ints')
-        while len(griddim) < 3:
-            griddim.append(1)
+        def check_dim(dim, name):
+            if not isinstance(dim, (tuple, list)):
+                dim = [dim]
+            else:
+                dim = list(dim)
+            if len(dim) > 3:
+                raise ValueError('%s must be a sequence of three integers, got %r'
+                                 % (name, dim))
+            for v in dim:
+                if not isinstance(v, numbers.Integral):
+                    raise TypeError('%s must be a sequence of integers, got %r'
+                                    % (name, dim))
+            while len(dim) < 3:
+                dim.append(1)
+            return dim
 
-        if not isinstance(blockdim, (tuple, list)):
-            blockdim = [blockdim]
-        else:
-            blockdim = list(blockdim)
-        if len(blockdim) > 3:
-            raise ValueError('blockdim must be tuple/list of three ints')
-        while len(blockdim) < 3:
-            blockdim.append(1)
+        griddim = check_dim(griddim, 'griddim')
+        blockdim = check_dim(blockdim, 'blockdim')
 
         clone = self.copy()
         clone.griddim = tuple(griddim)
