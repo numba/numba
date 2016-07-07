@@ -1,12 +1,11 @@
 from __future__ import absolute_import, print_function
 
 import copy
-import numbers
-import sys
-import warnings
-import operator
 from functools import reduce, wraps
+import operator
+import sys
 import threading
+import warnings
 
 from numba import ctypes_support as ctypes
 from numba.typing.templates import AbstractTemplate
@@ -17,7 +16,7 @@ from numba import funcdesc, typing, utils, serialize
 from .cudadrv.autotune import AutoTuner
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
-from .errors import KernelRuntimeError
+from .errors import KernelRuntimeError, normalize_kernel_dimensions
 from .api import get_current_device
 
 
@@ -257,6 +256,7 @@ class ForAll(object):
         return kernel.configure(blkct, tpb, stream=self.stream,
                                 sharedmem=self.sharedmem)(*args)
 
+
 class CUDAKernelBase(object):
     """Define interface for configurable kernels
     """
@@ -280,24 +280,7 @@ class CUDAKernelBase(object):
         return new
 
     def configure(self, griddim, blockdim, stream=0, sharedmem=0):
-        def check_dim(dim, name):
-            if not isinstance(dim, (tuple, list)):
-                dim = [dim]
-            else:
-                dim = list(dim)
-            if len(dim) > 3:
-                raise ValueError('%s must be a sequence of three integers, got %r'
-                                 % (name, dim))
-            for v in dim:
-                if not isinstance(v, numbers.Integral):
-                    raise TypeError('%s must be a sequence of integers, got %r'
-                                    % (name, dim))
-            while len(dim) < 3:
-                dim.append(1)
-            return dim
-
-        griddim = check_dim(griddim, 'griddim')
-        blockdim = check_dim(blockdim, 'blockdim')
+        griddim, blockdim = normalize_kernel_dimensions(griddim, blockdim)
 
         clone = self.copy()
         clone.griddim = tuple(griddim)
