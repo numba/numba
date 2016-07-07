@@ -2,13 +2,14 @@ from __future__ import print_function, division, absolute_import
 
 from collections import namedtuple
 import sys
+from functools import partial
 
 from llvmlite.ir import Value
 from llvmlite.llvmpy.core import Constant, Type, Builder
 
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
-from .errors import LoweringError
+from .errors import LoweringError, new_error_context
 from .targets import imputils
 
 
@@ -193,13 +194,10 @@ class BaseLower(object):
         self.pre_block(block)
         for inst in block.body:
             self.loc = inst.loc
-            try:
+            defaulterrcls = partial(LoweringError, loc=self.loc)
+            with new_error_context('lowering "{inst}" at {loc}', inst=inst,
+                                   loc=self.loc, errcls_=defaulterrcls):
                 self.lower_inst(inst)
-            except LoweringError:
-                raise
-            except Exception as e:
-                msg = "Internal error:\n%s: %s" % (type(e).__name__, e)
-                raise LoweringError(msg, inst.loc)
 
     def create_cpython_wrapper(self, release_gil=False):
         """
@@ -434,19 +432,52 @@ class Lower(BaseLower):
     def lower_binop(self, resty, expr, op):
         lhs = expr.lhs
         rhs = expr.rhs
+        static_lhs = expr.static_lhs
+        static_rhs = expr.static_rhs
         lty = self.typeof(lhs.name)
         rty = self.typeof(rhs.name)
         lhs = self.loadvar(lhs.name)
         rhs = self.loadvar(rhs.name)
-        # Get function
-        signature = self.fndesc.calltypes[expr]
-        impl = self.context.get_function(op, signature)
+
         # Convert argument to match
+        signature = self.fndesc.calltypes[expr]
         lhs = self.context.cast(self.builder, lhs, lty, signature.args[0])
         rhs = self.context.cast(self.builder, rhs, rty, signature.args[1])
+
+        def cast_result(res):
+            return self.context.cast(self.builder, res,
+                                     signature.return_type, resty)
+
+        # First try with static operands, if known
+        def try_static_impl(tys, args):
+            if any(a is ir.UNDEFINED for a in args):
+                return None
+            static_sig = typing.signature(signature.return_type, *tys)
+            try:
+                static_impl = self.context.get_function(op, static_sig)
+                return static_impl(self.builder, args)
+            except NotImplementedError:
+                return None
+
+        res = try_static_impl((types.Const(static_lhs), types.Const(static_rhs)),
+                              (static_lhs, static_rhs))
+        if res is not None:
+            return cast_result(res)
+
+        res = try_static_impl((types.Const(static_lhs), rty),
+                              (static_lhs, rhs))
+        if res is not None:
+            return cast_result(res)
+
+        res = try_static_impl((lty, types.Const(static_rhs)),
+                              (lhs, static_rhs))
+        if res is not None:
+            return cast_result(res)
+
+        # Normal implementation for generic arguments
+        impl = self.context.get_function(op, signature)
         res = impl(self.builder, (lhs, rhs))
-        return self.context.cast(self.builder, res,
-                                 signature.return_type, resty)
+        return cast_result(res)
 
     def lower_getitem(self, resty, expr, value, index, signature):
         baseval = self.loadvar(value.name)
