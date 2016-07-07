@@ -3,6 +3,8 @@ Version 0.27.0
 
 Improvements:
 
+* Issue #1976: improve error message when non-integral dimensions are given
+  to a CUDA kernel.
 * PR #1970: Optimize the power operator with a static exponent.
 * PR #1710: Improve contextual information for compiler errors.
 * PR #1961: Support printing constant strings.
