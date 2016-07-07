@@ -1406,40 +1406,35 @@ class TestStaticPower(TestCase):
     dedicated optimization.
     """
 
-    def _check_pow(self, fix_result, exponents, values):
+    def _check_pow(self, exponents, values):
         for exp in exponents:
-            pyfunc = make_static_power(exp)
-            cfunc = jit(nopython=True)(pyfunc)
+            # test against non-static version of the @jit-ed function
+            regular_func = LiteralOperatorImpl.pow_usecase
+            static_func = make_static_power(exp)
+
+            static_cfunc = jit(nopython=True)(static_func)
+            regular_cfunc = jit(nopython=True)(regular_func)
             for v in values:
                 try:
-                    expected = fix_result(pyfunc(v))
-                except OverflowError as e:
-                    got = cfunc(v)
-                    self.assertIn(got, (-np.inf, np.inf))
+                    expected = regular_cfunc(v, exp)
                 except ZeroDivisionError:
                     with self.assertRaises(ZeroDivisionError):
-                        cfunc(v)
+                        static_cfunc(v)
                 else:
-                    got = cfunc(v)
+                    got = static_cfunc(v)
                     self.assertPreciseEqual(expected, got, prec='double')
 
     def test_int_values(self):
         exponents = [1, 2, 3, 5, 17, 0, -1, -2, -3]
         vals = [0, 1, 3, -1, -4, np.int8(-3), np.uint16(4)]
 
-        def fix_result(x):
-            return int(x)
-
-        self._check_pow(fix_result, exponents, vals)
+        self._check_pow(exponents, vals)
 
     def test_real_values(self):
         exponents = [1, 2, 3, 5, 17, 0, -1, -2, -3, 0x111111, -0x111112]
         vals = [1.5, 3.25, -1.25, np.float32(-1.5), float('inf'), float('nan')]
 
-        def fix_result(x):
-            return x
-
-        self._check_pow(fix_result, exponents, vals)
+        self._check_pow(exponents, vals)
 
 
 if __name__ == '__main__':
