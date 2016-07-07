@@ -27,13 +27,6 @@ from numba.typing import signature
 from . import quicksort, slicing
 
 
-def get_preferred_alignment(context, array_type):
-    """
-    Get preferred alignment for the array type.
-    """
-    # NOTE: AVX prefer 32-byte alignment
-    return 32
-
 def set_range_metadata(builder, load, lower_bound, upper_bound):
     """
     Set the "range" metadata on a load instruction.
@@ -2845,8 +2838,9 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
                 arrtype.layout))
 
     allocsize = builder.mul(itemsize, arrlen)
+    align = context.get_preferred_array_alignment(arrtype.dtype)
     meminfo = context.nrt.meminfo_alloc_aligned(builder, size=allocsize,
-                                                align=get_preferred_alignment(context, arrtype))
+                                                align=align)
 
     data = context.nrt.meminfo_data(builder, meminfo)
 

@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import, division
 
 import math
+import numbers
 
 import numpy as np
 
@@ -174,16 +175,22 @@ def int_rem_impl(context, builder, sig, args):
                               builder.load(res))
 
 
+def _get_power_zerodiv_return(context, return_type):
+    if (isinstance(return_type, types.Integer)
+        and not context.error_model.raise_on_fp_zero_division):
+        # If not raising, return 0x8000... when computing 0 ** <negative number>
+        return -1 << (return_type.bitwidth - 1)
+    else:
+        return False
+
+
 def int_power_impl(context, builder, sig, args):
     """
     a ^ b, where a is an integer or real, and b an integer
     """
     is_integer = isinstance(sig.args[0], types.Integer)
     tp = sig.return_type
-    zerodiv_return = False
-    if is_integer and not context.error_model.raise_on_fp_zero_division:
-        # If not raising, return 0x8000... when computing 0 ** <negative number>
-        zerodiv_return = -1 << (tp.bitwidth - 1)
+    zerodiv_return = _get_power_zerodiv_return(context, tp)
 
     def int_power(a, b):
         # Ensure computations are done with a large enough width
@@ -218,6 +225,69 @@ def int_power_impl(context, builder, sig, args):
 
     res = context.compile_internal(builder, int_power, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+@lower_builtin('**', types.Integer, types.Const)
+@lower_builtin('**', types.Float, types.Const)
+def static_power_impl(context, builder, sig, args):
+    """
+    a ^ b, where a is an integer or real, and b a constant integer
+    """
+    exp = sig.args[1].value
+    if not isinstance(exp, numbers.Integral):
+        raise NotImplementedError
+    if abs(exp) > 0x10000:
+        # Optimization cutoff: fallback on the generic algorithm above
+        raise NotImplementedError
+    invert = exp < 0
+    exp = abs(exp)
+
+    tp = sig.return_type
+    is_integer = isinstance(tp, types.Integer)
+    zerodiv_return = _get_power_zerodiv_return(context, tp)
+
+    val = context.cast(builder, args[0], sig.args[0], tp)
+    lty = val.type
+
+    def mul(a, b):
+        if is_integer:
+            return builder.mul(a, b)
+        else:
+            return builder.fmul(a, b)
+
+    # Unroll the exponentiation loop
+    res = lty(1)
+    a = val
+    while exp != 0:
+        if exp & 1:
+            res = mul(res, val)
+        exp >>= 1
+        val = mul(val, val)
+
+    if invert:
+        # If the exponent was negative, fix the result by inverting it
+        if is_integer:
+            # Integer inversion
+            def invert_impl(a):
+                if a == 0:
+                    if zerodiv_return:
+                        return zerodiv_return
+                    else:
+                        raise ZeroDivisionError("0 cannot be raised to a negative power")
+                if a != 1 and a != -1:
+                    return 0
+                else:
+                    return a
+
+        else:
+            # Real inversion
+            def invert_impl(a):
+                return 1.0 / a
+
+        res = context.compile_internal(builder, invert_impl,
+                                       typing.signature(tp, tp), (res,))
+
+    return res
 
 
 def int_slt_impl(context, builder, sig, args):

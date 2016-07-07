@@ -143,13 +143,15 @@ class Expr(Inst):
     @classmethod
     def binop(cls, fn, lhs, rhs, loc):
         op = 'binop'
-        return cls(op=op, loc=loc, fn=fn, lhs=lhs, rhs=rhs)
+        return cls(op=op, loc=loc, fn=fn, lhs=lhs, rhs=rhs,
+                   static_lhs=UNDEFINED, static_rhs=UNDEFINED)
 
     @classmethod
     def inplace_binop(cls, fn, immutable_fn, lhs, rhs, loc):
         op = 'inplace_binop'
         return cls(op=op, loc=loc, fn=fn, immutable_fn=immutable_fn,
-                   lhs=lhs, rhs=rhs)
+                   lhs=lhs, rhs=rhs,
+                   static_lhs=UNDEFINED, static_rhs=UNDEFINED)
 
     @classmethod
     def unary(cls, fn, value, loc):

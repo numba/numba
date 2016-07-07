@@ -209,30 +209,29 @@ The following top-level functions are supported:
 * :func:`numpy.copy` (only the first argument)
 * :func:`numpy.diag`
 * :func:`numpy.digitize`
-* :func:`numpy.empty`
-* :func:`numpy.empty_like`
+* :func:`numpy.empty` (only the 2 first arguments)
+* :func:`numpy.empty_like` (only the 2 first arguments)
 * :func:`numpy.eye`
 * :func:`numpy.flatten` (no order argument; 'C' order only)
 * :func:`numpy.frombuffer` (only the 2 first arguments)
-* :func:`numpy.full`
-* :func:`numpy.full_like`
+* :func:`numpy.full` (only the 3 first arguments)
+* :func:`numpy.full_like` (only the 3 first arguments)
 * :func:`numpy.histogram` (only the 3 first arguments)
 * :func:`numpy.identity`
 * :func:`numpy.linspace` (only the 3-argument form)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
 * :class:`numpy.nditer` (only the first argument)
-* :func:`numpy.ones`
-* :func:`numpy.ones_like`
+* :func:`numpy.ones` (only the 2 first arguments)
+* :func:`numpy.ones_like` (only the 2 first arguments)
 * :func:`numpy.ravel` (no order argument; 'C' order only)
 * :func:`numpy.round_`
 * :func:`numpy.searchsorted` (only the 2 first arguments)
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
 * :func:`numpy.where`
-* :func:`numpy.zeros`
-* :func:`numpy.zeros_like`
-
+* :func:`numpy.zeros` (only the 2 first arguments)
+* :func:`numpy.zeros_like` (only the 2 first arguments)
 
 The following constructors are supported, both with a numeric input (to
 construct a scalar) or a sequence (to construct an array):
