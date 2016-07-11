@@ -10,6 +10,7 @@ import threading
 import timeit
 import math
 import sys
+import traceback
 
 import numpy as np
 
@@ -26,6 +27,15 @@ if IS_PY3:
     get_ident = threading.get_ident
     intern = sys.intern
     file_replace = os.replace
+
+    def erase_traceback(exc_value):
+        """
+        Erase the traceback and hanging locals from the given exception instance.
+        """
+        if exc_value.__traceback__ is not None:
+            traceback.clear_frames(exc_value.__traceback__)
+        return exc_value.with_traceback(None)
+
 else:
     import thread
     import __builtin__ as builtins
@@ -43,6 +53,12 @@ else:
                 os.rename(src, dest)
     else:
         file_replace = os.rename
+
+    def erase_traceback(exc_value):
+        """
+        Erase the traceback and hanging locals from the given exception instance.
+        """
+        return exc_value
 
 try:
     from inspect import signature as pysignature

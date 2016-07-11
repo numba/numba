@@ -904,12 +904,10 @@ class TypeInferer(object):
             ty = self.context.resolve_value_type(val)
         except ValueError as e:
             msg = str(e)
-            del e
         else:
             if ty is not None:
                 return ty
             msg = "Unsupported Python value %r" % (val,)
-        del val
         raise TypingError(msg, loc=inst.loc)
 
     def typeof_arg(self, inst, target, arg):
@@ -989,7 +987,6 @@ class TypeInferer(object):
             else:
                 e.patch_message("Untyped global name '%s': %s"
                                 % (gvar.name, e))
-                del gvar
                 raise
 
         if isinstance(typ, types.Dispatcher) and typ.dispatcher.is_compiling:

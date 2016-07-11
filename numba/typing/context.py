@@ -102,10 +102,9 @@ class BaseContext(object):
         """
         if func not in self._functions:
             # It's not a known function type, perhaps it's a global?
-            try:
-                func = self._lookup_global(func)
-            except KeyError:
-                pass
+            functy = self._lookup_global(func)
+            if functy is not None:
+                func = functy
         if func in self._functions:
             defns = self._functions[func]
             for defn in defns:
@@ -219,31 +218,28 @@ class BaseContext(object):
         try:
             ty = typeof(val, Purpose.constant)
         except ValueError as e:
-            typeof_exc = e
+            # Make sure the exception doesn't hold a reference to the user
+            # value.
+            typeof_exc = utils.erase_traceback(e)
         else:
-            if ty is not None:
-                return ty
+            return ty
 
         if isinstance(val, (types.ExternalFunction, types.NumbaFunction)):
             return val
 
-        try:
-            # Try to look up target specific typing information
-            return self._get_global_type(val)
-        except KeyError:
-            pass
+        # Try to look up target specific typing information
+        ty = self._get_global_type(val)
+        if ty is not None:
+            return ty
 
-        del val
         raise typeof_exc
 
     def _get_global_type(self, gv):
-        try:
-            return self._lookup_global(gv)
-        except KeyError:
-            if isinstance(gv, pytypes.ModuleType):
-                return types.Module(gv)
-            else:
-                raise
+        ty = self._lookup_global(gv)
+        if ty is not None:
+            return ty
+        if isinstance(gv, pytypes.ModuleType):
+            return types.Module(gv)
 
     def _load_builtins(self):
         # Initialize declarations
@@ -271,9 +267,8 @@ class BaseContext(object):
         for ftcls in loader.new_registrations('attributes'):
             self.insert_attributes(ftcls(self))
         for gv, gty in loader.new_registrations('globals'):
-            try:
-                existing = self._lookup_global(gv)
-            except KeyError:
+            existing = self._lookup_global(gv)
+            if existing is None:
                 self.insert_global(gv, gty)
             else:
                 # A type was already inserted, see if we can add to it
@@ -292,7 +287,11 @@ class BaseContext(object):
             gv = weakref.ref(gv)
         except TypeError:
             pass
-        return self._globals[gv]
+        try:
+            return self._globals.get(gv, None)
+        except TypeError:
+            # Unhashable type
+            return None
 
     def _insert_global(self, gv, gty):
         """
