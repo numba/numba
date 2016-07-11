@@ -1149,7 +1149,7 @@ def lstsq_impl(a, b, rcond=-1.0):
     _check_homogeneous_types("lstsq", a, b)
 
     np_dt = np_support.as_dtype(a.dtype)
-    nb_dt = np_support.from_dtype(np_dt)
+    nb_dt = a.dtype
 
     # convert typing floats to np floats for use in the impl
     r_type = getattr(nb_dt, "underlying_float", nb_dt)
@@ -1299,7 +1299,7 @@ def solve_impl(a, b):
     _check_homogeneous_types("solve", a, b)
 
     np_dt = np_support.as_dtype(a.dtype)
-    nb_dt = np_support.from_dtype(np_dt)
+    nb_dt = a.dtype
 
     # the lapack wrapper signature
     numba_xgesv_sig = types.intc(
