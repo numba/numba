@@ -2,13 +2,14 @@ from __future__ import print_function, division, absolute_import
 
 from collections import namedtuple
 import sys
+from functools import partial
 
 from llvmlite.ir import Value
 from llvmlite.llvmpy.core import Constant, Type, Builder
 
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
-from .errors import LoweringError
+from .errors import LoweringError, new_error_context
 from .targets import imputils
 
 
@@ -193,13 +194,10 @@ class BaseLower(object):
         self.pre_block(block)
         for inst in block.body:
             self.loc = inst.loc
-            try:
+            defaulterrcls = partial(LoweringError, loc=self.loc)
+            with new_error_context('lowering "{inst}" at {loc}', inst=inst,
+                                   loc=self.loc, errcls_=defaulterrcls):
                 self.lower_inst(inst)
-            except LoweringError:
-                raise
-            except Exception as e:
-                msg = "Internal error:\n%s: %s" % (type(e).__name__, e)
-                raise LoweringError(msg, inst.loc)
 
     def create_cpython_wrapper(self, release_gil=False):
         """
@@ -284,6 +282,9 @@ class Lower(BaseLower):
                 value = self.context.cast(self.builder, value, valuety,
                                           signature.args[2])
                 return impl(self.builder, (target, inst.index, value))
+
+        elif isinstance(inst, ir.Print):
+            self.lower_print(inst)
 
         elif isinstance(inst, ir.SetItem):
             signature = self.fndesc.calltypes[inst]
@@ -431,19 +432,52 @@ class Lower(BaseLower):
     def lower_binop(self, resty, expr, op):
         lhs = expr.lhs
         rhs = expr.rhs
+        static_lhs = expr.static_lhs
+        static_rhs = expr.static_rhs
         lty = self.typeof(lhs.name)
         rty = self.typeof(rhs.name)
         lhs = self.loadvar(lhs.name)
         rhs = self.loadvar(rhs.name)
-        # Get function
-        signature = self.fndesc.calltypes[expr]
-        impl = self.context.get_function(op, signature)
+
         # Convert argument to match
+        signature = self.fndesc.calltypes[expr]
         lhs = self.context.cast(self.builder, lhs, lty, signature.args[0])
         rhs = self.context.cast(self.builder, rhs, rty, signature.args[1])
+
+        def cast_result(res):
+            return self.context.cast(self.builder, res,
+                                     signature.return_type, resty)
+
+        # First try with static operands, if known
+        def try_static_impl(tys, args):
+            if any(a is ir.UNDEFINED for a in args):
+                return None
+            static_sig = typing.signature(signature.return_type, *tys)
+            try:
+                static_impl = self.context.get_function(op, static_sig)
+                return static_impl(self.builder, args)
+            except NotImplementedError:
+                return None
+
+        res = try_static_impl((types.Const(static_lhs), types.Const(static_rhs)),
+                              (static_lhs, static_rhs))
+        if res is not None:
+            return cast_result(res)
+
+        res = try_static_impl((types.Const(static_lhs), rty),
+                              (static_lhs, rhs))
+        if res is not None:
+            return cast_result(res)
+
+        res = try_static_impl((lty, types.Const(static_rhs)),
+                              (lhs, static_rhs))
+        if res is not None:
+            return cast_result(res)
+
+        # Normal implementation for generic arguments
+        impl = self.context.get_function(op, signature)
         res = impl(self.builder, (lhs, rhs))
-        return self.context.cast(self.builder, res,
-                                 signature.return_type, resty)
+        return cast_result(res)
 
     def lower_getitem(self, resty, expr, value, index, signature):
         baseval = self.loadvar(value.name)
@@ -474,6 +508,73 @@ class Lower(BaseLower):
             val = self.loadvar(var.name)
         return self.context.cast(self.builder, val, varty, ty)
 
+    def fold_call_args(self, fnty, signature, pos_args, vararg, kw_args):
+        if vararg:
+            # Inject *args from function call
+            # The lowering will be done in _cast_var() above.
+            tp_vararg = self.typeof(vararg.name)
+            assert isinstance(tp_vararg, types.BaseTuple)
+            pos_args = pos_args + [_VarArgItem(vararg, i)
+                                   for i in range(len(tp_vararg))]
+
+        # Fold keyword arguments and resolve default argument values
+        pysig = signature.pysig
+        if pysig is None:
+            if kw_args:
+                raise NotImplementedError("unsupported keyword arguments "
+                                          "when calling %s" % (fnty,))
+            argvals = [self._cast_var(var, sigty)
+                       for var, sigty in zip(pos_args, signature.args)]
+        else:
+            def normal_handler(index, param, var):
+                return self._cast_var(var, signature.args[index])
+
+            def default_handler(index, param, default):
+                return self.context.get_constant_generic(
+                    self.builder, signature.args[index], default)
+
+            def stararg_handler(index, param, vars):
+                values = [self._cast_var(var, sigty)
+                          for var, sigty in
+                          zip(vars, signature.args[index])]
+                return cgutils.make_anonymous_struct(self.builder, values)
+
+            argvals = typing.fold_arguments(pysig,
+                                            pos_args, dict(kw_args),
+                                            normal_handler,
+                                            default_handler,
+                                            stararg_handler)
+        return argvals
+
+    def lower_print(self, inst):
+        """
+        Lower a ir.Print()
+        """
+        # We handle this, as far as possible, as a normal call to built-in
+        # print().  This will make it easy to undo the special ir.Print
+        # rewrite when it becomes unnecessary (e.g. when we have native
+        # strings).
+        sig = self.fndesc.calltypes[inst]
+        assert sig.return_type == types.none
+        fnty = self.context.typing_context.resolve_value_type(print)
+
+        # Fix the call signature to inject any constant-inferred
+        # string argument
+        pos_tys = list(sig.args)
+        pos_args = list(inst.args)
+        for i in range(len(pos_args)):
+            if i in inst.consts:
+                pyval = inst.consts[i]
+                if isinstance(pyval, str):
+                    pos_tys[i] = types.Const(pyval)
+
+        fixed_sig = typing.signature(sig.return_type, *pos_tys)
+        fixed_sig.pysig = sig.pysig
+
+        argvals = self.fold_call_args(fnty, sig, pos_args, inst.vararg, {})
+        impl = self.context.get_function(print, fixed_sig)
+        impl(self.builder, argvals)
+
     def lower_call(self, resty, expr):
         signature = self.fndesc.calltypes[expr]
         if isinstance(signature.return_type, types.Phantom):
@@ -484,42 +585,8 @@ class Lower(BaseLower):
             argvals = expr.func.args
         else:
             fnty = self.typeof(expr.func.name)
-            pos_args = expr.args
-            if expr.vararg:
-                # Inject *args from function call
-                # The lowering will be done in _cast_var() above.
-                tp_vararg = self.typeof(expr.vararg.name)
-                assert isinstance(tp_vararg, types.BaseTuple)
-                pos_args = pos_args + [_VarArgItem(expr.vararg, i)
-                                       for i in range(len(tp_vararg))]
-
-            # Fold keyword arguments and resolve default argument values
-            pysig = signature.pysig
-            if pysig is None:
-                if expr.kws:
-                    raise NotImplementedError("unsupported keyword arguments "
-                                              "when calling %s" % (fnty,))
-                argvals = [self._cast_var(var, sigty)
-                           for var, sigty in zip(pos_args, signature.args)]
-            else:
-                def normal_handler(index, param, var):
-                    return self._cast_var(var, signature.args[index])
-
-                def default_handler(index, param, default):
-                    return self.context.get_constant_generic(
-                        self.builder, signature.args[index], default)
-
-                def stararg_handler(index, param, vars):
-                    values = [self._cast_var(var, sigty)
-                              for var, sigty in
-                              zip(vars, signature.args[index])]
-                    return cgutils.make_anonymous_struct(self.builder, values)
-
-                argvals = typing.fold_arguments(pysig,
-                                                pos_args, dict(expr.kws),
-                                                normal_handler,
-                                                default_handler,
-                                                stararg_handler)
+            argvals = self.fold_call_args(fnty, signature,
+                                          expr.args, expr.vararg, expr.kws)
 
         if isinstance(fnty, types.ExternalFunction):
             # Handle a named external function
@@ -581,7 +648,7 @@ class Lower(BaseLower):
             res = impl(self.context, self.builder, signature, argvals)
 
         else:
-            # Normal function resolution (for Numba-compiled functions)
+            # Normal function resolution
             self.debug_print("# calling normal function: {0}".format(fnty))
             impl = self.context.get_function(fnty, signature)
             if signature.recvr:
@@ -857,10 +924,10 @@ class Lower(BaseLower):
         if not self.context.enable_nrt:
             return
 
-        self.context.nrt_incref(self.builder, typ, val)
+        self.context.nrt.incref(self.builder, typ, val)
 
     def decref(self, typ, val):
         if not self.context.enable_nrt:
             return
 
-        self.context.nrt_decref(self.builder, typ, val)
+        self.context.nrt.decref(self.builder, typ, val)

@@ -10,7 +10,7 @@ class _DivmodFixer(ir.Visitor):
     def visit_Instruction(self, instr):
         if instr.type == ir.IntType(64):
             if instr.opname in ['srem', 'urem', 'sdiv', 'udiv']:
-                name = 'numba.math.{op}'.format(op=instr.opname)
+                name = 'numba_{op}'.format(op=instr.opname)
                 fn = self.module.globals.get(name)
                 # Declare the function if it doesn't already exist
                 if fn is None:

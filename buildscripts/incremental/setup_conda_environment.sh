@@ -1,16 +1,23 @@
 #!/bin/bash
 
+set -v
+
 CONDA_INSTALL="conda install -q -y"
 PIP_INSTALL="pip install -q"
 
-conda update -q -y conda
+# Display root environment (for debugging)
+conda list
 # Clean up any left-over from a previous build
-conda env remove -q -y -n $CONDA_ENV
+# (note workaround for https://github.com/conda/conda/issues/2679:
+#  `conda env remove` issue)
+conda remove --all -q -y -n $CONDA_ENV
 # Scipy, CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
 conda create -n $CONDA_ENV -q -y python=$PYTHON numpy=$NUMPY cffi pip scipy jinja2 ipython
 
+set +v
 source activate $CONDA_ENV
 set -v
+
 # Install llvmdev (separate channel, for now)
 $CONDA_INSTALL -c numba llvmdev="3.7*" llvmlite
 # Install enum34 and singledispatch for Python < 3.4

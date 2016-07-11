@@ -220,6 +220,11 @@ class TestCC(BasePYCCTest):
             for val in (-1, -1 + 0j, np.complex128(-1)):
                 res = lib.sqrt(val)
                 self.assertPreciseEqual(res, 1j)
+            for val in (4, 4.0, np.float64(4)):
+                res = lib.np_sqrt(val)
+                self.assertPreciseEqual(res, 2.0)
+            res = lib.spacing(1.0)
+            self.assertPreciseEqual(res, 2**-52)
             # Implicit seeding at startup should guarantee a non-pathological
             # start state.
             self.assertNotEqual(lib.random(-1), lib.random(-1))
@@ -235,6 +240,8 @@ class TestCC(BasePYCCTest):
                 assert res == 128
                 res = lib.random(42)
                 assert_allclose(res, %(expected)s)
+                res = lib.spacing(1.0)
+                assert_allclose(res, 2**-52)
                 """ % {'expected': expected}
             self.check_cc_compiled_in_subprocess(lib, code)
 

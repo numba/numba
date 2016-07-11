@@ -103,6 +103,24 @@ def get_slice_length(builder, slicestruct):
     return builder.select(is_zero_length, zero, nominal_length)
 
 
+def get_slice_bounds(builder, slicestruct):
+    """
+    Return the [lower, upper) indexing bounds of a slice.
+    """
+    start = slicestruct.start
+    stop = slicestruct.stop
+    zero = start.type(0)
+    one = start.type(1)
+    # This is a bit pessimal, e.g. it will return [1, 5) instead
+    # of [1, 4) for `1:5:2`
+    is_step_negative = builder.icmp_signed('<', slicestruct.step, zero)
+    lower = builder.select(is_step_negative,
+                           builder.add(stop, one), start)
+    upper = builder.select(is_step_negative,
+                           builder.add(start, one), stop)
+    return lower, upper
+
+
 def fix_stride(builder, slice, stride):
     """
     Fix the given stride for the slice's step.

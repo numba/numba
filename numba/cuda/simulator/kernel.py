@@ -1,11 +1,15 @@
 from __future__ import print_function
-from .array import to_device
-from .kernelapi import Dim3, FakeCUDAModule, swapped_cuda_module
-from numba.six import reraise
-import numpy as np
+
+from contextlib import contextmanager
 import sys
 import threading
-from contextlib import contextmanager
+
+import numpy as np
+
+from numba.six import reraise
+from .array import to_device
+from .kernelapi import Dim3, FakeCUDAModule, swapped_cuda_module
+from ..errors import normalize_kernel_dimensions
 
 
 """
@@ -73,27 +77,8 @@ class FakeCUDAKernel(object):
                     bm.run(grid_point, *fake_args)
 
     def __getitem__(self, configuration):
-        grid_dim = configuration[0]
-        block_dim = configuration[1]
-
-        if not isinstance(grid_dim, (tuple, list)):
-            grid_dim = [grid_dim]
-        else:
-            grid_dim = list(grid_dim)
-
-        if not isinstance(block_dim, (tuple, list)):
-            block_dim = [block_dim]
-        else:
-            block_dim = list(block_dim)
-
-        while len(grid_dim) < 3:
-            grid_dim.append(1)
-
-        while len(block_dim) < 3:
-            block_dim.append(1)
-
-        self.grid_dim = grid_dim
-        self.block_dim = block_dim
+        self.grid_dim, self.block_dim = \
+            normalize_kernel_dimensions(*configuration[:2])
 
         if len(configuration) == 4:
             self.dynshared_size = configuration[3]

@@ -379,7 +379,7 @@ def for_iter(context, builder, iterable_type, val):
 
     builder.position_at_end(bb_end)
     if context.enable_nrt:
-        context.nrt_decref(builder, iterator_type, iterval)
+        context.nrt.decref(builder, iterator_type, iterval)
 
 
 def impl_ret_new_ref(ctx, builder, retty, ret):
@@ -396,7 +396,7 @@ def impl_ret_borrowed(ctx, builder, retty, ret):
     returning a new reference.
     """
     if ctx.enable_nrt:
-        ctx.nrt_incref(builder, retty, ret)
+        ctx.nrt.incref(builder, retty, ret)
     return ret
 
 

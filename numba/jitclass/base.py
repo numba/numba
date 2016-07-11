@@ -366,10 +366,10 @@ def attr_impl(context, builder, sig, args, attr):
 
         # Store n
         setattr(data, _mangle_attr(attr), val)
-        context.nrt_incref(builder, attr_type, val)
+        context.nrt.incref(builder, attr_type, val)
 
         # Delete old value
-        context.nrt_decref(builder, attr_type, oldvalue)
+        context.nrt.decref(builder, attr_type, oldvalue)
 
     elif attr in typ.jitprops:
         # It's a jitted property
@@ -403,7 +403,7 @@ def imp_dtor(context, module, instance_type):
         ptr = builder.bitcast(dtor_fn.args[0], alloc_type.as_pointer())
         data = context.make_helper(builder, alloc_fe_type, ref=ptr)
 
-        context.nrt_decref(builder, alloc_fe_type, data._getvalue())
+        context.nrt.decref(builder, alloc_fe_type, data._getvalue())
 
         builder.ret_void()
 
@@ -420,12 +420,12 @@ def ctor_impl(context, builder, sig, args):
     alloc_type = context.get_data_type(inst_typ.get_data_type())
     alloc_size = context.get_abi_sizeof(alloc_type)
 
-    meminfo = context.nrt_meminfo_alloc_dtor(
+    meminfo = context.nrt.meminfo_alloc_dtor(
         builder,
         context.get_constant(types.uintp, alloc_size),
         imp_dtor(context, builder.module, inst_typ),
     )
-    data_pointer = context.nrt_meminfo_data(builder, meminfo)
+    data_pointer = context.nrt.meminfo_data(builder, meminfo)
     data_pointer = builder.bitcast(data_pointer,
                                    alloc_type.as_pointer())
 

@@ -297,7 +297,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             if failed_args:
                 # Patch error message to ease debugging
                 msg = str(e).rstrip() + (
-                    "\n\nThis error may be caused by the following argument(s):\n%s\n"
+                    "\n\nThis error may have been caused by the following argument(s):\n%s\n"
                     % "\n".join("- argument %d: %s" % (i, err)
                                 for i, err in failed_args))
                 e.patch_message(msg)
@@ -376,7 +376,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         cannot decide the type.
         """
         # Not going through the resolve_argument_type() indirection
-        # can shape a couple µs.
+        # can save a couple µs.
         try:
             tp = typeof(val, Purpose.argument)
         except ValueError:

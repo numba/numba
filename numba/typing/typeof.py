@@ -200,6 +200,6 @@ def _typeof_ndarray(val, c):
 
 @typeof_impl.register(smartarray.SmartArray)
 def typeof_array(val, c):
-    arrty = typeof_impl(val.host(), c)
+    arrty = typeof_impl(val.get('host'), c)
     return types.SmartArrayType(arrty.dtype, arrty.ndim, arrty.layout, type(val))
 

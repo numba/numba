@@ -20,7 +20,7 @@ from pprint import pprint
 import traceback
 
 from numba import ir, types, utils, config, six, typing
-from .errors import TypingError, UntypedAttributeError
+from .errors import TypingError, UntypedAttributeError, new_error_context
 
 
 class TypeVar(object):
@@ -29,28 +29,38 @@ class TypeVar(object):
         self.var = var
         self.type = None
         self.locked = False
+        # Stores source location of first definition
+        self.define_loc = None
 
-    def add_type(self, tp):
+    def add_type(self, tp, loc):
         assert isinstance(tp, types.Type), type(tp)
 
         if self.locked:
             if tp != self.type:
                 if self.context.can_convert(tp, self.type) is None:
-                    raise TypingError("No conversion from %s to %s for "
-                                      "'%s'" % (tp, self.type, self.var))
+                    msg = ("No conversion from %s to %s for '%s', "
+                           "defined at %s")
+                    raise TypingError(msg % (tp, self.type, self.var,
+                                             self.define_loc),
+                                      loc=loc)
         else:
             if self.type is not None:
                 unified = self.context.unify_pairs(self.type, tp)
                 if unified is None:
-                    raise TypingError("cannot unify %s and %s for '%s'"
-                                      % (self.type, tp, self.var))
+                    msg = "cannot unify %s and %s for '%s', defined at %s"
+                    raise TypingError(msg % (self.type, tp, self.var,
+                                             self.define_loc),
+                                      loc=loc)
             else:
+                # First time definition
                 unified = tp
+                self.define_loc = loc
+
             self.type = unified
 
         return self.type
 
-    def lock(self, tp):
+    def lock(self, tp, loc):
         assert isinstance(tp, types.Type), type(tp)
         assert not self.locked
 
@@ -59,14 +69,16 @@ class TypeVar(object):
         if (self.type is not None and
             self.context.can_convert(self.type, tp) is None):
             raise TypingError("No conversion from %s to %s for "
-                                "'%s'" % (tp, self.type, self.var))
+                              "'%s'" % (tp, self.type, self.var))
 
         self.type = tp
         self.locked = True
+        if self.define_loc is None:
+            self.define_loc = loc
 
-    def union(self, other):
+    def union(self, other, loc):
         if other.type is not None:
-            self.add_type(other.type)
+            self.add_type(other.type, loc=loc)
 
         return self.type
 
@@ -136,14 +148,15 @@ class Propagate(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        typevars = typeinfer.typevars
-        typeinfer.copy_type(self.src, self.dst)
-        # If `dst` is refined, notify us
-        typeinfer.refine_map[self.dst] = self
+        with new_error_context("typing of assignment at {0}", self.loc):
+            typeinfer.copy_type(self.src, self.dst, loc=self.loc)
+            # If `dst` is refined, notify us
+            typeinfer.refine_map[self.dst] = self
 
     def refine(self, typeinfer, target_type):
         # Do not back-propagate to locked variables (e.g. constants)
-        typeinfer.add_type(self.src, target_type, unless_locked=True)
+        typeinfer.add_type(self.src, target_type, unless_locked=True,
+                           loc=self.loc)
 
 
 class ArgConstraint(object):
@@ -154,14 +167,15 @@ class ArgConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        typevars = typeinfer.typevars
-        src = typevars[self.src]
-        if not src.defined:
-            return
-        ty = src.getone()
-        if isinstance(ty, types.Omitted):
-            ty = typeinfer.context.resolve_value_type(ty.value)
-        typeinfer.add_type(self.dst, ty)
+        with new_error_context("typing of argument at {0}", self.loc):
+            typevars = typeinfer.typevars
+            src = typevars[self.src]
+            if not src.defined:
+                return
+            ty = src.getone()
+            if isinstance(ty, types.Omitted):
+                ty = typeinfer.context.resolve_value_type(ty.value)
+            typeinfer.add_type(self.dst, ty, loc=self.loc)
 
 
 class BuildTupleConstraint(object):
@@ -171,16 +185,17 @@ class BuildTupleConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        typevars = typeinfer.typevars
-        tsets = [typevars[i.name].get() for i in self.items]
-        oset = typevars[self.target]
-        for vals in itertools.product(*tsets):
-            if vals and all(vals[0] == v for v in vals):
-                tup = types.UniTuple(dtype=vals[0], count=len(vals))
-            else:
-                # empty tuples fall here as well
-                tup = types.Tuple(vals)
-            typeinfer.add_type(self.target, tup)
+        with new_error_context("typing of tuple at {0}", self.loc):
+            typevars = typeinfer.typevars
+            tsets = [typevars[i.name].get() for i in self.items]
+            oset = typevars[self.target]
+            for vals in itertools.product(*tsets):
+                if vals and all(vals[0] == v for v in vals):
+                    tup = types.UniTuple(dtype=vals[0], count=len(vals))
+                else:
+                    # empty tuples fall here as well
+                    tup = types.Tuple(vals)
+                typeinfer.add_type(self.target, tup, loc=self.loc)
 
 
 class _BuildContainerConstraint(object):
@@ -191,18 +206,21 @@ class _BuildContainerConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        typevars = typeinfer.typevars
-        oset = typevars[self.target]
-        tsets = [typevars[i.name].get() for i in self.items]
-        if not tsets:
-            typeinfer.add_type(self.target,
-                               self.container_type(types.undefined))
-        else:
-            for typs in itertools.product(*tsets):
-                unified = typeinfer.context.unify_types(*typs)
-                if unified is not None:
-                    typeinfer.add_type(self.target,
-                                       self.container_type(unified))
+        with new_error_context("typing of list at {0}", self.loc):
+            typevars = typeinfer.typevars
+            oset = typevars[self.target]
+            tsets = [typevars[i.name].get() for i in self.items]
+            if not tsets:
+                typeinfer.add_type(self.target,
+                                   self.container_type(types.undefined),
+                                   loc=self.loc)
+            else:
+                for typs in itertools.product(*tsets):
+                    unified = typeinfer.context.unify_types(*typs)
+                    if unified is not None:
+                        typeinfer.add_type(self.target,
+                                           self.container_type(unified),
+                                           loc=self.loc)
 
 
 class BuildListConstraint(_BuildContainerConstraint):
@@ -213,6 +231,7 @@ class BuildSetConstraint(_BuildContainerConstraint):
     container_type = types.Set
 
 
+
 class ExhaustIterConstraint(object):
     def __init__(self, target, count, iterator, loc):
         self.target = target
@@ -221,20 +240,21 @@ class ExhaustIterConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        typevars = typeinfer.typevars
-        oset = typevars[self.target]
-        for tp in typevars[self.iterator.name].get():
-            if isinstance(tp, types.BaseTuple):
-                if len(tp) == self.count:
-                    typeinfer.add_type(self.target, tp)
-                else:
-                    raise ValueError("wrong tuple length for %r: "
-                                     "expected %d, got %d"
-                                     % (self.iterator.name, self.count, len(tp)))
-            elif isinstance(tp, types.IterableType):
-                tup = types.UniTuple(dtype=tp.iterator_type.yield_type,
-                                     count=self.count)
-                typeinfer.add_type(self.target, tup)
+        with new_error_context("typing of exhaust iter at {0}", self.loc):
+            typevars = typeinfer.typevars
+            oset = typevars[self.target]
+            for tp in typevars[self.iterator.name].get():
+                if isinstance(tp, types.BaseTuple):
+                    if len(tp) == self.count:
+                        typeinfer.add_type(self.target, tp, loc=self.loc)
+                    else:
+                        raise ValueError("wrong tuple length for %r: "
+                                         "expected %d, got %d"
+                                         % (self.iterator.name, self.count, len(tp)))
+                elif isinstance(tp, types.IterableType):
+                    tup = types.UniTuple(dtype=tp.iterator_type.yield_type,
+                                         count=self.count)
+                    typeinfer.add_type(self.target, tup, loc=self.loc)
 
 
 class PairFirstConstraint(object):
@@ -244,13 +264,14 @@ class PairFirstConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        typevars = typeinfer.typevars
-        oset = typevars[self.target]
-        for tp in typevars[self.pair.name].get():
-            if not isinstance(tp, types.Pair):
-                # XXX is this an error?
-                continue
-            typeinfer.add_type(self.target, tp.first_type)
+        with new_error_context("typing of pair-first at {0}", self.loc):
+            typevars = typeinfer.typevars
+            oset = typevars[self.target]
+            for tp in typevars[self.pair.name].get():
+                if not isinstance(tp, types.Pair):
+                    # XXX is this an error?
+                    continue
+                typeinfer.add_type(self.target, tp.first_type, loc=self.loc)
 
 
 class PairSecondConstraint(object):
@@ -260,13 +281,14 @@ class PairSecondConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        typevars = typeinfer.typevars
-        oset = typevars[self.target]
-        for tp in typevars[self.pair.name].get():
-            if not isinstance(tp, types.Pair):
-                # XXX is this an error?
-                continue
-            typeinfer.add_type(self.target, tp.second_type)
+        with new_error_context("typing of pair-second at {0}", self.loc):
+            typevars = typeinfer.typevars
+            oset = typevars[self.target]
+            for tp in typevars[self.pair.name].get():
+                if not isinstance(tp, types.Pair):
+                    # XXX is this an error?
+                    continue
+                typeinfer.add_type(self.target, tp.second_type, loc=self.loc)
 
 
 class StaticGetItemConstraint(object):
@@ -283,19 +305,49 @@ class StaticGetItemConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        typevars = typeinfer.typevars
-        oset = typevars[self.target]
-        for ty in typevars[self.value.name].get():
-            itemty = typeinfer.context.resolve_static_getitem(value=ty,
-                                                              index=self.index)
-            if itemty is not None:
-                typeinfer.add_type(self.target, itemty)
-            elif self.fallback is not None:
-                self.fallback(typeinfer)
+        with new_error_context("typing of static-get-item at {0}", self.loc):
+            typevars = typeinfer.typevars
+            oset = typevars[self.target]
+            for ty in typevars[self.value.name].get():
+                itemty = typeinfer.context.resolve_static_getitem(value=ty,
+                                                                  index=self.index)
+                if itemty is not None:
+                    typeinfer.add_type(self.target, itemty, loc=self.loc)
+                elif self.fallback is not None:
+                    self.fallback(typeinfer)
 
     def get_call_signature(self):
         # The signature is only needed for the fallback case in lowering
         return self.fallback and self.fallback.get_call_signature()
+
+
+def fold_arg_vars(typevars, args, vararg, kws):
+    """
+    Fold and resolve the argument variables of a function call.
+    """
+    # Fetch all argument types, bail if any is unknown
+    n_pos_args = len(args)
+    kwds = [kw for (kw, var) in kws]
+    argtypes = [typevars[a.name] for a in args]
+    argtypes += [typevars[var.name] for (kw, var) in kws]
+    if vararg is not None:
+        argtypes.append(typevars[vararg.name])
+
+    if not all(a.defined for a in argtypes):
+        return
+
+    args = tuple(a.getone() for a in argtypes)
+    pos_args = args[:n_pos_args]
+    if vararg is not None:
+        if not isinstance(args[-1], types.BaseTuple):
+            # Unsuitable for *args
+            # (Python is more lenient and accepts all iterables)
+            raise TypeError("*args in function call should be a tuple, got %s"
+                            % (args[-1],))
+        pos_args += args[-1].types
+        args = args[:-1]
+    kw_args = dict(zip(kwds, args[n_pos_args:]))
+    return pos_args, kw_args
 
 
 class CallConstraint(object):
@@ -313,46 +365,35 @@ class CallConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        typevars = typeinfer.typevars
-        fnty = typevars[self.func].getone()
-        self.resolve(typeinfer, typevars, fnty)
+        with new_error_context("typing of call at {0}", self.loc):
+            typevars = typeinfer.typevars
+            fnty = typevars[self.func].getone()
+            with new_error_context("resolving callee type: {0}", fnty):
+                self.resolve(typeinfer, typevars, fnty)
 
     def resolve(self, typeinfer, typevars, fnty):
         assert fnty
         context = typeinfer.context
 
-        # Fetch all argument types, bail if any is unknown
-        n_pos_args = len(self.args)
-        kwds = [kw for (kw, var) in self.kws]
-        argtypes = [typevars[a.name] for a in self.args]
-        argtypes += [typevars[var.name] for (kw, var) in self.kws]
-        if self.vararg is not None:
-            argtypes.append(typevars[self.vararg.name])
-
-        if not all(a.defined for a in argtypes):
+        r = fold_arg_vars(typevars, self.args, self.vararg, self.kws)
+        if r is None:
             # Cannot resolve call type until all argument types are known
             return
-
-        args = tuple(a.getone() for a in argtypes)
-        pos_args = args[:n_pos_args]
-        if self.vararg is not None:
-            if not isinstance(args[-1], types.BaseTuple):
-                # Unsuitable for *args
-                # (Python is more lenient and accepts all iterables)
-                return
-            pos_args += args[-1].types
-            args = args[:-1]
-        kw_args = dict(zip(kwds, args[n_pos_args:]))
+        pos_args, kw_args = r
 
         # Resolve call type
         sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
         if sig is None:
-            desc = context.explain_function_type(fnty)
+            # Arguments are invalid => explain why
             headtemp = "Invalid usage of {0} with parameters ({1})"
+            args = [str(a) for a in pos_args]
+            args += ["%s=%s" % (k, v) for k, v in sorted(kw_args.items())]
             head = headtemp.format(fnty, ', '.join(map(str, args)))
+            desc = context.explain_function_type(fnty)
             msg = '\n'.join([head, desc])
             raise TypingError(msg, loc=self.loc)
-        typeinfer.add_type(self.target, sig.return_type)
+
+        typeinfer.add_type(self.target, sig.return_type, loc=self.loc)
 
         # If the function is a bound function and its receiver type
         # was refined, propagate it.
@@ -385,7 +426,8 @@ class CallConstraint(object):
 
 class IntrinsicCallConstraint(CallConstraint):
     def __call__(self, typeinfer):
-        self.resolve(typeinfer, typeinfer.typevars, fnty=self.func)
+        with new_error_context("typing of intrinsic-call at {0}", self.loc):
+            self.resolve(typeinfer, typeinfer.typevars, fnty=self.func)
 
 
 class GetAttrConstraint(object):
@@ -397,20 +439,21 @@ class GetAttrConstraint(object):
         self.inst = inst
 
     def __call__(self, typeinfer):
-        typevars = typeinfer.typevars
-        valtys = typevars[self.value.name].get()
-        for ty in valtys:
-            attrty = typeinfer.context.resolve_getattr(ty, self.attr)
-            if attrty is None:
-                raise UntypedAttributeError(ty, self.attr, loc=self.inst.loc)
-            else:
-                typeinfer.add_type(self.target, attrty)
-        typeinfer.refine_map[self.target] = self
+        with new_error_context("typing of get attribute at {0}", self.loc):
+            typevars = typeinfer.typevars
+            valtys = typevars[self.value.name].get()
+            for ty in valtys:
+                attrty = typeinfer.context.resolve_getattr(ty, self.attr)
+                if attrty is None:
+                    raise UntypedAttributeError(ty, self.attr, loc=self.inst.loc)
+                else:
+                    typeinfer.add_type(self.target, attrty, loc=self.loc)
+            typeinfer.refine_map[self.target] = self
 
     def refine(self, typeinfer, target_type):
         if isinstance(target_type, types.BoundFunction):
             recvr = target_type.this
-            typeinfer.add_type(self.value.name, recvr)
+            typeinfer.add_type(self.value.name, recvr, loc=self.loc)
             source_constraint = typeinfer.refine_map.get(self.value.name)
             if source_constraint is not None:
                 source_constraint.refine(typeinfer, recvr)
@@ -428,19 +471,20 @@ class SetItemConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        typevars = typeinfer.typevars
-        if not all(typevars[var.name].defined
-                   for var in (self.target, self.index, self.value)):
-            return
-        targetty = typevars[self.target.name].getone()
-        idxty = typevars[self.index.name].getone()
-        valty = typevars[self.value.name].getone()
+        with new_error_context("typing of setitem at {0}", self.loc):
+            typevars = typeinfer.typevars
+            if not all(typevars[var.name].defined
+                       for var in (self.target, self.index, self.value)):
+                return
+            targetty = typevars[self.target.name].getone()
+            idxty = typevars[self.index.name].getone()
+            valty = typevars[self.value.name].getone()
 
-        sig = typeinfer.context.resolve_setitem(targetty, idxty, valty)
-        if sig is None:
-            raise TypingError("Cannot resolve setitem: %s[%s] = %s" %
-                              (targetty, idxty, valty), loc=self.loc)
-        self.signature = sig
+            sig = typeinfer.context.resolve_setitem(targetty, idxty, valty)
+            if sig is None:
+                raise TypingError("Cannot resolve setitem: %s[%s] = %s" %
+                                  (targetty, idxty, valty), loc=self.loc)
+            self.signature = sig
 
     def get_call_signature(self):
         return self.signature
@@ -455,21 +499,22 @@ class StaticSetItemConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        typevars = typeinfer.typevars
-        if not all(typevars[var.name].defined
-                   for var in (self.target, self.index_var, self.value)):
-            return
-        targetty = typevars[self.target.name].getone()
-        idxty = typevars[self.index_var.name].getone()
-        valty = typevars[self.value.name].getone()
+        with new_error_context("typing of staticsetitem at {0}", self.loc):
+            typevars = typeinfer.typevars
+            if not all(typevars[var.name].defined
+                       for var in (self.target, self.index_var, self.value)):
+                return
+            targetty = typevars[self.target.name].getone()
+            idxty = typevars[self.index_var.name].getone()
+            valty = typevars[self.value.name].getone()
 
-        sig = typeinfer.context.resolve_static_setitem(targetty, self.index, valty)
-        if sig is None:
-            sig = typeinfer.context.resolve_setitem(targetty, idxty, valty)
-        if sig is None:
-            raise TypingError("Cannot resolve setitem: %s[%r] = %s" %
-                              (targetty, self.index, valty), loc=self.loc)
-        self.signature = sig
+            sig = typeinfer.context.resolve_static_setitem(targetty, self.index, valty)
+            if sig is None:
+                sig = typeinfer.context.resolve_setitem(targetty, idxty, valty)
+            if sig is None:
+                raise TypingError("Cannot resolve setitem: %s[%r] = %s" %
+                                  (targetty, self.index, valty), loc=self.loc)
+            self.signature = sig
 
     def get_call_signature(self):
         return self.signature
@@ -482,18 +527,19 @@ class DelItemConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        typevars = typeinfer.typevars
-        if not all(typevars[var.name].defined
-                   for var in (self.target, self.index)):
-            return
-        targetty = typevars[self.target.name].getone()
-        idxty = typevars[self.index.name].getone()
+        with new_error_context("typing of delitem at {0}", self.loc):
+            typevars = typeinfer.typevars
+            if not all(typevars[var.name].defined
+                       for var in (self.target, self.index)):
+                return
+            targetty = typevars[self.target.name].getone()
+            idxty = typevars[self.index.name].getone()
 
-        sig = typeinfer.context.resolve_delitem(targetty, idxty)
-        if sig is None:
-            raise TypingError("Cannot resolve delitem: %s[%s]" %
-                              (targetty, idxty), loc=self.loc)
-        self.signature = sig
+            sig = typeinfer.context.resolve_delitem(targetty, idxty)
+            if sig is None:
+                raise TypingError("Cannot resolve delitem: %s[%s]" %
+                                  (targetty, idxty), loc=self.loc)
+            self.signature = sig
 
     def get_call_signature(self):
         return self.signature
@@ -507,17 +553,44 @@ class SetAttrConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        typevars = typeinfer.typevars
-        if not all(typevars[var.name].defined
-                   for var in (self.target, self.value)):
-            return
-        targetty = typevars[self.target.name].getone()
-        valty = typevars[self.value.name].getone()
+        with new_error_context("typing of set attribute {0!r} at {1}",
+                               self.attr, self.loc):
+            typevars = typeinfer.typevars
+            if not all(typevars[var.name].defined
+                       for var in (self.target, self.value)):
+                return
+            targetty = typevars[self.target.name].getone()
+            valty = typevars[self.value.name].getone()
+            sig = typeinfer.context.resolve_setattr(targetty, self.attr,
+                                                    valty)
+            if sig is None:
+                raise TypingError("Cannot resolve setattr: (%s).%s = %s" %
+                                  (targetty, self.attr, valty),
+                                  loc=self.loc)
+            self.signature = sig
 
-        sig = typeinfer.context.resolve_setattr(targetty, self.attr, valty)
-        if sig is None:
-            raise TypingError("Cannot resolve setattr: (%s).%s = %s" %
-                              (targetty, self.attr, valty), loc=self.loc)
+    def get_call_signature(self):
+        return self.signature
+
+
+class PrintConstraint(object):
+    def __init__(self, args, vararg, loc):
+        self.args = args
+        self.vararg = vararg
+        self.loc = loc
+
+    def __call__(self, typeinfer):
+        typevars = typeinfer.typevars
+
+        r = fold_arg_vars(typevars, self.args, self.vararg, {})
+        if r is None:
+            # Cannot resolve call type until all argument types are known
+            return
+        pos_args, kw_args = r
+
+        fnty = typeinfer.context.resolve_value_type(print)
+        assert fnty is not None
+        sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
         self.signature = sig
 
     def get_call_signature(self):
@@ -614,13 +687,13 @@ class TypeInferer(object):
     def seed_type(self, name, typ):
         """All arguments should be seeded.
         """
-        self.lock_type(name, typ)
+        self.lock_type(name, typ, loc=None)
 
     def seed_return(self, typ):
         """Seeding of return value is optional.
         """
         for var in self._get_return_vars():
-            self.lock_type(var.name, typ)
+            self.lock_type(var.name, typ, loc=None)
 
     def build_constraint(self):
         for blk in utils.itervalues(self.blocks):
@@ -643,25 +716,25 @@ class TypeInferer(object):
         if errors:
             raise errors[0]
 
-    def add_type(self, var, tp, unless_locked=False):
+    def add_type(self, var, tp, loc, unless_locked=False):
         assert isinstance(var, str), type(var)
         tv = self.typevars[var]
         if unless_locked and tv.locked:
             return
         oldty = tv.type
-        unified = tv.add_type(tp)
+        unified = tv.add_type(tp, loc=loc)
         if unified != oldty:
             self.propagate_refined_type(var, unified)
 
     def add_calltype(self, inst, signature):
         self.calltypes[inst] = signature
 
-    def copy_type(self, src_var, dest_var):
-        unified = self.typevars[dest_var].union(self.typevars[src_var])
+    def copy_type(self, src_var, dest_var, loc):
+        unified = self.typevars[dest_var].union(self.typevars[src_var], loc=loc)
 
-    def lock_type(self, var, tp):
+    def lock_type(self, var, tp, loc):
         tv = self.typevars[var]
-        tv.lock(tp)
+        tv.lock(tp, loc=loc)
 
     def propagate_refined_type(self, updated_var, updated_type):
         source_constraint = self.refine_map.get(updated_var)
@@ -763,6 +836,8 @@ class TypeInferer(object):
             self.typeof_delitem(inst)
         elif isinstance(inst, ir.SetAttr):
             self.typeof_setattr(inst)
+        elif isinstance(inst, ir.Print):
+            self.typeof_print(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
             pass
         elif isinstance(inst, ir.StaticRaise):
@@ -793,6 +868,12 @@ class TypeInferer(object):
     def typeof_setattr(self, inst):
         constraint = SetAttrConstraint(target=inst.target, attr=inst.attr,
                                        value=inst.value, loc=inst.loc)
+        self.constraints.append(constraint)
+        self.calls.append((inst, constraint))
+
+    def typeof_print(self, inst):
+        constraint = PrintConstraint(args=inst.args, vararg=inst.vararg,
+                                     loc=inst.loc)
         self.constraints.append(constraint)
         self.calls.append((inst, constraint))
 
@@ -838,11 +919,12 @@ class TypeInferer(object):
                                               loc=inst.loc))
 
     def typeof_const(self, inst, target, const):
-        self.lock_type(target.name, self.resolve_value_type(inst, const))
+        self.lock_type(target.name, self.resolve_value_type(inst, const),
+                       loc=inst.loc)
 
     def typeof_yield(self, inst, target, yield_):
         # Sending values into generators isn't supported.
-        self.add_type(target.name, types.none)
+        self.add_type(target.name, types.none, loc=inst.loc)
 
     def sentry_modified_builtin(self, inst, gvar):
         """
@@ -925,14 +1007,14 @@ class TypeInferer(object):
             typ = typ.copy(layout='C', readonly=True)
 
         self.sentry_modified_builtin(inst, gvar)
-        self.lock_type(target.name, typ)
+        self.lock_type(target.name, typ, loc=inst.loc)
         self.assumed_immutables.add(inst)
 
     def typeof_expr(self, inst, target, expr):
         if expr.op == 'call':
             if isinstance(expr.func, ir.Intrinsic):
                 sig = expr.func.type
-                self.add_type(target.name, sig.return_type)
+                self.add_type(target.name, sig.return_type, loc=inst.loc)
                 self.add_calltype(expr, sig)
             else:
                 self.typeof_call(inst, target, expr)

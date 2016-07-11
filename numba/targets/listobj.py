@@ -21,7 +21,7 @@ def get_list_payload(context, builder, list_type, value):
     reference, so that mutations are seen by all).
     """
     payload_type = types.ListPayload(list_type)
-    payload = context.nrt_meminfo_data(builder, value.meminfo)
+    payload = context.nrt.meminfo_data(builder, value.meminfo)
     ptrty = context.get_data_type(payload_type).as_pointer()
     payload = builder.bitcast(payload, ptrty)
     return context.make_data_helper(builder, payload_type, ref=payload)
@@ -200,7 +200,7 @@ class ListInstance(_ListPayloadMixin):
             builder.store(cgutils.false_bit, ok)
 
         with builder.if_then(builder.load(ok), likely=True):
-            meminfo = context.nrt_meminfo_new_varsize(builder, size=allocsize)
+            meminfo = context.nrt.meminfo_new_varsize(builder, size=allocsize)
             with builder.if_else(cgutils.is_null(builder, meminfo),
                                  likely=False) as (if_error, if_ok):
                 with if_error:
@@ -238,7 +238,7 @@ class ListInstance(_ListPayloadMixin):
         self = cls(context, builder, list_type, None)
         self._list.meminfo = meminfo
         self._list.parent = context.get_constant_null(types.pyobject)
-        context.nrt_incref(builder, list_type, self.value)
+        context.nrt.incref(builder, list_type, self.value)
         # Payload is part of the meminfo, no need to touch it
         return self
 
@@ -260,7 +260,7 @@ class ListInstance(_ListPayloadMixin):
                 context.call_conv.return_user_exc(builder, MemoryError,
                                                   ("cannot resize list",))
 
-            ptr = context.nrt_meminfo_varsize_realloc(builder, self._list.meminfo,
+            ptr = context.nrt.meminfo_varsize_realloc(builder, self._list.meminfo,
                                                       size=allocsize)
             cgutils.guard_memory_error(context, builder, ptr,
                                        "cannot resize list")
