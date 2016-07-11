@@ -901,13 +901,9 @@ class TypeInferer(object):
         represented by literals.
         """
         try:
-            ty = self.context.resolve_value_type(val)
+            return self.context.resolve_value_type(val)
         except ValueError as e:
             msg = str(e)
-        else:
-            if ty is not None:
-                return ty
-            msg = "Unsupported Python value %r" % (val,)
         raise TypingError(msg, loc=inst.loc)
 
     def typeof_arg(self, inst, target, arg):
