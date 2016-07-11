@@ -1084,6 +1084,11 @@ class TestLinalgSystems(TestLinalgBase):
         msg = "Incompatible array sizes, system is not dimensionally valid."
         self.assert_error(cfunc, args, msg, np.linalg.LinAlgError)
 
+    # check that args with differing dtypes raise
+    def assert_homogeneous_dtypes(self, name, cfunc, args):
+        msg = "np.linalg.%s() only supports inputs that have homogeneous dtypes." % name
+        self.assert_error(cfunc, args, msg, errors.TypingError)
+
 
 class TestLinalgLstsq(TestLinalgSystems):
     """
@@ -1237,15 +1242,14 @@ class TestLinalgLstsq(TestLinalgSystems):
         # test loop
         for a_size in sizes:
 
-            # order and dtype
-            a_dtype = next(cycle_dt)
+            dt = next(cycle_dt)
             a_order = next(cycle_order)
 
             # A full rank, well conditioned system
-            A = self.specific_sample_matrix(a_size, a_dtype, a_order)
+            A = self.specific_sample_matrix(a_size, dt, a_order)
 
             # run the test loop
-            inner_test_loop_fn(A, a_dtype)
+            inner_test_loop_fn(A, dt)
 
             m, n = a_size
             minmn = min(m, n)
@@ -1255,27 +1259,22 @@ class TestLinalgLstsq(TestLinalgSystems):
 
                 # Test a rank deficient system
                 r = minmn - 1
-                # order and dtype
-                a_dtype = next(cycle_dt)
-                a_order = next(cycle_order)
                 A = self.specific_sample_matrix(
-                    a_size, a_dtype, a_order, rank=r)
+                    a_size, dt, a_order, rank=r)
                 # run the test loop
-                inner_test_loop_fn(A, a_dtype)
+                inner_test_loop_fn(A, dt)
 
                 # Test a system with a given condition number for use in
                 # testing the rcond parameter.
                 # This works because the singular values in the
                 # specific_sample_matrix code are linspace (1, cond, [0... if
                 # rank deficient])
-                a_dtype = next(cycle_dt)
-                a_order = next(cycle_order)
                 A = self.specific_sample_matrix(
-                    a_size, a_dtype, a_order, condition=specific_cond)
+                    a_size, dt, a_order, condition=specific_cond)
                 # run the test loop
                 rcond = 1. / specific_cond
                 approx_half_rank_rcond = minmn * rcond
-                inner_test_loop_fn(A, a_dtype,
+                inner_test_loop_fn(A, dt,
                                    rcond=approx_half_rank_rcond)
 
         # Test input validation
@@ -1291,6 +1290,11 @@ class TestLinalgLstsq(TestLinalgSystems):
         bad = np.array([[1, 2], [3, 4]], dtype=np.int32)
         self.assert_wrong_dtype(rn, cfunc, (ok, bad))
         self.assert_wrong_dtype(rn, cfunc, (bad, ok))
+
+        # different dtypes
+        bad = np.array([[1, 2], [3, 4]], dtype=np.float32)
+        self.assert_homogeneous_dtypes(rn, cfunc, (ok, bad))
+        self.assert_homogeneous_dtypes(rn, cfunc, (bad, ok))
 
         # Dimension issue
         bad = np.array([1, 2], dtype=np.float64)
@@ -1373,11 +1377,6 @@ class TestLinalgSolve(TestLinalgSystems):
         # test: prime size squares
         sizes = [(1, 1), (3, 3), (7, 7)]
 
-        # There are a lot of combinations to test across all the different
-        # dtypes, especially when type promotion comes into play, to
-        # reduce the effort the dtype of "b" is cycled.
-        cycle_dt = cycle(self.dtypes)
-
         # test loop
         for size, dtype, order in \
                 product(sizes, self.dtypes, 'FC'):
@@ -1386,12 +1385,9 @@ class TestLinalgSolve(TestLinalgSystems):
             b_sizes = (1, 13)
 
             for b_size, b_order in product(b_sizes, 'FC'):
-                # dtype for b
-                dt = next(cycle_dt)
-
                 # check 2D B
                 B = self.specific_sample_matrix(
-                    (A.shape[0], b_size), dt, b_order)
+                    (A.shape[0], b_size), dtype, b_order)
                 check(A, B)
 
                 # check 1D B
@@ -1411,6 +1407,11 @@ class TestLinalgSolve(TestLinalgSystems):
         bad = np.array([[1, 0], [0, 1]], dtype=np.int32)
         self.assert_wrong_dtype(rn, cfunc, (ok, bad))
         self.assert_wrong_dtype(rn, cfunc, (bad, ok))
+
+        # different dtypes
+        bad = np.array([[1, 2], [3, 4]], dtype=np.float32)
+        self.assert_homogeneous_dtypes(rn, cfunc, (ok, bad))
+        self.assert_homogeneous_dtypes(rn, cfunc, (bad, ok))
 
         # Dimension issue
         bad = np.array([1, 0], dtype=np.float64)

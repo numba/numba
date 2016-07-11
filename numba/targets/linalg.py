@@ -527,6 +527,14 @@ def _check_linalg_matrix(a, func_name):
                           "float and complex arrays." % func_name)
 
 
+def _check_homogeneous_types(func_name, *types):
+    t0 = types[0].dtype
+    for t in types[1:]:
+        if t.dtype != t0:
+            msg = "np.linalg.%s() only supports inputs that have homogeneous dtypes." % func_name
+            raise TypingError(msg)
+
+
 @jit(nopython=True)
 def _inv_err_handler(r):
     if r != 0:
@@ -1138,20 +1146,14 @@ def lstsq_impl(a, b, rcond=-1.0):
     a_F_layout = a.layout == 'F'
     b_F_layout = b.layout == 'F'
 
-    # the typing context is not easily accessible in `@overload` mode
-    # so type unification etc. is done manually below
-    a_np_dt = np_support.as_dtype(a.dtype)
-    b_np_dt = np_support.as_dtype(b.dtype)
+    _check_homogeneous_types("lstsq", a, b)
 
-    np_shared_dt = np.promote_types(a_np_dt, b_np_dt)
-    nb_shared_dt = np_support.from_dtype(np_shared_dt)
+    np_dt = np_support.as_dtype(a.dtype)
+    nb_dt = a.dtype
 
     # convert typing floats to np floats for use in the impl
-    r_type = getattr(nb_shared_dt, "underlying_float", nb_shared_dt)
-    if r_type.bitwidth == 32:
-        real_dtype = np.float32
-    else:
-        real_dtype = np.float64
+    r_type = getattr(nb_dt, "underlying_float", nb_dt)
+    real_dtype = np_support.as_dtype(r_type)
 
     # the lapack wrapper signature
     numba_ez_gelsd_sig = types.intc(
@@ -1159,9 +1161,9 @@ def lstsq_impl(a, b, rcond=-1.0):
         types.intp,  # m
         types.intp,  # n
         types.intp,  # nrhs
-        types.CPointer(nb_shared_dt),  # a
+        types.CPointer(nb_dt),  # a
         types.intp,  # lda
-        types.CPointer(nb_shared_dt),  # b
+        types.CPointer(nb_dt),  # b
         types.intp,  # ldb
         types.CPointer(r_type),  # S
         types.float64,  # rcond
@@ -1172,7 +1174,7 @@ def lstsq_impl(a, b, rcond=-1.0):
     numba_ez_gelsd = types.ExternalFunction("numba_ez_gelsd",
                                             numba_ez_gelsd_sig)
 
-    kind = ord(get_blas_kind(nb_shared_dt, "lstsq"))
+    kind = ord(get_blas_kind(nb_dt, "lstsq"))
 
     # The following functions select specialisations based on
     # information around 'b', a lot of this effort is required
@@ -1184,7 +1186,7 @@ def lstsq_impl(a, b, rcond=-1.0):
     b_nrhs = _get_system_compute_nrhs(b)
 
     # get a specialised residual computation based on the dtype
-    compute_res = _get_lstsq_res_impl(nb_shared_dt, real_dtype, b)
+    compute_res = _get_lstsq_res_impl(nb_dt, real_dtype, b)
 
     # b copy function
     b_copy_in = _get_system_copy_in_b_impl(b)
@@ -1212,14 +1214,13 @@ def lstsq_impl(a, b, rcond=-1.0):
         maxmn = max(m, n)
 
         # a is destroyed on exit, copy it
-        acpy = a.astype(np_shared_dt)
         if a_F_layout:
-            acpy = np.copy(acpy)
+            acpy = np.copy(a)
         else:
-            acpy = np.asfortranarray(acpy)
+            acpy = np.asfortranarray(a)
 
         # b is overwritten on exit with the solution, copy allocate
-        bcpy = np.empty((nrhs, maxmn), dtype=np_shared_dt).T
+        bcpy = np.empty((nrhs, maxmn), dtype=np_dt).T
         # specialised copy in due to b being 1 or 2D
         b_copy_in(bcpy, b, nrhs)
 
@@ -1295,30 +1296,27 @@ def solve_impl(a, b):
     a_F_layout = a.layout == 'F'
     b_F_layout = b.layout == 'F'
 
-    # the typing context is not easily accessible in `@overload` mode
-    # so type unification etc. is done manually below
-    a_np_dt = np_support.as_dtype(a.dtype)
-    b_np_dt = np_support.as_dtype(b.dtype)
+    _check_homogeneous_types("solve", a, b)
 
-    np_shared_dt = np.promote_types(a_np_dt, b_np_dt)
-    nb_shared_dt = np_support.from_dtype(np_shared_dt)
+    np_dt = np_support.as_dtype(a.dtype)
+    nb_dt = a.dtype
 
     # the lapack wrapper signature
     numba_xgesv_sig = types.intc(
         types.char,  # kind
         types.intp,  # n
         types.intp,  # nhrs
-        types.CPointer(nb_shared_dt),  # a
+        types.CPointer(nb_dt),  # a
         types.intp,  # lda
         types.CPointer(F_INT_nbtype),  # ipiv
-        types.CPointer(nb_shared_dt),  # b
+        types.CPointer(nb_dt),  # b
         types.intp  # ldb
     )
 
     # the lapack wrapper function
     numba_xgesv = types.ExternalFunction("numba_xgesv", numba_xgesv_sig)
 
-    kind = ord(get_blas_kind(nb_shared_dt, "solve"))
+    kind = ord(get_blas_kind(nb_dt, "solve"))
 
     # get a specialisation for computing the number of RHS
     b_nrhs = _get_system_compute_nrhs(b)
@@ -1345,14 +1343,13 @@ def solve_impl(a, b):
         check_dimensionally_valid(a, b)
 
         # a is destroyed on exit, copy it
-        acpy = a.astype(np_shared_dt)
         if a_F_layout:
-            acpy = np.copy(acpy)
+            acpy = np.copy(a)
         else:
-            acpy = np.asfortranarray(acpy)
+            acpy = np.asfortranarray(a)
 
         # b is overwritten on exit with the solution, copy allocate
-        bcpy = np.empty((nrhs, n), dtype=np_shared_dt).T
+        bcpy = np.empty((nrhs, n), dtype=np_dt).T
         # specialised copy in due to b being 1 or 2D
         b_copy_in(bcpy, b, nrhs)
 
