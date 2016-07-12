@@ -166,7 +166,7 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
     elif tyinp in types.number_domain | set([types.boolean]):
         return _ScalarHelper(ctxt, bld, inp, tyinp)
     else:
-        raise TypeError('unknown type for {0}: {1}'.format(where, str(tyinp)))
+        raise NotImplementedError('unsupported type for {0}: {1}'.format(where, str(tyinp)))
 
 
 _broadcast_onto_sig = types.intp(types.intp, types.CPointer(types.intp),
@@ -313,7 +313,7 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
         arguments.append(output)
     elif context.enable_nrt:
         # Incref the output
-        context.nrt_incref(builder, sig.return_type, args[-1])
+        context.nrt.incref(builder, sig.return_type, args[-1])
 
     inputs = arguments[0:-1]
     output = arguments[-1]

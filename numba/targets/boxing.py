@@ -201,31 +201,20 @@ def box_charseq(typ, val, c):
     rawptr = cgutils.alloca_once_value(c.builder, value=val)
     strptr = c.builder.bitcast(rawptr, c.pyapi.cstring)
     fullsize = c.context.get_constant(types.intp, typ.count)
-    zero = c.context.get_constant(types.intp, 0)
+    zero = fullsize.type(0)
+    one = fullsize.type(1)
     count = cgutils.alloca_once_value(c.builder, zero)
 
-    bbend = c.builder.append_basic_block("end.string.count")
-
-    # Find the length of the string
+    # Find the length of the string, mimicking Numpy's behaviour:
+    # search for the last non-null byte in the underlying storage
+    # (e.g. b'A\0\0B\0\0\0' will return the logical string b'A\0\0B')
     with cgutils.loop_nest(c.builder, [fullsize], fullsize.type) as [idx]:
         # Get char at idx
         ch = c.builder.load(c.builder.gep(strptr, [idx]))
-        # Store the current index as count
-        c.builder.store(idx, count)
-        # Check if the char is a null-byte
-        ch_is_null = cgutils.is_null(c.builder, ch)
-        # If the char is a null-byte
-        with c.builder.if_then(ch_is_null):
-            # Jump to the end
-            c.builder.branch(bbend)
+        # If the char is a non-null-byte, store the next index as count
+        with c.builder.if_then(cgutils.is_not_null(c.builder, ch)):
+            c.builder.store(c.builder.add(idx, one), count)
 
-    # This is reached if there is no null-byte in the string
-    # Then, set count to the fullsize
-    c.builder.store(fullsize, count)
-    # Jump to the end
-    c.builder.branch(bbend)
-
-    c.builder.position_at_end(bbend)
     strlen = c.builder.load(count)
     return c.pyapi.bytes_from_string_and_size(strptr, strlen)
 
@@ -338,12 +327,14 @@ def box_smart_array(typ, value, c):
     with c.builder.if_else(cgutils.is_not_null(c.builder, obj)) as (has_parent, otherwise):
         with has_parent:
             c.pyapi.incref(obj)
-            retn = c.pyapi.call_method(obj, "host_changed")
+            host = c.pyapi.string_from_constant_string('host')
+            retn = c.pyapi.call_method(obj, 'mark_changed', [host])
             with c.builder.if_else(cgutils.is_not_null(c.builder, retn)) as (success, failure):
                 with success:
                     c.pyapi.decref(retn)
                 with failure:
-                    c.pyapi.raise_object()
+                    c.builder.store(c.pyapi.get_null_object(), res)
+            c.pyapi.decref(host)
         with otherwise:
             # box into a new array:
             classobj = c.pyapi.unserialize(c.pyapi.serialize_object(typ.pyclass))
@@ -410,7 +401,8 @@ def unbox_array(typ, obj, c):
 @unbox(types.SmartArrayType)
 def unbox_smart_array(typ, obj, c):
     a = c.context.make_helper(c.builder, typ)
-    arr = c.pyapi.call_method(obj, "host")
+    host = c.pyapi.string_from_constant_string('host')
+    arr = c.pyapi.call_method(obj, 'get', [host])
     with c.builder.if_else(cgutils.is_not_null(c.builder, arr)) as (success, failure):
         with success:
             a.data = c.unbox(typ.as_array, arr).value
@@ -419,6 +411,7 @@ def unbox_smart_array(typ, obj, c):
         with failure:
             c.pyapi.raise_object()
 
+    c.pyapi.decref(host)
     return NativeValue(a._getvalue())
 
 
@@ -426,12 +419,15 @@ def unbox_smart_array(typ, obj, c):
 def reflect_smart_array(typ, value, c):
     a = c.context.make_helper(c.builder, typ, value)
     arr = a.parent
-    retn = c.pyapi.call_method(arr, "host_changed")
+    host = c.pyapi.string_from_constant_string('host')
+    retn = c.pyapi.call_method(arr, 'mark_changed', [host])
     with c.builder.if_else(cgutils.is_not_null(c.builder, retn)) as (success, failure):
         with success:
             c.pyapi.decref(retn)
         with failure:
             c.pyapi.raise_object()
+
+    c.pyapi.decref(host)
 
 @box(types.Tuple)
 @box(types.UniTuple)
@@ -541,7 +537,7 @@ def box_list(typ, val, c):
             c.builder.store(obj, res)
 
     # Steal NRT ref
-    c.context.nrt_decref(c.builder, typ, val)
+    c.context.nrt.decref(c.builder, typ, val)
     return c.builder.load(res)
 
 
@@ -593,7 +589,7 @@ def _python_list_to_native(typ, obj, c, size, listptr, errorptr):
 
     # If an error occurred, drop the whole native list
     with c.builder.if_then(c.builder.load(errorptr)):
-        c.context.nrt_decref(c.builder, typ, list.value)
+        c.context.nrt.decref(c.builder, typ, list.value)
 
 
 @unbox(types.List)
@@ -736,7 +732,7 @@ def _python_set_to_native(typ, obj, c, size, setptr, errorptr):
 
     # If an error occurred, drop the whole native set
     with c.builder.if_then(c.builder.load(errorptr)):
-        c.context.nrt_decref(c.builder, typ, inst.value)
+        c.context.nrt.decref(c.builder, typ, inst.value)
 
 
 @unbox(types.Set)
@@ -824,7 +820,7 @@ def box_set(typ, val, c):
                 c.builder.store(obj, res)
 
     # Steal NRT ref
-    c.context.nrt_decref(c.builder, typ, val)
+    c.context.nrt.decref(c.builder, typ, val)
     return c.builder.load(res)
 
 @reflect(types.Set)

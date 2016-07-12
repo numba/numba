@@ -22,7 +22,7 @@ def add_nopython(a, b):
 
 @jit(nopython=True)
 def add_nopython_fail(a, b):
-    print(a.__class__)
+    object()
     return a + b
 
 def closure(a):

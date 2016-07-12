@@ -46,6 +46,7 @@ def typeof_impl(val, c):
         if cffi_utils.is_ffi_instance(val):
             return types.ffi
 
+    # XXX should raise ValueError instead?
     return getattr(val, "_numba_type_", None)
 
 
@@ -178,13 +179,13 @@ def _typeof_ndarray(val, c):
     try:
         dtype = numpy_support.from_dtype(val.dtype)
     except NotImplementedError:
-        return
+        raise ValueError("Unsupported array dtype: %s" % (val.dtype,))
     layout = numpy_support.map_layout(val)
     readonly = not val.flags.writeable
     return types.Array(dtype, val.ndim, layout, readonly=readonly)
 
 @typeof_impl.register(smartarray.SmartArray)
 def typeof_array(val, c):
-    arrty = typeof_impl(val.host(), c)
+    arrty = typeof_impl(val.get('host'), c)
     return types.SmartArrayType(arrty.dtype, arrty.ndim, arrty.layout, type(val))
 

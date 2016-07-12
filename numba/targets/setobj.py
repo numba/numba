@@ -366,7 +366,7 @@ class SetInstance(object):
         context = self._context
         builder = self._builder
 
-        ptr = self._context.nrt_meminfo_data(builder, self.meminfo)
+        ptr = self._context.nrt.meminfo_data(builder, self.meminfo)
         return _SetPayload(context, builder, self._ty, ptr)
 
     @property
@@ -737,7 +737,7 @@ class SetInstance(object):
         self = cls(context, builder, set_type, None)
         self._set.meminfo = meminfo
         self._set.parent = context.get_constant_null(types.pyobject)
-        context.nrt_incref(builder, set_type, self.value)
+        context.nrt.incref(builder, set_type, self.value)
         # Payload is part of the meminfo, no need to touch it
         return self
 
@@ -954,11 +954,11 @@ class SetInstance(object):
         with builder.if_then(builder.load(ok), likely=True):
             if realloc:
                 meminfo = self._set.meminfo
-                ptr = context.nrt_meminfo_varsize_alloc(builder, meminfo,
+                ptr = context.nrt.meminfo_varsize_alloc(builder, meminfo,
                                                         size=allocsize)
                 alloc_ok = cgutils.is_null(builder, ptr)
             else:
-                meminfo = context.nrt_meminfo_new_varsize(builder, size=allocsize)
+                meminfo = context.nrt.meminfo_new_varsize(builder, size=allocsize)
                 alloc_ok = cgutils.is_null(builder, meminfo)
 
             with builder.if_else(cgutils.is_null(builder, meminfo),
@@ -989,7 +989,7 @@ class SetInstance(object):
         """
         Free an allocated old payload at *ptr*.
         """
-        self._context.nrt_meminfo_varsize_free(self._builder, self.meminfo, ptr)
+        self._context.nrt.meminfo_varsize_free(self._builder, self.meminfo, ptr)
 
     def _copy_payload(self, src_payload):
         """
@@ -1021,7 +1021,7 @@ class SetInstance(object):
                                             nentries))
 
         with builder.if_then(builder.load(ok), likely=True):
-            meminfo = context.nrt_meminfo_new_varsize(builder, size=allocsize)
+            meminfo = context.nrt.meminfo_new_varsize(builder, size=allocsize)
             alloc_ok = cgutils.is_null(builder, meminfo)
 
             with builder.if_else(cgutils.is_null(builder, meminfo),
@@ -1054,7 +1054,7 @@ class SetIterInstance(object):
         self._builder = builder
         self._ty = iter_type
         self._iter = context.make_helper(builder, iter_type, iter_val)
-        ptr = self._context.nrt_meminfo_data(builder, self.meminfo)
+        ptr = self._context.nrt.meminfo_data(builder, self.meminfo)
         self._payload = _SetPayload(context, builder, self._ty.container, ptr)
 
     @classmethod

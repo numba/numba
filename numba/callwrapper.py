@@ -48,7 +48,7 @@ class _ArgManager(object):
             # (happens after the native value cleanup as the latter
             #  may need the native value)
             if self.context.enable_nrt:
-                self.context.nrt_decref(self.builder, ty, native.value)
+                self.context.nrt.decref(self.builder, ty, native.value)
 
         self.cleanups.append(cleanup_arg)
 

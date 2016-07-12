@@ -456,7 +456,6 @@ class Pipeline(object):
         """
         with self.fallback_context('Function "%s" failed type inference'
                                    % (self.func_attr.name,)):
-            legalize_given_types(self.args, self.return_type)
             # Type inference
             self.typemap, self.return_type, self.calltypes = type_inference_stage(
                 self.typingctx,
@@ -713,23 +712,6 @@ def compile_internal(typingctx, targetctx, library,
     pipeline = Pipeline(typingctx, targetctx, library,
                         args, return_type, flags, locals)
     return pipeline.compile_extra(func)
-
-
-def _is_nopython_types(t):
-    return not isinstance(t, types.Dummy) or isinstance(t, types.Opaque)
-
-
-def legalize_given_types(args, return_type):
-    # Filter argument types
-    for i, a in enumerate(args):
-        if not _is_nopython_types(a):
-            raise TypeError("Arg %d of %s is not legal in nopython "
-                            "mode" % (i, a))
-    # Filter return type
-    if (return_type and return_type != types.none and
-            not _is_nopython_types(return_type)):
-        raise TypeError('Return type of %s is not legal in nopython '
-                        'mode' % (return_type,))
 
 
 def legalize_return_type(return_type, interp, targetctx):

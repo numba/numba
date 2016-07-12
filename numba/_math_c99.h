@@ -49,7 +49,6 @@ VISIBILITY_HIDDEN float m_truncf(float x);
 VISIBILITY_HIDDEN double m_atan2(double y, double x);
 VISIBILITY_HIDDEN float m_atan2f(float y, float x);
 
-VISIBILITY_HIDDEN float m_hypotf(float x, float y);
 
 #if !HAVE_C99_MATH
 
@@ -83,9 +82,6 @@ VISIBILITY_HIDDEN float m_hypotf(float x, float y);
 #define truncf(x) m_truncf(x)
 
 #define atan2f(x, y) m_atan2f(x, y)
-
-/* float version of hypot missing in < VS2013 */
-#define hypotf(x, y) m_hypotf(x, y)
 
 #endif /* !HAVE_C99_MATH */
 

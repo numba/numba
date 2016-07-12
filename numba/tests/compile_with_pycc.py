@@ -53,6 +53,15 @@ def sqrt(u):
 def size(arr):
     return arr.size
 
+# Exercise linking to Numpy math functions
+@cc_helperlib.export('np_sqrt', 'f8(f8)')
+def np_sqrt(u):
+    return np.sqrt(u)
+
+@cc_helperlib.export('spacing', 'f8(f8)')
+def np_spacing(u):
+    return np.spacing(u)
+
 
 # This one clashes with libc random() unless pycc is careful with naming.
 @cc_helperlib.export('random', 'f8(i4)')

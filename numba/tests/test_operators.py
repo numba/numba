@@ -3,13 +3,14 @@ from __future__ import print_function
 import copy
 import itertools
 import operator
+import sys
 import warnings
 
 import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types, typeinfer, utils, errors
+from numba import jit, types, typeinfer, utils, errors
 from numba.config import PYVERSION
 from .support import TestCase, tag
 from .true_div_usecase import truediv_usecase, itruediv_usecase
@@ -20,6 +21,12 @@ Noflags = Flags()
 
 force_pyobj_flags = Flags()
 force_pyobj_flags.set("force_pyobject")
+
+
+def make_static_power(exp):
+    def pow_usecase(x):
+        return x ** exp
+    return pow_usecase
 
 
 class LiteralOperatorImpl(object):
@@ -1391,6 +1398,43 @@ class TestMixedInts(TestCase):
 class TestMixedIntsOperatorModule(TestMixedInts):
 
     op = FunctionalOperatorImpl
+
+
+class TestStaticPower(TestCase):
+    """
+    Test the ** operator with a static exponent, to exercise a
+    dedicated optimization.
+    """
+
+    def _check_pow(self, exponents, values):
+        for exp in exponents:
+            # test against non-static version of the @jit-ed function
+            regular_func = LiteralOperatorImpl.pow_usecase
+            static_func = make_static_power(exp)
+
+            static_cfunc = jit(nopython=True)(static_func)
+            regular_cfunc = jit(nopython=True)(regular_func)
+            for v in values:
+                try:
+                    expected = regular_cfunc(v, exp)
+                except ZeroDivisionError:
+                    with self.assertRaises(ZeroDivisionError):
+                        static_cfunc(v)
+                else:
+                    got = static_cfunc(v)
+                    self.assertPreciseEqual(expected, got, prec='double')
+
+    def test_int_values(self):
+        exponents = [1, 2, 3, 5, 17, 0, -1, -2, -3]
+        vals = [0, 1, 3, -1, -4, np.int8(-3), np.uint16(4)]
+
+        self._check_pow(exponents, vals)
+
+    def test_real_values(self):
+        exponents = [1, 2, 3, 5, 17, 0, -1, -2, -3, 0x111111, -0x111112]
+        vals = [1.5, 3.25, -1.25, np.float32(-1.5), float('inf'), float('nan')]
+
+        self._check_pow(exponents, vals)
 
 
 if __name__ == '__main__':

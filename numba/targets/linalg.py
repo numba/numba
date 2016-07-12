@@ -18,6 +18,7 @@ from numba.typing import signature
 from numba.extending import overload
 from numba.numpy_support import version as numpy_version
 from numba import types
+from numba import numpy_support as np_support
 from .arrayobj import make_array, _empty_nd_impl, array_copy
 from ..errors import TypingError
 
@@ -30,6 +31,13 @@ intp_t = cgutils.intp_t
 ll_intp_p = intp_t.as_pointer()
 
 
+# fortran int type, this needs to match the F_INT C declaration in
+# _lapack.c and is present to accomodate potential future 64bit int
+# based LAPACK use.
+F_INT_nptype = np.int32
+F_INT_nbtype = types.int32
+
+# BLAS kinds as letters
 _blas_kinds = {
     types.float32: 's',
     types.float64: 'd',
@@ -86,7 +94,7 @@ def make_contiguous(context, builder, sig, args):
         newargs.append(newval)
     yield signature(sig.return_type, *newtys), tuple(newargs)
     for ty, val in copies:
-        context.nrt_decref(builder, ty, val)
+        context.nrt.decref(builder, ty, val)
 
 
 def check_c_int(context, builder, n):
@@ -155,7 +163,7 @@ def call_xxgemv(context, builder, do_trans,
     Call the BLAS matrix * vector product function for the given arguments.
     """
     fnty = ir.FunctionType(ir.IntType(32),
-                           [ll_char, ll_char_p,               # kind, trans
+                           [ll_char, ll_char,                 # kind, trans
                             intp_t, intp_t,                   # m, n
                             ll_void_p, ll_void_p, intp_t,     # alpha, a, lda
                             ll_void_p, ll_void_p, ll_void_p,  # x, beta, y
@@ -175,8 +183,7 @@ def call_xxgemv(context, builder, do_trans,
 
     kind = get_blas_kind(dtype)
     kind_val = ir.Constant(ll_char, ord(kind))
-    trans = context.insert_const_string(builder.module,
-                                        "t" if do_trans else "n")
+    trans = ir.Constant(ll_char, ord('t') if do_trans else ord('n'))
 
     res = builder.call(fn, (kind_val, trans, m, n,
                             builder.bitcast(alpha, ll_void_p),
@@ -196,7 +203,7 @@ def call_xxgemm(context, builder,
     """
     fnty = ir.FunctionType(ir.IntType(32),
                            [ll_char,                       # kind
-                            ll_char_p, ll_char_p,          # transa, transb
+                            ll_char, ll_char,              # transa, transb
                             intp_t, intp_t, intp_t,        # m, n, k
                             ll_void_p, ll_void_p, intp_t,  # alpha, a, lda
                             ll_void_p, intp_t, ll_void_p,  # b, ldb, beta
@@ -210,8 +217,8 @@ def call_xxgemm(context, builder,
     alpha = make_constant_slot(context, builder, dtype, 1.0)
     beta = make_constant_slot(context, builder, dtype, 0.0)
 
-    trans = context.insert_const_string(builder.module, "t")
-    notrans = context.insert_const_string(builder.module, "n")
+    trans = ir.Constant(ll_char, ord('t'))
+    notrans = ir.Constant(ll_char, ord('n'))
 
     def get_array_param(ty, shapes, data):
         return (
@@ -496,201 +503,6 @@ def dot_3(context, builder, sig, args):
         else:
             assert 0
 
-
-def call_xxgetrf(context, builder, a_type, a_shapes, a_data, ipiv, info):
-    """
-    Call the LAPACK gettrf function for the given argument.
-
-    This function computes the LU decomposition of a matrix.
-    """
-    # XXX for ipiv, we are assuming a Fortran (LAPACK) int is the same size
-    # as a C int.
-    fnty = ir.FunctionType(ll_intc,
-                           [ll_char,                       # kind
-                            intp_t, intp_t,                # m, n
-                            ll_void_p, intp_t,             # a, lda
-                            ll_intc_p, ll_intp_p,          # ipiv, info
-                            ])
-
-    fn = builder.module.get_or_insert_function(fnty, name="numba_xxgetrf")
-
-    kind = get_blas_kind(a_type.dtype)
-    kind_val = ir.Constant(ll_char, ord(kind))
-
-    if a_type.layout == 'F':
-        m, n = a_shapes
-        lda = a_shapes[0]
-    else:
-        n, m = a_shapes
-        lda = a_shapes[1]
-
-    res = builder.call(fn, (kind_val, m, n,
-                            builder.bitcast(a_data, ll_void_p), lda,
-                            ipiv, info
-                            ))
-    check_lapack_return(context, builder, res)
-
-
-def call_xxgetri(context, builder, a_type, a_shapes, a_data, ipiv, work,
-                 lwork, info):
-    """
-    Call the LAPACK gettri function for the given argument.
-
-    This function computes the inverse of a matrix given its LU decomposition.
-    """
-    fnty = ir.FunctionType(ll_intc,
-                           [ll_char,                       # kind
-                            intp_t, ll_void_p, intp_t,     # n, a, lda
-                            ll_intc_p, ll_void_p,          # ipiv, work
-                            ll_intc_p, ll_intp_p,          # lwork, info
-                            ])
-    fn = builder.module.get_or_insert_function(fnty, name="numba_xxgetri")
-
-    kind = get_blas_kind(a_type.dtype)
-    kind_val = ir.Constant(ll_char, ord(kind))
-
-    n = lda = a_shapes[0]
-
-    res = builder.call(fn, (kind_val, n,
-                            builder.bitcast(a_data, ll_void_p), lda,
-                            ipiv, builder.bitcast(work, ll_void_p),
-                            lwork, info
-                            ))
-    check_lapack_return(context, builder, res)
-
-
-def mat_inv(context, builder, sig, args):
-    """
-    Invert a matrix through the use of its LU decomposition.
-    """
-    xty = sig.args[0]
-    dtype = xty.dtype
-
-    x = make_array(xty)(context, builder, args[0])
-    x_shapes = cgutils.unpack_tuple(builder, x.shape)
-    m, n = x_shapes
-    check_c_int(context, builder, m)
-    check_c_int(context, builder, n)
-
-    # Allocate the return array (Numpy never works in place contrary to
-    # Scipy for which one can specify to whether or not to overwrite the
-    # input).
-    def create_out(a):
-        m, n = a.shape
-        if m != n:
-            raise np.linalg.LinAlgError("Last 2 dimensions of "
-                                           "the array must be square.")
-        return a.copy()
-
-    out = context.compile_internal(builder, create_out,
-                                   signature(sig.return_type, *sig.args), args)
-    o = make_array(xty)(context, builder, out)
-
-    # Allocate the array in which the pivot indices are stored.
-    ipiv_t = types.Array(types.intc, 1, 'C')
-    i = _empty_nd_impl(context, builder, ipiv_t, (m,))
-    ipiv = i._getvalue()
-
-    info = cgutils.alloca_once(builder, intp_t)
-
-    # Compute the LU decomposition of the matrix.
-    call_xxgetrf(context, builder, xty, x_shapes, o.data, i.data,
-                 info)
-
-    info_val = builder.load(info)
-    zero = info_val.type(0)
-    lapack_error = builder.icmp_signed('!=', info_val, zero)
-    invalid_arg = builder.icmp_signed('<', info_val, zero)
-
-    with builder.if_then(lapack_error, False):
-        context.nrt_decref(builder, ipiv_t, ipiv)
-        with builder.if_else(invalid_arg) as (then, otherwise):
-            raise_err = context.call_conv.return_user_exc
-            with then:
-                raise_err(builder, ValueError,
-                          ('One argument passed to getrf is invalid',)
-                          )
-            with otherwise:
-                raise_err(builder, ValueError,
-                          ('Matrix is singular and cannot be inverted',)
-                          )
-
-    # Compute the optimal lwork.
-    lwork = make_constant_slot(context, builder, types.intc, -1)
-    work = cgutils.alloca_once(builder, context.get_value_type(xty.dtype))
-    call_xxgetri(context, builder, xty, x_shapes, o.data, i.data, work,
-                 lwork, info)
-
-    info_val = builder.load(info)
-    lapack_error = builder.icmp_signed('!=', info_val, zero)
-
-    with builder.if_then(lapack_error, False):
-        context.nrt_decref(builder, ipiv_t, ipiv)
-        raise_err = context.call_conv.return_user_exc
-        raise_err(builder, ValueError,
-                  ('One argument passed to getri is invalid',)
-                  )
-
-    # Allocate a work array of the optimal size as computed by getri.
-    def allocate_work(x, size):
-        """Allocate the work array.
-
-        """
-        size = int(1.01 * size.real)
-        return np.empty((size,), dtype=x.dtype)
-
-    wty = types.Array(dtype, 1, 'C')
-    work = context.compile_internal(builder, allocate_work,
-                                    signature(wty, xty, dtype),
-                                    (args[0], builder.load(work)))
-
-    w = make_array(wty)(context, builder, work)
-    w_shapes = cgutils.unpack_tuple(builder, w.shape)
-    lw, = w_shapes
-
-    builder.store(context.cast(builder, lw, types.intp, types.intc),
-                  lwork)
-
-    # Compute the matrix inverse.
-    call_xxgetri(context, builder, xty, x_shapes, o.data, i.data, w.data,
-                 lwork, info)
-
-    info_val = builder.load(info)
-    lapack_error = builder.icmp_signed('!=', info_val, zero)
-    invalid_arg = builder.icmp_signed('<', info_val, zero)
-
-    context.nrt_decref(builder, wty, work)
-    context.nrt_decref(builder, ipiv_t, ipiv)
-
-    with builder.if_then(lapack_error, False):
-        with builder.if_else(invalid_arg) as (then, otherwise):
-            raise_err = context.call_conv.return_user_exc
-            with then:
-                raise_err(builder, ValueError,
-                          ('One argument passed to getri is invalid',)
-                          )
-            with otherwise:
-                raise_err(builder, ValueError,
-                          ('Matrix is singular and cannot be inverted',)
-                          )
-
-    return impl_ret_new_ref(context, builder, sig.return_type, out)
-
-
-@lower_builtin(np.linalg.inv, types.Array)
-def inv(context, builder, sig, args):
-    """
-    np.linalg.inv(a)
-    """
-    ensure_lapack()
-
-    ndims = sig.args[0].ndim
-    if ndims == 2:
-        return mat_inv(context, builder, sig, args)
-    else:
-        assert 0
-
-
 fatal_error_sig = types.intc()
 fatal_error_func = types.ExternalFunction("numba_fatal_error", fatal_error_sig)
 
@@ -709,6 +521,108 @@ def _check_linalg_matrix(a, func_name):
                           % func_name)
     if not a.ndim == 2:
         raise TypingError("np.linalg.%s() only supported on 2-D arrays."
+                          % func_name)
+    if not isinstance(a.dtype, (types.Float, types.Complex)):
+        raise TypingError("np.linalg.%s() only supported on "
+                          "float and complex arrays." % func_name)
+
+
+def _check_homogeneous_types(func_name, *types):
+    t0 = types[0].dtype
+    for t in types[1:]:
+        if t.dtype != t0:
+            msg = "np.linalg.%s() only supports inputs that have homogeneous dtypes." % func_name
+            raise TypingError(msg)
+
+
+@jit(nopython=True)
+def _inv_err_handler(r):
+    if r != 0:
+        if r < 0:
+            fatal_error_func()
+            assert 0   # unreachable
+        if r > 0:
+            raise np.linalg.LinAlgError(
+                "Matrix is singular to machine precision.")
+
+
+@overload(np.linalg.inv)
+def inv_impl(a):
+    ensure_lapack()
+
+    _check_linalg_matrix(a, "inv")
+
+    numba_xxgetrf_sig = types.intc(types.char,   # kind
+                                   types.intp,  # m
+                                   types.intp,  # n
+                                   types.CPointer(a.dtype),  # a
+                                   types.intp,  # lda
+                                   types.CPointer(F_INT_nbtype)  # ipiv
+                                   )
+
+    numba_xxgetrf = types.ExternalFunction("numba_xxgetrf",
+                                           numba_xxgetrf_sig)
+
+    numba_ez_xxgetri_sig = types.intc(types.char,   # kind
+                                      types.intp,  # n
+                                      types.CPointer(a.dtype),  # a
+                                      types.intp,  # lda
+                                      types.CPointer(F_INT_nbtype)  # ipiv
+                                      )
+
+    numba_ez_xxgetri = types.ExternalFunction("numba_ez_xxgetri",
+                                              numba_ez_xxgetri_sig)
+
+    kind = ord(get_blas_kind(a.dtype, "inv"))
+
+    F_layout = a.layout == 'F'
+
+    def inv_impl(a):
+        n = a.shape[-1]
+        if a.shape[-2] != n:
+            msg = "Last 2 dimensions of the array must be square."
+            raise np.linalg.LinAlgError(msg)
+
+        _check_finite_matrix(a)
+
+        if F_layout:
+            acpy = np.copy(a)
+        else:
+            acpy = np.asfortranarray(a)
+
+        ipiv = np.empty(n, dtype=F_INT_nptype)
+
+        r = numba_xxgetrf(kind, n, n, acpy.ctypes, n, ipiv.ctypes)
+        _inv_err_handler(r)
+
+        r = numba_ez_xxgetri(kind, n, acpy.ctypes, n, ipiv.ctypes)
+        _inv_err_handler(r)
+
+        # help liveness analysis
+        acpy.size
+        ipiv.size
+        return acpy
+
+    return inv_impl
+
+
+@jit(nopython=True)
+def _handle_err_maybe_convergence_problem(r):
+    if r != 0:
+        if r < 0:
+            fatal_error_func()
+            assert 0   # unreachable
+        if r > 0:
+            raise ValueError("Internal algorithm failed to converge.")
+
+
+def _check_linalg_1_or_2d_matrix(a, func_name):
+    # checks that a matrix is 1 or 2D
+    if not isinstance(a, types.Array):
+        raise TypingError("np.linalg.%s() only supported for array types "
+                          % func_name)
+    if not a.ndim <= 2:
+        raise TypingError("np.linalg.%s() only supported on 1 and 2-D arrays "
                           % func_name)
     if not isinstance(a.dtype, (types.Float, types.Complex)):
         raise TypingError("np.linalg.%s() only supported on "
@@ -744,12 +658,13 @@ if numpy_version >= (1, 8):
             #  xxpotrf to compute the Hermitian of the upper triangle
             #  => they cancel each other)
             r = xxpotrf(kind, UP, n, out.ctypes, n)
-            if r < 0:
-                fatal_error_func()
-                assert 0   # unreachable
-            if r > 0:
-                raise np.linalg.LinAlgError(
-                    "Matrix is not positive definite.")
+            if r != 0:
+                if r < 0:
+                    fatal_error_func()
+                    assert 0   # unreachable
+                if r > 0:
+                    raise np.linalg.LinAlgError(
+                        "Matrix is not positive definite.")
             # Zero out upper triangle, in F order
             for col in range(n):
                 out[:col, col] = 0
@@ -838,9 +753,7 @@ if numpy_version >= (1, 8):
                                ldvl,
                                vr.ctypes,
                                ldvr)
-            if r < 0:
-                fatal_error_func()
-                assert 0   # unreachable
+            _handle_err_maybe_convergence_problem(r)
 
             # By design numba does not support dynamic return types, however,
             # Numpy does. Numpy uses this ability in the case of returning
@@ -898,9 +811,7 @@ if numpy_version >= (1, 8):
                                ldvl,
                                vr.ctypes,
                                ldvr)
-            if r < 0:
-                fatal_error_func()
-                assert 0   # unreachable
+            _handle_err_maybe_convergence_problem(r)
 
             # put these in to help with liveness analysis,
             # `.ctypes` doesn't keep the vars alive
@@ -992,9 +903,7 @@ if numpy_version >= (1, 8):
                 vt.ctypes,  # vt
                 ldvt          # ldvt
             )
-            if r < 0:
-                fatal_error_func()
-                assert 0   # unreachable
+            _handle_err_maybe_convergence_problem(r)
 
             # help liveness analysis
             acpy.size
@@ -1099,9 +1008,7 @@ def qr_impl(a):
             m,  # lda
             tau.ctypes  # tau
         )
-        if ret < 0:
-            fatal_error_func()
-            assert 0   # unreachable
+        _handle_err_maybe_convergence_problem(ret)
 
         # help liveness analysis
         tau.size
@@ -1110,3 +1017,560 @@ def qr_impl(a):
         return (q[:, :minmn], r)
 
     return qr_impl
+
+
+# helpers and jitted specialisations required for np.linalg.lstsq
+# and np.linalg.solve. These functions have "system" in their name
+# as a differentiator.
+
+def _get_system_copy_in_b_impl(b):
+    # gets an implementation for correctly copying 'b' into the
+    # scratch space for 'b'
+    ndim = b.ndim
+    if ndim == 1:
+        @jit(nopython=True)
+        def oneD_impl(bcpy, b, nrhs):
+            bcpy[:b.shape[-1], 0] = b
+        return oneD_impl
+    else:
+        @jit(nopython=True)
+        def twoD_impl(bcpy, b, nrhs):
+            bcpy[:b.shape[-2], :nrhs] = b
+        return twoD_impl
+
+
+def _get_system_compute_nrhs(b):
+    # gets and implementation for computing the number of right hand
+    # sides in the system of equations
+    ndim = b.ndim
+    if ndim == 1:
+        @jit(nopython=True)
+        def oneD_impl(b):
+            return 1
+        return oneD_impl
+    else:
+        @jit(nopython=True)
+        def twoD_impl(b):
+            return b.shape[-1]
+        return twoD_impl
+
+
+def _get_system_check_dimensionally_valid_impl(a, b):
+    # gets an implementation for checking that AX=B style system
+    # input is dimensionally valid
+    ndim = b.ndim
+    if ndim == 1:
+        @jit(nopython=True)
+        def oneD_impl(a, b):
+            am = a.shape[-2]
+            bm = b.shape[-1]
+            if am != bm:
+                raise np.linalg.LinAlgError(
+                    "Incompatible array sizes, system is not dimensionally valid.")
+        return oneD_impl
+    else:
+        @jit(nopython=True)
+        def twoD_impl(a, b):
+            am = a.shape[-2]
+            bm = b.shape[-2]
+            if am != bm:
+                raise np.linalg.LinAlgError(
+                    "Incompatible array sizes, system is not dimensionally valid.")
+        return twoD_impl
+
+# jitted specialisations for np.linalg.lstsq()
+
+
+def _get_lstsq_res_impl(dtype, real_dtype, b):
+    # gets an implementation for computing the residual
+    ndim = b.ndim
+    if ndim == 1:
+        if isinstance(dtype, (types.Complex)):
+            @jit(nopython=True)
+            def cmplx_impl(b, n, nrhs):
+                res = np.empty((1,), dtype=real_dtype)
+                res[0] = np.sum(np.abs(b[n:, 0])**2)
+                return res
+            return cmplx_impl
+        else:
+            @jit(nopython=True)
+            def real_impl(b, n, nrhs):
+                res = np.empty((1,), dtype=real_dtype)
+                res[0] = np.sum(b[n:, 0]**2)
+                return res
+            return real_impl
+    else:
+        if isinstance(dtype, (types.Complex)):
+            @jit(nopython=True)
+            def cmplx_impl(b, n, nrhs):
+                res = np.empty((nrhs), dtype=real_dtype)
+                for k in range(nrhs):
+                    res[k] = np.sum(np.abs(b[n:, k])**2)
+                return res
+            return cmplx_impl
+        else:
+            @jit(nopython=True)
+            def real_impl(b, n, nrhs):
+                res = np.empty((nrhs), dtype=real_dtype)
+                for k in range(nrhs):
+                    res[k] = np.sum(b[n:, k]**2)
+                return res
+            return real_impl
+
+
+def _get_lstsq_compute_return_impl(b):
+    # gets an implementation for extracting 'x' (the solution) from
+    # the 'b' scratch space
+    ndim = b.ndim
+    if ndim == 1:
+        @jit(nopython=True)
+        def oneD_impl(b, n):
+            return b.T.ravel()[:n]
+        return oneD_impl
+    else:
+        @jit(nopython=True)
+        def twoD_impl(b, n):
+            return b[:n, :].copy()
+        return twoD_impl
+
+
+@overload(np.linalg.lstsq)
+def lstsq_impl(a, b, rcond=-1.0):
+    ensure_lapack()
+
+    _check_linalg_matrix(a, "lstsq")
+
+    # B can be 1D or 2D.
+    _check_linalg_1_or_2d_matrix(b, "lstsq")
+
+    a_F_layout = a.layout == 'F'
+    b_F_layout = b.layout == 'F'
+
+    _check_homogeneous_types("lstsq", a, b)
+
+    np_dt = np_support.as_dtype(a.dtype)
+    nb_dt = a.dtype
+
+    # convert typing floats to np floats for use in the impl
+    r_type = getattr(nb_dt, "underlying_float", nb_dt)
+    real_dtype = np_support.as_dtype(r_type)
+
+    # the lapack wrapper signature
+    numba_ez_gelsd_sig = types.intc(
+        types.char,  # kind
+        types.intp,  # m
+        types.intp,  # n
+        types.intp,  # nrhs
+        types.CPointer(nb_dt),  # a
+        types.intp,  # lda
+        types.CPointer(nb_dt),  # b
+        types.intp,  # ldb
+        types.CPointer(r_type),  # S
+        types.float64,  # rcond
+        types.CPointer(types.intc)  # rank
+    )
+
+    # the lapack wrapper function
+    numba_ez_gelsd = types.ExternalFunction("numba_ez_gelsd",
+                                            numba_ez_gelsd_sig)
+
+    kind = ord(get_blas_kind(nb_dt, "lstsq"))
+
+    # The following functions select specialisations based on
+    # information around 'b', a lot of this effort is required
+    # as 'b' can be either 1D or 2D, and then there are
+    # some optimisations available depending on real or complex
+    # space.
+
+    # get a specialisation for computing the number of RHS
+    b_nrhs = _get_system_compute_nrhs(b)
+
+    # get a specialised residual computation based on the dtype
+    compute_res = _get_lstsq_res_impl(nb_dt, real_dtype, b)
+
+    # b copy function
+    b_copy_in = _get_system_copy_in_b_impl(b)
+
+    # return blob function
+    b_ret = _get_lstsq_compute_return_impl(b)
+
+    # check system is dimensionally valid function
+    check_dimensionally_valid = _get_system_check_dimensionally_valid_impl(
+        a, b)
+
+    def lstsq_impl(a, b, rcond=-1.0):
+        n = a.shape[-1]
+        m = a.shape[-2]
+        nrhs = b_nrhs(b)
+
+        # check the systems have no inf or NaN
+        _check_finite_matrix(a)
+        _check_finite_matrix(b)
+
+        # check the systems is dimensionally valid
+        check_dimensionally_valid(a, b)
+
+        minmn = min(m, n)
+        maxmn = max(m, n)
+
+        # a is destroyed on exit, copy it
+        if a_F_layout:
+            acpy = np.copy(a)
+        else:
+            acpy = np.asfortranarray(a)
+
+        # b is overwritten on exit with the solution, copy allocate
+        bcpy = np.empty((nrhs, maxmn), dtype=np_dt).T
+        # specialised copy in due to b being 1 or 2D
+        b_copy_in(bcpy, b, nrhs)
+
+        # Allocate returns
+        s = np.empty(minmn, dtype=real_dtype)
+        rank_ptr = np.empty(1, dtype=np.int32)
+
+        r = numba_ez_gelsd(
+            kind,  # kind
+            m,  # m
+            n,  # n
+            nrhs,  # nrhs
+            acpy.ctypes,  # a
+            m,  # lda
+            bcpy.ctypes,  # a
+            maxmn,  # ldb
+            s.ctypes,  # s
+            rcond,  # rcond
+            rank_ptr.ctypes  # rank
+        )
+        _handle_err_maybe_convergence_problem(r)
+
+        # set rank to that which was computed
+        rank = rank_ptr[0]
+
+        # compute residuals
+        if rank < n or m <= n:
+            res = np.empty((0), dtype=real_dtype)
+        else:
+            # this requires additional dispatch as there's a faster
+            # impl if the result is in the real domain (no abs() required)
+            res = compute_res(bcpy, n, nrhs)
+
+        # extract 'x', the solution
+        x = b_ret(bcpy, n)
+
+        # help liveness analysis
+        acpy.size
+        bcpy.size
+        s.size
+        rank_ptr.size
+
+        return (x, res, rank, s[:minmn])
+
+    return lstsq_impl
+
+# specialisations for np.linalg.solve
+
+
+def _get_solve_compute_return_impl(b):
+    # gets an implementation for extracting 'x' (the solution) from
+    # the 'b' scratch space
+    ndim = b.ndim
+    if ndim == 1:
+        @jit(nopython=True)
+        def oneD_impl(b):
+            return b.T.ravel()
+        return oneD_impl
+    else:
+        @jit(nopython=True)
+        def twoD_impl(b):
+            return b
+        return twoD_impl
+
+
+@overload(np.linalg.solve)
+def solve_impl(a, b):
+    ensure_lapack()
+
+    _check_linalg_matrix(a, "solve")
+    _check_linalg_1_or_2d_matrix(b, "solve")
+
+    a_F_layout = a.layout == 'F'
+    b_F_layout = b.layout == 'F'
+
+    _check_homogeneous_types("solve", a, b)
+
+    np_dt = np_support.as_dtype(a.dtype)
+    nb_dt = a.dtype
+
+    # the lapack wrapper signature
+    numba_xgesv_sig = types.intc(
+        types.char,  # kind
+        types.intp,  # n
+        types.intp,  # nhrs
+        types.CPointer(nb_dt),  # a
+        types.intp,  # lda
+        types.CPointer(F_INT_nbtype),  # ipiv
+        types.CPointer(nb_dt),  # b
+        types.intp  # ldb
+    )
+
+    # the lapack wrapper function
+    numba_xgesv = types.ExternalFunction("numba_xgesv", numba_xgesv_sig)
+
+    kind = ord(get_blas_kind(nb_dt, "solve"))
+
+    # get a specialisation for computing the number of RHS
+    b_nrhs = _get_system_compute_nrhs(b)
+
+    # check system is valid
+    check_dimensionally_valid = _get_system_check_dimensionally_valid_impl(
+        a, b)
+
+    # b copy function
+    b_copy_in = _get_system_copy_in_b_impl(b)
+
+    # b return function
+    b_ret = _get_solve_compute_return_impl(b)
+
+    def solve_impl(a, b):
+        n = a.shape[-1]
+        nrhs = b_nrhs(b)
+
+        # check the systems have no inf or NaN
+        _check_finite_matrix(a)
+        _check_finite_matrix(b)
+
+        # check the systems are dimensionally valid
+        check_dimensionally_valid(a, b)
+
+        # a is destroyed on exit, copy it
+        if a_F_layout:
+            acpy = np.copy(a)
+        else:
+            acpy = np.asfortranarray(a)
+
+        # b is overwritten on exit with the solution, copy allocate
+        bcpy = np.empty((nrhs, n), dtype=np_dt).T
+        # specialised copy in due to b being 1 or 2D
+        b_copy_in(bcpy, b, nrhs)
+
+        # allocate pivot array (needs to be fortran int size)
+        ipiv = np.empty(n, dtype=F_INT_nptype)
+
+        r = numba_xgesv(
+            kind,        # kind
+            n,           # n
+            nrhs,        # nhrs
+            acpy.ctypes,  # a
+            n,           # lda
+            ipiv.ctypes,  # ipiv
+            bcpy.ctypes,  # b
+            n            # ldb
+        )
+        _inv_err_handler(r)
+
+        # help liveness analysis
+        acpy.size
+        bcpy.size
+        ipiv.size
+
+        return b_ret(bcpy)
+
+    return solve_impl
+
+
+@overload(np.linalg.pinv)
+def pinv_impl(a, rcond=1.e-15):
+    ensure_lapack()
+
+    _check_linalg_matrix(a, "pinv")
+
+    # convert typing floats to numpy floats for use in the impl
+    s_type = getattr(a.dtype, "underlying_float", a.dtype)
+    s_dtype = np_support.as_dtype(s_type)
+
+    numba_ez_gesdd_sig = types.intc(
+        types.char,               # kind
+        types.char,               # jobz
+        types.intp,               # m
+        types.intp,               # n
+        types.CPointer(a.dtype),  # a
+        types.intp,               # lda
+        types.CPointer(s_type),   # s
+        types.CPointer(a.dtype),  # u
+        types.intp,               # ldu
+        types.CPointer(a.dtype),  # vt
+        types.intp                # ldvt
+    )
+
+    numba_ez_gesdd = types.ExternalFunction("numba_ez_gesdd",
+                                            numba_ez_gesdd_sig)
+
+    numba_xxgemm_sig = types.intc(
+        types.char,               # kind
+        types.char,               # TRANSA
+        types.char,               # TRANSB
+        types.intp,               # M
+        types.intp,               # N
+        types.intp,               # K
+        types.CPointer(a.dtype),  # ALPHA
+        types.CPointer(a.dtype),  # A
+        types.intp,               # LDA
+        types.CPointer(a.dtype),  # B
+        types.intp,               # LDB
+        types.CPointer(a.dtype),  # BETA
+        types.CPointer(a.dtype),  # C
+        types.intp                # LDC
+    )
+
+    numba_xxgemm = types.ExternalFunction("numba_xxgemm",
+                                          numba_xxgemm_sig)
+
+    F_layout = a.layout == 'F'
+
+    kind = ord(get_blas_kind(a.dtype, "pinv"))
+    JOB = ord('S')
+
+    # need conjugate transposes
+    TRANSA = ord('C')
+    TRANSB = ord('C')
+
+    # scalar constants
+    dt = np_support.as_dtype(a.dtype)
+    zero = np.array([0.], dtype=dt)
+    one = np.array([1.], dtype=dt)
+
+    def pinv_impl(a, rcond=1.e-15):
+
+        # The idea is to build the pseudo-inverse via inverting the singular
+        # value decomposition of a matrix `A`. Mathematically, this is roughly
+        # A = U*S*V^H        [The SV decomposition of A]
+        # A^+ = V*(S^+)*U^H  [The inverted SV decomposition of A]
+        # where ^+ is pseudo inversion and ^H is Hermitian transpose.
+        # As V and U are unitary, their inverses are simply their Hermitian
+        # transpose. S has singular values on its diagonal and zero elsewhere,
+        # it is inverted trivially by reciprocal of the diagonal values with
+        # the exception that zero singular values remain as zero.
+        #
+        # The practical implementation can take advantage of a few things to
+        # gain a few % performance increase:
+        # * A is destroyed by the SVD algorithm from LAPACK so a copy is
+        #   required, this memory is exactly the right size in which to return
+        #   the pseudo-inverse and so can be resued for this purpose.
+        # * The pseudo-inverse of S can be applied to either V or U^H, this
+        #   then leaves a GEMM operation to compute the inverse via either:
+        #   A^+ = (V*(S^+))*U^H
+        #   or
+        #   A^+ = V*((S^+)*U^H)
+        #   however application of S^+ to V^H or U is more convenient as they
+        #   are the result of the SVD algorithm. The application of the
+        #   diagonal system is just a matrix multiplication which results in a
+        #   row/column scaling (direction depending). To save effort, this
+        #   "matrix multiplication" is applied to the smallest of U or V^H and
+        #   only up to the point of "cut-off" (see next note) just as a direct
+        #   scaling.
+        # * The cut-off level for application of S^+ can be used to reduce
+        #   total effort, this cut-off can come via rcond or may just naturally
+        #   be present as a result of zeros in the singular values. Regardless
+        #   there's no need to multiply by zeros in the application of S^+ to
+        #   V^H or U as above. Further, the GEMM operation can be shrunk in
+        #   effort by noting that the possible zero block generated by the
+        #   presence of zeros in S^+ has no effect apart from wasting cycles as
+        #   it is all fmadd()s where one operand is zero. The inner dimension
+        #   of the GEMM operation can therefore be set as shrunk accordingly!
+
+        n = a.shape[-1]
+        m = a.shape[-2]
+
+        _check_finite_matrix(a)
+
+        if F_layout:
+            acpy = np.copy(a)
+        else:
+            acpy = np.asfortranarray(a)
+
+        minmn = min(m, n)
+
+        u = np.empty((minmn, m), dtype=a.dtype)
+        s = np.empty(minmn, dtype=s_dtype)
+        vt = np.empty((n, minmn), dtype=a.dtype)
+
+        r = numba_ez_gesdd(
+            kind,         # kind
+            JOB,          # job
+            m,            # m
+            n,            # n
+            acpy.ctypes,  # a
+            m,            # lda
+            s.ctypes,     # s
+            u.ctypes,     # u
+            m,            # ldu
+            vt.ctypes,    # vt
+            minmn         # ldvt
+        )
+        _handle_err_maybe_convergence_problem(r)
+
+        # Invert singular values under threshold. Also find the index of
+        # the threshold value as this is the upper limit for the application
+        # of the inverted singular values. Finding this value saves
+        # multiplication by a block of zeros that would be created by the
+        # application of these values to either U or V^H ahead of multiplying
+        # them together. This is done by simply in BLAS parlance via
+        # restricting the `k` dimension to `cut_idx` in `xgemm` whilst keeping
+        # the leading dimensions correct.
+
+        cut_at = s[0] * rcond
+        cut_idx = 0
+        for k in range(minmn):
+            if s[k] > cut_at:
+                s[k] = 1. / s[k]
+                cut_idx = k
+        cut_idx += 1
+
+        # Use cut_idx so there's no scaling by 0.
+        if m >= n:
+            # U is largest so apply S^+ to V^H.
+            for i in range(n):
+                for j in range(cut_idx):
+                    vt[i, j] = vt[i, j] * s[j]
+        else:
+            # V^H is largest so apply S^+ to U.
+            for i in range(cut_idx):
+                s_local = s[i]
+                for j in range(minmn):
+                    u[i, j] = u[i, j] * s_local
+
+        # Do (v^H)^H*U^H (obviously one of the matrices includes the S^+
+        # scaling) and write back to acpy. Note the innner dimension of cut_idx
+        # taking account of the possible zero block.
+        # We can store the result in acpy, given we had to create it
+        # for use in the SVD, and it is now redundant and the right size
+        # but wrong shape.
+
+        r = numba_xxgemm(
+            kind,
+            TRANSA,       # TRANSA
+            TRANSB,       # TRANSB
+            n,            # M
+            m,            # N
+            cut_idx,      # K
+            one.ctypes,   # ALPHA
+            vt.ctypes,    # A
+            minmn,        # LDA
+            u.ctypes,     # B
+            m,            # LDB
+            zero.ctypes,  # BETA
+            acpy.ctypes,  # C
+            n             # LDC
+        )
+
+        # help liveness analysis
+        acpy.size
+        vt.size
+        u.size
+        s.size
+        one.size
+        zero.size
+
+        return acpy.T.ravel().reshape(a.shape).T
+
+    return pinv_impl

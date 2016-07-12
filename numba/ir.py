@@ -143,13 +143,15 @@ class Expr(Inst):
     @classmethod
     def binop(cls, fn, lhs, rhs, loc):
         op = 'binop'
-        return cls(op=op, loc=loc, fn=fn, lhs=lhs, rhs=rhs)
+        return cls(op=op, loc=loc, fn=fn, lhs=lhs, rhs=rhs,
+                   static_lhs=UNDEFINED, static_rhs=UNDEFINED)
 
     @classmethod
     def inplace_binop(cls, fn, immutable_fn, lhs, rhs, loc):
         op = 'inplace_binop'
         return cls(op=op, loc=loc, fn=fn, immutable_fn=immutable_fn,
-                   lhs=lhs, rhs=rhs)
+                   lhs=lhs, rhs=rhs,
+                   static_lhs=UNDEFINED, static_rhs=UNDEFINED)
 
     @classmethod
     def unary(cls, fn, value, loc):
@@ -374,6 +376,9 @@ class StaticRaise(Stmt):
 
 
 class Return(Stmt):
+    """
+    Return to caller.
+    """
     is_terminator = True
     is_exit = True
 
@@ -386,6 +391,9 @@ class Return(Stmt):
 
 
 class Jump(Stmt):
+    """
+    Unconditional branch.
+    """
     is_terminator = True
 
     def __init__(self, target, loc):
@@ -397,6 +405,9 @@ class Jump(Stmt):
 
 
 class Branch(Stmt):
+    """
+    Conditional branch.
+    """
     is_terminator = True
 
     def __init__(self, cond, truebr, falsebr, loc):
@@ -410,6 +421,9 @@ class Branch(Stmt):
 
 
 class Assign(Stmt):
+    """
+    Assign to a variable.
+    """
     def __init__(self, value, target, loc):
         self.value = value
         self.target = target
@@ -417,6 +431,21 @@ class Assign(Stmt):
 
     def __str__(self):
         return '%s = %s' % (self.target, self.value)
+
+
+class Print(Stmt):
+    """
+    Print some values.
+    """
+    def __init__(self, args, vararg, loc):
+        self.args = args
+        self.vararg = vararg
+        # Constant-inferred arguments
+        self.consts = {}
+        self.loc = loc
+
+    def __str__(self):
+        return 'print(%s)' % ', '.join(str(v) for v in self.args)
 
 
 class Yield(Inst):

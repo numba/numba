@@ -213,6 +213,8 @@ class BaseContext(object):
         as a runtime constant.
         None is returned for unsupported types.
         """
+        # XXX some typeof() implementations raise a ValueError for
+        # better diagnostics, perhaps we should always do it?
         tp = typeof(val, Purpose.constant)
         if tp is not None:
             return tp
