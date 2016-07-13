@@ -849,7 +849,8 @@ class TestCache(BaseCacheTest):
         except subprocess.CalledProcessError as e:
             self.skipTest("ipython not available: return code %d"
                           % e.returncode)
-        print("ipython version:", ver.strip().decode())
+        ver = ver.strip().decode()
+        print("ipython version:", ver)
         # Create test input
         inputfn = os.path.join(self.tempdir, "ipython_cache_usecase.txt")
         with open(inputfn, "w") as f:
@@ -859,9 +860,9 @@ class TestCache(BaseCacheTest):
 
                 from numba import jit
 
-                @jit(cache=True)
-                def f():
-                    return 42
+                # IPython 5 does not support multiline input if stdin isn't
+                # a tty (https://github.com/ipython/ipython/issues/9752)
+                f = jit(cache=True)(lambda: 42)
 
                 res = f()
                 # IPython writes on stdout, so use stderr instead
