@@ -442,7 +442,7 @@ def llvm_to_ptx(llvmir, **opts):
     for decl, fn in replacements:
         llvmir = llvmir.replace(decl, fn)
 
-    llvmir = llvm37_to_34_ir(llvmir)
+    llvmir = llvm38_to_34_ir(llvmir)
 
     cu.add_module(llvmir.encode('utf8'))
     cu.add_module(libdevice.get())
@@ -452,6 +452,10 @@ def llvm_to_ptx(llvmir, **opts):
 
 re_metadata_def = re.compile(r"\!\d+\s*=")
 re_metadata_correct_usage = re.compile(r"metadata\s*\![{'\"]")
+
+re_attributes_def = re.compile(r"^attributes #\d+ = \{ ([\w\s]+)\ }")
+unsupported_attributes = {'argmemonly', 'inaccessiblememonly',
+                          'inaccessiblemem_or_argmemonly', 'norecurse'}
 
 re_getelementptr = re.compile(r"\Wgetelementptr\s(?:inbounds )?\(?")
 
@@ -464,9 +468,9 @@ re_type_tok = re.compile(r"[,{}()[\]]")
 re_annotations = re.compile(r"\Wnonnull\W")
 
 
-def llvm37_to_34_ir(ir):
+def llvm38_to_34_ir(ir):
     """
-    Convert LLVM 3.7 IR for LLVM 3.4.
+    Convert LLVM 3.8 IR for LLVM 3.4.
     """
     def parse_out_leading_type(s):
         par_level = 0
@@ -498,6 +502,12 @@ def llvm37_to_34_ir(ir):
             if None is re_metadata_correct_usage.search(line):
                 line = line.replace('!{', 'metadata !{')
                 line = line.replace('!"', 'metadata !"')
+        if line.startswith('attributes #'):
+            # Remove function attributes unsupported pre-3.8
+            m = re_attributes_def.match(line)
+            attrs = m.group(1).split()
+            attrs = ' '.join(a for a in attrs if a not in unsupported_attributes)
+            line = line.replace(m.group(1), attrs)
         if 'getelementptr ' in line:
             # Rewrite "getelementptr ty, ty* ptr, ..."
             # to "getelementptr ty *ptr, ..."
