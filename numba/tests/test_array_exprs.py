@@ -1,5 +1,4 @@
 from __future__ import print_function, division, absolute_import
-from timeit import Timer
 
 import numpy as np
 
@@ -47,6 +46,13 @@ def are_roots_imaginary(As, Bs, Cs):
 def div_add(As, Bs, Cs):
     return As / Bs + Cs
 
+def cube(As):
+    return As ** 3
+
+def explicit_output(a, b, out):
+    np.cos(a, out)
+    return np.add(out, b, out)
+
 
 # From issue #1264
 def distance_matrix(vectors):
@@ -86,6 +92,20 @@ class RewritesTester(Pipeline):
 
 class TestArrayExpressions(MemoryLeakMixin, TestCase):
 
+    def _compile_function(self, fn, arg_tys):
+        """
+        Compile the given function both without and with rewrites enabled.
+        """
+        control_pipeline = RewritesTester.mk_no_rw_pipeline(arg_tys)
+        cres_0 = control_pipeline.compile_extra(fn)
+        control_cfunc = cres_0.entry_point
+
+        test_pipeline = RewritesTester.mk_pipeline(arg_tys)
+        cres_1 = test_pipeline.compile_extra(fn)
+        test_cfunc = cres_1.entry_point
+
+        return control_pipeline, control_cfunc, test_pipeline, test_cfunc
+
     def test_simple_expr(self):
         '''
         Using a simple array expression, verify that rewriting is taking
@@ -96,13 +116,8 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
         Y = np.linspace(1,2,10)
         arg_tys = [typeof(arg) for arg in (A, X, Y)]
 
-        control_pipeline = RewritesTester.mk_no_rw_pipeline(arg_tys)
-        cres_0 = control_pipeline.compile_extra(axy)
-        nb_axy_0 = cres_0.entry_point
-
-        test_pipeline = RewritesTester.mk_pipeline(arg_tys)
-        cres_1 = test_pipeline.compile_extra(axy)
-        nb_axy_1 = cres_1.entry_point
+        control_pipeline, nb_axy_0, test_pipeline, nb_axy_1 = \
+            self._compile_function(axy, arg_tys)
 
         control_pipeline2 = RewritesTester.mk_no_rw_pipeline(arg_tys)
         cres_2 = control_pipeline2.compile_extra(ax2)
@@ -172,16 +187,96 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
 
         return Namespace(locals())
 
-    def _assert_total_rewrite(self, ir0, ir1):
-        '''
+    def _test_cube_function(self, fn=cube):
+        A = np.arange(10, dtype=np.float64)
+        arg_tys = (typeof(A),)
+
+        control_pipeline = RewritesTester.mk_no_rw_pipeline(arg_tys)
+        control_cres = control_pipeline.compile_extra(fn)
+        nb_fn_0 = control_cres.entry_point
+
+        test_pipeline = RewritesTester.mk_pipeline(arg_tys)
+        test_cres = test_pipeline.compile_extra(fn)
+        nb_fn_1 = test_cres.entry_point
+
+        expected = A ** 3
+        self.assertPreciseEqual(expected, nb_fn_0(A))
+        self.assertPreciseEqual(expected, nb_fn_1(A))
+
+        return Namespace(locals())
+
+    def _test_explicit_output_function(self, fn):
+        """
+        Test function having a (a, b, out) signature where *out* is
+        an output array the function writes into.
+        """
+        A = np.arange(10, dtype=np.float64)
+        B = A + 1
+        arg_tys = (typeof(A),) * 3
+
+        control_pipeline, control_cfunc, test_pipeline, test_cfunc = \
+            self._compile_function(fn, arg_tys)
+
+        def run_func(fn):
+            out = np.zeros_like(A)
+            fn(A, B, out)
+            return out
+
+        expected = run_func(fn)
+        self.assertPreciseEqual(expected, run_func(control_cfunc))
+        self.assertPreciseEqual(expected, run_func(test_cfunc))
+
+        return Namespace(locals())
+
+    def _assert_array_exprs(self, block, expected_count):
+        """
+        Assert the *block* has the expected number of array expressions
+        in it.
+        """
+        rewrite_count = len(list(self._get_array_exprs(block)))
+        self.assertEqual(rewrite_count, expected_count)
+
+    def _assert_total_rewrite(self, control_ir, test_ir, trivial=False):
+        """
         Given two dictionaries of Numba IR blocks, check to make sure the
-        control IR (ir0) has no array expressions, while the test IR
+        control IR has no array expressions, while the test IR
         contains one and only one.
-        '''
-        self.assertEqual(len(ir0), len(ir1))
-        self.assertGreater(len(ir0[0].body), len(ir1[0].body))
-        self.assertEqual(len(list(self._get_array_exprs(ir0[0].body))), 0)
-        self.assertEqual(len(list(self._get_array_exprs(ir1[0].body))), 1)
+        """
+        # Both IRs have the same number of blocks (presumably 1)
+        self.assertEqual(len(control_ir), len(test_ir))
+        control_block = control_ir[0].body
+        test_block = test_ir[0].body
+        self._assert_array_exprs(control_block, 0)
+        self._assert_array_exprs(test_block, 1)
+        if not trivial:
+            # If the expression wasn't trivial, the block length should
+            # have decreased (since a sequence of exprs was replaced
+            # with a single nested array expr).
+            self.assertGreater(len(control_block), len(test_block))
+
+    def _assert_no_rewrite(self, control_ir, test_ir):
+        """
+        Given two dictionaries of Numba IR blocks, check to make sure
+        the control IR and the test IR both have no array expressions.
+        """
+        self.assertEqual(len(control_ir), len(test_ir))
+        # All blocks should be identical, and not rewritten
+        for k, v in control_ir.items():
+            control_block = v.body
+            test_block = test_ir[k].body
+            self.assertEqual(len(control_block), len(test_block))
+            self._assert_array_exprs(control_block, 0)
+            self._assert_array_exprs(test_block, 0)
+
+    def test_trivial_expr(self):
+        """
+        Ensure even a non-nested expression is rewritten, as it can enable
+        scalar optimizations such as rewriting `x ** 2`.
+        """
+        ns = self._test_cube_function()
+        self._assert_total_rewrite(ns.control_pipeline.interp.blocks,
+                                   ns.test_pipeline.interp.blocks,
+                                   trivial=True)
 
     def test_complicated_expr(self):
         '''
@@ -263,6 +358,14 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
         ns = self._test_root_function(are_roots_imaginary)
         self._assert_total_rewrite(ns.control_pipeline.interp.blocks,
                                    ns.test_pipeline.interp.blocks)
+
+    def test_explicit_output(self):
+        """
+        Check that ufunc calls with explicit outputs are not rewritten.
+        """
+        ns = self._test_explicit_output_function(explicit_output)
+        self._assert_no_rewrite(ns.control_pipeline.interp.blocks,
+                                ns.test_pipeline.interp.blocks)
 
 
 class TestRewriteIssues(MemoryLeakMixin, TestCase):

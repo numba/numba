@@ -172,10 +172,20 @@ class ConfigOptions(object):
     def unset(self, name):
         self.set(name, False)
 
-    def __getattr__(self, name):
+    def _check_attr(self, name):
         if name not in self.OPTIONS:
-            raise NameError("Invalid flag: %s" % name)
+            raise AttributeError("Invalid flag: %s" % name)
+
+    def __getattr__(self, name):
+        self._check_attr(name)
         return self._values[name]
+
+    def __setattr__(self, name, value):
+        if name.startswith('_'):
+            super(ConfigOptions, self).__setattr__(name, value)
+        else:
+            self._check_attr(name)
+            self._values[name] = value
 
     def __repr__(self):
         return "Flags(%s)" % ', '.join('%s=%s' % (k, v)
