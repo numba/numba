@@ -49,8 +49,8 @@ supported from Numba-compiled code.  However, you can temporarily disable
 compilation by setting the :envvar:`NUMBA_DISABLE_JIT` environment
 variable.
 
-How do I create a Fortran-ordered array?
-----------------------------------------
+How can I create a Fortran-ordered array?
+-----------------------------------------
 
 Numba currently doesn't support the ``order`` argument to most Numpy
 functions such as :func:`numpy.empty` (because of limitations in the
@@ -64,6 +64,15 @@ can be rewritten as::
 
    a = np.empty((5, 3)).T
    b = np.zeros(some_shape[::-1]).T
+
+How can I increase integer width?
+---------------------------------
+
+By default, Numba will generally use machine integer width for integer
+variables.  On a 32-bit machine, you may sometimes need the magnitude of
+64-bit integers instead.  You can simply initialize relevant variables as
+``np.int64`` (for example ``np.int64(0)`` instead of ``0``).  It will
+propagate to all computations involving those variables.
 
 
 Performance

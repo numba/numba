@@ -6,9 +6,12 @@ Integer width
 -------------
 
 While Python has arbitrary-sized integers, integers in Numba-compiled
-functions get a fixed size (either through :term:`type inference`, or
-from an explicit specification by the user).  This means that arithmetic
+functions get a fixed size through :term:`type inference` (usually,
+the size of a machine integer).  This means that arithmetic
 operations can wrapround or produce undefined results or overflow.
+
+Type inference can be overriden by an explicit type specification,
+if fine-grained control of integer width is desired.
 
 Boolean inversion
 -----------------
