@@ -5,7 +5,7 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba.errors import TypingError
-from numba import types
+from numba import jit, types
 
 
 a0 = np.array(42)
@@ -20,6 +20,9 @@ dt = np.dtype([('x', np.int8), ('y', 'S3')])
 
 a4 = np.arange(32, dtype=np.int8).view(dt)
 a5 = a4[::-2]
+
+# A recognizable data string
+a6 = np.frombuffer(b"XXXX_array_contents_XXXX", dtype=np.float64)
 
 
 def getitem0(i):
@@ -46,6 +49,10 @@ def getitem5(i):
     return a5[i]
 
 
+def getitem6(i):
+    return a6[i]
+
+
 def use_arrayscalar_const():
     return s1
 
@@ -55,6 +62,9 @@ def write_to_global_array():
 
 
 class TestConstantArray(unittest.TestCase):
+    """
+    Test array constants.
+    """
 
     def check_array_const(self, pyfunc):
         cres = compile_isolated(pyfunc, (types.int32,))
@@ -79,6 +89,22 @@ class TestConstantArray(unittest.TestCase):
 
     def test_record_array_const_noncontig(self):
         self.check_array_const(getitem5)
+
+    def test_array_const_alignment(self):
+        """
+        Issue #1933: the array declaration in the LLVM IR must have
+        the right alignment specified.
+        """
+        sig = (types.intp,)
+        cfunc = jit(sig, nopython=True)(getitem6)
+        ir = cfunc.inspect_llvm(sig)
+        for line in ir.splitlines():
+            if 'XXXX_array_contents_XXXX' in line:
+                self.assertIn("constant [24 x i8]", line)  # sanity check
+                self.assertIn(", align 8", line)
+                break
+        else:
+            self.fail("could not find array declaration in LLVM IR")
 
     def test_arrayscalar_const(self):
         pyfunc = use_arrayscalar_const
