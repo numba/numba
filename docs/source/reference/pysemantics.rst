@@ -2,6 +2,7 @@
 Deviations from Python semantics
 ================================
 
+
 Integer width
 -------------
 
@@ -12,6 +13,10 @@ operations can wrapround or produce undefined results or overflow.
 
 Type inference can be overriden by an explicit type specification,
 if fine-grained control of integer width is desired.
+
+.. seealso::
+   :ref:`Enhancement proposal 1: Changes in integer typing <nbep-1>`
+
 
 Boolean inversion
 -----------------
@@ -26,6 +31,7 @@ returns another boolean::
    False
 
 Numba follows the Numpy semantics.
+
 
 Global and closure variables
 ----------------------------
