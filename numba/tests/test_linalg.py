@@ -337,6 +337,14 @@ def pinv_matrix(A, rcond=1e-15):  # 1e-15 from numpy impl
     return np.linalg.pinv(A)
 
 
+def slogdet_matrix(a):
+    return np.linalg.slogdet(a)
+
+
+def det_matrix(a):
+    return np.linalg.det(a)
+
+
 class TestLinalgBase(TestCase):
     """
     Provides setUp and common data/error modes for testing np.linalg functions.
@@ -1543,6 +1551,137 @@ class TestLinalgPinv(TestLinalgBase):
                 check(a, rcond=approx_half_rank_rcond)
 
         rn = "pinv"
+
+        # Wrong dtype
+        self.assert_wrong_dtype(rn, cfunc,
+                                (np.ones((2, 2), dtype=np.int32),))
+
+        # Dimension issue
+        self.assert_wrong_dimensions(rn, cfunc,
+                                     (np.ones(10, dtype=np.float64),))
+
+        # no nans or infs
+        self.assert_no_nan_or_inf(cfunc,
+                                  (np.array([[1., 2., ], [np.inf, np.nan]],
+                                            dtype=np.float64),))
+
+
+class TestLinalgSlogdet(TestLinalgBase):
+    """
+    Tests for np.linalg.slogdet.
+    """
+
+    @needs_lapack
+    def test_linalg_slogdet(self):
+        """
+        Test np.linalg.slogdet
+        """
+        cfunc = jit(nopython=True)(slogdet_matrix)
+
+        def check(a, **kwargs):
+            expected = slogdet_matrix(a, **kwargs)
+            got = cfunc(a, **kwargs)
+
+            # As numba returns python floats types and numpy returns
+            # numpy float types, some more adjustment and different
+            # types of comparison than those used with array based
+            # results is required.
+
+            # check that the returned tuple is same length
+            self.assertEqual(len(expected), len(got))
+            # and that length is 2
+            self.assertEqual(len(got), 2)
+
+            # check that the domain of the results match
+            for k in range(2):
+                self.assertEqual(
+                    np.iscomplexobj(got[k]),
+                    np.iscomplexobj(expected[k]))
+
+            # turn got[0] into the same dtype as `a`
+            # this is so checking with nulp will work
+            got_conv = a.dtype.type(got[0])
+            np.testing.assert_array_almost_equal_nulp(
+                got_conv, expected[0], nulp=10)
+            # compare log determinant magnitude with a more fuzzy value
+            # as numpy values come from higher precision lapack routines
+            resolution = 5 * np.finfo(expected[1]).resolution
+            np.testing.assert_allclose(
+                got[1], expected[1], rtol=resolution, atol=resolution)
+
+            # Ensure proper resource management
+            with self.assertNoNRTLeak():
+                cfunc(a, **kwargs)
+
+        # test: 1x1 as it is unusual, 4x4 as it is even and 7x7 as is it odd!
+        sizes = [(1, 1), (4, 4), (7, 7)]
+
+        # test loop
+        for size, dtype, order in \
+                product(sizes, self.dtypes, 'FC'):
+            # check a full rank matrix
+            a = self.specific_sample_matrix(size, dtype, order)
+            check(a)
+
+        # use a matrix of zeros to trip xgetrf U(i,i)=0 singular test
+        for dtype, order in product(self.dtypes, 'FC'):
+            a = np.zeros((3, 3), dtype=dtype)
+            check(a)
+
+        rn = "slogdet"
+
+        # Wrong dtype
+        self.assert_wrong_dtype(rn, cfunc,
+                                (np.ones((2, 2), dtype=np.int32),))
+
+        # Dimension issue
+        self.assert_wrong_dimensions(rn, cfunc,
+                                     (np.ones(10, dtype=np.float64),))
+
+        # no nans or infs
+        self.assert_no_nan_or_inf(cfunc,
+                                  (np.array([[1., 2., ], [np.inf, np.nan]],
+                                            dtype=np.float64),))
+
+
+class TestLinalgDet(TestLinalgBase):
+    """
+    Tests for np.linalg.det.
+    """
+
+    @needs_lapack
+    def test_linalg_det(self):
+        """
+        Test np.linalg.det
+        """
+        cfunc = jit(nopython=True)(det_matrix)
+
+        def check(a, **kwargs):
+            expected = det_matrix(a, **kwargs)
+            got = cfunc(a, **kwargs)
+            # check the determinants are the same
+            np.testing.assert_allclose(got, expected)
+
+            # Ensure proper resource management
+            with self.assertNoNRTLeak():
+                cfunc(a, **kwargs)
+
+        # test: 1x1 as it is unusual, 4x4 as it is even and 7x7 as is it odd!
+        sizes = [(1, 1), (4, 4), (7, 7)]
+
+        # test loop
+        for size, dtype, order in \
+                product(sizes, self.dtypes, 'FC'):
+            # check a full rank matrix
+            a = self.specific_sample_matrix(size, dtype, order)
+            check(a)
+
+        # use a matrix of zeros to trip xgetrf U(i,i)=0 singular test
+        for dtype, order in product(self.dtypes, 'FC'):
+            a = np.zeros((3, 3), dtype=dtype)
+            check(a)
+
+        rn = "det"
 
         # Wrong dtype
         self.assert_wrong_dtype(rn, cfunc,
