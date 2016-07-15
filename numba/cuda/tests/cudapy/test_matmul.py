@@ -1,7 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-from timeit import default_timer as time
-
 import numpy as np
 
 from numba import cuda, config, float32
@@ -58,7 +56,6 @@ class TestCudaMatMul(unittest.TestCase):
         B = np.array(np.random.random((n, n)), dtype=np.float32)
         C = np.empty_like(A)
 
-        s = time()
         stream = cuda.stream()
         with stream.auto_synchronize():
             dA = cuda.to_device(A, stream)
@@ -67,14 +64,8 @@ class TestCudaMatMul(unittest.TestCase):
             cu_square_matrix_mul[(bpg, bpg), (tpb, tpb), stream](dA, dB, dC)
             dC.copy_to_host(C, stream)
 
-        e = time()
-        tcuda = e - s
-
         # Host compute
-        s = time()
         Cans = np.dot(A, B)
-        e = time()
-        tcpu = e - s
 
         # Check result
         np.testing.assert_allclose(C, Cans, rtol=1e-5)

@@ -1,7 +1,5 @@
 from __future__ import print_function, absolute_import
 
-from timeit import default_timer as time
-
 import numpy as np
 import numpy.core.umath_tests as ut
 
@@ -10,10 +8,6 @@ from numba import guvectorize
 from numba import cuda
 from numba import unittest_support as unittest
 from numba.cuda.testing import skip_on_cudasim
-
-
-non_stream_speedups = []
-stream_speedups = []
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
@@ -43,18 +37,8 @@ class TestCUDAGufunc(unittest.TestCase):
         B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4,
                                                                    5)
 
-        ts = time()
         C = gufunc(A, B)
-        tcuda = time() - ts
-
-        ts = time()
         Gold = ut.matrix_multiply(A, B)
-        tcpu = time() - ts
-
-        non_stream_speedups.append(tcpu / tcuda)
-
-        print(C, Gold)
-
         self.assertTrue(np.allclose(C, Gold))
 
     def test_gufunc_auto_transfer(self):
@@ -82,18 +66,8 @@ class TestCUDAGufunc(unittest.TestCase):
 
         dB = cuda.to_device(B)
 
-        ts = time()
         C = gufunc(A, dB).copy_to_host()
-        tcuda = time() - ts
-
-        ts = time()
         Gold = ut.matrix_multiply(A, B)
-        tcpu = time() - ts
-
-        non_stream_speedups.append(tcpu / tcuda)
-
-        print(C, Gold)
-
         self.assertTrue(np.allclose(C, Gold))
 
     def test_gufunc(self):
@@ -119,16 +93,8 @@ class TestCUDAGufunc(unittest.TestCase):
         B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4,
                                                                    5)
 
-        ts = time()
         C = gufunc(A, B)
-        tcuda = time() - ts
-
-        ts = time()
         Gold = ut.matrix_multiply(A, B)
-        tcpu = time() - ts
-
-        non_stream_speedups.append(tcpu / tcuda)
-
         self.assertTrue(np.allclose(C, Gold))
 
     def test_gufunc_hidim(self):
@@ -152,16 +118,8 @@ class TestCUDAGufunc(unittest.TestCase):
         A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(4, 25, 2, 4)
         B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(4, 25, 4, 5)
 
-        ts = time()
         C = gufunc(A, B)
-        tcuda = time() - ts
-
-        ts = time()
         Gold = ut.matrix_multiply(A, B)
-        tcpu = time() - ts
-
-        non_stream_speedups.append(tcpu / tcuda)
-
         self.assertTrue(np.allclose(C, Gold))
 
     def test_gufunc_new_axis(self):
@@ -243,7 +201,6 @@ class TestCUDAGufunc(unittest.TestCase):
         B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4,
                                                                    5)
 
-        ts = time()
         stream = cuda.stream()
         dA = cuda.to_device(A, stream)
         dB = cuda.to_device(B, stream)
@@ -253,13 +210,7 @@ class TestCUDAGufunc(unittest.TestCase):
         C = dC.copy_to_host(stream=stream)
         stream.synchronize()
 
-        tcuda = time() - ts
-
-        ts = time()
         Gold = ut.matrix_multiply(A, B)
-        tcpu = time() - ts
-
-        stream_speedups.append(tcpu / tcuda)
 
         self.assertTrue(np.allclose(C, Gold))
 
