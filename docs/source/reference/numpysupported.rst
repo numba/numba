@@ -175,6 +175,8 @@ floating-point and complex numbers:
   output, complex input -> complex output).
 * :func:`numpy.linalg.inv`
 * :func:`numpy.linalg.lstsq`
+* :func:`numpy.linalg.norm` (only the 2 first arguments and only non string
+  values in kwarg `ord`).
 * :func:`numpy.linalg.pinv`
 * :func:`numpy.linalg.qr` (only the first argument).
 * :func:`numpy.linalg.slogdet`

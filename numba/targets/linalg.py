@@ -1691,3 +1691,319 @@ def det_impl(a):
         return sgn * np.exp(slogdet)
 
     return det_impl
+
+
+def _get_norm_impl(a, ord_flag):
+    # This function is quite involved as norm supports a large
+    # range of values to select different norm types via kwarg `ord`.
+    # The implementation below branches on dimension of the input
+    # (1D or 2D). The default for `ord` is `None` which requires
+    # special handling in numba, this is dealt with first in each of
+    # the dimension branches. Following this the various norms are
+    # computed via code that is in most cases simply a loop version
+    # of a ufunc based version as found in numpy.
+
+    # The following is common to both 1D and 2D cases.
+    # Convert typing floats to numpy floats for use in the impl.
+    # The return type is always a float, numba differs from numpy in
+    # that it returns an input precision specific value whereas numpy
+    # always returns np.float64.
+    nb_ret_type = getattr(a.dtype, "underlying_float", a.dtype)
+    np_ret_type = np_support.as_dtype(nb_ret_type)
+
+    np_dtype = np_support.as_dtype(a.dtype)
+
+    xxnrm2_sig = types.intc(types.char,  # kind
+                            types.intp,  # n
+                            types.CPointer(a.dtype),  # x
+                            types.intp,  # incx
+                            types.CPointer(nb_ret_type))
+
+    xxnrm2 = types.ExternalFunction("numba_xxnrm2", xxnrm2_sig)
+
+    kind = ord(get_blas_kind(a.dtype, "norm"))
+
+    one = 1
+
+    FORCE_CONTIG = a.layout not in 'CF'
+
+    if a.ndim == 1:
+        # 1D cases
+
+        # Used if order is None or order == 2 : see note below
+        @jit(nopython=True)
+        def oneD_none_or_2_impl(a, order=None):
+            # Just ignore order, calls are guarded to only come
+            # from cases where order=None or order=2.
+            n = len(a)
+            # Call L2-norm routine from BLAS
+            ret = np.empty((1,), dtype=np_ret_type)
+            jmp = int(a.strides[0] / a.itemsize)
+            r = xxnrm2(
+                kind,      # kind
+                n,         # n
+                a.ctypes,  # x
+                jmp,       # incx
+                ret.ctypes  # result
+            )
+            if r < 0:
+                fatal_error_func()
+                assert 0   # unreachable
+
+            # help liveness analysis
+            ret.size
+            a.size
+
+            return ret[0]
+
+        # handle "ord" being "None", must be done separately
+        if ord_flag in (None, types.none):
+            oneD_impl = oneD_none_or_2_impl
+        else:
+            @jit(nopython=True)
+            def oneD_impl(a, order=None):
+                n = len(a)
+                # Note: on order == 2
+                # This is the same as for ord=="None" but because
+                # we have to handle "None" specially this condition
+                # is separated
+                if order == 2:
+                    return oneD_none_or_2_impl(a, order=order)
+                elif order == np.inf:
+                    # max(abs(a))
+                    ret = abs(a[-1])
+                    for k in range(n - 1):
+                        val = np.abs(a[k])
+                        if val > ret:
+                            ret = val
+                    return ret
+
+                elif order == -np.inf:
+                    # min(abs(a))
+                    ret = abs(a[-1])
+                    for k in range(n - 1):
+                        val = np.abs(a[k])
+                        if val < ret:
+                            ret = val
+                    return ret
+
+                elif order == 0:
+                    # sum(a != 0)
+                    ret = 0.0
+                    for k in range(n):
+                        if a[k] != 0.:
+                            ret += 1.
+                    return ret
+
+                elif order == 1:
+                    # sum(abs(a))
+                    ret = 0.0
+                    for k in range(n):
+                        ret += abs(a[k])
+                    return ret
+
+                else:
+                    # sum(abs(a)**ord)**(1./ord)
+                    ret = 0.0
+                    for k in range(n):
+                        ret += np.abs(a[k])**order
+                    return ret**(1. / order)
+        return oneD_impl
+
+    elif a.ndim == 2:
+        # 2D cases
+
+        # Need svd
+        numba_ez_gesdd_sig = types.intc(
+            types.char,  # kind
+            types.char,  # jobz
+            types.intp,  # m
+            types.intp,  # n
+            types.CPointer(a.dtype),  # a
+            types.intp,  # lda
+            types.CPointer(nb_ret_type),  # s
+            types.CPointer(a.dtype),  # u
+            types.intp,  # ldu
+            types.CPointer(a.dtype),  # vt
+            types.intp  # ldvt
+        )
+
+        numba_ez_gesdd = types.ExternalFunction("numba_ez_gesdd",
+                                                numba_ez_gesdd_sig)
+
+        # Flag for "only compute `S`" to give to xgesdd
+        JOBZ_N = ord('N')
+
+        # This are not referenced in the computation but must be set
+        # for MKL.
+        u = np.empty((1, 1), dtype=np_dtype)
+        vt = np.empty((1, 1), dtype=np_dtype)
+
+        # type based limits for use in max/min based functions
+        max_val = np.finfo(np_ret_type.type).max
+        min_val = np.finfo(np_ret_type.type).min
+
+        F_layout = a.layout == 'F'
+
+        @jit(nopython=True)
+        def twoD_norm_from_svd(a):
+            # Don't use the np.linalg.svd impl instead
+            # call LAPACK to shortcut doing the "reconstruct
+            # singular vectors from reflectors" step and just
+            # get back the singular values.
+            _check_finite_matrix(a)
+            n = a.shape[-1]
+            m = a.shape[-2]
+            ldu = m
+            minmn = min(m, n)
+
+            # need to be >=1 but aren't referenced
+            ucol = 1
+            ldvt = 1
+
+            _check_finite_matrix(a)
+
+            if F_layout:
+                acpy = np.copy(a)
+            else:
+                acpy = np.asfortranarray(a)
+
+            # u and vt are not referenced however need to be
+            # allocated (as done above) for MKL as it
+            # checks for ref is nullptr.
+            s = np.empty(minmn, dtype=np_ret_type)
+
+            r = numba_ez_gesdd(
+                kind,        # kind
+                JOBZ_N,      # jobz
+                m,           # m
+                n,           # n
+                acpy.ctypes,  # a
+                m,           # lda
+                s.ctypes,    # s
+                u.ctypes,    # u
+                ldu,         # ldu
+                vt.ctypes,   # vt
+                ldvt         # ldvt
+            )
+            _handle_err_maybe_convergence_problem(r)
+
+            # help liveness analysis
+            acpy.size
+            vt.size
+            u.size
+            s.size
+
+            return s
+
+        # handle "ord" being "None"
+        if ord_flag in (None, types.none):
+            # Compute the Frobenius norm, this is the L2,2 induced norm of `A`
+            # which is the L2-norm of A.ravel() and so can be computed via BLAS
+            @jit(nopython=True)
+            def twoD_impl(a, order=None):
+                # If order is None...
+                # Call L2-norm routine from BLAS
+                ret = np.empty((1,), dtype=np_ret_type)
+                n = a.size
+                if FORCE_CONTIG:
+                    acpy = a.copy()
+                else:
+                    acpy = a
+                r = xxnrm2(
+                    kind,  # kind
+                    n,  # n
+                    acpy.ctypes,  # x
+                    one,
+                    ret.ctypes  # result
+                )
+                if r < 0:
+                    fatal_error_func()
+                    assert 0   # unreachable
+
+                # help liveness analysis
+                ret.size
+                acpy.size
+
+                return ret[0]
+        else:
+            @jit(nopython=True)
+            def twoD_impl(a, order=None):
+                n = a.shape[-1]
+                m = a.shape[-2]
+
+                if order == np.inf:
+                    # max of sum of abs across rows
+                    # max(sum(abs(a)), axis=1)
+                    global_max = 0.
+                    for ii in range(m):
+                        tmp = 0.
+                        for jj in range(n):
+                            tmp += abs(a[ii, jj])
+                        if tmp > global_max:
+                            global_max = tmp
+                    return global_max
+
+                elif order == -np.inf:
+                    # min of sum of abs across rows
+                    # min(sum(abs(a)), axis=1)
+                    global_min = max_val
+                    for ii in range(m):
+                        tmp = 0.
+                        for jj in range(n):
+                            tmp += abs(a[ii, jj])
+                        if tmp < global_min:
+                            global_min = tmp
+                    return global_min
+                elif order == 1:
+                    # max of sum of abs across cols
+                    # max(sum(abs(a)), axis=0)
+                    global_max = 0.
+                    for ii in range(n):
+                        tmp = 0.
+                        for jj in range(m):
+                            tmp += abs(a[jj, ii])
+                        if tmp > global_max:
+                            global_max = tmp
+                    return global_max
+
+                elif order == -1:
+                    # min of sum of abs across cols
+                    # min(sum(abs(a)), axis=0)
+                    global_min = max_val
+                    for ii in range(n):
+                        tmp = 0.
+                        for jj in range(m):
+                            tmp += abs(a[jj, ii])
+                        if tmp < global_min:
+                            global_min = tmp
+                    return global_min
+
+                # Results via SVD, singular values are sorted on return
+                # by definition.
+                elif order == 2:
+                    # max SV
+                    return twoD_norm_from_svd(a)[0]
+                elif order == -2:
+                    # min SV
+                    return twoD_norm_from_svd(a)[-1]
+                else:
+                    # replicate numpy error
+                    raise ValueError("Invalid norm order for matrices.")
+        return twoD_impl
+    else:
+        assert 0  # unreachable
+
+
+@overload(np.linalg.norm)
+def norm_impl(a, ord=None):
+    ensure_lapack()
+
+    _check_linalg_1_or_2d_matrix(a, "norm")
+
+    impl = _get_norm_impl(a, ord)
+
+    def norm_impl(a, ord=None):
+        return impl(a, ord)
+
+    return norm_impl
