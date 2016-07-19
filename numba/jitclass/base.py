@@ -66,11 +66,11 @@ def ctor({args}):
 
 def _getargs(fn):
     """
-    Returns list of positional and keyword argument names in order. 
+    Returns list of positional and keyword argument names in order.
     """
     sig = utils.pysignature(fn)
     params = sig.parameters
-    args = [k for k, v in params.items() 
+    args = [k for k, v in params.items()
             if (v.kind & v.POSITIONAL_OR_KEYWORD) == v.POSITIONAL_OR_KEYWORD]
     return args
 
@@ -138,6 +138,54 @@ def _fix_up_private_attr(clsname, spec):
     return out
 
 
+def _fill_total_ordering(methods):
+    # Auto fill ordered comparisons if __eq__ is defined
+    if '__eq__' not in methods:
+        return
+
+    # from total_ordering definition in python2.7
+    convert = {
+        '__lt__': [('__gt__', lambda self, other: not (self < other or self == other)),
+                   ('__le__', lambda self, other: self < other or self == other),
+                   ('__ge__', lambda self, other: not self < other)],
+        '__le__': [('__ge__', lambda self, other: not self <= other or self == other),
+                   ('__lt__', lambda self, other: self <= other and not self == other),
+                   ('__gt__', lambda self, other: not self <= other)],
+        '__gt__': [('__lt__', lambda self, other: not (self > other or self == other)),
+                   ('__ge__', lambda self, other: self > other or self == other),
+                   ('__le__', lambda self, other: not self > other)],
+        '__ge__': [('__le__', lambda self, other: (not self >= other) or self == other),
+                   ('__gt__', lambda self, other: self >= other and not self == other),
+                   ('__lt__', lambda self, other: not self >= other)]
+    }
+
+    roots = set(methods.keys()) & set(convert)
+    if not roots:
+        return
+
+    # prefer __lt__ to __le__ to __gt__ to __ge__
+    root = max(roots)
+    for opname, opfunc in convert[root]:
+        if opname not in roots:
+            opfunc.__name__ = opname
+            methods[opname] = opfunc
+
+
+def _fill_not_equal(methods):
+    # Auto fill __ne__ given __eq__
+    if '__ne__' not in methods and '__eq__' in methods:
+        def ne(self, other):
+            return not (self == other)
+
+        methods['__ne__'] = ne
+        ne.__name__ = '__ne__'
+
+
+def _fill_comparison_operators(methods):
+    _fill_not_equal(methods)
+    _fill_total_ordering(methods)
+
+
 def register_class_type(cls, spec, class_ctor, builder):
     """
     Internal function to create a jitclass.
@@ -186,6 +234,10 @@ def register_class_type(cls, spec, class_ctor, builder):
         if v.fdel is not None:
             raise TypeError("deleter is not supported: {0}".format(k))
 
+    # Auto fill comparison operators
+    _fill_comparison_operators(methods)
+
+    # Compile
     jitmethods = {}
     for k, v in methods.items():
         jitmethods[k] = njit(v)

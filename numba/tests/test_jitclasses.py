@@ -3,7 +3,6 @@ from __future__ import absolute_import, print_function, division
 from collections import OrderedDict
 import ctypes
 import sys
-import warnings
 
 import numpy as np
 
@@ -651,6 +650,27 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
 
         self.assertTrue(isinstance(jctype, types.ClassInstanceType))
 
+        # Test minimal interface to be Eq and Ordered
+        @jitclass([])
+        class Cmp2(object):
+            def __init__(self):
+                pass
+
+            def __eq__(self):
+                pass
+
+            def __lt__(self):
+                pass
+
+        jctype = Cmp2.class_type.instance_type
+        self.assertTrue(isinstance(jctype, types.Eq))
+        self.assertTrue(isinstance(jctype, types.Ordered))
+
+        self.assertTrue(isinstance(jctype, types.UserEq))
+        self.assertTrue(isinstance(jctype, types.UserOrdered))
+
+        self.assertTrue(isinstance(jctype, types.ClassInstanceType))
+
     @tag('important')
     def test_not_cmp_interface(self):
         @jitclass([])
@@ -996,7 +1016,6 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
             def __init__(self, value):
                 self._value = value
 
-
         ai = Apple(123)
         bi = Berry(124)
 
@@ -1027,6 +1046,7 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
 
         self.assertTrue(check_greaterthan(bi, ai))
         self.assertEqual(ai.use_count, 4)
+
 
     def test_gt(self):
         spec = [('_value', int32),
@@ -1181,6 +1201,59 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
 
         self.assertTrue(check_lessequal(bi, ai))
         self.assertEqual(ai.use_count, 4)
+
+    def test_default_ordering(self):
+        spec = [('_value', int32),
+                ('use_count', int32)]
+
+        @jitclass(spec)
+        class Apple(object):
+            def __init__(self, value):
+                self._value = value
+                self.use_count = 0
+
+            def __lt__(self, other):
+                self.use_count += 1
+                return self._value < other._value
+
+            def __eq__(self, other):
+                self.use_count += 1
+                return self._value == other._value
+
+        ai = Apple(123)
+        bi = Apple(122)
+
+        self.assertTrue(isinstance(typeof(ai), types.UserOrdered))
+        self.assertTrue(isinstance(typeof(ai), types.Ordered))
+        self.assertTrue(isinstance(typeof(ai), types.UserEq))
+        self.assertTrue(isinstance(typeof(ai), types.Eq))
+
+        self.assertEqual(ai.use_count, 0)
+        self.assertEqual(bi.use_count, 0)
+
+        self.assertFalse(ai < bi)
+        self.assertEqual(ai.use_count, 1)
+        self.assertEqual(bi.use_count, 0)
+
+        self.assertFalse(ai <= bi)
+        self.assertEqual(ai.use_count, 3)  # increment by 2
+        self.assertEqual(bi.use_count, 0)
+
+        self.assertTrue(ai >= bi)
+        self.assertEqual(ai.use_count, 4)  # increment by 1
+        self.assertEqual(bi.use_count, 0)
+
+        self.assertTrue(ai > bi)
+        self.assertEqual(ai.use_count, 6)  # increment by 2
+        self.assertEqual(bi.use_count, 0)
+
+        self.assertFalse(ai == bi)
+        self.assertEqual(ai.use_count, 7)  # increment by 1
+        self.assertEqual(bi.use_count, 0)
+
+        self.assertTrue(ai != bi)
+        self.assertEqual(ai.use_count, 8)  # increment by 1
+        self.assertEqual(bi.use_count, 0)
 
 
 if __name__ == '__main__':

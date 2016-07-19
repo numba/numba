@@ -6,8 +6,6 @@ from .functions import Dispatcher
 from ..typeconv import Conversion
 
 
-
-
 class PyObject(Dummy):
     """
     A generic CPython object.

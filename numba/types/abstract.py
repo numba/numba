@@ -7,7 +7,7 @@ import weakref
 import numpy as np
 
 from ..six import add_metaclass
-from ..utils import cached_property, IS_PY3
+from ..utils import cached_property
 
 
 # Types are added to a global registry (_typecache) in order to assign
@@ -321,6 +321,9 @@ class Ordered(Type):
         return instance.is_ordered()
 
 
+_ordered_operators = frozenset(['<', '<=', '>', '>='])
+
+
 class UserOrdered(Ordered, UserOp):
     """
     For user-defined types that may be orderable:
@@ -331,7 +334,20 @@ class UserOrdered(Ordered, UserOp):
     the following arguments: '<', '<=', '>' or '>='.
     """
     def is_ordered(self):
-        return any(self.supports_operator(x) for x in ['<', '<=', '>', '>='])
+        return bool(self.supported_ordered_operators())
+
+    def supported_ordered_operators(self):
+        """
+        Returns a set of supported operators
+        """
+        return frozenset(op for op in _ordered_operators
+                         if self.supports_operator(op))
+
+    def unsupported_ordered_operators(self):
+        """
+        Returns a set of unsupported operators
+        """
+        return _ordered_operators - self.supported_ordered_operators()
 
 
 class Number(Hashable, Eq, Ordered):
