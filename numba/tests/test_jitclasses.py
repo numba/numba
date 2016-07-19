@@ -644,18 +644,10 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
 
         jctype = Cmp.class_type.instance_type
         self.assertTrue(isinstance(jctype, types.Eq))
-        self.assertTrue(isinstance(jctype, types.Ne))
-        self.assertTrue(isinstance(jctype, types.Lt))
-        self.assertTrue(isinstance(jctype, types.Gt))
-        self.assertTrue(isinstance(jctype, types.Le))
-        self.assertTrue(isinstance(jctype, types.Ge))
+        self.assertTrue(isinstance(jctype, types.Ordered))
 
         self.assertTrue(isinstance(jctype, types.UserEq))
-        self.assertTrue(isinstance(jctype, types.UserNe))
-        self.assertTrue(isinstance(jctype, types.UserLt))
-        self.assertTrue(isinstance(jctype, types.UserGt))
-        self.assertTrue(isinstance(jctype, types.UserLe))
-        self.assertTrue(isinstance(jctype, types.UserGe))
+        self.assertTrue(isinstance(jctype, types.UserOrdered))
 
         self.assertTrue(isinstance(jctype, types.ClassInstanceType))
 
@@ -668,16 +660,10 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
 
         jctype = NotCmp.class_type.instance_type
         self.assertFalse(isinstance(jctype, types.Eq))
-        self.assertFalse(isinstance(jctype, types.Lt))
-        self.assertFalse(isinstance(jctype, types.Gt))
-        self.assertFalse(isinstance(jctype, types.Le))
-        self.assertFalse(isinstance(jctype, types.Ge))
+        self.assertFalse(isinstance(jctype, types.Ordered))
 
         self.assertFalse(isinstance(jctype, types.UserEq))
-        self.assertFalse(isinstance(jctype, types.UserLt))
-        self.assertFalse(isinstance(jctype, types.UserGt))
-        self.assertFalse(isinstance(jctype, types.UserLe))
-        self.assertFalse(isinstance(jctype, types.UserGe))
+        self.assertFalse(isinstance(jctype, types.UserOrdered))
 
         self.assertTrue(isinstance(jctype, types.ClassInstanceType))
 
@@ -1014,11 +1000,11 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
         ai = Apple(123)
         bi = Berry(124)
 
-        self.assertTrue(isinstance(typeof(ai), types.UserLt))
-        self.assertTrue(isinstance(typeof(ai), types.Lt))
+        self.assertTrue(isinstance(typeof(ai), types.UserOrdered))
+        self.assertTrue(isinstance(typeof(ai), types.Ordered))
 
-        self.assertFalse(isinstance(typeof(bi), types.UserLt))
-        self.assertFalse(isinstance(typeof(bi), types.Lt))
+        self.assertFalse(isinstance(typeof(bi), types.UserOrdered))
+        self.assertFalse(isinstance(typeof(bi), types.Ordered))
 
         self.assertEqual(ai.use_count, 0)
         self.assertTrue(ai < bi)
@@ -1065,11 +1051,11 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
         ai = Apple(123)
         bi = Berry(122)
 
-        self.assertTrue(isinstance(typeof(ai), types.UserGt))
-        self.assertTrue(isinstance(typeof(ai), types.Gt))
+        self.assertTrue(isinstance(typeof(ai), types.UserOrdered))
+        self.assertTrue(isinstance(typeof(ai), types.Ordered))
 
-        self.assertFalse(isinstance(typeof(bi), types.UserGt))
-        self.assertFalse(isinstance(typeof(bi), types.Gt))
+        self.assertFalse(isinstance(typeof(bi), types.UserOrdered))
+        self.assertFalse(isinstance(typeof(bi), types.Ordered))
 
         self.assertEqual(ai.use_count, 0)
         self.assertTrue(ai > bi)
@@ -1117,11 +1103,11 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
         ai = Apple(123)
         bi = Berry(124)
 
-        self.assertTrue(isinstance(typeof(ai), types.UserLe))
-        self.assertTrue(isinstance(typeof(ai), types.Le))
+        self.assertTrue(isinstance(typeof(ai), types.UserOrdered))
+        self.assertTrue(isinstance(typeof(ai), types.Ordered))
 
-        self.assertFalse(isinstance(typeof(bi), types.UserLe))
-        self.assertFalse(isinstance(typeof(bi), types.Le))
+        self.assertFalse(isinstance(typeof(bi), types.UserOrdered))
+        self.assertFalse(isinstance(typeof(bi), types.Ordered))
 
         self.assertEqual(ai.use_count, 0)
         self.assertTrue(ai <= bi)
@@ -1168,11 +1154,11 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
         ai = Apple(123)
         bi = Berry(122)
 
-        self.assertTrue(isinstance(typeof(ai), types.UserGe))
-        self.assertTrue(isinstance(typeof(ai), types.Ge))
+        self.assertTrue(isinstance(typeof(ai), types.UserOrdered))
+        self.assertTrue(isinstance(typeof(ai), types.Ordered))
 
-        self.assertFalse(isinstance(typeof(bi), types.UserGe))
-        self.assertFalse(isinstance(typeof(bi), types.Ge))
+        self.assertFalse(isinstance(typeof(bi), types.UserOrdered))
+        self.assertFalse(isinstance(typeof(bi), types.Ordered))
 
         self.assertEqual(ai.use_count, 0)
         self.assertTrue(ai >= bi)

@@ -444,13 +444,13 @@ def user_ne(context, builder, sig, args):
     return _reflectable_equality(context, builder, sig, args, inequality)
 
 
-def _user_ordered_cmp(forward_type, reflected_type, forward_op, reflected_op):
-    @lower_builtin(forward_op, forward_type, types.Any)
-    @lower_builtin(forward_op, forward_type, reflected_type)
-    @lower_builtin(forward_op, types.Any, reflected_type)
+def _user_ordered_cmp(forward_op, reflected_op):
+    @lower_builtin(forward_op, types.Ordered, types.Any)
+    @lower_builtin(forward_op, types.Ordered, types.Ordered)
+    @lower_builtin(forward_op, types.Any, types.Ordered)
     def imp(context, builder, sig, args):
         [self_type, other_type] = sig.args[:2]
-        if isinstance(self_type, forward_type):
+        if isinstance(self_type, types.Ordered):
             # forward version
             self_type = sig.args[0]
             fwd_impl = self_type.get_operator(forward_op, context, sig)
@@ -460,7 +460,7 @@ def _user_ordered_cmp(forward_type, reflected_type, forward_op, reflected_op):
                                sig.return_type)
         else:
             # reflected version
-            assert isinstance(other_type, reflected_type)
+            assert isinstance(other_type, types.Ordered)
             [this, other] = args
             reflected_sig = typing.signature(sig.return_type, other_type,
                                              self_type)
@@ -470,11 +470,11 @@ def _user_ordered_cmp(forward_type, reflected_type, forward_op, reflected_op):
     return imp
 
 
-user_lt = _user_ordered_cmp(types.UserLt, types.UserGt, "<", ">")
-user_gt = _user_ordered_cmp(types.UserGt, types.UserLt, ">", "<")
+user_lt = _user_ordered_cmp("<", ">")
+user_gt = _user_ordered_cmp(">", "<")
 
-user_le = _user_ordered_cmp(types.UserLe, types.UserGe, "<=", ">=")
-user_ge = _user_ordered_cmp(types.UserGe, types.UserLe, ">=", "<=")
+user_le = _user_ordered_cmp("<=", ">=")
+user_ge = _user_ordered_cmp(">=", "<=")
 
 
 @lower_builtin(len, types.ConstSized)

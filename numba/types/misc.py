@@ -306,7 +306,7 @@ class SliceType(Type):
         return self.members
 
 
-class ClassInstanceType(UserHashable, UserEq, UserLt, UserGt, UserLe, UserGe):
+class ClassInstanceType(UserHashable, UserEq, UserOrdered):
     """
     The type of a jitted class *instance*.  It will be the return-type
     of the constructor of the class.

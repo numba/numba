@@ -904,40 +904,29 @@ class CmpNe(AbstractTemplate):
         return signature(types.boolean, lhs, rhs)
 
 
+class CmpOrderedBase(AbstractTemplate):
+    def generic(self, args, kws):
+        [lhs, rhs] = args
+        if isinstance(lhs, types.Ordered) or isinstance(rhs, types.Ordered):
+            return signature(types.boolean, lhs, rhs)
+
+
 @infer
-class CmpLtBase(AbstractTemplate):
+class CmpLtBase(CmpOrderedBase):
     key = '<'
 
-    def generic(self, args, kws):
-        [lhs, rhs] = args
-        if isinstance(lhs, types.Lt) or isinstance(rhs, types.Gt):
-            return signature(types.boolean, lhs, rhs)
 
 @infer
-class CmpGtBase(AbstractTemplate):
+class CmpGtBase(CmpOrderedBase):
     key = '>'
 
-    def generic(self, args, kws):
-        [lhs, rhs] = args
-        if isinstance(lhs, types.Gt) or isinstance(rhs, types.Lt):
-            return signature(types.boolean, lhs, rhs)
-
 
 @infer
-class CmpLeBase(AbstractTemplate):
+class CmpLeBase(CmpOrderedBase):
     key = '<='
 
-    def generic(self, args, kws):
-        [lhs, rhs] = args
-        if isinstance(lhs, types.Le) or isinstance(rhs, types.Ge):
-            return signature(types.boolean, lhs, rhs)
-
 
 @infer
-class CmpGeBase(AbstractTemplate):
+class CmpGeBase(CmpOrderedBase):
     key = '>='
 
-    def generic(self, args, kws):
-        [lhs, rhs] = args
-        if isinstance(lhs, types.Ge) or isinstance(rhs, types.Le):
-            return signature(types.boolean, lhs, rhs)

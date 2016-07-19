@@ -31,14 +31,6 @@ def _on_type_disposal(wr, _pop=_typecache.pop):
     _pop(wr, None)
 
 
-def _get_defining_class(meth):
-    for base in reversed(meth.__self__.__mro__):
-        imp = getattr(base, meth.__name__, None)
-        if imp is not None and imp.__func__ is meth.__func__:
-            return base
-    raise RuntimeError('unreachable')
-
-
 class _TypeMetaclass(ABCMeta):
     """
     A metaclass that will intern instances after they are created.
@@ -76,8 +68,7 @@ class _TypeMetaclass(ABCMeta):
         the test.
         """
         if issubclass(type(instance), cls):
-            if (hasattr(cls, 'interface_check') and
-                    cls is _get_defining_class(cls.interface_check)):
+            if hasattr(cls, 'interface_check'):
                 return cls.interface_check(instance)
             else:
                 return True
@@ -269,22 +260,21 @@ class UserOp(Type):
 class UserHashable(Hashable, UserOp):
     """
     For user-defined types that may define __hash__.
-    Virtually subclass Hashable if ``self.supports_operator('hash')`` return True.
+    A class is a subclass for UserHashable iff `.is_hashable()` returns True.
+    `.is_hashable()` depends on the result of `.supports_operator('hash')`.
     """
     def is_hashable(self):
         return self.supports_operator('hash')
-
-    @classmethod
-    def interface_check(cls, instance):
-        return instance.is_hashable()
 
 
 class Eq(Type):
     """
     Base class for Eq types.
-    Subclass must provide ``__eq__``.
-    Subclass can optionally privde ``__ne__``.
+    Eq types must provide ``__eq__``.
+    Eq types can optionally privde ``__ne__``.
     If not provided, ``__ne__`` is automatically provided as inverted ``__eq__``
+
+    A class is a subclass for Eq iff `.is_eq()` returns True.
     """
 
     def is_eq(self):
@@ -301,12 +291,13 @@ class Eq(Type):
 class UserEq(Eq, UserOp):
     """
     For user-defined types that may define ``__eq__`` and ``__ne__``.
-    Virtually subclass Eq if `.is_eq()` returns True.
+    A class is a subclass for UserEq iff `.is_eq()` returns True.
+    `.is_eq()` depends on the result of `.supports_operator('==')`.
     """
 
     def __init__(self, *args, **kwargs):
         super(UserEq, self).__init__(*args, **kwargs)
-        # Enforce restricter interface requirement than CPython.
+        # Enforce stricter interface requirement than CPython.
         if self.supports_operator('!=') and not self.supports_operator('=='):
             raise TypeError("class defined `__ne__` but not `__eq__`")
 
@@ -314,88 +305,36 @@ class UserEq(Eq, UserOp):
         return self.supports_operator('==')
 
 
-class Lt(Type):
+class Ordered(Type):
     """
-    Base class for Lt types.
-    Subclass must provide ``__lt__``
-    """
-    @classmethod
-    def interface_check(cls, instance):
-        return cls.virtual_subclass_check(instance, [UserLt])
+    Base class for types that defines at least of one ordered comparison
+    operator.
 
+    A class is a subclass for Ordered iff `.is_ordered()` returns True.
+    """
 
-class UserLt(UserOp):
-    """
-    For user-defined types that may provide ``__lt__``.
-    Virtually subclass Lt if `self.supports_operator('<')` returns True.
-    """
+    def is_ordered(self):
+        return True
 
     @classmethod
     def interface_check(cls, instance):
-        return issubclass(type(instance), cls) and instance.supports_operator('<')
+        return instance.is_ordered()
 
 
-class Gt(Type):
+class UserOrdered(Ordered, UserOp):
     """
-    Base class for Gt types.
-    Subclass must provide ``__gt__``
+    For user-defined types that may be orderable:
+    defining at least one of the ordered comparison operators.
+
+    A class is a subclass for UserOrdered iff `.is_ordered()` returns True.
+    `.is_ordered()` depends on `.supports_operator` returning True for one of
+    the following arguments: '<', '<=', '>' or '>='.
     """
-    @classmethod
-    def interface_check(cls, instance):
-        return cls.virtual_subclass_check(instance, [UserGt])
+    def is_ordered(self):
+        return any(self.supports_operator(x) for x in ['<', '<=', '>', '>='])
 
 
-class UserGt(UserOp):
-    """
-    For user-defined types that may provide ``__gt__``.
-    Virtually subclass Gt if `self.supports_operator('>')` returns True.
-    """
-    @classmethod
-    def interface_check(cls, instance):
-        return issubclass(type(instance), cls) and instance.supports_operator('>')
-
-
-class Le(Type):
-    """
-    Base class for Le types.
-    Subclass must provide ``__le__``
-    """
-    @classmethod
-    def interface_check(cls, instance):
-        return cls.virtual_subclass_check(instance, [UserLe])
-
-
-class UserLe(UserOp):
-    """
-    For user-defined types that may provide ``__le__``.
-    Virtually subclass Le if `self.supports_operator('<=')` returns True.
-    """
-    @classmethod
-    def interface_check(cls, instance):
-        return issubclass(type(instance), cls) and instance.supports_operator('<=')
-
-
-class Ge(Type):
-    """
-    Base class for Ge types.
-    Subclass must provide ``__ge__``
-    """
-    @classmethod
-    def interface_check(cls, instance):
-        return cls.virtual_subclass_check(instance, [UserGe])
-
-
-class UserGe(UserOp):
-    """
-    For user-defined types that may provide ``__ge__``.
-    Virtually subclass Ge if `self.supports_operator('>=')` returns True.
-    """
-    @classmethod
-    def interface_check(cls, instance):
-        return issubclass(type(instance), cls) and instance.supports_operator('>=')
-
-
-class Number(Hashable, Eq, Lt, Gt, Le, Ge):
+class Number(Hashable, Eq, Ordered):
     """
     Base class for number types.
     """
