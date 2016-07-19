@@ -1605,7 +1605,7 @@ class TestLinalgSlogdet(TestLinalgBase):
                 got_conv, expected[0], nulp=10)
             # compare log determinant magnitude with a more fuzzy value
             # as numpy values come from higher precision lapack routines
-            resolution = 5 * np.finfo(expected[1]).resolution
+            resolution = 5 * np.finfo(a.dtype).resolution
             np.testing.assert_allclose(
                 got[1], expected[1], rtol=resolution, atol=resolution)
 
@@ -1659,8 +1659,11 @@ class TestLinalgDet(TestLinalgBase):
         def check(a, **kwargs):
             expected = det_matrix(a, **kwargs)
             got = cfunc(a, **kwargs)
+
+            resolution = 5 * np.finfo(a.dtype).resolution
+
             # check the determinants are the same
-            np.testing.assert_allclose(got, expected)
+            np.testing.assert_allclose(got, expected, rtol=resolution)
 
             # Ensure proper resource management
             with self.assertNoNRTLeak():
