@@ -14,6 +14,10 @@ from .imputils import (lower_builtin, lower_getattr_generic,
 from .. import typing, types, cgutils, utils
 
 
+def _supports_operator(typ, op):
+    return isinstance(typ, types.UserOp) and typ.supports_operator(op)
+
+
 @lower_builtin('is not', types.Any, types.Any)
 def generic_is_not(context, builder, sig, args):
     """
@@ -62,10 +66,6 @@ def generic_eq(context, builder, sig, args):
     Default implementation for `x == y` that fallback to `is`
     """
     lhs_type, rhs_type = sig.args
-    if isinstance(lhs_type, types.UserNe) or isinstance(rhs_type, types.UserNe):
-        warnings.warn("Possible unintentional usage of default __eq__ on "
-                      "object that implements __ne__", UserWarning)
-
     is_impl = context.get_function("is", sig)
     out = is_impl(builder, args)
     return impl_ret_new_ref(context, builder, sig.return_type, out)
@@ -385,14 +385,14 @@ def not_in(context, builder, sig, args):
 
 # -----------------------------------------------------------------------------
 
-def _reflectable_equality(context, builder, sig, args, comparison, cmp_type):
+def _reflectable_equality(context, builder, sig, args, comparison):
     """
     Implement reflection logic for (in)equality operator
     """
     self_type, other_type = sig.args[:2]
     # check if we need reflection version
-    if not isinstance(self_type, cmp_type):
-        assert isinstance(other_type, cmp_type)
+    if not isinstance(self_type, types.UserEq):
+        assert isinstance(other_type, types.UserEq)
         # reflected signature
         reflected_sig = typing.signature(sig.return_type, other_type, self_type)
         [this, other] = args
@@ -416,13 +416,12 @@ def user_eq(context, builder, sig, args):
                             sig.return_type)
         return impl_ret_new_ref(context, builder, sig.return_type, out)
 
-    return _reflectable_equality(context, builder, sig, args, equality,
-                                 types.UserEq)
+    return _reflectable_equality(context, builder, sig, args, equality)
 
 
-@lower_builtin("!=", types.UserNe, types.Any)
-@lower_builtin("!=", types.Any, types.UserNe)
-@lower_builtin("!=", types.UserNe, types.UserNe)
+@lower_builtin("!=", types.UserEq, types.Any)
+@lower_builtin("!=", types.Any, types.UserEq)
+@lower_builtin("!=", types.UserEq, types.UserEq)
 def user_ne(context, builder, sig, args):
 
     def inequality(context, builder, sig, args):
@@ -442,8 +441,7 @@ def user_ne(context, builder, sig, args):
 
         return impl_ret_new_ref(context, builder, sig.return_type, out)
 
-    return _reflectable_equality(context, builder, sig, args, inequality,
-                                 types.UserNe)
+    return _reflectable_equality(context, builder, sig, args, inequality)
 
 
 def _user_ordered_cmp(forward_type, reflected_type, forward_op, reflected_op):

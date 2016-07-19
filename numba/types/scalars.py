@@ -9,7 +9,7 @@ from .. import npdatetime, utils
 from ..typeconv import Conversion
 
 
-class Boolean(Hashable, Eq, Ne, Lt, Gt, Le, Ge):
+class Boolean(Hashable, Eq, Lt, Gt, Le, Ge):
 
     def cast_python_value(self, value):
         return bool(value)
