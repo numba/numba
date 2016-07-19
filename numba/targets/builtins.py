@@ -445,12 +445,12 @@ def user_ne(context, builder, sig, args):
 
 
 def _user_ordered_cmp(forward_op, reflected_op):
-    @lower_builtin(forward_op, types.Ordered, types.Any)
-    @lower_builtin(forward_op, types.Ordered, types.Ordered)
-    @lower_builtin(forward_op, types.Any, types.Ordered)
+    @lower_builtin(forward_op, types.UserOrdered, types.Any)
+    @lower_builtin(forward_op, types.UserOrdered, types.UserOrdered)
+    @lower_builtin(forward_op, types.Any, types.UserOrdered)
     def imp(context, builder, sig, args):
         [self_type, other_type] = sig.args[:2]
-        if isinstance(self_type, types.Ordered):
+        if isinstance(self_type, types.UserOrdered):
             # forward version
             self_type = sig.args[0]
             fwd_impl = self_type.get_operator(forward_op, context, sig)
@@ -460,7 +460,7 @@ def _user_ordered_cmp(forward_op, reflected_op):
                                sig.return_type)
         else:
             # reflected version
-            assert isinstance(other_type, types.Ordered)
+            assert isinstance(other_type, types.UserOrdered)
             [this, other] = args
             reflected_sig = typing.signature(sig.return_type, other_type,
                                              self_type)
