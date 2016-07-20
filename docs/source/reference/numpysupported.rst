@@ -169,6 +169,7 @@ floating-point and complex numbers:
 * On Python 3.5 and above, the matrix multiplication operator from
   :pep:`465` (i.e. ``a @ b`` where ``a`` and ``b`` are 1-D or 2-D arrays).
 * :func:`numpy.linalg.cholesky`
+* :func:`numpy.linalg.det`
 * :func:`numpy.linalg.eig` (only running with data that does not cause a domain
   change is supported e.g. real input -> real
   output, complex input -> complex output).
@@ -176,6 +177,7 @@ floating-point and complex numbers:
 * :func:`numpy.linalg.lstsq`
 * :func:`numpy.linalg.pinv`
 * :func:`numpy.linalg.qr` (only the first argument).
+* :func:`numpy.linalg.slogdet`
 * :func:`numpy.linalg.solve`
 * :func:`numpy.linalg.svd` (only the 2 first arguments).
 

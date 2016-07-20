@@ -1574,3 +1574,120 @@ def pinv_impl(a, rcond=1.e-15):
         return acpy.T.ravel().reshape(a.shape).T
 
     return pinv_impl
+
+
+def _get_slogdet_diag_walker(a):
+    """
+    Walks the diag of a LUP decomposed matrix
+    uses that det(A) = prod(diag(lup(A)))
+    and also that log(a)+log(b) = log(a*b)
+    The return sign is adjusted based on the values found
+    such that the log(value) stays in the real domain.
+    """
+    if isinstance(a.dtype, types.Complex):
+        @jit(nopython=True)
+        def cmplx_diag_walker(n, a, sgn):
+            # walk diagonal
+            csgn = sgn + 0.j
+            acc = 0.
+            for k in range(n):
+                absel = np.abs(a[k, k])
+                csgn = csgn * (a[k, k] / absel)
+                acc = acc + np.log(absel)
+            return (csgn, acc)
+        return cmplx_diag_walker
+    else:
+        @jit(nopython=True)
+        def real_diag_walker(n, a, sgn):
+            # walk diagonal
+            acc = 0.
+            for k in range(n):
+                v = a[k, k]
+                if v < 0.:
+                    sgn = -sgn
+                    v = -v
+                acc = acc + np.log(v)
+            # sgn is a float dtype
+            return (sgn + 0., acc)
+        return real_diag_walker
+
+
+@overload(np.linalg.slogdet)
+def slogdet_impl(a):
+    ensure_lapack()
+
+    _check_linalg_matrix(a, "slogdet")
+
+    numba_xxgetrf_sig = types.intc(types.char,   # kind
+                                   types.intp,  # m
+                                   types.intp,  # n
+                                   types.CPointer(a.dtype),  # a
+                                   types.intp,  # lda
+                                   types.CPointer(F_INT_nbtype)  # ipiv
+                                   )
+
+    numba_xxgetrf = types.ExternalFunction("numba_xxgetrf",
+                                           numba_xxgetrf_sig)
+
+    kind = ord(get_blas_kind(a.dtype, "slogdet"))
+
+    F_layout = a.layout == 'F'
+
+    diag_walker = _get_slogdet_diag_walker(a)
+
+    def slogdet_impl(a):
+        n = a.shape[-1]
+        if a.shape[-2] != n:
+            msg = "Last 2 dimensions of the array must be square."
+            raise np.linalg.LinAlgError(msg)
+
+        _check_finite_matrix(a)
+
+        if F_layout:
+            acpy = np.copy(a)
+        else:
+            acpy = np.asfortranarray(a)
+
+        ipiv = np.empty(n, dtype=F_INT_nptype)
+
+        r = numba_xxgetrf(kind, n, n, acpy.ctypes, n, ipiv.ctypes)
+
+        if r > 0:
+            # factorisation failed, return same defaults as np
+            return (0., -np.inf)
+        _inv_err_handler(r)  # catch input-to-lapack problem
+
+        # The following, prior to the call to diag_walker, is present
+        # to account for the effect of possible permutations to the
+        # sign of the determinant.
+        # This is the same idea as in numpy:
+        # File name `umath_linalg.c.src` e.g.
+        # https://github.com/numpy/numpy/blob/master/numpy/linalg/umath_linalg.c.src
+        # in function `@TYPE@_slogdet_single_element`.
+        sgn = 1
+        for k in range(n):
+            sgn = sgn + (ipiv[k] != (k + 1))
+
+        sgn = sgn & 1
+        if sgn == 0:
+            sgn = -1
+
+        # help liveness analysis
+        ipiv.size
+        return diag_walker(n, acpy, sgn)
+
+    return slogdet_impl
+
+
+@overload(np.linalg.det)
+def det_impl(a):
+
+    ensure_lapack()
+
+    _check_linalg_matrix(a, "det")
+
+    def det_impl(a):
+        (sgn, slogdet) = np.linalg.slogdet(a)
+        return sgn * np.exp(slogdet)
+
+    return det_impl
