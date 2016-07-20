@@ -22,7 +22,7 @@ a4 = np.arange(32, dtype=np.int8).view(dt)
 a5 = a4[::-2]
 
 # A recognizable data string
-a6 = np.frombuffer(b"XXXX_array_contents_XXXX", dtype=np.float64)
+a6 = np.frombuffer(b"XXXX_array_contents_XXXX", dtype=np.float32)
 
 
 def getitem0(i):
@@ -101,7 +101,9 @@ class TestConstantArray(unittest.TestCase):
         for line in ir.splitlines():
             if 'XXXX_array_contents_XXXX' in line:
                 self.assertIn("constant [24 x i8]", line)  # sanity check
-                self.assertIn(", align 8", line)
+                # Should be the ABI-required alignment for float32
+                # on most platforms...
+                self.assertIn(", align 4", line)
                 break
         else:
             self.fail("could not find array declaration in LLVM IR")
