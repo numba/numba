@@ -1661,7 +1661,9 @@ def slogdet_impl(a):
         # to account for the effect of possible permutations to the
         # sign of the determinant.
         # This is the same idea as in numpy:
-        # https://github.com/numpy/numpy/blob/master/numpy/linalg/umath_linalg.c.src#L1099-L1110
+        # File name `umath_linalg.c.src` e.g.
+        # https://github.com/numpy/numpy/blob/master/numpy/linalg/umath_linalg.c.src
+        # in function `@TYPE@_slogdet_single_element`.
         sgn = 1
         for k in range(n):
             sgn = sgn + (ipiv[k] != (k + 1))
