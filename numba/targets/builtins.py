@@ -14,10 +14,6 @@ from .imputils import (lower_builtin, lower_getattr_generic,
 from .. import typing, types, cgutils, utils
 
 
-def _supports_operator(typ, op):
-    return isinstance(typ, types.UserOp) and typ.supports_operator(op)
-
-
 @lower_builtin('is not', types.Any, types.Any)
 def generic_is_not(context, builder, sig, args):
     """

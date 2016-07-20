@@ -84,13 +84,49 @@ the jitclass instance is handed to the interpreter.  It is during attribute
 access to the field values that they are boxed.
 
 
+Overloading operators
+=====================
+
+Currently, only rich comparison operators can be overloaded.
+The list of supported comparison operators are:
+
+* unordered: ``__eq__``, ``__ne__``.
+* ordered: ``__lt__``, ``__gt__``, ``__le__``, ``__ge__``.
+
+Python-2 only ``__cmp__`` is not supported.
+
+Numba uses a stricter and simpler data model than CPython.  When
+``__eq__`` is defined, a default ``__ne__`` is provided as inverted ``__eq__``.
+When ``__ne__`` is defined but not ``__eq__``, Numba raises a ``TypeError``.
+When one of the ordered comparisons are defined, a default implementation is
+provided automatically for the rest of the ordered comparisons.  The behavior
+is equivalent to using ``@total_ordering``.
+
+To define a class that is orderable, only the ``__eq__`` and ``__lt__`` need
+to be defined; for example:
+
+.. code:: python
+
+    @jitclass([('value', int32)])
+    class Foo(object):
+        def __init__(self, value):
+            self.value = value
+
+        def __eq__(self, other):
+            return self.value == other.value
+
+        def __lt__(self, other):
+            return self.value < other.value
+
+
 Limitations
 ===========
 
 * A jitclass class object is treated as a function (the constructor) inside
   a numba compiled function.
 * ``isinstance()`` only works in the interpreter.
-* Manipulating jitclass instances in the interpreter is not optimized, yet.
+* Manipulating jitclass instances in the interpreter may not as efficient due
+  to extra wrappers.
 * Support for jitclasses are available on CPU only.
   (Note: Support for GPU devices is planned for a future release.)
 

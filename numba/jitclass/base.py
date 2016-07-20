@@ -139,6 +139,13 @@ def _fix_up_private_attr(clsname, spec):
 
 
 def _fill_total_ordering(methods):
+    """
+    Insert missing ordered comparisons into the dictionary of available methods.
+    These are all pure-python functions at this point.
+
+    Requires __eq__ to be available and at least one of the ordered comparison
+    is defined.
+    """
     # Auto fill ordered comparisons if __eq__ is defined
     if '__eq__' not in methods:
         return
@@ -172,6 +179,10 @@ def _fill_total_ordering(methods):
 
 
 def _fill_not_equal(methods):
+    """
+    Insert missing __ne__ if __eq__ is defined into the dictionary of available
+    methods.  These are all pure-python functions at this point.
+    """
     # Auto fill __ne__ given __eq__
     if '__ne__' not in methods and '__eq__' in methods:
         def ne(self, other):
@@ -182,6 +193,9 @@ def _fill_not_equal(methods):
 
 
 def _fill_comparison_operators(methods):
+    """
+    Insert missing comparison operators
+    """
     _fill_not_equal(methods)
     _fill_total_ordering(methods)
 

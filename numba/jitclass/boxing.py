@@ -76,10 +76,16 @@ _supported_special_methods = frozenset(['__hash__', '__eq__', '__ne__',
 
 
 def _handle_special_methods(dct, name, func):
+    """
+    Insert wrappers for special (__xxx__) methods.
+    """
+    # ignored method
     if name in _ignored_special_methods:
         return
+    # supported method
     elif name in _supported_special_methods:
         dct[name] = _generate_method(name, func)
+    # unknown method
     else:
         msg = "unsupported special method: {0}".format(name)
         raise NotImplementedError(msg)
