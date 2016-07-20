@@ -16,7 +16,6 @@ from .support import TestCase, MemoryLeakMixin, tag
 from numba.jitclass import _box
 from numba.runtime.nrt import MemInfo
 from numba.six import assertRegex
-from numba.utils import IS_PY3
 
 
 def _get_meminfo(box):
@@ -763,26 +762,18 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
             # not_equal provided via default __eq__
             return a != b
 
-        if IS_PY3:
-            # Only python3 have fallbacks to `==`
-            self.assertFalse(check_inequality(ai, bi))
-            self.assertEqual(ai.use_count, 5)
+        self.assertFalse(check_inequality(ai, bi))
+        self.assertEqual(ai.use_count, 5)
 
-            self.assertTrue(check_inequality(ai, ci))
-            self.assertEqual(ai.use_count, 6)
+        self.assertTrue(check_inequality(ai, ci))
+        self.assertEqual(ai.use_count, 6)
 
-            # notice the asymmetric __eq__ due to the instancecheck in MyClass
-            self.assertTrue(check_inequality(ai, di))
-            self.assertEqual(ai.use_count, 7)
+        # notice the asymmetric __eq__ due to the instancecheck in MyClass
+        self.assertTrue(check_inequality(ai, di))
+        self.assertEqual(ai.use_count, 7)
 
-            self.assertFalse(check_inequality(di, ai))
-            self.assertEqual(di.use_count, 3)
-        else:
-            with self.assertRaises(errors.LoweringError) as raises:
-                check_inequality(ai, bi)
-
-            self.assertIn("no default `is` implementation",
-                          str(raises.exception))
+        self.assertFalse(check_inequality(di, ai))
+        self.assertEqual(di.use_count, 3)
 
         self.assertEqual(bi.use_count, 0)
         self.assertEqual(ci.use_count, 0)
