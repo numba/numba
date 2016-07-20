@@ -1575,15 +1575,16 @@ def pinv_impl(a, rcond=1.e-15):
 
     return pinv_impl
 
-# Walks the diag of a LUP decomposed matrix
-# uses that det(A) = prod(diag(lup(A)))
-# and also that log(a)+log(b) = log(a*b)
-# The return sign is adjusted based on the values found
-# such that the log(value) stays in the real domain.
-
 
 def _get_slogdet_diag_walker(a):
-    if isinstance(a.dtype, types.scalars.Complex):
+    """
+    Walks the diag of a LUP decomposed matrix
+    uses that det(A) = prod(diag(lup(A)))
+    and also that log(a)+log(b) = log(a*b)
+    The return sign is adjusted based on the values found
+    such that the log(value) stays in the real domain.
+    """
+    if isinstance(a.dtype, types.Complex):
         @jit(nopython=True)
         def cmplx_diag_walker(n, a, sgn):
             # walk diagonal
@@ -1656,11 +1657,14 @@ def slogdet_impl(a):
             return (0., -np.inf)
         _inv_err_handler(r)  # catch input-to-lapack problem
 
+        # The following, prior to the call to diag_walker, is present
+        # to account for the effect of possible permutations to the
+        # sign of the determinant.
         sgn = 1
         for k in range(n):
             sgn = sgn + (ipiv[k] != (k + 1))
 
-        sgn = np.mod(sgn, 2)
+        sgn = sgn & 1
         if sgn == 0:
             sgn = -1
 
