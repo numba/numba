@@ -562,21 +562,23 @@ class LiftedLoop(_DispatcherBase):
     """
     _fold_args = False
 
-    def __init__(self, bytecode, typingctx, targetctx, locals, flags):
+    def __init__(self, interp, typingctx, targetctx, flags, locals):
+        bytecode = interp.bytecode
+        self.interp = interp
+        self.lifted_from = None
+
         self.typingctx = typingctx
         self.targetctx = targetctx
+        self.flags = flags
+        self.locals = locals
 
         _DispatcherBase.__init__(self, bytecode.arg_count, bytecode.func,
                                  bytecode.pysig)
 
-        self.locals = locals
-        self.flags = flags
-        self.bytecode = bytecode
-        self.lifted_from = None
-
     def get_source_location(self):
         """Return the starting line number of the loop.
         """
+        # XXX probably need to fix this; this should point to the start of loop
         return next(iter(self.bytecode)).lineno
 
     def compile(self, sig):
@@ -592,14 +594,13 @@ class LiftedLoop(_DispatcherBase):
                 return existing.entry_point
 
             assert not flags.enable_looplift, "Enable looplift flags is on"
-            cres = compiler.compile_bytecode(typingctx=self.typingctx,
-                                             targetctx=self.targetctx,
-                                             bc=self.bytecode,
-                                             args=args,
-                                             return_type=return_type,
-                                             flags=flags,
-                                             locals=self.locals,
-                                             lifted=(), lifted_from=self.lifted_from)
+            cres = compiler.compile_ir(typingctx=self.typingctx,
+                                       targetctx=self.targetctx,
+                                       interp=self.interp,
+                                       args=args, return_type=return_type,
+                                       flags=flags, locals=self.locals,
+                                       lifted=(),
+                                       lifted_from=self.lifted_from)
 
             # Check typing error if object mode is used
             if cres.typing_error is not None and not flags.enable_pyobject:

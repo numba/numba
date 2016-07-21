@@ -4,13 +4,14 @@ Implement transformation on Numba IR
 
 from __future__ import absolute_import, print_function
 
-from pprint import pprint
 from functools import singledispatch
 from collections import namedtuple
+from copy import copy
 
 from numba.controlflow import CFGraph
 from numba.analysis import compute_use_defs, compute_live_map
 from numba import ir
+from numba.interpreter import Interpreter
 
 
 def _build_controlflow(blocks):
@@ -113,8 +114,7 @@ def _loop_lift_modify_call_block(liftedloop, block, inputs, outputs, returnto):
     loc = block.loc
     blk = ir.Block(scope=scope, loc=loc)
     # load loop
-    fn = ir.Global(name='liftedloop.%s' % id(liftedloop), value=liftedloop,
-                   loc=loc)
+    fn = ir.Const(value=liftedloop, loc=loc)
     fnvar = scope.make_temp(loc=loc)
     blk.append(ir.Assign(target=fnvar, value=fn, loc=loc))
     # call loop
@@ -132,8 +132,8 @@ def _loop_lift_modify_call_block(liftedloop, block, inputs, outputs, returnto):
         blk.append(ir.Assign(target=target, value=getitem, loc=loc))
 
     # clean up
-    blk.append(ir.Del(value=fnvar, loc=loc))
-    blk.append(ir.Del(value=callres, loc=loc))
+    blk.append(ir.Del(value=fnvar.name, loc=loc))
+    blk.append(ir.Del(value=callres.name, loc=loc))
 
     # jump to next block
     blk.append(ir.Jump(target=returnto, loc=loc))
@@ -179,17 +179,35 @@ def _loop_lift_prepare_loop_func(loopinfo, blocks):
     blocks[loopinfo.returnto] = make_epilogue()
 
 
-def _loop_lift_modify_blocks(bytecode, loopinfo, blocks):
+def _loop_lift_modify_blocks(bytecode, loopinfo, blocks,
+                             typingctx, targetctx, flags, locals):
     """
     Modify the block inplace to call to the lifted-loop.
     Returns a dictionary of blocks of the lifted-loop.
     """
+    from numba.dispatcher import LiftedLoop
+
     loop = loopinfo.loop
     loopblockkeys = set(loop.body) | set(loop.entries) | set(loop.exits)
     loopblocks = dict((k, blocks[k]) for k in loopblockkeys)
 
     _loop_lift_prepare_loop_func(loopinfo, loopblocks)
-    liftedloop = LiftedLoop(bytecode, loopblocks, loopinfo.inputs)
+
+    def make_loop_interp(bytecode, blocks, argnames):
+        # XXX patch bytecode
+        bytecode = copy(bytecode)
+        bytecode.arg_names = tuple(argnames)
+        bytecode.arg_count = len(argnames)
+
+        interp = Interpreter(bytecode=bytecode)
+        firstblock = blocks[min(blocks)]
+        interp.blocks = blocks
+        interp.loc = firstblock.loc
+        # XXX fixup block_entry_vars
+        return interp
+
+    interp = make_loop_interp(bytecode, loopblocks, loopinfo.inputs)
+    liftedloop = LiftedLoop(interp, typingctx, targetctx, flags, locals)
 
     # modify for calling into liftedloop
     callblock = _loop_lift_modify_call_block(liftedloop, blocks[loopinfo.callfrom],
@@ -205,14 +223,15 @@ def _loop_lift_modify_blocks(bytecode, loopinfo, blocks):
     return liftedloop
 
 
-def loop_lifting(interp):
-    from numba.interpreter import Interpreter
+def loop_lifting(interp, typingctx, targetctx, flags, locals):
 
-    blocks = interp.blocks
+    blocks = interp.blocks.copy()
     loopinfos = _loop_lift_get_infos_for_lifted_loops(blocks)
     loops = []
     for loopinfo in loopinfos:
-        loops.append(_loop_lift_modify_blocks(interp.bytecode, loopinfo, blocks))
+        lifted = _loop_lift_modify_blocks(interp.bytecode, loopinfo, blocks,
+                                          typingctx, targetctx, flags, locals)
+        loops.append(lifted)
     # make main interpreter
     # XXX duplication
     main = Interpreter(bytecode=interp.bytecode)
@@ -220,19 +239,15 @@ def loop_lifting(interp):
     main.arg_count = interp.arg_count
     main.arg_names = interp.arg_names
     main.blocks = blocks
+    main.used_globals = interp.used_globals
+
+    main.block_entry_vars = {}
+
+    for offset, block in interp.blocks.items():
+        if offset in main.blocks and block in interp.block_entry_vars:
+            data = interp.block_entry_vars[block]
+            newblk = main.blocks[offset]
+            main.block_entry_vars[newblk] = data
 
     return main, loops
-
-
-class LiftedLoop(object):
-    # TODO
-    def __init__(self, bytecode, blocks, argnames):
-        from numba.interpreter import Interpreter
-
-        self.interp = Interpreter(bytecode=bytecode)
-        firstblock = blocks[min(blocks)]
-        self.interp.blocks = blocks
-        self.interp.loc = firstblock.loc
-        self.interp.arg_names = argnames
-        self.interp.arg_count = len(argnames)
 
