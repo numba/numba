@@ -2106,3 +2106,88 @@ def cond_impl(a, p=None):
         return impl(a, p)
 
     return cond_impl
+
+
+@overload(np.linalg.matrix_rank)
+def matrix_rank_impl(a, tol=None):
+    """
+    Computes rank for matrices and vectors.
+    The only issue that may arise is that because numpy uses double
+    precision lapack calls whereas numba uses type specific lapack
+    calls, some singular values may differ and therefore counting the
+    number of them above a tolerance may lead to different counts,
+    and therefore rank, in some cases.
+    """
+    ensure_lapack()
+
+    _check_linalg_1_or_2d_matrix(a, "matrix_rank")
+    sv_func = _compute_singular_values(a)
+
+    def _2d_matrix_rank_impl(a, tol):
+
+        @jit(nopython=True)
+        def get_rank(sv, t):
+            """
+            Gets rank from singular values with cut-off at a given tolerance
+            """
+            rank = 0
+            for k in range(len(sv)):
+                if sv[k] > t:
+                    rank = rank + 1
+                else:  # sv is ordered big->small so break on condition not met
+                    break
+            return rank
+
+        # handle the tol==None case separately for type inference to work
+        if tol in (None, types.none):
+            nb_type = getattr(a.dtype, "underlying_float", a.dtype)
+            np_type = np_support.as_dtype(nb_type)
+            eps_val = np.finfo(np_type).eps
+
+            @jit(nopython=True)
+            def _2d_tol_none_impl(a, tol):
+                s = sv_func(a)
+                # replicate numpy default tolerance calculation
+                r = a.shape[0]
+                c = a.shape[1]
+                l = r if r > c else c
+                t = s[0] * l * eps_val
+                return get_rank(s, t)
+            return _2d_tol_none_impl
+        else:
+            @jit(nopython=True)
+            def _2d_tol_not_none_impl(a, tol):
+                s = sv_func(a)
+                return get_rank(s, tol)
+            return _2d_tol_not_none_impl
+
+    def _get_matrix_rank_impl(a, tol):
+        ndim = a.ndim
+        if ndim == 1:
+            # NOTE: Technically, the numpy implementation could be argued as
+            # incorrect for the case of a vector (1D matrix). If a tolerance
+            # is provided and a vector with a singular value below tolerance is
+            # encountered this should report a rank of zero, the numpy
+            # implementation does not do this and instead elects to report that
+            # if any value in the vector is nonzero then the rank is 1.
+            # An example would be [0, 1e-15, 0, 2e-15] which numpy reports as
+            # rank 1 invariant of `tol`. The singular value for this vector is
+            # obviously sqrt(5)*1e-15 and so a tol of e.g. sqrt(6)*1e-15 should
+            # lead to a reported rank of 0 whereas a tol of 1e-15 should lead
+            # to a reported rank of 1, numpy reports 1 regardless.
+            # The code below replicates the numpy behaviour.
+            @jit(nopython=True)
+            def _1d_matrix_rank_impl(a, tol):
+                return int(np.all(a != 0.))
+            return _1d_matrix_rank_impl
+        elif ndim == 2:
+            return _2d_matrix_rank_impl(a, tol)
+        else:
+            assert 0  # unreachable
+
+    impl = _get_matrix_rank_impl(a, tol)
+
+    def matrix_rank_impl(a, tol=None):
+        return impl(a, tol)
+
+    return matrix_rank_impl

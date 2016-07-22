@@ -353,6 +353,10 @@ def cond_matrix(a, p=None):
     return np.linalg.cond(a, p)
 
 
+def matrix_rank_matrix(a, tol=None):
+    return np.linalg.matrix_rank(a, tol)
+
+
 class TestLinalgBase(TestCase):
     """
     Provides setUp and common data/error modes for testing np.linalg functions.
@@ -1865,5 +1869,90 @@ class TestLinalgCond(TestLinalgBase):
         # assert raises for an invalid norm kind kwarg
         self.assert_invalid_norm_kind(cfunc, (np.array([[1., 2.], [3., 4.]],
                                                        dtype=np.float64), 6))
+
+
+class TestLinalgMatrixRank(TestLinalgSystems):
+    """
+    Tests for np.linalg.matrix_rank.
+    """
+
+    @needs_lapack
+    def test_linalg_matrix_rank(self):
+        """
+        Test np.linalg.matrix_rank
+        """
+
+        cfunc = jit(nopython=True)(matrix_rank_matrix)
+
+        def check(a, **kwargs):
+            expected = matrix_rank_matrix(a, **kwargs)
+            got = cfunc(a, **kwargs)
+
+            # Ranks are integral so comparison should be trivial.
+            # check the rank is the same
+            np.testing.assert_allclose(got, expected)
+
+            # Ensure proper resource management
+            with self.assertNoNRTLeak():
+                cfunc(a, **kwargs)
+
+        sizes = [(7, 1), (11, 5), (5, 11), (3, 3), (1, 7)]
+
+        for size, dtype, order in \
+                product(sizes, self.dtypes, 'FC'):
+            a = self.specific_sample_matrix(size, dtype, order)
+            check(a)
+
+            # If the system is a matrix, check rank deficiency is reported
+            # correctly.
+            rm1 = min(size) - 1
+            if rm1 > 0:
+                a = self.specific_sample_matrix(size, dtype, order, rank=rm1)
+                check(a)
+                # check provision of a tolerance works as expected
+                # create a diag matrix with a singular value guaranteed below
+                # the tolerance 1e-13
+                m, n = a.shape
+                rv = min(m, n)
+                S = np.zeros((m, n), dtype=dtype)
+                idx = np.nonzero(np.eye(m, n))
+                if np.iscomplexobj(a):
+                    b = 1. + np.random.rand(rv) + 1.j +\
+                        1.j * np.random.rand(rv)
+                    # min singular value is sqrt(2)*1e-14
+                    b[0] = 1e-14 + 1e-14j
+                else:
+                    b = 1. + np.random.rand(rv)
+                    b[0] = 1e-14  # min singular value is 1e-14
+                S[idx[0][:rv], idx[1][:rv]] = b.astype(dtype)
+                # rank should be fullrank-1
+                tol = 1e-13
+                self.assertEqual(cfunc(S, tol), rv - 1)
+                check(S, tol=tol)
+
+        # check the zero vector returns rank 0
+        for dt in self.dtypes:
+            a = np.zeros((5), dtype=dt)
+            self.assertEqual(cfunc(a), 0)
+            # check match to np
+            check(a)
+
+        rn = "matrix_rank"
+
+        # Wrong dtype
+        self.assert_wrong_dtype(rn, cfunc,
+                                (np.ones((2, 2), dtype=np.int32),))
+
+        # Dimension issue
+        self.assert_wrong_dimensions_1D(
+            rn, cfunc, (np.ones(
+                12, dtype=np.float64).reshape(
+                2, 2, 3),))
+
+        # no nans or infs for 2D case
+        self.assert_no_nan_or_inf(cfunc,
+                                  (np.array([[1., 2., ], [np.inf, np.nan]],
+                                            dtype=np.float64),))
+
 if __name__ == '__main__':
     unittest.main()
