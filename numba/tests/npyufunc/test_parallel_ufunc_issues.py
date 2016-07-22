@@ -6,7 +6,7 @@ import ctypes
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba.tests.support import captured_output
+from numba.tests.support import captured_stdout
 from numba import vectorize
 
 
@@ -37,18 +37,19 @@ class TestParUfuncIssues(unittest.TestCase):
         """
         # make a ctypes callback that requires the GIL
         proto = ctypes.CFUNCTYPE(None, ctypes.c_int32)
+        characters = 'abcdefghij'
 
         def bar(x):
-            print('c', x)
+            print(characters[x])
 
         cbar = proto(bar)
 
         # our unit under test
         @vectorize(['int32(int32)'], target='parallel', nopython=True)
         def foo(x):
-            print('p', x)  # this reacquires the GIL
-            cbar(x)        # this reacquires the GIL
-            return x
+            print(x % 10)  # this reacquires the GIL
+            cbar(x % 10)   # this reacquires the GIL
+            return x * 2
 
         # Numpy ufunc has a heuristic to determine whether to release the GIL
         # during execution.  Small input size (10) seems to not release the GIL.
@@ -58,18 +59,19 @@ class TestParUfuncIssues(unittest.TestCase):
             a = np.arange(nelem, dtype=np.int32)
             acopy = a.copy()
             # run and capture stdout
-            with captured_output('stdout') as buf:
+            with captured_stdout() as buf:
                 got = foo(a)
             stdout = buf.getvalue()
             buf.close()
-            got_output = sorted(stdout.splitlines())
+            # process outputs from print
+            got_output = ''.join(sorted(map(lambda x: x.strip(), stdout)))
             # build expected output
-            expected_output = list(map('c {0}'.format, range(nelem)))
-            expected_output += list(map('p {0}'.format, range(nelem)))
-            expected_output = sorted(expected_output)
+            expected_output = [str(x % 10) for x in range(nelem)]
+            expected_output += [characters[x % 10] for x in range(nelem)]
+            expected_output = ''.join(sorted(expected_output))
             # verify
             self.assertEqual(got_output, expected_output)
-            np.testing.assert_equal(got, acopy)
+            np.testing.assert_equal(got, 2 * acopy)
 
 
 if __name__ == '__main__':
