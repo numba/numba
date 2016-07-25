@@ -22,11 +22,7 @@ before_install:
     - export PATH=$HOME/miniconda3/bin:$PATH
     - buildscripts/incremental/setup_conda_environment.sh
 install:
-    - source activate $CONDA_ENV
-    # Build numba extensions without silencing compile errors
-    - python setup.py build_ext -q --inplace
-    # Install numba
-    - python setup.py install -q >/dev/null
+    - buildscripts/incremental/build.sh
 
 script:
     - buildscripts/incremental/test.sh
