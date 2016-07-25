@@ -8,7 +8,7 @@ import itertools
 import sys
 from types import ModuleType
 
-from . import six, types
+from . import six, types, cgutils
 
 
 def transform_arg_name(arg):
@@ -23,10 +23,29 @@ def transform_arg_name(arg):
         return str(arg)
 
 
+def _ensure_ascii_char(ch):
+    """
+    Ensure character is representable in ASCII.
+
+    For each character code point greater than 127, encode each byte into `%XX`
+    form where XX is the hexidecimal representation of the byte value.
+    """
+    pt = ord(ch)
+    if pt >= 128:
+        out = []
+        while pt:
+            out.append(pt & 0xff)
+            pt >>= 8
+        return ''.join(map('%{0:02X}'.format, out))
+    else:
+        return ch
+
+
 def default_mangler(name, argtypes):
     codedargs = '.'.join(transform_arg_name(a).replace(' ', '_')
-                             for a in argtypes)
-    return '.'.join([name, codedargs])
+                         for a in argtypes)
+    fullname = '.'.join([name, codedargs])
+    return ''.join(map(_ensure_ascii_char, fullname))
 
 
 # A dummy module for dynamically-generated functions
@@ -75,7 +94,7 @@ class FunctionDescriptor(object):
         if self.modname:
             # XXX choose a different convention for object mode
             self.mangled_name = mangler('%s.%s' % (self.modname, self.unique_name),
-                                        self.argtypes)
+                                                   self.argtypes)
         else:
             self.mangled_name = mangler(self.unique_name, self.argtypes)
         self.inline = inline

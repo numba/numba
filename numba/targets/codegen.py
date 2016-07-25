@@ -9,7 +9,7 @@ import llvmlite.llvmpy.passes as lp
 import llvmlite.binding as ll
 import llvmlite.ir as llvmir
 
-from numba import config, utils
+from numba import config, utils, cgutils
 from numba.runtime.atomicops import remove_redundant_nrt_refct
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
@@ -42,7 +42,7 @@ class CodeLibrary(object):
         self._linking_libraries = set()
         self._final_module = ll.parse_assembly(
             str(self._codegen._create_empty_module(self._name)))
-        self._final_module.name = self._name
+        self._final_module.name = cgutils.normalize_ir_text(self._name)
         # Remember this on the module, for the object cache hooks
         self._final_module.__library = weakref.proxy(self)
         self._shared_module = None
@@ -143,7 +143,8 @@ class CodeLibrary(object):
         """
         self._raise_if_finalized()
         assert isinstance(ir_module, llvmir.Module)
-        ll_module = ll.parse_assembly(str(ir_module))
+        ir = cgutils.normalize_ir_text(str(ir_module))
+        ll_module = ll.parse_assembly(ir)
         ll_module.name = ir_module.name
         ll_module.verify()
         self.add_llvm_module(ll_module)
@@ -422,7 +423,7 @@ class BaseCPUCodegen(object):
                                       self._library_class._object_getbuffer_hook)
 
     def _create_empty_module(self, name):
-        ir_module = lc.Module(name)
+        ir_module = lc.Module(cgutils.normalize_ir_text(name))
         ir_module.triple = ll.get_process_triple()
         if self._data_layout:
             ir_module.data_layout = self._data_layout

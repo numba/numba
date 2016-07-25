@@ -967,3 +967,12 @@ def printf(builder, format, *args):
     # Call
     ptr_fmt = builder.bitcast(global_fmt, cstring)
     return builder.call(fn, [ptr_fmt] + list(args))
+
+
+def normalize_ir_text(text):
+    """
+    Normalize the given string to latin1 compatible encoding that is suitable
+    for use in LLVM IR.
+    """
+    # Just re-encoding to latin1 is enough
+    return text.encode('utf8').decode('latin1')
