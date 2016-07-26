@@ -14,12 +14,6 @@ import subprocess
 import sys
 import tempfile
 import time
-try:
-    # preferred over pure-python StringIO due to threadsafety
-    # note: parallel write to StringIO could cause data to go missing
-    from cStringIO import StringIO
-except ImportError:
-    from io import StringIO
 
 import numpy as np
 
@@ -541,7 +535,7 @@ def captured_output(stream_name):
     """Return a context manager used by captured_stdout/stdin/stderr
     that temporarily replaces the sys stream *stream_name* with a StringIO."""
     orig_stdout = getattr(sys, stream_name)
-    setattr(sys, stream_name, StringIO())
+    setattr(sys, stream_name, utils.StringIO())
     try:
         yield getattr(sys, stream_name)
     finally:
