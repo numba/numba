@@ -64,11 +64,11 @@ class TestParUfuncIssues(unittest.TestCase):
             stdout = buf.getvalue()
             buf.close()
             # process outputs from print
-            got_output = ''.join(sorted(map(lambda x: x.strip(), stdout)))
+            got_output = sorted(map(lambda x: x.strip(), stdout.splitlines()))
             # build expected output
             expected_output = [str(x % 10) for x in range(nelem)]
             expected_output += [characters[x % 10] for x in range(nelem)]
-            expected_output = ''.join(sorted(expected_output))
+            expected_output = sorted(expected_output)
             # verify
             self.assertEqual(got_output, expected_output)
             np.testing.assert_equal(got, 2 * acopy)
