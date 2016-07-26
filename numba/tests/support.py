@@ -15,8 +15,8 @@ import sys
 import tempfile
 import time
 try:
-    # prefered over pure-python StringIO due to threadsafety
-    # note: parallel write to StringIO could cause data to went missing
+    # preferred over pure-python StringIO due to threadsafety
+    # note: parallel write to StringIO could cause data to go missing
     from cStringIO import StringIO
 except ImportError:
     from io import StringIO
