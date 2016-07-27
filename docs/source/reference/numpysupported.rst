@@ -176,7 +176,7 @@ floating-point and complex numbers:
 * :func:`numpy.linalg.inv`
 * :func:`numpy.linalg.lstsq`
 * :func:`numpy.linalg.norm` (only the 2 first arguments and only non string
-  values in kwarg `ord`).
+  values in ``ord``).
 * :func:`numpy.linalg.pinv`
 * :func:`numpy.linalg.qr` (only the first argument).
 * :func:`numpy.linalg.slogdet`

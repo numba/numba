@@ -1723,8 +1723,6 @@ def _get_norm_impl(a, ord_flag):
 
     kind = ord(get_blas_kind(a.dtype, "norm"))
 
-    one = 1
-
     FORCE_CONTIG = a.layout not in 'CF'
 
     if a.ndim == 1:
@@ -1763,6 +1761,16 @@ def _get_norm_impl(a, ord_flag):
             @jit(nopython=True)
             def oneD_impl(a, order=None):
                 n = len(a)
+
+                # Shortcut to handle zero length arrays
+                # this differs slightly to numpy in that
+                # numpy raises a ValueError for kwarg ord=
+                # +/-np.inf as the reduction operations like
+                # max() and min() don't accept zero length
+                # arrays
+                if n == 0:
+                    return 0.0
+
                 # Note: on order == 2
                 # This is the same as for ord=="None" but because
                 # we have to handle "None" specially this condition
@@ -1771,18 +1779,18 @@ def _get_norm_impl(a, ord_flag):
                     return oneD_none_or_2_impl(a, order=order)
                 elif order == np.inf:
                     # max(abs(a))
-                    ret = abs(a[-1])
-                    for k in range(n - 1):
-                        val = np.abs(a[k])
+                    ret = abs(a[0])
+                    for k in range(1, n):
+                        val = abs(a[k])
                         if val > ret:
                             ret = val
                     return ret
 
                 elif order == -np.inf:
                     # min(abs(a))
-                    ret = abs(a[-1])
-                    for k in range(n - 1):
-                        val = np.abs(a[k])
+                    ret = abs(a[0])
+                    for k in range(1, n):
+                        val = abs(a[k])
                         if val < ret:
                             ret = val
                     return ret
@@ -1806,7 +1814,7 @@ def _get_norm_impl(a, ord_flag):
                     # sum(abs(a)**ord)**(1./ord)
                     ret = 0.0
                     for k in range(n):
-                        ret += np.abs(a[k])**order
+                        ret += abs(a[k])**order
                     return ret**(1. / order)
         return oneD_impl
 
@@ -1839,11 +1847,10 @@ def _get_norm_impl(a, ord_flag):
         u = np.empty((1, 1), dtype=np_dtype)
         vt = np.empty((1, 1), dtype=np_dtype)
 
-        # type based limits for use in max/min based functions
-        max_val = np.finfo(np_ret_type.type).max
-        min_val = np.finfo(np_ret_type.type).min
-
         F_layout = a.layout == 'F'
+
+        # type based limit for use in min based functions
+        max_val = np.finfo(np_ret_type.type).max
 
         @jit(nopython=True)
         def twoD_norm_from_svd(a):
@@ -1914,7 +1921,7 @@ def _get_norm_impl(a, ord_flag):
                     kind,  # kind
                     n,  # n
                     acpy.ctypes,  # x
-                    one,
+                    1,  # incx
                     ret.ctypes  # result
                 )
                 if r < 0:
@@ -1931,6 +1938,13 @@ def _get_norm_impl(a, ord_flag):
             def twoD_impl(a, order=None):
                 n = a.shape[-1]
                 m = a.shape[-2]
+
+                # Shortcut to handle zero size arrays
+                # this differs slightly to numpy in that
+                # numpy raises errors for some ord values
+                # and in other cases returns zero.
+                if a.size == 0:
+                    return 0.0
 
                 if order == np.inf:
                     # max of sum of abs across rows

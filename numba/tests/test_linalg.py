@@ -1719,6 +1719,13 @@ class TestLinalgNorm(TestLinalgSystems):
             a = self.sample_vector(10, dtype)[::3]
             check(a, ord=nrm_type)
 
+        # check that numba returns zero for empty arrays. Numpy returns zero
+        # for most norm types and raises ValueError for +/-np.inf.
+        for dtype, nrm_type, order in \
+                product(self.dtypes, nrm_types, 'FC'):
+            a = np.array([], dtype=dtype, order=order)
+            self.assertEqual(cfunc(a, nrm_type), 0.0)
+
         # Check 2D inputs:
         # test: column vector, tall, wide, square, row vector
         # prime sizes
@@ -1746,6 +1753,13 @@ class TestLinalgNorm(TestLinalgSystems):
 
             # contig for neither order
             check(a[1, 4::3], ord=nrm_type)
+
+        # check that numba returns zero for empty arrays. Numpy returns zero
+        # for some norm types and raises a variety of errors for others.
+        for dtype, nrm_type, order in \
+                product(self.dtypes, nrm_types, 'FC'):
+            a = np.array([[]], dtype=dtype, order=order)
+            self.assertEqual(cfunc(a, nrm_type), 0.0)
 
         rn = "norm"
 
