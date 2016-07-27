@@ -40,6 +40,7 @@ def _(term):
 
 
 @_get_targets.register(ir.Return)
+@_get_targets.register(ir.Raise)
 def _(term):
     return []
 
@@ -107,7 +108,7 @@ def _loop_lift_get_infos_for_lifted_loops(blocks):
     for loop in loops:
         [callfrom] = loop.entries   # requirement checked earlier
         an_exit = next(iter(loop.exits))
-        [returnto] = cfg.descendents(an_exit)  # requirement checked earlier
+        [(returnto, _)] = cfg.successors(an_exit)  # requirement checked earlier
 
         # note: sorted for stable ordering
         inputs = sorted(livemap[callfrom])
