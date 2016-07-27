@@ -345,6 +345,10 @@ def det_matrix(a):
     return np.linalg.det(a)
 
 
+def norm_matrix(a, ord=None):
+    return np.linalg.norm(a, ord)
+
+
 class TestLinalgBase(TestCase):
     """
     Provides setUp and common data/error modes for testing np.linalg functions.
@@ -437,7 +441,8 @@ class TestLinalgBase(TestCase):
             # matrices.
             tmp = self.sample_vector(m * m, dtype).reshape(m, m)
             U, _ = np.linalg.qr(tmp)
-            tmp = self.sample_vector(n * n, dtype).reshape(n, n)
+            # flip the second array, else for m==n the identity matrix appears
+            tmp = self.sample_vector(n * n, dtype)[::-1].reshape(n, n)
             V, _ = np.linalg.qr(tmp)
             # create singular values.
             sv = np.linspace(d_cond, condition, rv)
@@ -1661,6 +1666,122 @@ class TestLinalgDetAndSlogdet(TestLinalgBase):
     def test_linalg_slogdet(self):
         cfunc = jit(nopython=True)(slogdet_matrix)
         self.do_test("slogdet", self.check_slogdet, cfunc)
+
+# Use TestLinalgSystems as a base to get access to additional
+# testing for 1 and 2D inputs.
+
+
+class TestLinalgNorm(TestLinalgSystems):
+    """
+    Tests for np.linalg.norm.
+    """
+
+    def assert_invalid_norm_kind(self, cfunc, args):
+        msg = "Invalid norm order for matrices."
+        self.assert_error(cfunc, args, msg, ValueError)
+
+    @needs_lapack
+    def test_linalg_norm(self):
+        """
+        Test np.linalg.norm
+        """
+        cfunc = jit(nopython=True)(norm_matrix)
+
+        def check(a, **kwargs):
+            expected = norm_matrix(a, **kwargs)
+            got = cfunc(a, **kwargs)
+
+            # All results should be in the real domain
+            self.assertTrue(not np.iscomplexobj(got))
+
+            resolution = 5 * np.finfo(a.dtype).resolution
+
+            # check the norms are the same to the arg `a` precision
+            np.testing.assert_allclose(got, expected, rtol=resolution)
+
+            # Ensure proper resource management
+            with self.assertNoNRTLeak():
+                cfunc(a, **kwargs)
+
+        # Check 1D inputs
+        sizes = [1, 4, 7]
+        nrm_types = [None, np.inf, -np.inf, 0, 1, -1, 2, -2, 5, 6.7, -4.3]
+
+        # standard 1D input
+        for size, dtype, nrm_type in \
+                product(sizes, self.dtypes, nrm_types):
+            a = self.sample_vector(size, dtype)
+            check(a, ord=nrm_type)
+
+        # sliced 1D input
+        for dtype, nrm_type in \
+                product(self.dtypes, nrm_types):
+            a = self.sample_vector(10, dtype)[::3]
+            check(a, ord=nrm_type)
+
+        # check that numba returns zero for empty arrays. Numpy returns zero
+        # for most norm types and raises ValueError for +/-np.inf.
+        for dtype, nrm_type, order in \
+                product(self.dtypes, nrm_types, 'FC'):
+            a = np.array([], dtype=dtype, order=order)
+            self.assertEqual(cfunc(a, nrm_type), 0.0)
+
+        # Check 2D inputs:
+        # test: column vector, tall, wide, square, row vector
+        # prime sizes
+        sizes = [(7, 1), (11, 5), (5, 11), (3, 3), (1, 7)]
+        nrm_types = [None, np.inf, -np.inf, 1, -1, 2, -2]
+
+        # standard 2D input
+        for size, dtype, order, nrm_type in \
+                product(sizes, self.dtypes, 'FC', nrm_types):
+            # check a full rank matrix
+            a = self.specific_sample_matrix(size, dtype, order)
+            check(a, ord=nrm_type)
+
+        # check 2D slices work for the case where xnrm2 is called from
+        # BLAS (ord=None) to make sure it is working ok.
+        nrm_types = [None]
+        for dtype, nrm_type, order in \
+                product(self.dtypes, nrm_types, 'FC'):
+            a = self.specific_sample_matrix((17, 13), dtype, order)
+            # contig for C order
+            check(a[:3], ord=nrm_type)
+
+            # contig for Fortran order
+            check(a[:, 3:], ord=nrm_type)
+
+            # contig for neither order
+            check(a[1, 4::3], ord=nrm_type)
+
+        # check that numba returns zero for empty arrays. Numpy returns zero
+        # for some norm types and raises a variety of errors for others.
+        for dtype, nrm_type, order in \
+                product(self.dtypes, nrm_types, 'FC'):
+            a = np.array([[]], dtype=dtype, order=order)
+            self.assertEqual(cfunc(a, nrm_type), 0.0)
+
+        rn = "norm"
+
+        # Wrong dtype
+        self.assert_wrong_dtype(rn, cfunc,
+                                (np.ones((2, 2), dtype=np.int32),))
+
+        # Dimension issue, reuse the test from the TestLinalgSystems class
+        self.assert_wrong_dimensions_1D(
+            rn, cfunc, (np.ones(
+                12, dtype=np.float64).reshape(
+                2, 2, 3),))
+
+        # no nans or infs for 2d case when SVD is used (e.g 2-norm)
+        self.assert_no_nan_or_inf(cfunc,
+                                  (np.array([[1., 2.], [np.inf, np.nan]],
+                                            dtype=np.float64), 2))
+
+        # assert 2D input raises for an invalid norm kind kwarg
+        self.assert_invalid_norm_kind(cfunc, (np.array([[1., 2.], [3., 4.]],
+                                                       dtype=np.float64), 6))
+
 
 if __name__ == '__main__':
     unittest.main()
