@@ -102,10 +102,9 @@ class BaseContext(object):
         """
         if func not in self._functions:
             # It's not a known function type, perhaps it's a global?
-            try:
-                func = self._lookup_global(func)
-            except KeyError:
-                pass
+            functy = self._lookup_global(func)
+            if functy is not None:
+                func = functy
         if func in self._functions:
             defns = self._functions[func]
             for defn in defns:
@@ -189,13 +188,16 @@ class BaseContext(object):
         return self.resolve_function_type("delitem", args, kws)
 
     def resolve_module_constants(self, typ, attr):
-        """Resolve module-level global constants
+        """
+        Resolve module-level global constants.
         Return None or the attribute type
         """
-        if isinstance(typ, types.Module):
-            attrval = getattr(typ.pymod, attr)
-            ty = self.resolve_value_type(attrval)
-            return ty
+        assert isinstance(typ, types.Module)
+        attrval = getattr(typ.pymod, attr)
+        try:
+            return self.resolve_value_type(attrval)
+        except ValueError:
+            pass
 
     def resolve_argument_type(self, val):
         """
@@ -203,7 +205,7 @@ class BaseContext(object):
         as a function argument.  Integer types will all be considered
         int64, regardless of size.
 
-        None is returned for unsupported types.
+        ValueError is raised for unsupported types.
         """
         return typeof(val, Purpose.argument)
 
@@ -211,39 +213,33 @@ class BaseContext(object):
         """
         Return the numba type of a Python value that is being used
         as a runtime constant.
-        None is returned for unsupported types.
+        ValueError is raised for unsupported types.
         """
-        # XXX some typeof() implementations raise a ValueError for
-        # better diagnostics, perhaps we should always do it?
-        tp = typeof(val, Purpose.constant)
-        if tp is not None:
-            return tp
+        try:
+            ty = typeof(val, Purpose.constant)
+        except ValueError as e:
+            # Make sure the exception doesn't hold a reference to the user
+            # value.
+            typeof_exc = utils.erase_traceback(e)
+        else:
+            return ty
 
         if isinstance(val, (types.ExternalFunction, types.NumbaFunction)):
             return val
 
-        if isinstance(val, type):
-            if issubclass(val, BaseException):
-                return types.ExceptionClass(val)
-            if issubclass(val, tuple) and hasattr(val, "_asdict"):
-                return types.NamedTupleClass(val)
+        # Try to look up target specific typing information
+        ty = self._get_global_type(val)
+        if ty is not None:
+            return ty
 
-        try:
-            # Try to look up target specific typing information
-            return self._get_global_type(val)
-        except KeyError:
-            pass
-
-        return None
+        raise typeof_exc
 
     def _get_global_type(self, gv):
-        try:
-            return self._lookup_global(gv)
-        except KeyError:
-            if isinstance(gv, pytypes.ModuleType):
-                return types.Module(gv)
-            else:
-                raise
+        ty = self._lookup_global(gv)
+        if ty is not None:
+            return ty
+        if isinstance(gv, pytypes.ModuleType):
+            return types.Module(gv)
 
     def _load_builtins(self):
         # Initialize declarations
@@ -271,9 +267,8 @@ class BaseContext(object):
         for ftcls in loader.new_registrations('attributes'):
             self.insert_attributes(ftcls(self))
         for gv, gty in loader.new_registrations('globals'):
-            try:
-                existing = self._lookup_global(gv)
-            except KeyError:
+            existing = self._lookup_global(gv)
+            if existing is None:
                 self.insert_global(gv, gty)
             else:
                 # A type was already inserted, see if we can add to it
@@ -292,7 +287,11 @@ class BaseContext(object):
             gv = weakref.ref(gv)
         except TypeError:
             pass
-        return self._globals[gv]
+        try:
+            return self._globals.get(gv, None)
+        except TypeError:
+            # Unhashable type
+            return None
 
     def _insert_global(self, gv, gty):
         """

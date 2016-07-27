@@ -203,7 +203,8 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         v = set([1.0, 2.0, 3.0])
         self.assertEqual(typeof(v), types.Set(types.float64, reflected=True))
         v = frozenset(v)
-        self.assertIs(typeof(v), None)
+        with self.assertRaises(ValueError):
+            typeof(v)
 
     @tag('important')
     def test_namedtuple(self):

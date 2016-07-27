@@ -123,7 +123,8 @@ Inference
 .. function:: numba.typeof(value)
 
    Create a Numba type accurately describing the given Python *value*.
-   ``None`` is returned if the value isn't supported in :term:`nopython mode`.
+   ``ValueError`` is raised if the value isn't supported in
+   :term:`nopython mode`.
 
    ::
 
