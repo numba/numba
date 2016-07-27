@@ -49,7 +49,7 @@ def _(term):
     return [term.truebr, term.falsebr]
 
 
-def _extract_loop_lifting_candidates(cfg):
+def _extract_loop_lifting_candidates(cfg, blocks):
     """
     Returns a list of loops that are candidate for loop lifting
     """
@@ -78,8 +78,18 @@ def _extract_loop_lifting_candidates(cfg):
         "there is one entry"
         return len(loop.entries) == 1
 
+    def cannot_yield(loop):
+        "cannot have yield inside the loop"
+        insiders = set(loop.body) | set(loop.entries) | set(loop.exits)
+        for blk in map(blocks.__getitem__, insiders):
+            for inst in blk.body:
+                if isinstance(inst, ir.Assign):
+                    if isinstance(inst.value, ir.Yield):
+                        return False
+        return True
+
     return [loop for loop in toplevelloops
-            if same_exit_point(loop) and one_entry(loop)]
+            if same_exit_point(loop) and one_entry(loop) and cannot_yield(loop)]
 
 
 _loop_lift_info = namedtuple('loop_lift_info',
@@ -88,7 +98,7 @@ _loop_lift_info = namedtuple('loop_lift_info',
 
 def _loop_lift_get_infos_for_lifted_loops(blocks):
     cfg = _build_controlflow(blocks)
-    loops = _extract_loop_lifting_candidates(cfg)
+    loops = _extract_loop_lifting_candidates(cfg, blocks)
 
     usedefs = compute_use_defs(blocks)
     livemap = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
