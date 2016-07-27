@@ -8,7 +8,8 @@ import itertools
 import sys
 from types import ModuleType
 
-from . import six, types, cgutils
+from . import six, types
+from .utils import PY3
 
 
 def transform_arg_name(arg):
@@ -23,30 +24,15 @@ def transform_arg_name(arg):
         return str(arg)
 
 
-def _ensure_ascii_char(ch):
-    """
-    Ensure character is representable in ASCII.
-
-    For each character code point greater than 127, encode each byte into `%XX`
-    form where XX is the hexidecimal representation of the byte value.
-    """
-    pt = ord(ch)
-    if pt >= 128:
-        out = []
-        while pt:
-            out.append(pt & 0xff)
-            pt >>= 8
-        return ''.join(map('%{0:02X}'.format, out))
-    else:
-        return ch
-
-
 def default_mangler(name, argtypes):
     codedargs = '.'.join(transform_arg_name(a).replace(' ', '_')
                          for a in argtypes)
     fullname = '.'.join([name, codedargs])
-    return ''.join(map(_ensure_ascii_char, fullname))
-
+    out = fullname.encode('ascii', 'backslashreplace')
+    # for py3, convert bytes back to  str
+    if PY3:
+        out = out.decode('ascii')
+    return out
 
 # A dummy module for dynamically-generated functions
 _dynamic_modname = '<dynamic>'
