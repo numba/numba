@@ -15,6 +15,12 @@ import traceback
 import numpy as np
 
 from .six import *
+try:
+    # preferred over pure-python StringIO due to threadsafety
+    # note: parallel write to StringIO could cause data to go missing
+    from cStringIO import StringIO
+except ImportError:
+    from io import StringIO
 from numba.config import PYVERSION, MACHINE_BITS
 
 

@@ -1,5 +1,4 @@
 from __future__ import print_function, division, absolute_import
-from timeit import Timer
 
 import numpy as np
 

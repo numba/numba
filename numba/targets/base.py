@@ -861,6 +861,7 @@ class BaseContext(object):
         A low-level contiguous array constant is created in the LLVM IR.
         """
         assert typ.layout == 'C'                # assumed in typeinfer.py
+        datatype = self.get_data_type(typ.dtype)
 
         # Handle data: reify the flattened array in "C" order as a
         # global array of bytes.
@@ -869,6 +870,8 @@ class BaseContext(object):
         #       workaround issue #1850 which is due to numpy issue #3147
         consts = Constant.array(Type.int(8), bytearray(flat.data))
         data = cgutils.global_constant(builder, ".const.array.data", consts)
+        # Ensure correct data alignment (issue #1933)
+        data.align = self.get_abi_alignment(datatype)
 
         # Handle shape
         llintp = self.get_value_type(types.intp)
@@ -905,10 +908,8 @@ class BaseContext(object):
         """
         Get the ABI size of LLVM type *ty*.
         """
-        if isinstance(ty, llvmir.Type):
-            return ty.get_abi_size(self.target_data)
-        # XXX this one unused?
-        return self.target_data.get_abi_size(ty)
+        assert isinstance(ty, llvmir.Type), "Expected LLVM type"
+        return ty.get_abi_size(self.target_data)
 
     def get_abi_alignment(self, ty):
         """

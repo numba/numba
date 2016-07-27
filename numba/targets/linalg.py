@@ -527,6 +527,14 @@ def _check_linalg_matrix(a, func_name):
                           "float and complex arrays." % func_name)
 
 
+def _check_homogeneous_types(func_name, *types):
+    t0 = types[0].dtype
+    for t in types[1:]:
+        if t.dtype != t0:
+            msg = "np.linalg.%s() only supports inputs that have homogeneous dtypes." % func_name
+            raise TypingError(msg)
+
+
 @jit(nopython=True)
 def _inv_err_handler(r):
     if r != 0:
@@ -1138,20 +1146,14 @@ def lstsq_impl(a, b, rcond=-1.0):
     a_F_layout = a.layout == 'F'
     b_F_layout = b.layout == 'F'
 
-    # the typing context is not easily accessible in `@overload` mode
-    # so type unification etc. is done manually below
-    a_np_dt = np_support.as_dtype(a.dtype)
-    b_np_dt = np_support.as_dtype(b.dtype)
+    _check_homogeneous_types("lstsq", a, b)
 
-    np_shared_dt = np.promote_types(a_np_dt, b_np_dt)
-    nb_shared_dt = np_support.from_dtype(np_shared_dt)
+    np_dt = np_support.as_dtype(a.dtype)
+    nb_dt = a.dtype
 
     # convert typing floats to np floats for use in the impl
-    r_type = getattr(nb_shared_dt, "underlying_float", nb_shared_dt)
-    if r_type.bitwidth == 32:
-        real_dtype = np.float32
-    else:
-        real_dtype = np.float64
+    r_type = getattr(nb_dt, "underlying_float", nb_dt)
+    real_dtype = np_support.as_dtype(r_type)
 
     # the lapack wrapper signature
     numba_ez_gelsd_sig = types.intc(
@@ -1159,9 +1161,9 @@ def lstsq_impl(a, b, rcond=-1.0):
         types.intp,  # m
         types.intp,  # n
         types.intp,  # nrhs
-        types.CPointer(nb_shared_dt),  # a
+        types.CPointer(nb_dt),  # a
         types.intp,  # lda
-        types.CPointer(nb_shared_dt),  # b
+        types.CPointer(nb_dt),  # b
         types.intp,  # ldb
         types.CPointer(r_type),  # S
         types.float64,  # rcond
@@ -1172,7 +1174,7 @@ def lstsq_impl(a, b, rcond=-1.0):
     numba_ez_gelsd = types.ExternalFunction("numba_ez_gelsd",
                                             numba_ez_gelsd_sig)
 
-    kind = ord(get_blas_kind(nb_shared_dt, "lstsq"))
+    kind = ord(get_blas_kind(nb_dt, "lstsq"))
 
     # The following functions select specialisations based on
     # information around 'b', a lot of this effort is required
@@ -1184,7 +1186,7 @@ def lstsq_impl(a, b, rcond=-1.0):
     b_nrhs = _get_system_compute_nrhs(b)
 
     # get a specialised residual computation based on the dtype
-    compute_res = _get_lstsq_res_impl(nb_shared_dt, real_dtype, b)
+    compute_res = _get_lstsq_res_impl(nb_dt, real_dtype, b)
 
     # b copy function
     b_copy_in = _get_system_copy_in_b_impl(b)
@@ -1212,14 +1214,13 @@ def lstsq_impl(a, b, rcond=-1.0):
         maxmn = max(m, n)
 
         # a is destroyed on exit, copy it
-        acpy = a.astype(np_shared_dt)
         if a_F_layout:
-            acpy = np.copy(acpy)
+            acpy = np.copy(a)
         else:
-            acpy = np.asfortranarray(acpy)
+            acpy = np.asfortranarray(a)
 
         # b is overwritten on exit with the solution, copy allocate
-        bcpy = np.empty((nrhs, maxmn), dtype=np_shared_dt).T
+        bcpy = np.empty((nrhs, maxmn), dtype=np_dt).T
         # specialised copy in due to b being 1 or 2D
         b_copy_in(bcpy, b, nrhs)
 
@@ -1295,30 +1296,27 @@ def solve_impl(a, b):
     a_F_layout = a.layout == 'F'
     b_F_layout = b.layout == 'F'
 
-    # the typing context is not easily accessible in `@overload` mode
-    # so type unification etc. is done manually below
-    a_np_dt = np_support.as_dtype(a.dtype)
-    b_np_dt = np_support.as_dtype(b.dtype)
+    _check_homogeneous_types("solve", a, b)
 
-    np_shared_dt = np.promote_types(a_np_dt, b_np_dt)
-    nb_shared_dt = np_support.from_dtype(np_shared_dt)
+    np_dt = np_support.as_dtype(a.dtype)
+    nb_dt = a.dtype
 
     # the lapack wrapper signature
     numba_xgesv_sig = types.intc(
         types.char,  # kind
         types.intp,  # n
         types.intp,  # nhrs
-        types.CPointer(nb_shared_dt),  # a
+        types.CPointer(nb_dt),  # a
         types.intp,  # lda
         types.CPointer(F_INT_nbtype),  # ipiv
-        types.CPointer(nb_shared_dt),  # b
+        types.CPointer(nb_dt),  # b
         types.intp  # ldb
     )
 
     # the lapack wrapper function
     numba_xgesv = types.ExternalFunction("numba_xgesv", numba_xgesv_sig)
 
-    kind = ord(get_blas_kind(nb_shared_dt, "solve"))
+    kind = ord(get_blas_kind(nb_dt, "solve"))
 
     # get a specialisation for computing the number of RHS
     b_nrhs = _get_system_compute_nrhs(b)
@@ -1345,14 +1343,13 @@ def solve_impl(a, b):
         check_dimensionally_valid(a, b)
 
         # a is destroyed on exit, copy it
-        acpy = a.astype(np_shared_dt)
         if a_F_layout:
-            acpy = np.copy(acpy)
+            acpy = np.copy(a)
         else:
-            acpy = np.asfortranarray(acpy)
+            acpy = np.asfortranarray(a)
 
         # b is overwritten on exit with the solution, copy allocate
-        bcpy = np.empty((nrhs, n), dtype=np_shared_dt).T
+        bcpy = np.empty((nrhs, n), dtype=np_dt).T
         # specialised copy in due to b being 1 or 2D
         b_copy_in(bcpy, b, nrhs)
 
@@ -1577,3 +1574,450 @@ def pinv_impl(a, rcond=1.e-15):
         return acpy.T.ravel().reshape(a.shape).T
 
     return pinv_impl
+
+
+def _get_slogdet_diag_walker(a):
+    """
+    Walks the diag of a LUP decomposed matrix
+    uses that det(A) = prod(diag(lup(A)))
+    and also that log(a)+log(b) = log(a*b)
+    The return sign is adjusted based on the values found
+    such that the log(value) stays in the real domain.
+    """
+    if isinstance(a.dtype, types.Complex):
+        @jit(nopython=True)
+        def cmplx_diag_walker(n, a, sgn):
+            # walk diagonal
+            csgn = sgn + 0.j
+            acc = 0.
+            for k in range(n):
+                absel = np.abs(a[k, k])
+                csgn = csgn * (a[k, k] / absel)
+                acc = acc + np.log(absel)
+            return (csgn, acc)
+        return cmplx_diag_walker
+    else:
+        @jit(nopython=True)
+        def real_diag_walker(n, a, sgn):
+            # walk diagonal
+            acc = 0.
+            for k in range(n):
+                v = a[k, k]
+                if v < 0.:
+                    sgn = -sgn
+                    v = -v
+                acc = acc + np.log(v)
+            # sgn is a float dtype
+            return (sgn + 0., acc)
+        return real_diag_walker
+
+
+@overload(np.linalg.slogdet)
+def slogdet_impl(a):
+    ensure_lapack()
+
+    _check_linalg_matrix(a, "slogdet")
+
+    numba_xxgetrf_sig = types.intc(types.char,   # kind
+                                   types.intp,  # m
+                                   types.intp,  # n
+                                   types.CPointer(a.dtype),  # a
+                                   types.intp,  # lda
+                                   types.CPointer(F_INT_nbtype)  # ipiv
+                                   )
+
+    numba_xxgetrf = types.ExternalFunction("numba_xxgetrf",
+                                           numba_xxgetrf_sig)
+
+    kind = ord(get_blas_kind(a.dtype, "slogdet"))
+
+    F_layout = a.layout == 'F'
+
+    diag_walker = _get_slogdet_diag_walker(a)
+
+    def slogdet_impl(a):
+        n = a.shape[-1]
+        if a.shape[-2] != n:
+            msg = "Last 2 dimensions of the array must be square."
+            raise np.linalg.LinAlgError(msg)
+
+        _check_finite_matrix(a)
+
+        if F_layout:
+            acpy = np.copy(a)
+        else:
+            acpy = np.asfortranarray(a)
+
+        ipiv = np.empty(n, dtype=F_INT_nptype)
+
+        r = numba_xxgetrf(kind, n, n, acpy.ctypes, n, ipiv.ctypes)
+
+        if r > 0:
+            # factorisation failed, return same defaults as np
+            return (0., -np.inf)
+        _inv_err_handler(r)  # catch input-to-lapack problem
+
+        # The following, prior to the call to diag_walker, is present
+        # to account for the effect of possible permutations to the
+        # sign of the determinant.
+        # This is the same idea as in numpy:
+        # File name `umath_linalg.c.src` e.g.
+        # https://github.com/numpy/numpy/blob/master/numpy/linalg/umath_linalg.c.src
+        # in function `@TYPE@_slogdet_single_element`.
+        sgn = 1
+        for k in range(n):
+            sgn = sgn + (ipiv[k] != (k + 1))
+
+        sgn = sgn & 1
+        if sgn == 0:
+            sgn = -1
+
+        # help liveness analysis
+        ipiv.size
+        return diag_walker(n, acpy, sgn)
+
+    return slogdet_impl
+
+
+@overload(np.linalg.det)
+def det_impl(a):
+
+    ensure_lapack()
+
+    _check_linalg_matrix(a, "det")
+
+    def det_impl(a):
+        (sgn, slogdet) = np.linalg.slogdet(a)
+        return sgn * np.exp(slogdet)
+
+    return det_impl
+
+
+def _get_norm_impl(a, ord_flag):
+    # This function is quite involved as norm supports a large
+    # range of values to select different norm types via kwarg `ord`.
+    # The implementation below branches on dimension of the input
+    # (1D or 2D). The default for `ord` is `None` which requires
+    # special handling in numba, this is dealt with first in each of
+    # the dimension branches. Following this the various norms are
+    # computed via code that is in most cases simply a loop version
+    # of a ufunc based version as found in numpy.
+
+    # The following is common to both 1D and 2D cases.
+    # Convert typing floats to numpy floats for use in the impl.
+    # The return type is always a float, numba differs from numpy in
+    # that it returns an input precision specific value whereas numpy
+    # always returns np.float64.
+    nb_ret_type = getattr(a.dtype, "underlying_float", a.dtype)
+    np_ret_type = np_support.as_dtype(nb_ret_type)
+
+    np_dtype = np_support.as_dtype(a.dtype)
+
+    xxnrm2_sig = types.intc(types.char,  # kind
+                            types.intp,  # n
+                            types.CPointer(a.dtype),  # x
+                            types.intp,  # incx
+                            types.CPointer(nb_ret_type))
+
+    xxnrm2 = types.ExternalFunction("numba_xxnrm2", xxnrm2_sig)
+
+    kind = ord(get_blas_kind(a.dtype, "norm"))
+
+    FORCE_CONTIG = a.layout not in 'CF'
+
+    if a.ndim == 1:
+        # 1D cases
+
+        # Used if order is None or order == 2 : see note below
+        @jit(nopython=True)
+        def oneD_none_or_2_impl(a, order=None):
+            # Just ignore order, calls are guarded to only come
+            # from cases where order=None or order=2.
+            n = len(a)
+            # Call L2-norm routine from BLAS
+            ret = np.empty((1,), dtype=np_ret_type)
+            jmp = int(a.strides[0] / a.itemsize)
+            r = xxnrm2(
+                kind,      # kind
+                n,         # n
+                a.ctypes,  # x
+                jmp,       # incx
+                ret.ctypes  # result
+            )
+            if r < 0:
+                fatal_error_func()
+                assert 0   # unreachable
+
+            # help liveness analysis
+            ret.size
+            a.size
+
+            return ret[0]
+
+        # handle "ord" being "None", must be done separately
+        if ord_flag in (None, types.none):
+            oneD_impl = oneD_none_or_2_impl
+        else:
+            @jit(nopython=True)
+            def oneD_impl(a, order=None):
+                n = len(a)
+
+                # Shortcut to handle zero length arrays
+                # this differs slightly to numpy in that
+                # numpy raises a ValueError for kwarg ord=
+                # +/-np.inf as the reduction operations like
+                # max() and min() don't accept zero length
+                # arrays
+                if n == 0:
+                    return 0.0
+
+                # Note: on order == 2
+                # This is the same as for ord=="None" but because
+                # we have to handle "None" specially this condition
+                # is separated
+                if order == 2:
+                    return oneD_none_or_2_impl(a, order=order)
+                elif order == np.inf:
+                    # max(abs(a))
+                    ret = abs(a[0])
+                    for k in range(1, n):
+                        val = abs(a[k])
+                        if val > ret:
+                            ret = val
+                    return ret
+
+                elif order == -np.inf:
+                    # min(abs(a))
+                    ret = abs(a[0])
+                    for k in range(1, n):
+                        val = abs(a[k])
+                        if val < ret:
+                            ret = val
+                    return ret
+
+                elif order == 0:
+                    # sum(a != 0)
+                    ret = 0.0
+                    for k in range(n):
+                        if a[k] != 0.:
+                            ret += 1.
+                    return ret
+
+                elif order == 1:
+                    # sum(abs(a))
+                    ret = 0.0
+                    for k in range(n):
+                        ret += abs(a[k])
+                    return ret
+
+                else:
+                    # sum(abs(a)**ord)**(1./ord)
+                    ret = 0.0
+                    for k in range(n):
+                        ret += abs(a[k])**order
+                    return ret**(1. / order)
+        return oneD_impl
+
+    elif a.ndim == 2:
+        # 2D cases
+
+        # Need svd
+        numba_ez_gesdd_sig = types.intc(
+            types.char,  # kind
+            types.char,  # jobz
+            types.intp,  # m
+            types.intp,  # n
+            types.CPointer(a.dtype),  # a
+            types.intp,  # lda
+            types.CPointer(nb_ret_type),  # s
+            types.CPointer(a.dtype),  # u
+            types.intp,  # ldu
+            types.CPointer(a.dtype),  # vt
+            types.intp  # ldvt
+        )
+
+        numba_ez_gesdd = types.ExternalFunction("numba_ez_gesdd",
+                                                numba_ez_gesdd_sig)
+
+        # Flag for "only compute `S`" to give to xgesdd
+        JOBZ_N = ord('N')
+
+        # This are not referenced in the computation but must be set
+        # for MKL.
+        u = np.empty((1, 1), dtype=np_dtype)
+        vt = np.empty((1, 1), dtype=np_dtype)
+
+        F_layout = a.layout == 'F'
+
+        # type based limit for use in min based functions
+        max_val = np.finfo(np_ret_type.type).max
+
+        @jit(nopython=True)
+        def twoD_norm_from_svd(a):
+            # Don't use the np.linalg.svd impl instead
+            # call LAPACK to shortcut doing the "reconstruct
+            # singular vectors from reflectors" step and just
+            # get back the singular values.
+            _check_finite_matrix(a)
+            n = a.shape[-1]
+            m = a.shape[-2]
+            ldu = m
+            minmn = min(m, n)
+
+            # need to be >=1 but aren't referenced
+            ucol = 1
+            ldvt = 1
+
+            _check_finite_matrix(a)
+
+            if F_layout:
+                acpy = np.copy(a)
+            else:
+                acpy = np.asfortranarray(a)
+
+            # u and vt are not referenced however need to be
+            # allocated (as done above) for MKL as it
+            # checks for ref is nullptr.
+            s = np.empty(minmn, dtype=np_ret_type)
+
+            r = numba_ez_gesdd(
+                kind,        # kind
+                JOBZ_N,      # jobz
+                m,           # m
+                n,           # n
+                acpy.ctypes,  # a
+                m,           # lda
+                s.ctypes,    # s
+                u.ctypes,    # u
+                ldu,         # ldu
+                vt.ctypes,   # vt
+                ldvt         # ldvt
+            )
+            _handle_err_maybe_convergence_problem(r)
+
+            # help liveness analysis
+            acpy.size
+            vt.size
+            u.size
+            s.size
+
+            return s
+
+        # handle "ord" being "None"
+        if ord_flag in (None, types.none):
+            # Compute the Frobenius norm, this is the L2,2 induced norm of `A`
+            # which is the L2-norm of A.ravel() and so can be computed via BLAS
+            @jit(nopython=True)
+            def twoD_impl(a, order=None):
+                # If order is None...
+                # Call L2-norm routine from BLAS
+                ret = np.empty((1,), dtype=np_ret_type)
+                n = a.size
+                if FORCE_CONTIG:
+                    acpy = a.copy()
+                else:
+                    acpy = a
+                r = xxnrm2(
+                    kind,  # kind
+                    n,  # n
+                    acpy.ctypes,  # x
+                    1,  # incx
+                    ret.ctypes  # result
+                )
+                if r < 0:
+                    fatal_error_func()
+                    assert 0   # unreachable
+
+                # help liveness analysis
+                ret.size
+                acpy.size
+
+                return ret[0]
+        else:
+            @jit(nopython=True)
+            def twoD_impl(a, order=None):
+                n = a.shape[-1]
+                m = a.shape[-2]
+
+                # Shortcut to handle zero size arrays
+                # this differs slightly to numpy in that
+                # numpy raises errors for some ord values
+                # and in other cases returns zero.
+                if a.size == 0:
+                    return 0.0
+
+                if order == np.inf:
+                    # max of sum of abs across rows
+                    # max(sum(abs(a)), axis=1)
+                    global_max = 0.
+                    for ii in range(m):
+                        tmp = 0.
+                        for jj in range(n):
+                            tmp += abs(a[ii, jj])
+                        if tmp > global_max:
+                            global_max = tmp
+                    return global_max
+
+                elif order == -np.inf:
+                    # min of sum of abs across rows
+                    # min(sum(abs(a)), axis=1)
+                    global_min = max_val
+                    for ii in range(m):
+                        tmp = 0.
+                        for jj in range(n):
+                            tmp += abs(a[ii, jj])
+                        if tmp < global_min:
+                            global_min = tmp
+                    return global_min
+                elif order == 1:
+                    # max of sum of abs across cols
+                    # max(sum(abs(a)), axis=0)
+                    global_max = 0.
+                    for ii in range(n):
+                        tmp = 0.
+                        for jj in range(m):
+                            tmp += abs(a[jj, ii])
+                        if tmp > global_max:
+                            global_max = tmp
+                    return global_max
+
+                elif order == -1:
+                    # min of sum of abs across cols
+                    # min(sum(abs(a)), axis=0)
+                    global_min = max_val
+                    for ii in range(n):
+                        tmp = 0.
+                        for jj in range(m):
+                            tmp += abs(a[jj, ii])
+                        if tmp < global_min:
+                            global_min = tmp
+                    return global_min
+
+                # Results via SVD, singular values are sorted on return
+                # by definition.
+                elif order == 2:
+                    # max SV
+                    return twoD_norm_from_svd(a)[0]
+                elif order == -2:
+                    # min SV
+                    return twoD_norm_from_svd(a)[-1]
+                else:
+                    # replicate numpy error
+                    raise ValueError("Invalid norm order for matrices.")
+        return twoD_impl
+    else:
+        assert 0  # unreachable
+
+
+@overload(np.linalg.norm)
+def norm_impl(a, ord=None):
+    ensure_lapack()
+
+    _check_linalg_1_or_2d_matrix(a, "norm")
+
+    impl = _get_norm_impl(a, ord)
+
+    def norm_impl(a, ord=None):
+        return impl(a, ord)
+
+    return norm_impl

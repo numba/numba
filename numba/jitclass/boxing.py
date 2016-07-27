@@ -77,7 +77,9 @@ def _specialize_box(typ):
     if typ in _cache_specialized_box:
         return _cache_specialized_box[typ]
     dct = {'__slots__': (),
-           '_numba_type_': typ}
+           '_numba_type_': typ,
+           '__doc__': typ.class_type.class_def.__doc__,
+           }
     # Inject attributes as class properties
     for field in typ.struct:
         getter = _generate_getter(field)
@@ -91,7 +93,10 @@ def _specialize_box(typ):
             getter = _generate_getter(field)
         if 'set' in impdct:
             setter = _generate_setter(field)
-        dct[field] = property(getter, setter)
+        # get docstring from either the fget or fset
+        imp = impdct.get('get') or impdct.get('set') or None
+        doc = getattr(imp, '__doc__', None)
+        dct[field] = property(getter, setter, doc=doc)
     # Inject methods as class members
     for name, func in typ.methods.items():
         if not (name.startswith('__') and name.endswith('__')):
@@ -112,7 +117,8 @@ def _specialize_box(typ):
                 fast_fget = fget.compile((typ,))
                 fget.disable_compile()
                 setattr(subcls, k,
-                        property(fast_fget, prop.fset, prop.fdel))
+                        property(fast_fget, prop.fset, prop.fdel,
+                                 doc=prop.__doc__))
 
     return subcls
 

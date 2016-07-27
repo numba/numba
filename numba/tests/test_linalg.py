@@ -337,6 +337,18 @@ def pinv_matrix(A, rcond=1e-15):  # 1e-15 from numpy impl
     return np.linalg.pinv(A)
 
 
+def slogdet_matrix(a):
+    return np.linalg.slogdet(a)
+
+
+def det_matrix(a):
+    return np.linalg.det(a)
+
+
+def norm_matrix(a, ord=None):
+    return np.linalg.norm(a, ord)
+
+
 class TestLinalgBase(TestCase):
     """
     Provides setUp and common data/error modes for testing np.linalg functions.
@@ -429,7 +441,8 @@ class TestLinalgBase(TestCase):
             # matrices.
             tmp = self.sample_vector(m * m, dtype).reshape(m, m)
             U, _ = np.linalg.qr(tmp)
-            tmp = self.sample_vector(n * n, dtype).reshape(n, n)
+            # flip the second array, else for m==n the identity matrix appears
+            tmp = self.sample_vector(n * n, dtype)[::-1].reshape(n, n)
             V, _ = np.linalg.qr(tmp)
             # create singular values.
             sv = np.linspace(d_cond, condition, rv)
@@ -1084,6 +1097,11 @@ class TestLinalgSystems(TestLinalgBase):
         msg = "Incompatible array sizes, system is not dimensionally valid."
         self.assert_error(cfunc, args, msg, np.linalg.LinAlgError)
 
+    # check that args with differing dtypes raise
+    def assert_homogeneous_dtypes(self, name, cfunc, args):
+        msg = "np.linalg.%s() only supports inputs that have homogeneous dtypes." % name
+        self.assert_error(cfunc, args, msg, errors.TypingError)
+
 
 class TestLinalgLstsq(TestLinalgSystems):
     """
@@ -1237,15 +1255,14 @@ class TestLinalgLstsq(TestLinalgSystems):
         # test loop
         for a_size in sizes:
 
-            # order and dtype
-            a_dtype = next(cycle_dt)
+            dt = next(cycle_dt)
             a_order = next(cycle_order)
 
             # A full rank, well conditioned system
-            A = self.specific_sample_matrix(a_size, a_dtype, a_order)
+            A = self.specific_sample_matrix(a_size, dt, a_order)
 
             # run the test loop
-            inner_test_loop_fn(A, a_dtype)
+            inner_test_loop_fn(A, dt)
 
             m, n = a_size
             minmn = min(m, n)
@@ -1255,27 +1272,22 @@ class TestLinalgLstsq(TestLinalgSystems):
 
                 # Test a rank deficient system
                 r = minmn - 1
-                # order and dtype
-                a_dtype = next(cycle_dt)
-                a_order = next(cycle_order)
                 A = self.specific_sample_matrix(
-                    a_size, a_dtype, a_order, rank=r)
+                    a_size, dt, a_order, rank=r)
                 # run the test loop
-                inner_test_loop_fn(A, a_dtype)
+                inner_test_loop_fn(A, dt)
 
                 # Test a system with a given condition number for use in
                 # testing the rcond parameter.
                 # This works because the singular values in the
                 # specific_sample_matrix code are linspace (1, cond, [0... if
                 # rank deficient])
-                a_dtype = next(cycle_dt)
-                a_order = next(cycle_order)
                 A = self.specific_sample_matrix(
-                    a_size, a_dtype, a_order, condition=specific_cond)
+                    a_size, dt, a_order, condition=specific_cond)
                 # run the test loop
                 rcond = 1. / specific_cond
                 approx_half_rank_rcond = minmn * rcond
-                inner_test_loop_fn(A, a_dtype,
+                inner_test_loop_fn(A, dt,
                                    rcond=approx_half_rank_rcond)
 
         # Test input validation
@@ -1291,6 +1303,11 @@ class TestLinalgLstsq(TestLinalgSystems):
         bad = np.array([[1, 2], [3, 4]], dtype=np.int32)
         self.assert_wrong_dtype(rn, cfunc, (ok, bad))
         self.assert_wrong_dtype(rn, cfunc, (bad, ok))
+
+        # different dtypes
+        bad = np.array([[1, 2], [3, 4]], dtype=np.float32)
+        self.assert_homogeneous_dtypes(rn, cfunc, (ok, bad))
+        self.assert_homogeneous_dtypes(rn, cfunc, (bad, ok))
 
         # Dimension issue
         bad = np.array([1, 2], dtype=np.float64)
@@ -1373,11 +1390,6 @@ class TestLinalgSolve(TestLinalgSystems):
         # test: prime size squares
         sizes = [(1, 1), (3, 3), (7, 7)]
 
-        # There are a lot of combinations to test across all the different
-        # dtypes, especially when type promotion comes into play, to
-        # reduce the effort the dtype of "b" is cycled.
-        cycle_dt = cycle(self.dtypes)
-
         # test loop
         for size, dtype, order in \
                 product(sizes, self.dtypes, 'FC'):
@@ -1386,12 +1398,9 @@ class TestLinalgSolve(TestLinalgSystems):
             b_sizes = (1, 13)
 
             for b_size, b_order in product(b_sizes, 'FC'):
-                # dtype for b
-                dt = next(cycle_dt)
-
                 # check 2D B
                 B = self.specific_sample_matrix(
-                    (A.shape[0], b_size), dt, b_order)
+                    (A.shape[0], b_size), dtype, b_order)
                 check(A, B)
 
                 # check 1D B
@@ -1411,6 +1420,11 @@ class TestLinalgSolve(TestLinalgSystems):
         bad = np.array([[1, 0], [0, 1]], dtype=np.int32)
         self.assert_wrong_dtype(rn, cfunc, (ok, bad))
         self.assert_wrong_dtype(rn, cfunc, (bad, ok))
+
+        # different dtypes
+        bad = np.array([[1, 2], [3, 4]], dtype=np.float32)
+        self.assert_homogeneous_dtypes(rn, cfunc, (ok, bad))
+        self.assert_homogeneous_dtypes(rn, cfunc, (bad, ok))
 
         # Dimension issue
         bad = np.array([1, 0], dtype=np.float64)
@@ -1555,6 +1569,218 @@ class TestLinalgPinv(TestLinalgBase):
         self.assert_no_nan_or_inf(cfunc,
                                   (np.array([[1., 2., ], [np.inf, np.nan]],
                                             dtype=np.float64),))
+
+
+class TestLinalgDetAndSlogdet(TestLinalgBase):
+    """
+    Tests for np.linalg.det. and np.linalg.slogdet.
+    Exactly the same inputs are used for both tests as
+    det() is a trivial function of slogdet(), the tests
+    are therefore combined.
+    """
+
+    def check_det(self, cfunc, a, **kwargs):
+        expected = det_matrix(a, **kwargs)
+        got = cfunc(a, **kwargs)
+
+        resolution = 5 * np.finfo(a.dtype).resolution
+
+        # check the determinants are the same
+        np.testing.assert_allclose(got, expected, rtol=resolution)
+
+        # Ensure proper resource management
+        with self.assertNoNRTLeak():
+            cfunc(a, **kwargs)
+
+    def check_slogdet(self, cfunc, a, **kwargs):
+        expected = slogdet_matrix(a, **kwargs)
+        got = cfunc(a, **kwargs)
+
+        # As numba returns python floats types and numpy returns
+        # numpy float types, some more adjustment and different
+        # types of comparison than those used with array based
+        # results is required.
+
+        # check that the returned tuple is same length
+        self.assertEqual(len(expected), len(got))
+        # and that length is 2
+        self.assertEqual(len(got), 2)
+
+        # check that the domain of the results match
+        for k in range(2):
+            self.assertEqual(
+                np.iscomplexobj(got[k]),
+                np.iscomplexobj(expected[k]))
+
+        # turn got[0] into the same dtype as `a`
+        # this is so checking with nulp will work
+        got_conv = a.dtype.type(got[0])
+        np.testing.assert_array_almost_equal_nulp(
+            got_conv, expected[0], nulp=10)
+        # compare log determinant magnitude with a more fuzzy value
+        # as numpy values come from higher precision lapack routines
+        resolution = 5 * np.finfo(a.dtype).resolution
+        np.testing.assert_allclose(
+            got[1], expected[1], rtol=resolution, atol=resolution)
+
+        # Ensure proper resource management
+        with self.assertNoNRTLeak():
+            cfunc(a, **kwargs)
+
+    def do_test(self, rn, check, cfunc):
+
+        # test: 1x1 as it is unusual, 4x4 as it is even and 7x7 as is it odd!
+        sizes = [(1, 1), (4, 4), (7, 7)]
+
+        # test loop
+        for size, dtype, order in \
+                product(sizes, self.dtypes, 'FC'):
+            # check a full rank matrix
+            a = self.specific_sample_matrix(size, dtype, order)
+            check(cfunc, a)
+
+        # use a matrix of zeros to trip xgetrf U(i,i)=0 singular test
+        for dtype, order in product(self.dtypes, 'FC'):
+            a = np.zeros((3, 3), dtype=dtype)
+            check(cfunc, a)
+
+        # Wrong dtype
+        self.assert_wrong_dtype(rn, cfunc,
+                                (np.ones((2, 2), dtype=np.int32),))
+
+        # Dimension issue
+        self.assert_wrong_dimensions(rn, cfunc,
+                                     (np.ones(10, dtype=np.float64),))
+
+        # no nans or infs
+        self.assert_no_nan_or_inf(cfunc,
+                                  (np.array([[1., 2., ], [np.inf, np.nan]],
+                                            dtype=np.float64),))
+
+    @needs_lapack
+    def test_linalg_det(self):
+        cfunc = jit(nopython=True)(det_matrix)
+        self.do_test("det", self.check_det, cfunc)
+
+    @needs_lapack
+    def test_linalg_slogdet(self):
+        cfunc = jit(nopython=True)(slogdet_matrix)
+        self.do_test("slogdet", self.check_slogdet, cfunc)
+
+# Use TestLinalgSystems as a base to get access to additional
+# testing for 1 and 2D inputs.
+
+
+class TestLinalgNorm(TestLinalgSystems):
+    """
+    Tests for np.linalg.norm.
+    """
+
+    def assert_invalid_norm_kind(self, cfunc, args):
+        msg = "Invalid norm order for matrices."
+        self.assert_error(cfunc, args, msg, ValueError)
+
+    @needs_lapack
+    def test_linalg_norm(self):
+        """
+        Test np.linalg.norm
+        """
+        cfunc = jit(nopython=True)(norm_matrix)
+
+        def check(a, **kwargs):
+            expected = norm_matrix(a, **kwargs)
+            got = cfunc(a, **kwargs)
+
+            # All results should be in the real domain
+            self.assertTrue(not np.iscomplexobj(got))
+
+            resolution = 5 * np.finfo(a.dtype).resolution
+
+            # check the norms are the same to the arg `a` precision
+            np.testing.assert_allclose(got, expected, rtol=resolution)
+
+            # Ensure proper resource management
+            with self.assertNoNRTLeak():
+                cfunc(a, **kwargs)
+
+        # Check 1D inputs
+        sizes = [1, 4, 7]
+        nrm_types = [None, np.inf, -np.inf, 0, 1, -1, 2, -2, 5, 6.7, -4.3]
+
+        # standard 1D input
+        for size, dtype, nrm_type in \
+                product(sizes, self.dtypes, nrm_types):
+            a = self.sample_vector(size, dtype)
+            check(a, ord=nrm_type)
+
+        # sliced 1D input
+        for dtype, nrm_type in \
+                product(self.dtypes, nrm_types):
+            a = self.sample_vector(10, dtype)[::3]
+            check(a, ord=nrm_type)
+
+        # check that numba returns zero for empty arrays. Numpy returns zero
+        # for most norm types and raises ValueError for +/-np.inf.
+        for dtype, nrm_type, order in \
+                product(self.dtypes, nrm_types, 'FC'):
+            a = np.array([], dtype=dtype, order=order)
+            self.assertEqual(cfunc(a, nrm_type), 0.0)
+
+        # Check 2D inputs:
+        # test: column vector, tall, wide, square, row vector
+        # prime sizes
+        sizes = [(7, 1), (11, 5), (5, 11), (3, 3), (1, 7)]
+        nrm_types = [None, np.inf, -np.inf, 1, -1, 2, -2]
+
+        # standard 2D input
+        for size, dtype, order, nrm_type in \
+                product(sizes, self.dtypes, 'FC', nrm_types):
+            # check a full rank matrix
+            a = self.specific_sample_matrix(size, dtype, order)
+            check(a, ord=nrm_type)
+
+        # check 2D slices work for the case where xnrm2 is called from
+        # BLAS (ord=None) to make sure it is working ok.
+        nrm_types = [None]
+        for dtype, nrm_type, order in \
+                product(self.dtypes, nrm_types, 'FC'):
+            a = self.specific_sample_matrix((17, 13), dtype, order)
+            # contig for C order
+            check(a[:3], ord=nrm_type)
+
+            # contig for Fortran order
+            check(a[:, 3:], ord=nrm_type)
+
+            # contig for neither order
+            check(a[1, 4::3], ord=nrm_type)
+
+        # check that numba returns zero for empty arrays. Numpy returns zero
+        # for some norm types and raises a variety of errors for others.
+        for dtype, nrm_type, order in \
+                product(self.dtypes, nrm_types, 'FC'):
+            a = np.array([[]], dtype=dtype, order=order)
+            self.assertEqual(cfunc(a, nrm_type), 0.0)
+
+        rn = "norm"
+
+        # Wrong dtype
+        self.assert_wrong_dtype(rn, cfunc,
+                                (np.ones((2, 2), dtype=np.int32),))
+
+        # Dimension issue, reuse the test from the TestLinalgSystems class
+        self.assert_wrong_dimensions_1D(
+            rn, cfunc, (np.ones(
+                12, dtype=np.float64).reshape(
+                2, 2, 3),))
+
+        # no nans or infs for 2d case when SVD is used (e.g 2-norm)
+        self.assert_no_nan_or_inf(cfunc,
+                                  (np.array([[1., 2.], [np.inf, np.nan]],
+                                            dtype=np.float64), 2))
+
+        # assert 2D input raises for an invalid norm kind kwarg
+        self.assert_invalid_norm_kind(cfunc, (np.array([[1., 2.], [3., 4.]],
+                                                       dtype=np.float64), 6))
 
 
 if __name__ == '__main__':
