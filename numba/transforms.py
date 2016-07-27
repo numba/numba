@@ -203,6 +203,7 @@ def _loop_lift_modify_blocks(bytecode, loopinfo, blocks,
         firstblock = blocks[min(blocks)]
         interp.blocks = blocks
         interp.loc = firstblock.loc
+        interp.generator_info = None  # XXX
         # XXX fixup block_entry_vars
         return interp
 
@@ -241,7 +242,8 @@ def loop_lifting(interp, typingctx, targetctx, flags, locals):
     main.blocks = blocks
     main.used_globals = interp.used_globals
 
-    main.block_entry_vars = {}
+    cfg = _build_controlflow(blocks)
+    main._post_processing(cfg)
 
     for offset, block in interp.blocks.items():
         if offset in main.blocks and block in interp.block_entry_vars:

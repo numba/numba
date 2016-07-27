@@ -169,28 +169,27 @@ class Interpreter(object):
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
 
-        self._post_processing()
+        # XXX
+        cfg = self.cfa.graph
+        del self.cfa
 
-    def _post_processing(self):
+        # emit del nodes
+        self._insert_var_dels(cfg)
+        # other post-processing
+        self._post_processing(cfg)
+
+    def _post_processing(self, cfg):
         """
         Post-processing and analysis on generated IR
         """
-        var_def_map, var_dead_map = self._insert_var_dels()
-        self._compute_live_variables(var_def_map, var_dead_map)
-        if self.generator_info:
-            self._compute_generator_info()
-
-    def _compute_live_variables(self, var_def_map, var_dead_map):
-        """
-        Compute the live variables at the beginning of each block
-        and at each yield point.
-        The ``var_def_map`` and ``var_dead_map`` indicates the variable defined
-        and deleted at each block, respectively.
-        """
-        bev = analysis.compute_live_variables(self.cfa.graph, self.blocks,
+        var_def_map, var_dead_map = self._compute_def_dead_map(cfg)
+        bev = analysis.compute_live_variables(cfg, self.blocks,
                                               var_def_map, var_dead_map)
         for offset, ir_block in self.blocks.items():
             self.block_entry_vars[ir_block] = bev[offset]
+
+        if self.generator_info:
+            self._compute_generator_info()
 
     def _populate_generator_info(self):
         dct = self.generator_info.yield_points
@@ -200,7 +199,6 @@ class Interpreter(object):
                 if isinstance(inst, ir.Assign):
                     yieldinst = inst.value
                     if isinstance(yieldinst, ir.Yield):
-                        assert yieldinst.index is None
                         index = len(dct) + 1
                         yieldinst.index = index
                         yp = YieldPoint(block, yieldinst)
@@ -246,7 +244,7 @@ class Interpreter(object):
             st |= yp.weak_live_vars
         gi.state_vars = sorted(st)
 
-    def _insert_var_dels(self):
+    def _insert_var_dels(self, cfg):
         """
         Insert del statements for each variable.
         Returns a 2-tuple of (variable definition map, variable deletion map)
@@ -265,13 +263,27 @@ class Interpreter(object):
         """
         usedefs = analysis.compute_use_defs(self.blocks)
         var_use_map, var_def_map = usedefs.usemap, usedefs.defmap
-        live_map = analysis.compute_live_map(self.cfa.graph, self.blocks,
+        live_map = analysis.compute_live_map(cfg, self.blocks,
                                              var_use_map, var_def_map)
-        dead_maps = analysis.compute_dead_maps(self.cfa.graph, self.blocks,
+        dead_maps = analysis.compute_dead_maps(cfg, self.blocks,
                                                live_map, var_def_map)
         internal_dead_map = dead_maps.internal
         escaping_dead_map = dead_maps.escaping
         self._patch_var_dels(internal_dead_map, escaping_dead_map)
+        var_dead_map = dict((k, internal_dead_map[k] | escaping_dead_map[k])
+                            for k in self.blocks)
+        return var_def_map, var_dead_map
+
+    def _compute_def_dead_map(self, cfg):
+        # XXX duplicated
+        usedefs = analysis.compute_use_defs(self.blocks)
+        var_use_map, var_def_map = usedefs.usemap, usedefs.defmap
+        live_map = analysis.compute_live_map(cfg, self.blocks,
+                                             var_use_map, var_def_map)
+        dead_maps = analysis.compute_dead_maps(cfg, self.blocks,
+                                               live_map, var_def_map)
+        internal_dead_map = dead_maps.internal
+        escaping_dead_map = dead_maps.escaping
         var_dead_map = dict((k, internal_dead_map[k] | escaping_dead_map[k])
                             for k in self.blocks)
         return var_def_map, var_dead_map
