@@ -171,8 +171,6 @@ class Interpreter(object):
 
         # XXX
         cfg = self.cfa.graph
-        del self.cfa
-
         # emit del nodes
         self._insert_var_dels(cfg)
         # other post-processing
