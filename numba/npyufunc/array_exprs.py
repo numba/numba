@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import ast
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 import sys
 
 import numpy as np
@@ -35,30 +35,32 @@ class RewriteArrayExprs(rewrites.Rewrite):
         expressions.
         Return True when one or more matches were found, False otherwise.
         """
-        matches = []
         # We can trivially reject everything if there are no
         # calls in the type results.
-        if len(calltypes) > 0:
-            self.crnt_block = block
-            self.typemap = typemap
-            self.matches = matches
-            self.array_assigns = {}
-            self.const_assigns = {}
+        if len(calltypes) == 0:
+            return False
 
-            assignments = block.find_insts(ir.Assign)
-            for instr in assignments:
-                target_name = instr.target.name
-                expr = instr.value
-                # Does it assign an expression to an array variable?
-                if (isinstance(expr, ir.Expr) and
-                    isinstance(typemap.get(target_name, None), types.Array)):
-                    self._match_array_expr(instr, expr, target_name)
-                elif isinstance(expr, ir.Const):
-                    # Track constants since we might need them for an
-                    # array expression.
-                    self.const_assigns[target_name] = expr
+        self.crnt_block = block
+        self.typemap = typemap
+        # { variable name: IR assignment (of a function call or operator) }
+        self.array_assigns = OrderedDict()
+        # { variable name: IR assignment (of a constant) }
+        self.const_assigns = {}
 
-        return len(matches) > 0
+        assignments = block.find_insts(ir.Assign)
+        for instr in assignments:
+            target_name = instr.target.name
+            expr = instr.value
+            # Does it assign an expression to an array variable?
+            if (isinstance(expr, ir.Expr) and
+                isinstance(typemap.get(target_name, None), types.Array)):
+                self._match_array_expr(instr, expr, target_name)
+            elif isinstance(expr, ir.Const):
+                # Track constants since we might need them for an
+                # array expression.
+                self.const_assigns[target_name] = expr
+
+        return len(self.array_assigns) > 0
 
     def _match_array_expr(self, instr, expr, target_name):
         """
@@ -84,12 +86,8 @@ class RewriteArrayExprs(rewrites.Rewrite):
                 if _is_ufunc(func_key):
                     # If so, check whether an explicit output is passed.
                     if not self._has_explicit_output(expr, func_key):
-                        # If not, match it as a potential (sub)expression.
+                        # If not, match it as a (sub)expression.
                         array_assigns[target_name] = instr
-
-        # If we matched anything of interest, record it.
-        if target_name in array_assigns:
-            self.matches.append(target_name)
 
     def _has_explicit_output(self, expr, func):
         """
@@ -146,8 +144,7 @@ class RewriteArrayExprs(rewrites.Rewrite):
         replace_map = {}
         dead_vars = set()
         used_vars = defaultdict(int)
-        for match in self.matches:
-            instr = self.array_assigns[match]
+        for instr in self.array_assigns.values():
             expr = instr.value
             arr_inps = []
             arr_expr = self._get_array_operator(expr), arr_inps
