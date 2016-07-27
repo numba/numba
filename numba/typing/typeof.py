@@ -28,7 +28,6 @@ def typeof(val, purpose=Purpose.argument):
     ty = typeof_impl(val, c)
     if ty is None:
         msg = "cannot determine Numba type of value %r" % (val,)
-        del val
         raise ValueError(msg)
     return ty
 
