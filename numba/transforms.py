@@ -204,7 +204,8 @@ def _loop_lift_modify_blocks(bytecode, loopinfo, blocks,
         interp.blocks = blocks
         interp.loc = firstblock.loc
         interp.generator_info = None  # XXX
-        # XXX fixup block_entry_vars
+        cfg = _build_controlflow(blocks)
+        interp._post_processing(cfg)
         return interp
 
     interp = make_loop_interp(bytecode, loopblocks, loopinfo.inputs)
