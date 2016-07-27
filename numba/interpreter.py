@@ -168,7 +168,13 @@ class Interpreter(object):
         # Interpret loop
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
-        # Post-processing and analysis on generated IR
+
+        self._post_processing()
+
+    def _post_processing(self):
+        """
+        Post-processing and analysis on generated IR
+        """
         var_def_map, var_dead_map = self._insert_var_dels()
         self._compute_live_variables(var_def_map, var_dead_map)
         if self.generator_info:
@@ -216,11 +222,27 @@ class Interpreter(object):
         for offset, ir_block in self.blocks.items():
             self.block_entry_vars[ir_block] = block_entry_vars[offset]
 
+    def _populate_generator_info(self):
+        dct = self.generator_info.yield_points
+        assert not dct, 'rerunning _populate_generator_info'
+        for block in self.blocks.values():
+            for inst in block.body:
+                if isinstance(inst, ir.Assign):
+                    yieldinst = inst.value
+                    if isinstance(yieldinst, ir.Yield):
+                        assert yieldinst.index is None
+                        index = len(dct) + 1
+                        yieldinst.index = index
+                        yp = YieldPoint(block, yieldinst)
+                        dct[yieldinst.index] = yp
+
     def _compute_generator_info(self):
         """
         Compute the generator's state variables as the union of live variables
         at all yield points.
         """
+        self._populate_generator_info()
+
         gi = self.generator_info
         for yp in gi.get_yield_points():
             live_vars = set(self.block_entry_vars[yp.block])
@@ -1099,9 +1121,6 @@ class Interpreter(object):
         self.current_block.append(stmt)
 
     def op_YIELD_VALUE(self, inst, value, res):
-        dct = self.generator_info.yield_points
-        index = len(dct) + 1
+        index = None
         inst = ir.Yield(value=self.get(value), index=index, loc=self.loc)
-        yp = YieldPoint(self.current_block, inst)
-        dct[index] = yp
         return self.store(inst, res)
