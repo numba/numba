@@ -52,6 +52,13 @@ def lift4(x):
         d += c
     return c + d
 
+def lift5(x):
+    a = np.arange(4)
+    for i in range(a.shape[0]):
+        # Inner has a break statement
+        if i > 2:
+            break
+    return a
 
 def lift_gen1(x):
     # Outer needs object mode because of np.empty()
@@ -70,13 +77,6 @@ def reject1(x):
         return a
     return a
 
-def reject2(x):
-    a = np.arange(4)
-    for i in range(a.shape[0]):
-        # Inner has a break statement => cannot loop-lift
-        if i > 2:
-            break
-    return a
 
 def reject_gen1(x):
     a = np.arange(4)
@@ -196,15 +196,15 @@ class TestLoopLifting(TestCase):
     def test_lift4(self):
         self.check_lift_ok(lift4, (types.intp,), (123,))
 
+    def test_lift5(self):
+        self.check_lift_ok(lift5, (types.intp,), (123,))
+
     @tag('important')
     def test_lift_gen1(self):
         self.check_lift_generator_ok(lift_gen1, (types.intp,), (123,))
 
     def test_reject1(self):
         self.check_no_lift(reject1, (types.intp,), (123,))
-
-    def test_reject2(self):
-        self.check_no_lift(reject2, (types.intp,), (123,))
 
     def test_reject_gen1(self):
         self.check_no_lift_generator(reject_gen1, (types.intp,), (123,))
