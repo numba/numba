@@ -1,14 +1,18 @@
 from __future__ import print_function, division, absolute_import
 
 import ast
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 import sys
 
-from numpy import ufunc
+import numpy as np
 
 from .. import compiler, ir, types, rewrites, six
 from ..typing import npydecl
 from .dufunc import DUFunc
+
+
+def _is_ufunc(func):
+    return isinstance(func, (np.ufunc, DUFunc))
 
 
 @rewrites.register_rewrite('after-inference')
@@ -26,62 +30,76 @@ class RewriteArrayExprs(rewrites.Rewrite):
             special_ops['arrayexpr'] = _lower_array_expr
 
     def match(self, interp, block, typemap, calltypes):
-        '''Using typing and a basic block, search the basic block for array
-        expressions.  Returns True when one or more matches were
-        found, False otherwise.
-        '''
-        matches = []
-        # We can trivially reject everything if there are fewer than 2
-        # calls in the type results since we'll only rewrite when
-        # there are two or more calls.
-        if len(calltypes) > 1:
-            self.crnt_block = block
-            self.typemap = typemap
-            self.matches = matches
-            array_assigns = {}
-            self.array_assigns = array_assigns
-            const_assigns = {}
-            self.const_assigns = const_assigns
-            assignments = block.find_insts(ir.Assign)
-            for instr in assignments:
-                target_name = instr.target.name
-                expr = instr.value
-                if isinstance(expr, ir.Expr) and isinstance(
-                        typemap.get(target_name, None), types.Array):
-                    # We've matched a subexpression assignment to an
-                    # array variable.  Now see if the expression is an
-                    # array expression.
-                    expr_op = expr.op
-                    if ((expr_op in ('unary', 'binop')) and (
-                            expr.fn in npydecl.supported_array_operators)):
-                        # Matches an array operation that maps to a ufunc.
+        """
+        Using typing and a basic block, search the basic block for array
+        expressions.
+        Return True when one or more matches were found, False otherwise.
+        """
+        # We can trivially reject everything if there are no
+        # calls in the type results.
+        if len(calltypes) == 0:
+            return False
+
+        self.crnt_block = block
+        self.typemap = typemap
+        # { variable name: IR assignment (of a function call or operator) }
+        self.array_assigns = OrderedDict()
+        # { variable name: IR assignment (of a constant) }
+        self.const_assigns = {}
+
+        assignments = block.find_insts(ir.Assign)
+        for instr in assignments:
+            target_name = instr.target.name
+            expr = instr.value
+            # Does it assign an expression to an array variable?
+            if (isinstance(expr, ir.Expr) and
+                isinstance(typemap.get(target_name, None), types.Array)):
+                self._match_array_expr(instr, expr, target_name)
+            elif isinstance(expr, ir.Const):
+                # Track constants since we might need them for an
+                # array expression.
+                self.const_assigns[target_name] = expr
+
+        return len(self.array_assigns) > 0
+
+    def _match_array_expr(self, instr, expr, target_name):
+        """
+        Find whether the given assignment (*instr*) of an expression (*expr*)
+        to variable *target_name* is an array expression.
+        """
+        # We've matched a subexpression assignment to an
+        # array variable.  Now see if the expression is an
+        # array expression.
+        expr_op = expr.op
+        array_assigns = self.array_assigns
+
+        if ((expr_op in ('unary', 'binop')) and (
+                expr.fn in npydecl.supported_array_operators)):
+            # It is an array operator that maps to a ufunc.
+            array_assigns[target_name] = instr
+
+        elif ((expr_op == 'call') and (expr.func.name in self.typemap)):
+            # It could be a match for a known ufunc call.
+            func_type = self.typemap[expr.func.name]
+            if isinstance(func_type, types.Function):
+                func_key = func_type.typing_key
+                if _is_ufunc(func_key):
+                    # If so, check whether an explicit output is passed.
+                    if not self._has_explicit_output(expr, func_key):
+                        # If not, match it as a (sub)expression.
                         array_assigns[target_name] = instr
-                    elif ((expr_op == 'call') and (expr.func.name in typemap)):
-                        # Could be a match for a ufunc or DUFunc call.
-                        func_type = typemap[expr.func.name]
-                        # Note: func_type can be a types.Dispatcher, which
-                        #       doesn't have the `.template` attribute.
-                        if isinstance(func_type, types.Function):
-                            func_key = func_type.typing_key
-                            if isinstance(func_key, (ufunc, DUFunc)):
-                                # If so, match it as a potential subexpression.
-                                array_assigns[target_name] = instr
-                    # Now check to see if we matched anything of
-                    # interest; if so, check to see if one of the
-                    # expression's dependencies isn't also a matching
-                    # expression.
-                    if target_name in array_assigns:
-                        operands = set(var.name
-                                       for var in expr.list_vars())
-                        if operands.intersection(array_assigns.keys()):
-                            # We've identified a nested array
-                            # expression.  Rewrite it.
-                            matches.append(target_name)
-                elif isinstance(expr, ir.Const):
-                    # Track constants since we might need them for an
-                    # array expression.
-                    const_assigns[target_name] = expr
-        return len(matches) > 0
+
+    def _has_explicit_output(self, expr, func):
+        """
+        Return whether the *expr* call to *func* (a ufunc) features an
+        explicit output argument.
+        """
+        nargs = len(expr.args) + len(expr.kws)
+        if expr.vararg is not None:
+            # XXX *args unsupported here, assume there may be an explicit
+            # output
+            return True
+        return nargs > func.nin
 
     def _get_array_operator(self, ir_expr):
         ir_op = ir_expr.op
@@ -126,8 +144,7 @@ class RewriteArrayExprs(rewrites.Rewrite):
         replace_map = {}
         dead_vars = set()
         used_vars = defaultdict(int)
-        for match in self.matches:
-            instr = self.array_assigns[match]
+        for instr in self.array_assigns.values():
             expr = instr.value
             arr_inps = []
             arr_expr = self._get_array_operator(expr), arr_inps
@@ -265,7 +282,7 @@ def _arr_expr_to_ast(expr):
             else:
                 assert op in _unaryops
                 return ast.UnaryOp(_unaryops[op](), ast_args[0]), env
-        elif isinstance(op, (ufunc, DUFunc)):
+        elif _is_ufunc(op):
             fn_name = "__ufunc_or_dufunc_{0}".format(
                 hex(hash(op)).replace("-", "_"))
             fn_ast_name = ast.Name(fn_name, ast.Load())
