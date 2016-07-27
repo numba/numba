@@ -7,7 +7,6 @@ from __future__ import print_function, division, absolute_import
 import collections
 from contextlib import contextmanager
 import functools
-import re
 
 from llvmlite import ir
 
@@ -969,10 +968,17 @@ def printf(builder, format, *args):
     return builder.call(fn, [ptr_fmt] + list(args))
 
 
-def normalize_ir_text(text):
-    """
-    Normalize the given string to latin1 compatible encoding that is suitable
-    for use in LLVM IR.
-    """
-    # Just re-encoding to latin1 is enough
-    return text.encode('utf8').decode('latin1')
+if utils.PY3:
+    def normalize_ir_text(text):
+        """
+        Normalize the given string to latin1 compatible encoding that is suitable
+        for use in LLVM IR.
+        """
+        # Just re-encoding to latin1 is enough
+        return text.encode('utf8').decode('latin1')
+else:
+    def normalize_ir_text(text):
+        """
+        No-op for python2. Assume there won't be unicode names.
+        """
+        return text

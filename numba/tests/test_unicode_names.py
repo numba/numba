@@ -2,7 +2,7 @@
 from __future__ import print_function, absolute_import
 
 
-from numba import njit, cfunc
+from numba import njit, cfunc, cgutils
 from numba.six import exec_
 from numba.utils import PY2
 
@@ -41,6 +41,25 @@ class TestUnicodeNames(TestCase):
         fn = self.make_testcase(unicode_name2, 'Ծ_Ծ')
         cfn = cfunc("int32(int32, int32)")(fn)
         self.assertEqual(cfn.ctypes(1, 2), 3)
+
+
+class TestUnicodeUtils(TestCase):
+    def test_normalize_ir_text(self):
+        # non-unicode input
+        out = cgutils.normalize_ir_text('abc')
+        # str returned
+        self.assertIsInstance(out, str)
+        # try encoding to latin
+        out.encode('latin1')
+
+    @unittest.skipIf(PY2, "unicode identifier not supported in python2")
+    def test_normalize_ir_text_py3(self):
+        # unicode input
+        out = cgutils.normalize_ir_text(unicode_name2)
+        # str returned
+        self.assertIsInstance(out, str)
+        # try encoding to latin
+        out.encode('latin1')
 
 
 if __name__ == '__main__':
