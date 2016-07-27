@@ -112,6 +112,13 @@ def build_ufunc_kernel(library, ctx, innerfunc, sig):
 
     args, dimensions, steps, data = lfunc.args
 
+    # Release the GIL (and ensure we have the GIL)
+    # Note: numpy ufunc may not always release the GIL; thus,
+    #       we need to ensure we have the GIL.
+    pyapi = ctx.get_python_api(builder)
+    gil_state = pyapi.gil_ensure()
+    thread_state = pyapi.save_thread()
+
     # Distribute work
     total = builder.load(dimensions)
     ncpu = lc.Constant.int(total.type, NUM_THREADS)
@@ -181,8 +188,14 @@ def build_ufunc_kernel(library, ctx, innerfunc, sig):
 
     # Signal worker that we are ready
     builder.call(ready, ())
+
     # Wait for workers
     builder.call(synchronize, ())
+
+    # Work is done. Reacquire the GIL
+    pyapi.restore_thread(thread_state)
+    pyapi.gil_release(gil_state)
+
     builder.ret_void()
 
     return lfunc
