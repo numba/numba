@@ -189,7 +189,7 @@ class TypingError(NumbaError):
 
 class UntypedAttributeError(TypingError):
     def __init__(self, value, attr, loc=None):
-        msg = 'Unknown attribute "{attr}" of type {type}'.format(type=value,
+        msg = "Unknown attribute '{attr}' of type {type}".format(type=value,
                                                                  attr=attr)
         super(UntypedAttributeError, self).__init__(msg, loc=loc)
 

@@ -351,7 +351,10 @@ class AttributeTemplate(object):
         if fn is None:
             fn = self.generic_resolve
             if fn is NotImplemented:
-                return self.context.resolve_module_constants(value, attr)
+                if isinstance(value, types.Module):
+                    return self.context.resolve_module_constants(value, attr)
+                else:
+                    return None
             else:
                 return fn(value, attr)
         else:

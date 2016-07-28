@@ -22,13 +22,19 @@ from numba.typing.npydecl import supported_ufuncs, all_ufuncs
 is32bits = tuple.__itemsize__ == 4
 iswindows = sys.platform.startswith('win32')
 
+# NOTE: to test the implementation of Numpy ufuncs, we disable rewriting
+# of array expressions.
+
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
+enable_pyobj_flags.set("no_rewrites")
 
 no_pyobj_flags = Flags()
+no_pyobj_flags.set("no_rewrites")
 
 enable_nrt_flags = Flags()
 enable_nrt_flags.set("nrt")
+enable_nrt_flags.set("no_rewrites")
 
 
 def _unimplemented(func):

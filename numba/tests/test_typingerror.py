@@ -56,7 +56,7 @@ class TestTypingError(unittest.TestCase):
         try:
             compile_isolated(foo, ())
         except TypingError as e:
-            self.assertTrue(e.msg.startswith("Untyped global name"), e.msg)
+            self.assertIn("Untyped global name 'what'", str(e))
         else:
             self.fail("Should raise error")
 
@@ -64,7 +64,7 @@ class TestTypingError(unittest.TestCase):
         try:
             compile_isolated(bar, (types.int32,))
         except TypingError as e:
-            self.assertTrue(e.msg.startswith("Unknown attribute"), e.msg)
+            self.assertIn("Unknown attribute 'a' of type int32", str(e))
         else:
             self.fail("Should raise error")
 

@@ -35,6 +35,11 @@ EMIT_GET_CBLAS_FUNC(cdotu)
 EMIT_GET_CBLAS_FUNC(zdotu)
 EMIT_GET_CBLAS_FUNC(cdotc)
 EMIT_GET_CBLAS_FUNC(zdotc)
+EMIT_GET_CBLAS_FUNC(snrm2)
+EMIT_GET_CBLAS_FUNC(dnrm2)
+EMIT_GET_CBLAS_FUNC(scnrm2)
+EMIT_GET_CBLAS_FUNC(dznrm2)
+
 
 #undef EMIT_GET_CBLAS_FUNC
 
@@ -260,6 +265,9 @@ typedef void (*xxgemm_t)(char *transa, char *transb,
                          void *b, F_INT *ldb, void *beta,
                          void *c, F_INT *ldc);
 
+typedef float (*sxnrm2_t) (F_INT *n, void *x, F_INT *incx);
+typedef double (*dxnrm2_t) (F_INT *n, void *x, F_INT *incx);
+
 /* Vector * vector: result = dx * dy */
 NUMBA_EXPORT_FUNC(int)
 numba_xxdot(char kind, char conjugate, Py_ssize_t n, void *dx, void *dy,
@@ -392,6 +400,57 @@ numba_xxgemm(char kind, char transa, char transb,
                            b, &_ldb, beta, c, &_ldc);
     return 0;
 }
+
+
+/* L2-norms */
+NUMBA_EXPORT_FUNC(F_INT)
+numba_xxnrm2(char kind, Py_ssize_t n, void * x, Py_ssize_t incx, void * result)
+{
+    void *raw_func = NULL;
+    F_INT _incx;
+    F_INT _n;
+
+    ENSURE_VALID_KIND(kind)
+
+    switch (kind)
+    {
+        case 's':
+            raw_func = get_cblas_snrm2();
+            break;
+        case 'd':
+            raw_func = get_cblas_dnrm2();
+            break;
+        case 'c':
+            raw_func = get_cblas_scnrm2();
+            break;
+        case 'z':
+            raw_func = get_cblas_dznrm2();
+            break;
+    }
+    ENSURE_VALID_FUNC(raw_func)
+
+    _n = (F_INT) n;
+    _incx = (F_INT) incx;
+
+    switch (kind)
+    {
+        case 's':
+            *(float *) result = (*(sxnrm2_t) raw_func)(&_n, x, &_incx);;
+            break;
+        case 'd':
+            *(double *) result = (*(dxnrm2_t) raw_func)(&_n, x, &_incx);;
+            break;
+        case 'c':
+            *(float *) result = (*(sxnrm2_t) raw_func)(&_n, x, &_incx);;
+            break;
+        case 'z':
+            *(double *) result = (*(dxnrm2_t) raw_func)(&_n, x, &_incx);;
+            break;
+    }
+
+    return 0;
+}
+
 
 /*
  * LAPACK calling helpers.  The helpers can be called without the GIL held.

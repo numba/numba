@@ -10,10 +10,17 @@ import threading
 import timeit
 import math
 import sys
+import traceback
 
 import numpy as np
 
 from .six import *
+try:
+    # preferred over pure-python StringIO due to threadsafety
+    # note: parallel write to StringIO could cause data to go missing
+    from cStringIO import StringIO
+except ImportError:
+    from io import StringIO
 from numba.config import PYVERSION, MACHINE_BITS
 
 
@@ -26,6 +33,15 @@ if IS_PY3:
     get_ident = threading.get_ident
     intern = sys.intern
     file_replace = os.replace
+
+    def erase_traceback(exc_value):
+        """
+        Erase the traceback and hanging locals from the given exception instance.
+        """
+        if exc_value.__traceback__ is not None:
+            traceback.clear_frames(exc_value.__traceback__)
+        return exc_value.with_traceback(None)
+
 else:
     import thread
     import __builtin__ as builtins
@@ -43,6 +59,12 @@ else:
                 os.rename(src, dest)
     else:
         file_replace = os.rename
+
+    def erase_traceback(exc_value):
+        """
+        Erase the traceback and hanging locals from the given exception instance.
+        """
+        return exc_value
 
 try:
     from inspect import signature as pysignature
@@ -172,10 +194,20 @@ class ConfigOptions(object):
     def unset(self, name):
         self.set(name, False)
 
-    def __getattr__(self, name):
+    def _check_attr(self, name):
         if name not in self.OPTIONS:
-            raise NameError("Invalid flag: %s" % name)
+            raise AttributeError("Invalid flag: %s" % name)
+
+    def __getattr__(self, name):
+        self._check_attr(name)
         return self._values[name]
+
+    def __setattr__(self, name, value):
+        if name.startswith('_'):
+            super(ConfigOptions, self).__setattr__(name, value)
+        else:
+            self._check_attr(name)
+            self._values[name] = value
 
     def __repr__(self):
         return "Flags(%s)" % ', '.join('%s=%s' % (k, v)

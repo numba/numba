@@ -900,12 +900,11 @@ class TypeInferer(object):
         Resolve the type of a simple Python value, such as can be
         represented by literals.
         """
-        ty = self.context.resolve_value_type(val)
-        if ty is None:
-            msg = "Unsupported Python value %r" % (val,)
-            raise TypingError(msg, loc=inst.loc)
-        else:
-            return ty
+        try:
+            return self.context.resolve_value_type(val)
+        except ValueError as e:
+            msg = str(e)
+        raise TypingError(msg, loc=inst.loc)
 
     def typeof_arg(self, inst, target, arg):
         src_name = self._mangle_arg_name(arg.name)
@@ -973,13 +972,18 @@ class TypeInferer(object):
             return self.context.resolve_function_type(fnty, pos_args, kw_args)
 
     def typeof_global(self, inst, target, gvar):
-        typ = self.context.resolve_value_type(gvar.value)
-
-        if (typ is None and gvar.name == self.py_func.__name__
-            and gvar.name in _temporary_dispatcher_map):
-            # Self-recursion case where the dispatcher is not (yet?) known
-            # as a global variable
-            typ = types.Dispatcher(_temporary_dispatcher_map[gvar.name])
+        try:
+            typ = self.resolve_value_type(inst, gvar.value)
+        except TypingError as e:
+            if (gvar.name == self.py_func.__name__
+                and gvar.name in _temporary_dispatcher_map):
+                # Self-recursion case where the dispatcher is not (yet?) known
+                # as a global variable
+                typ = types.Dispatcher(_temporary_dispatcher_map[gvar.name])
+            else:
+                e.patch_message("Untyped global name '%s': %s"
+                                % (gvar.name, e))
+                raise
 
         if isinstance(typ, types.Dispatcher) and typ.dispatcher.is_compiling:
             # Recursive call
@@ -995,13 +999,9 @@ class TypeInferer(object):
             # XXX why layout='C'?
             typ = typ.copy(layout='C', readonly=True)
 
-        if typ is not None:
-            self.sentry_modified_builtin(inst, gvar)
-            self.lock_type(target.name, typ, loc=inst.loc)
-            self.assumed_immutables.add(inst)
-        else:
-            raise TypingError("Untyped global name '%s'" % gvar.name,
-                              loc=inst.loc)
+        self.sentry_modified_builtin(inst, gvar)
+        self.lock_type(target.name, typ, loc=inst.loc)
+        self.assumed_immutables.add(inst)
 
     def typeof_expr(self, inst, target, expr):
         if expr.op == 'call':
