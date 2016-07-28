@@ -4,7 +4,7 @@ import numpy as np
 from numba import types
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from .support import TestCase, tag
+from .support import TestCase, tag, MemoryLeakMixin
 
 
 looplift_flags = Flags()
@@ -106,7 +106,7 @@ def reject_npm1(x):
     return a
 
 
-class TestLoopLifting(TestCase):
+class TestLoopLifting(MemoryLeakMixin, TestCase):
 
     def try_lift(self, pyfunc, argtypes):
         cres = compile_isolated(pyfunc, argtypes,
@@ -216,7 +216,7 @@ class TestLoopLifting(TestCase):
         self.check_no_lift_nopython(reject_npm1, (types.intp,), (123,))
 
 
-class TestLoopLiftingInAction(TestCase):
+class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
     def test_issue_734(self):
         from numba import jit, void, int32, double
 

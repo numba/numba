@@ -79,14 +79,6 @@ def _loop_lift_modify_call_block(liftedloop, block, inputs, outputs, returnto):
     loc = block.loc
     blk = ir.Block(scope=scope, loc=loc)
 
-    # XXX: should fix delete insertion
-    # copy early deletes
-    for inst in block.body:
-        if isinstance(inst, ir.Del):
-            blk.append(inst)
-        else:
-            break
-
     # load loop
     fn = ir.Const(value=liftedloop, loc=loc)
     fnvar = scope.make_temp(loc=loc)
@@ -104,10 +96,6 @@ def _loop_lift_modify_call_block(liftedloop, block, inputs, outputs, returnto):
         getitem = ir.Expr.static_getitem(value=callres, index=i,
                                          index_var=None, loc=loc)
         blk.append(ir.Assign(target=target, value=getitem, loc=loc))
-
-    # clean up
-    blk.append(ir.Del(value=fnvar.name, loc=loc))
-    blk.append(ir.Del(value=callres.name, loc=loc))
 
     # jump to next block
     blk.append(ir.Jump(target=returnto, loc=loc))
@@ -149,25 +137,9 @@ def _loop_lift_prepare_loop_func(loopinfo, blocks):
         block.append(ir.Return(value=tup, loc=loc))
         return block
 
-    def modify_entry():
-        entry_block = blocks[loopinfo.callfrom]
-        scope = entry_block.scope
-        loc = entry_block.loc
-
-        block = ir.Block(scope=scope, loc=loc)
-        # XXX: should fix delete insertion
-        # remove deletes at the start
-        for start, inst in enumerate(entry_block.body):
-            if not isinstance(inst, ir.Del):
-                break
-        for inst in entry_block.body[start:]:
-            block.append(inst)
-        return block
-
     # Lowering assumes the first block to be the one with the smallest offset
     firstblk = min(blocks) - 1
     blocks[firstblk] = make_prologue()
-    blocks[loopinfo.callfrom] = modify_entry()
     blocks[loopinfo.returnto] = make_epilogue()
 
 

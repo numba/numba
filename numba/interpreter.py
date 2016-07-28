@@ -214,9 +214,7 @@ class Interpreter(object):
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
 
-        # emit del nodes
-        self._insert_var_dels()
-        # other post-processing
+        # post-processing
         self._post_processing()
 
     @utils.cached_property
@@ -227,6 +225,9 @@ class Interpreter(object):
         """
         Post-processing and analysis on generated IR
         """
+        # emit del nodes
+        self._insert_var_dels()
+
         vlt = self.variable_lifetime
         bev = analysis.compute_live_variables(vlt.cfg, self.blocks,
                                               vlt.usedefs.defmap,
@@ -330,7 +331,9 @@ class Interpreter(object):
             # rewrite body and insert dels
             body = []
             for stmt, delete_set in reversed(delete_pts):
-                body.append(stmt)
+                # Ignore dels (assuming no user inserted deletes)
+                if not isinstance(stmt, ir.Del):
+                    body.append(stmt)
                 # note: the reverse sort is not necessary for correctness
                 #       it is just to minimize changes to test for now
                 for var_name in sorted(delete_set, reverse=True):
