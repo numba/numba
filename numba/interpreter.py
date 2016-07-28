@@ -2,9 +2,8 @@ from __future__ import print_function, division, absolute_import
 
 import collections
 import dis
-from functools import reduce
-import operator
 import sys
+from copy import copy
 
 from . import ir, controlflow, dataflow, utils, errors, consts, analysis
 from .utils import builtins
@@ -90,6 +89,26 @@ class GeneratorInfo(object):
 class Interpreter(object):
     """A bytecode interpreter that builds up the IR.
     """
+
+    @classmethod
+    def from_blocks(cls, bytecode, blocks, used_globals={},
+                    force_non_generator=None, override_args=None):
+        if override_args is not None:
+            # XXX patch bytecode
+            bytecode = copy(bytecode)
+            bytecode.arg_names = tuple(override_args)
+            bytecode.arg_count = len(bytecode.arg_names)
+
+        interp = cls(bytecode=bytecode)
+        firstblock = blocks[min(blocks)]
+        interp.blocks = blocks
+        interp.loc = firstblock.loc
+        if force_non_generator:
+            interp.generator_info = None
+        interp.used_globals = used_globals
+        cfg = analysis.compute_cfg_from_blocks(blocks)
+        interp._post_processing(cfg)
+        return interp
 
     def __init__(self, bytecode):
         self.bytecode = bytecode

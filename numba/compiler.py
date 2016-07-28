@@ -436,8 +436,8 @@ class Pipeline(object):
         if loops:
             # Some loops were extracted
             if config.DEBUG_FRONTEND or config.DEBUG:
-                # XXX mix this up
-                print("Lifting loop", loops[0].get_source_location())
+                for loop in loops:
+                    print("Lifting loop", loop.get_source_location())
 
             cres = compile_ir(self.typingctx, self.targetctx, main,
                               self.args, self.return_type,

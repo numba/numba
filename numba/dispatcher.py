@@ -578,7 +578,6 @@ class LiftedLoop(_DispatcherBase):
     def get_source_location(self):
         """Return the starting line number of the loop.
         """
-        # XXX still need to check this
         firstblock = self.interp.blocks[min(self.interp.blocks)]
         inst = firstblock.body[0]
         return inst.loc.line

@@ -6,7 +6,12 @@ from functools import reduce
 from collections import namedtuple, defaultdict
 
 from numba import ir
+from numba.controlflow import CFGraph
+from numba.utils import singledispatch
 
+#
+# Analysis related to variable lifetime
+#
 
 _use_defs_result = namedtuple('use_defs_result', 'usemap,defmap')
 
@@ -181,3 +186,59 @@ def compute_live_variables(cfg, blocks, var_def_map, var_dead_map):
         new_point = fix_point_progress()
 
     return block_entry_vars
+
+
+#
+# Analysis related to controlflow
+#
+
+def compute_cfg_from_blocks(blocks):
+    cfg = CFGraph()
+    for k in blocks:
+        cfg.add_node(k)
+
+    for k, b in blocks.items():
+        term = b.terminator
+        for target in _get_targets(term):
+            cfg.add_edge(k, target)
+
+    cfg.set_entry_point(min(blocks))
+    cfg.process()
+    return cfg
+
+
+@singledispatch
+def _get_targets(term):
+    raise NotImplementedError(type(term))
+
+
+@_get_targets.register(ir.Jump)
+def _(term):
+    return [term.target]
+
+
+@_get_targets.register(ir.Return)
+@_get_targets.register(ir.Raise)
+def _(term):
+    return []
+
+
+@_get_targets.register(ir.Branch)
+def _(term):
+    return [term.truebr, term.falsebr]
+
+
+def find_top_level_loops(cfg):
+    """
+    A generator that yields toplevel loops given a control-flow-graph
+    """
+    blocks_in_loop = set()
+    # get loop bodies
+    for loop in cfg.loops().values():
+        insiders = set(loop.body) | set(loop.entries) | set(loop.exits)
+        insiders.discard(loop.header)
+        blocks_in_loop |= insiders
+    # find loop that is not part of other loops
+    for loop in cfg.loops().values():
+        if loop.header not in blocks_in_loop:
+            yield loop

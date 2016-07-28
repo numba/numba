@@ -4,70 +4,18 @@ Implement transformation on Numba IR
 
 from __future__ import absolute_import, print_function
 
-
 from collections import namedtuple
-from copy import copy
 
-from numba.controlflow import CFGraph
-from numba.analysis import compute_use_defs, compute_live_map
+from numba.analysis import (compute_use_defs, compute_live_map,
+                            compute_cfg_from_blocks, find_top_level_loops)
 from numba import ir
-from numba.utils import singledispatch
 from numba.interpreter import Interpreter
-
-
-def _build_controlflow(blocks):
-    cfg = CFGraph()
-    for k in blocks:
-        cfg.add_node(k)
-
-    for k, b in blocks.items():
-        term = b.terminator
-        for target in _get_targets(term):
-            cfg.add_edge(k, target)
-
-    cfg.set_entry_point(min(blocks))
-    cfg.process()
-    return cfg
-
-
-@singledispatch
-def _get_targets(term):
-    raise NotImplementedError(type(term))
-
-
-@_get_targets.register(ir.Jump)
-def _(term):
-    return [term.target]
-
-
-@_get_targets.register(ir.Return)
-@_get_targets.register(ir.Raise)
-def _(term):
-    return []
-
-
-@_get_targets.register(ir.Branch)
-def _(term):
-    return [term.truebr, term.falsebr]
 
 
 def _extract_loop_lifting_candidates(cfg, blocks):
     """
     Returns a list of loops that are candidate for loop lifting
     """
-    toplevelloops = []
-    blocks_in_loop = set()
-    # get loop bodies
-    for loop in cfg.loops().values():
-        insiders = set(loop.body) | set(loop.entries) | set(loop.exits)
-        insiders.discard(loop.header)
-        blocks_in_loop |= insiders
-    # find loop that is not part of other loops
-    for loop in cfg.loops().values():
-        if loop.header not in blocks_in_loop:
-            toplevelloops.append(loop)
-
-    # XXX: break this function into two
     # check well-formed-ness of the loop
     def same_exit_point(loop):
         "all exits must point to the same location"
@@ -90,7 +38,7 @@ def _extract_loop_lifting_candidates(cfg, blocks):
                         return False
         return True
 
-    return [loop for loop in toplevelloops
+    return [loop for loop in find_top_level_loops(cfg)
             if same_exit_point(loop) and one_entry(loop) and cannot_yield(loop)]
 
 
@@ -98,8 +46,10 @@ _loop_lift_info = namedtuple('loop_lift_info',
                              'loop,inputs,outputs,callfrom,returnto')
 
 
-def _loop_lift_get_infos_for_lifted_loops(blocks):
-    cfg = _build_controlflow(blocks)
+def _loop_lift_get_candidate_infos(cfg, blocks):
+    """
+    Returns information on looplifting candidates.
+    """
     loops = _extract_loop_lifting_candidates(cfg, blocks)
 
     usedefs = compute_use_defs(blocks)
@@ -122,6 +72,9 @@ def _loop_lift_get_infos_for_lifted_loops(blocks):
 
 
 def _loop_lift_modify_call_block(liftedloop, block, inputs, outputs, returnto):
+    """
+    Transform calling block from top-level function to call the lifted loop.
+    """
     scope = block.scope
     loc = block.loc
     blk = ir.Block(scope=scope, loc=loc)
@@ -162,7 +115,9 @@ def _loop_lift_modify_call_block(liftedloop, block, inputs, outputs, returnto):
 
 
 def _loop_lift_prepare_loop_func(loopinfo, blocks):
-
+    """
+    Transform loop blocks for use as lifted loop
+    """
     def make_prologue():
         entry_block = blocks[loopinfo.callfrom]
         scope = entry_block.scope
@@ -230,22 +185,9 @@ def _loop_lift_modify_blocks(bytecode, loopinfo, blocks,
 
     _loop_lift_prepare_loop_func(loopinfo, loopblocks)
 
-    def make_loop_interp(bytecode, blocks, argnames):
-        # XXX patch bytecode
-        bytecode = copy(bytecode)
-        bytecode.arg_names = tuple(argnames)
-        bytecode.arg_count = len(argnames)
-
-        interp = Interpreter(bytecode=bytecode)
-        firstblock = blocks[min(blocks)]
-        interp.blocks = blocks
-        interp.loc = firstblock.loc
-        interp.generator_info = None  # XXX
-        cfg = _build_controlflow(blocks)
-        interp._post_processing(cfg)
-        return interp
-
-    interp = make_loop_interp(bytecode, loopblocks, loopinfo.inputs)
+    interp = Interpreter.from_blocks(bytecode=bytecode, blocks=loopblocks,
+                                     override_args=loopinfo.inputs,
+                                     force_non_generator=True)
     liftedloop = LiftedLoop(interp, typingctx, targetctx, flags, locals)
 
     # modify for calling into liftedloop
@@ -263,31 +205,24 @@ def _loop_lift_modify_blocks(bytecode, loopinfo, blocks,
 
 
 def loop_lifting(interp, typingctx, targetctx, flags, locals):
+    """
+    Loop lifting transformation.
 
+    Given a interpreter `interp` returns a 2 tuple of
+    `(toplevel_interp, [loop0_interp, loop1_interp, ....])`
+    """
     blocks = interp.blocks.copy()
-    loopinfos = _loop_lift_get_infos_for_lifted_loops(blocks)
+    cfg = compute_cfg_from_blocks(blocks)
+    loopinfos = _loop_lift_get_candidate_infos(cfg, blocks)
     loops = []
     for loopinfo in loopinfos:
         lifted = _loop_lift_modify_blocks(interp.bytecode, loopinfo, blocks,
                                           typingctx, targetctx, flags, locals)
         loops.append(lifted)
     # make main interpreter
-    # XXX duplication
-    main = Interpreter(bytecode=interp.bytecode)
-    main.loc = interp.loc
-    main.arg_count = interp.arg_count
-    main.arg_names = interp.arg_names
-    main.blocks = blocks
-    main.used_globals = interp.used_globals
-
-    cfg = _build_controlflow(blocks)
-    main._post_processing(cfg)
-
-    for offset, block in interp.blocks.items():
-        if offset in main.blocks and block in interp.block_entry_vars:
-            data = interp.block_entry_vars[block]
-            newblk = main.blocks[offset]
-            main.block_entry_vars[newblk] = data
+    main = Interpreter.from_blocks(bytecode=interp.bytecode,
+                                   blocks=blocks,
+                                   used_globals=interp.used_globals)
 
     return main, loops
 
