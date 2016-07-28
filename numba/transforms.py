@@ -4,13 +4,14 @@ Implement transformation on Numba IR
 
 from __future__ import absolute_import, print_function
 
-from functools import singledispatch
+
 from collections import namedtuple
 from copy import copy
 
 from numba.controlflow import CFGraph
 from numba.analysis import compute_use_defs, compute_live_map
 from numba import ir
+from numba.utils import singledispatch
 from numba.interpreter import Interpreter
 
 
