@@ -76,7 +76,7 @@ def compute_live_map(cfg, blocks, var_use_map, var_def_map):
     return live_map
 
 
-_dead_maps_result = namedtuple('dead_maps_result', 'internal,escaping')
+_dead_maps_result = namedtuple('dead_maps_result', 'internal,escaping,combined')
 
 
 def compute_dead_maps(cfg, blocks, live_map, var_def_map):
@@ -143,8 +143,12 @@ def compute_dead_maps(cfg, blocks, live_map, var_def_map):
             msg = 'liveness info missing for vars: {0}'.format(missing_vars)
             raise RuntimeError(msg)
 
+    combined = dict((k, internal_dead_map[k] | escaping_dead_map[k])
+                    for k in blocks)
+
     return _dead_maps_result(internal=internal_dead_map,
-                             escaping=escaping_dead_map)
+                             escaping=escaping_dead_map,
+                             combined=combined)
 
 
 def compute_live_variables(cfg, blocks, var_def_map, var_dead_map):

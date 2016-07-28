@@ -86,6 +86,33 @@ class GeneratorInfo(object):
         return self.yield_points.values()
 
 
+class VariableLifetime(object):
+    """
+    For lazily building information of variable lifetime
+    """
+    def __init__(self, blocks):
+        self._blocks = blocks
+
+    @utils.cached_property
+    def cfg(self):
+        return analysis.compute_cfg_from_blocks(self._blocks)
+
+    @utils.cached_property
+    def usedefs(self):
+        return analysis.compute_use_defs(self._blocks)
+
+    @utils.cached_property
+    def livemap(self):
+        return analysis.compute_live_map(self.cfg, self._blocks,
+                                         self.usedefs.usemap,
+                                         self.usedefs.defmap)
+
+    @utils.cached_property
+    def deadmaps(self):
+        return analysis.compute_dead_maps(self.cfg, self._blocks, self.livemap,
+                                          self.usedefs.defmap)
+
+
 class Interpreter(object):
     """A bytecode interpreter that builds up the IR.
     """
@@ -106,8 +133,7 @@ class Interpreter(object):
         if force_non_generator:
             interp.generator_info = None
         interp.used_globals = used_globals
-        cfg = analysis.compute_cfg_from_blocks(blocks)
-        interp._post_processing(cfg)
+        interp._post_processing()
         return interp
 
     def __init__(self, bytecode):
@@ -188,20 +214,23 @@ class Interpreter(object):
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
 
-        # XXX
-        cfg = self.cfa.graph
         # emit del nodes
-        self._insert_var_dels(cfg)
+        self._insert_var_dels()
         # other post-processing
-        self._post_processing(cfg)
+        self._post_processing()
 
-    def _post_processing(self, cfg):
+    @utils.cached_property
+    def variable_lifetime(self):
+        return VariableLifetime(self.blocks)
+
+    def _post_processing(self):
         """
         Post-processing and analysis on generated IR
         """
-        var_def_map, var_dead_map = self._compute_def_dead_map(cfg)
-        bev = analysis.compute_live_variables(cfg, self.blocks,
-                                              var_def_map, var_dead_map)
+        vlt = self.variable_lifetime
+        bev = analysis.compute_live_variables(vlt.cfg, self.blocks,
+                                              vlt.usedefs.defmap,
+                                              vlt.deadmaps.combined)
         for offset, ir_block in self.blocks.items():
             self.block_entry_vars[ir_block] = bev[offset]
 
@@ -261,7 +290,7 @@ class Interpreter(object):
             st |= yp.weak_live_vars
         gi.state_vars = sorted(st)
 
-    def _insert_var_dels(self, cfg):
+    def _insert_var_dels(self):
         """
         Insert del statements for each variable.
         Returns a 2-tuple of (variable definition map, variable deletion map)
@@ -278,32 +307,8 @@ class Interpreter(object):
         the last use. Variable referenced by terminators (e.g. conditional
         branch and return) are deleted by the successors or the caller.
         """
-        usedefs = analysis.compute_use_defs(self.blocks)
-        var_use_map, var_def_map = usedefs.usemap, usedefs.defmap
-        live_map = analysis.compute_live_map(cfg, self.blocks,
-                                             var_use_map, var_def_map)
-        dead_maps = analysis.compute_dead_maps(cfg, self.blocks,
-                                               live_map, var_def_map)
-        internal_dead_map = dead_maps.internal
-        escaping_dead_map = dead_maps.escaping
-        self._patch_var_dels(internal_dead_map, escaping_dead_map)
-        var_dead_map = dict((k, internal_dead_map[k] | escaping_dead_map[k])
-                            for k in self.blocks)
-        return var_def_map, var_dead_map
-
-    def _compute_def_dead_map(self, cfg):
-        # XXX duplicated
-        usedefs = analysis.compute_use_defs(self.blocks)
-        var_use_map, var_def_map = usedefs.usemap, usedefs.defmap
-        live_map = analysis.compute_live_map(cfg, self.blocks,
-                                             var_use_map, var_def_map)
-        dead_maps = analysis.compute_dead_maps(cfg, self.blocks,
-                                               live_map, var_def_map)
-        internal_dead_map = dead_maps.internal
-        escaping_dead_map = dead_maps.escaping
-        var_dead_map = dict((k, internal_dead_map[k] | escaping_dead_map[k])
-                            for k in self.blocks)
-        return var_def_map, var_dead_map
+        vlt = self.variable_lifetime
+        self._patch_var_dels(vlt.deadmaps.internal, vlt.deadmaps.escaping)
 
     def _patch_var_dels(self, internal_dead_map, escaping_dead_map):
         """
