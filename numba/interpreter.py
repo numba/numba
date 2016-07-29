@@ -239,6 +239,9 @@ class Interpreter(object):
             self._compute_generator_info()
 
     def _populate_generator_info(self):
+        """
+        Fill `index` for the Yield instruction and create YieldPoints.
+        """
         dct = self.generator_info.yield_points
         assert not dct, 'rerunning _populate_generator_info'
         for block in self.blocks.values():
@@ -1128,6 +1131,7 @@ class Interpreter(object):
         self.current_block.append(stmt)
 
     def op_YIELD_VALUE(self, inst, value, res):
+        # initialize index to None.  it's being set later in post-processing
         index = None
         inst = ir.Yield(value=self.get(value), index=index, loc=self.loc)
         return self.store(inst, res)
