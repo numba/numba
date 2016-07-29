@@ -137,7 +137,7 @@ class TypeAnnotation(object):
                 if self.lifted:
                     print("# The function contains lifted loops", file=io)
                     for loop in self.lifted:
-                        print("# Loop at line %d" % loop.bytecode.firstlineno,
+                        print("# Loop at line %d" % loop.get_source_location(),
                               file=io)
                         print("# Has %d overloads" % len(loop.overloads),
                               file=io)

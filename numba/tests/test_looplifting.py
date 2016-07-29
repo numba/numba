@@ -1,7 +1,8 @@
 from __future__ import print_function, division, absolute_import
+
 import numpy as np
 
-from numba import types
+from numba import types, utils
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from .support import TestCase, tag, MemoryLeakMixin
@@ -216,6 +217,78 @@ class TestLoopLifting(MemoryLeakMixin, TestCase):
         self.check_no_lift_nopython(reject_npm1, (types.intp,), (123,))
 
 
+class TestLoopLiftingAnnotate(TestCase):
+    def test_annotate_1(self):
+        """
+        Verify that annotation works as expected with one lifted loop
+        """
+        from numba import jit
+
+        # dummy function to force objmode
+        def bar():
+            pass
+
+        def foo(x):
+            bar()  # force obj
+            for i in range(x.size):
+                x[i] += 1
+
+            return x
+
+        cfoo = jit(foo)
+
+        x = np.arange(10)
+        xcopy = x.copy()
+        r = cfoo(x)
+        np.testing.assert_equal(r, xcopy + 1)
+
+        with utils.StringIO() as buf:
+            cfoo.inspect_types(file=buf)
+            annotation = buf.getvalue()
+
+        self.assertIn("The function contains lifted loops", annotation)
+        line = foo.__code__.co_firstlineno + 2  # 2 lines down from func head
+        self.assertIn("Loop at line {line}".format(line=line), annotation)
+        self.assertIn("Has 1 overloads", annotation)
+
+    def test_annotate_2(self):
+        """
+        Verify that annotation works as expected with two lifted loops
+        """
+        from numba import jit
+
+        # dummy function to force objmode
+        def bar():
+            pass
+
+        def foo(x):
+            bar()  # force obj
+            # first lifted loop
+            for i in range(x.size):
+                x[i] += 1
+            # second lifted loop
+            for j in range(x.size):
+                x[j] *= 2
+            return x
+
+        cfoo = jit(foo)
+
+        x = np.arange(10)
+        xcopy = x.copy()
+        r = cfoo(x)
+        np.testing.assert_equal(r, (xcopy + 1) * 2)
+
+        with utils.StringIO() as buf:
+            cfoo.inspect_types(file=buf)
+            annotation = buf.getvalue()
+
+        self.assertIn("The function contains lifted loops", annotation)
+        line1 = foo.__code__.co_firstlineno + 3  # 3 lines down from func head
+        line2 = foo.__code__.co_firstlineno + 6  # 6 lines down from func head
+        self.assertIn("Loop at line {line}".format(line=line1), annotation)
+        self.assertIn("Loop at line {line}".format(line=line2), annotation)
+
+
 class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
     def test_issue_734(self):
         from numba import jit, void, int32, double
@@ -329,6 +402,7 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
 
             cfunc = jit(forceobj=True)(pyfunc)
             self.assertEqual(pyfunc(True), cfunc(True))
+
 
 if __name__ == '__main__':
     unittest.main()
