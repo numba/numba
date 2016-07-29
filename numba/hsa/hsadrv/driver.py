@@ -251,9 +251,15 @@ class Driver(object):
         else:
             @atexit.register
             def shutdown():
-                for agent in self.agents:
-                    agent.release()
-                self._recycler.drain()
+                try:
+                    for agent in self.agents:
+                        agent.release()
+                except AttributeError:
+                    # this is because no agents initialised
+                    #  so self.agents isn't present
+                    pass 
+                else:
+                    self._recycler.drain()
 
     def _initialize_agents(self):
         if self._agent_map is not None:
@@ -359,7 +365,6 @@ class Driver(object):
         def driver_wrapper(fn):
             def wrapped(*args, **kwargs):
                 return fn(*args, **kwargs)
-
             return wrapped
 
         retval = driver_wrapper(libfn)
@@ -467,6 +472,7 @@ class Agent(HsaWrapper):
         self._recycler = hsa._recycler
         self._queues = set()
         self._initialize_regions()
+        self._initialize_mempools()
 
     @property
     def device(self):
@@ -480,6 +486,10 @@ class Agent(HsaWrapper):
     def regions(self):
         return self._regions
 
+    @property
+    def mempools(self):
+        return self._mempools
+
     def _initialize_regions(self):
         region_ids = []
 
@@ -491,6 +501,19 @@ class Agent(HsaWrapper):
         hsa.hsa_agent_iterate_regions(self._id, callback, None)
         self._regions = _RegionList([MemRegion.instance_for(self, region_id)
                                      for region_id in region_ids])
+        
+    def _initialize_mempools(self):
+        mempool_ids = []
+
+        def on_region(_id, ctxt=None):
+            mempool_ids.append(_id)
+            return enums.HSA_STATUS_SUCCESS
+
+        callback = drvapi.HSA_AMD_AGENT_ITERATE_MEMORY_POOLS_CALLBACK(on_region)
+        hsa.hsa_amd_agent_iterate_memory_pools(self._id, callback, None)
+        self._mempools = _RegionList([MemPool.instance_for(self, mempool_id)
+                                     for mempool_id in mempool_ids])
+
 
     def _create_queue(self, size, callback=None, data=None,
                       private_segment_size=None, group_segment_size=None,
@@ -587,6 +610,107 @@ class _RegionList(Sequence):
         return self._all[idx]
 
 
+class MemPool(HsaWrapper):
+    """Abstracts a HSA mem pool.
+
+    This will wrap and provide an OO interface for hsa_amd_memory_pool_t
+    C-API elements
+    """
+    _hsa_info_function = 'hsa_amd_memory_pool_get_info'
+
+    _hsa_properties = {
+        'segment': (
+            enums_ext.HSA_AMD_MEMORY_POOL_INFO_SEGMENT,
+            drvapi.hsa_amd_segment_t
+        ),
+        '_flags': (
+            enums_ext.HSA_AMD_MEMORY_POOL_INFO_GLOBAL_FLAGS,
+            ctypes.c_uint32
+        ),
+        'size': (enums_ext.HSA_AMD_MEMORY_POOL_INFO_SIZE,
+                    ctypes.c_size_t),
+        'alloc_allowed': (enums_ext.HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED,
+                            ctypes.c_bool),
+        'alloc_granule': (enums_ext.HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_GRANULE,
+                            ctypes.c_size_t),
+        'alloc_alignment': (enums_ext.HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALIGNMENT,
+                            ctypes.c_size_t),
+        'accessible_by_all': (enums_ext.HSA_AMD_MEMORY_POOL_INFO_ACCESSIBLE_BY_ALL,
+                            ctypes.c_bool),
+    }
+
+    _segment_name_map = {
+        enums_ext.HSA_AMD_SEGMENT_GLOBAL: 'global',
+        enums_ext.HSA_AMD_SEGMENT_READONLY: 'readonly',
+        enums_ext.HSA_AMD_SEGMENT_PRIVATE: 'private',
+        enums_ext.HSA_AMD_SEGMENT_GROUP: 'group',
+    }
+
+    def __init__(self, agent, pool):
+        """Do not instantiate MemPool objects directly, use the factory class
+        method 'instance_for' to ensure MemPool identity"""
+        self._id = pool
+        self._owner_agent = agent
+        self._as_parameter_ = self._id
+        self.allocations = utils.UniqueDict()
+
+    @property
+    def kind(self):
+        return self._segment_name_map[self.segment]
+
+    @property
+    def agent(self):
+        return self._owner_agent
+
+    def supports(self, check_flag):
+        """
+            Determines if a given feature is supported by this MemRegion.
+            Feature flags are found in "./enums_exp.py" under:
+                * hsa_amd_memory_pool_global_flag_t
+                Params:
+                check_flag: Feature flag to test
+        """
+        if self.kind == 'global':
+            return self._flags & check_flag
+        else:
+            return False
+
+    def allocate(self, nbytes, allow_access_to=None):
+        assert self.alloc_allowed
+        #assert nbytes <= self.alloc_max_size this appears to not exist
+        assert nbytes >= 0
+        buff = ctypes.c_void_p()
+        flags = ctypes.c_uint32(0) # From API docs "Must be 0"!
+        hsa.hsa_amd_memory_pool_allocate(self._id, nbytes, flags, ctypes.byref(buff))
+        
+        if allow_access_to:
+            for agent in allow_access_to:
+                # If permitted, grant the specified agent access the memory.
+                hsa.hsa_amd_agents_allow_access(1,
+                                                drvapi.hsa_agent_t(agent._id),
+                                                None,
+                                                buff)
+        fin = _make_mem_finalizer(hsa.hsa_amd_memory_pool_free)
+        ret = MemoryPointer(weakref.proxy(self), buff,  nbytes,\
+                finalizer = fin(self, buff))
+        if buff.value == None:
+            raise RuntimeError("MemoryPointer has no value")
+        self.allocations[buff.value] = ret
+     
+        return ret.own()
+
+    _instance_dict = {}
+
+    @classmethod
+    def instance_for(cls, owner, _id):
+        try:
+            return cls._instance_dict[_id]
+        except KeyError:
+            new_instance = cls(owner, _id)
+            cls._instance_dict[_id] = new_instance
+            return new_instance
+
+
 class MemRegion(HsaWrapper):
     """Abstracts a HSA memory region.
 
@@ -605,15 +729,15 @@ class MemRegion(HsaWrapper):
         'host_accessible': (enums_ext.HSA_AMD_REGION_INFO_HOST_ACCESSIBLE,
                             ctypes.c_bool),
         'size': (enums.HSA_REGION_INFO_SIZE,
-                 ctypes.c_size_t),
+                    ctypes.c_size_t),
         'alloc_max_size': (enums.HSA_REGION_INFO_ALLOC_MAX_SIZE,
-                           ctypes.c_size_t),
+                            ctypes.c_size_t),
         'alloc_alignment': (enums.HSA_REGION_INFO_RUNTIME_ALLOC_ALIGNMENT,
                             ctypes.c_size_t),
         'alloc_granule': (enums.HSA_REGION_INFO_RUNTIME_ALLOC_GRANULE,
-                          ctypes.c_size_t),
+                            ctypes.c_size_t),
         'alloc_allowed': (enums.HSA_REGION_INFO_RUNTIME_ALLOC_ALLOWED,
-                          ctypes.c_bool),
+                            ctypes.c_bool),
     }
 
     _segment_name_map = {
@@ -643,7 +767,7 @@ class MemRegion(HsaWrapper):
             Determines if a given feature is supported by this MemRegion.
             Feature flags are found in "./enums.py" under:
                 * hsa_region_global_flag_t
-             Params:
+                Params:
                 check_flag: Feature flag to test
         """
         if self.kind == 'global':
@@ -672,6 +796,7 @@ class MemRegion(HsaWrapper):
             new_instance = cls(owner, _id)
             cls._instance_dict[_id] = new_instance
             return new_instance
+
 
 
 class Queue(object):
@@ -1142,6 +1267,107 @@ class Context(object):
             raise RuntimeError("MemoryPointer has no value")
         self.allocations[mem.value] = ret
         return ret.own()
+    
+    
+    
+    def getMempools(self, segment_is=None, segment_is_not=None, pool_global_flags=None):
+        """
+        Gets mempools on this context that match the specified criteria.
+        """
+        hw = self._agent.device
+        all_pools = self._agent.mempools
+        flag_ok_r = list()        
+        
+        def query_agent_access(agent, pool):
+            """
+            Queries the accessibility status of this memory pool for a
+            specified agent.
+            """           
+            access_type = drvapi.hsa_amd_memory_pool_access_t()
+            hsa.hsa_amd_agent_memory_pool_get_info(
+            agent._id, pool._id, enums_ext.HSA_AMD_AGENT_MEMORY_POOL_INFO_ACCESS,
+            ctypes.byref(access_type))
+            return access_type # <- will be a value in enum hsa_amd_memory_pool_access_t
+
+        if segment_is and segment_is_not:
+            raise RuntimeError("Only one of segment_is or segment_is_not may be provided.")
+
+        # don't support DSP
+        if hw == "GPU" or hw == "CPU":
+            # find pools in requested segment
+            if segment_is is not None or segment_is_not is not None:
+                for r in all_pools:
+                    seg = r.segment
+                    if segment_is is not None:
+                        if seg == segment_is:
+                            flag_ok_r.append(r)
+                    if segment_is_not is not None:
+                        if seg != segment_is_not:
+                            flag_ok_r.append(r)
+            else:
+                flag_ok_r = [x for x in all_pools]
+
+            mempools = list()
+            # check system required flags for allocation
+            for r in flag_ok_r:
+                # check that specified global flags are supported
+                # if some were requested
+                if pool_global_flags is not None:
+                    ac = 0
+                    for gflags in pool_global_flags:
+                        if not r.supports(gflags):
+                            break
+                        else:
+                            ac = ac + 1
+                    if ac == len(pool_global_flags):
+                        mempools.append(r) 
+                else:
+                    mempools.append(r)
+        else:
+            raise RuntimeError("Unknown device type string \"%s\"" % hw)
+
+        return mempools
+            
+    
+    def mempoolalloc(self, nbytes, allow_access_to=None, segment_is=None, segment_is_not=None, pool_global_flags=None):
+        """
+        Allocates memory in a memory pool.
+        Parameters:
+        nbytes the number of bytes to allocate.
+        memTypeFlags the flags for which the memory pool must have support,\
+                        due to the inherent rawness of the underlying call, the\
+                        validity of the flag is not checked, cf. C language.
+        """
+        
+        # find a mempool for the allocation
+        mempools = self.getMempools(segment_is=segment_is, segment_is_not=segment_is_not, pool_global_flags=pool_global_flags)
+
+        assert len(mempools) > 0, "No suitable memory pools found."
+
+        # walk though valid pools trying to malloc until there's none left
+        mem = None
+        for mempool in mempools:
+            try:
+                m = mempool.allocate(nbytes, allow_access_to)
+            except HsaApiError: 
+                # try next memory mempool if an allocation fails
+                # or an access mutation fails.
+                
+                # Forcibly clear up m, no point in having allocations hanging about
+                # that don't match the access pattern requested waiting for gc() run
+                if m:
+                    m.free()
+            else: # allocation succeeded, stop looking for memory
+                mem = m
+                break
+
+        if mem == None:
+            raise RuntimeError("Memory allocation failed. No agent/mempool \
+                combination could meet allocation restraints \
+                (hardware = %s, size = %s)." % \
+                ( hw, nbytes))
+
+        return mem
 
 def _make_mem_finalizer(dtor):
     """
@@ -1156,11 +1382,13 @@ def _make_mem_finalizer(dtor):
         allocations = context.allocations
 
         def core():
+            print("\nCurrent allocations:", allocations)
             if allocations:
+                print("Attempting delete on %s"%handle.value)
                 del allocations[handle.value]
             dtor(handle)
         return core
-
+    
     return mem_finalize
 
 def device_pointer(obj):

@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import
-import os
 import ctypes
+import os
+import threading
 
 import numpy as np
 
@@ -419,34 +420,124 @@ class TestContext(_TestBase):
         else: #TODO: write APU variant
             pass
 
+    def test_mempool(self):
+        n = 10 # things to alloc
+        nbytes = ctypes.sizeof(ctypes.c_double) * n
+        # run if a dGPU is present
+        if(dgpu_present()):
+            dGPU_agent = self.gpu
+            CPU_agent = self.cpu
+            
+            # allocate a GPU memory pool
+            gpu_ctx = Context(dGPU_agent)
+            gpu_only_mem = gpu_ctx.mempoolalloc(nbytes)
 
-class TestDeviceLoop(_TestBase):
+            # allocate a CPU memory pool, allow the GPU access to it
+            cpu_ctx = Context(CPU_agent)
+            cpu_mem = cpu_ctx.mempoolalloc(nbytes, allow_access_to=[gpu_ctx.agent])
+            
+            ## Test writing to allocated area
+            src = np.random.random(n).astype(np.float64)
+            hsa.hsa_memory_copy(cpu_mem.device_pointer, src.ctypes.data, src.nbytes)
+            hsa.hsa_memory_copy(gpu_only_mem.device_pointer, cpu_mem.device_pointer, src.nbytes)
 
-    @unittest.skipIf(not dgpu_present(), "no discrete GPU present")
-    def test_vectorize_device_loop(self):
-        """
-            Tests device preallocation computation loop
-            with a couple of data types
-        """
-        import math
-        sig = [float32(float32),
-                   float64(float64)]
-        @vectorize(sig, target='hsa')
-        def dgpu_fn(arg):
-            return math.cos(arg)
 
-        def test(ty):
-                data = np.array(np.random.random(100), dtype=ty)
-                out = np.empty_like(data)
-                device_data = hsaapi.to_device(data)
-                res_data = hsaapi.to_device(out)
-                dgpu_fn(device_data, out = res_data)
-                result = res_data.copy_to_host()
-                gold = np.cos(data)
-                assert np.allclose(gold, result), (gold, result)
+            # clear
+            z0 = np.zeros_like(src)
+            hsa.hsa_memory_copy(cpu_mem.device_pointer, z0.ctypes.data, z0.nbytes)
+            ref = (n * ctypes.c_double).from_address(cpu_mem.device_pointer.value)
+            for k in range(n):
+                self.assertEqual(ref[k], 0)
 
-        test(np.float64)
-        test(np.float32)
+            # copy back from dGPU
+            hsa.hsa_memory_copy(cpu_mem.device_pointer, gpu_only_mem.device_pointer, src.nbytes)
+            for k in range(n):
+                self.assertEqual(ref[k], src[k])
+
+    def test_mempool_amd_example(self):
+
+        # run if a dGPU is present
+        if(dgpu_present()):
+            dGPU_agent = self.gpu
+            gpu_ctx = Context(dGPU_agent)
+            CPU_agent = self.cpu
+            cpu_ctx = Context(CPU_agent)
+
+            kNumInt = 1024;
+            kSize = kNumInt * ctypes.sizeof(ctypes.c_int)
+
+            dependent_signal = hsa.create_signal(0)
+            completion_signal = hsa.create_signal(0)
+
+            ## get a coarse grain mem pool on the CPU
+            coarse_grain_system_pool = cpu_ctx.getMempools(pool_global_flags=[enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED])[0]
+
+            ## allocate host src and dst, allow gpu access
+            host_src = coarse_grain_system_pool.allocate(kSize, allow_access_to=[gpu_ctx.agent])
+            host_dst = coarse_grain_system_pool.allocate(kSize, allow_access_to=[gpu_ctx.agent])
+
+            # there's a loop in `i` here over GPU hardware
+            i = 0
+
+            # get gpu local pool
+            gpu_local_pool = gpu_ctx.getMempools(segment_is=enums_ext.HSA_AMD_SEGMENT_GLOBAL)[0]
+            local_memory = gpu_local_pool.allocate(kSize)
+
+            host_src_view = (kNumInt * ctypes.c_int).from_address(host_src.device_pointer.value)
+            host_dst_view = (kNumInt * ctypes.c_int).from_address(host_dst.device_pointer.value)
+
+            host_src_view[:] = i + 2016 + np.arange(0, kNumInt, dtype=np.int32)
+            host_dst_view[:] = np.zeros(kNumInt, dtype=np.int32)
+
+
+            print("GPU: %s"%gpu_ctx._agent.name)
+            print("CPU: %s"%cpu_ctx._agent.name)
+
+            hsa.hsa_signal_store_relaxed(completion_signal, 1);
+
+            class validatorThread(threading.Thread):
+                def run(self):
+                    val = hsa.hsa_signal_wait_acquire(
+                        completion_signal,
+                        enums.HSA_SIGNAL_CONDITION_EQ,
+                        0,
+                        ctypes.c_uint64(-1),
+                        enums.HSA_WAIT_STATE_ACTIVE)
+
+                    if val != 0:
+                        raise RuntimeError("Signal wait error")
+
+                    # verify
+                    if np.allclose(host_dst_view, host_src_view):
+                        print("Async copy passed.")
+                    else:
+                        print("Async copy failed.")
+
+            h2l_start = False # should this be atomic? probably...
+
+            # this could be a call on the signal itself dependent_signal.store_relaxed(1)
+            hsa.hsa_signal_store_relaxed(dependent_signal, 1);
+
+            class l2hThread(threading.Thread):
+                def run(self):
+                    f = ctypes.pointer(drvapi.hsa_signal_t(dependent_signal._id))
+                    hsa.hsa_amd_memory_async_copy(host_dst.device_pointer.value,
+                            cpu_ctx._agent, local_memory.device_pointer.value,
+                                            gpu_ctx._agent, kSize, 1,
+                                            f, completion_signal);
+
+                h2l_start = True
+
+            # init thread instances
+            validator = validatorThread()
+            l2h = l2hThread()
+            # run them
+            #validator.start()
+            #l2h.start()
+
+            # join
+            #validator.join()
+            #l2h.join()
 
 
     @unittest.skipIf(not dgpu_present(), "no discrete GPU present")
@@ -466,6 +557,7 @@ class TestDeviceLoop(_TestBase):
         func(data, out=out_device)
         host_output = out_device.copy_to_host()
         np.testing.assert_equal(np.ones(n), host_output)
+
 
 if __name__ == '__main__':
     unittest.main()
