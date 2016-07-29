@@ -242,9 +242,10 @@ class TestLoopLiftingAnnotate(TestCase):
         r = cfoo(x)
         np.testing.assert_equal(r, xcopy + 1)
 
-        with utils.StringIO() as buf:
-            cfoo.inspect_types(file=buf)
-            annotation = buf.getvalue()
+        buf = utils.StringIO()
+        cfoo.inspect_types(file=buf)
+        annotation = buf.getvalue()
+        buf.close()
 
         self.assertIn("The function contains lifted loops", annotation)
         line = foo.__code__.co_firstlineno + 2  # 2 lines down from func head
@@ -278,9 +279,10 @@ class TestLoopLiftingAnnotate(TestCase):
         r = cfoo(x)
         np.testing.assert_equal(r, (xcopy + 1) * 2)
 
-        with utils.StringIO() as buf:
-            cfoo.inspect_types(file=buf)
-            annotation = buf.getvalue()
+        buf = utils.StringIO()
+        cfoo.inspect_types(file=buf)
+        annotation = buf.getvalue()
+        buf.close()
 
         self.assertIn("The function contains lifted loops", annotation)
         line1 = foo.__code__.co_firstlineno + 3  # 3 lines down from func head
