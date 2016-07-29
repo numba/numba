@@ -53,15 +53,14 @@ def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
     loopinfos = []
     for loop in loops:
         [callfrom] = loop.entries   # requirement checked earlier
-        an_exit = next(iter(loop.exits))
+        an_exit = next(iter(loop.exits))  # anyone of the exit block
         [(returnto, _)] = cfg.successors(an_exit)  # requirement checked earlier
-
         # note: sorted for stable ordering
         inputs = sorted(livemap[callfrom])
         outputs = sorted(livemap[returnto])
-        loopinfos.append(_loop_lift_info(loop=loop,
-                                         inputs=inputs, outputs=outputs,
-                                         callfrom=callfrom, returnto=returnto))
+        lli = _loop_lift_info(loop=loop, inputs=inputs, outputs=outputs,
+                              callfrom=callfrom, returnto=returnto)
+        loopinfos.append(lli)
     return loopinfos
 
 
@@ -80,17 +79,15 @@ def _loop_lift_modify_call_block(liftedloop, block, inputs, outputs, returnto):
     # call loop
     args = [scope.get(name) for name in inputs]
     callexpr = ir.Expr.call(func=fnvar, args=args, kws=(), loc=loc)
-
+    # temp variable for the return value
     callres = scope.make_temp(loc=loc)
     blk.append(ir.Assign(target=callres, value=callexpr, loc=loc))
-
     # unpack return value
     for i, out in enumerate(outputs):
         target = scope.get(out)
         getitem = ir.Expr.static_getitem(value=callres, index=i,
                                          index_var=None, loc=loc)
         blk.append(ir.Assign(target=target, value=getitem, loc=loc))
-
     # jump to next block
     blk.append(ir.Jump(target=returnto, loc=loc))
     return blk
@@ -98,9 +95,13 @@ def _loop_lift_modify_call_block(liftedloop, block, inputs, outputs, returnto):
 
 def _loop_lift_prepare_loop_func(loopinfo, blocks):
     """
-    Transform loop blocks for use as lifted loop
+    Inplace transform loop blocks for use as lifted loop.
     """
     def make_prologue():
+        """
+        Make a new block that unwraps the argument and jump to the loop entry.
+        This block is the entry block of the function.
+        """
         entry_block = blocks[loopinfo.callfrom]
         scope = entry_block.scope
         loc = entry_block.loc
@@ -117,6 +118,10 @@ def _loop_lift_prepare_loop_func(loopinfo, blocks):
         return block
 
     def make_epilogue():
+        """
+        Make a new block to prepare the return values.
+        This block is the last block of the function.
+        """
         entry_block = blocks[loopinfo.callfrom]
         scope = entry_block.scope
         loc = entry_block.loc
@@ -145,28 +150,26 @@ def _loop_lift_modify_blocks(bytecode, loopinfo, blocks,
     """
     from numba.dispatcher import LiftedLoop
 
+    # Copy loop blocks
     loop = loopinfo.loop
     loopblockkeys = set(loop.body) | set(loop.entries) | set(loop.exits)
-    loopblocks = dict((k, blocks[k]) for k in loopblockkeys)
-
+    loopblocks = dict((k, blocks[k].copy()) for k in loopblockkeys)
+    # Modify the loop blocks
     _loop_lift_prepare_loop_func(loopinfo, loopblocks)
-
+    # Create an intrepreter for the lifted loop
     interp = Interpreter.from_blocks(bytecode=bytecode, blocks=loopblocks,
                                      override_args=loopinfo.inputs,
                                      force_non_generator=True)
     liftedloop = LiftedLoop(interp, typingctx, targetctx, flags, locals)
-
     # modify for calling into liftedloop
     callblock = _loop_lift_modify_call_block(liftedloop, blocks[loopinfo.callfrom],
                                              loopinfo.inputs, loopinfo.outputs,
                                              loopinfo.returnto)
-
     # remove blocks
     for k in loopblockkeys:
         del blocks[k]
-
+    # update main interpreter callsite into the liftedloop
     blocks[loopinfo.callfrom] = callblock
-
     return liftedloop
 
 
