@@ -6,8 +6,7 @@ from __future__ import absolute_import, print_function
 
 from collections import namedtuple
 
-from numba.analysis import (compute_use_defs, compute_live_map,
-                            compute_cfg_from_blocks, find_top_level_loops)
+from numba.analysis import compute_cfg_from_blocks, find_top_level_loops
 from numba import ir
 from numba.interpreter import Interpreter
 
@@ -46,15 +45,11 @@ _loop_lift_info = namedtuple('loop_lift_info',
                              'loop,inputs,outputs,callfrom,returnto')
 
 
-def _loop_lift_get_candidate_infos(cfg, blocks):
+def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
     """
     Returns information on looplifting candidates.
     """
     loops = _extract_loop_lifting_candidates(cfg, blocks)
-
-    usedefs = compute_use_defs(blocks)
-    livemap = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
-
     loopinfos = []
     for loop in loops:
         [callfrom] = loop.entries   # requirement checked earlier
@@ -67,7 +62,6 @@ def _loop_lift_get_candidate_infos(cfg, blocks):
         loopinfos.append(_loop_lift_info(loop=loop,
                                          inputs=inputs, outputs=outputs,
                                          callfrom=callfrom, returnto=returnto))
-
     return loopinfos
 
 
@@ -185,7 +179,8 @@ def loop_lifting(interp, typingctx, targetctx, flags, locals):
     """
     blocks = interp.blocks.copy()
     cfg = compute_cfg_from_blocks(blocks)
-    loopinfos = _loop_lift_get_candidate_infos(cfg, blocks)
+    loopinfos = _loop_lift_get_candidate_infos(cfg, blocks,
+                                               interp.variable_lifetime.livemap)
     loops = []
     for loopinfo in loopinfos:
         lifted = _loop_lift_modify_blocks(interp.bytecode, loopinfo, blocks,
