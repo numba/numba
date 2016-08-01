@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Test mangling
+Test function name mangling.
+The mangling affects the ABI of numba compiled binaries.
 """
 
 from numba import types
