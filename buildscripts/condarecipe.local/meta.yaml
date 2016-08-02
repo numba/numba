@@ -38,6 +38,10 @@ test:
   files:
     - mandel.py
   commands:
+    # Check Numba executables are there
     - pycc -h
     - numba -h
+    # Check test discovery works
+    - python -m numba.tests.test_runtests
+    # Run the whole test suite
     - python -m numba.runtests -m -b
