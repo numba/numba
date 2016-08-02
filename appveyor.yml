@@ -28,8 +28,7 @@ install:
   - conda install -q -y conda=4.1.4
   - buildscripts\\incremental\\setup_conda_environment.cmd
   # Build the package
-  - call activate %CONDA_ENV%
-  - python setup.py build_ext -q --inplace
+  - buildscripts\\incremental\\build.cmd
 
 build: false
 

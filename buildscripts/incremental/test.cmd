@@ -9,6 +9,7 @@ python -m numba.tests.test_runtests
 @rem Note that coverage is run from the checkout dir to match the "source"
 @rem directive in .coveragerc
 if "%RUN_COVERAGE%" == "yes" (
+    set PYTHONPATH=.
     coverage erase
     coverage run runtests.py -b -m numba.tests
 ) else (

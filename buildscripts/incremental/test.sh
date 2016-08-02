@@ -15,6 +15,7 @@ python -m numba.tests.test_runtests
 # Note that coverage is run from the checkout dir to match the "source"
 # directive in .coveragerc
 if [ "$RUN_COVERAGE" == "yes" ]; then
+    export PYTHONPATH=.
     coverage erase
     coverage run runtests.py -b -m numba.tests
 else

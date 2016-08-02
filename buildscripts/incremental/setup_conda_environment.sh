@@ -20,8 +20,8 @@ set +v
 source activate $CONDA_ENV
 set -v
 
-# Install llvmdev (separate channel, for now)
-$CONDA_INSTALL -c numba llvmdev="3.7*" llvmlite
+# Install latest llvmlite build
+$CONDA_INSTALL -c numba llvmlite
 # Install enum34 and singledispatch for Python < 3.4
 if [ $PYTHON \< "3.4" ]; then $CONDA_INSTALL enum34; fi
 if [ $PYTHON \< "3.4" ]; then $PIP_INSTALL singledispatch; fi

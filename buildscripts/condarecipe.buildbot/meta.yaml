@@ -1,3 +1,10 @@
+#
+# This recipe only runs the CUDA tests.  It is meant as a dependent recipe
+# to the main recipe, since CUDA tests cannot generally be run on any
+# build VM (a special setup is needed that may not be compatible with
+# the build environment, e.g. CentOS 5).
+#
+
 package:
    name: numba
    version: {{ GIT_DESCRIBE_TAG }}
@@ -39,6 +46,10 @@ test:
   files:
     - mandel.py
   commands:
+    # Check Numba executables are there
     - pycc -h
     - numba -h
+    # Check test discovery works
+    - python -m numba.tests.test_runtests
+    # Run the CUDA test suite
     - python -m numba.runtests -v -m -b numba.cuda.tests
