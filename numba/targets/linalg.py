@@ -263,10 +263,6 @@ class _LAPACK:
         return types.ExternalFunction("numba_xgesv", sig)
 
 
-lapack = _LAPACK()
-blas = _BLAS()
-
-
 @contextlib.contextmanager
 def make_contiguous(context, builder, sig, args):
     """
@@ -747,9 +743,9 @@ def inv_impl(a):
 
     _check_linalg_matrix(a, "inv")
 
-    numba_xxgetrf = lapack.numba_xxgetrf(a.dtype)
+    numba_xxgetrf = _LAPACK().numba_xxgetrf(a.dtype)
 
-    numba_xxgetri = lapack.numba_ez_xxgetri(a.dtype)
+    numba_xxgetri = _LAPACK().numba_ez_xxgetri(a.dtype)
 
     kind = ord(get_blas_kind(a.dtype, "inv"))
 
@@ -814,7 +810,7 @@ if numpy_version >= (1, 8):
 
         _check_linalg_matrix(a, "cholesky")
 
-        numba_xxpotrf = lapack.numba_xxpotrf(a.dtype)
+        numba_xxpotrf = _LAPACK().numba_xxpotrf(a.dtype)
 
         kind = ord(get_blas_kind(a.dtype, "cholesky"))
         UP = ord('U')
@@ -854,8 +850,8 @@ if numpy_version >= (1, 8):
 
         _check_linalg_matrix(a, "eig")
 
-        numba_ez_rgeev = lapack.numba_ez_rgeev(a.dtype)
-        numba_ez_cgeev = lapack.numba_ez_cgeev(a.dtype)
+        numba_ez_rgeev = _LAPACK().numba_ez_rgeev(a.dtype)
+        numba_ez_cgeev = _LAPACK().numba_ez_cgeev(a.dtype)
 
         kind = ord(get_blas_kind(a.dtype, "eig"))
 
@@ -984,7 +980,7 @@ if numpy_version >= (1, 8):
         s_type = getattr(a.dtype, "underlying_float", a.dtype)
         s_dtype = np_support.as_dtype(s_type)
 
-        numba_ez_gesdd = lapack.numba_ez_gesdd(a.dtype)
+        numba_ez_gesdd = _LAPACK().numba_ez_gesdd(a.dtype)
 
         kind = ord(get_blas_kind(a.dtype, "svd"))
 
@@ -1056,8 +1052,8 @@ def qr_impl(a):
     # entries of A into Q, storing Q in A (creates orthonormal columns from
     # the elementary reflectors).
 
-    numba_ez_geqrf = lapack.numba_ez_geqrf(a.dtype)
-    numba_ez_xxgqr = lapack.numba_ez_xxgqr(a.dtype)
+    numba_ez_geqrf = _LAPACK().numba_ez_geqrf(a.dtype)
+    numba_ez_xxgqr = _LAPACK().numba_ez_xxgqr(a.dtype)
 
     kind = ord(get_blas_kind(a.dtype, "qr"))
 
@@ -1262,7 +1258,7 @@ def lstsq_impl(a, b, rcond=-1.0):
     real_dtype = np_support.as_dtype(r_type)
 
     # lapack solver
-    numba_ez_gelsd = lapack.numba_ez_gelsd(a.dtype)
+    numba_ez_gelsd = _LAPACK().numba_ez_gelsd(a.dtype)
 
     kind = ord(get_blas_kind(nb_dt, "lstsq"))
 
@@ -1392,7 +1388,7 @@ def solve_impl(a, b):
     nb_dt = a.dtype
 
     # the lapack solver
-    numba_xgesv = lapack.numba_xgesv(a.dtype)
+    numba_xgesv = _LAPACK().numba_xgesv(a.dtype)
 
     kind = ord(get_blas_kind(nb_dt, "solve"))
 
@@ -1466,9 +1462,9 @@ def pinv_impl(a, rcond=1.e-15):
     s_type = getattr(a.dtype, "underlying_float", a.dtype)
     s_dtype = np_support.as_dtype(s_type)
 
-    numba_ez_gesdd = lapack.numba_ez_gesdd(a.dtype)
+    numba_ez_gesdd = _LAPACK().numba_ez_gesdd(a.dtype)
 
-    numba_xxgemm = blas.numba_xxgemm(a.dtype)
+    numba_xxgemm = _BLAS().numba_xxgemm(a.dtype)
 
     F_layout = a.layout == 'F'
 
@@ -1663,7 +1659,7 @@ def slogdet_impl(a):
 
     _check_linalg_matrix(a, "slogdet")
 
-    numba_xxgetrf = lapack.numba_xxgetrf(a.dtype)
+    numba_xxgetrf = _LAPACK().numba_xxgetrf(a.dtype)
 
     kind = ord(get_blas_kind(a.dtype, "slogdet"))
 
@@ -1749,7 +1745,7 @@ def _get_norm_impl(a, ord_flag):
 
     np_dtype = np_support.as_dtype(a.dtype)
 
-    xxnrm2 = blas.numba_xxnrm2(a.dtype)
+    xxnrm2 = _BLAS().numba_xxnrm2(a.dtype)
 
     kind = ord(get_blas_kind(a.dtype, "norm"))
 
@@ -1851,7 +1847,7 @@ def _get_norm_impl(a, ord_flag):
     elif a.ndim == 2:
         # 2D cases
 
-        numba_ez_gesdd = lapack.numba_ez_gesdd(a.dtype)
+        numba_ez_gesdd = _LAPACK().numba_ez_gesdd(a.dtype)
 
         # Flag for "only compute `S`" to give to xgesdd
         JOBZ_N = ord('N')
