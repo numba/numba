@@ -72,6 +72,197 @@ def make_constant_slot(context, builder, ty, val):
     return cgutils.alloca_once_value(builder, const)
 
 
+class _BLAS:
+    """
+    Functions to return type signatures for wrapped
+    BLAS functions.
+    """
+
+    def __init__(self):
+        ensure_blas()
+
+    @classmethod
+    def numba_xxnrm2(cls, dtype):
+        rtype = getattr(dtype, "underlying_float", dtype)
+        sig = types.intc(types.char,             # kind
+                         types.intp,             # n
+                         types.CPointer(dtype),  # x
+                         types.intp,             # incx
+                         types.CPointer(rtype))  # returned
+
+        return types.ExternalFunction("numba_xxnrm2", sig)
+
+    @classmethod
+    def numba_xxgemm(cls, dtype):
+        sig = types.intc(
+            types.char,             # kind
+            types.char,             # transa
+            types.char,             # transb
+            types.intp,             # m
+            types.intp,             # n
+            types.intp,             # k
+            types.CPointer(dtype),  # alpha
+            types.CPointer(dtype),  # a
+            types.intp,             # lda
+            types.CPointer(dtype),  # b
+            types.intp,             # ldb
+            types.CPointer(dtype),  # beta
+            types.CPointer(dtype),  # c
+            types.intp              # ldc
+        )
+        return types.ExternalFunction("numba_xxgemm", sig)
+
+
+class _LAPACK:
+    """
+    Functions to return type signatures for wrapped
+    LAPACK functions.
+    """
+
+    def __init__(self):
+        ensure_lapack()
+
+    @classmethod
+    def numba_xxgetrf(cls, dtype):
+        sig = types.intc(types.char,                   # kind
+                         types.intp,                   # m
+                         types.intp,                   # n
+                         types.CPointer(dtype),        # a
+                         types.intp,                   # lda
+                         types.CPointer(F_INT_nbtype)  # ipiv
+                         )
+        return types.ExternalFunction("numba_xxgetrf", sig)
+
+    @classmethod
+    def numba_ez_xxgetri(cls, dtype):
+        sig = types.intc(types.char,                   # kind
+                         types.intp,                   # n
+                         types.CPointer(dtype),        # a
+                         types.intp,                   # lda
+                         types.CPointer(F_INT_nbtype)  # ipiv
+                         )
+        return types.ExternalFunction("numba_ez_xxgetri", sig)
+
+    @classmethod
+    def numba_ez_rgeev(cls, dtype):
+        sig = types.intc(types.char,             # kind
+                         types.char,             # jobvl
+                         types.char,             # jobvr
+                         types.intp,             # n
+                         types.CPointer(dtype),  # a
+                         types.intp,             # lda
+                         types.CPointer(dtype),  # wr
+                         types.CPointer(dtype),  # wi
+                         types.CPointer(dtype),  # vl
+                         types.intp,             # ldvl
+                         types.CPointer(dtype),  # vr
+                         types.intp              # ldvr
+                         )
+        return types.ExternalFunction("numba_ez_rgeev", sig)
+
+    @classmethod
+    def numba_ez_cgeev(cls, dtype):
+        sig = types.intc(types.char,             # kind
+                         types.char,             # jobvl
+                         types.char,             # jobvr
+                         types.intp,             # n
+                         types.CPointer(dtype),  # a
+                         types.intp,             # lda
+                         types.CPointer(dtype),  # w
+                         types.CPointer(dtype),  # vl
+                         types.intp,             # ldvl
+                         types.CPointer(dtype),  # vr
+                         types.intp              # ldvr
+                         )
+        return types.ExternalFunction("numba_ez_cgeev", sig)
+
+    @classmethod
+    def numba_xxpotrf(cls, dtype):
+        sig = types.intc(types.char,             # kind
+                         types.char,             # uplo
+                         types.intp,             # n
+                         types.CPointer(dtype),  # a
+                         types.intp              # lda
+                         )
+        return types.ExternalFunction("numba_xxpotrf", sig)
+
+    @classmethod
+    def numba_ez_gesdd(cls, dtype):
+        stype = getattr(dtype, "underlying_float", dtype)
+        sig = types.intc(
+            types.char,             # kind
+            types.char,             # jobz
+            types.intp,             # m
+            types.intp,             # n
+            types.CPointer(dtype),  # a
+            types.intp,             # lda
+            types.CPointer(stype),  # s
+            types.CPointer(dtype),  # u
+            types.intp,             # ldu
+            types.CPointer(dtype),  # vt
+            types.intp              # ldvt
+        )
+
+        return types.ExternalFunction("numba_ez_gesdd", sig)
+
+    @classmethod
+    def numba_ez_geqrf(cls, dtype):
+        sig = types.intc(
+            types.char,             # kind
+            types.intp,             # m
+            types.intp,             # n
+            types.CPointer(dtype),  # a
+            types.intp,             # lda
+            types.CPointer(dtype),  # tau
+        )
+        return types.ExternalFunction("numba_ez_geqrf", sig)
+
+    @classmethod
+    def numba_ez_xxgqr(cls, dtype):
+        sig = types.intc(
+            types.char,             # kind
+            types.intp,             # m
+            types.intp,             # n
+            types.intp,             # k
+            types.CPointer(dtype),  # a
+            types.intp,             # lda
+            types.CPointer(dtype),  # tau
+        )
+        return types.ExternalFunction("numba_ez_xxgqr", sig)
+
+    @classmethod
+    def numba_ez_gelsd(cls, dtype):
+        rtype = getattr(dtype, "underlying_float", dtype)
+        sig = types.intc(
+            types.char,                 # kind
+            types.intp,                 # m
+            types.intp,                 # n
+            types.intp,                 # nrhs
+            types.CPointer(dtype),      # a
+            types.intp,                 # lda
+            types.CPointer(dtype),      # b
+            types.intp,                 # ldb
+            types.CPointer(rtype),      # S
+            types.float64,              # rcond
+            types.CPointer(types.intc)  # rank
+        )
+        return types.ExternalFunction("numba_ez_gelsd", sig)
+
+    @classmethod
+    def numba_xgesv(cls, dtype):
+        sig = types.intc(
+            types.char,                    # kind
+            types.intp,                    # n
+            types.intp,                    # nhrs
+            types.CPointer(dtype),         # a
+            types.intp,                    # lda
+            types.CPointer(F_INT_nbtype),  # ipiv
+            types.CPointer(dtype),         # b
+            types.intp                     # ldb
+        )
+        return types.ExternalFunction("numba_xgesv", sig)
+
+
 @contextlib.contextmanager
 def make_contiguous(context, builder, sig, args):
     """
@@ -552,26 +743,9 @@ def inv_impl(a):
 
     _check_linalg_matrix(a, "inv")
 
-    numba_xxgetrf_sig = types.intc(types.char,   # kind
-                                   types.intp,  # m
-                                   types.intp,  # n
-                                   types.CPointer(a.dtype),  # a
-                                   types.intp,  # lda
-                                   types.CPointer(F_INT_nbtype)  # ipiv
-                                   )
+    numba_xxgetrf = _LAPACK().numba_xxgetrf(a.dtype)
 
-    numba_xxgetrf = types.ExternalFunction("numba_xxgetrf",
-                                           numba_xxgetrf_sig)
-
-    numba_ez_xxgetri_sig = types.intc(types.char,   # kind
-                                      types.intp,  # n
-                                      types.CPointer(a.dtype),  # a
-                                      types.intp,  # lda
-                                      types.CPointer(F_INT_nbtype)  # ipiv
-                                      )
-
-    numba_ez_xxgetri = types.ExternalFunction("numba_ez_xxgetri",
-                                              numba_ez_xxgetri_sig)
+    numba_xxgetri = _LAPACK().numba_ez_xxgetri(a.dtype)
 
     kind = ord(get_blas_kind(a.dtype, "inv"))
 
@@ -595,7 +769,7 @@ def inv_impl(a):
         r = numba_xxgetrf(kind, n, n, acpy.ctypes, n, ipiv.ctypes)
         _inv_err_handler(r)
 
-        r = numba_ez_xxgetri(kind, n, acpy.ctypes, n, ipiv.ctypes)
+        r = numba_xxgetri(kind, n, acpy.ctypes, n, ipiv.ctypes)
         _inv_err_handler(r)
 
         # help liveness analysis
@@ -636,9 +810,7 @@ if numpy_version >= (1, 8):
 
         _check_linalg_matrix(a, "cholesky")
 
-        xxpotrf_sig = types.intc(types.int8, types.int8, types.intp,
-                                 types.CPointer(a.dtype), types.intp)
-        xxpotrf = types.ExternalFunction("numba_xxpotrf", xxpotrf_sig)
+        numba_xxpotrf = _LAPACK().numba_xxpotrf(a.dtype)
 
         kind = ord(get_blas_kind(a.dtype, "cholesky"))
         UP = ord('U')
@@ -657,7 +829,7 @@ if numpy_version >= (1, 8):
             # (out is really its Hermitian in F order, but UP instructs
             #  xxpotrf to compute the Hermitian of the upper triangle
             #  => they cancel each other)
-            r = xxpotrf(kind, UP, n, out.ctypes, n)
+            r = numba_xxpotrf(kind, UP, n, out.ctypes, n)
             if r != 0:
                 if r < 0:
                     fatal_error_func()
@@ -678,38 +850,8 @@ if numpy_version >= (1, 8):
 
         _check_linalg_matrix(a, "eig")
 
-        numba_ez_rgeev_sig = types.intc(types.char,  # kind
-                                        types.char,  # jobvl
-                                        types.char,  # jobvr
-                                        types.intp,  # n
-                                        types.CPointer(a.dtype),  # a
-                                        types.intp,  # lda
-                                        types.CPointer(a.dtype),  # wr
-                                        types.CPointer(a.dtype),  # wi
-                                        types.CPointer(a.dtype),  # vl
-                                        types.intp,  # ldvl
-                                        types.CPointer(a.dtype),  # vr
-                                        types.intp  # ldvr
-                                        )
-
-        numba_ez_rgeev = types.ExternalFunction("numba_ez_rgeev",
-                                                numba_ez_rgeev_sig)
-
-        numba_ez_cgeev_sig = types.intc(types.char,  # kind
-                                        types.char,  # jobvl
-                                        types.char,  # jobvr
-                                        types.intp,  # n
-                                        types.CPointer(a.dtype),  # a
-                                        types.intp,  # lda
-                                        types.CPointer(a.dtype),  # w
-                                        types.CPointer(a.dtype),  # vl
-                                        types.intp,  # ldvl
-                                        types.CPointer(a.dtype),  # vr
-                                        types.intp  # ldvr
-                                        )
-
-        numba_ez_cgeev = types.ExternalFunction("numba_ez_cgeev",
-                                                numba_ez_cgeev_sig)
+        numba_ez_rgeev = _LAPACK().numba_ez_rgeev(a.dtype)
+        numba_ez_cgeev = _LAPACK().numba_ez_cgeev(a.dtype)
 
         kind = ord(get_blas_kind(a.dtype, "eig"))
 
@@ -836,27 +978,9 @@ if numpy_version >= (1, 8):
 
         # convert typing floats to numpy floats for use in the impl
         s_type = getattr(a.dtype, "underlying_float", a.dtype)
-        if s_type.bitwidth == 32:
-            s_dtype = np.float32
-        else:
-            s_dtype = np.float64
+        s_dtype = np_support.as_dtype(s_type)
 
-        numba_ez_gesdd_sig = types.intc(
-            types.char,  # kind
-            types.char,  # jobz
-            types.intp,  # m
-            types.intp,  # n
-            types.CPointer(a.dtype),  # a
-            types.intp,  # lda
-            types.CPointer(s_type),  # s
-            types.CPointer(a.dtype),  # u
-            types.intp,  # ldu
-            types.CPointer(a.dtype),  # vt
-            types.intp  # ldvt
-        )
-
-        numba_ez_gesdd = types.ExternalFunction("numba_ez_gesdd",
-                                                numba_ez_gesdd_sig)
+        numba_ez_gesdd = _LAPACK().numba_ez_gesdd(a.dtype)
 
         kind = ord(get_blas_kind(a.dtype, "svd"))
 
@@ -928,30 +1052,8 @@ def qr_impl(a):
     # entries of A into Q, storing Q in A (creates orthonormal columns from
     # the elementary reflectors).
 
-    numba_ez_geqrf_sig = types.intc(
-        types.char,  # kind
-        types.intp,  # m
-        types.intp,  # n
-        types.CPointer(a.dtype),  # a
-        types.intp,  # lda
-        types.CPointer(a.dtype),  # tau
-    )
-
-    numba_ez_geqrf = types.ExternalFunction("numba_ez_geqrf",
-                                            numba_ez_geqrf_sig)
-
-    numba_ez_xxgqr_sig = types.intc(
-        types.char,  # kind
-        types.intp,  # m
-        types.intp,  # n
-        types.intp,  # k
-        types.CPointer(a.dtype),  # a
-        types.intp,  # lda
-        types.CPointer(a.dtype),  # tau
-    )
-
-    numba_ez_xxgqr = types.ExternalFunction("numba_ez_xxgqr",
-                                            numba_ez_xxgqr_sig)
+    numba_ez_geqrf = _LAPACK().numba_ez_geqrf(a.dtype)
+    numba_ez_xxgqr = _LAPACK().numba_ez_xxgqr(a.dtype)
 
     kind = ord(get_blas_kind(a.dtype, "qr"))
 
@@ -1155,24 +1257,8 @@ def lstsq_impl(a, b, rcond=-1.0):
     r_type = getattr(nb_dt, "underlying_float", nb_dt)
     real_dtype = np_support.as_dtype(r_type)
 
-    # the lapack wrapper signature
-    numba_ez_gelsd_sig = types.intc(
-        types.char,  # kind
-        types.intp,  # m
-        types.intp,  # n
-        types.intp,  # nrhs
-        types.CPointer(nb_dt),  # a
-        types.intp,  # lda
-        types.CPointer(nb_dt),  # b
-        types.intp,  # ldb
-        types.CPointer(r_type),  # S
-        types.float64,  # rcond
-        types.CPointer(types.intc)  # rank
-    )
-
-    # the lapack wrapper function
-    numba_ez_gelsd = types.ExternalFunction("numba_ez_gelsd",
-                                            numba_ez_gelsd_sig)
+    # lapack solver
+    numba_ez_gelsd = _LAPACK().numba_ez_gelsd(a.dtype)
 
     kind = ord(get_blas_kind(nb_dt, "lstsq"))
 
@@ -1301,20 +1387,8 @@ def solve_impl(a, b):
     np_dt = np_support.as_dtype(a.dtype)
     nb_dt = a.dtype
 
-    # the lapack wrapper signature
-    numba_xgesv_sig = types.intc(
-        types.char,  # kind
-        types.intp,  # n
-        types.intp,  # nhrs
-        types.CPointer(nb_dt),  # a
-        types.intp,  # lda
-        types.CPointer(F_INT_nbtype),  # ipiv
-        types.CPointer(nb_dt),  # b
-        types.intp  # ldb
-    )
-
-    # the lapack wrapper function
-    numba_xgesv = types.ExternalFunction("numba_xgesv", numba_xgesv_sig)
+    # the lapack solver
+    numba_xgesv = _LAPACK().numba_xgesv(a.dtype)
 
     kind = ord(get_blas_kind(nb_dt, "solve"))
 
@@ -1388,42 +1462,9 @@ def pinv_impl(a, rcond=1.e-15):
     s_type = getattr(a.dtype, "underlying_float", a.dtype)
     s_dtype = np_support.as_dtype(s_type)
 
-    numba_ez_gesdd_sig = types.intc(
-        types.char,               # kind
-        types.char,               # jobz
-        types.intp,               # m
-        types.intp,               # n
-        types.CPointer(a.dtype),  # a
-        types.intp,               # lda
-        types.CPointer(s_type),   # s
-        types.CPointer(a.dtype),  # u
-        types.intp,               # ldu
-        types.CPointer(a.dtype),  # vt
-        types.intp                # ldvt
-    )
+    numba_ez_gesdd = _LAPACK().numba_ez_gesdd(a.dtype)
 
-    numba_ez_gesdd = types.ExternalFunction("numba_ez_gesdd",
-                                            numba_ez_gesdd_sig)
-
-    numba_xxgemm_sig = types.intc(
-        types.char,               # kind
-        types.char,               # TRANSA
-        types.char,               # TRANSB
-        types.intp,               # M
-        types.intp,               # N
-        types.intp,               # K
-        types.CPointer(a.dtype),  # ALPHA
-        types.CPointer(a.dtype),  # A
-        types.intp,               # LDA
-        types.CPointer(a.dtype),  # B
-        types.intp,               # LDB
-        types.CPointer(a.dtype),  # BETA
-        types.CPointer(a.dtype),  # C
-        types.intp                # LDC
-    )
-
-    numba_xxgemm = types.ExternalFunction("numba_xxgemm",
-                                          numba_xxgemm_sig)
+    numba_xxgemm = _BLAS().numba_xxgemm(a.dtype)
 
     F_layout = a.layout == 'F'
 
@@ -1618,16 +1659,7 @@ def slogdet_impl(a):
 
     _check_linalg_matrix(a, "slogdet")
 
-    numba_xxgetrf_sig = types.intc(types.char,   # kind
-                                   types.intp,  # m
-                                   types.intp,  # n
-                                   types.CPointer(a.dtype),  # a
-                                   types.intp,  # lda
-                                   types.CPointer(F_INT_nbtype)  # ipiv
-                                   )
-
-    numba_xxgetrf = types.ExternalFunction("numba_xxgetrf",
-                                           numba_xxgetrf_sig)
+    numba_xxgetrf = _LAPACK().numba_xxgetrf(a.dtype)
 
     kind = ord(get_blas_kind(a.dtype, "slogdet"))
 
@@ -1713,13 +1745,7 @@ def _get_norm_impl(a, ord_flag):
 
     np_dtype = np_support.as_dtype(a.dtype)
 
-    xxnrm2_sig = types.intc(types.char,  # kind
-                            types.intp,  # n
-                            types.CPointer(a.dtype),  # x
-                            types.intp,  # incx
-                            types.CPointer(nb_ret_type))
-
-    xxnrm2 = types.ExternalFunction("numba_xxnrm2", xxnrm2_sig)
+    xxnrm2 = _BLAS().numba_xxnrm2(a.dtype)
 
     kind = ord(get_blas_kind(a.dtype, "norm"))
 
@@ -1821,23 +1847,7 @@ def _get_norm_impl(a, ord_flag):
     elif a.ndim == 2:
         # 2D cases
 
-        # Need svd
-        numba_ez_gesdd_sig = types.intc(
-            types.char,  # kind
-            types.char,  # jobz
-            types.intp,  # m
-            types.intp,  # n
-            types.CPointer(a.dtype),  # a
-            types.intp,  # lda
-            types.CPointer(nb_ret_type),  # s
-            types.CPointer(a.dtype),  # u
-            types.intp,  # ldu
-            types.CPointer(a.dtype),  # vt
-            types.intp  # ldvt
-        )
-
-        numba_ez_gesdd = types.ExternalFunction("numba_ez_gesdd",
-                                                numba_ez_gesdd_sig)
+        numba_ez_gesdd = _LAPACK().numba_ez_gesdd(a.dtype)
 
         # Flag for "only compute `S`" to give to xgesdd
         JOBZ_N = ord('N')
