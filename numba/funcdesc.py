@@ -9,6 +9,7 @@ import sys
 from types import ModuleType
 
 from . import six, types
+from .utils import PY3
 
 
 def transform_arg_name(arg):
@@ -25,9 +26,13 @@ def transform_arg_name(arg):
 
 def default_mangler(name, argtypes):
     codedargs = '.'.join(transform_arg_name(a).replace(' ', '_')
-                             for a in argtypes)
-    return '.'.join([name, codedargs])
-
+                         for a in argtypes)
+    fullname = '.'.join([name, codedargs])
+    out = fullname.encode('ascii', 'backslashreplace')
+    # for py3, convert bytes back to  str
+    if PY3:
+        out = out.decode('ascii')
+    return out
 
 # A dummy module for dynamically-generated functions
 _dynamic_modname = '<dynamic>'
@@ -75,7 +80,7 @@ class FunctionDescriptor(object):
         if self.modname:
             # XXX choose a different convention for object mode
             self.mangled_name = mangler('%s.%s' % (self.modname, self.unique_name),
-                                        self.argtypes)
+                                                   self.argtypes)
         else:
             self.mangled_name = mangler(self.unique_name, self.argtypes)
         self.inline = inline
