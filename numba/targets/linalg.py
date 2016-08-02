@@ -72,7 +72,7 @@ def make_constant_slot(context, builder, ty, val):
     return cgutils.alloca_once_value(builder, const)
 
 
-class _blas:
+class _BLAS:
     """
     Functions to return type signatures for wrapped
     BLAS functions.
@@ -113,7 +113,7 @@ class _blas:
         return types.ExternalFunction("numba_xxgemm", sig)
 
 
-class _lapack:
+class _LAPACK:
     """
     Functions to return type signatures for wrapped
     LAPACK functions.
@@ -263,8 +263,8 @@ class _lapack:
         return types.ExternalFunction("numba_xgesv", sig)
 
 
-lapack = _lapack()
-blas = _blas()
+lapack = _LAPACK()
+blas = _BLAS()
 
 
 @contextlib.contextmanager
