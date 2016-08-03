@@ -1725,6 +1725,85 @@ def det_impl(a):
     return det_impl
 
 
+def _compute_singular_values(a):
+    """
+    Returns a function to compute singular values of `a`
+    """
+    numba_ez_gesdd = _LAPACK().numba_ez_gesdd(a.dtype)
+
+    kind = ord(get_blas_kind(a.dtype, "svd"))
+
+    # Flag for "only compute `S`" to give to xgesdd
+    JOBZ_N = ord('N')
+
+    nb_ret_type = getattr(a.dtype, "underlying_float", a.dtype)
+    np_ret_type = np_support.as_dtype(nb_ret_type)
+    np_dtype = np_support.as_dtype(a.dtype)
+
+    # This are not referenced in the computation but must be set
+    # for MKL.
+    u = np.empty((1, 1), dtype=np_dtype)
+    vt = np.empty((1, 1), dtype=np_dtype)
+
+    F_layout = a.layout == 'F'
+
+    @jit(nopython=True)
+    def sv_function(a):
+        """
+        Computes singular values.
+        """
+        # Don't use the np.linalg.svd impl instead
+        # call LAPACK to shortcut doing the "reconstruct
+        # singular vectors from reflectors" step and just
+        # get back the singular values.
+        _check_finite_matrix(a)
+        n = a.shape[-1]
+        m = a.shape[-2]
+        ldu = m
+        minmn = min(m, n)
+
+        # need to be >=1 but aren't referenced
+        ucol = 1
+        ldvt = 1
+
+        _check_finite_matrix(a)
+
+        if F_layout:
+            acpy = np.copy(a)
+        else:
+            acpy = np.asfortranarray(a)
+
+        # u and vt are not referenced however need to be
+        # allocated (as done above) for MKL as it
+        # checks for ref is nullptr.
+        s = np.empty(minmn, dtype=np_ret_type)
+
+        r = numba_ez_gesdd(
+            kind,        # kind
+            JOBZ_N,      # jobz
+            m,           # m
+            n,           # n
+            acpy.ctypes,  # a
+            m,           # lda
+            s.ctypes,    # s
+            u.ctypes,    # u
+            ldu,         # ldu
+            vt.ctypes,   # vt
+            ldvt         # ldvt
+        )
+        _handle_err_maybe_convergence_problem(r)
+
+        # help liveness analysis
+        acpy.size
+        vt.size
+        u.size
+        s.size
+
+        return s
+
+    return sv_function
+
+
 def _get_norm_impl(a, ord_flag):
     # This function is quite involved as norm supports a large
     # range of values to select different norm types via kwarg `ord`.
@@ -1847,71 +1926,7 @@ def _get_norm_impl(a, ord_flag):
     elif a.ndim == 2:
         # 2D cases
 
-        numba_ez_gesdd = _LAPACK().numba_ez_gesdd(a.dtype)
-
-        # Flag for "only compute `S`" to give to xgesdd
-        JOBZ_N = ord('N')
-
-        # This are not referenced in the computation but must be set
-        # for MKL.
-        u = np.empty((1, 1), dtype=np_dtype)
-        vt = np.empty((1, 1), dtype=np_dtype)
-
-        F_layout = a.layout == 'F'
-
-        # type based limit for use in min based functions
-        max_val = np.finfo(np_ret_type.type).max
-
-        @jit(nopython=True)
-        def twoD_norm_from_svd(a):
-            # Don't use the np.linalg.svd impl instead
-            # call LAPACK to shortcut doing the "reconstruct
-            # singular vectors from reflectors" step and just
-            # get back the singular values.
-            _check_finite_matrix(a)
-            n = a.shape[-1]
-            m = a.shape[-2]
-            ldu = m
-            minmn = min(m, n)
-
-            # need to be >=1 but aren't referenced
-            ucol = 1
-            ldvt = 1
-
-            _check_finite_matrix(a)
-
-            if F_layout:
-                acpy = np.copy(a)
-            else:
-                acpy = np.asfortranarray(a)
-
-            # u and vt are not referenced however need to be
-            # allocated (as done above) for MKL as it
-            # checks for ref is nullptr.
-            s = np.empty(minmn, dtype=np_ret_type)
-
-            r = numba_ez_gesdd(
-                kind,        # kind
-                JOBZ_N,      # jobz
-                m,           # m
-                n,           # n
-                acpy.ctypes,  # a
-                m,           # lda
-                s.ctypes,    # s
-                u.ctypes,    # u
-                ldu,         # ldu
-                vt.ctypes,   # vt
-                ldvt         # ldvt
-            )
-            _handle_err_maybe_convergence_problem(r)
-
-            # help liveness analysis
-            acpy.size
-            vt.size
-            u.size
-            s.size
-
-            return s
+        sv_func = _compute_singular_values(a)
 
         # handle "ord" being "None"
         if ord_flag in (None, types.none):
@@ -1944,6 +1959,9 @@ def _get_norm_impl(a, ord_flag):
 
                 return ret[0]
         else:
+            # max value for this dtype
+            max_val = np.finfo(np_ret_type.type).max
+
             @jit(nopython=True)
             def twoD_impl(a, order=None):
                 n = a.shape[-1]
@@ -2007,10 +2025,10 @@ def _get_norm_impl(a, ord_flag):
                 # by definition.
                 elif order == 2:
                     # max SV
-                    return twoD_norm_from_svd(a)[0]
+                    return sv_func(a)[0]
                 elif order == -2:
                     # min SV
-                    return twoD_norm_from_svd(a)[-1]
+                    return sv_func(a)[-1]
                 else:
                     # replicate numpy error
                     raise ValueError("Invalid norm order for matrices.")
@@ -2031,3 +2049,60 @@ def norm_impl(a, ord=None):
         return impl(a, ord)
 
     return norm_impl
+
+
+@overload(np.linalg.cond)
+def cond_impl(a, p=None):
+    ensure_lapack()
+
+    _check_linalg_matrix(a, "cond")
+
+    sv_func = _compute_singular_values(a)
+
+    def _get_cond_impl(a, p):
+        # handle the p==None case separately for type inference to work ok
+        if p in (None, types.none):
+            @jit(nopython=True)
+            def cond_none_impl(a, p):
+                s = sv_func(a)
+                return s[0] / s[-1]
+            return cond_none_impl
+        else:
+            @jit(nopython=True)
+            def cond_not_none_impl(a, p):
+                # This is extracted for performance, numpy does approximately:
+                # `condition = norm(a) * norm(inv(a))`
+                # in the cases of `p == 2` or `p ==-2` singular values are used
+                # for computing norms. This costs numpy an svd of `a` then an
+                # inversion of `a` and another svd of `a`.
+                # Below is a different approach, which also gives a more
+                # accurate answer as there is no inversion involved.
+                # Recall that the singular values of an inverted matrix are the
+                # reciprocal of singular values of the original matrix.
+                # Therefore calling `svd(a)` once yields all the information
+                # needed about both `a` and `inv(a)` without the cost or
+                # potential loss of accuracy incurred through inversion.
+                # For the case of `p == 2`, the result is just the ratio of
+                # `largest singular value/smallest singular value`, and for the
+                # case of `p==-2` the result is simply the
+                # `smallest singular value/largest singular value`.
+                # As a result of this, numba accepts non-square matrices as
+                # input when p==+/-2 as well as when p==None.
+                if p == 2 or p == -2:
+                    s = sv_func(a)
+                    if p == 2:
+                        return s[0] / s[-1]
+                    else:
+                        return s[-1] / s[0]
+                else:  # cases np.inf, -np.inf, 1, -1
+                    norm_a = np.linalg.norm(a, p)
+                    norm_inv_a = np.linalg.norm(np.linalg.inv(a), p)
+                    return norm_a * norm_inv_a
+            return cond_not_none_impl
+
+    impl = _get_cond_impl(a, p)
+
+    def cond_impl(a, p=None):
+        return impl(a, p)
+
+    return cond_impl

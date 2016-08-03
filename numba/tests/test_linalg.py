@@ -349,6 +349,10 @@ def norm_matrix(a, ord=None):
     return np.linalg.norm(a, ord)
 
 
+def cond_matrix(a, p=None):
+    return np.linalg.cond(a, p)
+
+
 class TestLinalgBase(TestCase):
     """
     Provides setUp and common data/error modes for testing np.linalg functions.
@@ -531,6 +535,13 @@ class TestLinalgBase(TestCase):
             atol = 100 * resolution  # zeros tend to be fuzzy
         # check it matches
         np.testing.assert_allclose(got, eye, rtol, atol)
+
+    def assert_invalid_norm_kind(self, cfunc, args):
+        """
+        For use in norm() and cond() tests.
+        """
+        msg = "Invalid norm order for matrices."
+        self.assert_error(cfunc, args, msg, ValueError)
 
 
 class TestTestLinalgBase(TestCase):
@@ -1676,10 +1687,6 @@ class TestLinalgNorm(TestLinalgSystems):
     Tests for np.linalg.norm.
     """
 
-    def assert_invalid_norm_kind(self, cfunc, args):
-        msg = "Invalid norm order for matrices."
-        self.assert_error(cfunc, args, msg, ValueError)
-
     @needs_lapack
     def test_linalg_norm(self):
         """
@@ -1783,5 +1790,80 @@ class TestLinalgNorm(TestLinalgSystems):
                                                        dtype=np.float64), 6))
 
 
+class TestLinalgCond(TestLinalgBase):
+    """
+    Tests for np.linalg.cond.
+    """
+
+    @needs_lapack
+    def test_linalg_cond(self):
+        """
+        Test np.linalg.cond
+        """
+
+        cfunc = jit(nopython=True)(cond_matrix)
+
+        def check(a, **kwargs):
+            expected = cond_matrix(a, **kwargs)
+            got = cfunc(a, **kwargs)
+
+            # All results should be in the real domain
+            self.assertTrue(not np.iscomplexobj(got))
+
+            resolution = 5 * np.finfo(a.dtype).resolution
+
+            # check the cond is the same to the arg `a` precision
+            np.testing.assert_allclose(got, expected, rtol=resolution)
+
+            # Ensure proper resource management
+            with self.assertNoNRTLeak():
+                cfunc(a, **kwargs)
+
+        # valid p values (used to indicate norm type)
+        ps = [None, np.inf, -np.inf, 1, -1, 2, -2]
+        sizes = [(3, 3), (7, 7)]
+
+        for size, dtype, order, p in \
+                product(sizes, self.dtypes, 'FC', ps):
+            a = self.specific_sample_matrix(size, dtype, order)
+            check(a, p=p)
+
+        # When p=None non-square matrices are accepted.
+        sizes = [(7, 1), (11, 5), (5, 11), (1, 7)]
+        for size, dtype, order in \
+                product(sizes, self.dtypes, 'FC'):
+            a = self.specific_sample_matrix(size, dtype, order)
+            check(a)
+
+        # try an ill-conditioned system with 2-norm, make sure np raises an
+        # overflow warning as the result is `+inf` and that the result from
+        # numba matches.
+        with warnings.catch_warnings():
+            a = np.array([[1.e308, 0], [0, 0.1]], dtype=np.float64)
+            warnings.simplefilter("error", RuntimeWarning)
+            self.assertRaisesRegexp(RuntimeWarning,
+                                    'overflow encountered in.*',
+                                    check, a)
+            warnings.simplefilter("ignore", RuntimeWarning)
+            check(a)
+
+        rn = "cond"
+
+        # Wrong dtype
+        self.assert_wrong_dtype(rn, cfunc,
+                                (np.ones((2, 2), dtype=np.int32),))
+
+        # Dimension issue
+        self.assert_wrong_dimensions(rn, cfunc,
+                                     (np.ones(10, dtype=np.float64),))
+
+        # no nans or infs when p="None" (default for kwarg).
+        self.assert_no_nan_or_inf(cfunc,
+                                  (np.array([[1., 2., ], [np.inf, np.nan]],
+                                            dtype=np.float64),))
+
+        # assert raises for an invalid norm kind kwarg
+        self.assert_invalid_norm_kind(cfunc, (np.array([[1., 2.], [3., 4.]],
+                                                       dtype=np.float64), 6))
 if __name__ == '__main__':
     unittest.main()
