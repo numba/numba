@@ -2086,6 +2086,8 @@ def cond_impl(a, p=None):
                 # `largest singular value/smallest singular value`, and for the
                 # case of `p==-2` the result is simply the
                 # `smallest singular value/largest singular value`.
+                # As a result of this, numba accepts non-square matrices as
+                # input when p==+/-2 as well as when p==None.
                 if p == 2 or p == -2:
                     s = sv_func(a)
                     if p == 2:

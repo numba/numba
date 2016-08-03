@@ -1828,6 +1828,13 @@ class TestLinalgCond(TestLinalgBase):
             a = self.specific_sample_matrix(size, dtype, order)
             check(a, p=p)
 
+        # When p=None non-square matrices are accepted.
+        sizes = [(7, 1), (11, 5), (5, 11), (1, 7)]
+        for size, dtype, order in \
+                product(sizes, self.dtypes, 'FC'):
+            a = self.specific_sample_matrix(size, dtype, order)
+            check(a)
+
         # try an ill-conditioned system with 2-norm, make sure np raises an
         # overflow warning as the result is `+inf` and that the result from
         # numba matches.
