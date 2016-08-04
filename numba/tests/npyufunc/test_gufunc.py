@@ -6,7 +6,7 @@ import numpy.core.umath_tests as ut
 from numba import unittest_support as unittest
 from numba import void, float32, jit, guvectorize
 from numba.npyufunc import GUVectorize
-from ..support import tag
+from ..support import tag, TestCase
 
 
 def matmulcore(A, B, C):
@@ -23,7 +23,7 @@ def axpy(a, x, y, out):
     out[0] = a * x  + y
 
 
-class TestGUFunc(unittest.TestCase):
+class TestGUFunc(TestCase):
     target = 'cpu'
 
     def check_matmul_gufunc(self, gufunc):
@@ -34,7 +34,7 @@ class TestGUFunc(unittest.TestCase):
         C = gufunc(A, B)
         Gold = ut.matrix_multiply(A, B)
 
-        self.assertTrue(np.allclose(C, Gold))
+        np.testing.assert_allclose(C, Gold)
 
     @tag('important')
     def test_gufunc(self):
@@ -71,7 +71,7 @@ class TestGUFuncParallel(TestGUFunc):
     target = 'parallel'
 
 
-class TestGUVectorizeScalar(unittest.TestCase):
+class TestGUVectorizeScalar(TestCase):
     """
     Nothing keeps user from out-of-bound memory access
     """
@@ -117,7 +117,7 @@ class TestGUVectorizeScalar(unittest.TestCase):
         out = foo(inp, 2)
 
         # verify result
-        self.assertTrue(np.all(inp * 2 == out))
+        self.assertPreciseEqual(inp * 2, out)
 
     def test_scalar_input_core_type(self):
         def pyfunc(inp, n, out):

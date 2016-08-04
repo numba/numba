@@ -130,7 +130,7 @@ class TestLoopLifting(TestCase):
         got = cres.entry_point(*args)
         self.assert_lifted_native(cres)
         # Check return values
-        self.assertTrue(np.all(expected == got))
+        self.assertPreciseEqual(expected, got)
 
     def check_lift_generator_ok(self, pyfunc, argtypes, args):
         """
@@ -142,7 +142,7 @@ class TestLoopLifting(TestCase):
         got = list(cres.entry_point(*args))
         self.assert_lifted_native(cres)
         # Check return values
-        self.assertEqual(got, expected)
+        self.assertPreciseEqual(expected, got)
 
     def check_no_lift(self, pyfunc, argtypes, args):
         """
@@ -153,7 +153,8 @@ class TestLoopLifting(TestCase):
         self.assertFalse(cres.lifted)
         expected = pyfunc(*args)
         got = cres.entry_point(*args)
-        self.assertTrue(np.all(expected == got))
+        # Check return values
+        self.assertPreciseEqual(expected, got)
 
     def check_no_lift_generator(self, pyfunc, argtypes, args):
         """
@@ -164,7 +165,7 @@ class TestLoopLifting(TestCase):
         self.assertFalse(cres.lifted)
         expected = list(pyfunc(*args))
         got = list(cres.entry_point(*args))
-        self.assertEqual(got, expected)
+        self.assertPreciseEqual(expected, got)
 
     def check_no_lift_nopython(self, pyfunc, argtypes, args):
         """
@@ -181,7 +182,7 @@ class TestLoopLifting(TestCase):
         self.assertTrue(cres.lifted)
         expected = pyfunc(*args)
         got = cres.entry_point(*args)
-        self.assertTrue(np.all(expected == got))
+        self.assertPreciseEqual(expected, got)
 
     def test_lift1(self):
         self.check_lift_ok(lift1, (types.intp,), (123,))
@@ -234,7 +235,7 @@ class TestLoopLiftingInAction(TestCase):
             np_a = np.arange(10, dtype='int32')
             forloop_with_if(u, nb_a)
             forloop_with_if.py_func(u, np_a)
-            self.assertTrue(np.all(nb_a == np_a))
+            self.assertPreciseEqual(nb_a, np_a)
 
     def test_issue_812(self):
         from numba import jit

@@ -87,20 +87,20 @@ class TestIR(unittest.TestCase):
         local = ir.Scope(parent=top, loc=ir.Loc(filename=filename, line=2))
 
         apple = local.define('apple', loc=ir.Loc(filename=filename, line=3))
-        self.assertTrue(local.get('apple') is apple)
+        self.assertIs(local.get('apple'), apple)
         self.assertEqual(len(local.localvars), 1)
 
         orange = top.define('orange', loc=ir.Loc(filename=filename, line=4))
         self.assertEqual(len(local.localvars), 1)
         self.assertEqual(len(top.localvars), 1)
-        self.assertTrue(top.get('orange') is orange)
-        self.assertTrue(local.get('orange') is orange)
+        self.assertIs(top.get('orange'), orange)
+        self.assertIs(local.get('orange'), orange)
 
         more_orange = local.define('orange', loc=ir.Loc(filename=filename,
                                                         line=5))
-        self.assertTrue(top.get('orange') is orange)
-        self.assertTrue(local.get('orange') is not orange)
-        self.assertTrue(local.get('orange') is more_orange)
+        self.assertIs(top.get('orange'), orange)
+        self.assertIsNot(local.get('orange'), not orange)
+        self.assertIs(local.get('orange'), more_orange)
 
         try:
             bad_orange = local.define('orange', loc=ir.Loc(filename=filename,

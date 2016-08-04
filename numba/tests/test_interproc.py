@@ -28,7 +28,7 @@ class TestInterProc(unittest.TestCase):
         global cfoo
         cfoo = jit((int32, int32), nopython=True)(foo)
         cbar = jit((int32, int32), nopython=True)(bar)
-        self.assertTrue(cbar(1, 2), 1 + 2 + 2)
+        self.assertEqual(cbar(1, 2), 1 + 2 + 2)
 
     def test_bar_call_foo_compiled_twice(self):
         # When a function is compiled twice, then called from another
@@ -39,7 +39,7 @@ class TestInterProc(unittest.TestCase):
             cfoo = jit((int32, int32), nopython=True)(foo)
             gc.collect()
         cbar = jit((int32, int32), nopython=True)(bar)
-        self.assertTrue(cbar(1, 2), 1 + 2 + 2)
+        self.assertEqual(cbar(1, 2), 1 + 2 + 2)
 
     def test_callsite_compilation(self):
         self.assertEqual(outer(1, 2), 1 + 2)
