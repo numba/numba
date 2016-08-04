@@ -120,6 +120,22 @@ class Stmt(Inst):
         return self._rec_list_vars(self.__dict__)
 
 
+class Terminator(Stmt):
+    """
+    IR statements that are terminators: the last statement in a block.
+    A terminator must either:
+    - exit the function
+    - jump to a block
+
+    All subclass of Terminator must override `.get_targets()` to return a list
+    of jump targets.
+    """
+    is_terminator = True
+
+    def get_targets(self):
+        raise NotImplementedError(type(self))
+
+
 class Expr(Inst):
     """
     An IR expression (an instruction which can only be part of a larger
@@ -257,7 +273,7 @@ class SetItem(Stmt):
     """
     target[index] = value
     """
-    
+
     def __init__(self, target, index, value, loc):
         self.target = target
         self.index = index
@@ -339,8 +355,7 @@ class Del(Stmt):
         return "del %s" % self.value
 
 
-class Raise(Stmt):
-    is_terminator = True
+class Raise(Terminator):
     is_exit = True
 
     def __init__(self, exception, loc):
@@ -350,14 +365,16 @@ class Raise(Stmt):
     def __str__(self):
         return "raise %s" % self.exception
 
+    def get_targets(self):
+        return []
 
-class StaticRaise(Stmt):
+
+class StaticRaise(Terminator):
     """
     Raise an exception class and arguments known at compile-time.
     Note that if *exc_class* is None, a bare "raise" statement is implied
     (i.e. re-raise the current exception).
     """
-    is_terminator = True
     is_exit = True
 
     def __init__(self, exc_class, exc_args, loc):
@@ -374,12 +391,14 @@ class StaticRaise(Stmt):
             return "raise %s(%s)" % (self.exc_class,
                                      ", ".join(map(repr, self.exc_args)))
 
+    def get_targets(self):
+        return []
 
-class Return(Stmt):
+
+class Return(Terminator):
     """
     Return to caller.
     """
-    is_terminator = True
     is_exit = True
 
     def __init__(self, value, loc):
@@ -389,12 +408,14 @@ class Return(Stmt):
     def __str__(self):
         return 'return %s' % self.value
 
+    def get_targets(self):
+        return []
 
-class Jump(Stmt):
+
+class Jump(Terminator):
     """
     Unconditional branch.
     """
-    is_terminator = True
 
     def __init__(self, target, loc):
         self.target = target
@@ -403,12 +424,14 @@ class Jump(Stmt):
     def __str__(self):
         return 'jump %s' % self.target
 
+    def get_targets(self):
+        return [self.target]
 
-class Branch(Stmt):
+
+class Branch(Terminator):
     """
     Conditional branch.
     """
-    is_terminator = True
 
     def __init__(self, cond, truebr, falsebr, loc):
         self.cond = cond
@@ -418,6 +441,9 @@ class Branch(Stmt):
 
     def __str__(self):
         return 'branch %s, %s, %s' % (self.cond, self.truebr, self.falsebr)
+
+    def get_targets(self):
+        return [self.truebr, self.falsebr]
 
 
 class Assign(Stmt):

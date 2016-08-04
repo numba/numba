@@ -7,7 +7,6 @@ from collections import namedtuple, defaultdict
 
 from numba import ir
 from numba.controlflow import CFGraph
-from numba.utils import singledispatch
 
 #
 # Analysis related to variable lifetime
@@ -203,33 +202,12 @@ def compute_cfg_from_blocks(blocks):
 
     for k, b in blocks.items():
         term = b.terminator
-        for target in _get_targets(term):
+        for target in term.get_targets():
             cfg.add_edge(k, target)
 
     cfg.set_entry_point(min(blocks))
     cfg.process()
     return cfg
-
-
-@singledispatch
-def _get_targets(term):
-    raise NotImplementedError(type(term))
-
-
-@_get_targets.register(ir.Jump)
-def _(term):
-    return [term.target]
-
-
-@_get_targets.register(ir.Return)
-@_get_targets.register(ir.Raise)
-def _(term):
-    return []
-
-
-@_get_targets.register(ir.Branch)
-def _(term):
-    return [term.truebr, term.falsebr]
 
 
 def find_top_level_loops(cfg):
