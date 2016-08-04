@@ -12,7 +12,7 @@ import numba.unittest_support as unittest
 from numba import types, typing, utils, typeof, numpy_support, njit
 from numba.compiler import compile_isolated, Flags, DEFAULT_FLAGS
 from numba.numpy_support import from_dtype
-from numba import vectorize
+from numba import jit, vectorize
 from numba.config import PYVERSION
 from numba.errors import LoweringError, TypingError
 from .support import TestCase, CompilationCache, MemoryLeakMixin, tag
@@ -1376,6 +1376,29 @@ class TestUfuncIssues(TestCase):
 
         cr = compile_isolated(foo, [types.complex128, types.complex128])
         self.assertEqual(foo(1j, 1j), cr.entry_point(1j, 1j))
+
+    def test_issue_2006(self):
+        """
+        <float32 ** int> should return float32, not float64.
+        """
+        def foo(x, y):
+            return np.power(x, y)
+        pyfunc = foo
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(x, y):
+            got = cfunc(x, y)
+            np.testing.assert_array_almost_equal(got, pyfunc(x, y))
+            # Check the power operation conserved the input's dtype
+            # (this is different from Numpy, whose behaviour depends on
+            #  the *values* of the arguments -- see PyArray_CanCastArrayTo).
+            self.assertEqual(got.dtype, x.dtype)
+
+        xs = [np.float32([1, 2, 3]), np.complex64([1j, 2, 3-3j])]
+        for x in xs:
+            check(x, 3)
+            check(x, np.uint64(3))
+            check(x, np.int64([2, 2, 3]))
 
 
 class _LoopTypesTester(TestCase):

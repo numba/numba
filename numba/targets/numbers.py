@@ -500,8 +500,8 @@ def _implement_integer_operators():
         lower_builtin('<=', ty, ty)(int_ule_impl)
         lower_builtin('>', ty, ty)(int_ugt_impl)
         lower_builtin('>=', ty, ty)(int_uge_impl)
-        lower_builtin('**', types.float64, ty)(int_power_impl)
-        lower_builtin(pow, types.float64, ty)(int_power_impl)
+        lower_builtin('**', types.Float, ty)(int_power_impl)
+        lower_builtin(pow, types.Float, ty)(int_power_impl)
         lower_builtin(abs, ty)(uint_abs_impl)
 
     for ty in types.signed_domain:
@@ -509,8 +509,8 @@ def _implement_integer_operators():
         lower_builtin('<=', ty, ty)(int_sle_impl)
         lower_builtin('>', ty, ty)(int_sgt_impl)
         lower_builtin('>=', ty, ty)(int_sge_impl)
-        lower_builtin('**', types.float64, ty)(int_power_impl)
-        lower_builtin(pow, types.float64, ty)(int_power_impl)
+        lower_builtin('**', types.Float, ty)(int_power_impl)
+        lower_builtin(pow, types.Float, ty)(int_power_impl)
         lower_builtin(abs, ty)(int_abs_impl)
 
 def _implement_bitwise_operators():

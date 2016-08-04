@@ -237,7 +237,7 @@ class FakeUFunc(object):
             assert len(in_) == self.nin
             assert len(out) == self.nout
 
-# Typical types for np.add, np.multiply
+# Typical types for np.add, np.multiply, np.isnan
 _add_types = ['??->?', 'bb->b', 'BB->B', 'hh->h', 'HH->H', 'ii->i', 'II->I',
               'll->l', 'LL->L', 'qq->q', 'QQ->Q', 'ee->e', 'ff->f', 'dd->d',
               'gg->g', 'FF->F', 'DD->D', 'GG->G', 'Mm->M', 'mm->m', 'mM->M',
@@ -247,6 +247,9 @@ _mul_types = ['??->?', 'bb->b', 'BB->B', 'hh->h', 'HH->H', 'ii->i', 'II->I',
               'll->l', 'LL->L', 'qq->q', 'QQ->Q', 'ee->e', 'ff->f', 'dd->d',
               'gg->g', 'FF->F', 'DD->D', 'GG->G', 'mq->m', 'qm->m', 'md->m',
               'dm->m', 'OO->O']
+
+# This one only has floating-point loops
+_isnan_types = ['e->?', 'f->?', 'd->?', 'g->?', 'F->?', 'D->?', 'G->?']
 
 
 class TestUFuncs(TestCase):
@@ -258,6 +261,7 @@ class TestUFuncs(TestCase):
         f = numpy_support.ufunc_find_matching_loop
         np_add = FakeUFunc(_add_types)
         np_mul = FakeUFunc(_mul_types)
+        np_isnan = FakeUFunc(_isnan_types)
 
         def check(ufunc, input_types, sigs, output_types=()):
             """
@@ -268,7 +272,10 @@ class TestUFuncs(TestCase):
             self.assertTrue(loop)
             if isinstance(sigs, str):
                 sigs = (sigs,)
-            self.assertIn(loop.ufunc_sig, sigs)
+            self.assertIn(loop.ufunc_sig, sigs,
+                          "inputs=%s and outputs=%s should have selected "
+                          "one of %s, got %s"
+                          % (input_types, output_types, sigs, loop.ufunc_sig))
             self.assertEqual(len(loop.numpy_inputs), len(loop.inputs))
             self.assertEqual(len(loop.numpy_outputs), len(loop.outputs))
             if not output_types:
@@ -283,6 +290,9 @@ class TestUFuncs(TestCase):
             return loop
 
         def check_exact(ufunc, input_types, sigs, output_types=()):
+            """
+            Like check(), but also ensure no casting of inputs occurred.
+            """
             loop = check(ufunc, input_types, sigs, output_types)
             self.assertEqual(loop.inputs, list(input_types))
 
@@ -320,6 +330,18 @@ class TestUFuncs(TestCase):
         check(np_add, (types.int16, types.uint16), 'ii->i')
         check(np_add, (types.complex64, types.float64), 'DD->D')
         check(np_add, (types.float64, types.complex64), 'DD->D')
+        # Integers should cast to any real or complex (see #2006)
+        int_types = [types.int8, types.int32, types.uint32,
+                     types.int64, types.uint64]
+        for intty in int_types:
+            check(np_add, (types.float32, intty), 'ff->f')
+            check(np_add, (types.float64, intty), 'dd->d')
+            check(np_add, (types.complex64, intty), 'FF->F')
+            check(np_add, (types.complex128, intty), 'DD->D')
+        # `float16` should not be selected even when it's a match, though
+        for intty in int_types:
+            check(np_isnan, (intty,), 'f->?')
+
         # With some timedelta64 arguments as well
         check(np_mul, (types.NPTimedelta('s'), types.int32),
               'mq->m', output_types=(types.NPTimedelta('s'),))

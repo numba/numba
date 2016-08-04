@@ -265,6 +265,21 @@ class UFuncLoopSpec(collections.namedtuple('_UFuncLoopSpec',
         return [as_dtype(x) for x in self.outputs]
 
 
+def ufunc_can_cast(from_, to, casting='safe'):
+    """
+    A variant of np.can_cast() that allows casting any integer to
+    any real or complex type, to avoid unexpected up-castings.
+
+    For example we want `float32 ** int32` to be allowed to return `float32`.
+    """
+    from_ = np.dtype(from_)
+    to = np.dtype(to)
+    if from_.kind in 'iu' and to.kind in 'cf':
+        # Decide that all integers can cast to any real or complex type.
+        return True
+    return np.can_cast(from_, to, casting)
+
+
 def ufunc_find_matching_loop(ufunc, arg_types):
     """Find the appropriate loop to be used for a ufunc based on the types
     of the operands
@@ -327,22 +342,28 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                 if outer.char != inner:
                     found = False
                     break
-            elif not np.can_cast(outer.char, inner, 'safe'):
+            elif not ufunc_can_cast(outer.char, inner, 'safe'):
                 found = False
                 break
         if found and strict_ufunc_typing:
             # Can we cast the inner result to the outer result type?
             for outer, inner in zip(np_output_types, ufunc_outputs):
                 if (outer.char not in 'mM' and not
-                    np.can_cast(inner, outer.char, 'same_kind')):
+                    ufunc_can_cast(inner, outer.char, 'same_kind')):
                     found = False
                     break
         if found:
             # Found: determine the Numba types for the loop's inputs and
             # outputs.
-            inputs = choose_types(input_types, ufunc_inputs)
-            outputs = choose_types(output_types, ufunc_outputs)
-            return UFuncLoopSpec(inputs, outputs, candidate)
+            try:
+                inputs = choose_types(input_types, ufunc_inputs)
+                outputs = choose_types(output_types, ufunc_outputs)
+            except NotImplementedError:
+                # One of the selected dtypes isn't supported by Numba
+                # (e.g. float16), try other candidates
+                continue
+            else:
+                return UFuncLoopSpec(inputs, outputs, candidate)
 
     return None
 

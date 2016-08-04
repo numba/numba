@@ -217,10 +217,11 @@ class BinOpFloorDiv(ConcreteTemplate):
 class BinOpPower(ConcreteTemplate):
     key = "**"
     cases = list(integer_binop_cases)
+    # Ensure that float32 ** int doesn't go through DP computations
+    cases += [signature(types.float32, types.float32, op)
+              for op in (types.int32, types.int64, types.uint64)]
     cases += [signature(types.float64, types.float64, op)
-              for op in sorted(types.signed_domain)]
-    cases += [signature(types.float64, types.float64, op)
-              for op in sorted(types.unsigned_domain)]
+              for op in (types.int32, types.int64, types.uint64)]
     cases += [signature(op, op, op)
               for op in sorted(types.real_domain)]
     cases += [signature(op, op, op)
