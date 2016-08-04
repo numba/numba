@@ -248,8 +248,9 @@ _mul_types = ['??->?', 'bb->b', 'BB->B', 'hh->h', 'HH->H', 'ii->i', 'II->I',
               'gg->g', 'FF->F', 'DD->D', 'GG->G', 'mq->m', 'qm->m', 'md->m',
               'dm->m', 'OO->O']
 
-# This one only has floating-point loops
+# Those ones only have floating-point loops
 _isnan_types = ['e->?', 'f->?', 'd->?', 'g->?', 'F->?', 'D->?', 'G->?']
+_sqrt_types = ['e->e', 'f->f', 'd->d', 'g->g', 'F->F', 'D->D', 'G->G', 'O->O']
 
 
 class TestUFuncs(TestCase):
@@ -262,6 +263,7 @@ class TestUFuncs(TestCase):
         np_add = FakeUFunc(_add_types)
         np_mul = FakeUFunc(_mul_types)
         np_isnan = FakeUFunc(_isnan_types)
+        np_sqrt = FakeUFunc(_sqrt_types)
 
         def check(ufunc, input_types, sigs, output_types=()):
             """
@@ -330,17 +332,20 @@ class TestUFuncs(TestCase):
         check(np_add, (types.int16, types.uint16), 'ii->i')
         check(np_add, (types.complex64, types.float64), 'DD->D')
         check(np_add, (types.float64, types.complex64), 'DD->D')
-        # Integers should cast to any real or complex (see #2006)
-        int_types = [types.int8, types.int32, types.uint32,
-                     types.int64, types.uint64]
+        # Integers, when used together with floating-point numbers,
+        # should cast to any real or complex (see #2006)
+        int_types = [types.int32, types.uint32, types.int64, types.uint64]
         for intty in int_types:
             check(np_add, (types.float32, intty), 'ff->f')
             check(np_add, (types.float64, intty), 'dd->d')
             check(np_add, (types.complex64, intty), 'FF->F')
             check(np_add, (types.complex128, intty), 'DD->D')
-        # `float16` should not be selected even when it's a match, though
+        # However, when used alone, they should cast only to
+        # floating-point types of sufficient precision
+        # (typical use case: np.sqrt(2) should give an accurate enough value)
         for intty in int_types:
-            check(np_isnan, (intty,), 'f->?')
+            check(np_sqrt, (intty,), 'd->d')
+            check(np_isnan, (intty,), 'd->?')
 
         # With some timedelta64 arguments as well
         check(np_mul, (types.NPTimedelta('s'), types.int32),

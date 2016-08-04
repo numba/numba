@@ -265,16 +265,19 @@ class UFuncLoopSpec(collections.namedtuple('_UFuncLoopSpec',
         return [as_dtype(x) for x in self.outputs]
 
 
-def ufunc_can_cast(from_, to, casting='safe'):
+def ufunc_can_cast(from_, to, has_mixed_inputs, casting='safe'):
     """
-    A variant of np.can_cast() that allows casting any integer to
-    any real or complex type, to avoid unexpected up-castings.
+    A variant of np.can_cast() that can allow casting any integer to
+    any real or complex type, in case the operation has mixed-kind
+    inputs.
 
-    For example we want `float32 ** int32` to be allowed to return `float32`.
+    For example we want `np.power(float32, int32)` to be computed using
+    SP arithmetic and return `float32`.
+    However, `np.sqrt(int32)` should use DP arithmetic and return `float64`.
     """
     from_ = np.dtype(from_)
     to = np.dtype(to)
-    if from_.kind in 'iu' and to.kind in 'cf':
+    if has_mixed_inputs and from_.kind in 'iu' and to.kind in 'cf':
         # Decide that all integers can cast to any real or complex type.
         return True
     return np.can_cast(from_, to, casting)
@@ -304,6 +307,11 @@ def ufunc_find_matching_loop(ufunc, arg_types):
         np_output_types = [as_dtype(x) for x in output_types]
     except NotImplementedError:
         return None
+
+    # Whether the inputs are mixed integer / floating-point
+    has_mixed_inputs = (
+        any(dt.kind in 'iu' for dt in np_input_types) and
+        any(dt.kind in 'cf' for dt in np_input_types))
 
     def choose_types(numba_types, ufunc_letters):
         """
@@ -342,14 +350,16 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                 if outer.char != inner:
                     found = False
                     break
-            elif not ufunc_can_cast(outer.char, inner, 'safe'):
+            elif not ufunc_can_cast(outer.char, inner,
+                                    has_mixed_inputs, 'safe'):
                 found = False
                 break
         if found and strict_ufunc_typing:
             # Can we cast the inner result to the outer result type?
             for outer, inner in zip(np_output_types, ufunc_outputs):
                 if (outer.char not in 'mM' and not
-                    ufunc_can_cast(inner, outer.char, 'same_kind')):
+                    ufunc_can_cast(inner, outer.char,
+                                   has_mixed_inputs, 'same_kind')):
                     found = False
                     break
         if found:
