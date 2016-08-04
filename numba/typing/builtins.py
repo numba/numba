@@ -643,40 +643,41 @@ register_number_classes(infer_global)
 #------------------------------------------------------------------------------
 
 
-@infer_global(max)
-class Max(AbstractTemplate):
+class MinMaxBase(AbstractTemplate):
+
+    def _unify_minmax(self, tys):
+        for ty in tys:
+            if not isinstance(ty, types.Number):
+                return
+        return self.context.unify_types(*tys)
 
     def generic(self, args, kws):
         assert not kws
 
-        # max(a, b, ...)
-        if len(args) < 2:
+        if not args:
             return
-        for a in args:
-            if a not in types.number_domain:
+        if len(args) == 1:
+            # max(arg) only supported if arg is an iterable
+            if isinstance(args[0], types.BaseTuple):
+                tys = list(args[0])
+            else:
                 return
-
-        retty = self.context.unify_types(*args)
+        else:
+            # max(*args)
+            tys = args
+        retty = self._unify_minmax(tys)
         if retty is not None:
             return signature(retty, *args)
+
+
+@infer_global(max)
+class Max(MinMaxBase):
+    pass
 
 
 @infer_global(min)
-class Min(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-
-        # min(a, b, ...)
-        if len(args) < 2:
-            return
-        for a in args:
-            if a not in types.number_domain:
-                return
-
-        retty = self.context.unify_types(*args)
-        if retty is not None:
-            return signature(retty, *args)
+class Min(MinMaxBase):
+    pass
 
 
 @infer_global(round)
