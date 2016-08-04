@@ -34,7 +34,7 @@ class TestGUFunc(TestCase):
         C = gufunc(A, B)
         Gold = ut.matrix_multiply(A, B)
 
-        np.testing.assert_allclose(C, Gold)
+        np.testing.assert_allclose(C, Gold, rtol=1e-5, atol=1e-8)
 
     @tag('important')
     def test_gufunc(self):

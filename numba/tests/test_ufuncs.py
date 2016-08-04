@@ -232,11 +232,16 @@ class TestUFuncs(BaseUFuncTest, TestCase):
                                        output_type, result,
                                        expected.dtype, expected)
 
-            scalar_type = getattr(output_type, 'dtype', input_type)
-            prec = ('single'
-                    if scalar_type in (types.float32, types.complex64)
-                    else 'double')
-            self.assertPreciseEqual(expected, result, prec=prec, msg=msg)
+            try:
+                np.testing.assert_array_almost_equal(expected, result,
+                                                     err_msg=msg)
+            except AssertionError:
+                if invalid_flag:
+                    # Allow output to mismatch for invalid input
+                    print("Output mismatch for invalid input",
+                          input_tuple, result, expected)
+                else:
+                    raise
 
     def binary_ufunc_test(self, ufunc, flags=no_pyobj_flags,
                          skip_inputs=[], additional_inputs=[],
@@ -718,7 +723,7 @@ class TestUFuncs(BaseUFuncTest, TestCase):
             cfunc(input1_operand, input2_operand, result)
             pyfunc(input1_operand, input2_operand, expected)
 
-            scalar_type = getattr(output_type, 'dtype', input_type)
+            scalar_type = getattr(output_type, 'dtype', output_type)
             prec = ('single'
                     if scalar_type in (types.float32, types.complex64)
                     else 'double')
