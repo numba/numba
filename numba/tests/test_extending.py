@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from collections import namedtuple
 import math
 import sys
+import pickle
 
 import numpy as np
 
@@ -17,7 +18,7 @@ from numba.extending import (typeof_impl, type_callable,
                              models, register_model,
                              box, unbox, NativeValue,
                              make_attribute_wrapper,
-                             llvm_call
+                             llvm_call, _LLVMCall,
                              )
 from numba.typing.templates import (
     ConcreteTemplate, signature, infer)
@@ -461,6 +462,9 @@ class TestHighLevelExtending(TestCase):
 
 class TestLLVMCall(TestCase):
     def test_ll_pointer_cast(self):
+        """
+        Usecase test: custom reinterpret cast to turn int values to pointers
+        """
         from ctypes import CFUNCTYPE, POINTER, c_float, c_int
 
         # Use llvm_call to make a reinterpret_cast operation
@@ -518,6 +522,87 @@ class TestLLVMCall(TestCase):
         expect = list(map(str, arr))
         self.assertEqual(expect, got)
 
+    def test_serialization(self):
+        """
+        Test serialization of llvm_call objects
+        """
+        # define a llvm_call
+        def typing(context):
+            return lambda x: x(x)
+
+        def codegen(context, builder, signature, args):
+            return args[0]
+
+        identity = llvm_call(typing, codegen)
+
+        # use in a jit function
+        @jit(nopython=True)
+        def foo(x):
+            return identity(x)
+
+        self.assertEqual(foo(1), 1)
+
+        # get serialization memo
+        memo = _LLVMCall._memo
+        memo_size = len(memo)
+
+        # pickle foo and check memo size
+        serialized_foo = pickle.dumps(foo)
+        # increases the memo size
+        memo_size += 1
+        self.assertEqual(memo_size, len(memo))
+        # unpickle
+        foo_rebuilt = pickle.loads(serialized_foo)
+        self.assertEqual(memo_size, len(memo))
+        # check rebuilt foo
+        self.assertEqual(foo(1), foo_rebuilt(1))
+
+        # pickle identity directly
+        serialized_identity = pickle.dumps(identity)
+        # memo size unchanged
+        self.assertEqual(memo_size, len(memo))
+        # unpickle
+        identity_rebuilt = pickle.loads(serialized_identity)
+        # must be the same object
+        self.assertIs(identity, identity_rebuilt)
+        # memo size unchanged
+        self.assertEqual(memo_size, len(memo))
+
+    def test_deserialization(self):
+        """
+        Test deserialization of llvm_call
+        """
+        def typing(context):
+            return lambda x: x(x)
+
+        def codegen(context, builder, signature, args):
+            return args[0]
+
+        memo = _LLVMCall._memo
+        memo_size = len(memo)
+        # invoke _LLVMCall indirectly to avoid registration which keeps an
+        # internal reference inside the compiler
+        original = _LLVMCall('foo', typing, codegen, typespec=None)
+        self.assertIs(original._typing, typing)
+        self.assertIs(original._codegen, codegen)
+        pickled = pickle.dumps(original)
+        # by pickling, a new memo entry is created
+        memo_size += 1
+        self.assertEqual(memo_size, len(memo))
+        del original  # remove original before unpickling
+        # by deleting, the memo entry is removed
+        memo_size -= 1
+        self.assertEqual(memo_size, len(memo))
+
+        rebuilt = pickle.loads(pickled)
+        # verify that the rebuilt object is different
+        self.assertIsNot(rebuilt._typing, typing)
+        self.assertIsNot(rebuilt._codegen, codegen)
+
+        # the second rebuilt object is the same as the first
+        second = pickle.loads(pickled)
+        self.assertIs(rebuilt._typing, second._typing)
+        self.assertIs(rebuilt._codegen, second._codegen)
 
 if __name__ == '__main__':
     unittest.main()

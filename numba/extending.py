@@ -1,5 +1,7 @@
 
 import inspect
+import uuid
+import weakref
 
 from numba import types
 
@@ -11,7 +13,6 @@ from .targets.imputils import (
     lower_setattr, lower_setattr_generic, lower_cast)
 from .datamodel import models, register_default as register_model
 from .pythonapi import box, unbox, reflect, NativeValue
-
 
 def type_callable(func):
     """
@@ -174,11 +175,33 @@ class _LLVMCall(object):
     """
     Dummy callable for llvm_call
     """
+    _memo = weakref.WeakValueDictionary()
+    __uuid = None
+
     def __init__(self, name, typing, codegen, typespec):
-        self.name = "<llvm_call {0}>".format(name)
+        self._name = name
         self._typing = typing
         self._codegen = codegen
         self._typespec = typespec
+
+    @property
+    def _uuid(self):
+        """
+        An instance-specific UUID, to avoid multiple deserializations of
+        a given instance.
+
+        Note this is lazily-generated, for performance reasons.
+        """
+        u = self.__uuid
+        if u is None:
+            u = str(uuid.uuid1())
+            self._set_uuid(u)
+        return u
+
+    def _set_uuid(self, u):
+        assert self.__uuid is None
+        self.__uuid = u
+        self._memo[u] = self
 
     def _register(self):
         # register typing
@@ -194,7 +217,35 @@ class _LLVMCall(object):
         raise NotImplementedError(msg)
 
     def __repr__(self):
-        return self.name
+        return "<llvm_call {0}>".format(self._name)
+
+    def __reduce__(self):
+        from numba import serialize
+
+        def reduce_func(fn):
+            gs = serialize._get_function_globals_for_reduction(fn)
+            return serialize._reduce_function(fn, gs)
+
+        return (serialize._rebuild_reduction,
+                (self.__class__, str(self._uuid), self._name,
+                 reduce_func(self._typing), reduce_func(self._codegen),
+                 self._typespec))
+
+    @classmethod
+    def _rebuild(cls, uuid, name, typing_reduced, codegen_reduced, typespec):
+        from numba import serialize
+
+        try:
+            return cls._memo[uuid]
+        except KeyError:
+            typing = serialize._rebuild_function(*typing_reduced)
+            codegen = serialize._rebuild_function(*codegen_reduced)
+
+            llc = cls(name=name, typing=typing, codegen=codegen,
+                      typespec=typespec)
+            llc._register()
+            llc._set_uuid(uuid)
+            return llc
 
 
 def llvm_call(typing, codegen, typespec=types.VarArg(types.Any), name=None):
