@@ -17,6 +17,7 @@ from numba.extending import (typeof_impl, type_callable,
                              models, register_model,
                              box, unbox, NativeValue,
                              make_attribute_wrapper,
+                             llvm_call
                              )
 from numba.typing.templates import (
     ConcreteTemplate, signature, infer)
@@ -456,6 +457,66 @@ class TestHighLevelExtending(TestCase):
         errmsg = str(raises.exception)
         expectmsg = "cannot convert native Module"
         self.assertIn(expectmsg, errmsg)
+
+
+class TestLLVMCall(TestCase):
+    def test_ll_pointer_cast(self):
+        from ctypes import CFUNCTYPE, POINTER, c_float, c_int
+
+        # Use llvm_call to make a reinterpret_cast operation
+        def unsafe_caster(result_type):
+            assert isinstance(result_type, types.CPointer)
+
+            # defines the typing logic
+            def typing(context):
+                return lambda src: result_type(types.uintp)
+
+            # defines the custom code generation
+            def codegen(context, builder, signature, args):
+                [src] = args
+                rtype = signature.return_type
+                llrtype = context.get_value_type(rtype)
+                return builder.inttoptr(src, llrtype)
+
+            return llvm_call(typing, codegen)
+
+        # make a nopython function to use our cast op.
+        # this is not usable from cpython due to the returning of a pointer.
+        def unsafe_get_ctypes_pointer(src):
+            raise NotImplementedError("not callable from python")
+
+        @overload(unsafe_get_ctypes_pointer, {'no_cpython_wrapper': True})
+        def array_impl_unsafe_get_ctypes_pointer(arrtype):
+            if isinstance(arrtype, types.Array):
+                unsafe_cast = unsafe_caster(types.CPointer(arrtype.dtype))
+
+                def array_impl(arr):
+                    return unsafe_cast(src=arr.ctypes.data)
+                return array_impl
+
+        # the ctype wrapped function for use in nopython mode
+        def my_c_fun_raw(ptr, n):
+            for i in range(n):
+                print(ptr[i])
+
+        prototype = CFUNCTYPE(None, POINTER(c_float), c_int)
+        my_c_fun = prototype(my_c_fun_raw)
+
+        # Call our pointer-cast in a @jit compiled function and use
+        # the pointer in a ctypes function
+        @jit(nopython=True)
+        def foo(arr):
+            ptr = unsafe_get_ctypes_pointer(arr)
+            my_c_fun(ptr, arr.size)
+
+        # Test
+        arr = np.arange(10, dtype=np.float32)
+        with captured_stdout() as buf:
+            foo(arr)
+            got = buf.getvalue().splitlines()
+        buf.close()
+        expect = list(map(str, arr))
+        self.assertEqual(expect, got)
 
 
 if __name__ == '__main__':

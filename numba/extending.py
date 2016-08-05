@@ -168,3 +168,56 @@ def make_attribute_wrapper(typeclass, struct_attr, python_attr):
         attrty = get_attr_fe_type(typ)
         attrval = getattr(val, struct_attr)
         return impl_ret_borrowed(context, builder, attrty, attrval)
+
+
+class _LLVMCall(object):
+    """
+    Dummy callable for llvm_call
+    """
+    def __init__(self, name, typing, codegen, typespec):
+        self.name = "<llvm_call {0}>".format(name)
+        self._typing = typing
+        self._codegen = codegen
+        self._typespec = typespec
+
+    def _register(self):
+        # register typing
+        type_callable(self)(self._typing)
+        # register codegen
+        lower_builtin(self, self._typespec)(self._codegen)
+
+    def __call__(self, *args, **kwargs):
+        """
+        This is only defined to pretend to be a callable from CPython.
+        """
+        msg = '{0} is not usable in pure-python'.format(self)
+        raise NotImplementedError(msg)
+
+    def __repr__(self):
+        return self.name
+
+
+def llvm_call(typing, codegen, typespec=types.VarArg(types.Any), name=None):
+    """
+    For defining a simple nopython callable that is implemented using llvmlite.
+    This is an escape hatch for expert users to build custom LLVM IR.
+
+    The *typing* argument is the function that defines the type inference logic.
+    See ``type_callable`` for details.
+
+    The *codegen* argument is the function that defines the code generation
+    logic.  See ``lower_builtin`` for details.
+
+    This is equivalent to calling ``type_callable(self)(typing)`` and
+    ``lower_builtin(self, typesepc)(codegen)``.
+
+    Note: there is no guarantee at the entrance of *codegen* that the
+    IRBuilder is located in a new function or the caller function.  The only
+    guarantee is that the IRBuilder is ready for user to insert custom IR and
+    the output of the operation must be in the returned by *codegen*.
+    """
+    if name is None:
+        name = 'typing={0} codegen={1}]'.format(typing, codegen)
+    llc = _LLVMCall(name, typing, codegen, typespec)
+    llc._register()
+    return llc
