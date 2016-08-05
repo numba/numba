@@ -291,7 +291,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                 self._impl_cache[cache_key] = None
                 return
             from numba import jit
-            disp = self._impl_cache[cache_key] = jit(nopython=True)(pyfunc)
+            jitdecor = jit(nopython=True, **self._jit_options)
+            disp = self._impl_cache[cache_key] = jitdecor(pyfunc)
         else:
             if disp is None:
                 return
@@ -311,15 +312,16 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         return self._compiled_overloads[sig.args]
 
 
-def make_overload_template(func, overload_func):
+def make_overload_template(func, overload_func, jit_options):
     """
     Make a template class for function *func* overloaded by *overload_func*.
+    Compiler options are passed as a dictionary to *jit_options*.
     """
     func_name = getattr(func, '__name__', str(func))
     name = "OverloadTemplate_%s" % (func_name,)
     base = _OverloadFunctionTemplate
     dct = dict(key=func, _overload_func=staticmethod(overload_func),
-               _impl_cache={}, _compiled_overloads={})
+               _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options)
     return type(base)(name, (base,), dct)
 
 

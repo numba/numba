@@ -239,6 +239,28 @@ def clip_usecase(x, lo, hi):
     return x.clip(lo, hi)
 
 
+# -----------------------------------------------------------------------
+
+def return_non_boxable():
+    return np
+
+
+@overload(return_non_boxable, jit_options={'no_cpython_wrapper': True})
+def overload_return_non_boxable():
+    def imp():
+        return np
+    return imp
+
+
+def non_boxable_ok_usecase(sz):
+    mod = return_non_boxable()
+    return mod.arange(sz)
+
+
+def non_boxable_bad_usecase():
+    return return_non_boxable()
+
+
 class TestLowLevelExtending(TestCase):
     """
     Test the low-level two-tier extension API.
@@ -415,6 +437,25 @@ class TestHighLevelExtending(TestCase):
         with captured_stdout():
             cfunc(MyDummy())
             self.assertEqual(sys.stdout.getvalue(), "hello!\n")
+
+    def test_no_cpython_wrapper(self):
+        """
+        Test overloading whose return value cannot be represented in CPython.
+        """
+        # Test passing Module type from a @overload implementation to ensure
+        # that the *no_cpython_wrapper* flag works
+        ok_cfunc = jit(nopython=True)(non_boxable_ok_usecase)
+        n = 10
+        got = ok_cfunc(n)
+        expect = non_boxable_ok_usecase(n)
+        np.testing.assert_equal(expect, got)
+        # Verify that the Module type cannot be returned to CPython
+        bad_cfunc = jit(nopython=True)(non_boxable_bad_usecase)
+        with self.assertRaises(NotImplementedError) as raises:
+            bad_cfunc()
+        errmsg = str(raises.exception)
+        expectmsg = "cannot convert native Module"
+        self.assertIn(expectmsg, errmsg)
 
 
 if __name__ == '__main__':

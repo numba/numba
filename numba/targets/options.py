@@ -58,6 +58,9 @@ class TargetOptions(object):
         if kws.pop('no_rewrites', False):
             flags.set('no_rewrites')
 
+        if kws.pop('no_cpython_wrapper', False):
+            flags.set('no_cpython_wrapper')
+
         flags.set("enable_pyobject_looplift")
 
         if kws:

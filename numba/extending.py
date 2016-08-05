@@ -42,7 +42,7 @@ def type_callable(func):
     return decorate
 
 
-def overload(func):
+def overload(func, jit_options={}):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode.
@@ -61,11 +61,13 @@ def overload(func):
                     return n
                 return len_impl
 
+    Compiler options can be passed as an dictionary using the **jit_options**
+    argument.
     """
     from .typing.templates import make_overload_template, infer_global
 
     def decorate(overload_func):
-        template = make_overload_template(func, overload_func)
+        template = make_overload_template(func, overload_func, jit_options)
         infer(template)
         if hasattr(func, '__module__'):
             infer_global(func, types.Function(template))
