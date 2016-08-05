@@ -2150,7 +2150,7 @@ def matrix_rank_impl(a, tol=None):
                 # replicate numpy default tolerance calculation
                 r = a.shape[0]
                 c = a.shape[1]
-                l = r if r > c else c
+                l = max(r, c)
                 t = s[0] * l * eps_val
                 return get_rank(s, t)
             return _2d_tol_none_impl
@@ -2178,7 +2178,10 @@ def matrix_rank_impl(a, tol=None):
             # The code below replicates the numpy behaviour.
             @jit(nopython=True)
             def _1d_matrix_rank_impl(a, tol):
-                return int(np.all(a != 0.))
+                for k in range(len(a)):
+                    if a[k] != 0.:
+                        return 1
+                return 0
             return _1d_matrix_rank_impl
         elif ndim == 2:
             return _2d_matrix_rank_impl(a, tol)

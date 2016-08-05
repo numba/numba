@@ -1900,41 +1900,59 @@ class TestLinalgMatrixRank(TestLinalgSystems):
 
         for size, dtype, order in \
                 product(sizes, self.dtypes, 'FC'):
+            # check full rank system
             a = self.specific_sample_matrix(size, dtype, order)
             check(a)
 
             # If the system is a matrix, check rank deficiency is reported
-            # correctly.
-            rm1 = min(size) - 1
-            if rm1 > 0:
-                a = self.specific_sample_matrix(size, dtype, order, rank=rm1)
+            # correctly. Check all ranks from 0 to (full rank - 1).
+            tol = 1e-13
+            # first check 1 to (full rank - 1)
+            for k in range(1, min(size) - 1):
+                # check rank k
+                a = self.specific_sample_matrix(size, dtype, order, rank=k)
+                self.assertEqual(cfunc(a), k)
                 check(a)
                 # check provision of a tolerance works as expected
-                # create a diag matrix with a singular value guaranteed below
-                # the tolerance 1e-13
+                # create a (m x n) diagonal matrix with a singular value
+                # guaranteed below the tolerance 1e-13
                 m, n = a.shape
-                rv = min(m, n)
-                S = np.zeros((m, n), dtype=dtype)
+                a[:, :] = 0.  # reuse `a`'s memory
                 idx = np.nonzero(np.eye(m, n))
                 if np.iscomplexobj(a):
-                    b = 1. + np.random.rand(rv) + 1.j +\
-                        1.j * np.random.rand(rv)
+                    b = 1. + np.random.rand(k) + 1.j +\
+                        1.j * np.random.rand(k)
                     # min singular value is sqrt(2)*1e-14
                     b[0] = 1e-14 + 1e-14j
                 else:
-                    b = 1. + np.random.rand(rv)
+                    b = 1. + np.random.rand(k)
                     b[0] = 1e-14  # min singular value is 1e-14
-                S[idx[0][:rv], idx[1][:rv]] = b.astype(dtype)
-                # rank should be fullrank-1
-                tol = 1e-13
-                self.assertEqual(cfunc(S, tol), rv - 1)
-                check(S, tol=tol)
+                a[idx[0][:k], idx[1][:k]] = b.astype(dtype)
+                # rank should be k-1 (as tol is present)
+                self.assertEqual(cfunc(a, tol), k - 1)
+                check(a, tol=tol)
+            # then check zero rank
+            a[:, :] = 0.
+            self.assertEqual(cfunc(a), 0)
+            check(a)
+            # add in a singular value that is small
+            if np.iscomplexobj(a):
+                a[-1, -1] = 1e-14 + 1e-14j
+            else:
+                a[-1, -1] = 1e-14
+            # check the system has zero rank to a given tolerance
+            self.assertEqual(cfunc(a, tol), 0)
+            check(a, tol=tol)
 
-        # check the zero vector returns rank 0
+        # check the zero vector returns rank 0 and a nonzero vector
+        # returns rank 1.
         for dt in self.dtypes:
             a = np.zeros((5), dtype=dt)
             self.assertEqual(cfunc(a), 0)
-            # check match to np
+            check(a)
+            # make it a nonzero vector
+            a[0] = 1.
+            self.assertEqual(cfunc(a), 1)
             check(a)
 
         rn = "matrix_rank"
