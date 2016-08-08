@@ -2,6 +2,7 @@ from __future__ import absolute_import, print_function, division
 
 import multiprocessing as mp
 import traceback
+import pickle
 
 import numpy as np
 
@@ -11,14 +12,10 @@ from numba import unittest_support as unittest
 from numba.cuda.testing import skip_on_cudasim, CUDATestCase
 
 
-def base_ipc_handle_test(handle_array, size, result_queue):
+def core_ipc_handle_test(make_handle, result_queue):
     try:
-        # manually recreate the IPC mem handle
-        handle = drvapi.cu_ipc_mem_handle()
-        for i, v in enumerate(handle_array):
-            handle[i] = v
-        # use *IpcHandle* to open the IPC memory
-        handle = cuda.driver.IpcHandle(None, handle, size)
+        handle = make_handle()
+        size = handle.size
         dptr = handle.open(cuda.current_context())
         # read the device pointer as an array
         dtype = np.dtype(np.intp)
@@ -41,6 +38,21 @@ def base_ipc_handle_test(handle_array, size, result_queue):
     result_queue.put((succ, out))
 
 
+def base_ipc_handle_test(handle_array, size, result_queue):
+    def make_handle():
+        # manually recreate the IPC mem handle
+        handle = drvapi.cu_ipc_mem_handle(*handle_array)
+        # use *IpcHandle* to open the IPC memory
+        handle = cuda.driver.IpcHandle(None, handle, size)
+        return handle
+
+    return core_ipc_handle_test(make_handle, result_queue)
+
+
+def serialize_ipc_handle_test(handle, result_queue):
+    return core_ipc_handle_test(lambda: handle, result_queue)
+
+
 @skip_on_cudasim('Ipc not available in CUDASIM')
 class TestIpcMemory(CUDATestCase):
     @classmethod
@@ -57,13 +69,41 @@ class TestIpcMemory(CUDATestCase):
         ipch = ctx.get_ipc_handle(devarr.gpu_data)
 
         # manually prepare for serialization (as ndarray)
-        handle_array = np.asarray(ipch.handle)
+        handle_array = tuple(ipch.handle)
         size = ipch.size
 
         # spawn new process for testing
         result_queue = mp.Queue()
         args = (handle_array, size, result_queue)
         proc = mp.Process(target=base_ipc_handle_test, args=args)
+        proc.start()
+        succ, out = result_queue.get()
+        if not succ:
+            self.fail(out)
+        else:
+            np.testing.assert_equal(arr, out)
+        proc.join(3)
+
+    def test_ipc_handle_serialization(self):
+        # prepare data for IPC
+        arr = np.arange(10, dtype=np.intp)
+        devarr = cuda.to_device(arr)
+
+        # create IPC handle
+        ctx = cuda.current_context()
+        ipch = ctx.get_ipc_handle(devarr.gpu_data)
+
+        # pickle
+        buf = pickle.dumps(ipch)
+        ipch_recon = pickle.loads(buf)
+        self.assertIs(ipch_recon.base, None)
+        self.assertEqual(tuple(ipch_recon.handle), tuple(ipch.handle))
+        self.assertEqual(ipch_recon.size, ipch.size)
+
+        # spawn new process for testing
+        result_queue = mp.Queue()
+        args = (ipch, result_queue)
+        proc = mp.Process(target=serialize_ipc_handle_test, args=args)
         proc.start()
         succ, out = result_queue.get()
         if not succ:

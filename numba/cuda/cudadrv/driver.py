@@ -30,8 +30,9 @@ from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
 from .drvapi import cu_occupancy_b2d_size
 from . import enums, drvapi, _extras
-from numba import config
+from numba import config, serialize
 from numba.utils import longint as long
+
 
 VERBOSE_JIT_LOG = int(os.environ.get('NUMBAPRO_VERBOSE_CU_JIT_LOG', 1))
 MIN_REQUIRED_CC = (2, 0)
@@ -843,6 +844,15 @@ class IpcHandle(object):
             raise ValueError('IpcHandle not opened')
         driver.cuIpcCloseMemHandle(self._opened_mem.handle)
         self._opened_mem = None
+
+    def __reduce__(self):
+        args = (self.__class__, tuple(self.handle), self.size)
+        return (serialize._rebuild_reduction, args)
+
+    @classmethod
+    def _rebuild(cls, handle_ary, size):
+        handle = drvapi.cu_ipc_mem_handle(*handle_ary)
+        return cls(base=None, handle=handle, size=size)
 
 
 class MemoryPointer(object):
