@@ -973,7 +973,8 @@ class OwnedPointer(object):
                 if mem.refct == 0:
                     mem.free()
             except ReferenceError:
-                raise ReferenceError('cuda memory is already released')
+                # ignore reference error here
+                pass
 
         self._mem.refct += 1
         utils.finalize(self, deref)
