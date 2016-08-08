@@ -234,6 +234,7 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
             try:
                 np.testing.assert_array_almost_equal(expected, result,
+                                                     decimal=5,
                                                      err_msg=msg)
             except AssertionError:
                 if invalid_flag:
