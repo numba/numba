@@ -125,10 +125,17 @@ ext_jitclass_box = Extension(name='numba.jitclass._box',
                              depends=['numba/_pymodule.h'],
                              include_dirs=['numba'])
 
+ext_cuda_extras = Extension(name='numba.cuda.cudadrv._extras',
+                            sources=['numba/cuda/cudadrv/_extras.c'],
+                            depends=['numba/_pymodule.h'],
+                            include_dirs=["numba"])
+
+
 ext_modules = [ext_dynfunc, ext_dispatcher,
                ext_helperlib, ext_typeconv,
                ext_npyufunc_ufunc, ext_npyufunc_workqueue, ext_mviewbuf,
-               ext_nrt_python, ext_jitclass_box]
+               ext_nrt_python, ext_jitclass_box,
+               ext_cuda_extras]
 
 
 def find_packages(root_dir, root_name):

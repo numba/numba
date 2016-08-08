@@ -29,7 +29,7 @@ from numba import utils, servicelib, mviewbuf
 from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
 from .drvapi import cu_occupancy_b2d_size
-from . import enums, drvapi
+from . import enums, drvapi, _extras
 from numba import config
 from numba.utils import longint as long
 
@@ -194,6 +194,24 @@ class Driver(object):
         else:
             self.pid = _getpid()
 
+        self._initialize_extras()
+
+    def _initialize_extras(self):
+        # set pointer to original cuIpcOpenMemHandle
+        set_proto = ctypes.CFUNCTYPE(None, c_void_p)
+        set_cuIpcOpenMemHandle = set_proto(_extras.set_cuIpcOpenMemHandle)
+        set_cuIpcOpenMemHandle(self._find_api('cuIpcOpenMemHandle'))
+        # bind caller to cuIpcOpenMemHandle that fixes the ABI
+        call_proto = ctypes.CFUNCTYPE(c_int,
+                                      ctypes.POINTER(drvapi.cu_device_ptr),
+                                      ctypes.POINTER(drvapi.cu_ipc_mem_handle),
+                                      ctypes.c_uint)
+        call_cuIpcOpenMemHandle = call_proto(_extras.call_cuIpcOpenMemHandle)
+        safe_call = self._wrap_api_call('call_cuIpcOpenMemHandle',
+                                        call_cuIpcOpenMemHandle)
+        # override cuIpcOpenMemHandle
+        self.cuIpcOpenMemHandle = safe_call
+
     @property
     def is_available(self):
         if not self.is_initialized:
@@ -222,12 +240,15 @@ class Driver(object):
         libfn.restype = restype
         libfn.argtypes = argtypes
 
+        safe_call = self._wrap_api_call(fname, libfn)
+        setattr(self, fname, safe_call)
+        return safe_call
+
+    def _wrap_api_call(self, fname, libfn):
         @functools.wraps(libfn)
         def safe_cuda_api_call(*args):
             retcode = libfn(*args)
             self._check_error(fname, retcode)
-
-        setattr(self, fname, safe_cuda_api_call)
         return safe_cuda_api_call
 
     def _find_api(self, fname):
@@ -293,6 +314,7 @@ class Driver(object):
         if not handle.value:
             return None
         return handle
+
 
 driver = Driver()
 
@@ -631,6 +653,20 @@ class Context(object):
     def memunpin(self, pointer):
         raise NotImplementedError
 
+    def get_ipc_handle(self, memory):
+        ipchandle = drvapi.cu_ipc_mem_handle()
+        driver.cuIpcGetMemHandle(ctypes.cast(ipchandle, ctypes.POINTER(drvapi.cu_ipc_mem_handle)), memory.handle)
+        return IpcHandle(memory, ipchandle, memory.size)
+
+    def open_ipc_handle(self, handle, size):
+        # open the IPC handle to get the device pointer
+        dptr = drvapi.cu_device_ptr()
+        flags = 1  # CU_IPC_MEM_LAZY_ENABLE_PEER_ACCESS
+        driver.cuIpcOpenMemHandle(byref(dptr), handle, flags)
+        # wrap it
+        return MemoryPointer(context=weakref.proxy(self), pointer=dptr,
+                             size=size)
+
     def create_module_ptx(self, ptx):
         if isinstance(ptx, str):
             ptx = ptx.encode('utf8')
@@ -782,6 +818,31 @@ def _module_finalizer(context, handle):
         trashing.add_trash(cleanup)
 
     return core
+
+
+class IpcHandle(object):
+    def __init__(self, base, handle, size):
+        self.base = base
+        self.handle = handle
+        self.size = size
+        self._opened_mem = None
+
+    def open(self, context):
+        if self.base is not None:
+            raise ValueError('opening IpcHandle from original process')
+
+        if self._opened_mem is not None:
+            return self._device_pointer
+
+        mem = context.open_ipc_handle(self.handle, self.size)
+        self._opened_mem = mem
+        return mem.own()
+
+    def close(self):
+        if self._opened_mem is None:
+            raise ValueError('IpcHandle not opened')
+        driver.cuIpcCloseMemHandle(self._opened_mem.handle)
+        self._opened_mem = None
 
 
 class MemoryPointer(object):
