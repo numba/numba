@@ -53,6 +53,22 @@ def serialize_ipc_handle_test(handle, result_queue):
     return core_ipc_handle_test(lambda: handle, result_queue)
 
 
+def ipc_array_test(ipcarr, result_queue):
+    try:
+        with ipcarr as darr:
+            arr = darr.copy_to_host()
+
+    except:
+        # FAILED. propagate the exception as a string
+        succ = False
+        out = traceback.format_exc()
+    else:
+        # OK. send the ndarray back
+        succ = True
+        out = arr
+    result_queue.put((succ, out))
+
+
 @skip_on_cudasim('Ipc not available in CUDASIM')
 class TestIpcMemory(CUDATestCase):
     @classmethod
@@ -104,6 +120,24 @@ class TestIpcMemory(CUDATestCase):
         result_queue = mp.Queue()
         args = (ipch, result_queue)
         proc = mp.Process(target=serialize_ipc_handle_test, args=args)
+        proc.start()
+        succ, out = result_queue.get()
+        if not succ:
+            self.fail(out)
+        else:
+            np.testing.assert_equal(arr, out)
+        proc.join(3)
+
+    def test_ipc_array(self):
+        # prepare data for IPC
+        arr = np.arange(10, dtype=np.intp)
+        devarr = cuda.to_device(arr)
+        ipch = devarr.get_ipc_handle()
+
+        # spawn new process for testing
+        result_queue = mp.Queue()
+        args = (ipch, result_queue)
+        proc = mp.Process(target=ipc_array_test, args=args)
         proc.start()
         succ, out = result_queue.get()
         if not succ:

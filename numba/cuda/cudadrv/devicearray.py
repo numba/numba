@@ -14,7 +14,7 @@ import numpy as np
 
 from . import driver as _driver
 from . import devices
-from numba import dummyarray, types, numpy_support
+from numba import dummyarray, types, numpy_support, serialize
 
 try:
     long
@@ -240,6 +240,11 @@ class DeviceNDArrayBase(object):
         """
         return self.gpu_data
 
+    def get_ipc_handle(self):
+        ipch = devices.get_context().get_ipc_handle(self.gpu_data)
+        return IpcArrayHandle(shape=self.shape, strides=self.strides,
+                              dtype=self.dtype, ipc_handle=ipch)
+
 
 class DeviceRecord(DeviceNDArrayBase):
     '''
@@ -348,6 +353,28 @@ class DeviceNDArray(DeviceNDArrayBase):
             newdata = self.gpu_data.view(*arr.extent)
             return cls(shape=arr.shape, strides=arr.strides,
                        dtype=self.dtype, gpu_data=newdata, stream=stream)
+
+
+class IpcArrayHandle(object):
+    def __init__(self, shape, strides, dtype, ipc_handle):
+        self.shape = shape
+        self.strides = strides
+        self.dtype = dtype
+        self.ipc_handle = ipc_handle
+
+    def open(self):
+        dptr = self.ipc_handle.open(devices.get_context())
+        return DeviceNDArray(shape=self.shape, strides=self.strides,
+                             dtype=self.dtype, gpu_data=dptr)
+
+    def close(self):
+        self.ipc_handle.close()
+
+    def __enter__(self):
+        return self.open()
+
+    def __exit__(self, type, value, traceback):
+        self.close()
 
 
 class MappedNDArray(DeviceNDArrayBase, np.ndarray):

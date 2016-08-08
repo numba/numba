@@ -833,7 +833,7 @@ class IpcHandle(object):
             raise ValueError('opening IpcHandle from original process')
 
         if self._opened_mem is not None:
-            return self._device_pointer
+            raise ValueError('IpcHandle is already opened')
 
         mem = context.open_ipc_handle(self.handle, self.size)
         self._opened_mem = mem
