@@ -828,10 +828,20 @@ def _module_finalizer(context, handle):
 
 
 class IpcHandle(object):
+    """
+    Internal IPC handle.
+
+    Serialization of the CUDA IPC handle object is implemented here.
+
+    The *base* attribute is a reference to the original allocation to keep it
+    alive.  The *handle* is a ctypes object of the CUDA IPC handle. The *size*
+    is the allocation size.
+    """
     def __init__(self, base, handle, size):
         self.base = base
         self.handle = handle
         self.size = size
+        # remember if the handle is already opened
         self._opened_mem = None
 
     def open(self, context):
@@ -842,6 +852,7 @@ class IpcHandle(object):
             raise ValueError('IpcHandle is already opened')
 
         mem = context.open_ipc_handle(self.handle, self.size)
+        # this object owns the opened allocation
         self._opened_mem = mem
         return mem.own()
 
