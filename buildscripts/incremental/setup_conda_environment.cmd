@@ -15,6 +15,8 @@ conda remove --all -q -y -n %CONDA_ENV%
 conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip scipy jinja2 ipython
 
 call activate %CONDA_ENV%
+@rem Downgrade setuptools to workaround https://github.com/pypa/setuptools/issues/728
+%CONDA_INSTALL% setuptools=23
 @rem Install latest llvmlite build
 %CONDA_INSTALL% -c numba llvmlite
 @rem Install required backports for older Pythons
