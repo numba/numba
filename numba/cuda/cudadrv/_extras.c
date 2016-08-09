@@ -1,5 +1,5 @@
 /*
- * Helper binding to call some CUDA Runtime API that makes cannot be directly
+ * Helper binding to call some CUDA Runtime API that cannot be directly
  * encoded using ctypes.
  */
 

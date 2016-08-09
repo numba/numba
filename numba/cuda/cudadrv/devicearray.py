@@ -243,7 +243,7 @@ class DeviceNDArrayBase(object):
     def get_ipc_handle(self):
         """
         Returns a *IpcArrayHandle* object that is safe to serialize and transfer
-        to a remote process to share the local allocation.
+        to another process to share the local allocation.
 
         Note: this feature is only available on Linux.
         """
