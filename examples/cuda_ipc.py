@@ -27,7 +27,7 @@ def parent():
     print('device array:', darr.copy_to_host())
     print('returned host array', hostarr)
 
-    # verity
+    # verify
     np.testing.assert_equal(darr.copy_to_host(), arr + 1)
     np.testing.assert_equal(hostarr, arr * 2)
 
