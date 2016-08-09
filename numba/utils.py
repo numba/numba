@@ -166,7 +166,6 @@ def _at_shutdown():
     global _shutting_down
     _shutting_down = True
 
-atexit.register(_at_shutdown)
 
 def shutting_down(globals=globals):
     """
@@ -561,6 +560,7 @@ class finalize:
             import atexit
             atexit.register(self._exitfunc)
             finalize._registered_with_atexit = True
+            atexit.register(_at_shutdown)
         info = self._Info()
         info.weakref = ref(obj, self)
         info.func = func
