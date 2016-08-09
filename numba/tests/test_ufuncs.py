@@ -728,7 +728,7 @@ class TestUFuncs(BaseUFuncTest, TestCase):
             prec = ('single'
                     if scalar_type in (types.float32, types.complex64)
                     else 'double')
-            self.assertPreciseEqual(expected, result, prec=prec, msg=msg)
+            self.assertPreciseEqual(expected, result, prec=prec)
 
     def test_mixed_types(self):
         if not numpy_support.strict_ufunc_typing:
