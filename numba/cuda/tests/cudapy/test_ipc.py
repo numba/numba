@@ -13,7 +13,8 @@ from numba import unittest_support as unittest
 from numba.cuda.testing import skip_on_cudasim, CUDATestCase
 
 
-NOT_LINUX = not sys.platform.startswith('linux')
+not_linux = not sys.platform.startswith('linux')
+has_mp_get_context = hasattr(mp, 'get_context')
 
 
 def core_ipc_handle_test(make_handle, result_queue):
@@ -82,13 +83,10 @@ def ipc_array_test(ipcarr, result_queue):
     result_queue.put((succ, out))
 
 
-@unittest.skipIf(NOT_LINUX, "IPC only supported on Linux")
+@unittest.skipIf(not_linux, "IPC only supported on Linux")
+@unittest.skipUnless(has_mp_get_context, "requires multiprocessing.get_context")
 @skip_on_cudasim('Ipc not available in CUDASIM')
 class TestIpcMemory(CUDATestCase):
-    @classmethod
-    def setUpClass(cls):
-        mp.set_start_method('spawn')
-
     def test_ipc_handle(self):
         # prepare data for IPC
         arr = np.arange(10, dtype=np.intp)
@@ -103,9 +101,10 @@ class TestIpcMemory(CUDATestCase):
         size = ipch.size
 
         # spawn new process for testing
-        result_queue = mp.Queue()
+        ctx = mp.get_context('spawn')
+        result_queue = ctx.Queue()
         args = (handle_array, size, result_queue)
-        proc = mp.Process(target=base_ipc_handle_test, args=args)
+        proc = ctx.Process(target=base_ipc_handle_test, args=args)
         proc.start()
         succ, out = result_queue.get()
         if not succ:
@@ -131,9 +130,10 @@ class TestIpcMemory(CUDATestCase):
         self.assertEqual(ipch_recon.size, ipch.size)
 
         # spawn new process for testing
-        result_queue = mp.Queue()
+        ctx = mp.get_context('spawn')
+        result_queue = ctx.Queue()
         args = (ipch, result_queue)
-        proc = mp.Process(target=serialize_ipc_handle_test, args=args)
+        proc = ctx.Process(target=serialize_ipc_handle_test, args=args)
         proc.start()
         succ, out = result_queue.get()
         if not succ:
@@ -149,9 +149,10 @@ class TestIpcMemory(CUDATestCase):
         ipch = devarr.get_ipc_handle()
 
         # spawn new process for testing
-        result_queue = mp.Queue()
+        ctx = mp.get_context('spawn')
+        result_queue = ctx.Queue()
         args = (ipch, result_queue)
-        proc = mp.Process(target=ipc_array_test, args=args)
+        proc = ctx.Process(target=ipc_array_test, args=args)
         proc.start()
         succ, out = result_queue.get()
         if not succ:
@@ -161,14 +162,14 @@ class TestIpcMemory(CUDATestCase):
         proc.join(3)
 
 
-@unittest.skipUnless(NOT_LINUX, "IPC only supported on Linux")
+@unittest.skipUnless(not_linux, "IPC only supported on Linux")
 @skip_on_cudasim('Ipc not available in CUDASIM')
 class TestIpcNotSupported(CUDATestCase):
     def test_unsupported(self):
         arr = np.arange(10, dtype=np.intp)
         devarr = cuda.to_device(arr)
         with self.assertRaises(OSError) as raises:
-            ipch = devarr.get_ipc_handle()
+            devarr.get_ipc_handle()
         errmsg = str(raises.exception)
         self.assertIn('OS does not support CUDA IPC', errmsg)
 
