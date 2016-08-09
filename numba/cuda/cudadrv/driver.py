@@ -36,6 +36,7 @@ from numba.utils import longint as long
 
 VERBOSE_JIT_LOG = int(os.environ.get('NUMBAPRO_VERBOSE_CU_JIT_LOG', 1))
 MIN_REQUIRED_CC = (2, 0)
+SUPPORTS_IPC = sys.platform.startswith('linux')
 
 
 class DeadMemoryError(RuntimeError):
@@ -655,6 +656,11 @@ class Context(object):
         raise NotImplementedError
 
     def get_ipc_handle(self, memory):
+        """
+        Returns a *IpcHandle* from a GPU allocation.
+        """
+        if not SUPPORTS_IPC:
+            raise OSError('OS does not support CUDA IPC')
         ipchandle = drvapi.cu_ipc_mem_handle()
         driver.cuIpcGetMemHandle(ctypes.cast(ipchandle, ctypes.POINTER(drvapi.cu_ipc_mem_handle)), memory.handle)
         return IpcHandle(memory, ipchandle, memory.size)
@@ -846,7 +852,9 @@ class IpcHandle(object):
         self._opened_mem = None
 
     def __reduce__(self):
-        args = (self.__class__, tuple(self.handle), self.size)
+        # Preprocess the IPC handle, which is defined as a byte array.
+        preprocessed_handle = tuple(self.handle)
+        args = (self.__class__, preprocessed_handle, self.size)
         return (serialize._rebuild_reduction, args)
 
     @classmethod

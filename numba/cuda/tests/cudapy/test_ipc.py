@@ -1,5 +1,6 @@
 from __future__ import absolute_import, print_function, division
 
+import sys
 import multiprocessing as mp
 import traceback
 import pickle
@@ -10,6 +11,9 @@ from numba import cuda
 from numba.cuda.cudadrv import drvapi, devicearray
 from numba import unittest_support as unittest
 from numba.cuda.testing import skip_on_cudasim, CUDATestCase
+
+
+NOT_LINUX = not sys.platform.startswith('linux')
 
 
 def core_ipc_handle_test(make_handle, result_queue):
@@ -57,6 +61,15 @@ def ipc_array_test(ipcarr, result_queue):
     try:
         with ipcarr as darr:
             arr = darr.copy_to_host()
+            try:
+                # should fail to reopen
+                with ipcarr as darr2:
+                    pass
+            except ValueError as e:
+                if str(e) != 'IpcHandle is already opened':
+                    raise AssertionError('invalid exception message')
+            else:
+                raise AssertionError('did not raise on reopen')
 
     except:
         # FAILED. propagate the exception as a string
@@ -69,6 +82,7 @@ def ipc_array_test(ipcarr, result_queue):
     result_queue.put((succ, out))
 
 
+@unittest.skipIf(NOT_LINUX, "IPC only supported on Linux")
 @skip_on_cudasim('Ipc not available in CUDASIM')
 class TestIpcMemory(CUDATestCase):
     @classmethod
@@ -145,6 +159,18 @@ class TestIpcMemory(CUDATestCase):
         else:
             np.testing.assert_equal(arr, out)
         proc.join(3)
+
+
+@unittest.skipUnless(NOT_LINUX, "IPC only supported on Linux")
+@skip_on_cudasim('Ipc not available in CUDASIM')
+class TestIpcNotSupported(CUDATestCase):
+    def test_unsupported(self):
+        arr = np.arange(10, dtype=np.intp)
+        devarr = cuda.to_device(arr)
+        with self.assertRaises(OSError) as raises:
+            ipch = devarr.get_ipc_handle()
+        errmsg = str(raises.exception)
+        self.assertIn('OS does not support CUDA IPC', errmsg)
 
 
 if __name__ == '__main__':
