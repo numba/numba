@@ -209,6 +209,7 @@ class Driver(object):
                                       ctypes.POINTER(drvapi.cu_ipc_mem_handle),
                                       ctypes.c_uint)
         call_cuIpcOpenMemHandle = call_proto(_extras.call_cuIpcOpenMemHandle)
+        call_cuIpcOpenMemHandle.__name__ = 'call_cuIpcOpenMemHandle'
         safe_call = self._wrap_api_call('call_cuIpcOpenMemHandle',
                                         call_cuIpcOpenMemHandle)
         # override cuIpcOpenMemHandle
