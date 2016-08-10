@@ -176,6 +176,7 @@ floating-point and complex numbers:
   output, complex input -> complex output).
 * :func:`numpy.linalg.inv`
 * :func:`numpy.linalg.lstsq`
+* :func:`numpy.linalg.matrix_rank`
 * :func:`numpy.linalg.norm` (only the 2 first arguments and only non string
   values in ``ord``).
 * :func:`numpy.linalg.pinv`
