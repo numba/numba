@@ -338,11 +338,10 @@ class TestGetItem(TestCase):
         cfunc = cr.entry_point
 
         a = np.arange(100, dtype='i4').reshape(10, 10)
-        self.assertTrue((pyfunc(a, 0, 10, 1) == cfunc(a, 0, 10, 1)).all())
-        self.assertTrue((pyfunc(a, 2, 3, 1) == cfunc(a, 2, 3, 1)).all())
-        self.assertTrue((pyfunc(a, 10, 0, 1) == cfunc(a, 10, 0, 1)).all())
-        self.assertTrue((pyfunc(a, 0, 10, -1) == cfunc(a, 0, 10, -1)).all())
-        self.assertTrue((pyfunc(a, 0, 10, 2) == cfunc(a, 0, 10, 2)).all())
+        for args in [(0, 10, 1), (2, 3, 1), (10, 0, 1),
+                     (0, 10, -1), (0, 10, 2)]:
+            self.assertPreciseEqual(pyfunc(a, *args), cfunc(a, *args),
+                                    msg="for args %s" % (args,))
 
     def test_2d_slicing_npm(self):
         self.test_2d_slicing(flags=Noflags)
@@ -551,9 +550,9 @@ class TestGetItem(TestCase):
         cfunc = cr.entry_point
 
         a = np.arange(100, dtype='i4').reshape(10, 10)
-        self.assertTrue((pyfunc(a, 0) == cfunc(a, 0)).all())
-        self.assertTrue((pyfunc(a, 9) == cfunc(a, 9)).all())
-        self.assertTrue((pyfunc(a, -1) == cfunc(a, -1)).all())
+        self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
+        self.assertPreciseEqual(pyfunc(a, 9), cfunc(a, 9))
+        self.assertPreciseEqual(pyfunc(a, -1), cfunc(a, -1))
 
         arraytype = types.Array(types.int32, 2, 'A')
         cr = compile_isolated(pyfunc, (arraytype, types.int32), flags=flags)
@@ -738,7 +737,7 @@ class TestGetItem(TestCase):
         cfunc = cr.entry_point
 
         a = np.arange(100, dtype='i4').reshape(10, 10)
-        self.assertTrue((pyfunc(a) == cfunc(a)).all())
+        self.assertPreciseEqual(pyfunc(a), cfunc(a))
 
     def test_none_index_npm(self):
         with self.assertTypingError():
@@ -777,7 +776,7 @@ class TestSetItem(TestCase):
         control = udt.copy()
         pyfunc(control)
         cfunc(udt)
-        self.assertTrue((udt == control).all())
+        self.assertPreciseEqual(udt, control)
 
     def test_1d_slicing_set(self, flags=enable_pyobj_flags):
         """
@@ -883,7 +882,7 @@ class TestSetItem(TestCase):
         for test in ((0, 10), (2, 5)):
             pyleft = pyfunc(np.zeros_like(arg), arg[slice(*test)], *test)
             cleft = cfunc(np.zeros_like(arg), arg[slice(*test)], *test)
-            self.assertTrue((pyleft == cleft).all())
+            self.assertPreciseEqual(pyleft, cleft)
 
     def test_1d_slicing_set_npm(self):
         self.test_1d_slicing_set(flags=Noflags)

@@ -104,7 +104,7 @@ class TestUsecases(TestCase):
             args = a, b
 
             cfunc(*args)
-            self.assertTrue(np.all(a == b), args)
+            self.assertPreciseEqual(a, b, msg=str(args))
 
     @tag('important')
     def test_copy_arrays2d(self):
@@ -122,7 +122,7 @@ class TestUsecases(TestCase):
             args = a, b
 
             cfunc(*args)
-            self.assertTrue(np.all(a == b), args)
+            self.assertPreciseEqual(a, b, msg=str(args))
 
     def run_ifelse(self, pyfunc):
         cr = compile_isolated(pyfunc, (types.int32, types.int32))

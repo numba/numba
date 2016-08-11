@@ -376,7 +376,7 @@ class TestRecordDtype(unittest.TestCase):
             cfunc(got, i, value)
 
             # Match the entire array to ensure no memory corruption
-            self.assertTrue(np.all(expect == got))
+            np.testing.assert_equal(expect, got)
 
     @tag('important')
     def test_set_a(self):
@@ -427,7 +427,7 @@ class TestRecordDtype(unittest.TestCase):
             # Match the entire array to ensure no memory corruption
             self.assertEqual(expect[i], expect[j])
             self.assertEqual(got[i], got[j])
-            self.assertTrue(np.all(expect == got))
+            np.testing.assert_equal(expect, got)
 
     def _test_record_args(self, revargs):
         """

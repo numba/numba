@@ -33,7 +33,7 @@ class BaseVectorizeDecor(unittest.TestCase):
         A = np.arange(100, dtype=np.float64)
         result = numba_func(A)
         gold = numpy_func(A)
-        self.assertTrue(np.allclose(result, gold))
+        np.testing.assert_allclose(result, gold)
 
     def _test_template_1(self, target):
         numba_sinc = vectorize(['float64(float64)', 'float32(float32)'],
@@ -55,7 +55,7 @@ class BaseVectorizeDecor(unittest.TestCase):
         scale = np.uint32(3)
         result = numba_scaled_sinc(A, scale)
         gold = numpy_scaled_sinc(A, scale)
-        self.assertTrue(np.allclose(result, gold))
+        np.testing.assert_allclose(result, gold, atol=1e-8)
 
     def _test_template_4(self, target):
         sig = [int32(int32, int32),
@@ -69,7 +69,7 @@ class BaseVectorizeDecor(unittest.TestCase):
             data = np.linspace(0., 100., 500).astype(ty)
             result = basic_ufunc(data, data)
             gold = np_ufunc(data, data)
-            self.assertTrue(np.allclose(gold, result))
+            np.testing.assert_allclose(gold, result)
 
         test(np.double)
         test(np.float32)

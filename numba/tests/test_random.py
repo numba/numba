@@ -839,19 +839,19 @@ class TestRandom(BaseTest):
                 expected = a.copy()
                 func(got)
                 r.shuffle(expected)
-                self.assertTrue(np.all(got == expected), (got, expected))
+                self.assertPreciseEqual(got, expected)
         else:
             # Sanity check
             for i in range(3):
                 b = a.copy()
                 func(b)
-                self.assertFalse(np.all(a == b))
+                self.assertNotEqual(list(a), list(b))
                 self.assertEqual(sorted(a), sorted(b))
                 a = b
         # Test with an arbitrary buffer-providing object
         b = a.copy()
         func(memoryview(b))
-        self.assertFalse(np.all(a == b))
+        self.assertNotEqual(list(a), list(b))
         self.assertEqual(sorted(a), sorted(b))
         # Read-only object
         with self.assertTypingError():

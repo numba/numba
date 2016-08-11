@@ -101,10 +101,10 @@ class TestTupleReturn(TestCase):
         cres = compile_isolated(tuple_return_usecase, (aryty, aryty))
         a = b = np.arange(5, dtype='float64')
         ra, rb = cres.entry_point(a, b)
-        self.assertTrue((ra == a).all())
-        self.assertTrue((rb == b).all())
+        self.assertPreciseEqual(ra, a)
+        self.assertPreciseEqual(rb, b)
         del a, b
-        self.assertTrue((ra == rb).all())
+        self.assertPreciseEqual(ra, rb)
 
     def test_scalar_tuple(self):
         scalarty = types.float32

@@ -5,7 +5,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import float32
 from numba.npyufunc import Vectorize
-from ..support import tag
+from ..support import tag, TestCase
 
 
 dtype = np.float32
@@ -46,7 +46,7 @@ vectorizers = [
 ]
 
 
-class TestUFuncs(unittest.TestCase):
+class TestUFuncs(TestCase):
 
     def _test_ufunc_attributes(self, cls, a, b, *args):
         "Test ufunc attributes"
@@ -55,10 +55,10 @@ class TestUFuncs(unittest.TestCase):
         ufunc = vectorizer.build_ufunc()
 
         info = (cls, a.ndim)
-        self.assertTrue(np.all(ufunc(a, b) == a + b), info)
-        self.assertTrue(ufunc_reduce(ufunc, a) == np.sum(a), info)
-        self.assertTrue(np.all(ufunc.accumulate(a) == np.add.accumulate(a)), info)
-        self.assertTrue(np.all(ufunc.outer(a, b) == np.add.outer(a, b)), info)
+        self.assertPreciseEqual(ufunc(a, b), a + b, msg=info)
+        self.assertPreciseEqual(ufunc_reduce(ufunc, a), np.sum(a), msg=info)
+        self.assertPreciseEqual(ufunc.accumulate(a), np.add.accumulate(a), msg=info)
+        self.assertPreciseEqual(ufunc.outer(a, b), np.add.outer(a, b), msg=info)
 
     def _test_broadcasting(self, cls, a, b, c, d):
         "Test multiple args"
@@ -67,7 +67,7 @@ class TestUFuncs(unittest.TestCase):
         ufunc = vectorizer.build_ufunc()
 
         info = (cls, a.shape)
-        self.assertTrue(np.all(ufunc(a, b, c, d) == a + b + c + d), info)
+        self.assertPreciseEqual(ufunc(a, b, c, d), a + b + c + d, msg=info)
 
     @tag('important')
     def test_ufunc_attributes(self):
@@ -97,7 +97,8 @@ class TestUFuncs(unittest.TestCase):
             ufunc = vectorizer.build_ufunc()
 
             broadcasting_b = b[np.newaxis, :, np.newaxis, np.newaxis, :]
-            self.assertTrue(np.all(ufunc(a, broadcasting_b) == a + broadcasting_b))
+            self.assertPreciseEqual(ufunc(a, broadcasting_b),
+                                    a + broadcasting_b)
 
 
 if __name__ == '__main__':
