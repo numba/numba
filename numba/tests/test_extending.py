@@ -471,18 +471,21 @@ class TestLLVMCall(TestCase):
         def unsafe_caster(result_type):
             assert isinstance(result_type, types.CPointer)
 
-            # defines the typing logic
-            def typing(context):
-                return lambda src: result_type(types.uintp)
+            @llvm_call
+            def unsafe_cast(typingctx, src):
+                if isinstance(src, types.Integer):
+                    sig = result_type(types.uintp)
 
-            # defines the custom code generation
-            def codegen(context, builder, signature, args):
-                [src] = args
-                rtype = signature.return_type
-                llrtype = context.get_value_type(rtype)
-                return builder.inttoptr(src, llrtype)
+                    # defines the custom code generation
+                    def codegen(context, builder, signature, args):
+                        [src] = args
+                        rtype = signature.return_type
+                        llrtype = context.get_value_type(rtype)
+                        return builder.inttoptr(src, llrtype)
 
-            return llvm_call(typing, codegen)
+                    return sig, codegen
+
+            return unsafe_cast
 
         # make a nopython function to use our cast op.
         # this is not usable from cpython due to the returning of a pointer.
@@ -515,6 +518,7 @@ class TestLLVMCall(TestCase):
 
         # Test
         arr = np.arange(10, dtype=np.float32)
+        foo(arr)
         with captured_stdout() as buf:
             foo(arr)
             got = buf.getvalue().splitlines()
@@ -527,13 +531,13 @@ class TestLLVMCall(TestCase):
         Test serialization of llvm_call objects
         """
         # define a llvm_call
-        def typing(context):
-            return lambda x: x(x)
+        @llvm_call
+        def identity(context, x):
+            def codegen(context, builder, signature, args):
+                return args[0]
 
-        def codegen(context, builder, signature, args):
-            return args[0]
-
-        identity = llvm_call(typing, codegen)
+            sig = x(x)
+            return sig, codegen
 
         # use in a jit function
         @jit(nopython=True)
@@ -572,19 +576,18 @@ class TestLLVMCall(TestCase):
         """
         Test deserialization of llvm_call
         """
-        def typing(context):
-            return lambda x: x(x)
+        def defn(context, x):
+            def codegen(context, builder, signature, args):
+                return args[0]
 
-        def codegen(context, builder, signature, args):
-            return args[0]
+            return x(x), codegen
 
         memo = _LLVMCall._memo
         memo_size = len(memo)
         # invoke _LLVMCall indirectly to avoid registration which keeps an
         # internal reference inside the compiler
-        original = _LLVMCall('foo', typing, codegen, typespec=None)
-        self.assertIs(original._typing, typing)
-        self.assertIs(original._codegen, codegen)
+        original = _LLVMCall('foo', defn)
+        self.assertIs(original._defn, defn)
         pickled = pickle.dumps(original)
         # by pickling, a new memo entry is created
         memo_size += 1
@@ -596,13 +599,12 @@ class TestLLVMCall(TestCase):
 
         rebuilt = pickle.loads(pickled)
         # verify that the rebuilt object is different
-        self.assertIsNot(rebuilt._typing, typing)
-        self.assertIsNot(rebuilt._codegen, codegen)
+        self.assertIsNot(rebuilt._defn, defn)
 
         # the second rebuilt object is the same as the first
         second = pickle.loads(pickled)
-        self.assertIs(rebuilt._typing, second._typing)
-        self.assertIs(rebuilt._codegen, second._codegen)
+        self.assertIs(rebuilt._defn, second._defn)
+
 
 if __name__ == '__main__':
     unittest.main()

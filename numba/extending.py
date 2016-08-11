@@ -178,11 +178,9 @@ class _LLVMCall(object):
     _memo = weakref.WeakValueDictionary()
     __uuid = None
 
-    def __init__(self, name, typing, codegen, typespec):
+    def __init__(self, name, defn):
         self._name = name
-        self._typing = typing
-        self._codegen = codegen
-        self._typespec = typespec
+        self._defn = defn
 
     @property
     def _uuid(self):
@@ -204,10 +202,11 @@ class _LLVMCall(object):
         self._memo[u] = self
 
     def _register(self):
-        # register typing
-        type_callable(self)(self._typing)
-        # register codegen
-        lower_builtin(self, self._typespec)(self._codegen)
+        from .typing.templates import make_llvm_call_template, infer_global
+
+        template = make_llvm_call_template(self, self._defn, self._name)
+        infer(template)
+        infer_global(self, types.Function(template))
 
     def __call__(self, *args, **kwargs):
         """
@@ -228,47 +227,60 @@ class _LLVMCall(object):
 
         return (serialize._rebuild_reduction,
                 (self.__class__, str(self._uuid), self._name,
-                 reduce_func(self._typing), reduce_func(self._codegen),
-                 self._typespec))
+                 reduce_func(self._defn)))
 
     @classmethod
-    def _rebuild(cls, uuid, name, typing_reduced, codegen_reduced, typespec):
+    def _rebuild(cls, uuid, name, defn_reduced):
         from numba import serialize
 
         try:
             return cls._memo[uuid]
         except KeyError:
-            typing = serialize._rebuild_function(*typing_reduced)
-            codegen = serialize._rebuild_function(*codegen_reduced)
+            defn = serialize._rebuild_function(*defn_reduced)
 
-            llc = cls(name=name, typing=typing, codegen=codegen,
-                      typespec=typespec)
+            llc = cls(name=name, defn=defn)
             llc._register()
             llc._set_uuid(uuid)
             return llc
 
 
-def llvm_call(typing, codegen, typespec=types.VarArg(types.Any), name=None):
+def llvm_call(func):
     """
-    For defining a simple nopython callable that is implemented using llvmlite.
-    This is an escape hatch for expert users to build custom LLVM IR.
+    A decorator marking the decorated function as typing and implementing
+    *func* in nopython mode using the llvmlite IRBuilder API.  This is an escape
+    hatch for expert users to build custom LLVM IR that will be inlined to
+    the caller.
 
-    The *typing* argument is the function that defines the type inference logic.
-    See ``type_callable`` for details.
+    The first argument to *func* is the typing context.  The rest of the
+    arguments corresponds to the type of arguments of the decorated function.
+    These arguments are also used as the formal argument of the decorated
+    function.  If *func* has the signature ``foo(typing_context, arg0, arg1)``,
+    the decorated function will have the signature ``foo(arg0, arg1)``.
 
-    The *codegen* argument is the function that defines the code generation
-    logic.  See ``lower_builtin`` for details.
+    The return values of *func* should be a 2-tuple of expected type signature,
+    and a code-generation function that will passed to ``lower_builtin``.
+    For unsupported operation, return None.
 
-    This is equivalent to calling ``type_callable(self)(typing)`` and
-    ``lower_builtin(self, typesepc)(codegen)``.
+    Here is an example implementing a ``cast_int_to_byte_ptr`` that cast
+    any integer to a byte pointer::
 
-    Note: there is no guarantee at the entrance of *codegen* that the
-    IRBuilder is located in a new function or the caller function.  The only
-    guarantee is that the IRBuilder is ready for user to insert custom IR and
-    the output of the operation must be in the returned by *codegen*.
+        @llvm_call
+        def cast_int_to_byte_ptr(typingctx, src):
+            # check for accepted types
+            if isinstance(src, types.Integer):
+                # create the expected type signature
+                result_type = types.CPointer(types.uint8)
+                sig = result_type(types.uintp)
+                # defines the custom code generation
+                def codegen(context, builder, signature, args):
+                    # llvm IRBuilder code here
+                    [src] = args
+                    rtype = signature.return_type
+                    llrtype = context.get_value_type(rtype)
+                    return builder.inttoptr(src, llrtype)
+                return sig, codegen
     """
-    if name is None:
-        name = 'typing={0} codegen={1}]'.format(typing, codegen)
-    llc = _LLVMCall(name, typing, codegen, typespec)
+    name = getattr(func, '__name__', str(func))
+    llc = _LLVMCall(name, func)
     llc._register()
     return llc

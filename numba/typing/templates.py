@@ -325,6 +325,56 @@ def make_overload_template(func, overload_func, jit_options):
     return type(base)(name, (base,), dct)
 
 
+class _LLVMCallTemplate(AbstractTemplate):
+    """
+    A base class of templates for llvm_call intrinsic definition
+    """
+
+    def generic(self, args, kws):
+        """
+        Type the llvm_call intrinsic by the arguments.
+        """
+        from numba.targets.imputils import lower_builtin
+
+        cache_key = self.context, args, tuple(kws.items())
+        try:
+            return self._impl_cache[cache_key]
+        except KeyError:
+            result = self._definition_func(self, *args, **kws)
+            if result is None:
+                return
+            [sig, imp] = result
+            pysig = utils.pysignature(self._definition_func)
+            # omit context argument from user function
+            parameters = list(pysig.parameters.values())[1:]
+            sig.pysig = pysig.replace(parameters=parameters)
+            self._impl_cache[cache_key] = sig
+            self._overload_cache[sig.args] = imp
+            # register the lowering
+            typespec = types.VarArg(types.Any)
+            lower_builtin(imp, typespec)(imp)
+            return sig
+
+    def get_impl_key(self, sig):
+        """
+        Return the key for looking up the implementation for the given
+        signature on the target context.
+        """
+        return self._overload_cache[sig.args]
+
+
+def make_llvm_call_template(handle, defn, name):
+    """
+    Make a template class for a llvm_call handle *handle* defined by the
+    function *defn*.  The *name* is used for naming the new template class.
+    """
+    base = _LLVMCallTemplate
+    name = "_LLVMCallTemplate_%s" % (name)
+    dct = dict(key=handle, _definition_func=staticmethod(defn),
+               _impl_cache={}, _overload_cache={})
+    return type(base)(name, (base,), dct)
+
+
 class AttributeTemplate(object):
     _initialized = False
 
