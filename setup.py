@@ -143,12 +143,12 @@ def get_ext_modules():
                                depends=['numba/runtime/nrt.h',
                                         'numba/_pymodule.h',
                                         'numba/runtime/_nrt_python.c'],
-                               include_dirs=["numba"])
+                               **np_compile_args)
 
     ext_jitclass_box = Extension(name='numba.jitclass._box',
                                  sources=['numba/jitclass/_box.c'],
                                  depends=['numba/_pymodule.h'],
-                                 include_dirs=['numba'])
+                                 )
 
     ext_modules = [ext_dynfunc, ext_dispatcher,
                    ext_helperlib, ext_typeconv,
