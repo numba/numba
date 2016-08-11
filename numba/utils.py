@@ -661,3 +661,8 @@ class finalize:
             finalize._shutdown = True
             if reenable_gc:
                 gc.enable()
+
+
+# dummy invocation to force _at_shutdown() to be registered
+finalize(lambda: None, lambda: None)
+assert finalize._registered_with_atexit
