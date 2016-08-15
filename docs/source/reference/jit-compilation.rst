@@ -157,6 +157,29 @@ Dispatcher objects
       signature keyword is specified a string corresponding to that
       individual signature is returned.
 
+   .. method:: inspect_cfg(signature=None, show_wrapped)
+
+      Return a dictionary keying compiled function signatures to the
+      control-flow graph objects for the function.  If the signature keyword is
+      specified a string corresponding to that individual signature is returned.
+
+      The control-flow graph objects can be stringified (``str`` or ``repr``)
+      to get the textual representation of the graph in DOT format.  Or, use
+      its ``.display(filename=None, view=False)`` method to plot the graph.
+      The *filename* option can be set to a specific path for the rendered
+      output to write to.  If *view* option is True, the plot is opened by
+      the system default application for the image format (PDF). In IPython
+      notebook, the returned object can be plot inlined.
+
+      Usage::
+
+        @jit
+        def foo():
+          ...
+
+        # opens the CFG in system default application
+        foo.inspect_cfg(foo.signatures[0]).display(view=True)
+
    .. method:: recompile()
 
       Recompile all existing signatures.  This can be useful for example if
