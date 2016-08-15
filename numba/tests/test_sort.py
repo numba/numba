@@ -554,11 +554,13 @@ class TestTimsortArrays(JITTimsortMixin, BaseTimsortTest, TestCase):
 
 class BaseQuicksortTest(BaseSortingTest):
 
+    # NOTE these tests assume a non-argsort quicksort.
+
     def test_insertion_sort(self):
         n = 20
         def check(l, n):
             res = self.array_factory([9999] + l + [-9999])
-            f(res, 1, n)
+            f(res, res, 1, n)
             self.assertEqual(res[0], 9999)
             self.assertEqual(res[-1], -9999)
             self.assertSorted(l, res[1:-1])
@@ -581,7 +583,7 @@ class BaseQuicksortTest(BaseSortingTest):
         n = 20
         def check(l, n):
             res = self.array_factory([9999] + l + [-9999])
-            index = f(res, 1, n)
+            index = f(res, res, 1, n)
             self.assertEqual(res[0], 9999)
             self.assertEqual(res[-1], -9999)
             pivot = res[index]
@@ -727,7 +729,7 @@ class TestNumpySort(TestCase):
         """
         Whether the array has duplicates.  Takes NaNs into account.
         """
-        if np.isnan(arr).size > 1:
+        if np.count_nonzero(np.isnan(arr)) > 1:
             return True
         if np.unique(arr).size < arr.size:
             return True
