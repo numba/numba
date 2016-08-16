@@ -255,6 +255,11 @@ class Driver(object):
         if retcode != enums.CUDA_SUCCESS:
             errname = ERROR_MAP.get(retcode, "UNKNOWN_CUDA_ERROR")
             msg = "Call to %s results in %s" % (fname, errname)
+            if retcode == enums.CUDA_ERROR_NOT_INITIALIZED:
+                # Detect forking
+                if _getpid() != self.pid:
+                    msg = 'pid %s forked from pid %s after CUDA driver init'
+                    raise CudaDriverError("CUDA initialized before forking")
             raise CudaAPIError(retcode, msg)
 
     def get_device(self, devnum=0):
@@ -284,10 +289,6 @@ class Driver(object):
         """Get current active context in CUDA driver runtime.
         Note: Lowlevel calls that returns the handle.
         """
-        # Detect forking
-        if self.is_initialized and _getpid() != self.pid:
-            raise CudaDriverError("CUDA initialized before forking")
-
         handle = drvapi.cu_context(0)
         driver.cuCtxGetCurrent(byref(handle))
         if not handle.value:
