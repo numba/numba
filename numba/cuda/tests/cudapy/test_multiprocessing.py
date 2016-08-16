@@ -1,4 +1,4 @@
-import sys
+import os
 import multiprocessing as mp
 
 import numpy as np
@@ -8,7 +8,7 @@ from numba import unittest_support as unittest
 from numba.cuda.testing import skip_on_cudasim
 
 has_mp_get_context = hasattr(mp, 'get_context')
-is_unix = sys.platform.startswith('linux') or sys.platform.startswith('darwin')
+is_unix = os.name == 'posix'
 
 
 def fork_test(q):
