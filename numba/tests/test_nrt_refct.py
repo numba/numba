@@ -4,13 +4,22 @@ Tests issues or edge cases for producing invalid NRT refct
 
 from __future__ import division, absolute_import, print_function
 
-import numba.unittest_support as unittest
+import gc
+
 import numpy as np
+
+import numba.unittest_support as unittest
 from numba import njit
 from numba.runtime import rtsys
+from .support import TestCase
 
 
-class TestNrtRefCt(unittest.TestCase):
+class TestNrtRefCt(TestCase):
+
+    def setUp(self):
+        # Clean up any NRT-backed objects hanging in a dead reference cycle
+        gc.collect()
+
     def test_no_return(self):
         """
         Test issue #1291
@@ -24,7 +33,7 @@ class TestNrtRefCt(unittest.TestCase):
 
         n = 10
         init_stats = rtsys.get_allocation_stats()
-        foo(10)
+        foo(n)
         cur_stats = rtsys.get_allocation_stats()
         self.assertEqual(cur_stats.alloc - init_stats.alloc, n)
         self.assertEqual(cur_stats.free - init_stats.free, n)

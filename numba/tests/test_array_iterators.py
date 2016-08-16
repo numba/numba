@@ -127,7 +127,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         array_flat(arr, out)
         cfunc(arr, nb_out)
 
-        self.assertTrue(np.all(out == nb_out), (out, nb_out))
+        self.assertPreciseEqual(out, nb_out)
 
     def check_array_unary(self, arr, arrty, func):
         cres = compile_isolated(func, [arrty])

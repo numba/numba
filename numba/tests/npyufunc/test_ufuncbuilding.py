@@ -84,7 +84,7 @@ class TestUfuncBuilding(TestCase):
 
         def check(a):
             b = ufunc(a, a)
-            self.assertTrue(np.all(a + a == b))
+            self.assertPreciseEqual(a + a, b)
             self.assertEqual(b.dtype, a.dtype)
 
         a = np.arange(12, dtype='int32')
@@ -107,7 +107,7 @@ class TestUfuncBuilding(TestCase):
 
         def check(a):
             b = ufunc(a, a)
-            self.assertTrue(np.all(a + a == b))
+            self.assertPreciseEqual(a + a, b)
             self.assertEqual(b.dtype, a.dtype)
 
         a = np.arange(12, dtype='complex64') + 1j
@@ -126,7 +126,7 @@ class TestUfuncBuilding(TestCase):
 
         a = np.arange(10, dtype='int32')
         b = ufunc(a, a)
-        self.assertTrue(np.all(a + a == b))
+        self.assertPreciseEqual(a + a, b)
 
     def test_nested_call(self):
         """
@@ -170,7 +170,7 @@ class TestGUfuncBuilding(TestCase):
         a = np.arange(10, dtype="int32").reshape(2, 5)
         b = ufunc(a, a)
 
-        self.assertTrue(np.all(a + a == b))
+        self.assertPreciseEqual(a + a, b)
         self.assertEqual(b.dtype, np.dtype('int32'))
 
         # Metadata
@@ -187,7 +187,7 @@ class TestGUfuncBuilding(TestCase):
         a = np.arange(10, dtype="complex64").reshape(2, 5) + 1j
         b = ufunc(a, a)
 
-        self.assertTrue(np.all(a + a == b))
+        self.assertPreciseEqual(a + a, b)
 
     def test_gufunc_struct_forceobj(self):
         gufb = GUFuncBuilder(guadd, "(x, y),(x, y)->(x, y)",
@@ -200,8 +200,7 @@ class TestGUfuncBuilding(TestCase):
         a = np.arange(10, dtype="complex64").reshape(2, 5) + 1j
         b = ufunc(a, a)
 
-        self.assertTrue(np.all(a + a == b))
-        self.assertEqual(b.dtype, np.dtype('complex64'))
+        self.assertPreciseEqual(a + a, b)
 
 
 class TestGUfuncBuildingJitDisabled(TestGUfuncBuilding):
@@ -222,23 +221,20 @@ class TestVectorizeDecor(TestCase):
         ufunc = vectorize(['int32(int32, int32)'])(add)
         a = np.arange(10, dtype='int32')
         b = ufunc(a, a)
-        self.assertTrue(np.all(a + a == b))
-        self.assertEqual(b.dtype, np.dtype('int32'))
+        self.assertPreciseEqual(a + a, b)
 
     def test_vectorize_objmode(self):
         ufunc = vectorize(['int32(int32, int32)'], forceobj=True)(add)
         a = np.arange(10, dtype='int32')
         b = ufunc(a, a)
-        self.assertTrue(np.all(a + a == b))
-        self.assertEqual(b.dtype, np.dtype('int32'))
+        self.assertPreciseEqual(a + a, b)
 
     @tag('important')
     def test_vectorize_bool_return(self):
         ufunc = vectorize(['bool_(int32, int32)'])(equals)
         a = np.arange(10, dtype='int32')
         r = ufunc(a,a)
-        self.assertTrue(np.all(r))
-        self.assertEqual(r.dtype, np.dtype('bool_'))
+        self.assertPreciseEqual(r, np.ones(r.shape, dtype=np.bool_))
 
     @tag('important')
     def test_vectorize_identity(self):
@@ -260,17 +256,17 @@ class TestVectorizeDecor(TestCase):
         a = np.linspace(0,1,10)
         b = np.linspace(1,2,10)
         ufunc = vectorize(add)
-        self.assertTrue(np.all(ufunc(a,b) == (a + b)))
+        self.assertPreciseEqual(ufunc(a,b), a + b)
         ufunc2 = vectorize(add)
         c = np.empty(10)
         ufunc2(a, b, c)
-        self.assertTrue(np.all(c == (a + b)))
+        self.assertPreciseEqual(c, a + b)
 
     def test_vectorize_only_kws(self):
         a = np.linspace(0,1,10)
         b = np.linspace(1,2,10)
         ufunc = vectorize(identity=PyUFunc_One, nopython=True)(mul)
-        self.assertTrue(np.all(ufunc(a,b) == (a * b)))
+        self.assertPreciseEqual(ufunc(a,b), a * b)
 
     def test_vectorize_output_kwarg(self):
         """
@@ -299,8 +295,7 @@ class TestVectorizeDecor(TestCase):
                             "(x,y),(x,y)->(x,y)")(guadd)
         a = np.arange(10, dtype='int32').reshape(2, 5)
         b = ufunc(a, a)
-        self.assertTrue(np.all(a + a == b))
-        self.assertEqual(b.dtype, np.dtype('int32'))
+        self.assertPreciseEqual(a + a, b)
 
     @tag('important')
     def test_guvectorize_no_output(self):
@@ -309,14 +304,14 @@ class TestVectorizeDecor(TestCase):
         a = np.arange(10, dtype='int32').reshape(2, 5)
         out = np.zeros_like(a)
         ufunc(a, a, out)
-        self.assertTrue(np.all(a + a == out))
+        self.assertPreciseEqual(a + a, out)
 
     def test_guvectorize_objectmode(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
                             "(x,y),(x,y)->(x,y)")(guadd_obj)
         a = np.arange(10, dtype='int32').reshape(2, 5)
         b = ufunc(a, a)
-        self.assertTrue(np.all(a + a == b))
+        self.assertPreciseEqual(a + a, b)
 
     def test_guvectorize_scalar_objectmode(self):
         """
@@ -326,7 +321,7 @@ class TestVectorizeDecor(TestCase):
                             "(x,y),()->(x,y)")(guadd_scalar_obj)
         a = np.arange(10, dtype='int32').reshape(2, 5)
         b = ufunc(a, 3)
-        self.assertTrue(np.all(a + 3 == b))
+        self.assertPreciseEqual(a + 3, b)
 
     def test_guvectorize_error_in_objectmode(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],

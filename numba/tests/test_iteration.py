@@ -171,7 +171,7 @@ class IterationTest(TestCase):
         pyfunc(expected)
         got = arr.copy()
         cfunc(got)
-        self.assertTrue(np.all(expected == got))
+        self.assertPreciseEqual(expected, got)
 
     def test_array_1d_record_mutate(self):
         self.test_array_1d_record_mutate_npm(flags=force_pyobj_flags)

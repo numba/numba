@@ -376,7 +376,7 @@ class TestRecordDtype(unittest.TestCase):
             cfunc(got, i, value)
 
             # Match the entire array to ensure no memory corruption
-            self.assertTrue(np.all(expect == got))
+            np.testing.assert_equal(expect, got)
 
     @tag('important')
     def test_set_a(self):
@@ -427,7 +427,7 @@ class TestRecordDtype(unittest.TestCase):
             # Match the entire array to ensure no memory corruption
             self.assertEqual(expect[i], expect[j])
             self.assertEqual(got[i], got[j])
-            self.assertTrue(np.all(expect == got))
+            np.testing.assert_equal(expect, got)
 
     def _test_record_args(self, revargs):
         """
@@ -662,6 +662,37 @@ class TestRecordDtype(unittest.TestCase):
         pyfunc = record_read_second_arr
         cfunc = self.get_cfunc(pyfunc, (nbrecord,))
         self.assertEqual(cfunc(rec), pyfunc(rec))
+
+    def test_structure_dtype_with_titles(self):
+        # the following is the definition of int4 vector type from pyopencl
+        vecint4 = np.dtype([(('x', 's0'), 'i4'), (('y', 's1'), 'i4'),
+                            (('z', 's2'), 'i4'), (('w', 's3'), 'i4')])
+        nbtype = numpy_support.from_dtype(vecint4)
+        self.assertEqual(len(nbtype.fields), len(vecint4.fields))
+
+        arr = np.zeros(10, dtype=vecint4)
+
+        def pyfunc(a):
+            for i in range(a.size):
+                j = i + 1
+                a[i]['s0'] = j * 2
+                a[i]['x'] += -1
+
+                a[i]['s1'] = j * 3
+                a[i]['y'] += -2
+
+                a[i]['s2'] = j * 4
+                a[i]['z'] += -3
+
+                a[i]['s3'] = j * 5
+                a[i]['w'] += -4
+
+            return a
+
+        expect = pyfunc(arr.copy())
+        cfunc = self.get_cfunc(pyfunc, (nbtype[:],))
+        got = cfunc(arr.copy())
+        np.testing.assert_equal(expect, got)
 
 
 def _get_cfunc_nopython(pyfunc, argspec):

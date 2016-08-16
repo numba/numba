@@ -5,6 +5,7 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types, errors
+from .support import TestCase
 
 
 def setitem_slice(a, start, stop, step, scalar):
@@ -18,7 +19,7 @@ def usecase(obs, nPoints):
     obs[(center + 1):] = np.arange(nPoints - center - 1)
 
 
-class TestStoreSlice(unittest.TestCase):
+class TestStoreSlice(TestCase):
 
     def test_usecase(self):
         n = 10
@@ -32,7 +33,7 @@ class TestStoreSlice(unittest.TestCase):
         cres.entry_point(obs_got, n)
         usecase(obs_expected, n)
 
-        self.assertTrue(np.allclose(obs_got, obs_expected))
+        self.assertPreciseEqual(obs_got, obs_expected)
 
     def test_array_slice_setitem(self):
         n = 10
@@ -58,7 +59,7 @@ class TestStoreSlice(unittest.TestCase):
             b = np.arange(n, dtype=np.int64)
             cres.entry_point(a, start, stop, step, scalar)
             setitem_slice(b, start, stop, step, scalar)
-            self.assertTrue(np.allclose(a, b))
+            self.assertPreciseEqual(a, b)
 
         # test if step = 0
         a = np.arange(n, dtype=np.int64)

@@ -7,7 +7,7 @@ import numpy as np
 from numba import numpy_support, types
 from numba.compiler import compile_isolated
 from numba import unittest_support as unittest
-from .support import captured_stdout, tag
+from .support import captured_stdout, tag, TestCase
 
 
 def usecase1(arr1, arr2):
@@ -62,7 +62,7 @@ def usecase5(x, N):
         print(x[k].f1, x.s1[k], x[k].f2)
 
 
-class TestRecordUsecase(unittest.TestCase):
+class TestRecordUsecase(TestCase):
 
     def setUp(self):
         fields = [('f1', '<f8'), ('s1', '|S3'), ('f2', '<f8')]
@@ -102,8 +102,8 @@ class TestRecordUsecase(unittest.TestCase):
         pyfunc(expect1, expect2)
         cfunc(got1, got2)
 
-        self.assertTrue(np.all(expect1 == got1))
-        self.assertTrue(np.all(expect2 == got2))
+        np.testing.assert_equal(expect1, got1)
+        np.testing.assert_equal(expect2, got2)
 
     def _setup_usecase2to5(self, dtype):
         N = 5
