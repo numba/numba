@@ -41,6 +41,8 @@ the input's precision, and invoke single-precision linear algebra routines
 when all inputs are ``float32`` or ``complex64``.
 
 
+.. _ufunc-fpu-errors:
+
 Warnings and errors
 -------------------
 
