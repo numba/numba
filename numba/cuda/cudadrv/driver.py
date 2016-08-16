@@ -19,6 +19,7 @@ import weakref
 import functools
 import copy
 import warnings
+import logging
 from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
                     c_void_p, c_float)
 import contextlib
@@ -35,6 +36,23 @@ from numba.utils import longint as long
 
 VERBOSE_JIT_LOG = int(os.environ.get('NUMBAPRO_VERBOSE_CU_JIT_LOG', 1))
 MIN_REQUIRED_CC = (2, 0)
+
+
+def _make_logger():
+    logger = logging.getLogger(__name__)
+    lvl = str(config.CUDA_LOG_LEVEL).upper()
+    lvl = getattr(logging, lvl, None)
+    if not isinstance(lvl, int):
+        lvl = logging.CRITICAL
+    logger.setLevel(lvl)
+    handler = logging.StreamHandler(sys.stderr)
+    fmt = '== CUDA [%(relativeCreated)d] %(levelname)5s -- %(message)s'
+    handler.setFormatter(logging.Formatter(fmt=fmt))
+    logger.addHandler(handler)
+    return logger
+
+
+_logger = _make_logger()
 
 
 class DeadMemoryError(RuntimeError):
@@ -187,6 +205,7 @@ class Driver(object):
     def initialize(self):
         self.is_initialized = True
         try:
+            _logger.info('init')
             self.cuInit(0)
         except CudaAPIError as e:
             self.initialization_error = e
@@ -224,6 +243,7 @@ class Driver(object):
 
         @functools.wraps(libfn)
         def safe_cuda_api_call(*args):
+            _logger.debug('call driver api: %s', libfn.__name__)
             retcode = libfn(*args)
             self._check_error(fname, retcode)
 
@@ -255,10 +275,12 @@ class Driver(object):
         if retcode != enums.CUDA_SUCCESS:
             errname = ERROR_MAP.get(retcode, "UNKNOWN_CUDA_ERROR")
             msg = "Call to %s results in %s" % (fname, errname)
+            _logger.error(msg)
             if retcode == enums.CUDA_ERROR_NOT_INITIALIZED:
                 # Detect forking
                 if _getpid() != self.pid:
                     msg = 'pid %s forked from pid %s after CUDA driver init'
+                    _logger.critical(msg, _getpid(), self.pid)
                     raise CudaDriverError("CUDA initialized before forking")
             raise CudaAPIError(retcode, msg)
 
@@ -450,6 +472,7 @@ class _PendingDeallocs(object):
         byte size of the resource added.  It is an optional argument.  Some
         resources (e.g. CUModule) has an unknown memory footprint on the device.
         """
+        _logger.info('add pending dealloc: %s %s bytes', dtor.__name__, size)
         self._cons.append((dtor, handle, size))
         self._size += int(size)
         if (len(self._cons) > config.CUDA_DEALLOCS_COUNT or
@@ -464,6 +487,7 @@ class _PendingDeallocs(object):
         if not self.is_disabled:
             while self._cons:
                 [dtor, handle, size] = self._cons.popleft()
+                _logger.info('dealloc: %s %s bytes', dtor.__name__, size)
                 dtor(handle)
             self._size = 0
 
@@ -515,7 +539,9 @@ class Context(object):
         """
         Clean up all owned resources in this context.
         """
+        _logger.info('reset context of device %s', self.device.id)
         # Free owned resources
+        _logger.info('reset context of device %s', self.device.id)
         self.allocations.clear()
         self.modules.clear()
         # Clear trash
