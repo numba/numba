@@ -11,6 +11,27 @@ should generally be small and within reasonable expectations.  However,
 small accumulated differences might produce large differences at the end,
 especially if a divergent function is involved.
 
+Math library implementations
+''''''''''''''''''''''''''''
+
+Numba supports a variety of platforms and operating systems, each of which
+has its own math library implementation (referred to as ``libm`` from here
+in).  The majority of math functions included in ``libm`` have specific
+requirements as set out by the IEEE 754 standard (like ``sin()``, ``exp()``
+etc.), but each implementation may have bugs.  Thus, on some platforms
+Numba has to exercise special care in order to workaround known ``libm``
+issues.
+
+Another typical problem is when an operating system's ``libm`` function
+set is incomplete and needs to be supplemented by additional functions.
+These are provided with reference to the IEEE 754 and C99 standards
+and are often implemented in Numba in a manner similar to equivalent
+CPython functions.
+
+In particular, math library issues are known to affect Python 2.7 builds
+on Windows, since Python 2.7 requires the use of an obsolete version of
+the Microsoft Visual Studio compiler.
+
 Linear algebra
 ''''''''''''''
 
