@@ -32,7 +32,7 @@ def is_nan(builder, val):
     """
     Return a condition testing whether *val* is a NaN.
     """
-    return builder.not_(builder.fcmp(lc.FCMP_OEQ, val, val))
+    return builder.fcmp_unordered('uno', val, val)
 
 def is_inf(builder, val):
     """
@@ -50,7 +50,7 @@ def is_finite(builder, val):
     """
     # is_finite(x)  <=>  x - x != NaN
     val_minus_val = builder.fsub(val, val)
-    return builder.fcmp_ordered('==', val_minus_val, val_minus_val)
+    return builder.fcmp_ordered('ord', val_minus_val, val_minus_val)
 
 def f64_as_int64(builder, val):
     """
