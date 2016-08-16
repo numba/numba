@@ -282,8 +282,12 @@ def detect():
 
 @contextlib.contextmanager
 def defer_cleanup():
-    tserv = get_current_device().trashing
-    with tserv.defer_cleanup:
+    """
+    Temporarily disable memory deallocation.
+    Use this to prevent resource deallocation brekaing asynchronous execution.
+    """
+    deallocs = current_context().deallocations
+    with deallocs.disable():
         yield
 
 
