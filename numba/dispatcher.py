@@ -15,7 +15,7 @@ from numba import _dispatcher, compiler, utils, types, config, errors
 from numba.typeconv.rules import default_type_manager
 from numba import sigutils, serialize, typing
 from numba.typing.templates import fold_arguments
-from numba.typing.typeof import typeof, Purpose
+from numba.typing.typeof import Purpose, typeof, typeof_impl
 from numba.bytecode import get_code_object
 from numba.six import create_bound_method, next
 from .caching import NullCache, FunctionCache
@@ -31,6 +31,10 @@ class OmittedArg(object):
 
     def __repr__(self):
         return "omitted arg(%r)" % (self.value,)
+
+    @property
+    def _numba_type_(self):
+        return types.Omitted(self.value)
 
 
 class _FunctionCompiler(object):
@@ -150,8 +154,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         self.__code__ = self.func_code
 
         argnames = tuple(pysig.parameters)
-        defargs = tuple(OmittedArg(val)
-                        for val in (self.py_func.__defaults__ or ()))
+        default_values = self.py_func.__defaults__ or ()
+        defargs = tuple(OmittedArg(val) for val in default_values)
         try:
             lastarg = list(pysig.parameters.values())[-1]
         except IndexError:
@@ -612,4 +616,6 @@ class LiftedLoop(_DispatcherBase):
 
 
 # Initialize typeof machinery
-_dispatcher.typeof_init(dict((str(t), t._code) for t in types.number_domain))
+_dispatcher.typeof_init(
+    OmittedArg,
+    dict((str(t), t._code) for t in types.number_domain))
