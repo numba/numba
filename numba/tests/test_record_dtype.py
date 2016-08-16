@@ -665,8 +665,8 @@ class TestRecordDtype(unittest.TestCase):
 
     def test_structure_dtype_with_titles(self):
         # the following is the definition of int4 vector type from pyopencl
-        vecint4 = np.dtype([(('x', 's0'), '<i4'), (('y', 's1'), '<i4'),
-                            (('z', 's2'), '<i4'), (('w', 's3'), '<i4')])
+        vecint4 = np.dtype([(('x', 's0'), 'i4'), (('y', 's1'), 'i4'),
+                            (('z', 's2'), 'i4'), (('w', 's3'), 'i4')])
         nbtype = numpy_support.from_dtype(vecint4)
         self.assertEqual(len(nbtype.fields), len(vecint4.fields))
 
