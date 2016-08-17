@@ -414,6 +414,9 @@ def met_requirement_for_device(device):
 
 
 class _SizeNotSet(object):
+    """
+    Dummy object for _PendingDeallocs when *size* is not set.
+    """
     def __str__(self):
         return '?'
 
@@ -424,6 +427,10 @@ _SizeNotSet = _SizeNotSet()
 
 
 class _PendingDeallocs(object):
+    """
+    Pending deallocations of a context (or device since we are using the primary
+    context).
+    """
     MAX_PENDING_DEALLOCS_COUNT = config.CUDA_DEALLOCS_COUNT
     PENDING_DEALLOCS_RATIO = config.CUDA_DEALLOCS_RATIO
 
@@ -434,6 +441,14 @@ class _PendingDeallocs(object):
         self._max_pending_bytes = int(capacity * self.PENDING_DEALLOCS_RATIO)
 
     def add_item(self, dtor, handle, size=_SizeNotSet):
+        """
+        Add a pending deallocation.
+
+        The *dtor* arg is the destructor function that takes an argument,
+        *handle*.  It is used as ``dtor(handle)``.  The *size* arg is the
+        byte size of the resource added.  It is an optional argument.  Some
+        resources (e.g. CUModule) has an unknown memory footprint on the device.
+        """
         self._cons.append((dtor, handle, size))
         self._size += int(size)
         if (len(self._cons) > self.MAX_PENDING_DEALLOCS_COUNT or
@@ -441,6 +456,10 @@ class _PendingDeallocs(object):
             self.clear()
 
     def clear(self):
+        """
+        Flush any pending deallocations unless it is disabled.
+        Do nothing if disabled.
+        """
         if not self.is_disabled:
             while self._cons:
                 [dtor, handle, size] = self._cons.popleft()
@@ -449,6 +468,10 @@ class _PendingDeallocs(object):
 
     @contextlib.contextmanager
     def disable(self):
+        """
+        Context manager to temporarily disable flushing pending deallocation.
+        This can be nested.
+        """
         self._disable_count += 1
         yield
         self._disable_count -= 1
@@ -459,6 +482,9 @@ class _PendingDeallocs(object):
         return self._disable_count > 0
 
     def __len__(self):
+        """
+        Returns number of pending deallocations.
+        """
         return len(self._cons)
 
 
