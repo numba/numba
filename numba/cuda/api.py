@@ -284,7 +284,16 @@ def detect():
 def defer_cleanup():
     """
     Temporarily disable memory deallocation.
-    Use this to prevent resource deallocation brekaing asynchronous execution.
+    Use this to prevent resource deallocation breaking asynchronous execution.
+
+    For example::
+
+        with defer_cleanup():
+            # all cleanup is deferred in here
+            do_speed_critical_code()
+        # cleanup will occur here
+
+    Note: this context manager can be nested.
     """
     deallocs = current_context().deallocations
     with deallocs.disable():
