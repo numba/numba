@@ -43,6 +43,11 @@ def type_callable(func):
     return decorate
 
 
+# By default, an *overload* does not have a cpython wrapper because it is not
+# callable from python.
+_overload_default_jit_options = {'no_cpython_wrapper': True}
+
+
 def overload(func, jit_options={}):
     """
     A decorator marking the decorated function as typing and implementing
@@ -67,8 +72,12 @@ def overload(func, jit_options={}):
     """
     from .typing.templates import make_overload_template, infer_global
 
+    # set default options
+    opts = _overload_default_jit_options.copy()
+    opts.update(jit_options)  # let user options override
+
     def decorate(overload_func):
-        template = make_overload_template(func, overload_func, jit_options)
+        template = make_overload_template(func, overload_func, opts)
         infer(template)
         if hasattr(func, '__module__'):
             infer_global(func, types.Function(template))

@@ -492,7 +492,7 @@ class TestLLVMCall(TestCase):
         def unsafe_get_ctypes_pointer(src):
             raise NotImplementedError("not callable from python")
 
-        @overload(unsafe_get_ctypes_pointer, {'no_cpython_wrapper': True})
+        @overload(unsafe_get_ctypes_pointer)
         def array_impl_unsafe_get_ctypes_pointer(arrtype):
             if isinstance(arrtype, types.Array):
                 unsafe_cast = unsafe_caster(types.CPointer(arrtype.dtype))
