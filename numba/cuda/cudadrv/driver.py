@@ -378,6 +378,7 @@ class Device(object):
             trashing.clear()
 
         utils.finalize(self, finalizer)
+        self.primary_context = None
 
     @property
     def COMPUTE_CAPABILITY(self):
@@ -416,42 +417,48 @@ class Device(object):
     def __ne__(self, other):
         return not (self == other)
 
-    def create_context(self):
-        """Create a CUDA context.
+    def get_primary_context(self):
         """
+        Returns the primary context for the device.
+        Note: it is not pushed to the CPU thread.
+        """
+        if self.primary_context is not None:
+            return self.primary_context
+
         met_requirement_for_device(self)
 
-        flags = 0
-        if self.CAN_MAP_HOST_MEMORY:
-            flags |= enums.CU_CTX_MAP_HOST
+        # create primary context
+        hctx = drvapi.cu_context()
+        driver.cuDevicePrimaryCtxRetain(byref(hctx), self.id)
 
-        # Clean up any trash
-        self.trashing.service()
-
-        # Create new context
-        handle = drvapi.cu_context()
-        driver.cuCtxCreate(byref(handle), flags, self.id)
-
-        ctx = Context(weakref.proxy(self), handle,
-                      _context_finalizer(self.trashing, handle))
-
+        ctx = Context(weakref.proxy(self), hctx)
+        self.primary_context = ctx
         return ctx
 
+    def release_primary_context(self):
+        """
+        Release reference to primary context
+        """
+        driver.cuDevicePrimaryCtxRelease(self.id)
+        self.primary_context = None
+
     def reset(self):
-        self.trashing.clear()
-
-
-def _context_finalizer(trashing, ctxhandle):
-    def core():
-        trashing.add_trash(lambda: driver.cuCtxDestroy(ctxhandle))
-
-    return core
+        try:
+            if self.primary_context is not None:
+                self.primary_context.reset()
+            self.release_primary_context()
+        finally:
+            # reset at the driver level
+            driver.cuDevicePrimaryCtxReset(self.id)
 
 
 def met_requirement_for_device(device):
     if device.compute_capability < MIN_REQUIRED_CC:
         raise CudaSupportError("%s has compute capability < %s" %
                                (device, MIN_REQUIRED_CC))
+
+
+_MemoryInfo = namedtuple("_MemoryInfo", "free,total")
 
 
 class Context(object):
@@ -506,7 +513,7 @@ class Context(object):
         free = c_size_t()
         total = c_size_t()
         driver.cuMemGetInfo(byref(free), byref(total))
-        return free.value, total.value
+        return _MemoryInfo(free=free.value, total=total.value)
 
     def get_active_blocks_per_multiprocessor(self, func, blocksize, memsize, flags=None):
         """Return occupancy of a function.
