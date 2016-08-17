@@ -593,6 +593,11 @@ class ControlFlowAnalysis(object):
         end = inst.get_jump_target()
         self._blockstack.append(end)
         self._loops.append((inst.offset, end))
+        # TODO: Looplifting requires the loop entry be its own block.
+        #       Forcing a new block here is the simplest solution for now.
+        #       But, we should consider other less ad-hoc ways.
+        self.jump(inst.next)
+        self._force_new_block = True
 
     def op_POP_BLOCK(self, inst):
         self._blockstack.pop()

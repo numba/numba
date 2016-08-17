@@ -24,6 +24,8 @@ requirements:
   build:
     - python
     - numpy x.x
+    # Avoid https://github.com/pypa/setuptools/issues/728
+    - setuptools 23.*
     # On channel https://anaconda.org/numba/
     - llvmlite 0.13.*
     - funcsigs       [py27]
@@ -31,6 +33,8 @@ requirements:
   run:
     - python
     - numpy x.x
+    # Avoid https://github.com/pypa/setuptools/issues/728
+    - setuptools 23.*
     # On channel https://anaconda.org/numba/
     - llvmlite 0.13.*
     - funcsigs       [py27]

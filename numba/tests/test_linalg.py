@@ -353,6 +353,10 @@ def cond_matrix(a, p=None):
     return np.linalg.cond(a, p)
 
 
+def matrix_rank_matrix(a, tol=None):
+    return np.linalg.matrix_rank(a, tol)
+
+
 class TestLinalgBase(TestCase):
     """
     Provides setUp and common data/error modes for testing np.linalg functions.
@@ -1865,5 +1869,108 @@ class TestLinalgCond(TestLinalgBase):
         # assert raises for an invalid norm kind kwarg
         self.assert_invalid_norm_kind(cfunc, (np.array([[1., 2.], [3., 4.]],
                                                        dtype=np.float64), 6))
+
+
+class TestLinalgMatrixRank(TestLinalgSystems):
+    """
+    Tests for np.linalg.matrix_rank.
+    """
+
+    @needs_lapack
+    def test_linalg_matrix_rank(self):
+        """
+        Test np.linalg.matrix_rank
+        """
+
+        cfunc = jit(nopython=True)(matrix_rank_matrix)
+
+        def check(a, **kwargs):
+            expected = matrix_rank_matrix(a, **kwargs)
+            got = cfunc(a, **kwargs)
+
+            # Ranks are integral so comparison should be trivial.
+            # check the rank is the same
+            np.testing.assert_allclose(got, expected)
+
+            # Ensure proper resource management
+            with self.assertNoNRTLeak():
+                cfunc(a, **kwargs)
+
+        sizes = [(7, 1), (11, 5), (5, 11), (3, 3), (1, 7)]
+
+        for size, dtype, order in \
+                product(sizes, self.dtypes, 'FC'):
+            # check full rank system
+            a = self.specific_sample_matrix(size, dtype, order)
+            check(a)
+
+            # If the system is a matrix, check rank deficiency is reported
+            # correctly. Check all ranks from 0 to (full rank - 1).
+            tol = 1e-13
+            # first check 1 to (full rank - 1)
+            for k in range(1, min(size) - 1):
+                # check rank k
+                a = self.specific_sample_matrix(size, dtype, order, rank=k)
+                self.assertEqual(cfunc(a), k)
+                check(a)
+                # check provision of a tolerance works as expected
+                # create a (m x n) diagonal matrix with a singular value
+                # guaranteed below the tolerance 1e-13
+                m, n = a.shape
+                a[:, :] = 0.  # reuse `a`'s memory
+                idx = np.nonzero(np.eye(m, n))
+                if np.iscomplexobj(a):
+                    b = 1. + np.random.rand(k) + 1.j +\
+                        1.j * np.random.rand(k)
+                    # min singular value is sqrt(2)*1e-14
+                    b[0] = 1e-14 + 1e-14j
+                else:
+                    b = 1. + np.random.rand(k)
+                    b[0] = 1e-14  # min singular value is 1e-14
+                a[idx[0][:k], idx[1][:k]] = b.astype(dtype)
+                # rank should be k-1 (as tol is present)
+                self.assertEqual(cfunc(a, tol), k - 1)
+                check(a, tol=tol)
+            # then check zero rank
+            a[:, :] = 0.
+            self.assertEqual(cfunc(a), 0)
+            check(a)
+            # add in a singular value that is small
+            if np.iscomplexobj(a):
+                a[-1, -1] = 1e-14 + 1e-14j
+            else:
+                a[-1, -1] = 1e-14
+            # check the system has zero rank to a given tolerance
+            self.assertEqual(cfunc(a, tol), 0)
+            check(a, tol=tol)
+
+        # check the zero vector returns rank 0 and a nonzero vector
+        # returns rank 1.
+        for dt in self.dtypes:
+            a = np.zeros((5), dtype=dt)
+            self.assertEqual(cfunc(a), 0)
+            check(a)
+            # make it a nonzero vector
+            a[0] = 1.
+            self.assertEqual(cfunc(a), 1)
+            check(a)
+
+        rn = "matrix_rank"
+
+        # Wrong dtype
+        self.assert_wrong_dtype(rn, cfunc,
+                                (np.ones((2, 2), dtype=np.int32),))
+
+        # Dimension issue
+        self.assert_wrong_dimensions_1D(
+            rn, cfunc, (np.ones(
+                12, dtype=np.float64).reshape(
+                2, 2, 3),))
+
+        # no nans or infs for 2D case
+        self.assert_no_nan_or_inf(cfunc,
+                                  (np.array([[1., 2., ], [np.inf, np.nan]],
+                                            dtype=np.float64),))
+
 if __name__ == '__main__':
     unittest.main()

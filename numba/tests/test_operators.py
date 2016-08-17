@@ -415,8 +415,8 @@ class TestOperators(TestCase):
                 x_expected = copy.copy(x)
                 got = cfunc(x_got, y)
                 expected = pyfunc(x_expected, y)
-                self.assertTrue(np.allclose(got, expected))
-                self.assertTrue(np.allclose(x_got, x_expected))
+                np.testing.assert_allclose(got, expected, rtol=1e-5)
+                np.testing.assert_allclose(x_got, x_expected, rtol=1e-5)
 
     def coerce_operand(self, op, numba_type):
         if hasattr(op, "dtype"):
@@ -1243,9 +1243,10 @@ class TestMixedInts(TestCase):
                 expected = control_func(x)
                 got = cfunc(x)
                 self.assertIsInstance(got, expected_type)
-                self.assertTrue(np.all(got == expected),
-                                "mismatch for %r with type %s: %r != %r"
-                                % (x, xt, got, expected))
+                self.assertPreciseEqual(
+                    got, expected,
+                    msg="mismatch for %r with type %s: %r != %r"
+                        % (x, xt, got, expected))
 
     def run_arith_binop(self, pyfunc, opname, samples,
                         expected_type=utils.INT_TYPES):

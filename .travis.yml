@@ -28,7 +28,7 @@ script:
     - buildscripts/incremental/test.sh
 
 after_success:
-    - if [ "$RUN_COVERAGE" == "yes" ]; then coverage combine; codecov; fi
+    - buildscripts/incremental/after_success.sh
 
 notifications:
     email: false

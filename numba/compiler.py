@@ -11,7 +11,7 @@ from .tracing import trace, event
 
 from numba import (bytecode, interpreter, funcdesc, typing, typeinfer,
                    lowering, objmode, utils, config, errors,
-                   types, ir, looplifting, macro, types, rewrites)
+                   types, ir, macro, types, rewrites, transforms)
 from numba.targets import cpu, callconv
 from numba.annotations import type_annotations
 
@@ -377,6 +377,17 @@ class Pipeline(object):
         self.func_attr = func_attr
         return self._compile_bytecode()
 
+    def compile_ir(self, interp, lifted=(), lifted_from=None,
+                   func_attr=DEFAULT_FUNCTION_ATTRIBUTES):
+        self.bc = interp.bytecode
+        self.func = interp.bytecode.func
+        self.lifted = lifted
+        self.lifted_from = lifted_from
+        self.func_attr = func_attr
+
+        self._set_and_check_interp(interp)
+        return self._compile_ir()
+
     def compile_internal(self, bc, func_attr=DEFAULT_FUNCTION_ATTRIBUTES):
         assert not self.flags.force_pyobject
         self.bc = bc
@@ -390,7 +401,11 @@ class Pipeline(object):
         """
         Analyze bytecode and translating to Numba IR
         """
-        self.interp = translate_stage(self.bc)
+        interp = translate_stage(self.bc)
+        self._set_and_check_interp(interp)
+
+    def _set_and_check_interp(self, interp):
+        self.interp = interp
         self.nargs = self.interp.arg_count
         if not self.args and self.flags.force_pyobject:
             # Allow an empty argument types specification when object mode
@@ -405,9 +420,6 @@ class Pipeline(object):
         """
         Loop lifting analysis and transformation
         """
-        assert not self.lifted
-
-        # Try loop lifting
         loop_flags = self.flags.copy()
         outer_flags = self.flags.copy()
         # Do not recursively loop lift
@@ -416,23 +428,22 @@ class Pipeline(object):
         if not self.flags.enable_pyobject_looplift:
             loop_flags.unset('enable_pyobject')
 
-        def dispatcher_factory(loopbc):
-            from . import dispatcher
-            return dispatcher.LiftedLoop(loopbc, self.typingctx,
-                                         self.targetctx,
-                                         self.locals, loop_flags)
-
-        entry, loops = looplifting.lift_loop(self.bc, dispatcher_factory)
+        main, loops = transforms.loop_lifting(self.interp,
+                                              typingctx=self.typingctx,
+                                              targetctx=self.targetctx,
+                                              locals=self.locals,
+                                              flags=loop_flags)
         if loops:
             # Some loops were extracted
             if config.DEBUG_FRONTEND or config.DEBUG:
-                print("Lifting loop", loops[0].get_source_location())
+                for loop in loops:
+                    print("Lifting loop", loop.get_source_location())
 
-            cres = compile_bytecode(self.typingctx, self.targetctx, entry,
-                                    self.args, self.return_type,
-                                    outer_flags, self.locals,
-                                    lifted=tuple(loops), lifted_from=None,
-                                    func_attr=self.func_attr)
+            cres = compile_ir(self.typingctx, self.targetctx, main,
+                              self.args, self.return_type,
+                              outer_flags, self.locals,
+                              lifted=tuple(loops), lifted_from=None,
+                              func_attr=self.func_attr)
             return cres
 
     def stage_objectmode_frontend(self):
@@ -629,12 +640,16 @@ class Pipeline(object):
         if self.interp is not None:
             self.interp.reset()
 
-    def _compile_bytecode(self):
+    def _compile_core(self):
+        """
+        Populate and run compiler pipeline
+        """
         pm = _PipelineManager()
 
         if not self.flags.force_pyobject:
             pm.create_pipeline("nopython")
-            pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
+            if self.interp is None:
+                pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
             if not self.flags.no_rewrites:
                 pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
             pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
@@ -646,7 +661,8 @@ class Pipeline(object):
 
         if self.status.can_fallback or self.flags.force_pyobject:
             pm.create_pipeline("object")
-            pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
+            if self.interp is None:
+                pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
             pm.add_stage(self.stage_objectmode_frontend, "object mode frontend")
             pm.add_stage(self.stage_annotate_type, "annotate type")
             pm.add_stage(self.stage_objectmode_backend, "object mode backend")
@@ -665,6 +681,20 @@ class Pipeline(object):
         else:
             assert self.cr is not None
             return self.cr
+
+    def _compile_bytecode(self):
+        """
+        Populate and run pipeline for bytecode input
+        """
+        assert self.interp is None
+        return self._compile_core()
+
+    def _compile_ir(self):
+        """
+        Populate and run pipeline for IR input
+        """
+        assert self.interp is not None
+        return self._compile_core()
 
 
 def _make_subtarget(targetctx, flags):
@@ -702,6 +732,15 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
     pipeline = Pipeline(typingctx, targetctx, library,
                         args, return_type, flags, locals)
     return pipeline.compile_bytecode(bc=bc, lifted=lifted, lifted_from=lifted_from, func_attr=func_attr)
+
+
+def compile_ir(typingctx, targetctx, interp, args, return_type, flags,
+               locals, lifted=(), lifted_from=None,
+               func_attr=DEFAULT_FUNCTION_ATTRIBUTES, library=None):
+
+    pipeline = Pipeline(typingctx, targetctx, library,
+                        args, return_type, flags, locals)
+    return pipeline.compile_ir(interp=interp, lifted=lifted, lifted_from=lifted_from, func_attr=func_attr)
 
 
 def compile_internal(typingctx, targetctx, library,

@@ -103,7 +103,7 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
         cres = compile_isolated(pyfunc, [types.int32])
         cfunc = cres.entry_point
         x = 123
-        self.assertTrue(cfunc(x), x + 1)
+        self.assertEqual(cfunc(x), x + 1)
 
     def test_function_pointer(self):
         pyfunc = use_func_pointer

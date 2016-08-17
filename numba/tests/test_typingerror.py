@@ -154,5 +154,25 @@ class TestArgumentTypingError(unittest.TestCase):
         self.assertIn(expected, str(raises.exception))
 
 
+class TestCallError(unittest.TestCase):
+    def test_readonly_array(self):
+        @jit("(f8[:],)", nopython=True)
+        def inner(x):
+            return x
+
+        @jit(nopython=True)
+        def outer():
+            return inner(gvalues)
+
+        gvalues = np.ones(10, dtype=np.float64)
+
+        with self.assertRaises(TypingError) as raises:
+            outer()
+
+        got = str(raises.exception)
+        pat = r"Invalid usage of.*readonly array\(float64, 1d, C\)"
+        self.assertIsNotNone(re.search(pat, got))
+
+
 if __name__ == '__main__':
     unittest.main()

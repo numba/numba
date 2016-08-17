@@ -371,13 +371,6 @@ class ByteCodeBase(object):
                                           self.co_consts, self.co_names)
 
 
-class CustomByteCode(ByteCodeBase):
-    """
-    A simplified ByteCode class, used for hosting inner loops
-    when loop-lifting.
-    """
-
-
 class ByteCode(ByteCodeBase):
     def __init__(self, func):
         func = get_function_object(func)

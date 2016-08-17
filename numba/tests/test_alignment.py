@@ -2,10 +2,11 @@
 
 import numpy as np
 from numba import from_dtype, njit, void
-from numba import unittest_support as unittest
+from .support import TestCase
 
 
-class TestAlignment(unittest.TestCase):
+class TestAlignment(TestCase):
+
     def test_record_alignment(self):
         rec_dtype = np.dtype([('a', 'int32'), ('b', 'float64')], align=True)
         rec = from_dtype(rec_dtype)
@@ -22,8 +23,7 @@ class TestAlignment(unittest.TestCase):
             a_rec.b = (i + 1) * 123
 
         foo(a_recarray)
-
-        self.assertTrue(np.all(a_recarray.a == a_recarray.b))
+        np.testing.assert_equal(a_recarray.a, a_recarray.b)
 
     def test_record_misaligned(self):
         rec_dtype = np.dtype([('a', 'int32'), ('b', 'float64')])
