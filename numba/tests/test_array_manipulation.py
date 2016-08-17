@@ -100,6 +100,14 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(got, expected)
             del got
             self.memory_leak_teardown()
+        def check_only_shape(arr, shape, expected_shape):
+            # Only check Numba result to avoid Numpy bugs
+            self.memory_leak_setup()
+            got = run(arr, shape)
+            self.assertEqual(got.shape, expected_shape)
+            self.assertEqual(got.size, arr.size)
+            del got
+            self.memory_leak_teardown()
         def check_err_shape(arr, shape):
             with self.assertRaises(NotImplementedError) as raises:
                 run(arr, shape)
@@ -115,7 +123,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             with self.assertRaises(ValueError) as raises:
                 run(arr, shape)
             self.assertEqual(str(raises.exception),
-                             "multiple negative shape value")
+                             "multiple negative shape values")
 
         # C-contiguous
         arr = np.arange(24)
@@ -130,6 +138,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         check(arr, (8, 3))
         check(arr, (8, 1, 3))
         check(arr, (1, 8, 1, 1, 3, 1))
+        check_err_size(arr, ())
         check_err_size(arr, (25,))
         check_err_size(arr, (8, 4))
         arr = np.arange(24).reshape((1, 8, 1, 1, 3, 1))
@@ -156,6 +165,26 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         check_err_size(arr, (-1, 4))
         check_err_multiple_negative(arr, (-1, -2, 5, 5))
         check_err_multiple_negative(arr, (5, 5, -1, -1))
+
+        # 0-sized arrays
+        def check_empty(arr):
+            check(arr, 0)
+            check(arr, (0,))
+            check(arr, (1, 0, 2))
+            check(arr, (0, 55, 1, 0, 2))
+            # -1 is buggy in Numpy with 0-sized arrays
+            check_only_shape(arr, -1, (0,))
+            check_only_shape(arr, (-1,), (0,))
+            check_only_shape(arr, (0, -1), (0, 0))
+            check_only_shape(arr, (4, -1), (4, 0))
+            check_only_shape(arr, (-1, 0, 4), (0, 0, 4))
+            check_err_size(arr, ())
+            check_err_size(arr, 1)
+            check_err_size(arr, (1, 2))
+
+        arr = np.array([])
+        check_empty(arr)
+        check_empty(arr.reshape((3, 2, 0)))
 
         # Exceptions leak references
         self.disable_leak_check()
