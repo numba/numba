@@ -36,13 +36,16 @@ _pid = None
 
 def random_init():
     """
-    Initialize the random states with system entropy.
+    Reset the random states.
     """
     global _pid
     if _pid != os.getpid():
-        b = os.urandom(N * 4)
-        for n in ('py_random_state', 'np_random_state'):
-            _helperlib.rnd_seed(_helperlib.c_helpers[n], b)
+        # Make sure the states are marked unitialized.
+        # Actual initialization with system entropy (if needed)
+        # is done lazily (see rnd_implicit_init() in _random.c).
+        for state_ptr in [_helperlib.rnd_get_py_state_ptr(),
+                          _helperlib.rnd_get_np_state_ptr()]:
+            _helperlib.rnd_reset(state_ptr)
         _pid = os.getpid()
 
 
@@ -144,13 +147,20 @@ def get_next_int(context, builder, state_ptr, nbits):
     return builder.load(ret)
 
 
+def _get_state_ptr(context, builder, kind):
+    assert kind in ('py', 'np')
+    func_name = "numba_get_%s_random_state" % kind
+    fnty = ir.FunctionType(rnd_state_ptr_t, ())
+    fn = builder.module.get_or_insert_function(fnty, func_name)
+    fn.attributes.add('readnone')
+    fn.attributes.add('nounwind')
+    return builder.call(fn, ())
+
 def get_py_state_ptr(context, builder):
-    return context.get_c_value(builder, rnd_state_t,
-                               "numba_py_random_state")
+    return _get_state_ptr(context, builder, 'py')
 
 def get_np_state_ptr(context, builder):
-    return context.get_c_value(builder, rnd_state_t,
-                               "numba_np_random_state")
+    return _get_state_ptr(context, builder, 'np')
 
 def get_state_ptr(context, builder, name):
     return {

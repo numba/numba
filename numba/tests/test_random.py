@@ -20,8 +20,12 @@ from .support import TestCase, compile_function, tag
 # State size of the Mersenne Twister
 N = 624
 
-py_state_ptr = _helperlib.c_helpers['py_random_state']
-np_state_ptr = _helperlib.c_helpers['np_random_state']
+
+def get_py_state_ptr():
+    return _helperlib.rnd_get_py_state_ptr()
+
+def get_np_state_ptr():
+    return _helperlib.rnd_get_np_state_ptr()
 
 
 def numpy_randint1(a):
@@ -212,16 +216,16 @@ class TestInternals(BaseTest):
         self.assertEqual(len(set(states)), len(states))
 
     def test_get_set_state(self):
-        self._check_get_set_state(py_state_ptr)
+        self._check_get_set_state(get_py_state_ptr())
 
     def test_shuffle(self):
-        self._check_shuffle(py_state_ptr)
+        self._check_shuffle(get_py_state_ptr())
 
     def test_init(self):
-        self._check_init(py_state_ptr)
+        self._check_init(get_py_state_ptr())
 
     def test_perturb(self):
-        self._check_perturb(py_state_ptr)
+        self._check_perturb(get_py_state_ptr())
 
 
 class TestRandom(BaseTest):
@@ -291,7 +295,7 @@ class TestRandom(BaseTest):
 
     @tag('important')
     def test_random_getrandbits(self):
-        self._check_getrandbits(jit_unary("random.getrandbits"), py_state_ptr)
+        self._check_getrandbits(jit_unary("random.getrandbits"), get_py_state_ptr())
 
     # Explanation for the large ulps value: on 32-bit platforms, our
     # LLVM-compiled functions use SSE but they are compared against
@@ -324,30 +328,30 @@ class TestRandom(BaseTest):
 
     @tag('important')
     def test_random_gauss(self):
-        self._check_gauss(jit_binary("random.gauss"), None, None, py_state_ptr)
+        self._check_gauss(jit_binary("random.gauss"), None, None, get_py_state_ptr())
 
     def test_random_normalvariate(self):
         # normalvariate() is really an alias to gauss() in Numba
         # (not in Python, though - they use different algorithms)
         self._check_gauss(jit_binary("random.normalvariate"), None, None,
-                          py_state_ptr)
+                          get_py_state_ptr())
 
     @tag('important')
     def test_numpy_normal(self):
         self._check_gauss(jit_binary("np.random.normal"),
                           jit_unary("np.random.normal"),
                           jit_nullary("np.random.normal"),
-                          np_state_ptr)
+                          get_np_state_ptr())
 
     @tag('important')
     def test_numpy_standard_normal(self):
         self._check_gauss(None, None, jit_nullary("np.random.standard_normal"),
-                          np_state_ptr)
+                          get_np_state_ptr())
 
     @tag('important')
     def test_numpy_randn(self):
         self._check_gauss(None, None, jit_nullary("np.random.randn"),
-                          np_state_ptr)
+                          get_np_state_ptr())
 
     def _check_lognormvariate(self, func2, func1, func0, ptr):
         """
@@ -366,13 +370,13 @@ class TestRandom(BaseTest):
 
     def test_random_lognormvariate(self):
         self._check_lognormvariate(jit_binary("random.lognormvariate"),
-                                   None, None, py_state_ptr)
+                                   None, None, get_py_state_ptr())
 
     def test_numpy_lognormal(self):
         self._check_lognormvariate(jit_binary("np.random.lognormal"),
                                    jit_unary("np.random.lognormal"),
                                    jit_nullary("np.random.lognormal"),
-                                   np_state_ptr)
+                                   get_np_state_ptr())
 
     def _check_randrange(self, func1, func2, func3, ptr, max_width):
         """
@@ -414,7 +418,7 @@ class TestRandom(BaseTest):
             cr2 = compile_isolated(random_randrange2, (tp, tp))
             cr3 = compile_isolated(random_randrange3, (tp, tp, tp))
             self._check_randrange(cr1.entry_point, cr2.entry_point,
-                                  cr3.entry_point, py_state_ptr, max_width)
+                                  cr3.entry_point, get_py_state_ptr(), max_width)
 
     @tag('important')
     def test_numpy_randint(self):
@@ -422,7 +426,7 @@ class TestRandom(BaseTest):
             cr1 = compile_isolated(numpy_randint1, (tp,))
             cr2 = compile_isolated(numpy_randint2, (tp, tp))
             self._check_randrange(cr1.entry_point, cr2.entry_point,
-                                  None, np_state_ptr, max_width)
+                                  None, get_np_state_ptr(), max_width)
 
     def _check_randint(self, func, ptr, max_width):
         """
@@ -448,7 +452,7 @@ class TestRandom(BaseTest):
     def test_random_randint(self):
         for tp, max_width in [(types.int64, 2**63), (types.int32, 2**31)]:
             cr = compile_isolated(random_randint, (tp, tp))
-            self._check_randint(cr.entry_point, py_state_ptr, max_width)
+            self._check_randint(cr.entry_point, get_py_state_ptr(), max_width)
 
     def _check_uniform(self, func, ptr):
         """
@@ -461,11 +465,11 @@ class TestRandom(BaseTest):
 
     @tag('important')
     def test_random_uniform(self):
-        self._check_uniform(jit_binary("random.uniform"), py_state_ptr)
+        self._check_uniform(jit_binary("random.uniform"), get_py_state_ptr())
 
     @tag('important')
     def test_numpy_uniform(self):
-        self._check_uniform(jit_binary("np.random.uniform"), np_state_ptr)
+        self._check_uniform(jit_binary("np.random.uniform"), get_np_state_ptr())
 
     def _check_triangular(self, func2, func3, ptr):
         """
@@ -481,12 +485,12 @@ class TestRandom(BaseTest):
     def test_random_triangular(self):
         self._check_triangular(jit_binary("random.triangular"),
                                jit_ternary("random.triangular"),
-                               py_state_ptr)
+                               get_py_state_ptr())
 
     def test_numpy_triangular(self):
         triangular = jit_ternary("np.random.triangular")
         fixed_triangular = lambda l, r, m: triangular(l, m, r)
-        self._check_triangular(None, fixed_triangular, np_state_ptr)
+        self._check_triangular(None, fixed_triangular, get_np_state_ptr())
 
     def _check_gammavariate(self, func2, func1, ptr):
         """
@@ -511,15 +515,15 @@ class TestRandom(BaseTest):
 
     def test_random_gammavariate(self):
         self._check_gammavariate(jit_binary("random.gammavariate"), None,
-                                 py_state_ptr)
+                                 get_py_state_ptr())
 
     def test_numpy_gamma(self):
         self._check_gammavariate(jit_binary("np.random.gamma"),
                                  jit_unary("np.random.gamma"),
-                                 np_state_ptr)
+                                 get_np_state_ptr())
         self._check_gammavariate(None,
                                  jit_unary("np.random.standard_gamma"),
-                                 np_state_ptr)
+                                 get_np_state_ptr())
 
     def _check_betavariate(self, func, ptr):
         """
@@ -535,10 +539,10 @@ class TestRandom(BaseTest):
         self.assertRaises(ValueError, func, 1.0, -0.5)
 
     def test_random_betavariate(self):
-        self._check_betavariate(jit_binary("random.betavariate"), py_state_ptr)
+        self._check_betavariate(jit_binary("random.betavariate"), get_py_state_ptr())
 
     def test_numpy_beta(self):
-        self._check_betavariate(jit_binary("np.random.beta"), np_state_ptr)
+        self._check_betavariate(jit_binary("np.random.beta"), get_np_state_ptr())
 
     def _check_vonmisesvariate(self, func, ptr):
         """
@@ -550,11 +554,11 @@ class TestRandom(BaseTest):
 
     def test_random_vonmisesvariate(self):
         self._check_vonmisesvariate(jit_binary("random.vonmisesvariate"),
-                                    py_state_ptr)
+                                    get_py_state_ptr())
 
     def test_numpy_vonmises(self):
         self._check_vonmisesvariate(jit_binary("np.random.vonmises"),
-                                    np_state_ptr)
+                                    get_np_state_ptr())
 
     def _check_expovariate(self, func, ptr):
         """
@@ -569,7 +573,7 @@ class TestRandom(BaseTest):
                                         prec='double')
 
     def test_random_expovariate(self):
-        self._check_expovariate(jit_unary("random.expovariate"), py_state_ptr)
+        self._check_expovariate(jit_unary("random.expovariate"), get_py_state_ptr())
 
     def _check_exponential(self, func1, func0, ptr):
         """
@@ -585,12 +589,12 @@ class TestRandom(BaseTest):
     def test_numpy_exponential(self):
         self._check_exponential(jit_unary("np.random.exponential"),
                                 jit_nullary("np.random.exponential"),
-                                np_state_ptr)
+                                get_np_state_ptr())
 
     def test_numpy_standard_exponential(self):
         self._check_exponential(None,
                                 jit_nullary("np.random.standard_exponential"),
-                                np_state_ptr)
+                                get_np_state_ptr())
 
     def _check_paretovariate(self, func, ptr):
         """
@@ -601,12 +605,12 @@ class TestRandom(BaseTest):
         self._check_dist(func, r.paretovariate, [(0.5,), (3.5,)])
 
     def test_random_paretovariate(self):
-        self._check_paretovariate(jit_unary("random.paretovariate"), py_state_ptr)
+        self._check_paretovariate(jit_unary("random.paretovariate"), get_py_state_ptr())
 
     def test_numpy_pareto(self):
         pareto = jit_unary("np.random.pareto")
         fixed_pareto = lambda a: pareto(a) + 1.0
-        self._check_paretovariate(fixed_pareto, np_state_ptr)
+        self._check_paretovariate(fixed_pareto, get_np_state_ptr())
 
     def _check_weibullvariate(self, func2, func1, ptr):
         """
@@ -623,17 +627,17 @@ class TestRandom(BaseTest):
 
     def test_random_weibullvariate(self):
         self._check_weibullvariate(jit_binary("random.weibullvariate"),
-                                   None, py_state_ptr)
+                                   None, get_py_state_ptr())
 
     def test_numpy_weibull(self):
         self._check_weibullvariate(None, jit_unary("np.random.weibull"),
-                                   np_state_ptr)
+                                   get_np_state_ptr())
 
     @tag('important')
     def test_numpy_binomial(self):
         # We follow Numpy's algorithm up to n*p == 30
         binomial = jit_binary("np.random.binomial")
-        r = self._follow_numpy(np_state_ptr, 0)
+        r = self._follow_numpy(get_np_state_ptr(), 0)
         self._check_dist(binomial, r.binomial, [(18, 0.25)])
         # Sanity check many values
         for n in (100, 1000, 10000):
@@ -658,14 +662,14 @@ class TestRandom(BaseTest):
     @tag('important')
     def test_numpy_chisquare(self):
         chisquare = jit_unary("np.random.chisquare")
-        r = self._follow_cpython(np_state_ptr)
+        r = self._follow_cpython(get_np_state_ptr())
         self._check_dist(chisquare,
                          functools.partial(py_chisquare, r),
                          [(1.5,), (2.5,)])
 
     def test_numpy_f(self):
         f = jit_binary("np.random.f")
-        r = self._follow_cpython(np_state_ptr)
+        r = self._follow_cpython(get_np_state_ptr())
         self._check_dist(f, functools.partial(py_f, r),
                          [(0.5, 1.5), (1.5, 0.8)])
 
@@ -693,13 +697,13 @@ class TestRandom(BaseTest):
 
     def test_numpy_gumbel(self):
         gumbel = jit_binary("np.random.gumbel")
-        r = self._follow_numpy(np_state_ptr)
+        r = self._follow_numpy(get_np_state_ptr())
         self._check_dist(gumbel, r.gumbel, [(0.0, 1.0), (-1.5, 3.5)])
 
     def test_numpy_hypergeometric(self):
         # Our implementation follows Numpy's up to nsamples = 10.
         hg = jit_ternary("np.random.hypergeometric")
-        r = self._follow_numpy(np_state_ptr)
+        r = self._follow_numpy(get_np_state_ptr())
         self._check_dist(hg, r.hypergeometric,
                          [(1000, 5000, 10), (5000, 1000, 10)],
                          niters=30)
@@ -716,7 +720,7 @@ class TestRandom(BaseTest):
         self.assertGreaterEqual(np.mean(r), 90.0)
 
     def test_numpy_laplace(self):
-        r = self._follow_numpy(np_state_ptr)
+        r = self._follow_numpy(get_np_state_ptr())
         self._check_dist(jit_binary("np.random.laplace"), r.laplace,
                          [(0.0, 1.0), (-1.5, 3.5)])
         self._check_dist(jit_unary("np.random.laplace"), r.laplace,
@@ -725,7 +729,7 @@ class TestRandom(BaseTest):
 
     @tag('important')
     def test_numpy_logistic(self):
-        r = self._follow_numpy(np_state_ptr)
+        r = self._follow_numpy(get_np_state_ptr())
         self._check_dist(jit_binary("np.random.logistic"), r.logistic,
                          [(0.0, 1.0), (-1.5, 3.5)])
         self._check_dist(jit_unary("np.random.logistic"), r.logistic,
@@ -733,14 +737,14 @@ class TestRandom(BaseTest):
         self._check_dist(jit_nullary("np.random.logistic"), r.logistic, [()])
 
     def test_numpy_logseries(self):
-        r = self._follow_numpy(np_state_ptr)
+        r = self._follow_numpy(get_np_state_ptr())
         logseries = jit_unary("np.random.logseries")
         self._check_dist(logseries, r.logseries,
                          [(0.1,), (0.99,), (0.9999,)],
                          niters=50)
         # Numpy's logseries overflows on 32-bit builds, so instead
         # hardcode Numpy's (correct) output on 64-bit builds.
-        r = self._follow_numpy(np_state_ptr, seed=1)
+        r = self._follow_numpy(get_np_state_ptr(), seed=1)
         self.assertEqual([logseries(0.9999999999999) for i in range(10)],
                          [2022733531, 77296, 30, 52204, 9341294, 703057324,
                           413147702918, 1870715907, 16009330, 738])
@@ -749,7 +753,7 @@ class TestRandom(BaseTest):
         self.assertRaises(ValueError, logseries, 1.1)
 
     def test_numpy_poisson(self):
-        r = self._follow_numpy(np_state_ptr)
+        r = self._follow_numpy(get_np_state_ptr())
         poisson = jit_unary("np.random.poisson")
         # Our implementation follows Numpy's.
         self._check_dist(poisson, r.poisson,
@@ -758,7 +762,7 @@ class TestRandom(BaseTest):
         self.assertRaises(ValueError, poisson, -0.1)
 
     def test_numpy_negative_binomial(self):
-        self._follow_numpy(np_state_ptr, 0)
+        self._follow_numpy(get_np_state_ptr(), 0)
         negbin = jit_binary("np.random.negative_binomial")
         self.assertEqual([negbin(10, 0.9) for i in range(10)],
                          [2, 3, 1, 5, 2, 1, 0, 1, 0, 0])
@@ -778,7 +782,7 @@ class TestRandom(BaseTest):
 
     @tag('important')
     def test_numpy_power(self):
-        r = self._follow_numpy(np_state_ptr)
+        r = self._follow_numpy(get_np_state_ptr())
         power = jit_unary("np.random.power")
         self._check_dist(power, r.power,
                          [(0.1,), (0.5,), (0.9,), (6.0,)])
@@ -786,7 +790,7 @@ class TestRandom(BaseTest):
         self.assertRaises(ValueError, power, -0.1)
 
     def test_numpy_rayleigh(self):
-        r = self._follow_numpy(np_state_ptr)
+        r = self._follow_numpy(get_np_state_ptr())
         rayleigh1 = jit_unary("np.random.rayleigh")
         rayleigh0 = jit_nullary("np.random.rayleigh")
         self._check_dist(rayleigh1, r.rayleigh,
@@ -796,7 +800,7 @@ class TestRandom(BaseTest):
         self.assertRaises(ValueError, rayleigh1, -0.1)
 
     def test_numpy_standard_cauchy(self):
-        r = self._follow_numpy(np_state_ptr)
+        r = self._follow_numpy(get_np_state_ptr())
         cauchy = jit_nullary("np.random.standard_cauchy")
         self._check_dist(cauchy, r.standard_cauchy, [()])
 
@@ -804,14 +808,14 @@ class TestRandom(BaseTest):
         # We use CPython's algorithm for the gamma dist and numpy's
         # for the normal dist.  Standard T calls both so we can't check
         # against either generator's output.
-        r = self._follow_cpython(np_state_ptr)
+        r = self._follow_cpython(get_np_state_ptr())
         standard_t = jit_unary("np.random.standard_t")
         avg = np.mean([standard_t(5) for i in range(5000)])
         # Sanity check
         self.assertLess(abs(avg), 0.5)
 
     def test_numpy_wald(self):
-        r = self._follow_numpy(np_state_ptr)
+        r = self._follow_numpy(get_np_state_ptr())
         wald = jit_binary("np.random.wald")
         self._check_dist(wald, r.wald, [(1.0, 1.0), (2.0, 5.0)])
         self.assertRaises(ValueError, wald, 0.0, 1.0)
@@ -820,7 +824,7 @@ class TestRandom(BaseTest):
         self.assertRaises(ValueError, wald, 1.0, -0.1)
 
     def test_numpy_zipf(self):
-        r = self._follow_numpy(np_state_ptr)
+        r = self._follow_numpy(get_np_state_ptr())
         zipf = jit_unary("np.random.zipf")
         self._check_dist(zipf, r.zipf, [(1.5,), (2.5,)], niters=100)
         for val in (1.0, 0.5, 0.0, -0.1):
@@ -859,11 +863,11 @@ class TestRandom(BaseTest):
 
     @tag('important')
     def test_random_shuffle(self):
-        self._check_shuffle(jit_unary("random.shuffle"), py_state_ptr)
+        self._check_shuffle(jit_unary("random.shuffle"), get_py_state_ptr())
 
     @tag('important')
     def test_numpy_shuffle(self):
-        self._check_shuffle(jit_unary("np.random.shuffle"), np_state_ptr)
+        self._check_shuffle(jit_unary("np.random.shuffle"), get_np_state_ptr())
 
     def _check_startup_randomness(self, func_name, func_args):
         """
@@ -917,7 +921,7 @@ class TestRandomArrays(BaseTest):
         Check returning an array according to a given distribution.
         """
         cfunc = self._compile_array_dist(funcname, len(scalar_args) + 1)
-        r = self._follow_numpy(np_state_ptr)
+        r = self._follow_numpy(get_np_state_ptr())
         pyfunc = getattr(r, funcname)
         for size in (8, (2, 3)):
             args = scalar_args + (size,)

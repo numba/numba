@@ -2,6 +2,14 @@
  * PRNG support.
  */
 
+#ifdef _MSC_VER
+#define HAVE_PTHREAD_ATFORK 0
+#else
+#define HAVE_PTHREAD_ATFORK 1
+#include <pthread.h>
+#endif
+
+
 /* Magic Mersenne Twister constants */
 #define MT_N 624
 #define MT_M 397
@@ -15,10 +23,8 @@ typedef struct {
     unsigned int mt[MT_N];
     int has_gauss;
     double gauss;
+    int is_initialized;
 } rnd_state_t;
-
-NUMBA_EXPORT_DATA(rnd_state_t) numba_py_random_state;
-NUMBA_EXPORT_DATA(rnd_state_t) numba_np_random_state;
 
 /* Some code portions below from CPython's _randommodule.c, some others
    from Numpy's and Jean-Sebastien Roy's randomkit.c. */
@@ -59,6 +65,7 @@ numba_rnd_init(rnd_state_t *state, unsigned int seed)
     state->index = MT_N;
     state->has_gauss = 0;
     state->gauss = 0.0;
+    state->is_initialized = 1;
 }
 
 /* Perturb mt[] with a key array */
@@ -91,6 +98,7 @@ rnd_init_by_array(rnd_state_t *state, unsigned int init_key[], size_t key_length
     state->index = MT_N;
     state->has_gauss = 0;
     state->gauss = 0.0;
+    state->is_initialized = 1;
 }
 
 /* Random-initialize the given state (for use at startup) */
@@ -133,12 +141,153 @@ _numba_rnd_random_seed(rnd_state_t *state)
     return 0;
 }
 
-/* Python-exposed helpers for state management */
+/*
+ * Management of thread-local random state.
+ */
+
+static int rnd_globally_initialized;
+
+static __thread rnd_state_t numba_py_random_state;
+static __thread rnd_state_t numba_np_random_state;
+
+/* Seed the state with random bytes */
+static int
+rnd_seed_with_bytes(rnd_state_t *state, Py_buffer *buf)
+{
+    unsigned int *keys;
+    unsigned char *bytes;
+    size_t i, nkeys;
+
+    nkeys = buf->len / sizeof(unsigned int);
+    keys = (unsigned int *) PyMem_Malloc(nkeys * sizeof(unsigned int));
+    if (keys == NULL) {
+        PyBuffer_Release(buf);
+        return -1;
+    }
+    bytes = (unsigned char *) buf->buf;
+    /* Convert input bytes to int32 keys, without violating alignment
+     * constraints.
+     */
+    for (i = 0; i < nkeys; i++, bytes += 4) {
+        keys[i] = (bytes[3] << 24) + (bytes[2] << 16) +
+                  (bytes[1] << 8) + (bytes[0] << 0);
+    }
+    PyBuffer_Release(buf);
+    rnd_init_by_array(state, keys, nkeys);
+    PyMem_Free(keys);
+    return 0;
+}
+
+#if HAVE_PTHREAD_ATFORK
+/* After a fork(), the child should reseed its random states.
+ * Since only the main thread survives in the child, it's enough to mark
+ * the current thread-local states as uninitialized.
+ */
+static void
+rnd_atfork_child(void)
+{
+    numba_py_random_state.is_initialized = 0;
+    numba_np_random_state.is_initialized = 0;
+}
+#endif
+
+static void
+rnd_global_init(void)
+{
+    #if HAVE_PTHREAD_ATFORK
+    pthread_atfork(NULL, NULL, rnd_atfork_child);
+    #endif
+    rnd_globally_initialized = 1;
+}
+
+/* First-time init a random state */
+static void
+rnd_implicit_init(rnd_state_t *state)
+{
+    /* Initialize with random bytes.  The easiest for us is to
+     * call os.urandom() to get good-quality cross-platform random bytes.
+     */
+    PyObject *module, *bufobj;
+    Py_buffer buf;
+    PyGILState_STATE gilstate = PyGILState_Ensure();
+
+    if (!rnd_globally_initialized)
+        rnd_global_init();
+
+    module = PyImport_ImportModuleNoBlock("os");
+    if (module == NULL)
+        goto error;
+    /* Read as many bytes as necessary to get the full entropy
+     * exploitable by the MT generator.
+     */
+    bufobj = PyObject_CallMethod(module, "urandom", "i",
+                                 (int) (MT_N * sizeof(unsigned int)));
+    Py_DECREF(module);
+    if (bufobj == NULL)
+        goto error;
+    if (PyObject_GetBuffer(bufobj, &buf, PyBUF_SIMPLE))
+        goto error;
+    Py_DECREF(bufobj);
+    if (rnd_seed_with_bytes(state, &buf))
+        goto error;
+    /* state->is_initialized is set now */
+
+    PyGILState_Release(gilstate);
+    return;
+
+error:
+    /* In normal conditions, os.urandom() or PyMem_Malloc() never fails,
+     * and we don't want the caller to deal with errors, so just bail out.
+     */
+    if (PyErr_Occurred())
+        PyErr_Print();
+    Py_FatalError(NULL);
+}
+
+/* Functions returning the thread-local random state pointer.
+ * The LLVM JIT doesn't support thread-local variables so we rely
+ * on the C compiler instead.
+ */
+
+NUMBA_EXPORT_FUNC(rnd_state_t *)
+numba_get_py_random_state(void)
+{
+    rnd_state_t *state = &numba_py_random_state;
+    if (!state->is_initialized)
+        rnd_implicit_init(state);
+    return state;
+}
+
+NUMBA_EXPORT_FUNC(rnd_state_t *)
+numba_get_np_random_state(void)
+{
+    rnd_state_t *state = &numba_np_random_state;
+    if (!state->is_initialized)
+        rnd_implicit_init(state);
+    return state;
+}
+
+
+/*
+ * Python-exposed helpers for state management and testing.
+ */
 static int
 rnd_state_converter(PyObject *obj, rnd_state_t **state)
 {
     *state = (rnd_state_t *) PyLong_AsVoidPtr(obj);
     return (*state != NULL || !PyErr_Occurred());
+}
+
+NUMBA_EXPORT_FUNC(PyObject *)
+_numba_rnd_get_py_state_ptr(PyObject *self)
+{
+    return PyLong_FromVoidPtr(numba_get_py_random_state());
+}
+
+NUMBA_EXPORT_FUNC(PyObject *)
+_numba_rnd_get_np_state_ptr(PyObject *self)
+{
+    return PyLong_FromVoidPtr(numba_get_np_random_state());
 }
 
 NUMBA_EXPORT_FUNC(PyObject *)
@@ -178,6 +327,7 @@ _numba_rnd_set_state(PyObject *self, PyObject *args)
     }
     state->has_gauss = 0;
     state->gauss = 0.0;
+    state->is_initialized = 1;
     Py_RETURN_NONE;
 }
 
@@ -205,37 +355,6 @@ _numba_rnd_get_state(PyObject *self, PyObject *arg)
 }
 
 NUMBA_EXPORT_FUNC(PyObject *)
-_numba_rnd_seed_with_urandom(PyObject *self, PyObject *args)
-{
-    rnd_state_t *state;
-    Py_buffer buf;
-    unsigned int *keys;
-    unsigned char *bytes;
-    size_t i, nkeys;
-
-    if (!PyArg_ParseTuple(args, "O&s*:rnd_seed",
-                          rnd_state_converter, &state, &buf)) {
-        return NULL;
-    }
-    /* Make a copy to avoid alignment issues */
-    nkeys = buf.len / sizeof(unsigned int);
-    keys = (unsigned int *) PyMem_Malloc(nkeys * sizeof(unsigned int));
-    if (keys == NULL) {
-        PyBuffer_Release(&buf);
-        return NULL;
-    }
-    bytes = (unsigned char *) buf.buf;
-    for (i = 0; i < nkeys; i++, bytes += 4) {
-        keys[i] = (bytes[3] << 24) + (bytes[2] << 16) +
-                  (bytes[1] << 8) + (bytes[0] << 0);
-    }
-    PyBuffer_Release(&buf);
-    rnd_init_by_array(state, keys, nkeys);
-    PyMem_Free(keys);
-    Py_RETURN_NONE;
-}
-
-NUMBA_EXPORT_FUNC(PyObject *)
 _numba_rnd_seed(PyObject *self, PyObject *args)
 {
     unsigned int seed;
@@ -243,15 +362,43 @@ _numba_rnd_seed(PyObject *self, PyObject *args)
 
     if (!PyArg_ParseTuple(args, "O&I:rnd_seed",
                           rnd_state_converter, &state, &seed)) {
+        /* rnd_seed_*(bytes-like object) */
+        Py_buffer buf;
+
         PyErr_Clear();
-        return _numba_rnd_seed_with_urandom(self, args);
+        if (!PyArg_ParseTuple(args, "O&s*:rnd_seed",
+                              rnd_state_converter, &state, &buf))
+            return NULL;
+
+        if (rnd_seed_with_bytes(state, &buf))
+            return NULL;
+        else
+            Py_RETURN_NONE;
     }
-    numba_rnd_init(state, seed);
+    else {
+        /* rnd_seed_*(int32) */
+        numba_rnd_init(state, seed);
+        Py_RETURN_NONE;
+    }
+}
+
+NUMBA_EXPORT_FUNC(PyObject *)
+_numba_rnd_reset(PyObject *self, PyObject *args)
+{
+    rnd_state_t *state;
+
+    if (!PyArg_ParseTuple(args, "O&:rnd_reset",
+                          rnd_state_converter, &state))
+        return NULL;
+
+    state->is_initialized = 0;
     Py_RETURN_NONE;
 }
 
-/* Random distribution helpers.
- * Most code straight from Numpy's distributions.c. */
+/*
+ * Random distribution helpers.
+ * Most code straight from Numpy's distributions.c.
+ */
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846264338328

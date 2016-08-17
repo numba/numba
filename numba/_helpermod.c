@@ -77,9 +77,6 @@ build_c_helpers_dict(void)
     declmethod(unpack_slice);
     declmethod(do_raise);
     declmethod(unpickle);
-    declmethod(rnd_shuffle);
-    declmethod(rnd_init);
-    declmethod(poisson_ptrs);
     declmethod(attempt_nocopy_reshape);
     declmethod(get_list_private_data);
     declmethod(set_list_private_data);
@@ -87,6 +84,8 @@ build_c_helpers_dict(void)
     declmethod(get_pyobject_private_data);
     declmethod(set_pyobject_private_data);
     declmethod(reset_pyobject_private_data);
+
+    /* BLAS / LAPACK */
     declmethod(xxgemm);
     declmethod(xxgemv);
     declmethod(xxdot);
@@ -102,9 +101,12 @@ build_c_helpers_dict(void)
     declmethod(xgesv);
     declmethod(xxnrm2);
 
-    
-    declpointer(py_random_state);
-    declpointer(np_random_state);
+    /* PRNG support */
+    declmethod(get_py_random_state);
+    declmethod(get_np_random_state);
+    declmethod(rnd_shuffle);
+    declmethod(rnd_init);
+    declmethod(poisson_ptrs);
 
 #define MATH_UNARY(F, R, A) declmethod(F);
 #define MATH_BINARY(F, R, A, B) declmethod(F);
@@ -152,6 +154,9 @@ build_npymath_exports_dict(void)
 
 static PyMethodDef ext_methods[] = {
     { "rnd_get_state", (PyCFunction) _numba_rnd_get_state, METH_O, NULL },
+    { "rnd_get_py_state_ptr", (PyCFunction) _numba_rnd_get_py_state_ptr, METH_NOARGS, NULL },
+    { "rnd_get_np_state_ptr", (PyCFunction) _numba_rnd_get_np_state_ptr, METH_NOARGS, NULL },
+    { "rnd_reset", (PyCFunction) _numba_rnd_reset, METH_VARARGS, NULL },
     { "rnd_seed", (PyCFunction) _numba_rnd_seed, METH_VARARGS, NULL },
     { "rnd_set_state", (PyCFunction) _numba_rnd_set_state, METH_VARARGS, NULL },
     { "rnd_shuffle", (PyCFunction) _numba_rnd_shuffle, METH_O, NULL },
