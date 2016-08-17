@@ -356,7 +356,10 @@ def from_struct_dtype(dtype):
         raise TypeError("Do not support dtype containing object")
 
     fields = {}
-    for name, (elemdtype, offset) in dtype.fields.items():
+
+    for name, info in dtype.fields.items():
+        # *info* may have 3 element if it has a "title", which can be ignored
+        [elemdtype, offset] = info[:2]
         fields[name] = from_dtype(elemdtype), offset
 
     # Note: dtype.alignment is not consistent.
