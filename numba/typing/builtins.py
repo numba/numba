@@ -652,6 +652,9 @@ class MinMaxBase(AbstractTemplate):
         return self.context.unify_types(*tys)
 
     def generic(self, args, kws):
+        """
+        Resolve a min() or max() call.
+        """
         assert not kws
 
         if not args:
@@ -660,6 +663,9 @@ class MinMaxBase(AbstractTemplate):
             # max(arg) only supported if arg is an iterable
             if isinstance(args[0], types.BaseTuple):
                 tys = list(args[0])
+                if not tys:
+                    raise TypeError("%s() argument is an empty tuple"
+                                    % (self.key.__name__,))
             else:
                 return
         else:

@@ -112,6 +112,10 @@ def max_usecase2(x, y):
 def max_usecase3(x):
     return max(x)
 
+def max_usecase4():
+    return max(())
+
+
 def min_usecase1(x, y):
     return min(x, y)
 
@@ -120,6 +124,9 @@ def min_usecase2(x, y):
 
 def min_usecase3(x):
     return min(x)
+
+def min_usecase4():
+    return min(())
 
 
 def oct_usecase(x):
@@ -662,6 +669,21 @@ class TestBuiltins(TestCase):
     def test_min_unary_non_iterable_npm(self):
         with self.assertTypingError():
             self.check_min_max_unary_non_iterable(min_usecase3)
+
+    # Test that max(()) and min(()) fail
+
+    def check_min_max_empty_tuple(self, pyfunc, func_name):
+        with self.assertTypingError() as raises:
+            compile_isolated(pyfunc, (), flags=no_pyobj_flags)
+        self.assertIn("%s() argument is an empty tuple" % func_name,
+                      str(raises.exception))
+
+    def test_max_empty_tuple(self):
+        self.check_min_max_empty_tuple(max_usecase4, "max")
+
+    def test_min_empty_tuple(self):
+        self.check_min_max_empty_tuple(min_usecase4, "min")
+
 
     def test_oct(self, flags=enable_pyobj_flags):
         pyfunc = oct_usecase
