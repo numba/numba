@@ -147,6 +147,7 @@ _numba_rnd_random_seed(rnd_state_t *state)
 
 static int rnd_globally_initialized;
 
+/* XXX __declspec(thread) for MSVC? */
 static __thread rnd_state_t numba_py_random_state;
 static __thread rnd_state_t numba_np_random_state;
 
