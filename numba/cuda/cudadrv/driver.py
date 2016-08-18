@@ -431,14 +431,15 @@ class _PendingDeallocs(object):
     Pending deallocations of a context (or device since we are using the primary
     context).
     """
-    MAX_PENDING_DEALLOCS_COUNT = config.CUDA_DEALLOCS_COUNT
-    PENDING_DEALLOCS_RATIO = config.CUDA_DEALLOCS_RATIO
-
     def __init__(self, capacity):
         self._cons = deque()
         self._disable_count = 0
         self._size = 0
-        self._max_pending_bytes = int(capacity * self.PENDING_DEALLOCS_RATIO)
+        self._memory_capacity = capacity
+
+    @property
+    def _max_pending_bytes(self):
+        return int(self._memory_capacity * config.CUDA_DEALLOCS_RATIO)
 
     def add_item(self, dtor, handle, size=_SizeNotSet):
         """
@@ -451,7 +452,7 @@ class _PendingDeallocs(object):
         """
         self._cons.append((dtor, handle, size))
         self._size += int(size)
-        if (len(self._cons) > self.MAX_PENDING_DEALLOCS_COUNT or
+        if (len(self._cons) > config.CUDA_DEALLOCS_COUNT or
                 self._size > self._max_pending_bytes):
             self.clear()
 
