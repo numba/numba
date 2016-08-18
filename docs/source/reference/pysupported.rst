@@ -171,6 +171,7 @@ The following built-in functions are supported:
 * :func:`abs`
 * :class:`bool`
 * :class:`complex`
+* :func:`divmod`
 * :func:`enumerate`
 * :class:`float`
 * :class:`int`: only the one-argument form
