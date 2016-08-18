@@ -86,3 +86,9 @@ def jit(fn_or_sig=None, device=False, debug=False, argtypes=None, inline=False, 
     return FakeCUDAKernel(fn_or_sig, device=device)
 
 autojit = jit
+
+
+@contextmanager
+def defer_cleanup():
+    # No effect for simulator
+    yield
