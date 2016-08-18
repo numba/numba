@@ -78,6 +78,8 @@ def get_state_ptr(context, builder, name):
     func_name = "numba_get_%s_random_state" % name
     fnty = ir.FunctionType(rnd_state_ptr_t, ())
     fn = builder.module.get_or_insert_function(fnty, func_name)
+    # These two attributes allow LLVM to hoist the function call
+    # outside of loops.
     fn.attributes.add('readnone')
     fn.attributes.add('nounwind')
     return builder.call(fn, ())

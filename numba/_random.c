@@ -154,10 +154,9 @@ static int rnd_globally_initialized;
 #ifdef _MSC_VER
 #define THREAD_LOCAL(ty) __declspec(thread) ty
 #else
+/* Non-standard C99 extension that's understood by gcc and clang */
 #define THREAD_LOCAL(ty) __thread ty
 #endif
-
-// #define THREAD_LOCAL(ty) ty
 
 static THREAD_LOCAL(rnd_state_t) numba_py_random_state;
 static THREAD_LOCAL(rnd_state_t) numba_np_random_state;
@@ -207,9 +206,9 @@ static void
 rnd_ensure_global_init(void)
 {
     if (!rnd_globally_initialized) {
-        #if HAVE_PTHREAD_ATFORK
+#if HAVE_PTHREAD_ATFORK
         pthread_atfork(NULL, NULL, rnd_atfork_child);
-        #endif
+#endif
         rnd_globally_initialized = 1;
     }
 }
