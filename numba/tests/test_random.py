@@ -3,10 +3,12 @@ from __future__ import print_function
 import collections
 import functools
 import math
+import multiprocessing
 import os
 import random
 import subprocess
 import sys
+import threading
 
 import numpy as np
 
@@ -1271,6 +1273,139 @@ class TestRandomMultinomial(BaseTest):
         self.assertEqual(res.shape[:-1], k)
         for sample in res.reshape((-1, res.shape[-1])):
             self._check_sample(n, pvals, sample)
+
+
+
+@jit(nopython=True, nogil=True)
+def py_extract_randomness(seed, out):
+    if seed != 0:
+        random.seed(seed)
+    for i in range(out.size):
+        out[i] = random.getrandbits(32)
+
+_randint_limit = 1 << 32
+
+@jit(nopython=True, nogil=True)
+def np_extract_randomness(seed, out):
+    if seed != 0:
+        np.random.seed(seed)
+    s = 0
+    for i in range(out.size):
+        out[i] = np.random.randint(_randint_limit)
+
+
+
+class TestThreads(TestCase):
+    """
+    Check the PRNG behaves well with threads.
+    """
+
+    # Enough iterations for:
+    # 1. Mersenne-Twister state shuffles to occur (once every 624)
+    # 2. Race conditions to be plausible
+    # 3. Nice statistical properties to emerge
+    _extract_iterations = 100000
+
+    def setUp(self):
+        # Warm up, to avoid compiling in the threads
+        args = (42, self._get_output(1))
+        py_extract_randomness(*args)
+        np_extract_randomness(*args)
+
+    def _get_output(self, size):
+        return np.zeros(size, dtype=np.uint32)
+
+    def check_output(self, out):
+        """
+        Check statistical properties of output.
+        """
+        # Output should follow a uniform distribution in [0, 1<<32)
+        expected_avg = 1 << 31
+        expected_std = (1 << 32) / np.sqrt(12)
+        rtol = 0.05  # given enough iterations
+        np.testing.assert_allclose(out.mean(), expected_avg, rtol=rtol)
+        np.testing.assert_allclose(out.std(), expected_std, rtol=rtol)
+
+    def check_thread_outputs(self, results, same_expected):
+        # Outputs should have the expected statistical properties
+        # (an unitialized PRNG or a PRNG whose internal state was
+        #  corrupted by a race condition could produce bogus randomness)
+        for out in results:
+            self.check_output(out)
+
+        # Check all threads gave either the same sequence or
+        # distinct sequences
+        if same_expected:
+            expected_distinct = 1
+        else:
+            expected_distinct = len(results)
+
+        heads = {tuple(out[:5]) for out in results}
+        tails = {tuple(out[-5:]) for out in results}
+        sums = {out.sum() for out in results}
+        self.assertEqual(len(heads), expected_distinct, heads)
+        self.assertEqual(len(tails), expected_distinct, tails)
+        self.assertEqual(len(sums), expected_distinct, sums)
+
+    def extract_in_threads(self, nthreads, extract_randomness, seed):
+        """
+        Run *nthreads* threads extracting randomness with the given *seed*
+        (no seeding if 0).
+        """
+        results = [self._get_output(self._extract_iterations)
+                   for i in range(nthreads + 1)]
+
+        def target(i):
+            # The PRNG will be seeded in thread
+            extract_randomness(seed=seed, out=results[i])
+
+        threads = [threading.Thread(target=target, args=(i,))
+                   for i in range(nthreads)]
+
+        for th in threads:
+            th.start()
+        # Exercise main thread as well
+        target(nthreads)
+        for th in threads:
+            th.join()
+
+        return results
+
+    def check_thread_safety(self, extract_randomness):
+        """
+        When initializing the PRNG the same way, each thread
+        should produce the same sequence of random numbers,
+        using independent states, regardless of parallel
+        execution.
+        """
+        # Note the seed value doesn't matter, as long as it's
+        # the same for all threads
+        results = self.extract_in_threads(15, extract_randomness, seed=42)
+
+        # All threads gave the same sequence
+        self.check_thread_outputs(results, same_expected=True)
+
+    def check_implicit_initialization(self, extract_randomness):
+        """
+        The PRNG in new threads should be implicitly initialized with
+        system entropy, if seed() wasn't called.
+        """
+        results = self.extract_in_threads(4, extract_randomness, seed=0)
+
+        # All threads gave a different, valid random sequence
+        self.check_thread_outputs(results, same_expected=False)
+
+    def test_py_thread_safety(self):
+        self.check_thread_safety(py_extract_randomness)
+
+    def test_np_thread_safety(self):
+        self.check_thread_safety(np_extract_randomness)
+
+    def test_py_implicit_initialization(self):
+        self.check_implicit_initialization(py_extract_randomness)
+
+    def test_np_implicit_initialization(self):
+        self.check_implicit_initialization(np_extract_randomness)
 
 
 if __name__ == "__main__":

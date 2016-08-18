@@ -17,9 +17,13 @@
 #define MT_UPPER_MASK 0x80000000U
 #define MT_LOWER_MASK 0x7fffffffU
 
-/* unsigned int is sufficient on modern machines as we only need 32 bits */
+/*
+ * Note this structure is accessed in numba.targets.randomimpl,
+ * any changes here should be reflected there too.
+ */
 typedef struct {
     int index;
+    /* unsigned int is sufficient on modern machines as we only need 32 bits */
     unsigned int mt[MT_N];
     int has_gauss;
     double gauss;
@@ -147,9 +151,16 @@ _numba_rnd_random_seed(rnd_state_t *state)
 
 static int rnd_globally_initialized;
 
-/* XXX __declspec(thread) for MSVC? */
-static __thread rnd_state_t numba_py_random_state;
-static __thread rnd_state_t numba_np_random_state;
+#ifdef _MSC_VER
+#define THREAD_LOCAL(ty) __declspec(thread) ty
+#else
+#define THREAD_LOCAL(ty) __thread ty
+#endif
+
+// #define THREAD_LOCAL(ty) ty
+
+static THREAD_LOCAL(rnd_state_t) numba_py_random_state;
+static THREAD_LOCAL(rnd_state_t) numba_np_random_state;
 
 /* Seed the state with random bytes */
 static int
@@ -205,8 +216,9 @@ rnd_global_init(void)
 static void
 rnd_implicit_init(rnd_state_t *state)
 {
-    /* Initialize with random bytes.  The easiest for us is to
-     * call os.urandom() to get good-quality cross-platform random bytes.
+    /* Initialize with random bytes.  The easiest way to get good-quality
+     * cross-platform random bytes is still to call os.urandom()
+     * using the Python interpreter...
      */
     PyObject *module, *bufobj;
     Py_buffer buf;
@@ -237,7 +249,7 @@ rnd_implicit_init(rnd_state_t *state)
     return;
 
 error:
-    /* In normal conditions, os.urandom() or PyMem_Malloc() never fails,
+    /* In normal conditions, os.urandom() and PyMem_Malloc() shouldn't fail,
      * and we don't want the caller to deal with errors, so just bail out.
      */
     if (PyErr_Occurred())
