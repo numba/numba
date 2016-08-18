@@ -60,7 +60,7 @@ def int_mul_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def int_divmod(context, builder, ty, x, y):
+def int_divmod_signed(context, builder, ty, x, y):
     """
     Reference Objects/intobject.c
     xdivy = x / y;
@@ -116,12 +116,23 @@ def int_divmod(context, builder, ty, x, y):
     return builder.load(resdiv), builder.load(resmod)
 
 
-@lower_builtin(divmod, types.Integer, types.Integer)
-def int_divmod_impl(context, builder, sig, args):
+def int_divmod(context, builder, ty, x, y):
+    """
+    Integer divmod(x, y).  The caller must ensure that y != 0.
+    """
+    if ty.signed:
+        return int_divmod_signed(context, builder, ty, x, y)
+    else:
+        return builder.udiv(x, y), builder.urem(x, y)
+
+
+def _int_divmod_impl(context, builder, sig, args, zerodiv_message):
     va, vb = args
     ta, tb = sig.args
 
-    ty = sig.return_type.dtype
+    ty = sig.return_type
+    if isinstance(ty, types.UniTuple):
+        ty = ty.dtype
     a = context.cast(builder, va, ta, ty)
     b = context.cast(builder, vb, tb, ty)
     quot = cgutils.alloca_once(builder, a.type, name="quot")
@@ -131,7 +142,7 @@ def int_divmod_impl(context, builder, sig, args):
                          ) as (if_zero, if_non_zero):
         with if_zero:
             if not context.error_model.fp_zero_division(
-                builder, ("integer division by zero",)):
+                builder, (zerodiv_message,)):
                 # No exception raised => return 0
                 # XXX We should also set the FPU exception status, but
                 # there's no easy way to do that from LLVM.
@@ -142,6 +153,14 @@ def int_divmod_impl(context, builder, sig, args):
             builder.store(q, quot)
             builder.store(r, rem)
 
+    return quot, rem
+
+
+@lower_builtin(divmod, types.Integer, types.Integer)
+def int_divmod_impl(context, builder, sig, args):
+    quot, rem = _int_divmod_impl(context, builder, sig, args,
+                                 "integer divmod by zero")
+
     return cgutils.pack_array(builder,
                               (builder.load(quot), builder.load(rem)))
 
@@ -149,31 +168,9 @@ def int_divmod_impl(context, builder, sig, args):
 @lower_builtin('/?', types.Integer, types.Integer)
 @lower_builtin('//', types.Integer, types.Integer)
 def int_floordiv_impl(context, builder, sig, args):
-    [va, vb] = args
-    [ta, tb] = sig.args
-    ty = sig.return_type
-    a = context.cast(builder, va, ta, ty)
-    b = context.cast(builder, vb, tb, ty)
-    res = cgutils.alloca_once(builder, a.type)
-
-    with builder.if_else(cgutils.is_scalar_zero(builder, b), likely=False
-                         ) as (if_zero, if_non_zero):
-        with if_zero:
-            if not context.error_model.fp_zero_division(
-                builder, ("integer division by zero",)):
-                # No exception raised => return 0
-                # XXX We should also set the FPU exception status, but
-                # there's no easy way to do that from LLVM.
-                builder.store(b, res)
-        with if_non_zero:
-            if sig.return_type.signed:
-                quot, _ = int_divmod(context, builder, ty, a, b)
-            else:
-                quot = builder.udiv(a, b)
-            builder.store(quot, res)
-
-    return impl_ret_untracked(context, builder, sig.return_type,
-                              builder.load(res))
+    quot, rem = _int_divmod_impl(context, builder, sig, args,
+                                 "integer division by zero")
+    return builder.load(quot)
 
 
 @lower_builtin('/', types.Integer, types.Integer)
@@ -190,31 +187,9 @@ def int_truediv_impl(context, builder, sig, args):
 
 @lower_builtin('%', types.Integer, types.Integer)
 def int_rem_impl(context, builder, sig, args):
-    [va, vb] = args
-    [ta, tb] = sig.args
-    ty = sig.return_type
-    a = context.cast(builder, va, ta, ty)
-    b = context.cast(builder, vb, tb, ty)
-    res = cgutils.alloca_once(builder, a.type)
-
-    with builder.if_else(cgutils.is_scalar_zero(builder, b), likely=False
-                         ) as (if_zero, if_non_zero):
-        with if_zero:
-            if not context.error_model.fp_zero_division(
-                builder, ("modulo by zero",)):
-                # No exception raised => return 0
-                # XXX We should also set the FPU exception status, but
-                # there's no easy way to do that from LLVM.
-                builder.store(b, res)
-        with if_non_zero:
-            if sig.return_type.signed:
-                _, rem = int_divmod(context, builder, ty, a, b)
-            else:
-                rem = builder.urem(a, b)
-            builder.store(rem, res)
-
-    return impl_ret_untracked(context, builder, sig.return_type,
-                              builder.load(res))
+    quot, rem = _int_divmod_impl(context, builder, sig, args,
+                                 "integer modulo by zero")
+    return builder.load(rem)
 
 
 def _get_power_zerodiv_return(context, return_type):

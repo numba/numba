@@ -354,7 +354,6 @@ class TestBuiltins(TestCase):
         for x, y, in itertools.product(numerators, denominators):
             expected_quot, expected_rem = pyfunc(x, y)
             quot, rem = cfunc(x, y)
-            print(x, y, "->", quot, expected_quot, rem, expected_rem)
             f = truncate_result
             self.assertPreciseEqual((f(quot), f(rem)),
                                     (f(expected_quot), f(expected_rem)))
@@ -380,7 +379,6 @@ class TestBuiltins(TestCase):
         for x, y, in itertools.product(numerators, denominators):
             expected_quot, expected_rem = pyfunc(x, y)
             quot, rem = cfunc(x, y)
-            print(x, y, "->", quot, expected_quot, rem, expected_rem)
             self.assertPreciseEqual((quot, rem), (expected_quot, expected_rem))
 
         for x in numerators:
