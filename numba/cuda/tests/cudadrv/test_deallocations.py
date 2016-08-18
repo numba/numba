@@ -1,3 +1,5 @@
+from __future__ import division
+
 import numpy as np
 
 from numba import cuda, config
@@ -21,11 +23,17 @@ class TestDeallocation(unittest.TestCase):
 
     def test_max_pending_bytes(self):
         # get deallocation manager and flush it
-        deallocs = cuda.current_context().deallocations
+        ctx = cuda.current_context()
+        deallocs = ctx.deallocations
         deallocs.clear()
         self.assertEqual(len(deallocs), 0)
 
-        max_pending = deallocs._max_pending_bytes
+        mi = ctx.get_memory_info()
+
+        max_pending = 10**6  # 1MB
+        # change to a smaller ratio
+        config.CUDA_DEALLOCS_RATIO = max_pending / mi.total
+        self.assertEqual(deallocs._max_pending_bytes, max_pending)
 
         # deallocate half the max size
         cuda.to_device(np.ones(max_pending // 2, dtype=np.int8))
