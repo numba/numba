@@ -196,3 +196,80 @@ def loop_lifting(interp, typingctx, targetctx, flags, locals):
 
     return main, loops
 
+
+def canonicalize_cfg_single_backedge(blocks):
+    """
+    Rewrite loops that have multiple backedges.
+    """
+    cfg = compute_cfg_from_blocks(blocks)
+    newblocks = blocks.copy()
+
+    def new_block_id():
+        return max(newblocks.keys()) + 1
+
+    def has_multiple_backedges(loop):
+        count = 0
+        for k in loop.body:
+            blk = blocks[k]
+            edges = blk.terminator.get_targets()
+            # is a backedge?
+            if loop.header in edges:
+                count += 1
+                if count > 1:
+                    # early exit
+                    return True
+        return False
+
+    def yield_loops_with_multiple_backedges():
+        for lp in cfg.loops().values():
+            if has_multiple_backedges(lp):
+                yield lp
+
+    def replace_target(term, src, dst):
+        def replace(target):
+            return (dst if target == src else target)
+
+        if isinstance(term, ir.Branch):
+            return ir.Branch(cond=term.cond,
+                             truebr=replace(term.truebr),
+                             falsebr=replace(term.falsebr),
+                             loc=term.loc)
+        elif isinstance(term, ir.Jump):
+            return ir.Jump(target=replace(term.target), loc=term.loc)
+        else:
+            assert not term.get_targets()
+            return term
+
+    def rewrite_single_backedge(loop):
+        """
+        Add new tail block that gathers all the backedges
+        """
+        header = loop.header
+        tailkey = new_block_id()
+        for blkkey in loop.body:
+            blk = newblocks[blkkey]
+            if header in blk.terminator.get_targets():
+                newblk = blk.copy()
+                # rewrite backedge into jumps to new tail block
+                newblk.body[-1] = replace_target(blk.terminator, header,
+                                                 tailkey)
+                newblocks[blkkey] = newblk
+        # create new tail block
+        entryblk = newblocks[header]
+        tailblk = ir.Block(scope=entryblk.scope, loc=entryblk.loc)
+        # add backedge
+        tailblk.append(ir.Jump(target=header, loc=tailblk.loc))
+        newblocks[tailkey] = tailblk
+
+    for loop in yield_loops_with_multiple_backedges():
+        rewrite_single_backedge(loop)
+
+    return newblocks
+
+
+def canonicalize_cfg(blocks):
+    """
+    Rewrite the given blocks to canonicalize the CFG.
+    Returns a new dictionary of blocks.
+    """
+    return canonicalize_cfg_single_backedge(blocks)
