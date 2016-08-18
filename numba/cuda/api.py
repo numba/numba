@@ -291,7 +291,7 @@ def defer_cleanup():
         with defer_cleanup():
             # all cleanup is deferred in here
             do_speed_critical_code()
-        # cleanup will occur here
+        # cleanup can occur here
 
     Note: this context manager can be nested.
     """

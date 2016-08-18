@@ -89,6 +89,31 @@ class TestDeferCleanup(unittest.TestCase):
         deallocs.clear()
         self.assertEqual(len(deallocs), 0)
 
+    def test_exception(self):
+        harr = np.arange(5)
+        darr1 = cuda.to_device(harr)
+        deallocs = cuda.current_context().deallocations
+        deallocs.clear()
+        self.assertEqual(len(deallocs), 0)
+
+        class CustomError(Exception):
+            pass
+
+        with self.assertRaises(CustomError):
+            with cuda.defer_cleanup():
+                darr2 = cuda.to_device(harr)
+                del darr2
+                self.assertEqual(len(deallocs), 1)
+                deallocs.clear()
+                self.assertEqual(len(deallocs), 1)
+                raise CustomError
+        deallocs.clear()
+        self.assertEqual(len(deallocs), 0)
+        del darr1
+        self.assertEqual(len(deallocs), 1)
+        deallocs.clear()
+        self.assertEqual(len(deallocs), 0)
+
 
 class TestDeferCleanupAvail(unittest.TestCase):
     def test_context_manager(self):

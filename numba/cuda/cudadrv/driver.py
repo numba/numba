@@ -474,9 +474,11 @@ class _PendingDeallocs(object):
         This can be nested.
         """
         self._disable_count += 1
-        yield
-        self._disable_count -= 1
-        assert self._disable_count >= 0
+        try:
+            yield
+        finally:
+            self._disable_count -= 1
+            assert self._disable_count >= 0
 
     @property
     def is_disabled(self):
