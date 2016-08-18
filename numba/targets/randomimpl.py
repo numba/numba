@@ -36,17 +36,20 @@ _pid = None
 
 def random_init():
     """
-    Reset the random states.
+    Routine ensuring the PRNG is properly initialized.
     """
     global _pid
     if _pid != os.getpid():
-        # Make sure the states are marked unitialized.
+        _helperlib.rnd_global_init()
+        # Note this only marks the states unitialized.
         # Actual initialization with system entropy, if needed,
         # is done lazily (see rnd_implicit_init() in _random.c).
         for state_ptr in [_helperlib.rnd_get_py_state_ptr(),
                           _helperlib.rnd_get_np_state_ptr()]:
             _helperlib.rnd_reset(state_ptr)
         _pid = os.getpid()
+
+random_init()
 
 
 # This is the same struct as rnd_state_t in _random.c.

@@ -1295,10 +1295,7 @@ def np_extract_randomness(seed, out):
 
 
 
-class TestThreads(TestCase):
-    """
-    Check the PRNG behaves well with threads.
-    """
+class ConcurrencyBaseTest(TestCase):
 
     # Enough iterations for:
     # 1. Mersenne-Twister state shuffles to occur (once every 624)
@@ -1326,7 +1323,7 @@ class TestThreads(TestCase):
         np.testing.assert_allclose(out.mean(), expected_avg, rtol=rtol)
         np.testing.assert_allclose(out.std(), expected_std, rtol=rtol)
 
-    def check_thread_outputs(self, results, same_expected):
+    def check_several_outputs(self, results, same_expected):
         # Outputs should have the expected statistical properties
         # (an unitialized PRNG or a PRNG whose internal state was
         #  corrupted by a race condition could produce bogus randomness)
@@ -1346,6 +1343,12 @@ class TestThreads(TestCase):
         self.assertEqual(len(heads), expected_distinct, heads)
         self.assertEqual(len(tails), expected_distinct, tails)
         self.assertEqual(len(sums), expected_distinct, sums)
+
+
+class TestThreads(ConcurrencyBaseTest):
+    """
+    Check the PRNG behaves well with threads.
+    """
 
     def extract_in_threads(self, nthreads, extract_randomness, seed):
         """
@@ -1383,7 +1386,7 @@ class TestThreads(TestCase):
         results = self.extract_in_threads(15, extract_randomness, seed=42)
 
         # All threads gave the same sequence
-        self.check_thread_outputs(results, same_expected=True)
+        self.check_several_outputs(results, same_expected=True)
 
     def check_implicit_initialization(self, extract_randomness):
         """
@@ -1393,13 +1396,84 @@ class TestThreads(TestCase):
         results = self.extract_in_threads(4, extract_randomness, seed=0)
 
         # All threads gave a different, valid random sequence
-        self.check_thread_outputs(results, same_expected=False)
+        self.check_several_outputs(results, same_expected=False)
 
     def test_py_thread_safety(self):
         self.check_thread_safety(py_extract_randomness)
 
     def test_np_thread_safety(self):
         self.check_thread_safety(np_extract_randomness)
+
+    def test_py_implicit_initialization(self):
+        self.check_implicit_initialization(py_extract_randomness)
+
+    def test_np_implicit_initialization(self):
+        self.check_implicit_initialization(np_extract_randomness)
+
+
+@unittest.skipIf(os.name == 'nt', "Windows is not affected by fork() issues")
+class TestProcesses(ConcurrencyBaseTest):
+    """
+    Check the PRNG behaves well in child processes.
+    """
+
+    # Avoid nested multiprocessing AssertionError
+    # ("daemonic processes are not allowed to have children")
+    _numba_parallel_test_ = False
+
+
+    def extract_in_processes(self, nprocs, extract_randomness):
+        """
+        Run *nprocs* processes extracting randomness
+        without explicit seeding.
+        """
+        q = multiprocessing.Queue()
+        results = []
+
+        def target_inner():
+            out = self._get_output(self._extract_iterations)
+            extract_randomness(seed=0, out=out)
+            return out
+
+        def target():
+            try:
+                out = target_inner()
+                q.put(out)
+            except Exception as e:
+                # Ensure an exception in a child gets reported
+                # in the parent.
+                q.put(e)
+                raise
+
+        procs = [multiprocessing.Process(target=target)
+                 for i in range(nprocs)]
+        for p in procs:
+            p.start()
+        # Need to dequeue before joining, otherwise the large size of the
+        # enqueued objects will lead to deadlock.
+        for i in range(nprocs):
+            results.append(q.get(timeout=5))
+        for p in procs:
+            p.join()
+
+        # Exercise parent process as well; this will detect if the
+        # same state was reused for one of the children.
+        results.append(target_inner())
+        for res in results:
+            if isinstance(res, Exception):
+                self.fail("Exception in child: %s" % (res,))
+
+        return results
+
+    def check_implicit_initialization(self, extract_randomness):
+        """
+        The PRNG in new processes should be implicitly initialized
+        with system entropy, to avoid reproducing the same sequences.
+        """
+        results = self.extract_in_processes(2, extract_randomness)
+
+        # All processes gave a different, valid random sequence
+        self.check_several_outputs(results, same_expected=False)
 
     def test_py_implicit_initialization(self):
         self.check_implicit_initialization(py_extract_randomness)

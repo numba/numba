@@ -204,12 +204,14 @@ rnd_atfork_child(void)
 #endif
 
 static void
-rnd_global_init(void)
+rnd_ensure_global_init(void)
 {
-    #if HAVE_PTHREAD_ATFORK
-    pthread_atfork(NULL, NULL, rnd_atfork_child);
-    #endif
-    rnd_globally_initialized = 1;
+    if (!rnd_globally_initialized) {
+        #if HAVE_PTHREAD_ATFORK
+        pthread_atfork(NULL, NULL, rnd_atfork_child);
+        #endif
+        rnd_globally_initialized = 1;
+    }
 }
 
 /* First-time init a random state */
@@ -224,8 +226,7 @@ rnd_implicit_init(rnd_state_t *state)
     Py_buffer buf;
     PyGILState_STATE gilstate = PyGILState_Ensure();
 
-    if (!rnd_globally_initialized)
-        rnd_global_init();
+    rnd_ensure_global_init();
 
     module = PyImport_ImportModuleNoBlock("os");
     if (module == NULL)
@@ -405,6 +406,13 @@ _numba_rnd_reset(PyObject *self, PyObject *args)
         return NULL;
 
     state->is_initialized = 0;
+    Py_RETURN_NONE;
+}
+
+NUMBA_EXPORT_FUNC(PyObject *)
+_numba_rnd_global_init(PyObject *self)
+{
+    rnd_ensure_global_init();
     Py_RETURN_NONE;
 }
 
