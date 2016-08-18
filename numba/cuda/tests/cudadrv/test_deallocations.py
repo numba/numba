@@ -31,21 +31,26 @@ class TestDeallocation(unittest.TestCase):
         mi = ctx.get_memory_info()
 
         max_pending = 10**6  # 1MB
-        # change to a smaller ratio
-        config.CUDA_DEALLOCS_RATIO = max_pending / mi.total
-        self.assertEqual(deallocs._max_pending_bytes, max_pending)
+        old_ratio = config.CUDA_DEALLOCS_RATIO
+        try:
+            # change to a smaller ratio
+            config.CUDA_DEALLOCS_RATIO = max_pending / mi.total
+            self.assertEqual(deallocs._max_pending_bytes, max_pending)
 
-        # deallocate half the max size
-        cuda.to_device(np.ones(max_pending // 2, dtype=np.int8))
-        self.assertEqual(len(deallocs), 1)
+            # deallocate half the max size
+            cuda.to_device(np.ones(max_pending // 2, dtype=np.int8))
+            self.assertEqual(len(deallocs), 1)
 
-        # deallocate another remaining
-        cuda.to_device(np.ones(max_pending - deallocs._size, dtype=np.int8))
-        self.assertEqual(len(deallocs), 2)
+            # deallocate another remaining
+            cuda.to_device(np.ones(max_pending - deallocs._size, dtype=np.int8))
+            self.assertEqual(len(deallocs), 2)
 
-        # another byte to trigger .clear()
-        cuda.to_device(np.ones(1, dtype=np.int8))
-        self.assertEqual(len(deallocs), 0)
+            # another byte to trigger .clear()
+            cuda.to_device(np.ones(1, dtype=np.int8))
+            self.assertEqual(len(deallocs), 0)
+        finally:
+            # restore old ratio
+            config.CUDA_DEALLOCS_RATIO = old_ratio
 
 
 @skip_on_cudasim("defer_cleanup has no effect in CUDASIM")
