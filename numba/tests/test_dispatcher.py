@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import errno
 import imp
+import multiprocessing
 import os
 import shutil
 import stat
@@ -893,6 +894,31 @@ class TestCache(BaseCacheTest):
         # Run a second time and check caching
         err = execute_with_input()
         self.assertEqual(err.strip(), "cache hits = 1")
+
+
+class TestMultiprocessCache(BaseCacheTest):
+
+    # Nested multiprocessing.Pool raises AssertionError:
+    # "daemonic processes are not allowed to have children"
+    _numba_parallel_test_ = False
+
+    here = os.path.dirname(__file__)
+    usecases_file = os.path.join(here, "cache_usecases.py")
+    modname = "dispatcher_caching_test_fodder"
+
+    def test_multiprocessing(self):
+        # Check caching works from multiple processes at once (#2028)
+        mod = self.import_module()
+        # Calling a pure Python caller of the JIT-compiled function is
+        # necessary to reproduce the issue.
+        f = mod.simple_usecase_caller
+        n = 3
+        pool = multiprocessing.Pool(n)
+        try:
+            res = sum(pool.imap(f, range(n)))
+        finally:
+            pool.close()
+        self.assertEqual(res, n * (n - 1) // 2)
 
 
 if __name__ == '__main__':
