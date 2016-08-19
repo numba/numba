@@ -352,6 +352,13 @@ class ArrayAttribute(AttributeTemplate):
         if ary.ndim == 1:
             return signature(types.none)
 
+    @bound_function("array.argsort")
+    def resolve_argsort(self, ary, args, kws):
+        assert not args
+        assert not kws
+        if ary.ndim == 1:
+            return signature(types.Array(types.intp, 1, 'C'))
+
     @bound_function("array.view")
     def resolve_view(self, ary, args, kws):
         from .npydecl import _parse_dtype
