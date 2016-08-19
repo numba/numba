@@ -213,7 +213,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         """Disable the compilation of new signatures at call time.
         """
         # If disabling compilation then there must be at least one signature
-        assert val or len(self.signatures) > 0
+        assert (not val) or len(self.signatures) > 0
         self._can_compile = not val
 
     def add_overload(self, cres):
