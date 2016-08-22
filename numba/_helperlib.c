@@ -384,7 +384,7 @@ numba_ndarray_new(int nd,
 
 
 /*
- * Handle reshaping of zero-sides array.
+ * Handle reshaping of zero-sized array.
  * See numba_attempt_nocopy_reshape() below.
  */
 static int
