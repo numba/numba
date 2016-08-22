@@ -83,9 +83,10 @@ def int_divmod_signed(context, builder, ty, x, y):
     ZERO = y.type(0)
     ONE = y.type(1)
 
-    # NOTE: On x86 at least, dividing the smallest representable integer
-    # by -1 causes a SIFGPE (division overflow), causing the process
-    # to crash.  We return 0, 0 instead (more or less like Numpy).
+    # NOTE: On x86 at least, dividing the lowest representable integer
+    # (e.g. 0x80000000 for int32) by -1 causes a SIFGPE (division overflow),
+    # causing the process to crash.
+    # We return 0, 0 instead (more or less like Numpy).
 
     resdiv = cgutils.alloca_once_value(builder, ZERO)
     resmod = cgutils.alloca_once_value(builder, ZERO)
