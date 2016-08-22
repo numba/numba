@@ -585,8 +585,9 @@ def _loop_nest(builder, shape, intp):
 
 def pack_array(builder, values, ty=None):
     """
-    Pack an array of values.  *ty* should be given if the array may be empty,
-    in which case the type can't be inferred from the values.
+    Pack a sequence of values in a LLVM array.  *ty* should be given
+    if the array may be empty, in which case the type can't be inferred
+    from the values.
     """
     n = len(values)
     if ty is None:

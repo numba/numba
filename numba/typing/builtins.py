@@ -213,6 +213,12 @@ class BinOpFloorDiv(ConcreteTemplate):
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
 
+@infer_global(divmod)
+class DivMod(ConcreteTemplate):
+    _tys = machine_ints + sorted(types.real_domain)
+    cases = [signature(types.UniTuple(ty, 2), ty, ty) for ty in _tys]
+
+
 @infer
 class BinOpPower(ConcreteTemplate):
     key = "**"

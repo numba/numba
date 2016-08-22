@@ -81,36 +81,6 @@ class TestTypes(TestCase):
         # Different dtypes
         self.assertNotEqual(types.DType(types.int32), types.DType(types.int64))
 
-    def test_ordering(self):
-        def check_order(values):
-            for i in range(len(values)):
-                self.assertLessEqual(values[i], values[i])
-                self.assertGreaterEqual(values[i], values[i])
-                self.assertFalse(values[i] < values[i])
-                self.assertFalse(values[i] > values[i])
-                for j in range(i):
-                    self.assertLess(values[j], values[i])
-                    self.assertLessEqual(values[j], values[i])
-                    self.assertGreater(values[i], values[j])
-                    self.assertGreaterEqual(values[i], values[j])
-                    self.assertFalse(values[i] < values[j])
-                    self.assertFalse(values[i] <= values[j])
-                    self.assertFalse(values[j] > values[i])
-                    self.assertFalse(values[j] >= values[i])
-
-        check_order([types.int8, types.int16, types.int32, types.int64])
-        check_order([types.uint8, types.uint16, types.uint32, types.uint64])
-        check_order([types.float32, types.float64])
-        check_order([types.complex64, types.complex128])
-
-        if IS_PY3:
-            with self.assertRaises(TypeError):
-                types.int8 <= types.uint32
-            with self.assertRaises(TypeError):
-                types.int8 <= types.float32
-            with self.assertRaises(TypeError):
-                types.float64 <= types.complex128
-
     def test_weaktype(self):
         d = Dummy()
         e = Dummy()
@@ -227,17 +197,63 @@ class TestTypes(TestCase):
         self.assertPreciseEqual(ty(5), np.timedelta64(5))
         self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT'))
 
-    def test_bitwidth_number_types(self):
+
+class TestNumbers(TestCase):
+    """
+    Tests for number types.
+    """
+
+    def test_bitwidth(self):
         """
         All numeric types have bitwidth attribute
         """
         for ty in types.number_domain:
             self.assertTrue(hasattr(ty, "bitwidth"))
 
+    def test_minval_maxval(self):
+        self.assertEqual(types.int8.maxval, 127)
+        self.assertEqual(types.int8.minval, -128)
+        self.assertEqual(types.uint8.maxval, 255)
+        self.assertEqual(types.uint8.minval, 0)
+        self.assertEqual(types.int64.maxval, (1<<63) - 1)
+        self.assertEqual(types.int64.minval, -(1<<63))
+        self.assertEqual(types.uint64.maxval, (1<<64) - 1)
+        self.assertEqual(types.uint64.minval, 0)
+
     def test_from_bidwidth(self):
         f = types.Integer.from_bitwidth
         self.assertIs(f(32), types.int32)
         self.assertIs(f(8, signed=False), types.uint8)
+
+    def test_ordering(self):
+        def check_order(values):
+            for i in range(len(values)):
+                self.assertLessEqual(values[i], values[i])
+                self.assertGreaterEqual(values[i], values[i])
+                self.assertFalse(values[i] < values[i])
+                self.assertFalse(values[i] > values[i])
+                for j in range(i):
+                    self.assertLess(values[j], values[i])
+                    self.assertLessEqual(values[j], values[i])
+                    self.assertGreater(values[i], values[j])
+                    self.assertGreaterEqual(values[i], values[j])
+                    self.assertFalse(values[i] < values[j])
+                    self.assertFalse(values[i] <= values[j])
+                    self.assertFalse(values[j] > values[i])
+                    self.assertFalse(values[j] >= values[i])
+
+        check_order([types.int8, types.int16, types.int32, types.int64])
+        check_order([types.uint8, types.uint16, types.uint32, types.uint64])
+        check_order([types.float32, types.float64])
+        check_order([types.complex64, types.complex128])
+
+        if IS_PY3:
+            with self.assertRaises(TypeError):
+                types.int8 <= types.uint32
+            with self.assertRaises(TypeError):
+                types.int8 <= types.float32
+            with self.assertRaises(TypeError):
+                types.float64 <= types.complex128
 
 
 class TestNdIter(TestCase):

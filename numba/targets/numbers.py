@@ -60,7 +60,7 @@ def int_mul_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def int_divmod(context, builder, x, y):
+def int_divmod_signed(context, builder, ty, x, y):
     """
     Reference Objects/intobject.c
     xdivy = x / y;
@@ -79,60 +79,99 @@ def int_divmod(context, builder, x, y):
     *p_xmody = xmody;
     """
     assert x.type == y.type
-    xdivy = builder.sdiv(x, y)
-    xmody = builder.srem(x, y)  # Intel has divmod instruction
 
-    ZERO = Constant.null(y.type)
-    ONE = Constant.int(y.type, 1)
+    ZERO = y.type(0)
+    ONE = y.type(1)
 
-    y_xor_xmody_ltz = builder.icmp(lc.ICMP_SLT, builder.xor(y, xmody), ZERO)
-    xmody_istrue = builder.icmp(lc.ICMP_NE, xmody, ZERO)
-    cond = builder.and_(xmody_istrue, y_xor_xmody_ltz)
+    # NOTE: On x86 at least, dividing the lowest representable integer
+    # (e.g. 0x80000000 for int32) by -1 causes a SIFGPE (division overflow),
+    # causing the process to crash.
+    # We return 0, 0 instead (more or less like Numpy).
 
-    bb1 = builder.basic_block
-    with builder.if_then(cond):
-        xmody_plus_y = builder.add(xmody, y)
-        xdivy_minus_1 = builder.sub(xdivy, ONE)
-        bb2 = builder.basic_block
+    resdiv = cgutils.alloca_once_value(builder, ZERO)
+    resmod = cgutils.alloca_once_value(builder, ZERO)
 
-    resdiv = builder.phi(y.type)
-    resdiv.add_incoming(xdivy, bb1)
-    resdiv.add_incoming(xdivy_minus_1, bb2)
+    is_overflow = builder.and_(
+        builder.icmp_signed('==', x, x.type(ty.minval)),
+        builder.icmp_signed('==', y, y.type(-1)))
 
-    resmod = builder.phi(x.type)
-    resmod.add_incoming(xmody, bb1)
-    resmod.add_incoming(xmody_plus_y, bb2)
+    with builder.if_then(builder.not_(is_overflow), likely=True):
+        # Note LLVM will optimize this to a single divmod instruction,
+        # if available on the target CPU (e.g. x86).
+        xdivy = builder.sdiv(x, y)
+        xmody = builder.srem(x, y)
 
-    return resdiv, resmod
+        y_xor_xmody_ltz = builder.icmp_signed('<', builder.xor(y, xmody), ZERO)
+        xmody_istrue = builder.icmp_signed('!=', xmody, ZERO)
+        cond = builder.and_(xmody_istrue, y_xor_xmody_ltz)
+
+        with builder.if_else(cond) as (if_different_signs, if_same_signs):
+            with if_same_signs:
+                builder.store(xdivy, resdiv)
+                builder.store(xmody, resmod)
+
+            with if_different_signs:
+                builder.store(builder.sub(xdivy, ONE), resdiv)
+                builder.store(builder.add(xmody, y), resmod)
+
+    return builder.load(resdiv), builder.load(resmod)
 
 
-@lower_builtin('/?', types.Integer, types.Integer)
-@lower_builtin('//', types.Integer, types.Integer)
-def int_floordiv_impl(context, builder, sig, args):
-    [va, vb] = args
-    [ta, tb] = sig.args
-    a = context.cast(builder, va, ta, sig.return_type)
-    b = context.cast(builder, vb, tb, sig.return_type)
-    res = cgutils.alloca_once(builder, a.type)
+def int_divmod(context, builder, ty, x, y):
+    """
+    Integer divmod(x, y).  The caller must ensure that y != 0.
+    """
+    if ty.signed:
+        return int_divmod_signed(context, builder, ty, x, y)
+    else:
+        return builder.udiv(x, y), builder.urem(x, y)
+
+
+def _int_divmod_impl(context, builder, sig, args, zerodiv_message):
+    va, vb = args
+    ta, tb = sig.args
+
+    ty = sig.return_type
+    if isinstance(ty, types.UniTuple):
+        ty = ty.dtype
+    a = context.cast(builder, va, ta, ty)
+    b = context.cast(builder, vb, tb, ty)
+    quot = cgutils.alloca_once(builder, a.type, name="quot")
+    rem = cgutils.alloca_once(builder, a.type, name="rem")
 
     with builder.if_else(cgutils.is_scalar_zero(builder, b), likely=False
                          ) as (if_zero, if_non_zero):
         with if_zero:
             if not context.error_model.fp_zero_division(
-                builder, ("integer division by zero",)):
+                builder, (zerodiv_message,)):
                 # No exception raised => return 0
                 # XXX We should also set the FPU exception status, but
                 # there's no easy way to do that from LLVM.
-                builder.store(b, res)
+                builder.store(b, quot)
+                builder.store(b, rem)
         with if_non_zero:
-            if sig.return_type.signed:
-                quot, _ = int_divmod(context, builder, a, b)
-            else:
-                quot = builder.udiv(a, b)
-            builder.store(quot, res)
+            q, r = int_divmod(context, builder, ty, a, b)
+            builder.store(q, quot)
+            builder.store(r, rem)
 
-    return impl_ret_untracked(context, builder, sig.return_type,
-                              builder.load(res))
+    return quot, rem
+
+
+@lower_builtin(divmod, types.Integer, types.Integer)
+def int_divmod_impl(context, builder, sig, args):
+    quot, rem = _int_divmod_impl(context, builder, sig, args,
+                                 "integer divmod by zero")
+
+    return cgutils.pack_array(builder,
+                              (builder.load(quot), builder.load(rem)))
+
+
+@lower_builtin('/?', types.Integer, types.Integer)
+@lower_builtin('//', types.Integer, types.Integer)
+def int_floordiv_impl(context, builder, sig, args):
+    quot, rem = _int_divmod_impl(context, builder, sig, args,
+                                 "integer division by zero")
+    return builder.load(quot)
 
 
 @lower_builtin('/', types.Integer, types.Integer)
@@ -149,30 +188,9 @@ def int_truediv_impl(context, builder, sig, args):
 
 @lower_builtin('%', types.Integer, types.Integer)
 def int_rem_impl(context, builder, sig, args):
-    [va, vb] = args
-    [ta, tb] = sig.args
-    a = context.cast(builder, va, ta, sig.return_type)
-    b = context.cast(builder, vb, tb, sig.return_type)
-    res = cgutils.alloca_once(builder, a.type)
-
-    with builder.if_else(cgutils.is_scalar_zero(builder, b), likely=False
-                         ) as (if_zero, if_non_zero):
-        with if_zero:
-            if not context.error_model.fp_zero_division(
-                builder, ("modulo by zero",)):
-                # No exception raised => return 0
-                # XXX We should also set the FPU exception status, but
-                # there's no easy way to do that from LLVM.
-                builder.store(b, res)
-        with if_non_zero:
-            if sig.return_type.signed:
-                _, rem = int_divmod(context, builder, a, b)
-            else:
-                rem = builder.urem(a, b)
-            builder.store(rem, res)
-
-    return impl_ret_untracked(context, builder, sig.return_type,
-                              builder.load(res))
+    quot, rem = _int_divmod_impl(context, builder, sig, args,
+                                 "integer modulo by zero")
+    return builder.load(rem)
 
 
 def _get_power_zerodiv_return(context, return_type):
@@ -626,35 +644,31 @@ def real_divmod_func_body(context, builder, vx, wx):
     builder.store(mod, pmod)
     builder.store(div, pdiv)
 
-    ZERO = Constant.real(vx.type, 0)
-    ONE = Constant.real(vx.type, 1)
-    mod_istrue = builder.fcmp(lc.FCMP_ONE, mod, ZERO)
-    wx_ltz = builder.fcmp(lc.FCMP_OLT, wx, ZERO)
-    mod_ltz = builder.fcmp(lc.FCMP_OLT, mod, ZERO)
+    # Note the use of negative zero for proper negating with `ZERO - x`
+    ZERO = vx.type(0.0)
+    NZERO = vx.type(-0.0)
+    ONE = vx.type(1.0)
+    mod_istrue = builder.fcmp_unordered('!=', mod, ZERO)
+    wx_ltz = builder.fcmp_ordered('<', wx, ZERO)
+    mod_ltz = builder.fcmp_ordered('<', mod, ZERO)
 
-    with builder.if_then(mod_istrue):
-        wx_ltz_ne_mod_ltz = builder.icmp(lc.ICMP_NE, wx_ltz, mod_ltz)
+    with builder.if_else(mod_istrue, likely=True) as (if_nonzero_mod, if_zero_mod):
+        with if_nonzero_mod:
+            # `mod` is non-zero or NaN
+            # Ensure the remainder has the same sign as the denominator
+            wx_ltz_ne_mod_ltz = builder.icmp(lc.ICMP_NE, wx_ltz, mod_ltz)
 
-        with builder.if_then(wx_ltz_ne_mod_ltz):
-            mod = builder.fadd(mod, wx)
-            div = builder.fsub(div, ONE)
+            with builder.if_then(wx_ltz_ne_mod_ltz):
+                builder.store(builder.fsub(div, ONE), pdiv)
+                builder.store(builder.fadd(mod, wx), pmod)
+
+        with if_zero_mod:
+            # `mod` is zero, select the proper sign depending on
+            # the denominator's sign
+            mod = builder.select(wx_ltz, NZERO, ZERO)
             builder.store(mod, pmod)
-            builder.store(div, pdiv)
 
-    del mod
-    del div
-
-    with cgutils.ifnot(builder, mod_istrue):
-        mod = builder.load(pmod)
-        mod = builder.fmul(mod, mod)
-        builder.store(mod, pmod)
-        del mod
-
-        with builder.if_then(wx_ltz):
-            mod = builder.load(pmod)
-            mod = builder.fsub(ZERO, mod)
-            builder.store(mod, pmod)
-            del mod
+    del mod, div
 
     div = builder.load(pdiv)
     div_istrue = builder.fcmp(lc.FCMP_ONE, div, ZERO)
@@ -677,6 +691,32 @@ def real_divmod_func_body(context, builder, vx, wx):
         builder.store(floordiv, pfloordiv)
 
     return builder.load(pfloordiv), builder.load(pmod)
+
+
+@lower_builtin(divmod, types.Float, types.Float)
+def real_divmod_impl(context, builder, sig, args):
+    x, y = args
+    quot = cgutils.alloca_once(builder, x.type, name="quot")
+    rem = cgutils.alloca_once(builder, x.type, name="rem")
+
+    with builder.if_else(cgutils.is_scalar_zero(builder, y), likely=False
+                         ) as (if_zero, if_non_zero):
+        with if_zero:
+            if not context.error_model.fp_zero_division(
+                builder, ("modulo by zero",)):
+                # No exception raised => compute the nan result,
+                # and set the FP exception word for Numpy warnings.
+                q = builder.fdiv(x, y)
+                r = builder.frem(x, y)
+                builder.store(q, quot)
+                builder.store(r, rem)
+        with if_non_zero:
+            q, r = real_divmod(context, builder, x, y)
+            builder.store(q, quot)
+            builder.store(r, rem)
+
+    return cgutils.pack_array(builder,
+                              (builder.load(quot), builder.load(rem)))
 
 
 def real_mod_impl(context, builder, sig, args):
