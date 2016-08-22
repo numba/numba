@@ -17,6 +17,14 @@ from numba.tests.support import TestCase, captured_stderr
 
 
 @jit(cache=True, nopython=True)
+def simple_usecase(x):
+    return x
+
+def simple_usecase_caller(x):
+    return simple_usecase(x)
+
+
+@jit(cache=True, nopython=True)
 def add_usecase(x, y):
     return x + y + Z
 

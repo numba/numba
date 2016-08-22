@@ -1125,44 +1125,50 @@ def qr_impl(a):
 # and np.linalg.solve. These functions have "system" in their name
 # as a differentiator.
 
-def _get_system_copy_in_b_impl(b):
-    # gets an implementation for correctly copying 'b' into the
-    # scratch space for 'b'
-    ndim = b.ndim
-    if ndim == 1:
-        @jit(nopython=True)
+def _system_copy_in_b(bcpy, b, nrhs):
+    """
+    Correctly copy 'b' into the 'bcpy' scratch space.
+    """
+    raise NotImplementedError
+
+@overload(_system_copy_in_b)
+def _system_copy_in_b_impl(bcpy, b, nrhs):
+    if b.ndim == 1:
         def oneD_impl(bcpy, b, nrhs):
             bcpy[:b.shape[-1], 0] = b
         return oneD_impl
     else:
-        @jit(nopython=True)
         def twoD_impl(bcpy, b, nrhs):
             bcpy[:b.shape[-2], :nrhs] = b
         return twoD_impl
 
+def _system_compute_nrhs(b):
+    """
+    Compute the number of right hand sides in the system of equations
+    """
+    raise NotImplementedError
 
-def _get_system_compute_nrhs(b):
-    # gets and implementation for computing the number of right hand
-    # sides in the system of equations
-    ndim = b.ndim
-    if ndim == 1:
-        @jit(nopython=True)
+@overload(_system_compute_nrhs)
+def _system_compute_nrhs_impl(b):
+    if b.ndim == 1:
         def oneD_impl(b):
             return 1
         return oneD_impl
     else:
-        @jit(nopython=True)
         def twoD_impl(b):
             return b.shape[-1]
         return twoD_impl
 
+def _system_check_dimensionally_valid(a, b):
+    """
+    Check that AX=B style system input is dimensionally valid.
+    """
+    raise NotImplementedError
 
-def _get_system_check_dimensionally_valid_impl(a, b):
-    # gets an implementation for checking that AX=B style system
-    # input is dimensionally valid
+@overload(_system_check_dimensionally_valid)
+def _system_check_dimensionally_valid_impl(a, b):
     ndim = b.ndim
     if ndim == 1:
-        @jit(nopython=True)
         def oneD_impl(a, b):
             am = a.shape[-2]
             bm = b.shape[-1]
@@ -1171,7 +1177,6 @@ def _get_system_check_dimensionally_valid_impl(a, b):
                     "Incompatible array sizes, system is not dimensionally valid.")
         return oneD_impl
     else:
-        @jit(nopython=True)
         def twoD_impl(a, b):
             am = a.shape[-2]
             bm = b.shape[-2]
@@ -1180,30 +1185,35 @@ def _get_system_check_dimensionally_valid_impl(a, b):
                     "Incompatible array sizes, system is not dimensionally valid.")
         return twoD_impl
 
-# jitted specialisations for np.linalg.lstsq()
 
+def _lstsq_residual(b, n, rhs):
+    """
+    Compute the residual from the 'b' scratch space.
+    """
+    raise NotImplementedError
 
-def _get_lstsq_res_impl(dtype, real_dtype, b):
-    # gets an implementation for computing the residual
+@overload (_lstsq_residual)
+def _lstsq_residual_impl(b, n, rhs):
     ndim = b.ndim
+    dtype = b.dtype
+    real_dtype = np_support.as_dtype(getattr(dtype, "underlying_float", dtype))
+
     if ndim == 1:
         if isinstance(dtype, (types.Complex)):
-            @jit(nopython=True)
             def cmplx_impl(b, n, nrhs):
                 res = np.empty((1,), dtype=real_dtype)
                 res[0] = np.sum(np.abs(b[n:, 0])**2)
                 return res
             return cmplx_impl
         else:
-            @jit(nopython=True)
             def real_impl(b, n, nrhs):
                 res = np.empty((1,), dtype=real_dtype)
                 res[0] = np.sum(b[n:, 0]**2)
                 return res
             return real_impl
     else:
+        assert ndim == 2
         if isinstance(dtype, (types.Complex)):
-            @jit(nopython=True)
             def cmplx_impl(b, n, nrhs):
                 res = np.empty((nrhs), dtype=real_dtype)
                 for k in range(nrhs):
@@ -1211,7 +1221,6 @@ def _get_lstsq_res_impl(dtype, real_dtype, b):
                 return res
             return cmplx_impl
         else:
-            @jit(nopython=True)
             def real_impl(b, n, nrhs):
                 res = np.empty((nrhs), dtype=real_dtype)
                 for k in range(nrhs):
@@ -1220,19 +1229,22 @@ def _get_lstsq_res_impl(dtype, real_dtype, b):
             return real_impl
 
 
-def _get_lstsq_compute_return_impl(b):
-    # gets an implementation for extracting 'x' (the solution) from
-    # the 'b' scratch space
-    ndim = b.ndim
-    if ndim == 1:
-        @jit(nopython=True)
-        def oneD_impl(b, n):
-            return b.T.ravel()[:n]
+def _lstsq_solution(b, bcpy, n):
+    """
+    Extract 'x' (the lstsq solution) from the 'bcpy' scratch space.
+    Note 'b' is only used to check the system input dimension...
+    """
+    raise NotImplementedError
+
+@overload(_lstsq_solution)
+def _lstsq_solution_impl(b, bcpy, n):
+    if b.ndim == 1:
+        def oneD_impl(b, bcpy, n):
+            return bcpy.T.ravel()[:n]
         return oneD_impl
     else:
-        @jit(nopython=True)
-        def twoD_impl(b, n):
-            return b[:n, :].copy()
+        def twoD_impl(b, bcpy, n):
+            return bcpy[:n, :].copy()
         return twoD_impl
 
 
@@ -1268,33 +1280,17 @@ def lstsq_impl(a, b, rcond=-1.0):
     # some optimisations available depending on real or complex
     # space.
 
-    # get a specialisation for computing the number of RHS
-    b_nrhs = _get_system_compute_nrhs(b)
-
-    # get a specialised residual computation based on the dtype
-    compute_res = _get_lstsq_res_impl(nb_dt, real_dtype, b)
-
-    # b copy function
-    b_copy_in = _get_system_copy_in_b_impl(b)
-
-    # return blob function
-    b_ret = _get_lstsq_compute_return_impl(b)
-
-    # check system is dimensionally valid function
-    check_dimensionally_valid = _get_system_check_dimensionally_valid_impl(
-        a, b)
-
     def lstsq_impl(a, b, rcond=-1.0):
         n = a.shape[-1]
         m = a.shape[-2]
-        nrhs = b_nrhs(b)
+        nrhs = _system_compute_nrhs(b)
 
         # check the systems have no inf or NaN
         _check_finite_matrix(a)
         _check_finite_matrix(b)
 
         # check the systems is dimensionally valid
-        check_dimensionally_valid(a, b)
+        _system_check_dimensionally_valid(a, b)
 
         minmn = min(m, n)
         maxmn = max(m, n)
@@ -1308,7 +1304,7 @@ def lstsq_impl(a, b, rcond=-1.0):
         # b is overwritten on exit with the solution, copy allocate
         bcpy = np.empty((nrhs, maxmn), dtype=np_dt).T
         # specialised copy in due to b being 1 or 2D
-        b_copy_in(bcpy, b, nrhs)
+        _system_copy_in_b(bcpy, b, nrhs)
 
         # Allocate returns
         s = np.empty(minmn, dtype=real_dtype)
@@ -1338,10 +1334,10 @@ def lstsq_impl(a, b, rcond=-1.0):
         else:
             # this requires additional dispatch as there's a faster
             # impl if the result is in the real domain (no abs() required)
-            res = compute_res(bcpy, n, nrhs)
+            res = _lstsq_residual(bcpy, n, nrhs)
 
         # extract 'x', the solution
-        x = b_ret(bcpy, n)
+        x = _lstsq_solution(b, bcpy, n)
 
         # help liveness analysis
         acpy.size
@@ -1353,22 +1349,23 @@ def lstsq_impl(a, b, rcond=-1.0):
 
     return lstsq_impl
 
-# specialisations for np.linalg.solve
 
+def _solve_compute_return(b, bcpy):
+    """
+    Extract 'x' (the solution) from the 'bcpy' scratch space.
+    Note 'b' is only used to check the system input dimension...
+    """
+    raise NotImplementedError
 
-def _get_solve_compute_return_impl(b):
-    # gets an implementation for extracting 'x' (the solution) from
-    # the 'b' scratch space
-    ndim = b.ndim
-    if ndim == 1:
-        @jit(nopython=True)
-        def oneD_impl(b):
-            return b.T.ravel()
+@overload(_solve_compute_return)
+def _solve_compute_return_impl(b, bcpy):
+    if b.ndim == 1:
+        def oneD_impl(b, bcpy):
+            return bcpy.T.ravel()
         return oneD_impl
     else:
-        @jit(nopython=True)
-        def twoD_impl(b):
-            return b
+        def twoD_impl(b, bcpy):
+            return bcpy
         return twoD_impl
 
 
@@ -1392,29 +1389,16 @@ def solve_impl(a, b):
 
     kind = ord(get_blas_kind(nb_dt, "solve"))
 
-    # get a specialisation for computing the number of RHS
-    b_nrhs = _get_system_compute_nrhs(b)
-
-    # check system is valid
-    check_dimensionally_valid = _get_system_check_dimensionally_valid_impl(
-        a, b)
-
-    # b copy function
-    b_copy_in = _get_system_copy_in_b_impl(b)
-
-    # b return function
-    b_ret = _get_solve_compute_return_impl(b)
-
     def solve_impl(a, b):
         n = a.shape[-1]
-        nrhs = b_nrhs(b)
+        nrhs = _system_compute_nrhs(b)
 
         # check the systems have no inf or NaN
         _check_finite_matrix(a)
         _check_finite_matrix(b)
 
         # check the systems are dimensionally valid
-        check_dimensionally_valid(a, b)
+        _system_check_dimensionally_valid(a, b)
 
         # a is destroyed on exit, copy it
         if a_F_layout:
@@ -1425,7 +1409,7 @@ def solve_impl(a, b):
         # b is overwritten on exit with the solution, copy allocate
         bcpy = np.empty((nrhs, n), dtype=np_dt).T
         # specialised copy in due to b being 1 or 2D
-        b_copy_in(bcpy, b, nrhs)
+        _system_copy_in_b(bcpy, b, nrhs)
 
         # allocate pivot array (needs to be fortran int size)
         ipiv = np.empty(n, dtype=F_INT_nptype)
@@ -1447,7 +1431,7 @@ def solve_impl(a, b):
         bcpy.size
         ipiv.size
 
-        return b_ret(bcpy)
+        return _solve_compute_return(b, bcpy)
 
     return solve_impl
 
@@ -1727,6 +1711,14 @@ def det_impl(a):
 
 def _compute_singular_values(a):
     """
+    Compute singular values of *a*.
+    """
+    raise NotImplementedError
+
+
+@overload(_compute_singular_values)
+def _compute_singular_values_impl(a):
+    """
     Returns a function to compute singular values of `a`
     """
     numba_ez_gesdd = _LAPACK().numba_ez_gesdd(a.dtype)
@@ -1747,7 +1739,6 @@ def _compute_singular_values(a):
 
     F_layout = a.layout == 'F'
 
-    @jit(nopython=True)
     def sv_function(a):
         """
         Computes singular values.
@@ -1804,6 +1795,48 @@ def _compute_singular_values(a):
     return sv_function
 
 
+def _oneD_norm_2(a):
+    """
+    Compute the L2-norm of 1D-array *a*.
+    """
+    raise NotImplementedError
+
+@overload(_oneD_norm_2)
+def _oneD_norm_2_impl(a):
+    nb_ret_type = getattr(a.dtype, "underlying_float", a.dtype)
+    np_ret_type = np_support.as_dtype(nb_ret_type)
+
+    xxnrm2 = _BLAS().numba_xxnrm2(a.dtype)
+
+    kind = ord(get_blas_kind(a.dtype, "norm"))
+
+    def impl(a):
+        # Just ignore order, calls are guarded to only come
+        # from cases where order=None or order=2.
+        n = len(a)
+        # Call L2-norm routine from BLAS
+        ret = np.empty((1,), dtype=np_ret_type)
+        jmp = int(a.strides[0] / a.itemsize)
+        r = xxnrm2(
+            kind,      # kind
+            n,         # n
+            a.ctypes,  # x
+            jmp,       # incx
+            ret.ctypes  # result
+        )
+        if r < 0:
+            fatal_error_func()
+            assert 0   # unreachable
+
+        # help liveness analysis
+        ret.size
+        a.size
+
+        return ret[0]
+
+    return impl
+
+
 def _get_norm_impl(a, ord_flag):
     # This function is quite involved as norm supports a large
     # range of values to select different norm types via kwarg `ord`.
@@ -1828,42 +1861,14 @@ def _get_norm_impl(a, ord_flag):
 
     kind = ord(get_blas_kind(a.dtype, "norm"))
 
-    FORCE_CONTIG = a.layout not in 'CF'
-
     if a.ndim == 1:
         # 1D cases
 
-        # Used if order is None or order == 2 : see note below
-        @jit(nopython=True)
-        def oneD_none_or_2_impl(a, order=None):
-            # Just ignore order, calls are guarded to only come
-            # from cases where order=None or order=2.
-            n = len(a)
-            # Call L2-norm routine from BLAS
-            ret = np.empty((1,), dtype=np_ret_type)
-            jmp = int(a.strides[0] / a.itemsize)
-            r = xxnrm2(
-                kind,      # kind
-                n,         # n
-                a.ctypes,  # x
-                jmp,       # incx
-                ret.ctypes  # result
-            )
-            if r < 0:
-                fatal_error_func()
-                assert 0   # unreachable
-
-            # help liveness analysis
-            ret.size
-            a.size
-
-            return ret[0]
-
         # handle "ord" being "None", must be done separately
         if ord_flag in (None, types.none):
-            oneD_impl = oneD_none_or_2_impl
+            def oneD_impl(a, order=None):
+                return _oneD_norm_2(a)
         else:
-            @jit(nopython=True)
             def oneD_impl(a, order=None):
                 n = len(a)
 
@@ -1881,7 +1886,7 @@ def _get_norm_impl(a, ord_flag):
                 # we have to handle "None" specially this condition
                 # is separated
                 if order == 2:
-                    return oneD_none_or_2_impl(a, order=order)
+                    return _oneD_norm_2(a)
                 elif order == np.inf:
                     # max(abs(a))
                     ret = abs(a[0])
@@ -1926,43 +1931,37 @@ def _get_norm_impl(a, ord_flag):
     elif a.ndim == 2:
         # 2D cases
 
-        sv_func = _compute_singular_values(a)
-
         # handle "ord" being "None"
         if ord_flag in (None, types.none):
+            # Force `a` to be C-order, so that we can take a contiguous
+            # 1D view.
+            if a.layout == 'C':
+                @jit(nopython=True)
+                def array_prepare(a):
+                    return a
+            elif a.layout == 'F':
+                @jit(nopython=True)
+                def array_prepare(a):
+                    # Legal since L2(a) == L2(a.T)
+                    return a.T
+            else:
+                @jit(nopython=True)
+                def array_prepare(a):
+                    return a.copy()
+
             # Compute the Frobenius norm, this is the L2,2 induced norm of `A`
             # which is the L2-norm of A.ravel() and so can be computed via BLAS
-            @jit(nopython=True)
             def twoD_impl(a, order=None):
-                # If order is None...
-                # Call L2-norm routine from BLAS
-                ret = np.empty((1,), dtype=np_ret_type)
                 n = a.size
-                if FORCE_CONTIG:
-                    acpy = a.copy()
-                else:
-                    acpy = a
-                r = xxnrm2(
-                    kind,  # kind
-                    n,  # n
-                    acpy.ctypes,  # x
-                    1,  # incx
-                    ret.ctypes  # result
-                )
-                if r < 0:
-                    fatal_error_func()
-                    assert 0   # unreachable
-
-                # help liveness analysis
-                ret.size
-                acpy.size
-
-                return ret[0]
+                if n == 0:
+                    # reshape() currently doesn't support zero-sized arrays
+                    return 0.0
+                a_c = array_prepare(a)
+                return _oneD_norm_2(a_c.reshape(n))
         else:
             # max value for this dtype
             max_val = np.finfo(np_ret_type.type).max
 
-            @jit(nopython=True)
             def twoD_impl(a, order=None):
                 n = a.shape[-1]
                 m = a.shape[-2]
@@ -2025,10 +2024,10 @@ def _get_norm_impl(a, ord_flag):
                 # by definition.
                 elif order == 2:
                     # max SV
-                    return sv_func(a)[0]
+                    return _compute_singular_values(a)[0]
                 elif order == -2:
                     # min SV
-                    return sv_func(a)[-1]
+                    return _compute_singular_values(a)[-1]
                 else:
                     # replicate numpy error
                     raise ValueError("Invalid norm order for matrices.")
@@ -2043,12 +2042,7 @@ def norm_impl(a, ord=None):
 
     _check_linalg_1_or_2d_matrix(a, "norm")
 
-    impl = _get_norm_impl(a, ord)
-
-    def norm_impl(a, ord=None):
-        return impl(a, ord)
-
-    return norm_impl
+    return _get_norm_impl(a, ord)
 
 
 @overload(np.linalg.cond)
@@ -2057,18 +2051,14 @@ def cond_impl(a, p=None):
 
     _check_linalg_matrix(a, "cond")
 
-    sv_func = _compute_singular_values(a)
-
     def _get_cond_impl(a, p):
         # handle the p==None case separately for type inference to work ok
         if p in (None, types.none):
-            @jit(nopython=True)
-            def cond_none_impl(a, p):
-                s = sv_func(a)
+            def cond_none_impl(a, p=None):
+                s = _compute_singular_values(a)
                 return s[0] / s[-1]
             return cond_none_impl
         else:
-            @jit(nopython=True)
             def cond_not_none_impl(a, p):
                 # This is extracted for performance, numpy does approximately:
                 # `condition = norm(a) * norm(inv(a))`
@@ -2089,7 +2079,7 @@ def cond_impl(a, p=None):
                 # As a result of this, numba accepts non-square matrices as
                 # input when p==+/-2 as well as when p==None.
                 if p == 2 or p == -2:
-                    s = sv_func(a)
+                    s = _compute_singular_values(a)
                     if p == 2:
                         return s[0] / s[-1]
                     else:
@@ -2100,12 +2090,21 @@ def cond_impl(a, p=None):
                     return norm_a * norm_inv_a
             return cond_not_none_impl
 
-    impl = _get_cond_impl(a, p)
+    return _get_cond_impl(a, p)
 
-    def cond_impl(a, p=None):
-        return impl(a, p)
 
-    return cond_impl
+@jit(nopython=True)
+def _get_rank_from_singular_values(sv, t):
+    """
+    Gets rank from singular values with cut-off at a given tolerance
+    """
+    rank = 0
+    for k in range(len(sv)):
+        if sv[k] > t:
+            rank = rank + 1
+        else:  # sv is ordered big->small so break on condition not met
+            break
+    return rank
 
 
 @overload(np.linalg.matrix_rank)
@@ -2121,22 +2120,8 @@ def matrix_rank_impl(a, tol=None):
     ensure_lapack()
 
     _check_linalg_1_or_2d_matrix(a, "matrix_rank")
-    sv_func = _compute_singular_values(a)
 
     def _2d_matrix_rank_impl(a, tol):
-
-        @jit(nopython=True)
-        def get_rank(sv, t):
-            """
-            Gets rank from singular values with cut-off at a given tolerance
-            """
-            rank = 0
-            for k in range(len(sv)):
-                if sv[k] > t:
-                    rank = rank + 1
-                else:  # sv is ordered big->small so break on condition not met
-                    break
-            return rank
 
         # handle the tol==None case separately for type inference to work
         if tol in (None, types.none):
@@ -2144,21 +2129,19 @@ def matrix_rank_impl(a, tol=None):
             np_type = np_support.as_dtype(nb_type)
             eps_val = np.finfo(np_type).eps
 
-            @jit(nopython=True)
-            def _2d_tol_none_impl(a, tol):
-                s = sv_func(a)
+            def _2d_tol_none_impl(a, tol=None):
+                s = _compute_singular_values(a)
                 # replicate numpy default tolerance calculation
                 r = a.shape[0]
                 c = a.shape[1]
                 l = max(r, c)
                 t = s[0] * l * eps_val
-                return get_rank(s, t)
+                return _get_rank_from_singular_values(s, t)
             return _2d_tol_none_impl
         else:
-            @jit(nopython=True)
             def _2d_tol_not_none_impl(a, tol):
-                s = sv_func(a)
-                return get_rank(s, tol)
+                s = _compute_singular_values(a)
+                return _get_rank_from_singular_values(s, tol)
             return _2d_tol_not_none_impl
 
     def _get_matrix_rank_impl(a, tol):
@@ -2176,7 +2159,6 @@ def matrix_rank_impl(a, tol=None):
             # lead to a reported rank of 0 whereas a tol of 1e-15 should lead
             # to a reported rank of 1, numpy reports 1 regardless.
             # The code below replicates the numpy behaviour.
-            @jit(nopython=True)
             def _1d_matrix_rank_impl(a, tol):
                 for k in range(len(a)):
                     if a[k] != 0.:
@@ -2188,9 +2170,4 @@ def matrix_rank_impl(a, tol=None):
         else:
             assert 0  # unreachable
 
-    impl = _get_matrix_rank_impl(a, tol)
-
-    def matrix_rank_impl(a, tol=None):
-        return impl(a, tol)
-
-    return matrix_rank_impl
+    return _get_matrix_rank_impl(a, tol)
