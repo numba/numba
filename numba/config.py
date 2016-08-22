@@ -199,6 +199,8 @@ class _EnvReloader(object):
         # CUDA logging level
         # Any level name from the *logging* module.  Case insensitive.
         # Defaults to CRITICAL if not set or invalid.
+        # Note: This setting only applies when logging is not configured.
+        #       Any existing logging configuration is preserved.
         CUDA_LOG_LEVEL = _readenv("NUMBA_CUDA_LOG_LEVEL", str, '')
 
         # Maximum number of pending CUDA deallocations (default: 10)

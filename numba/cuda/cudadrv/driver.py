@@ -40,15 +40,25 @@ MIN_REQUIRED_CC = (2, 0)
 
 def _make_logger():
     logger = logging.getLogger(__name__)
-    lvl = str(config.CUDA_LOG_LEVEL).upper()
-    lvl = getattr(logging, lvl, None)
-    if not isinstance(lvl, int):
-        lvl = logging.CRITICAL
-    logger.setLevel(lvl)
-    handler = logging.StreamHandler(sys.stderr)
-    fmt = '== CUDA [%(relativeCreated)d] %(levelname)5s -- %(message)s'
-    handler.setFormatter(logging.Formatter(fmt=fmt))
-    logger.addHandler(handler)
+    # is logging configured?
+    if not logger.hasHandlers():
+        # read user config
+        lvl = str(config.CUDA_LOG_LEVEL).upper()
+        lvl = getattr(logging, lvl, None)
+        if not isinstance(lvl, int):
+            # default to critical level
+            lvl = logging.CRITICAL
+        logger.setLevel(lvl)
+        # did user specify a level?
+        if config.CUDA_LOG_LEVEL:
+            # create a simple handler that prints to stderr
+            handler = logging.StreamHandler(sys.stderr)
+            fmt = '== CUDA [%(relativeCreated)d] %(levelname)5s -- %(message)s'
+            handler.setFormatter(logging.Formatter(fmt=fmt))
+            logger.addHandler(handler)
+        else:
+            # otherwise, put a null handler
+            logger.addHandler(logging.NullHandler())
     return logger
 
 
