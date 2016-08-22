@@ -84,9 +84,6 @@ class _DeviceContextManager(object):
         return "<Managed Device {self.id}>".format(self=self)
 
 
-_MSG_TOO_MANY_CTX_PER_DEV = "Creating more contexts then devices"
-
-
 class _Runtime(object):
     """Emulate the CUDA runtime context management.
 
@@ -99,15 +96,6 @@ class _Runtime(object):
 
         # A thread local stack
         self.context_stack = servicelib.TLStack()
-        # Remembers all context
-        # key: context.handle.value
-        # value: Context
-        self._contexts = {}
-
-        # Device's context map
-        # key: Device.id
-        # value: Context
-        self._devctx = {}
 
         # Remember the main thread
         # Only the main thread can *actually* destroy
@@ -120,25 +108,7 @@ class _Runtime(object):
     def current_context(self):
         """Return the active gpu context
         """
-        top = self.context_stack.top
-        # integrity check
-        assert driver.get_context().value == top.handle.value, (
-            "An unmanaged CUDA context is active."
-        )
-        return top
-
-    def _create_context(self, gpu):
-        """Create a new context for the given gpu
-        """
-        # Use lock to prevent internal state corruption
-        with self._lock:
-            ctx = gpu.create_context()
-            self._contexts[ctx.handle.value] = ctx
-            self._devctx[gpu.id] = ctx
-
-            assert len(self._contexts) <= len(gpus), _MSG_TOO_MANY_CTX_PER_DEV
-            assert len(self._devctx) <= len(gpus), _MSG_TOO_MANY_CTX_PER_DEV
-            return ctx
+        return self.context_stack.top
 
     def _get_or_create_context(self, gpu):
         """Try to use a already created context for the given gpu.  If none
@@ -146,27 +116,17 @@ class _Runtime(object):
 
         Returns the context
         """
-        # Get a context from the device
-        ctx = self._devctx.get(gpu.id)
-        if ctx is None:
-            ctx = self._create_context(gpu)
-        else:
-            # Push the context to the stack
+        with self._lock:
+            ctx = gpu.get_primary_context()
             ctx.push()
-
-        return ctx
+            return ctx
 
     def push_context(self, gpu):
         """Push a context for the given GPU or create a new one if no context
         exist for the given GPU.
         """
-        # First context
-        if not self._contexts:
-            # Create a context and quit
-            ctx = self._create_context(gpu)
-
         # Context stack is empty or the active device is not the given gpu
-        elif self.context_stack.is_empty or self.current_context.device != gpu:
+        if self.context_stack.is_empty or self.current_context.device != gpu:
             ctx = self._get_or_create_context(gpu)
 
         # Active context is from the gpu
@@ -215,15 +175,9 @@ class _Runtime(object):
             self._destroy_all_contexts()
 
     def _destroy_all_contexts(self):
-        # Destroy all contexts
-        for ctx in self._contexts.values():
-            ctx.reset()
         # Reset all devices
         for gpu in self.gpus:
             gpu.reset()
-        # Clear internal references to contexts and devices
-        self._contexts.clear()
-        self._devctx.clear()
 
 
 _runtime = _Runtime()

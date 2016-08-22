@@ -2,11 +2,10 @@ from __future__ import print_function, division, absolute_import
 
 import collections
 import dis
-from functools import reduce
-import operator
 import sys
+from copy import copy
 
-from . import ir, controlflow, dataflow, utils, errors, consts
+from . import ir, controlflow, dataflow, utils, errors, consts, analysis
 from .utils import builtins
 
 
@@ -87,9 +86,55 @@ class GeneratorInfo(object):
         return self.yield_points.values()
 
 
+class VariableLifetime(object):
+    """
+    For lazily building information of variable lifetime
+    """
+    def __init__(self, blocks):
+        self._blocks = blocks
+
+    @utils.cached_property
+    def cfg(self):
+        return analysis.compute_cfg_from_blocks(self._blocks)
+
+    @utils.cached_property
+    def usedefs(self):
+        return analysis.compute_use_defs(self._blocks)
+
+    @utils.cached_property
+    def livemap(self):
+        return analysis.compute_live_map(self.cfg, self._blocks,
+                                         self.usedefs.usemap,
+                                         self.usedefs.defmap)
+
+    @utils.cached_property
+    def deadmaps(self):
+        return analysis.compute_dead_maps(self.cfg, self._blocks, self.livemap,
+                                          self.usedefs.defmap)
+
+
 class Interpreter(object):
     """A bytecode interpreter that builds up the IR.
     """
+
+    @classmethod
+    def from_blocks(cls, bytecode, blocks, used_globals={},
+                    force_non_generator=None, override_args=None):
+        if override_args is not None:
+            # XXX patch bytecode
+            bytecode = copy(bytecode)
+            bytecode.arg_names = tuple(override_args)
+            bytecode.arg_count = len(bytecode.arg_names)
+
+        interp = cls(bytecode=bytecode)
+        firstblock = blocks[min(blocks)]
+        interp.blocks = blocks
+        interp.loc = firstblock.loc
+        if force_non_generator:
+            interp.generator_info = None
+        interp.used_globals = used_globals
+        interp._post_processing()
+        return interp
 
     def __init__(self, bytecode):
         self.bytecode = bytecode
@@ -168,59 +213,54 @@ class Interpreter(object):
         # Interpret loop
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
-        # Post-processing and analysis on generated IR
-        var_def_map, var_dead_map = self._insert_var_dels()
-        self._compute_live_variables(var_def_map, var_dead_map)
+
+        # post-processing
+        self._post_processing()
+
+    @utils.cached_property
+    def variable_lifetime(self):
+        return VariableLifetime(self.blocks)
+
+    def _post_processing(self):
+        """
+        Post-processing and analysis on generated IR
+        """
+        # emit del nodes
+        self._insert_var_dels()
+
+        vlt = self.variable_lifetime
+        bev = analysis.compute_live_variables(vlt.cfg, self.blocks,
+                                              vlt.usedefs.defmap,
+                                              vlt.deadmaps.combined)
+        for offset, ir_block in self.blocks.items():
+            self.block_entry_vars[ir_block] = bev[offset]
+
         if self.generator_info:
             self._compute_generator_info()
 
-    def _compute_live_variables(self, var_def_map, var_dead_map):
+    def _populate_generator_info(self):
         """
-        Compute the live variables at the beginning of each block
-        and at each yield point.
-        The ``var_def_map`` and ``var_dead_map`` indicates the variable defined
-        and deleted at each block, respectively.
+        Fill `index` for the Yield instruction and create YieldPoints.
         """
-        # live var at the entry per block
-        block_entry_vars = collections.defaultdict(set)
-
-        def fix_point_progress():
-            return tuple(map(len, block_entry_vars.values()))
-
-        cfg = self.cfa.graph
-        old_point = None
-        new_point = fix_point_progress()
-
-        # Propagate defined variables and still live the successors.
-        # (note the entry block automatically gets an empty set)
-
-        # Note: This is finding the actual available variables at the entry
-        #       of each block. The algorithm in _compute_live_map() is finding
-        #       the variable that must be available at the entry of each block.
-        #       This is top-down in the dataflow.  The other one is bottom-up.
-        while old_point != new_point:
-            # We iterate until the result stabilizes.  This is necessary
-            # because of loops in the graphself.
-            for offset in self.blocks:
-                # vars available + variable defined
-                avail = block_entry_vars[offset] | var_def_map[offset]
-                # substract variables deleted
-                avail -= var_dead_map[offset]
-                # add ``avail`` to each successors
-                for succ, _data in cfg.successors(offset):
-                    block_entry_vars[succ] |= avail
-
-            old_point = new_point
-            new_point = fix_point_progress()
-
-        for offset, ir_block in self.blocks.items():
-            self.block_entry_vars[ir_block] = block_entry_vars[offset]
+        dct = self.generator_info.yield_points
+        assert not dct, 'rerunning _populate_generator_info'
+        for block in self.blocks.values():
+            for inst in block.body:
+                if isinstance(inst, ir.Assign):
+                    yieldinst = inst.value
+                    if isinstance(yieldinst, ir.Yield):
+                        index = len(dct) + 1
+                        yieldinst.index = index
+                        yp = YieldPoint(block, yieldinst)
+                        dct[yieldinst.index] = yp
 
     def _compute_generator_info(self):
         """
         Compute the generator's state variables as the union of live variables
         at all yield points.
         """
+        self._populate_generator_info()
+
         gi = self.generator_info
         for yp in gi.get_yield_points():
             live_vars = set(self.block_entry_vars[yp.block])
@@ -271,139 +311,8 @@ class Interpreter(object):
         the last use. Variable referenced by terminators (e.g. conditional
         branch and return) are deleted by the successors or the caller.
         """
-        var_use_map, var_def_map = self._compute_use_defs()
-        live_map = self._compute_live_map(var_use_map, var_def_map)
-        dead_maps = self._compute_dead_maps(live_map, var_def_map)
-        internal_dead_map, escaping_dead_map = dead_maps
-        self._patch_var_dels(internal_dead_map, escaping_dead_map)
-        var_dead_map = dict((k, internal_dead_map[k] | escaping_dead_map[k])
-                            for k in self.blocks)
-        return var_def_map, var_dead_map
-
-    def _compute_use_defs(self):
-        """
-        Find variable use/def per block.
-        """
-        var_use_map = {}   # { block offset -> set of vars }
-        var_def_map = {}   # { block offset -> set of vars }
-        for offset, ir_block in self.blocks.items():
-            var_use_map[offset] = use_set = set()
-            var_def_map[offset] = def_set = set()
-            for stmt in ir_block.body:
-                if isinstance(stmt, ir.Assign):
-                    if isinstance(stmt.value, ir.Inst):
-                        rhs_set = set(var.name
-                                      for var in stmt.value.list_vars())
-                    elif isinstance(stmt.value, ir.Var):
-                        rhs_set = set([stmt.value.name])
-                    elif isinstance(stmt.value, (ir.Arg, ir.Const, ir.Global,
-                                                 ir.FreeVar)):
-                        rhs_set = ()
-                    else:
-                        raise AssertionError('unreachable', type(stmt.value))
-                    # If lhs not in rhs of the assignment
-                    if stmt.target.name not in rhs_set:
-                        def_set.add(stmt.target.name)
-
-                for var in stmt.list_vars():
-                    # do not include locally defined vars to use-map
-                    if var.name not in def_set:
-                        use_set.add(var.name)
-
-        return var_use_map, var_def_map
-
-    def _compute_live_map(self, var_use_map, var_def_map):
-        """
-        Find variables that must be alive at the ENTRY of each block.
-        We use a simple fix-point algorithm that iterates until the set of
-        live variables is unchanged for each block.
-        """
-        live_map = {}
-        for offset in self.blocks.keys():
-            live_map[offset] = var_use_map[offset]
-
-        def fix_point_progress():
-            return tuple(len(v) for v in live_map.values())
-
-        old_point = None
-        new_point = fix_point_progress()
-        while old_point != new_point:
-            for offset in live_map.keys():
-                for inc_blk, _data in self.cfa.graph.predecessors(offset):
-                    # substract all variables that are defined in
-                    # the incoming block
-                    live_map[inc_blk] |= live_map[offset] - var_def_map[inc_blk]
-            old_point = new_point
-            new_point = fix_point_progress()
-
-        return live_map
-
-    def _compute_dead_maps(self, live_map, var_def_map):
-        """
-        Compute the end-of-live information for variables.
-        `live_map` contains a mapping of block offset to all the living
-        variables at the ENTRY of the block.
-        """
-        # The following three dictionaries will be
-        # { block offset -> set of variables to delete }
-        # all vars that should be deleted at the start of the successors
-        escaping_dead_map = collections.defaultdict(set)
-        # all vars that should be deleted within this block
-        internal_dead_map = collections.defaultdict(set)
-        # all vars that should be delted after the function exit
-        exit_dead_map = collections.defaultdict(set)
-
-        for offset, ir_block in self.blocks.items():
-            # live vars WITHIN the block will include all the locally
-            # defined variables
-            cur_live_set = live_map[offset] | var_def_map[offset]
-            # vars alive alive in the outgoing blocks
-            outgoing_live_map = dict((out_blk, live_map[out_blk])
-                                     for out_blk, _data
-                                     in self.cfa.graph.successors(offset))
-            # vars to keep alive for the terminator
-            terminator_liveset = set(v.name
-                                     for v in ir_block.terminator.list_vars())
-            # vars to keep alive in the successors
-            combined_liveset = reduce(operator.or_, outgoing_live_map.values(),
-                                      set())
-            # include variables used in terminator
-            combined_liveset |= terminator_liveset
-            # vars that are dead within the block beacuse they are not
-            # propagated to any outgoing blocks
-            internal_set = cur_live_set - combined_liveset
-            internal_dead_map[offset] = internal_set
-            # vars that escape this block
-            escaping_live_set = cur_live_set - internal_set
-            for out_blk, new_live_set in outgoing_live_map.items():
-                # successor should delete the unused escaped vars
-                new_live_set = new_live_set | var_def_map[out_blk]
-                escaping_dead_map[out_blk] |= escaping_live_set - new_live_set
-
-            # if no outgoing blocks
-            if not outgoing_live_map:
-                # insert var used by terminator
-                exit_dead_map[offset] = terminator_liveset
-
-        # Verify that the dead maps cover all live variables
-        all_vars = reduce(operator.or_, live_map.values(), set())
-        internal_dead_vars = reduce(operator.or_, internal_dead_map.values(),
-                                    set())
-        escaping_dead_vars = reduce(operator.or_, escaping_dead_map.values(),
-                                    set())
-        exit_dead_vars = reduce(operator.or_, exit_dead_map.values(), set())
-        dead_vars = (internal_dead_vars | escaping_dead_vars | exit_dead_vars)
-        missing_vars = all_vars - dead_vars
-        if missing_vars:
-            # There are no exit points
-            if not self.cfa.graph.exit_points():
-                # We won't be able to verify this
-                pass
-            else:
-                msg = 'liveness info missing for vars: {0}'.format(missing_vars)
-                raise RuntimeError(msg)
-
-        return internal_dead_map, escaping_dead_map
+        vlt = self.variable_lifetime
+        self._patch_var_dels(vlt.deadmaps.internal, vlt.deadmaps.escaping)
 
     def _patch_var_dels(self, internal_dead_map, escaping_dead_map):
         """
@@ -425,7 +334,9 @@ class Interpreter(object):
             # rewrite body and insert dels
             body = []
             for stmt, delete_set in reversed(delete_pts):
-                body.append(stmt)
+                # Ignore dels (assuming no user inserted deletes)
+                if not isinstance(stmt, ir.Del):
+                    body.append(stmt)
                 # note: the reverse sort is not necessary for correctness
                 #       it is just to minimize changes to test for now
                 for var_name in sorted(delete_set, reverse=True):
@@ -1220,9 +1131,7 @@ class Interpreter(object):
         self.current_block.append(stmt)
 
     def op_YIELD_VALUE(self, inst, value, res):
-        dct = self.generator_info.yield_points
-        index = len(dct) + 1
+        # initialize index to None.  it's being set later in post-processing
+        index = None
         inst = ir.Yield(value=self.get(value), index=index, loc=self.loc)
-        yp = YieldPoint(self.current_block, inst)
-        dct[index] = yp
         return self.store(inst, res)

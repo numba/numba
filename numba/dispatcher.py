@@ -213,7 +213,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         """Disable the compilation of new signatures at call time.
         """
         # If disabling compilation then there must be at least one signature
-        assert val or len(self.signatures) > 0
+        assert (not val) or len(self.signatures) > 0
         self._can_compile = not val
 
     def add_overload(self, cres):
@@ -562,22 +562,25 @@ class LiftedLoop(_DispatcherBase):
     """
     _fold_args = False
 
-    def __init__(self, bytecode, typingctx, targetctx, locals, flags):
+    def __init__(self, interp, typingctx, targetctx, flags, locals):
+        self.bytecode = interp.bytecode
+        self.interp = interp
+        self.lifted_from = None
+
         self.typingctx = typingctx
         self.targetctx = targetctx
-
-        _DispatcherBase.__init__(self, bytecode.arg_count, bytecode.func,
-                                 bytecode.pysig)
-
-        self.locals = locals
         self.flags = flags
-        self.bytecode = bytecode
-        self.lifted_from = None
+        self.locals = locals
+
+        _DispatcherBase.__init__(self, self.bytecode.arg_count,
+                                 self.bytecode.func, self.bytecode.pysig)
 
     def get_source_location(self):
         """Return the starting line number of the loop.
         """
-        return next(iter(self.bytecode)).lineno
+        firstblock = self.interp.blocks[min(self.interp.blocks)]
+        inst = firstblock.body[0]
+        return inst.loc.line
 
     def compile(self, sig):
         with self._compile_lock:
@@ -592,14 +595,13 @@ class LiftedLoop(_DispatcherBase):
                 return existing.entry_point
 
             assert not flags.enable_looplift, "Enable looplift flags is on"
-            cres = compiler.compile_bytecode(typingctx=self.typingctx,
-                                             targetctx=self.targetctx,
-                                             bc=self.bytecode,
-                                             args=args,
-                                             return_type=return_type,
-                                             flags=flags,
-                                             locals=self.locals,
-                                             lifted=(), lifted_from=self.lifted_from)
+            cres = compiler.compile_ir(typingctx=self.typingctx,
+                                       targetctx=self.targetctx,
+                                       interp=self.interp,
+                                       args=args, return_type=return_type,
+                                       flags=flags, locals=self.locals,
+                                       lifted=(),
+                                       lifted_from=self.lifted_from)
 
             # Check typing error if object mode is used
             if cres.typing_error is not None and not flags.enable_pyobject:

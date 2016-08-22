@@ -41,7 +41,6 @@ extensions = [
     #'sphinx.ext.mathjax',
     'sphinx.ext.autodoc',
     #'sphinx.ext.graphviz',
-    'sphinxjp.themecore',
 ]
 
 todo_include_todos = True
