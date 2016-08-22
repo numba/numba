@@ -390,55 +390,6 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
 # ---------------------------------------------------------------------------
 
 
-class _ProtectEngineDestroy(object):
-    def __init__(self, set_cas, engine):
-        self.set_cas = set_cas
-        self.engine = engine
-
-    def __del__(self):
-        """
-        We need to set the CAS function to NULL to prevent the worker threads to
-        execute this function as LLVM is releasing the memory of the function.
-        """
-        self.set_cas(0)
-
-
-_keepalive = []
-
-
-def _make_cas_function():
-    """
-    Generate a compare-and-swap function for portability sake.
-    """
-    from numba.targets.registry import cpu_target
-
-    codegen = cpu_target.target_context.codegen()
-
-    # Generate IR
-    library = codegen.create_library('cas_for_parallel_ufunc')
-    mod = library.create_ir_module('cas_module')
-
-    llint = lc.Type.int()
-    llintp = lc.Type.pointer(llint)
-    fnty = lc.Type.function(llint, [llintp, llint, llint])
-    fn = mod.add_function(fnty, name='.numba.parallel.ufunc.cas')
-    ptr, old, repl = fn.args
-    bb = fn.append_basic_block('')
-    builder = lc.Builder(bb)
-    outpack = builder.cmpxchg(ptr, old, repl, ordering='monotonic')
-    out = builder.extract_value(outpack, 0)
-    failed = builder.extract_value(outpack, 1)
-    builder.ret(builder.select(failed, old, out))
-
-    # Build & Link
-    library.add_ir_module(mod)
-    library.finalize()
-
-    ptr = library.get_pointer_to_function(fn.name)
-
-    return library, ptr
-
-
 def _launch_threads():
     """
     Initialize work queues and workers
@@ -463,13 +414,6 @@ def _init():
     ll.add_symbol('numba_add_task', lib.add_task)
     ll.add_symbol('numba_synchronize', lib.synchronize)
     ll.add_symbol('numba_ready', lib.ready)
-
-    set_cas = CFUNCTYPE(None, c_void_p)(lib.set_cas)
-
-    library, cas_ptr = _make_cas_function()
-    set_cas(c_void_p(cas_ptr))
-
-    _keepalive.append(_ProtectEngineDestroy(set_cas, library))
 
     _is_initialized = True
 
