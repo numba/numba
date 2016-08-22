@@ -1321,29 +1321,35 @@ def array_T(context, builder, typ, value):
     return impl_ret_borrowed(context, builder, typ, res)
 
 
-def _attempt_nocopy_reshape(context, builder, aryty, ary, newnd, newshape,
-                            newstrides):
+def _attempt_nocopy_reshape(context, builder, aryty, ary,
+                            newnd, newshape, newstrides):
     """
     Call into Numba_attempt_nocopy_reshape() for the given array type
-    and instance, and the specified new shape.  The array pointed to
-    by *newstrides* will be filled up if successful.
+    and instance, and the specified new shape.
+
+    Return value is non-zero if successful, and the array pointed to
+    by *newstrides* will be filled up with the computed results.
     """
     ll_intp = context.get_value_type(types.intp)
     ll_intp_star = ll_intp.as_pointer()
     ll_intc = context.get_value_type(types.intc)
-    fnty = lc.Type.function(ll_intc, [ll_intp, ll_intp_star, ll_intp_star,
-                                      ll_intp, ll_intp_star, ll_intp_star,
-                                      ll_intp, ll_intc])
+    fnty = lc.Type.function(ll_intc, [
+        # nd, *dims, *strides
+        ll_intp, ll_intp_star, ll_intp_star,
+        # newnd, *newdims, *newstrides
+        ll_intp, ll_intp_star, ll_intp_star,
+        # itemsize, is_f_order
+        ll_intp, ll_intc])
     fn = builder.module.get_or_insert_function(
         fnty, name="numba_attempt_nocopy_reshape")
 
-    nd = lc.Constant.int(ll_intp, aryty.ndim)
+    nd = ll_intp(aryty.ndim)
     shape = cgutils.gep_inbounds(builder, ary._get_ptr_by_name('shape'), 0, 0)
     strides = cgutils.gep_inbounds(builder, ary._get_ptr_by_name('strides'), 0, 0)
-    newnd = lc.Constant.int(ll_intp, newnd)
+    newnd = ll_intp(newnd)
     newshape = cgutils.gep_inbounds(builder, newshape, 0, 0)
     newstrides = cgutils.gep_inbounds(builder, newstrides, 0, 0)
-    is_f_order = lc.Constant.int(ll_intc, 0)
+    is_f_order = ll_intc(0)
     res = builder.call(fn, [nd, shape, strides,
                             newnd, newshape, newstrides,
                             ary.itemsize, is_f_order])
@@ -1352,41 +1358,39 @@ def _attempt_nocopy_reshape(context, builder, aryty, ary, newnd, newshape,
 
 def normalize_reshape_value(origsize, shape):
     num_neg_value = 0
-    for s in shape:
+    known_size = 1
+    for ax, s in enumerate(shape):
         if s < 0:
             num_neg_value += 1
+            neg_ax = ax
+        else:
+            known_size *= s
 
     if num_neg_value == 0:
-        total_size = 1
-        for s in shape:
-            total_size *= s
-
-        if origsize != total_size:
+        if origsize != known_size:
             raise ValueError("total size of new array must be unchanged")
 
     elif num_neg_value == 1:
-        # infer negative dimension
-        known_size = 1
-        inferred_ax = 0
-        for ax, s in enumerate(shape):
-            if s > 0:
-                known_size *= s
-            else:
-                inferred_ax = ax
-
-        if origsize % known_size > 0:
-            raise ValueError("total size of new array must be unchanged")
+        # Infer negative dimension
+        if known_size == 0:
+            inferred = 0
+            ok = origsize == 0
         else:
-            shape[inferred_ax] = origsize // known_size
+            inferred = origsize // known_size
+            ok = origsize % known_size == 0
+        if not ok:
+            raise ValueError("total size of new array must be unchanged")
+        shape[neg_ax] = inferred
 
     else:
-        raise ValueError("multiple negative shape value")
+        raise ValueError("multiple negative shape values")
 
 
 @lower_builtin('array.reshape', types.Array, types.BaseTuple)
 def array_reshape(context, builder, sig, args):
     aryty = sig.args[0]
     retty = sig.return_type
+
     shapety = sig.args[1]
     shape = args[1]
 
@@ -1395,12 +1399,14 @@ def array_reshape(context, builder, sig, args):
 
     ary = make_array(aryty)(context, builder, args[0])
 
-    # Create a shape array (no heap allocation)
-    shape_ary_ty = types.Array(dtype=shapety.dtype, ndim=1, layout='C')
-
+    # We will change the target shape in this slot
+    # (see normalize_reshape_value() below)
     newshape = cgutils.alloca_once(builder, ll_shape)
     builder.store(shape, newshape)
 
+    # Create a shape array pointing to the value of newshape.
+    # (roughly, `shape_ary = np.array(ary.shape)`)
+    shape_ary_ty = types.Array(dtype=shapety.dtype, ndim=1, layout='C')
     shape_ary = make_array(shape_ary_ty)(context, builder)
     shape_itemsize = context.get_constant(types.intp,
                                           context.get_abi_sizeof(ll_intp))
@@ -1427,7 +1433,7 @@ def array_reshape(context, builder, sig, args):
 
     ok = _attempt_nocopy_reshape(context, builder, aryty, ary, newnd,
                                  newshape, newstrides)
-    fail = builder.icmp_unsigned('==', ok, lc.Constant.int(ok.type, 0))
+    fail = builder.icmp_unsigned('==', ok, ok.type(0))
 
     with builder.if_then(fail):
         msg = "incompatible shape for array"

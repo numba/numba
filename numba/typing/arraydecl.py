@@ -220,7 +220,8 @@ def normalize_shape(shape):
             return types.UniTuple(dimtype, len(shape))
 
     elif isinstance(shape, types.Tuple) and shape.count == 0:
-        return shape
+        # Force (0 x intp) for consistency with other shapes
+        return types.UniTuple(types.intp, 0)
 
 
 @infer_getattr
