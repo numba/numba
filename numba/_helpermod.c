@@ -225,9 +225,7 @@ MOD_INIT(_helperlib) {
     PyModule_AddIntConstant(m, "py_buffer_size", sizeof(Py_buffer));
     PyModule_AddIntConstant(m, "py_gil_state_size", sizeof(PyGILState_STATE));
 
-    if (_numba_rnd_random_seed(&numba_py_random_state) ||
-        _numba_rnd_random_seed(&numba_np_random_state))
-        return MOD_ERROR_VAL;
+    numba_rnd_ensure_global_init();
 
     return MOD_SUCCESS_VAL(m);
 }

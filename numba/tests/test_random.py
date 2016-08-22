@@ -15,7 +15,6 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba import jit, _helperlib, types
 from numba.compiler import compile_isolated
-from numba.targets.randomimpl import random_init
 from .support import TestCase, compile_function, tag
 
 
@@ -236,10 +235,6 @@ class TestRandom(BaseTest):
     # C code and SSE-using LLVM code), which is especially brutal for some
     # iterative algorithms with sensitive exit conditions.
     # Therefore we stick to hardcoded integers for seed values.
-
-    def setUp(self):
-        # Make sure the PRNG is initialized before we set the seed
-        random_init()
 
     def _check_random_seed(self, seedfunc, randomfunc):
         """
@@ -909,10 +904,6 @@ class TestRandomArrays(BaseTest):
     Test array-producing variants of np.random.* functions.
     """
 
-    def setUp(self):
-        # Make sure the PRNG is initialized before we set the seed
-        random_init()
-
     def _compile_array_dist(self, funcname, nargs):
         qualname = "np.random.%s" % (funcname,)
         argstring = ', '.join('abcd'[:nargs])
@@ -1042,10 +1033,6 @@ class TestRandomChoice(BaseTest):
     """
     Test np.random.choice.
     """
-
-    def setUp(self):
-        # Make sure the PRNG is initialized before we set the seed
-        random_init()
 
     def _check_results(self, pop, res, replace=True):
         """
@@ -1210,10 +1197,6 @@ class TestRandomMultinomial(BaseTest):
     # A biased dice
     pvals = np.array([1, 1, 1, 2, 3, 1], dtype=np.float64)
     pvals /= pvals.sum()
-
-    def setUp(self):
-        # Make sure the PRNG is initialized before we set the seed
-        random_init()
 
     def _check_sample(self, n, pvals, sample):
         """

@@ -105,46 +105,6 @@ rnd_init_by_array(rnd_state_t *state, unsigned int init_key[], size_t key_length
     state->is_initialized = 1;
 }
 
-/* Random-initialize the given state (for use at startup) */
-NUMBA_EXPORT_FUNC(int)
-_numba_rnd_random_seed(rnd_state_t *state)
-{
-    PyObject *timemod, *timeobj;
-    double timeval;
-    Py_uintptr_t seed;
-    unsigned int seed32;
-    void *dummy;
-
-    /* XXX we could get a seed using _PyOS_URandom() instead */
-
-    timemod = PyImport_ImportModuleNoBlock("time");
-    if (!timemod)
-        return -1;
-    timeobj = PyObject_CallMethod(timemod, "time", NULL);
-    Py_DECREF(timemod);
-    timeval = PyFloat_AsDouble(timeobj);
-    Py_DECREF(timeobj);
-    if (timeval == -1 && PyErr_Occurred())
-        return -1;
-    /* Mix in seconds and nanoseconds */
-    seed = (Py_uintptr_t) timeval ^ (Py_uintptr_t) (timeval * 1e9);
-#ifndef _WIN32
-    seed ^= getpid();
-#endif
-    /* Address space randomization bits: mix in various pointers. */
-    seed ^= (Py_uintptr_t) &timemod;
-    seed += (Py_uintptr_t) &PyObject_CallMethod >> 3;
-    seed += (Py_uintptr_t) &rnd_init_by_array;
-    dummy = malloc(1);
-    free(dummy);
-    seed += (Py_uintptr_t) &dummy;
-
-    /* Reduce to 32 bits for Mersenne Twisted seeding */
-    seed32 = (unsigned int) (seed ^ (seed >> 16));
-    numba_rnd_init(state, seed32);
-    return 0;
-}
-
 /*
  * Management of thread-local random state.
  */
@@ -202,13 +162,17 @@ rnd_atfork_child(void)
 }
 #endif
 
-static void
-rnd_ensure_global_init(void)
+/* Global initialization routine.  It must be called as early as possible.
+ */
+NUMBA_EXPORT_FUNC(void)
+numba_rnd_ensure_global_init(void)
 {
     if (!rnd_globally_initialized) {
 #if HAVE_PTHREAD_ATFORK
         pthread_atfork(NULL, NULL, rnd_atfork_child);
 #endif
+        numba_py_random_state.is_initialized = 0;
+        numba_np_random_state.is_initialized = 0;
         rnd_globally_initialized = 1;
     }
 }
@@ -224,8 +188,6 @@ rnd_implicit_init(rnd_state_t *state)
     PyObject *module, *bufobj;
     Py_buffer buf;
     PyGILState_STATE gilstate = PyGILState_Ensure();
-
-    rnd_ensure_global_init();
 
     module = PyImport_ImportModuleNoBlock("os");
     if (module == NULL)
@@ -411,7 +373,6 @@ _numba_rnd_reset(PyObject *self, PyObject *args)
 NUMBA_EXPORT_FUNC(PyObject *)
 _numba_rnd_global_init(PyObject *self)
 {
-    rnd_ensure_global_init();
     Py_RETURN_NONE;
 }
 
