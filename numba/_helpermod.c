@@ -94,6 +94,7 @@ build_c_helpers_dict(void)
     declmethod(xxpotrf);
     declmethod(ez_rgeev);
     declmethod(ez_cgeev);
+    declmethod(ez_xxxevd);
     declmethod(ez_gesdd);
     declmethod(ez_geqrf);
     declmethod(ez_xxgqr);

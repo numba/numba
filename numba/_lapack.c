@@ -502,6 +502,14 @@ EMIT_GET_CLAPACK_FUNC(dgeev)
 EMIT_GET_CLAPACK_FUNC(cgeev)
 EMIT_GET_CLAPACK_FUNC(zgeev)
 
+/* Computes for an N-by-N Hermitian matrix A, the
+ * eigenvalues and, optionally, the left and/or right eigenvectors.
+ */
+EMIT_GET_CLAPACK_FUNC(ssyevd)
+EMIT_GET_CLAPACK_FUNC(dsyevd)
+EMIT_GET_CLAPACK_FUNC(cheevd)
+EMIT_GET_CLAPACK_FUNC(zheevd)
+
 /* Computes generalised SVD */
 EMIT_GET_CLAPACK_FUNC(sgesdd)
 EMIT_GET_CLAPACK_FUNC(dgesdd)
@@ -563,6 +571,15 @@ typedef void (*cgesdd_t)(char *jobz, F_INT *m, F_INT *n, void *a, F_INT *lda,
                          void *work, F_INT *lwork, void *rwork, F_INT *iwork,
                          F_INT *info);
 
+typedef void (*xsyevd_t)(char *jobz, char *uplo, F_INT *n, void *a, F_INT *lda,
+                         void *w, void *work, F_INT *lwork, F_INT *iwork,
+                         F_INT *liwork, F_INT *info);
+
+typedef void (*xheevd_t)(char *jobz, char *uplo, F_INT *n, void *a, F_INT *lda,
+                         void *w, void *work, F_INT *lwork, void *rwork,
+                         F_INT *lrwork, F_INT *iwork, F_INT *liwork,
+                         F_INT *info);
+
 typedef void (*xgeqrf_t)(F_INT *m, F_INT *n, void *a, F_INT *lda, void *tau,
                          void *work, F_INT *lwork, F_INT *info);
 
@@ -615,6 +632,52 @@ static size_t kind_size(char kind)
     }
     return data_size;
 
+}
+
+/*
+ * underlying_float_kind()
+ * gets the underlying float kind for a given kind.
+ *
+ * Input:
+ * kind - the kind, one of:
+ *         (s, d, c, z) = (float, double, complex, double complex).
+ *
+ * Returns:
+ * underlying_float_kind - the underlying float kind, one of:
+ *         (s, d) = (float, double).
+ *
+ * This function essentially provides a map between the char kind
+ * of a type and the char kind of the underlying float used in the
+ * type. Essentially:
+ * ---------------
+ * Input -> Output
+ * ---------------
+ *     s -> s
+ *     d -> d
+ *     c -> s
+ *     z -> d
+ * ---------------
+ * 
+ */
+static char underlying_float_kind(char kind)
+{
+    switch(kind)
+    {
+        case 's':
+        case 'c':
+            return 's';
+        case 'd':
+        case 'z':
+            return 'd';
+        default:
+        {
+            PyGILState_STATE st = PyGILState_Ensure();
+            PyErr_SetString(PyExc_ValueError,
+                            "invalid kind in underlying_float_kind()");
+            PyGILState_Release(st);
+        }
+    }
+    return -1;
 }
 
 /*
@@ -982,6 +1045,213 @@ numba_ez_cgeev(char kind, char jobvl, char jobvr,  Py_ssize_t n, void *a,
     return (int)info;
 }
 
+
+typedef void (*xsyevd_t)(char *jobz, char *uplo, F_INT *n, void *a, F_INT *lda,
+                         void *w, void *work, F_INT *lwork, F_INT *iwork,
+                         F_INT *liwork, F_INT *info);
+
+typedef void (*xheevd_t)(char *jobz, char *uplo, F_INT *n, void *a, F_INT *lda,
+                         void *w, void *work, F_INT *lwork, void *rwork,
+                         F_INT *lrwork, F_INT *iwork, F_INT *liwork,
+                         F_INT *info);
+
+
+/* real space symmetric eigen systems info from ssyevd/dsyevd */
+static int
+numba_raw_rsyevd(char kind, char jobz, char uplo, Py_ssize_t n, void *a,
+                 Py_ssize_t lda, void *w, void *work, Py_ssize_t lwork,
+                 F_INT *iwork, Py_ssize_t liwork, F_INT *info)
+{
+    void *raw_func = NULL;
+    F_INT _n, _lda, _lwork, _liwork;
+
+    ENSURE_VALID_REAL_KIND(kind)
+
+    switch (kind)
+    {
+        case 's':
+            raw_func = get_clapack_ssyevd();
+            break;
+        case 'd':
+            raw_func = get_clapack_dsyevd();
+            break;
+    }
+    ENSURE_VALID_FUNC(raw_func)
+
+    _n = (F_INT) n;
+    _lda = (F_INT) lda;
+    _lwork = (F_INT) lwork;
+    _liwork = (F_INT) liwork;
+
+    (*(xsyevd_t) raw_func)(&jobz, &uplo, &_n, a, &_lda, w, work, &_lwork, iwork, &_liwork, info);
+    return 0;
+}
+
+/* Real space eigen systems info from dsyevd/ssyevd
+ * as numba_raw_rsyevd but the allocation and error handling is done for the user.
+ * Args are as per LAPACK.
+ */
+static int
+numba_ez_rsyevd(char kind, char jobz, char uplo, Py_ssize_t n, void *a, Py_ssize_t lda, void *w)
+{
+    F_INT info = 0;
+    F_INT lwork = -1, liwork=-1;
+    F_INT _n, _lda;
+    size_t base_size = -1;
+    void *work = NULL;
+    F_INT *iwork = NULL;
+    all_dtypes stack_slot;
+    int stack_int = -1;
+
+    ENSURE_VALID_REAL_KIND(kind)
+
+    _n = (F_INT) n;
+    _lda = (F_INT) lda;
+
+    base_size = kind_size(kind);
+
+    work = &stack_slot;
+    iwork = &stack_int;
+    numba_raw_rsyevd(kind, jobz, uplo, _n, a, _lda, w, work, lwork, iwork, liwork, &info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_rsyevd", info);
+
+    lwork = cast_from_X(kind, work);
+    if (checked_PyMem_RawMalloc(&work, base_size * lwork))
+    {
+        return STATUS_ERROR;
+    }
+    liwork = *iwork;
+    if (checked_PyMem_RawMalloc((void**)&iwork, base_size * liwork))
+    {
+        PyMem_RawFree(work);
+        return STATUS_ERROR;
+    }
+    numba_raw_rsyevd(kind, jobz, uplo, _n, a, _lda, w, work, lwork, iwork, liwork, &info);
+    PyMem_RawFree(work);
+    PyMem_RawFree(iwork);
+
+    CATCH_LAPACK_INVALID_ARG("numba_raw_rsyevd", info);
+
+    return (int)info;
+}
+
+
+/* complex space symmetric eigen systems info from cheevd/zheevd*/
+static int
+numba_raw_cheevd(char kind, char jobz, char uplo, Py_ssize_t n, void *a,
+                 Py_ssize_t lda, void *w, void *work, Py_ssize_t lwork,
+                 void *rwork, Py_ssize_t lrwork, F_INT *iwork,
+                 Py_ssize_t liwork, F_INT *info)
+{
+    void *raw_func = NULL;
+    F_INT _n, _lda, _lwork, _lrwork, _liwork;
+
+    ENSURE_VALID_COMPLEX_KIND(kind)
+
+    switch (kind)
+    {
+        case 'c':
+            raw_func = get_clapack_cheevd();
+            break;
+        case 'z':
+            raw_func = get_clapack_zheevd();
+            break;
+    }
+    ENSURE_VALID_FUNC(raw_func)
+
+    _n = (F_INT) n;
+    _lda = (F_INT) lda;
+    _lwork = (F_INT) lwork;
+    _lrwork = (F_INT) lrwork;
+    _liwork = (F_INT) liwork;
+
+    (*(xheevd_t) raw_func)(&jobz, &uplo, &_n, a, &_lda, w, work, &_lwork, rwork, &_lrwork, iwork, &_liwork, info);
+    return 0;
+}
+
+/* complex space eigen systems info from cheevd/zheevd
+ * as numba_raw_cheevd but the allocation and error handling is done for the user.
+ * Args are as per LAPACK.
+ */
+static int
+numba_ez_cheevd(char kind, char jobz, char uplo, Py_ssize_t n, void *a, Py_ssize_t lda, void *w)
+{
+    F_INT info = 0;
+    F_INT lwork = -1, lrwork = -1, liwork=-1;
+    F_INT _n, _lda;
+    size_t base_size = -1, underlying_float_size = -1;
+    void *work = NULL, *rwork = NULL;
+    F_INT *iwork = NULL;
+    all_dtypes stack_slot1, stack_slot2;
+    char uf_kind;
+    int stack_int = -1;
+
+    ENSURE_VALID_COMPLEX_KIND(kind)
+
+    _n = (F_INT) n;
+    _lda = (F_INT) lda;
+
+    base_size = kind_size(kind);
+    uf_kind = underlying_float_kind(kind);
+    underlying_float_size = kind_size(uf_kind);
+
+    work = &stack_slot1;
+    rwork = &stack_slot2;
+    iwork = &stack_int;
+    numba_raw_cheevd(kind, jobz, uplo, _n, a, _lda, w, work, lwork, rwork, lrwork, iwork, liwork, &info);
+    CATCH_LAPACK_INVALID_ARG("numba_raw_cheevd", info);
+
+    lwork = cast_from_X(uf_kind, work);
+    if (checked_PyMem_RawMalloc(&work, base_size * lwork))
+    {
+        return STATUS_ERROR;
+    }
+
+    lrwork = cast_from_X(uf_kind, rwork);
+    if (checked_PyMem_RawMalloc(&rwork, underlying_float_size * lrwork))
+    {
+        PyMem_RawFree(work);
+        return STATUS_ERROR;
+    }
+
+    liwork = *iwork;
+    if (checked_PyMem_RawMalloc((void**)&iwork, base_size * liwork))
+    {
+        PyMem_RawFree(work);
+        PyMem_RawFree(rwork);
+        return STATUS_ERROR;
+    }
+    numba_raw_cheevd(kind, jobz, uplo, _n, a, _lda, w, work, lwork, rwork, lrwork, iwork, liwork, &info);
+    PyMem_RawFree(work);
+    PyMem_RawFree(rwork);
+    PyMem_RawFree(iwork);
+
+    CATCH_LAPACK_INVALID_ARG("numba_raw_cheevd", info);
+
+    return (int)info;
+}
+
+/* Hermitian eigenvalue systems info from *syevd and *heevd.
+ * This routine hides the type and general complexity involved with making the
+ * calls. The work space computation and error handling etc is hidden.
+ * Args are as per LAPACK.
+ */
+NUMBA_EXPORT_FUNC(int)
+numba_ez_xxxevd(char kind, char jobz, char uplo, Py_ssize_t n, void *a, Py_ssize_t lda, void *w)
+{
+    ENSURE_VALID_KIND(kind)
+
+    switch (kind)
+    {
+        case 's':
+        case 'd':
+            return numba_ez_rsyevd(kind, jobz, uplo, n, a, lda, w);
+        case 'c':
+        case 'z':
+            return numba_ez_cheevd(kind, jobz, uplo, n, a, lda, w);
+    }
+    return STATUS_ERROR; /* unreachable */
+}
 
 /* Real space svd systems info from dgesdd/sgesdd
  * Args are as per LAPACK.
