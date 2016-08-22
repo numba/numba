@@ -52,9 +52,6 @@ def _make_logger():
     return logger
 
 
-_logger = _make_logger()
-
-
 class DeadMemoryError(RuntimeError):
     pass
 
@@ -203,6 +200,10 @@ class Driver(object):
             self.initialization_error = e
 
     def initialize(self):
+        # lazily initialize logger
+        global _logger
+        _logger = _make_logger()
+
         self.is_initialized = True
         try:
             _logger.info('init')
