@@ -5,6 +5,7 @@ the buffer protocol.
 
 from __future__ import print_function, absolute_import, division
 
+import collections
 import functools
 import math
 
@@ -3625,42 +3626,35 @@ def np_array(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 # Sorting
 
-_sorting_init = False
+_sorts = {}
 
 def lt_floats(a, b):
     return math.isnan(b) or a < b
 
-def load_sorts():
+def get_sort_func(is_float, is_argsort=False):
     """
-    Load quicksort lazily, to avoid circular imports accross the jit() global.
+    Get a sort implementation of the given kind.
     """
-    g = globals()
-    if g['_sorting_init']:
-        return
-
-    default_quicksort = quicksort.make_jit_quicksort()
-    g['run_default_quicksort'] = default_quicksort.run_quicksort
-    float_quicksort = quicksort.make_jit_quicksort(lt=lt_floats)
-    g['run_float_quicksort'] = float_quicksort.run_quicksort
-    g['_sorting_init'] = True
+    key = is_float, is_argsort
+    try:
+        return _sorts[key]
+    except KeyError:
+        sort = quicksort.make_jit_quicksort(lt=lt_floats if is_float else None,
+                                            is_argsort=is_argsort)
+        func = _sorts[key] = sort.run_quicksort
+        return func
 
 
 @lower_builtin("array.sort", types.Array)
 def array_sort(context, builder, sig, args):
-    load_sorts()
-
     arytype = sig.args[0]
-    dtype = arytype.dtype
+    sort_func = get_sort_func(is_float=isinstance(arytype.dtype, types.Float))
 
-    if isinstance(dtype, types.Float):
-        def array_sort_impl(arr):
-            return run_float_quicksort(arr)
-    else:
-        def array_sort_impl(arr):
-            return run_default_quicksort(arr)
+    def array_sort_impl(arr):
+        # Note we clobber the return value
+        sort_func(arr)
 
     return context.compile_internal(builder, array_sort_impl, sig, args)
-
 
 @lower_builtin(np.sort, types.Array)
 def np_sort(context, builder, sig, args):
@@ -3671,6 +3665,18 @@ def np_sort(context, builder, sig, args):
         return res
 
     return context.compile_internal(builder, np_sort_impl, sig, args)
+
+@lower_builtin("array.argsort", types.Array)
+@lower_builtin(np.argsort, types.Array)
+def array_argsort(context, builder, sig, args):
+    arytype = sig.args[0]
+    sort_func = get_sort_func(is_float=isinstance(arytype.dtype, types.Float),
+                              is_argsort=True)
+
+    def array_argsort_impl(arr):
+        return sort_func(arr)
+
+    return context.compile_internal(builder, array_argsort_impl, sig, args)
 
 
 # -----------------------------------------------------------------------------

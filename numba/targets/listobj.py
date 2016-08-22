@@ -943,9 +943,9 @@ def list_sort(context, builder, sig, args):
 
     def list_sort_impl(lst, reverse):
         if reverse:
-            return run_reversed_sort(lst)
+            run_reversed_sort(lst)
         else:
-            return run_default_sort(lst)
+            run_default_sort(lst)
 
     return context.compile_internal(builder, list_sort_impl, sig, args)
 

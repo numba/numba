@@ -344,6 +344,11 @@ class FunctionCache(_Cache):
         Load and recreate the cached CompileResult for the given signature,
         using the *target_context*.
         """
+        with self._guard_against_spurious_io_errors():
+            return self._load_overload(sig, target_context)
+        # None returned if the `with` block swallows an exception
+
+    def _load_overload(self, sig, target_context):
         if not self._enabled:
             return
         overloads = self._load_index()
@@ -361,6 +366,10 @@ class FunctionCache(_Cache):
         """
         Save the CompileResult for the given signature in the cache.
         """
+        with self._guard_against_spurious_io_errors():
+            self._save_overload(sig, cres)
+
+    def _save_overload(self, sig, cres):
         if not self._enabled:
             return
         if not self._check_cachable(cres):
@@ -414,6 +423,20 @@ class FunctionCache(_Cache):
 
     def _data_path(self, name):
         return os.path.join(self._cache_path, name)
+
+    @contextlib.contextmanager
+    def _guard_against_spurious_io_errors(self):
+        if os.name == 'nt':
+            # Guard against permission errors due to accessing the file
+            # from several processes (see #2028)
+            try:
+                yield
+            except EnvironmentError as e:
+                if e.errno != errno.EACCES:
+                    raise
+        else:
+            # No such conditions under non-Windows OSes
+            yield
 
     @contextlib.contextmanager
     def _open_for_write(self, filepath):

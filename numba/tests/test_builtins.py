@@ -102,6 +102,7 @@ def long_usecase(x, base):
 def map_usecase(x, map_func):
     return map(map_func, x)
 
+
 def max_usecase1(x, y):
     return max(x, y)
 
@@ -111,6 +112,10 @@ def max_usecase2(x, y):
 def max_usecase3(x):
     return max(x)
 
+def max_usecase4():
+    return max(())
+
+
 def min_usecase1(x, y):
     return min(x, y)
 
@@ -119,6 +124,10 @@ def min_usecase2(x, y):
 
 def min_usecase3(x):
     return min(x)
+
+def min_usecase4():
+    return min(())
+
 
 def oct_usecase(x):
     return oct(x)
@@ -514,8 +523,40 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_map(flags=no_pyobj_flags)
 
+    #
+    # min() and max()
+    #
+
+    def check_minmax_1(self, pyfunc, flags):
+        cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
+        cfunc = cr.entry_point
+
+        x_operands = [-1, 0, 1]
+        y_operands = [-1, 0, 1]
+        for x, y in itertools.product(x_operands, y_operands):
+            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
+
     def test_max_1(self, flags=enable_pyobj_flags):
-        pyfunc = max_usecase1
+        """
+        max(*args)
+        """
+        self.check_minmax_1(max_usecase1, flags)
+
+    def test_min_1(self, flags=enable_pyobj_flags):
+        """
+        min(*args)
+        """
+        self.check_minmax_1(min_usecase1, flags)
+
+    @tag('important')
+    def test_max_npm_1(self):
+        self.test_max_1(flags=no_pyobj_flags)
+
+    @tag('important')
+    def test_min_npm_1(self):
+        self.test_min_1(flags=no_pyobj_flags)
+
+    def check_minmax_2(self, pyfunc, flags):
         cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
         cfunc = cr.entry_point
 
@@ -525,50 +566,56 @@ class TestBuiltins(TestCase):
             self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
     def test_max_2(self, flags=enable_pyobj_flags):
-        pyfunc = max_usecase2
-        cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
-        cfunc = cr.entry_point
+        """
+        max(list)
+        """
+        self.check_minmax_2(max_usecase2, flags)
 
-        x_operands = [-1, 0, 1]
-        y_operands = [-1, 0, 1]
-        for x, y in itertools.product(x_operands, y_operands):
-            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
-
-    @tag('important')
-    def test_max_npm_1(self):
-        self.test_max_1(flags=no_pyobj_flags)
+    def test_min_2(self, flags=enable_pyobj_flags):
+        """
+        min(list)
+        """
+        self.check_minmax_2(min_usecase2, flags)
 
     def test_max_npm_2(self):
         with self.assertTypingError():
             self.test_max_2(flags=no_pyobj_flags)
 
-    def test_min_1(self, flags=enable_pyobj_flags):
-        pyfunc = min_usecase1
-        cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
-        cfunc = cr.entry_point
-
-        x_operands = [-1, 0, 1]
-        y_operands = [-1, 0, 1]
-        for x, y in itertools.product(x_operands, y_operands):
-            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
-
-    def test_min_2(self, flags=enable_pyobj_flags):
-        pyfunc = min_usecase2
-        cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
-        cfunc = cr.entry_point
-
-        x_operands = [-1, 0, 1]
-        y_operands = [-1, 0, 1]
-        for x, y in itertools.product(x_operands, y_operands):
-            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
-
-    @tag('important')
-    def test_min_npm_1(self):
-        self.test_min_1(flags=no_pyobj_flags)
-
     def test_min_npm_2(self):
         with self.assertTypingError():
             self.test_min_2(flags=no_pyobj_flags)
+
+    def check_minmax_3(self, pyfunc, flags):
+        def check(argty):
+            cr = compile_isolated(pyfunc, (argty,), flags=flags)
+            cfunc = cr.entry_point
+            # Check that the algorithm matches Python's with a non-total order
+            tup = (1.5, float('nan'), 2.5)
+            for val in [tup, tup[::-1]]:
+                self.assertPreciseEqual(cfunc(val), pyfunc(val))
+
+        check(types.UniTuple(types.float64, 3))
+        check(types.Tuple((types.float32, types.float64, types.float32)))
+
+    def test_max_3(self, flags=enable_pyobj_flags):
+        """
+        max(tuple)
+        """
+        self.check_minmax_3(max_usecase3, flags)
+
+    def test_min_3(self, flags=enable_pyobj_flags):
+        """
+        min(tuple)
+        """
+        self.check_minmax_3(min_usecase3, flags)
+
+    @tag('important')
+    def test_max_npm_3(self):
+        self.test_max_3(flags=no_pyobj_flags)
+
+    @tag('important')
+    def test_min_npm_3(self):
+        self.test_min_3(flags=no_pyobj_flags)
 
     def check_min_max_invalid_types(self, pyfunc, flags=enable_pyobj_flags):
         cr = compile_isolated(pyfunc, (types.int32, types.Dummy('list')),
@@ -622,6 +669,21 @@ class TestBuiltins(TestCase):
     def test_min_unary_non_iterable_npm(self):
         with self.assertTypingError():
             self.check_min_max_unary_non_iterable(min_usecase3)
+
+    # Test that max(()) and min(()) fail
+
+    def check_min_max_empty_tuple(self, pyfunc, func_name):
+        with self.assertTypingError() as raises:
+            compile_isolated(pyfunc, (), flags=no_pyobj_flags)
+        self.assertIn("%s() argument is an empty tuple" % func_name,
+                      str(raises.exception))
+
+    def test_max_empty_tuple(self):
+        self.check_min_max_empty_tuple(max_usecase4, "max")
+
+    def test_min_empty_tuple(self):
+        self.check_min_max_empty_tuple(min_usecase4, "min")
+
 
     def test_oct(self, flags=enable_pyobj_flags):
         pyfunc = oct_usecase

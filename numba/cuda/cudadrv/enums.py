@@ -164,7 +164,7 @@ CU_JIT_INPUT_LIBRARY = 4
 # Option type: unsigned int
 # Applies to: compiler only
 
-CU_JIT_MAX_REGISTERS = 0,
+CU_JIT_MAX_REGISTERS = 0
 
 
 # IN: Specifies minimum number of threads per block to target compilation

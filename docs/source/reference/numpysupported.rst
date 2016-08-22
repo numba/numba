@@ -139,6 +139,7 @@ Other methods
 
 The following methods of Numpy arrays are supported:
 
+* :meth:`~numpy.ndarray.argsort` (without arguments)
 * :meth:`~numpy.ndarray.astype` (only the 1-argument form)
 * :meth:`~numpy.ndarray.copy` (without arguments)
 * :meth:`~numpy.ndarray.flatten` (no order argument; 'C' order only)
@@ -209,6 +210,7 @@ Other functions
 The following top-level functions are supported:
 
 * :func:`numpy.arange`
+* :func:`numpy.argsort` (no optional arguments)
 * :func:`numpy.array` (only the 2 first arguments)
 * :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.bincount` (only the 2 first arguments)
