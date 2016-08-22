@@ -357,25 +357,6 @@ _numba_rnd_seed(PyObject *self, PyObject *args)
     }
 }
 
-NUMBA_EXPORT_FUNC(PyObject *)
-_numba_rnd_reset(PyObject *self, PyObject *args)
-{
-    rnd_state_t *state;
-
-    if (!PyArg_ParseTuple(args, "O&:rnd_reset",
-                          rnd_state_converter, &state))
-        return NULL;
-
-    state->is_initialized = 0;
-    Py_RETURN_NONE;
-}
-
-NUMBA_EXPORT_FUNC(PyObject *)
-_numba_rnd_global_init(PyObject *self)
-{
-    Py_RETURN_NONE;
-}
-
 /*
  * Random distribution helpers.
  * Most code straight from Numpy's distributions.c.

@@ -156,8 +156,6 @@ static PyMethodDef ext_methods[] = {
     { "rnd_get_state", (PyCFunction) _numba_rnd_get_state, METH_O, NULL },
     { "rnd_get_py_state_ptr", (PyCFunction) _numba_rnd_get_py_state_ptr, METH_NOARGS, NULL },
     { "rnd_get_np_state_ptr", (PyCFunction) _numba_rnd_get_np_state_ptr, METH_NOARGS, NULL },
-    { "rnd_global_init", (PyCFunction) _numba_rnd_global_init, METH_NOARGS, NULL },
-    { "rnd_reset", (PyCFunction) _numba_rnd_reset, METH_VARARGS, NULL },
     { "rnd_seed", (PyCFunction) _numba_rnd_seed, METH_VARARGS, NULL },
     { "rnd_set_state", (PyCFunction) _numba_rnd_set_state, METH_VARARGS, NULL },
     { "rnd_shuffle", (PyCFunction) _numba_rnd_shuffle, METH_O, NULL },
