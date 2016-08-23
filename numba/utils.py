@@ -521,6 +521,20 @@ def total_ordering(cls):
     return cls
 
 
+def logger_hasHandlers(logger):
+    # Backport from python3.5 logging implementation of `.hasHandlers()`
+    c = logger
+    rv = False
+    while c:
+        if c.handlers:
+            rv = True
+            break
+        if not c.propagate:
+            break
+        else:
+            c = c.parent
+    return rv
+
 # Backported from Python 3.4: weakref.finalize()
 
 from weakref import ref
