@@ -609,9 +609,9 @@ def _fpreset(context, builder):
     context.printf(builder, "-- FP control word (errno = %d): 0x%08X\n",
                    errno_ret, builder.load(cur_control))
 
-    fnty = ir.FunctionType(ir.VoidType(), [])
-    fn = builder.module.get_or_insert_function(fnty, "_fpreset")
-    builder.call(fn, ())
+    #fnty = ir.FunctionType(ir.VoidType(), [])
+    #fn = builder.module.get_or_insert_function(fnty, "_fpreset")
+    #builder.call(fn, ())
 
     return
 
