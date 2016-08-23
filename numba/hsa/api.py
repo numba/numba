@@ -111,3 +111,7 @@ def to_device(obj, context=get_context(), copy=True, to=None):
         to.copy_to_device(obj, context)
     return to
 
+
+def stream(context=get_context()):
+    from .hsadrv.driver import Stream
+    return Stream(context=context)

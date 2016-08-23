@@ -139,6 +139,11 @@ class DeviceNDArrayBase(object):
 
         _driver.host_to_dGPU(context, self, ary, sz)
 
+    def async_copy_to_device(self, ary, stream):
+        ctx = stream._context
+        asyncopy = ctx.create_async_copy(ary.nbytes)
+        asyncopy.copy_to_device(self, ary, stream=stream)
+
     def copy_to_host(self, ary=None):
         """Copy ``self`` to ``ary`` or create a new Numpy ndarray
         if ``ary`` is ``None``.

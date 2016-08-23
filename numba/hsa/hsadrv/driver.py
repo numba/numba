@@ -257,7 +257,7 @@ class Driver(object):
                 except AttributeError:
                     # this is because no agents initialised
                     #  so self.agents isn't present
-                    pass 
+                    pass
                 else:
                     self._recycler.drain()
 
@@ -501,7 +501,7 @@ class Agent(HsaWrapper):
         hsa.hsa_agent_iterate_regions(self._id, callback, None)
         self._regions = _RegionList([MemRegion.instance_for(self, region_id)
                                      for region_id in region_ids])
-        
+
     def _initialize_mempools(self):
         mempool_ids = []
 
@@ -513,7 +513,6 @@ class Agent(HsaWrapper):
         hsa.hsa_amd_agent_iterate_memory_pools(self._id, callback, None)
         self._mempools = _RegionList([MemPool.instance_for(self, mempool_id)
                                      for mempool_id in mempool_ids])
-
 
     def _create_queue(self, size, callback=None, data=None,
                       private_segment_size=None, group_segment_size=None,
@@ -682,7 +681,7 @@ class MemPool(HsaWrapper):
         buff = ctypes.c_void_p()
         flags = ctypes.c_uint32(0) # From API docs "Must be 0"!
         hsa.hsa_amd_memory_pool_allocate(self._id, nbytes, flags, ctypes.byref(buff))
-        
+
         if allow_access_to:
             for agent in allow_access_to:
                 # If permitted, grant the specified agent access the memory.
@@ -696,7 +695,7 @@ class MemPool(HsaWrapper):
         if buff.value == None:
             raise RuntimeError("MemoryPointer has no value")
         self.allocations[buff.value] = ret
-     
+
         return ret.own()
 
     _instance_dict = {}
@@ -1267,22 +1266,22 @@ class Context(object):
             raise RuntimeError("MemoryPointer has no value")
         self.allocations[mem.value] = ret
         return ret.own()
-    
-    
-    
+
+
+
     def getMempools(self, segment_is=None, segment_is_not=None, pool_global_flags=None):
         """
         Gets mempools on this context that match the specified criteria.
         """
         hw = self._agent.device
         all_pools = self._agent.mempools
-        flag_ok_r = list()        
-        
+        flag_ok_r = list()
+
         def query_agent_access(agent, pool):
             """
             Queries the accessibility status of this memory pool for a
             specified agent.
-            """           
+            """
             access_type = drvapi.hsa_amd_memory_pool_access_t()
             hsa.hsa_amd_agent_memory_pool_get_info(
             agent._id, pool._id, enums_ext.HSA_AMD_AGENT_MEMORY_POOL_INFO_ACCESS,
@@ -1320,15 +1319,15 @@ class Context(object):
                         else:
                             ac = ac + 1
                     if ac == len(pool_global_flags):
-                        mempools.append(r) 
+                        mempools.append(r)
                 else:
                     mempools.append(r)
         else:
             raise RuntimeError("Unknown device type string \"%s\"" % hw)
 
         return mempools
-            
-    
+
+
     def mempoolalloc(self, nbytes, allow_access_to=None, segment_is=None, segment_is_not=None, pool_global_flags=None):
         """
         Allocates memory in a memory pool.
@@ -1338,7 +1337,7 @@ class Context(object):
                         due to the inherent rawness of the underlying call, the\
                         validity of the flag is not checked, cf. C language.
         """
-        
+
         # find a mempool for the allocation
         mempools = self.getMempools(segment_is=segment_is, segment_is_not=segment_is_not, pool_global_flags=pool_global_flags)
 
@@ -1349,10 +1348,10 @@ class Context(object):
         for mempool in mempools:
             try:
                 m = mempool.allocate(nbytes, allow_access_to)
-            except HsaApiError: 
+            except HsaApiError:
                 # try next memory mempool if an allocation fails
                 # or an access mutation fails.
-                
+
                 # Forcibly clear up m, no point in having allocations hanging about
                 # that don't match the access pattern requested waiting for gc() run
                 if m:
@@ -1368,6 +1367,65 @@ class Context(object):
                 ( hw, nbytes))
 
         return mem
+
+    def create_async_copy(self, size):
+        return AsyncCopy(gpu_ctx=self, size=size)
+
+
+class AsyncCopy(object):
+    def __init__(self, gpu_ctx, size):
+        assert dgpu_present()
+        self._size = size
+        self._gpu_ctx = gpu_ctx
+        self._cpu_ctx = Context([a for a in hsa.agents if not a.is_component][0])
+        # cpu pool
+        flags = [enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED]
+        self._cpupool = self._cpu_ctx.getMempools(pool_global_flags=flags)[0]
+        self._cpumem = self._cpupool.allocate(size, allow_access_to=[self._gpu_ctx.agent])
+
+    def copy_to_device(self, devary, ary, stream):
+        def byte_view(addr, sz):
+            return (ctypes.c_byte * sz).from_address(addr)
+
+        cpu_membytes = byte_view(self._cpumem.device_pointer.value, self._size)
+
+        cpu_membytes[:] = ary.view(dtype=np.uint8)
+
+        completion_signal = hsa.create_signal(1)
+
+        dependent_signal = stream._get_last_signal()
+        if dependent_signal is not None:
+            dsignal = drvapi.hsa_signal_t(dependent_signal._id)
+            signals = (1, ctypes.byref(dsignal), completion_signal)
+        else:
+            signals = (0, None, completion_signal)
+
+        hsa.hsa_amd_memory_async_copy(devary.dgpu_data.device_pointer.value,
+                                      self._gpu_ctx._agent._id,
+                                      self._cpumem.device_pointer.value,
+                                      self._cpu_ctx._agent._id, self._size,
+                                      *signals)
+
+        stream._set_last_signal(completion_signal)
+
+
+class Stream(object):
+    """
+    An asynchronous stream for async API
+    """
+    def __init__(self, context):
+        self._context = context
+        self._last_signal = None
+
+    def _set_last_signal(self, signal):
+        self._last_signal = signal
+
+    def _get_last_signal(self):
+        return self._last_signal
+
+    def synchronize(self):
+        self._last_signal.wait_until_ne_one()
+
 
 def _make_mem_finalizer(dtor):
     """
@@ -1388,7 +1446,7 @@ def _make_mem_finalizer(dtor):
                 del allocations[handle.value]
             dtor(handle)
         return core
-    
+
     return mem_finalize
 
 def device_pointer(obj):
