@@ -590,17 +590,14 @@ def real_divmod(context, builder, x, y):
 
 def _fpreset(context, builder):
     # XXX
-    fnty = ir.FunctionType(ir.VoidType(), [])
-    fn = builder.module.get_or_insert_function(fnty, "_fpreset")
-    builder.call(fn, ())
-
-    intty = ir.IntType(32)
 
     #errno_t _controlfp_s(
         #unsigned int *currentControl,
         #unsigned int newControl,
         #unsigned int mask
     #);
+
+    intty = ir.IntType(32)
 
     fnty = ir.FunctionType(intty, [intty.as_pointer(), intty, intty])
     fn = builder.module.get_or_insert_function(fnty, "_controlfp_s")
@@ -611,6 +608,10 @@ def _fpreset(context, builder):
 
     context.printf(builder, "-- FP control word (errno = %d): 0x%08X\n",
                    errno_ret, builder.load(cur_control))
+
+    fnty = ir.FunctionType(ir.VoidType(), [])
+    fn = builder.module.get_or_insert_function(fnty, "_fpreset")
+    builder.call(fn, ())
 
     return
 
