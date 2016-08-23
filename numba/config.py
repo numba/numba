@@ -196,6 +196,13 @@ class _EnvReloader(object):
         # Enable CUDA simulator
         ENABLE_CUDASIM = _readenv("NUMBA_ENABLE_CUDASIM", int, 0)
 
+        # CUDA logging level
+        # Any level name from the *logging* module.  Case insensitive.
+        # Defaults to CRITICAL if not set or invalid.
+        # Note: This setting only applies when logging is not configured.
+        #       Any existing logging configuration is preserved.
+        CUDA_LOG_LEVEL = _readenv("NUMBA_CUDA_LOG_LEVEL", str, '')
+
         # Maximum number of pending CUDA deallocations (default: 10)
         CUDA_DEALLOCS_COUNT = _readenv("NUMBA_CUDA_MAX_PENDING_DEALLOCS_COUNT",
                                        int, 10)
