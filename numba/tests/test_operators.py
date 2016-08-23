@@ -416,7 +416,7 @@ class TestOperators(TestCase):
             for x, y in itertools.product(x_operands, y_operands):
                 # For inplace ops, we check that the first operand
                 # was correctly mutated.
-                for i in range(3):
+                for i in range(2):
                     x_got = copy.copy(x)
                     x_expected = copy.copy(x)
                     got = cfunc(x_got, y)
