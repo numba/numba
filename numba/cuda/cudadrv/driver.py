@@ -41,7 +41,7 @@ MIN_REQUIRED_CC = (2, 0)
 def _make_logger():
     logger = logging.getLogger(__name__)
     # is logging configured?
-    if not logger.hasHandlers():
+    if not utils.logger_hasHandlers(logger):
         # read user config
         lvl = str(config.CUDA_LOG_LEVEL).upper()
         lvl = getattr(logging, lvl, None)
