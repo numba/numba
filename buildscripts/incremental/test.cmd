@@ -14,5 +14,6 @@ if "%RUN_COVERAGE%" == "yes" (
     coverage run runtests.py -b -m numba.tests
 ) else (
     set NUMBA_ENABLE_CUDASIM=1
-    python -m numba.runtests -b -m numba.tests
+    @rem python -m numba.runtests -b -m numba.tests
+    python -m numba.runtests -b -m numba.tests.test_operators
 )
