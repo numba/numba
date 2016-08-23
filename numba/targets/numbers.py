@@ -592,8 +592,26 @@ def _fpreset(context, builder):
     # XXX
     fnty = ir.FunctionType(ir.VoidType(), [])
     fn = builder.module.get_or_insert_function(fnty, "_fpreset")
-
     builder.call(fn, ())
+
+    intty = ir.IntType(32)
+
+    #errno_t _controlfp_s(
+        #unsigned int *currentControl,
+        #unsigned int newControl,
+        #unsigned int mask
+    #);
+
+    fnty = ir.FunctionType(intty, [intty.as_pointer(), intty, intty])
+    fn = builder.module.get_or_insert_function(fnty, "_controlfp_s")
+
+    cur_control = cgutils.alloca_once_value(builder, intty(-1))
+    zero = intty(0)
+    errno_ret = builder.call(fn, (cur_control, zero, zero))
+
+    context.printf(builder, "-- FP control word (errno = %d): 0x%08X\n",
+                   errno_ret, builder.load(cur_control))
+
     return
 
 
