@@ -181,6 +181,7 @@ class _EnvReloader(object):
                                         'sandybridge', 'ivybridge')
 
         ENABLE_AVX = _readenv("NUMBA_ENABLE_AVX", int, avx_default)
+        print("ENABLE_AVX =", ENABLE_AVX)
 
         # Disable jit for debugging
         DISABLE_JIT = _readenv("NUMBA_DISABLE_JIT", int, 0)
