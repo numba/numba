@@ -416,12 +416,13 @@ class TestOperators(TestCase):
             for x, y in itertools.product(x_operands, y_operands):
                 # For inplace ops, we check that the first operand
                 # was correctly mutated.
-                x_got = copy.copy(x)
-                x_expected = copy.copy(x)
-                got = cfunc(x_got, y)
-                expected = pyfunc(x_expected, y)
-                print("pyfunc %s (%s, %s) -> expected = %s, got = %s"
-                      % (pyfunc, x, y, expected, got))
+                for i in range(3):
+                    x_got = copy.copy(x)
+                    x_expected = copy.copy(x)
+                    got = cfunc(x_got, y)
+                    expected = pyfunc(x_expected, y)
+                    print("pyfunc %s (%s, %s) -> expected = %s, got = %s"
+                          % (pyfunc, x, y, expected, got))
                 np.testing.assert_allclose(got, expected, rtol=1e-5)
                 np.testing.assert_allclose(x_got, x_expected, rtol=1e-5)
 
