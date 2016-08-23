@@ -406,7 +406,12 @@ class TestOperators(TestCase):
         if pyfunc is NotImplemented:
             self.skipTest("test irrelevant on this version of Python")
         for arg_types in types_list:
-            cr = compile_isolated(pyfunc, arg_types, flags=flags)
+            from numba import config
+            config.DUMP_ASSEMBLY = True
+            try:
+                cr = compile_isolated(pyfunc, arg_types, flags=flags)
+            finally:
+                config.DUMP_ASSEMBLY = False
             cfunc = cr.entry_point
             for x, y in itertools.product(x_operands, y_operands):
                 # For inplace ops, we check that the first operand
