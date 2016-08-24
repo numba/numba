@@ -1453,7 +1453,7 @@ class TestStaticPower(TestCase):
 
     def test_real_values(self):
         exponents = [1, 2, 3, 5, 17, 0, -1, -2, -3, 0x111111, -0x111112]
-        vals = [1.5, 3.25, -1.25, np.float32(-1.5), float('inf'), float('nan')]
+        vals = [1.5, 3.25, -1.25, np.float32(-2.0), float('inf'), float('nan')]
 
         self._check_pow(exponents, vals)
 
