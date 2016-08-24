@@ -56,8 +56,6 @@ class CPUContext(BaseContext):
         self.install_registry(operatorimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(randomimpl.registry)
-        # Initialize PRNG state
-        randomimpl.random_init()
 
     @property
     def target_data(self):

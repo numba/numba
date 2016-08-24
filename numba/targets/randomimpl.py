@@ -32,25 +32,50 @@ N = 624
 N_const = ir.Constant(int32_t, N)
 
 
-_pid = None
-
-def random_init():
-    """
-    Initialize the random states with system entropy.
-    """
-    global _pid
-    if _pid != os.getpid():
-        b = os.urandom(N * 4)
-        for n in ('py_random_state', 'np_random_state'):
-            _helperlib.rnd_seed(_helperlib.c_helpers[n], b)
-        _pid = os.getpid()
-
-
-# This is the same struct as rnd_state_t in _helperlib.c.
-rnd_state_t = ir.LiteralStructType(
-    [int32_t, ir.ArrayType(int32_t, N),
-     int32_t, double])
+# This is the same struct as rnd_state_t in _random.c.
+rnd_state_t = ir.LiteralStructType([
+    # index
+    int32_t,
+    # mt[N]
+    ir.ArrayType(int32_t, N),
+    # has_gauss
+    int32_t,
+    # gauss
+    double,
+    # is_initialized
+    int32_t,
+    ])
 rnd_state_ptr_t = ir.PointerType(rnd_state_t)
+
+def get_state_ptr(context, builder, name):
+    """
+    Get a pointer to the given thread-local random state
+    (depending on *name*: "py" or "np").
+    If the state isn't initialized, it is lazily initialized with
+    system entropy.
+    """
+    assert name in ('py', 'np')
+    func_name = "numba_get_%s_random_state" % name
+    fnty = ir.FunctionType(rnd_state_ptr_t, ())
+    fn = builder.module.get_or_insert_function(fnty, func_name)
+    # These two attributes allow LLVM to hoist the function call
+    # outside of loops.
+    fn.attributes.add('readnone')
+    fn.attributes.add('nounwind')
+    return builder.call(fn, ())
+
+def get_py_state_ptr(context, builder):
+    """
+    Get a pointer to the thread-local Python random state.
+    """
+    return get_state_ptr(context, builder, 'py')
+
+def get_np_state_ptr(context, builder):
+    """
+    Get a pointer to the thread-local Numpy random state.
+    """
+    return get_state_ptr(context, builder, 'np')
+
 
 # Accessors
 def get_index_ptr(builder, state_ptr):
@@ -142,21 +167,6 @@ def get_next_int(context, builder, state_ptr, nbits):
             builder.store(total, ret)
 
     return builder.load(ret)
-
-
-def get_py_state_ptr(context, builder):
-    return context.get_c_value(builder, rnd_state_t,
-                               "numba_py_random_state")
-
-def get_np_state_ptr(context, builder):
-    return context.get_c_value(builder, rnd_state_t,
-                               "numba_np_random_state")
-
-def get_state_ptr(context, builder, name):
-    return {
-        "py": get_py_state_ptr,
-        "np": get_np_state_ptr,
-        }[name](context, builder)
 
 
 def _fill_defaults(context, builder, sig, args, defaults):
@@ -992,7 +1002,7 @@ def poisson_impl(context, builder, sig, args):
         big_lam = builder.fcmp_ordered('>=', lam, ir.Constant(double, 10.0))
         with builder.if_then(big_lam):
             # For lambda >= 10.0, we switch to a more accurate
-            # algorithm (see _helperlib.c).
+            # algorithm (see _random.c).
             fnty = ir.FunctionType(int64_t, (rnd_state_ptr_t, double))
             fn = builder.function.module.get_or_insert_function(fnty,
                                                                 "numba_poisson_ptrs")
