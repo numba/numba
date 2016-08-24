@@ -18,7 +18,7 @@ from numba.extending import (typeof_impl, type_callable,
                              models, register_model,
                              box, unbox, NativeValue,
                              make_attribute_wrapper,
-                             llvm_call, _LLVMCall,
+                             intrinsic, _Intrinsic,
                              )
 from numba.typing.templates import (
     ConcreteTemplate, signature, infer)
@@ -460,18 +460,18 @@ class TestHighLevelExtending(TestCase):
         self.assertIn(expectmsg, errmsg)
 
 
-class TestLLVMCall(TestCase):
+class TestIntrinsic(TestCase):
     def test_ll_pointer_cast(self):
         """
         Usecase test: custom reinterpret cast to turn int values to pointers
         """
         from ctypes import CFUNCTYPE, POINTER, c_float, c_int
 
-        # Use llvm_call to make a reinterpret_cast operation
+        # Use intrinsic to make a reinterpret_cast operation
         def unsafe_caster(result_type):
             assert isinstance(result_type, types.CPointer)
 
-            @llvm_call
+            @intrinsic
             def unsafe_cast(typingctx, src):
                 if isinstance(src, types.Integer):
                     sig = result_type(types.uintp)
@@ -528,10 +528,10 @@ class TestLLVMCall(TestCase):
 
     def test_serialization(self):
         """
-        Test serialization of llvm_call objects
+        Test serialization of intrinsic objects
         """
-        # define a llvm_call
-        @llvm_call
+        # define a intrinsic
+        @intrinsic
         def identity(context, x):
             def codegen(context, builder, signature, args):
                 return args[0]
@@ -547,7 +547,7 @@ class TestLLVMCall(TestCase):
         self.assertEqual(foo(1), 1)
 
         # get serialization memo
-        memo = _LLVMCall._memo
+        memo = _Intrinsic._memo
         memo_size = len(memo)
 
         # pickle foo and check memo size
@@ -574,7 +574,7 @@ class TestLLVMCall(TestCase):
 
     def test_deserialization(self):
         """
-        Test deserialization of llvm_call
+        Test deserialization of intrinsic
         """
         def defn(context, x):
             def codegen(context, builder, signature, args):
@@ -582,11 +582,11 @@ class TestLLVMCall(TestCase):
 
             return x(x), codegen
 
-        memo = _LLVMCall._memo
+        memo = _Intrinsic._memo
         memo_size = len(memo)
-        # invoke _LLVMCall indirectly to avoid registration which keeps an
+        # invoke _Intrinsic indirectly to avoid registration which keeps an
         # internal reference inside the compiler
-        original = _LLVMCall('foo', defn)
+        original = _Intrinsic('foo', defn)
         self.assertIs(original._defn, defn)
         pickled = pickle.dumps(original)
         # by pickling, a new memo entry is created

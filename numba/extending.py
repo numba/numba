@@ -180,9 +180,9 @@ def make_attribute_wrapper(typeclass, struct_attr, python_attr):
         return impl_ret_borrowed(context, builder, attrty, attrval)
 
 
-class _LLVMCall(object):
+class _Intrinsic(object):
     """
-    Dummy callable for llvm_call
+    Dummy callable for intrinsic
     """
     _memo = weakref.WeakValueDictionary()
     __uuid = None
@@ -211,9 +211,9 @@ class _LLVMCall(object):
         self._memo[u] = self
 
     def _register(self):
-        from .typing.templates import make_llvm_call_template, infer_global
+        from .typing.templates import make_intrinsic_template, infer_global
 
-        template = make_llvm_call_template(self, self._defn, self._name)
+        template = make_intrinsic_template(self, self._defn, self._name)
         infer(template)
         infer_global(self, types.Function(template))
 
@@ -225,7 +225,7 @@ class _LLVMCall(object):
         raise NotImplementedError(msg)
 
     def __repr__(self):
-        return "<llvm_call {0}>".format(self._name)
+        return "<intrinsic {0}>".format(self._name)
 
     def __reduce__(self):
         from numba import serialize
@@ -253,7 +253,7 @@ class _LLVMCall(object):
             return llc
 
 
-def llvm_call(func):
+def intrinsic(func):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode using the llvmlite IRBuilder API.  This is an escape
@@ -273,7 +273,7 @@ def llvm_call(func):
     Here is an example implementing a ``cast_int_to_byte_ptr`` that cast
     any integer to a byte pointer::
 
-        @llvm_call
+        @intrinsic
         def cast_int_to_byte_ptr(typingctx, src):
             # check for accepted types
             if isinstance(src, types.Integer):
@@ -290,6 +290,6 @@ def llvm_call(func):
                 return sig, codegen
     """
     name = getattr(func, '__name__', str(func))
-    llc = _LLVMCall(name, func)
+    llc = _Intrinsic(name, func)
     llc._register()
     return llc

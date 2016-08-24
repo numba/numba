@@ -325,14 +325,14 @@ def make_overload_template(func, overload_func, jit_options):
     return type(base)(name, (base,), dct)
 
 
-class _LLVMCallTemplate(AbstractTemplate):
+class _IntrinsicTemplate(AbstractTemplate):
     """
-    A base class of templates for llvm_call intrinsic definition
+    A base class of templates for intrinsic intrinsic definition
     """
 
     def generic(self, args, kws):
         """
-        Type the llvm_call intrinsic by the arguments.
+        Type the intrinsic intrinsic by the arguments.
         """
         from numba.targets.imputils import lower_builtin
 
@@ -363,13 +363,13 @@ class _LLVMCallTemplate(AbstractTemplate):
         return self._overload_cache[sig.args]
 
 
-def make_llvm_call_template(handle, defn, name):
+def make_intrinsic_template(handle, defn, name):
     """
-    Make a template class for a llvm_call handle *handle* defined by the
+    Make a template class for a intrinsic handle *handle* defined by the
     function *defn*.  The *name* is used for naming the new template class.
     """
-    base = _LLVMCallTemplate
-    name = "_LLVMCallTemplate_%s" % (name)
+    base = _IntrinsicTemplate
+    name = "_IntrinsicTemplate_%s" % (name)
     dct = dict(key=handle, _definition_func=staticmethod(defn),
                _impl_cache={}, _overload_cache={})
     return type(base)(name, (base,), dct)
