@@ -1,9 +1,10 @@
 from __future__ import print_function, absolute_import, division
 
+import contextlib
 import sys
 import numpy as np
-import threading
 import random
+import threading
 
 from numba import unittest_support as unittest
 from numba import njit
@@ -13,6 +14,13 @@ from .support import MemoryLeakMixin, TestCase, tag
 
 
 nrtjit = njit(_nrt=True, nogil=True)
+
+
+def np_concatenate1(a, b, c):
+    return np.concatenate((a, b, c))
+
+def np_concatenate2(a, b, c, axis):
+    return np.concatenate((a, b, c), axis=axis)
 
 
 class BaseTest(TestCase):
@@ -1061,6 +1069,138 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
         cfunc = nrtjit(pyfunc)
         got = cfunc([(1, 2.5), (3, 4.5)])
         self.assertPreciseEqual(got, np.int32([[1, 2], [3, 4]]))
+
+
+class TestNpConcatenate(MemoryLeakMixin, TestCase):
+
+    def _3d_arrays(self):
+        a = np.arange(24).reshape((4, 3, 2))
+        b = a + 10
+        c = (b + 10).copy(order='F')
+        d = (c + 10)[::-1]
+        e = (d + 10)[...,::-1]
+        return a, b, c, d, e
+
+    @contextlib.contextmanager
+    def assert_invalid_sizes_over_dim(self, axis):
+        with self.assertRaises(ValueError) as raises:
+            yield
+        self.assertIn("input sizes over dimension %d do not match" % axis,
+                      str(raises.exception))
+
+    @tag('important')
+    def test_3d(self):
+        pyfunc = np_concatenate2
+        cfunc = nrtjit(pyfunc)
+
+        def check(a, b, c, axis):
+            for ax in (axis, -3 + axis):
+                expected = pyfunc(a, b, c, axis=ax)
+                got = cfunc(a, b, c, axis=ax)
+                self.assertPreciseEqual(got, expected)
+
+        def check_all_axes(a, b, c):
+            for axis in range(3):
+                check(a, b, c, axis)
+
+        a, b, c, d, e = self._3d_arrays()
+
+        # Inputs with equal sizes
+        # C, C, C
+        check_all_axes(a, b, b)
+        # C, C, F
+        check_all_axes(a, b, c)
+        # F, F, F
+        check_all_axes(a.T, b.T, a.T)
+        # F, F, C
+        check_all_axes(a.T, b.T, c.T)
+        # F, F, A
+        check_all_axes(a.T, b.T, d.T)
+        # A, A, A
+        # (note Numpy may select the layout differently for other inputs)
+        check_all_axes(d.T, e.T, d.T)
+
+        # Inputs with compatible sizes
+        check(a[1:], b, c[::-1], axis=0)
+        check(a, b[:,1:], c, axis=1)
+        check(a, b, c[:,:,1:], axis=2)
+
+        # Different but compatible dtypes
+        check_all_axes(a, b.astype(np.float64), b)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        # Incompatible sizes
+        for axis in (1, 2, -2, -1):
+            with self.assert_invalid_sizes_over_dim(0):
+                cfunc(a[1:], b, b, axis)
+        for axis in (0, 2, -3, -1):
+            with self.assert_invalid_sizes_over_dim(1):
+                cfunc(a, b[:,1:], b, axis)
+
+    def test_3d_no_axis(self):
+        pyfunc = np_concatenate1
+        cfunc = nrtjit(pyfunc)
+
+        def check(a, b, c):
+            expected = pyfunc(a, b, c)
+            got = cfunc(a, b, c)
+            self.assertPreciseEqual(got, expected)
+
+        a, b, c, d, e = self._3d_arrays()
+
+        # Inputs with equal sizes
+        # C, C, C
+        check(a, b, b)
+        # C, C, F
+        check(a, b, c)
+        # F, F, F
+        check(a.T, b.T, a.T)
+        # F, F, C
+        check(a.T, b.T, c.T)
+        # F, F, A
+        check(a.T, b.T, d.T)
+        # A, A, A
+        # (note Numpy may select the layout differently for other inputs)
+        check(d.T, e.T, d.T)
+
+        # Inputs with compatible sizes
+        check(a[1:], b, c[::-1])
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        # Incompatible sizes
+        with self.assert_invalid_sizes_over_dim(1):
+            cfunc(a, b[:,1:], b)
+
+    def test_typing_errors(self):
+        pyfunc = np_concatenate1
+        cfunc = nrtjit(pyfunc)
+
+        a = np.arange(15)
+        b = a.reshape((3, 5))
+        c = a.astype(np.dtype([('x', np.int8)]))
+        d = np.array(42)
+
+        # Different dimensionalities
+        with self.assertTypingError() as raises:
+            cfunc(a, b, b)
+        self.assertIn("all the input arrays must have same number of dimensions",
+                      str(raises.exception))
+
+        # Incompatible dtypes
+        with self.assertTypingError() as raises:
+            cfunc(a, c, c)
+        self.assertIn("input arrays must have compatible dtypes",
+                      str(raises.exception))
+
+        # 0-d arrays
+        with self.assertTypingError() as raises:
+            cfunc(d, d, d)
+        self.assertIn("zero-dimensional arrays cannot be concatenated",
+                      str(raises.exception))
 
 
 def benchmark_refct_speed():

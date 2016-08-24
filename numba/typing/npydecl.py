@@ -696,6 +696,47 @@ class NdCopy(CallableTemplate):
         return typer
 
 
+@infer_global(np.concatenate)
+class NdConcatenate(CallableTemplate):
+
+    def generic(self):
+        def typer(arrays, axis=None):
+            if axis is not None and not isinstance(axis, types.Integer):
+                # Note Numpy allows axis=None, but it isn't documented:
+                # https://github.com/numpy/numpy/issues/7968
+                return
+
+            if (not isinstance(arrays, types.BaseTuple)
+                or not len(arrays)
+                or not all(isinstance(a, types.Array) for a in arrays)):
+                return
+
+            ndim = arrays[0].ndim
+            for a in arrays:
+                if a.ndim != ndim:
+                    raise TypeError("np.concatenate(): all the input arrays "
+                                    "must have same number of dimensions")
+
+            if ndim == 0:
+                raise TypeError("zero-dimensional arrays cannot be concatenated")
+
+            dtype = self.context.unify_types(*(a.dtype for a in arrays))
+            if dtype is None:
+                raise TypeError("np.concatenate(): input arrays must have "
+                                "compatible dtypes")
+
+            # Only create a F array if all input arrays have F layout.
+            # This is a simplified version of Numpy's behaviour,
+            # while Numpy's actually processes the input strides to
+            # decide on optimal output strides
+            # (see PyArray_CreateMultiSortedStridePerm()).
+            layout = 'F' if all(a.layout == 'F' for a in arrays) else 'C'
+
+            return types.Array(dtype, ndim, layout)
+
+        return typer
+
+
 # -----------------------------------------------------------------------------
 # Linear algebra
 
