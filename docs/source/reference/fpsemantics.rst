@@ -40,6 +40,17 @@ even when a ``float32`` input is given.  Numba will always observe
 the input's precision, and invoke single-precision linear algebra routines
 when all inputs are ``float32`` or ``complex64``.
 
+Mixed-types operations
+''''''''''''''''''''''
+
+Numpy will most often return a ``float64`` as a result of a computation
+with mixed integer and floating-point operands (a typical example is the
+power operator ``**``).  Numba by contrast will select the highest precision
+amongst the floating-point operands, so for example ``float32 ** int32``
+will return a ``float32``, regardless of the input values.  This makes
+performance characteristics easier to predict, but you should explicitly
+cast the input to ``float64`` if you need the extra precision.
+
 
 .. _ufunc-fpu-errors:
 
