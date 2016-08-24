@@ -349,6 +349,12 @@ Vectorized functions (ufuncs and DUFuncs)
       elements specified by *indices*.  If you are using Numpy 1.7 or
       earlier, this method will not be present.  See `ufunc.at`_.
 
+
+.. note::
+   Vectorized functions can, in rare circumstances, show
+   :ref:`unexpected warnings or errors <ufunc-fpu-errors>`.
+
+
 .. _`ufunc.nin`: http://docs.scipy.org/doc/numpy/reference/generated/numpy.ufunc.nin.html#numpy.ufunc.nin
 
 .. _`ufunc.nout`: http://docs.scipy.org/doc/numpy/reference/generated/numpy.ufunc.nout.html#numpy.ufunc.nout
