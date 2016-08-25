@@ -3684,7 +3684,7 @@ def _do_concatenate(context, builder, axis,
         # Do the copy loop
         # Note the loop nesting is optimized for the destination layout
         loop_nest = cgutils.loop_nest(builder, arr_sh, cgutils.intp_t,
-                                      inverted=retty.layout == 'F')
+                                      order=retty.layout)
 
         with loop_nest as indices:
             src_ptr = cgutils.get_item_pointer2(builder, arr_data,

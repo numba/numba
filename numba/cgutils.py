@@ -559,22 +559,25 @@ def for_range_slice_generic(builder, start, stop, step):
 
 
 @contextmanager
-def loop_nest(builder, shape, intp, inverted=False):
+def loop_nest(builder, shape, intp, order='C'):
     """
     Generate a loop nest walking a N-dimensional array.
     Yields a tuple of N indices for use in the inner loop body,
     iterating over the *shape* space.
 
-    If *inverted* is true, indices are incremented outside-in
-    (i.e. (0,0), (1,0), (2,0), (0,1) etc.), otherwise inside-out
+    If *order* is 'C' (the default), indices are incremented inside-out
     (i.e. (0,0), (0,1), (0,2), (1,0) etc.).
-    This is useful when walking a F-ordered array.
+    If *order* is 'F', they are incremented outside-in
+    (i.e. (0,0), (1,0), (2,0), (0,1) etc.).
+    This has performance implications when walking an array as it impacts
+    the spatial locality of memory accesses.
     """
+    assert order in 'CF'
     if not shape:
         # 0-d array
         yield ()
     else:
-        if inverted:
+        if order == 'F':
             _swap = lambda x: x[::-1]
         else:
             _swap = lambda x: x
