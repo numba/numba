@@ -238,6 +238,7 @@ The following top-level functions are supported:
 * :func:`numpy.searchsorted` (only the 2 first arguments)
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
+* :func:`numpy.stack`
 * :func:`numpy.where`
 * :func:`numpy.zeros` (only the 2 first arguments)
 * :func:`numpy.zeros_like` (only the 2 first arguments)

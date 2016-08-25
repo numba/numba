@@ -3623,14 +3623,9 @@ def np_array(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, arr._getvalue())
 
 
-def _np_concatenate(context, builder, arrtys, arrs, retty, axis):
-    ndim = retty.ndim
-
-    zero = cgutils.intp_t(0)
-    ll_ndim = cgutils.intp_t(ndim)
-
-    arrs = [make_array(aty)(context, builder, value=a)
-            for aty, a in zip(arrtys, arrs)]
+def _normalize_axis(context, builder, func_name, ndim, axis):
+    zero = axis.type(0)
+    ll_ndim = axis.type(ndim)
 
     # Normalize negative axis
     is_neg_axis = builder.icmp_signed('<', axis, zero)
@@ -3641,11 +3636,86 @@ def _np_concatenate(context, builder, arrtys, arrs, retty, axis):
         builder.icmp_signed('<', axis, zero),
         builder.icmp_signed('>=', axis, ll_ndim))
     with builder.if_then(axis_out_of_bounds, likely=False):
-        context.call_conv.return_user_exc(builder, IndexError,
-                                          ("np.concatenate(): axis out of bounds",))
+        msg = "%s(): axis out of bounds" % func_name
+        context.call_conv.return_user_exc(builder, IndexError, (msg,))
+
+    return axis
+
+
+def _do_concatenate(context, builder, axis,
+                    arrtys, arrs, arr_shapes, arr_strides,
+                    retty, ret_shapes):
+    """
+    Concatenate arrays along the given axis.
+    """
+    assert len(arrtys) == len(arrs) == len(arr_shapes) == len(arr_strides)
+
+    zero = cgutils.intp_t(0)
+
+    # Allocate return array
+    ret = _empty_nd_impl(context, builder, retty, ret_shapes)
+    ret_strides = cgutils.unpack_tuple(builder, ret.strides)
+
+    # Compute the offset by which to bump the destination pointer
+    # after copying each input array.
+    # Morally, we need to copy each input array at different start indices
+    # into the destination array; bumping the destination pointer
+    # is simply easier than offsetting all destination indices.
+    copy_offsets = []
+
+    for arr_sh in arr_shapes:
+        # offset = ret_strides[axis] * input_shape[axis]
+        offset = zero
+        for dim, (size, stride) in enumerate(zip(arr_sh, ret_strides)):
+            is_axis = builder.icmp_signed('==', axis.type(dim), axis)
+            addend = builder.mul(size, stride)
+            offset = builder.select(is_axis,
+                                    builder.add(offset, addend),
+                                    offset)
+        copy_offsets.append(offset)
+
+    # Copy input arrays into the return array
+    ret_data = ret.data
+
+    for arrty, arr, arr_sh, arr_st, offset in zip(arrtys, arrs, arr_shapes,
+                                                  arr_strides, copy_offsets):
+        arr_data = arr.data
+
+        # Do the copy loop
+        # Note the loop nesting is optimized for the destination layout
+        loop_nest = cgutils.loop_nest(builder, arr_sh, cgutils.intp_t,
+                                      inverted=retty.layout == 'F')
+
+        with loop_nest as indices:
+            src_ptr = cgutils.get_item_pointer2(builder, arr_data,
+                                                arr_sh, arr_st,
+                                                arrty.layout, indices)
+            val = builder.load(src_ptr)
+            val = context.cast(builder, val, arrty.dtype, retty.dtype)
+            dest_ptr = cgutils.get_item_pointer2(builder, ret_data,
+                                                 ret_shapes, ret_strides,
+                                                 retty.layout, indices)
+            builder.store(val, dest_ptr)
+
+        # Bump destination pointer
+        ret_data = cgutils.pointer_add(builder, ret_data, offset)
+
+    return ret
+
+
+def _np_concatenate(context, builder, arrtys, arrs, retty, axis):
+    ndim = retty.ndim
+
+    zero = cgutils.intp_t(0)
+
+    arrs = [make_array(aty)(context, builder, value=a)
+            for aty, a in zip(arrtys, arrs)]
+
+    axis = _normalize_axis(context, builder, "np.concatenate", ndim, axis)
 
     # Get input shapes
     arr_shapes = [cgutils.unpack_tuple(builder, arr.shape) for arr in arrs]
+    arr_strides = [cgutils.unpack_tuple(builder, arr.strides) for arr in arrs]
 
     # Compute return shape:
     # - the dimension for the concatenation axis is summed over all inputs
@@ -3678,55 +3748,95 @@ def _np_concatenate(context, builder, arrtys, arrs, retty, axis):
 
     ret_shapes = [builder.load(sh) for sh in ret_shapes]
 
-    # Allocate return array
-    ret = _empty_nd_impl(context, builder, retty, ret_shapes)
-    ret_strides = cgutils.unpack_tuple(builder, ret.strides)
-
-    # Compute the offset by which to bump the destination pointer
-    # after copying each input array.
-    # Morally, we need to copy each input array at different start indices
-    # into the destination array; bumping the destination pointer
-    # is simply easier than offsetting all destination indices.
-    copy_offsets = []
-
-    for arr_sh in arr_shapes:
-        # offset = ret_strides[axis] * input_shape[axis]
-        offset = zero
-        for dim, (size, stride) in enumerate(zip(arr_sh, ret_strides)):
-            is_axis = builder.icmp_signed('==', axis.type(dim), axis)
-            addend = builder.mul(size, stride)
-            offset = builder.select(is_axis,
-                                    builder.add(offset, addend),
-                                    offset)
-        copy_offsets.append(offset)
-
-    # Copy input arrays into the return array
-    ret_data = ret.data
-
-    for arrty, arr, arr_sh, offset in zip(arrtys, arrs, arr_shapes, copy_offsets):
-        arr_data = arr.data
-        arr_strides = cgutils.unpack_tuple(builder, arr.strides)
-
-        # Do the copy loop
-        # Note the loop nesting is optimized for the destination layout
-        loop_nest = cgutils.loop_nest(builder, arr_sh, cgutils.intp_t,
-                                      inverted=retty.layout == 'F')
-
-        with loop_nest as indices:
-            src_ptr = cgutils.get_item_pointer2(builder, arr_data,
-                                                arr_sh, arr_strides,
-                                                arrty.layout, indices)
-            val = builder.load(src_ptr)
-            val = context.cast(builder, val, arrty.dtype, retty.dtype)
-            dest_ptr = cgutils.get_item_pointer2(builder, ret_data,
-                                                 ret_shapes, ret_strides,
-                                                 retty.layout, indices)
-            builder.store(val, dest_ptr)
-
-        # Bump destination pointer
-        ret_data = cgutils.pointer_add(builder, ret_data, offset)
-
+    ret = _do_concatenate(context, builder, axis,
+                          arrtys, arrs, arr_shapes, arr_strides,
+                          retty, ret_shapes)
     return impl_ret_new_ref(context, builder, retty, ret._getvalue())
+
+
+def _np_stack(context, builder, arrtys, arrs, retty, axis):
+    ndim = retty.ndim
+
+    zero = cgutils.intp_t(0)
+    one = cgutils.intp_t(1)
+    ll_ndim = cgutils.intp_t(ndim)
+    ll_narrays = cgutils.intp_t(len(arrs))
+
+    arrs = [make_array(aty)(context, builder, value=a)
+            for aty, a in zip(arrtys, arrs)]
+
+    axis = _normalize_axis(context, builder, "np.stack", ndim, axis)
+
+    # Check input arrays have the same shape
+    orig_shape = cgutils.unpack_tuple(builder, arrs[0].shape)
+
+    for arr in arrs[1:]:
+        is_ok = cgutils.true_bit
+        for sh, orig_sh in zip(cgutils.unpack_tuple(builder, arr.shape),
+                               orig_shape):
+            is_ok = builder.and_(is_ok, builder.icmp_signed('==', sh, orig_sh))
+            with builder.if_then(builder.not_(is_ok), likely=False):
+                context.call_conv.return_user_exc(
+                    builder, ValueError,
+                    ("np.stack(): all input arrays must have the same shape",))
+
+    orig_strides = [cgutils.unpack_tuple(builder, arr.strides) for arr in arrs]
+
+    # Compute input shapes and return shape with the new axis inserted
+    # e.g. given 5 input arrays of shape (2, 3, 4) and axis=1,
+    # corrected input shape is (2, 1, 3, 4) and return shape is (2, 5, 3, 4).
+    ll_shty = ir.ArrayType(cgutils.intp_t, ndim)
+
+    input_shapes = cgutils.alloca_once(builder, ll_shty)
+    ret_shapes = cgutils.alloca_once(builder, ll_shty)
+
+    # 1. copy original sizes at appropriate places
+    for dim in range(ndim - 1):
+        ll_dim = cgutils.intp_t(dim)
+        after_axis = builder.icmp_signed('>=', ll_dim, axis)
+        sh = orig_shape[dim]
+        idx = builder.select(after_axis,
+                             builder.add(ll_dim, one),
+                             ll_dim)
+        builder.store(sh, cgutils.gep_inbounds(builder, input_shapes, 0, idx))
+        builder.store(sh, cgutils.gep_inbounds(builder, ret_shapes, 0, idx))
+
+    # 2. insert new size at axis dimension
+    builder.store(one, cgutils.gep_inbounds(builder, input_shapes, 0, axis))
+    builder.store(ll_narrays, cgutils.gep_inbounds(builder, ret_shapes, 0, axis))
+
+    input_shapes = [cgutils.unpack_tuple(builder, builder.load(input_shapes))] * len(arrs)
+    ret_shapes = cgutils.unpack_tuple(builder, builder.load(ret_shapes))
+
+    # Compute input strides for each array with the new axis inserted
+    input_strides = [cgutils.alloca_once(builder, ll_shty)
+                     for i in range(len(arrs))]
+
+    # 1. copy original strides at appropriate places
+    for dim in range(ndim - 1):
+        ll_dim = cgutils.intp_t(dim)
+        after_axis = builder.icmp_signed('>=', ll_dim, axis)
+        idx = builder.select(after_axis,
+                             builder.add(ll_dim, one),
+                             ll_dim)
+        for i in range(len(arrs)):
+            builder.store(orig_strides[i][dim],
+                          cgutils.gep_inbounds(builder, input_strides[i], 0, idx))
+
+    # 2. insert new stride at axis dimension
+    # (the value is indifferent for a 1-sized dimension, we put 0)
+    for i in range(len(arrs)):
+        builder.store(zero, cgutils.gep_inbounds(builder, input_strides[i], 0, axis))
+
+    input_strides = [cgutils.unpack_tuple(builder, builder.load(st))
+                     for st in input_strides]
+
+    # Create concatenated array
+    ret = _do_concatenate(context, builder, axis,
+                          arrtys, arrs, input_shapes, input_strides,
+                          retty, ret_shapes)
+    return impl_ret_new_ref(context, builder, retty, ret._getvalue())
+
 
 
 @lower_builtin(np.concatenate, types.BaseTuple)
@@ -3746,6 +3856,26 @@ def np_concatenate_axis(context, builder, sig, args):
                            cgutils.unpack_tuple(builder, args[0]),
                            sig.return_type,
                            axis)
+
+
+if numpy_version >= (1, 10):
+    @lower_builtin(np.stack, types.BaseTuple)
+    def np_stack(context, builder, sig, args):
+        axis = context.get_constant(types.intp, 0)
+        return _np_stack(context, builder,
+                         list(sig.args[0]),
+                         cgutils.unpack_tuple(builder, args[0]),
+                         sig.return_type,
+                         axis)
+
+    @lower_builtin(np.stack, types.BaseTuple, types.Integer)
+    def np_stack_axis(context, builder, sig, args):
+        axis = context.cast(builder, args[1], sig.args[1], types.intp)
+        return _np_stack(context, builder,
+                         list(sig.args[0]),
+                         cgutils.unpack_tuple(builder, args[0]),
+                         sig.return_type,
+                         axis)
 
 
 # -----------------------------------------------------------------------------

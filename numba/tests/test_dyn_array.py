@@ -22,6 +22,12 @@ def np_concatenate1(a, b, c):
 def np_concatenate2(a, b, c, axis):
     return np.concatenate((a, b, c), axis=axis)
 
+def np_stack1(a, b, c):
+    return np.stack((a, b, c))
+
+def np_stack2(a, b, c, axis):
+    return np.stack((a, b, c), axis=axis)
+
 
 class BaseTest(TestCase):
 
@@ -1072,6 +1078,9 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
 
 
 class TestNpConcatenate(MemoryLeakMixin, TestCase):
+    """
+    Tests for np.concatenate().
+    """
 
     def _3d_arrays(self):
         a = np.arange(24).reshape((4, 3, 2))
@@ -1201,6 +1210,102 @@ class TestNpConcatenate(MemoryLeakMixin, TestCase):
             cfunc(d, d, d)
         self.assertIn("zero-dimensional arrays cannot be concatenated",
                       str(raises.exception))
+
+
+@unittest.skipUnless(hasattr(np, "stack"), "this Numpy doesn't have np.stack()")
+class TestNpStack(MemoryLeakMixin, TestCase):
+    """
+    Tests for np.stack().
+    """
+
+    def _3d_arrays(self):
+        a = np.arange(24).reshape((4, 3, 2))
+        b = a + 10
+        c = (b + 10).copy(order='F')
+        d = (c + 10)[::-1]
+        e = (d + 10)[...,::-1]
+        return a, b, c, d, e
+
+    @contextlib.contextmanager
+    def assert_invalid_sizes(self):
+        with self.assertRaises(ValueError) as raises:
+            yield
+        self.assertIn("all input arrays must have the same shape",
+                      str(raises.exception))
+
+    def check_stack(self, pyfunc, cfunc, args):
+        expected = pyfunc(*args)
+        got = cfunc(*args)
+        # Numba doesn't choose the same layout as Numpy,
+        # but it should always be contiguous
+        self.assertEqual(got.shape, expected.shape)
+        self.assertPreciseEqual(got.flatten(), expected.flatten())
+        self.assertTrue(got.flags.c_contiguous or got.flags.f_contiguous,
+                        got.flags)
+
+    def check_3d(self, pyfunc, generate_starargs):
+        cfunc = nrtjit(pyfunc)
+
+        def check(a, b, c, args):
+            self.check_stack(pyfunc, cfunc, (a, b, c) + args)
+
+        def check_all_axes(a, b, c):
+            for args in generate_starargs():
+                check(a, b, c, args)
+
+        a, b, c, d, e = self._3d_arrays()
+
+        # C, C, C
+        check_all_axes(a, b, b)
+        # C, C, F
+        check_all_axes(a, b, c)
+        # F, F, F
+        check_all_axes(a.T, b.T, a.T)
+        # F, F, C
+        check_all_axes(a.T, b.T, c.T)
+        # F, F, A
+        check_all_axes(a.T, b.T, d.T)
+        # A, A, A
+        check_all_axes(d.T, e.T, d.T)
+
+        # Different but compatible dtypes
+        check_all_axes(a, b.astype(np.float64), b)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        # Inputs have different shapes
+        with self.assert_invalid_sizes():
+            args = next(generate_starargs())
+            cfunc(a[:-1], b, c, *args)
+
+    @tag('important')
+    def test_3d(self):
+        pyfunc = np_stack2
+
+        def generate_starargs():
+            for axis in range(3):
+                yield (axis,)
+                yield (-3 + axis,)
+
+        self.check_3d(pyfunc, generate_starargs)
+
+    def test_3d_no_axis(self):
+        pyfunc = np_stack1
+
+        def generate_starargs():
+            yield()
+
+        self.check_3d(pyfunc, generate_starargs)
+
+    def test_0d(self):
+        pyfunc = np_stack1
+        cfunc = nrtjit(pyfunc)
+
+        a = np.array(42)
+        b = np.array(-5j)
+
+        self.check_stack(pyfunc, cfunc, (a, b, b))
 
 
 def benchmark_refct_speed():
