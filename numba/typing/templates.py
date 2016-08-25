@@ -327,12 +327,12 @@ def make_overload_template(func, overload_func, jit_options):
 
 class _IntrinsicTemplate(AbstractTemplate):
     """
-    A base class of templates for intrinsic intrinsic definition
+    A base class of templates for intrinsic definition
     """
 
     def generic(self, args, kws):
         """
-        Type the intrinsic intrinsic by the arguments.
+        Type the intrinsic by the arguments.
         """
         from numba.targets.imputils import lower_builtin
 
@@ -351,8 +351,7 @@ class _IntrinsicTemplate(AbstractTemplate):
             self._impl_cache[cache_key] = sig
             self._overload_cache[sig.args] = imp
             # register the lowering
-            typespec = types.VarArg(types.Any)
-            lower_builtin(imp, typespec)(imp)
+            lower_builtin(imp, *sig.args)(imp)
             return sig
 
     def get_impl_key(self, sig):
