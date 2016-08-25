@@ -744,27 +744,28 @@ class NdConcatenate(CallableTemplate):
         return typer
 
 
-@infer_global(np.stack)
-class NdStack(CallableTemplate):
+if numpy_version >= (1, 10):
+    @infer_global(np.stack)
+    class NdStack(CallableTemplate):
 
-    def generic(self):
-        def typer(arrays, axis=None):
-            if axis is not None and not isinstance(axis, types.Integer):
-                # Note Numpy allows axis=None, but it isn't documented:
-                # https://github.com/numpy/numpy/issues/7968
-                return
+        def generic(self):
+            def typer(arrays, axis=None):
+                if axis is not None and not isinstance(axis, types.Integer):
+                    # Note Numpy allows axis=None, but it isn't documented:
+                    # https://github.com/numpy/numpy/issues/7968
+                    return
 
-            dtype, ndim = _sequence_of_arrays(self.context,
-                                              "np.stack", arrays)
+                dtype, ndim = _sequence_of_arrays(self.context,
+                                                  "np.stack", arrays)
 
-            # This diverges from Numpy's behaviour, which simply inserts
-            # a new stride at the requested axis (therefore can return
-            # a 'A' array).
-            layout = 'F' if all(a.layout == 'F' for a in arrays) else 'C'
+                # This diverges from Numpy's behaviour, which simply inserts
+                # a new stride at the requested axis (therefore can return
+                # a 'A' array).
+                layout = 'F' if all(a.layout == 'F' for a in arrays) else 'C'
 
-            return types.Array(dtype, ndim + 1, layout)
+                return types.Array(dtype, ndim + 1, layout)
 
-        return typer
+            return typer
 
 
 # -----------------------------------------------------------------------------
