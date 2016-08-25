@@ -28,11 +28,18 @@ static int BASIC_TYPECODES[12];
 
 static int tc_intp;
 
+/* The type object for the numba .dispatcher.OmittedArg class
+ * that wraps omitted arguments.
+ */
+static PyObject *omittedarg_type;
+
 static PyObject *typecache;
 static PyObject *ndarray_typecache;
 static PyObject *structured_dtypes;
 
 static PyObject *str_typeof_pyval = NULL;
+static PyObject *str_value = NULL;
+static PyObject *str_numba_type = NULL;
 
 
 /*
@@ -167,6 +174,8 @@ enum opcode {
     OP_FLOAT = 'f',
     OP_COMPLEX = 'c',
     OP_BOOL = '?',
+    OP_OMITTED = '!',
+
     OP_BYTEARRAY = 'a',
     OP_BYTES = 'b',
     OP_NONE = 'n',
@@ -232,6 +241,10 @@ compute_dtype_fingerprint(string_writer_t *w, PyArray_Descr *descr)
 static int
 compute_fingerprint(string_writer_t *w, PyObject *val)
 {
+    /*
+     * Implementation note: for performance, we start with common
+     * types that can be tested with fast checks.
+     */
     if (val == Py_None)
         return string_writer_put_char(w, OP_NONE);
     if (PyBool_Check(val))
@@ -256,6 +269,15 @@ compute_fingerprint(string_writer_t *w, PyObject *val)
         return string_writer_put_char(w, OP_BYTES);
     if (PyByteArray_Check(val))
         return string_writer_put_char(w, OP_BYTEARRAY);
+    if ((PyObject *) Py_TYPE(val) == omittedarg_type) {
+        PyObject *default_val = PyObject_GetAttr(val, str_value);
+        if (default_val == NULL)
+            return -1;
+        TRY(string_writer_put_char, w, OP_OMITTED);
+        TRY(compute_fingerprint, w, default_val);
+        Py_DECREF(default_val);
+        return 0;
+    }
     if (PyArray_IsScalar(val, Generic)) {
         /* Note: PyArray_DescrFromScalar() may be a bit slow on
            non-trivial types. */
@@ -383,8 +405,8 @@ error:
 /*
  * Getting the typecode from a Type object.
  */
-static
-int _typecode_from_type_object(PyObject *tyobj) {
+static int
+_typecode_from_type_object(PyObject *tyobj) {
     int typecode;
     PyObject *tmpcode = PyObject_GetAttrString(tyobj, "_code");
     if (tmpcode == NULL) {
@@ -423,24 +445,34 @@ int _typecode_from_type_object(PyObject *tyobj) {
    However, we don't need to refer to it again, we just need to make sure that
    it is never deleted.
 */
-static
-int _typecode_fallback(PyObject *dispatcher, PyObject *val,
-                       int retain_reference) {
-    PyObject *tmptype;
+static int
+_typecode_fallback(PyObject *dispatcher, PyObject *val,
+                   int retain_reference) {
+    PyObject *numba_type;
     int typecode;
 
-    // Go back to the interpreter
-    tmptype = PyObject_CallMethodObjArgs((PyObject *) dispatcher,
-                                         str_typeof_pyval, val, NULL);
-    if (!tmptype) {
+    /*
+     * For values that define "_numba_type_", which holds a numba Type
+     * instance that should be used as the type of the value.
+     * Note this is done here, not in typeof_typecode(), so that
+     * some values can still benefit from fingerprint caching.
+     */
+    if (PyObject_HasAttr(val, str_numba_type)) {
+        numba_type = PyObject_GetAttrString(val, "_numba_type_");
+        if (!numba_type)
+            return -1;
+    }
+    else {
+        // Go back to the interpreter
+        numba_type = PyObject_CallMethodObjArgs((PyObject *) dispatcher,
+                                                str_typeof_pyval, val, NULL);
+    }
+    if (!numba_type)
         return -1;
-    }
-    typecode = _typecode_from_type_object(tmptype);
-    if (!retain_reference) {
-        Py_DECREF(tmptype);
-    }
+    typecode = _typecode_from_type_object(numba_type);
+    if (!retain_reference)
+        Py_DECREF(numba_type);
     return typecode;
-
 }
 
 /* Variations on _typecode_fallback for convenience */
@@ -725,23 +757,6 @@ int typecode_arrayscalar(PyObject *dispatcher, PyObject* aryscalar) {
     return BASIC_TYPECODES[typecode];
 }
 
-/*
- * For values that defines "_numba_type_", which holds a numba Type instance
- * that should be used as the type of the value.
- */
-static
-int
-typeof_numba_type_shortcut(PyObject *dispatcher, PyObject *val)
-{
-    int typecode;
-    PyObject *numba_type = NULL;
-    numba_type = PyObject_GetAttrString(val, "_numba_type_");
-    if (!numba_type) return -1;
-    typecode = _typecode_from_type_object(numba_type);
-    Py_DECREF(numba_type);
-    return typecode;
-}
-
 int
 typeof_typecode(PyObject *dispatcher, PyObject *val)
 {
@@ -775,10 +790,6 @@ typeof_typecode(PyObject *dispatcher, PyObject *val)
     else if (PyType_IsSubtype(tyobj, &PyArray_Type)) {
         return typecode_ndarray(dispatcher, (PyArrayObject*)val);
     }
-    /* Special case for "_numba_type_" attribute */
-    else if (PyObject_HasAttrString(val, "_numba_type_")) {
-        return typeof_numba_type_shortcut(dispatcher, val);
-    }
 
     return typecode_using_fingerprint(dispatcher, val);
 }
@@ -809,12 +820,21 @@ int init_numpy(void) {
 }
 
 
+/*
+ * typeof_init(omittedarg_type, typecode_dict)
+ * (called from dispatcher.py to fill in missing information)
+ */
 PyObject *
 typeof_init(PyObject *self, PyObject *args)
 {
     PyObject *tmpobj;
-    PyObject* dict = PySequence_Fast_GET_ITEM(args, 0);
+    PyObject *dict;
     int index = 0;
+
+    if (!PyArg_ParseTuple(args, "O!O!:typeof_init",
+                          &PyType_Type, &omittedarg_type,
+                          &PyDict_Type, &dict))
+        return NULL;
 
     /* Initialize Numpy API */
     if ( ! init_numpy() ) {
@@ -877,7 +897,9 @@ typeof_init(PyObject *self, PyObject *args)
     memset(cached_arycode, 0xFF, sizeof(cached_arycode));
 
     str_typeof_pyval = PyString_InternFromString("typeof_pyval");
-    if (str_typeof_pyval == NULL)
+    str_value = PyString_InternFromString("value");
+    str_numba_type = PyString_InternFromString("_numba_type_");
+    if (!str_value || !str_typeof_pyval || !str_numba_type)
         return NULL;
 
     Py_RETURN_NONE;
