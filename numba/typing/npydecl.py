@@ -700,7 +700,8 @@ def _sequence_of_arrays(context, func_name, arrays):
     if (not isinstance(arrays, types.BaseTuple)
         or not len(arrays)
         or not all(isinstance(a, types.Array) for a in arrays)):
-        return
+        raise TypeError("%s(): expecting a non-empty tuple of arrays, "
+                        "got %s" % (func_name, arrays))
 
     ndim = arrays[0].ndim
     for a in arrays:
