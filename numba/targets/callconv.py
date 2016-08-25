@@ -187,8 +187,12 @@ class MinimalCallConv(BaseCallConv):
         self._return_errcode_raw(builder, RETCODE_OK)
 
     def return_user_exc(self, builder, exc, exc_args=None):
-        assert (exc is None or issubclass(exc, BaseException)), exc
-        assert (exc_args is None or isinstance(exc_args, tuple)), exc_args
+        if exc is not None and not issubclass(exc, BaseException):
+            raise TypeError("exc should be None or exception class, got %r"
+                            % (exc,))
+        if exc_args is not None and not isinstance(exc_args, tuple):
+            raise TypeError("exc_args should be None or tuple, got %r"
+                            % (exc_args,))
         call_helper = self._get_call_helper(builder)
         exc_id = call_helper._add_exception(exc, exc_args)
         self._return_errcode_raw(builder, _const_int(exc_id))
@@ -327,8 +331,12 @@ class CPUCallConv(BaseCallConv):
         self._return_errcode_raw(builder, RETCODE_OK)
 
     def return_user_exc(self, builder, exc, exc_args=None):
-        assert (exc is None or issubclass(exc, BaseException)), exc
-        assert (exc_args is None or isinstance(exc_args, tuple)), exc_args
+        if exc is not None and not issubclass(exc, BaseException):
+            raise TypeError("exc should be None or exception class, got %r"
+                            % (exc,))
+        if exc_args is not None and not isinstance(exc_args, tuple):
+            raise TypeError("exc_args should be None or tuple, got %r"
+                            % (exc_args,))
         pyapi = self.context.get_python_api(builder)
         # Build excinfo struct
         if exc_args is not None:
