@@ -1171,7 +1171,7 @@ class Context(object):
     def __init__(self, agent):
         self._agent = weakref.proxy(agent)
 
-        if self._agent.is_component: # only components have queues
+        if self._agent.is_component:  # only components have queues
             qs = agent.queue_max_size
             defq = self._agent.create_queue_multi(qs, callback=self._callback)
             self._defaultqueue = defq.owned()
@@ -1368,32 +1368,30 @@ class Context(object):
 
         return mem
 
-    def create_async_copy(self, size):
-        return AsyncCopy(gpu_ctx=self, size=size)
+    def create_async_copy(self, cpu_ctx, size):
+        return AsyncCopy(cpu_ctx=cpu_ctx, gpu_ctx=self, size=size)
 
 
 class AsyncCopy(object):
-    def __init__(self, gpu_ctx, size):
+    def __init__(self, cpu_ctx, gpu_ctx, size):
         assert dgpu_present()
         self._size = size
+        self._cpu_ctx = cpu_ctx
         self._gpu_ctx = gpu_ctx
-        self._cpu_ctx = Context([a for a in hsa.agents if not a.is_component][0])
-        # cpu pool
+        # allocate cpu memory
         flags = [enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED]
-        self._cpupool = self._cpu_ctx.getMempools(pool_global_flags=flags)[0]
-        self._cpumem = self._cpupool.allocate(size, allow_access_to=[self._gpu_ctx.agent])
+        self._cpu_mem = self._cpu_ctx.mempoolalloc(
+            self._size, allow_access_to=[self._gpu_ctx._agent],
+            pool_global_flags=flags)
 
     def copy_to_device(self, devary, ary, stream):
-        def byte_view(addr, sz):
-            return (ctypes.c_byte * sz).from_address(addr)
-
-        cpu_membytes = byte_view(self._cpumem.device_pointer.value, self._size)
-
+        cbytearr = (ctypes.c_byte * self._size)
+        cpu_membytes = cbytearr.from_address(self._cpu_mem.device_pointer.value)
         cpu_membytes[:] = ary.view(dtype=np.uint8)
 
         completion_signal = hsa.create_signal(1)
-
         dependent_signal = stream._get_last_signal()
+
         if dependent_signal is not None:
             dsignal = drvapi.hsa_signal_t(dependent_signal._id)
             signals = (1, ctypes.byref(dsignal), completion_signal)
@@ -1402,7 +1400,7 @@ class AsyncCopy(object):
 
         hsa.hsa_amd_memory_async_copy(devary.dgpu_data.device_pointer.value,
                                       self._gpu_ctx._agent._id,
-                                      self._cpumem.device_pointer.value,
+                                      self._cpu_mem.device_pointer.value,
                                       self._cpu_ctx._agent._id, self._size,
                                       *signals)
 

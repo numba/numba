@@ -141,7 +141,7 @@ class DeviceNDArrayBase(object):
 
     def async_copy_to_device(self, ary, stream):
         ctx = stream._context
-        asyncopy = ctx.create_async_copy(ary.nbytes)
+        asyncopy = ctx.create_async_copy(devices.get_cpu(), ary.nbytes)
         asyncopy.copy_to_device(self, ary, stream=stream)
 
     def copy_to_host(self, ary=None):
@@ -165,7 +165,7 @@ class DeviceNDArrayBase(object):
 
             result_array = d_arr.copy_to_host()
         """
-        if ary is None: # destination does not exist
+        if ary is None:  # destination does not exist
             hostary = np.empty(shape=self.alloc_size, dtype=np.byte)
         else: # destination does exist, it's `ary`, check it
             if ary.dtype != self.dtype:

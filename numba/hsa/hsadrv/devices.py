@@ -4,7 +4,7 @@ Expose each GPU device directly
 from __future__ import print_function, absolute_import, division
 import functools
 from numba import servicelib
-from .driver import hsa as driver
+from .driver import hsa as driver, Context as _Context
 
 
 class _culist(object):
@@ -95,6 +95,17 @@ class CU(object):
         if self._context:
             self._context.reset()
             self._context = None
+
+
+_cpu_context = None
+
+
+def get_cpu():
+    global _cpu_context
+    if _cpu_context is None:
+        cpu_agent = [a for a in driver.agents if not a.is_component][0]
+        _cpu_context = _Context(cpu_agent)
+    return _cpu_context
 
 
 def get_gpu(i):
