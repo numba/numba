@@ -247,7 +247,7 @@ def return_non_boxable():
     return np
 
 
-@overload(return_non_boxable, jit_options={'no_cpython_wrapper': True})
+@overload(return_non_boxable)
 def overload_return_non_boxable():
     def imp():
         return np
