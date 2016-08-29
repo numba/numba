@@ -237,6 +237,7 @@ class Driver(object):
         self._agent_map = None
         self._programs = {}
         self._recycler = Recycler()
+        self._active_streams = weakref.WeakSet()
 
     def _initialize_api(self):
         if self.is_initialized:
@@ -394,6 +395,19 @@ class Driver(object):
         """
         return list(filter(lambda a: a.is_component, reversed(sorted(
             self.agents))))
+
+    def create_stream(self):
+        st = Stream()
+        self._active_streams.add(st)
+        return st
+
+    def implicit_sync(self):
+        """
+        Implicit synchronization for all asynchronous streams
+        across all devices.
+        """
+        for st in self._active_streams:
+            st.synchronize()
 
 
 hsa = Driver()
@@ -1168,6 +1182,10 @@ class Context(object):
     Parameters:
     agent the agent, and instance of the class Agent
     """
+
+    # a weak set of active Stream objects
+    _active_streams = weakref.WeakSet()
+
     def __init__(self, agent):
         self._agent = weakref.proxy(agent)
 
@@ -1266,8 +1284,6 @@ class Context(object):
             raise RuntimeError("MemoryPointer has no value")
         self.allocations[mem.value] = ret
         return ret.own()
-
-
 
     def getMempools(self, segment_is=None, segment_is_not=None, pool_global_flags=None):
         """
@@ -1411,8 +1427,7 @@ class Stream(object):
     """
     An asynchronous stream for async API
     """
-    def __init__(self, context):
-        self._context = context
+    def __init__(self):
         self._last_signal = None
 
     def _set_last_signal(self, signal):

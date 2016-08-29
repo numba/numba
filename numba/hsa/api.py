@@ -82,7 +82,7 @@ def device_array(shape, dtype=np.float, strides=None, order='C'):
 
 from numba.hsa.hsadrv.devices import get_context
 
-def to_device(obj, context=get_context(), copy=True, to=None):
+def to_device(obj, stream=None, context=get_context(), copy=True, to=None):
     """to_device(obj, context, copy=True, to=None)
 
     Allocate and transfer a numpy ndarray or structured scalar to the device.
@@ -105,13 +105,13 @@ def to_device(obj, context=get_context(), copy=True, to=None):
 
     """
     if to is None:
-        to, new = devicearray.auto_device(obj, context, copy=copy)
+        to, new = devicearray.auto_device(obj, context=context, copy=copy)
         return to
     if copy:
-        to.copy_to_device(obj, context)
+        to.copy_to_device(obj, context=context)
     return to
 
 
-def stream(context=get_context()):
-    from .hsadrv.driver import Stream
-    return Stream(context=context)
+def stream():
+    from .hsadrv.driver import hsa
+    return hsa.create_stream()

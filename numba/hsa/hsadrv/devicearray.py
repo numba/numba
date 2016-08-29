@@ -14,6 +14,7 @@ from numba.cuda.cudadrv.driver import memory_size_from_info as \
 agnostic_memory_size_from_info
 from . import devices
 from numba import dummyarray, types, numpy_support
+from .error import HsaContextMismatchError
 
 try:
     long
@@ -46,6 +47,7 @@ def require_hsa_ndarray(obj):
     "Raises ValueError if is_hsa_ndarray(obj) evaluates False"
     if not is_hsa_ndarray(obj):
         raise ValueError('require an hsa ndarray object')
+
 
 class DeviceNDArrayBase(object):
     """Base class for an on dGPU NDArray representation cf. numpy.ndarray
@@ -100,6 +102,10 @@ class DeviceNDArrayBase(object):
         self.dgpu_data = dgpu_data
 
     @property
+    def _context(self):
+        return self.dgpu_data.context
+
+    @property
     def _numba_type_(self):
         """
         Magic attribute expected by Numba to get the numba type that
@@ -117,15 +123,26 @@ class DeviceNDArrayBase(object):
         else:
             return self.dgpu_data.device_ctypes_pointer
 
-    def copy_to_device(self, ary, context):
+    def copy_to_device(self, ary, stream=None, context=None):
         """Copy `ary` to `self`.
 
         If `ary` is a HSA memory, perform a device-to-device transfer.
         Otherwise, perform a a host-to-device transfer.
+
+        If `stream` is a stream object, an async copy to used.
         """
         if ary.size == 0:
             # Nothing to do
             return
+
+        if context is not None:
+            if self.dgpu_data is not None:
+                expect, got = self._context, context
+                if expect != got:
+                    raise HsaContextMismatchError(expect=expect, got=got)
+        else:
+            context = self._context
+
         # TODO: Worry about multiple dGPUs
         #if _driver.is_device_memory(ary):
         #    sz = min(self.alloc_size, ary.alloc_size)
@@ -136,15 +153,18 @@ class DeviceNDArrayBase(object):
         sz = self.alloc_size
 
         # host_to_dGPU(context, dst, src, size):
+        if stream is None:
+            _driver.hsa.implicit_sync()
+            _driver.host_to_dGPU(self._context, self, ary, sz)
+        else:
+            self._async_copy_to_device(ary, stream)
 
-        _driver.host_to_dGPU(context, self, ary, sz)
-
-    def async_copy_to_device(self, ary, stream):
-        ctx = stream._context
+    def _async_copy_to_device(self, ary, stream):
+        ctx = self._context
         asyncopy = ctx.create_async_copy(devices.get_cpu(), ary.nbytes)
         asyncopy.copy_to_device(self, ary, stream=stream)
 
-    def copy_to_host(self, ary=None):
+    def copy_to_host(self, ary=None, stream=None):
         """Copy ``self`` to ``ary`` or create a new Numpy ndarray
         if ``ary`` is ``None``.
 
@@ -165,6 +185,7 @@ class DeviceNDArrayBase(object):
 
             result_array = d_arr.copy_to_host()
         """
+        _driver.hsa.implicit_sync()
         if ary is None:  # destination does not exist
             hostary = np.empty(shape=self.alloc_size, dtype=np.byte)
         else: # destination does exist, it's `ary`, check it
@@ -211,6 +232,7 @@ class DeviceNDArrayBase(object):
         """Returns a device memory object that is used as the argument.
         """
         return self.dgpu_data
+
 
 class DeviceNDArray(DeviceNDArrayBase):
     '''
@@ -267,6 +289,7 @@ class DeviceNDArray(DeviceNDArrayBase):
         else:
             raise NotImplementedError("operation requires copying")
 
+
 def from_array_like(ary, dgpu_data=None):
     "Create a DeviceNDArray object that is like ary."
     if ary.ndim == 0:
@@ -304,7 +327,7 @@ def auto_device(obj, context, copy=True):
         sentry_contiguous(obj)
         devobj = from_array_like(obj)
         if copy:
-            devobj.copy_to_device(obj, context)
+            devobj.copy_to_device(obj, context=context)
         return devobj, True
 
 

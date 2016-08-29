@@ -16,9 +16,8 @@ class TestDeviceArray(unittest.TestCase):
         devarr = hsa.to_device(arr)
 
         stream = hsa.stream()
-        devarr.async_copy_to_device(arr + 100, stream=stream)
-        stream.synchronize()
-
+        devarr.copy_to_device(arr + 100, stream=stream)
+        # implicit synchronization
         got = devarr.copy_to_host()
         np.testing.assert_equal(arr + 100, got)
 

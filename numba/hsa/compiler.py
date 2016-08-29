@@ -341,6 +341,9 @@ class HSAKernel(HSAKernelBase):
         # Actual Kernel launch
         qq = ctx.default_queue
 
+        if self.stream is None:
+            hsa.implicit_sync()
+
         # Dispatch
         qq.dispatch(symbol, kernargs, workgroup_size=self.local_size,
                     grid_size=self.global_size)
