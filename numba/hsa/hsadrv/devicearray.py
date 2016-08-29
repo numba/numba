@@ -157,11 +157,11 @@ class DeviceNDArrayBase(object):
             _driver.hsa.implicit_sync()
             _driver.host_to_dGPU(self._context, self, ary, sz)
         else:
-            self._async_copy_to_device(ary, stream)
+            self._async_copy_to_device(ary, sz, stream)
 
-    def _async_copy_to_device(self, ary, stream):
+    def _async_copy_to_device(self, ary, size, stream):
         ctx = self._context
-        asyncopy = ctx.create_async_copy(devices.get_cpu(), ary.nbytes)
+        asyncopy = ctx.create_async_copy(devices.get_cpu_context(), size)
         asyncopy.copy_to_device(self, ary, stream=stream)
 
     def copy_to_host(self, ary=None, stream=None):
@@ -185,7 +185,6 @@ class DeviceNDArrayBase(object):
 
             result_array = d_arr.copy_to_host()
         """
-        _driver.hsa.implicit_sync()
         if ary is None:  # destination does not exist
             hostary = np.empty(shape=self.alloc_size, dtype=np.byte)
         else: # destination does exist, it's `ary`, check it
@@ -203,16 +202,21 @@ class DeviceNDArrayBase(object):
                                 self.strides in scalstrides):
                     raise TypeError('incompatible strides; device %s; host %s' %
                                     (self.strides, ary.strides))
-            hostary = ary # this is supposed to be a ptr for writing
+            hostary = ary  # this is supposed to be a ptr for writing
 
         # a location for the data exists as `hostary`
         assert self.alloc_size >= 0, "Negative memory size"
 
-        context = devices.get_context()
+        context = self._context
 
         # copy the data from the device to the hostary
         if self.alloc_size != 0:
-            _driver.dGPU_to_host(context, hostary, self, self.alloc_size)
+            sz = self.alloc_size
+            if stream is None:
+                _driver.hsa.implicit_sync()
+                _driver.dGPU_to_host(context, hostary, self, sz)
+            else:
+                self._async_copy_to_host(hostary, sz, stream)
 
         # if the location for the data was originally None
         # then create a new ndarray and plumb in the new memory
@@ -227,6 +231,11 @@ class DeviceNDArrayBase(object):
             hostary = ary
 
         return hostary
+
+    def _async_copy_to_host(self, ary, size, stream):
+        ctx = self._context
+        asyncopy = ctx.create_async_copy(devices.get_cpu_context(), size)
+        asyncopy.copy_to_host(ary, self, stream=stream)
 
     def as_hsa_arg(self):
         """Returns a device memory object that is used as the argument.
@@ -315,7 +324,7 @@ def sentry_contiguous(ary):
             raise ValueError(errmsg_contiguous_buffer)
 
 
-def auto_device(obj, context, copy=True):
+def auto_device(obj, context, stream=None, copy=True):
     """
     Create a DeviceArray like obj and optionally copy data from
     host to device. If obj already represents device memory, it is returned and
@@ -327,7 +336,7 @@ def auto_device(obj, context, copy=True):
         sentry_contiguous(obj)
         devobj = from_array_like(obj)
         if copy:
-            devobj.copy_to_device(obj, context=context)
+            devobj.copy_to_device(obj, stream=stream, context=context)
         return devobj, True
 
 

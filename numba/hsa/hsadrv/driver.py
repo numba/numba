@@ -704,8 +704,8 @@ class MemPool(HsaWrapper):
                                                 None,
                                                 buff)
         fin = _make_mem_finalizer(hsa.hsa_amd_memory_pool_free)
-        ret = MemoryPointer(weakref.proxy(self), buff,  nbytes,\
-                finalizer = fin(self, buff))
+        ret = MemoryPointer(weakref.proxy(self), buff, nbytes,
+                            finalizer=fin(self, buff))
         if buff.value == None:
             raise RuntimeError("MemoryPointer has no value")
         self.allocations[buff.value] = ret
@@ -809,7 +809,6 @@ class MemRegion(HsaWrapper):
             new_instance = cls(owner, _id)
             cls._instance_dict[_id] = new_instance
             return new_instance
-
 
 
 class Queue(object):
@@ -994,7 +993,6 @@ class Program(object):
                 print(msg.value.decode("utf-8"))
                 exit(-hsa_status)
 
-
         support = ctypes.c_bool(0)
         hsa.hsa_system_extension_supported(enums.HSA_EXTENSION_FINALIZER,
                                            version_major,
@@ -1021,7 +1019,7 @@ class Program(object):
 
         self._as_parameter_ = self._id
         utils.finalize(self, self._ftabl.hsa_ext_program_destroy,
-                self._id)
+                       self._id)
 
     def add_module(self, module):
         self._ftabl.hsa_ext_program_add_module(self._id, module._id)
@@ -1104,6 +1102,7 @@ class Symbol(HsaWrapper):
     def __init__(self, symbol_id):
         self._id = symbol_id
 
+
 class MemoryPointer(object):
     __hsa_memory__ = True
 
@@ -1145,6 +1144,23 @@ class MemoryPointer(object):
     @property
     def device_ctypes_pointer(self):
         return self.device_pointer
+
+
+class PinnedMemory(mviewbuf.MemAlloc):
+    def __init__(self, context, owner, pointer, size):
+        self.context = context
+        self.owned = owner
+        self.size = size
+        self.host_pointer = pointer
+        self.handle = self.host_pointer
+
+        # For buffer interface
+        self._buflen_ = self.size
+        self._bufptr_ = self.host_pointer.value
+
+    def own(self):
+        return self
+
 
 class OwnedPointer(object):
     def __init__(self, memptr, view=None):
@@ -1195,6 +1211,7 @@ class Context(object):
             self._defaultqueue = defq.owned()
 
         self.allocations = utils.UniqueDict()
+        self._staging_area = None
 
     def _callback(self, status, queue):
         drvapi._check_error(status, queue)
@@ -1278,8 +1295,8 @@ class Context(object):
               ( hw, nbytes, memTypeFlags))
 
         fin = _make_mem_finalizer(hsa.hsa_memory_free)
-        ret = MemoryPointer(weakref.proxy(self), mem,  nbytes,\
-                finalizer = fin(self, mem))
+        ret = MemoryPointer(weakref.proxy(self), mem, nbytes,
+                            finalizer=fin(self, mem))
         if mem.value == None:
             raise RuntimeError("MemoryPointer has no value")
         self.allocations[mem.value] = ret
@@ -1343,8 +1360,8 @@ class Context(object):
 
         return mempools
 
-
-    def mempoolalloc(self, nbytes, allow_access_to=None, segment_is=None, segment_is_not=None, pool_global_flags=None):
+    def mempoolalloc(self, nbytes, allow_access_to=None, segment_is=None,
+                     segment_is_not=None, pool_global_flags=None):
         """
         Allocates memory in a memory pool.
         Parameters:
@@ -1355,7 +1372,9 @@ class Context(object):
         """
 
         # find a mempool for the allocation
-        mempools = self.getMempools(segment_is=segment_is, segment_is_not=segment_is_not, pool_global_flags=pool_global_flags)
+        mempools = self.getMempools(segment_is=segment_is,
+                                    segment_is_not=segment_is_not,
+                                    pool_global_flags=pool_global_flags)
 
         assert len(mempools) > 0, "No suitable memory pools found."
 
@@ -1376,13 +1395,37 @@ class Context(object):
                 mem = m
                 break
 
-        if mem == None:
-            raise RuntimeError("Memory allocation failed. No agent/mempool \
-                combination could meet allocation restraints \
-                (hardware = %s, size = %s)." % \
-                ( hw, nbytes))
+        if mem is None:
+            raise RuntimeError("Memory allocation failed. No agent/mempool "
+                               "combination could meet allocation restraints "
+                               "(hardware = %s, size = %s)." % (hw, nbytes))
 
         return mem
+
+    def memhostalloc(self, size, allow_access_to):
+        # allocate cpu memory
+        flags = [enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED]
+        mem = self.mempoolalloc(size, allow_access_to=allow_access_to,
+                                pool_global_flags=flags)
+        return PinnedMemory(weakref.proxy(self), owner=mem,
+                            pointer=mem.device_pointer, size=mem.size)
+
+    def get_staging_area(self, cpu_ctx, size):
+        """
+        Called from the GPU contet to get a staging area for async copy.
+        """
+        sa = self._staging_area
+        # no staging area yet or size inadequate
+        if sa is None or sa.size > size:
+            # ensure all pending async task to complete
+            hsa.implicit_sync()
+            # allocate cpu memory
+            flags = [enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED]
+            sa = cpu_ctx.mempoolalloc(size, allow_access_to=[self._agent],
+                                      pool_global_flags=flags)
+            self._staging_area = sa
+
+        return self._staging_area
 
     def create_async_copy(self, cpu_ctx, size):
         return AsyncCopy(cpu_ctx=cpu_ctx, gpu_ctx=self, size=size)
@@ -1394,17 +1437,8 @@ class AsyncCopy(object):
         self._size = size
         self._cpu_ctx = cpu_ctx
         self._gpu_ctx = gpu_ctx
-        # allocate cpu memory
-        flags = [enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED]
-        self._cpu_mem = self._cpu_ctx.mempoolalloc(
-            self._size, allow_access_to=[self._gpu_ctx._agent],
-            pool_global_flags=flags)
 
     def copy_to_device(self, devary, ary, stream):
-        cbytearr = (ctypes.c_byte * self._size)
-        cpu_membytes = cbytearr.from_address(self._cpu_mem.device_pointer.value)
-        cpu_membytes[:] = ary.view(dtype=np.uint8)
-
         completion_signal = hsa.create_signal(1)
         dependent_signal = stream._get_last_signal()
 
@@ -1416,11 +1450,30 @@ class AsyncCopy(object):
 
         hsa.hsa_amd_memory_async_copy(devary.dgpu_data.device_pointer.value,
                                       self._gpu_ctx._agent._id,
-                                      self._cpu_mem.device_pointer.value,
+                                      ary.ctypes.data,
                                       self._cpu_ctx._agent._id, self._size,
                                       *signals)
 
-        stream._set_last_signal(completion_signal)
+        stream._add_signal(completion_signal)
+
+    def copy_to_host(self, ary, devary, stream):
+        completion_signal = hsa.create_signal(1)
+        dependent_signal = stream._get_last_signal()
+
+        if dependent_signal is not None:
+            dsignal = drvapi.hsa_signal_t(dependent_signal._id)
+            signals = (1, ctypes.byref(dsignal), completion_signal)
+        else:
+            signals = (0, None, completion_signal)
+
+        hsa.hsa_amd_memory_async_copy(ary.ctypes.data,
+                                      self._cpu_ctx._agent._id,
+                                      devary.dgpu_data.device_pointer.value,
+                                      self._gpu_ctx._agent._id,
+                                      self._size,
+                                      *signals)
+
+        stream._add_signal(completion_signal)
 
 
 class Stream(object):
@@ -1428,16 +1481,29 @@ class Stream(object):
     An asynchronous stream for async API
     """
     def __init__(self):
-        self._last_signal = None
+        self._signals = []
 
-    def _set_last_signal(self, signal):
-        self._last_signal = signal
+    def _add_signal(self, signal):
+        """
+        Add a signal that corresponds to an async task.
+        """
+        self._signals.append(signal)
 
     def _get_last_signal(self):
-        return self._last_signal
+        """
+        Get the last signal.
+        """
+        return self._signals[-1] if self._signals else None
 
     def synchronize(self):
-        self._last_signal.wait_until_ne_one()
+        """
+        Synchronize the stream.
+        """
+        print("SYNC")
+        if self._signals:
+            signals, self._signals = self._signals, []
+            for sig in reversed(signals):
+                sig.wait_until_ne_one()
 
 
 def _make_mem_finalizer(dtor):
@@ -1451,12 +1517,14 @@ def _make_mem_finalizer(dtor):
     """
     def mem_finalize(context, handle):
         allocations = context.allocations
+        sync = hsa.implicit_sync
 
         def core():
             print("\nCurrent allocations:", allocations)
             if allocations:
-                print("Attempting delete on %s"%handle.value)
+                print("Attempting delete on %s" % handle.value)
                 del allocations[handle.value]
+            sync()
             dtor(handle)
         return core
 
@@ -1504,6 +1572,7 @@ def host_pointer(obj):
 
     forcewritable = isinstance(obj, np.void)
     return mviewbuf.memoryview_get_buffer(obj, forcewritable)
+
 
 def host_to_dGPU(context, dst, src, size):
     """

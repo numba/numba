@@ -100,7 +100,7 @@ class CU(object):
 _cpu_context = None
 
 
-def get_cpu():
+def get_cpu_context():
     global _cpu_context
     if _cpu_context is None:
         cpu_agent = [a for a in driver.agents if not a.is_component][0]
@@ -110,6 +110,9 @@ def get_cpu():
 
 def get_gpu(i):
     return cus[i]
+
+def get_num_gpus():
+    return len(cus)
 
 
 _custack = servicelib.TLStack()
@@ -128,6 +131,10 @@ def get_context(devnum=0):
     return the HSA context.
     """
     return _get_device(devnum=devnum).associate_context()
+
+
+def get_all_contexts():
+    return [get_context(i) for i in range(get_num_gpus())]
 
 
 def require_context(fn):
