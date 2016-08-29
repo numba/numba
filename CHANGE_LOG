@@ -3,10 +3,15 @@ Version 0.28.0
 
 Amongst other improvements, this version improves again the level of
 support for linear algebra -- functions from the :mod:`numpy.linalg`
-module.
+module.  Also, our random generator is now guaranteed to be thread-safe
+and fork-safe.
 
 Improvements:
 
+* PR #2019: Add the ``@intrinsic`` decorator to define low-level
+  subroutines callable from JIT functions (this is considered
+  a private API for now).
+* PR #2059: Implement ``np.concatenate`` and ``np.stack``.
 * PR #2048: Make random generation fork-safe and thread-safe, producing
   independent streams of random numbers for each thread or process.
 * PR #2031: Add documentation of floating-point pitfalls.
