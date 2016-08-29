@@ -696,6 +696,79 @@ class NdCopy(CallableTemplate):
         return typer
 
 
+def _sequence_of_arrays(context, func_name, arrays):
+    if (not isinstance(arrays, types.BaseTuple)
+        or not len(arrays)
+        or not all(isinstance(a, types.Array) for a in arrays)):
+        raise TypeError("%s(): expecting a non-empty tuple of arrays, "
+                        "got %s" % (func_name, arrays))
+
+    ndim = arrays[0].ndim
+    for a in arrays:
+        if a.ndim != ndim:
+            raise TypeError("%s(): all the input arrays "
+                            "must have same number of dimensions"
+                            % func_name)
+
+    dtype = context.unify_types(*(a.dtype for a in arrays))
+    if dtype is None:
+        raise TypeError("%s(): input arrays must have "
+                        "compatible dtypes" % func_name)
+
+    return dtype, ndim
+
+
+@infer_global(np.concatenate)
+class NdConcatenate(CallableTemplate):
+
+    def generic(self):
+        def typer(arrays, axis=None):
+            if axis is not None and not isinstance(axis, types.Integer):
+                # Note Numpy allows axis=None, but it isn't documented:
+                # https://github.com/numpy/numpy/issues/7968
+                return
+
+            dtype, ndim = _sequence_of_arrays(self.context,
+                                              "np.concatenate", arrays)
+            if ndim == 0:
+                raise TypeError("zero-dimensional arrays cannot be concatenated")
+
+            # Only create a F array if all input arrays have F layout.
+            # This is a simplified version of Numpy's behaviour,
+            # while Numpy's actually processes the input strides to
+            # decide on optimal output strides
+            # (see PyArray_CreateMultiSortedStridePerm()).
+            layout = 'F' if all(a.layout == 'F' for a in arrays) else 'C'
+
+            return types.Array(dtype, ndim, layout)
+
+        return typer
+
+
+if numpy_version >= (1, 10):
+    @infer_global(np.stack)
+    class NdStack(CallableTemplate):
+
+        def generic(self):
+            def typer(arrays, axis=None):
+                if axis is not None and not isinstance(axis, types.Integer):
+                    # Note Numpy allows axis=None, but it isn't documented:
+                    # https://github.com/numpy/numpy/issues/7968
+                    return
+
+                dtype, ndim = _sequence_of_arrays(self.context,
+                                                  "np.stack", arrays)
+
+                # This diverges from Numpy's behaviour, which simply inserts
+                # a new stride at the requested axis (therefore can return
+                # a 'A' array).
+                layout = 'F' if all(a.layout == 'F' for a in arrays) else 'C'
+
+                return types.Array(dtype, ndim + 1, layout)
+
+            return typer
+
+
 # -----------------------------------------------------------------------------
 # Linear algebra
 

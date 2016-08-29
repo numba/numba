@@ -214,6 +214,7 @@ The following top-level functions are supported:
 * :func:`numpy.array` (only the 2 first arguments)
 * :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.bincount` (only the 2 first arguments)
+* :func:`numpy.concatenate`
 * :func:`numpy.copy` (only the first argument)
 * :func:`numpy.diag`
 * :func:`numpy.digitize`
@@ -237,6 +238,7 @@ The following top-level functions are supported:
 * :func:`numpy.searchsorted` (only the 2 first arguments)
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
+* :func:`numpy.stack`
 * :func:`numpy.where`
 * :func:`numpy.zeros` (only the 2 first arguments)
 * :func:`numpy.zeros_like` (only the 2 first arguments)
