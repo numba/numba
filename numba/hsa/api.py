@@ -74,6 +74,7 @@ def deregister(*args):
 from .hsadrv import devicearray
 from numba.cuda.api import _prepare_shape_strides_dtype
 
+
 def device_array(shape, dtype=np.float, strides=None, order='C'):
     """device_array(shape, dtype=np.float, strides=None, order='C')
 
@@ -82,6 +83,13 @@ def device_array(shape, dtype=np.float, strides=None, order='C'):
     shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
                                                          order)
     return devicearray.DeviceNDArray(shape=shape, strides=strides, dtype=dtype)
+
+
+def device_array_like(ary):
+    """Call hsa.devicearray() with information from the array.
+    """
+    return device_array(shape=ary.shape, dtype=ary.dtype, strides=ary.strides)
+
 
 from numba.hsa.hsadrv.devices import get_context
 
