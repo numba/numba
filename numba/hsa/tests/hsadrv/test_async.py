@@ -10,8 +10,8 @@ from numba.hsa.hsadrv.driver import dgpu_present
 @unittest.skipUnless(dgpu_present(), 'test only on dGPU system')
 class TestAsync(unittest.TestCase):
 
-    def test_pinned_array(self):
-        arr = hsa.pinned_array(shape=1024, dtype=np.float32)
+    def test_coarsegrain_array(self):
+        arr = hsa.coarsegrain_array(shape=1024, dtype=np.float32)
         self.assertEqual(arr.size, 1024)
         arr[:] = expect = np.arange(arr.size)
         np.testing.assert_allclose(arr, expect)
@@ -22,7 +22,7 @@ class TestAsync(unittest.TestCase):
         devarr = hsa.to_device(arr)
 
         # allocate pinned array equivalent
-        hostarr = hsa.pinned_array(shape=arr.shape, dtype=arr.dtype)
+        hostarr = hsa.coarsegrain_array(shape=arr.shape, dtype=arr.dtype)
         hostarr[:] = arr + 100
 
         stream = hsa.stream()
@@ -38,8 +38,8 @@ class TestAsync(unittest.TestCase):
 
     def test_async_copy_to_device_and_back(self):
         arr = np.arange(1024)
-        hostarr = hsa.pinned_array(shape=arr.shape, dtype=arr.dtype)
-        gotarr = hsa.pinned_array(shape=arr.shape, dtype=arr.dtype)
+        hostarr = hsa.coarsegrain_array(shape=arr.shape, dtype=arr.dtype)
+        gotarr = hsa.coarsegrain_array(shape=arr.shape, dtype=arr.dtype)
         stream = hsa.stream()
         ct = len(stream._signals)
         devarr = hsa.to_device(hostarr, stream=stream)

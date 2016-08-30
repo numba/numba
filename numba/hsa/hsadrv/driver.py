@@ -1146,7 +1146,7 @@ class MemoryPointer(object):
         return self.device_pointer
 
 
-class PinnedMemory(mviewbuf.MemAlloc):
+class HostCoarseGrainMemory(mviewbuf.MemAlloc):
     def __init__(self, context, owner, pointer, size):
         self.context = context
         self.owned = owner
@@ -1400,12 +1400,12 @@ class Context(object):
 
         return mem
 
-    def memhostalloc(self, size, allow_access_to):
+    def memhostcoarsealloc(self, size, allow_access_to):
         # allocate cpu memory
         flags = [enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED]
         mem = self.mempoolalloc(size, allow_access_to=allow_access_to,
                                 pool_global_flags=flags)
-        return PinnedMemory(weakref.proxy(self), owner=mem,
+        return HostCoarseGrainMemory(weakref.proxy(self), owner=mem,
                             pointer=mem.device_pointer, size=mem.size)
 
 

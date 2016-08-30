@@ -121,8 +121,8 @@ def stream():
     return hsa.create_stream()
 
 
-def pinned_array(shape, dtype=np.float, strides=None, order='C'):
-    """pinned_array(shape, dtype=np.float, strides=None, order='C')
+def coarsegrain_array(shape, dtype=np.float, strides=None, order='C'):
+    """coarsegrain_array(shape, dtype=np.float, strides=None, order='C')
 
     Allocate a np.ndarray with a buffer that is pinned (pagelocked).
     Similar to np.empty().
@@ -133,7 +133,7 @@ def pinned_array(shape, dtype=np.float, strides=None, order='C'):
     bytesize = agnostic_memory_size_from_info(shape, strides, dtype.itemsize)
     # TODO does allowing access by all dGPUs really work in a multiGPU system?
     agents = [c._agent for c in devices.get_all_contexts()]
-    buf = devices.get_cpu_context().memhostalloc(bytesize, agents)
+    buf = devices.get_cpu_context().memhostcoarsealloc(bytesize, agents)
     arr = np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
                      buffer=buf)
     return arr
