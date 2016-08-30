@@ -1,15 +1,14 @@
 from __future__ import print_function, absolute_import
 
 import numpy as np
+
 from numba import hsa
-from numba.hsa.hsadrv.error import HsaDriverError
 import numba.unittest_support as unittest
-
-
 from numba.hsa.hsadrv.driver import dgpu_present
 
 
-class TestDeviceArray(unittest.TestCase):
+@unittest.skipUnless(dgpu_present(), 'test only on dGPU system')
+class TestAsync(unittest.TestCase):
 
     def test_pinned_array(self):
         arr = hsa.pinned_array(shape=1024, dtype=np.float32)
