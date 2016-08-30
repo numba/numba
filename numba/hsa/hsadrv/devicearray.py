@@ -295,6 +295,14 @@ class DeviceNDArray(DeviceNDArrayBase):
             raise NotImplementedError("operation requires copying")
 
 
+class CoarseGrainArray(np.ndarray):
+    __hsa_memory__ = True
+
+    @property
+    def device_ctypes_pointer(self):
+        return self.ctypes.data_as(c_void_p)
+
+
 def from_array_like(ary, dgpu_data=None):
     "Create a DeviceNDArray object that is like ary."
     if ary.ndim == 0:

@@ -144,4 +144,4 @@ def coarsegrain_array(shape, dtype=np.float, strides=None, order='C'):
     buf = devices.get_cpu_context().memhostcoarsealloc(bytesize, agents)
     arr = np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
                      buffer=buf)
-    return arr
+    return arr.view(type=devicearray.CoarseGrainArray)
