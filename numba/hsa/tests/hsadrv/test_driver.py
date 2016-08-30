@@ -248,7 +248,7 @@ class TestMemory(_TestBase):
                 Executable
 
         def get_brig_file(basedir=None):
-            if basedir == None:
+            if basedir is None:
                 basedir = os.path.dirname(__file__)
             path = os.path.join(basedir, 'vector_copy_dgpu_example.brig')
             assert os.path.isfile(path)

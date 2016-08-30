@@ -706,7 +706,7 @@ class MemPool(HsaWrapper):
         fin = _make_mem_finalizer(hsa.hsa_amd_memory_pool_free)
         ret = MemoryPointer(weakref.proxy(self), buff, nbytes,
                             finalizer=fin(self, buff))
-        if buff.value == None:
+        if buff.value is None:
             raise RuntimeError("MemoryPointer has no value")
         self.allocations[buff.value] = ret
 
@@ -999,7 +999,7 @@ class Program(object):
                                            version_minor,
                                            ctypes.byref(support))
 
-        assert support.value == True, ('HSA system extension %s.%s not supported' %
+        assert support.value, ('HSA system extension %s.%s not supported' %
                 (version_major, version_minor))
 
         # struct of function pointers
@@ -1244,7 +1244,7 @@ class Context(object):
         # don't support DSP
         if hw == "GPU" or hw == "CPU":
             # check user requested flags
-            if(memTypeFlags is not None):
+            if memTypeFlags is not None:
                 for r in all_reg:
                     count = 0
                     for flags in memTypeFlags:
@@ -1259,19 +1259,17 @@ class Context(object):
             for r in flag_ok_r:
                 # check the mem region is coarse grained if dGPU present
                 # TODO: this probably ought to explicitly check for a dGPU.
-                if (hw == "GPU" and not\
-                    r.supports(enums.HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED)):
+                if (hw == "GPU" and
+                        not r.supports(enums.HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED)):
                     continue
                 # check accessibility criteria
-                if hostAccessible == True:
+                if hostAccessible:
                     if r.host_accessible:
                         regions.append(r)
-                elif hostAccessible == False:
+                else:
                     if not r.host_accessible:
                         regions.append(r)
-                else:
-                    raise RuntimeError("hostAccessible must be\
-                    True or False, found %s" % hostAccessible)
+
         else:
             raise RuntimeError("Unknown device type string \"%s\"" % hw)
 
@@ -1288,7 +1286,7 @@ class Context(object):
             else: # allocation succeeded, stop looking for memory
                 break
 
-        if mem == None:
+        if mem is None:
             raise RuntimeError("Memory allocation failed. No agent/region \
               combination could meet allocation restraints \
               (hardware = %s, size = %s, flags = %s)." % \
@@ -1297,7 +1295,7 @@ class Context(object):
         fin = _make_mem_finalizer(hsa.hsa_memory_free)
         ret = MemoryPointer(weakref.proxy(self), mem, nbytes,
                             finalizer=fin(self, mem))
-        if mem.value == None:
+        if mem.value is None:
             raise RuntimeError("MemoryPointer has no value")
         self.allocations[mem.value] = ret
         return ret.own()
