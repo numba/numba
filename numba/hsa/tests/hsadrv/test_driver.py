@@ -458,102 +458,123 @@ class TestContext(_TestBase):
             for k in range(n):
                 self.assertEqual(ref[k], src[k])
 
-    def test_mempool_amd_example(self):
-
-        # run if a dGPU is present
-        if dgpu_present():
+    def check_mempool_with_flags(self, gflags):
             dGPU_agent = self.gpu
             gpu_ctx = Context(dGPU_agent)
+
             CPU_agent = self.cpu
             cpu_ctx = Context(CPU_agent)
+            # get mempool with specific flags
+            pools = cpu_ctx.getMempools(pool_global_flags=gflags)
+            self.assertGreater(len(pools), 0)
+            [pool] = pools
+            # try allocating for GPU access
+            ptr = pool.allocate(1024, allow_access_to=[gpu_ctx._agent])
 
-            kNumInt = 1024
-            kSize = kNumInt * ctypes.sizeof(ctypes.c_int)
+    @unittest.skipUnless(dgpu_present(), 'dGPU only')
+    def test_mempool_finegrained(self):
+        gflags = [enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_FINE_GRAINED]
+        self.check_mempool_with_flags(gflags)
 
-            dependent_signal = hsa.create_signal(0)
-            completion_signal = hsa.create_signal(0)
+    @unittest.skipUnless(dgpu_present(), 'dGPU only')
+    def test_mempool_coarsegrained(self):
+        gflags = [enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED]
+        self.check_mempool_with_flags(gflags)
 
-            ## get a coarse grain mem pool on the CPU
-            coarse_grain_system_pool = cpu_ctx.getMempools(pool_global_flags=[enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED])[0]
+    @unittest.skipUnless(dgpu_present(), 'dGPU only')
+    def test_mempool_amd_example(self):
+        dGPU_agent = self.gpu
+        gpu_ctx = Context(dGPU_agent)
+        CPU_agent = self.cpu
+        cpu_ctx = Context(CPU_agent)
 
-            ## allocate host src and dst, allow gpu access
-            host_src = coarse_grain_system_pool.allocate(kSize, allow_access_to=[gpu_ctx.agent])
-            host_dst = coarse_grain_system_pool.allocate(kSize, allow_access_to=[gpu_ctx.agent])
+        kNumInt = 1024
+        kSize = kNumInt * ctypes.sizeof(ctypes.c_int)
 
-            # there's a loop in `i` here over GPU hardware
-            i = 0
+        dependent_signal = hsa.create_signal(0)
+        completion_signal = hsa.create_signal(0)
 
-            # get gpu local pool
-            gpu_local_pool = gpu_ctx.getMempools(segment_is=enums_ext.HSA_AMD_SEGMENT_GLOBAL)[0]
-            local_memory = gpu_local_pool.allocate(kSize)
+        ## get a coarse grain mem pool on the CPU
+        coarse_grain_system_pool = cpu_ctx.getMempools(pool_global_flags=[enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED])[0]
 
-            host_src_view = (kNumInt * ctypes.c_int).from_address(host_src.device_pointer.value)
-            host_dst_view = (kNumInt * ctypes.c_int).from_address(host_dst.device_pointer.value)
+        ## allocate host src and dst, allow gpu access
+        host_src = coarse_grain_system_pool.allocate(kSize, allow_access_to=[gpu_ctx.agent])
+        host_dst = coarse_grain_system_pool.allocate(kSize, allow_access_to=[gpu_ctx.agent])
 
-            host_src_view[:] = i + 2016 + np.arange(0, kNumInt, dtype=np.int32)
-            host_dst_view[:] = np.zeros(kNumInt, dtype=np.int32)
+        # there's a loop in `i` here over GPU hardware
+        i = 0
 
-            # print("GPU: %s"%gpu_ctx._agent.name)
-            # print("CPU: %s"%cpu_ctx._agent.name)
+        # get gpu local pool
+        gpu_local_pool = gpu_ctx.getMempools(segment_is=enums_ext.HSA_AMD_SEGMENT_GLOBAL)[0]
+        local_memory = gpu_local_pool.allocate(kSize)
 
-            hsa.hsa_signal_store_relaxed(completion_signal, 1);
+        host_src_view = (kNumInt * ctypes.c_int).from_address(host_src.device_pointer.value)
+        host_dst_view = (kNumInt * ctypes.c_int).from_address(host_dst.device_pointer.value)
 
-            q = queue.Queue()
+        host_src_view[:] = i + 2016 + np.arange(0, kNumInt, dtype=np.int32)
+        host_dst_view[:] = np.zeros(kNumInt, dtype=np.int32)
 
-            class validatorThread(threading.Thread):
-                def run(self):
-                    val = hsa.hsa_signal_wait_acquire(
-                        completion_signal,
-                        enums.HSA_SIGNAL_CONDITION_EQ,
-                        0,
-                        ctypes.c_uint64(-1),
-                        enums.HSA_WAIT_STATE_ACTIVE)
+        # print("GPU: %s"%gpu_ctx._agent.name)
+        # print("CPU: %s"%cpu_ctx._agent.name)
 
-                    q.put(val)  # wait_res
+        hsa.hsa_signal_store_relaxed(completion_signal, 1);
 
-            # this could be a call on the signal itself dependent_signal.store_relaxed(1)
-            hsa.hsa_signal_store_relaxed(dependent_signal, 1);
+        q = queue.Queue()
 
-            h2l_start = threading.Semaphore(value=0)
+        class validatorThread(threading.Thread):
+            def run(self):
+                val = hsa.hsa_signal_wait_acquire(
+                    completion_signal,
+                    enums.HSA_SIGNAL_CONDITION_EQ,
+                    0,
+                    ctypes.c_uint64(-1),
+                    enums.HSA_WAIT_STATE_ACTIVE)
 
-            class l2hThread(threading.Thread):
-                def run(self):
-                    dep_signal = drvapi.hsa_signal_t(dependent_signal._id)
-                    hsa.hsa_amd_memory_async_copy(host_dst.device_pointer.value,
-                                            cpu_ctx._agent._id,
-                                            local_memory.device_pointer.value,
-                                            gpu_ctx._agent._id, kSize, 1,
-                                            ctypes.byref(dep_signal),
-                                            completion_signal)
-                    h2l_start.release()  # signal h2l to start
+                q.put(val)  # wait_res
 
-            class h2lThread(threading.Thread):
-                def run(self):
-                    h2l_start.acquire()  # to wait until l2h thread has started
-                    hsa.hsa_amd_memory_async_copy(local_memory.device_pointer.value,
-                                                gpu_ctx._agent._id,
-                                                host_src.device_pointer.value,
-                                                cpu_ctx._agent._id, kSize, 0,
-                                                None,
-                                                dependent_signal)
+        # this could be a call on the signal itself dependent_signal.store_relaxed(1)
+        hsa.hsa_signal_store_relaxed(dependent_signal, 1);
 
-            timeout = 10  # 10 seconds timeout
-            # # init thread instances
-            validator = validatorThread()
-            l2h = l2hThread()
-            h2l = h2lThread()
-            # run them
-            validator.start()
-            l2h.start()
-            h2l.start()
-            # join
-            l2h.join(timeout)
-            h2l.join(timeout)
-            validator.join(timeout)
-            # verify
-            wait_res = q.get()
-            self.assertEqual(wait_res, 0)
-            np.testing.assert_allclose(host_dst_view, host_src_view)
+        h2l_start = threading.Semaphore(value=0)
+
+        class l2hThread(threading.Thread):
+            def run(self):
+                dep_signal = drvapi.hsa_signal_t(dependent_signal._id)
+                hsa.hsa_amd_memory_async_copy(host_dst.device_pointer.value,
+                                        cpu_ctx._agent._id,
+                                        local_memory.device_pointer.value,
+                                        gpu_ctx._agent._id, kSize, 1,
+                                        ctypes.byref(dep_signal),
+                                        completion_signal)
+                h2l_start.release()  # signal h2l to start
+
+        class h2lThread(threading.Thread):
+            def run(self):
+                h2l_start.acquire()  # to wait until l2h thread has started
+                hsa.hsa_amd_memory_async_copy(local_memory.device_pointer.value,
+                                            gpu_ctx._agent._id,
+                                            host_src.device_pointer.value,
+                                            cpu_ctx._agent._id, kSize, 0,
+                                            None,
+                                            dependent_signal)
+
+        timeout = 10  # 10 seconds timeout
+        # # init thread instances
+        validator = validatorThread()
+        l2h = l2hThread()
+        h2l = h2lThread()
+        # run them
+        validator.start()
+        l2h.start()
+        h2l.start()
+        # join
+        l2h.join(timeout)
+        h2l.join(timeout)
+        validator.join(timeout)
+        # verify
+        wait_res = q.get()
+        self.assertEqual(wait_res, 0)
+        np.testing.assert_allclose(host_dst_view, host_src_view)
 
     @unittest.skipIf(not dgpu_present(), "no discrete GPU present")
     def test_to_device_to_host(self):
