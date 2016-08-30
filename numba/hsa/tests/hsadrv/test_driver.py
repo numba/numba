@@ -138,7 +138,7 @@ class TestMemory(_TestBase):
             self.assertEqual(ref[i], src[i])
         hsa.hsa_memory_free(ptr)
 
-    @unittest.skipIf(not dgpu_present(), "no discrete GPU present")
+    @unittest.skipUnless(dgpu_present(), "dGPU only")
     def test_coarse_grained_allocate(self):
         """
         Tests the coarse grained allocation works on a dGPU.
@@ -234,7 +234,7 @@ class TestMemory(_TestBase):
         hsa.hsa_memory_free(gpu_only_ptr)
         hsa.hsa_memory_free(gpu_host_accessible_ptr)
 
-    #@unittest.skipIf(not dgpu_present(), "no discrete GPU present")
+    #@unittest.skipUnless(dgpu_present(), "dGPU only")
     @unittest.skip("BRIG format unsupported.")
     def test_coarse_grained_kernel_execution(self):
         """
@@ -424,39 +424,39 @@ class TestContext(_TestBase):
         else: #TODO: write APU variant
             pass
 
+    @unittest.skipUnless(dgpu_present(), "dGPU only")
     def test_mempool(self):
         n = 10 # things to alloc
         nbytes = ctypes.sizeof(ctypes.c_double) * n
-        # run if a dGPU is present
-        if dgpu_present():
-            dGPU_agent = self.gpu
-            CPU_agent = self.cpu
 
-            # allocate a GPU memory pool
-            gpu_ctx = Context(dGPU_agent)
-            gpu_only_mem = gpu_ctx.mempoolalloc(nbytes)
+        dGPU_agent = self.gpu
+        CPU_agent = self.cpu
 
-            # allocate a CPU memory pool, allow the GPU access to it
-            cpu_ctx = Context(CPU_agent)
-            cpu_mem = cpu_ctx.mempoolalloc(nbytes, allow_access_to=[gpu_ctx.agent])
+        # allocate a GPU memory pool
+        gpu_ctx = Context(dGPU_agent)
+        gpu_only_mem = gpu_ctx.mempoolalloc(nbytes)
 
-            ## Test writing to allocated area
-            src = np.random.random(n).astype(np.float64)
-            hsa.hsa_memory_copy(cpu_mem.device_pointer, src.ctypes.data, src.nbytes)
-            hsa.hsa_memory_copy(gpu_only_mem.device_pointer, cpu_mem.device_pointer, src.nbytes)
+        # allocate a CPU memory pool, allow the GPU access to it
+        cpu_ctx = Context(CPU_agent)
+        cpu_mem = cpu_ctx.mempoolalloc(nbytes, allow_access_to=[gpu_ctx.agent])
+
+        ## Test writing to allocated area
+        src = np.random.random(n).astype(np.float64)
+        hsa.hsa_memory_copy(cpu_mem.device_pointer, src.ctypes.data, src.nbytes)
+        hsa.hsa_memory_copy(gpu_only_mem.device_pointer, cpu_mem.device_pointer, src.nbytes)
 
 
-            # clear
-            z0 = np.zeros_like(src)
-            hsa.hsa_memory_copy(cpu_mem.device_pointer, z0.ctypes.data, z0.nbytes)
-            ref = (n * ctypes.c_double).from_address(cpu_mem.device_pointer.value)
-            for k in range(n):
-                self.assertEqual(ref[k], 0)
+        # clear
+        z0 = np.zeros_like(src)
+        hsa.hsa_memory_copy(cpu_mem.device_pointer, z0.ctypes.data, z0.nbytes)
+        ref = (n * ctypes.c_double).from_address(cpu_mem.device_pointer.value)
+        for k in range(n):
+            self.assertEqual(ref[k], 0)
 
-            # copy back from dGPU
-            hsa.hsa_memory_copy(cpu_mem.device_pointer, gpu_only_mem.device_pointer, src.nbytes)
-            for k in range(n):
-                self.assertEqual(ref[k], src[k])
+        # copy back from dGPU
+        hsa.hsa_memory_copy(cpu_mem.device_pointer, gpu_only_mem.device_pointer, src.nbytes)
+        for k in range(n):
+            self.assertEqual(ref[k], src[k])
 
     def check_mempool_with_flags(self, gflags):
             dGPU_agent = self.gpu
@@ -576,7 +576,7 @@ class TestContext(_TestBase):
         self.assertEqual(wait_res, 0)
         np.testing.assert_allclose(host_dst_view, host_src_view)
 
-    @unittest.skipIf(not dgpu_present(), "no discrete GPU present")
+    @unittest.skipUnless(dgpu_present(), "dGPU only")
     def test_to_device_to_host(self):
         """
             Tests .to_device() and .copy_to_host()
