@@ -295,7 +295,7 @@ class DeviceNDArray(DeviceNDArrayBase):
             raise NotImplementedError("operation requires copying")
 
 
-class CoarseGrainArray(np.ndarray):
+class HostArray(np.ndarray):
     __hsa_memory__ = True
 
     @property

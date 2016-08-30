@@ -116,9 +116,8 @@ def to_device(obj, stream=None, context=get_context(), copy=True, to=None):
 
     """
     if to is None:
-        to, new = devicearray.auto_device(obj, stream=stream, context=context,
-                                          copy=copy)
-        return to
+        to = devicearray.from_array_like(obj)
+
     if copy:
         to.copy_to_device(obj, stream=stream, context=context)
     return to
@@ -129,19 +128,32 @@ def stream():
     return hsa.create_stream()
 
 
-def coarsegrain_array(shape, dtype=np.float, strides=None, order='C'):
-    """coarsegrain_array(shape, dtype=np.float, strides=None, order='C')
-
-    Allocate a np.ndarray with a buffer that is pinned (pagelocked).
-    Similar to np.empty().
-    """
+def _host_array(finegrain, shape, dtype, strides, order):
     from .hsadrv import devices
     shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
                                                          order)
     bytesize = agnostic_memory_size_from_info(shape, strides, dtype.itemsize)
     # TODO does allowing access by all dGPUs really work in a multiGPU system?
     agents = [c._agent for c in devices.get_all_contexts()]
-    buf = devices.get_cpu_context().memhostcoarsealloc(bytesize, agents)
+    buf = devices.get_cpu_context().memhostalloc(bytesize, finegrain=finegrain,
+                                                 allow_access_to=agents)
     arr = np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
                      buffer=buf)
-    return arr.view(type=devicearray.CoarseGrainArray)
+    return arr.view(type=devicearray.HostArray)
+
+
+def coarsegrain_array(shape, dtype=np.float, strides=None, order='C'):
+    """coarsegrain_array(shape, dtype=np.float, strides=None, order='C')
+    Similar to np.empty().
+    """
+    return _host_array(finegrain=False, shape=shape, dtype=dtype,
+                       strides=strides, order=order)
+
+
+def finegrain_array(shape, dtype=np.float, strides=None, order='C'):
+    """finegrain_array(shape, dtype=np.float, strides=None, order='C')
+
+    Similar to np.empty().
+    """
+    return _host_array(finegrain=False, shape=shape, dtype=dtype,
+                       strides=strides, order=order)

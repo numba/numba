@@ -47,6 +47,16 @@ class TestMemory(unittest.TestCase):
         copy_kernel[blkct, blksz](got, expect.copy())
         np.testing.assert_equal(got, expect)
 
+    def test_finegrain_array(self):
+        blkct = 4
+        blksz = 128
+        nelem = blkct * blksz
+        expect = np.arange(nelem) + 1
+        got = hsa.finegrain_array(shape=expect.shape, dtype=expect.dtype)
+        got.fill(0)
+        copy_kernel[blkct, blksz](got, expect.copy())
+        np.testing.assert_equal(got, expect)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1146,7 +1146,7 @@ class MemoryPointer(object):
         return self.device_pointer
 
 
-class HostCoarseGrainMemory(mviewbuf.MemAlloc):
+class HostMemory(mviewbuf.MemAlloc):
     def __init__(self, context, owner, pointer, size):
         self.context = context
         self.owned = owner
@@ -1400,13 +1400,16 @@ class Context(object):
 
         return mem
 
-    def memhostcoarsealloc(self, size, allow_access_to):
-        # allocate cpu memory
-        flags = [enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED]
+    def memhostalloc(self, size, finegrain, allow_access_to):
+        if finegrain:
+            flags = [enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED]
+        else:
+            flags = [enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_FINE_GRAINED]
+
         mem = self.mempoolalloc(size, allow_access_to=allow_access_to,
                                 pool_global_flags=flags)
-        return HostCoarseGrainMemory(weakref.proxy(self), owner=mem,
-                            pointer=mem.device_pointer, size=mem.size)
+        return HostMemory(weakref.proxy(self), owner=mem,
+                          pointer=mem.device_pointer, size=mem.size)
 
 
 class Stream(object):
