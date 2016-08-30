@@ -1410,23 +1410,6 @@ class Context(object):
         return PinnedMemory(weakref.proxy(self), owner=mem,
                             pointer=mem.device_pointer, size=mem.size)
 
-    def get_staging_area(self, cpu_ctx, size):
-        """
-        Called from the GPU contet to get a staging area for async copy.
-        """
-        sa = self._staging_area
-        # no staging area yet or size inadequate
-        if sa is None or sa.size > size:
-            # ensure all pending async task to complete
-            hsa.implicit_sync()
-            # allocate cpu memory
-            flags = [enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED]
-            sa = cpu_ctx.mempoolalloc(size, allow_access_to=[self._agent],
-                                      pool_global_flags=flags)
-            self._staging_area = sa
-
-        return self._staging_area
-
 
 class Stream(object):
     """
