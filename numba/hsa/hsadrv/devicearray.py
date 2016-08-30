@@ -157,12 +157,10 @@ class DeviceNDArrayBase(object):
             _driver.hsa.implicit_sync()
             _driver.host_to_dGPU(self._context, self, ary, sz)
         else:
-            self._async_copy_to_device(ary, sz, stream)
-
-    def _async_copy_to_device(self, ary, size, stream):
-        ctx = self._context
-        asyncopy = ctx.create_async_copy(devices.get_cpu_context(), size)
-        asyncopy.copy_to_device(self, ary, stream=stream)
+            _driver.async_host_to_dGPU(dst_ctx=self._context,
+                                       src_ctx=devices.get_cpu_context(),
+                                       dst=self, src=ary, size=sz,
+                                       stream=stream)
 
     def copy_to_host(self, ary=None, stream=None):
         """Copy ``self`` to ``ary`` or create a new Numpy ndarray
@@ -216,7 +214,10 @@ class DeviceNDArrayBase(object):
                 _driver.hsa.implicit_sync()
                 _driver.dGPU_to_host(context, hostary, self, sz)
             else:
-                self._async_copy_to_host(hostary, sz, stream)
+                _driver.async_dGPU_to_host(dst_ctx=devices.get_cpu_context(),
+                                           src_ctx=self._context,
+                                           dst=hostary, src=self,
+                                           size=sz, stream=stream)
 
         # if the location for the data was originally None
         # then create a new ndarray and plumb in the new memory
@@ -231,11 +232,6 @@ class DeviceNDArrayBase(object):
             hostary = ary
 
         return hostary
-
-    def _async_copy_to_host(self, ary, size, stream):
-        ctx = self._context
-        asyncopy = ctx.create_async_copy(devices.get_cpu_context(), size)
-        asyncopy.copy_to_host(ary, self, stream=stream)
 
     def as_hsa_arg(self):
         """Returns a device memory object that is used as the argument.

@@ -1427,54 +1427,6 @@ class Context(object):
 
         return self._staging_area
 
-    def create_async_copy(self, cpu_ctx, size):
-        return AsyncCopy(cpu_ctx=cpu_ctx, gpu_ctx=self, size=size)
-
-
-class AsyncCopy(object):
-    def __init__(self, cpu_ctx, gpu_ctx, size):
-        assert dgpu_present()
-        self._size = size
-        self._cpu_ctx = cpu_ctx
-        self._gpu_ctx = gpu_ctx
-
-    def copy_to_device(self, devary, ary, stream):
-        completion_signal = hsa.create_signal(1)
-        dependent_signal = stream._get_last_signal()
-
-        if dependent_signal is not None:
-            dsignal = drvapi.hsa_signal_t(dependent_signal._id)
-            signals = (1, ctypes.byref(dsignal), completion_signal)
-        else:
-            signals = (0, None, completion_signal)
-
-        hsa.hsa_amd_memory_async_copy(devary.dgpu_data.device_pointer.value,
-                                      self._gpu_ctx._agent._id,
-                                      ary.ctypes.data,
-                                      self._cpu_ctx._agent._id, self._size,
-                                      *signals)
-
-        stream._add_signal(completion_signal)
-
-    def copy_to_host(self, ary, devary, stream):
-        completion_signal = hsa.create_signal(1)
-        dependent_signal = stream._get_last_signal()
-
-        if dependent_signal is not None:
-            dsignal = drvapi.hsa_signal_t(dependent_signal._id)
-            signals = (1, ctypes.byref(dsignal), completion_signal)
-        else:
-            signals = (0, None, completion_signal)
-
-        hsa.hsa_amd_memory_async_copy(ary.ctypes.data,
-                                      self._cpu_ctx._agent._id,
-                                      devary.dgpu_data.device_pointer.value,
-                                      self._gpu_ctx._agent._id,
-                                      self._size,
-                                      *signals)
-
-        stream._add_signal(completion_signal)
-
 
 class Stream(object):
     """
@@ -1499,7 +1451,6 @@ class Stream(object):
         """
         Synchronize the stream.
         """
-        print("SYNC")
         if self._signals:
             signals, self._signals = self._signals, []
             for sig in reversed(signals):
@@ -1603,3 +1554,34 @@ def dGPU_to_host(context, dst, src, size):
 
     hsa.hsa_memory_copy(host_pointer(dst), src.device_ctypes_pointer.value, size)
 
+
+def async_host_to_dGPU(dst_ctx, src_ctx, dst, src, size, stream):
+    async_copy_dgpu(dst_ctx=dst_ctx, src_ctx=src_ctx,
+                    src=host_pointer(src), dst=device_pointer(dst),
+                    size=size, stream=stream)
+
+
+def async_dGPU_to_host(dst_ctx, src_ctx, dst, src, size, stream):
+    async_copy_dgpu(dst_ctx=dst_ctx, src_ctx=src_ctx,
+                    dst=host_pointer(dst), src=device_pointer(src),
+                    size=size, stream=stream)
+
+
+def async_copy_dgpu(dst_ctx, src_ctx, dst, src, size, stream):
+    if size < 0:
+        raise ValueError("Invalid size given: %s" % size)
+
+    completion_signal = hsa.create_signal(1)
+    dependent_signal = stream._get_last_signal()
+
+    if dependent_signal is not None:
+        dsignal = drvapi.hsa_signal_t(dependent_signal._id)
+        signals = (1, ctypes.byref(dsignal), completion_signal)
+    else:
+        signals = (0, None, completion_signal)
+
+    hsa.hsa_amd_memory_async_copy(dst, dst_ctx._agent._id,
+                                  src, src_ctx._agent._id,
+                                  size, *signals)
+
+    stream._add_signal(completion_signal)
