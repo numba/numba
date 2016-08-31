@@ -8,10 +8,16 @@ class HsaDriverError(Exception):
 class HsaSupportError(ImportError):
     pass
 
+
 class HsaApiError(HsaDriverError):
     def __init__(self, code, msg):
         self.code = code
         super(HsaApiError, self).__init__(msg)
 
+
 class HsaWarning(UserWarning):
+    pass
+
+
+class HsaKernelLaunchError(HsaDriverError):
     pass

@@ -2,7 +2,7 @@ from __future__ import print_function, absolute_import
 
 import numpy as np
 from numba import hsa
-from numba.hsa.hsadrv.error import HsaDriverError
+from numba.hsa.hsadrv.error import HsaKernelLaunchError
 import numba.unittest_support as unittest
 
 
@@ -135,9 +135,9 @@ class TestSimple(unittest.TestCase):
         def udt():
             pass
 
-        with self.assertRaises(HsaDriverError) as raises:
+        with self.assertRaises(HsaKernelLaunchError) as raises:
             udt[1, 2**30]()
-        self.assertIn("workgroupsize is too big", str(raises.exception))
+        self.assertIn("Try reducing group-size", str(raises.exception))
 
 
 if __name__ == '__main__':

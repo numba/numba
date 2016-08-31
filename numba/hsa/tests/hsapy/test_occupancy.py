@@ -25,8 +25,7 @@ class TestOccupancy(unittest.TestCase):
             allowed_vgpr_per_workitem=128,
             occupancy=0,
             reasons=set(['allowed_wave_due_to_vgpr',
-                         'allowed_wave',
-                         'allowed_vgpr_per_workitem']),
+                         'allowed_wave']),
         )
         self.check_limits(inputs, outputs)
 
@@ -98,8 +97,7 @@ class TestOccupancy(unittest.TestCase):
             allowed_vgpr_per_workitem=256,
             occupancy=0,
             reasons=set(['allowed_wave_due_to_vgpr',
-                         'allowed_wave',
-                         'allowed_vgpr_per_workitem']),
+                         'allowed_wave']),
         )
         self.check_limits(inputs, outputs)
 

@@ -20,7 +20,8 @@ _limits = namedtuple('_limits', ['allowed_wave_due_to_sgpr',
                                  'allowed_wave',
                                  'allowed_vgpr_per_workitem',
                                  'occupancy',
-                                 'reasons'])
+                                 'reasons',
+                                 'suggestions'])
 
 
 def get_limiting_factors(group_size, vgpr_per_workitem, sgpr_per_wave):
@@ -43,8 +44,8 @@ def get_limiting_factors(group_size, vgpr_per_workitem, sgpr_per_wave):
         reasons.add('allowed_wave_due_to_vgpr')
     if allowed_wave < required_wave_count_per_simd:
         reasons.add('allowed_wave')
-    if allowed_vgpr_per_workitem < vgpr_per_workitem:
-        reasons.add('allowed_vgpr_per_workitem')
+
+    suggestions = [_suggestions[r] for r in sorted(reasons)]
 
     # occupancy
     inflight_wave_per_cu = (0 if reasons else
@@ -56,5 +57,21 @@ def get_limiting_factors(group_size, vgpr_per_workitem, sgpr_per_wave):
                    allowed_wave=allowed_wave,
                    allowed_vgpr_per_workitem=allowed_vgpr_per_workitem,
                    occupancy=occupancy,
-                   reasons=reasons)
+                   reasons=reasons,
+                   suggestions=suggestions)
+
+
+_suggestions = {}
+
+_suggestions['allowed_wave_due_to_sgpr'] = (
+    "* Cannot allocate enough sGPRs for all resident wavefronts."
+)
+
+_suggestions['allowed_wave_due_to_vgpr'] = (
+    "* Cannot allocate enough vGPRs for all resident wavefronts."
+)
+
+_suggestions['allowed_wave'] = (
+    "* Launch requires too many wavefronts. Try reducing group-size."
+)
 

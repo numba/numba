@@ -1,16 +1,22 @@
 from __future__ import print_function, absolute_import
 import copy
 from collections import namedtuple
+import re
+
+import numpy as np
 
 from numba.typing.templates import ConcreteTemplate
 from numba import types, compiler
 from .hlc import hlc
 from .hsadrv import devices, driver, enums, drvapi
+from .hsadrv.error import HsaKernelLaunchError
+from . import gcn_occupancy
 from numba.hsa.hsadrv.driver import hsa, dgpu_present
 from .hsadrv import devicearray
 from numba.typing.templates import AbstractTemplate
 from numba import ctypes_support as ctypes
 from numba import config
+
 
 def compile_hsa(pyfunc, return_type, args, debug):
     # First compilation will trigger the initialization of the HSA backend.
@@ -263,6 +269,27 @@ class HSAKernel(HSAKernelBase):
         # cached program
         self._cacheprog = _CachedProgram(entry_name=self.entry_name,
                                          binary=self.binary)
+        self._parse_kernel_resource()
+
+    def _parse_kernel_resource(self):
+        """
+        Temporary workaround for register limit
+        """
+        m = re.search(r"wavefront_sgpr_count\s*=\s*(\d+)", self.assembly)
+        self._wavefront_sgpr_count = int(m.group(1))
+        m = re.search(r"workitem_vgpr_count\s*=\s*(\d+)", self.assembly)
+        self._workitem_vgpr_count = int(m.group(1))
+
+    def _sentry_resource_limit(self):
+        group_size = np.prod(self.local_size)
+        limits = gcn_occupancy.get_limiting_factors(
+            group_size=group_size,
+            vgpr_per_workitem=self._workitem_vgpr_count,
+            sgpr_per_wave=self._wavefront_sgpr_count)
+        if limits.reasons:
+            fmt = 'insufficient resources to launch kernel due to:\n{}'
+            msg = fmt.format('\n'.join(limits.suggestions))
+            raise HsaKernelLaunchError(msg)
 
     def _generateGCN(self):
         hlcmod = hlc.Module()
@@ -284,6 +311,8 @@ class HSAKernel(HSAKernelBase):
         return ctx, entry.symbol, kernargs, entry.kernarg_region
 
     def __call__(self, *args):
+        self._sentry_resource_limit()
+
         ctx, symbol, kernargs, kernarg_region = self.bind()
 
         # Unpack pyobject values into ctypes scalar values

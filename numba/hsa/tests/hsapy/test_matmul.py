@@ -5,6 +5,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import hsa, float32
+from numba.hsa.hsadrv.error import HsaKernelLaunchError
 
 
 class TestMatMul(unittest.TestCase):
@@ -47,9 +48,7 @@ class TestMatMul(unittest.TestCase):
         print("CPU time:", te - ts)
         np.testing.assert_allclose(ans, C, rtol=1e-5)
 
-    def test_matmul_fast(self):
-        blocksize = 20
-        gridsize = 20
+    def check_matmul_fast(self, gridsize, blocksize):
 
         @hsa.jit
         def matmulfast(A, B, C):
@@ -106,6 +105,13 @@ class TestMatMul(unittest.TestCase):
         te = timer()
         print("CPU time:", te - ts)
         np.testing.assert_allclose(ans, C, rtol=1e-5)
+
+    def test_matmul_fast(self):
+        self.check_matmul_fast(gridsize=8, blocksize=8)
+
+    def test_matmul_fast_insufficient_resources(self):
+        with self.assertRaises(HsaKernelLaunchError):
+            self.check_matmul_fast(gridsize=8, blocksize=20)
 
 
 if __name__ == '__main__':
