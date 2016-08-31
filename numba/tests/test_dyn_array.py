@@ -28,6 +28,18 @@ def np_stack1(a, b, c):
 def np_stack2(a, b, c, axis):
     return np.stack((a, b, c), axis=axis)
 
+def np_hstack(a, b, c):
+    return np.hstack((a, b, c))
+
+def np_vstack(a, b, c):
+    return np.vstack((a, b, c))
+
+def np_dstack(a, b, c):
+    return np.dstack((a, b, c))
+
+def np_column_stack(a, b, c):
+    return np.column_stack((a, b, c))
+
 
 class BaseTest(TestCase):
 
@@ -1236,16 +1248,14 @@ class TestNpStack(MemoryLeakMixin, TestCase):
     def check_stack(self, pyfunc, cfunc, args):
         expected = pyfunc(*args)
         got = cfunc(*args)
-        # Numba doesn't choose the same layout as Numpy,
-        # but it should always be contiguous
+        # Numba doesn't choose the same layout as Numpy.
+        # We would like to check the result is contiguous, but we can't
+        # rely on the "flags" attribute when there are 1-sized
+        # dimensions.
         self.assertEqual(got.shape, expected.shape)
         self.assertPreciseEqual(got.flatten(), expected.flatten())
-        self.assertTrue(got.flags.c_contiguous or got.flags.f_contiguous,
-                        got.flags)
 
-    def check_3d(self, pyfunc, generate_starargs):
-        cfunc = nrtjit(pyfunc)
-
+    def check_3d(self, pyfunc, cfunc, generate_starargs):
         def check(a, b, c, args):
             self.check_stack(pyfunc, cfunc, (a, b, c) + args)
 
@@ -1271,41 +1281,135 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         # Different but compatible dtypes
         check_all_axes(a, b.astype(np.float64), b)
 
+    def check_runtime_errors(self, cfunc, generate_starargs):
         # Exceptions leak references
+        self.assert_no_memory_leak()
         self.disable_leak_check()
 
         # Inputs have different shapes
+        a, b, c, d, e = self._3d_arrays()
         with self.assert_invalid_sizes():
             args = next(generate_starargs())
             cfunc(a[:-1], b, c, *args)
 
     @tag('important')
     def test_3d(self):
+        """
+        stack(3d arrays, axis)
+        """
         pyfunc = np_stack2
+        cfunc = nrtjit(pyfunc)
 
         def generate_starargs():
             for axis in range(3):
                 yield (axis,)
                 yield (-3 + axis,)
 
-        self.check_3d(pyfunc, generate_starargs)
+        self.check_3d(pyfunc, cfunc, generate_starargs)
+        self.check_runtime_errors(cfunc, generate_starargs)
 
     def test_3d_no_axis(self):
+        """
+        stack(3d arrays)
+        """
         pyfunc = np_stack1
+        cfunc = nrtjit(pyfunc)
 
         def generate_starargs():
             yield()
 
-        self.check_3d(pyfunc, generate_starargs)
+        self.check_3d(pyfunc, cfunc, generate_starargs)
+        self.check_runtime_errors(cfunc, generate_starargs)
 
     def test_0d(self):
+        """
+        stack(0d arrays)
+        """
         pyfunc = np_stack1
         cfunc = nrtjit(pyfunc)
 
         a = np.array(42)
         b = np.array(-5j)
+        c = np.array(True)
 
+        self.check_stack(pyfunc, cfunc, (a, b, c))
+
+    def check_xxstack(self, pyfunc, cfunc):
+        """
+        3d and 0d tests for hstack(), vstack(), dstack().
+        """
+        def generate_starargs():
+            yield()
+
+        self.check_3d(pyfunc, cfunc, generate_starargs)
+        # 0d
+        a = np.array(42)
+        b = np.array(-5j)
+        c = np.array(True)
+        self.check_stack(pyfunc, cfunc, (a, b, a))
+
+    def test_hstack(self):
+        pyfunc = np_hstack
+        cfunc = nrtjit(pyfunc)
+
+        self.check_xxstack(pyfunc, cfunc)
+        # 1d
+        a = np.arange(5)
+        b = np.arange(6) + 10
         self.check_stack(pyfunc, cfunc, (a, b, b))
+        # 2d
+        a = np.arange(6).reshape((2, 3))
+        b = np.arange(8).reshape((2, 4)) + 100
+        self.check_stack(pyfunc, cfunc, (a, b, a))
+
+    def test_vstack(self):
+        pyfunc = np_vstack
+        cfunc = nrtjit(pyfunc)
+
+        self.check_xxstack(pyfunc, cfunc)
+        # 1d
+        a = np.arange(5)
+        b = a + 10
+        self.check_stack(pyfunc, cfunc, (a, b, b))
+        # 2d
+        a = np.arange(6).reshape((3, 2))
+        b = np.arange(8).reshape((4, 2)) + 100
+        self.check_stack(pyfunc, cfunc, (a, b, b))
+
+    def test_dstack(self):
+        pyfunc = np_dstack
+        cfunc = nrtjit(pyfunc)
+
+        self.check_xxstack(pyfunc, cfunc)
+        # 1d
+        a = np.arange(5)
+        b = a + 10
+        self.check_stack(pyfunc, cfunc, (a, b, b))
+        # 2d
+        a = np.arange(12).reshape((3, 4))
+        b = a + 100
+        self.check_stack(pyfunc, cfunc, (a, b, b))
+
+    def test_column_stack(self):
+        pyfunc = np_column_stack
+        cfunc = nrtjit(pyfunc)
+
+        a = np.arange(4)
+        b = a + 10
+        c = np.arange(12).reshape((4, 3))
+        self.check_stack(pyfunc, cfunc, (a, b, c))
+
+        # Exceptions leak references
+        self.assert_no_memory_leak()
+        self.disable_leak_check()
+
+        # Invalid dims
+        a = np.array(42)
+        with self.assertTypingError():
+            cfunc((a, a, a))
+        a = a.reshape((1, 1, 1))
+        with self.assertTypingError():
+            cfunc((a, a, a))
 
 
 def benchmark_refct_speed():
