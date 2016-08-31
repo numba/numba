@@ -93,7 +93,7 @@ def device_array_like(ary):
 
 from numba.hsa.hsadrv.devices import get_context
 
-def to_device(obj, stream=None, context=get_context(), copy=True, to=None):
+def to_device(obj, stream=None, context=None, copy=True, to=None):
     """to_device(obj, context, copy=True, to=None)
 
     Allocate and transfer a numpy ndarray or structured scalar to the device.
@@ -115,6 +115,8 @@ def to_device(obj, stream=None, context=get_context(), copy=True, to=None):
         d_ary.copy_to_host(ary)
 
     """
+    context = context or get_context()
+
     if to is None:
         to = devicearray.from_array_like(obj)
 

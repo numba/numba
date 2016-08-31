@@ -25,7 +25,9 @@ class HsaKernelLaunchError(HsaDriverError):
 
 class HsaContextMismatchError(HsaDriverError):
     def __init__(self, expect, got):
-        msg = ("device array is associated with a different "
+        fmt = ("device array is associated with a different "
                "context: expect {0} but got {1}")
-        super(HsaContextMismatchError, self).__init__(msg.format())
+        msg = fmt.format(expect, got)
+        super(HsaContextMismatchError, self).__init__(msg)
+
 
