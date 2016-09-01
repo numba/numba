@@ -130,6 +130,7 @@ class TestDeferCleanupAvail(unittest.TestCase):
             pass
 
 
+@skip_on_cudasim('not supported on CUDASIM')
 class TestDel(unittest.TestCase):
     """
     Ensure resources are deleted properly without ignored exception.
