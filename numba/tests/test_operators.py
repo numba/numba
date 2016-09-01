@@ -1370,9 +1370,16 @@ class TestMixedInts(TestCase):
                            % (x, y, (xt, yt)))
                     self.assertPreciseEqual(got, expected, msg=msg)
 
-        for xt, yt in self.signed_pairs:
+        # For bitshifts, only the first operand's signedness matters
+        # to choose the operation's signedness.
+        signed_pairs = [(u, v) for u, v in self.type_pairs
+                        if u.signed]
+        unsigned_pairs = [(u, v) for u, v in self.type_pairs
+                          if not u.signed]
+
+        for xt, yt in signed_pairs:
             check(xt, yt, control_signed)
-        for xt, yt in self.unsigned_pairs:
+        for xt, yt in unsigned_pairs:
             check(xt, yt, control_unsigned)
 
     def test_lshift(self):

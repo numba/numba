@@ -241,8 +241,15 @@ class PowerBuiltin(BinOpPower):
 
 
 class BitwiseShiftOperation(ConcreteTemplate):
-    cases = list(integer_binop_cases)
-
+    # For bitshifts, only the first operand's signedness matters
+    # to choose the operation's signedness (the second operand
+    # should always be positive but will generally be considered
+    # signed anyway, since it's often a constant integer).
+    # (also, see issue #1995 for right-shifts)
+    cases = [signature(max(op, types.intp), op, types.intp)
+             for op in sorted(types.signed_domain)]
+    cases += [signature(max(op, types.uintp), op, types.intp)
+              for op in sorted(types.unsigned_domain)]
 
 @infer
 class BitwiseLeftShift(BitwiseShiftOperation):
