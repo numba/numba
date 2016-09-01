@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
+import gc
+
 import numpy as np
 
 from numba import njit, vectorize
@@ -395,6 +397,8 @@ class TestRewriteIssues(MemoryLeakMixin, TestCase):
         expected = distance_matrix(x)
         actual = njit(distance_matrix)(x)
         np.testing.assert_array_almost_equal(expected, actual)
+        # Avoid sporadic failures in MemoryLeakMixin.tearDown()
+        gc.collect()
 
     def test_issue_1372(self):
         """Test array expression with duplicated term"""
