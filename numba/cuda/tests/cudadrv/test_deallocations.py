@@ -142,31 +142,31 @@ class TestDel(unittest.TestCase):
         self.assertFalse(cap.getvalue())
 
     def test_stream(self):
-        ctx = cuda.devices.get_context()
+        ctx = cuda.current_context()
         stream = ctx.create_stream()
         with self.check_ignored_exception(ctx):
             del stream
 
     def test_event(self):
-        ctx = cuda.devices.get_context()
+        ctx = cuda.current_context()
         event = ctx.create_event()
         with self.check_ignored_exception(ctx):
             del event
 
     def test_pinned_memory(self):
-        ctx = cuda.devices.get_context()
+        ctx = cuda.current_context()
         mem = ctx.memhostalloc(32)
         with self.check_ignored_exception(ctx):
             del mem
 
     def test_mapped_memory(self):
-        ctx = cuda.devices.get_context()
+        ctx = cuda.current_context()
         mem = ctx.memhostalloc(32, mapped=True)
         with self.check_ignored_exception(ctx):
             del mem
 
     def test_device_memory(self):
-        ctx = cuda.devices.get_context()
+        ctx = cuda.current_context()
         mem = ctx.memalloc(32)
         with self.check_ignored_exception(ctx):
             del mem
