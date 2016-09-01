@@ -744,7 +744,7 @@ class Context(object):
         handle = drvapi.cu_stream()
         driver.cuStreamCreate(byref(handle), 0)
         return Stream(weakref.proxy(self), handle,
-                      _stream_finalizer(self.allocations, handle))
+                      _stream_finalizer(self.deallocations, handle))
 
     def create_event(self, timing=True):
         handle = drvapi.cu_event()

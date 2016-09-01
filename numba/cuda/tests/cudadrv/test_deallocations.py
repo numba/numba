@@ -1,9 +1,12 @@
 from __future__ import division
 
+from contextlib import contextmanager
+
 import numpy as np
 
 from numba import cuda, config
 from numba.cuda.testing import unittest, skip_on_cudasim
+from numba.tests.support import captured_stderr
 
 
 @skip_on_cudasim('not supported on CUDASIM')
@@ -125,6 +128,49 @@ class TestDeferCleanupAvail(unittest.TestCase):
         # just make sure the API is available
         with cuda.defer_cleanup():
             pass
+
+
+@skip_on_cudasim('not supported on CUDASIM')
+class TestDel(unittest.TestCase):
+    """
+    Ensure resources are deleted properly without ignored exception.
+    """
+    @contextmanager
+    def check_ignored_exception(self, ctx):
+        with captured_stderr() as cap:
+            yield
+            ctx.deallocations.clear()
+        self.assertFalse(cap.getvalue())
+
+    def test_stream(self):
+        ctx = cuda.current_context()
+        stream = ctx.create_stream()
+        with self.check_ignored_exception(ctx):
+            del stream
+
+    def test_event(self):
+        ctx = cuda.current_context()
+        event = ctx.create_event()
+        with self.check_ignored_exception(ctx):
+            del event
+
+    def test_pinned_memory(self):
+        ctx = cuda.current_context()
+        mem = ctx.memhostalloc(32)
+        with self.check_ignored_exception(ctx):
+            del mem
+
+    def test_mapped_memory(self):
+        ctx = cuda.current_context()
+        mem = ctx.memhostalloc(32, mapped=True)
+        with self.check_ignored_exception(ctx):
+            del mem
+
+    def test_device_memory(self):
+        ctx = cuda.current_context()
+        mem = ctx.memalloc(32)
+        with self.check_ignored_exception(ctx):
+            del mem
 
 
 if __name__ == '__main__':
