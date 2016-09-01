@@ -213,6 +213,9 @@ The following top-level functions are supported:
 * :func:`numpy.argsort` (no optional arguments)
 * :func:`numpy.array` (only the 2 first arguments)
 * :func:`numpy.asfortranarray` (only the first argument)
+* :func:`numpy.atleast_1d`
+* :func:`numpy.atleast_2d`
+* :func:`numpy.atleast_3d`
 * :func:`numpy.bincount` (only the 2 first arguments)
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate`

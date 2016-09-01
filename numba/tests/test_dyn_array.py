@@ -1348,6 +1348,7 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         c = np.array(True)
         self.check_stack(pyfunc, cfunc, (a, b, a))
 
+    @tag('important')
     def test_hstack(self):
         pyfunc = np_hstack
         cfunc = nrtjit(pyfunc)
@@ -1362,6 +1363,7 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         b = np.arange(8).reshape((2, 4)) + 100
         self.check_stack(pyfunc, cfunc, (a, b, a))
 
+    @tag('important')
     def test_vstack(self):
         pyfunc = np_vstack
         cfunc = nrtjit(pyfunc)
@@ -1376,6 +1378,7 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         b = np.arange(8).reshape((4, 2)) + 100
         self.check_stack(pyfunc, cfunc, (a, b, b))
 
+    @tag('important')
     def test_dstack(self):
         pyfunc = np_dstack
         cfunc = nrtjit(pyfunc)
@@ -1390,6 +1393,7 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         b = a + 100
         self.check_stack(pyfunc, cfunc, (a, b, b))
 
+    @tag('important')
     def test_column_stack(self):
         pyfunc = np_column_stack
         cfunc = nrtjit(pyfunc)

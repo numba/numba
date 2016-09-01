@@ -3738,6 +3738,68 @@ def np_expand_dims(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, ret)
 
 
+def _atleast_nd(context, builder, sig, args, transform):
+    arrtys = sig.args
+    arrs = args
+
+    if isinstance(sig.return_type, types.BaseTuple):
+        rettys = list(sig.return_type)
+    else:
+        rettys = [sig.return_type]
+    assert len(rettys) == len(arrtys)
+
+    rets = [transform(context, builder, arr, arrty, retty)
+            for arr, arrty, retty in zip(arrs, arrtys, rettys)]
+
+    if isinstance(sig.return_type, types.BaseTuple):
+        ret = context.make_tuple(builder, sig.return_type, rets)
+    else:
+        ret = rets[0]
+    return impl_ret_borrowed(context, builder, sig.return_type, ret)
+
+
+def _atleast_nd_transform(min_ndim, axes):
+    """
+    Return a callback successively inserting 1-sized dimensions at the
+    following axes.
+    """
+    assert min_ndim == len(axes)
+
+    def transform(context, builder, arr, arrty, retty):
+        for i in range(min_ndim):
+            ndim = i + 1
+            if arrty.ndim < ndim:
+                axis = cgutils.intp_t(axes[i])
+                newarrty = arrty.copy(ndim=arrty.ndim + 1)
+                arr = expand_dims(context, builder,
+                                  typing.signature(newarrty, arrty), (arr,),
+                                  axis)
+                arrty = newarrty
+
+        return arr
+
+    return transform
+
+
+@lower_builtin(np.atleast_1d, types.VarArg(types.Array))
+def np_atleast_1d(context, builder, sig, args):
+    transform = _atleast_nd_transform(1, [0])
+
+    return _atleast_nd(context, builder, sig, args, transform)
+
+@lower_builtin(np.atleast_2d, types.VarArg(types.Array))
+def np_atleast_2d(context, builder, sig, args):
+    transform = _atleast_nd_transform(2, [0, 0])
+
+    return _atleast_nd(context, builder, sig, args, transform)
+
+@lower_builtin(np.atleast_3d, types.VarArg(types.Array))
+def np_atleast_2d(context, builder, sig, args):
+    transform = _atleast_nd_transform(3, [0, 0, 2])
+
+    return _atleast_nd(context, builder, sig, args, transform)
+
+
 def _do_concatenate(context, builder, axis,
                     arrtys, arrs, arr_shapes, arr_strides,
                     retty, ret_shapes):
