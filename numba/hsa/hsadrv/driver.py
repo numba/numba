@@ -687,21 +687,13 @@ class MemPool(HsaWrapper):
         else:
             return False
 
-    def allocate(self, nbytes, allow_access_to=None):
+    def allocate(self, nbytes):
         assert self.alloc_allowed
         #assert nbytes <= self.alloc_max_size this appears to not exist
         assert nbytes >= 0
         buff = ctypes.c_void_p()
         flags = ctypes.c_uint32(0) # From API docs "Must be 0"!
         hsa.hsa_amd_memory_pool_allocate(self._id, nbytes, flags, ctypes.byref(buff))
-
-        if allow_access_to:
-            for agent in allow_access_to:
-                # If permitted, grant the specified agent access the memory.
-                hsa.hsa_amd_agents_allow_access(1,
-                                                drvapi.hsa_agent_t(agent._id),
-                                                None,
-                                                buff)
         if buff.value is None:
             raise HsaDriverError("Failed to allocate from {}".format(self))
         return buff
@@ -1140,6 +1132,19 @@ class MemoryPointer(object):
     def device_ctypes_pointer(self):
         return self.device_pointer
 
+    def allow_access_to(self, *agents):
+        """
+        Grant access to given *agents*.
+        Upon return, only the listed-agents and the owner agent have direct
+        access to this pointer.
+        """
+        ct = len(agents)
+        if ct == 0:
+            return
+        agent_array = (ct * drvapi.hsa_agent_t)(*[a._id for a in agents])
+        hsa.hsa_amd_agents_allow_access(ct, agent_array, None,
+                                        self.device_pointer)
+
 
 class HostMemory(mviewbuf.MemAlloc):
     def __init__(self, context, owner, pointer, size):
@@ -1319,7 +1324,7 @@ class Context(object):
         self.allocations[mem.value] = ret
         return ret.own()
 
-    def mempoolalloc(self, nbytes, allow_access_to=None, finegrain=False):
+    def mempoolalloc(self, nbytes, allow_access_to=(), finegrain=False):
         """
         Allocates memory in a memory pool.
         Parameters:
@@ -1331,17 +1336,18 @@ class Context(object):
                    if finegrain
                    else self.coarsegrain_mempool)
 
-        buff = mempool.allocate(nbytes, allow_access_to)
+        buff = mempool.allocate(nbytes)
         fin = _make_mem_finalizer(hsa.hsa_amd_memory_pool_free)
         mp = MemoryPointer(weakref.proxy(self), buff, nbytes,
                            finalizer=fin(self, buff))
-
+        mp.allow_access_to(*allow_access_to)
         self.allocations[buff.value] = mp
         return mp.own()
 
     def memhostalloc(self, size, finegrain, allow_access_to):
         mem = self.mempoolalloc(size, allow_access_to=allow_access_to,
                                 finegrain=finegrain)
+        mem.allow_access_to(*allow_access_to)
         return HostMemory(weakref.proxy(self), owner=mem,
                           pointer=mem.device_pointer, size=mem.size)
 

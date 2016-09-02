@@ -503,17 +503,14 @@ class TestContext(_TestBase):
             self.assertEqual(ref[k], src[k])
 
     def check_mempool_with_flags(self, finegrain):
-            dGPU_agent = self.gpu
-            gpu_ctx = Context(dGPU_agent)
+        dGPU_agent = self.gpu
+        gpu_ctx = Context(dGPU_agent)
 
-            CPU_agent = self.cpu
-            cpu_ctx = Context(CPU_agent)
+        CPU_agent = self.cpu
+        cpu_ctx = Context(CPU_agent)
 
-            # get mempool with specific flags
-            pool = (cpu_ctx.finegrain_mempool
-                    if finegrain else cpu_ctx.coarsegrain_mempool)
-            # try allocating for GPU access
-            ptr = pool.allocate(1024, allow_access_to=[gpu_ctx._agent])
+        # get mempool with specific flags
+        cpu_ctx.mempoolalloc(1024, allow_access_to=[gpu_ctx._agent])
 
     @unittest.skipUnless(dgpu_present(), 'dGPU only')
     def test_mempool_finegrained(self):
