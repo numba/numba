@@ -10,9 +10,9 @@ class TestOccupancy(unittest.TestCase):
         for k, expect in expected_outputs.items():
             got = getattr(outputs, k)
             if k == 'occupancy':
-                self.assertEqual(got, expect, k)
+                self.assertAlmostEqual(got, expect, msg=k)
             else:
-                self.assertAlmostEqual(got, expect, k)
+                self.assertEqual(got, expect, k)
 
     def test_limits_1(self):
         inputs = dict(group_size=400,
@@ -25,7 +25,8 @@ class TestOccupancy(unittest.TestCase):
             allowed_vgpr_per_workitem=128,
             occupancy=0,
             reasons=set(['allowed_wave_due_to_vgpr',
-                         'allowed_wave']),
+                         'allowed_wave',
+                         'group_size']),
         )
         self.check_limits(inputs, outputs)
 
@@ -54,7 +55,8 @@ class TestOccupancy(unittest.TestCase):
             allowed_vgpr_per_workitem=32,
             occupancy=0,
             reasons=set(['allowed_wave_due_to_sgpr',
-                         'allowed_wave']),
+                         'allowed_wave',
+                         'group_size']),
         )
         self.check_limits(inputs, outputs)
 
@@ -67,8 +69,8 @@ class TestOccupancy(unittest.TestCase):
             allowed_wave_due_to_vgpr=8,
             allowed_wave=8,
             allowed_vgpr_per_workitem=32,
-            occupancy=.8,
-            reasons=set(),
+            occupancy=0,
+            reasons=set(['group_size']),
         )
         self.check_limits(inputs, outputs)
 

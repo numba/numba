@@ -14,6 +14,9 @@ sgpr_per_simd = 512
 max_wave_count = 10
 max_inflight_wave_per_cu = max_wave_count * simd_per_cu
 
+# XXX due to limit in AMDGPU backend
+max_group_size = 256
+
 
 _limits = namedtuple('_limits', ['allowed_wave_due_to_sgpr',
                                  'allowed_wave_due_to_vgpr',
@@ -44,6 +47,8 @@ def get_limiting_factors(group_size, vgpr_per_workitem, sgpr_per_wave):
         reasons.add('allowed_wave_due_to_vgpr')
     if allowed_wave < required_wave_count_per_simd:
         reasons.add('allowed_wave')
+    if group_size > max_group_size:
+        reasons.add('group_size')
 
     suggestions = [_suggestions[r] for r in sorted(reasons)]
 
@@ -73,5 +78,9 @@ _suggestions['allowed_wave_due_to_vgpr'] = (
 
 _suggestions['allowed_wave'] = (
     "* Launch requires too many wavefronts. Try reducing group-size."
+)
+
+_suggestions['group_size'] = (
+    "* Exceeds max group size (256)."
 )
 
