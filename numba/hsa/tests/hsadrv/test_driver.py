@@ -494,19 +494,17 @@ class TestContext(_TestBase):
         dependent_signal = hsa.create_signal(0)
         completion_signal = hsa.create_signal(0)
 
-        ## get a coarse grain mem pool on the CPU
-        coarse_grain_system_pool = cpu_ctx.getMempools(pool_global_flags=[enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED])[0]
-
         ## allocate host src and dst, allow gpu access
-        host_src = coarse_grain_system_pool.allocate(kSize, allow_access_to=[gpu_ctx.agent])
-        host_dst = coarse_grain_system_pool.allocate(kSize, allow_access_to=[gpu_ctx.agent])
+        flags = dict(allow_access_to=[gpu_ctx.agent],
+                     pool_global_flags=[enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED])
+        host_src = cpu_ctx.mempoolalloc(kSize, **flags)
+        host_dst = cpu_ctx.mempoolalloc(kSize, **flags)
 
         # there's a loop in `i` here over GPU hardware
         i = 0
 
         # get gpu local pool
-        gpu_local_pool = gpu_ctx.getMempools(segment_is=enums_ext.HSA_AMD_SEGMENT_GLOBAL)[0]
-        local_memory = gpu_local_pool.allocate(kSize)
+        local_memory = gpu_ctx.mempoolalloc(kSize, segment_is=enums_ext.HSA_AMD_SEGMENT_GLOBAL)
 
         host_src_view = (kNumInt * ctypes.c_int).from_address(host_src.device_pointer.value)
         host_dst_view = (kNumInt * ctypes.c_int).from_address(host_dst.device_pointer.value)

@@ -665,7 +665,6 @@ class MemPool(HsaWrapper):
         self._id = pool
         self._owner_agent = agent
         self._as_parameter_ = self._id
-        self.allocations = utils.UniqueDict()
 
     @property
     def kind(self):
@@ -703,14 +702,9 @@ class MemPool(HsaWrapper):
                                                 drvapi.hsa_agent_t(agent._id),
                                                 None,
                                                 buff)
-        fin = _make_mem_finalizer(hsa.hsa_amd_memory_pool_free)
-        ret = MemoryPointer(weakref.proxy(self), buff, nbytes,
-                            finalizer=fin(self, buff))
         if buff.value is None:
-            raise RuntimeError("MemoryPointer has no value")
-        self.allocations[buff.value] = ret
-
-        return ret.own()
+            raise HsaDriverError("Failed to allocate from {}".format(self))
+        return buff
 
     _instance_dict = {}
 
@@ -1107,6 +1101,7 @@ class MemoryPointer(object):
     __hsa_memory__ = True
 
     def __init__(self, context, pointer, size, finalizer=None):
+        assert isinstance(context, Context)
         self.context = context
         self.device_pointer = pointer
         self.size = size
@@ -1380,7 +1375,14 @@ class Context(object):
         mem = None
         for mempool in mempools:
             try:
-                m = mempool.allocate(nbytes, allow_access_to)
+                buff = mempool.allocate(nbytes, allow_access_to)
+                fin = _make_mem_finalizer(hsa.hsa_amd_memory_pool_free)
+                mp = MemoryPointer(weakref.proxy(self), buff, nbytes,
+                                   finalizer=fin(self, buff))
+
+                self.allocations[buff.value] = mp
+
+                m = mp.own()
             except HsaApiError:
                 # try next memory mempool if an allocation fails
                 # or an access mutation fails.
@@ -1389,7 +1391,7 @@ class Context(object):
                 # that don't match the access pattern requested waiting for gc() run
                 if m:
                     m.free()
-            else: # allocation succeeded, stop looking for memory
+            else:  # allocation succeeded, stop looking for memory
                 mem = m
                 break
 
