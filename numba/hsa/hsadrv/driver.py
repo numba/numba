@@ -1206,7 +1206,17 @@ class Context(object):
             self._defaultqueue = defq.owned()
 
         self.allocations = utils.UniqueDict()
-        self._staging_area = None
+        # get pools
+        coarse_flag = enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED
+        fine_flag = enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_FINE_GRAINED
+        alloc_mps = [mp for mp in agent.mempools.globals if mp.alloc_allowed]
+        self._coarsegrain_mempool = None
+        self._finegrain_mempool = None
+        for mp in alloc_mps:
+            if mp.supports(coarse_flag):
+                self._coarsegrain_mempool = mp
+            if mp.supports(fine_flag):
+                self._finegrain_mempool = mp
 
     def _callback(self, status, queue):
         drvapi._check_error(status, queue)
@@ -1219,6 +1229,20 @@ class Context(object):
     @property
     def agent(self):
         return self._agent
+
+    @property
+    def coarsegrain_mempool(self):
+        if self._coarsegrain_mempool is None:
+            msg = 'coarsegrain mempool is not available in {}'.format(self._agent)
+            raise ValueError(msg)
+        return self._coarsegrain_mempool
+
+    @property
+    def finegrain_mempool(self):
+        if self._finegrain_mempool is None:
+            msg = 'finegrain mempool is not available in {}'.format(self._agent)
+            raise ValueError(msg)
+        return self._finegrain_mempool
 
     def memalloc(self, nbytes, memTypeFlags=None, hostAccessible=True):
         """
@@ -1295,121 +1319,29 @@ class Context(object):
         self.allocations[mem.value] = ret
         return ret.own()
 
-    def getMempools(self, segment_is=None, segment_is_not=None, pool_global_flags=None):
-        """
-        Gets mempools on this context that match the specified criteria.
-        """
-        hw = self._agent.device
-        all_pools = self._agent.mempools
-        flag_ok_r = list()
-
-        def query_agent_access(agent, pool):
-            """
-            Queries the accessibility status of this memory pool for a
-            specified agent.
-            """
-            access_type = drvapi.hsa_amd_memory_pool_access_t()
-            hsa.hsa_amd_agent_memory_pool_get_info(
-            agent._id, pool._id, enums_ext.HSA_AMD_AGENT_MEMORY_POOL_INFO_ACCESS,
-            ctypes.byref(access_type))
-            return access_type # <- will be a value in enum hsa_amd_memory_pool_access_t
-
-        if segment_is and segment_is_not:
-            raise RuntimeError("Only one of segment_is or segment_is_not may be provided.")
-
-        # don't support DSP
-        if hw == "GPU" or hw == "CPU":
-            # find pools in requested segment
-            if segment_is is not None or segment_is_not is not None:
-                for r in all_pools:
-                    seg = r.segment
-                    if segment_is is not None:
-                        if seg == segment_is:
-                            flag_ok_r.append(r)
-                    if segment_is_not is not None:
-                        if seg != segment_is_not:
-                            flag_ok_r.append(r)
-            else:
-                flag_ok_r = [x for x in all_pools]
-
-            mempools = list()
-            # check system required flags for allocation
-            for r in flag_ok_r:
-                # check that specified global flags are supported
-                # if some were requested
-                if pool_global_flags is not None:
-                    ac = 0
-                    for gflags in pool_global_flags:
-                        if not r.supports(gflags):
-                            break
-                        else:
-                            ac = ac + 1
-                    if ac == len(pool_global_flags):
-                        mempools.append(r)
-                else:
-                    mempools.append(r)
-        else:
-            raise RuntimeError("Unknown device type string \"%s\"" % hw)
-
-        return mempools
-
-    def mempoolalloc(self, nbytes, allow_access_to=None, segment_is=None,
-                     segment_is_not=None, pool_global_flags=None):
+    def mempoolalloc(self, nbytes, allow_access_to=None, finegrain=False):
         """
         Allocates memory in a memory pool.
         Parameters:
-        nbytes the number of bytes to allocate.
-        memTypeFlags the flags for which the memory pool must have support,\
-                        due to the inherent rawness of the underlying call, the\
-                        validity of the flag is not checked, cf. C language.
+        *nbytes* the number of bytes to allocate.
+        *allow_acces_to*
+        *finegrain*
         """
+        mempool = (self.finegrain_mempool
+                   if finegrain
+                   else self.coarsegrain_mempool)
 
-        # find a mempool for the allocation
-        mempools = self.getMempools(segment_is=segment_is,
-                                    segment_is_not=segment_is_not,
-                                    pool_global_flags=pool_global_flags)
+        buff = mempool.allocate(nbytes, allow_access_to)
+        fin = _make_mem_finalizer(hsa.hsa_amd_memory_pool_free)
+        mp = MemoryPointer(weakref.proxy(self), buff, nbytes,
+                           finalizer=fin(self, buff))
 
-        assert len(mempools) > 0, "No suitable memory pools found."
-
-        # walk though valid pools trying to malloc until there's none left
-        mem = None
-        for mempool in mempools:
-            try:
-                buff = mempool.allocate(nbytes, allow_access_to)
-                fin = _make_mem_finalizer(hsa.hsa_amd_memory_pool_free)
-                mp = MemoryPointer(weakref.proxy(self), buff, nbytes,
-                                   finalizer=fin(self, buff))
-
-                self.allocations[buff.value] = mp
-
-                m = mp.own()
-            except HsaApiError:
-                # try next memory mempool if an allocation fails
-                # or an access mutation fails.
-
-                # Forcibly clear up m, no point in having allocations hanging about
-                # that don't match the access pattern requested waiting for gc() run
-                if m:
-                    m.free()
-            else:  # allocation succeeded, stop looking for memory
-                mem = m
-                break
-
-        if mem is None:
-            raise RuntimeError("Memory allocation failed. No agent/mempool "
-                               "combination could meet allocation restraints "
-                               "(hardware = %s, size = %s)." % (hw, nbytes))
-
-        return mem
+        self.allocations[buff.value] = mp
+        return mp.own()
 
     def memhostalloc(self, size, finegrain, allow_access_to):
-        if finegrain:
-            flags = [enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED]
-        else:
-            flags = [enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_FINE_GRAINED]
-
         mem = self.mempoolalloc(size, allow_access_to=allow_access_to,
-                                pool_global_flags=flags)
+                                finegrain=finegrain)
         return HostMemory(weakref.proxy(self), owner=mem,
                           pointer=mem.device_pointer, size=mem.size)
 

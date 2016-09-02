@@ -378,6 +378,7 @@ class TestMemory(_TestBase):
         hsa.hsa_memory_free(gpu_in_ptr)
         hsa.hsa_memory_free(gpu_out_ptr)
 
+
 class TestContext(_TestBase):
     """Tests the Context class behaviour is correct."""
 
@@ -424,6 +425,49 @@ class TestContext(_TestBase):
         else: #TODO: write APU variant
             pass
 
+    def check_mempools(self, agent, has_fine_grain=True):
+        # get allocation-allowed pools
+        mp_alloc_list = [mp for mp in agent.mempools if mp.alloc_allowed]
+        mpdct = {'global': [], 'readonly': [], 'private': [], 'group': []}
+
+        for mp in mp_alloc_list:
+            mpdct[mp.kind].append(mp)
+
+        # only globals are allocation-allowed
+        if has_fine_grain:
+            self.assertEqual(len(mpdct['global']), 2)
+        else:
+            self.assertEqual(len(mpdct['global']), 1)
+        self.assertEqual(len(mpdct['readonly']), 0)
+        self.assertEqual(len(mpdct['private']), 0)
+        self.assertEqual(len(mpdct['group']), 0)
+
+        self.assertEqual(len(agent.mempools.globals), len(mpdct['global']))
+
+        # the global-pools are coarse-grain and fine-grain pools
+        glbs = mpdct['global']
+        coarsegrain = None
+        finegrain = None
+        for gmp in glbs:
+            if gmp.supports(enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED):
+                coarsegrain = gmp
+            if gmp.supports(enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_FINE_GRAINED):
+                finegrain = gmp
+
+        self.assertIsNotNone(coarsegrain)
+        if has_fine_grain:
+            self.assertIsNotNone(finegrain)
+        else:
+            self.assertIsNone(finegrain)
+        self.assertIsNot(coarsegrain, finegrain)
+
+    def test_cpu_mempool_property(self):
+        self.check_mempools(self.cpu)
+
+    @unittest.skipUnless(dgpu_present(), "dGPU only")
+    def test_gpu_mempool_property(self):
+        self.check_mempools(self.gpu, has_fine_grain=False)
+
     @unittest.skipUnless(dgpu_present(), "dGPU only")
     def test_mempool(self):
         n = 10 # things to alloc
@@ -458,28 +502,26 @@ class TestContext(_TestBase):
         for k in range(n):
             self.assertEqual(ref[k], src[k])
 
-    def check_mempool_with_flags(self, gflags):
+    def check_mempool_with_flags(self, finegrain):
             dGPU_agent = self.gpu
             gpu_ctx = Context(dGPU_agent)
 
             CPU_agent = self.cpu
             cpu_ctx = Context(CPU_agent)
+
             # get mempool with specific flags
-            pools = cpu_ctx.getMempools(pool_global_flags=gflags)
-            self.assertGreater(len(pools), 0)
-            [pool] = pools
+            pool = (cpu_ctx.finegrain_mempool
+                    if finegrain else cpu_ctx.coarsegrain_mempool)
             # try allocating for GPU access
             ptr = pool.allocate(1024, allow_access_to=[gpu_ctx._agent])
 
     @unittest.skipUnless(dgpu_present(), 'dGPU only')
     def test_mempool_finegrained(self):
-        gflags = [enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_FINE_GRAINED]
-        self.check_mempool_with_flags(gflags)
+        self.check_mempool_with_flags(finegrain=True)
 
     @unittest.skipUnless(dgpu_present(), 'dGPU only')
     def test_mempool_coarsegrained(self):
-        gflags = [enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED]
-        self.check_mempool_with_flags(gflags)
+        self.check_mempool_with_flags(finegrain=False)
 
     @unittest.skipUnless(dgpu_present(), 'dGPU only')
     def test_mempool_amd_example(self):
@@ -495,8 +537,7 @@ class TestContext(_TestBase):
         completion_signal = hsa.create_signal(0)
 
         ## allocate host src and dst, allow gpu access
-        flags = dict(allow_access_to=[gpu_ctx.agent],
-                     pool_global_flags=[enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED])
+        flags = dict(allow_access_to=[gpu_ctx.agent], finegrain=False)
         host_src = cpu_ctx.mempoolalloc(kSize, **flags)
         host_dst = cpu_ctx.mempoolalloc(kSize, **flags)
 
@@ -504,7 +545,7 @@ class TestContext(_TestBase):
         i = 0
 
         # get gpu local pool
-        local_memory = gpu_ctx.mempoolalloc(kSize, segment_is=enums_ext.HSA_AMD_SEGMENT_GLOBAL)
+        local_memory = gpu_ctx.mempoolalloc(kSize)
 
         host_src_view = (kNumInt * ctypes.c_int).from_address(host_src.device_pointer.value)
         host_dst_view = (kNumInt * ctypes.c_int).from_address(host_dst.device_pointer.value)

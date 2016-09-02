@@ -88,8 +88,7 @@ class DeviceNDArrayBase(object):
                 self.alloc_size = agnostic_memory_size_from_info(self.shape,
                                           self.strides, self.dtype.itemsize)
                 # find a coarse region on the dGPU
-                gflags = [_driver.enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED]
-                dgpu_data = devices.get_context().mempoolalloc(self.alloc_size, pool_global_flags=gflags)
+                dgpu_data = devices.get_context().mempoolalloc(self.alloc_size)
             else:  # we have some preallocated dgpu_memory
                 sz = getattr(dgpu_data, '_hsa_memsize_', None)
                 if sz is None:
