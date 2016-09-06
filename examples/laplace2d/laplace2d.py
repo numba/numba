@@ -1,12 +1,16 @@
 #!/usr/bin/env python
-import numpy as np
+from __future__ import print_function
+
 import time
+
+import numpy as np
+
 
 def jacobi_relax_core(A, Anew):
     error = 0.0
     n = A.shape[0]
     m = A.shape[1]
-    
+
     for j in range(1, n - 1):
         for i in range(1, m - 1):
             Anew[j, i] = 0.25 * ( A[j, i + 1] + A[j, i - 1] \
@@ -40,7 +44,7 @@ def main():
 
     while error > tol and iter < iter_max:
         error = jacobi_relax_core(A, Anew)
-    
+
         # swap A and Anew
         tmp = A
         A = Anew

@@ -3,12 +3,20 @@
 '''
 Example vectorize usage.
 '''
+from __future__ import print_function
 
-import numpy as np
-from numba import *
-from timeit import default_timer as time
 import math
 import sys
+from timeit import default_timer as time
+
+import numpy as np
+
+
+from numba import vectorize
+
+
+N = 1000000
+
 
 def check_answer(ans, A, B, C):
     for d, a, b in zip(ans, A, B):
@@ -19,8 +27,8 @@ def sum(a, b):
     return a + b
 
 def main():
-    targets = ['cpu', 'stream', 'parallel']
-    
+    targets = ['cpu', 'parallel']
+
     # run just one target if is specified in the argument
     for t in targets:
         if t in sys.argv[1:]:
@@ -29,15 +37,15 @@ def main():
 
     for target in targets:
         print('== Target', target)
-        vect_sum = vectorize([f4(f4, f4), f8(f8, f8)],
+        vect_sum = vectorize(['f4(f4, f4)', 'f8(f8, f8)'],
                              target=target)(sum)
 
-        A = np.fromfile('inputA.dat', dtype=np.float32)
-        B = np.fromfile('inputB.dat', dtype=np.float32)
+        A = np.random.random(N).astype(np.float32)
+        B = np.random.random(N).astype(np.float32)
         assert A.shape == B.shape
         assert A.dtype ==  B.dtype
         assert len(A.shape) == 1
-        N = A.shape[0]
+
         D = np.empty(A.shape, dtype=A.dtype)
 
         print('Data size', N)
@@ -50,8 +58,6 @@ def main():
 
         print('Execution time %.4f' % total_time)
         print('Throughput %.4f' % (N / total_time))
-
-
 
         if '-verify' in sys.argv[1:]:
             check_answer(D, A, B, C)
