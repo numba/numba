@@ -225,6 +225,10 @@ class Interpreter(object):
         """
         Post-processing and analysis on generated IR
         """
+        from . import transforms
+
+        self.blocks = transforms.canonicalize_cfg(self.blocks)
+
         # emit del nodes
         self._insert_var_dels()
 
