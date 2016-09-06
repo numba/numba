@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from __future__ import print_function
 
+import sys
 import time
 
 import numpy as np
@@ -20,6 +21,15 @@ def jacobi_relax_core(A, Anew):
 
 
 def main():
+    argv = sys.argv[1:]
+    if len(argv) == 1:
+        [iter_max] = argv
+        iter_max = int(iter_max)
+    else:
+        print('Using default max number of iteration to 2 due to long run time.')
+        print('Override by passing a cmdline arg: python {} <max_iter>'.format(__file__))
+        iter_max = 3
+
     NN = 512
     NM = 512
 
@@ -28,7 +38,6 @@ def main():
 
     n = NN
     m = NM
-    iter_max = 1000
 
     tol = 1.0e-6
     error = 1.0
