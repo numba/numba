@@ -11,6 +11,8 @@ import ctypes
 import struct
 import traceback
 import weakref
+import logging
+
 from collections import Sequence
 from numba.utils import total_ordering
 from numba import mviewbuf
@@ -20,6 +22,9 @@ from .error import HsaSupportError, HsaDriverError, HsaApiError
 from . import enums, enums_ext, drvapi
 from numba.utils import longint as long
 import numpy as np
+
+
+_logger = logging.getLogger(__name__)
 
 
 class HsaKernelTimedOut(HsaDriverError):
@@ -365,6 +370,7 @@ class Driver(object):
 
         def driver_wrapper(fn):
             def wrapped(*args, **kwargs):
+                _logger.debug('call driver api: %s', fname)
                 return fn(*args, **kwargs)
             return wrapped
 
@@ -406,6 +412,7 @@ class Driver(object):
         Implicit synchronization for all asynchronous streams
         across all devices.
         """
+        _logger.info("implicit sync")
         for st in self._active_streams:
             st.synchronize()
 
@@ -976,7 +983,7 @@ class Program(object):
             if hsa_status is not enums.HSA_STATUS_SUCCESS:
                 msg = ctypes.c_char_p()
                 hsa.hsa_status_string(hsa_status, ctypes.byref(msg))
-                print(msg.value.decode("utf-8"))
+                _logger.info(msg.value.decode("utf-8"))
                 exit(-hsa_status)
 
         support = ctypes.c_bool(0)
@@ -1347,7 +1354,6 @@ class Context(object):
     def memhostalloc(self, size, finegrain, allow_access_to):
         mem = self.mempoolalloc(size, allow_access_to=allow_access_to,
                                 finegrain=finegrain)
-        mem.allow_access_to(*allow_access_to)
         return HostMemory(weakref.proxy(self), owner=mem,
                           pointer=mem.device_pointer, size=mem.size)
 
@@ -1395,11 +1401,11 @@ def _make_mem_finalizer(dtor):
         sync = hsa.implicit_sync
 
         def core():
-            print("\nCurrent allocations:", allocations)
+            _logger.info("Current allocations: %s", allocations)
             if allocations:
-                print("Attempting delete on %s" % handle.value)
+                _logger.info("Attempting delete on %s" % handle.value)
                 del allocations[handle.value]
-            sync()
+            sync()  # implicit sync
             dtor(handle)
         return core
 
@@ -1458,6 +1464,7 @@ def host_to_dGPU(context, dst, src, size):
     src a pointer to the source location in host memory
     size the size (in bytes) of data to transfer
     """
+    _logger.info("CPU->dGPU")
     if size < 0:
         raise ValueError("Invalid size given: %s" % size)
 
@@ -1473,6 +1480,7 @@ def dGPU_to_host(context, dst, src, size):
     src a pointer to the source location in host memory
     size the size (in bytes) of data to transfer
     """
+    _logger.info("dGPU->CPU")
     if size < 0:
         raise ValueError("Invalid size given: %s" % size)
 
@@ -1480,12 +1488,14 @@ def dGPU_to_host(context, dst, src, size):
 
 
 def async_host_to_dGPU(dst_ctx, src_ctx, dst, src, size, stream):
+    _logger.info("Async CPU->dGPU")
     async_copy_dgpu(dst_ctx=dst_ctx, src_ctx=src_ctx,
                     src=host_pointer(src), dst=device_pointer(dst),
                     size=size, stream=stream)
 
 
 def async_dGPU_to_host(dst_ctx, src_ctx, dst, src, size, stream):
+    _logger.info("Async dGPU->CPU")
     async_copy_dgpu(dst_ctx=dst_ctx, src_ctx=src_ctx,
                     dst=host_pointer(dst), src=device_pointer(src),
                     size=size, stream=stream)

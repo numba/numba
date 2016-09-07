@@ -2,11 +2,15 @@
 Test arrays backed by different memory
 """
 
+import logging
+
 import numpy as np
 
 from numba import hsa
 import numba.unittest_support as unittest
 from numba.hsa.hsadrv.driver import dgpu_present
+
+logger = logging.getLogger()
 
 
 @hsa.jit
@@ -32,8 +36,11 @@ class TestMemory(unittest.TestCase):
         blksz = 128
         nelem = blkct * blksz
         expect = np.arange(nelem) + 1
+        logger.info('device array like')
         darr = hsa.device_array_like(expect)
+        logger.info('pre launch')
         copy_kernel[blkct, blksz](darr, hsa.to_device(expect))
+        logger.info('post launch')
         got = darr.copy_to_host()
         np.testing.assert_equal(got, expect)
 
@@ -42,9 +49,12 @@ class TestMemory(unittest.TestCase):
         blksz = 128
         nelem = blkct * blksz
         expect = np.arange(nelem) + 1
+        logger.info('coarsegrain array')
         got = hsa.coarsegrain_array(shape=expect.shape, dtype=expect.dtype)
         got.fill(0)
+        logger.info('pre launch')
         copy_kernel[blkct, blksz](got, expect.copy())
+        logger.info('post launch')
         np.testing.assert_equal(got, expect)
 
     def test_finegrain_array(self):
@@ -52,11 +62,15 @@ class TestMemory(unittest.TestCase):
         blksz = 128
         nelem = blkct * blksz
         expect = np.arange(nelem) + 1
+        logger.info('finegrain array')
         got = hsa.finegrain_array(shape=expect.shape, dtype=expect.dtype)
         got.fill(0)
+        logger.info('pre launch')
         copy_kernel[blkct, blksz](got, expect.copy())
+        logger.info('post launch')
         np.testing.assert_equal(got, expect)
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
     unittest.main()
