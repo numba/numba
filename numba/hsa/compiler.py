@@ -345,8 +345,16 @@ class HSAKernel(HSAKernelBase):
             hsa.implicit_sync()
 
         # Dispatch
+        signal = None
+        if self.stream is not None:
+            signal = hsa.create_signal(1)
+            qq.insert_barrier(self.stream._get_last_signal())
+
         qq.dispatch(symbol, kernargs, workgroup_size=self.local_size,
-                    grid_size=self.global_size)
+                    grid_size=self.global_size, signal=signal)
+
+        if self.stream is not None:
+            self.stream._add_signal(signal)
 
         # retrieve auto converted arrays
         for wb in retr:
@@ -354,7 +362,10 @@ class HSAKernel(HSAKernelBase):
 
         # Free kernel region
         if kernargs is not None:
-            kernarg_region.free(kernargs)
+            if self.stream is None:
+                kernarg_region.free(kernargs)
+            else:
+                self.stream._add_callback(lambda: kernarg_region.free(kernargs))
 
 
 def _unpack_argument(ty, val, kernelargs, retr):

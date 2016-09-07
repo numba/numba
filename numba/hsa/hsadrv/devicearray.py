@@ -157,10 +157,16 @@ class DeviceNDArrayBase(object):
             _driver.hsa.implicit_sync()
             _driver.host_to_dGPU(self._context, self, ary, sz)
         else:
-            _driver.async_host_to_dGPU(dst_ctx=self._context,
-                                       src_ctx=devices.get_cpu_context(),
-                                       dst=self, src=ary, size=sz,
-                                       stream=stream)
+            if isinstance(ary, DeviceNDArray):
+                _driver.async_dGPU_to_dGPU(dst_ctx=self._context,
+                                           src_ctx=ary._context,
+                                           dst=self, src=ary, size=sz,
+                                           stream=stream)
+            else:
+                _driver.async_host_to_dGPU(dst_ctx=self._context,
+                                        src_ctx=devices.get_cpu_context(),
+                                        dst=self, src=ary, size=sz,
+                                        stream=stream)
 
     def copy_to_host(self, ary=None, stream=None):
         """Copy ``self`` to ``ary`` or create a new Numpy ndarray

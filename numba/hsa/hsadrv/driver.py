@@ -12,8 +12,9 @@ import struct
 import traceback
 import weakref
 import logging
+from contextlib import contextmanager
 
-from collections import Sequence
+from collections import Sequence, defaultdict
 from numba.utils import total_ordering
 from numba import mviewbuf
 from numba import utils
@@ -306,12 +307,12 @@ class Driver(object):
         return Program(program)
 
     def create_signal(self, initial_value, consumers=None):
-        if consumers is not None:
-            consumers_len = len(consumers)
-            consumers_type = drvapi.hsa_agent_t * consumers_len
-            consumers = consumers_type(*[c._id for c in consumers])
-        else:
-            consumers_len = 0
+        if consumers is None:
+            consumers = tuple(self.agents)
+
+        consumers_len = len(consumers)
+        consumers_type = drvapi.hsa_agent_t * consumers_len
+        consumers = consumers_type(*[c._id for c in consumers])
 
         result = drvapi.hsa_signal_t()
         self.hsa_signal_create(initial_value, consumers_len, consumers,
@@ -540,6 +541,7 @@ class Agent(HsaWrapper):
                       queue_type=None):
         assert queue_type is not None
         assert size <= self.queue_max_size
+
         cb_typ = drvapi.HSA_QUEUE_CALLBACK_FUNC
         cb = ctypes.cast(None, cb_typ) if callback is None else cb_typ(callback)
         result = ctypes.POINTER(drvapi.hsa_queue_t)()
@@ -819,10 +821,56 @@ class Queue(object):
     def __getattr__(self, fname):
         return getattr(self._id.contents, fname)
 
+    @contextmanager
+    def _get_packet(self, packet_type):
+        # Write AQL packet at the calculated queue index address
+        queue_struct = self._id.contents
+        queue_mask = queue_struct.size - 1
+        assert (ctypes.sizeof(packet_type) ==
+                ctypes.sizeof(drvapi.hsa_kernel_dispatch_packet_t))
+        packet_array_t = (packet_type * queue_struct.size)
+
+        # Obtain the current queue write index
+        index = hsa.hsa_queue_add_write_index_acq_rel(self._id, 1)
+
+        while True:
+            read_offset = hsa.hsa_queue_load_read_index_acquire(self._id)
+            if read_offset <= index < read_offset + queue_struct.size:
+                break
+
+        queue_offset = index & queue_mask
+        queue = packet_array_t.from_address(queue_struct.base_address)
+        packet = queue[queue_offset]
+
+        # zero init
+        ctypes.memset(ctypes.addressof(packet), 0, ctypes.sizeof(packet_type))
+        yield packet
+        # Increment write index
+        # Ring the doorbell
+        hsa.hsa_signal_store_release(self._id.contents.doorbell_signal, index)
+
+    def insert_barrier(self, dep_signal):
+        with self._get_packet(drvapi.hsa_barrier_and_packet_t) as packet:
+            # Populate packet
+            packet.dep_signal0 = dep_signal._id
+
+            header = 0
+            header |= enums.HSA_FENCE_SCOPE_SYSTEM << enums.HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE
+            header |= enums.HSA_FENCE_SCOPE_SYSTEM << enums.HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE
+            header |= enums.HSA_PACKET_TYPE_BARRIER_AND << enums.HSA_PACKET_HEADER_TYPE
+            header |= 1 << enums.HSA_PACKET_HEADER_BARRIER
+
+            # Original example calls for an atomic store.
+            # Since we are on x86, store of aligned 16 bit is atomic.
+            # The C code is
+            # __atomic_store_n((uint16_t*)(&dispatch_packet->header), header, __ATOMIC_RELEASE);
+            packet.header = header
+
     def dispatch(self, symbol, kernargs,
                  workgroup_size=None,
                  grid_size=None,
                  signal=None):
+        _logger.info("dispatch %s", symbol.name)
         dims = len(workgroup_size)
         assert dims == len(grid_size)
         assert 0 < dims <= 3
@@ -830,67 +878,49 @@ class Queue(object):
         if workgroup_size > tuple(self._agent.workgroup_max_dim)[:dims]:
             msg = "workgroupsize is too big {0} > {1}"
             raise HsaDriverError(msg.format(workgroup_size,
-                                tuple(self._agent.workgroup_max_dim)[:dims]))
+                                 tuple(self._agent.workgroup_max_dim)[:dims]))
         s = signal if signal is not None else hsa.create_signal(1)
 
         # Note: following vector_copy.c
+        with self._get_packet(drvapi.hsa_kernel_dispatch_packet_t) as packet:
 
-        # Obtain the current queue write index
-        index = hsa.hsa_queue_load_write_index_relaxed(self._id)
+            # Populate packet
+            packet.setup |= dims << enums.HSA_KERNEL_DISPATCH_PACKET_SETUP_DIMENSIONS
 
-        # Write AQL packet at the calculated queue index address
-        queue_struct = self._id.contents
-        queue_mask = queue_struct.size - 1
+            packet.workgroup_size_x = workgroup_size[0]
+            packet.workgroup_size_y = workgroup_size[1] if dims > 1 else 1
+            packet.workgroup_size_z = workgroup_size[2] if dims > 2 else 1
 
-        dispatch_packet_t = drvapi.hsa_kernel_dispatch_packet_t
-        packet_array_t = (dispatch_packet_t * queue_struct.size)
+            packet.grid_size_x = grid_size[0]
+            packet.grid_size_y = grid_size[1] if dims > 1 else 1
+            packet.grid_size_z = grid_size[2] if dims > 2 else 1
 
-        queue_offset = index & queue_mask
-        queue = packet_array_t.from_address(queue_struct.base_address)
+            packet.completion_signal = s._id
 
-        packet = queue[queue_offset]
+            packet.kernel_object = symbol.kernel_object
 
-        # Populate packet
-        packet.setup |= dims << enums.HSA_KERNEL_DISPATCH_PACKET_SETUP_DIMENSIONS
+            packet.kernarg_address = (0 if kernargs is None
+                                      else kernargs.value)
 
-        packet.workgroup_size_x = workgroup_size[0]
-        packet.workgroup_size_y = workgroup_size[1] if dims > 1 else 1
-        packet.workgroup_size_z = workgroup_size[2] if dims > 2 else 1
+            packet.private_segment_size = symbol.private_segment_size
+            packet.group_segment_size = symbol.group_segment_size
 
-        packet.grid_size_x = grid_size[0]
-        packet.grid_size_y = grid_size[1] if dims > 1 else 1
-        packet.grid_size_z = grid_size[2] if dims > 2 else 1
+            header = 0
+            header |= enums.HSA_FENCE_SCOPE_SYSTEM << enums.HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE
+            header |= enums.HSA_FENCE_SCOPE_SYSTEM << enums.HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE
+            header |= enums.HSA_PACKET_TYPE_KERNEL_DISPATCH << enums.HSA_PACKET_HEADER_TYPE
 
-        packet.completion_signal = s._id
-
-        packet.kernel_object = symbol.kernel_object
-
-        packet.kernarg_address = (0 if kernargs is None
-                                  else kernargs.value)
-
-        packet.private_segment_size = symbol.private_segment_size
-        packet.group_segment_size = symbol.group_segment_size
-
-        header = 0
-        header |= enums.HSA_FENCE_SCOPE_SYSTEM << enums.HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE
-        header |= enums.HSA_FENCE_SCOPE_SYSTEM << enums.HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE
-        header |= enums.HSA_PACKET_TYPE_KERNEL_DISPATCH << enums.HSA_PACKET_HEADER_TYPE
-
-        # Original example calls for an atomic store.
-        # Since we are on x86, store of aligned 16 bit is atomic.
-        # The C code is
-        # __atomic_store_n((uint16_t*)(&dispatch_packet->header), header, __ATOMIC_RELEASE);
-        packet.header = header
-
-        # Increment write index
-        hsa.hsa_queue_store_write_index_relaxed(self._id, index + 1)
-        # Ring the doorbell
-        hsa.hsa_signal_store_relaxed(self._id.contents.doorbell_signal, index)
+            # Original example calls for an atomic store.
+            # Since we are on x86, store of aligned 16 bit is atomic.
+            # The C code is
+            # __atomic_store_n((uint16_t*)(&dispatch_packet->header), header, __ATOMIC_RELEASE);
+            packet.header = header
 
         # Wait on the dispatch completion signal
 
         # synchronous if no signal was provided
         if signal is None:
+            _logger.info('wait for sychronous kernel to complete')
             timeout = 10
             if not s.wait_until_ne_one(timeout=timeout):
                 msg = "Kernel timed out after {timeout} second"
@@ -925,8 +955,8 @@ class Signal(object):
     def load_relaxed(self):
         return hsa.hsa_signal_load_relaxed(self._id)
 
-    def load_acquired(self):
-        return hsa.hsa_signal_load_acquired(self._id)
+    def load_acquire(self):
+        return hsa.hsa_signal_load_acquire(self._id)
 
     def wait_until_ne_one(self, timeout=None):
         """
@@ -1068,7 +1098,7 @@ class Executable(object):
                                           name.encode('ascii')),
                                       agent._id, 0,
                                       ctypes.byref(symbol))
-        return Symbol(symbol)
+        return Symbol(name, symbol)
 
 
 class Symbol(HsaWrapper):
@@ -1092,8 +1122,9 @@ class Symbol(HsaWrapper):
         ),
     }
 
-    def __init__(self, symbol_id):
+    def __init__(self, name, symbol_id):
         self._id = symbol_id
+        self.name = name
 
 
 class MemoryPointer(object):
@@ -1364,12 +1395,17 @@ class Stream(object):
     """
     def __init__(self):
         self._signals = []
+        self._callbacks = defaultdict(list)
 
     def _add_signal(self, signal):
         """
         Add a signal that corresponds to an async task.
         """
         self._signals.append(signal)
+
+    def _add_callback(self, callback):
+        assert callable(callback)
+        self._callbacks[self._get_last_signal()].append(callback)
 
     def _get_last_signal(self):
         """
@@ -1383,8 +1419,12 @@ class Stream(object):
         """
         if self._signals:
             signals, self._signals = self._signals, []
-            for sig in reversed(signals):
-                sig.wait_until_ne_one()
+            for sig in signals:
+                if sig.load_relaxed() == 1:
+                    sig.wait_until_ne_one()
+                for cb in self._callbacks[sig]:
+                    cb()
+            self._callbacks.clear()
 
 
 def _make_mem_finalizer(dtor):
@@ -1500,6 +1540,12 @@ def async_dGPU_to_host(dst_ctx, src_ctx, dst, src, size, stream):
                     dst=host_pointer(dst), src=device_pointer(src),
                     size=size, stream=stream)
 
+
+def async_dGPU_to_dGPU(dst_ctx, src_ctx, dst, src, size, stream):
+    _logger.info("Async dGPU->dGPU")
+    async_copy_dgpu(dst_ctx=dst_ctx, src_ctx=src_ctx,
+                    dst=device_pointer(dst), src=device_pointer(src),
+                    size=size, stream=stream)
 
 def async_copy_dgpu(dst_ctx, src_ctx, dst, src, size, stream):
     if size < 0:

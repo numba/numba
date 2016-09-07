@@ -99,19 +99,17 @@ class hsa_barrier_and_packet_t(ctypes.Structure):
         ('header', ctypes.c_uint16),
         ('reserved0', ctypes.c_uint16),
         ('reserved1', ctypes.c_uint32),
-        ('dep_signal', hsa_signal_t*5),
+        ('dep_signal0', hsa_signal_t),
+        ('dep_signal1', hsa_signal_t),
+        ('dep_signal2', hsa_signal_t),
+        ('dep_signal3', hsa_signal_t),
+        ('dep_signal4', hsa_signal_t),
         ('reserved2', ctypes.c_uint64),
         ('completion_signal', hsa_signal_t),
         ]
-class hsa_barrier_or_packet_t(ctypes.Structure):
-    _fields_ = [
-        ('header', ctypes.c_uint16),
-        ('reserved0', ctypes.c_uint16),
-        ('reserved1', ctypes.c_uint32),
-        ('dep_signal', hsa_signal_t*5),
-        ('reserved2', ctypes.c_uint64),
-        ('completion_signal', hsa_signal_t),
-        ]
+
+hsa_barrier_or_packet_t = hsa_barrier_and_packet_t
+
 hsa_region_segment_t = ctypes.c_int # enum
 hsa_region_global_flag_t = ctypes.c_int # enum
 hsa_region_info_t = ctypes.c_int # enum
@@ -1075,7 +1073,7 @@ API_PROTOTYPES = {
 
     #--------------------------------------------------------------------------
     # Code Object functions
-    #-------------------------------------------------------------------------- 
+    #--------------------------------------------------------------------------
 
     # hsa_status_t HSA_API hsa_isa_from_name(const char* name,
     #                                        hsa_isa_t* isa);
@@ -1200,7 +1198,7 @@ API_PROTOTYPES = {
 
     #--------------------------------------------------------------------------
     #  Executable functions
-    #-------------------------------------------------------------------------- 
+    #--------------------------------------------------------------------------
 
     # hsa_status_t HSA_API hsa_executable_create(
     #     hsa_profile_t profile,
