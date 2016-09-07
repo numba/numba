@@ -70,6 +70,18 @@ class TestMemory(unittest.TestCase):
         logger.info('post launch')
         np.testing.assert_equal(got, expect)
 
+    def test_device_device_transfer(self):
+        nelem = 1000
+        expect = np.arange(nelem, dtype=np.int32) + 1
+        logger.info('device array like')
+        darr = hsa.device_array_like(expect)
+        self.assertTrue(np.all(expect != darr.copy_to_host()))
+        logger.info('to_device')
+        stage = hsa.to_device(expect)
+        logger.info('device -> device')
+        darr.copy_to_device(stage)
+        np.testing.assert_equal(expect, darr.copy_to_host())
+
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)

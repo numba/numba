@@ -155,7 +155,11 @@ class DeviceNDArrayBase(object):
         # host_to_dGPU(context, dst, src, size):
         if stream is None:
             _driver.hsa.implicit_sync()
-            _driver.host_to_dGPU(self._context, self, ary, sz)
+
+            if isinstance(ary, DeviceNDArray):
+                _driver.dGPU_to_dGPU(self._context, self, ary, sz)
+            else:
+                _driver.host_to_dGPU(self._context, self, ary, sz)
         else:
             if isinstance(ary, DeviceNDArray):
                 _driver.async_dGPU_to_dGPU(dst_ctx=self._context,

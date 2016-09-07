@@ -1508,7 +1508,7 @@ def host_to_dGPU(context, dst, src, size):
     if size < 0:
         raise ValueError("Invalid size given: %s" % size)
 
-    hsa.hsa_memory_copy(dst.device_ctypes_pointer.value, src.ctypes.data, size)
+    hsa.hsa_memory_copy(device_pointer(dst), host_pointer(src), size)
 
 
 def dGPU_to_host(context, dst, src, size):
@@ -1524,7 +1524,15 @@ def dGPU_to_host(context, dst, src, size):
     if size < 0:
         raise ValueError("Invalid size given: %s" % size)
 
-    hsa.hsa_memory_copy(host_pointer(dst), src.device_ctypes_pointer.value, size)
+    hsa.hsa_memory_copy(host_pointer(dst), device_pointer(src), size)
+
+
+def dGPU_to_dGPU(context, dst, src, size):
+    _logger.info("dGPU->dGPU")
+    if size < 0:
+        raise ValueError("Invalid size given: %s" % size)
+
+    hsa.hsa_memory_copy(device_pointer(dst), device_pointer(src), size)
 
 
 def async_host_to_dGPU(dst_ctx, src_ctx, dst, src, size, stream):
@@ -1546,6 +1554,7 @@ def async_dGPU_to_dGPU(dst_ctx, src_ctx, dst, src, size, stream):
     async_copy_dgpu(dst_ctx=dst_ctx, src_ctx=src_ctx,
                     dst=device_pointer(dst), src=device_pointer(src),
                     size=size, stream=stream)
+
 
 def async_copy_dgpu(dst_ctx, src_ctx, dst, src, size, stream):
     if size < 0:
