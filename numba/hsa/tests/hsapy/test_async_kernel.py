@@ -1,5 +1,5 @@
 """
-Test arrays backed by different memory
+Test async kernel copy
 """
 
 import logging
@@ -13,17 +13,16 @@ from numba.hsa.hsadrv.driver import dgpu_present
 logger = logging.getLogger()
 
 
-@hsa.jit("int32[:], int32[:]")
-def add1_kernel(dst, src):
-    i = hsa.get_global_id(0)
-    if i < dst.size:
-        dst[i] = src[i] + 1
-
-
 @unittest.skipUnless(dgpu_present(), 'test only on dGPU system')
 class TestAsyncKernel(unittest.TestCase):
     def test_1(self):
         logger.info('context info: %s', hsa.get_context().agent)
+
+        @hsa.jit("int32[:], int32[:]")
+        def add1_kernel(dst, src):
+            i = hsa.get_global_id(0)
+            if i < dst.size:
+                dst[i] = src[i] + 1
 
         blksz = 256
         gridsz = 10**5
