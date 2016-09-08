@@ -970,9 +970,11 @@ class Signal(object):
         else:
             # timeout as seconds
             expire = timeout * hsa.timestamp_frequency * mhz
+
+        # XXX: use active wait instead of blocked seem to avoid hang in docker
         hsa.hsa_signal_wait_acquire(self._id, enums.HSA_SIGNAL_CONDITION_NE,
                                     one, expire,
-                                    enums.HSA_WAIT_STATE_BLOCKED)
+                                    enums.HSA_WAIT_STATE_ACTIVE)
         return self.load_relaxed() != one
 
 
