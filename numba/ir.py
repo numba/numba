@@ -790,35 +790,11 @@ class Loop(object):
         return "Loop(entry=%s, exit=%s)" % args
 
 
-"""
-numba/rewrites:
-    - infer_constant()
-
-numba/transforms.py:
-    - used_globals
-    - variable_lifetime
-
-interp fields:
-    - arg_count
-    - bytecode.arg_count (?)
-    - bytecode.arg_names
-    - bytecode.func
-    - bytecode.func_qualname
-    - bytecode.is_generator
-    - bytecode.pysig
-    - blocks
-    - generator_info
-    - loc.filename
-    - loc.line
-
-interp methods:
-    - get_block_entry_vars()
-"""
-
-
 class FunctionIR(object):
 
     def __init__(self, interp):
+        # XXX turn this inside out?  Interpreter should first construct
+        # a FunctionIR object and then work on it
         from . import consts
 
         self.blocks = interp.blocks
@@ -873,7 +849,7 @@ class FunctionIR(object):
                                % (name,))
             value = defs[0]
 
-    # XXX FunctionIdentity?
+    # XXX just let people access self.func_id members?
 
     @property
     def func(self):

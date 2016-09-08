@@ -210,6 +210,8 @@ class Interpreter(object):
     def variable_lifetime(self):
         return VariableLifetime(self.blocks)
 
+    # XXX write a post-processor class?
+
     def _post_processing(self):
         """
         Post-processing and analysis on generated IR
