@@ -25,14 +25,14 @@ test_scripts = [
     'laplace2d/laplace2d.py',
     'laplace2d/laplace2d-numba.py',
     #   The following scripts are interactive
-    #'example.py',
-    #'mandel.py',
-    #'mandel/mandel_vectorize.py',
-    #'mandel/mandel_autojit.py',
+    # 'example.py',
+    'mandel.py',
+    'mandel/mandel_vectorize.py',
+    'mandel/mandel_autojit.py',
     'nbody/nbody.py',
     'nbody/nbody_modified_by_MarkHarris.py',
     # Missing input files !?
-    #'vectorize/sum.py',
+    'vectorize/sum.py',
     'vectorize/polynomial.py',
 ]
 
@@ -53,7 +53,8 @@ notebooks = [#'j0 in Numba.ipynb', # contains errors
              'LinearRegr.ipynb',
              'numba.ipynb',
              'Using Numba.ipynb']
-    
+
+
 @ddt
 class TestExample(TestCase):
     """Test adapter to validate example applets."""
@@ -66,7 +67,7 @@ class TestExample(TestCase):
             out = check_output(script, stderr=STDOUT, shell=True)
         except CalledProcessError as e:
             status = e.returncode
-            print(e.output)
+            print(e.output.decode())
         self.assertEqual(status, 0)
 
 @ddt
@@ -78,10 +79,10 @@ class NBTest(NotebookTest):
         notebook=join(dirname(dirname(__file__)), 'notebooks', nb)
         self._test_notebook(notebook, test)
 
-        
+
 def load_tests(loader, tests, pattern):
 
     notebooks = loader.loadTestsFromTestCase(NBTest)
     examples = loader.loadTestsFromTestCase(TestExample)
     return TestSuite([notebooks, examples])
-    
+

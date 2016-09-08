@@ -2,9 +2,16 @@
 """
 Compute and plot the Mandelbrot set using matplotlib.
 """
+import os
 
 import numpy as np
+
+import matplotlib
+if os.environ.get('DISPLAY') is None:
+    matplotlib.use('agg')
+    print("suppress matplotlib display")
 import pylab
+
 
 from numba import jit
 

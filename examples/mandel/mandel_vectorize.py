@@ -2,7 +2,13 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
 
+import os
 from timeit import default_timer as timer
+
+import matplotlib
+if os.environ.get('DISPLAY') is None:
+    matplotlib.use('agg')
+    print("suppress matplotlib display")
 
 from matplotlib.pylab import imshow, jet, show, ion
 
