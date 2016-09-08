@@ -14,7 +14,7 @@ import weakref
 import logging
 from contextlib import contextmanager
 
-from collections import Sequence, defaultdict
+from collections import Sequence, defaultdict, deque
 from numba.utils import total_ordering
 from numba import mviewbuf
 from numba import utils
@@ -1394,13 +1394,16 @@ class Stream(object):
     An asynchronous stream for async API
     """
     def __init__(self):
-        self._signals = []
+        self._signals = deque()
         self._callbacks = defaultdict(list)
 
     def _add_signal(self, signal):
         """
         Add a signal that corresponds to an async task.
         """
+        # XXX: too many pending signals seem to cause async copy to hang
+        if len(self._signals) > 100:
+            self._sync(50)
         self._signals.append(signal)
 
     def _add_callback(self, callback):
@@ -1417,14 +1420,20 @@ class Stream(object):
         """
         Synchronize the stream.
         """
-        if self._signals:
-            signals, self._signals = self._signals, []
-            for sig in signals:
-                if sig.load_relaxed() == 1:
-                    sig.wait_until_ne_one()
-                for cb in self._callbacks[sig]:
-                    cb()
-            self._callbacks.clear()
+        self._sync(len(self._signals))
+
+    def _sync(self, limit):
+        ct = 0
+        while self._signals:
+            if ct >= limit:
+                break
+            sig = self._signals.popleft()
+            if sig.load_relaxed() == 1:
+                sig.wait_until_ne_one()
+            for cb in self._callbacks[sig]:
+                cb()
+            del self._callbacks[sig]
+            ct += 1
 
 
 def _make_mem_finalizer(dtor):
