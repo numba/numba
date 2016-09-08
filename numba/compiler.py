@@ -101,11 +101,6 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
         return cr
 
 
-FunctionAttributes = namedtuple("FunctionAttributes",
-                                ['name', 'filename', 'lineno'])
-DEFAULT_FUNCTION_ATTRIBUTES = FunctionAttributes('<anonymous>', '<unknown>', 0)
-
-
 _LowerResult = namedtuple("_LowerResult", [
     "fndesc",
     "call_helper",
@@ -113,38 +108,6 @@ _LowerResult = namedtuple("_LowerResult", [
     "env",
     "has_dynamic_globals",
 ])
-
-
-def get_function_attributes(func):
-    '''
-    Extract the function attributes from a Python function or object with
-    *py_func* attribute, such as CPUDispatcher.
-
-    Returns an instance of FunctionAttributes.
-    '''
-    if hasattr(func, 'py_func'):
-        func = func.py_func  # This is a Overload object
-
-    name, filename, lineno = DEFAULT_FUNCTION_ATTRIBUTES
-    try:
-        name = func.__name__
-    except AttributeError:
-        pass  # this "function" object isn't really a function
-
-    try:
-        possible_filename = inspect.getsourcefile(func)
-        # Sometimes getsourcefile returns null
-        if possible_filename is not None:
-            filename = possible_filename
-    except TypeError:
-        pass  # built-in function, or other object unsupported by inspect
-
-    try:
-        lines, lineno = inspect.getsourcelines(func)
-    except (IOError, TypeError):
-        pass  # unable to read source code for function
-
-    return FunctionAttributes(name, filename, lineno)
 
 
 def compile_result(**kws):
@@ -286,10 +249,10 @@ class Pipeline(object):
         self.locals = locals
 
         # Results of various steps of the compilation pipeline
-        self.interp = None
+        self.interp = None  # XXX func_ir?
         self.bc = None
+        self.func_id = None
         self.func = None
-        self.func_attr = None
         self.lifted = None
         self.lifted_from = None
         self.typemap = None
@@ -317,8 +280,8 @@ class Pipeline(object):
                     e = e.with_traceback(None)
                 warnings.warn_explicit('%s: %s' % (msg, e),
                                        errors.NumbaWarning,
-                                       self.func_attr.filename,
-                                       self.func_attr.lineno)
+                                       self.func_id.filename,
+                                       self.func_id.firstlineno)
 
                 raise
 
@@ -338,27 +301,26 @@ class Pipeline(object):
                     e = e.with_traceback(None)
                 warnings.warn_explicit('%s: %s' % (msg, e),
                                        errors.NumbaWarning,
-                                       self.func_attr.filename,
-                                       self.func_attr.lineno)
+                                       self.func_id.filename,
+                                       self.func_id.firstlineno)
 
                 raise
 
-    def extract_bytecode(self, func):
+    def extract_bytecode(self, func_id):
         """
         Extract bytecode from function
         """
-        func_attr = get_function_attributes(func)
-        self.func = func
-        self.func_attr = func_attr
-        bc = bytecode.ByteCode(func=self.func)
+        bc = bytecode.ByteCode(func_id)
         if config.DUMP_BYTECODE:
             print(bc.dump())
 
         return bc
 
     def compile_extra(self, func):
+        self.func_id = bytecode.FunctionIdentity.from_function(func)
+
         try:
-            bc = self.extract_bytecode(func)
+            bc = self.extract_bytecode(self.func_id)
         except BaseException as e:
             if self.status.can_giveup:
                 self.stage_compile_interp_mode()
@@ -366,42 +328,27 @@ class Pipeline(object):
             else:
                 raise e
 
-        return self.compile_bytecode(bc, func_attr=self.func_attr)
-
-    def compile_bytecode(self, bc, lifted=(), lifted_from=None,
-                         func_attr=DEFAULT_FUNCTION_ATTRIBUTES):
         self.bc = bc
-        self.func = bc.func
-        self.lifted = lifted
-        self.lifted_from = lifted_from
-        self.func_attr = func_attr
+        # XXX that or `func`?
+        self.func = self.func_id.func
+        self.lifted = ()
+        self.lifted_from = None
         return self._compile_bytecode()
 
-    def compile_ir(self, interp, lifted=(), lifted_from=None,
-                   func_attr=DEFAULT_FUNCTION_ATTRIBUTES):
-        self.bc = interp.bytecode
-        self.func = interp.bytecode.func
+    def compile_ir(self, interp, lifted=(), lifted_from=None):
+        self.func_id = interp.func_id
+        self.func = interp.func_id.func
         self.lifted = lifted
         self.lifted_from = lifted_from
-        self.func_attr = func_attr
 
         self._set_and_check_interp(interp)
         return self._compile_ir()
-
-    def compile_internal(self, bc, func_attr=DEFAULT_FUNCTION_ATTRIBUTES):
-        assert not self.flags.force_pyobject
-        self.bc = bc
-        self.lifted = ()
-        self.func_attr = func_attr
-        self.status.can_fallback = False
-        self.status.can_giveup = False
-        return self._compile_bytecode()
 
     def stage_analyze_bytecode(self):
         """
         Analyze bytecode and translating to Numba IR
         """
-        interp = translate_stage(self.bc)
+        interp = translate_stage(self.func_id, self.bc)
         self._set_and_check_interp(interp)
 
     def _set_and_check_interp(self, interp):
@@ -442,8 +389,7 @@ class Pipeline(object):
             cres = compile_ir(self.typingctx, self.targetctx, main,
                               self.args, self.return_type,
                               outer_flags, self.locals,
-                              lifted=tuple(loops), lifted_from=None,
-                              func_attr=self.func_attr)
+                              lifted=tuple(loops), lifted_from=None)
             return cres
 
     def stage_objectmode_frontend(self):
@@ -466,7 +412,7 @@ class Pipeline(object):
         Type inference and legalization
         """
         with self.fallback_context('Function "%s" failed type inference'
-                                   % (self.func_attr.name,)):
+                                   % (self.func_id.func_name,)):
             # Type inference
             self.typemap, self.return_type, self.calltypes = type_inference_stage(
                 self.typingctx,
@@ -476,7 +422,7 @@ class Pipeline(object):
                 self.locals)
 
         with self.fallback_context('Function "%s" has invalid return type'
-                                   % (self.func_attr.name,)):
+                                   % (self.func_id.func_name,)):
             legalize_return_type(self.return_type, self.interp,
                                  self.targetctx)
 
@@ -488,7 +434,7 @@ class Pipeline(object):
         assert self.interp
         with self.fallback_context('Internal error in pre-inference rewriting '
                                    'pass encountered during compilation of '
-                                   'function "%s"' % (self.func_attr.name,)):
+                                   'function "%s"' % (self.func_id.func_name,)):
             rewrites.rewrite_registry.apply('before-inference',
                                             self, self.interp)
 
@@ -503,7 +449,7 @@ class Pipeline(object):
         assert isinstance(getattr(self, 'calltypes', None), dict)
         with self.fallback_context('Internal error in post-inference rewriting '
                                    'pass encountered during compilation of '
-                                   'function "%s"' % (self.func_attr.name,)):
+                                   'function "%s"' % (self.func_id.func_name,)):
             rewrites.rewrite_registry.apply('after-inference',
                                             self, self.interp)
 
@@ -519,7 +465,6 @@ class Pipeline(object):
             lifted_from=self.lifted_from,
             args=self.args,
             return_type=self.return_type,
-            func_attr=self.func_attr,
             html_output=config.HTML)
 
         if config.ANNOTATE:
@@ -534,7 +479,7 @@ class Pipeline(object):
         Object mode compilation
         """
         with self.giveup_context("Function %s failed at object mode lowering"
-                                 % (self.func_attr.name,)):
+                                 % (self.func_id.func_name,)):
             if len(self.args) != self.nargs:
                 # append missing
                 self.args = (tuple(self.args) + (types.pyobject,) *
@@ -548,7 +493,7 @@ class Pipeline(object):
     def backend_nopython_mode(self):
         """Native mode compilation"""
         with self.fallback_context("Function %s failed at nopython "
-                                   "mode lowering" % (self.func_attr.name,)):
+                                   "mode lowering" % (self.func_id.func_name,)):
             return native_lowering_stage(
                 self.targetctx,
                 self.library,
@@ -564,7 +509,7 @@ class Pipeline(object):
         """
         if self.library is None:
             codegen = self.targetctx.codegen()
-            self.library = codegen.create_library(self.bc.func_qualname)
+            self.library = codegen.create_library(self.func_id.func_qualname)
             # Enable object caching upfront, so that the library can
             # be later serialized.
             self.library.enable_object_caching()
@@ -597,17 +542,17 @@ class Pipeline(object):
         # Warn if compiled function in object mode and force_pyobject not set
         if not self.flags.force_pyobject:
             if len(self.lifted) > 0:
-                warn_msg = 'Function "%s" was compiled in object mode without forceobj=True, but has lifted loops.' % (self.func_attr.name,)
+                warn_msg = 'Function "%s" was compiled in object mode without forceobj=True, but has lifted loops.' % (self.func_id.func_name,)
             else:
-                warn_msg = 'Function "%s" was compiled in object mode without forceobj=True.' % (self.func_attr.name,)
+                warn_msg = 'Function "%s" was compiled in object mode without forceobj=True.' % (self.func_id.func_name,)
             warnings.warn_explicit(warn_msg, errors.NumbaWarning,
-                                   self.func_attr.filename,
-                                   self.func_attr.lineno)
+                                   self.func_id.filename,
+                                   self.func_id.firstlineno)
             if self.flags.release_gil:
                 warn_msg = "Code running in object mode won't allow parallel execution despite nogil=True."
                 warnings.warn_explicit(warn_msg, errors.NumbaWarning,
-                                       self.func_attr.filename,
-                                       self.func_attr.lineno)
+                                       self.func_id.filename,
+                                       self.func_id.firstlineno)
 
     def stage_nopython_backend(self):
         """
@@ -637,8 +582,8 @@ class Pipeline(object):
         """
         Cleanup intermediate results to release resources.
         """
-        if self.interp is not None:
-            self.interp.reset()
+        #if self.interp is not None:
+            #self.interp.reset()
 
     def _compile_core(self):
         """
@@ -725,22 +670,13 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
     return pipeline.compile_extra(func)
 
 
-def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
-                     locals, lifted=(), lifted_from=None,
-                     func_attr=DEFAULT_FUNCTION_ATTRIBUTES, library=None):
-
-    pipeline = Pipeline(typingctx, targetctx, library,
-                        args, return_type, flags, locals)
-    return pipeline.compile_bytecode(bc=bc, lifted=lifted, lifted_from=lifted_from, func_attr=func_attr)
-
-
 def compile_ir(typingctx, targetctx, interp, args, return_type, flags,
-               locals, lifted=(), lifted_from=None,
-               func_attr=DEFAULT_FUNCTION_ATTRIBUTES, library=None):
+               locals, lifted=(), lifted_from=None, library=None):
 
     pipeline = Pipeline(typingctx, targetctx, library,
                         args, return_type, flags, locals)
-    return pipeline.compile_ir(interp=interp, lifted=lifted, lifted_from=lifted_from, func_attr=func_attr)
+    return pipeline.compile_ir(interp=interp, lifted=lifted,
+                               lifted_from=lifted_from)
 
 
 def compile_internal(typingctx, targetctx, library,
@@ -787,13 +723,13 @@ def legalize_return_type(return_type, interp, targetctx):
         raise TypeError("Can't return function object in nopython mode")
 
 
-def translate_stage(bytecode):
-    interp = interpreter.Interpreter(bytecode=bytecode)
+def translate_stage(func_id, bytecode):
+    interp = interpreter.Interpreter.from_function_id(func_id)
 
     if config.DUMP_CFG:
         interp.cfa.dump()
 
-    interp.interpret()
+    interp.interpret(bytecode)
 
     if config.DEBUG or config.DUMP_IR:
         print(("IR DUMP: %s" % interp.bytecode.func_qualname).center(80, "-"))
@@ -802,7 +738,7 @@ def translate_stage(bytecode):
             print(("GENERATOR INFO: %s" % interp.bytecode.func_qualname).center(80, "-"))
             interp.dump_generator_info()
 
-    return interp
+    return interp.result()
 
 
 def type_inference_stage(typingctx, interp, args, return_type, locals={}):
@@ -813,7 +749,7 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
     infer = typeinfer.TypeInferer(typingctx, interp, warnings)
 
     # Seed argument types
-    for index, (name, ty) in enumerate(zip(interp.bytecode.arg_names, args)):
+    for index, (name, ty) in enumerate(zip(interp.arg_names, args)):
         infer.seed_argument(name, index, ty)
 
     # Seed return type

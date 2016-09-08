@@ -644,7 +644,7 @@ class TypeInferer(object):
         self.context = context
         self.blocks = interp.blocks
         self.generator_info = interp.generator_info
-        self.py_func = interp.bytecode.func
+        self.py_func = interp.func
         self.typevars = TypeVarMap()
         self.typevars.set_context(context)
         self.constraints = ConstraintNetwork()

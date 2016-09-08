@@ -142,7 +142,7 @@ def _loop_lift_prepare_loop_func(loopinfo, blocks):
     blocks[loopinfo.returnto] = make_epilogue()
 
 
-def _loop_lift_modify_blocks(bytecode, loopinfo, blocks,
+def _loop_lift_modify_blocks(interp, loopinfo, blocks,
                              typingctx, targetctx, flags, locals):
     """
     Modify the block inplace to call to the lifted-loop.
@@ -156,11 +156,15 @@ def _loop_lift_modify_blocks(bytecode, loopinfo, blocks,
     loopblocks = dict((k, blocks[k].copy()) for k in loopblockkeys)
     # Modify the loop blocks
     _loop_lift_prepare_loop_func(loopinfo, loopblocks)
-    # Create an intrepreter for the lifted loop
-    interp = Interpreter.from_blocks(bytecode=bytecode, blocks=loopblocks,
-                                     override_args=loopinfo.inputs,
-                                     force_non_generator=True)
-    liftedloop = LiftedLoop(interp, typingctx, targetctx, flags, locals)
+    # Create an interpreter for the lifted loop
+    lifted_interp = Interpreter.from_blocks(
+        blocks=loopblocks, func_id=interp.func_id,
+        arg_names=tuple(loopinfo.inputs),
+        arg_count=len(loopinfo.inputs),
+        force_non_generator=True)
+
+    liftedloop = LiftedLoop(lifted_interp.result(),
+                            typingctx, targetctx, flags, locals)
     # modify for calling into liftedloop
     callblock = _loop_lift_modify_call_block(liftedloop, blocks[loopinfo.callfrom],
                                              loopinfo.inputs, loopinfo.outputs,
@@ -186,14 +190,13 @@ def loop_lifting(interp, typingctx, targetctx, flags, locals):
                                                interp.variable_lifetime.livemap)
     loops = []
     for loopinfo in loopinfos:
-        lifted = _loop_lift_modify_blocks(interp.bytecode, loopinfo, blocks,
+        lifted = _loop_lift_modify_blocks(interp, loopinfo, blocks,
                                           typingctx, targetctx, flags, locals)
         loops.append(lifted)
     # make main interpreter
-    main = Interpreter.from_blocks(bytecode=interp.bytecode,
-                                   blocks=blocks,
-                                   used_globals=interp.used_globals)
-
+    main = Interpreter.from_blocks(blocks=blocks,
+                                   func_id=interp.func_id,
+                                   )
     return main, loops
 
 

@@ -118,74 +118,49 @@ class Interpreter(object):
     """
 
     @classmethod
-    def from_blocks(cls, bytecode, blocks, used_globals={},
-                    force_non_generator=None, override_args=None):
-        if override_args is not None:
-            # XXX patch bytecode
-            bytecode = copy(bytecode)
-            bytecode.arg_names = tuple(override_args)
-            bytecode.arg_count = len(bytecode.arg_names)
-
-        interp = cls(bytecode=bytecode)
+    def from_blocks(cls, func_id, blocks,
+                    arg_count=None, arg_names=None,
+                    force_non_generator=False):
         firstblock = blocks[min(blocks)]
+        loc = firstblock.loc
+        is_generator = func_id.is_generator and not force_non_generator
+        if arg_count is None:
+            arg_count = func_id.arg_count
+        if arg_names is None:
+            arg_names = func_id.arg_names
+
+        interp = cls(func_id, arg_count, arg_names, is_generator, loc)
         interp.blocks = blocks
-        interp.loc = firstblock.loc
-        if force_non_generator:
-            interp.generator_info = None
-        interp.used_globals = used_globals
+
         interp._post_processing()
         return interp
 
-    def __init__(self, bytecode):
-        self.bytecode = bytecode
-        self.loc = ir.Loc(filename=bytecode.filename, line=1)
-        self.arg_count = bytecode.arg_count
-        self.arg_names = bytecode.arg_names
+    @classmethod
+    def from_function_id(cls, func_id):
+        loc = ir.Loc.from_function_id(func_id)
+        interp = cls(func_id,
+                     func_id.arg_count,
+                     func_id.arg_names,
+                     func_id.is_generator, loc)
+        return interp
 
-        # { inst offset : ir.Block }
-        self.blocks = {}
-        # { name: value } of global variables used by the bytecode
-        self.used_globals = {}
-        # { name: [definitions] } of local variables
-        self.definitions = collections.defaultdict(list)
-        # { ir.Block: { variable names (potentially) alive at start of block } }
-        self.block_entry_vars = {}
+    def __init__(self, func_id, arg_count, arg_names, is_generator, loc):
+        self.func_id = func_id
+        self.arg_count = arg_count
+        self.arg_names = arg_names
+        self.loc = loc
 
-        self.reset()
-
-    def reset(self):
-        """
-        Reset all internal state and release resources.
-        """
-        self.scopes = []
-        global_scope = ir.Scope(parent=None, loc=self.loc)
-        self.scopes.append(global_scope)
-
-        # Control flow analysis
-        self.cfa = controlflow.ControlFlowAnalysis(self.bytecode)
-        self.cfa.run()
-        # Data flow analysis
-        self.dfa = dataflow.DataFlowAnalysis(self.cfa)
-        self.dfa.run()
-        # Constant inference
-        self.consts = consts.ConstantInference(self)
-
-        if self.bytecode.is_generator:
+        if is_generator:
             self.generator_info = GeneratorInfo()
         else:
             self.generator_info = None
 
-        # Temp states during interpretation
-        self.current_block = None
-        self.current_block_offset = None
-        self.syntax_blocks = []
-        self.dfainfo = None
-
-    def get_used_globals(self):
-        """
-        Return a dictionary of global variables used by the bytecode.
-        """
-        return self.used_globals
+        # { inst offset : ir.Block }
+        self.blocks = {}
+        # { name: [definitions] } of local variables
+        self.definitions = collections.defaultdict(list)
+        # { ir.Block: { variable names (potentially) alive at start of block } }
+        self.block_entry_vars = {}
 
     def get_block_entry_vars(self, block):
         """
@@ -194,21 +169,30 @@ class Interpreter(object):
         """
         return self.block_entry_vars[block]
 
-    def infer_constant(self, name):
-        """
-        Try to infer the constant value of a given variable.
-        """
-        if isinstance(name, ir.Var):
-            name = name.name
-        return self.consts.infer_constant(name)
-
-    def interpret(self):
+    def interpret(self, bytecode):
         """
         Generate IR for this bytecode.
         """
+        self.bytecode = bytecode
+
+        self.scopes = []
+        global_scope = ir.Scope(parent=None, loc=self.loc)
+        self.scopes.append(global_scope)
+
+        # Control flow analysis
+        self.cfa = controlflow.ControlFlowAnalysis(bytecode)
+        self.cfa.run()
+        # Data flow analysis
+        self.dfa = dataflow.DataFlowAnalysis(self.cfa)
+        self.dfa.run()
+
+        # Temp states during interpretation
+        self.current_block = None
+        self.current_block_offset = None
+        self.syntax_blocks = []
+        self.dfainfo = None
+
         firstblk = min(self.cfa.blocks.keys())
-        self.loc = ir.Loc(filename=self.bytecode.filename,
-                          line=self.bytecode[firstblk].lineno)
         self.scopes.append(ir.Scope(parent=self.current_scope, loc=self.loc))
         # Interpret loop
         for inst, kws in self._iter_inst():
@@ -216,6 +200,11 @@ class Interpreter(object):
 
         # post-processing
         self._post_processing()
+
+    def result(self):
+        """
+        """
+        return ir.FunctionIR(self)
 
     @utils.cached_property
     def variable_lifetime(self):
@@ -365,16 +354,15 @@ class Interpreter(object):
             self._start_new_block(firstinst)
             if blkct == 0:
                 # Is first block
+                self.loc = self.loc.with_lineno(firstinst.lineno)
                 self.init_first_block()
             for offset, kws in self.dfainfo.insts:
                 inst = self.bytecode[offset]
-                self.loc = ir.Loc(filename=self.bytecode.filename,
-                                  line=inst.lineno)
+                self.loc = self.loc.with_lineno(inst.lineno)
                 yield inst, kws
             self._end_current_block()
 
     def _start_new_block(self, inst):
-        self.loc = ir.Loc(filename=self.bytecode.filename, line=inst.lineno)
         oldblock = self.current_block
         self.insert_block(inst.offset)
         # Ensure the last block is terminated
@@ -424,7 +412,7 @@ class Interpreter(object):
         as a builtins (second).  If both failed, return a ir.UNDEFINED.
         """
         try:
-            return utils.get_function_globals(self.bytecode.func)[name]
+            return utils.get_function_globals(self.func_id.func)[name]
         except KeyError:
             return getattr(builtins, name, ir.UNDEFINED)
 
@@ -433,7 +421,7 @@ class Interpreter(object):
         Get a value from the cell contained in this function's closure.
         If not set, return a ir.UNDEFINED.
         """
-        cell = self.bytecode.func.__closure__[index]
+        cell = self.func_id.func.__closure__[index]
         try:
             return cell.cell_contents
         except ValueError:
@@ -518,27 +506,6 @@ class Interpreter(object):
         if var is None:
             var = self.current_scope.get(name)
         return var
-
-    def get_definition(self, value):
-        """
-        Get the definition site for the given variable name or instance.
-        A Expr instance is returned.
-        """
-        while True:
-            if isinstance(value, ir.Var):
-                name = value.name
-            elif isinstance(value, str):
-                name = value
-            else:
-                return value
-            defs = self.definitions[name]
-            if len(defs) == 0:
-                raise KeyError("no definition for %r"
-                               % (name,))
-            if len(defs) > 1:
-                raise KeyError("more than one definition for %r"
-                               % (name,))
-            value = defs[0]
 
     # --- Block operations ---
 
@@ -843,7 +810,6 @@ class Interpreter(object):
     def op_LOAD_GLOBAL(self, inst, res):
         name = self.code_names[inst.arg]
         value = self.get_global_value(name)
-        self.used_globals[name] = value
         gl = ir.Global(name, value, loc=self.loc)
         self.store(gl, res)
 

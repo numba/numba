@@ -139,8 +139,9 @@ class FunctionDescriptor(object):
 
         ``unique_name`` must be a unique name.
         """
-        func = interp.bytecode.func
-        qualname = interp.bytecode.func_qualname
+        func = interp.func_id.func
+        qualname = interp.func_id.func_qualname
+        # XXX to func_id
         modname = func.__module__
         doc = func.__doc__ or ''
         args = tuple(interp.arg_names)

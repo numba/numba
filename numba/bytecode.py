@@ -288,31 +288,15 @@ class ByteCodeBase(object):
         'table', 'labels', 'arg_count', 'arg_names', 'used_globals',
         )
 
-    def __init__(self, func, func_qualname, pysig, filename, co_names,
-                 co_varnames, co_consts, co_freevars, table, labels,
-                 is_generator, arg_count=None, arg_names=None):
-        # When given, these values may not match the pysig's
-        # (when lifting loops)
-        if arg_count is None:
-            arg_count = len(pysig.parameters)
-        if arg_names is None:
-            arg_names = list(pysig.parameters)
-        self.func = func
-        self.module = inspect.getmodule(func)
-        self.is_generator = is_generator
-        self.func_qualname = func_qualname
-        self.func_name = func_qualname.split('.')[-1]
-        self.pysig = pysig
-        self.arg_count = arg_count
-        self.arg_names = arg_names
-        self.filename = filename
+    def __init__(self, func_id, co_names, co_varnames, co_consts, co_freevars,
+                 table, labels):
+        self.func_id = func_id
         self.co_names = co_names
         self.co_varnames = co_varnames
         self.co_consts = co_consts
         self.co_freevars = co_freevars
         self.table = table
         self.labels = labels
-        self.firstlineno = min(inst.lineno for inst in self.table.values())
 
     def __iter__(self):
         return utils.itervalues(self.table)
@@ -367,35 +351,21 @@ class ByteCodeBase(object):
         Get a {name: value} map of the globals used by this code
         object and any nested code objects.
         """
-        return self._compute_used_globals(self.func, self.table,
+        return self._compute_used_globals(self.func_id.func, self.table,
                                           self.co_consts, self.co_names)
 
 
 class ByteCode(ByteCodeBase):
-    def __init__(self, func):
-        func = get_function_object(func)
-        code = get_code_object(func)
-        pysig = utils.pysignature(func)
-        if not code:
-            raise errors.ByteCodeSupportError(
-                "%s does not provide its bytecode" % func)
+    def __init__(self, func_id):
+        code = func_id.code
 
         # A map of {offset: ByteCodeInst}
         table = utils.SortedMap(ByteCodeIter(code))
         labels = set(dis.findlabels(code.co_code))
         labels.add(0)
 
-        try:
-            func_qualname = func.__qualname__
-        except AttributeError:
-            func_qualname = func.__name__
-
-        self._mark_lineno(table, code)
-        super(ByteCode, self).__init__(func=func,
-                                       func_qualname=func_qualname,
-                                       is_generator=inspect.isgeneratorfunction(func),
-                                       pysig=pysig,
-                                       filename=code.co_filename,
+        self._mark_lineno(table, func_id.code)
+        super(ByteCode, self).__init__(func_id=func_id,
                                        co_names=code.co_names,
                                        co_varnames=code.co_varnames,
                                        co_consts=code.co_consts,
@@ -416,3 +386,35 @@ class ByteCode(ByteCodeBase):
                 known = inst.lineno
             else:
                 inst.lineno = known
+
+
+class FunctionIdentity(object):
+
+    @classmethod
+    def from_function(cls, pyfunc):
+        func = get_function_object(pyfunc)
+        code = get_code_object(func)
+        pysig = utils.pysignature(func)
+        if not code:
+            raise errors.ByteCodeSupportError(
+                "%s does not provide its bytecode" % func)
+
+        try:
+            func_qualname = func.__qualname__
+        except AttributeError:
+            func_qualname = func.__name__
+
+        self = cls()
+        self.func = pyfunc
+        self.func_qualname = func_qualname
+        self.func_name = func_qualname.split('.')[-1]
+        self.code = code
+        self.module = inspect.getmodule(func)
+        self.is_generator = inspect.isgeneratorfunction(func)
+        self.pysig = pysig
+        self.filename = code.co_filename
+        self.firstlineno = code.co_firstlineno
+        self.arg_count = len(pysig.parameters)
+        self.arg_names = list(pysig.parameters)
+
+        return self

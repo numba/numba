@@ -18,6 +18,10 @@ class Loc(object):
         self.line = line
         self.col = col
 
+    @classmethod
+    def from_function_id(cls, func_id):
+        return cls(func_id.filename, func_id.firstlineno)
+
     def __repr__(self):
         return "Loc(filename=%s, line=%s, col=%s)" % (self.filename,
                                                       self.line, self.col)
@@ -38,6 +42,12 @@ class Loc(object):
             # This may happen on windows if the drive is different
             path = os.path.abspath(self.filename)
         return 'File "%s", line %d' % (path, self.line)
+
+    def with_lineno(self, line, col=None):
+        """
+        Return a new Loc with this line number.
+        """
+        return type(self)(self.filename, line, col)
 
 
 class VarMap(object):
@@ -778,6 +788,108 @@ class Loop(object):
     def __repr__(self):
         args = self.entry, self.exit
         return "Loop(entry=%s, exit=%s)" % args
+
+
+"""
+numba/rewrites:
+    - infer_constant()
+
+numba/transforms.py:
+    - used_globals
+    - variable_lifetime
+
+interp fields:
+    - arg_count
+    - bytecode.arg_count (?)
+    - bytecode.arg_names
+    - bytecode.func
+    - bytecode.func_qualname
+    - bytecode.is_generator
+    - bytecode.pysig
+    - blocks
+    - generator_info
+    - loc.filename
+    - loc.line
+
+interp methods:
+    - get_block_entry_vars()
+"""
+
+
+class FunctionIR(object):
+
+    def __init__(self, interp):
+        from . import consts
+
+        self.blocks = interp.blocks
+        self.generator_info = interp.generator_info
+        # For loop-lifting
+        self.variable_lifetime = interp.variable_lifetime
+
+        self.func_id = interp.func_id
+        self.loc = interp.loc
+        # Can be different from func_id.arg_count or func_id.arg_names
+        # (for loop-lifting)
+        self.arg_count = interp.arg_count
+        self.arg_names = interp.arg_names
+
+        self._definitions = interp.definitions
+        self._block_entry_vars = interp.block_entry_vars
+        self._consts = consts.ConstantInference(self)
+
+    def get_block_entry_vars(self, block):
+        """
+        Return a set of variable names possibly alive at the beginning of
+        the block.
+        """
+        return self._block_entry_vars[block]
+
+    def infer_constant(self, name):
+        """
+        Try to infer the constant value of a given variable.
+        """
+        if isinstance(name, Var):
+            name = name.name
+        return self._consts.infer_constant(name)
+
+    def get_definition(self, value):
+        """
+        Get the definition site for the given variable name or instance.
+        A Expr instance is returned.
+        """
+        while True:
+            if isinstance(value, Var):
+                name = value.name
+            elif isinstance(value, str):
+                name = value
+            else:
+                return value
+            defs = self._definitions[name]
+            if len(defs) == 0:
+                raise KeyError("no definition for %r"
+                               % (name,))
+            if len(defs) > 1:
+                raise KeyError("more than one definition for %r"
+                               % (name,))
+            value = defs[0]
+
+    # XXX FunctionIdentity?
+
+    @property
+    def func(self):
+        return self.func_id.func
+
+    @property
+    def func_qualname(self):
+        return self.func_id.func_qualname
+
+    @property
+    def is_generator(self):
+        return self.func_id.is_generator
+
+    @property
+    def pysig(self):
+        return self.func_id.pysig
 
 
 # A stub for undefined global reference

@@ -567,7 +567,6 @@ class LiftedLoop(_DispatcherBase):
     _fold_args = False
 
     def __init__(self, interp, typingctx, targetctx, flags, locals):
-        self.bytecode = interp.bytecode
         self.interp = interp
         self.lifted_from = None
 
@@ -576,15 +575,13 @@ class LiftedLoop(_DispatcherBase):
         self.flags = flags
         self.locals = locals
 
-        _DispatcherBase.__init__(self, self.bytecode.arg_count,
-                                 self.bytecode.func, self.bytecode.pysig)
+        _DispatcherBase.__init__(self, self.interp.arg_count,
+                                 self.interp.func, self.interp.pysig)
 
     def get_source_location(self):
         """Return the starting line number of the loop.
         """
-        firstblock = self.interp.blocks[min(self.interp.blocks)]
-        inst = firstblock.body[0]
-        return inst.loc.line
+        return self.interp.loc.line
 
     def compile(self, sig):
         with self._compile_lock:
