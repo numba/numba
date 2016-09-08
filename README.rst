@@ -2,6 +2,8 @@
 Numba
 =====
 
+[![asv](http://img.shields.io/badge/benchmarked%20by-asv-green.svg?style=flat)](http://numba.pydata.org/numba-benchmark/)
+
 Numba is an Open Source NumPy-aware optimizing compiler for Python
 sponsored by Continuum Analytics, Inc.  It uses the
 remarkable LLVM compiler infrastructure to compile Python syntax to
