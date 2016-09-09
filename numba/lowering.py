@@ -534,9 +534,10 @@ class Lower(BaseLower):
                     self.builder, signature.args[index], default)
 
             def stararg_handler(index, param, vars):
+                stararg_ty = signature.args[index]
+                assert isinstance(stararg_ty, types.BaseTuple), stararg_ty
                 values = [self._cast_var(var, sigty)
-                          for var, sigty in
-                          zip(vars, signature.args[index])]
+                          for var, sigty in zip(vars, stararg_ty)]
                 return cgutils.make_anonymous_struct(self.builder, values)
 
             argvals = typing.fold_arguments(pysig,

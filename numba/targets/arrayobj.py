@@ -3642,6 +3642,164 @@ def _normalize_axis(context, builder, func_name, ndim, axis):
     return axis
 
 
+def _insert_axis_in_shape(context, builder, orig_shape, ndim, axis):
+    """
+    Compute shape with the new axis inserted
+    e.g. given original shape (2, 3, 4) and axis=2,
+    the returned new shape is (2, 3, 1, 4).
+    """
+    assert len(orig_shape) == ndim - 1
+
+    ll_shty = ir.ArrayType(cgutils.intp_t, ndim)
+    shapes = cgutils.alloca_once(builder, ll_shty)
+
+    one = cgutils.intp_t(1)
+
+    # 1. copy original sizes at appropriate places
+    for dim in range(ndim - 1):
+        ll_dim = cgutils.intp_t(dim)
+        after_axis = builder.icmp_signed('>=', ll_dim, axis)
+        sh = orig_shape[dim]
+        idx = builder.select(after_axis,
+                             builder.add(ll_dim, one),
+                             ll_dim)
+        builder.store(sh, cgutils.gep_inbounds(builder, shapes, 0, idx))
+
+    # 2. insert new size (1) at axis dimension
+    builder.store(one, cgutils.gep_inbounds(builder, shapes, 0, axis))
+
+    return cgutils.unpack_tuple(builder, builder.load(shapes))
+
+
+def _insert_axis_in_strides(context, builder, orig_strides, ndim, axis):
+    """
+    Same as _insert_axis_in_shape(), but with a strides array.
+    """
+    assert len(orig_strides) == ndim - 1
+
+    ll_shty = ir.ArrayType(cgutils.intp_t, ndim)
+    strides = cgutils.alloca_once(builder, ll_shty)
+
+    one = cgutils.intp_t(1)
+    zero = cgutils.intp_t(0)
+
+    # 1. copy original strides at appropriate places
+    for dim in range(ndim - 1):
+        ll_dim = cgutils.intp_t(dim)
+        after_axis = builder.icmp_signed('>=', ll_dim, axis)
+        idx = builder.select(after_axis,
+                             builder.add(ll_dim, one),
+                             ll_dim)
+        builder.store(orig_strides[dim],
+                      cgutils.gep_inbounds(builder, strides, 0, idx))
+
+    # 2. insert new stride at axis dimension
+    # (the value is indifferent for a 1-sized dimension, we use 0)
+    builder.store(zero, cgutils.gep_inbounds(builder, strides, 0, axis))
+
+    return cgutils.unpack_tuple(builder, builder.load(strides))
+
+
+def expand_dims(context, builder, sig, args, axis):
+    """
+    np.expand_dims() with the given axis.
+    """
+    retty = sig.return_type
+    ndim = retty.ndim
+    arrty = sig.args[0]
+
+    arr = make_array(arrty)(context, builder, value=args[0])
+    ret = make_array(retty)(context, builder)
+
+    shapes = cgutils.unpack_tuple(builder, arr.shape)
+    strides = cgutils.unpack_tuple(builder, arr.strides)
+
+    new_shapes = _insert_axis_in_shape(context, builder, shapes, ndim, axis)
+    new_strides = _insert_axis_in_strides(context, builder, strides, ndim, axis)
+
+    populate_array(ret,
+                   data=arr.data,
+                   shape=new_shapes,
+                   strides=new_strides,
+                   itemsize=arr.itemsize,
+                   meminfo=arr.meminfo,
+                   parent=arr.parent)
+
+    return ret._getvalue()
+
+
+@lower_builtin(np.expand_dims, types.Array, types.Integer)
+def np_expand_dims(context, builder, sig, args):
+    axis = context.cast(builder, args[1], sig.args[1], types.intp)
+    axis = _normalize_axis(context, builder, "np.expand_dims",
+                           sig.return_type.ndim, axis)
+
+    ret = expand_dims(context, builder, sig, args, axis)
+    return impl_ret_borrowed(context, builder, sig.return_type, ret)
+
+
+def _atleast_nd(context, builder, sig, args, transform):
+    arrtys = sig.args
+    arrs = args
+
+    if isinstance(sig.return_type, types.BaseTuple):
+        rettys = list(sig.return_type)
+    else:
+        rettys = [sig.return_type]
+    assert len(rettys) == len(arrtys)
+
+    rets = [transform(context, builder, arr, arrty, retty)
+            for arr, arrty, retty in zip(arrs, arrtys, rettys)]
+
+    if isinstance(sig.return_type, types.BaseTuple):
+        ret = context.make_tuple(builder, sig.return_type, rets)
+    else:
+        ret = rets[0]
+    return impl_ret_borrowed(context, builder, sig.return_type, ret)
+
+
+def _atleast_nd_transform(min_ndim, axes):
+    """
+    Return a callback successively inserting 1-sized dimensions at the
+    following axes.
+    """
+    assert min_ndim == len(axes)
+
+    def transform(context, builder, arr, arrty, retty):
+        for i in range(min_ndim):
+            ndim = i + 1
+            if arrty.ndim < ndim:
+                axis = cgutils.intp_t(axes[i])
+                newarrty = arrty.copy(ndim=arrty.ndim + 1)
+                arr = expand_dims(context, builder,
+                                  typing.signature(newarrty, arrty), (arr,),
+                                  axis)
+                arrty = newarrty
+
+        return arr
+
+    return transform
+
+
+@lower_builtin(np.atleast_1d, types.VarArg(types.Array))
+def np_atleast_1d(context, builder, sig, args):
+    transform = _atleast_nd_transform(1, [0])
+
+    return _atleast_nd(context, builder, sig, args, transform)
+
+@lower_builtin(np.atleast_2d, types.VarArg(types.Array))
+def np_atleast_2d(context, builder, sig, args):
+    transform = _atleast_nd_transform(2, [0, 0])
+
+    return _atleast_nd(context, builder, sig, args, transform)
+
+@lower_builtin(np.atleast_3d, types.VarArg(types.Array))
+def np_atleast_2d(context, builder, sig, args):
+    transform = _atleast_nd_transform(3, [0, 0, 2])
+
+    return _atleast_nd(context, builder, sig, args, transform)
+
+
 def _do_concatenate(context, builder, axis,
                     arrtys, arrs, arr_shapes, arr_strides,
                     retty, ret_shapes):
@@ -3690,12 +3848,12 @@ def _do_concatenate(context, builder, axis,
             src_ptr = cgutils.get_item_pointer2(builder, arr_data,
                                                 arr_sh, arr_st,
                                                 arrty.layout, indices)
-            val = builder.load(src_ptr)
+            val = load_item(context, builder, arrty, src_ptr)
             val = context.cast(builder, val, arrty.dtype, retty.dtype)
             dest_ptr = cgutils.get_item_pointer2(builder, ret_data,
                                                  ret_shapes, ret_strides,
                                                  retty.layout, indices)
-            builder.store(val, dest_ptr)
+            store_item(context, builder, retty, val, dest_ptr)
 
         # Bump destination pointer
         ret_data = cgutils.pointer_add(builder, ret_data, offset)
@@ -3858,24 +4016,128 @@ def np_concatenate_axis(context, builder, sig, args):
                            axis)
 
 
+@lower_builtin(np.column_stack, types.BaseTuple)
+def np_column_stack(context, builder, sig, args):
+    orig_arrtys = list(sig.args[0])
+    orig_arrs = cgutils.unpack_tuple(builder, args[0])
+
+    arrtys = []
+    arrs = []
+
+    axis = context.get_constant(types.intp, 1)
+
+    for arrty, arr in zip(orig_arrtys, orig_arrs):
+        if arrty.ndim == 2:
+            arrtys.append(arrty)
+            arrs.append(arr)
+        else:
+            # Convert 1d array to 2d column array: np.expand_dims(a, 1)
+            assert arrty.ndim == 1
+            newty = arrty.copy(ndim=2)
+            expand_sig = typing.signature(newty, arrty)
+            newarr = expand_dims(context, builder, expand_sig, (arr,), axis)
+
+            arrtys.append(newty)
+            arrs.append(newarr)
+
+    return _np_concatenate(context, builder, arrtys, arrs,
+                           sig.return_type, axis)
+
+
+def _np_stack_common(context, builder, sig, args, axis):
+    """
+    np.stack() with the given axis value.
+    """
+    return _np_stack(context, builder,
+                     list(sig.args[0]),
+                     cgutils.unpack_tuple(builder, args[0]),
+                     sig.return_type,
+                     axis)
+
 if numpy_version >= (1, 10):
     @lower_builtin(np.stack, types.BaseTuple)
     def np_stack(context, builder, sig, args):
         axis = context.get_constant(types.intp, 0)
-        return _np_stack(context, builder,
-                         list(sig.args[0]),
-                         cgutils.unpack_tuple(builder, args[0]),
-                         sig.return_type,
-                         axis)
+        return _np_stack_common(context, builder, sig, args, axis)
 
     @lower_builtin(np.stack, types.BaseTuple, types.Integer)
     def np_stack_axis(context, builder, sig, args):
         axis = context.cast(builder, args[1], sig.args[1], types.intp)
-        return _np_stack(context, builder,
-                         list(sig.args[0]),
-                         cgutils.unpack_tuple(builder, args[0]),
-                         sig.return_type,
-                         axis)
+        return _np_stack_common(context, builder, sig, args, axis)
+
+
+@lower_builtin(np.hstack, types.BaseTuple)
+def np_hstack(context, builder, sig, args):
+    tupty = sig.args[0]
+    ndim = tupty[0].ndim
+
+    if ndim == 0:
+        # hstack() on 0-d arrays returns a 1-d array
+        axis = context.get_constant(types.intp, 0)
+        return _np_stack_common(context, builder, sig, args, axis)
+
+    else:
+        # As a special case, dimension 0 of 1-dimensional arrays is "horizontal"
+        axis = 0 if ndim == 1 else 1
+
+        def np_hstack_impl(arrays):
+            return np.concatenate(arrays, axis=axis)
+
+        return context.compile_internal(builder, np_hstack_impl, sig, args)
+
+@lower_builtin(np.vstack, types.BaseTuple)
+def np_vstack(context, builder, sig, args):
+    tupty = sig.args[0]
+    ndim = tupty[0].ndim
+
+    if ndim == 0:
+        def np_vstack_impl(arrays):
+            return np.expand_dims(np.hstack(arrays), 1)
+
+    elif ndim == 1:
+        # np.stack(arrays, axis=0)
+        axis = context.get_constant(types.intp, 0)
+        return _np_stack_common(context, builder, sig, args, axis)
+
+    else:
+        def np_vstack_impl(arrays):
+            return np.concatenate(arrays, axis=0)
+
+    return context.compile_internal(builder, np_vstack_impl, sig, args)
+
+@lower_builtin(np.dstack, types.BaseTuple)
+def np_dstack(context, builder, sig, args):
+    tupty = sig.args[0]
+    retty = sig.return_type
+    ndim = tupty[0].ndim
+
+    if ndim == 0:
+        def np_vstack_impl(arrays):
+            return np.hstack(arrays).reshape(1, 1, -1)
+
+        return context.compile_internal(builder, np_vstack_impl, sig, args)
+
+    elif ndim == 1:
+        # np.expand_dims(np.stack(arrays, axis=1), axis=0)
+        axis = context.get_constant(types.intp, 1)
+        stack_retty = retty.copy(ndim=retty.ndim - 1)
+        stack_sig = typing.signature(stack_retty, *sig.args)
+        stack_ret = _np_stack_common(context, builder, stack_sig, args, axis)
+
+        axis = context.get_constant(types.intp, 0)
+        expand_sig = typing.signature(retty, stack_retty)
+        return expand_dims(context, builder, expand_sig, (stack_ret,), axis)
+
+    elif ndim == 2:
+        # np.stack(arrays, axis=2)
+        axis = context.get_constant(types.intp, 2)
+        return _np_stack_common(context, builder, sig, args, axis)
+
+    else:
+        def np_vstack_impl(arrays):
+            return np.concatenate(arrays, axis=2)
+
+        return context.compile_internal(builder, np_vstack_impl, sig, args)
 
 
 # -----------------------------------------------------------------------------
