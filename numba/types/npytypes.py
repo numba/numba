@@ -265,6 +265,10 @@ class Array(Buffer):
 
     def __init__(self, dtype, ndim, layout, readonly=False, name=None,
                  aligned=True):
+        if isinstance(dtype, DType):
+            # auto unpack DType
+            dtype = dtype.dtype
+
         if readonly:
             self.mutable = False
         if (not aligned or
