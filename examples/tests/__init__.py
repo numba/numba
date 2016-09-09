@@ -69,17 +69,18 @@ class TestExample(TestCase):
     """Test adapter to validate example applets."""
 
     def setUp(self):
-        # suppress matplotlib display
-        os.environ['DISPLAY'] = ''
         # to pick up sitecustomize.py
-        basedir = dirname(dirname(__file__))
+        basedir = dirname(__file__)
         os.environ['PYTHONPATH'] = basedir
+        # matplotlibrc to suppress display
+        os.environ['MATPLOTLIBRC'] = basedir
 
     @data(*test_scripts)
     def test(self, script):
-        script = join(dirname(dirname(__file__)), script)
+        script = abspath(join(dirname(dirname(__file__)), script))
         status = 0
         try:
+            print(script)
             out = check_output(script, stderr=STDOUT, shell=True)
         except CalledProcessError as e:
             status = e.returncode
