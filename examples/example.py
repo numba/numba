@@ -2,13 +2,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
 
-import os
-import matplotlib
-
-if not os.environ.get('DISPLAY', None):
-    matplotlib.use('agg')
-    print("suppress matplotlib display")
-
 from scipy.misc import ascent
 from numpy import ones
 import numpy

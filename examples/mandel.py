@@ -2,18 +2,11 @@
 """
 Compute and plot the Mandelbrot set using matplotlib.
 """
-import os
-
 import numpy as np
-
-import matplotlib
-if not os.environ.get('DISPLAY', None):
-    matplotlib.use('agg')
-    print("suppress matplotlib display")
 import pylab
 
-
 from numba import jit
+
 
 @jit
 def mandel(x, y, max_iters):
@@ -30,6 +23,7 @@ def mandel(x, y, max_iters):
             return 255 * i // max_iters
 
     return 255
+
 
 @jit(nopython=True)
 def create_fractal(min_x, max_x, min_y, max_y, image, iters):
