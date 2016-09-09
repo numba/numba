@@ -1,10 +1,18 @@
-from os.path import dirname, join
+import os
+from os.path import dirname, join, abspath
 from unittest.case import TestCase
 from unittest.suite import TestSuite
 from subprocess import STDOUT, check_output, CalledProcessError
+
 from numba.testing.ddt import ddt, data
 from numba.testing.notebook import NotebookTest
 from numba import cuda
+
+# setup coverage
+default_config_file = abspath(join(dirname(dirname(__file__)), '.coveragerc'))
+print('using coveragerc:', default_config_file)
+os.environ['COVERAGE_PROCESS_START'] = default_config_file
+
 
 test_scripts = [
     'binarytree.py',
@@ -12,7 +20,6 @@ test_scripts = [
     'cffi_example.py',
     'compile_with_pycc.py',
     'ctypes_example.py',
-    #'cuda_mpi.py',
     'fbcorr.py',
     'jitclass.py',
     'linkedlist.py',
@@ -20,6 +27,7 @@ test_scripts = [
     'nogil.py',
     'objects.py',
     'ra24.py',
+    'stack.py',
     'structures.py',
     'sum.py',
     'ufuncs.py',
@@ -47,9 +55,10 @@ if cuda.is_available():
     'laplace2d/laplace2d-numba-cuda-improve.py',
     'laplace2d/laplace2d-numba-cuda-smem.py',
     'vectorize/cuda_polynomial.py',
+    # 'cuda_mpi.py',
     ])
 
-notebooks = ['j0 in Numba.ipynb', # contains errors
+notebooks = ['j0 in Numba.ipynb',
              'LinearRegr.ipynb',
              'numba.ipynb',
              'Using Numba.ipynb']
@@ -58,6 +67,13 @@ notebooks = ['j0 in Numba.ipynb', # contains errors
 @ddt
 class TestExample(TestCase):
     """Test adapter to validate example applets."""
+
+    def setUp(self):
+        # suppress matplotlib display
+        os.environ['DISPLAY'] = ''
+        # to pick up sitecustomize.py
+        basedir = dirname(dirname(__file__))
+        os.environ['PYTHONPATH'] = basedir
 
     @data(*test_scripts)
     def test(self, script):
@@ -82,7 +98,6 @@ class NBTest(NotebookTest):
 
 
 def load_tests(loader, tests, pattern):
-
     notebooks = loader.loadTestsFromTestCase(NBTest)
     examples = loader.loadTestsFromTestCase(TestExample)
     return TestSuite([notebooks, examples])

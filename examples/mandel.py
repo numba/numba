@@ -7,7 +7,7 @@ import os
 import numpy as np
 
 import matplotlib
-if os.environ.get('DISPLAY') is None:
+if not os.environ.get('DISPLAY', None):
     matplotlib.use('agg')
     print("suppress matplotlib display")
 import pylab

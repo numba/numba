@@ -5,7 +5,7 @@ from __future__ import print_function, division, absolute_import
 import os
 import matplotlib
 
-if os.environ.get('DISPLAY') is None:
+if not os.environ.get('DISPLAY', None):
     matplotlib.use('agg')
     print("suppress matplotlib display")
 
