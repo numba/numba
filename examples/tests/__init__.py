@@ -80,10 +80,12 @@ class TestExample(TestCase):
         script = join(dirname(dirname(__file__)), script)
         status = 0
         try:
-            check_output(script, stderr=STDOUT, shell=True)
+            out = check_output(script, stderr=STDOUT, shell=True)
         except CalledProcessError as e:
             status = e.returncode
-            print(e.output.decode())
+            out = e.output
+
+        print(out.decode())
         self.assertEqual(status, 0)
 
 
