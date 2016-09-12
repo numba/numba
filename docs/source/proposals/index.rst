@@ -30,3 +30,4 @@ Other proposals
    extension-points.rst
    jit-classes.rst
    cfunc.rst
+   type-inference.rst
