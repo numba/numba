@@ -6,7 +6,7 @@ import numpy as np
 
 from numba import njit, vectorize
 from numba import unittest_support as unittest
-from numba import compiler, typing, typeof, ir
+from numba import compiler, typing, typeof, ir, utils
 from numba.compiler import Pipeline, _PipelineManager, Flags
 from numba.targets import cpu
 from .support import MemoryLeakMixin, TestCase
@@ -54,6 +54,12 @@ def cube(As):
 def explicit_output(a, b, out):
     np.cos(a, out)
     return np.add(out, b, out)
+
+def variable_name_reuse(a, b, c, d):
+    u = a + b
+    u = u - a * b
+    u = u * c + d
+    return u
 
 
 # From issue #1264
@@ -445,6 +451,22 @@ class TestRewriteIssues(MemoryLeakMixin, TestCase):
         expect = foo.py_func(a, b)
         got = foo(a, b)
         self.assertPreciseEqual(got, expect)
+
+    def test_annotations(self):
+        """
+        Type annotation of array expressions with disambiguated
+        variable names (issue #1466).
+        """
+        cfunc = njit(variable_name_reuse)
+
+        a = np.linspace(0, 1, 10)
+        cfunc(a, a, a, a)
+
+        buf = utils.StringIO()
+        cfunc.inspect_types(buf)
+        res = buf.getvalue()
+        self.assertIn("#   u.1 = ", res)
+        self.assertIn("#   u.2 = ", res)
 
 
 class TestSemantics(MemoryLeakMixin, unittest.TestCase):
