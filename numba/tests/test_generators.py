@@ -5,7 +5,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import jit, types
+from numba import jit, njit, types
 from .support import TestCase, MemoryLeakMixin, tag
 from numba import testing
 
@@ -587,6 +587,30 @@ class TestGeneratorWithNRT(MemoryLeakMixin, TestCase):
         c_res = c_driver(patches)
 
         np.testing.assert_equal(py_res, c_res)
+
+    def test_issue_1808(self):
+        """
+        Incorrect return data model
+        """
+        magic = 0xdeadbeef
+
+        @njit
+        def generator():
+            yield magic
+
+        @njit
+        def get_generator():
+            return generator()
+
+        @njit
+        def main():
+            out = 0
+            for x in get_generator():
+                out += x
+
+            return out
+
+        self.assertEqual(main(), magic)
 
 
 if __name__ == '__main__':
