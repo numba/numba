@@ -183,9 +183,12 @@ class SetItemBuffer(AbstractTemplate):
         if isinstance(res, types.Array):
             # Indexing produces an array
             if isinstance(val, types.Array):
-                if (val.ndim == res.ndim and
-                    self.context.can_convert(val.dtype, res.dtype)):
-                    # Allow assignement of same-dimensionality compatible-dtype array
+                if not self.context.can_convert(val.dtype, res.dtype):
+                    # DType conversion not possible
+                    return
+                if val.ndim <= res.ndim:
+                    # Allow assignement of to a same or higher dimensionality
+                    # compatible-dtype array
                     res = val
                 else:
                     # NOTE: array broadcasting is unsupported

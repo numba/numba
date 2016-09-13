@@ -5,7 +5,6 @@ the buffer protocol.
 
 from __future__ import print_function, absolute_import, division
 
-import collections
 import functools
 import math
 
@@ -1207,8 +1206,50 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         src_strides = cgutils.unpack_tuple(builder, src.strides)
         src_data = src.data
 
-        # Check shapes are equal
         index_shape = indexer.get_shape()
+        zero = context.get_constant(types.uintp, 0)
+        one = context.get_constant(types.uintp, 1)
+
+        # Adjust for broadcasting to higher dimension
+        if len(index_shape) > len(src_shapes):
+            nd_diff = len(index_shape) - len(src_shapes)
+            srcty = srcty.copy(ndim=len(index_shape), layout='A')
+
+            # Fill missing shapes, strides
+            src_shapes = list(index_shape[:-len(src_shapes)]) + src_shapes
+            src_strides = [zero] * nd_diff + src_strides
+
+        # Adjust all mismatching ones in shape
+        bc_shapes = []
+        bc_strides = []
+        for ind_shape, old_shape, old_stride in zip(index_shape, src_shapes,
+                                                    src_strides):
+            mismatch = builder.icmp_signed('!=', ind_shape, old_shape)
+            src_is_one = builder.icmp_signed('==', old_shape, one)
+            pred = builder.and_(mismatch, src_is_one)
+            new_shape = builder.select(pred, ind_shape, old_shape)
+            new_stride = builder.select(pred, zero, old_stride)
+            bc_shapes.append(new_shape)
+            bc_strides.append(new_stride)
+
+        src_shapes = bc_shapes
+        src_strides = bc_strides
+        srcty = srcty.copy(ndim=len(index_shape), layout='A')
+
+        # Create new view
+        new_src = make_array(srcty)(context, builder)
+
+        repl = dict(shape=cgutils.pack_array(builder, src_shapes),
+                    strides=cgutils.pack_array(builder, src_strides))
+        cgutils.copy_struct(new_src, src, repl)
+
+        src = new_src
+
+        src_shapes = cgutils.unpack_tuple(builder, src.shape)
+        src_strides = cgutils.unpack_tuple(builder, src.strides)
+        src_data = src.data
+
+        # Check shapes are equal
         shape_error = cgutils.false_bit
         assert len(index_shape) == len(src_shapes)
 
