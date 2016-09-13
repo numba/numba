@@ -131,6 +131,12 @@ def empty_tuple_usecase(a):
 def setitem_usecase(a, index, value):
     a[index] = value
 
+
+@njit
+def setitem_slice_usecase(a, value):
+    a[:] = value
+
+
 def slicing_1d_usecase_set(a, b, start, stop, step):
     a[start:stop:step] = b
     return a
@@ -967,10 +973,32 @@ class TestSetItem(TestCase):
         # Using a 0-d array as scalar index
         setitem_usecase(arr, np.array(3).astype(np.uint16), 8)
         self.assertEqual(arr.tolist(), [0, 42, 2, 8, 4])
-        # Broadcasting
+        # Scalar Broadcasting
         arr = np.arange(9).reshape(3, 3)
         setitem_usecase(arr, 1, 42)
         self.assertEqual(arr.tolist(), [[0, 1, 2], [42, 42, 42], [6, 7, 8]])
+
+    def test_setitem_slice(self):
+        """
+        scalar indexed assignment
+        """
+        # Scalar Broadcasting
+        dst = np.arange(5)
+        setitem_slice_usecase(dst, 42)
+        self.assertEqual(dst.tolist(), [42] * 5)
+        # 1D -> 2D Array Broadcasting
+        dst = np.arange(6).reshape(2, 3)
+        setitem_slice_usecase(dst, np.arange(1, 4))
+        self.assertEqual(dst.tolist(), [[1, 2, 3], [1, 2, 3]])
+        # 2D -> 2D Array Broadcasting
+        dst = np.arange(6).reshape(2, 3)
+        setitem_slice_usecase(dst, np.arange(1, 4).reshape(1, 3))
+        self.assertEqual(dst.tolist(), [[1, 2, 3], [1, 2, 3]])
+        # 2D -> 4D Array Broadcasting
+        dst = np.arange(12).reshape(2, 1, 2, 3)
+        setitem_slice_usecase(dst, np.arange(1, 4).reshape(1, 3))
+        inner2 = [[1, 2, 3], [1, 2, 3]]
+        self.assertEqual(dst.tolist(), [[inner2]] * 2)
 
     def test_setitem_readonly(self):
         arr = np.arange(5)
