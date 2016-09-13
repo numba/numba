@@ -2,7 +2,8 @@
 Overview
 ========
 
-Numba gives you the power to speed up your applications with high performance
+Numba is a compiler for Python array and numerical functions that gives 
+you the power to speed up your applications with high performance
 functions written directly in Python.
 
 Numba generates optimized machine code from pure Python code using
