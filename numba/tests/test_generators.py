@@ -8,6 +8,8 @@ from numba.compiler import compile_isolated, Flags
 from numba import jit, njit, types
 from .support import TestCase, MemoryLeakMixin, tag
 from numba import testing
+from numba.datamodel.testing import test_factory
+
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -611,6 +613,13 @@ class TestGeneratorWithNRT(MemoryLeakMixin, TestCase):
             return out
 
         self.assertEqual(main(), magic)
+
+
+class TestGeneratorModel(test_factory()):
+    fe_type = types.Generator(gen_func=None, yield_type=types.int32,
+                              arg_types=[types.int64, types.float32],
+                              state_types=[types.intp, types.intp[::1]],
+                              has_finalizer=False)
 
 
 if __name__ == '__main__':
