@@ -348,8 +348,8 @@ class Pipeline(object):
         """
         Analyze bytecode and translating to Numba IR
         """
-        interp = translate_stage(self.func_id, self.bc)
-        self._set_and_check_interp(interp)
+        func_ir = translate_stage(self.func_id, self.bc)
+        self._set_and_check_interp(func_ir)
 
     def _set_and_check_interp(self, interp):
         self.interp = interp
@@ -362,6 +362,10 @@ class Pipeline(object):
             raise TypeError("Signature mismatch: %d argument types given, "
                             "but function takes %d arguments"
                             % (len(self.args), self.nargs))
+
+    def stage_process_ir(self):
+        # TODO: s/self.interp/self.func_ir/
+        ir_processing_stage(self.interp)
 
     def frontend_looplift(self):
         """
@@ -595,6 +599,7 @@ class Pipeline(object):
             pm.create_pipeline("nopython")
             if self.interp is None:
                 pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
+            pm.add_stage(self.stage_process_ir, "processing IR")
             if not self.flags.no_rewrites:
                 pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
             pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
@@ -608,6 +613,7 @@ class Pipeline(object):
             pm.create_pipeline("object")
             if self.interp is None:
                 pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
+            pm.add_stage(self.stage_process_ir, "processing IR")
             pm.add_stage(self.stage_objectmode_frontend, "object mode frontend")
             pm.add_stage(self.stage_annotate_type, "annotate type")
             pm.add_stage(self.stage_objectmode_backend, "object mode backend")
@@ -725,20 +731,23 @@ def legalize_return_type(return_type, interp, targetctx):
 
 def translate_stage(func_id, bytecode):
     interp = interpreter.Interpreter.from_function_id(func_id)
-
-    if config.DUMP_CFG:
-        interp.cfa.dump()
-
     interp.interpret(bytecode)
+    return interp.result()
+
+
+def ir_processing_stage(func_ir):
+    postproc = interpreter.PostProcessor(func_ir)
+    postproc.run()
 
     if config.DEBUG or config.DUMP_IR:
-        print(("IR DUMP: %s" % interp.bytecode.func_qualname).center(80, "-"))
-        interp.dump()
-        if interp.generator_info:
-            print(("GENERATOR INFO: %s" % interp.bytecode.func_qualname).center(80, "-"))
-            interp.dump_generator_info()
+        name = func_ir.func_id.func_qualname
+        print(("IR DUMP: %s" % name).center(80, "-"))
+        func_ir.dump()
+        if func_ir.is_generator:
+            print(("GENERATOR INFO: %s" % name).center(80, "-"))
+            func_ir.dump_generator_info()
 
-    return interp.result()
+    return func_ir
 
 
 def type_inference_stage(typingctx, interp, args, return_type, locals={}):

@@ -1,9 +1,11 @@
 from __future__ import print_function, division, absolute_import
-import sys
+
+from collections import defaultdict
 import os
 import pprint
-from collections import defaultdict
+import sys
 
+from . import utils
 from .errors import (NotDefinedError, RedefinedError, VerificationError,
                      ConstantInferenceError)
 
@@ -800,9 +802,7 @@ class FunctionIR(object):
         from . import consts
 
         self.blocks = interp.blocks
-        self.generator_info = interp.generator_info
-        # For loop-lifting
-        self.variable_lifetime = interp.variable_lifetime
+        self.is_generator = interp.is_generator
 
         self.func_id = interp.func_id
         self.loc = interp.loc
@@ -810,9 +810,11 @@ class FunctionIR(object):
         # (for loop-lifting)
         self.arg_count = interp.arg_count
         self.arg_names = interp.arg_names
+        # { ir.Block: { variable names (potentially) alive at start of block } }
+        self.block_entry_vars = {}
 
         self._definitions = interp.definitions
-        self._block_entry_vars = interp.block_entry_vars
+        #self._block_entry_vars = interp.block_entry_vars
         self._consts = consts.ConstantInference(self)
 
     def get_block_entry_vars(self, block):
@@ -820,7 +822,7 @@ class FunctionIR(object):
         Return a set of variable names possibly alive at the beginning of
         the block.
         """
-        return self._block_entry_vars[block]
+        return self.block_entry_vars[block]
 
     def infer_constant(self, name):
         """
@@ -851,6 +853,27 @@ class FunctionIR(object):
                                % (name,))
             value = defs[0]
 
+    @utils.cached_property
+    def variable_lifetime(self):
+        from .interpreter import VariableLifetime
+        return VariableLifetime(self.blocks)
+
+    def dump(self, file=None):
+        # Avoid early bind of sys.stdout as default value
+        file = file or sys.stdout
+        for offset, block in sorted(self.blocks.items()):
+            print('label %s:' % (offset,), file=file)
+            block.dump(file=file)
+
+    def dump_generator_info(self, file=None):
+        file = file or sys.stdout
+        gi = self.generator_info
+        print("generator state variables:", sorted(gi.state_vars), file=file)
+        for index, yp in sorted(gi.yield_points.items()):
+            print("yield point #%d: live variables = %s, weak live variables = %s"
+                  % (index, sorted(yp.live_vars), sorted(yp.weak_live_vars)),
+                  file=file)
+
     # XXX just let people access self.func_id members?
 
     @property
@@ -860,10 +883,6 @@ class FunctionIR(object):
     @property
     def func_qualname(self):
         return self.func_id.func_qualname
-
-    @property
-    def is_generator(self):
-        return self.func_id.is_generator
 
     @property
     def pysig(self):

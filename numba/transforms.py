@@ -194,9 +194,10 @@ def loop_lifting(interp, typingctx, targetctx, flags, locals):
                                           typingctx, targetctx, flags, locals)
         loops.append(lifted)
     # make main interpreter
-    main = Interpreter.from_blocks(blocks=blocks,
-                                   func_id=interp.func_id,
-                                   )
+    main_interp = Interpreter.from_blocks(blocks=blocks,
+                                          func_id=interp.func_id)
+    main = main_interp.result()
+
     return main, loops
 
 

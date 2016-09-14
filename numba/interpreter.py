@@ -5,7 +5,7 @@ import dis
 import sys
 from copy import copy
 
-from . import ir, controlflow, dataflow, utils, errors, consts, analysis
+from . import config, ir, controlflow, dataflow, utils, errors, consts, analysis
 from .utils import builtins
 
 
@@ -60,59 +60,6 @@ class Assigner(object):
         return None
 
 
-class YieldPoint(object):
-
-    def __init__(self, block, inst):
-        assert isinstance(block, ir.Block)
-        assert isinstance(inst, ir.Yield)
-        self.block = block
-        self.inst = inst
-        self.live_vars = None
-        self.weak_live_vars = None
-
-
-class GeneratorInfo(object):
-
-    def __init__(self):
-        # { index: YieldPoint }
-        self.yield_points = {}
-        # Ordered list of variable names
-        self.state_vars = []
-
-    def get_yield_points(self):
-        """
-        Return an iterable of YieldPoint instances.
-        """
-        return self.yield_points.values()
-
-
-class VariableLifetime(object):
-    """
-    For lazily building information of variable lifetime
-    """
-    def __init__(self, blocks):
-        self._blocks = blocks
-
-    @utils.cached_property
-    def cfg(self):
-        return analysis.compute_cfg_from_blocks(self._blocks)
-
-    @utils.cached_property
-    def usedefs(self):
-        return analysis.compute_use_defs(self._blocks)
-
-    @utils.cached_property
-    def livemap(self):
-        return analysis.compute_live_map(self.cfg, self._blocks,
-                                         self.usedefs.usemap,
-                                         self.usedefs.defmap)
-
-    @utils.cached_property
-    def deadmaps(self):
-        return analysis.compute_dead_maps(self.cfg, self._blocks, self.livemap,
-                                          self.usedefs.defmap)
-
-
 class Interpreter(object):
     """A bytecode interpreter that builds up the IR.
     """
@@ -131,8 +78,6 @@ class Interpreter(object):
 
         interp = cls(func_id, arg_count, arg_names, is_generator, loc)
         interp.blocks = blocks
-
-        interp._post_processing()
         return interp
 
     @classmethod
@@ -149,25 +94,12 @@ class Interpreter(object):
         self.arg_count = arg_count
         self.arg_names = arg_names
         self.loc = loc
-
-        if is_generator:
-            self.generator_info = GeneratorInfo()
-        else:
-            self.generator_info = None
+        self.is_generator = is_generator
 
         # { inst offset : ir.Block }
         self.blocks = {}
         # { name: [definitions] } of local variables
         self.definitions = collections.defaultdict(list)
-        # { ir.Block: { variable names (potentially) alive at start of block } }
-        self.block_entry_vars = {}
-
-    def get_block_entry_vars(self, block):
-        """
-        Return a set of variable names possibly alive at the beginning of
-        the block.
-        """
-        return self.block_entry_vars[block]
 
     def interpret(self, bytecode):
         """
@@ -182,6 +114,9 @@ class Interpreter(object):
         # Control flow analysis
         self.cfa = controlflow.ControlFlowAnalysis(bytecode)
         self.cfa.run()
+        if config.DUMP_CFG:
+            self.cfa.dump()
+
         # Data flow analysis
         self.dfa = dataflow.DataFlowAnalysis(self.cfa)
         self.dfa.run()
@@ -198,151 +133,10 @@ class Interpreter(object):
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
 
-        # post-processing
-        self._post_processing()
-
     def result(self):
         """
         """
         return ir.FunctionIR(self)
-
-    @utils.cached_property
-    def variable_lifetime(self):
-        return VariableLifetime(self.blocks)
-
-    # XXX write a post-processor class?
-
-    def _post_processing(self):
-        """
-        Post-processing and analysis on generated IR
-        """
-        from . import transforms
-
-        self.blocks = transforms.canonicalize_cfg(self.blocks)
-
-        # emit del nodes
-        self._insert_var_dels()
-
-        vlt = self.variable_lifetime
-        bev = analysis.compute_live_variables(vlt.cfg, self.blocks,
-                                              vlt.usedefs.defmap,
-                                              vlt.deadmaps.combined)
-        for offset, ir_block in self.blocks.items():
-            self.block_entry_vars[ir_block] = bev[offset]
-
-        if self.generator_info:
-            self._compute_generator_info()
-
-    def _populate_generator_info(self):
-        """
-        Fill `index` for the Yield instruction and create YieldPoints.
-        """
-        dct = self.generator_info.yield_points
-        assert not dct, 'rerunning _populate_generator_info'
-        for block in self.blocks.values():
-            for inst in block.body:
-                if isinstance(inst, ir.Assign):
-                    yieldinst = inst.value
-                    if isinstance(yieldinst, ir.Yield):
-                        index = len(dct) + 1
-                        yieldinst.index = index
-                        yp = YieldPoint(block, yieldinst)
-                        dct[yieldinst.index] = yp
-
-    def _compute_generator_info(self):
-        """
-        Compute the generator's state variables as the union of live variables
-        at all yield points.
-        """
-        self._populate_generator_info()
-
-        gi = self.generator_info
-        for yp in gi.get_yield_points():
-            live_vars = set(self.block_entry_vars[yp.block])
-            weak_live_vars = set()
-            stmts = iter(yp.block.body)
-            for stmt in stmts:
-                if isinstance(stmt, ir.Assign):
-                    if stmt.value is yp.inst:
-                        break
-                    live_vars.add(stmt.target.name)
-                elif isinstance(stmt, ir.Del):
-                    live_vars.remove(stmt.value)
-            else:
-                assert 0, "couldn't find yield point"
-            # Try to optimize out any live vars that are deleted immediately
-            # after the yield point.
-            for stmt in stmts:
-                if isinstance(stmt, ir.Del):
-                    name = stmt.value
-                    if name in live_vars:
-                        live_vars.remove(name)
-                        weak_live_vars.add(name)
-                else:
-                    break
-            yp.live_vars = live_vars
-            yp.weak_live_vars = weak_live_vars
-
-        st = set()
-        for yp in gi.get_yield_points():
-            st |= yp.live_vars
-            st |= yp.weak_live_vars
-        gi.state_vars = sorted(st)
-
-    def _insert_var_dels(self):
-        """
-        Insert del statements for each variable.
-        Returns a 2-tuple of (variable definition map, variable deletion map)
-        which indicates variables defined and deleted in each block.
-
-        The algorithm avoids relying on explicit knowledge on loops and
-        distinguish between variables that are defined locally vs variables that
-        come from incoming blocks.
-        We start with simple usage (variable reference) and definition (variable
-        creation) maps on each block. Propagate the liveness info to predecessor
-        blocks until it stabilize, at which point we know which variables must
-        exist before entering each block. Then, we compute the end of variable
-        lives and insert del statements accordingly. Variables are deleted after
-        the last use. Variable referenced by terminators (e.g. conditional
-        branch and return) are deleted by the successors or the caller.
-        """
-        vlt = self.variable_lifetime
-        self._patch_var_dels(vlt.deadmaps.internal, vlt.deadmaps.escaping)
-
-    def _patch_var_dels(self, internal_dead_map, escaping_dead_map):
-        """
-        Insert delete in each block
-        """
-        for offset, ir_block in self.blocks.items():
-            # for each internal var, insert delete after the last use
-            internal_dead_set = internal_dead_map[offset].copy()
-            delete_pts = []
-            # for each statement in reverse order
-            for stmt in reversed(ir_block.body[:-1]):
-                # internal vars that are used here
-                live_set = set(v.name for v in stmt.list_vars())
-                dead_set = live_set & internal_dead_set
-                # used here but not afterwards
-                delete_pts.append((stmt, dead_set))
-                internal_dead_set -= dead_set
-
-            # rewrite body and insert dels
-            body = []
-            for stmt, delete_set in reversed(delete_pts):
-                # Ignore dels (assuming no user inserted deletes)
-                if not isinstance(stmt, ir.Del):
-                    body.append(stmt)
-                # note: the reverse sort is not necessary for correctness
-                #       it is just to minimize changes to test for now
-                for var_name in sorted(delete_set, reverse=True):
-                    body.append(ir.Del(var_name, loc=ir_block.loc))
-            body.append(ir_block.body[-1])  # terminator
-            ir_block.body = body
-
-            # vars to delete at the start
-            escape_dead_set = escaping_dead_map[offset]
-            for var_name in sorted(escape_dead_set):
-                ir_block.prepend(ir.Del(var_name, loc=ir_block.loc))
 
     def init_first_block(self):
         # Define variables receiving the function arguments
@@ -463,22 +257,6 @@ class Interpreter(object):
                 if e.loc is None:
                     e.loc = self.loc
                 raise e
-
-    def dump(self, file=None):
-        # Avoid early bind of sys.stdout as default value
-        file = file or sys.stdout
-        for offset, block in sorted(self.blocks.items()):
-            print('label %s:' % (offset,), file=file)
-            block.dump(file=file)
-
-    def dump_generator_info(self, file=None):
-        file = file or sys.stdout
-        gi = self.generator_info
-        print("generator state variables:", sorted(gi.state_vars), file=file)
-        for index, yp in sorted(gi.yield_points.items()):
-            print("yield point #%d: live variables = %s, weak live variables = %s"
-                  % (index, sorted(yp.live_vars), sorted(yp.weak_live_vars)),
-                  file=file)
 
 
     # --- Scope operations ---
@@ -1107,3 +885,194 @@ class Interpreter(object):
         index = None
         inst = ir.Yield(value=self.get(value), index=index, loc=self.loc)
         return self.store(inst, res)
+
+
+class YieldPoint(object):
+
+    def __init__(self, block, inst):
+        assert isinstance(block, ir.Block)
+        assert isinstance(inst, ir.Yield)
+        self.block = block
+        self.inst = inst
+        self.live_vars = None
+        self.weak_live_vars = None
+
+
+class GeneratorInfo(object):
+
+    def __init__(self):
+        # { index: YieldPoint }
+        self.yield_points = {}
+        # Ordered list of variable names
+        self.state_vars = []
+
+    def get_yield_points(self):
+        """
+        Return an iterable of YieldPoint instances.
+        """
+        return self.yield_points.values()
+
+
+class VariableLifetime(object):
+    """
+    For lazily building information of variable lifetime
+    """
+    def __init__(self, blocks):
+        self._blocks = blocks
+
+    @utils.cached_property
+    def cfg(self):
+        return analysis.compute_cfg_from_blocks(self._blocks)
+
+    @utils.cached_property
+    def usedefs(self):
+        return analysis.compute_use_defs(self._blocks)
+
+    @utils.cached_property
+    def livemap(self):
+        return analysis.compute_live_map(self.cfg, self._blocks,
+                                         self.usedefs.usemap,
+                                         self.usedefs.defmap)
+
+    @utils.cached_property
+    def deadmaps(self):
+        return analysis.compute_dead_maps(self.cfg, self._blocks, self.livemap,
+                                          self.usedefs.defmap)
+
+
+class PostProcessor(object):
+
+    def __init__(self, func_ir):
+        self.func_ir = func_ir
+
+    def run(self):
+        from . import transforms
+
+        self.func_ir.blocks = transforms.canonicalize_cfg(self.func_ir.blocks)
+
+        # emit del nodes
+        self._insert_var_dels()
+
+        vlt = self.func_ir.variable_lifetime
+        bev = analysis.compute_live_variables(vlt.cfg, self.func_ir.blocks,
+                                              vlt.usedefs.defmap,
+                                              vlt.deadmaps.combined)
+        for offset, ir_block in self.func_ir.blocks.items():
+            self.func_ir.block_entry_vars[ir_block] = bev[offset]
+
+        if self.func_ir.is_generator:
+            self.func_ir.generator_info = GeneratorInfo()
+            self._compute_generator_info()
+        else:
+            self.func_ir.generator_info = None
+
+    def _populate_generator_info(self):
+        """
+        Fill `index` for the Yield instruction and create YieldPoints.
+        """
+        dct = self.func_ir.generator_info.yield_points
+        assert not dct, 'rerunning _populate_generator_info'
+        for block in self.func_ir.blocks.values():
+            for inst in block.body:
+                if isinstance(inst, ir.Assign):
+                    yieldinst = inst.value
+                    if isinstance(yieldinst, ir.Yield):
+                        index = len(dct) + 1
+                        yieldinst.index = index
+                        yp = YieldPoint(block, yieldinst)
+                        dct[yieldinst.index] = yp
+
+    def _compute_generator_info(self):
+        """
+        Compute the generator's state variables as the union of live variables
+        at all yield points.
+        """
+        self._populate_generator_info()
+
+        gi = self.func_ir.generator_info
+        for yp in gi.get_yield_points():
+            live_vars = set(self.func_ir.get_block_entry_vars(yp.block))
+            weak_live_vars = set()
+            stmts = iter(yp.block.body)
+            for stmt in stmts:
+                if isinstance(stmt, ir.Assign):
+                    if stmt.value is yp.inst:
+                        break
+                    live_vars.add(stmt.target.name)
+                elif isinstance(stmt, ir.Del):
+                    live_vars.remove(stmt.value)
+            else:
+                assert 0, "couldn't find yield point"
+            # Try to optimize out any live vars that are deleted immediately
+            # after the yield point.
+            for stmt in stmts:
+                if isinstance(stmt, ir.Del):
+                    name = stmt.value
+                    if name in live_vars:
+                        live_vars.remove(name)
+                        weak_live_vars.add(name)
+                else:
+                    break
+            yp.live_vars = live_vars
+            yp.weak_live_vars = weak_live_vars
+
+        st = set()
+        for yp in gi.get_yield_points():
+            st |= yp.live_vars
+            st |= yp.weak_live_vars
+        gi.state_vars = sorted(st)
+
+    def _insert_var_dels(self):
+        """
+        Insert del statements for each variable.
+        Returns a 2-tuple of (variable definition map, variable deletion map)
+        which indicates variables defined and deleted in each block.
+
+        The algorithm avoids relying on explicit knowledge on loops and
+        distinguish between variables that are defined locally vs variables that
+        come from incoming blocks.
+        We start with simple usage (variable reference) and definition (variable
+        creation) maps on each block. Propagate the liveness info to predecessor
+        blocks until it stabilize, at which point we know which variables must
+        exist before entering each block. Then, we compute the end of variable
+        lives and insert del statements accordingly. Variables are deleted after
+        the last use. Variable referenced by terminators (e.g. conditional
+        branch and return) are deleted by the successors or the caller.
+        """
+        vlt = self.func_ir.variable_lifetime
+        self._patch_var_dels(vlt.deadmaps.internal, vlt.deadmaps.escaping)
+
+    def _patch_var_dels(self, internal_dead_map, escaping_dead_map):
+        """
+        Insert delete in each block
+        """
+        for offset, ir_block in self.func_ir.blocks.items():
+            # for each internal var, insert delete after the last use
+            internal_dead_set = internal_dead_map[offset].copy()
+            delete_pts = []
+            # for each statement in reverse order
+            for stmt in reversed(ir_block.body[:-1]):
+                # internal vars that are used here
+                live_set = set(v.name for v in stmt.list_vars())
+                dead_set = live_set & internal_dead_set
+                # used here but not afterwards
+                delete_pts.append((stmt, dead_set))
+                internal_dead_set -= dead_set
+
+            # rewrite body and insert dels
+            body = []
+            for stmt, delete_set in reversed(delete_pts):
+                # Ignore dels (assuming no user inserted deletes)
+                if not isinstance(stmt, ir.Del):
+                    body.append(stmt)
+                # note: the reverse sort is not necessary for correctness
+                #       it is just to minimize changes to test for now
+                for var_name in sorted(delete_set, reverse=True):
+                    body.append(ir.Del(var_name, loc=ir_block.loc))
+            body.append(ir_block.body[-1])  # terminator
+            ir_block.body = body
+
+            # vars to delete at the start
+            escape_dead_set = escaping_dead_map[offset]
+            for var_name in sorted(escape_dead_set):
+                ir_block.prepend(ir.Del(var_name, loc=ir_block.loc))
