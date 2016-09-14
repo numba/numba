@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 import sys
 
 import numpy as np
-from numba import jit, numpy_support, types, typeof
+from numba import jit, numpy_support, types
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba.funcdesc import transform_arg_name
@@ -860,33 +860,6 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
             expected = pyfunc(self.refsample1d, i)
             got = cfunc(self.nbsample1d, i)
             self.assertEqual(expected, got)
-
-class TestRecordDtypeTypeObj(unittest.TestCase):
-    def test_record_type_equiv(self):
-        rec_dt = np.dtype([('a', np.int32), ('b', np.float32)])
-        rec_ty = typeof(rec_dt)
-        art1 = rec_ty[::1]
-        arr = np.zeros(5, dtype=rec_dt)
-        art2 = typeof(arr)
-        self.assertEqual(art2.dtype.dtype, rec_ty)
-        self.assertEqual(art1, art2)
-
-    def test_user_specified(self):
-        rec_dt = np.dtype([('a', np.int32), ('b', np.float32)])
-        rec_type = typeof(rec_dt)
-
-        @jit((rec_type[:],), nopython=True)
-        def foo(x):
-            return x['a'], x['b']
-
-        arr = np.zeros(1, dtype=rec_dt)
-        arr[0]['a'] = 123
-        arr[0]['b'] = 32.1
-
-        a, b = foo(arr)
-
-        self.assertEqual(a, arr[0]['a'])
-        self.assertEqual(b, arr[0]['b'])
 
 
 if __name__ == '__main__':
