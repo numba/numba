@@ -176,6 +176,19 @@ class TestTypes(TestCase):
         check(scalar[:,::1], scalar, 2, 'C')
         check(scalar[::1,:], scalar, 2, 'F')
 
+    def test_array_notation_for_dtype(self):
+        def check(arrty, scalar, ndim, layout):
+            self.assertIs(arrty.dtype, scalar)
+            self.assertEqual(arrty.ndim, ndim)
+            self.assertEqual(arrty.layout, layout)
+        scalar = types.int32
+        dtyped = types.DType(scalar)
+        check(dtyped[:], scalar, 1, 'A')
+        check(dtyped[::1], scalar, 1, 'C')
+        check(dtyped[:,:], scalar, 2, 'A')
+        check(dtyped[:,::1], scalar, 2, 'C')
+        check(dtyped[::1,:], scalar, 2, 'F')
+
     @tag('important')
     def test_call_notation(self):
         # Function call signature
