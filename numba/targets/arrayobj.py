@@ -1195,22 +1195,21 @@ def _bc_adjust_dimension(context, builder, shapes, strides, target_shape):
     # Adjust for broadcasting to higher dimension
     if len(target_shape) > len(shapes):
         nd_diff = len(target_shape) - len(shapes)
-        # Fill missing shapes, strides
-        shapes = list(target_shape[:-len(shapes)]) + shapes
+        # Fill missing shapes with one, strides with zeros
+        shapes = [one] * nd_diff + shapes
         strides = [zero] * nd_diff + strides
     # Adjust for broadcasting to lower dimension
     elif len(target_shape) < len(shapes):
         # Accepted if all extra dims has shape 1
         nd_diff = len(shapes) - len(target_shape)
-        accepted = cgutils.true_bit
-        for sh in shapes[:nd_diff]:
-            is_one = builder.icmp_unsigned('==', sh, one)
-            accepted = builder.and_(is_one, accepted)
+        dim_is_one = [builder.icmp_unsigned('==', sh, one)
+                      for sh in shapes[:nd_diff]]
+        accepted = functools.reduce(builder.and_, dim_is_one,
+                                    cgutils.true_bit)
         # Check error
         with builder.if_then(builder.not_(accepted), likely=False):
             msg = "cannot broadcast source array for assignment"
             context.call_conv.return_user_exc(builder, ValueError, (msg,))
-
         # Truncate extra shapes, strides
         shapes = shapes[nd_diff:]
         strides = strides[nd_diff:]
@@ -1230,37 +1229,37 @@ def _bc_adjust_shape_strides(context, builder, shapes, strides, target_shape):
     zero = context.get_constant(types.uintp, 0)
     one = context.get_constant(types.uintp, 1)
     # Adjust all mismatching ones in shape
-    for ind_shape, old_shape, old_stride in zip(target_shape, shapes, strides):
-        mismatch = builder.icmp_signed('!=', ind_shape, old_shape)
-        src_is_one = builder.icmp_signed('==', old_shape, one)
-        pred = builder.and_(mismatch, src_is_one)
-        new_shape = builder.select(pred, ind_shape, old_shape)
-        new_stride = builder.select(pred, zero, old_stride)
-        bc_shapes.append(new_shape)
-        bc_strides.append(new_stride)
+    mismatch = [builder.icmp_signed('!=', tar, old)
+                for tar, old in zip(target_shape, shapes)]
+    src_is_one = [builder.icmp_signed('==', old, one) for old in shapes]
+    preds = [builder.and_(x, y) for x, y in zip(mismatch, src_is_one)]
+    bc_shapes = [builder.select(p, tar, old)
+                 for p, tar, old in zip(preds, target_shape, shapes)]
+    bc_strides = [builder.select(p, zero, old)
+                  for p, old in zip(preds, strides)]
     return bc_shapes, bc_strides
 
 
-def _broadcast_to_shape(context, builder, srcty, src, target_shape):
+def _broadcast_to_shape(context, builder, arrtype, arr, target_shape):
     """
     Broadcast the given array to the target_shape.
     Returns (array_type, array)
     """
     # Compute broadcasted shape and strides
-    shapes = cgutils.unpack_tuple(builder, src.shape)
-    strides = cgutils.unpack_tuple(builder, src.strides)
+    shapes = cgutils.unpack_tuple(builder, arr.shape)
+    strides = cgutils.unpack_tuple(builder, arr.strides)
 
     shapes, strides = _bc_adjust_dimension(context, builder, shapes, strides,
                                            target_shape)
     shapes, strides = _bc_adjust_shape_strides(context, builder, shapes,
                                                strides, target_shape)
-    new_srcty = srcty.copy(ndim=len(target_shape), layout='A')
+    new_arrtype = arrtype.copy(ndim=len(target_shape), layout='A')
     # Create new view
-    new_src = make_array(new_srcty)(context, builder)
+    new_arr = make_array(new_arrtype)(context, builder)
     repl = dict(shape=cgutils.pack_array(builder, shapes),
                 strides=cgutils.pack_array(builder, strides))
-    cgutils.copy_struct(new_src, src, repl)
-    return new_srcty, new_src
+    cgutils.copy_struct(new_arr, arr, repl)
+    return new_arrtype, new_arr
 
 
 def fancy_setslice(context, builder, sig, args, index_types, indices):
