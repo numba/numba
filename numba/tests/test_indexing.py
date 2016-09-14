@@ -1036,7 +1036,6 @@ class TestSetItem(TestCase):
         self.assertEqual('cannot assign slice from input of different size',
                          errmsg)
 
-
     def test_setitem_readonly(self):
         arr = np.arange(5)
         arr.flags.writeable = False

@@ -1180,6 +1180,89 @@ def maybe_copy_source(context, builder, use_copy,
     return src_getitem, src_cleanup
 
 
+def _bc_adjust_dimension(context, builder, shapes, strides, target_shape):
+    """
+    Preprocess dimension for broadcasting.
+    Returns (shapes, strides) such that the ndim match *target_shape*.
+    When expanding to higher ndim, the returning shapes and strides are
+    prepended with ones and zeros, respectively.
+    When truncating to lower ndim, the shapes are checked (in runtime).
+    All extra dimension must have size of 1.
+    """
+    zero = context.get_constant(types.uintp, 0)
+    one = context.get_constant(types.uintp, 1)
+
+    # Adjust for broadcasting to higher dimension
+    if len(target_shape) > len(shapes):
+        nd_diff = len(target_shape) - len(shapes)
+        # Fill missing shapes, strides
+        shapes = list(target_shape[:-len(shapes)]) + shapes
+        strides = [zero] * nd_diff + strides
+    # Adjust for broadcasting to lower dimension
+    elif len(target_shape) < len(shapes):
+        # Accepted if all extra dims has shape 1
+        nd_diff = len(shapes) - len(target_shape)
+        accepted = cgutils.true_bit
+        for sh in shapes[:nd_diff]:
+            is_one = builder.icmp_unsigned('==', sh, one)
+            accepted = builder.and_(is_one, accepted)
+        # Check error
+        with builder.if_then(builder.not_(accepted), likely=False):
+            msg = "cannot broadcast source array for assignment"
+            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+
+        # Truncate extra shapes, strides
+        shapes = shapes[nd_diff:]
+        strides = strides[nd_diff:]
+
+    return shapes, strides
+
+
+def _bc_adjust_shape_strides(context, builder, shapes, strides, target_shape):
+    """
+    Broadcast shapes and strides to target_shape given that their ndim already
+    matches.  For each location where the shape is 1 and does not match the
+    dim for target, it is set to the value at the target and the stride is
+    set to zero.
+    """
+    bc_shapes = []
+    bc_strides = []
+    zero = context.get_constant(types.uintp, 0)
+    one = context.get_constant(types.uintp, 1)
+    # Adjust all mismatching ones in shape
+    for ind_shape, old_shape, old_stride in zip(target_shape, shapes, strides):
+        mismatch = builder.icmp_signed('!=', ind_shape, old_shape)
+        src_is_one = builder.icmp_signed('==', old_shape, one)
+        pred = builder.and_(mismatch, src_is_one)
+        new_shape = builder.select(pred, ind_shape, old_shape)
+        new_stride = builder.select(pred, zero, old_stride)
+        bc_shapes.append(new_shape)
+        bc_strides.append(new_stride)
+    return bc_shapes, bc_strides
+
+
+def _broadcast_to_shape(context, builder, srcty, src, target_shape):
+    """
+    Broadcast the given array to the target_shape.
+    Returns (array_type, array)
+    """
+    # Compute broadcasted shape and strides
+    shapes = cgutils.unpack_tuple(builder, src.shape)
+    strides = cgutils.unpack_tuple(builder, src.strides)
+
+    shapes, strides = _bc_adjust_dimension(context, builder, shapes, strides,
+                                           target_shape)
+    shapes, strides = _bc_adjust_shape_strides(context, builder, shapes,
+                                               strides, target_shape)
+    new_srcty = srcty.copy(ndim=len(target_shape), layout='A')
+    # Create new view
+    new_src = make_array(new_srcty)(context, builder)
+    repl = dict(shape=cgutils.pack_array(builder, shapes),
+                strides=cgutils.pack_array(builder, strides))
+    cgutils.copy_struct(new_src, src, repl)
+    return new_srcty, new_src
+
+
 def fancy_setslice(context, builder, sig, args, index_types, indices):
     """
     Implement slice assignment for arrays.  This implementation works for
@@ -1201,66 +1284,10 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     if isinstance(srcty, types.Buffer):
         # Source is an array
         src_dtype = srcty.dtype
-        src = make_array(srcty)(context, builder, src)
-        src_shapes = cgutils.unpack_tuple(builder, src.shape)
-        src_strides = cgutils.unpack_tuple(builder, src.strides)
-        src_data = src.data
-
         index_shape = indexer.get_shape()
-        zero = context.get_constant(types.uintp, 0)
-        one = context.get_constant(types.uintp, 1)
-
-        # Adjust for broadcasting to higher dimension
-        if len(index_shape) > len(src_shapes):
-            nd_diff = len(index_shape) - len(src_shapes)
-            srcty = srcty.copy(ndim=len(index_shape), layout='A')
-            # Fill missing shapes, strides
-            src_shapes = list(index_shape[:-len(src_shapes)]) + src_shapes
-            src_strides = [zero] * nd_diff + src_strides
-        elif len(index_shape) < len(src_shapes):
-            # Accepted if all extra dims has shape 1
-            nd_diff = len(src_shapes) - len(index_shape)
-            accepted = cgutils.true_bit
-            for sh in src_shapes[:nd_diff]:
-                is_one = builder.icmp_unsigned('==', sh, one)
-                accepted = builder.and_(is_one, accepted)
-            # Check error
-            with builder.if_then(builder.not_(accepted), likely=False):
-                msg = "cannot broadcast source array for assignment"
-                context.call_conv.return_user_exc(builder, ValueError, (msg,))
-
-            srcty = srcty.copy(ndim=len(index_shape))
-            # Truncate extra shapes, strides
-            src_shapes = src_shapes[nd_diff:]
-            src_strides = src_strides[nd_diff:]
-
-
-        # Adjust all mismatching ones in shape
-        bc_shapes = []
-        bc_strides = []
-        for ind_shape, old_shape, old_stride in zip(index_shape, src_shapes,
-                                                    src_strides):
-            mismatch = builder.icmp_signed('!=', ind_shape, old_shape)
-            src_is_one = builder.icmp_signed('==', old_shape, one)
-            pred = builder.and_(mismatch, src_is_one)
-            new_shape = builder.select(pred, ind_shape, old_shape)
-            new_stride = builder.select(pred, zero, old_stride)
-            bc_shapes.append(new_shape)
-            bc_strides.append(new_stride)
-
-        src_shapes = bc_shapes
-        src_strides = bc_strides
-        srcty = srcty.copy(ndim=len(index_shape), layout='A')
-
-        # Create new view
-        new_src = make_array(srcty)(context, builder)
-
-        repl = dict(shape=cgutils.pack_array(builder, src_shapes),
-                    strides=cgutils.pack_array(builder, src_strides))
-        cgutils.copy_struct(new_src, src, repl)
-
-        src = new_src
-
+        src = make_array(srcty)(context, builder, src)
+        # Broadcast source array to shape
+        srcty, src = _broadcast_to_shape(context, builder, srcty, src, index_shape)
         src_shapes = cgutils.unpack_tuple(builder, src.shape)
         src_strides = cgutils.unpack_tuple(builder, src.strides)
         src_data = src.data
