@@ -158,6 +158,8 @@ class Expr(Inst):
         self._kws = kws
 
     def __getattr__(self, name):
+        if name.startswith('_'):
+            return Inst.__getattr__(self, name)
         return self._kws[name]
 
     def __setattr__(self, name, value):

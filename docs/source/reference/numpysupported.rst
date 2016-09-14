@@ -213,19 +213,26 @@ The following top-level functions are supported:
 * :func:`numpy.argsort` (no optional arguments)
 * :func:`numpy.array` (only the 2 first arguments)
 * :func:`numpy.asfortranarray` (only the first argument)
+* :func:`numpy.atleast_1d`
+* :func:`numpy.atleast_2d`
+* :func:`numpy.atleast_3d`
 * :func:`numpy.bincount` (only the 2 first arguments)
+* :func:`numpy.column_stack`
 * :func:`numpy.concatenate`
 * :func:`numpy.copy` (only the first argument)
 * :func:`numpy.diag`
 * :func:`numpy.digitize`
+* :func:`numpy.dstack`
 * :func:`numpy.empty` (only the 2 first arguments)
 * :func:`numpy.empty_like` (only the 2 first arguments)
+* :func:`numpy.expand_dims`
 * :func:`numpy.eye`
 * :func:`numpy.flatten` (no order argument; 'C' order only)
 * :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full` (only the 3 first arguments)
 * :func:`numpy.full_like` (only the 3 first arguments)
 * :func:`numpy.histogram` (only the 3 first arguments)
+* :func:`numpy.hstack`
 * :func:`numpy.identity`
 * :func:`numpy.linspace` (only the 3-argument form)
 * :class:`numpy.ndenumerate`
@@ -239,6 +246,7 @@ The following top-level functions are supported:
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
 * :func:`numpy.stack`
+* :func:`numpy.vstack`
 * :func:`numpy.where`
 * :func:`numpy.zeros` (only the 2 first arguments)
 * :func:`numpy.zeros_like` (only the 2 first arguments)

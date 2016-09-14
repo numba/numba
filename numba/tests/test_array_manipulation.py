@@ -6,7 +6,7 @@ import numba.unittest_support as unittest
 import numpy as np
 
 from numba.compiler import compile_isolated, Flags
-from numba import types, from_dtype, errors, typeof
+from numba import jit, types, from_dtype, errors, typeof
 from .support import TestCase, MemoryLeakMixin, CompilationCache, tag
 
 enable_pyobj_flags = Flags()
@@ -44,6 +44,22 @@ def squeeze_array(a):
     return a.squeeze()
 
 
+def expand_dims(a, axis):
+    return np.expand_dims(a, axis)
+
+
+def atleast_1d(*args):
+    return np.atleast_1d(*args)
+
+
+def atleast_2d(*args):
+    return np.atleast_2d(*args)
+
+
+def atleast_3d(*args):
+    return np.atleast_3d(*args)
+
+
 def as_strided1(a):
     # as_strided() with implicit shape
     strides = (a.strides[0] // 2,) + a.strides[1:]
@@ -55,10 +71,6 @@ def as_strided2(a):
     shape = a.shape[:-1] + (a.shape[-1] - window + 1, window)
     strides = a.strides + (a.strides[-1],)
     return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
-
-
-def add_axis1(a):
-    return np.expand_dims(a, axis=0)
 
 
 def add_axis2(a):
@@ -189,6 +201,100 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         # Exceptions leak references
         self.disable_leak_check()
 
+    @tag('important')
+    def test_expand_dims(self):
+        pyfunc = expand_dims
+
+        def run(arr, axis):
+            cres = self.ccache.compile(pyfunc, (typeof(arr), typeof(axis)))
+            return cres.entry_point(arr, axis)
+
+        def check(arr, axis):
+            expected = pyfunc(arr, axis)
+            self.memory_leak_setup()
+            got = run(arr, axis)
+            self.assertPreciseEqual(got, expected)
+            del got
+            self.memory_leak_teardown()
+
+        def check_all_axes(arr):
+            for axis in range(-arr.ndim - 1, arr.ndim + 1):
+                check(arr, axis)
+
+        # 1d
+        arr = np.arange(5)
+        check_all_axes(arr)
+        # 3d (C, F, A)
+        arr = np.arange(24).reshape((2, 3, 4))
+        check_all_axes(arr)
+        check_all_axes(arr.T)
+        check_all_axes(arr[::-1])
+        # 0d
+        arr = np.array(42)
+        check_all_axes(arr)
+
+    def check_atleast_nd(self, pyfunc, cfunc):
+        def check_result(got, expected):
+            # We would like to check the result has the same contiguity,
+            # but we can't rely on the "flags" attribute when there are
+            # 1-sized dimensions.
+            self.assertStridesEqual(got, expected)
+            self.assertPreciseEqual(got.flatten(), expected.flatten())
+
+        def check_single(arg):
+            check_result(cfunc(arg), pyfunc(arg))
+
+        def check_tuple(*args):
+            expected_tuple = pyfunc(*args)
+            got_tuple = cfunc(*args)
+            self.assertEqual(len(got_tuple), len(expected_tuple))
+            for got, expected in zip(got_tuple, expected_tuple):
+                check_result(got, expected)
+
+        # 0d
+        a1 = np.array(42)
+        a2 = np.array(5j)
+        check_single(a1)
+        check_tuple(a1, a2)
+        # 1d
+        b1 = np.arange(5)
+        b2 = np.arange(6) + 1j
+        b3 = b1[::-1]
+        check_single(b1)
+        check_tuple(b1, b2, b3)
+        # 2d
+        c1 = np.arange(6).reshape((2, 3))
+        c2 = c1.T
+        c3 = c1[::-1]
+        check_single(c1)
+        check_tuple(c1, c2, c3)
+        # 3d
+        d1 = np.arange(24).reshape((2, 3, 4))
+        d2 = d1.T
+        d3 = d1[::-1]
+        check_single(d1)
+        check_tuple(d1, d2, d3)
+        # 4d
+        e = np.arange(16).reshape((2, 2, 2, 2))
+        check_single(e)
+        # mixed dimensions
+        check_tuple(a1, b2, c3, d2)
+
+    def test_atleast_1d(self):
+        pyfunc = atleast_1d
+        cfunc = jit(nopython=True)(pyfunc)
+        self.check_atleast_nd(pyfunc, cfunc)
+
+    def test_atleast_2d(self):
+        pyfunc = atleast_2d
+        cfunc = jit(nopython=True)(pyfunc)
+        self.check_atleast_nd(pyfunc, cfunc)
+
+    def test_atleast_3d(self):
+        pyfunc = atleast_3d
+        cfunc = jit(nopython=True)(pyfunc)
+        self.check_atleast_nd(pyfunc, cfunc)
+
     def check_as_strided(self, pyfunc):
         def run(arr):
             cres = self.ccache.compile(pyfunc, (typeof(arr),))
@@ -316,24 +422,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             self.test_squeeze_array(flags=no_pyobj_flags)
 
         self.assertIn("squeeze", str(raises.exception))
-
-    def test_add_axis1(self, flags=enable_pyobj_flags):
-        a = np.arange(9).reshape(3, 3)
-
-        pyfunc = add_axis1
-        arraytype1 = typeof(a)
-        cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
-        cfunc = cr.entry_point
-
-        expected = pyfunc(a)
-        got = cfunc(a)
-        np.testing.assert_equal(expected, got)
-
-    def test_add_axis1_npm(self):
-        with self.assertRaises(errors.UntypedAttributeError) as raises:
-            self.test_add_axis1(flags=no_pyobj_flags)
-
-        self.assertIn("expand_dims", str(raises.exception))
 
     def test_add_axis2(self, flags=enable_pyobj_flags):
         a = np.arange(9).reshape(3, 3)
