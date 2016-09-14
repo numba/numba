@@ -980,7 +980,7 @@ class TestSetItem(TestCase):
 
     def test_setitem_slice(self):
         """
-        scalar indexed assignment
+        broadcasted array assignment
         """
         # Scalar Broadcasting
         dst = np.arange(5)
@@ -999,6 +999,43 @@ class TestSetItem(TestCase):
         setitem_slice_usecase(dst, np.arange(1, 4).reshape(1, 3))
         inner2 = [[1, 2, 3], [1, 2, 3]]
         self.assertEqual(dst.tolist(), [[inner2]] * 2)
+        # 2D -> 1D Array Broadcasting
+        dst = np.arange(5)
+        setitem_slice_usecase(dst, np.arange(1, 6).reshape(1, 5))
+        self.assertEqual(dst.tolist(), [1, 2, 3, 4, 5])
+        # 4D -> 2D Array Broadcasting
+        dst = np.arange(6).reshape(2, 3)
+        setitem_slice_usecase(dst, np.arange(1, 1 + dst.size).reshape(1, 1, 2, 3))
+        self.assertEqual(dst.tolist(), [[1, 2, 3], [4, 5, 6]])
+
+    def test_setitem_slice_error(self):
+        # higher dim assigned into lower dim
+        # 2D -> 1D
+        dst = np.arange(5)
+        src = np.arange(10).reshape(2, 5)
+        with self.assertRaises(ValueError) as raises:
+            setitem_slice_usecase(dst, src)
+        errmsg = str(raises.exception)
+        self.assertEqual('cannot broadcast source array for assignment',
+                         errmsg)
+        # 3D -> 2D
+        dst = np.arange(5).reshape(1, 5)
+        src = np.arange(10).reshape(1, 2, 5)
+        with self.assertRaises(ValueError) as raises:
+            setitem_slice_usecase(dst, src)
+        errmsg = str(raises.exception)
+        self.assertEqual('cannot assign slice from input of different size',
+                         errmsg)
+        # lower to higher
+        # 1D -> 2D
+        dst = np.arange(10).reshape(2, 5)
+        src = np.arange(4)
+        with self.assertRaises(ValueError) as raises:
+            setitem_slice_usecase(dst, src)
+        errmsg = str(raises.exception)
+        self.assertEqual('cannot assign slice from input of different size',
+                         errmsg)
+
 
     def test_setitem_readonly(self):
         arr = np.arange(5)

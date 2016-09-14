@@ -186,13 +186,8 @@ class SetItemBuffer(AbstractTemplate):
                 if not self.context.can_convert(val.dtype, res.dtype):
                     # DType conversion not possible
                     return
-                if val.ndim <= res.ndim:
-                    # Allow assignement of to a same or higher dimensionality
-                    # compatible-dtype array
-                    res = val
                 else:
-                    # NOTE: array broadcasting is unsupported
-                    return
+                    res = val
             elif isinstance(val, types.Sequence):
                 if (res.ndim == 1 and
                     self.context.can_convert(val.dtype, res.dtype)):

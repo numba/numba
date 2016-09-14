@@ -1214,10 +1214,26 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         if len(index_shape) > len(src_shapes):
             nd_diff = len(index_shape) - len(src_shapes)
             srcty = srcty.copy(ndim=len(index_shape), layout='A')
-
             # Fill missing shapes, strides
             src_shapes = list(index_shape[:-len(src_shapes)]) + src_shapes
             src_strides = [zero] * nd_diff + src_strides
+        elif len(index_shape) < len(src_shapes):
+            # Accepted if all extra dims has shape 1
+            nd_diff = len(src_shapes) - len(index_shape)
+            accepted = cgutils.true_bit
+            for sh in src_shapes[:nd_diff]:
+                is_one = builder.icmp_unsigned('==', sh, one)
+                accepted = builder.and_(is_one, accepted)
+            # Check error
+            with builder.if_then(builder.not_(accepted), likely=False):
+                msg = "cannot broadcast source array for assignment"
+                context.call_conv.return_user_exc(builder, ValueError, (msg,))
+
+            srcty = srcty.copy(ndim=len(index_shape))
+            # Truncate extra shapes, strides
+            src_shapes = src_shapes[nd_diff:]
+            src_strides = src_strides[nd_diff:]
+
 
         # Adjust all mismatching ones in shape
         bc_shapes = []
