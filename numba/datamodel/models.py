@@ -1111,10 +1111,10 @@ class GeneratorModel(CompositeModel):
         return value
 
     def as_return(self, builder, value):
-        return value
+        return self.as_data(builder, value)
 
     def from_return(self, builder, value):
-        return value
+        return self.from_data(builder, value)
 
     def as_data(self, builder, value):
         return builder.load(value)
