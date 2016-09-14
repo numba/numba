@@ -18,7 +18,7 @@ from numba import unittest_support as unittest
 from numba.utils import IS_PY3
 from numba import sigutils, types, typing
 from numba.types.abstract import _typecache
-from numba import jit, numpy_support
+from numba import jit, numpy_support, typeof
 from .support import TestCase, tag
 from .enum_usecases import *
 
@@ -175,6 +175,19 @@ class TestTypes(TestCase):
         check(scalar[:,:], scalar, 2, 'A')
         check(scalar[:,::1], scalar, 2, 'C')
         check(scalar[::1,:], scalar, 2, 'F')
+
+    def test_array_notation_for_dtype(self):
+        def check(arrty, scalar, ndim, layout):
+            self.assertIs(arrty.dtype, scalar)
+            self.assertEqual(arrty.ndim, ndim)
+            self.assertEqual(arrty.layout, layout)
+        scalar = types.int32
+        dtyped = types.DType(scalar)
+        check(dtyped[:], scalar, 1, 'A')
+        check(dtyped[::1], scalar, 1, 'C')
+        check(dtyped[:,:], scalar, 2, 'A')
+        check(dtyped[:,::1], scalar, 2, 'C')
+        check(dtyped[::1,:], scalar, 2, 'F')
 
     @tag('important')
     def test_call_notation(self):
@@ -488,6 +501,34 @@ class TestSignatures(TestCase):
         check_error((types.Integer,), "invalid signature")
         check_error((None,), "invalid signature")
         check_error([], "invalid signature")
+
+
+class TestRecordDtype(unittest.TestCase):
+    def test_record_type_equiv(self):
+        rec_dt = np.dtype([('a', np.int32), ('b', np.float32)])
+        rec_ty = typeof(rec_dt)
+        art1 = rec_ty[::1]
+        arr = np.zeros(5, dtype=rec_dt)
+        art2 = typeof(arr)
+        self.assertEqual(art2.dtype.dtype, rec_ty)
+        self.assertEqual(art1, art2)
+
+    def test_user_specified(self):
+        rec_dt = np.dtype([('a', np.int32), ('b', np.float32)])
+        rec_type = typeof(rec_dt)
+
+        @jit((rec_type[:],), nopython=True)
+        def foo(x):
+            return x['a'], x['b']
+
+        arr = np.zeros(1, dtype=rec_dt)
+        arr[0]['a'] = 123
+        arr[0]['b'] = 32.1
+
+        a, b = foo(arr)
+
+        self.assertEqual(a, arr[0]['a'])
+        self.assertEqual(b, arr[0]['b'])
 
 
 if __name__ == '__main__':
