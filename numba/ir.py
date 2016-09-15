@@ -900,20 +900,6 @@ class FunctionIR(object):
                   % (index, sorted(yp.live_vars), sorted(yp.weak_live_vars)),
                   file=file)
 
-    # XXX just let people access self.func_id members?
-
-    @property
-    def func(self):
-        return self.func_id.func
-
-    @property
-    def func_qualname(self):
-        return self.func_id.func_qualname
-
-    @property
-    def pysig(self):
-        return self.func_id.pysig
-
 
 # A stub for undefined global reference
 UNDEFINED = object()

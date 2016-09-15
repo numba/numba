@@ -576,7 +576,8 @@ class LiftedLoop(_DispatcherBase):
         self.locals = locals
 
         _DispatcherBase.__init__(self, self.func_ir.arg_count,
-                                 self.func_ir.func, self.func_ir.pysig)
+                                 self.func_ir.func_id.func,
+                                 self.func_ir.func_id.pysig)
 
     def get_source_location(self):
         """Return the starting line number of the loop.
