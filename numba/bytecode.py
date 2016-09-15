@@ -4,14 +4,15 @@ From NumbaPro
 """
 from __future__ import print_function, division, absolute_import
 
+from collections import namedtuple, OrderedDict
 import dis
 import inspect
 import sys
 from types import CodeType, ModuleType
-from collections import namedtuple
 
 from numba import errors, utils
 from numba.config import PYVERSION
+
 
 opcode_info = namedtuple('opcode_info', ['argsize'])
 
@@ -275,28 +276,46 @@ class ByteCodeIter(object):
         return buf
 
 
-class ByteCodeOperation(object):
-    def __init__(self, inst, args):
-        self.inst = inst
-        self.args = args
+class ByteCode(object):
+    """
+    The decoded bytecode of a function, and related information.
+    """
+    __slots__ = ('func_id', 'co_names', 'co_varnames', 'co_consts',
+                 'co_freevars', 'table', 'labels')
 
+    def __init__(self, func_id):
+        code = func_id.code
 
-class ByteCodeBase(object):
-    __slots__ = (
-        'func', 'func_name', 'func_qualname', 'filename',
-        'pysig', 'co_names', 'co_varnames', 'co_consts', 'co_freevars',
-        'table', 'labels', 'arg_count', 'arg_names', 'used_globals',
-        )
+        labels = set(dis.findlabels(code.co_code))
+        labels.add(0)
 
-    def __init__(self, func_id, co_names, co_varnames, co_consts, co_freevars,
-                 table, labels):
+        # A map of {offset: ByteCodeInst}
+        table = OrderedDict(ByteCodeIter(code))
+        self._compute_lineno(table, code)
+
         self.func_id = func_id
-        self.co_names = co_names
-        self.co_varnames = co_varnames
-        self.co_consts = co_consts
-        self.co_freevars = co_freevars
+        self.co_names = code.co_names
+        self.co_varnames = code.co_varnames
+        self.co_consts = code.co_consts
+        self.co_freevars = code.co_freevars
         self.table = table
-        self.labels = labels
+        self.labels = sorted(labels)
+
+    @classmethod
+    def _compute_lineno(cls, table, code):
+        """
+        Compute the line numbers for all bytecode instructions.
+        """
+        for offset, lineno in dis.findlinestarts(code):
+            if offset in table:
+                table[offset].lineno = lineno
+        known = -1
+        for inst in table.values():
+            if inst.lineno >= 0:
+                known = inst.lineno
+            else:
+                inst.lineno = known
+        return table
 
     def __iter__(self):
         return utils.itervalues(self.table)
@@ -341,7 +360,7 @@ class ByteCodeBase(object):
         # Add globals used by any nested code object
         for co in co_consts:
             if isinstance(co, CodeType):
-                subtable = utils.SortedMap(ByteCodeIter(co))
+                subtable = OrderedDict(ByteCodeIter(co))
                 d.update(cls._compute_used_globals(func, subtable,
                                                    co.co_consts, co.co_names))
         return d
@@ -353,39 +372,6 @@ class ByteCodeBase(object):
         """
         return self._compute_used_globals(self.func_id.func, self.table,
                                           self.co_consts, self.co_names)
-
-
-class ByteCode(ByteCodeBase):
-    def __init__(self, func_id):
-        code = func_id.code
-
-        # A map of {offset: ByteCodeInst}
-        table = utils.SortedMap(ByteCodeIter(code))
-        labels = set(dis.findlabels(code.co_code))
-        labels.add(0)
-
-        self._mark_lineno(table, func_id.code)
-        super(ByteCode, self).__init__(func_id=func_id,
-                                       co_names=code.co_names,
-                                       co_varnames=code.co_varnames,
-                                       co_consts=code.co_consts,
-                                       co_freevars=code.co_freevars,
-                                       table=table,
-                                       labels=list(sorted(labels)))
-
-    @classmethod
-    def _mark_lineno(cls, table, code):
-        '''Fill the lineno info for all bytecode inst
-        '''
-        for offset, lineno in dis.findlinestarts(code):
-            if offset in table:
-                table[offset].lineno = lineno
-        known = -1
-        for inst in table.values():
-            if inst.lineno >= 0:
-                known = inst.lineno
-            else:
-                inst.lineno = known
 
 
 class FunctionIdentity(object):
