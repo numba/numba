@@ -64,37 +64,12 @@ class Interpreter(object):
     """A bytecode interpreter that builds up the IR.
     """
 
-    @classmethod
-    def from_blocks(cls, func_id, blocks,
-                    arg_count=None, arg_names=None,
-                    force_non_generator=False):
-        firstblock = blocks[min(blocks)]
-        loc = firstblock.loc
-        is_generator = func_id.is_generator and not force_non_generator
-        if arg_count is None:
-            arg_count = func_id.arg_count
-        if arg_names is None:
-            arg_names = func_id.arg_names
-
-        interp = cls(func_id, arg_count, arg_names, is_generator, loc)
-        interp.blocks = blocks
-        return interp
-
-    @classmethod
-    def from_function_id(cls, func_id):
-        loc = ir.Loc.from_function_id(func_id)
-        interp = cls(func_id,
-                     func_id.arg_count,
-                     func_id.arg_names,
-                     func_id.is_generator, loc)
-        return interp
-
-    def __init__(self, func_id, arg_count, arg_names, is_generator, loc):
+    def __init__(self, func_id):
         self.func_id = func_id
-        self.arg_count = arg_count
-        self.arg_names = arg_names
-        self.loc = loc
-        self.is_generator = is_generator
+        self.arg_count = func_id.arg_count
+        self.arg_names = func_id.arg_names
+        self.loc = ir.Loc.from_function_id(func_id)
+        self.is_generator = func_id.is_generator
 
         # { inst offset : ir.Block }
         self.blocks = {}

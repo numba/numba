@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
+import copy
 import os
 import pprint
 import sys
@@ -799,19 +800,22 @@ class FunctionIR(object):
     def __init__(self, interp):
         # XXX turn this inside out?  Interpreter should first construct
         # a FunctionIR object and then work on it
-        from . import consts
-
         self.blocks = interp.blocks
         self.is_generator = interp.is_generator
 
         self.func_id = interp.func_id
         self.loc = interp.loc
+        self._definitions = interp.definitions
         # Can be different from func_id.arg_count or func_id.arg_names
         # (for loop-lifting)
         self.arg_count = interp.arg_count
         self.arg_names = interp.arg_names
 
-        self._definitions = interp.definitions
+        self._reset_analysis_variables()
+
+    def _reset_analysis_variables(self):
+        from . import consts
+
         self._consts = consts.ConstantInference(self)
 
         # Will be computed by PostProcessor
@@ -819,6 +823,30 @@ class FunctionIR(object):
         self.variable_lifetime = None
         # { ir.Block: { variable names (potentially) alive at start of block } }
         self.block_entry_vars = {}
+
+    def derive(self, blocks, arg_count=None, arg_names=None,
+               force_non_generator=False):
+        """
+        Derive a new function IR from this one, using the given blocks,
+        and possibly modifying the argument count and generator flag.
+
+        Post-processing will have to be run again on the new IR.
+        """
+        firstblock = blocks[min(blocks)]
+        is_generator = self.is_generator and not force_non_generator
+
+        new_ir = copy.copy(self)
+        new_ir.blocks = blocks
+        new_ir.loc = firstblock.loc
+        if force_non_generator:
+            new_ir.is_generator = False
+        if arg_count is not None:
+            new_ir.arg_count = arg_count
+        if arg_names is not None:
+            new_ir.arg_names = arg_names
+        new_ir._reset_analysis_variables()
+
+        return new_ir
 
     def get_block_entry_vars(self, block):
         """

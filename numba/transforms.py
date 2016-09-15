@@ -156,15 +156,15 @@ def _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
     loopblocks = dict((k, blocks[k].copy()) for k in loopblockkeys)
     # Modify the loop blocks
     _loop_lift_prepare_loop_func(loopinfo, loopblocks)
-    # Create an interpreter for the lifted loop
-    lifted_interp = Interpreter.from_blocks(
-        blocks=loopblocks, func_id=func_ir.func_id,
-        arg_names=tuple(loopinfo.inputs),
-        arg_count=len(loopinfo.inputs),
-        force_non_generator=True)
 
-    liftedloop = LiftedLoop(lifted_interp.result(),
+    # Create a new IR for the lifted loop
+    lifted_ir = func_ir.derive(blocks=loopblocks,
+                               arg_names=tuple(loopinfo.inputs),
+                               arg_count=len(loopinfo.inputs),
+                               force_non_generator=True)
+    liftedloop = LiftedLoop(lifted_ir,
                             typingctx, targetctx, flags, locals)
+
     # modify for calling into liftedloop
     callblock = _loop_lift_modify_call_block(liftedloop, blocks[loopinfo.callfrom],
                                              loopinfo.inputs, loopinfo.outputs,
@@ -193,10 +193,9 @@ def loop_lifting(func_ir, typingctx, targetctx, flags, locals):
         lifted = _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
                                           typingctx, targetctx, flags, locals)
         loops.append(lifted)
-    # make main interpreter
-    main_interp = Interpreter.from_blocks(blocks=blocks,
-                                          func_id=func_ir.func_id)
-    main = main_interp.result()
+
+    # Make main IR
+    main = func_ir.derive(blocks=blocks)
 
     return main, loops
 

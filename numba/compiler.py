@@ -149,7 +149,7 @@ def run_frontend(func):
     """
     # XXX make this a dedicated Pipeline?
     func_id = bytecode.FunctionIdentity.from_function(func)
-    interp = interpreter.Interpreter.from_function_id(func_id)
+    interp = interpreter.Interpreter(func_id)
     bc = bytecode.ByteCode(func_id=func_id)
     interp.interpret(bc)
     func_ir = interp.result()
@@ -744,7 +744,7 @@ def legalize_return_type(return_type, interp, targetctx):
 
 
 def translate_stage(func_id, bytecode):
-    interp = interpreter.Interpreter.from_function_id(func_id)
+    interp = interpreter.Interpreter(func_id)
     interp.interpret(bytecode)
     return interp.result()
 
