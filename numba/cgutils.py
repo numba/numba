@@ -71,6 +71,21 @@ def create_struct_proxy(fe_type, kind='value'):
     return res
 
 
+def copy_struct(dst, src, repl={}):
+    """
+    Copy structure from *src* to *dst* with replacement from *repl*.
+    """
+    repl = repl.copy()
+    # copy data from src or use those in repl
+    for k in src._datamodel._fields:
+        v = repl.pop(k, getattr(src, k))
+        setattr(dst, k, v)
+    # use remaining key-values in repl
+    for k, v in repl.items():
+        setattr(dst, k, v)
+    return dst
+
+
 class _StructProxy(object):
     """
     Creates a `Structure` like interface that is constructed with information
