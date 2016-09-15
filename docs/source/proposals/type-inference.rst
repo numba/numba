@@ -3,7 +3,7 @@ NBEP ?: Type Inference
 ======================
 
 :Author: Siu Kwan Lam
-:Date: Sept 2015
+:Date: Sept 2016
 :Status: Draft
 
 
@@ -18,8 +18,8 @@ be correctly lowered (translated into a low-level representation).  The type of
 a variable describes the set of valid operations and available attributes.
 Resolving this information during compilation avoids the overhead of type
 checking and dispatching at runtime.  However, Python is dynamically typed and
-the user does not declare variable types.  Since type information is absent.
-we use type inference is to reconstruct the missing information.
+the user does not declare variable types.  Since type information is absent,
+we use type inference to reconstruct the missing information.
 
 
 Numba Type Semantic
@@ -28,21 +28,21 @@ Numba Type Semantic
 Type inference operates on Numba IR, a mostly static-single-assignment (SSA)
 encoding of the Python bytecode.  Conceptually, all intermediate values in the
 Python code is explicitly assigned to a variable in the IR.  Numba enforces
-that each variable to have one type only.  A user variable (from the Python
+that each IR variable to have one type only.  A user variable (from the Python
 source code) can be mapped to multiple variables in the IR.  They are *versions*
 of a variable.  Each time a user variable is assigned to, a new version is
 created.  From that point, all subsequent references will use the new version.
 The user variable *evolves* as the function logic updates its type.  Merge
 points (e.g. subsequent block to an if-else, the loop body, etc..) in the control
-flow path need extra care.  Each incoming paths could be holding a different
+flow need extra care.  Each incoming paths could be holding a different
 variable version.  A new version is implicitly created at the merge point.
-The incoming versions are also merged.  This may translate to an implicit cast.
+The incoming versions are merged.  This may translate to an implicit cast.
 
 Numba uses function overloading to emulate Python duck-typing.  The type of a
 function can contain multiple call signatures that accept different argument
 types and yields different return types.  The process to decide the best
-signature for an overloaded function is called overload resolution.
-Numba partially implements the C++  overload resolution scheme
+signature for an overloaded function is called *overload resolution*.
+Numba partially implements the C++ overload resolution scheme
 (ISOCPP 13.3 Overload Resolution).  The scheme uses a "best fit" algorithm by
 ranking each argument symmetrically.  The five possible rankings in increasing
 order of penalty are:
@@ -81,7 +81,7 @@ variable, constraint network, and typing context.
   type.  Type conversion is applied as necessary and precision loss is
   accepted for usability reason.
 
-* The *constraint network* is a dependency graph built from the user code.  Each
+* The *constraint network* is a dependency graph built from the IR.  Each
   node represents an operation in the Numba IR and updates at least one type
   variables.  There may be cycles due to loops in user code.
 
@@ -94,7 +94,7 @@ A failure in type inference can be caused by two reasons.  One reason is user
 error due to incorrect use of a type.  This type of error will also trigger an
 exception in regular python execution.  Another reason is due to the use of an
 unsupported feature, but the code is otherwise valid in regular python
-execution.
+execution.  Any error will cause numba to fallback to *object-mode*.
 
 Since functions can be overloaded, the type inference needs to decide the call
 type, the calling signature, at each call site.  To decide the call type, the
