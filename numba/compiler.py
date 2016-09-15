@@ -9,9 +9,9 @@ import warnings
 import traceback
 from .tracing import trace, event
 
-from numba import (bytecode, interpreter, funcdesc, typing, typeinfer,
-                   lowering, objmode, utils, config, errors,
-                   types, ir, macro, types, rewrites, transforms)
+from numba import (bytecode, interpreter, funcdesc, postproc,
+                   typing, typeinfer, lowering, objmode, utils, config,
+                   errors, types, ir, types, rewrites, transforms)
 from numba.targets import cpu, callconv
 from numba.annotations import type_annotations
 
@@ -153,7 +153,7 @@ def run_frontend(func):
     bc = bytecode.ByteCode(func_id=func_id)
     interp.interpret(bc)
     func_ir = interp.result()
-    post_proc = interpreter.PostProcessor(func_ir)
+    post_proc = postproc.PostProcessor(func_ir)
     post_proc.run()
     return func_ir
 
@@ -344,7 +344,6 @@ class Pipeline(object):
                 raise e
 
         self.bc = bc
-        # XXX that or `func`?
         self.lifted = ()
         self.lifted_from = None
         return self._compile_bytecode()
@@ -749,8 +748,8 @@ def translate_stage(func_id, bytecode):
 
 
 def ir_processing_stage(func_ir):
-    postproc = interpreter.PostProcessor(func_ir)
-    postproc.run()
+    post_proc = postproc.PostProcessor(func_ir)
+    post_proc.run()
 
     if config.DEBUG or config.DUMP_IR:
         name = func_ir.func_id.func_qualname

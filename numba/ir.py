@@ -810,12 +810,15 @@ class FunctionIR(object):
         # (for loop-lifting)
         self.arg_count = interp.arg_count
         self.arg_names = interp.arg_names
-        # { ir.Block: { variable names (potentially) alive at start of block } }
-        self.block_entry_vars = {}
 
         self._definitions = interp.definitions
-        #self._block_entry_vars = interp.block_entry_vars
         self._consts = consts.ConstantInference(self)
+
+        # Will be computed by PostProcessor
+        self.generator_info = None
+        self.variable_lifetime = None
+        # { ir.Block: { variable names (potentially) alive at start of block } }
+        self.block_entry_vars = {}
 
     def get_block_entry_vars(self, block):
         """
@@ -852,11 +855,6 @@ class FunctionIR(object):
                 raise KeyError("more than one definition for %r"
                                % (name,))
             value = defs[0]
-
-    @utils.cached_property
-    def variable_lifetime(self):
-        from .interpreter import VariableLifetime
-        return VariableLifetime(self.blocks)
 
     def dump(self, file=None):
         # Avoid early bind of sys.stdout as default value
