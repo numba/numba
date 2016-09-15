@@ -131,7 +131,7 @@ class FunctionDescriptor(object):
         return "<function descriptor %r>" % (self.unique_name)
 
     @classmethod
-    def _get_function_info(cls, interp):
+    def _get_function_info(cls, func_ir):
         """
         Returns
         -------
@@ -139,12 +139,12 @@ class FunctionDescriptor(object):
 
         ``unique_name`` must be a unique name.
         """
-        func = interp.func_id.func
-        qualname = interp.func_id.func_qualname
+        func = func_ir.func_id.func
+        qualname = func_ir.func_id.func_qualname
         # XXX to func_id
         modname = func.__module__
         doc = func.__doc__ or ''
-        args = tuple(interp.arg_names)
+        args = tuple(func_ir.arg_names)
         kws = ()        # TODO
 
         if modname is None:
@@ -159,10 +159,10 @@ class FunctionDescriptor(object):
         return qualname, unique_name, modname, doc, args, kws
 
     @classmethod
-    def _from_python_function(cls, interp, typemap, restype, calltypes,
+    def _from_python_function(cls, func_ir, typemap, restype, calltypes,
                               native, mangler=None, inline=False):
         (qualname, unique_name, modname, doc, args, kws,
-         )= cls._get_function_info(interp)
+         )= cls._get_function_info(func_ir)
         self = cls(native, modname, qualname, unique_name, doc,
                    typemap, restype, calltypes,
                    args, kws, mangler=mangler, inline=inline)
@@ -176,18 +176,18 @@ class PythonFunctionDescriptor(FunctionDescriptor):
     __slots__ = ()
 
     @classmethod
-    def from_specialized_function(cls, interp, typemap, restype, calltypes,
+    def from_specialized_function(cls, func_ir, typemap, restype, calltypes,
                                   mangler, inline):
         """
         Build a FunctionDescriptor for a given specialization of a Python
         function (in nopython mode).
         """
-        return cls._from_python_function(interp, typemap, restype, calltypes,
+        return cls._from_python_function(func_ir, typemap, restype, calltypes,
                                          native=True, mangler=mangler,
                                          inline=inline)
 
     @classmethod
-    def from_object_mode_function(cls, interp):
+    def from_object_mode_function(cls, func_ir):
         """
         Build a FunctionDescriptor for an object mode variant of a Python
         function.
@@ -195,7 +195,7 @@ class PythonFunctionDescriptor(FunctionDescriptor):
         typemap = defaultdict(lambda: types.pyobject)
         calltypes = typemap.copy()
         restype = types.pyobject
-        return cls._from_python_function(interp, typemap, restype, calltypes,
+        return cls._from_python_function(func_ir, typemap, restype, calltypes,
                                          native=False)
 
 

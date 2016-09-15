@@ -123,9 +123,9 @@ class TestIRDump(unittest.TestCase):
         return compiler.run_frontend(pyfunc)
 
     def check_ir_dump(self, pyfunc):
-        interp = self.get_ir(pyfunc)
+        func_ir = self.get_ir(pyfunc)
         out = StringIO()
-        interp.dump(file=out)
+        func_ir.dump(file=out)
         expected = textwrap.dedent(pyfunc.__doc__).strip().splitlines()
         got = out.getvalue().strip().splitlines()
         self.assertEqual(got, expected,

@@ -142,7 +142,7 @@ def _loop_lift_prepare_loop_func(loopinfo, blocks):
     blocks[loopinfo.returnto] = make_epilogue()
 
 
-def _loop_lift_modify_blocks(interp, loopinfo, blocks,
+def _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
                              typingctx, targetctx, flags, locals):
     """
     Modify the block inplace to call to the lifted-loop.
@@ -158,7 +158,7 @@ def _loop_lift_modify_blocks(interp, loopinfo, blocks,
     _loop_lift_prepare_loop_func(loopinfo, loopblocks)
     # Create an interpreter for the lifted loop
     lifted_interp = Interpreter.from_blocks(
-        blocks=loopblocks, func_id=interp.func_id,
+        blocks=loopblocks, func_id=func_ir.func_id,
         arg_names=tuple(loopinfo.inputs),
         arg_count=len(loopinfo.inputs),
         force_non_generator=True)
@@ -177,25 +177,25 @@ def _loop_lift_modify_blocks(interp, loopinfo, blocks,
     return liftedloop
 
 
-def loop_lifting(interp, typingctx, targetctx, flags, locals):
+def loop_lifting(func_ir, typingctx, targetctx, flags, locals):
     """
     Loop lifting transformation.
 
-    Given a interpreter `interp` returns a 2 tuple of
+    Given a interpreter `func_ir` returns a 2 tuple of
     `(toplevel_interp, [loop0_interp, loop1_interp, ....])`
     """
-    blocks = interp.blocks.copy()
+    blocks = func_ir.blocks.copy()
     cfg = compute_cfg_from_blocks(blocks)
     loopinfos = _loop_lift_get_candidate_infos(cfg, blocks,
-                                               interp.variable_lifetime.livemap)
+                                               func_ir.variable_lifetime.livemap)
     loops = []
     for loopinfo in loopinfos:
-        lifted = _loop_lift_modify_blocks(interp, loopinfo, blocks,
+        lifted = _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
                                           typingctx, targetctx, flags, locals)
         loops.append(lifted)
     # make main interpreter
     main_interp = Interpreter.from_blocks(blocks=blocks,
-                                          func_id=interp.func_id)
+                                          func_id=func_ir.func_id)
     main = main_interp.result()
 
     return main, loops

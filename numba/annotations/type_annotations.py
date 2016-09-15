@@ -53,18 +53,18 @@ class TypeAnnotation(object):
     # to be compiled).
     func_data = OrderedDict()
 
-    def __init__(self, interp, typemap, calltypes, lifted, lifted_from, args, return_type,
-                 html_output=None):
-        self.func_id = interp.func_id
-        self.blocks = interp.blocks
+    def __init__(self, func_ir, typemap, calltypes, lifted, lifted_from,
+                 args, return_type, html_output=None):
+        self.func_id = func_ir.func_id
+        self.blocks = func_ir.blocks
         self.typemap = typemap
         self.calltypes = calltypes
         if html_output is None:
             self.html_output = None
         else:
             self.html_output = os.path.join(os.getcwd(), html_output)
-        self.filename = interp.loc.filename
-        self.linenum = str(interp.loc.line)
+        self.filename = func_ir.loc.filename
+        self.linenum = str(func_ir.loc.line)
         self.signature = str(args) + ' -> ' + str(return_type)
 
         # lifted loop information

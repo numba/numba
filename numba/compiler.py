@@ -265,9 +265,9 @@ class Pipeline(object):
         self.locals = locals
 
         # Results of various steps of the compilation pipeline
-        self.interp = None  # XXX func_ir?
         self.bc = None
         self.func_id = None
+        self.func_ir = None
         self.lifted = None
         self.lifted_from = None
         self.typemap = None
@@ -348,12 +348,12 @@ class Pipeline(object):
         self.lifted_from = None
         return self._compile_bytecode()
 
-    def compile_ir(self, interp, lifted=(), lifted_from=None):
-        self.func_id = interp.func_id
+    def compile_ir(self, func_ir, lifted=(), lifted_from=None):
+        self.func_id = func_ir.func_id
         self.lifted = lifted
         self.lifted_from = lifted_from
 
-        self._set_and_check_interp(interp)
+        self._set_and_check_ir(func_ir)
         return self._compile_ir()
 
     def stage_analyze_bytecode(self):
@@ -361,11 +361,11 @@ class Pipeline(object):
         Analyze bytecode and translating to Numba IR
         """
         func_ir = translate_stage(self.func_id, self.bc)
-        self._set_and_check_interp(func_ir)
+        self._set_and_check_ir(func_ir)
 
-    def _set_and_check_interp(self, interp):
-        self.interp = interp
-        self.nargs = self.interp.arg_count
+    def _set_and_check_ir(self, func_ir):
+        self.func_ir = func_ir
+        self.nargs = self.func_ir.arg_count
         if not self.args and self.flags.force_pyobject:
             # Allow an empty argument types specification when object mode
             # is explicitly requested.
@@ -376,8 +376,7 @@ class Pipeline(object):
                             % (len(self.args), self.nargs))
 
     def stage_process_ir(self):
-        # TODO: s/self.interp/self.func_ir/
-        ir_processing_stage(self.interp)
+        ir_processing_stage(self.func_ir)
 
     def frontend_looplift(self):
         """
@@ -391,7 +390,7 @@ class Pipeline(object):
         if not self.flags.enable_pyobject_looplift:
             loop_flags.unset('enable_pyobject')
 
-        main, loops = transforms.loop_lifting(self.interp,
+        main, loops = transforms.loop_lifting(self.func_ir,
                                               typingctx=self.typingctx,
                                               targetctx=self.targetctx,
                                               locals=self.locals,
@@ -432,14 +431,14 @@ class Pipeline(object):
             # Type inference
             self.typemap, self.return_type, self.calltypes = type_inference_stage(
                 self.typingctx,
-                self.interp,
+                self.func_ir,
                 self.args,
                 self.return_type,
                 self.locals)
 
         with self.fallback_context('Function "%s" has invalid return type'
                                    % (self.func_id.func_name,)):
-            legalize_return_type(self.return_type, self.interp,
+            legalize_return_type(self.return_type, self.func_ir,
                                  self.targetctx)
 
     def stage_generic_rewrites(self):
@@ -447,34 +446,34 @@ class Pipeline(object):
         Perform any intermediate representation rewrites before type
         inference.
         """
-        assert self.interp
+        assert self.func_ir
         with self.fallback_context('Internal error in pre-inference rewriting '
                                    'pass encountered during compilation of '
                                    'function "%s"' % (self.func_id.func_name,)):
             rewrites.rewrite_registry.apply('before-inference',
-                                            self, self.interp)
+                                            self, self.func_ir)
 
     def stage_nopython_rewrites(self):
         """
         Perform any intermediate representation rewrites after type
         inference.
         """
-        # Ensure we have an IR container (interp), and type information.
-        assert self.interp
+        # Ensure we have an IR and type information.
+        assert self.func_ir
         assert isinstance(getattr(self, 'typemap', None), dict)
         assert isinstance(getattr(self, 'calltypes', None), dict)
         with self.fallback_context('Internal error in post-inference rewriting '
                                    'pass encountered during compilation of '
                                    'function "%s"' % (self.func_id.func_name,)):
             rewrites.rewrite_registry.apply('after-inference',
-                                            self, self.interp)
+                                            self, self.func_ir)
 
     def stage_annotate_type(self):
         """
         Create type annotation after type inference
         """
         self.type_annotation = type_annotations.TypeAnnotation(
-            interp=self.interp,
+            func_ir=self.func_ir,
             typemap=self.typemap,
             calltypes=self.calltypes,
             lifted=self.lifted,
@@ -503,7 +502,7 @@ class Pipeline(object):
 
             return py_lowering_stage(self.targetctx,
                                      self.library,
-                                     self.interp,
+                                     self.func_ir,
                                      self.flags)
 
     def backend_nopython_mode(self):
@@ -513,7 +512,7 @@ class Pipeline(object):
             return native_lowering_stage(
                 self.targetctx,
                 self.library,
-                self.interp,
+                self.func_ir,
                 self.typemap,
                 self.return_type,
                 self.calltypes,
@@ -598,8 +597,6 @@ class Pipeline(object):
         """
         Cleanup intermediate results to release resources.
         """
-        #if self.interp is not None:
-            #self.interp.reset()
 
     def _compile_core(self):
         """
@@ -609,7 +606,7 @@ class Pipeline(object):
 
         if not self.flags.force_pyobject:
             pm.create_pipeline("nopython")
-            if self.interp is None:
+            if self.func_ir is None:
                 pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
             pm.add_stage(self.stage_process_ir, "processing IR")
             if not self.flags.no_rewrites:
@@ -623,7 +620,7 @@ class Pipeline(object):
 
         if self.status.can_fallback or self.flags.force_pyobject:
             pm.create_pipeline("object")
-            if self.interp is None:
+            if self.func_ir is None:
                 pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
             pm.add_stage(self.stage_process_ir, "processing IR")
             pm.add_stage(self.stage_objectmode_frontend, "object mode frontend")
@@ -649,14 +646,14 @@ class Pipeline(object):
         """
         Populate and run pipeline for bytecode input
         """
-        assert self.interp is None
+        assert self.func_ir is None
         return self._compile_core()
 
     def _compile_ir(self):
         """
         Populate and run pipeline for IR input
         """
-        assert self.interp is not None
+        assert self.func_ir is not None
         return self._compile_core()
 
 
@@ -688,12 +685,17 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
     return pipeline.compile_extra(func)
 
 
-def compile_ir(typingctx, targetctx, interp, args, return_type, flags,
+def compile_ir(typingctx, targetctx, func_ir, args, return_type, flags,
                locals, lifted=(), lifted_from=None, library=None):
+    """
+    Compile a function with the given IR.
+
+    For internal use only.
+    """
 
     pipeline = Pipeline(typingctx, targetctx, library,
                         args, return_type, flags, locals)
-    return pipeline.compile_ir(interp=interp, lifted=lifted,
+    return pipeline.compile_ir(func_ir=func_ir, lifted=lifted,
                                lifted_from=lifted_from)
 
 

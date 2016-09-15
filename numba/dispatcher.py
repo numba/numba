@@ -566,8 +566,8 @@ class LiftedLoop(_DispatcherBase):
     """
     _fold_args = False
 
-    def __init__(self, interp, typingctx, targetctx, flags, locals):
-        self.interp = interp
+    def __init__(self, func_ir, typingctx, targetctx, flags, locals):
+        self.func_ir = func_ir
         self.lifted_from = None
 
         self.typingctx = typingctx
@@ -575,13 +575,13 @@ class LiftedLoop(_DispatcherBase):
         self.flags = flags
         self.locals = locals
 
-        _DispatcherBase.__init__(self, self.interp.arg_count,
-                                 self.interp.func, self.interp.pysig)
+        _DispatcherBase.__init__(self, self.func_ir.arg_count,
+                                 self.func_ir.func, self.func_ir.pysig)
 
     def get_source_location(self):
         """Return the starting line number of the loop.
         """
-        return self.interp.loc.line
+        return self.func_ir.loc.line
 
     def compile(self, sig):
         with self._compile_lock:
@@ -598,7 +598,7 @@ class LiftedLoop(_DispatcherBase):
             assert not flags.enable_looplift, "Enable looplift flags is on"
             cres = compiler.compile_ir(typingctx=self.typingctx,
                                        targetctx=self.targetctx,
-                                       interp=self.interp,
+                                       func_ir=self.func_ir,
                                        args=args, return_type=return_type,
                                        flags=flags, locals=self.locals,
                                        lifted=(),
