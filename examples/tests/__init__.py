@@ -36,7 +36,6 @@ test_scripts = [
     'laplace2d/laplace2d.py',
     'laplace2d/laplace2d-numba.py',
     'example.py',
-    'mandel.py',
     'mandel/mandel_vectorize.py',
     'mandel/mandel_autojit.py',
     'nbody/nbody.py',
