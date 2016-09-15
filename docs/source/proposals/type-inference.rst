@@ -90,11 +90,18 @@ types are propagated in the constraint network, which eventually fills all the
 type variables.  Due to cycles in the network, the process repeats until all
 type variables converge or it fails with undecidable types.
 
+Type unification always returns a more "general" (quoted because unsafe conversion
+is allowed) type.  Types will converge to the least "general" type that
+can represent all possible values that the variable can hold.  Since unification
+will never move down the type hierarchy and there is a single top type, the
+universal type---``object``, the type inference is guaranteed to converge.
+
 A failure in type inference can be caused by two reasons.  One reason is user
 error due to incorrect use of a type.  This type of error will also trigger an
 exception in regular python execution.  Another reason is due to the use of an
 unsupported feature, but the code is otherwise valid in regular python
-execution.  Any error will cause numba to fallback to *object-mode*.
+execution.  Upon an error, the type inference will set all types to the object
+type.  As a result, numba will fallback to *object-mode*.
 
 Since functions can be overloaded, the type inference needs to decide the call
 type, the calling signature, at each call site.  To decide the call type, the
