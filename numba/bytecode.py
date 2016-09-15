@@ -389,9 +389,15 @@ class ByteCode(ByteCodeBase):
 
 
 class FunctionIdentity(object):
+    """
+    A function's identity and metadata.
+    """
 
     @classmethod
     def from_function(cls, pyfunc):
+        """
+        Create the FunctionIdentity of the given function.
+        """
         func = get_function_object(pyfunc)
         code = get_code_object(func)
         pysig = utils.pysignature(func)

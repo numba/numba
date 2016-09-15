@@ -941,11 +941,20 @@ class VariableLifetime(object):
 
 
 class PostProcessor(object):
+    """
+    A post-processor for Numba IR.
+    """
 
     def __init__(self, func_ir):
         self.func_ir = func_ir
 
     def run(self):
+        """
+        Run the following passes over Numba IR:
+        - canonicalize the CFG
+        - compute lifetime of variables
+        - compute generator info (if function is a generator function)
+        """
         from . import transforms
 
         self.func_ir.blocks = transforms.canonicalize_cfg(self.func_ir.blocks)

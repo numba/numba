@@ -142,6 +142,22 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
                              flags, locals)
 
 
+def run_frontend(func):
+    """
+    Run the compiler frontend over the given Python function, and return
+    the function's canonical Numba IR.
+    """
+    # XXX make this a dedicated Pipeline?
+    func_id = bytecode.FunctionIdentity.from_function(func)
+    interp = interpreter.Interpreter.from_function_id(func_id)
+    bc = bytecode.ByteCode(func_id=func_id)
+    interp.interpret(bc)
+    func_ir = interp.result()
+    post_proc = interpreter.PostProcessor(func_ir)
+    post_proc.run()
+    return func_ir
+
+
 class _CompileStatus(object):
     """
     Used like a C record
@@ -252,7 +268,6 @@ class Pipeline(object):
         self.interp = None  # XXX func_ir?
         self.bc = None
         self.func_id = None
-        self.func = None
         self.lifted = None
         self.lifted_from = None
         self.typemap = None
@@ -330,14 +345,12 @@ class Pipeline(object):
 
         self.bc = bc
         # XXX that or `func`?
-        self.func = self.func_id.func
         self.lifted = ()
         self.lifted_from = None
         return self._compile_bytecode()
 
     def compile_ir(self, interp, lifted=(), lifted_from=None):
         self.func_id = interp.func_id
-        self.func = interp.func_id.func
         self.lifted = lifted
         self.lifted_from = lifted_from
 
@@ -573,7 +586,7 @@ class Pipeline(object):
         signature = typing.signature(types.pyobject, *args)
         self.cr = compile_result(typing_context=self.typingctx,
                                  target_context=self.targetctx,
-                                 entry_point=self.func,
+                                 entry_point=self.func_id.func,
                                  typing_error=self.status.fail_reason,
                                  type_annotation="<Interpreter mode function>",
                                  signature=signature,
