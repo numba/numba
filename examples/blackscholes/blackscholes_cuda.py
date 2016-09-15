@@ -1,19 +1,21 @@
 #! /usr/bin/env python
+from __future__ import print_function
 
-import numpy as np
 import math
 import time
-from numba import *
+
+import numpy as np
+
 from numba import cuda
+
 from blackscholes_numba import black_scholes, black_scholes_numba
-#import logging; logging.getLogger().setLevel(0)
 
 
 RISKFREE = 0.02
 VOLATILITY = 0.30
 
 
-@cuda.jit(argtypes=(double,), restype=double, device=True, inline=True)
+@cuda.jit(device=True)
 def cnd_cuda(d):
     A1 = 0.31938153
     A2 = -0.356563782
@@ -34,14 +36,14 @@ def cnd_cuda(d):
 # that occupies more than one line.  The following decorator should
 # comply with PEP 8, and not go past the 79-th column.
 
-@cuda.jit(argtypes=(double[:], double[:], double[:], double[:], double[:], double, double))
+@cuda.jit("(double[:], double[:], double[:], double[:], double[:], double, double)")
 def black_scholes_cuda(callResult, putResult, S, X,
                        T, R, V):
-#    S = stockPrice
-#    X = optionStrike
-#    T = optionYears
-#    R = Riskfree
-#    V = Volatility
+    #    S = stockPrice
+    #    X = optionStrike
+    #    T = optionYears
+    #    R = Riskfree
+    #    V = Volatility
     i = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
     if i >= S.shape[0]:
         return
