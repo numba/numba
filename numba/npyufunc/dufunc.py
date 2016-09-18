@@ -6,6 +6,7 @@ from .. import jit, typeof, utils, types, numpy_support, sigutils
 from ..typing import npydecl
 from ..typing.templates import AbstractTemplate, signature
 from . import _internal, ufuncbuilder
+from ..dispatcher import Dispatcher
 
 
 def make_dufunc_kernel(_dufunc):
@@ -73,6 +74,8 @@ class DUFunc(_internal._DUFunc):
     __base_kwargs = set(('identity', '_keepalive', 'nin', 'nout'))
 
     def __init__(self, py_func, identity=None, targetoptions={}):
+        if isinstance(py_func, Dispatcher):
+            py_func = py_func.py_func
         self.targetoptions = targetoptions.copy()
         kws = {}
         kws['identity'] = ufuncbuilder.parse_identity(identity)
