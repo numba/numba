@@ -792,29 +792,22 @@ class BaseContext(object):
             self.call_conv.return_status_propagate(builder, status)
         return res
 
-    def call_recursive(self, builder, name, sig, args):
-        # XXX Linkage trick
-        # Add call to the generated function
-        llvm_mod = builder.module
+    def call_unresolved(self, builder, name, sig, args):
+        """
+        Insert a function call to an unresolved symbol with the given *name*.
+
+        Note: this is used for recursive call.
+        """
+        # Insert an unresolved reference to the function being called.
+        codegen = self.codegen()
         fnty = self.call_conv.get_function_type(sig.return_type, sig.args)
-
-        voidptr = llvmir.IntType(8).as_pointer()
-        ptrname = '.numba.unresolved$' + name
-        fnptr = llvm_mod.get_global(ptrname)
-        if fnptr is None:
-            fnptr = llvmir.GlobalVariable(llvm_mod, voidptr, name=ptrname)
-            # fnptr.initializer = voidptr(None)
-            fnptr.linkage = 'external'
-
-        fn = builder.bitcast(builder.load(fnptr), fnty.as_pointer())
-
-        # Call
+        fn = codegen.insert_unresolved_ref(builder, fnty, name)
+        # Normal call sequence
         status, res = self.call_conv.call_function(builder, fn, sig.return_type,
                                                    sig.args, args)
-
         with cgutils.if_unlikely(builder, status.is_error):
             self.call_conv.return_status_propagate(builder, status)
-        return fnptr.name, res
+        return res
 
     def get_executable(self, func, fndesc):
         raise NotImplementedError
