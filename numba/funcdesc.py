@@ -4,7 +4,6 @@ Function descriptors.
 from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
-import itertools
 import sys
 from types import ModuleType
 
@@ -52,8 +51,6 @@ class FunctionDescriptor(object):
     __slots__ = ('native', 'modname', 'qualname', 'doc', 'typemap',
                  'calltypes', 'args', 'kws', 'restype', 'argtypes',
                  'mangled_name', 'unique_name', 'inline')
-
-    _unique_ids = itertools.count(1)
 
     def __init__(self, native, modname, qualname, unique_name, doc,
                  typemap, restype, calltypes, args, kws, mangler=None,
@@ -158,7 +155,7 @@ class FunctionDescriptor(object):
         # Even the same function definition can be compiled into
         # several different function objects with distinct closure
         # variables, so we make sure to disambiguish using an unique id.
-        unique_name = "%s$%d" % (qualname, next(cls._unique_ids))
+        unique_name = "%s$%d" % (qualname, func_ir.func_id.uid)
 
         return qualname, unique_name, modname, doc, args, kws
 

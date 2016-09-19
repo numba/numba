@@ -8,6 +8,7 @@ from collections import namedtuple, OrderedDict
 import dis
 import inspect
 import sys
+import itertools
 from types import CodeType, ModuleType
 
 from numba import errors, utils
@@ -382,6 +383,7 @@ class FunctionIdentity(object):
     being compiled, not necessarily the top-level user function
     (the two might be distinct, e.g. in the `@generated_jit` case).
     """
+    _unique_ids = itertools.count(1)
 
     @classmethod
     def from_function(cls, pyfunc):
@@ -412,5 +414,6 @@ class FunctionIdentity(object):
         self.firstlineno = code.co_firstlineno
         self.arg_count = len(pysig.parameters)
         self.arg_names = list(pysig.parameters)
+        self.uid = next(cls._unique_ids)
 
         return self
