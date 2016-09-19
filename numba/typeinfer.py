@@ -959,7 +959,7 @@ class TypeInferer(object):
                     rettypes.add(typevar.getone())
             # No known return type
             if not rettypes:
-                raise TypeError("cannot type infer run-away recursion")
+                raise TypingError("cannot type infer runaway recursion")
 
             return_type = self._unify_return_types(rettypes)
 

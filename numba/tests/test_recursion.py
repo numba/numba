@@ -4,6 +4,7 @@ import math
 
 from numba import jit
 from numba import unittest_support as unittest
+from numba.errors import TypingError
 from .support import TestCase, tag
 
 
@@ -28,6 +29,12 @@ class TestSelfRecursion(TestCase):
     def test_global_implicit_sig(self):
         self.check_fib(self.mod.fib3)
 
+    def test_runaway(self):
+        with self.assertRaises(TypingError) as raises:
+            self.mod.runaway_self(123)
+        self.assertIn("cannot type infer runaway recursion",
+                      str(raises.exception))
+
 
 class TestMutualRecursion(TestCase):
 
@@ -45,6 +52,12 @@ class TestMutualRecursion(TestCase):
         for x in [-1, 0, 1, 3]:
             self.assertPreciseEqual(pfoo(x=x), cfoo(x=x))
             self.assertPreciseEqual(pbar(y=x, z=1), cbar(y=x, z=1))
+
+    def test_runaway(self):
+        with self.assertRaises(TypingError) as raises:
+            self.mod.runaway_mutual(123)
+        self.assertIn("cannot type infer runaway recursion",
+                      str(raises.exception))
 
 
 if __name__ == '__main__':

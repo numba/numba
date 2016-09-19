@@ -35,6 +35,12 @@ def fib3(n):
     return fib3(n - 1) + fib3(n - 2)
 
 
+# Run-away self recursion
+@jit(nopython=True)
+def runaway_self(x):
+    return runaway_self(x)
+
+
 # Mutual recursion
 @jit(nopython=True)
 def outer_fac(n):
@@ -63,3 +69,15 @@ def make_mutual2(jit=lambda x: x):
         return foo(x=y - z)
 
     return foo, bar
+
+
+# Mutual runaway recursion
+
+@jit(nopython=True)
+def runaway_mutual(x):
+    return runaway_mutual_inner(x)
+
+
+@jit(nopython=True)
+def runaway_mutual_inner(x):
+    return runaway_mutual(x)
