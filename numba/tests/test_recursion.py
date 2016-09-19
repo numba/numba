@@ -1,9 +1,8 @@
 from __future__ import print_function, division, absolute_import
 
-import numpy as np
+import math
 
 from numba import unittest_support as unittest
-from numba import jit
 from .support import TestCase, tag
 
 
@@ -26,10 +25,7 @@ class TestSelfRecursion(TestCase):
         self.check_fib(self.mod.fib2)
 
     def test_global_implicit_sig(self):
-        with self.assertTypingError() as raises:
-            self.mod.fib3(10)
-        self.assertIn("recursive calls need an explicit signature",
-                      str(raises.exception))
+        self.check_fib(self.mod.fib3)
 
 
 class TestMutualRecursion(TestCase):
@@ -39,10 +35,8 @@ class TestMutualRecursion(TestCase):
         self.mod = recursion_usecases
 
     def test_mutual(self):
-        with self.assertTypingError() as raises:
-            self.mod.outer_fac(10)
-        self.assertIn("mutual recursion not supported",
-                      str(raises.exception))
+        expect = math.factorial(10)
+        self.assertPreciseEqual(self.mod.outer_fac(10), expect)
 
 
 if __name__ == '__main__':

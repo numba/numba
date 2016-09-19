@@ -27,7 +27,7 @@ def make_fib2():
 fib2 = make_fib2()
 
 
-# Implicit signature (unsupported)
+# Implicit signature
 @jit(nopython=True)
 def fib3(n):
     if n < 2:
@@ -35,7 +35,7 @@ def fib3(n):
     return fib3(n - 1) + fib3(n - 2)
 
 
-# Mutual recursion (unsupported)
+# Mutual recursion
 @jit(nopython=True)
 def outer_fac(n):
     if n < 1:

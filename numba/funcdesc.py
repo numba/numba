@@ -132,7 +132,7 @@ class FunctionDescriptor(object):
         return "<function descriptor %r>" % (self.unique_name)
 
     @classmethod
-    def _get_function_info(cls, func_ir):
+    def _get_function_info(cls, func_id):
         """
         Returns
         -------
@@ -140,13 +140,11 @@ class FunctionDescriptor(object):
 
         ``unique_name`` must be a unique name.
         """
-        func = func_ir.func_id.func
-        qualname = func_ir.func_id.func_qualname
+        func = func_id.func
+        qualname = func_id.func_qualname
         # XXX to func_id
         modname = func.__module__
         doc = func.__doc__ or ''
-        args = tuple(func_ir.arg_names)
-        kws = ()        # TODO
 
         if modname is None:
             # Dynamically generated function.
@@ -155,18 +153,35 @@ class FunctionDescriptor(object):
         # Even the same function definition can be compiled into
         # several different function objects with distinct closure
         # variables, so we make sure to disambiguish using an unique id.
-        unique_name = "%s$%d" % (qualname, func_ir.func_id.uid)
+        unique_name = "%s$%d" % (qualname, func_id.uid)
 
-        return qualname, unique_name, modname, doc, args, kws
+        return qualname, unique_name, modname, doc
 
     @classmethod
     def _from_python_function(cls, func_ir, typemap, restype, calltypes,
                               native, mangler=None, inline=False):
-        (qualname, unique_name, modname, doc, args, kws,
-         )= cls._get_function_info(func_ir)
+        info = cls._get_function_info(func_ir.func_id)
+        (qualname, unique_name, modname, doc) = info
+        args = func_ir.arg_names
+        kws = ()   # TODO
         self = cls(native, modname, qualname, unique_name, doc,
                    typemap, restype, calltypes,
                    args, kws, mangler=mangler, inline=inline)
+        return self
+
+    @classmethod
+    def _from_ident_and_sig(cls, func_id, signature, mangler=None, native=True):
+        (qualname, unique_name, modname, doc) = cls._get_function_info(func_id)
+        typemap = {}
+        restype = signature.return_type
+        calltypes = {}
+        argtypes = signature.args
+
+        args = func_id.arg_names
+        kws = ()   # TODO
+        self = cls(native, modname, qualname, unique_name, doc,
+                   typemap, restype, calltypes,
+                   args, kws, argtypes=argtypes, mangler=mangler)
         return self
 
 

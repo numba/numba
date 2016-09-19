@@ -781,9 +781,10 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
     for k, v in locals.items():
         infer.seed_type(k, v)
 
-    infer.build_constraint()
-    infer.propagate()
-    typemap, restype, calltypes = infer.unify()
+    with infer.register():
+        infer.build_constraint()
+        infer.propagate()
+        typemap, restype, calltypes = infer.unify()
 
     # Output all Numba warnings
     warnings.flush()

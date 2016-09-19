@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import functools
 import locale
 import weakref
+from collections import defaultdict
 
 import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.passes as lp
@@ -387,6 +388,7 @@ class JITCodeLibrary(CodeLibrary):
         return self._codegen._engine.get_function_address(name)
 
     def _finalize_specific(self):
+        self._codegen.dynamic_link_resolution(self._final_module)
         self._codegen._engine.finalize_object()
 
 
@@ -401,6 +403,9 @@ class BaseCPUCodegen(object):
         self._llvm_module = ll.parse_assembly(
             str(self._create_empty_module(module_name)))
         self._llvm_module.name = "global_codegen_module"
+        self._unresolved_refs = defaultdict(list)
+        self._known_symbols = set()
+        self._refmap = {}
         self._init(self._llvm_module)
 
     def _init(self, llvm_module):
@@ -521,6 +526,35 @@ class BaseCPUCodegen(object):
         return (self._llvm_module.triple, ll.get_host_cpu_name(),
                 self._tm_features)
 
+    def dynamic_link_resolution(self, module):
+        import ctypes
+
+        prefix = '.numba.unresolved$'
+
+        for gv in module.global_variables:
+            if gv.name.startswith(prefix):
+                sym = gv.name[len(prefix):]
+                self._unresolved_refs[sym].append(gv)
+
+                ptr = ctypes.c_void_p(0)
+                self._refmap[gv] = ptr
+                self._engine.add_global_mapping(gv, ctypes.addressof(ptr))
+
+        for fn in module.functions:
+            if not fn.is_declaration:
+                self._known_symbols.add(fn.name)
+
+        resolved = set()
+        for name, gvars in self._unresolved_refs.items():
+            if name in self._known_symbols:
+                resolved.add(name)
+                fnptr = self._engine.get_function_address(name)
+                for gv in gvars:
+                    ptr = self._refmap[gv]
+                    ptr.value = fnptr
+                    # print("MAP", name, gv, fnptr)
+        for name in resolved:
+            del self._unresolved_refs[name]
 
 class AOTCPUCodegen(BaseCPUCodegen):
     """

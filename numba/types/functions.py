@@ -317,9 +317,10 @@ class RecursiveCall(Opaque):
     Recursive call to a Dispatcher.
     """
 
-    def __init__(self, dispatcher_type):
+    def __init__(self, dispatcher_type, func_id):
         assert isinstance(dispatcher_type, Dispatcher)
         self.dispatcher_type = dispatcher_type
+        self.func_id = func_id
         name = "recursive(%s)" % (dispatcher_type,)
         super(RecursiveCall, self).__init__(name)
 

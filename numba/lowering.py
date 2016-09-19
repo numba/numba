@@ -644,9 +644,14 @@ class Lower(BaseLower):
                                                          argvals, fnty.cconv)
 
         elif isinstance(fnty, types.RecursiveCall):
-            # Self-recursive call
-            impl = imputils.user_function(self.fndesc, ())
-            res = impl(self.context, self.builder, signature, argvals)
+            # Recursive call
+            # XXX
+            from .funcdesc import FunctionDescriptor
+            desc = FunctionDescriptor._from_ident_and_sig(
+                fnty.func_id, signature=signature,
+                mangler=self.context.mangler)
+            name = desc.mangled_name
+            name, res = self.context.call_recursive(self.builder, name, signature, argvals)
 
         else:
             # Normal function resolution

@@ -701,6 +701,15 @@ class TypeInferer(object):
             for inst in blk.body:
                 self.constrain_statement(inst)
 
+    @contextlib.contextmanager
+    def register(self):
+        cb = self.context.callstack
+        with cb.register(self, self.func_id, self.get_argument_types()):
+            yield
+
+    def get_argument_types(self):
+        return tuple(self.typevars[a].getone() for a in self.arg_names.values())
+
     def propagate(self):
         newtoken = self.get_state_token()
         oldtoken = None
@@ -944,17 +953,21 @@ class TypeInferer(object):
         Resolve a call to a given function type.  A signature is returned.
         """
         if isinstance(fnty, types.RecursiveCall):
-            # Self-recursive call
+            # Recursive call
             disp = fnty.dispatcher_type.dispatcher
             pysig, args = disp.fold_argument_types(pos_args, kw_args)
 
             # Fetch the return type as given by the user
             rettypes = set()
-            for retvar in self._get_return_vars():
-                typevar = self.typevars[retvar.name]
-                if not typevar.defined:
-                    raise TypeError("recursive calls need an explicit signature in jit()")
-                rettypes.add(typevar.getone())
+            frame = self.context.callstack.find(disp.py_func)
+            for retvar in frame.typeinfer._get_return_vars():
+                typevar = frame.typeinfer.typevars[retvar.name]
+                if typevar.defined:
+                    rettypes.add(typevar.getone())
+            # No known return type
+            if not rettypes:
+                raise TypeError("cannot type infer run-away recursion")
+
             return_type = self._unify_return_types(rettypes)
 
             # Match call arguments with current inference arguments
@@ -988,11 +1001,12 @@ class TypeInferer(object):
 
         if isinstance(typ, types.Dispatcher) and typ.dispatcher.is_compiling:
             # Recursive call
-            if typ.dispatcher.py_func is self.func_id.func:
-                typ = types.RecursiveCall(typ)
+            callframe = self.context.callstack.find(typ.dispatcher.py_func)
+            if callframe is not None:
+                typ = types.RecursiveCall(typ, callframe.func_id)
             else:
                 raise NotImplementedError(
-                    "call to %s: mutual recursion not supported"
+                    "call to %s: unsupported recursion"
                     % typ.dispatcher)
 
         if isinstance(typ, types.Array):
