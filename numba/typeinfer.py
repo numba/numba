@@ -701,15 +701,6 @@ class TypeInferer(object):
             for inst in blk.body:
                 self.constrain_statement(inst)
 
-    @contextlib.contextmanager
-    def register(self):
-        cb = self.context.callstack
-        with cb.register(self, self.func_id, self.get_argument_types()):
-            yield
-
-    def get_argument_types(self):
-        return tuple(self.typevars[a].getone() for a in self.arg_names.values())
-
     def propagate(self):
         newtoken = self.get_state_token()
         oldtoken = None
@@ -959,7 +950,9 @@ class TypeInferer(object):
 
             # Fetch the return type as given by the user
             rettypes = set()
-            frame = self.context.callstack.find(disp.py_func)
+            frame = self.context.callstack.match(disp.py_func, args)
+
+            # Unify known return types
             for retvar in frame.typeinfer._get_return_vars():
                 typevar = frame.typeinfer.typevars[retvar.name]
                 if typevar.defined:
@@ -970,15 +963,7 @@ class TypeInferer(object):
 
             return_type = self._unify_return_types(rettypes)
 
-            # Match call arguments with current inference arguments
-            assert len(args) == len(self.arg_names)
-            formal_args = [self.typevars[self.arg_names[i]].getone()
-                           for i in range(len(args))]
-            for formal_ty, actual_ty in zip(formal_args, args):
-                if not self.context.can_convert(actual_ty, formal_ty):
-                    raise TypeError("bad self-recursive call with argument types %s" % (args,))
-
-            sig = typing.signature(return_type, *formal_args)
+            sig = typing.signature(return_type, *args)
             sig.pysig = pysig
             return sig
         else:
@@ -1001,7 +986,7 @@ class TypeInferer(object):
 
         if isinstance(typ, types.Dispatcher) and typ.dispatcher.is_compiling:
             # Recursive call
-            callframe = self.context.callstack.find(typ.dispatcher.py_func)
+            callframe = self.context.callstack.findfirst(typ.dispatcher.py_func)
             if callframe is not None:
                 typ = types.RecursiveCall(typ, callframe.func_id)
             else:

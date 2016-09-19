@@ -67,12 +67,31 @@ class CallStack(Sequence):
             self._stack.pop()
             self._lock.release()
 
-    def find(self, py_func):
+    def finditer(self, py_func):
         """
-        Returns the first frame that matches the function object or None.
+        Yields frame that matches the function object starting from the top
+        of stack.
         """
         for frame in self:
             if frame.func_id.func is py_func:
+                yield frame
+
+    def findfirst(self, py_func):
+        """
+        Returns the first result from `.finditer(py_func)`; or None if no match.
+        """
+        try:
+            return next(self.finditer(py_func))
+        except StopIteration:
+            return
+
+    def match(self, py_func, args):
+        """
+        Returns first function that matches *py_func* and the arguments types in
+        *args*; or, None if no match.
+        """
+        for frame in self.finditer(py_func):
+            if frame.args == args:
                 return frame
 
 
