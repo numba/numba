@@ -114,3 +114,53 @@ def make_type_change_mutual(jit=lambda x: x):
             return y
 
     return foo
+
+
+# Indirect mutual recursion
+def make_four_level(jit=lambda x: x):
+    @jit
+    def first(x):
+        # The recursing call must have a path that is non-recursing.
+        if x > 0:
+            return second(x) * 2
+        else:
+            return 1
+
+    @jit
+    def second(x):
+        return third(x) * 3
+
+    @jit
+    def third(x):
+        return fourth(x) * 4
+
+    @jit
+    def fourth(x):
+        return first(x / 2 - 1)
+
+    return first
+
+
+def make_inner_error(jit=lambda x: x):
+    @jit
+    def outer(x):
+        if x > 0:
+            return inner(x)
+
+        else:
+            return 1
+
+    @jit
+    def inner(x):
+        if x > 0:
+            return outer(x - 1)
+        else:
+            # this branch is actually never executed
+            return error_fun(x)
+
+    @jit
+    def error_fun(x):
+        # to trigger an untyped attribute error
+        return x.ndim
+
+    return outer

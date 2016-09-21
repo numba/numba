@@ -26,6 +26,7 @@ class TestSelfRecursion(TestCase):
     def test_inner_explicit_sig(self):
         self.check_fib(self.mod.fib2)
 
+    @tag('important')
     def test_global_implicit_sig(self):
         self.check_fib(self.mod.fib3)
 
@@ -65,11 +66,32 @@ class TestMutualRecursion(TestCase):
         self.assertIn("cannot type infer runaway recursion",
                       str(raises.exception))
 
+    @tag('important')
     def test_type_change(self):
         pfunc = self.mod.make_type_change_mutual()
         cfunc = self.mod.make_type_change_mutual(jit(nopython=True))
         args = 13, 0.125
         self.assertPreciseEqual(pfunc(*args), cfunc(*args))
+
+    def test_four_level(self):
+        pfunc = self.mod.make_four_level()
+        cfunc = self.mod.make_four_level(jit(nopython=True))
+        arg = 7
+        self.assertPreciseEqual(pfunc(arg), cfunc(arg))
+
+    def test_inner_error(self):
+        # nopython mode
+        cfunc = self.mod.make_inner_error(jit(nopython=True))
+        with self.assertRaises(TypingError) as raises:
+            cfunc(2)
+        errmsg = 'Unknown attribute \'ndim\''
+        self.assertIn(errmsg, str(raises.exception))
+
+        # objectmode
+        # error is never trigger, function return normally
+        cfunc = self.mod.make_inner_error(jit)
+        pfunc = self.mod.make_inner_error()
+        self.assertEqual(cfunc(6), pfunc(6))
 
 
 if __name__ == '__main__':
