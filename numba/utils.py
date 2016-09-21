@@ -257,40 +257,6 @@ class UniqueDict(dict):
         super(UniqueDict, self).__setitem__(key, value)
 
 
-class NonReentrantLock(object):
-    """
-    A lock class which explicitly forbids reentrancy.
-    """
-
-    def __init__(self):
-        self._lock = threading.Lock()
-        self._owner = None
-
-    def acquire(self):
-        me = get_ident()
-        if me == self._owner:
-            raise RuntimeError("cannot re-acquire lock from same thread")
-        self._lock.acquire()
-        self._owner = me
-
-    def release(self):
-        if self._owner != get_ident():
-            raise RuntimeError("cannot release un-acquired lock")
-        self._owner = None
-        self._lock.release()
-
-    def is_owned(self):
-        """
-        Whether the lock is owned by the current thread.
-        """
-        return self._owner == get_ident()
-
-    __enter__ = acquire
-
-    def __exit__(self, t, v, tb):
-        self.release()
-
-
 # Django's cached_property
 # see https://docs.djangoproject.com/en/dev/ref/utils/#django.utils.functional.cached_property
 

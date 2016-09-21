@@ -51,11 +51,11 @@ class TestCase(unittest.TestCase):
         self.check_testsuite_size(['numba.cuda.tests'], 1, 400)
 
     def test_module(self):
-        self.check_testsuite_size(['numba.tests.test_utils'], 5, 15)
+        self.check_testsuite_size(['numba.tests.test_utils'], 3, 15)
         self.check_testsuite_size(['numba.tests.test_nested_calls'], 5, 15)
         # Several modules
         self.check_testsuite_size(['numba.tests.test_nested_calls',
-                                   'numba.tests.test_utils'], 15, 30)
+                                   'numba.tests.test_utils'], 13, 30)
 
     def test_subpackage(self):
         self.check_testsuite_size(['numba.tests.npyufunc'], 50, 200)
