@@ -4,7 +4,7 @@ import re
 from collections import defaultdict, deque
 
 from numba.config import MACHINE_BITS
-from numba import cgutils
+from numba import cgutils, types
 from llvmlite import ir, binding as llvm
 
 # Flag to enable debug print in NRT_incref and NRT_decref
@@ -146,6 +146,22 @@ def _define_atomic_cas(module, ordering):
     return fn_cas
 
 
+def _define_nrt_unresolved_abort(ctx, module):
+    """
+    Defines an abort function due to unresolved symbol.
+
+    The function takes no args and will always raise an exception.
+    It should be safe to call this function with incorrect number of arguments.
+    """
+    fnty = ctx.call_conv.get_function_type(types.none, ())
+    fn = ir.Function(module, fnty, name="nrt_unresolved_abort")
+    bb = fn.append_basic_block()
+    builder = ir.IRBuilder(bb)
+    msg = "numba jitted function aborted due to unresolved symbol"
+    ctx.call_conv.return_user_exc(builder, RuntimeError, (msg,))
+    return fn
+
+
 def create_nrt_module(ctx):
     """
     Create an IR module defining the LLVM NRT functions.
@@ -164,6 +180,8 @@ def create_nrt_module(ctx):
     _define_nrt_meminfo_data(ir_mod)
     _define_nrt_incref(ir_mod, atomic_inc)
     _define_nrt_decref(ir_mod, atomic_dec)
+
+    _define_nrt_unresolved_abort(ctx, ir_mod)
 
     return ir_mod, library
 

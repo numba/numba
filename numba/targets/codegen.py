@@ -415,7 +415,8 @@ class RuntimeLinker(object):
             if gv.name.startswith(prefix):
                 sym = gv.name[len(prefix):]
                 # Allocate a memory space for the pointer
-                ptr = ctypes.c_void_p(0)
+                abortfn = engine.get_function_address('nrt_unresolved_abort')
+                ptr = ctypes.c_void_p(abortfn)
                 engine.add_global_mapping(gv, ctypes.addressof(ptr))
                 self._unresolved[sym].append(ptr)
 
