@@ -377,6 +377,10 @@ class ByteCode(object):
 class FunctionIdentity(object):
     """
     A function's identity and metadata.
+
+    Note this typically represents a function whose bytecode is
+    being compiled, not necessarily the top-level user function
+    (the two might be distinct, e.g. in the `@generated_jit` case).
     """
 
     @classmethod

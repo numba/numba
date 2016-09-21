@@ -151,8 +151,7 @@ def run_frontend(func):
     func_id = bytecode.FunctionIdentity.from_function(func)
     interp = interpreter.Interpreter(func_id)
     bc = bytecode.ByteCode(func_id=func_id)
-    interp.interpret(bc)
-    func_ir = interp.result()
+    func_ir = interp.interpret(bc)
     post_proc = postproc.PostProcessor(func_ir)
     post_proc.run()
     return func_ir
@@ -745,8 +744,7 @@ def legalize_return_type(return_type, interp, targetctx):
 
 def translate_stage(func_id, bytecode):
     interp = interpreter.Interpreter(func_id)
-    interp.interpret(bytecode)
-    return interp.result()
+    return interp.interpret(bytecode)
 
 
 def ir_processing_stage(func_ir):

@@ -797,19 +797,16 @@ class Loop(object):
 
 class FunctionIR(object):
 
-    def __init__(self, interp):
-        # XXX turn this inside out?  Interpreter should first construct
-        # a FunctionIR object and then work on it
-        self.blocks = interp.blocks
-        self.is_generator = interp.is_generator
+    def __init__(self, blocks, is_generator, func_id, loc,
+                 definitions, arg_count, arg_names):
+        self.blocks = blocks
+        self.is_generator = is_generator
+        self.func_id = func_id
+        self.loc = loc
+        self.arg_count = arg_count
+        self.arg_names = arg_names
 
-        self.func_id = interp.func_id
-        self.loc = interp.loc
-        self._definitions = interp.definitions
-        # Can be different from func_id.arg_count or func_id.arg_names
-        # (for loop-lifting)
-        self.arg_count = interp.arg_count
-        self.arg_names = interp.arg_names
+        self._definitions = definitions
 
         self._reset_analysis_variables()
 

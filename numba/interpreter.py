@@ -68,7 +68,7 @@ class Interpreter(object):
         self.func_id = func_id
         self.arg_count = func_id.arg_count
         self.arg_names = func_id.arg_names
-        self.loc = ir.Loc.from_function_id(func_id)
+        self.loc = self.first_loc = ir.Loc.from_function_id(func_id)
         self.is_generator = func_id.is_generator
 
         # { inst offset : ir.Block }
@@ -108,10 +108,9 @@ class Interpreter(object):
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
 
-    def result(self):
-        """
-        """
-        return ir.FunctionIR(self)
+        return ir.FunctionIR(self.blocks, self.is_generator, self.func_id,
+                             self.first_loc, self.definitions,
+                             self.arg_count, self.arg_names)
 
     def init_first_block(self):
         # Define variables receiving the function arguments

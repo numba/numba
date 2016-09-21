@@ -44,6 +44,10 @@ class FunctionDescriptor(object):
     """
     Base class for function descriptors: an object used to carry
     useful metadata about a natively callable function.
+
+    Note that while `FunctionIdentity` denotes a Python function
+    which is being concretely compiled by Numba, `FunctionDescriptor`
+    may be more "abstract": e.g. a function decorated with `@generated_jit`.
     """
     __slots__ = ('native', 'modname', 'qualname', 'doc', 'typemap',
                  'calltypes', 'args', 'kws', 'restype', 'argtypes',
