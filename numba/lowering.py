@@ -649,8 +649,13 @@ class Lower(BaseLower):
             qualprefix = fnty.overloads[signature.args]
             mangler = self.context.mangler or default_mangler
             mangled_name = mangler(qualprefix, signature.args)
-            res = self.context.call_unresolved(self.builder, mangled_name,
-                                               signature, argvals)
+            # special case self recursion
+            if self.builder.function.name.startswith(mangled_name):
+                res = self.context.call_internal(self.builder, self.fndesc,
+                                                 signature, argvals)
+            else:
+                res = self.context.call_unresolved(self.builder, mangled_name,
+                                                   signature, argvals)
 
         else:
             # Normal function resolution
