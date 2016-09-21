@@ -640,11 +640,12 @@ class TypeInferer(object):
     Operates on block that shares the same ir.Scope.
     """
 
-    def __init__(self, context, interp, warnings):
+    def __init__(self, context, func_ir, warnings):
         self.context = context
-        self.blocks = interp.blocks
-        self.generator_info = interp.generator_info
-        self.py_func = interp.bytecode.func
+        self.blocks = func_ir.blocks
+        self.generator_info = func_ir.generator_info
+        self.func_id = func_ir.func_id
+
         self.typevars = TypeVarMap()
         self.typevars.set_context(context)
         self.constraints = ConstraintNetwork()
@@ -788,8 +789,8 @@ class TypeInferer(object):
         if yield_type is None:
             raise TypingError("Cannot type generator: cannot unify yielded types "
                               "%s" % (yield_types,))
-        return types.Generator(self.py_func, yield_type, arg_types, state_types,
-                               has_finalizer=True)
+        return types.Generator(self.func_id.func, yield_type, arg_types,
+                               state_types, has_finalizer=True)
 
     def get_function_types(self, typemap):
         """
@@ -975,7 +976,7 @@ class TypeInferer(object):
         try:
             typ = self.resolve_value_type(inst, gvar.value)
         except TypingError as e:
-            if (gvar.name == self.py_func.__name__
+            if (gvar.name == self.func_id.func_name
                 and gvar.name in _temporary_dispatcher_map):
                 # Self-recursion case where the dispatcher is not (yet?) known
                 # as a global variable
@@ -987,7 +988,7 @@ class TypeInferer(object):
 
         if isinstance(typ, types.Dispatcher) and typ.dispatcher.is_compiling:
             # Recursive call
-            if typ.dispatcher.py_func is self.py_func:
+            if typ.dispatcher.py_func is self.func_id.func:
                 typ = types.RecursiveCall(typ)
             else:
                 raise NotImplementedError(

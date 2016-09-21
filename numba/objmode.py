@@ -505,7 +505,7 @@ class PyLower(BaseLower):
         """
         Initialize live variables for *block*.
         """
-        self._live_vars = set(self.interp.get_block_entry_vars(block))
+        self._live_vars = set(self.func_ir.get_block_entry_vars(block))
 
     def _getvar(self, name, ltype=None):
         if name not in self.varmap:

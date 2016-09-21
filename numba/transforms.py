@@ -142,7 +142,7 @@ def _loop_lift_prepare_loop_func(loopinfo, blocks):
     blocks[loopinfo.returnto] = make_epilogue()
 
 
-def _loop_lift_modify_blocks(bytecode, loopinfo, blocks,
+def _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
                              typingctx, targetctx, flags, locals):
     """
     Modify the block inplace to call to the lifted-loop.
@@ -156,11 +156,15 @@ def _loop_lift_modify_blocks(bytecode, loopinfo, blocks,
     loopblocks = dict((k, blocks[k].copy()) for k in loopblockkeys)
     # Modify the loop blocks
     _loop_lift_prepare_loop_func(loopinfo, loopblocks)
-    # Create an intrepreter for the lifted loop
-    interp = Interpreter.from_blocks(bytecode=bytecode, blocks=loopblocks,
-                                     override_args=loopinfo.inputs,
-                                     force_non_generator=True)
-    liftedloop = LiftedLoop(interp, typingctx, targetctx, flags, locals)
+
+    # Create a new IR for the lifted loop
+    lifted_ir = func_ir.derive(blocks=loopblocks,
+                               arg_names=tuple(loopinfo.inputs),
+                               arg_count=len(loopinfo.inputs),
+                               force_non_generator=True)
+    liftedloop = LiftedLoop(lifted_ir,
+                            typingctx, targetctx, flags, locals)
+
     # modify for calling into liftedloop
     callblock = _loop_lift_modify_call_block(liftedloop, blocks[loopinfo.callfrom],
                                              loopinfo.inputs, loopinfo.outputs,
@@ -173,26 +177,25 @@ def _loop_lift_modify_blocks(bytecode, loopinfo, blocks,
     return liftedloop
 
 
-def loop_lifting(interp, typingctx, targetctx, flags, locals):
+def loop_lifting(func_ir, typingctx, targetctx, flags, locals):
     """
     Loop lifting transformation.
 
-    Given a interpreter `interp` returns a 2 tuple of
+    Given a interpreter `func_ir` returns a 2 tuple of
     `(toplevel_interp, [loop0_interp, loop1_interp, ....])`
     """
-    blocks = interp.blocks.copy()
+    blocks = func_ir.blocks.copy()
     cfg = compute_cfg_from_blocks(blocks)
     loopinfos = _loop_lift_get_candidate_infos(cfg, blocks,
-                                               interp.variable_lifetime.livemap)
+                                               func_ir.variable_lifetime.livemap)
     loops = []
     for loopinfo in loopinfos:
-        lifted = _loop_lift_modify_blocks(interp.bytecode, loopinfo, blocks,
+        lifted = _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
                                           typingctx, targetctx, flags, locals)
         loops.append(lifted)
-    # make main interpreter
-    main = Interpreter.from_blocks(bytecode=interp.bytecode,
-                                   blocks=blocks,
-                                   used_globals=interp.used_globals)
+
+    # Make main IR
+    main = func_ir.derive(blocks=blocks)
 
     return main, loops
 

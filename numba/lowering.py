@@ -44,14 +44,14 @@ class BaseLower(object):
     # If true, then can't cache LLVM module accross process calls
     has_dynamic_globals = False
 
-    def __init__(self, context, library, fndesc, interp):
+    def __init__(self, context, library, fndesc, func_ir):
         self.context = context
         self.library = library
         self.fndesc = fndesc
-        self.blocks = utils.SortedMap(utils.iteritems(interp.blocks))
-        self.interp = interp
+        self.blocks = utils.SortedMap(utils.iteritems(func_ir.blocks))
+        self.func_ir = func_ir
         self.call_conv = context.call_conv
-        self.generator_info = self.interp.generator_info
+        self.generator_info = func_ir.generator_info
 
         # Initialize LLVM
         self.module = self.library.create_ir_module(self.fndesc.unique_name)

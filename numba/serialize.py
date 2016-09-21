@@ -44,7 +44,8 @@ def _get_function_globals_for_reduction(func):
     Analyse *func* and return a dictionary of global values suitable for
     reduction.
     """
-    bc = bytecode.ByteCode(func)
+    func_id = bytecode.FunctionIdentity.from_function(func)
+    bc = bytecode.ByteCode(func_id)
     globs = bc.get_used_globals()
     for k, v in globs.items():
         # Make modules picklable by name
