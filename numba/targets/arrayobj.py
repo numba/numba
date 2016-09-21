@@ -5,7 +5,6 @@ the buffer protocol.
 
 from __future__ import print_function, absolute_import, division
 
-import collections
 import functools
 import math
 
@@ -1181,6 +1180,88 @@ def maybe_copy_source(context, builder, use_copy,
     return src_getitem, src_cleanup
 
 
+def _bc_adjust_dimension(context, builder, shapes, strides, target_shape):
+    """
+    Preprocess dimension for broadcasting.
+    Returns (shapes, strides) such that the ndim match *target_shape*.
+    When expanding to higher ndim, the returning shapes and strides are
+    prepended with ones and zeros, respectively.
+    When truncating to lower ndim, the shapes are checked (in runtime).
+    All extra dimension must have size of 1.
+    """
+    zero = context.get_constant(types.uintp, 0)
+    one = context.get_constant(types.uintp, 1)
+
+    # Adjust for broadcasting to higher dimension
+    if len(target_shape) > len(shapes):
+        nd_diff = len(target_shape) - len(shapes)
+        # Fill missing shapes with one, strides with zeros
+        shapes = [one] * nd_diff + shapes
+        strides = [zero] * nd_diff + strides
+    # Adjust for broadcasting to lower dimension
+    elif len(target_shape) < len(shapes):
+        # Accepted if all extra dims has shape 1
+        nd_diff = len(shapes) - len(target_shape)
+        dim_is_one = [builder.icmp_unsigned('==', sh, one)
+                      for sh in shapes[:nd_diff]]
+        accepted = functools.reduce(builder.and_, dim_is_one,
+                                    cgutils.true_bit)
+        # Check error
+        with builder.if_then(builder.not_(accepted), likely=False):
+            msg = "cannot broadcast source array for assignment"
+            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+        # Truncate extra shapes, strides
+        shapes = shapes[nd_diff:]
+        strides = strides[nd_diff:]
+
+    return shapes, strides
+
+
+def _bc_adjust_shape_strides(context, builder, shapes, strides, target_shape):
+    """
+    Broadcast shapes and strides to target_shape given that their ndim already
+    matches.  For each location where the shape is 1 and does not match the
+    dim for target, it is set to the value at the target and the stride is
+    set to zero.
+    """
+    bc_shapes = []
+    bc_strides = []
+    zero = context.get_constant(types.uintp, 0)
+    one = context.get_constant(types.uintp, 1)
+    # Adjust all mismatching ones in shape
+    mismatch = [builder.icmp_signed('!=', tar, old)
+                for tar, old in zip(target_shape, shapes)]
+    src_is_one = [builder.icmp_signed('==', old, one) for old in shapes]
+    preds = [builder.and_(x, y) for x, y in zip(mismatch, src_is_one)]
+    bc_shapes = [builder.select(p, tar, old)
+                 for p, tar, old in zip(preds, target_shape, shapes)]
+    bc_strides = [builder.select(p, zero, old)
+                  for p, old in zip(preds, strides)]
+    return bc_shapes, bc_strides
+
+
+def _broadcast_to_shape(context, builder, arrtype, arr, target_shape):
+    """
+    Broadcast the given array to the target_shape.
+    Returns (array_type, array)
+    """
+    # Compute broadcasted shape and strides
+    shapes = cgutils.unpack_tuple(builder, arr.shape)
+    strides = cgutils.unpack_tuple(builder, arr.strides)
+
+    shapes, strides = _bc_adjust_dimension(context, builder, shapes, strides,
+                                           target_shape)
+    shapes, strides = _bc_adjust_shape_strides(context, builder, shapes,
+                                               strides, target_shape)
+    new_arrtype = arrtype.copy(ndim=len(target_shape), layout='A')
+    # Create new view
+    new_arr = make_array(new_arrtype)(context, builder)
+    repl = dict(shape=cgutils.pack_array(builder, shapes),
+                strides=cgutils.pack_array(builder, strides))
+    cgutils.copy_struct(new_arr, arr, repl)
+    return new_arrtype, new_arr
+
+
 def fancy_setslice(context, builder, sig, args, index_types, indices):
     """
     Implement slice assignment for arrays.  This implementation works for
@@ -1202,13 +1283,15 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     if isinstance(srcty, types.Buffer):
         # Source is an array
         src_dtype = srcty.dtype
+        index_shape = indexer.get_shape()
         src = make_array(srcty)(context, builder, src)
+        # Broadcast source array to shape
+        srcty, src = _broadcast_to_shape(context, builder, srcty, src, index_shape)
         src_shapes = cgutils.unpack_tuple(builder, src.shape)
         src_strides = cgutils.unpack_tuple(builder, src.strides)
         src_data = src.data
 
         # Check shapes are equal
-        index_shape = indexer.get_shape()
         shape_error = cgutils.false_bit
         assert len(index_shape) == len(src_shapes)
 
