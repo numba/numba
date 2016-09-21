@@ -59,6 +59,10 @@ class CallStack(Sequence):
 
     @contextlib.contextmanager
     def register(self, typeinfer, func_id, args):
+        # guard compiling the same function with the same signature
+        if self.match(func_id.func, args):
+            msg = "compiler re-entrant to the same function signature"
+            raise RuntimeError(msg)
         self._lock.acquire()
         self._stack.append(CallFrame(typeinfer, func_id, args))
         try:

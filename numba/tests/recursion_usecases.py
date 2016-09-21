@@ -99,12 +99,12 @@ def make_type_change_mutual(jit=lambda x: x):
     @jit
     def foo(x, y):
         if x > 1 and y > 0:
+            # call bar first to exercise partial type inference.
+            # typeinferer suspended at the call to bar() and haven't determined
+            # the potential return type from the else-branch
             return x + bar(x - y, y)
-            # return y
         else:
-            # return x + bar(x - y, y)
             return y
-
 
     @jit
     def bar(x, y):

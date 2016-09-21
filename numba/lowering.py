@@ -647,9 +647,12 @@ class Lower(BaseLower):
             # Recursive call
             # XXX
             from .funcdesc import FunctionDescriptor
-            desc = FunctionDescriptor._from_ident_and_sig(
-                fnty.func_id, signature=signature,
-                mangler=self.context.mangler)
+
+            desc = fnty.overloads[signature.args]
+            if not isinstance(desc, FunctionDescriptor):
+                desc = FunctionDescriptor._from_ident_and_sig(
+                    desc, signature=signature, mangler=self.context.mangler)
+
             res = self.context.call_unresolved(self.builder, desc.mangled_name,
                                                signature, argvals)
 

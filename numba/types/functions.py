@@ -316,13 +316,20 @@ class RecursiveCall(Opaque):
     """
     Recursive call to a Dispatcher.
     """
+    _overloads = None
 
-    def __init__(self, dispatcher_type, func_id):
+    def __init__(self, dispatcher_type):
         assert isinstance(dispatcher_type, Dispatcher)
         self.dispatcher_type = dispatcher_type
-        self.func_id = func_id
         name = "recursive(%s)" % (dispatcher_type,)
         super(RecursiveCall, self).__init__(name)
+        # Initializing for the first time
+        if self._overloads is None:
+            self._overloads = {}
+
+    @property
+    def overloads(self):
+        return self._overloads
 
     @property
     def key(self):
