@@ -27,6 +27,16 @@ def make_fib2():
 fib2 = make_fib2()
 
 
+def make_type_change_self(jit=lambda x: x):
+    @jit
+    def type_change_self(x, y):
+        if x > 1 and y > 0:
+            return x + type_change_self(x - y, y)
+        else:
+            return y
+    return type_change_self
+
+
 # Implicit signature
 @jit(nopython=True)
 def fib3(n):
@@ -81,3 +91,26 @@ def runaway_mutual(x):
 @jit(nopython=True)
 def runaway_mutual_inner(x):
     return runaway_mutual(x)
+
+
+# Mutual type changing reursion
+
+def make_type_change_mutual(jit=lambda x: x):
+    @jit
+    def foo(x, y):
+        if x > 1 and y > 0:
+            return x + bar(x - y, y)
+            # return y
+        else:
+            # return x + bar(x - y, y)
+            return y
+
+
+    @jit
+    def bar(x, y):
+        if x > 1 and y > 0:
+            return x + foo(x - y, y)
+        else:
+            return y
+
+    return foo

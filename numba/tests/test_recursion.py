@@ -35,6 +35,12 @@ class TestSelfRecursion(TestCase):
         self.assertIn("cannot type infer runaway recursion",
                       str(raises.exception))
 
+    def test_type_change(self):
+        pfunc = self.mod.make_type_change_self()
+        cfunc = self.mod.make_type_change_self(jit(nopython=True))
+        args = 13, 0.125
+        self.assertPreciseEqual(pfunc(*args), cfunc(*args))
+
 
 class TestMutualRecursion(TestCase):
 
@@ -58,6 +64,12 @@ class TestMutualRecursion(TestCase):
             self.mod.runaway_mutual(123)
         self.assertIn("cannot type infer runaway recursion",
                       str(raises.exception))
+
+    def test_type_change(self):
+        pfunc = self.mod.make_type_change_mutual()
+        cfunc = self.mod.make_type_change_mutual(jit(nopython=True))
+        args = 13, 0.125
+        self.assertPreciseEqual(pfunc(*args), cfunc(*args))
 
 
 if __name__ == '__main__':
