@@ -408,12 +408,20 @@ class FunctionIdentity(object):
         self.func_name = func_qualname.split('.')[-1]
         self.code = code
         self.module = inspect.getmodule(func)
+        self.modname = (utils._dynamic_modname
+                        if self.module is None
+                        else self.module.__name__)
         self.is_generator = inspect.isgeneratorfunction(func)
         self.pysig = pysig
         self.filename = code.co_filename
         self.firstlineno = code.co_firstlineno
         self.arg_count = len(pysig.parameters)
         self.arg_names = list(pysig.parameters)
-        self.uid = next(cls._unique_ids)
+
+        # Even the same function definition can be compiled into
+        # several different function objects with distinct closure
+        # variables, so we make sure to disambiguish using an unique id.
+        uid = next(cls._unique_ids)
+        self.unique_name = '{}${}'.format(self.func_qualname, uid)
 
         return self

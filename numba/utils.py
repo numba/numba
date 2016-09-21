@@ -11,7 +11,7 @@ import timeit
 import math
 import sys
 import traceback
-
+from types import ModuleType
 import numpy as np
 
 from .six import *
@@ -500,6 +500,13 @@ def logger_hasHandlers(logger):
         else:
             c = c.parent
     return rv
+
+
+# A dummy module for dynamically-generated functions
+_dynamic_modname = '<dynamic>'
+_dynamic_module = ModuleType(_dynamic_modname)
+_dynamic_module.__builtins__ = moves.builtins
+
 
 # Backported from Python 3.4: weakref.finalize()
 

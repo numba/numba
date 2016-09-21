@@ -5,10 +5,9 @@ from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
 import sys
-from types import ModuleType
 
-from . import six, types
-from .utils import PY3
+from . import types
+from .utils import PY3, _dynamic_modname, _dynamic_module
 
 
 def transform_arg_name(arg):
@@ -33,10 +32,13 @@ def default_mangler(name, argtypes):
         out = out.decode('ascii')
     return out
 
-# A dummy module for dynamically-generated functions
-_dynamic_modname = '<dynamic>'
-_dynamic_module = ModuleType(_dynamic_modname)
-_dynamic_module.__builtins__ = six.moves.builtins
+
+def qualifying_prefix(modname, qualname):
+    """
+    Returns a new string that is used for the first half of the mangled name.
+    """
+    # XXX choose a different convention for object mode
+    return '{}.{}'.format(modname, qualname) if modname else qualname
 
 
 class FunctionDescriptor(object):
@@ -78,12 +80,8 @@ class FunctionDescriptor(object):
         mangler = default_mangler if mangler is None else mangler
         # The mangled name *must* be unique, else the wrong function can
         # be chosen at link time.
-        if self.modname:
-            # XXX choose a different convention for object mode
-            self.mangled_name = mangler('%s.%s' % (self.modname, self.unique_name),
-                                                   self.argtypes)
-        else:
-            self.mangled_name = mangler(self.unique_name, self.argtypes)
+        qualprefix = qualifying_prefix(self.modname, self.unique_name)
+        self.mangled_name = mangler(qualprefix, self.argtypes)
         self.inline = inline
 
     def lookup_module(self):
@@ -132,7 +130,7 @@ class FunctionDescriptor(object):
         return "<function descriptor %r>" % (self.unique_name)
 
     @classmethod
-    def _get_function_info(cls, func_id):
+    def _get_function_info(cls, func_ir):
         """
         Returns
         -------
@@ -140,48 +138,30 @@ class FunctionDescriptor(object):
 
         ``unique_name`` must be a unique name.
         """
-        func = func_id.func
-        qualname = func_id.func_qualname
+        func = func_ir.func_id.func
+        qualname = func_ir.func_id.func_qualname
         # XXX to func_id
         modname = func.__module__
         doc = func.__doc__ or ''
+        args = tuple(func_ir.arg_names)
+        kws = ()        # TODO
 
         if modname is None:
             # Dynamically generated function.
             modname = _dynamic_modname
 
-        # Even the same function definition can be compiled into
-        # several different function objects with distinct closure
-        # variables, so we make sure to disambiguish using an unique id.
-        unique_name = "%s$%d" % (qualname, func_id.uid)
+        unique_name = func_ir.func_id.unique_name
 
-        return qualname, unique_name, modname, doc
+        return qualname, unique_name, modname, doc, args, kws
 
     @classmethod
     def _from_python_function(cls, func_ir, typemap, restype, calltypes,
                               native, mangler=None, inline=False):
-        info = cls._get_function_info(func_ir.func_id)
-        (qualname, unique_name, modname, doc) = info
-        args = func_ir.arg_names
-        kws = ()   # TODO
+        (qualname, unique_name, modname, doc, args, kws,
+         )= cls._get_function_info(func_ir)
         self = cls(native, modname, qualname, unique_name, doc,
                    typemap, restype, calltypes,
                    args, kws, mangler=mangler, inline=inline)
-        return self
-
-    @classmethod
-    def _from_ident_and_sig(cls, func_id, signature, mangler=None, native=True):
-        (qualname, unique_name, modname, doc) = cls._get_function_info(func_id)
-        typemap = {}
-        restype = signature.return_type
-        calltypes = {}
-        argtypes = signature.args
-
-        args = func_id.arg_names
-        kws = ()   # TODO
-        self = cls(native, modname, qualname, unique_name, doc,
-                   typemap, restype, calltypes,
-                   args, kws, argtypes=argtypes, mangler=mangler)
         return self
 
 

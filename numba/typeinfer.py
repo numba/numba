@@ -21,6 +21,7 @@ import traceback
 
 from numba import ir, types, utils, config, six, typing
 from .errors import TypingError, UntypedAttributeError, new_error_context
+from .funcdesc import qualifying_prefix
 
 
 class TypeVar(object):
@@ -1005,11 +1006,14 @@ class TypeInferer(object):
             if frame is None:
                 sig = self.context.resolve_function_type(fnty.dispatcher_type,
                                                          pos_args, kw_args)
-                # XXX store func_id instead
-                fnty.overloads[args] = disp.overloads[args].fndesc
+                fndesc = disp.overloads[args].fndesc
+                fnty.overloads[args] = qualifying_prefix(fndesc.modname,
+                                                         fndesc.unique_name)
                 return sig
 
-            fnty.overloads[args] = frame.func_id
+            fnid = frame.func_id
+            fnty.overloads[args] = qualifying_prefix(fnid.modname,
+                                                     fnid.unique_name)
             # Resume propagation in parent frame
             return_type = frame.typeinfer.return_types_from_partial()
             # No known return type
