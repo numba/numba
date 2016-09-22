@@ -404,6 +404,8 @@ class ArrayAttribute(AttributeTemplate):
         if isinstance(ary.dtype, types.Record):
             if attr in ary.dtype.fields:
                 return ary.copy(dtype=ary.dtype.typeof(attr), layout='A')
+        elif ary.dtype in types.complex_domain and attr in ['real', 'imag']:
+            return ary.copy(dtype=ary.dtype.underlying_float, layout='A')
 
 
 @infer

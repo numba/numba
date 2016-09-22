@@ -1888,14 +1888,43 @@ def array_ctypes_data(context, builder, typ, value):
 #-------------------------------------------------------------------------------
 # Structured / record lookup
 
+
+def array_complex_attr(context, builder, typ, array, attr):
+    if attr not in ['real', 'imag'] or typ.dtype not in types.complex_domain:
+        raise NotImplementedError("cannot get attribute `{}`".format(attr))
+
+    # sizeof underlying float type
+    flty = typ.dtype.underlying_float
+    sizeof_flty = context.get_abi_sizeof(context.get_data_type(flty))
+    itemsize = array.itemsize.type(sizeof_flty)
+
+    # cast data pointer to float type
+    llfltptrty = context.get_value_type(flty).as_pointer()
+    dataptr = builder.bitcast(array.data, llfltptrty)
+
+    # add offset
+    if attr == 'imag':
+        dataptr = builder.gep(dataptr, [ir.IntType(32)(1)])
+
+    # make result
+    resultty = typ.copy(dtype=flty, layout='A')
+    result = make_array(resultty)(context, builder)
+    repl = dict(data=dataptr, itemsize=itemsize)
+    cgutils.copy_struct(result, array, repl)
+    return impl_ret_borrowed(context, builder, resultty, result._getvalue())
+
+
 @lower_getattr_generic(types.Array)
-def array_record_getattr(context, builder, typ, value, attr):
+def array_getattr(context, builder, typ, value, attr):
     """
-    Generic getattr() implementation for record arrays: fetch the given
+    Generic getattr() implementation for record and complex arrays: fetch the given
     record member, i.e. a subarray.
     """
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
+
+    if typ.dtype in types.complex_domain:
+        return array_complex_attr(context, builder, typ, array, attr)
 
     rectype = typ.dtype
     if not isinstance(rectype, types.Record):
@@ -1932,7 +1961,7 @@ def array_record_getitem(context, builder, sig, args):
     if not isinstance(index, str):
         # This will fallback to normal getitem
         raise NotImplementedError
-    return array_record_getattr(context, builder, sig.args[0], args[0], index)
+    return array_getattr(context, builder, sig.args[0], args[0], index)
 
 
 @lower_getattr_generic(types.Record)
