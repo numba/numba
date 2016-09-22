@@ -237,15 +237,23 @@ class TestComplexArray(MemoryLeakMixin, unittest.TestCase):
     def test_real_attr(self):
         pyfunc = array_real
         cfunc = njit(pyfunc)
+        # test 1D
         size = 10
         arr = np.arange(size) + np.arange(size) * 10j
+        self.assertEqual(pyfunc(arr).tolist(), cfunc(arr).tolist())
+        # test 2D
+        arr = arr.reshape(2, 5)
         self.assertEqual(pyfunc(arr).tolist(), cfunc(arr).tolist())
 
     def test_imag_attr(self):
         pyfunc = array_imag
         cfunc = njit(pyfunc)
+        # test 1D
         size = 10
         arr = np.arange(size) + np.arange(size) * 10j
+        self.assertEqual(pyfunc(arr).tolist(), cfunc(arr).tolist())
+        # test 2D
+        arr = arr.reshape(2, 5)
         self.assertEqual(pyfunc(arr).tolist(), cfunc(arr).tolist())
 
 
