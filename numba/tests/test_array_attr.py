@@ -79,6 +79,14 @@ def array_ctypes_data(arr):
     return arr.ctypes.data
 
 
+def array_real(arr):
+    return arr.real
+
+
+def array_imag(arr):
+    return arr.imag
+
+
 class TestArrayAttr(MemoryLeakMixin, TestCase):
 
     def setUp(self):
@@ -223,6 +231,22 @@ class TestArrayCTypes(MemoryLeakMixin, unittest.TestCase):
         cfunc = njit(pyfunc)
         arr = np.arange(3)
         self.assertEqual(pyfunc(arr), cfunc(arr))
+
+
+class TestComplexArray(MemoryLeakMixin, unittest.TestCase):
+    def test_real_attr(self):
+        pyfunc = array_real
+        cfunc = njit(pyfunc)
+        size = 10
+        arr = np.arange(size) + np.arange(size) * 10j
+        self.assertEqual(pyfunc(arr).tolist(), cfunc(arr).tolist())
+
+    def test_imag_attr(self):
+        pyfunc = array_imag
+        cfunc = njit(pyfunc)
+        size = 10
+        arr = np.arange(size) + np.arange(size) * 10j
+        self.assertEqual(pyfunc(arr).tolist(), cfunc(arr).tolist())
 
 
 if __name__ == '__main__':
