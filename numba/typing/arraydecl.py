@@ -9,6 +9,7 @@ from numba.typing.templates import (AttributeTemplate, AbstractTemplate,
 # import time side effect: array operations requires typing support of sequence
 # defined in collections: e.g. array.shape[i]
 from numba.typing import collections
+from numba.errors import TypingError
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
 
@@ -277,7 +278,7 @@ class ArrayAttribute(AttributeTemplate):
             return res
         else:
             msg = "cannot access .{} of array of {}"
-            raise TypeError(msg.format(attr, ary.dtype))
+            raise TypingError(msg.format(attr, ary.dtype))
 
     @bound_function("array.transpose")
     def resolve_transpose(self, ary, args, kws):

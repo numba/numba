@@ -1,7 +1,5 @@
 from __future__ import print_function
 
-import sys
-
 import numpy as np
 
 import numba.unittest_support as unittest
@@ -9,6 +7,7 @@ from numba.compiler import compile_isolated
 from numba.numpy_support import from_dtype
 from numba import types, njit, typeof, numpy_support
 from .support import TestCase, CompilationCache, MemoryLeakMixin, tag
+from numba.errors import TypingError
 
 
 def array_dtype(a):
@@ -301,6 +300,33 @@ class TestRealImagAttr(MemoryLeakMixin, unittest.TestCase):
     def test_number_imag(self):
         for dtype in [np.uint8, np.int32, np.float32, np.float64]:
             self.check_number_imag(dtype)
+
+    def test_record_real(self):
+        rectyp = np.dtype([('real', np.float32), ('imag', np.complex64)])
+        arr = np.zeros(3, dtype=rectyp)
+        arr['real'] = np.random.random(arr.size)
+        arr['imag'] = np.random.random(arr.size) * 1.3j
+
+        # check numpy behavior
+        # .real is identity
+        self.assertIs(array_real(arr), arr)
+        # .imag is zero_like
+        self.assertEqual(array_imag(arr).tolist(), np.zeros_like(arr).tolist())
+
+        # check numba behavior
+        # it's most likely a user error, anyway
+        jit_array_real = njit(array_real)
+        jit_array_imag = njit(array_imag)
+
+        with self.assertRaises(TypingError) as raises:
+            jit_array_real(arr)
+        self.assertIn("cannot access .real of array of Record",
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            jit_array_imag(arr)
+        self.assertIn("cannot access .imag of array of Record",
+                      str(raises.exception))
 
 
 if __name__ == '__main__':
