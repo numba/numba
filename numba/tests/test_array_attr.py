@@ -233,8 +233,8 @@ class TestArrayCTypes(MemoryLeakMixin, unittest.TestCase):
         self.assertEqual(pyfunc(arr), cfunc(arr))
 
 
-class TestComplexArray(MemoryLeakMixin, unittest.TestCase):
-    def test_real_attr(self):
+class TestRealImagAttr(MemoryLeakMixin, unittest.TestCase):
+    def test_complex_real(self):
         pyfunc = array_real
         cfunc = njit(pyfunc)
         # test 1D
@@ -245,7 +245,7 @@ class TestComplexArray(MemoryLeakMixin, unittest.TestCase):
         arr = arr.reshape(2, 5)
         self.assertEqual(pyfunc(arr).tolist(), cfunc(arr).tolist())
 
-    def test_imag_attr(self):
+    def test_complex_imag(self):
         pyfunc = array_imag
         cfunc = njit(pyfunc)
         # test 1D
@@ -255,6 +255,52 @@ class TestComplexArray(MemoryLeakMixin, unittest.TestCase):
         # test 2D
         arr = arr.reshape(2, 5)
         self.assertEqual(pyfunc(arr).tolist(), cfunc(arr).tolist())
+
+    def check_number_real(self, dtype):
+        pyfunc = array_real
+        cfunc = njit(pyfunc)
+        # test 1D
+        size = 10
+        arr = np.arange(size, dtype=dtype)
+        self.assertEqual(pyfunc(arr).tolist(), cfunc(arr).tolist())
+        # test 2D
+        arr = arr.reshape(2, 5)
+        self.assertEqual(pyfunc(arr).tolist(), cfunc(arr).tolist())
+        # test identity
+        self.assertEqual(arr.data, pyfunc(arr).data)
+        self.assertEqual(arr.data, cfunc(arr).data)
+        # test writable
+        real = cfunc(arr)
+        self.assertNotEqual(arr[0, 0], 5)
+        real[0, 0] = 5
+        self.assertEqual(arr[0, 0], 5)
+
+    def test_number_real(self):
+        for dtype in [np.uint8, np.int32, np.float32, np.float64]:
+            self.check_number_real(dtype)
+
+    def check_number_imag(self, dtype):
+        pyfunc = array_imag
+        cfunc = njit(pyfunc)
+        # test 1D
+        size = 10
+        arr = np.arange(size, dtype=dtype)
+        self.assertEqual(pyfunc(arr).tolist(), cfunc(arr).tolist())
+        # test 2D
+        arr = arr.reshape(2, 5)
+        self.assertEqual(pyfunc(arr).tolist(), cfunc(arr).tolist())
+        # test are zeros
+        self.assertEqual(cfunc(arr).tolist(), np.zeros_like(arr).tolist())
+        # test readonly
+        imag = cfunc(arr)
+        with self.assertRaises(ValueError) as raises:
+            imag[0] = 1
+        self.assertEqual('assignment destination is read-only',
+                         str(raises.exception))
+
+    def test_number_imag(self):
+        for dtype in [np.uint8, np.int32, np.float32, np.float64]:
+            self.check_number_imag(dtype)
 
 
 if __name__ == '__main__':

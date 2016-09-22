@@ -261,6 +261,24 @@ class ArrayAttribute(AttributeTemplate):
             retty = ary.copy(layout=layout)
         return retty
 
+    def resolve_real(self, ary):
+        return self._resolve_real_imag(ary, attr='real')
+
+    def resolve_imag(self, ary):
+        return self._resolve_real_imag(ary, attr='imag')
+
+    def _resolve_real_imag(self, ary, attr):
+        if ary.dtype in types.complex_domain:
+            return ary.copy(dtype=ary.dtype.underlying_float, layout='A')
+        elif ary.dtype in types.number_domain:
+            res = ary.copy(dtype=ary.dtype)
+            if attr == 'imag':
+                res = res.copy(readonly=True)
+            return res
+        else:
+            msg = "cannot access .{} of array of {}"
+            raise TypeError(msg.format(attr, ary.dtype))
+
     @bound_function("array.transpose")
     def resolve_transpose(self, ary, args, kws):
         assert not args
@@ -404,8 +422,6 @@ class ArrayAttribute(AttributeTemplate):
         if isinstance(ary.dtype, types.Record):
             if attr in ary.dtype.fields:
                 return ary.copy(dtype=ary.dtype.typeof(attr), layout='A')
-        elif ary.dtype in types.complex_domain and attr in ['real', 'imag']:
-            return ary.copy(dtype=ary.dtype.underlying_float, layout='A')
 
 
 @infer

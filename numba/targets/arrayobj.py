@@ -1886,12 +1886,37 @@ def array_ctypes_data(context, builder, typ, value):
 
 
 #-------------------------------------------------------------------------------
-# Structured / record lookup
+# .real / .imag
+
+@lower_getattr(types.Array, "real")
+def array_real_part(context, builder, typ, value):
+    if typ.dtype in types.complex_domain:
+        return array_complex_attr(context, builder, typ, value, attr='real')
+    elif typ.dtype in types.number_domain:
+        # as an identity function
+        return impl_ret_borrowed(context, builder, typ, value)
+    else:
+        raise NotImplementedError('unsupported .real for {}'.format(type.dtype))
 
 
-def array_complex_attr(context, builder, typ, array, attr):
+@lower_getattr(types.Array, "imag")
+def array_imag_part(context, builder, typ, value):
+    if typ.dtype in types.complex_domain:
+        return array_complex_attr(context, builder, typ, value, attr='imag')
+    elif typ.dtype in types.number_domain:
+        # return a readonly zero array
+        sig = signature(typ.copy(readonly=True), typ)
+        return numpy_zeros_like_nd(context, builder, sig, [value])
+    else:
+        raise NotImplementedError('unsupported .imag for {}'.format(type.dtype))
+
+
+def array_complex_attr(context, builder, typ, value, attr):
     if attr not in ['real', 'imag'] or typ.dtype not in types.complex_domain:
         raise NotImplementedError("cannot get attribute `{}`".format(attr))
+
+    arrayty = make_array(typ)
+    array = arrayty(context, builder, value)
 
     # sizeof underlying float type
     flty = typ.dtype.underlying_float
@@ -1914,17 +1939,17 @@ def array_complex_attr(context, builder, typ, array, attr):
     return impl_ret_borrowed(context, builder, resultty, result._getvalue())
 
 
+#-------------------------------------------------------------------------------
+# Structured / record lookup
+
 @lower_getattr_generic(types.Array)
-def array_getattr(context, builder, typ, value, attr):
+def array_record_getattr(context, builder, typ, value, attr):
     """
-    Generic getattr() implementation for record and complex arrays: fetch the given
+    Generic getattr() implementation for record arrays: fetch the given
     record member, i.e. a subarray.
     """
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
-
-    if typ.dtype in types.complex_domain:
-        return array_complex_attr(context, builder, typ, array, attr)
 
     rectype = typ.dtype
     if not isinstance(rectype, types.Record):
@@ -1961,7 +1986,7 @@ def array_record_getitem(context, builder, sig, args):
     if not isinstance(index, str):
         # This will fallback to normal getitem
         raise NotImplementedError
-    return array_getattr(context, builder, sig.args[0], args[0], index)
+    return array_record_getattr(context, builder, sig.args[0], args[0], index)
 
 
 @lower_getattr_generic(types.Record)
