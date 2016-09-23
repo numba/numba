@@ -2425,3 +2425,71 @@ def matrix_rank_impl(a, tol=None):
             assert 0  # unreachable
 
     return _get_matrix_rank_impl(a, tol)
+
+
+@overload(np.linalg.matrix_power)
+def matrix_power_impl(a, n):
+    """
+    Computes matrix power. Only integer powers are supported in numpy.
+    """
+
+    _check_linalg_matrix(a, "matrix_power")
+    np_dtype = np_support.as_dtype(a.dtype)
+
+    nt = getattr(n, 'dtype', n)
+    if not isinstance(nt, types.Integer):
+        raise TypeError("Exponent must be an integer.")
+
+    def matrix_power_impl(a, n):
+
+        if n == 0:
+            # this should be eye() but it doesn't support
+            # the dtype kwarg yet so do it manually to save
+            # the copy required by eye(a.shape[0]).asdtype()
+            A = np.zeros(a.shape, dtype=np_dtype)
+            for k in range(a.shape[0]):
+                A[k, k] = 1.
+            return A
+
+        # note: to be consistent over contiguousness, C order is
+        # returned as that is what dot() produces and the most common
+        # paths through matrix_power will involve that. Therefore
+        # copies are made here to ensure the data ordering is
+        # correct for paths not going via dot().
+
+        if n < 0:
+            A = np.linalg.inv(a).copy()
+            if n == -1:  # return now
+                return A
+            n = -n
+        else:
+            if n == 1:  # return a copy now
+                return a.copy()
+            A = a  # this is safe, `a` is only read
+
+        if n < 4:
+            if n == 2:
+                return np.dot(A, A)
+            if n == 3:
+                return np.dot(np.dot(A, A), A)
+        else:
+
+            acc = A
+            exp = n
+
+            # tried a loop split and branchless using identity matrix as
+            # input but it seems like having a "first entry" flag is quicker
+            flag = True
+            while exp != 0:
+                if exp & 1:
+                    if flag:
+                        ret = acc
+                        flag = False
+                    else:
+                        ret = np.dot(ret, acc)
+                acc = np.dot(acc, acc)
+                exp = exp >> 1
+
+            return ret
+
+    return matrix_power_impl

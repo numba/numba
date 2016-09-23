@@ -369,6 +369,10 @@ def matrix_rank_matrix(a, tol=None):
     return np.linalg.matrix_rank(a, tol)
 
 
+def matrix_power_matrix(a, n):
+    return np.linalg.matrix_power(a, n)
+
+
 class TestLinalgBase(TestCase):
     """
     Provides setUp and common data/error modes for testing np.linalg functions.
@@ -2047,6 +2051,66 @@ class TestLinalgMatrixRank(TestLinalgSystems):
         self.assert_no_nan_or_inf(cfunc,
                                   (np.array([[1., 2., ], [np.inf, np.nan]],
                                             dtype=np.float64),))
+
+
+class TestLinalgMatrixPower(TestLinalgBase):
+    """
+    Tests for np.linalg.matrix_power.
+    """
+
+    def assert_int_exponenent(self, cfunc, args):
+        # validate first arg is ok
+        cfunc(args[0], 1)
+        # pass in both args and assert fail
+        with self.assertRaises(errors.TypingError):
+            cfunc(*args)
+
+    @needs_lapack
+    def test_linalg_matrix_power(self):
+        cfunc = jit(nopython=True)(matrix_power_matrix)
+
+        def check(a, pwr):
+            expected = matrix_power_matrix(a, pwr)
+            got = cfunc(a, pwr)
+
+            # check that the computed results are contig and in the same way
+            self.assert_contig_sanity(got, "C")
+
+            res = 5 * np.finfo(a.dtype).resolution
+            np.testing.assert_allclose(got, expected, rtol=res, atol=res)
+
+            # Ensure proper resource management
+            with self.assertNoNRTLeak():
+                cfunc(a, pwr)
+
+        sizes = [(1, 1), (5, 5), (7, 7)]
+        powers = [-33, -17] + list(range(-10, 10)) + [17, 33]
+
+        for size, pwr, dtype, order in \
+                product(sizes, powers, self.dtypes, 'FC'):
+            a = self.specific_sample_matrix(size, dtype, order)
+            check(a, pwr)
+
+        rn = "matrix_power"
+
+        # Wrong dtype
+        self.assert_wrong_dtype(rn, cfunc,
+                                (np.ones((2, 2), dtype=np.int32), 1))
+
+        # not an int power
+        self.assert_wrong_dtype(rn, cfunc,
+                                (np.ones((2, 2), dtype=np.int32), 1))
+
+        # Dimension issue
+        self.assert_wrong_dimensions(rn, cfunc,
+                                     (np.ones(10, dtype=np.float64), 1))
+
+        # non-integer supplied as exponent
+        self.assert_int_exponenent(cfunc, (np.ones((2, 2)), 1.2))
+
+        # singular matrix is not invertible
+        self.assert_raise_on_singular(cfunc, (np.array([[0., 0], [1, 1]]), -1))
+
 
 if __name__ == '__main__':
     unittest.main()
