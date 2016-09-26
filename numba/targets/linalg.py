@@ -719,16 +719,22 @@ def _check_finite_matrix(a):
                 "Array must not contain infs or NaNs.")
 
 
-def _check_linalg_matrix(a, func_name):
+def _check_linalg_matrix(a, func_name, la_prefix=True):
+    # la_prefix is present as some functions, e.g. np.trace()
+    # are documented under "linear algebra" but aren't in the
+    # module
+    prefix = "np.linalg" if la_prefix else "np"
+    interp = (prefix, func_name)
     if not isinstance(a, types.Array):
-        raise TypingError("np.linalg.%s() only supported for array types"
-                          % func_name)
+        msg = "%s.%s() only supported for array types" % interp
+        raise TypingError(msg)
     if not a.ndim == 2:
-        raise TypingError("np.linalg.%s() only supported on 2-D arrays."
-                          % func_name)
+        msg = "%s.%s() only supported on 2-D arrays." % interp
+        raise TypingError(msg)
     if not isinstance(a.dtype, (types.Float, types.Complex)):
-        raise TypingError("np.linalg.%s() only supported on "
-                          "float and complex arrays." % func_name)
+        msg = "%s.%s() only supported on "\
+            "float and complex arrays." % interp
+        raise TypingError(msg)
 
 
 def _check_homogeneous_types(func_name, *types):
@@ -803,17 +809,22 @@ def _handle_err_maybe_convergence_problem(r):
             raise ValueError("Internal algorithm failed to converge.")
 
 
-def _check_linalg_1_or_2d_matrix(a, func_name):
+def _check_linalg_1_or_2d_matrix(a, func_name, la_prefix=True):
+    # la_prefix is present as some functions, e.g. np.trace()
+    # are documented under "linear algebra" but aren't in the
+    # module
+    prefix = "np.linalg" if la_prefix else "np"
+    interp = (prefix, func_name)
     # checks that a matrix is 1 or 2D
     if not isinstance(a, types.Array):
-        raise TypingError("np.linalg.%s() only supported for array types "
-                          % func_name)
+        raise TypingError("%s.%s() only supported for array types "
+                          % interp)
     if not a.ndim <= 2:
-        raise TypingError("np.linalg.%s() only supported on 1 and 2-D arrays "
-                          % func_name)
+        raise TypingError("%s.%s() only supported on 1 and 2-D arrays "
+                          % interp)
     if not isinstance(a.dtype, (types.Float, types.Complex)):
-        raise TypingError("np.linalg.%s() only supported on "
-                          "float and complex arrays." % func_name)
+        raise TypingError("%s.%s() only supported on "
+                          "float and complex arrays." % interp)
 
 if numpy_version >= (1, 8):
 
@@ -2493,3 +2504,213 @@ def matrix_power_impl(a, n):
             return ret
 
     return matrix_power_impl
+
+# This is documented under linalg despite not being in the module
+
+
+@overload(np.trace)
+def matrix_trace_impl(a, offset=0):
+    """
+    Computes the trace of an array.
+    """
+
+    _check_linalg_matrix(a, "trace", la_prefix=False)
+
+    if not isinstance(offset, types.Integer):
+        raise TypeError("integer argument expected, got %s" % offset)
+
+    def matrix_trace_impl(a, offset=0):
+        rows, cols = a.shape
+        k = offset
+        if k < 0:
+            rows = rows + k
+        if k > 0:
+            cols = cols - k
+        n = max(min(rows, cols), 0)
+        ret = 0
+        if k >= 0:
+            for i in range(n):
+                ret += a[i, k + i]
+        else:
+            for i in range(n):
+                ret += a[i - k, i]
+        return ret
+
+    return matrix_trace_impl
+
+
+def _check_scalar_or_lt_2d_mat(a, func_name, la_prefix=True):
+    prefix = "np.linalg" if la_prefix else "np"
+    interp = (prefix, func_name)
+    # checks that a matrix is 1 or 2D
+    if isinstance(a, types.Array):
+        if not a.ndim <= 2:
+            raise TypingError("%s.%s() only supported on 1 and 2-D arrays "
+                              % interp)
+
+
+def _get_as_array(x):
+    if not isinstance(x, types.Array):
+        @register_jitable
+        def asarray(x):
+            return np.array((x,))
+        return asarray
+    else:
+        @register_jitable
+        def asarray(x):
+            return x
+        return asarray
+
+
+def _get_outer_impl(a, b, out):
+    a_arr = _get_as_array(a)
+    b_arr = _get_as_array(b)
+
+    if out in (None, types.none):
+        @register_jitable
+        def outer_impl(a, b, out):
+            aa = a_arr(a)
+            bb = b_arr(b)
+            return np.multiply(aa.ravel().reshape((aa.size, 1)),
+                               bb.ravel().reshape((1, bb.size)))
+        return outer_impl
+    else:
+        @register_jitable
+        def outer_impl(a, b, out):
+            aa = a_arr(a)
+            bb = b_arr(b)
+            np.multiply(aa.ravel().reshape((aa.size, 1)),
+                        bb.ravel().reshape((1, bb.size)),
+                        out)
+            return out
+        return outer_impl
+
+
+@overload(np.outer)
+def outer_impl(a, b, out=None):
+
+    _check_scalar_or_lt_2d_mat(a, "outer", la_prefix=False)
+    _check_scalar_or_lt_2d_mat(b, "outer", la_prefix=False)
+
+    impl = _get_outer_impl(a, b, out)
+
+    def outer_impl(a, b, out=None):
+        return impl(a, b, out)
+
+    return outer_impl
+
+
+def _kron_normaliser_impl(x):
+    # makes x into a 2d array
+    if isinstance(x, types.Array):
+        if x.ndim == 2:
+            @register_jitable
+            def nrm_shape(x):
+                xn = x.shape[-1]
+                xm = x.shape[-2]
+                return x.reshape(xm, xn)
+            return nrm_shape
+        else:
+            @register_jitable
+            def nrm_shape(x):
+                xn = x.shape[-1]
+                return x.reshape(1, xn)
+            return nrm_shape
+    else:  # assume its a scalar
+        @register_jitable
+        def nrm_shape(x):
+            a = np.empty((1, 1), type(x))
+            a[0] = x
+            return a
+        return nrm_shape
+
+
+def _kron_return(a, b):
+    # transforms c into something that kron would return
+    # based on the shapes of a and b
+    a_is_arr = isinstance(a, types.Array)
+    b_is_arr = isinstance(b, types.Array)
+    if a_is_arr and b_is_arr:
+        if a.ndim == 2 or b.ndim == 2:
+            @register_jitable
+            def ret(a, b, c):
+                return c
+            return ret
+        else:
+            @register_jitable
+            def ret(a, b, c):
+                return c.reshape(c.size)
+            return ret
+    else:  # at least one of (a, b) is a scalar
+        if a_is_arr:
+            @register_jitable
+            def ret(a, b, c):
+                return c.reshape(a.shape)
+            return ret
+        elif b_is_arr:
+            @register_jitable
+            def ret(a, b, c):
+                return c.reshape(b.shape)
+            return ret
+        else:  # both scalars
+            @register_jitable
+            def ret(a, b, c):
+                return c[0]
+            return ret
+
+
+@overload(np.kron)
+def kron_impl(a, b):
+
+    _check_scalar_or_lt_2d_mat(a, "kron", la_prefix=False)
+    _check_scalar_or_lt_2d_mat(b, "kron", la_prefix=False)
+
+    fix_a = _kron_normaliser_impl(a)
+    fix_b = _kron_normaliser_impl(b)
+    ret_c = _kron_return(a, b)
+
+    # this is fine because the ufunc for the Hadamard product
+    # will reject differing dtypes in a and b.
+    dt = getattr(a, 'dtype', a)
+
+    def kron_impl(a, b):
+
+        aa = fix_a(a)
+        bb = fix_b(b)
+
+        am = aa.shape[-2]
+        an = aa.shape[-1]
+        bm = bb.shape[-2]
+        bn = bb.shape[-1]
+
+        cm = am * bm
+        cn = an * bn
+
+        # allocate c
+        C = np.empty((cm, cn), dtype=dt)
+
+        # In practice this is runs quicker than the more obvious
+        # `each element of A multiplied by B and assigned to
+        # a block in C` like alg.
+
+        # loop over rows of A
+        for i in range(am):
+            # compute the column offset into C
+            rjmp = i * bm
+            # loop over rows of B
+            for k in range(bm):
+                # compute row the offset into C
+                irjmp = rjmp + k
+                # slice a given row of B
+                slc = bb[k, :]
+                # loop over columns of A
+                for j in range(an):
+                    # vectorized assignment of an element of A
+                    # multiplied by the current row of B into
+                    # a slice of a row of C
+                    cjmp = j * bn
+                    C[irjmp, cjmp:cjmp + bn] = aa[i, j] * slc
+
+        return ret_c(a, b, C)
+
+    return kron_impl
