@@ -12,7 +12,7 @@ import llvmlite.binding as ll
 import llvmlite.ir as llvmir
 
 from numba import config, utils, cgutils
-from numba.runtime.atomicops import remove_redundant_nrt_refct
+from numba.runtime.nrtopt import remove_redundant_nrt_refct
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
                       'i886', 'i986'])
