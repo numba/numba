@@ -657,7 +657,7 @@ static size_t kind_size(char kind)
  *     c -> s
  *     z -> d
  * ---------------
- * 
+ *
  */
 static char underlying_float_kind(char kind)
 {
@@ -1044,17 +1044,6 @@ numba_ez_cgeev(char kind, char jobvl, char jobvr,  Py_ssize_t n, void *a,
 
     return (int)info;
 }
-
-
-typedef void (*xsyevd_t)(char *jobz, char *uplo, F_INT *n, void *a, F_INT *lda,
-                         void *w, void *work, F_INT *lwork, F_INT *iwork,
-                         F_INT *liwork, F_INT *info);
-
-typedef void (*xheevd_t)(char *jobz, char *uplo, F_INT *n, void *a, F_INT *lda,
-                         void *w, void *work, F_INT *lwork, void *rwork,
-                         F_INT *lrwork, F_INT *iwork, F_INT *liwork,
-                         F_INT *info);
-
 
 /* real space symmetric eigen systems info from ssyevd/dsyevd */
 static int
