@@ -51,6 +51,16 @@ def runaway_self(x):
     return runaway_self(x)
 
 
+@jit(nopython=True)
+def raise_self(x):
+    if x == 1:
+        raise ValueError("raise_self")
+    elif x > 0:
+        return raise_self(x - 1)
+    else:
+        return 1
+
+
 # Mutual recursion
 @jit(nopython=True)
 def outer_fac(n):
@@ -162,5 +172,25 @@ def make_inner_error(jit=lambda x: x):
     def error_fun(x):
         # to trigger an untyped attribute error
         return x.ndim
+
+    return outer
+
+
+def make_raise_mutual(jit=lambda x: x):
+    @jit
+    def outer(x):
+        if x > 0:
+            return inner(x)
+        else:
+            return 1
+
+    @jit
+    def inner(x):
+        if x == 1:
+            raise ValueError('raise_mutual')
+        elif x > 0:
+            return outer(x - 1)
+        else:
+            return 1
 
     return outer

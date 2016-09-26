@@ -1,10 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
 import math
+import warnings
 
 from numba import jit
 from numba import unittest_support as unittest
-from numba.errors import TypingError
+from numba.errors import TypingError, NumbaWarning
 from .support import TestCase, tag
 
 
@@ -41,6 +42,12 @@ class TestSelfRecursion(TestCase):
         cfunc = self.mod.make_type_change_self(jit(nopython=True))
         args = 13, 0.125
         self.assertPreciseEqual(pfunc(*args), cfunc(*args))
+
+    def test_raise(self):
+        with self.assertRaises(ValueError) as raises:
+            self.mod.raise_self(3)
+
+        self.assertEqual(str(raises.exception), "raise_self")
 
 
 class TestMutualRecursion(TestCase):
@@ -83,15 +90,24 @@ class TestMutualRecursion(TestCase):
         # nopython mode
         cfunc = self.mod.make_inner_error(jit(nopython=True))
         with self.assertRaises(TypingError) as raises:
-            cfunc(2)
+                cfunc(2)
         errmsg = 'Unknown attribute \'ndim\''
         self.assertIn(errmsg, str(raises.exception))
-
         # objectmode
         # error is never trigger, function return normally
         cfunc = self.mod.make_inner_error(jit)
         pfunc = self.mod.make_inner_error()
-        self.assertEqual(cfunc(6), pfunc(6))
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', category=NumbaWarning)
+            got = cfunc(6)
+        self.assertEqual(got, pfunc(6))
+
+    def test_raise(self):
+        cfunc = self.mod.make_raise_mutual()#jit(nopython=True))
+        with self.assertRaises(ValueError) as raises:
+            cfunc(2)
+
+        self.assertEqual(str(raises.exception), "raise_mutual")
 
 
 if __name__ == '__main__':
