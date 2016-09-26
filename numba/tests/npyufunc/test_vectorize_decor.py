@@ -5,7 +5,7 @@ import math
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import int32, uint32, float32, float64, vectorize
+from numba import int32, uint32, float32, float64, jit, vectorize
 from ..support import tag
 
 
@@ -28,88 +28,82 @@ def vector_add(a, b):
     return a + b
 
 
-class BaseVectorizeDecor(unittest.TestCase):
-    def _run_and_compare(self, numba_func, numpy_func):
+class BaseVectorizeDecor(object):
+
+    __test__ = False
+    target = None
+    funcs = {
+        'func1': sinc,
+        'func2': scaled_sinc,
+        'func3': vector_add,
+    }
+
+    def _run_and_compare(self, func, sig, A, *args, **kwargs):
+        numba_func = vectorize(sig, target=self.target)(func)
+        numpy_func = np.vectorize(func)
+        result = numba_func(A, *args)
+        gold = numpy_func(A, *args)
+        np.testing.assert_allclose(result, gold, **kwargs)
+
+    @tag('important')
+    def test_1(self):
+        sig = ['float64(float64)', 'float32(float32)']
+        func = self.funcs['func1']
         A = np.arange(100, dtype=np.float64)
-        result = numba_func(A)
-        gold = numpy_func(A)
-        np.testing.assert_allclose(result, gold)
+        self._run_and_compare(func, sig, A)
 
-    def _test_template_1(self, target):
-        numba_sinc = vectorize(['float64(float64)', 'float32(float32)'],
-                               target=target)(sinc)
-        numpy_sinc = np.vectorize(sinc)
-        self._run_and_compare(numba_sinc, numpy_sinc)
-
-    def _test_template_2(self, target):
-        numba_sinc = vectorize([float64(float64), float32(float32)],
-                               target=target)(sinc)
-        numpy_sinc = np.vectorize(sinc)
-        self._run_and_compare(numba_sinc, numpy_sinc)
-
-    def _test_template_3(self, target):
-        numba_scaled_sinc = vectorize(['float64(float64, uint32)'],
-                                      target=target)(scaled_sinc)
-        numpy_scaled_sinc = np.vectorize(scaled_sinc)
+    @tag('important')
+    def test_2(self):
+        sig = [float64(float64), float32(float32)]
+        func = self.funcs['func1']
+        A = np.arange(100, dtype=np.float64)
+        self._run_and_compare(func, sig, A)
+    
+    @tag('important')
+    def test_3(self):
+        sig = ['float64(float64, uint32)']
+        func = self.funcs['func2']
         A = np.arange(100, dtype=np.float64)
         scale = np.uint32(3)
-        result = numba_scaled_sinc(A, scale)
-        gold = numpy_scaled_sinc(A, scale)
-        np.testing.assert_allclose(result, gold, atol=1e-8)
-
-    def _test_template_4(self, target):
-        sig = [int32(int32, int32),
-               uint32(uint32, uint32),
-               float32(float32, float32),
-               float64(float64, float64)]
-        basic_ufunc = vectorize(sig, target=target)(vector_add)
-        np_ufunc = np.add
-
-        def test(ty):
-            data = np.linspace(0., 100., 500).astype(ty)
-            result = basic_ufunc(data, data)
-            gold = np_ufunc(data, data)
-            np.testing.assert_allclose(gold, result)
-
-        test(np.double)
-        test(np.float32)
-        test(np.int32)
-        test(np.uint32)
-
-
-class TestVectorizeDecor(BaseVectorizeDecor):
+        self._run_and_compare(func, sig, A, scale, atol=1e-8)
 
     @tag('important')
-    def test_cpu_1(self):
-        self._test_template_1('cpu')
+    def test_4(self):
+        sig = [
+            int32(int32, int32),
+            uint32(uint32, uint32),
+            float32(float32, float32),
+            float64(float64, float64),
+        ]
+        func = self.funcs['func3']
+        A = np.arange(100, dtype=np.float64)
+        self._run_and_compare(func, sig, A, A)
+        A = A.astype(np.float32)
+        self._run_and_compare(func, sig, A, A)
+        A = A.astype(np.int32)
+        self._run_and_compare(func, sig, A, A)
+        A = A.astype(np.uint32)
+        self._run_and_compare(func, sig, A, A)
 
-    @tag('important')
-    def test_parallel_1(self):
-        self._test_template_1('parallel')
 
-    @tag('important')
-    def test_cpu_2(self):
-        self._test_template_2('cpu')
+class TestCPUVectorizeDecor(unittest.TestCase, BaseVectorizeDecor):
+    __test__ = True 
+    target = 'cpu'
 
-    @tag('important')
-    def test_parallel_2(self):
-        self._test_template_2('parallel')
 
-    @tag('important')
-    def test_cpu_3(self):
-        self._test_template_3('cpu')
+class TestParallelVectorizeDecor(unittest.TestCase, BaseVectorizeDecor):
+    __test__ = True 
+    target = 'parallel'
 
-    @tag('important')
-    def test_parallel_3(self):
-        self._test_template_3('parallel')
 
-    @tag('important')
-    def test_cpu_4(self):
-        self._test_template_4('cpu')
-
-    @tag('important')
-    def test_parallel_4(self):
-        self._test_template_4('parallel')
+class TestCPUVectorizeJitted(unittest.TestCase, BaseVectorizeDecor):
+    __test__ = True 
+    target = 'cpu'
+    funcs = {
+        'func1': jit(sinc),
+        'func2': jit(scaled_sinc),
+        'func3': jit(vector_add),
+    }
 
 
 if __name__ == '__main__':
