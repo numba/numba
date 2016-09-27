@@ -36,6 +36,7 @@ test_scripts = [
     'laplace2d/laplace2d.py',
     'laplace2d/laplace2d-numba.py',
     'blur_image.py',
+    'mergesort.py',
     'mandel/mandel_vectorize.py',
     'mandel/mandel_jit.py',
     'nbody/nbody.py',
