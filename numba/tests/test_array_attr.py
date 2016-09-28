@@ -232,28 +232,22 @@ class TestArrayCTypes(MemoryLeakMixin, unittest.TestCase):
         self.assertEqual(pyfunc(arr), cfunc(arr))
 
 
-class TestRealImagAttr(MemoryLeakMixin, unittest.TestCase):
-    def test_complex_real(self):
-        pyfunc = array_real
+class TestRealImagAttr(MemoryLeakMixin, TestCase):
+    def check_complex(self, pyfunc):
         cfunc = njit(pyfunc)
         # test 1D
         size = 10
         arr = np.arange(size) + np.arange(size) * 10j
-        self.assertEqual(pyfunc(arr).tolist(), cfunc(arr).tolist())
+        self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
         # test 2D
         arr = arr.reshape(2, 5)
-        self.assertEqual(pyfunc(arr).tolist(), cfunc(arr).tolist())
+        self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+
+    def test_complex_real(self):
+        self.check_complex(array_real)
 
     def test_complex_imag(self):
-        pyfunc = array_imag
-        cfunc = njit(pyfunc)
-        # test 1D
-        size = 10
-        arr = np.arange(size) + np.arange(size) * 10j
-        self.assertEqual(pyfunc(arr).tolist(), cfunc(arr).tolist())
-        # test 2D
-        arr = arr.reshape(2, 5)
-        self.assertEqual(pyfunc(arr).tolist(), cfunc(arr).tolist())
+        self.check_complex(array_imag)
 
     def check_number_real(self, dtype):
         pyfunc = array_real
@@ -261,10 +255,10 @@ class TestRealImagAttr(MemoryLeakMixin, unittest.TestCase):
         # test 1D
         size = 10
         arr = np.arange(size, dtype=dtype)
-        self.assertEqual(pyfunc(arr).tolist(), cfunc(arr).tolist())
+        self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
         # test 2D
         arr = arr.reshape(2, 5)
-        self.assertEqual(pyfunc(arr).tolist(), cfunc(arr).tolist())
+        self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
         # test identity
         self.assertEqual(arr.data, pyfunc(arr).data)
         self.assertEqual(arr.data, cfunc(arr).data)
@@ -275,6 +269,9 @@ class TestRealImagAttr(MemoryLeakMixin, unittest.TestCase):
         self.assertEqual(arr[0, 0], 5)
 
     def test_number_real(self):
+        """
+        Testing .real of non-complex dtypes
+        """
         for dtype in [np.uint8, np.int32, np.float32, np.float64]:
             self.check_number_real(dtype)
 
@@ -284,10 +281,10 @@ class TestRealImagAttr(MemoryLeakMixin, unittest.TestCase):
         # test 1D
         size = 10
         arr = np.arange(size, dtype=dtype)
-        self.assertEqual(pyfunc(arr).tolist(), cfunc(arr).tolist())
+        self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
         # test 2D
         arr = arr.reshape(2, 5)
-        self.assertEqual(pyfunc(arr).tolist(), cfunc(arr).tolist())
+        self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
         # test are zeros
         self.assertEqual(cfunc(arr).tolist(), np.zeros_like(arr).tolist())
         # test readonly
@@ -298,6 +295,9 @@ class TestRealImagAttr(MemoryLeakMixin, unittest.TestCase):
                          str(raises.exception))
 
     def test_number_imag(self):
+        """
+        Testing .imag of non-complex dtypes
+        """
         for dtype in [np.uint8, np.int32, np.float32, np.float64]:
             self.check_number_imag(dtype)
 
