@@ -1912,6 +1912,33 @@ def array_imag_part(context, builder, typ, value):
 
 
 def array_complex_attr(context, builder, typ, value, attr):
+    """
+    Given a complex array, it's memory layout is:
+
+        R C R C R C
+        ^   ^   ^
+
+    (`R` indicates a float for the real part;
+     `C` indicates a float for the imaginery part;
+     the `^` indicates the start of each element)
+
+    To get the real part, we can simply change the dtype and itemsize to that
+    of the underlying float type.  The new layout is:
+
+        R x R x R x
+        ^   ^   ^
+
+    (`x` indicates unused)
+
+    A load operation will use the dtype to determine the number of bytes to
+    load.
+
+    To get the imaginary part, we shift the pointer by 1 float offset and
+    change the dtype and itemsize.  The new layout is:
+
+        x C x C x C
+          ^   ^   ^
+    """
     if attr not in ['real', 'imag'] or typ.dtype not in types.complex_domain:
         raise NotImplementedError("cannot get attribute `{}`".format(attr))
 
