@@ -1,5 +1,5 @@
 ========================
-NBEP ?: Typing Recursion
+NBEP 6: Typing Recursion
 ========================
 
 :Author: Siu Kwan Lam
