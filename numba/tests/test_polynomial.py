@@ -33,7 +33,7 @@ class TestPolynomialBase(TestCase):
         self.assertIn(msg, str(raises.exception))
 
     def assert_1d_input(self, cfunc, args):
-        msg = "Input must be a rank-1 array."
+        msg = "Input must be a 1d array."
         self.assert_error(cfunc, args, msg)
 
 

@@ -27,7 +27,7 @@ def roots_impl(p):
         # https://github.com/numpy/numpy/blob/master/numpy/lib/polynomial.py
 
         if len(p.shape) != 1:
-            raise ValueError("Input must be a rank-1 array.")
+            raise ValueError("Input must be a 1d array.")
 
         non_zero = np.nonzero(p)[0]
 
