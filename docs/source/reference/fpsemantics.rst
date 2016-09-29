@@ -40,6 +40,17 @@ even when a ``float32`` input is given.  Numba will always observe
 the input's precision, and invoke single-precision linear algebra routines
 when all inputs are ``float32`` or ``complex64``.
 
+The implementations of the ``numpy.linalg`` routines in Numba only support the
+floating point types that are used in the LAPACK functions that provide
+the underlying core functionality. As a result  only ``float32``, ``float64``,
+``complex64`` and ``complex128`` types are supported. If a user has e.g. an
+``int32`` type, an appropriate type conversion must be performed to a
+floating point type prior to its use in these routines. The reason for this
+decision is to essentially avoid having to replicate type conversion choices
+made in Numpy and to also encourage the user to choose the optimal floating
+point type for the operation they are undertaking.
+
+
 Mixed-types operations
 ''''''''''''''''''''''
 
