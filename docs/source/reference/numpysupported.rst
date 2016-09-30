@@ -182,6 +182,7 @@ floating-point and complex numbers:
 * :func:`numpy.linalg.eigvalsh` (only the first argument).
 * :func:`numpy.linalg.inv`
 * :func:`numpy.linalg.lstsq`
+* :func:`numpy.linalg.matrix_power`
 * :func:`numpy.linalg.matrix_rank`
 * :func:`numpy.linalg.norm` (only the 2 first arguments and only non string
   values in ``ord``).
