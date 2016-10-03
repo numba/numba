@@ -430,7 +430,7 @@ class RuntimeLinker(object):
 
     def resolve(self, engine):
         """
-        Fix unresolved symbols if there are defined.
+        Fix unresolved symbols if they are defined.
         """
         # An iterator to get all unresolved but available symbols
         pending = [name for name in self._unresolved if name in self._defined]

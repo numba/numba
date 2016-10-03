@@ -420,7 +420,7 @@ class FunctionIdentity(object):
 
         # Even the same function definition can be compiled into
         # several different function objects with distinct closure
-        # variables, so we make sure to disambiguish using an unique id.
+        # variables, so we make sure to disambiguate using an unique id.
         uid = next(cls._unique_ids)
         self.unique_name = '{}${}'.format(self.func_qualname, uid)
 
