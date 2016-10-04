@@ -773,7 +773,7 @@ def inv_impl(a):
         _check_finite_matrix(a)
 
         if F_layout:
-            acpy = np.copy(a)
+            acpy = _asfortranarray_copy(a)
         else:
             acpy = np.asfortranarray(a)
 
@@ -801,6 +801,11 @@ def _handle_err_maybe_convergence_problem(r):
             assert 0   # unreachable
         if r > 0:
             raise ValueError("Internal algorithm failed to converge.")
+
+
+@jit(nopython=True)
+def _asfortranarray_copy(a):
+    return np.asfortranarray(a.copy())
 
 
 def _check_linalg_1_or_2d_matrix(a, func_name):
@@ -885,7 +890,7 @@ if numpy_version >= (1, 8):
             _check_finite_matrix(a)
 
             if F_layout:
-                acpy = np.copy(a)
+                acpy = _asfortranarray_copy(a)
             else:
                 acpy = np.asfortranarray(a)
 
@@ -945,7 +950,7 @@ if numpy_version >= (1, 8):
             _check_finite_matrix(a)
 
             if F_layout:
-                acpy = np.copy(a)
+                acpy = _asfortranarray_copy(a)
             else:
                 acpy = np.asfortranarray(a)
 
@@ -1009,7 +1014,7 @@ if numpy_version >= (1, 8):
             _check_finite_matrix(a)
 
             if F_layout:
-                acpy = np.copy(a)
+                acpy = _asfortranarray_copy(a)
             else:
                 acpy = np.asfortranarray(a)
 
@@ -1071,7 +1076,7 @@ if numpy_version >= (1, 8):
             _check_finite_matrix(a)
 
             if F_layout:
-                acpy = np.copy(a)
+                acpy = _asfortranarray_copy(a)
             else:
                 acpy = np.asfortranarray(a)
 
@@ -1136,7 +1141,7 @@ if numpy_version >= (1, 8):
             _check_finite_matrix(a)
 
             if F_layout:
-                acpy = np.copy(a)
+                acpy = _asfortranarray_copy(a)
             else:
                 acpy = np.asfortranarray(a)
 
@@ -1189,7 +1194,7 @@ if numpy_version >= (1, 8):
             _check_finite_matrix(a)
 
             if F_layout:
-                acpy = np.copy(a)
+                acpy = _asfortranarray_copy(a)
             else:
                 acpy = np.asfortranarray(a)
 
@@ -1239,7 +1244,7 @@ if numpy_version >= (1, 8):
             _check_finite_matrix(a)
 
             if F_layout:
-                acpy = np.copy(a)
+                acpy = _asfortranarray_copy(a)
             else:
                 acpy = np.asfortranarray(a)
 
@@ -1549,7 +1554,7 @@ def lstsq_impl(a, b, rcond=-1.0):
 
         # a is destroyed on exit, copy it
         if a_F_layout:
-            acpy = np.copy(a)
+            acpy = _asfortranarray_copy(a)
         else:
             acpy = np.asfortranarray(a)
 
@@ -1655,7 +1660,7 @@ def solve_impl(a, b):
 
         # a is destroyed on exit, copy it
         if a_F_layout:
-            acpy = np.copy(a)
+            acpy = _asfortranarray_copy(a)
         else:
             acpy = np.asfortranarray(a)
 
@@ -1762,7 +1767,7 @@ def pinv_impl(a, rcond=1.e-15):
         _check_finite_matrix(a)
 
         if F_layout:
-            acpy = np.copy(a)
+            acpy = _asfortranarray_copy(a)
         else:
             acpy = np.asfortranarray(a)
 
@@ -1913,7 +1918,7 @@ def slogdet_impl(a):
         _check_finite_matrix(a)
 
         if F_layout:
-            acpy = np.copy(a)
+            acpy = _asfortranarray_copy(a)
         else:
             acpy = np.asfortranarray(a)
 
@@ -2013,7 +2018,7 @@ def _compute_singular_values_impl(a):
         _check_finite_matrix(a)
 
         if F_layout:
-            acpy = np.copy(a)
+            acpy = _asfortranarray_copy(a)
         else:
             acpy = np.asfortranarray(a)
 
