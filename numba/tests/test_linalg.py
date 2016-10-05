@@ -672,6 +672,7 @@ class TestLinalgInv(TestLinalgBase):
     """
 
     @tag('important')
+    @unittest.skip("Problematic")
     @needs_lapack
     def test_linalg_inv(self):
         """
@@ -976,12 +977,10 @@ class TestLinalgEigenSystems(TestLinalgBase):
     def test_linalg_eigvals(self):
         self.checker_for_linalg_eig("eigvals", eigvals_matrix, 1, True)
 
-    @unittest.skip("memory bug?")
     @needs_lapack
     def test_linalg_eigh(self):
         self.checker_for_linalg_eig("eigh", eigh_matrix, 2, False)
 
-    @unittest.skip("memory bug?")
     @needs_lapack
     def test_linalg_eigvalsh(self):
         self.checker_for_linalg_eig("eigvalsh", eigvalsh_matrix, 1, False)
