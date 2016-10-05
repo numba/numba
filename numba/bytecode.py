@@ -77,6 +77,11 @@ def _make_bytecode_table():
             ('INPLACE_MATRIX_MULTIPLY', 0),
         ]
 
+    if sys.version_info[:2] <= (3, 5):
+        version_specific += [
+            ('MAKE_CLOSURE', 2),
+        ]
+
     bytecodes = [
         # opname, operandlen
         ('BINARY_ADD', 0),
@@ -129,7 +134,6 @@ def _make_bytecode_table():
         ('LOAD_FAST', 2),
         ('LOAD_GLOBAL', 2),
         ('LOAD_DEREF', 2),
-        ('MAKE_CLOSURE', 2),
         ('MAKE_FUNCTION', 2),
         ('POP_BLOCK', 0),
         ('POP_JUMP_IF_FALSE', 2),
