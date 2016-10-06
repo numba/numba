@@ -96,6 +96,8 @@ The following attributes of Numpy arrays are supported:
 * :attr:`~numpy.ndarray.size`
 * :attr:`~numpy.ndarray.strides`
 * :attr:`~numpy.ndarray.T`
+* :attr:`~numpy.ndarray.real`
+* :attr:`~numpy.ndarray.imag`
 
 The ``flags`` object
 ''''''''''''''''''''
@@ -109,6 +111,21 @@ The ``flat`` object
 The object returned by the :attr:`~numpy.ndarray.flat` attribute supports
 iteration and indexing, but be careful: indexing is very slow on
 non-C-contiguous arrays.
+
+The ``real`` and ``imag`` attributes
+''''''''''''''''''''''''''''''''''''
+
+Numpy supports these attributes regardless of the dtype but Numba chooses to
+limit their support to avoid potential user error.  For numeric dtypes,
+Numba follows Numpy's behavior.  The :attr:`~numpy.ndarray.real` attribute
+returns a view of the real part of the complex array and it behaves as an identity
+function for other numeric dtypes.  The :attr:`~numpy.ndarray.imag` attribute
+returns a view of the imaginary part of the complex array and it returns a zero
+array with the same shape and dtype for other numeric dtypes.  For non-numeric
+dtypes, including all structured/record dtypes, using these attributes will
+result in a compile-time (`TypingError`) error.  This behavior differs from
+Numpy's but it is chosen to avoid the confusion with potential field names that
+overlaps with these attributes.
 
 Calculation
 -----------
