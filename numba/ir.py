@@ -1,9 +1,12 @@
 from __future__ import print_function, division, absolute_import
-import sys
+
+from collections import defaultdict
+import copy
 import os
 import pprint
-from collections import defaultdict
+import sys
 
+from . import utils
 from .errors import (NotDefinedError, RedefinedError, VerificationError,
                      ConstantInferenceError)
 
@@ -17,6 +20,10 @@ class Loc(object):
         self.filename = filename
         self.line = line
         self.col = col
+
+    @classmethod
+    def from_function_id(cls, func_id):
+        return cls(func_id.filename, func_id.firstlineno)
 
     def __repr__(self):
         return "Loc(filename=%s, line=%s, col=%s)" % (self.filename,
@@ -38,6 +45,12 @@ class Loc(object):
             # This may happen on windows if the drive is different
             path = os.path.abspath(self.filename)
         return 'File "%s", line %d' % (path, self.line)
+
+    def with_lineno(self, line, col=None):
+        """
+        Return a new Loc with this line number.
+        """
+        return type(self)(self.filename, line, col)
 
 
 class VarMap(object):
@@ -148,6 +161,8 @@ class Expr(Inst):
         self._kws = kws
 
     def __getattr__(self, name):
+        if name.startswith('_'):
+            return Inst.__getattr__(self, name)
         return self._kws[name]
 
     def __setattr__(self, name, value):
@@ -778,6 +793,109 @@ class Loop(object):
     def __repr__(self):
         args = self.entry, self.exit
         return "Loop(entry=%s, exit=%s)" % args
+
+
+class FunctionIR(object):
+
+    def __init__(self, blocks, is_generator, func_id, loc,
+                 definitions, arg_count, arg_names):
+        self.blocks = blocks
+        self.is_generator = is_generator
+        self.func_id = func_id
+        self.loc = loc
+        self.arg_count = arg_count
+        self.arg_names = arg_names
+
+        self._definitions = definitions
+
+        self._reset_analysis_variables()
+
+    def _reset_analysis_variables(self):
+        from . import consts
+
+        self._consts = consts.ConstantInference(self)
+
+        # Will be computed by PostProcessor
+        self.generator_info = None
+        self.variable_lifetime = None
+        # { ir.Block: { variable names (potentially) alive at start of block } }
+        self.block_entry_vars = {}
+
+    def derive(self, blocks, arg_count=None, arg_names=None,
+               force_non_generator=False):
+        """
+        Derive a new function IR from this one, using the given blocks,
+        and possibly modifying the argument count and generator flag.
+
+        Post-processing will have to be run again on the new IR.
+        """
+        firstblock = blocks[min(blocks)]
+        is_generator = self.is_generator and not force_non_generator
+
+        new_ir = copy.copy(self)
+        new_ir.blocks = blocks
+        new_ir.loc = firstblock.loc
+        if force_non_generator:
+            new_ir.is_generator = False
+        if arg_count is not None:
+            new_ir.arg_count = arg_count
+        if arg_names is not None:
+            new_ir.arg_names = arg_names
+        new_ir._reset_analysis_variables()
+
+        return new_ir
+
+    def get_block_entry_vars(self, block):
+        """
+        Return a set of variable names possibly alive at the beginning of
+        the block.
+        """
+        return self.block_entry_vars[block]
+
+    def infer_constant(self, name):
+        """
+        Try to infer the constant value of a given variable.
+        """
+        if isinstance(name, Var):
+            name = name.name
+        return self._consts.infer_constant(name)
+
+    def get_definition(self, value):
+        """
+        Get the definition site for the given variable name or instance.
+        A Expr instance is returned.
+        """
+        while True:
+            if isinstance(value, Var):
+                name = value.name
+            elif isinstance(value, str):
+                name = value
+            else:
+                return value
+            defs = self._definitions[name]
+            if len(defs) == 0:
+                raise KeyError("no definition for %r"
+                               % (name,))
+            if len(defs) > 1:
+                raise KeyError("more than one definition for %r"
+                               % (name,))
+            value = defs[0]
+
+    def dump(self, file=None):
+        # Avoid early bind of sys.stdout as default value
+        file = file or sys.stdout
+        for offset, block in sorted(self.blocks.items()):
+            print('label %s:' % (offset,), file=file)
+            block.dump(file=file)
+
+    def dump_generator_info(self, file=None):
+        file = file or sys.stdout
+        gi = self.generator_info
+        print("generator state variables:", sorted(gi.state_vars), file=file)
+        for index, yp in sorted(gi.yield_points.items()):
+            print("yield point #%d: live variables = %s, weak live variables = %s"
+                  % (index, sorted(yp.live_vars), sorted(yp.weak_live_vars)),
+                  file=file)
 
 
 # A stub for undefined global reference

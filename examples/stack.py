@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 This example demonstrates jitclasses and deferred type.
 This is an extension to the simpler singly-linked-list example in
@@ -7,7 +9,7 @@ underlying linked-list.
 """
 
 from __future__ import print_function, absolute_import
-from numba.utils import OrderedDict
+from collections import OrderedDict
 from numba import njit
 from numba import jitclass
 from numba import deferred_type, intp, optional

@@ -452,10 +452,7 @@ class CPUCallConv(BaseCallConv):
         code = builder.call(callee, realargs)
         status = self._get_return_status(builder, code,
                                          builder.load(excinfoptr))
-        if is_generator_function:
-            retval = retvaltmp
-        else:
-            retval = builder.load(retvaltmp)
+        retval = builder.load(retvaltmp)
         out = self.context.get_returned_value(builder, resty, retval)
         return status, out
 

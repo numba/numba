@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 """
 This example demonstrates jitclasses and deferred types for writing a
 singly-linked-list.

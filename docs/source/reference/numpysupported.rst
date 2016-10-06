@@ -175,8 +175,14 @@ floating-point and complex numbers:
 * :func:`numpy.linalg.eig` (only running with data that does not cause a domain
   change is supported e.g. real input -> real
   output, complex input -> complex output).
+* :func:`numpy.linalg.eigh` (only the first argument).
+* :func:`numpy.linalg.eigvals` (only running with data that does not cause a 
+  domain change is supported e.g. real input -> real output,
+  complex input -> complex output).
+* :func:`numpy.linalg.eigvalsh` (only the first argument).
 * :func:`numpy.linalg.inv`
 * :func:`numpy.linalg.lstsq`
+* :func:`numpy.linalg.matrix_power`
 * :func:`numpy.linalg.matrix_rank`
 * :func:`numpy.linalg.norm` (only the 2 first arguments and only non string
   values in ``ord``).
@@ -241,6 +247,7 @@ The following top-level functions are supported:
 * :func:`numpy.ones` (only the 2 first arguments)
 * :func:`numpy.ones_like` (only the 2 first arguments)
 * :func:`numpy.ravel` (no order argument; 'C' order only)
+* :func:`numpy.roots`
 * :func:`numpy.round_`
 * :func:`numpy.searchsorted` (only the 2 first arguments)
 * :func:`numpy.sinc`

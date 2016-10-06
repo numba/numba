@@ -31,3 +31,5 @@ Other proposals
    jit-classes.rst
    cfunc.rst
    type-inference.rst
+   typing_recursion.rst
+

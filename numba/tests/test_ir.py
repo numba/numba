@@ -3,7 +3,7 @@ from __future__ import print_function
 import textwrap
 
 import numba.unittest_support as unittest
-from numba import bytecode, interpreter, ir
+from numba import compiler, ir
 from numba.utils import PYVERSION, StringIO
 
 
@@ -120,15 +120,12 @@ class TestIRDump(unittest.TestCase):
     """
 
     def get_ir(self, pyfunc):
-        bc = bytecode.ByteCode(func=pyfunc)
-        interp = interpreter.Interpreter(bc)
-        interp.interpret()
-        return interp
+        return compiler.run_frontend(pyfunc)
 
     def check_ir_dump(self, pyfunc):
-        interp = self.get_ir(pyfunc)
+        func_ir = self.get_ir(pyfunc)
         out = StringIO()
-        interp.dump(file=out)
+        func_ir.dump(file=out)
         expected = textwrap.dedent(pyfunc.__doc__).strip().splitlines()
         got = out.getvalue().strip().splitlines()
         self.assertEqual(got, expected,

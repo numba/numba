@@ -1,12 +1,17 @@
 #!/usr/bin/env python
-import numpy as np
+from __future__ import print_function
+
+import sys
 import time
+
+import numpy as np
+
 
 def jacobi_relax_core(A, Anew):
     error = 0.0
     n = A.shape[0]
     m = A.shape[1]
-    
+
     for j in range(1, n - 1):
         for i in range(1, m - 1):
             Anew[j, i] = 0.25 * ( A[j, i + 1] + A[j, i - 1] \
@@ -16,6 +21,15 @@ def jacobi_relax_core(A, Anew):
 
 
 def main():
+    argv = sys.argv[1:]
+    if len(argv) == 1:
+        [iter_max] = argv
+        iter_max = int(iter_max)
+    else:
+        print('Using default max number of iteration to 2 due to long run time.')
+        print('Override by passing a cmdline arg: python {} <max_iter>'.format(__file__))
+        iter_max = 3
+
     NN = 512
     NM = 512
 
@@ -24,7 +38,6 @@ def main():
 
     n = NN
     m = NM
-    iter_max = 1000
 
     tol = 1.0e-6
     error = 1.0
@@ -40,7 +53,7 @@ def main():
 
     while error > tol and iter < iter_max:
         error = jacobi_relax_core(A, Anew)
-    
+
         # swap A and Anew
         tmp = A
         A = Anew

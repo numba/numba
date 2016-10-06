@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import ast
 from collections import defaultdict, OrderedDict
+import contextlib
 import sys
 
 import numpy as np
@@ -302,45 +303,72 @@ def _arr_expr_to_ast(expr):
         "Don't know how to translate array expression '%r'" % (expr,))
 
 
+@contextlib.contextmanager
+def _legalize_parameter_names(var_list):
+    """
+    Legalize names in the variable list for use as a Python function's
+    parameter names.
+    """
+    var_map = OrderedDict()
+    for var in var_list:
+        old_name = var.name
+        new_name = old_name.replace("$", "_").replace(".", "_")
+        # Caller should ensure the names are unique
+        assert new_name not in var_map
+        var_map[new_name] = var, old_name
+        var.name = new_name
+    param_names = list(var_map)
+    try:
+        yield param_names
+    finally:
+        # Make sure the old names are restored, to avoid confusing
+        # other parts of Numba (see issue #1466)
+        for var, old_name in var_map.values():
+            var.name = old_name
+
+
 def _lower_array_expr(lowerer, expr):
     '''Lower an array expression built by RewriteArrayExprs.
     '''
     expr_name = "__numba_array_expr_%s" % (hex(hash(expr)).replace("-", "_"))
+    expr_filename = expr.loc.filename
     expr_var_list = expr.list_vars()
-    expr_var_map = {}
-    for expr_var in expr_var_list:
-        expr_var_name = expr_var.name
-        expr_var_new_name = expr_var_name.replace("$", "_").replace(".", "_")
-        # Avoid inserting existing var into the expr_var_map
-        if expr_var_new_name not in expr_var_map:
-            expr_var_map[expr_var_new_name] = expr_var_name, expr_var
-        expr_var.name = expr_var_new_name
-    expr_filename = expr_var_list[0].loc.filename
-    # Parameters are the names internal to the new closure.
-    expr_params = sorted(expr_var_map.keys())
-    # Arguments are the names external to the new closure (except in
-    # Python abstract syntax, apparently...)
-    expr_args = [expr_var_map[key][0] for key in expr_params]
-    if hasattr(ast, "arg"):
-        # Should be Python 3.x
-        ast_args = [ast.arg(param_name, None)
-                    for param_name in expr_params]
-    else:
-        # Should be Python 2.x
-        ast_args = [ast.Name(param_name, ast.Param())
-                    for param_name in expr_params]
-    # Parse a stub function to ensure the AST is populated with
-    # reasonable defaults for the Python version.
-    ast_module = ast.parse('def {0}(): return'.format(expr_name),
-                           expr_filename, 'exec')
-    assert hasattr(ast_module, 'body') and len(ast_module.body) == 1
-    ast_fn = ast_module.body[0]
-    ast_fn.args.args = ast_args
-    ast_fn.body[0].value, namespace = _arr_expr_to_ast(expr.expr)
-    ast.fix_missing_locations(ast_module)
+    # The expression may use a given variable several times, but we
+    # should only create one parameter for it.
+    expr_var_unique = sorted(set(expr_var_list), key=lambda var: var.name)
+
+    # Arguments are the names external to the new closure
+    expr_args = [var.name for var in expr_var_unique]
+
+    # 1. Create an AST tree from the array expression.
+
+    with _legalize_parameter_names(expr_var_unique) as expr_params:
+
+        if hasattr(ast, "arg"):
+            # Should be Python 3.x
+            ast_args = [ast.arg(param_name, None)
+                        for param_name in expr_params]
+        else:
+            # Should be Python 2.x
+            ast_args = [ast.Name(param_name, ast.Param())
+                        for param_name in expr_params]
+        # Parse a stub function to ensure the AST is populated with
+        # reasonable defaults for the Python version.
+        ast_module = ast.parse('def {0}(): return'.format(expr_name),
+                               expr_filename, 'exec')
+        assert hasattr(ast_module, 'body') and len(ast_module.body) == 1
+        ast_fn = ast_module.body[0]
+        ast_fn.args.args = ast_args
+        ast_fn.body[0].value, namespace = _arr_expr_to_ast(expr.expr)
+        ast.fix_missing_locations(ast_module)
+
+    # 2. Compile the AST module and extract the Python function.
+
     code_obj = compile(ast_module, expr_filename, 'exec')
     six.exec_(code_obj, namespace)
     impl = namespace[expr_name]
+
+    # 3. Now compile a ufunc using the Python function as kernel.
 
     context = lowerer.context
     builder = lowerer.builder
