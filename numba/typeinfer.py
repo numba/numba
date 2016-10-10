@@ -599,13 +599,6 @@ class PrintConstraint(object):
 
 
 class TypeVarMap(dict):
-    def copy(self):
-        clone = TypeVarMap()
-        clone.set_context(self.context)
-        for k, v in self.items():
-            clone[k] = v
-        return clone
-
     def set_context(self, context):
         self.context = context
 

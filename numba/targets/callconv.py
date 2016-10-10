@@ -439,7 +439,8 @@ class CPUCallConv(BaseCallConv):
             env = cgutils.get_null_value(PYOBJECT)
         is_generator_function = isinstance(resty, types.Generator)
 
-        # XXX better fix?
+        # XXX better fix for callees that are not function values
+        #     (pointers to function; thus have no `.args` attribute)
         retty = self._get_return_argument(callee.function_type).pointee
 
         retvaltmp = cgutils.alloca_once(builder, retty)
