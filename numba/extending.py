@@ -86,6 +86,36 @@ def overload(func, jit_options={}):
     return decorate
 
 
+def register_jitable(*args, **kwargs):
+    """
+    Register a regular python function that can be executed by the python
+    interpreter and can be compiled into a nopython function when referenced
+    by other jit'ed functions.  Can be used as::
+
+        @register_jitable
+        def foo(x, y):
+            return x + y
+
+    Or, with compiler options::
+
+        @register_jitable(_nrt=False) # disable runtime allocation
+        def foo(x, y):
+            return x + y
+
+    """
+    def wrap(fn):
+        # It is just a wrapper for @overload
+        @overload(fn, jit_options=kwargs)
+        def ov_wrap(*args, **kwargs):
+            return fn
+        return fn
+
+    if kwargs:
+        return wrap
+    else:
+        return wrap(*args)
+
+
 def overload_attribute(typ, attr):
     """
     A decorator marking the decorated function as typing and implementing

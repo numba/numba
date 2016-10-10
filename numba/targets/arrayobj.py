@@ -24,6 +24,7 @@ from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     iternext_impl, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
+from numba.extending import register_jitable
 from . import quicksort, slicing
 
 
@@ -4339,14 +4340,12 @@ def impl_shape_unchecked(context, builder, sig, args):
 
 @extending.overload(np.lib.stride_tricks.as_strided)
 def as_strided(x, shape=None, strides=None):
-    from numba import jit
-
     if shape in (None, types.none):
-        @jit(nopython=True)
+        @register_jitable
         def get_shape(x, shape):
             return x.shape
     else:
-        @jit(nopython=True)
+        @register_jitable
         def get_shape(x, shape):
             return shape
 
@@ -4357,7 +4356,7 @@ def as_strided(x, shape=None, strides=None):
         # use cases of as_strided() pass explicit *strides*.
         raise NotImplementedError("as_strided() strides argument is mandatory")
     else:
-        @jit(nopython=True)
+        @register_jitable
         def get_strides(x, strides):
             return strides
 
