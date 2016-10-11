@@ -10,12 +10,12 @@ from llvmlite import ir
 
 import numpy as np
 
-from numba import jit, types, cgutils
+from numba import types, cgutils
 
 from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
-from numba.extending import overload
+from numba.extending import overload, register_jitable
 from numba.numpy_support import version as numpy_version
 from numba import types
 from numba import numpy_support as np_support
@@ -711,7 +711,7 @@ fatal_error_sig = types.intc()
 fatal_error_func = types.ExternalFunction("numba_fatal_error", fatal_error_sig)
 
 
-@jit(nopython=True)
+@register_jitable
 def _check_finite_matrix(a):
     for v in np.nditer(a):
         if not np.isfinite(v.item()):
@@ -739,7 +739,7 @@ def _check_homogeneous_types(func_name, *types):
             raise TypingError(msg)
 
 
-@jit(nopython=True)
+@register_jitable
 def _inv_err_handler(r):
     if r != 0:
         if r < 0:
@@ -793,7 +793,7 @@ def inv_impl(a):
     return inv_impl
 
 
-@jit(nopython=True)
+@register_jitable
 def _handle_err_maybe_convergence_problem(r):
     if r != 0:
         if r < 0:
@@ -1863,7 +1863,7 @@ def _get_slogdet_diag_walker(a):
     such that the log(value) stays in the real domain.
     """
     if isinstance(a.dtype, types.Complex):
-        @jit(nopython=True)
+        @register_jitable
         def cmplx_diag_walker(n, a, sgn):
             # walk diagonal
             csgn = sgn + 0.j
@@ -1875,7 +1875,7 @@ def _get_slogdet_diag_walker(a):
             return (csgn, acc)
         return cmplx_diag_walker
     else:
-        @jit(nopython=True)
+        @register_jitable
         def real_diag_walker(n, a, sgn):
             # walk diagonal
             acc = 0.
@@ -2190,16 +2190,16 @@ def _get_norm_impl(a, ord_flag):
             # Force `a` to be C-order, so that we can take a contiguous
             # 1D view.
             if a.layout == 'C':
-                @jit(nopython=True)
+                @register_jitable
                 def array_prepare(a):
                     return a
             elif a.layout == 'F':
-                @jit(nopython=True)
+                @register_jitable
                 def array_prepare(a):
                     # Legal since L2(a) == L2(a.T)
                     return a.T
             else:
-                @jit(nopython=True)
+                @register_jitable
                 def array_prepare(a):
                     return a.copy()
 
@@ -2347,7 +2347,7 @@ def cond_impl(a, p=None):
     return _get_cond_impl(a, p)
 
 
-@jit(nopython=True)
+@register_jitable
 def _get_rank_from_singular_values(sv, t):
     """
     Gets rank from singular values with cut-off at a given tolerance

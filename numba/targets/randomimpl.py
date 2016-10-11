@@ -12,11 +12,11 @@ import numpy as np
 
 from llvmlite import ir
 
-from numba.extending import overload
+from numba.extending import overload, register_jitable
 from numba.targets.imputils import (Registry, impl_ret_untracked,
                                     impl_ret_new_ref)
 from numba.typing import signature
-from numba import _helperlib, cgutils, types, jit
+from numba import _helperlib, cgutils, types
 
 
 registry = Registry()
@@ -1271,15 +1271,15 @@ def choice(a, size=None, replace=True):
         assert a.ndim == 1
         dtype = a.dtype
 
-        @jit(nopython=True)
+        @register_jitable
         def get_source_size(a):
             return len(a)
 
-        @jit(nopython=True)
+        @register_jitable
         def copy_source(a):
             return a.copy()
 
-        @jit(nopython=True)
+        @register_jitable
         def getitem(a, a_i):
             return a[a_i]
 
@@ -1287,15 +1287,15 @@ def choice(a, size=None, replace=True):
         # choice() over an implied arange() population
         dtype = np.intp
 
-        @jit(nopython=True)
+        @register_jitable
         def get_source_size(a):
             return a
 
-        @jit(nopython=True)
+        @register_jitable
         def copy_source(a):
             return np.arange(a)
 
-        @jit(nopython=True)
+        @register_jitable
         def getitem(a, a_i):
             return a_i
 
@@ -1354,7 +1354,7 @@ def multinomial(n, pvals, size=None):
 
     dtype = np.intp
 
-    @jit(nopython=True)
+    @register_jitable
     def multinomial_inner(n, pvals, out):
         # Numpy's algorithm for multinomial()
         fl = out.flat

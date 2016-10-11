@@ -12,8 +12,8 @@ from llvmlite import ir
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Constant, Type
 
-from numba import jit, types, cgutils, typing
-from numba.extending import overload, overload_method
+from numba import types, cgutils, typing
+from numba.extending import overload, overload_method, register_jitable
 from numba.numpy_support import as_dtype
 from numba.numpy_support import version as numpy_version
 from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
@@ -301,7 +301,7 @@ def get_isnan(dtype):
     if isinstance(dtype, (types.Float, types.Complex)):
         return np.isnan
     else:
-        @jit(nopython=True)
+        @register_jitable
         def _trivial_isnan(x):
             return False
         return _trivial_isnan
@@ -425,7 +425,7 @@ def np_nansum(a):
 #----------------------------------------------------------------------------
 # Median and partitioning
 
-@jit(nopython=True)
+@register_jitable
 def _partition(A, low, high):
     mid = (low + high) >> 1
     # NOTE: the pattern of swaps below for the pivot choice and the
@@ -453,7 +453,7 @@ def _partition(A, low, high):
     A[i], A[high] = A[high], A[i]
     return i
 
-@jit(nopython=True)
+@register_jitable
 def _select(arry, k, low, high):
     """
     Select the k'th smallest element in array[low:high + 1].
@@ -468,7 +468,7 @@ def _select(arry, k, low, high):
             i = _partition(arry, low, high)
     return arry[k]
 
-@jit(nopython=True)
+@register_jitable
 def _select_two(arry, k, low, high):
     """
     Select the k'th and k+1'th smallest elements in array[low:high + 1].
@@ -492,7 +492,7 @@ def _select_two(arry, k, low, high):
 
     return arry[k], arry[k + 1]
 
-@jit(nopython=True)
+@register_jitable
 def _median_inner(temp_arry, n):
     """
     The main logic of the median() call.  *temp_arry* must be disposable,
@@ -867,23 +867,23 @@ def np_bincount(a, weights=None):
         validate_1d_array_like("bincount", weights)
         out_dtype = weights.dtype
 
-        @jit(nopython=True)
+        @register_jitable
         def validate_inputs(a, weights):
             if len(a) != len(weights):
                 raise ValueError("bincount(): weights and list don't have the same length")
 
-        @jit(nopython=True)
+        @register_jitable
         def count_item(out, idx, val, weights):
             out[val] += weights[idx]
 
     else:
         out_dtype = types.intp
 
-        @jit(nopython=True)
+        @register_jitable
         def validate_inputs(a, weights):
             pass
 
-        @jit(nopython=True)
+        @register_jitable
         def count_item(out, idx, val, weights):
             out[val] += 1
 
@@ -960,7 +960,7 @@ def searchsorted(a, v):
 
 @overload(np.digitize)
 def np_digitize(x, bins, right=False):
-    @jit(nopython=True)
+    @register_jitable
     def are_bins_increasing(bins):
         n = len(bins)
         is_increasing = True
@@ -979,7 +979,7 @@ def np_digitize(x, bins, right=False):
     # NOTE: the algorithm is slightly different from searchsorted's,
     # as the edge cases (bin boundaries, NaN) give different results.
 
-    @jit(nopython=True)
+    @register_jitable
     def digitize_scalar(x, bins, right):
         # bins are monotonically-increasing
         n = len(bins)
@@ -1017,7 +1017,7 @@ def np_digitize(x, bins, right=False):
 
         return lo
 
-    @jit(nopython=True)
+    @register_jitable
     def digitize_scalar_decreasing(x, bins, right):
         # bins are monotonically-decreasing
         n = len(bins)

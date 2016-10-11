@@ -56,6 +56,7 @@ class CPUContext(BaseContext):
         self.install_registry(operatorimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(randomimpl.registry)
+        self.install_registry(randomimpl.registry)
 
     @property
     def target_data(self):

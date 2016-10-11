@@ -19,6 +19,7 @@ from numba.extending import (typeof_impl, type_callable,
                              box, unbox, NativeValue,
                              make_attribute_wrapper,
                              intrinsic, _Intrinsic,
+                             register_jitable,
                              )
 from numba.typing.templates import (
     ConcreteTemplate, signature, infer)
@@ -604,6 +605,38 @@ class TestIntrinsic(TestCase):
         # the second rebuilt object is the same as the first
         second = pickle.loads(pickled)
         self.assertIs(rebuilt._defn, second._defn)
+
+
+class TestRegisterJitable(unittest.TestCase):
+    def test_no_flags(self):
+        @register_jitable
+        def foo(x, y):
+            return x + y
+
+        def bar(x, y):
+            return foo(x, y)
+
+        cbar = jit(nopython=True)(bar)
+
+        expect = bar(1, 2)
+        got = cbar(1, 2)
+        self.assertEqual(expect, got)
+
+    def test_flags_no_nrt(self):
+        @register_jitable(_nrt=False)
+        def foo(n):
+            return np.arange(n)
+
+        def bar(n):
+            return foo(n)
+
+        self.assertEqual(bar(3).tolist(), [0, 1, 2])
+
+        cbar = jit(nopython=True)(bar)
+        with self.assertRaises(errors.TypingError) as raises:
+            cbar(2)
+        msg = "Only accept returning of array passed into the function as argument"
+        self.assertIn(msg, str(raises.exception))
 
 
 if __name__ == '__main__':
