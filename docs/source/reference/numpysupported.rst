@@ -124,8 +124,8 @@ returns a view of the imaginary part of the complex array and it returns a zero
 array with the same shape and dtype for other numeric dtypes.  For non-numeric
 dtypes, including all structured/record dtypes, using these attributes will
 result in a compile-time (`TypingError`) error.  This behavior differs from
-Numpy's but it is chosen to avoid the confusion with potential field names that
-overlaps with these attributes.
+Numpy's but it is chosen to avoid the potential confusion with field names that
+overlap these attributes.
 
 Calculation
 -----------
