@@ -149,7 +149,7 @@ class TestArgumentTypingError(unittest.TestCase):
             cfunc(1, foo, 1)
         expected = textwrap.dedent("""\
             This error may have been caused by the following argument(s):
-            - argument 1: cannot determine Numba type of value <Foo instance>"""
+            - argument 1: cannot determine Numba type of <class 'numba.tests.test_typingerror.Foo'>"""
             )
         self.assertIn(expected, str(raises.exception))
 
