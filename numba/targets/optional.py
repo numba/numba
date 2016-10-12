@@ -93,8 +93,18 @@ def any_to_optional(context, builder, fromty, toty, val):
         return context.make_optional_value(builder, toty.type, val)
 
 
-@lower_cast(types.Optional, types.Any)
 @lower_cast(types.Optional, types.Boolean)
+def optional_to_bool(context, builder, fromty, toty, val):
+    optval = context.make_helper(builder, fromty, value=val)
+    validbit = cgutils.as_bool_bit(builder, optval.valid)
+    retval = cgutils.alloca_once_value(builder, validbit)
+    with builder.if_then(validbit):
+        res = context.cast(builder, optval.data, fromty.type, toty)
+        builder.store(res, retval)
+    return builder.load(retval)
+
+
+@lower_cast(types.Optional, types.Any)
 def optional_to_any(context, builder, fromty, toty, val):
     optval = context.make_helper(builder, fromty, value=val)
     validbit = cgutils.as_bool_bit(builder, optval.valid)

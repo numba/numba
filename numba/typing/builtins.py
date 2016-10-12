@@ -728,6 +728,17 @@ class Hash(AbstractTemplate):
             return signature(types.intp, *args)
 
 
+@infer_global(isinstance)
+class IsInstance(AbstractTemplate):
+
+    def generic(self, args, kws):
+        assert not kws
+        instance, classtype, = args
+        if isinstance(instance, types.ClassInstanceType):
+            if isinstance(classtype, types.ClassType):
+                return signature(types.bool_, *args)
+
+
 #------------------------------------------------------------------------------
 
 
@@ -889,3 +900,54 @@ class DeferredAttribute(AttributeTemplate):
 
     def generic_resolve(self, deferred, attr):
         return self.context.resolve_getattr(deferred.get(), attr)
+
+
+#------------------------------------------------------------------------------
+
+
+@infer
+class CmpEq(AbstractTemplate):
+    key = '=='
+
+    def generic(self, args, kws):
+        [lhs, rhs] = args
+        # use the equality function from the type; or fallback to `is`
+        return signature(types.boolean, lhs, rhs)
+
+
+@infer
+class CmpNe(AbstractTemplate):
+    key = '!='
+
+    def generic(self, args, kws):
+        [lhs, rhs] = args
+        # use the inequality function from the type; or fallback to `is not`
+        return signature(types.boolean, lhs, rhs)
+
+
+class CmpOrderedBase(AbstractTemplate):
+    def generic(self, args, kws):
+        [lhs, rhs] = args
+        if isinstance(lhs, types.Ordered) or isinstance(rhs, types.Ordered):
+            return signature(types.boolean, lhs, rhs)
+
+
+@infer
+class CmpLtBase(CmpOrderedBase):
+    key = '<'
+
+
+@infer
+class CmpGtBase(CmpOrderedBase):
+    key = '>'
+
+
+@infer
+class CmpLeBase(CmpOrderedBase):
+    key = '<='
+
+
+@infer
+class CmpGeBase(CmpOrderedBase):
+    key = '>='
+

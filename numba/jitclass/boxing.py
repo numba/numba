@@ -67,6 +67,30 @@ def _generate_method(name, func):
 _cache_specialized_box = {}
 
 
+_ignored_special_methods = frozenset(['__init__'])
+
+
+_supported_special_methods = frozenset(['__hash__', '__eq__', '__ne__',
+                                        '__lt__', '__gt__', '__le__', '__ge__'])
+
+
+
+def _handle_special_methods(dct, name, func):
+    """
+    Insert wrappers for special (__xxx__) methods.
+    """
+    # ignored method
+    if name in _ignored_special_methods:
+        return
+    # supported method
+    elif name in _supported_special_methods:
+        dct[name] = _generate_method(name, func)
+    # unknown method
+    else:
+        msg = "unsupported special method: {0}".format(name)
+        raise NotImplementedError(msg)
+
+
 def _specialize_box(typ):
     """
     Create a subclass of Box that is specialized to the jitclass.
@@ -101,6 +125,9 @@ def _specialize_box(typ):
     for name, func in typ.methods.items():
         if not (name.startswith('__') and name.endswith('__')):
             dct[name] = _generate_method(name, func)
+        else:
+            _handle_special_methods(dct, name, func)
+
     # Create subclass
     subcls = type(typ.classname, (_box.Box,), dct)
     # Store to cache

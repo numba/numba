@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from .abstract import *
 from .common import *
+from .functions import Dispatcher
 from ..typeconv import Conversion
 
 
@@ -303,13 +304,23 @@ class SliceType(Type):
         return self.members
 
 
-class ClassInstanceType(Type):
+class ClassInstanceType(UserHashable, UserEq, UserOrdered):
     """
     The type of a jitted class *instance*.  It will be the return-type
     of the constructor of the class.
     """
     mutable = True
     name_prefix = "instance"
+
+    _op_method_map = {
+        'hash': '__hash__',
+        '==': '__eq__',
+        '!=': '__ne__',
+        '<': '__lt__',
+        '>': '__gt__',
+        '<=': '__le__',
+        '>=': '__ge__',
+    }
 
     def __init__(self, class_type):
         self.class_type = class_type
@@ -345,6 +356,18 @@ class ClassInstanceType(Type):
     @property
     def methods(self):
         return self.class_type.methods
+
+    def supports_operator(self, opname):
+        return self._op_method_map[opname] in self.methods
+
+    def get_operator(self, op, context, sig):
+        name = self._op_method_map[op]
+        method = self.jitmethods[name]
+        disp_type = Dispatcher(method)
+        # Get call signature, which may have different return type
+        callsig = disp_type.get_call_type(context.typing_context, sig.args, {})
+        call = context.get_function(disp_type, callsig)
+        return call, callsig
 
 
 class ClassType(Callable, Opaque):

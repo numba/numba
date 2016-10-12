@@ -37,6 +37,10 @@ def typeof_impl(val, c):
     """
     Generic typeof() implementation.
     """
+    tp = getattr(val, "_numba_type_", None)
+    if tp is not None:
+        return tp
+
     tp = _typeof_buffer(val, c)
     if tp is not None:
         return tp
@@ -201,4 +205,3 @@ def _typeof_ndarray(val, c):
 def typeof_array(val, c):
     arrty = typeof_impl(val.get('host'), c)
     return types.SmartArrayType(arrty.dtype, arrty.ndim, arrty.layout, type(val))
-

@@ -60,6 +60,21 @@ class _TypeMetaclass(ABCMeta):
         inst = type.__call__(cls, *args, **kwargs)
         return cls._intern(inst)
 
+    def __instancecheck__(cls, instance):
+        """
+        Override ``isinstance()`` to check for interface compatability.
+        When doing instance check against an interface type, any subclass of
+        Type that defines ``interface_check()``, we uses the classmethod for
+        the test.
+        """
+        if issubclass(type(instance), cls):
+            if hasattr(cls, 'interface_check'):
+                return cls.interface_check(instance)
+            else:
+                return True
+        else:
+            return False
+
 
 def _type_reconstructor(reconstructor, reconstructor_args, state):
     """
@@ -208,10 +223,134 @@ class Dummy(Type):
 class Hashable(Type):
     """
     Base class for hashable types.
+    A class is a subclass for Hashable iff `.is_hashable()` returns True.
+    """
+    def is_hashable(self):
+        """
+        Virtual subclasses should override this to customize subclass testing.
+        """
+        return True
+
+    @classmethod
+    def interface_check(cls, instance):
+        return instance.is_hashable()
+
+
+class UserOp(Type):
+    """
+    Base class for user-defined types that may define certain operators.
+    Valid operator names are: "hash", "==", "!=", "<", "<=", ">", ">=".
+    """
+    def supports_operator(self, op):
+        """
+        Returns True iff the operator ``op`` is supported by this type.
+        """
+        return False
+
+    def get_operator(self, op, context, sig):
+        """
+        Given the operator ``op``, returns (call, callsig) where
+            * `res = call(builder, args)` emits the operator implementation to
+                `builder` with `args` and returns to `res`;
+            * `callsig` is the signature of `call`.
+        """
+        raise NotImplementedError
+
+
+class UserHashable(Hashable, UserOp):
+    """
+    For user-defined types that may define __hash__.
+    A class is a subclass for UserHashable iff `.is_hashable()` returns True.
+    `.is_hashable()` depends on the result of `.supports_operator('hash')`.
+    """
+    def is_hashable(self):
+        return self.supports_operator('hash')
+
+
+class Eq(Type):
+    """
+    Base class for Eq types.
+    Eq types must provide ``__eq__``.
+    Eq types can optionally privde ``__ne__``.
+    If not provided, ``__ne__`` is automatically provided as inverted ``__eq__``
+
+    A class is a subclass for Eq iff `.is_eq()` returns True.
     """
 
+    def is_eq(self):
+        """
+        Virtual subclasses should override this to customize subclass testing.
+        """
+        return True
 
-class Number(Hashable):
+    @classmethod
+    def interface_check(cls, instance):
+        return instance.is_eq()
+
+
+class UserEq(Eq, UserOp):
+    """
+    For user-defined types that may define ``__eq__`` and ``__ne__``.
+    A class is a subclass for UserEq iff `.is_eq()` returns True.
+    `.is_eq()` depends on the result of `.supports_operator('==')`.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(UserEq, self).__init__(*args, **kwargs)
+        # Enforce stricter interface requirement than CPython.
+        if self.supports_operator('!=') and not self.supports_operator('=='):
+            raise TypeError("class defined `__ne__` but not `__eq__`")
+
+    def is_eq(self):
+        return self.supports_operator('==')
+
+
+class Ordered(Type):
+    """
+    Base class for types that defines at least of one ordered comparison
+    operator.
+
+    A class is a subclass for Ordered iff `.is_ordered()` returns True.
+    """
+
+    def is_ordered(self):
+        return True
+
+    @classmethod
+    def interface_check(cls, instance):
+        return instance.is_ordered()
+
+
+_ordered_operators = frozenset(['<', '<=', '>', '>='])
+
+
+class UserOrdered(Ordered, UserOp):
+    """
+    For user-defined types that may be orderable:
+    defining at least one of the ordered comparison operators.
+
+    A class is a subclass for UserOrdered iff `.is_ordered()` returns True.
+    `.is_ordered()` depends on `.supports_operator` returning True for one of
+    the following arguments: '<', '<=', '>' or '>='.
+    """
+    def is_ordered(self):
+        return bool(self.supported_ordered_operators())
+
+    def supported_ordered_operators(self):
+        """
+        Returns a set of supported operators
+        """
+        return frozenset(op for op in _ordered_operators
+                         if self.supports_operator(op))
+
+    def unsupported_ordered_operators(self):
+        """
+        Returns a set of unsupported operators
+        """
+        return _ordered_operators - self.supported_ordered_operators()
+
+
+class Number(Hashable, Eq, Ordered):
     """
     Base class for number types.
     """

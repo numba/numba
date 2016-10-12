@@ -12,7 +12,7 @@ from numba import njit
 from numba.typing import templates
 from numba.datamodel import default_manager, models
 from numba.targets import imputils
-from numba import cgutils
+from numba import cgutils, utils
 from numba.six import exec_
 from . import _box
 
@@ -59,9 +59,20 @@ def _mangle_attr(name):
 # Class object
 
 _ctor_template = """
-def ctor(*args):
-    return __numba_cls_(*args)
+def ctor({args}):
+    return __numba_cls_({args})
 """
+
+
+def _getargs(fn):
+    """
+    Returns list of positional and keyword argument names in order.
+    """
+    sig = utils.pysignature(fn)
+    params = sig.parameters
+    args = [k for k, v in params.items()
+            if (v.kind & v.POSITIONAL_OR_KEYWORD) == v.POSITIONAL_OR_KEYWORD]
+    return args
 
 
 class JitClassType(type):
@@ -84,7 +95,11 @@ class JitClassType(type):
         Generate a wrapper for calling the constructor from pure Python.
         Note the wrapper will only accept positional arguments.
         """
-        ctor_source = _ctor_template
+        init = cls.class_type.instance_type.methods['__init__']
+        # get postitional and keyword arguments
+        # offset by one to exclude the `self` arg
+        args = _getargs(init)[1:]
+        ctor_source = _ctor_template.format(args=', '.join(args))
         glbls = {"__numba_cls_": cls}
         exec_(ctor_source, glbls)
         ctor = glbls['ctor']
@@ -121,6 +136,68 @@ def _fix_up_private_attr(clsname, spec):
             k = '_' + clsname + k
         out[k] = v
     return out
+
+
+def _fill_total_ordering(methods):
+    """
+    Insert missing ordered comparisons into the dictionary of available methods.
+    These are all pure-python functions at this point.
+
+    Requires __eq__ to be available and at least one of the ordered comparison
+    is defined.
+    """
+    # Auto fill ordered comparisons if __eq__ is defined
+    if '__eq__' not in methods:
+        return
+
+    # from total_ordering definition in python2.7
+    convert = {
+        '__lt__': [('__gt__', lambda self, other: not (self < other or self == other)),
+                   ('__le__', lambda self, other: self < other or self == other),
+                   ('__ge__', lambda self, other: not self < other)],
+        '__le__': [('__ge__', lambda self, other: not self <= other or self == other),
+                   ('__lt__', lambda self, other: self <= other and not self == other),
+                   ('__gt__', lambda self, other: not self <= other)],
+        '__gt__': [('__lt__', lambda self, other: not (self > other or self == other)),
+                   ('__ge__', lambda self, other: self > other or self == other),
+                   ('__le__', lambda self, other: not self > other)],
+        '__ge__': [('__le__', lambda self, other: (not self >= other) or self == other),
+                   ('__gt__', lambda self, other: self >= other and not self == other),
+                   ('__lt__', lambda self, other: not self >= other)]
+    }
+
+    roots = set(methods.keys()) & set(convert)
+    if not roots:
+        return
+
+    # prefer __lt__ to __le__ to __gt__ to __ge__
+    root = max(roots)
+    for opname, opfunc in convert[root]:
+        if opname not in roots:
+            opfunc.__name__ = opname
+            methods[opname] = opfunc
+
+
+def _fill_not_equal(methods):
+    """
+    Insert missing __ne__ if __eq__ is defined into the dictionary of available
+    methods.  These are all pure-python functions at this point.
+    """
+    # Auto fill __ne__ given __eq__
+    if '__ne__' not in methods and '__eq__' in methods:
+        def ne(self, other):
+            return not (self == other)
+
+        methods['__ne__'] = ne
+        ne.__name__ = '__ne__'
+
+
+def _fill_comparison_operators(methods):
+    """
+    Insert missing comparison operators
+    """
+    _fill_not_equal(methods)
+    _fill_total_ordering(methods)
 
 
 def register_class_type(cls, spec, class_ctor, builder):
@@ -171,6 +248,10 @@ def register_class_type(cls, spec, class_ctor, builder):
         if v.fdel is not None:
             raise TypeError("deleter is not supported: {0}".format(k))
 
+    # Auto fill comparison operators
+    _fill_comparison_operators(methods)
+
+    # Compile
     jitmethods = {}
     for k, v in methods.items():
         jitmethods[k] = njit(v)
@@ -233,6 +314,10 @@ def _drop_ignored_attrs(dct):
 
     for k in drop:
         del dct[k]
+
+    # ignore __hash__ if it is None
+    if '__hash__' in dct:
+        dct.pop('__hash__', None)
 
 
 class ClassBuilder(object):

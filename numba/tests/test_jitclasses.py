@@ -6,6 +6,7 @@ import sys
 
 import numpy as np
 
+from numba import types
 from numba import (float32, float64, int16, int32, boolean, deferred_type,
                    optional)
 from numba import njit, typeof, errors
@@ -14,7 +15,7 @@ from numba import jitclass
 from .support import TestCase, MemoryLeakMixin, tag
 from numba.jitclass import _box
 from numba.runtime.nrt import MemInfo
-from numba.errors import LoweringError
+from numba.six import assertRegex
 
 
 def _get_meminfo(box):
@@ -282,7 +283,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         def do_is(a, b):
             return a is b
 
-        with self.assertRaises(LoweringError) as raises:
+        with self.assertRaises(errors.LoweringError) as raises:
             # trigger compilation
             do_is(vec_a, vec_a)
         self.assertIn('no default `is` implementation', str(raises.exception))
@@ -583,6 +584,687 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(Apple.__init__.__doc__, 'init docstring')
         self.assertEqual(Apple.foo.__doc__, 'foo method docstring')
         self.assertEqual(Apple.aval.__doc__, 'aval property docstring')
+
+
+class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
+
+    @tag('important')
+    def test_hash(self):
+        spec = [('_value', int32)]
+
+        @jitclass(spec)
+        class MyClass(object):
+
+            def __init__(self, value):
+                self._value = value
+
+            def __hash__(self):
+                return self._value
+
+            def call_hash(self):
+                return hash(self)
+
+        instty = MyClass.class_type.instance_type
+        self.assertIsInstance(instty, types.Hashable)
+        # Checks for bug in the instancecheck that makes this an Integer
+        self.assertNotIsInstance(instty, types.Integer)
+
+        inst = MyClass(value=123)
+        self.assertEqual(hash(inst), inst._value)
+        self.assertEqual(inst.call_hash(), hash(inst))
+
+    def test_not_hash(self):
+        spec = [('_value', int32)]
+
+        @jitclass(spec)
+        class MyClass(object):
+
+            def __init__(self, value):
+                self._value = value
+
+            def call_hash(self):
+                return hash(self)
+
+        instty = MyClass.class_type.instance_type
+        self.assertNotIsInstance(instty, types.Hashable)
+
+        inst = MyClass(value=123)
+        with self.assertRaises(errors.TypingError) as raises:
+            inst.call_hash()
+        errmsg = str(raises.exception)
+        regex = r"Invalid usage of Function\(<built-in function hash>\)"
+        assertRegex(self, errmsg, regex)
+
+    @tag('important')
+    def test_cmp_interface(self):
+        @jitclass([])
+        class Cmp(object):
+            def __init__(self):
+                pass
+
+            def __eq__(self):
+                pass
+
+            def __ne__(self):
+                pass
+
+            def __lt__(self):
+                pass
+
+            def __gt__(self):
+                pass
+
+            def __le__(self):
+                pass
+
+            def __ge__(self):
+                pass
+
+        jctype = Cmp.class_type.instance_type
+        self.assertTrue(isinstance(jctype, types.Eq))
+        self.assertTrue(isinstance(jctype, types.Ordered))
+
+        self.assertTrue(isinstance(jctype, types.UserEq))
+        self.assertTrue(isinstance(jctype, types.UserOrdered))
+
+        self.assertTrue(isinstance(jctype, types.ClassInstanceType))
+
+        # Test minimal interface to be Eq and Ordered
+        @jitclass([])
+        class Cmp2(object):
+            def __init__(self):
+                pass
+
+            def __eq__(self):
+                pass
+
+            def __lt__(self):
+                pass
+
+        jctype = Cmp2.class_type.instance_type
+        self.assertTrue(isinstance(jctype, types.Eq))
+        self.assertTrue(isinstance(jctype, types.Ordered))
+
+        self.assertTrue(isinstance(jctype, types.UserEq))
+        self.assertTrue(isinstance(jctype, types.UserOrdered))
+
+        self.assertTrue(isinstance(jctype, types.ClassInstanceType))
+
+    @tag('important')
+    def test_not_cmp_interface(self):
+        @jitclass([])
+        class NotCmp(object):
+            def __init__(self):
+                pass
+
+        jctype = NotCmp.class_type.instance_type
+        self.assertFalse(isinstance(jctype, types.Eq))
+        self.assertFalse(isinstance(jctype, types.Ordered))
+
+        self.assertFalse(isinstance(jctype, types.UserEq))
+        self.assertFalse(isinstance(jctype, types.UserOrdered))
+
+        self.assertTrue(isinstance(jctype, types.ClassInstanceType))
+
+    @tag('important')
+    def test_eq(self):
+        spec = [('_value', int32),
+                ('use_count', int32)]
+
+        @jitclass(spec)
+        class MyClass(object):
+
+            def __init__(self, value):
+                self._value = value
+                self.use_count = 0
+
+            def __eq__(self, other):
+                self.use_count += 1
+                if isinstance(other, MyClass):
+                    return self._value == other._value
+
+        @jitclass(spec)
+        class MyOtherClass(object):
+
+            def __init__(self, value):
+                self._value = value
+                self.use_count = 0
+
+            def __eq__(self, other):
+                self.use_count += 1
+                return self._value == other._value
+
+        myclass_insttype = MyClass.class_type.instance_type
+        myotherclass_insttype = MyOtherClass.class_type.instance_type
+
+        self.assertTrue(isinstance(myclass_insttype, types.UserEq))
+        self.assertTrue(isinstance(myclass_insttype, types.Eq))
+
+        self.assertTrue(isinstance(myotherclass_insttype, types.UserEq))
+        self.assertTrue(isinstance(myotherclass_insttype, types.Eq))
+
+        ai = MyClass(value=123)
+        bi = MyClass(value=123)
+        ci = MyClass(value=321)
+        di = MyOtherClass(value=ai._value)
+
+        self.assertEqual(ai.use_count, 0)
+        self.assertEqual(bi.use_count, 0)
+        self.assertEqual(ci.use_count, 0)
+        self.assertEqual(di.use_count, 0)
+
+        self.assertEqual(ai, bi)
+        self.assertEqual(ai.use_count, 1)
+
+        # notice the asymmetric __eq__ due to the instancecheck in MyClass
+        self.assertEqual(di, ai)
+        self.assertEqual(di.use_count, 1)
+
+        @njit
+        def check_equality(a, b):
+            return a == b
+
+        self.assertTrue(check_equality(ai, bi))
+        self.assertEqual(ai.use_count, 2)
+
+        self.assertFalse(check_equality(ai, ci))
+        self.assertEqual(ai.use_count, 3)
+
+        # notice the asymmetric __eq__ due to the instancecheck in MyClass
+        self.assertFalse(check_equality(ai, di))
+        self.assertEqual(ai.use_count, 4)
+
+        self.assertTrue(check_equality(di, ai))
+        self.assertEqual(di.use_count, 2)
+
+        @njit
+        def check_inequality(a, b):
+            # not_equal provided via default __eq__
+            return a != b
+
+        self.assertFalse(check_inequality(ai, bi))
+        self.assertEqual(ai.use_count, 5)
+
+        self.assertTrue(check_inequality(ai, ci))
+        self.assertEqual(ai.use_count, 6)
+
+        # notice the asymmetric __eq__ due to the instancecheck in MyClass
+        self.assertTrue(check_inequality(ai, di))
+        self.assertEqual(ai.use_count, 7)
+
+        self.assertFalse(check_inequality(di, ai))
+        self.assertEqual(di.use_count, 3)
+
+        self.assertEqual(bi.use_count, 0)
+        self.assertEqual(ci.use_count, 0)
+
+    @tag('important')
+    def test_ne(self):
+        spec = [('_value', int32),
+                ('use_count', int32)]
+
+        @jitclass(spec)
+        class MyClass(object):
+
+            def __init__(self, value):
+                self._value = value
+                self.use_count = 0
+
+            def __eq__(self, other):
+                return not (self != other)
+
+            def __ne__(self, other):
+                self.use_count += 1
+                if isinstance(other, MyClass):
+                    return self._value != other._value
+                return True
+
+        @jitclass(spec)
+        class MyOtherClass(object):
+
+            def __init__(self, value):
+                self._value = value
+                self.use_count = 0
+
+            def __eq__(self, other):
+                return not (self != other)
+
+            def __ne__(self, other):
+                self.use_count += 1
+                return self._value != other._value
+
+        myclass_insttype = MyClass.class_type.instance_type
+        myotherclass_insttype = MyOtherClass.class_type.instance_type
+
+        self.assertTrue(isinstance(myclass_insttype, types.UserEq))
+        self.assertTrue(isinstance(myclass_insttype, types.Eq))
+
+        self.assertTrue(isinstance(myotherclass_insttype, types.UserEq))
+        self.assertTrue(isinstance(myotherclass_insttype, types.Eq))
+
+        ai = MyClass(value=123)
+        bi = MyClass(value=123)
+        ci = MyClass(value=321)
+        di = MyOtherClass(value=ai._value)
+
+        self.assertEqual(ai.use_count, 0)
+        self.assertEqual(bi.use_count, 0)
+        self.assertEqual(ci.use_count, 0)
+        self.assertEqual(di.use_count, 0)
+
+        # there're no default __eq__ that uses __ne__; it will fallback to `is`
+        self.assertEqual(ai, bi)
+        self.assertEqual(ai.use_count, 1)
+        self.assertEqual(bi.use_count, 0)
+
+        self.assertFalse(ai != bi)
+        self.assertEqual(ai.use_count, 2)
+
+        self.assertNotEqual(ai, ci)
+        self.assertEqual(ai.use_count, 3)
+
+        # notice the asymmetric __eq__ due to the instancecheck in MyClass
+        self.assertNotEqual(ai, di)
+        self.assertEqual(ai.use_count, 4)
+        self.assertFalse(di != ai)
+        self.assertEqual(di.use_count, 1)
+
+        @njit
+        def check_inequality(a, b):
+            # not_equal provided via default __eq__
+            return a != b
+
+        self.assertFalse(check_inequality(ai, bi))
+        self.assertEqual(ai.use_count, 5)
+
+        self.assertTrue(check_inequality(ai, ci))
+        self.assertEqual(ai.use_count, 6)
+
+        # notice the asymmetric __eq__ due to the instancecheck in MyClass
+        self.assertTrue(check_inequality(ai, di))
+        self.assertEqual(ai.use_count, 7)
+
+        self.assertFalse(check_inequality(di, ai))
+        self.assertEqual(di.use_count, 2)
+
+        @njit
+        def check_equality(a, b):
+            return a == b
+
+        self.assertTrue(check_equality(ai, bi))
+        self.assertEqual(ai.use_count, 8)
+
+        self.assertFalse(check_equality(ai, di))
+        self.assertEqual(ai.use_count, 9)
+
+        class BadClass(object):
+            def __init__(self):
+                pass
+
+            def __ne__(self, other):
+                pass
+
+        with self.assertRaises(TypeError) as raises:
+            jitclass(spec)(BadClass)
+        self.assertEqual(str(raises.exception),
+                         "class defined `__ne__` but not `__eq__`")
+
+    def test_reflected_eq(self):
+        spec = [('_value', int32),
+                ('use_count', int32)]
+
+        @jitclass(spec)
+        class Apple(object):
+
+            def __init__(self, value):
+                self._value = value
+                self.use_count = 0
+
+            def __eq__(self, other):
+                self.use_count += 1
+                return self._value == other._value
+
+        @jitclass(spec)
+        class Berry(object):
+
+            def __init__(self, value):
+                self._value = value
+
+        ai = Apple(value=123)
+        bi = Berry(value=123)
+
+        self.assertTrue(isinstance(typeof(ai), types.Eq))
+        self.assertTrue(isinstance(typeof(ai), types.UserEq))
+
+        self.assertFalse(isinstance(typeof(bi), types.Eq))
+        self.assertFalse(isinstance(typeof(bi), types.UserEq))
+
+        # the values are equal
+        self.assertEqual(ai._value, bi._value)
+        self.assertEqual(ai.use_count, 0)
+        # equality is provided in this direction
+        self.assertEqual(ai, bi)
+        self.assertEqual(ai.use_count, 1)
+        # reflected equality
+        self.assertEqual(bi, ai)
+        self.assertEqual(ai.use_count, 2)
+
+        # check reflected equality in jitted code
+        @njit
+        def check_equality(x, y):
+            return x == y
+
+        self.assertTrue(check_equality(ai, bi))
+        self.assertEqual(ai.use_count, 3)
+
+        self.assertTrue(check_equality(bi, ai))
+        self.assertEqual(ai.use_count, 4)
+
+    def test_reflected_ne(self):
+        spec = [('_value', int32),
+                ('use_count', int32)]
+
+        @jitclass(spec)
+        class Apple(object):
+
+            def __init__(self, value):
+                self._value = value
+                self.use_count = 0
+
+            def __eq__(self, other):
+                return not (self != other)
+
+            def __ne__(self, other):
+                self.use_count += 1
+                return self._value != other._value
+
+        @jitclass(spec)
+        class Berry(object):
+
+            def __init__(self, value):
+                self._value = value
+
+        ai = Apple(value=123)
+        bi = Berry(value=321)
+
+        # the values are not equal
+        self.assertNotEqual(ai._value, bi._value)
+        self.assertEqual(ai.use_count, 0)
+        # inequality is provided in this direction
+        self.assertNotEqual(ai, bi)
+        self.assertEqual(ai.use_count, 1)
+        # reflected inequality
+        self.assertNotEqual(bi, ai)
+        self.assertEqual(ai.use_count, 2)
+
+        # check reflected equality in jitted code
+        @njit
+        def check_inequality(x, y):
+            return x != y
+
+        self.assertTrue(check_inequality(ai, bi))
+        self.assertEqual(ai.use_count, 3)
+
+        self.assertTrue(check_inequality(bi, ai))
+        self.assertEqual(ai.use_count, 4)
+
+    def test_lt(self):
+        spec = [('_value', int32),
+                ('use_count', int32)]
+
+        @jitclass(spec)
+        class Apple(object):
+            def __init__(self, value):
+                self._value = value
+                self.use_count = 0
+
+            def __lt__(self, other):
+                self.use_count += 1
+                return self._value < other._value
+
+        @jitclass(spec)
+        class Berry(object):
+            def __init__(self, value):
+                self._value = value
+
+        ai = Apple(123)
+        bi = Berry(124)
+
+        self.assertTrue(isinstance(typeof(ai), types.UserOrdered))
+        self.assertTrue(isinstance(typeof(ai), types.Ordered))
+
+        self.assertFalse(isinstance(typeof(bi), types.UserOrdered))
+        self.assertFalse(isinstance(typeof(bi), types.Ordered))
+
+        self.assertEqual(ai.use_count, 0)
+        self.assertTrue(ai < bi)
+        self.assertEqual(ai.use_count, 1)
+        self.assertTrue(bi > ai)
+        self.assertEqual(ai.use_count, 2)
+
+        @njit
+        def check_lessthan(x, y):
+            return x < y
+
+        self.assertTrue(check_lessthan(ai, bi))
+        self.assertEqual(ai.use_count, 3)
+
+        # test reflection
+        # __gt__ is the reflection of __lt__
+        @njit
+        def check_greaterthan(x, y):
+            return x > y
+
+        self.assertTrue(check_greaterthan(bi, ai))
+        self.assertEqual(ai.use_count, 4)
+
+
+    def test_gt(self):
+        spec = [('_value', int32),
+                ('use_count', int32)]
+
+        @jitclass(spec)
+        class Apple(object):
+            def __init__(self, value):
+                self._value = value
+                self.use_count = 0
+
+            def __gt__(self, other):
+                self.use_count += 1
+                return self._value > other._value
+
+        @jitclass(spec)
+        class Berry(object):
+            def __init__(self, value):
+                self._value = value
+
+
+        ai = Apple(123)
+        bi = Berry(122)
+
+        self.assertTrue(isinstance(typeof(ai), types.UserOrdered))
+        self.assertTrue(isinstance(typeof(ai), types.Ordered))
+
+        self.assertFalse(isinstance(typeof(bi), types.UserOrdered))
+        self.assertFalse(isinstance(typeof(bi), types.Ordered))
+
+        self.assertEqual(ai.use_count, 0)
+        self.assertTrue(ai > bi)
+        self.assertEqual(ai.use_count, 1)
+        self.assertTrue(bi < ai)
+        self.assertEqual(ai.use_count, 2)
+
+        @njit
+        def check_greaterthan(x, y):
+            return x > y
+
+        self.assertTrue(check_greaterthan(ai, bi))
+        self.assertEqual(ai.use_count, 3)
+
+        # test reflection
+        # __lt__ is the reflection of __gt__
+        @njit
+        def check_lessthan(x, y):
+            return x < y
+
+        self.assertTrue(check_lessthan(bi, ai))
+        self.assertEqual(ai.use_count, 4)
+
+
+    def test_le(self):
+        spec = [('_value', int32),
+                ('use_count', int32)]
+
+        @jitclass(spec)
+        class Apple(object):
+            def __init__(self, value):
+                self._value = value
+                self.use_count = 0
+
+            def __le__(self, other):
+                self.use_count += 1
+                return self._value <= other._value
+
+        @jitclass(spec)
+        class Berry(object):
+            def __init__(self, value):
+                self._value = value
+
+
+        ai = Apple(123)
+        bi = Berry(124)
+
+        self.assertTrue(isinstance(typeof(ai), types.UserOrdered))
+        self.assertTrue(isinstance(typeof(ai), types.Ordered))
+
+        self.assertFalse(isinstance(typeof(bi), types.UserOrdered))
+        self.assertFalse(isinstance(typeof(bi), types.Ordered))
+
+        self.assertEqual(ai.use_count, 0)
+        self.assertTrue(ai <= bi)
+        self.assertEqual(ai.use_count, 1)
+        self.assertTrue(bi >= ai)
+        self.assertEqual(ai.use_count, 2)
+
+        @njit
+        def check_lessequal(x, y):
+            return x <= y
+
+        self.assertTrue(check_lessequal(ai, bi))
+        self.assertEqual(ai.use_count, 3)
+
+        # test reflection
+        # __ge__ is the reflection of __le__
+        @njit
+        def check_greaterequal(x, y):
+            return x >= y
+
+        self.assertTrue(check_greaterequal(bi, ai))
+        self.assertEqual(ai.use_count, 4)
+
+    def test_ge(self):
+        spec = [('_value', int32),
+                ('use_count', int32)]
+
+        @jitclass(spec)
+        class Apple(object):
+            def __init__(self, value):
+                self._value = value
+                self.use_count = 0
+
+            def __ge__(self, other):
+                self.use_count += 1
+                return self._value >= other._value
+
+        @jitclass(spec)
+        class Berry(object):
+            def __init__(self, value):
+                self._value = value
+
+
+        ai = Apple(123)
+        bi = Berry(122)
+
+        self.assertTrue(isinstance(typeof(ai), types.UserOrdered))
+        self.assertTrue(isinstance(typeof(ai), types.Ordered))
+
+        self.assertFalse(isinstance(typeof(bi), types.UserOrdered))
+        self.assertFalse(isinstance(typeof(bi), types.Ordered))
+
+        self.assertEqual(ai.use_count, 0)
+        self.assertTrue(ai >= bi)
+        self.assertEqual(ai.use_count, 1)
+        self.assertTrue(bi <= ai)
+        self.assertEqual(ai.use_count, 2)
+
+        @njit
+        def check_greaterequal(x, y):
+            return x >= y
+
+        self.assertTrue(check_greaterequal(ai, bi))
+        self.assertEqual(ai.use_count, 3)
+
+        # test reflection
+        # __le__ is the reflection of __ge__
+        @njit
+        def check_lessequal(x, y):
+            return x <= y
+
+        self.assertTrue(check_lessequal(bi, ai))
+        self.assertEqual(ai.use_count, 4)
+
+    def test_default_ordering(self):
+        spec = [('_value', int32),
+                ('use_count', int32)]
+
+        @jitclass(spec)
+        class Apple(object):
+            def __init__(self, value):
+                self._value = value
+                self.use_count = 0
+
+            def __lt__(self, other):
+                self.use_count += 1
+                return self._value < other._value
+
+            def __eq__(self, other):
+                self.use_count += 1
+                return self._value == other._value
+
+        ai = Apple(123)
+        bi = Apple(122)
+
+        self.assertTrue(isinstance(typeof(ai), types.UserOrdered))
+        self.assertTrue(isinstance(typeof(ai), types.Ordered))
+        self.assertTrue(isinstance(typeof(ai), types.UserEq))
+        self.assertTrue(isinstance(typeof(ai), types.Eq))
+
+        self.assertEqual(ai.use_count, 0)
+        self.assertEqual(bi.use_count, 0)
+
+        self.assertFalse(ai < bi)
+        self.assertEqual(ai.use_count, 1)
+        self.assertEqual(bi.use_count, 0)
+
+        self.assertFalse(ai <= bi)
+        self.assertEqual(ai.use_count, 3)  # increment by 2
+        self.assertEqual(bi.use_count, 0)
+
+        self.assertTrue(ai >= bi)
+        self.assertEqual(ai.use_count, 4)  # increment by 1
+        self.assertEqual(bi.use_count, 0)
+
+        self.assertTrue(ai > bi)
+        self.assertEqual(ai.use_count, 6)  # increment by 2
+        self.assertEqual(bi.use_count, 0)
+
+        self.assertFalse(ai == bi)
+        self.assertEqual(ai.use_count, 7)  # increment by 1
+        self.assertEqual(bi.use_count, 0)
+
+        self.assertTrue(ai != bi)
+        self.assertEqual(ai.use_count, 8)  # increment by 1
+        self.assertEqual(bi.use_count, 0)
 
 
 if __name__ == '__main__':

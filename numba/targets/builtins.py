@@ -2,17 +2,15 @@ from __future__ import print_function, absolute_import, division
 
 import math
 from functools import reduce
+import warnings
 
 import numpy as np
 
-from llvmlite import ir
-from llvmlite.llvmpy.core import Type, Constant
-import llvmlite.llvmpy.core as lc
+from llvmlite.llvmpy.core import Type
 
-from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
-                       lower_cast, lower_constant, iternext_impl,
-                       call_getiter, call_iternext,
-                       impl_ret_borrowed, impl_ret_untracked)
+from .imputils import (lower_builtin, lower_getattr_generic,
+                       lower_cast, lower_constant, call_getiter, call_iternext,
+                       impl_ret_borrowed, impl_ret_untracked, impl_ret_new_ref)
 from .. import typing, types, cgutils, utils
 
 
@@ -25,29 +23,69 @@ def generic_is_not(context, builder, sig, args):
     return builder.not_(is_impl(builder, args))
 
 
+# used to avoid recursion on `is` impl due to fallback to `==` and the reverse
+_using_is_fallback = False
+
+
 @lower_builtin('is', types.Any, types.Any)
 def generic_is(context, builder, sig, args):
     """
     Default implementation for `x is y`
     """
+    global _using_is_fallback
     lhs_type, rhs_type = sig.args
     # the lhs and rhs have the same type
     if lhs_type == rhs_type:
-            # mutable types
-            if lhs_type.mutable:
+            # mutable types (or recursing due to sequence of fallback)
+            if lhs_type.mutable or _using_is_fallback:
                 raise NotImplementedError('no default `is` implementation')
             # immutable types
             else:
                 # fallbacks to `==`
                 try:
+                    _using_is_fallback = True   # mark start of fallback
                     eq_impl = context.get_function('==', sig)
                 except NotImplementedError:
                     # no `==` implemented for this type
                     return cgutils.false_bit
                 else:
                     return eq_impl(builder, args)
+                finally:
+                    _using_is_fallback = False
     else:
         return cgutils.false_bit
+
+
+@lower_builtin('==', types.Any, types.Any)
+def generic_eq(context, builder, sig, args):
+    """
+    Default implementation for `x == y` that fallback to `is`
+    """
+    lhs_type, rhs_type = sig.args
+    is_impl = context.get_function("is", sig)
+    out = is_impl(builder, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, out)
+
+
+@lower_builtin('!=', types.Any, types.Any)
+def generic_ne(context, builder, sig, args):
+    """
+    On Py2, Default implementation for `x != y` that fallback to `is not`
+    On Py3, fallback to not equal
+    """
+    lhs_type, rhs_type = sig.args
+    if isinstance(lhs_type, types.UserEq) or isinstance(rhs_type, types.UserEq):
+        warnings.warn("Possible unintentional usage of default __ne__ on "
+                      "object that implements __eq__", UserWarning)
+    if utils.IS_PY3:
+        # use inverted equal
+        eq_impl = context.get_function("==", sig)
+        out = builder.not_(eq_impl(builder, args))
+    else:
+        # use `is not`
+        is_impl = context.get_function("is not", sig)
+        out = is_impl(builder, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, out)
 
 #-------------------------------------------------------------------------------
 
@@ -76,6 +114,31 @@ def deferred_to_any(context, builder, fromty, toty, val):
     model = context.data_model_manager[fromty]
     val = model.get(builder, val)
     return context.cast(builder, val, fromty.get(), toty)
+
+
+#------------------------------------------------------------------------------
+# Hashing User-defined type
+
+
+@lower_builtin(hash, types.UserHashable)
+def hash_user_hashable(context, builder, sig, args):
+    self_type = sig.args[0]
+    call, callsig = self_type.get_operator('hash', context, sig)
+    out = call(builder, args)
+    # Cast return value to match the expected return_type
+    out = context.cast(builder, out, callsig.return_type, sig.return_type)
+    return impl_ret_new_ref(context, builder, sig.return_type, out)
+
+
+#------------------------------------------------------------------------------
+# isinstance
+
+@lower_builtin(isinstance, types.ClassInstanceType, types.ClassType)
+def isinstance_jitclass(context, builder, sig, args):
+    instance_type, class_type = sig.args
+    # Class inheritance is not supported yet
+    check_res = instance_type.class_type == class_type
+    return context.get_constant(types.bool_, check_res)
 
 
 #------------------------------------------------------------------------------
@@ -313,6 +376,98 @@ def not_in(context, builder, sig, args):
 
 # -----------------------------------------------------------------------------
 
+def _reflectable_equality(context, builder, sig, args, comparison):
+    """
+    Implement reflection logic for (in)equality operator
+    """
+    self_type, other_type = sig.args[:2]
+    # check if we need reflection version
+    if not isinstance(self_type, types.UserEq):
+        assert isinstance(other_type, types.UserEq)
+        # reflected signature
+        reflected_sig = typing.signature(sig.return_type, other_type, self_type)
+        [this, other] = args
+        return comparison(context, builder, reflected_sig, [other, this])
+    else:
+        return comparison(context, builder, sig, args)
+
+
+@lower_builtin("==", types.UserEq, types.Any)
+@lower_builtin("==", types.Any, types.UserEq)
+@lower_builtin("==", types.UserEq, types.UserEq)
+def user_eq(context, builder, sig, args):
+
+    def equality(context, builder, sig, args):
+        self_type = sig.args[0]
+        # get user implementation
+        call, callsig = self_type.get_operator('==', context, sig)
+        out = call(builder, args)
+        # cast return value to match the expected return_type
+        out = context.cast(builder, out, callsig.return_type,
+                            sig.return_type)
+        return impl_ret_new_ref(context, builder, sig.return_type, out)
+
+    return _reflectable_equality(context, builder, sig, args, equality)
+
+
+@lower_builtin("!=", types.UserEq, types.Any)
+@lower_builtin("!=", types.Any, types.UserEq)
+@lower_builtin("!=", types.UserEq, types.UserEq)
+def user_ne(context, builder, sig, args):
+
+    def inequality(context, builder, sig, args):
+        self_type = sig.args[0]
+
+        if self_type.supports_operator('!='):
+            # get user implementation
+            call, callsig = self_type.get_operator('!=', context, sig)
+            out = call(builder, args)
+            # cast return value to match the expected return_type
+            out = context.cast(builder, out, callsig.return_type,
+                               sig.return_type)
+        else:
+            # fallback to equality operator
+            default_impl = context.get_function("==", sig)
+            out = builder.not_(default_impl(builder, args))
+
+        return impl_ret_new_ref(context, builder, sig.return_type, out)
+
+    return _reflectable_equality(context, builder, sig, args, inequality)
+
+
+def _user_ordered_cmp(forward_op, reflected_op):
+    @lower_builtin(forward_op, types.UserOrdered, types.Any)
+    @lower_builtin(forward_op, types.UserOrdered, types.UserOrdered)
+    @lower_builtin(forward_op, types.Any, types.UserOrdered)
+    def imp(context, builder, sig, args):
+        [self_type, other_type] = sig.args[:2]
+        if isinstance(self_type, types.UserOrdered):
+            # forward version
+            self_type = sig.args[0]
+            fwd_impl = self_type.get_operator(forward_op, context, sig)
+            call, callsig = fwd_impl
+            out = call(builder, args)
+            out = context.cast(builder, out, callsig.return_type,
+                               sig.return_type)
+        else:
+            # reflected version
+            assert isinstance(other_type, types.UserOrdered)
+            [this, other] = args
+            reflected_sig = typing.signature(sig.return_type, other_type,
+                                             self_type)
+            rfl_impl = context.get_function(reflected_op, reflected_sig)
+            out = rfl_impl(builder, [other, this])
+        return impl_ret_new_ref(context, builder, sig.return_type, out)
+    return imp
+
+
+user_lt = _user_ordered_cmp("<", ">")
+user_gt = _user_ordered_cmp(">", "<")
+
+user_le = _user_ordered_cmp("<=", ">=")
+user_ge = _user_ordered_cmp(">=", "<=")
+
+
 @lower_builtin(len, types.ConstSized)
 def constsized_len(context, builder, sig, args):
     [ty] = sig.args
@@ -328,3 +483,4 @@ def sized_bool(context, builder, sig, args):
         return cgutils.true_bit
     else:
         return cgutils.false_bit
+
