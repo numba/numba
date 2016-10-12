@@ -24,6 +24,27 @@
 /*
  * Other helpers.
  */
+ 
+
+static  void (*fnclex)(void) = NULL;
+
+
+NUMBA_EXPORT_FUNC(double)
+numba_fmod(double x, double y){
+    fnclex();
+    return fmod(x, y);
+}
+
+NUMBA_EXPORT_FUNC(float)
+numba_fmodf(float x, float y) {
+    fnclex();
+    return fmodf(x, y);
+}
+
+NUMBA_EXPORT_FUNC(void)
+numba_set_fnclex(void *fn){
+    fnclex = fn;
+}
 
 /* provide 64-bit division function to 32-bit platforms */
 NUMBA_EXPORT_FUNC(int64_t)

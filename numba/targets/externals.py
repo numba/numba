@@ -151,6 +151,34 @@ class _ExternalMathFunctions(_Installer):
             #  be loaded at the same time, for example msvcrt100 by
             #  CPython and msvcrt120 by LLVM)
             ll.add_symbol(fname, c_helpers[fname])
+            
+        import ctypes
+        ptr_set_fnclex = c_helpers['set_fnclex']
+        fn = ctypes.CFUNCTYPE(None, ctypes.c_void_p)(ptr_set_fnclex)
+        
+        library = compile_fnclex(context)
+        fnclex_ptr=library.get_pointer_to_function('fnclex')
+        fn(fnclex_ptr)
 
+ 
+def compile_fnclex(context):
+    """
+    Compile the multi3() helper function used by LLVM
+    for 128-bit multiplication on 32-bit platforms.
+    """
+    codegen = context.codegen()
+    library = codegen.create_library("multi3")
+    ir_mod = """
+define void @fnclex() {
+  call void asm sideeffect "fnclex", ""()
+  ret void
+}
+    """
+    ll.ffi.lib.LLVMPY_InitializeNativeAsmParser()
+    library.add_llvm_module(ll.parse_assembly(ir_mod))
+    library.finalize()
 
+    return library
+
+        
 c_math_functions = _ExternalMathFunctions()
