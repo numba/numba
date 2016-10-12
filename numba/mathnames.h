@@ -70,8 +70,8 @@ MATH_UNARY(truncf, float, float)
 MATH_BINARY(pow, double, double, double)
 MATH_BINARY(powf, float, float, float)
 
-//MATH_BINARY(fmod, double, double, double)
-//MATH_BINARY(fmodf, float, float, float)
+MATH_BINARY(fmod, double, double, double)
+MATH_BINARY(fmodf, float, float, float)
 
 MATH_BINARY(atan2_fixed, double, double, double)
 MATH_BINARY(atan2, double, double, double)

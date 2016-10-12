@@ -3,13 +3,19 @@ Register external C functions necessary for Numba code generation.
 """
 
 import sys
+import ctypes
 
 from llvmlite import ir
 import llvmlite.binding as ll
 
-from numba import utils
+from numba import utils, config
 from numba import _helperlib
 from . import intrinsics
+
+# Require workaround for https://support.microsoft.com/en-us/kb/982107 ?
+need_kb982107 = (config.PYVERSION == (2, 7) and
+                 config.IS_WIN32 and
+                 not config.IS_32BITS)
 
 
 def _add_missing_symbol(symbol, addr):
@@ -150,35 +156,46 @@ class _ExternalMathFunctions(_Installer):
             # (under Windows, different versions of the C runtime can
             #  be loaded at the same time, for example msvcrt100 by
             #  CPython and msvcrt120 by LLVM)
-            ll.add_symbol(fname, c_helpers[fname])
-            
-        import ctypes
-        ptr_set_fnclex = c_helpers['set_fnclex']
-        fn = ctypes.CFUNCTYPE(None, ctypes.c_void_p)(ptr_set_fnclex)
-        
-        library = compile_fnclex(context)
-        fnclex_ptr=library.get_pointer_to_function('fnclex')
-        fn(fnclex_ptr)
+            if need_kb982107 and fname.startswith('fmod'):
+                ll.add_symbol(fname, c_helpers['fixed_' + fname])
+            else:
+                ll.add_symbol(fname, c_helpers[fname])
 
- 
+        if need_kb982107:
+            set_fnclex(context, c_helpers)
+
+
+def set_fnclex(context, c_helpers):
+    """
+    Install fnclex before fmod calls.
+    Workaround for https://support.microsoft.com/en-us/kb/982107
+    """
+    ptr_set_fnclex = c_helpers['set_fnclex']
+    fn = ctypes.CFUNCTYPE(None, ctypes.c_void_p)(ptr_set_fnclex)
+
+    library = compile_fnclex(context)
+    fnclex_ptr = library.get_pointer_to_function('fnclex')
+    fn(fnclex_ptr)
+
+
 def compile_fnclex(context):
     """
-    Compile the multi3() helper function used by LLVM
-    for 128-bit multiplication on 32-bit platforms.
+    Compile a function that calls fnclex to workround
+    https://support.microsoft.com/en-us/kb/982107
     """
     codegen = context.codegen()
-    library = codegen.create_library("multi3")
+    library = codegen.create_library("kb982107")
     ir_mod = """
 define void @fnclex() {
   call void asm sideeffect "fnclex", ""()
   ret void
 }
     """
+    # XXX llvmlite does not expose this initializer as a python function, yet.
     ll.ffi.lib.LLVMPY_InitializeNativeAsmParser()
     library.add_llvm_module(ll.parse_assembly(ir_mod))
     library.finalize()
-
     return library
 
-        
+
 c_math_functions = _ExternalMathFunctions()

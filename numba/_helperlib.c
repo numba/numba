@@ -24,20 +24,22 @@
 /*
  * Other helpers.
  */
- 
 
+
+/* Fix fmod() and fmodf() for windows x64 VC 9.0 (VS 2008)
+https://support.microsoft.com/en-us/kb/982107
+*/
 static  void (*fnclex)(void) = NULL;
 
-
 NUMBA_EXPORT_FUNC(double)
-numba_fmod(double x, double y){
-    fnclex();
+numba_fixed_fmod(double x, double y){
+    fnclex();  /* no inline asm in x64 =( */
     return fmod(x, y);
 }
 
 NUMBA_EXPORT_FUNC(float)
-numba_fmodf(float x, float y) {
-    fnclex();
+numba_fixed_fmodf(float x, float y) {
+    fnclex();  /* no inline asm in x64 =( */
     return fmodf(x, y);
 }
 
