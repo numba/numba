@@ -3,13 +3,13 @@
 """
 An inplace and an out-of-place implementation of recursive mergesort.
 This is not an efficient sort implementation.
-The purpose is to demonstrate the recursion support.
+The purpose is to demonstrate recursion support.
 """
 from __future__ import print_function, division, absolute_import
 
 from timeit import default_timer as timer
 
-import numpy
+import numpy as np
 
 from numba import njit
 
@@ -87,19 +87,19 @@ def run(mergesort):
     print(('Running %s' % mergesort.py_func.__name__).center(80, '='))
     # Small case (warmup)
     print("Warmup")
-    arr = numpy.random.random(6)
+    arr = np.random.random(6)
     expect = arr.copy()
     expect.sort()
-    res = mergesort(arr)
     print("unsorted", arr)
+    res = mergesort(arr)
     print("  sorted", res)
     # Test correstness
-    assert numpy.all(expect == res)
+    assert np.all(expect == res)
     print()
     # Large case
     nelem = 10**3
     print("Sorting %d float64" % nelem)
-    arr = numpy.random.random(nelem)
+    arr = np.random.random(nelem)
     expect = arr.copy()
 
     # Run pure python version
@@ -120,7 +120,7 @@ def run(mergesort):
     te = timer()
     print('numba took %.3fms' % (1000 * (te - ts)))
     # Test correstness
-    assert numpy.all(expect == res)
+    assert np.all(expect == res)
 
 
 def main():
