@@ -10,8 +10,8 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import jit, numpy_support, types, typeinfer, utils, errors
-from numba.config import PYVERSION, MACHINE_BITS
+from numba import jit, types, typeinfer, utils, errors
+from numba.config import PYVERSION
 from .support import TestCase, tag
 from .true_div_usecase import truediv_usecase, itruediv_usecase
 from .matmul_usecase import (matmul_usecase, imatmul_usecase, DumbMatrix,
@@ -27,22 +27,6 @@ def make_static_power(exp):
     def pow_usecase(x):
         return x ** exp
     return pow_usecase
-
-
-# On 64-bit Windows, MSVC 2008 (Python 2.7) and Numpy 1.9, there's a
-# heisenbug that seems to manifest as wrong values returned by the CRT's
-# fmodf() function (which is called by LLVM's lowering of the `frem`
-# instruction).
-# Perhaps Numpy messing with some internal FP state that confuses the CRT?
-# Regardless, the only sane thing to do seems to be to skip the tests...
-
-_windows_floordiv_heisenbug = (
-    sys.platform == 'win32' and numpy_support.version[:2] == (1, 9)
-    and MACHINE_BITS == 64)
-
-_avoid_windows_floordiv_heisenbug = unittest.skipIf(
-    _windows_floordiv_heisenbug,
-    "avoid Windows + Numpy floordiv heisenbug - see PR #2057")
 
 
 class LiteralOperatorImpl(object):
@@ -563,7 +547,6 @@ class TestOperators(TestCase):
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                              flags=flags)
 
-    @_avoid_windows_floordiv_heisenbug
     def run_binop_floats_floordiv(self, pyfunc, flags=force_pyobj_flags):
         self.run_binop_floats(pyfunc, flags=flags)
 

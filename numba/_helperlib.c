@@ -25,6 +25,29 @@
  * Other helpers.
  */
 
+
+/* Fix fmod() and fmodf() for windows x64 VC 9.0 (VS 2008)
+https://support.microsoft.com/en-us/kb/982107
+*/
+static  void (*fnclex)(void) = NULL;
+
+NUMBA_EXPORT_FUNC(double)
+numba_fixed_fmod(double x, double y){
+    fnclex();  /* no inline asm in x64 =( */
+    return fmod(x, y);
+}
+
+NUMBA_EXPORT_FUNC(float)
+numba_fixed_fmodf(float x, float y) {
+    fnclex();  /* no inline asm in x64 =( */
+    return fmodf(x, y);
+}
+
+NUMBA_EXPORT_FUNC(void)
+numba_set_fnclex(void *fn){
+    fnclex = fn;
+}
+
 /* provide 64-bit division function to 32-bit platforms */
 NUMBA_EXPORT_FUNC(int64_t)
 numba_sdiv(int64_t a, int64_t b) {

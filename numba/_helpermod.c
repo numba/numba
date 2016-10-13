@@ -36,6 +36,10 @@ build_c_helpers_dict(void)
 
 #define declpointer(ptr) _declpointer(#ptr, &numba_##ptr)
 
+    declmethod(fixed_fmod);
+    declmethod(fixed_fmodf);
+    declmethod(set_fnclex);
+
     declmethod(sdiv);
     declmethod(srem);
     declmethod(udiv);
