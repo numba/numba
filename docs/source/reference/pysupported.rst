@@ -49,7 +49,8 @@ Recursive calls
 
 Most recursive call patterns are supported.  The only restriction is that the
 recursive callee must have a control-flow path that returns without recursing.
-Numba is able to type-infer recursive functions.
+Numba is able to type-infer recursive functions without specifying the function
+type signature (which is required in numba 0.28 and earlier).
 Recursive calls can even call into a different overload of the function.
 
 .. XXX add reference to NBEP
