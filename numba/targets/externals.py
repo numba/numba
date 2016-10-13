@@ -191,8 +191,7 @@ define void @fnclex() {
   ret void
 }
     """
-    # XXX llvmlite does not expose this initializer as a python function, yet.
-    ll.ffi.lib.LLVMPY_InitializeNativeAsmParser()
+    ll.initialize_native_asmparser()
     library.add_llvm_module(ll.parse_assembly(ir_mod))
     library.finalize()
     return library
