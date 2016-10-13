@@ -162,7 +162,8 @@ class _ExternalMathFunctions(_Installer):
                 ll.add_symbol(fname, c_helpers[fname])
 
         if need_kb982107:
-            set_fnclex(context, c_helpers)
+            # Make the library immortal
+            self._kb982107_lib = set_fnclex(context, c_helpers)
 
 
 def set_fnclex(context, c_helpers):
@@ -176,6 +177,8 @@ def set_fnclex(context, c_helpers):
     library = compile_fnclex(context)
     fnclex_ptr = library.get_pointer_to_function('fnclex')
     fn(fnclex_ptr)
+
+    return library
 
 
 def compile_fnclex(context):
