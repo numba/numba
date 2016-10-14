@@ -793,6 +793,48 @@ class BaseContext(object):
             self.call_conv.return_status_propagate(builder, status)
         return res
 
+    def call_unresolved(self, builder, name, sig, args):
+        """
+        Insert a function call to an unresolved symbol with the given *name*.
+
+        Note: this is used for recursive call.
+
+        In the mutual recursion case::
+
+            @njit
+            def foo():
+                ...  # calls bar()
+
+            @njit
+            def bar():
+                ... # calls foo()
+
+            foo()
+
+        When foo() is called, the compilation of bar() is fully completed
+        (codegen'ed and loaded) before foo() is. Since MCJIT's eager compilation
+        doesn't allow loading modules with declare-only functions (which is
+        needed for foo() in bar()), the call_unresolved injects a global
+        variable that the "linker" can update even after the module is loaded by
+        MCJIT. The linker would allocate space for the global variable before
+        the bar() module is loaded. When later foo() module is defined, it will
+        update bar()'s reference to foo().
+
+        The legacy lazy JIT and the new ORC JIT would allow a declare-only
+        function be used in a module as long as it is defined by the time of its
+        first use.
+        """
+        # Insert an unresolved reference to the function being called.
+        codegen = self.codegen()
+        fnty = self.call_conv.get_function_type(sig.return_type, sig.args)
+        fn = codegen.insert_unresolved_ref(builder, fnty, name)
+        # Normal call sequence
+        status, res = self.call_conv.call_function(builder, fn, sig.return_type,
+                                                   sig.args, args)
+        with cgutils.if_unlikely(builder, status.is_error):
+            self.call_conv.return_status_propagate(builder, status)
+        return res
+
     def get_executable(self, func, fndesc):
         raise NotImplementedError
 

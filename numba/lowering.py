@@ -11,6 +11,7 @@ from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
 from .errors import LoweringError, new_error_context
 from .targets import imputils
+from .funcdesc import default_mangler
 
 
 class Environment(_dynfunc.Environment):
@@ -644,9 +645,17 @@ class Lower(BaseLower):
                                                          argvals, fnty.cconv)
 
         elif isinstance(fnty, types.RecursiveCall):
-            # Self-recursive call
-            impl = imputils.user_function(self.fndesc, ())
-            res = impl(self.context, self.builder, signature, argvals)
+            # Recursive call
+            qualprefix = fnty.overloads[signature.args]
+            mangler = self.context.mangler or default_mangler
+            mangled_name = mangler(qualprefix, signature.args)
+            # special case self recursion
+            if self.builder.function.name.startswith(mangled_name):
+                res = self.context.call_internal(self.builder, self.fndesc,
+                                                 signature, argvals)
+            else:
+                res = self.context.call_unresolved(self.builder, mangled_name,
+                                                   signature, argvals)
 
         else:
             # Normal function resolution

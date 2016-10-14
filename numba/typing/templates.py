@@ -266,7 +266,6 @@ class ConcreteTemplate(FunctionTemplate):
 
     def apply(self, args, kws):
         cases = getattr(self, 'cases')
-        assert cases
         return self._select(cases, args, kws)
 
 

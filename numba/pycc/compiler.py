@@ -14,7 +14,7 @@ from numba.utils import IS_PY3
 from . import llvm_types as lt
 from numba.compiler import compile_extra, Flags
 from numba.targets.registry import cpu_target
-from numba.runtime import atomicops
+from numba.runtime import nrtdynmod
 
 
 logger = logging.getLogger(__name__)
@@ -143,7 +143,7 @@ class _ModuleCompiler(object):
         if self.use_nrt:
             flags.set("nrt")
             # Compile NRT helpers
-            nrt_module, _ = atomicops.create_nrt_module(self.context)
+            nrt_module, _ = nrtdynmod.create_nrt_module(self.context)
             library.add_ir_module(nrt_module)
 
         for entry in self.export_entries:

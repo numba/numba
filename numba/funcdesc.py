@@ -4,12 +4,10 @@ Function descriptors.
 from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
-import itertools
 import sys
-from types import ModuleType
 
-from . import six, types
-from .utils import PY3
+from . import types
+from .utils import PY3, _dynamic_modname, _dynamic_module
 
 
 def transform_arg_name(arg):
@@ -34,10 +32,13 @@ def default_mangler(name, argtypes):
         out = out.decode('ascii')
     return out
 
-# A dummy module for dynamically-generated functions
-_dynamic_modname = '<dynamic>'
-_dynamic_module = ModuleType(_dynamic_modname)
-_dynamic_module.__builtins__ = six.moves.builtins
+
+def qualifying_prefix(modname, qualname):
+    """
+    Returns a new string that is used for the first half of the mangled name.
+    """
+    # XXX choose a different convention for object mode
+    return '{}.{}'.format(modname, qualname) if modname else qualname
 
 
 class FunctionDescriptor(object):
@@ -52,8 +53,6 @@ class FunctionDescriptor(object):
     __slots__ = ('native', 'modname', 'qualname', 'doc', 'typemap',
                  'calltypes', 'args', 'kws', 'restype', 'argtypes',
                  'mangled_name', 'unique_name', 'inline')
-
-    _unique_ids = itertools.count(1)
 
     def __init__(self, native, modname, qualname, unique_name, doc,
                  typemap, restype, calltypes, args, kws, mangler=None,
@@ -81,12 +80,8 @@ class FunctionDescriptor(object):
         mangler = default_mangler if mangler is None else mangler
         # The mangled name *must* be unique, else the wrong function can
         # be chosen at link time.
-        if self.modname:
-            # XXX choose a different convention for object mode
-            self.mangled_name = mangler('%s.%s' % (self.modname, self.unique_name),
-                                                   self.argtypes)
-        else:
-            self.mangled_name = mangler(self.unique_name, self.argtypes)
+        qualprefix = qualifying_prefix(self.modname, self.unique_name)
+        self.mangled_name = mangler(qualprefix, self.argtypes)
         self.inline = inline
 
     def lookup_module(self):
@@ -155,10 +150,7 @@ class FunctionDescriptor(object):
             # Dynamically generated function.
             modname = _dynamic_modname
 
-        # Even the same function definition can be compiled into
-        # several different function objects with distinct closure
-        # variables, so we make sure to disambiguish using an unique id.
-        unique_name = "%s$%d" % (qualname, next(cls._unique_ids))
+        unique_name = func_ir.func_id.unique_name
 
         return qualname, unique_name, modname, doc, args, kws
 

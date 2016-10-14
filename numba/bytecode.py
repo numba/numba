@@ -8,6 +8,7 @@ from collections import namedtuple, OrderedDict
 import dis
 import inspect
 import sys
+import itertools
 from types import CodeType, ModuleType
 
 from numba import errors, utils
@@ -382,6 +383,7 @@ class FunctionIdentity(object):
     being compiled, not necessarily the top-level user function
     (the two might be distinct, e.g. in the `@generated_jit` case).
     """
+    _unique_ids = itertools.count(1)
 
     @classmethod
     def from_function(cls, pyfunc):
@@ -406,11 +408,20 @@ class FunctionIdentity(object):
         self.func_name = func_qualname.split('.')[-1]
         self.code = code
         self.module = inspect.getmodule(func)
+        self.modname = (utils._dynamic_modname
+                        if self.module is None
+                        else self.module.__name__)
         self.is_generator = inspect.isgeneratorfunction(func)
         self.pysig = pysig
         self.filename = code.co_filename
         self.firstlineno = code.co_firstlineno
         self.arg_count = len(pysig.parameters)
         self.arg_names = list(pysig.parameters)
+
+        # Even the same function definition can be compiled into
+        # several different function objects with distinct closure
+        # variables, so we make sure to disambiguate using an unique id.
+        uid = next(cls._unique_ids)
+        self.unique_name = '{}${}'.format(self.func_qualname, uid)
 
         return self

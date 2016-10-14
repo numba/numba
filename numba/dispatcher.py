@@ -9,6 +9,7 @@ import struct
 import sys
 import uuid
 import weakref
+import threading
 
 import numba
 from numba import _dispatcher, compiler, utils, types, config, errors
@@ -168,7 +169,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                                         has_stararg)
 
         self.doc = py_func.__doc__
-        self._compile_lock = utils.NonReentrantLock()
+        self._compile_lock = threading.RLock()
 
         utils.finalize(self, self._make_finalizer())
 
@@ -242,8 +243,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         # Fold keyword arguments and resolve default values
         pysig, args = self._compiler.fold_argument_types(args, kws)
         kws = {}
-        # Ensure an overload is available, but avoid compiler re-entrance
-        if self._can_compile and not self.is_compiling:
+        # Ensure an overload is available
+        if self._can_compile:
             self.compile(tuple(args))
 
         # Create function type for typing
@@ -267,7 +268,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         """
         Whether a specialization is currently being compiled.
         """
-        return self._compile_lock.is_owned()
+        return self._compile_lock._is_owned()
 
     def _compile_for_args(self, *args, **kws):
         """
