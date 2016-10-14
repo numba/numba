@@ -405,7 +405,7 @@ class _GufuncWrapper(object):
                 self.cache.save_overload(self.cres.signature, wrapperlib)
             # Finalize and get function pointer
             ptr = wrapperlib.get_pointer_to_function(wrapper_name)
-            return ptr, self.env
+            return ptr, self.env, wrapper_name
 
     def gen_loop_body(self, builder, pyapi, func, args):
         status, retval = self.call_conv.call_function(builder, func,
