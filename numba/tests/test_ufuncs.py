@@ -1024,9 +1024,9 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
                                     flags=no_pyobj_flags)
             cfunc = cr.entry_point
             expected = lhs.copy()
-            pyfunc(expected, rhs)
             got = lhs.copy()
             cfunc(got, rhs)
+            pyfunc(expected, rhs)  # run this last to avoid fmod error
             self.assertPreciseEqual(got, expected)
 
     def inplace_float_op_test(self, operator, lhs_values, rhs_values):
