@@ -29,17 +29,19 @@ def vector_add(a, b):
 
 
 class BaseVectorizeDecor(object):
-
-    __test__ = False
     target = None
+    wrapper = None
     funcs = {
         'func1': sinc,
         'func2': scaled_sinc,
         'func3': vector_add,
     }
 
-    def _run_and_compare(self, func, sig, A, *args, **kwargs):
-        numba_func = vectorize(sig, target=self.target)(func)
+    @classmethod
+    def _run_and_compare(cls, func, sig, A, *args, **kwargs):
+        if cls.wrapper is not None:
+            func = cls.wrapper(func)
+        numba_func = vectorize(sig, target=cls.target)(func)
         numpy_func = np.vectorize(func)
         result = numba_func(A, *args)
         gold = numpy_func(A, *args)
@@ -87,23 +89,16 @@ class BaseVectorizeDecor(object):
 
 
 class TestCPUVectorizeDecor(unittest.TestCase, BaseVectorizeDecor):
-    __test__ = True 
     target = 'cpu'
 
 
 class TestParallelVectorizeDecor(unittest.TestCase, BaseVectorizeDecor):
-    __test__ = True 
     target = 'parallel'
 
 
 class TestCPUVectorizeJitted(unittest.TestCase, BaseVectorizeDecor):
-    __test__ = True 
     target = 'cpu'
-    funcs = {
-        'func1': jit(sinc),
-        'func2': jit(scaled_sinc),
-        'func3': jit(vector_add),
-    }
+    wrapper = jit
 
 
 if __name__ == '__main__':
