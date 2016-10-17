@@ -1,3 +1,30 @@
+Version 0.29.0
+--------------
+
+This release extends the support of recursive functions to include direct and
+indirect recursion without explicit function type annotations.  See new example
+in `examples/mergesort.py`.  Newly supported numpy features include array
+stacking functions, np.linalg.eig* functions, np.lingla.matrix_power and
+array to array broadcasting in assignments.
+
+Improvements:
+
+* PR #2130, #2137: Add type-inferred recursion with docs and examples.
+* PR #2134: Add ``np.linalg.matrix_power``.
+* PR #2129: Add ``np.linalg.{eigvals,eigh,eigvalsh}``.
+* PR #2126: Add array-to-array broadcasting.
+* PR #2069: Add hstack and related functions.
+* PR #2128: Allow for vectorizing a jitted function. (thanks to @dhirschfeld)
+
+Fixes:
+
+* PR #2149: Workaround MSVC9.0 SP1 fmod bug kb982107.
+* PR #2145, Issue #2009: Fixes kwargs for jitclass ``__init__`` method.
+* PR #2150: Fix slowdown in objmode fallback.
+* PR #2050, Issue #1258: Fix liveness problem with some generator loops.
+* PR #2072, Issue #1995: Right shift of unsigned LHS should be logical.
+
+
 Version 0.28.1
 --------------
 
