@@ -4,13 +4,14 @@ Version 0.29.0
 This release extends the support of recursive functions to include direct and
 indirect recursion without explicit function type annotations.  See new example
 in `examples/mergesort.py`.  Newly supported numpy features include array
-stacking functions, np.linalg.eig* functions, np.lingla.matrix_power and
-array to array broadcasting in assignments.
+stacking functions, np.linalg.eig* functions, np.linalg.matrix_power, np.roots
+and array to array broadcasting in assignments.
 
 Improvements:
 
 * PR #2130, #2137: Add type-inferred recursion with docs and examples.
 * PR #2134: Add ``np.linalg.matrix_power``.
+* PR #2125: Add ``np.roots``.
 * PR #2129: Add ``np.linalg.{eigvals,eigh,eigvalsh}``.
 * PR #2126: Add array-to-array broadcasting.
 * PR #2069: Add hstack and related functions.
