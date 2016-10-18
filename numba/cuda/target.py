@@ -5,7 +5,7 @@ from llvmlite.llvmpy.core import (Type, Builder, LINKAGE_INTERNAL,
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
-from numba import typing, types, cgutils
+from numba import typing, types, cgutils, debuginfo
 from numba.utils import cached_property
 from numba.targets.base import BaseContext
 from numba.targets.callconv import MinimalCallConv
@@ -38,6 +38,7 @@ VALID_CHARS = re.compile(r'[^a-z0-9]', re.I)
 class CUDATargetContext(BaseContext):
     implement_powi_as_math_call = True
     strict_alignment = True
+    DIBuilder = debuginfo.NvvmDIBuilder
 
     # Overrides
     def create_module(self, name):

@@ -184,6 +184,7 @@ class CPUTargetOptions(TargetOptions):
         "forceobj": bool,
         "looplift": bool,
         "boundcheck": bool,
+        "debug": bool,
         "_nrt": bool,
         "no_rewrites": bool,
         "no_cpython_wrapper": bool,

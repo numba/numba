@@ -52,6 +52,7 @@ def compile_cuda(pyfunc, return_type, args, debug, inline):
     flags.set('no_cpython_wrapper')
     if debug:
         flags.set('boundcheck')
+        flags.set('debuginfo')
     if inline:
         flags.set('forceinline')
     # Run compilation pipeline
@@ -422,7 +423,7 @@ class CUDAKernel(CUDAKernelBase):
                  link=(), debug=False, fastmath=False, type_annotation=None):
         super(CUDAKernel, self).__init__()
         # initialize CUfunction
-        options = {}
+        options = {'debug': debug}
         if fastmath:
             options.update(dict(ftz=True,
                                 prec_sqrt=False,

@@ -13,7 +13,7 @@ import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
-from numba import types, utils, cgutils, typing, funcdesc
+from numba import types, utils, cgutils, typing, funcdesc, debuginfo
 from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
 from . import arrayobj, builtins, imputils
@@ -190,6 +190,10 @@ class BaseContext(object):
     # Force powi implementation as math.pow call
     implement_powi_as_math_call = False
     implement_pow_as_math_call = False
+
+    # Emit Debug info
+    enable_debuginfo = False
+    DIBuilder = debuginfo.DIBuilder
 
     # Bound checking
     enable_boundcheck = False

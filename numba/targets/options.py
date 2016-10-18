@@ -50,6 +50,7 @@ class TargetOptions(object):
             flags.set("nrt")
 
         if kws.pop('debug', False):
+            flags.set("debuginfo")
             flags.set("boundcheck")
 
         if kws.pop('nogil', False):

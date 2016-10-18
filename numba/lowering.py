@@ -12,6 +12,7 @@ from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
 from .errors import LoweringError, new_error_context
 from .targets import imputils
 from .funcdesc import default_mangler
+from . import debuginfo
 
 
 class Environment(_dynfunc.Environment):
@@ -67,6 +68,14 @@ class BaseLower(object):
         self.firstblk = min(self.blocks.keys())
         self.loc = -1
 
+        # Debuginfo
+        dibuildercls = (self.context.DIBuilder
+                        if self.context.enable_debuginfo
+                        else debuginfo.DummyDIBuilder)
+
+        self.debuginfo = dibuildercls(module=self.module,
+                                                filepath=func_ir.loc.filename)
+
         # Subclass initialization
         self.init()
 
@@ -106,11 +115,15 @@ class BaseLower(object):
         # (for generators) and it's important to use a new API and
         # EnvironmentManager.
         self.pyapi = None
+        self.debuginfo.mark_subprogram(function=self.builder.function,
+                                       name=self.fndesc.qualname,
+                                       line=self.func_ir.loc.line)
 
     def post_lower(self):
         """
         Called after all blocks are lowered
         """
+        self.debuginfo.finalize()
 
     def pre_block(self, block):
         """
@@ -232,6 +245,8 @@ class Lower(BaseLower):
     GeneratorLower = generators.GeneratorLower
 
     def lower_inst(self, inst):
+        # Set debug location for all subsequent LL instructions
+        self.debuginfo.mark_location(self.builder, self.loc)
         self.debug_print(str(inst))
         if isinstance(inst, ir.Assign):
             ty = self.typeof(inst.target.name)
