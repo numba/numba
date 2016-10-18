@@ -1,3 +1,39 @@
+Version 0.29.0
+--------------
+
+This release extends the support of recursive functions to include direct and
+indirect recursion without explicit function type annotations.  See new example
+in `examples/mergesort.py`.  Newly supported numpy features include array
+stacking functions, np.linalg.eig* functions, np.linalg.matrix_power, np.roots
+and array to array broadcasting in assignments.
+
+This release depends on llvmlite 0.14.0 and supports CUDA 8 but it is not
+required.
+
+Improvements:
+
+* PR #2130, #2137: Add type-inferred recursion with docs and examples.
+* PR #2134: Add ``np.linalg.matrix_power``.
+* PR #2125: Add ``np.roots``.
+* PR #2129: Add ``np.linalg.{eigvals,eigh,eigvalsh}``.
+* PR #2126: Add array-to-array broadcasting.
+* PR #2069: Add hstack and related functions.
+* PR #2128: Allow for vectorizing a jitted function. (thanks to @dhirschfeld)
+* PR #2117: Update examples and make them test-able.
+* PR #2127: Refactor interpreter class and its results.
+
+Fixes:
+
+* PR #2149: Workaround MSVC9.0 SP1 fmod bug kb982107.
+* PR #2145, Issue #2009: Fixes kwargs for jitclass ``__init__`` method.
+* PR #2150: Fix slowdown in objmode fallback.
+* PR #2050, Issue #1258: Fix liveness problem with some generator loops.
+* PR #2072, Issue #1995: Right shift of unsigned LHS should be logical.
+* PR #2115, Issue #1466: Fix inspect_types() error due to mangled variable name.
+* PR #2119, Issue #2118: Fix array type created from record-dtype.
+* PR #2122, Issue #1808: Fix returning a generator due to datamodel error.
+
+
 Version 0.28.1
 --------------
 
