@@ -35,7 +35,7 @@ Installing
 ==========
 
 The easiest way to install numba and get updates is by using the Anaconda
-Distribution: https://store.continuum.io/cshop/anaconda/
+Distribution: https://www.continuum.io/downloads
 
 ::
 
