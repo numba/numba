@@ -13,7 +13,7 @@ import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
-from numba import types, utils, cgutils, typing
+from numba import types, utils, cgutils, typing, funcdesc
 from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
 from . import arrayobj, builtins, imputils
@@ -187,9 +187,6 @@ class BaseContext(object):
     # Causes exception to be raised if the record members are not aligned.
     strict_alignment = False
 
-    # Use default mangler (no specific requirement)
-    mangler = None
-
     # Force powi implementation as math.pow call
     implement_powi_as_math_call = False
     implement_pow_as_math_call = False
@@ -259,6 +256,12 @@ class BaseContext(object):
         """
         Load target-specific registries.  Can be overriden by subclasses.
         """
+
+    def mangler(self, name, types):
+        """
+        Perform name mangling.
+        """
+        return funcdesc.default_mangler(name, types)
 
     def get_arg_packer(self, fe_args):
         return datamodel.ArgPacker(self.data_model_manager, fe_args)

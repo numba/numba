@@ -571,7 +571,7 @@ def real_divmod(context, builder, x, y):
     floatty = x.type
 
     module = builder.module
-    fname = ".numba.python.rem.%s" % x.type
+    fname = context.mangler(".numba.python.rem", [x.type])
     fnty = Type.function(floatty, (floatty, floatty, Type.pointer(floatty)))
     fn = module.get_or_insert_function(fnty, fname)
 
@@ -674,9 +674,12 @@ def real_divmod_func_body(context, builder, vx, wx):
     div_istrue = builder.fcmp(lc.FCMP_ONE, div, ZERO)
 
     with builder.if_then(div_istrue):
-        module = builder.module
-        floorfn = lc.Function.intrinsic(module, lc.INTR_FLOOR, [wx.type])
-        floordiv = builder.call(floorfn, [div])
+        realtypemap = {'float': types.float32,
+                       'double': types.float64}
+        realtype = realtypemap[str(wx.type)]
+        floorfn = context.get_function(math.floor,
+                                       typing.signature(realtype, realtype))
+        floordiv = floorfn(builder, [div])
         floordivdiff = builder.fsub(div, floordiv)
         floordivincr = builder.fadd(floordiv, ONE)
         HALF = Constant.real(wx.type, 0.5)
