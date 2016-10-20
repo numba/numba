@@ -6,7 +6,11 @@ import sys, logging, re
 from ctypes import (c_void_p, c_int, POINTER, c_char_p, c_size_t, byref,
                     c_char)
 import threading
-from numba import config
+
+from llvmlite import binding as ll
+from llvmlite import ir
+
+from numba import config, cgutils
 from .error import NvvmError, NvvmSupportError
 from .libs import get_libdevice, open_libdevice, open_cudalib
 
@@ -63,6 +67,10 @@ class NVVM(object):
         # nvvmResult nvvmVersion(int *major, int *minor)
         'nvvmVersion': (nvvm_result, POINTER(c_int), POINTER(c_int)),
 
+        # nvvmResult nvvmIRVersion ( int* majorIR, int* minorIR, int* majorDbg, int* minorDbg )
+        'nvvmIRVersion': (nvvm_result, POINTER(c_int), POINTER(c_int),
+                          POINTER(c_int), POINTER(c_int)),
+
         # nvvmResult nvvmCreateProgram(nvvmProgram *cu)
         'nvvmCreateProgram': (nvvm_result, POINTER(nvvm_program)),
 
@@ -93,6 +101,9 @@ class NVVM(object):
 
         # nvvmResult nvvmGetProgramLog(nvvmProgram cu, char *buffer)
         'nvvmGetProgramLog': (nvvm_result, nvvm_program, c_char_p),
+
+        # nvvmVerifyProgram
+        'nvvmVerifyProgram': (nvvm_result, nvvm_program, c_int, POINTER(c_char_p))
     }
 
     # Singleton reference
@@ -117,6 +128,9 @@ class NVVM(object):
                     func.argtypes = proto[1:]
                     setattr(inst, name, func)
 
+                # Setup compilation lock
+                inst._lock = threading.Lock()
+
         return cls.__INSTANCE
 
     def get_version(self):
@@ -126,6 +140,16 @@ class NVVM(object):
         self.check_error(err, 'Failed to get version.')
         return major.value, minor.value
 
+    def get_ir_version(self):
+        major = c_int()
+        minor = c_int()
+        majordbg = c_int()
+        minordbg = c_int()
+        err = self.nvvmIRVersion(byref(major), byref(minor),
+                                 byref(majordbg), byref(minordbg))
+        self.check_error(err, 'Failed to get IR version.')
+        return (major.value, minor.value), (majordbg.value, minordbg.value)
+
     def check_error(self, error, msg, exit=False):
         if error:
             exc = NvvmError(msg, RESULT_CODE_NAMES[error])
@@ -134,6 +158,12 @@ class NVVM(object):
                 sys.exit(1)
             else:
                 raise exc
+
+    def lock(self):
+        return self._lock.acquire()
+
+    def unlock(self):
+        return self._lock.release()
 
 
 class CompilationUnit(object):
@@ -147,6 +177,13 @@ class CompilationUnit(object):
         driver = NVVM()
         err = driver.nvvmDestroyProgram(byref(self._handle))
         driver.check_error(err, 'Failed to destroy CU', exit=True)
+
+    def __enter__(self):
+        self.driver.lock()
+        return self
+
+    def __exit__(self, *args):
+        self.driver.unlock()
 
     def add_module(self, buffer):
         """
@@ -225,6 +262,10 @@ class CompilationUnit(object):
         # compile
         c_opts = (c_char_p * len(opts))(*[c_char_p(x.encode('utf8'))
                                           for x in opts])
+
+        err = self.driver.nvvmVerifyProgram(self._handle, len(opts), c_opts)
+        self._try_error(err, 'Failed to verify\n')
+
         err = self.driver.nvvmCompileProgram(self._handle, len(opts), c_opts)
         self._try_error(err, 'Failed to compile\n')
 
@@ -350,65 +391,106 @@ class LibDevice(object):
         return self.bc
 
 
-ir_numba_cas_hack = """
-define internal i32 @___numba_cas_hack(i32* %ptr, i32 %cmp, i32 %val) alwaysinline {
-    %out = cmpxchg volatile i32* %ptr, i32 %cmp, i32 %val monotonic
-    ret i32 %out
-}
-"""
-
 # Translation of code from CUDA Programming Guide v6.5, section B.12
-ir_numba_atomic_double_add = """
-define internal double @___numba_atomic_double_add(double* %ptr, double %val) alwaysinline {
-entry:
-    %iptr = bitcast double* %ptr to i64*
-    %old2 = load volatile i64, i64* %iptr
-    br label %attempt
 
-attempt:
-    %old = phi i64 [ %old2, %entry ], [ %cas, %attempt ]
-    %dold = bitcast i64 %old to double
-    %dnew = fadd double %dold, %val
-    %new = bitcast double %dnew to i64
-    %cas = cmpxchg volatile i64* %iptr, i64 %old, i64 %new monotonic
-    %repeat = icmp ne i64 %cas, %old
-    br i1 %repeat, label %attempt, label %done
+def make_ir_numba_atomic_double_add(m):
+    double = ir.DoubleType()
+    fnty = ir.FunctionType(double, (double.as_pointer(), double))
+    fn = ir.Function(m, fnty, name='___numba_atomic_double_add')
+    fn.attributes.add('alwaysinline')
+    fn.linkage = 'linkonce_odr'
 
-done:
-    %result = bitcast i64 %old to double
-    ret double %result
-}
-"""
+    label_entry = fn.append_basic_block('entry')
+    label_attempt = fn.append_basic_block('attempt')
+    label_done = fn.append_basic_block('done')
 
-ir_numba_atomic_double_max = """
-define internal double @___numba_atomic_double_max(double* %ptr, double %val) alwaysinline {
-entry:
-    %ptrval = load volatile double, double* %ptr
-    ; Check if val is a NaN and return *ptr early if so
-    %valnan = fcmp uno double %val, %val
-    br i1 %valnan, label %done, label %lt_check
+    builder = ir.IRBuilder(label_entry)
+    [ptr, val] = fn.args
+    ptr.name = 'ptr'
+    val.name = 'val'
 
-lt_check:
-    %dold = phi double [ %ptrval, %entry ], [ %dcas, %attempt ]
-    ; Continue attempts if dold < val or dold is NaN (using ult semantics)
-    %lt = fcmp ult double %dold, %val
-    br i1 %lt, label %attempt, label %done
+    i64 = ir.IntType(64)
+    i64ptr = i64.as_pointer()
+    iptr = builder.bitcast(ptr, i64ptr)
+    old2 = builder.load(iptr)
+    old2.volatile = True
 
-attempt:
-    ; Attempt to swap in the larger value
-    %iold = bitcast double %dold to i64
-    %iptr = bitcast double* %ptr to i64*
-    %ival = bitcast double %val to i64
-    %cas = cmpxchg volatile i64* %iptr, i64 %iold, i64 %ival monotonic
-    %dcas = bitcast i64 %cas to double
-    br label %lt_check
+    builder.branch(label_attempt)
 
-done:
-    ; Return max
-    %ret = phi double [ %ptrval, %entry ], [ %dold, %lt_check ]
-    ret double %ret
-}
-"""
+    builder.position_at_end(label_attempt)
+    old = builder.phi(i64)
+    old.add_incoming(old2, label_entry)
+    dold = builder.bitcast(old, double)
+    dnew = builder.fadd(dold, val)
+    new = builder.bitcast(dnew, i64)
+    cmpxchg = builder.cmpxchg(iptr, old, new, ordering='monotonic')
+    cmpxchg.volatile = True
+    cas, ok = cgutils.unpack_tuple(builder, cmpxchg)
+    old.add_incoming(cas, label_attempt)
+    repeat = builder.not_(ok)
+    builder.cbranch(repeat, label_attempt, label_done)
+
+    builder.position_at_end(label_done)
+    result = builder.bitcast(old, double)
+    builder.ret(result)
+
+
+def make_ir_numba_atomic_double_max(m):
+    double = ir.DoubleType()
+    i64 = ir.IntType(64)
+    i64ptr = i64.as_pointer()
+    fnty = ir.FunctionType(double, [double.as_pointer(), double])
+    fn = ir.Function(m, fnty, name='___numba_atomic_double_max')
+    fn.attributes.add('alwaysinline')
+    fn.linakge = 'internal'
+
+    label_entry = fn.append_basic_block('entry')
+    label_lt_check = fn.append_basic_block('lt_check')
+    label_attempt = fn.append_basic_block('attempt')
+    label_done = fn.append_basic_block('done')
+
+    [ptr, val] = fn.args
+    ptr.name = 'ptr'
+    val.name = 'val'
+
+    builder = ir.IRBuilder(label_entry)
+    ptrval = builder.load(ptr)
+    ptrval.volatile = True
+    # Check if val is a NaN and return *ptr early if so
+    valnan = builder.fcmp_unordered('uno', val, val)
+    builder.cbranch(valnan, label_done, label_lt_check)
+
+    builder.position_at_end(label_lt_check)
+    dold = builder.phi(double)
+    dold.add_incoming(ptrval, label_entry)
+    # Continue attempts if dold < val or dold is NaN (using ult semantics)
+    lt = builder.fcmp_unordered('<', dold, val)
+    builder.cbranch(lt, label_attempt, label_done)
+
+    builder.position_at_end(label_attempt)
+    # Attempt to swap in the larger value
+    iold = builder.bitcast(dold, i64)
+    iptr = builder.bitcast(ptr, i64ptr)
+    ival = builder.bitcast(val, i64)
+    cmpxchg = builder.cmpxchg(iptr, iold, ival, ordering='monotonic')
+    cmpxchg.volatile = True
+    cas, ok = cgutils.unpack_tuple(builder, cmpxchg)
+    dcas = builder.bitcast(cas, double)
+    dold.add_incoming(dcas, label_attempt)
+    builder.branch(label_lt_check)
+
+    builder.position_at_end(label_done)
+    ret = builder.phi(double)
+    ret.add_incoming(ptrval, label_entry)
+    ret.add_incoming(dold, label_lt_check)
+    builder.ret(ret)
+
+
+def make_helper_lib():
+    m = ir.Module()
+    make_ir_numba_atomic_double_add(m)
+    make_ir_numba_atomic_double_max(m)
+    return ll.parse_assembly(str(m))
 
 
 def _replace_datalayout(llvmir):
@@ -423,31 +505,25 @@ def _replace_datalayout(llvmir):
             break
     return '\n'.join(lines)
 
+_helper_lib_module = make_helper_lib()
+
+_compiler_lock = threading.Lock()
+
 
 def llvm_to_ptx(llvmir, **opts):
-    cu = CompilationUnit()
-    libdevice = LibDevice(arch=opts.get('arch', 'compute_20'))
-    # New LLVM generate a shorthand for datalayout that NVVM does not know
-    llvmir = _replace_datalayout(llvmir)
-    # Replace with our cmpxchg and atomic implementations because LLVM 3.5 has
-    # a new semantic for cmpxchg.
-    replacements = [
-        ('declare i32 @___numba_cas_hack(i32*, i32, i32)',
-         ir_numba_cas_hack),
-        ('declare double @___numba_atomic_double_add(double*, double)',
-         ir_numba_atomic_double_add),
-        ('declare double @___numba_atomic_double_max(double*, double)',
-         ir_numba_atomic_double_max)]
+    with CompilationUnit() as cu:
+        libdevice = LibDevice(arch=opts.get('arch', 'compute_20'))
+        # New LLVM generate a shorthand for datalayout that NVVM does not know
+        llvmir = _replace_datalayout(llvmir)
 
-    for decl, fn in replacements:
-        llvmir = llvmir.replace(decl, fn)
+        llmod = ll.parse_assembly(llvmir)
+        llmod.link_in(_helper_lib_module, preserve=True)
+        llvmbitcode = llmod.as_bitcode()
 
-    llvmir = llvm38_to_34_ir(llvmir)
-
-    cu.add_module(llvmir.encode('utf8'))
-    cu.add_module(libdevice.get())
-    ptx = cu.compile(**opts)
-    return ptx
+        cu.add_module(llvmbitcode)
+        cu.add_module(libdevice.get())
+        ptx = cu.compile(**opts)
+        return ptx
 
 
 re_metadata_def = re.compile(r"\!\d+\s*=")
@@ -547,6 +623,11 @@ def set_cuda_kernel(lfunc):
 
     nmd = m.get_or_insert_named_metadata('nvvm.annotations')
     nmd.add(md)
+
+    # set nvvm ir version
+    i32 = ir.IntType(32)
+    md_ver = m.add_metadata([i32(1), i32(3)])
+    m.add_named_metadata('nvvmir.version', md_ver)
 
 
 def fix_data_layout(module):
