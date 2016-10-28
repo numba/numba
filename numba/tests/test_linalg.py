@@ -2157,7 +2157,7 @@ class TestTrace(TestLinalgBase):
         sizes = [(7, 1), (11, 5), (5, 11), (3, 3), (1, 7)]
 
         # offsets to cover the range of the matrix sizes above
-        offsets = [-13, -12, -11, *[x for x in range(-10, 10, 2)], 11, 12, 13]
+        offsets = [-13, -12, -11] + list(range(-10, 10)) + [11, 12, 13]
 
         for size, offset, dtype, order in \
                 product(sizes, offsets, self.dtypes, 'FC'):
