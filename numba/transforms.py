@@ -71,20 +71,19 @@ def _loop_lift_modify_call_block(liftedloop, block, inputs, outputs, returnto):
     scope = block.scope
     loc = block.loc
     blk = ir.Block(scope=scope, loc=loc)
-
     # load loop
     fn = ir.Const(value=liftedloop, loc=loc)
     fnvar = scope.make_temp(loc=loc)
     blk.append(ir.Assign(target=fnvar, value=fn, loc=loc))
     # call loop
-    args = [scope.get(name) for name in inputs]
+    args = [scope.get_exact(name) for name in inputs]
     callexpr = ir.Expr.call(func=fnvar, args=args, kws=(), loc=loc)
     # temp variable for the return value
     callres = scope.make_temp(loc=loc)
     blk.append(ir.Assign(target=callres, value=callexpr, loc=loc))
     # unpack return value
     for i, out in enumerate(outputs):
-        target = scope.get(out)
+        target = scope.get_exact(out)
         getitem = ir.Expr.static_getitem(value=callres, index=i,
                                          index_var=None, loc=loc)
         blk.append(ir.Assign(target=target, value=getitem, loc=loc))
@@ -128,7 +127,7 @@ def _loop_lift_prepare_loop_func(loopinfo, blocks):
 
         block = ir.Block(scope=scope, loc=loc)
         # prepare tuples to return
-        vals = [scope.get(name=name) for name in loopinfo.outputs]
+        vals = [scope.get_exact(name=name) for name in loopinfo.outputs]
         tupexpr = ir.Expr.build_tuple(items=vals, loc=loc)
         tup = scope.make_temp(loc=loc)
         block.append(ir.Assign(target=tup, value=tupexpr, loc=loc))
