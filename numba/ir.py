@@ -845,6 +845,11 @@ class FunctionIR(object):
 
         return new_ir
 
+    def copy(self):
+        new_ir = copy.copy(self)
+        new_ir.blocks = self.blocks.copy()
+        return new_ir
+
     def get_block_entry_vars(self, block):
         """
         Return a set of variable names possibly alive at the beginning of
