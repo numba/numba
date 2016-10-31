@@ -154,7 +154,7 @@ class TypeAnnotation(object):
         python_source = SourceLines(self.func_id.func)
         ir_lines = self.prepare_annotations()
         line_nums = [num for num in python_source]
-        lifted_lines = [l.bytecode.firstlineno for l in self.lifted]
+        lifted_lines = [l.get_source_location for l in self.lifted]
 
         def add_ir_line(func_data, line):
             line_str = line.strip()
