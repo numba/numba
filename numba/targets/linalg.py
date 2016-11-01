@@ -2586,18 +2586,32 @@ def _get_outer_impl(a, b, out):
         return outer_impl
 
 
-@overload(np.outer)
-def outer_impl(a, b, out=None):
-
-    _check_scalar_or_lt_2d_mat(a, "outer", la_prefix=False)
-    _check_scalar_or_lt_2d_mat(b, "outer", la_prefix=False)
-
-    impl = _get_outer_impl(a, b, out)
-
+if numpy_version >= (1, 9):
+    @overload(np.outer)
     def outer_impl(a, b, out=None):
-        return impl(a, b, out)
 
-    return outer_impl
+        _check_scalar_or_lt_2d_mat(a, "outer", la_prefix=False)
+        _check_scalar_or_lt_2d_mat(b, "outer", la_prefix=False)
+
+        impl = _get_outer_impl(a, b, out)
+
+        def outer_impl(a, b, out=None):
+            return impl(a, b, out)
+
+        return outer_impl
+else:
+    @overload(np.outer)
+    def outer_impl(a, b):
+
+        _check_scalar_or_lt_2d_mat(a, "outer", la_prefix=False)
+        _check_scalar_or_lt_2d_mat(b, "outer", la_prefix=False)
+
+        impl = _get_outer_impl(a, b, None)
+
+        def outer_impl(a, b):
+            return impl(a, b, None)
+
+        return outer_impl
 
 
 def _kron_normaliser_impl(x):

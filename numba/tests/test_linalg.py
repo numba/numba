@@ -11,6 +11,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import jit, errors
+from numba.numpy_support import version as numpy_version
 from .support import TestCase, tag
 from .matmul_usecase import matmul_usecase, needs_matmul, needs_blas
 
@@ -377,8 +378,12 @@ def trace_matrix(a, offset=0):
     return np.trace(a, offset)
 
 
-def outer_matrix(a, b, out=None):
-    return np.outer(a, b, out=out)
+if numpy_version >= (1, 9):
+    def outer_matrix(a, b, out=None):
+        return np.outer(a, b, out=out)
+else:
+    def outer_matrix(a, b):
+        return np.outer(a, b)
 
 
 def kron_matrix(a, b):
@@ -2240,9 +2245,10 @@ class TestBasics(TestLinalgSystems):  # TestLinalgSystems for 1d test
                 product(self.sizes, self.sizes, self.dtypes):
             (a, b) = self._get_input(size1, size2, dtype)
             check(a, b)
-            c = np.empty((np.asarray(a).size, np.asarray(b).size),
-                         dtype=np.asarray(a).dtype)
-            check(a, b, out=c)
+            if numpy_version >= (1, 9):
+                c = np.empty((np.asarray(a).size, np.asarray(b).size),
+                             dtype=np.asarray(a).dtype)
+                check(a, b, out=c)
 
         self._assert_wrong_dim("outer", cfunc)
 
