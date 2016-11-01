@@ -26,11 +26,6 @@ class TestLargeCode(unittest.TestCase):
 
         try:
             subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
-        except subprocess.CalledProcessError as exc:
-            self.assertIn('LLVM ERROR: branch size exceeds simm16',
-                          exc.output.decode())
-        else:
-            self.fail('far branch bug fixed!')
         finally:
             if oldpp is None:
                 del os.environ['PYTHONPATH']
