@@ -275,10 +275,12 @@ class HSAKernel(HSAKernelBase):
         """
         Temporary workaround for register limit
         """
-        m = re.search(r"wavefront_sgpr_count\s*=\s*(\d+)", self.assembly)
+        m = re.search(r"\bwavefront_sgpr_count\s*=\s*(\d+)", self.assembly)
         self._wavefront_sgpr_count = int(m.group(1))
-        m = re.search(r"workitem_vgpr_count\s*=\s*(\d+)", self.assembly)
+        m = re.search(r"\bworkitem_vgpr_count\s*=\s*(\d+)", self.assembly)
         self._workitem_vgpr_count = int(m.group(1))
+        assert self._wavefront_sgpr_count > 0
+        assert self._workitem_vgpr_count > 0
 
     def _sentry_resource_limit(self):
         group_size = np.prod(self.local_size)
