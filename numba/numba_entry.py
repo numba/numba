@@ -90,9 +90,16 @@ def get_sys_info():
         try:
             cu.list_devices()[0]  # will a device initialise?
         except Exception as e:
-            msg = "CUDA driver library cannot be found"
-            if msg in e.msg:
-                print(msg + " or no CUDA enabled devices are present.")
+            msg_not_found = "CUDA driver library cannot be found"
+            msg_disabled_by_user = "CUDA disabled by user"
+            if msg_not_found in e.msg:
+                print(
+                    msg_not_found +
+                    " or no CUDA enabled devices are present.")
+            elif msg_disabled_by_user in e.msg:
+                print(
+                    msg_disabled_by_user +
+                    " or no CUDA enabled devices are present.")
             else:
                 print(
                     "Error: unknown CUDA device intialisation problem. Message:" +
