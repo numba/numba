@@ -44,9 +44,8 @@ class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
         ctx = cres.target_context
         signature = cres.signature
         library = cres.library
-        llvm_func = library.get_function(cres.fndesc.llvm_func_name)
-        wrapper = build_ufunc_wrapper(library, ctx, llvm_func, signature)
-        ptr = library.get_pointer_to_function(wrapper.name)
+        fname = cres.fndesc.llvm_func_name
+        ptr = build_ufunc_wrapper(library, ctx, fname, signature)
         # Get dtypes
         dtypenums = [np.dtype(a.name).num for a in signature.args]
         dtypenums.append(np.dtype(signature.return_type.name).num)
@@ -54,13 +53,11 @@ class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
         return dtypenums, ptr, keepalive
 
 
-def build_ufunc_wrapper(library, ctx, lfunc, signature):
-    innerfunc = ufuncbuilder.build_ufunc_wrapper(library, ctx, lfunc, signature,
+def build_ufunc_wrapper(library, ctx, fname, signature):
+    innerfunc = ufuncbuilder.build_ufunc_wrapper(library, ctx, fname, signature,
                                                  objmode=False, env=None,
                                                  envptr=None)
-    lfunc = build_ufunc_kernel(library, ctx, innerfunc, signature)
-    library.add_ir_module(lfunc.module)
-    return lfunc
+    return build_ufunc_kernel(library, ctx, innerfunc, signature)
 
 
 def build_ufunc_kernel(library, ctx, innerfunc, sig):
@@ -100,10 +97,9 @@ def build_ufunc_kernel(library, ctx, innerfunc, sig):
                                              lc.Type.pointer(intp_t),
                                              lc.Type.pointer(intp_t),
                                              byte_ptr_t])
-
-    mod = library.create_ir_module('parallel.ufunc.wrapper')
+    wrapperlib = ctx.codegen().create_library('parallelufuncwrapper')
+    mod = wrapperlib.create_ir_module('parallel.ufunc.wrapper')
     lfunc = mod.add_function(fnty, name=".kernel")
-    innerfunc = mod.add_function(fnty, name=innerfunc.name)
 
     bb_entry = lfunc.append_basic_block('')
 
@@ -180,11 +176,12 @@ def build_ufunc_kernel(library, ctx, innerfunc, sig):
     # Add tasks for queue; one per thread
     as_void_ptr = lambda arg: builder.bitcast(arg, byte_ptr_t)
 
+    fnptr = ctx.get_constant(types.uintp, innerfunc).inttoptr(byte_ptr_t)
     for each_args, each_dims in zip(args_list, count_list):
         innerargs = [as_void_ptr(x) for x
-                     in [innerfunc, each_args, each_dims, steps, data]]
+                     in [each_args, each_dims, steps, data]]
 
-        builder.call(add_task, innerargs)
+        builder.call(add_task, [fnptr] + innerargs)
 
     # Signal worker that we are ready
     builder.call(ready, ())
@@ -198,7 +195,9 @@ def build_ufunc_kernel(library, ctx, innerfunc, sig):
 
     builder.ret_void()
 
-    return lfunc
+    wrapperlib.add_ir_module(mod)
+    wrapperlib.add_linking_library(library)
+    return wrapperlib.get_pointer_to_function(lfunc.name)
 
 
 # ---------------------------------------------------------------------------
@@ -224,12 +223,10 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
         library = cres.library
         signature = cres.signature
         llvm_func = library.get_function(cres.fndesc.llvm_func_name)
-        wrapper, env = build_gufunc_wrapper(library, ctx, llvm_func,
+        ptr, env = build_gufunc_wrapper(library, ctx, llvm_func,
                                             signature, self.sin, self.sout,
                                             fndesc=cres.fndesc,
                                             env=cres.environment)
-
-        ptr = library.get_pointer_to_function(wrapper.name)
 
         # Get dtypes
         dtypenums = []
@@ -245,16 +242,16 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
 
 def build_gufunc_wrapper(library, ctx, llvm_func, signature, sin, sout, fndesc,
                          env):
-    innerfunc, env = ufuncbuilder.build_gufunc_wrapper(library, ctx, llvm_func,
+    innerfunc, env = ufuncbuilder.build_gufunc_wrapper(library, ctx,
                                                        signature, sin, sout,
                                                        fndesc=fndesc, env=env)
     sym_in = set(sym for term in sin for sym in term)
     sym_out = set(sym for term in sout for sym in term)
     inner_ndim = len(sym_in | sym_out)
 
-    lfunc = build_gufunc_kernel(library, ctx, innerfunc, signature, inner_ndim)
-    library.add_ir_module(lfunc.module)
-    return lfunc, env
+    ptr = build_gufunc_kernel(library, ctx, innerfunc, signature, inner_ndim)
+
+    return ptr, env
 
 
 def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
@@ -297,10 +294,9 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
                                              lc.Type.pointer(intp_t),
                                              lc.Type.pointer(intp_t),
                                              byte_ptr_t])
-
-    mod = library.create_ir_module('parallel.gufunc.wrapper')
+    wrapperlib = ctx.codegen().create_library('parallelufuncwrapper')
+    mod = wrapperlib.create_ir_module('parallel.gufunc.wrapper')
     lfunc = mod.add_function(fnty, name=".kernel")
-    innerfunc = mod.add_function(fnty, name=innerfunc.name)
 
     bb_entry = lfunc.append_basic_block('')
 
@@ -372,10 +368,11 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
     # Add tasks for queue; one per thread
     as_void_ptr = lambda arg: builder.bitcast(arg, byte_ptr_t)
 
+    fnptr = ctx.get_constant(types.uintp, innerfunc).inttoptr(byte_ptr_t)
     for each_args, each_dims in zip(args_list, count_list):
         innerargs = [as_void_ptr(x) for x
-                     in [innerfunc, each_args, each_dims, steps, data]]
-        builder.call(add_task, innerargs)
+                     in [each_args, each_dims, steps, data]]
+        builder.call(add_task, [fnptr] + innerargs)
 
     # Signal worker that we are ready
     builder.call(ready, ())
@@ -384,7 +381,9 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
 
     builder.ret_void()
 
-    return lfunc
+    wrapperlib.add_ir_module(mod)
+    wrapperlib.add_linking_library(library)
+    return wrapperlib.get_pointer_to_function(lfunc.name)
 
 
 # ---------------------------------------------------------------------------
