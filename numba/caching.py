@@ -402,7 +402,8 @@ class FunctionCache(_Cache):
         elif cres.lifted:
             cannot_cache = "as it uses lifted loops"
         elif cres.has_dynamic_globals:
-            cannot_cache = "as it uses dynamic globals (such as ctypes pointers)"
+            cannot_cache = ("as it uses dynamic globals "
+                            "(such as ctypes pointers and large global arrays)")
         if cannot_cache:
             msg = ('Cannot cache compiled function "%s" %s'
                    % (self._funcname, cannot_cache))
