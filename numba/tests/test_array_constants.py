@@ -154,7 +154,8 @@ class TestConstantArray(unittest.TestCase):
         out = cres.entry_point()
         self.assertIs(biggie, out)
         # Remove all local references to biggie
-        del biggie, out
+        del out
+        biggie = None  #  del biggie is syntax error in py2
         # Run again and verify result
         out = cres.entry_point()
         np.testing.assert_equal(np.arange(nelem), out)
