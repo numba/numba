@@ -913,18 +913,23 @@ class BaseContext(object):
         Create an array structure reifying the given constant array.
         A low-level contiguous array constant is created in the LLVM IR.
         """
-        assert typ.layout == 'C'                # assumed in typeinfer.py
         datatype = self.get_data_type(typ.dtype)
-
-        # Handle data: reify the flattened array in "C" order as a
-        # global array of bytes.
-        flat = ary.flatten()
-        # Note: we use `bytearray(flat.data)` instead of `bytearray(flat)` to
-        #       workaround issue #1850 which is due to numpy issue #3147
-        consts = Constant.array(Type.int(8), bytearray(flat.data))
-        data = cgutils.global_constant(builder, ".const.array.data", consts)
-        # Ensure correct data alignment (issue #1933)
-        data.align = self.get_abi_alignment(datatype)
+        # don't freeze ary of non-C contig or bigger than 1MB
+        if typ.layout != 'C' or ary.nbytes > 10**6: # 1MB maximum
+            # get pointer from the ary
+            llvoidptr = self.get_value_type(types.voidptr)
+            dataptr = ary.ctypes.data
+            data = self.get_constant(types.uintp, dataptr).inttoptr(llvoidptr)
+        else:
+            # Handle data: reify the flattened array in "C" order as a
+            # global array of bytes.
+            flat = ary.flatten()
+            # Note: we use `bytearray(flat.data)` instead of `bytearray(flat)` to
+            #       workaround issue #1850 which is due to numpy issue #3147
+            consts = Constant.array(Type.int(8), bytearray(flat.data))
+            data = cgutils.global_constant(builder, ".const.array.data", consts)
+            # Ensure correct data alignment (issue #1933)
+            data.align = self.get_abi_alignment(datatype)
 
         # Handle shape
         llintp = self.get_value_type(types.intp)
