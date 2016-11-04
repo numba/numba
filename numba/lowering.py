@@ -41,10 +41,6 @@ class BaseLower(object):
     """
     Lower IR to LLVM
     """
-
-    # If true, then can't cache LLVM module accross process calls
-    has_dynamic_globals = False
-
     def __init__(self, context, library, fndesc, func_ir):
         self.context = context
         self.library = library
@@ -227,6 +223,13 @@ class BaseLower(object):
         if config.DEBUG_JIT:
             self.context.debug_print(self.builder, "DEBUGJIT: {0}".format(msg))
 
+    @property
+    def has_dynamic_globals(self):
+        """
+        If true, then can't cache LLVM module accross process calls.
+        """
+        return self.library.has_dynamic_globals
+
 
 class Lower(BaseLower):
     GeneratorLower = generators.GeneratorLower
@@ -371,9 +374,6 @@ class Lower(BaseLower):
         value = inst.value
         # In nopython mode, closure vars are frozen like globals
         if isinstance(value, (ir.Const, ir.Global, ir.FreeVar)):
-            if isinstance(ty, types.ExternalFunctionPointer):
-                self.has_dynamic_globals = True
-
             res = self.context.get_constant_generic(self.builder, ty,
                                                     value.value)
             self.incref(ty, res)

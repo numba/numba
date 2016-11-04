@@ -203,6 +203,9 @@ class BaseContext(object):
     # Error model for various operations (only FP exceptions currently)
     error_model = None
 
+    # Whether dynamic globals (CPU runtime addresses) is allowed
+    allow_dynamic_globals = False
+
     def __init__(self, typing_context):
         _load_global_helpers()
 
@@ -915,11 +918,13 @@ class BaseContext(object):
         """
         datatype = self.get_data_type(typ.dtype)
         # don't freeze ary of non-C contig or bigger than 1MB
-        if typ.layout != 'C' or ary.nbytes > 10**6: # 1MB maximum
+        size_limit = 10**6
+        if (self.allow_dynamic_globals and
+                typ.layout != 'C' or ary.nbytes > size_limit):
             # get pointer from the ary
-            llvoidptr = self.get_value_type(types.voidptr)
             dataptr = ary.ctypes.data
-            data = self.get_constant(types.uintp, dataptr).inttoptr(llvoidptr)
+            data = self.add_dynamic_addr(builder, dataptr, info=str(type(dataptr)))
+            rt_addr = self.add_dynamic_addr(builder, id(ary), info=str(type(ary)))
         else:
             # Handle data: reify the flattened array in "C" order as a
             # global array of bytes.
@@ -930,6 +935,7 @@ class BaseContext(object):
             data = cgutils.global_constant(builder, ".const.array.data", consts)
             # Ensure correct data alignment (issue #1933)
             data.align = self.get_abi_alignment(datatype)
+            rt_addr = None
 
         # Handle shape
         llintp = self.get_value_type(types.intp)
@@ -948,9 +954,6 @@ class BaseContext(object):
         # Create array structure
         cary = self.make_array(typ)(self, builder)
 
-        rt_addr = self.get_constant(types.uintp, id(ary)).inttoptr(
-            self.get_value_type(types.pyobject))
-
         intp_itemsize = self.get_constant(types.intp, ary.dtype.itemsize)
         self.populate_array(cary,
                             data=builder.bitcast(data, cary.data.type),
@@ -961,6 +964,22 @@ class BaseContext(object):
                             meminfo=None)
 
         return cary._getvalue()
+
+    def add_dynamic_addr(self, builder, intaddr, info):
+        """
+        Returns dynamic address as a void pointer `i8*`.
+
+        Internally, a named metadata is added to inform the lowerer about
+        the usage of dynamic addresses.  Caching will be disabled.
+        """
+        assert self.allow_dynamic_globals, "dyn globals disabled in this target"
+        assert isinstance(intaddr, int), 'dyn addr not of int type'
+        mod = builder.module
+        llvoidptr = self.get_value_type(types.voidptr)
+        addr = self.get_constant(types.uintp, intaddr).inttoptr(llvoidptr)
+        gv = mod.add_global_variable(llvoidptr, name='numba.dynamic.globals')
+        gv.initializer = addr
+        return builder.load(gv)
 
     def get_abi_sizeof(self, ty):
         """
