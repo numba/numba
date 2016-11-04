@@ -134,6 +134,31 @@ class TestConstantArray(unittest.TestCase):
         out = cres.entry_point()
         self.assertEqual(out, 86)
 
+    def test_too_big_to_freeze(self):
+        """
+        Test issue https://github.com/numba/numba/issues/2188 where freezing
+        a constant array into the code thats prohibitively long and consume
+        too much RAM.
+        """
+        nelem = 10**7   # 10 million items
+        biggie = np.arange(nelem)
+
+        def pyfunc():
+            return biggie
+
+        cres = compile_isolated(pyfunc, ())
+        # Check that the array is not frozen into the LLVM IR.
+        # LLVM size must be less than the array size.
+        self.assertLess(len(cres.library.get_llvm_str()), biggie.nbytes)
+        # Run and test result
+        out = cres.entry_point()
+        self.assertIs(biggie, out)
+        # Remove all local references to biggie
+        del biggie, out
+        # Run again and verify result
+        out = cres.entry_point()
+        np.testing.assert_equal(np.arange(nelem), out)
+
 
 if __name__ == '__main__':
     unittest.main()
