@@ -89,19 +89,26 @@ class TestUfuncCacheTest(UfuncCacheTest):
     def test_direct_ufunc_cache_objmode(self):
         self.test_direct_ufunc_cache(forceobj=True)
 
-    def test_indirect_ufunc_cache(self):
+    def test_direct_ufunc_cache_parallel(self):
+        self.test_direct_ufunc_cache(target='parallel')
+
+    def test_indirect_ufunc_cache(self, **kwargs):
         new_ufunc, cached_ufunc = self.check_ufunc_cache(
-            "indirect_ufunc_cache_usecase", n_overloads=3)
+            "indirect_ufunc_cache_usecase", n_overloads=3, **kwargs)
         # Test the cached and original versions
         inp = np.random.random(10).astype(np.float64)
         np.testing.assert_equal(new_ufunc(inp), cached_ufunc(inp))
         inp = np.arange(10, dtype=np.intp)
         np.testing.assert_equal(new_ufunc(inp), cached_ufunc(inp))
 
+    def test_indirect_ufunc_cache_parallel(self):
+        self.test_indirect_ufunc_cache(target='parallel')
+
 
 class TestDUfuncCacheTest(UfuncCacheTest):
-    def check_dufunc_usecase(self, usecase_name):
+    # Note: DUFunc doesn't support parallel target yet
 
+    def check_dufunc_usecase(self, usecase_name):
         mod = self.import_module()
         usecase = getattr(mod, usecase_name)
         # Create dufunc
@@ -127,7 +134,7 @@ class TestDUfuncCacheTest(UfuncCacheTest):
         self.check_dufunc_usecase('indirect_dufunc_cache_usecase')
 
 
-class TestGUFuncCacheTest(UfuncCacheTest):
+class TestGUfuncCacheTest(UfuncCacheTest):
 
     def test_direct_gufunc_cache(self, **kwargs):
         new_ufunc, cached_ufunc = self.check_ufunc_cache(
@@ -141,14 +148,20 @@ class TestGUFuncCacheTest(UfuncCacheTest):
     def test_direct_gufunc_cache_objmode(self):
         self.test_direct_gufunc_cache(forceobj=True)
 
-    def test_indirect_gufunc_cache(self):
+    def test_direct_gufunc_cache_parallel(self):
+        self.test_direct_gufunc_cache(target='parallel')
+
+    def test_indirect_gufunc_cache(self, **kwargs):
         new_ufunc, cached_ufunc = self.check_ufunc_cache(
-            "indirect_gufunc_cache_usecase", n_overloads=3)
+            "indirect_gufunc_cache_usecase", n_overloads=3, **kwargs)
         # Test the cached and original versions
         inp = np.random.random(10).astype(np.float64)
         np.testing.assert_equal(new_ufunc(inp), cached_ufunc(inp))
         inp = np.arange(10, dtype=np.intp)
         np.testing.assert_equal(new_ufunc(inp), cached_ufunc(inp))
+
+    def test_indirect_gufunc_cache_parallel(self, **kwargs):
+        self.test_indirect_gufunc_cache(target='parallel')
 
 
 if __name__ == '__main__':
