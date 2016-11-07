@@ -219,7 +219,7 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, envptr, env
         builder.ret_void()
     del builder
 
-    # Run optimizer
+    # Link and finalize
     wrapperlib.add_ir_module(wrapper_module)
     wrapperlib.add_linking_library(library)
     return wrapperlib.get_pointer_to_function(wrapper.name)
@@ -357,9 +357,9 @@ class _GufuncWrapper(object):
 
         builder.ret_void()
 
+        # Link and finalize
         self.wrapperlib.add_ir_module(wrapper_module)
         self.wrapperlib.add_linking_library(self.library)
-        wrapper = self.wrapperlib.get_function(wrapper.name)
         ptr = self.wrapperlib.get_pointer_to_function(wrapper.name)
         return ptr, self.env
 

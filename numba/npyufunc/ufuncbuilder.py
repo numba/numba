@@ -73,21 +73,27 @@ class UFuncDispatcher(object):
         # The feature requires a real python function
         flags.unset("enable_looplift")
 
+        cres = self._compile_core(sig, flags, locals)
+        self.overloads[cres.signature] = cres
+        return cres
+
+    def _compile_core(self, sig, flags, locals):
+        """
+        Trigger the compiler on the core function or load a previously
+        compiled version from the cache.  Returns the CompileResult.
+        """
         typingctx = self.targetdescr.typing_context
         targetctx = self.targetdescr.target_context
-
-        args, return_type = sigutils.normalize_signature(sig)
-
         cres = self.cache.load_overload(sig, targetctx)
-        if cres is None:
-            cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
-                                          args=args, return_type=return_type,
-                                          flags=flags, locals=locals)
-            self.cache.save_overload(sig, cres)
-        else:
-            # XXX Not sure why this is necessary
-            targetctx.refresh()
-        self.overloads[cres.signature] = cres
+        if cres is not None:
+            # Use cached version
+            return cres
+        # Compile
+        args, return_type = sigutils.normalize_signature(sig)
+        cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
+                                      args=args, return_type=return_type,
+                                      flags=flags, locals=locals)
+        self.cache.save_overload(sig, cres)
         return cres
 
 

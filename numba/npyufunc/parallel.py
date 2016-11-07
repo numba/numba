@@ -176,6 +176,7 @@ def build_ufunc_kernel(library, ctx, innerfunc, sig):
     # Add tasks for queue; one per thread
     as_void_ptr = lambda arg: builder.bitcast(arg, byte_ptr_t)
 
+    # Note: the runtime address is taken and used as a constant in the function.
     fnptr = ctx.get_constant(types.uintp, innerfunc).inttoptr(byte_ptr_t)
     for each_args, each_dims in zip(args_list, count_list):
         innerargs = [as_void_ptr(x) for x
@@ -195,6 +196,7 @@ def build_ufunc_kernel(library, ctx, innerfunc, sig):
 
     builder.ret_void()
 
+    # Link and compile
     wrapperlib.add_ir_module(mod)
     wrapperlib.add_linking_library(library)
     return wrapperlib.get_pointer_to_function(lfunc.name)
@@ -368,6 +370,7 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
     # Add tasks for queue; one per thread
     as_void_ptr = lambda arg: builder.bitcast(arg, byte_ptr_t)
 
+    # Note: the runtime address is taken and used as a constant in the function.
     fnptr = ctx.get_constant(types.uintp, innerfunc).inttoptr(byte_ptr_t)
     for each_args, each_dims in zip(args_list, count_list):
         innerargs = [as_void_ptr(x) for x
