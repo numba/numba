@@ -205,12 +205,14 @@ def build_ufunc_kernel(library, ctx, innerfunc, sig):
 # ---------------------------------------------------------------------------
 
 class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
-    def __init__(self, py_func, signature, identity=None, targetoptions={}):
+    def __init__(self, py_func, signature, identity=None, cache=False,
+                 targetoptions={}):
         # Force nopython mode
         targetoptions.update(dict(nopython=True))
         super(ParallelGUFuncBuilder, self).__init__(py_func=py_func,
                                                     signature=signature,
                                                     identity=identity,
+                                                    cache=cache,
                                                     targetoptions=targetoptions)
 
     def build(self, cres):

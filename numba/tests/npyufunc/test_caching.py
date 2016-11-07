@@ -9,7 +9,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import config
 
-from ..support import MemoryLeakMixin, captured_stdout
+from ..support import captured_stdout
 from ..test_dispatcher import BaseCacheTest
 
 

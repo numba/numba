@@ -196,10 +196,10 @@ class _BaseUFuncBuilder(object):
 
 class UFuncBuilder(_BaseUFuncBuilder):
 
-    def __init__(self, py_func, identity=None, targetoptions={}):
+    def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
         self.py_func = py_func
         self.identity = parse_identity(identity)
-        self.nb_func = jit(target='npyufunc', **targetoptions)(py_func)
+        self.nb_func = jit(target='npyufunc', cache=cache, **targetoptions)(py_func)
         self._sigs = []
         self._cres = {}
 
@@ -255,11 +255,11 @@ class UFuncBuilder(_BaseUFuncBuilder):
 class GUFuncBuilder(_BaseUFuncBuilder):
 
     # TODO handle scalar
-    def __init__(self, py_func, signature, identity=None, targetoptions={}):
+    def __init__(self, py_func, signature, identity=None, cache=False,
+                 targetoptions={}):
         self.py_func = py_func
         self.identity = parse_identity(identity)
-        do_cache = targetoptions.pop('cache', False)
-        self.nb_func = jit(target='npyufunc', cache=do_cache)(py_func)
+        self.nb_func = jit(target='npyufunc', cache=cache)(py_func)
         self.signature = signature
         self.sin, self.sout = parse_signature(signature)
         self.targetoptions = targetoptions
