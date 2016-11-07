@@ -226,11 +226,9 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
         ctx = cres.target_context
         library = cres.library
         signature = cres.signature
-        llvm_func = library.get_function(cres.fndesc.llvm_func_name)
-        ptr, env = build_gufunc_wrapper(library, ctx, llvm_func,
-                                            signature, self.sin, self.sout,
-                                            fndesc=cres.fndesc,
-                                            env=cres.environment)
+        ptr, env = build_gufunc_wrapper(library, ctx, signature, self.sin,
+                                        self.sout, fndesc=cres.fndesc,
+                                        env=cres.environment)
 
         # Get dtypes
         dtypenums = []
@@ -244,8 +242,7 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
         return dtypenums, ptr, env
 
 
-def build_gufunc_wrapper(library, ctx, llvm_func, signature, sin, sout, fndesc,
-                         env):
+def build_gufunc_wrapper(library, ctx, signature, sin, sout, fndesc, env):
     innerfunc, env = ufuncbuilder.build_gufunc_wrapper(library, ctx,
                                                        signature, sin, sout,
                                                        fndesc=fndesc, env=env)
