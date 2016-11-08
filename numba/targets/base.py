@@ -969,7 +969,7 @@ class BaseContext(object):
         """
         Returns dynamic address as a void pointer `i8*`.
 
-        Internally, a named metadata is added to inform the lowerer about
+        Internally, a global variable is added to inform the lowerer about
         the usage of dynamic addresses.  Caching will be disabled.
         """
         assert self.allow_dynamic_globals, "dyn globals disabled in this target"
