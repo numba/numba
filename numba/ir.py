@@ -644,10 +644,17 @@ class Scope(object):
 
     def get(self, name):
         """
-        Refer to a variable
+        Refer to a variable.  Returns the latest version.
         """
         if name in self.redefined:
             name = "%s.%d" % (name, self.redefined[name])
+        return self.get_exact(name)
+
+    def get_exact(self, name):
+        """
+        Refer to a variable.  The returned variable has the exact
+        name (exact variable version).
+        """
         try:
             return self.localvars.get(name)
         except NotDefinedError:
