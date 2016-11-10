@@ -921,7 +921,7 @@ class BaseContext(object):
         size_limit = 10**6
 
         if (self.allow_dynamic_globals and
-                typ.layout not in 'FC' or ary.nbytes > size_limit):
+                (typ.layout not in 'FC' or ary.nbytes > size_limit)):
             # get pointer from the ary
             dataptr = ary.ctypes.data
             data = self.add_dynamic_addr(builder, dataptr, info=str(type(dataptr)))
