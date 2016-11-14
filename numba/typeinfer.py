@@ -1046,8 +1046,7 @@ class TypeInferer(object):
 
         if isinstance(typ, types.Array):
             # Global array in nopython mode is constant
-            # XXX why layout='C'?
-            typ = typ.copy(layout='C', readonly=True)
+            typ = typ.copy(readonly=True)
 
         self.sentry_modified_builtin(inst, gvar)
         self.lock_type(target.name, typ, loc=inst.loc)
