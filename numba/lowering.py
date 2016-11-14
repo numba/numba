@@ -734,6 +734,11 @@ class Lower(BaseLower):
         elif expr.op == 'exhaust_iter':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
+            # Unpack optional
+            if isinstance(ty, types.Optional):
+                val = self.context.cast(self.builder, val, ty, ty.type)
+                ty = ty.type
+
             # If we have a tuple, we needn't do anything
             # (and we can't iterate over the heterogenous ones).
             if isinstance(ty, types.BaseTuple):
