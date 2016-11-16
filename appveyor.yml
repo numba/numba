@@ -36,6 +36,7 @@ build: false
 before_test:
   # Run system info tool
   - ps: pushd bin
+  - ps: echo %cd%
   - ps: dir
   - "%CMD_IN_ENV% python numba -s"
   - ps: popd
