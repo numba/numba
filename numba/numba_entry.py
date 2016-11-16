@@ -84,39 +84,39 @@ def get_sys_info():
            ("LLVM version", '.'.join(
                [str(k) for k in llvmbind.llvm_version_info])))
 
-       #print("")
-       #print("__CUDA Information__")
-       ## Look for GPUs
-       #try:
-           #cu.list_devices()[0]  # will a device initialise?
-       #except BaseException as e:
-           #msg_not_found = "CUDA driver library cannot be found"
-           #msg_disabled_by_user = "CUDA disabled by user"
-           #msg_end = " or no CUDA enabled devices are present."
-           #msg_generic_problem = "Error: CUDA device intialisation problem."
-           #msg = getattr(e, 'msg', None)
-           #if msg is not None:
-               #if msg_not_found in msg:
-                   #err_msg = msg_not_found + msg_end
-               #elif msg_disabled_by_user in msg:
-                   #err_msg = msg_disabled_by_user + msg_end
-               #else:
-                   #err_msg = msg_generic_problem + " Message:" + msg
-           #else:
-               #err_msg = msg_generic_problem + " " + str(e)
-           ## Best effort error report
-           #print("%s\nError class: %s" % (err_msg, str(type(e))))
-       #else:
-           #try:
-               #cu.detect()
-               #dv = ct.c_int(0)
-               #cudriver.cuDriverGetVersion(ct.byref(dv))
-               #print(fmt % ("CUDA driver version", dv.value))
-               #print("CUDA libraries:")
-               #cudadrv.libs.test(sys.platform, print_paths=False)
-           #except:
-               #print(
-                   #"Error: Probing CUDA failed (device and driver present, runtime problem?)\n")
+       print("")
+       print("__CUDA Information__")
+       # Look for GPUs
+       try:
+           cu.list_devices()[0]  # will a device initialise?
+       except BaseException as e:
+           msg_not_found = "CUDA driver library cannot be found"
+           msg_disabled_by_user = "CUDA disabled by user"
+           msg_end = " or no CUDA enabled devices are present."
+           msg_generic_problem = "Error: CUDA device intialisation problem."
+           msg = getattr(e, 'msg', None)
+           if msg is not None:
+               if msg_not_found in msg:
+                   err_msg = msg_not_found + msg_end
+               elif msg_disabled_by_user in msg:
+                   err_msg = msg_disabled_by_user + msg_end
+               else:
+                   err_msg = msg_generic_problem + " Message:" + msg
+           else:
+               err_msg = msg_generic_problem + " " + str(e)
+           # Best effort error report
+           print("%s\nError class: %s" % (err_msg, str(type(e))))
+       else:
+           try:
+               cu.detect()
+               dv = ct.c_int(0)
+               cudriver.cuDriverGetVersion(ct.byref(dv))
+               print(fmt % ("CUDA driver version", dv.value))
+               print("CUDA libraries:")
+               cudadrv.libs.test(sys.platform, print_paths=False)
+           except:
+               print(
+                   "Error: Probing CUDA failed (device and driver present, runtime problem?)\n")
 
        # Look for conda and conda information
        #print("")
