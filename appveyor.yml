@@ -32,11 +32,14 @@ install:
 
 build: false
 
-test_script:
+
+before_test:
   # Run system info tool
-  - pushd bin
-  - "%CMD_IN_ENV% numba -s
-  - popd
+  - ps: pushd bin
+  - "%CMD_IN_ENV% numba -s"
+  - ps: popd
+
+test_script:
   # Run a subset of the test suite, as AppVeyor is quite slow.
   # %CMD_IN_ENV% is needed for distutils/setuptools-based tests
   # on certain build configurations.
