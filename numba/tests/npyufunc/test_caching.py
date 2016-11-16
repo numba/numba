@@ -196,12 +196,14 @@ class TestCacheSpecificIssue(UfuncCacheTest):
         # ensure function is cached
         self.run_in_separate_process('direct_ufunc_cache_usecase()')
         # use the cached function
+        # this will fail if the target context is not init'ed
         self.run_in_separate_process('direct_ufunc_cache_usecase()')
 
     def test_first_load_cached_gufunc(self):
         # ensure function is cached
         self.run_in_separate_process('direct_gufunc_cache_usecase()')
         # use the cached function
+        # this will fail out if the target context is not init'ed
         self.run_in_separate_process('direct_gufunc_cache_usecase()')
 
 
