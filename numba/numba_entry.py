@@ -48,9 +48,9 @@ def _probe_cuda(cuda_q):
             # the 3 lines below sometimes segfault on windows
             # hence this function is called from a separate
             # process
-            dv = ct.c_int(0)
-            cudriver.cuDriverGetVersion(ct.byref(dv))
-            print(fmt % ("CUDA driver version", dv.value))
+            #dv = ct.c_int(0)
+            #cudriver.cuDriverGetVersion(ct.byref(dv))
+            #print(fmt % ("CUDA driver version", dv.value))
             print("CUDA libraries:")
             cudadrv.libs.test(sys.platform, print_paths=False)
         except:
@@ -142,13 +142,13 @@ def get_sys_info():
 
         # probe for cuda in a new process
         # old cuda drivers on windows have a tendency to cause segfaults
-        #with StringIO() as cuda_buf:
-            #cuda_q = Queue()
-            #cuda_q.put(cuda_buf)
-            #cuda_p = Process(target=_probe_cuda, args=(cuda_q,))
-            #cuda_p.start()
-            #cuda_p.join()
-            #print(cuda_q.get().getvalue())
+        with StringIO() as cuda_buf:
+            cuda_q = Queue()
+            cuda_q.put(cuda_buf)
+            cuda_p = Process(target=_probe_cuda, args=(cuda_q,))
+            cuda_p.start()
+            cuda_p.join()
+            print(cuda_q.get().getvalue())
 
         # Look for conda and conda information
         print("")
