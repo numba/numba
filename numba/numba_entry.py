@@ -6,7 +6,7 @@ import os
 import subprocess
 
 
-def _probe_cuda():
+def _probe_cuda(cuda_q):
     """
     Must be called from a separate process. Can cause a segfault
     on windows under certain circumstances.
@@ -15,6 +15,10 @@ def _probe_cuda():
     from numba.cuda import cudadrv
     from numba.cuda.cudadrv.driver import driver as cudriver
     import ctypes as ct
+    import sys
+    buf = cuda_q.get()
+    # rewire stdout to StringIO buffer
+    sys.stdout = buf
     fmt = "%-21s : %-s"
     print("")
     print("__CUDA Information__")
@@ -52,6 +56,9 @@ def _probe_cuda():
         except:
             print(
                 "Error: Probing CUDA failed (device and driver present, runtime problem?)\n")
+    # flush and send buffer back to parent
+    sys.stdout.flush()
+    cuda_q.put(buf)
 
 
 def get_sys_info():
@@ -65,7 +72,11 @@ def get_sys_info():
     from datetime import datetime
     from itertools import chain
     from subprocess import check_output, CalledProcessError
-    from multiprocessing import Process
+    from multiprocessing import Process, Queue
+    try:
+        from StringIO import StringIO
+    except ImportError:
+        from io import StringIO
 
     try:
         fmt = "%-21s : %-s"
@@ -131,9 +142,13 @@ def get_sys_info():
 
         # probe for cuda in a new process
         # old cuda drivers on windows have a tendency to cause segfaults
-        cuda_p = Process(target=_probe_cuda)
-        cuda_p.start()
-        cuda_p.join()
+        with StringIO() as cuda_buf:
+            cuda_q = Queue()
+            cuda_q.put(cuda_buf)
+            cuda_p = Process(target=_probe_cuda, args=(cuda_q,))
+            cuda_p.start()
+            cuda_p.join()
+            print(cuda_q.get().getvalue())
 
         # Look for conda and conda information
         print("")
