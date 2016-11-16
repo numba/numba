@@ -1,8 +1,10 @@
 from __future__ import print_function, absolute_import, division
 
+import sys
 import os.path
 import re
 from contextlib import contextmanager
+import subprocess
 
 import numpy as np
 
@@ -162,6 +164,47 @@ class TestGUfuncCacheTest(UfuncCacheTest):
 
     def test_indirect_gufunc_cache_parallel(self, **kwargs):
         self.test_indirect_gufunc_cache(target='parallel')
+
+
+class TestCacheSpecificIssue(UfuncCacheTest):
+
+    def run_in_separate_process(self, runcode):
+        # Based on the same name util function in test_dispatcher but modified
+        # to allow user to define what to run.
+        code = """if 1:
+            import sys
+
+            sys.path.insert(0, %(tempdir)r)
+            mod = __import__(%(modname)r)
+            mod.%(runcode)s
+            """ % dict(tempdir=self.tempdir, modname=self.modname,
+                       runcode=runcode)
+
+        popen = subprocess.Popen([sys.executable, "-c", code],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = popen.communicate()
+        if popen.returncode != 0:
+            raise AssertionError("process failed with code %s: stderr follows\n%s\n"
+                                 % (popen.returncode, err.decode()))
+
+    #
+    # The following test issue #2198 that loading cached (g)ufunc first
+    # bypasses some target context initialization.
+    #
+
+    def test_first_load_cached_ufunc(self):
+        # ensure function is cached
+        self.run_in_separate_process('direct_ufunc_cache_usecase()')
+        # use the cached function
+        # this will fail if the target context is not init'ed
+        self.run_in_separate_process('direct_ufunc_cache_usecase()')
+
+    def test_first_load_cached_gufunc(self):
+        # ensure function is cached
+        self.run_in_separate_process('direct_gufunc_cache_usecase()')
+        # use the cached function
+        # this will fail out if the target context is not init'ed
+        self.run_in_separate_process('direct_gufunc_cache_usecase()')
 
 
 if __name__ == '__main__':
