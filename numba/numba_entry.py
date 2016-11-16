@@ -106,17 +106,17 @@ def get_sys_info():
                err_msg = msg_generic_problem + " " + str(e)
            # Best effort error report
            print("%s\nError class: %s" % (err_msg, str(type(e))))
-       else:
-           try:
-               cu.detect()
-               dv = ct.c_int(0)
-               cudriver.cuDriverGetVersion(ct.byref(dv))
-               print(fmt % ("CUDA driver version", dv.value))
-               print("CUDA libraries:")
-               cudadrv.libs.test(sys.platform, print_paths=False)
-           except:
-               print(
-                   "Error: Probing CUDA failed (device and driver present, runtime problem?)\n")
+       #else:
+           #try:
+               #cu.detect()
+               #dv = ct.c_int(0)
+               #cudriver.cuDriverGetVersion(ct.byref(dv))
+               #print(fmt % ("CUDA driver version", dv.value))
+               #print("CUDA libraries:")
+               #cudadrv.libs.test(sys.platform, print_paths=False)
+           #except:
+               #print(
+                   #"Error: Probing CUDA failed (device and driver present, runtime problem?)\n")
 
        # Look for conda and conda information
        #print("")
