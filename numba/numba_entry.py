@@ -6,173 +6,190 @@ import os
 import subprocess
 
 
+def _probe_cuda():
+    """
+    Must be called from a separate process. Can cause a segfault
+    on windows under certain circumstances.
+    """
+    from numba import cuda as cu
+    from numba.cuda import cudadrv
+    from numba.cuda.cudadrv.driver import driver as cudriver
+    import ctypes as ct
+    fmt = "%-21s : %-s"
+    print("")
+    print("__CUDA Information__")
+    # Look for GPUs
+    try:
+        cu.list_devices()[0]  # will a device initialise?
+    except BaseException as e:
+        msg_not_found = "CUDA driver library cannot be found"
+        msg_disabled_by_user = "CUDA disabled by user"
+        msg_end = " or no CUDA enabled devices are present."
+        msg_generic_problem = "Error: CUDA device intialisation problem."
+        msg = getattr(e, 'msg', None)
+        if msg is not None:
+            if msg_not_found in msg:
+                err_msg = msg_not_found + msg_end
+            elif msg_disabled_by_user in msg:
+                err_msg = msg_disabled_by_user + msg_end
+            else:
+                err_msg = msg_generic_problem + " Message:" + msg
+        else:
+            err_msg = msg_generic_problem + " " + str(e)
+        # Best effort error report
+        print("%s\nError class: %s" % (err_msg, str(type(e))))
+    else:
+        try:
+            cu.detect()
+            # the 3 lines below sometimes segfault on windows
+            # hence this function is called from a separate
+            # process
+            dv = ct.c_int(0)
+            cudriver.cuDriverGetVersion(ct.byref(dv))
+            print(fmt % ("CUDA driver version", dv.value))
+            print("CUDA libraries:")
+            cudadrv.libs.test(sys.platform, print_paths=False)
+        except:
+            print(
+                "Error: Probing CUDA failed (device and driver present, runtime problem?)\n")
+
+
 def get_sys_info():
-   # delay these imports until now as they are only needed in this
-   # function which then exits.
-   import platform
-   import json
-   from numba import cuda as cu
-   from numba.cuda import cudadrv
-   from numba.cuda.cudadrv.driver import driver as cudriver
-   import textwrap as tw
-   import ctypes as ct
-   import llvmlite.binding as llvmbind
-   import locale
-   from datetime import datetime
-   from itertools import chain
-   from subprocess import check_output, CalledProcessError
+    # delay these imports until now as they are only needed in this
+    # function which then exits.
+    import platform
+    import json
+    import textwrap as tw
+    import llvmlite.binding as llvmbind
+    import locale
+    from datetime import datetime
+    from itertools import chain
+    from subprocess import check_output, CalledProcessError
+    from multiprocessing import Process
 
-   try:
-       fmt = "%-21s : %-s"
-       print("-" * 80)
-       print("__Time Stamp__")
-       print(datetime.utcnow())
-       print("")
+    try:
+        fmt = "%-21s : %-s"
+        print("-" * 80)
+        print("__Time Stamp__")
+        print(datetime.utcnow())
+        print("")
 
-       print("__Hardware Information__")
-       print(fmt % ("Machine", platform.machine()))
-       print(fmt % ("CPU Name", llvmbind.get_host_cpu_name()))
-       features = sorted(
-           [key for key, value in llvmbind.get_host_cpu_features().items() if value])
-       cpu_feat = tw.fill(' '.join(features), 80)
-       print(fmt % ("CPU Features", ""))
-       print(cpu_feat)
-       print("")
+        print("__Hardware Information__")
+        print(fmt % ("Machine", platform.machine()))
+        print(fmt % ("CPU Name", llvmbind.get_host_cpu_name()))
+        features = sorted(
+            [key for key, value in llvmbind.get_host_cpu_features().items() if value])
+        cpu_feat = tw.fill(' '.join(features), 80)
+        print(fmt % ("CPU Features", ""))
+        print(cpu_feat)
+        print("")
 
-       print("__OS Information__")
-       print(fmt % ("Platform", platform.platform(aliased=True)))
-       print(fmt % ("Release", platform.release()))
-       system_name = platform.system()
-       print(fmt % ("System Name", system_name))
-       print(fmt % ("Version", platform.version()))
-       try:
-           if system_name == 'Linux':
-               info = platform.linux_distribution()
-           elif system_name == 'Windows':
-               info = platform.win32_ver()
-           elif system_name == 'Darwin':
-               info = platform.mac_ver()
-           else:
-               raise RuntimeError("Unknown system.")
-           buf = ''.join([x
-                          if x != '' else ' '
-                          for x in list(chain.from_iterable(info))])
-           print(fmt % ("OS specific info", buf))
+        print("__OS Information__")
+        print(fmt % ("Platform", platform.platform(aliased=True)))
+        print(fmt % ("Release", platform.release()))
+        system_name = platform.system()
+        print(fmt % ("System Name", system_name))
+        print(fmt % ("Version", platform.version()))
+        try:
+            if system_name == 'Linux':
+                info = platform.linux_distribution()
+            elif system_name == 'Windows':
+                info = platform.win32_ver()
+            elif system_name == 'Darwin':
+                info = platform.mac_ver()
+            else:
+                raise RuntimeError("Unknown system.")
+            buf = ''.join([x
+                           if x != '' else ' '
+                           for x in list(chain.from_iterable(info))])
+            print(fmt % ("OS specific info", buf))
 
-           if system_name == 'Linux':
-               print(fmt % ("glibc info", ' '.join(platform.libc_ver())))
-       except:
-           print("Error: System name incorrectly identified or unknown.")
-       print("")
+            if system_name == 'Linux':
+                print(fmt % ("glibc info", ' '.join(platform.libc_ver())))
+        except:
+            print("Error: System name incorrectly identified or unknown.")
+        print("")
 
-       print("__Python Information__")
-       print(fmt % ("Python Compiler", platform.python_compiler()))
-       print(
-           fmt %
-           ("Python Implementation",
-            platform.python_implementation()))
-       print(fmt % ("Python Version", platform.python_version()))
-       print(
-           fmt %
-           ("Python Locale ", ' '.join(
-               [x for x in locale.getdefaultlocale() if x is not None])))
+        print("__Python Information__")
+        print(fmt % ("Python Compiler", platform.python_compiler()))
+        print(
+            fmt %
+            ("Python Implementation",
+             platform.python_implementation()))
+        print(fmt % ("Python Version", platform.python_version()))
+        print(
+            fmt %
+            ("Python Locale ", ' '.join(
+                [x for x in locale.getdefaultlocale() if x is not None])))
 
-       print("")
-       print("__LLVM information__")
-       print(
-           fmt %
-           ("LLVM version", '.'.join(
-               [str(k) for k in llvmbind.llvm_version_info])))
+        print("")
+        print("__LLVM information__")
+        print(
+            fmt %
+            ("LLVM version", '.'.join(
+                [str(k) for k in llvmbind.llvm_version_info])))
 
-       print("")
-       print("__CUDA Information__")
-       # Look for GPUs
-       try:
-           cu.list_devices()[0]  # will a device initialise?
-       except BaseException as e:
-           msg_not_found = "CUDA driver library cannot be found"
-           msg_disabled_by_user = "CUDA disabled by user"
-           msg_end = " or no CUDA enabled devices are present."
-           msg_generic_problem = "Error: CUDA device intialisation problem."
-           msg = getattr(e, 'msg', None)
-           if msg is not None:
-               if msg_not_found in msg:
-                   err_msg = msg_not_found + msg_end
-               elif msg_disabled_by_user in msg:
-                   err_msg = msg_disabled_by_user + msg_end
-               else:
-                   err_msg = msg_generic_problem + " Message:" + msg
-           else:
-               err_msg = msg_generic_problem + " " + str(e)
-           # Best effort error report
-           print("%s\nError class: %s" % (err_msg, str(type(e))))
-       else:
-           try:
-               cu.detect()
-               #dv = ct.c_int(0)
-               #cudriver.cuDriverGetVersion(ct.byref(dv))
-               #print(fmt % ("CUDA driver version", dv.value))
-               #print("CUDA libraries:")
-               #cudadrv.libs.test(sys.platform, print_paths=False)
-           except:
-               print(
-                   "Error: Probing CUDA failed (device and driver present, runtime problem?)\n")
+        # probe for cuda in a new process
+        # old cuda drivers on windows have a tendency to cause segfaults
+        cuda_p = Process(target=_probe_cuda)
+        cuda_p.start()
+        cuda_p.join()
 
-       # Look for conda and conda information
-       #print("")
-       #print("__Conda Information__")
-       #cmd = ["conda", "info", "--json"]
-       #try:
-           #conda_out = check_output(cmd)
-       #except Exception as e:
-           #print(
-               #"Conda not present/not working.\nError was %s\n" % e)
-       #else:
-           #data = ''.join(conda_out.decode("utf-8").splitlines())
-           #jsond = json.loads(data)
-           #keys = ['conda_build_version',
-                   #'conda_env_version',
-                   #'platform',
-                   #'python_version',
-                   #'root_writable']
-           #for k in keys:
-               #try:
-                   #print(fmt % (k, jsond[k]))
-               #except KeyError:
-                   #pass
+        # Look for conda and conda information
+        print("")
+        print("__Conda Information__")
+        cmd = ["conda", "info", "--json"]
+        try:
+            conda_out = check_output(cmd)
+        except Exception as e:
+            print(
+                "Conda not present/not working.\nError was %s\n" % e)
+        else:
+            data = ''.join(conda_out.decode("utf-8").splitlines())
+            jsond = json.loads(data)
+            keys = ['conda_build_version',
+                    'conda_env_version',
+                    'platform',
+                    'python_version',
+                    'root_writable']
+            for k in keys:
+                try:
+                    print(fmt % (k, jsond[k]))
+                except KeyError:
+                    pass
 
-           ## get info about current environment
-           #cmd = ["conda", "list"]
-           #try:
-               #conda_out = check_output(cmd)
-           #except CalledProcessError as e:
-               #print("Error: Conda command failed. Error was %s\n" % e.output)
-           #else:
-               #print("")
-               #print("__Current Conda Env__")
-               #data = conda_out.decode("utf-8").splitlines()
-               #for k in data:
-                   #if k[0] != '#':  # don't show where the env is, personal data
-                       #print(k)
+            # get info about current environment
+            cmd = ["conda", "list"]
+            try:
+                conda_out = check_output(cmd)
+            except CalledProcessError as e:
+                print("Error: Conda command failed. Error was %s\n" % e.output)
+            else:
+                print("")
+                print("__Current Conda Env__")
+                data = conda_out.decode("utf-8").splitlines()
+                for k in data:
+                    if k[0] != '#':  # don't show where the env is, personal data
+                        print(k)
 
-       print("-" * 80)
+        print("-" * 80)
 
-   except Exception as e:
-       print("Error: The system reporting tool has failed unexpectedly.")
-       print("Exception was:")
-       print(e)
+    except Exception as e:
+        print("Error: The system reporting tool has failed unexpectedly.")
+        print("Exception was:")
+        print(e)
 
-   finally:
-       print(
-           "%s" %
-           "If requested, please copy and paste the information between\n"
-           "the dashed (----) lines, or from a given specific section as\n"
-           "appropriate.\n\n"
-           "=============================================================\n"
-           "IMPORTANT: Please ensure that you are happy with sharing the\n"
-           "contents of the information present, any information that you\n"
-           "wish to keep private you should remove before sharing.\n"
-           "=============================================================\n")
+    finally:
+        print(
+            "%s" %
+            "If requested, please copy and paste the information between\n"
+            "the dashed (----) lines, or from a given specific section as\n"
+            "appropriate.\n\n"
+            "=============================================================\n"
+            "IMPORTANT: Please ensure that you are happy with sharing the\n"
+            "contents of the information present, any information that you\n"
+            "wish to keep private you should remove before sharing.\n"
+            "=============================================================\n")
 
 
 def make_parser():

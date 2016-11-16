@@ -38,7 +38,7 @@ before_test:
   - ps: pushd bin
   - ps: echo %cd%
   - ps: dir
-  - "%CMD_IN_ENV% python numba -s"
+  - ps: python numba -s
   - ps: popd
 
 test_script:
