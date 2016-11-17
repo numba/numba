@@ -32,6 +32,12 @@ install:
 
 build: false
 
+before_test:
+  # Run system info tool
+  - ps: pushd bin
+  - ps: python numba -s
+  - ps: popd
+
 test_script:
   # Run a subset of the test suite, as AppVeyor is quite slow.
   # %CMD_IN_ENV% is needed for distutils/setuptools-based tests
