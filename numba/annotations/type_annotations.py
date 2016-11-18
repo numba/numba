@@ -154,7 +154,7 @@ class TypeAnnotation(object):
         python_source = SourceLines(self.func_id.func)
         ir_lines = self.prepare_annotations()
         line_nums = [num for num in python_source]
-        lifted_lines = [l.get_source_location for l in self.lifted]
+        lifted_lines = [l.get_source_location() for l in self.lifted]
 
         def add_ir_line(func_data, line):
             line_str = line.strip()
@@ -227,32 +227,23 @@ class TypeAnnotation(object):
                     elif line.strip().endswith('pyobject'):
                         func_data['python_tags'][num] = 'object_tag'
 
-        # If there are no lifted loops to compile, or if there are lifted loops
-        # to compiled and they've all been compiled, then write annotations
-        # for current function.
-        if ((len(self.lifted) == 0 and self.lifted_from is None) or
-                (self.lifted_from is not None and
-                 self.lifted_from[1]['num_lifted_loops'] == 0)):
+        try:
+            from jinja2 import Template
+        except ImportError:
+            raise ImportError("please install the 'jinja2' package")
 
-            # If jinja2 module is not installed we should never get here,
-            # but just in case...
-            try:
-                from jinja2 import Template
-            except ImportError:
-                raise ImportError("please install the 'jinja2' package")
+        root = os.path.join(os.path.dirname(__file__))
+        template_filename = os.path.join(root, 'template.html')
+        with open(template_filename, 'r') as template:
+            html = template.read()
 
-            root = os.path.join(os.path.dirname(__file__))
-            template_filename = os.path.join(root, 'template.html')
-            with open(template_filename, 'r') as template:
-                html = template.read()
-
-            template = Template(html)
-            rendered = template.render(func_data=TypeAnnotation.func_data)
-            if outfile is None:
-                with open(self.html_output, 'w') as output:
-                    output.write(rendered)
-            else:
-                outfile.write(rendered)
+        template = Template(html)
+        rendered = template.render(func_data=TypeAnnotation.func_data)
+        if outfile is None:
+            with open(self.html_output, 'w') as output:
+                output.write(rendered)
+        else:
+            outfile.write(rendered)
 
     def __str__(self):
         return self.annotate()
