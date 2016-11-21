@@ -100,7 +100,9 @@ class TestAnnotation(unittest.TestCase):
 
         # There should be only one function output.
         self.assertEqual(output.count("Function name: udt"), 1)
-        self.assertEqual(output.count("with signature: {}".format(sig_i64)), 1)
+
+        sigfmt = "with signature: {} -&gt; pyobject"
+        self.assertEqual(output.count(sigfmt.format(sig_i64)), 1)
         # Ensure the loop is tagged
         self.assertEqual(len(re.findall(re_lifted_tag, output)), 1)
 
@@ -117,8 +119,8 @@ class TestAnnotation(unittest.TestCase):
 
         # There should be two function output
         self.assertEqual(output.count("Function name: udt"), 2)
-        self.assertEqual(output.count("with signature: {}".format(sig_i64)), 1)
-        self.assertEqual(output.count("with signature: {}".format(sig_f64)), 1)
+        self.assertEqual(output.count(sigfmt.format(sig_i64)), 1)
+        self.assertEqual(output.count(sigfmt.format(sig_f64)), 1)
         # Ensure the loop is tagged in both output
         self.assertEqual(len(re.findall(re_lifted_tag, output)), 2)
 
