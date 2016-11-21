@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import os
 import inspect
 from contextlib import contextmanager
 from collections import namedtuple, defaultdict
@@ -486,7 +487,8 @@ class Pipeline(object):
             print(self.type_annotation)
             print('=' * 80)
         if config.HTML:
-            self.type_annotation.html_annotate()
+            with open(config.HTML, 'w') as fout:
+                self.type_annotation.html_annotate(fout)
 
     def backend_object_mode(self):
         """

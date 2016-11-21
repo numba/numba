@@ -30,7 +30,6 @@ class TestAnnotation(unittest.TestCase):
 
         cres = compile_isolated(foo, [types.int32, types.int32])
         ta = cres.type_annotation
-        self.assertIs(ta.html_output, None)
 
         buf = StringIO()
         ta.html_annotate(buf)
@@ -61,7 +60,6 @@ class TestAnnotation(unittest.TestCase):
         cres = compile_isolated(foo, [types.intp], flags=flags)
 
         ta = cres.type_annotation
-        self.assertIs(ta.html_output, None)
 
         buf = StringIO()
         ta.html_annotate(buf)

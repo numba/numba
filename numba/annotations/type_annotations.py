@@ -59,10 +59,6 @@ class TypeAnnotation(object):
         self.blocks = func_ir.blocks
         self.typemap = typemap
         self.calltypes = calltypes
-        if html_output is None:
-            self.html_output = None
-        else:
-            self.html_output = os.path.join(os.getcwd(), html_output)
         self.filename = func_ir.loc.filename
         self.linenum = str(func_ir.loc.line)
         self.signature = str(args) + ' -> ' + str(return_type)
@@ -150,7 +146,7 @@ class TypeAnnotation(object):
 
             return io.getvalue()
 
-    def html_annotate(self, outfile=None):
+    def html_annotate(self, outfile):
         python_source = SourceLines(self.func_id.func)
         ir_lines = self.prepare_annotations()
         line_nums = [num for num in python_source]
@@ -239,11 +235,7 @@ class TypeAnnotation(object):
 
         template = Template(html)
         rendered = template.render(func_data=TypeAnnotation.func_data)
-        if outfile is None:
-            with open(self.html_output, 'w') as output:
-                output.write(rendered)
-        else:
-            outfile.write(rendered)
+        outfile.write(rendered)
 
     def __str__(self):
         return self.annotate()
