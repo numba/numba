@@ -2509,7 +2509,7 @@ def matrix_power_impl(a, n):
 
 
 @overload(np.trace)
-def matrix_trace_impl(a, offset=0):
+def matrix_trace_impl(a, offset=types.int_):
     """
     Computes the trace of an array.
     """

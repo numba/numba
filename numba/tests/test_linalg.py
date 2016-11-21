@@ -378,6 +378,10 @@ def trace_matrix(a, offset=0):
     return np.trace(a, offset)
 
 
+def trace_matrix_no_offset(a):
+    return np.trace(a)
+
+
 if numpy_version >= (1, 9):
     def outer_matrix(a, b, out=None):
         return np.outer(a, b, out=out)
@@ -2136,6 +2140,12 @@ class TestTrace(TestLinalgBase):
     Tests for np.trace.
     """
 
+    def setUp(self):
+        super(TestTrace, self).setUp()
+        # compile two versions, one with and one without the offset kwarg
+        self.cfunc_w_offset = jit(nopython=True)(trace_matrix)
+        self.cfunc_no_offset = jit(nopython=True)(trace_matrix_no_offset)
+
     def assert_int_offset(self, cfunc, a, **kwargs):
         # validate first arg is ok
         cfunc(a)
@@ -2144,10 +2154,15 @@ class TestTrace(TestLinalgBase):
             cfunc(a, **kwargs)
 
     def test_trace(self):
-        cfunc = jit(nopython=True)(trace_matrix)
 
         def check(a, **kwargs):
-            expected = trace_matrix(a, **kwargs)
+            if 'offset' in kwargs:
+                expected = trace_matrix(a, **kwargs)
+                cfunc = self.cfunc_w_offset
+            else:
+                expected = trace_matrix_no_offset(a, **kwargs)
+                cfunc = self.cfunc_no_offset
+
             got = cfunc(a, **kwargs)
 
             res = 5 * np.finfo(a.dtype).resolution
@@ -2168,15 +2183,21 @@ class TestTrace(TestLinalgBase):
                 product(sizes, offsets, self.dtypes, 'FC'):
             a = self.specific_sample_matrix(size, dtype, order)
             check(a, offset=offset)
+            if offset == 0:
+                check(a)
 
         rn = "trace"
 
         # Dimension issue
-        self.assert_wrong_dimensions(rn, cfunc,
+        self.assert_wrong_dimensions(rn, self.cfunc_w_offset,
                                      (np.ones(10, dtype=np.float64), 1), False)
+        self.assert_wrong_dimensions(rn, self.cfunc_no_offset,
+                                     (np.ones(10, dtype=np.float64),), False)
 
         # non-integer supplied as exponent
-        self.assert_int_offset(cfunc, np.ones((2, 2)), offset=1.2)
+        self.assert_int_offset(
+            self.cfunc_w_offset, np.ones(
+                (2, 2)), offset=1.2)
 
 
 class TestBasics(TestLinalgSystems):  # TestLinalgSystems for 1d test
