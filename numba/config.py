@@ -156,7 +156,13 @@ class _EnvReloader(object):
         ANNOTATE = _readenv("NUMBA_DUMP_ANNOTATION", int, 0)
 
         # Dump type annotation in html format
-        HTML = _readenv("NUMBA_DUMP_HTML", str, None)
+        def fmt_html_path(path):
+            if path is None:
+                return path
+            else:
+                return os.path.abspath(path)
+
+        HTML = _readenv("NUMBA_DUMP_HTML", fmt_html_path, None)
 
         # Allow interpreter fallback so that Numba @jit decorator will never fail
         # Use for migrating from old numba (<0.12) which supported closure, and other
