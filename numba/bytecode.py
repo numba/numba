@@ -116,13 +116,21 @@ if sys.version_info[:2] >= (3, 6):
     def _unpack_opargs(code):
         extended_arg = 0
         for i in range(0, len(code), 2):
+            if not extended_arg:
+                # Mark inst offset at first extended
+                offset = i
             op = code[i]
             if op >= HAVE_ARGUMENT:
-                arg = code[i+1] | extended_arg
-                extended_arg = (arg << 8) if op == EXTENDED_ARG else 0
+                arg = code[i + 1] | extended_arg
+                if op == EXTENDED_ARG:
+                    extended_arg = (arg << 8)
+                    continue
             else:
                 arg = None
-            yield (i, op, arg, i + 2)
+
+            if op != EXTENDED_ARG:
+                extended_arg = 0
+            yield (offset, op, arg, i + 2)
 
 else:
     def _unpack_opargs(code):
@@ -132,14 +140,15 @@ else:
         while i < n:
             op = code[i]
             offset = i
-            i = i+1
+            i = i + 1
             arg = None
             if op >= HAVE_ARGUMENT:
-                arg = code[i] + code[i+1]*256 + extended_arg
+                arg = code[i] + code[i + 1] * 256 + extended_arg
                 extended_arg = 0
-                i = i+2
+                i = i + 2
                 if op == EXTENDED_ARG:
-                    extended_arg = arg*65536
+                    extended_arg = arg * 65536
+                    continue
             yield (offset, op, arg, i)
 
 
