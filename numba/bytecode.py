@@ -134,6 +134,9 @@ if sys.version_info[:2] >= (3, 6):
 
 else:
     def _unpack_opargs(code):
+        if sys.version_info[0] < 3:
+            code = list(map(ord, code))
+
         extended_arg = 0
         n = len(code)
         i = 0
