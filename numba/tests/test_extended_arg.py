@@ -6,7 +6,7 @@ import dis
 import struct
 import sys
 
-from numba import jit
+from numba import jit, utils
 from .support import TestCase, tweak_code
 
 
@@ -25,9 +25,14 @@ class TestExtendedArg(TestCase):
 
         b = bytearray(f.__code__.co_code)
         consts = f.__code__.co_consts
-        consts = consts + (None,) * 65535 + (42,)
-        b[:0] = struct.pack("<BH", dis.EXTENDED_ARG, 1)
-
+        if utils.PYVERSION >= (3, 6):
+            bytecode_len = 0xff
+            bytecode_format = "<BB"
+        else:
+            bytecode_len = 0xffff
+            bytecode_format = "<BH"
+        consts = consts + (None,) * bytecode_len + (42,)
+        b[:0] = struct.pack(bytecode_format, dis.EXTENDED_ARG, 1)
         tweak_code(f, codestring=bytes(b), consts=consts)
         return f
 
@@ -36,6 +41,7 @@ class TestExtendedArg(TestCase):
         self.assertPreciseEqual(pyfunc(), 42)
         cfunc = jit(nopython=True)(pyfunc)
         self.assertPreciseEqual(cfunc(), 42)
+
 
 
 if __name__ == '__main__':

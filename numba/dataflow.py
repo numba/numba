@@ -324,6 +324,22 @@ class DataFlowAnalysis(object):
             info.append(inst, func=func, vararg=vararg, res=res)
             info.push(res)
 
+    def op_BUILD_TUPLE_UNPACK_WITH_CALL(self, info, inst):
+        # Builds tuple from other tuples on the stack
+        tuples = list(reversed([info.pop() for _ in range(inst.arg)]))
+        temps = [info.make_temp() for _ in range(len(tuples) - 1)]
+        info.append(inst, tuples=tuples, temps=temps)
+        # The result is in the last temp var
+        info.push(temps[-1])
+
+    def op_BUILD_CONST_KEY_MAP(self, info, inst):
+        keys = info.pop()
+        vals = list(reversed([info.pop() for _ in range(inst.arg)]))
+        keytmps = [info.make_temp() for _ in range(inst.arg)]
+        res = info.make_temp()
+        info.append(inst, keys=keys, keytmps=keytmps, values=vals, res=res)
+        info.push(res)
+
     def op_PRINT_ITEM(self, info, inst):
         warnings.warn("Python2 style print partially supported.  Please use "
                       "Python3 style print.", RuntimeWarning)
