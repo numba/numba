@@ -45,7 +45,7 @@ def var_swapping(a, b, c, d, e):
     c, d, e = e, c, d
     return a + b + c + d + e
 
-def var_propagate1(a, b):
+def var_propagate1_pre36(a, b):
     """
     label 0:
         a = arg(0, name=a)                       ['a']
@@ -77,6 +77,44 @@ def var_propagate1(a, b):
     """
     c = (a if a > b else b) + 5
     return c
+
+def var_propagate1_post36(a, b):
+    """
+    label 0:
+        a = arg(0, name=a)                       ['a']
+        b = arg(1, name=b)                       ['b']
+        $0.3 = a > b                             ['$0.3', 'a', 'b']
+        branch $0.3, 8, 12                       ['$0.3']
+    label 8:
+        del b                                    []
+        del $0.3                                 []
+        $phi14.2 = a                             ['$phi14.2', 'a']
+        del a                                    []
+        jump 14                                  []
+    label 12:
+        del a                                    []
+        del $0.3                                 []
+        $phi14.2 = b                             ['$phi14.2', 'b']
+        del b                                    []
+        jump 14                                  []
+    label 14:
+        $const14.1 = const(int, 5)               ['$const14.1']
+        $14.3 = $phi14.2 + $const14.1            ['$14.3', '$const14.1', '$phi14.2']
+        del $phi14.2                             []
+        del $const14.1                           []
+        c = $14.3                                ['$14.3', 'c']
+        del $14.3                                []
+        $14.5 = cast(value=c)                    ['$14.5', 'c']
+        del c                                    []
+        return $14.5                             ['$14.5']
+    """
+    c = (a if a > b else b) + 5
+    return c
+
+
+var_propagate1 = (var_propagate1_post36
+                  if PYVERSION >= (3, 6)
+                  else var_propagate1_pre36)
 
 
 class TestIR(unittest.TestCase):
