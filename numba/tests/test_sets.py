@@ -344,11 +344,17 @@ class TestSetLiterals(BaseTest):
     def test_build_heterogenous_set(self, flags=enable_pyobj_flags):
         pyfunc = set_literal_return_usecase((1, 2.0, 3j, 2))
         self.run_nullary_func(pyfunc, flags=flags)
-        # Check that items are inserted in the right order (here the
-        # result will be {2}, not {2.0})
         pyfunc = set_literal_return_usecase((2.0, 2))
         got, expected = self.run_nullary_func(pyfunc, flags=flags)
-        self.assertIs(type(got.pop()), type(expected.pop()))
+
+        # Check that items are inserted in the right order (here the
+        # result will be {2.0}, not {2})
+        # Note: http://bugs.python.org/issue26020 changed the previously invalid
+        #       ordering.
+        if ((sys.version_info[:2] == (2, 7) and sys.version_info[2] >= 13) or
+              (sys.version_info[:2] == (3, 5) and sys.version_info[2] >= 3) or
+              (sys.version_info[:2] >= (3, 6))):
+            self.assertIs(type(got.pop()), type(expected.pop()))
 
     @tag('important')
     @needs_set_literals

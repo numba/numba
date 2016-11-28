@@ -181,7 +181,8 @@ class DataFlowAnalysis(object):
 
     def op_BUILD_SET(self, info, inst):
         count = inst.arg
-        items = [info.pop() for _ in range(count)]
+        # Note: related python bug http://bugs.python.org/issue26020
+        items = list(reversed([info.pop() for _ in range(count)]))
         res = info.make_temp()
         info.append(inst, items=items, res=res)
         info.push(res)
