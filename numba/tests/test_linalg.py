@@ -11,6 +11,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import jit, errors
+from numba.numpy_support import version as numpy_version
 from .support import TestCase, tag
 from .matmul_usecase import matmul_usecase, needs_matmul, needs_blas
 
@@ -373,6 +374,26 @@ def matrix_power_matrix(a, n):
     return np.linalg.matrix_power(a, n)
 
 
+def trace_matrix(a, offset=0):
+    return np.trace(a, offset)
+
+
+def trace_matrix_no_offset(a):
+    return np.trace(a)
+
+
+if numpy_version >= (1, 9):
+    def outer_matrix(a, b, out=None):
+        return np.outer(a, b, out=out)
+else:
+    def outer_matrix(a, b):
+        return np.outer(a, b)
+
+
+def kron_matrix(a, b):
+    return np.kron(a, b)
+
+
 class TestLinalgBase(TestCase):
     """
     Provides setUp and common data/error modes for testing np.linalg functions.
@@ -491,8 +512,9 @@ class TestLinalgBase(TestCase):
         msg = "np.linalg.%s() only supported on float and complex arrays" % name
         self.assert_error(cfunc, args, msg, errors.TypingError)
 
-    def assert_wrong_dimensions(self, name, cfunc, args):
-        msg = "np.linalg.%s() only supported on 2-D arrays" % name
+    def assert_wrong_dimensions(self, name, cfunc, args, la_prefix=True):
+        prefix = "np.linalg" if la_prefix else "np"
+        msg = "%s.%s() only supported on 2-D arrays" % (prefix, name)
         self.assert_error(cfunc, args, msg, errors.TypingError)
 
     def assert_no_nan_or_inf(self, cfunc, args):
@@ -876,8 +898,8 @@ class TestLinalgEigenSystems(TestLinalgBase):
                     # modify 'a' if hermitian eigensystem functionality is
                     # being tested. 'L' for use lower part is default and
                     # the only thing used at present so we conjugate transpose
-                    # the lower part into the upper for use in the 
-                    # reconstruction. By construction the sample matrix is 
+                    # the lower part into the upper for use in the
+                    # reconstruction. By construction the sample matrix is
                     # tridiag so this is just a question of copying the lower
                     # diagonal into the upper and conjugating on the way.
                     if name[-1] == 'h':
@@ -924,7 +946,7 @@ class TestLinalgEigenSystems(TestLinalgBase):
             # Ensure proper resource management
             with self.assertNoNRTLeak():
                 cfunc(a)
-        
+
         # The main test loop
         for dtype, order in product(self.dtypes, 'FC'):
             a = self.sample_matrix(n, dtype, order)
@@ -1183,8 +1205,9 @@ class TestLinalgSystems(TestLinalgBase):
     """
 
     # check for RHS with dimension > 2 raises
-    def assert_wrong_dimensions_1D(self, name, cfunc, args):
-        msg = "np.linalg.%s() only supported on 1 and 2-D arrays" % name
+    def assert_wrong_dimensions_1D(self, name, cfunc, args, la_prefix=True):
+        prefix = "np.linalg" if la_prefix else "np"
+        msg = "%s.%s() only supported on 1 and 2-D arrays" % (prefix, name)
         self.assert_error(cfunc, args, msg, errors.TypingError)
 
     # check that a dimensionally invalid system raises
@@ -2110,6 +2133,167 @@ class TestLinalgMatrixPower(TestLinalgBase):
 
         # singular matrix is not invertible
         self.assert_raise_on_singular(cfunc, (np.array([[0., 0], [1, 1]]), -1))
+
+
+class TestTrace(TestLinalgBase):
+    """
+    Tests for np.trace.
+    """
+
+    def setUp(self):
+        super(TestTrace, self).setUp()
+        # compile two versions, one with and one without the offset kwarg
+        self.cfunc_w_offset = jit(nopython=True)(trace_matrix)
+        self.cfunc_no_offset = jit(nopython=True)(trace_matrix_no_offset)
+
+    def assert_int_offset(self, cfunc, a, **kwargs):
+        # validate first arg is ok
+        cfunc(a)
+        # pass in kwarg and assert fail
+        with self.assertRaises(errors.TypingError):
+            cfunc(a, **kwargs)
+
+    def test_trace(self):
+
+        def check(a, **kwargs):
+            if 'offset' in kwargs:
+                expected = trace_matrix(a, **kwargs)
+                cfunc = self.cfunc_w_offset
+            else:
+                expected = trace_matrix_no_offset(a, **kwargs)
+                cfunc = self.cfunc_no_offset
+
+            got = cfunc(a, **kwargs)
+
+            res = 5 * np.finfo(a.dtype).resolution
+            np.testing.assert_allclose(got, expected, rtol=res, atol=res)
+
+            # Ensure proper resource management
+            with self.assertNoNRTLeak():
+                cfunc(a, **kwargs)
+
+        # test: column vector, tall, wide, square, row vector
+        # prime sizes
+        sizes = [(7, 1), (11, 5), (5, 11), (3, 3), (1, 7)]
+
+        # offsets to cover the range of the matrix sizes above
+        offsets = [-13, -12, -11] + list(range(-10, 10)) + [11, 12, 13]
+
+        for size, offset, dtype, order in \
+                product(sizes, offsets, self.dtypes, 'FC'):
+            a = self.specific_sample_matrix(size, dtype, order)
+            check(a, offset=offset)
+            if offset == 0:
+                check(a)
+
+        rn = "trace"
+
+        # Dimension issue
+        self.assert_wrong_dimensions(rn, self.cfunc_w_offset,
+                                     (np.ones(10, dtype=np.float64), 1), False)
+        self.assert_wrong_dimensions(rn, self.cfunc_no_offset,
+                                     (np.ones(10, dtype=np.float64),), False)
+
+        # non-integer supplied as exponent
+        self.assert_int_offset(
+            self.cfunc_w_offset, np.ones(
+                (2, 2)), offset=1.2)
+
+
+class TestBasics(TestLinalgSystems):  # TestLinalgSystems for 1d test
+
+    order1 = cycle(['F', 'C', 'C', 'F'])
+    order2 = cycle(['C', 'F', 'C', 'F'])
+
+    # test: column vector, matrix, row vector, 1d sizes
+    # (7, 1, 3) and two scalars
+    sizes = [(7, 1), (3, 3), (1, 7), (7,), (1,), (3,), 3., 5.]
+
+    def _assert_wrong_dim(self, rn, cfunc):
+        # Dimension issue
+        self.assert_wrong_dimensions_1D(
+            rn, cfunc, (np.array([[[1]]], dtype=np.float64), np.ones(1)), False)
+        self.assert_wrong_dimensions_1D(
+            rn, cfunc, (np.ones(1), np.array([[[1]]], dtype=np.float64)), False)
+
+    def _gen_input(self, size, dtype, order):
+        if not isinstance(size, tuple):
+            return size
+        else:
+            if len(size) == 1:
+                return self.sample_vector(size[0], dtype)
+            else:
+                return self.sample_vector(
+                    size[0] * size[1],
+                    dtype).reshape(
+                    size, order=order)
+
+    def _get_input(self, size1, size2, dtype):
+        a = self._gen_input(size1, dtype, next(self.order1))
+        b = self._gen_input(size2, dtype, next(self.order2))
+        # force domain consistency as underlying ufuncs require it
+        if np.iscomplexobj(a):
+            b = b + 1j
+        if np.iscomplexobj(b):
+            a = a + 1j
+        return (a, b)
+
+    def test_outer(self):
+        cfunc = jit(nopython=True)(outer_matrix)
+
+        def check(a, b, **kwargs):
+
+            # check without kwargs
+            expected = outer_matrix(a, b)
+            got = cfunc(a, b)
+
+            res = 5 * np.finfo(np.asarray(a).dtype).resolution
+            np.testing.assert_allclose(got, expected, rtol=res, atol=res)
+
+            # if kwargs present check with them too
+            if 'out' in kwargs:
+                got = cfunc(a, b, **kwargs)
+                np.testing.assert_allclose(got, expected, rtol=res,
+                                           atol=res)
+                np.testing.assert_allclose(kwargs['out'], expected,
+                                           rtol=res, atol=res)
+
+            # Ensure proper resource management
+            with self.assertNoNRTLeak():
+                cfunc(a, b, **kwargs)
+
+        for size1, size2, dtype in \
+                product(self.sizes, self.sizes, self.dtypes):
+            (a, b) = self._get_input(size1, size2, dtype)
+            check(a, b)
+            if numpy_version >= (1, 9):
+                c = np.empty((np.asarray(a).size, np.asarray(b).size),
+                             dtype=np.asarray(a).dtype)
+                check(a, b, out=c)
+
+        self._assert_wrong_dim("outer", cfunc)
+
+    def test_kron(self):
+        cfunc = jit(nopython=True)(kron_matrix)
+
+        def check(a, b, **kwargs):
+
+            expected = kron_matrix(a, b)
+            got = cfunc(a, b)
+
+            res = 5 * np.finfo(np.asarray(a).dtype).resolution
+            np.testing.assert_allclose(got, expected, rtol=res, atol=res)
+
+            # Ensure proper resource management
+            with self.assertNoNRTLeak():
+                cfunc(a, b)
+
+        for size1, size2, dtype in \
+                product(self.sizes, self.sizes, self.dtypes):
+            (a, b) = self._get_input(size1, size2, dtype)
+            check(a, b)
+
+        self._assert_wrong_dim("kron", cfunc)
 
 
 if __name__ == '__main__':
