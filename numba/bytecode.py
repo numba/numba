@@ -111,48 +111,46 @@ class ByteCodeInst(object):
             return 0
 
 
-# Adapted from Lib/dis.py
 if sys.version_info[:2] >= (3, 6):
-    def _unpack_opargs(code):
-        extended_arg = 0
-        for i in range(0, len(code), 2):
-            if not extended_arg:
-                # Mark inst offset at first extended
-                offset = i
-            op = code[i]
-            if op >= HAVE_ARGUMENT:
-                arg = code[i + 1] | extended_arg
-                if op == EXTENDED_ARG:
-                    extended_arg = (arg << 8)
-                    continue
-            else:
-                arg = None
-
-            if op != EXTENDED_ARG:
-                extended_arg = 0
-            yield (offset, op, arg, i + 2)
-
+    CODE_LEN = 1
+    ARG_LEN = 1
+    NO_ARG_LEN = 1
 else:
-    def _unpack_opargs(code):
-        if sys.version_info[0] < 3:
-            code = list(map(ord, code))
+    CODE_LEN = 1
+    ARG_LEN = 2
+    NO_ARG_LEN = 0
+
+
+# Adapted from Lib/dis.py
+def _unpack_opargs(code):
+    """
+    Returns a 4-int-tuple of
+    (bytecode offset, opcode, argument, offset of next bytecode).
+    """
+    if sys.version_info[0] < 3:
+        code = list(map(ord, code))
+
+    extended_arg = 0
+    n = len(code)
+    offset = i = 0
+    while i < n:
+        op = code[i]
+        i += CODE_LEN
+        if op >= HAVE_ARGUMENT:
+            arg = code[i] | extended_arg
+            for j in range(ARG_LEN):
+                arg |= code[i + j] << (8 * j)
+            i += ARG_LEN
+            if op == EXTENDED_ARG:
+                extended_arg = arg << 8 * ARG_LEN
+                continue
+        else:
+            arg = None
+            i += NO_ARG_LEN
 
         extended_arg = 0
-        n = len(code)
-        i = 0
-        while i < n:
-            op = code[i]
-            offset = i
-            i = i + 1
-            arg = None
-            if op >= HAVE_ARGUMENT:
-                arg = code[i] + code[i + 1] * 256 + extended_arg
-                extended_arg = 0
-                i = i + 2
-                if op == EXTENDED_ARG:
-                    extended_arg = arg * 65536
-                    continue
-            yield (offset, op, arg, i)
+        yield (offset, op, arg, i)
+        offset = i  # Mark inst offset at first extended
 
 
 class ByteCodeIter(object):
