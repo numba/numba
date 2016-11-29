@@ -268,6 +268,7 @@ class Pipeline(object):
         self.bc = None
         self.func_id = None
         self.func_ir = None
+        self.func_ir_original = None  # used for fallback
         self.lifted = None
         self.lifted_from = None
         self.typemap = None
@@ -378,6 +379,9 @@ class Pipeline(object):
     def stage_process_ir(self):
         ir_processing_stage(self.func_ir)
 
+    def stage_preserve_ir(self):
+        self.func_ir_original = self.func_ir.copy()
+
     def frontend_looplift(self):
         """
         Loop lifting analysis and transformation
@@ -411,6 +415,7 @@ class Pipeline(object):
         """
         Front-end: Analyze bytecode, generate Numba IR, infer types
         """
+        self.func_ir = self.func_ir_original or self.func_ir
         if self.flags.enable_looplift:
             assert not self.lifted
             cres = self.frontend_looplift()
@@ -611,6 +616,8 @@ class Pipeline(object):
                 pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
             pm.add_stage(self.stage_process_ir, "processing IR")
             if not self.flags.no_rewrites:
+                if self.status.can_fallback:
+                    pm.add_stage(self.stage_preserve_ir, "preserve IR for fallback")
                 pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
             pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
             pm.add_stage(self.stage_annotate_type, "annotate type")
