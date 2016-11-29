@@ -20,6 +20,9 @@ forceobj_flags.set("force_pyobject")
 
 no_pyobj_flags = Flags()
 
+nrt_no_pyobj_flags = Flags()
+nrt_no_pyobj_flags.set("nrt")
+
 
 def abs_usecase(x):
     return abs(x)
@@ -180,6 +183,17 @@ def zip_3_usecase():
     for i, j, k in zip((1, 2), (3, 4, 5), (6.7, 8.9)):
         result += i * j * k
     return result
+
+
+def zip_first_exhausted():
+    iterable = range(7)
+    n = 3
+    it = iter(iterable)
+    # 1st iterator is shorter
+    front = list(zip(range(n), it))
+    # Make sure that we didn't skip one in `it`
+    back = list(it)
+    return front, back
 
 
 def pow_op_usecase(x, y):
@@ -902,6 +916,17 @@ class TestBuiltins(TestCase):
 
     def test_zip_0_npm(self):
         self.test_zip_0(flags=no_pyobj_flags)
+
+    def test_zip_first_exhausted(self, flags=forceobj_flags):
+        """
+        Test side effect to the input iterators when a left iterator has been
+        exhausted before the ones on the right.
+        """
+        self.run_nullary_func(zip_first_exhausted, flags)
+
+    @tag('important')
+    def test_zip_first_exhausted_npm(self):
+        self.test_zip_first_exhausted(flags=nrt_no_pyobj_flags)
 
     def test_pow_op_usecase(self):
         args = [
