@@ -41,11 +41,26 @@ def array_flat_sum(arr):
 def array_flat_len(arr):
     return len(arr.flat)
 
+def array_flat_premature_free(size):
+    x = np.arange(size)
+    res = np.zeros_like(x, dtype=np.intp)
+    for i, v in enumerate(x.flat):
+        res[i] = v
+    return res
+
 def array_ndenumerate_sum(arr):
     s = 0
     for (i, j), v in np.ndenumerate(arr):
         s = s + (i + 1) * (j + 1) * v
     return s
+
+def array_ndenumerate_premature_free(size):
+    # test premature free (see issue #2112)
+    x = np.arange(size)
+    res = np.zeros_like(x, dtype=np.intp)
+    for i, v in np.ndenumerate(x):
+        res[i] = v
+    return res
 
 def np_ndindex_empty():
     s = 0
@@ -285,6 +300,14 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         arr = np.array([42]).reshape(())
         check(arr)
 
+    def test_array_flat_premature_free(self):
+        cres = compile_isolated(array_flat_premature_free, [types.intp])
+        cfunc = cres.entry_point
+        expect = array_flat_premature_free(6)
+        got = cfunc(6)
+        self.assertTrue(got.sum())
+        self.assertPreciseEqual(expect, got)
+
     @tag('important')
     def test_array_ndenumerate_2d(self):
         arr = np.arange(12).reshape(4, 3)
@@ -328,6 +351,14 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         self.check_array_flat_sum(arr, arrty)
         arrty = types.Array(types.int32, 2, layout='A')
         self.check_array_flat_sum(arr, arrty)
+
+    def test_array_ndenumerate_premature_free(self):
+        cres = compile_isolated(array_ndenumerate_premature_free, [types.intp])
+        cfunc = cres.entry_point
+        expect = array_ndenumerate_premature_free(6)
+        got = cfunc(6)
+        self.assertTrue(got.sum())
+        self.assertPreciseEqual(expect, got)
 
     def test_np_ndindex(self):
         func = np_ndindex
