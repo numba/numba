@@ -131,6 +131,12 @@ def empty_tuple_usecase(a):
 def setitem_usecase(a, index, value):
     a[index] = value
 
+
+@njit
+def setitem_broadcast_usecase(a, value):
+    a[:] = value
+
+
 def slicing_1d_usecase_set(a, b, start, stop, step):
     a[start:stop:step] = b
     return a
@@ -967,10 +973,85 @@ class TestSetItem(TestCase):
         # Using a 0-d array as scalar index
         setitem_usecase(arr, np.array(3).astype(np.uint16), 8)
         self.assertEqual(arr.tolist(), [0, 42, 2, 8, 4])
-        # Broadcasting
+        # Scalar Broadcasting
         arr = np.arange(9).reshape(3, 3)
         setitem_usecase(arr, 1, 42)
         self.assertEqual(arr.tolist(), [[0, 1, 2], [42, 42, 42], [6, 7, 8]])
+
+    def test_setitem_broadcast(self):
+        """
+        broadcasted array assignment
+        """
+        # Scalar Broadcasting
+        dst = np.arange(5)
+        setitem_broadcast_usecase(dst, 42)
+        self.assertEqual(dst.tolist(), [42] * 5)
+        # 1D -> 2D Array Broadcasting
+        dst = np.arange(6).reshape(2, 3)
+        setitem_broadcast_usecase(dst, np.arange(1, 4))
+        self.assertEqual(dst.tolist(), [[1, 2, 3], [1, 2, 3]])
+        # 2D -> 2D Array Broadcasting
+        dst = np.arange(6).reshape(2, 3)
+        setitem_broadcast_usecase(dst, np.arange(1, 4).reshape(1, 3))
+        self.assertEqual(dst.tolist(), [[1, 2, 3], [1, 2, 3]])
+        # 2D -> 4D Array Broadcasting
+        dst = np.arange(12).reshape(2, 1, 2, 3)
+        setitem_broadcast_usecase(dst, np.arange(1, 4).reshape(1, 3))
+        inner2 = [[1, 2, 3], [1, 2, 3]]
+        self.assertEqual(dst.tolist(), [[inner2]] * 2)
+        # 2D -> 1D Array Broadcasting
+        dst = np.arange(5)
+        setitem_broadcast_usecase(dst, np.arange(1, 6).reshape(1, 5))
+        self.assertEqual(dst.tolist(), [1, 2, 3, 4, 5])
+        # 4D -> 2D Array Broadcasting
+        dst = np.arange(6).reshape(2, 3)
+        setitem_broadcast_usecase(dst, np.arange(1, 1 + dst.size).reshape(1, 1, 2, 3))
+        self.assertEqual(dst.tolist(), [[1, 2, 3], [4, 5, 6]])
+
+    def test_setitem_broadcast_error(self):
+        # higher dim assigned into lower dim
+        # 2D -> 1D
+        dst = np.arange(5)
+        src = np.arange(10).reshape(2, 5)
+        with self.assertRaises(ValueError) as raises:
+            setitem_broadcast_usecase(dst, src)
+        errmsg = str(raises.exception)
+        self.assertEqual('cannot broadcast source array for assignment',
+                         errmsg)
+        # 3D -> 2D
+        dst = np.arange(5).reshape(1, 5)
+        src = np.arange(10).reshape(1, 2, 5)
+        with self.assertRaises(ValueError) as raises:
+            setitem_broadcast_usecase(dst, src)
+        errmsg = str(raises.exception)
+        self.assertEqual('cannot assign slice from input of different size',
+                         errmsg)
+        # lower to higher
+        # 1D -> 2D
+        dst = np.arange(10).reshape(2, 5)
+        src = np.arange(4)
+        with self.assertRaises(ValueError) as raises:
+            setitem_broadcast_usecase(dst, src)
+        errmsg = str(raises.exception)
+        self.assertEqual('cannot assign slice from input of different size',
+                         errmsg)
+
+    def test_slicing_1d_broadcast(self):
+        # 1D -> 2D sliced (1)
+        dst = np.arange(6).reshape(3, 2)
+        src = np.arange(1, 3)
+        slicing_1d_usecase_set(dst, src, 0, 2, 1)
+        self.assertEqual(dst.tolist(), [[1, 2], [1, 2], [4, 5]])
+        # 1D -> 2D sliced (2)
+        dst = np.arange(6).reshape(3, 2)
+        src = np.arange(1, 3)
+        slicing_1d_usecase_set(dst, src, 0, None, 2)
+        self.assertEqual(dst.tolist(), [[1, 2], [2, 3], [1, 2]])
+        # 2D -> 2D sliced (3)
+        dst = np.arange(6).reshape(3, 2)
+        src = np.arange(1, 5).reshape(2, 2)
+        slicing_1d_usecase_set(dst, src, None, 2, 1)
+        self.assertEqual(dst.tolist(), [[1, 2], [3, 4], [4, 5]])
 
     def test_setitem_readonly(self):
         arr = np.arange(5)

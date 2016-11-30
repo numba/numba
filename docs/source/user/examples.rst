@@ -6,7 +6,7 @@ Examples
 Mandelbrot
 ----------
 
-.. literalinclude:: /../../examples/mandel.py
+.. literalinclude:: /../../examples/mandel/mandel_jit.py
 
 
 .. _example-movemean:

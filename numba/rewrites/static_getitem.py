@@ -11,7 +11,7 @@ class RewriteConstGetitems(Rewrite):
     """
 
     def match(self, interp, block, typemap, calltypes):
-        self.getitems = getitems = []
+        self.getitems = getitems = {}
         self.block = block
         # Detect all getitem expressions and find which ones can be
         # rewritten
@@ -21,7 +21,7 @@ class RewriteConstGetitems(Rewrite):
                     const = interp.infer_constant(expr.index)
                 except errors.ConstantInferenceError:
                     continue
-                getitems.append((expr, const))
+                getitems[expr] = const
 
         return len(getitems) > 0
 
@@ -29,11 +29,21 @@ class RewriteConstGetitems(Rewrite):
         """
         Rewrite all matching getitems as static_getitems.
         """
-        for expr, const in self.getitems:
-            expr.op = 'static_getitem'
-            expr.index_var = expr.index
-            expr.index = const
-        return self.block
+        new_block = self.block.copy()
+        new_block.clear()
+        for inst in self.block.body:
+            if isinstance(inst, ir.Assign):
+                expr = inst.value
+                if expr in self.getitems:
+                    const = self.getitems[expr]
+                    new_expr = ir.Expr.static_getitem(value=expr.value,
+                                                      index=const,
+                                                      index_var=expr.index,
+                                                      loc=expr.loc)
+                    inst = ir.Assign(value=new_expr, target=inst.target,
+                                     loc=inst.loc)
+            new_block.append(inst)
+        return new_block
 
 
 @register_rewrite('before-inference')

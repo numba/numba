@@ -41,6 +41,26 @@ class Integer(Number):
             return NotImplemented
         return self.bitwidth < other.bitwidth
 
+    @property
+    def maxval(self):
+        """
+        The maximum value representable by this type.
+        """
+        if self.signed:
+            return (1 << (self.bitwidth - 1)) - 1
+        else:
+            return (1 << self.bitwidth) - 1
+
+    @property
+    def minval(self):
+        """
+        The minimal value representable by this type.
+        """
+        if self.signed:
+            return -(1 << (self.bitwidth - 1))
+        else:
+            return 0
+
 
 @utils.total_ordering
 class Float(Number):

@@ -357,7 +357,9 @@ def to_dtype(ty):
 
 
 class DeviceVectorize(_BaseUFuncBuilder):
-    def __init__(self, func, identity=None, targetoptions={}):
+    def __init__(self, func, identity=None, cache=False, targetoptions={}):
+        if cache:
+            raise TypeError("caching is not supported")
         assert not targetoptions
         self.py_func = func
         self.identity = parse_identity(identity)
@@ -421,7 +423,9 @@ class DeviceVectorize(_BaseUFuncBuilder):
 
 
 class DeviceGUFuncVectorize(_BaseUFuncBuilder):
-    def __init__(self, func, sig, identity=None, targetoptions={}):
+    def __init__(self, func, sig, identity=None, cache=False, targetoptions={}):
+        if cache:
+            raise TypeError("caching is not supported")
         # Allow nopython flag to be set.
         if not targetoptions.pop('nopython', True):
             raise TypeError("nopython flag must be True")

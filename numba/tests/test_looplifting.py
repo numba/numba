@@ -406,6 +406,27 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
             cfunc = jit(forceobj=True)(pyfunc)
             self.assertEqual(pyfunc(True), cfunc(True))
 
+    def test_variable_scope_bug(self):
+        """
+        https://github.com/numba/numba/issues/2179
+
+        Looplifting transformation is using the wrong verion of variable `h`.
+        """
+        from numba import jit
+
+        def bar(x):
+            return x
+
+        def foo(x):
+            h = 0.
+            for k in range(x):
+                h = h + k
+            h = h - bar(x)
+            return h
+
+        cfoo = jit(foo)
+        self.assertEqual(foo(10), cfoo(10))
+
 
 if __name__ == '__main__':
     unittest.main()

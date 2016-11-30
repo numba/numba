@@ -96,6 +96,8 @@ The following attributes of Numpy arrays are supported:
 * :attr:`~numpy.ndarray.size`
 * :attr:`~numpy.ndarray.strides`
 * :attr:`~numpy.ndarray.T`
+* :attr:`~numpy.ndarray.real`
+* :attr:`~numpy.ndarray.imag`
 
 The ``flags`` object
 ''''''''''''''''''''
@@ -109,6 +111,21 @@ The ``flat`` object
 The object returned by the :attr:`~numpy.ndarray.flat` attribute supports
 iteration and indexing, but be careful: indexing is very slow on
 non-C-contiguous arrays.
+
+The ``real`` and ``imag`` attributes
+''''''''''''''''''''''''''''''''''''
+
+Numpy supports these attributes regardless of the dtype but Numba chooses to
+limit their support to avoid potential user error.  For numeric dtypes,
+Numba follows Numpy's behavior.  The :attr:`~numpy.ndarray.real` attribute
+returns a view of the real part of the complex array and it behaves as an identity
+function for other numeric dtypes.  The :attr:`~numpy.ndarray.imag` attribute
+returns a view of the imaginary part of the complex array and it returns a zero
+array with the same shape and dtype for other numeric dtypes.  For non-numeric
+dtypes, including all structured/record dtypes, using these attributes will
+result in a compile-time (`TypingError`) error.  This behavior differs from
+Numpy's but it is chosen to avoid the potential confusion with field names that
+overlap these attributes.
 
 Calculation
 -----------
@@ -139,6 +156,7 @@ Other methods
 
 The following methods of Numpy arrays are supported:
 
+* :meth:`~numpy.ndarray.argsort` (without arguments)
 * :meth:`~numpy.ndarray.astype` (only the 1-argument form)
 * :meth:`~numpy.ndarray.copy` (without arguments)
 * :meth:`~numpy.ndarray.flatten` (no order argument; 'C' order only)
@@ -165,6 +183,9 @@ Basic linear algebra is supported on 1-D and 2-D contiguous arrays of
 floating-point and complex numbers:
 
 * :func:`numpy.dot`
+* :func:`numpy.kron`
+* :func:`numpy.outer`
+* :func:`numpy.trace` (only the first argument).
 * :func:`numpy.vdot`
 * On Python 3.5 and above, the matrix multiplication operator from
   :pep:`465` (i.e. ``a @ b`` where ``a`` and ``b`` are 1-D or 2-D arrays).
@@ -174,8 +195,14 @@ floating-point and complex numbers:
 * :func:`numpy.linalg.eig` (only running with data that does not cause a domain
   change is supported e.g. real input -> real
   output, complex input -> complex output).
+* :func:`numpy.linalg.eigh` (only the first argument).
+* :func:`numpy.linalg.eigvals` (only running with data that does not cause a 
+  domain change is supported e.g. real input -> real output,
+  complex input -> complex output).
+* :func:`numpy.linalg.eigvalsh` (only the first argument).
 * :func:`numpy.linalg.inv`
 * :func:`numpy.linalg.lstsq`
+* :func:`numpy.linalg.matrix_power`
 * :func:`numpy.linalg.matrix_rank`
 * :func:`numpy.linalg.norm` (only the 2 first arguments and only non string
   values in ``ord``).
@@ -199,6 +226,7 @@ The following reduction functions are supported:
 * :func:`numpy.nanmean` (only the first argument)
 * :func:`numpy.nanmedian` (only the first argument)
 * :func:`numpy.nanmin` (only the first argument)
+* :func:`numpy.nanprod` (only the first argument)
 * :func:`numpy.nanstd` (only the first argument)
 * :func:`numpy.nansum` (only the first argument)
 * :func:`numpy.nanvar` (only the first argument)
@@ -209,20 +237,29 @@ Other functions
 The following top-level functions are supported:
 
 * :func:`numpy.arange`
+* :func:`numpy.argsort` (no optional arguments)
 * :func:`numpy.array` (only the 2 first arguments)
 * :func:`numpy.asfortranarray` (only the first argument)
+* :func:`numpy.atleast_1d`
+* :func:`numpy.atleast_2d`
+* :func:`numpy.atleast_3d`
 * :func:`numpy.bincount` (only the 2 first arguments)
+* :func:`numpy.column_stack`
+* :func:`numpy.concatenate`
 * :func:`numpy.copy` (only the first argument)
 * :func:`numpy.diag`
 * :func:`numpy.digitize`
+* :func:`numpy.dstack`
 * :func:`numpy.empty` (only the 2 first arguments)
 * :func:`numpy.empty_like` (only the 2 first arguments)
+* :func:`numpy.expand_dims`
 * :func:`numpy.eye`
 * :func:`numpy.flatten` (no order argument; 'C' order only)
 * :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full` (only the 3 first arguments)
 * :func:`numpy.full_like` (only the 3 first arguments)
 * :func:`numpy.histogram` (only the 3 first arguments)
+* :func:`numpy.hstack`
 * :func:`numpy.identity`
 * :func:`numpy.linspace` (only the 3-argument form)
 * :class:`numpy.ndenumerate`
@@ -231,10 +268,13 @@ The following top-level functions are supported:
 * :func:`numpy.ones` (only the 2 first arguments)
 * :func:`numpy.ones_like` (only the 2 first arguments)
 * :func:`numpy.ravel` (no order argument; 'C' order only)
+* :func:`numpy.roots`
 * :func:`numpy.round_`
 * :func:`numpy.searchsorted` (only the 2 first arguments)
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
+* :func:`numpy.stack`
+* :func:`numpy.vstack`
 * :func:`numpy.where`
 * :func:`numpy.zeros` (only the 2 first arguments)
 * :func:`numpy.zeros_like` (only the 2 first arguments)

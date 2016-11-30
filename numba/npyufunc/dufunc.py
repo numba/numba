@@ -6,6 +6,7 @@ from .. import jit, typeof, utils, types, numpy_support, sigutils
 from ..typing import npydecl
 from ..typing.templates import AbstractTemplate, signature
 from . import _internal, ufuncbuilder
+from ..dispatcher import Dispatcher
 
 
 def make_dufunc_kernel(_dufunc):
@@ -72,11 +73,14 @@ class DUFunc(_internal._DUFunc):
     # _internal.c:dufunc_init()
     __base_kwargs = set(('identity', '_keepalive', 'nin', 'nout'))
 
-    def __init__(self, py_func, identity=None, targetoptions={}):
+    def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
+        if isinstance(py_func, Dispatcher):
+            py_func = py_func.py_func
         self.targetoptions = targetoptions.copy()
         kws = {}
         kws['identity'] = ufuncbuilder.parse_identity(identity)
-        dispatcher = jit(target='npyufunc')(py_func)
+
+        dispatcher = jit(target='npyufunc', cache=cache)(py_func)
         super(DUFunc, self).__init__(dispatcher, **kws)
         # Loop over a copy of the keys instead of the keys themselves,
         # since we're changing the dictionary while looping.

@@ -100,6 +100,10 @@ class DType(DTypeSpec, Opaque):
     def dtype(self):
         return self._dtype
 
+    def __getitem__(self, arg):
+        res = super(DType, self).__getitem__(arg)
+        return res.copy(dtype=self.dtype)
+
 
 class NumpyFlatType(SimpleIteratorType, MutableSequence):
     """

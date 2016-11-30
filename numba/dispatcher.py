@@ -9,13 +9,14 @@ import struct
 import sys
 import uuid
 import weakref
+import threading
 
 import numba
 from numba import _dispatcher, compiler, utils, types, config, errors
 from numba.typeconv.rules import default_type_manager
 from numba import sigutils, serialize, typing
 from numba.typing.templates import fold_arguments
-from numba.typing.typeof import typeof, Purpose
+from numba.typing.typeof import Purpose, typeof, typeof_impl
 from numba.bytecode import get_code_object
 from numba.six import create_bound_method, next
 from .caching import NullCache, FunctionCache
@@ -31,6 +32,10 @@ class OmittedArg(object):
 
     def __repr__(self):
         return "omitted arg(%r)" % (self.value,)
+
+    @property
+    def _numba_type_(self):
+        return types.Omitted(self.value)
 
 
 class _FunctionCompiler(object):
@@ -150,8 +155,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         self.__code__ = self.func_code
 
         argnames = tuple(pysig.parameters)
-        defargs = tuple(OmittedArg(val)
-                        for val in (self.py_func.__defaults__ or ()))
+        default_values = self.py_func.__defaults__ or ()
+        defargs = tuple(OmittedArg(val) for val in default_values)
         try:
             lastarg = list(pysig.parameters.values())[-1]
         except IndexError:
@@ -164,7 +169,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                                         has_stararg)
 
         self.doc = py_func.__doc__
-        self._compile_lock = utils.NonReentrantLock()
+        self._compile_lock = threading.RLock()
 
         utils.finalize(self, self._make_finalizer())
 
@@ -213,7 +218,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         """Disable the compilation of new signatures at call time.
         """
         # If disabling compilation then there must be at least one signature
-        assert val or len(self.signatures) > 0
+        assert (not val) or len(self.signatures) > 0
         self._can_compile = not val
 
     def add_overload(self, cres):
@@ -238,8 +243,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         # Fold keyword arguments and resolve default values
         pysig, args = self._compiler.fold_argument_types(args, kws)
         kws = {}
-        # Ensure an overload is available, but avoid compiler re-entrance
-        if self._can_compile and not self.is_compiling:
+        # Ensure an overload is available
+        if self._can_compile:
             self.compile(tuple(args))
 
         # Create function type for typing
@@ -263,7 +268,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         """
         Whether a specialization is currently being compiled.
         """
-        return self._compile_lock.is_owned()
+        return self._compile_lock._is_owned()
 
     def _compile_for_args(self, *args, **kws):
         """
@@ -584,9 +589,8 @@ class LiftedLoop(_DispatcherBase):
     """
     _fold_args = False
 
-    def __init__(self, interp, typingctx, targetctx, flags, locals):
-        self.bytecode = interp.bytecode
-        self.interp = interp
+    def __init__(self, func_ir, typingctx, targetctx, flags, locals):
+        self.func_ir = func_ir
         self.lifted_from = None
 
         self.typingctx = typingctx
@@ -594,15 +598,14 @@ class LiftedLoop(_DispatcherBase):
         self.flags = flags
         self.locals = locals
 
-        _DispatcherBase.__init__(self, self.bytecode.arg_count,
-                                 self.bytecode.func, self.bytecode.pysig)
+        _DispatcherBase.__init__(self, self.func_ir.arg_count,
+                                 self.func_ir.func_id.func,
+                                 self.func_ir.func_id.pysig)
 
     def get_source_location(self):
         """Return the starting line number of the loop.
         """
-        firstblock = self.interp.blocks[min(self.interp.blocks)]
-        inst = firstblock.body[0]
-        return inst.loc.line
+        return self.func_ir.loc.line
 
     def compile(self, sig):
         with self._compile_lock:
@@ -619,7 +622,7 @@ class LiftedLoop(_DispatcherBase):
             assert not flags.enable_looplift, "Enable looplift flags is on"
             cres = compiler.compile_ir(typingctx=self.typingctx,
                                        targetctx=self.targetctx,
-                                       interp=self.interp,
+                                       func_ir=self.func_ir,
                                        args=args, return_type=return_type,
                                        flags=flags, locals=self.locals,
                                        lifted=(),
@@ -634,4 +637,6 @@ class LiftedLoop(_DispatcherBase):
 
 
 # Initialize typeof machinery
-_dispatcher.typeof_init(dict((str(t), t._code) for t in types.number_domain))
+_dispatcher.typeof_init(
+    OmittedArg,
+    dict((str(t), t._code) for t in types.number_domain))

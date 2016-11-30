@@ -1,11 +1,14 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
-import sys
+
+
+from timeit import default_timer as timer
+
+from matplotlib.pylab import imshow, jet, show, ion
+
 from numba import vectorize
 import numpy as np
-from timeit import default_timer as timer
-from matplotlib.pylab import imshow, jet, show, ion
 
 sig = 'uint8(uint32, f4, f4, f4, f4, uint32, uint32, uint32)'
 

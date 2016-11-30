@@ -16,7 +16,8 @@ for use in :term:`nopython mode` functions.  The function decorated with
 runtime arguments.  It should return a callable representing the
 *implementation* of the function for the given types.  The returned
 implementation is compiled by Numba as if it were a normal function
-decorated with ``@jit``.
+decorated with ``@jit``.  Additional options to ``@jit`` can be passed as
+dictionary using the ``jit_options`` argument.
 
 For example, let's pretend Numba doesn't support the :func:`len` function
 on tuples yet.  Here is how to implement it using ``@overload``::

@@ -17,6 +17,14 @@ from numba.tests.support import TestCase, captured_stderr
 
 
 @jit(cache=True, nopython=True)
+def simple_usecase(x):
+    return x
+
+def simple_usecase_caller(x):
+    return simple_usecase(x)
+
+
+@jit(cache=True, nopython=True)
 def add_usecase(x, y):
     return x + y + Z
 
@@ -92,6 +100,13 @@ def make_closure(x):
 
 closure1 = make_closure(3)
 closure2 = make_closure(5)
+
+
+biggie = np.arange(10**6)
+
+@jit(cache=True, nopython=True)
+def use_big_array():
+    return biggie
 
 
 Z = 1

@@ -17,10 +17,10 @@ class ConstantInference(object):
     This shouldn't be used directly, instead call Interpreter.infer_constant().
     """
 
-    def __init__(self, interp):
+    def __init__(self, func_ir):
         # Avoid cyclic references as some user-visible objects may be
         # held alive in the cache
-        self._interp = weakref.proxy(interp)
+        self._func_ir = weakref.proxy(func_ir)
         self._cache = {}
 
     def infer_constant(self, name):
@@ -52,7 +52,7 @@ class ConstantInference(object):
             raise TypeError("infer_constant() called with non-str %r"
                             % (name,))
         try:
-            defn = self._interp.get_definition(name)
+            defn = self._func_ir.get_definition(name)
         except KeyError:
             raise ConstantInferenceError(
                 "no single definition for %r" % (name,))

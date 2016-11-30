@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import errno
+import multiprocessing
 import os
 import shutil
 import subprocess
@@ -732,6 +733,20 @@ class TestCache(BaseCacheTest):
                          'Cannot cache compiled function "looplifted" '
                          'as it uses lifted loops')
 
+    def test_big_array(self):
+        # Code references big array globals cannot be cached
+        mod = self.import_module()
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaWarning)
+
+            f = mod.use_big_array
+            np.testing.assert_equal(f(), mod.biggie)
+            self.check_pycache(0)
+
+        self.assertEqual(len(w), 1)
+        self.assertIn('Cannot cache compiled function "use_big_array" '
+                      'as it uses dynamic globals', str(w[0].message))
+
     def test_ctypes(self):
         # Functions using a ctypes pointer can't be cached and raise
         # a warning.
@@ -937,6 +952,31 @@ class TestCache(BaseCacheTest):
         # Run a second time and check caching
         err = execute_with_input()
         self.assertEqual(err.strip(), "cache hits = 1")
+
+
+class TestMultiprocessCache(BaseCacheTest):
+
+    # Nested multiprocessing.Pool raises AssertionError:
+    # "daemonic processes are not allowed to have children"
+    _numba_parallel_test_ = False
+
+    here = os.path.dirname(__file__)
+    usecases_file = os.path.join(here, "cache_usecases.py")
+    modname = "dispatcher_caching_test_fodder"
+
+    def test_multiprocessing(self):
+        # Check caching works from multiple processes at once (#2028)
+        mod = self.import_module()
+        # Calling a pure Python caller of the JIT-compiled function is
+        # necessary to reproduce the issue.
+        f = mod.simple_usecase_caller
+        n = 3
+        pool = multiprocessing.Pool(n)
+        try:
+            res = sum(pool.imap(f, range(n)))
+        finally:
+            pool.close()
+        self.assertEqual(res, n * (n - 1) // 2)
 
 
 if __name__ == '__main__':

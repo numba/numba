@@ -3,6 +3,8 @@ from __future__ import print_function, division, absolute_import
 import functools
 import locale
 import weakref
+from collections import defaultdict
+import ctypes
 
 import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.passes as lp
@@ -10,7 +12,7 @@ import llvmlite.binding as ll
 import llvmlite.ir as llvmir
 
 from numba import config, utils, cgutils
-from numba.runtime.atomicops import remove_redundant_nrt_refct
+from numba.runtime.nrtopt import remove_redundant_nrt_refct
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
                       'i886', 'i986'])
@@ -72,6 +74,12 @@ class CodeLibrary(object):
         # Remember this on the module, for the object cache hooks
         self._final_module.__library = weakref.proxy(self)
         self._shared_module = None
+        # Track names of the dynamic globals
+        self._dynamic_globals = []
+
+    @property
+    def has_dynamic_globals(self):
+        return len(self._dynamic_globals) > 0
 
     @property
     def codegen(self):
@@ -175,7 +183,16 @@ class CodeLibrary(object):
         ll_module.verify()
         self.add_llvm_module(ll_module)
 
+    def _scan_dynamic_globals(self, ll_module):
+        """
+        Scan for dynanmic globals and track their names
+        """
+        for gv in ll_module.global_variables:
+            if gv.name.startswith("numba.dynamic.globals"):
+                self._dynamic_globals.append(gv.name)
+
     def add_llvm_module(self, ll_module):
+        self._scan_dynamic_globals(ll_module)
         self._optimize_functions(ll_module)
         # TODO: we shouldn't need to recreate the LLVM module object
         ll_module = remove_redundant_nrt_refct(ll_module)
@@ -421,7 +438,61 @@ class JITCodeLibrary(CodeLibrary):
         return self._codegen._engine.get_function_address(name)
 
     def _finalize_specific(self):
+        self._codegen._scan_and_fix_unresolved_refs(self._final_module)
         self._codegen._engine.finalize_object()
+
+
+class RuntimeLinker(object):
+    """
+    For tracking unresolved symbols generated at runtime due to recursion.
+    """
+    PREFIX = '.numba.unresolved$'
+
+    def __init__(self):
+        self._unresolved = defaultdict(list)
+        self._defined = set()
+        self._resolved = []
+
+    def scan_unresolved_symbols(self, module, engine):
+        """
+        Scan and track all unresolved external symbols in the module and
+        allocate memory for it.
+        """
+        prefix = self.PREFIX
+
+        for gv in module.global_variables:
+            if gv.name.startswith(prefix):
+                sym = gv.name[len(prefix):]
+                # Allocate a memory space for the pointer
+                abortfn = engine.get_function_address('nrt_unresolved_abort')
+                ptr = ctypes.c_void_p(abortfn)
+                engine.add_global_mapping(gv, ctypes.addressof(ptr))
+                self._unresolved[sym].append(ptr)
+
+    def scan_defined_symbols(self, module):
+        """
+        Scan and track all defined symbols.
+        """
+        for fn in module.functions:
+            if not fn.is_declaration:
+                self._defined.add(fn.name)
+
+    def resolve(self, engine):
+        """
+        Fix unresolved symbols if they are defined.
+        """
+        # An iterator to get all unresolved but available symbols
+        pending = [name for name in self._unresolved if name in self._defined]
+        # Resolve pending symbols
+        for name in pending:
+            # Get runtime address
+            fnptr = engine.get_function_address(name)
+            # Fix all usage
+            for ptr in self._unresolved[name]:
+                ptr.value = fnptr
+                self._resolved.append((name, ptr))   # keep ptr alive
+            # Delete resolved
+            del self._unresolved[name]
 
 
 class BaseCPUCodegen(object):
@@ -435,6 +506,7 @@ class BaseCPUCodegen(object):
         self._llvm_module = ll.parse_assembly(
             str(self._create_empty_module(module_name)))
         self._llvm_module.name = "global_codegen_module"
+        self._rtlinker = RuntimeLinker()
         self._init(self._llvm_module)
 
     def _init(self, llvm_module):
@@ -554,6 +626,22 @@ class BaseCPUCodegen(object):
         """
         return (self._llvm_module.triple, ll.get_host_cpu_name(),
                 self._tm_features)
+
+    def _scan_and_fix_unresolved_refs(self, module):
+        self._rtlinker.scan_unresolved_symbols(module, self._engine)
+        self._rtlinker.scan_defined_symbols(module)
+        self._rtlinker.resolve(self._engine)
+
+    def insert_unresolved_ref(self, builder, fnty, name):
+        voidptr = llvmir.IntType(8).as_pointer()
+        ptrname = self._rtlinker.PREFIX + name
+        llvm_mod = builder.module
+        fnptr = llvm_mod.get_global(ptrname)
+        # Not defined?
+        if fnptr is None:
+            fnptr = llvmir.GlobalVariable(llvm_mod, voidptr, name=ptrname)
+            fnptr.linkage = 'external'
+        return builder.bitcast(builder.load(fnptr), fnty.as_pointer())
 
 
 class AOTCPUCodegen(BaseCPUCodegen):

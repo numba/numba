@@ -21,6 +21,7 @@ import traceback
 
 from numba import ir, types, utils, config, six, typing
 from .errors import TypingError, UntypedAttributeError, new_error_context
+from .funcdesc import qualifying_prefix
 
 
 class TypeVar(object):
@@ -244,9 +245,12 @@ class ExhaustIterConstraint(object):
             typevars = typeinfer.typevars
             oset = typevars[self.target]
             for tp in typevars[self.iterator.name].get():
+                # unpack optional
+                tp = tp.type if isinstance(tp, types.Optional) else tp
                 if isinstance(tp, types.BaseTuple):
                     if len(tp) == self.count:
                         typeinfer.add_type(self.target, tp, loc=self.loc)
+                        break
                     else:
                         raise ValueError("wrong tuple length for %r: "
                                          "expected %d, got %d"
@@ -255,6 +259,9 @@ class ExhaustIterConstraint(object):
                     tup = types.UniTuple(dtype=tp.iterator_type.yield_type,
                                          count=self.count)
                     typeinfer.add_type(self.target, tup, loc=self.loc)
+                    break
+            else:
+                raise TypingError("failed to unpack {}".format(tp), loc=self.loc)
 
 
 class PairFirstConstraint(object):
@@ -640,11 +647,13 @@ class TypeInferer(object):
     Operates on block that shares the same ir.Scope.
     """
 
-    def __init__(self, context, interp, warnings):
+    def __init__(self, context, func_ir, warnings):
         self.context = context
-        self.blocks = interp.blocks
-        self.generator_info = interp.generator_info
-        self.py_func = interp.bytecode.func
+        self.blocks = func_ir.blocks
+        self.generator_info = func_ir.generator_info
+        self.func_id = func_ir.func_id
+        self.func_ir = func_ir
+
         self.typevars = TypeVarMap()
         self.typevars.set_context(context)
         self.constraints = ConstraintNetwork()
@@ -666,6 +675,19 @@ class TypeInferer(object):
             self.debug = TypeInferDebug(self)
         else:
             self.debug = NullDebug()
+
+        self._skip_recursion = False
+
+    def copy(self, skip_recursion=False):
+        clone = TypeInferer(self.context, self.func_ir, self.warnings)
+        clone.arg_names = self.arg_names.copy()
+        clone._skip_recursion = skip_recursion
+
+        for k, v in self.typevars.items():
+            if not v.locked and v.defined:
+                clone.typevars[k].add_type(v.getone(), loc=v.define_loc)
+
+        return clone
 
     def _mangle_arg_name(self, name):
         # Disambiguise argument name
@@ -700,11 +722,38 @@ class TypeInferer(object):
             for inst in blk.body:
                 self.constrain_statement(inst)
 
-    def propagate(self):
+    def return_types_from_partial(self):
+        """
+        Resume type inference partially to deduce the return type.
+        Note: No side-effect to `self`.
+
+        Returns the inferred return type or None if it cannot deduce the return
+        type.
+        """
+        # Clone the typeinferer and disable typing recursive calls
+        cloned = self.copy(skip_recursion=True)
+        # rebuild constraint network
+        cloned.build_constraint()
+        # propagate without raising
+        cloned.propagate(raise_errors=False)
+        # get return types
+        rettypes = set()
+        for retvar in cloned._get_return_vars():
+            if retvar.name in cloned.typevars:
+                typevar = cloned.typevars[retvar.name]
+                if typevar and typevar.defined:
+                    rettypes.add(typevar.getone())
+        if not rettypes:
+            return
+        # unify return types
+        return cloned._unify_return_types(rettypes)
+
+    def propagate(self, raise_errors=True):
         newtoken = self.get_state_token()
         oldtoken = None
         # Since the number of types are finite, the typesets will eventually
         # stop growing.
+
         while newtoken != oldtoken:
             self.debug.propagate_started()
             oldtoken = newtoken
@@ -714,7 +763,10 @@ class TypeInferer(object):
             newtoken = self.get_state_token()
             self.debug.propagate_finished()
         if errors:
-            raise errors[0]
+            if raise_errors:
+                raise errors[0]
+            else:
+                return errors
 
     def add_type(self, var, tp, loc, unless_locked=False):
         assert isinstance(var, str), type(var)
@@ -788,8 +840,8 @@ class TypeInferer(object):
         if yield_type is None:
             raise TypingError("Cannot type generator: cannot unify yielded types "
                               "%s" % (yield_types,))
-        return types.Generator(self.py_func, yield_type, arg_types, state_types,
-                               has_finalizer=True)
+        return types.Generator(self.func_id.func, yield_type, arg_types,
+                               state_types, has_finalizer=True)
 
     def get_function_types(self, typemap):
         """
@@ -942,29 +994,32 @@ class TypeInferer(object):
         """
         Resolve a call to a given function type.  A signature is returned.
         """
-        if isinstance(fnty, types.RecursiveCall):
-            # Self-recursive call
+        if isinstance(fnty, types.RecursiveCall) and not self._skip_recursion:
+            # Recursive call
             disp = fnty.dispatcher_type.dispatcher
             pysig, args = disp.fold_argument_types(pos_args, kw_args)
 
-            # Fetch the return type as given by the user
-            rettypes = set()
-            for retvar in self._get_return_vars():
-                typevar = self.typevars[retvar.name]
-                if not typevar.defined:
-                    raise TypeError("recursive calls need an explicit signature in jit()")
-                rettypes.add(typevar.getone())
-            return_type = self._unify_return_types(rettypes)
+            frame = self.context.callstack.match(disp.py_func, args)
 
-            # Match call arguments with current inference arguments
-            assert len(args) == len(self.arg_names)
-            formal_args = [self.typevars[self.arg_names[i]].getone()
-                           for i in range(len(args))]
-            for formal_ty, actual_ty in zip(formal_args, args):
-                if not self.context.can_convert(actual_ty, formal_ty):
-                    raise TypeError("bad self-recursive call with argument types %s" % (args,))
+            # If the signature is not being compiled
+            if frame is None:
+                sig = self.context.resolve_function_type(fnty.dispatcher_type,
+                                                         pos_args, kw_args)
+                fndesc = disp.overloads[args].fndesc
+                fnty.overloads[args] = qualifying_prefix(fndesc.modname,
+                                                         fndesc.unique_name)
+                return sig
 
-            sig = typing.signature(return_type, *formal_args)
+            fnid = frame.func_id
+            fnty.overloads[args] = qualifying_prefix(fnid.modname,
+                                                     fnid.unique_name)
+            # Resume propagation in parent frame
+            return_type = frame.typeinfer.return_types_from_partial()
+            # No known return type
+            if return_type is None:
+                raise TypingError("cannot type infer runaway recursion")
+
+            sig = typing.signature(return_type, *args)
             sig.pysig = pysig
             return sig
         else:
@@ -975,7 +1030,7 @@ class TypeInferer(object):
         try:
             typ = self.resolve_value_type(inst, gvar.value)
         except TypingError as e:
-            if (gvar.name == self.py_func.__name__
+            if (gvar.name == self.func_id.func_name
                 and gvar.name in _temporary_dispatcher_map):
                 # Self-recursion case where the dispatcher is not (yet?) known
                 # as a global variable
@@ -987,17 +1042,17 @@ class TypeInferer(object):
 
         if isinstance(typ, types.Dispatcher) and typ.dispatcher.is_compiling:
             # Recursive call
-            if typ.dispatcher.py_func is self.py_func:
+            callframe = self.context.callstack.findfirst(typ.dispatcher.py_func)
+            if callframe is not None:
                 typ = types.RecursiveCall(typ)
             else:
                 raise NotImplementedError(
-                    "call to %s: mutual recursion not supported"
+                    "call to %s: unsupported recursion"
                     % typ.dispatcher)
 
         if isinstance(typ, types.Array):
             # Global array in nopython mode is constant
-            # XXX why layout='C'?
-            typ = typ.copy(layout='C', readonly=True)
+            typ = typ.copy(readonly=True)
 
         self.sentry_modified_builtin(inst, gvar)
         self.lock_type(target.name, typ, loc=inst.loc)

@@ -2,7 +2,7 @@
 CUDA driver bridge implementation
 
 NOTE:
-The new driver implementation uses a "trashing service" that help prevents a
+The new driver implementation uses a *_PendingDeallocs* that help prevents a
 crashing the system (particularly OSX) when the CUDA context is corrupted at
 resource deallocation.  The old approach ties resource management directly
 into the object destructor; thus, at corruption of the CUDA context,
@@ -19,13 +19,14 @@ import weakref
 import functools
 import copy
 import warnings
+import logging
 from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
                     c_void_p, c_float)
 import contextlib
 import numpy as np
-from collections import namedtuple
+from collections import namedtuple, deque
 
-from numba import utils, servicelib, mviewbuf
+from numba import utils, mviewbuf
 from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
 from .drvapi import cu_occupancy_b2d_size
@@ -35,6 +36,30 @@ from numba.utils import longint as long
 
 VERBOSE_JIT_LOG = int(os.environ.get('NUMBAPRO_VERBOSE_CU_JIT_LOG', 1))
 MIN_REQUIRED_CC = (2, 0)
+
+
+def _make_logger():
+    logger = logging.getLogger(__name__)
+    # is logging configured?
+    if not utils.logger_hasHandlers(logger):
+        # read user config
+        lvl = str(config.CUDA_LOG_LEVEL).upper()
+        lvl = getattr(logging, lvl, None)
+        if not isinstance(lvl, int):
+            # default to critical level
+            lvl = logging.CRITICAL
+        logger.setLevel(lvl)
+        # did user specify a level?
+        if config.CUDA_LOG_LEVEL:
+            # create a simple handler that prints to stderr
+            handler = logging.StreamHandler(sys.stderr)
+            fmt = '== CUDA [%(relativeCreated)d] %(levelname)5s -- %(message)s'
+            handler.setFormatter(logging.Formatter(fmt=fmt))
+            logger.addHandler(handler)
+        else:
+            # otherwise, put a null handler
+            logger.addHandler(logging.NullHandler())
+    return logger
 
 
 class DeadMemoryError(RuntimeError):
@@ -185,8 +210,13 @@ class Driver(object):
             self.initialization_error = e
 
     def initialize(self):
+        # lazily initialize logger
+        global _logger
+        _logger = _make_logger()
+
         self.is_initialized = True
         try:
+            _logger.info('init')
             self.cuInit(0)
         except CudaAPIError as e:
             self.initialization_error = e
@@ -224,6 +254,7 @@ class Driver(object):
 
         @functools.wraps(libfn)
         def safe_cuda_api_call(*args):
+            _logger.debug('call driver api: %s', libfn.__name__)
             retcode = libfn(*args)
             self._check_error(fname, retcode)
 
@@ -255,6 +286,13 @@ class Driver(object):
         if retcode != enums.CUDA_SUCCESS:
             errname = ERROR_MAP.get(retcode, "UNKNOWN_CUDA_ERROR")
             msg = "Call to %s results in %s" % (fname, errname)
+            _logger.error(msg)
+            if retcode == enums.CUDA_ERROR_NOT_INITIALIZED:
+                # Detect forking
+                if _getpid() != self.pid:
+                    msg = 'pid %s forked from pid %s after CUDA driver init'
+                    _logger.critical(msg, _getpid(), self.pid)
+                    raise CudaDriverError("CUDA initialized before forking")
             raise CudaAPIError(retcode, msg)
 
     def get_device(self, devnum=0):
@@ -284,10 +322,6 @@ class Driver(object):
         """Get current active context in CUDA driver runtime.
         Note: Lowlevel calls that returns the handle.
         """
-        # Detect forking
-        if self.is_initialized and _getpid() != self.pid:
-            raise CudaDriverError("CUDA initialized before forking")
-
         handle = drvapi.cu_context(0)
         driver.cuCtxGetCurrent(byref(handle))
         if not handle.value:
@@ -295,45 +329,6 @@ class Driver(object):
         return handle
 
 driver = Driver()
-
-
-class TrashService(servicelib.Service):
-    """
-    We need this to enqueue things to be removed.  There are times when you
-    want to disable deallocation because that would break asynchronous work
-    queues.
-    """
-    CLEAN_LIMIT = 20
-
-    def add_trash(self, item):
-        self.trash.append(item)
-
-    def process(self, _arg):
-        self.trash = []
-        yield
-        while True:
-            count = 0
-            # Clean the trash
-            assert self.CLEAN_LIMIT > count
-            while self.trash and count < self.CLEAN_LIMIT:
-                cb = self.trash.pop()
-                # Invoke callback
-                cb()
-                count += 1
-            yield
-
-    def clear(self):
-        while self.trash:
-            cb = self.trash.pop()
-            cb()
-
-    @contextlib.contextmanager
-    def defer_cleanup(self):
-        orig = self.enabled
-        self.enabled = False
-        yield
-        self.enabled = orig
-        self.service()
 
 
 def _build_reverse_device_attrs():
@@ -359,7 +354,6 @@ class Device(object):
         driver.cuDeviceGet(byref(got_devnum), devnum)
         assert devnum == got_devnum.value, "Driver returned another device"
         self.id = got_devnum.value
-        self.trashing = trashing = TrashService("cuda.device%d.trash" % self.id)
         self.attributes = {}
         # Read compute capability
         cc_major = c_int()
@@ -372,11 +366,7 @@ class Device(object):
         buf = (c_char * bufsz)()
         driver.cuDeviceGetName(buf, bufsz, self.id)
         self.name = buf.value
-
-        def finalizer():
-            trashing.clear()
-
-        utils.finalize(self, finalizer)
+        self.primary_context = None
 
     @property
     def COMPUTE_CAPABILITY(self):
@@ -415,42 +405,128 @@ class Device(object):
     def __ne__(self, other):
         return not (self == other)
 
-    def create_context(self):
-        """Create a CUDA context.
+    def get_primary_context(self):
         """
+        Returns the primary context for the device.
+        Note: it is not pushed to the CPU thread.
+        """
+        if self.primary_context is not None:
+            return self.primary_context
+
         met_requirement_for_device(self)
 
-        flags = 0
-        if self.CAN_MAP_HOST_MEMORY:
-            flags |= enums.CU_CTX_MAP_HOST
+        # create primary context
+        hctx = drvapi.cu_context()
+        driver.cuDevicePrimaryCtxRetain(byref(hctx), self.id)
 
-        # Clean up any trash
-        self.trashing.service()
-
-        # Create new context
-        handle = drvapi.cu_context()
-        driver.cuCtxCreate(byref(handle), flags, self.id)
-
-        ctx = Context(weakref.proxy(self), handle,
-                      _context_finalizer(self.trashing, handle))
-
+        ctx = Context(weakref.proxy(self), hctx)
+        self.primary_context = ctx
         return ctx
 
+    def release_primary_context(self):
+        """
+        Release reference to primary context
+        """
+        driver.cuDevicePrimaryCtxRelease(self.id)
+        self.primary_context = None
+
     def reset(self):
-        self.trashing.clear()
-
-
-def _context_finalizer(trashing, ctxhandle):
-    def core():
-        trashing.add_trash(lambda: driver.cuCtxDestroy(ctxhandle))
-
-    return core
+        try:
+            if self.primary_context is not None:
+                self.primary_context.reset()
+            self.release_primary_context()
+        finally:
+            # reset at the driver level
+            driver.cuDevicePrimaryCtxReset(self.id)
 
 
 def met_requirement_for_device(device):
     if device.compute_capability < MIN_REQUIRED_CC:
         raise CudaSupportError("%s has compute capability < %s" %
                                (device, MIN_REQUIRED_CC))
+
+
+class _SizeNotSet(object):
+    """
+    Dummy object for _PendingDeallocs when *size* is not set.
+    """
+    def __str__(self):
+        return '?'
+
+    def __int__(self):
+        return 0
+
+_SizeNotSet = _SizeNotSet()
+
+
+class _PendingDeallocs(object):
+    """
+    Pending deallocations of a context (or device since we are using the primary
+    context).
+    """
+    def __init__(self, capacity):
+        self._cons = deque()
+        self._disable_count = 0
+        self._size = 0
+        self._memory_capacity = capacity
+
+    @property
+    def _max_pending_bytes(self):
+        return int(self._memory_capacity * config.CUDA_DEALLOCS_RATIO)
+
+    def add_item(self, dtor, handle, size=_SizeNotSet):
+        """
+        Add a pending deallocation.
+
+        The *dtor* arg is the destructor function that takes an argument,
+        *handle*.  It is used as ``dtor(handle)``.  The *size* arg is the
+        byte size of the resource added.  It is an optional argument.  Some
+        resources (e.g. CUModule) has an unknown memory footprint on the device.
+        """
+        _logger.info('add pending dealloc: %s %s bytes', dtor.__name__, size)
+        self._cons.append((dtor, handle, size))
+        self._size += int(size)
+        if (len(self._cons) > config.CUDA_DEALLOCS_COUNT or
+                self._size > self._max_pending_bytes):
+            self.clear()
+
+    def clear(self):
+        """
+        Flush any pending deallocations unless it is disabled.
+        Do nothing if disabled.
+        """
+        if not self.is_disabled:
+            while self._cons:
+                [dtor, handle, size] = self._cons.popleft()
+                _logger.info('dealloc: %s %s bytes', dtor.__name__, size)
+                dtor(handle)
+            self._size = 0
+
+    @contextlib.contextmanager
+    def disable(self):
+        """
+        Context manager to temporarily disable flushing pending deallocation.
+        This can be nested.
+        """
+        self._disable_count += 1
+        try:
+            yield
+        finally:
+            self._disable_count -= 1
+            assert self._disable_count >= 0
+
+    @property
+    def is_disabled(self):
+        return self._disable_count > 0
+
+    def __len__(self):
+        """
+        Returns number of pending deallocations.
+        """
+        return len(self._cons)
+
+
+_MemoryInfo = namedtuple("_MemoryInfo", "free,total")
 
 
 class Context(object):
@@ -460,44 +536,27 @@ class Context(object):
     Contexts should not be constructed directly by user code.
     """
 
-    def __init__(self, device, handle, finalizer=None):
+    def __init__(self, device, handle):
         self.device = device
         self.handle = handle
-        self.external_finalizer = finalizer
-        self.trashing = TrashService("cuda.device%d.context%x.trash" %
-                                     (self.device.id, self.handle.value))
         self.allocations = utils.UniqueDict()
+        # *deallocations* is lazily initialized on context push
+        self.deallocations = None
         self.modules = utils.UniqueDict()
-        utils.finalize(self, self._make_finalizer())
         # For storing context specific data
         self.extras = {}
-
-    def _make_finalizer(self):
-        """
-        Make a finalizer function that doesn't keep a reference to this object.
-        """
-        allocations = self.allocations
-        modules = self.modules
-        trashing = self.trashing
-        external_finalizer = self.external_finalizer
-
-        def finalize():
-            allocations.clear()
-            modules.clear()
-            trashing.clear()
-            if external_finalizer is not None:
-                external_finalizer()
-        return finalize
 
     def reset(self):
         """
         Clean up all owned resources in this context.
         """
+        _logger.info('reset context of device %s', self.device.id)
         # Free owned resources
+        _logger.info('reset context of device %s', self.device.id)
         self.allocations.clear()
         self.modules.clear()
         # Clear trash
-        self.trashing.clear()
+        self.deallocations.clear()
 
     def get_memory_info(self):
         """Returns (free, total) memory in bytes in the context.
@@ -505,7 +564,7 @@ class Context(object):
         free = c_size_t()
         total = c_size_t()
         driver.cuMemGetInfo(byref(free), byref(total))
-        return free.value, total.value
+        return _MemoryInfo(free=free.value, total=total.value)
 
     def get_active_blocks_per_multiprocessor(self, func, blocksize, memsize, flags=None):
         """Return occupancy of a function.
@@ -547,6 +606,9 @@ class Context(object):
         Pushes this context on the current CPU Thread.
         """
         driver.cuCtxPushCurrent(self.handle)
+        # setup *deallocations* as the context becomes active for the first time
+        if self.deallocations is None:
+            self.deallocations = _PendingDeallocs(self.get_memory_info().total)
 
     def pop(self):
         """
@@ -557,19 +619,39 @@ class Context(object):
         driver.cuCtxPopCurrent(byref(popped))
         assert popped.value == self.handle.value
 
+    def _attempt_allocation(self, allocator):
+        """
+        Attempt allocation by calling *allocator*.  If a out-of-memory error
+        is raised, the pending deallocations are flushed and the allocation
+        is retried.  If it fails in the second attempt, the error is reraised.
+        """
+        try:
+            allocator()
+        except CudaAPIError as e:
+            # is out-of-memory?
+            if e.code == enums.CUDA_ERROR_OUT_OF_MEMORY:
+                # clear pending deallocations
+                self.deallocations.clear()
+                # try again
+                allocator()
+            else:
+                raise
+
     def memalloc(self, bytesize):
-        self.trashing.service()
         ptr = drvapi.cu_device_ptr()
-        driver.cuMemAlloc(byref(ptr), bytesize)
-        _memory_finalizer = _make_mem_finalizer(driver.cuMemFree)
+
+        def allocator():
+            driver.cuMemAlloc(byref(ptr), bytesize)
+
+        self._attempt_allocation(allocator)
+
+        _memory_finalizer = _make_mem_finalizer(driver.cuMemFree, bytesize)
         mem = MemoryPointer(weakref.proxy(self), ptr, bytesize,
                             _memory_finalizer(self, ptr))
         self.allocations[ptr.value] = mem
         return mem.own()
 
     def memhostalloc(self, bytesize, mapped=False, portable=False, wc=False):
-        self.trashing.service()
-
         pointer = c_void_p()
         flags = 0
         if mapped:
@@ -579,11 +661,19 @@ class Context(object):
         if wc:
             flags |= enums.CU_MEMHOSTALLOC_WRITECOMBINED
 
-        driver.cuMemHostAlloc(byref(pointer), bytesize, flags)
+        def allocator():
+            driver.cuMemHostAlloc(byref(pointer), bytesize, flags)
+
+        if mapped:
+            self._attempt_allocation(allocator)
+        else:
+            allocator()
+
         owner = None
 
         if mapped:
-            _hostalloc_finalizer = _make_mem_finalizer(driver.cuMemFreeHost)
+            _hostalloc_finalizer = _make_mem_finalizer(driver.cuMemFreeHost,
+                                                       bytesize)
             finalizer = _hostalloc_finalizer(self, pointer)
             mem = MappedMemory(weakref.proxy(self), owner, pointer,
                                bytesize, finalizer=finalizer)
@@ -591,14 +681,12 @@ class Context(object):
             self.allocations[mem.handle.value] = mem
             return mem.own()
         else:
-            finalizer = _pinnedalloc_finalizer(self.trashing, pointer)
+            finalizer = _pinnedalloc_finalizer(self.deallocations, pointer)
             mem = PinnedMemory(weakref.proxy(self), owner, pointer, bytesize,
                                finalizer=finalizer)
             return mem
 
     def mempin(self, owner, pointer, size, mapped=False):
-        self.trashing.service()
-
         if isinstance(pointer, (int, long)):
             pointer = c_void_p(pointer)
 
@@ -613,10 +701,17 @@ class Context(object):
         if mapped:
             flags |= enums.CU_MEMHOSTREGISTER_DEVICEMAP
 
-        driver.cuMemHostRegister(pointer, size, flags)
+        def allocator():
+            driver.cuMemHostRegister(pointer, size, flags)
 
         if mapped:
-            _mapped_finalizer = _make_mem_finalizer(driver.cuMemHostUnregister)
+            self._attempt_allocation(allocator)
+        else:
+            allocator()
+
+        if mapped:
+            _mapped_finalizer = _make_mem_finalizer(driver.cuMemHostUnregister,
+                                                    size)
             finalizer = _mapped_finalizer(self, pointer)
             mem = MappedMemory(weakref.proxy(self), owner, pointer, size,
                                finalizer=finalizer)
@@ -624,7 +719,7 @@ class Context(object):
             return mem.own()
         else:
             mem = PinnedMemory(weakref.proxy(self), owner, pointer, size,
-                               finalizer=_pinned_finalizer(self.trashing,
+                               finalizer=_pinned_finalizer(self.deallocations,
                                                            pointer))
             return mem
 
@@ -638,32 +733,27 @@ class Context(object):
         return self.create_module_image(image)
 
     def create_module_image(self, image):
-        self.trashing.service()
         module = load_module_image(self, image)
         self.modules[module.handle.value] = module
         return weakref.proxy(module)
 
     def unload_module(self, module):
         del self.modules[module.handle.value]
-        self.trashing.service()
 
     def create_stream(self):
-        self.trashing.service()
         handle = drvapi.cu_stream()
         driver.cuStreamCreate(byref(handle), 0)
         return Stream(weakref.proxy(self), handle,
-                      _stream_finalizer(self.trashing, handle))
+                      _stream_finalizer(self.deallocations, handle))
 
     def create_event(self, timing=True):
-        self.trashing.service()
-
         handle = drvapi.cu_event()
         flags = 0
         if not timing:
             flags |= enums.CU_EVENT_DISABLE_TIMING
         driver.cuEventCreate(byref(handle), flags)
         return Event(weakref.proxy(self), handle,
-                     finalizer=_event_finalizer(self.trashing, handle))
+                     finalizer=_event_finalizer(self.deallocations, handle))
 
     def synchronize(self):
         driver.cuCtxSynchronize()
@@ -715,71 +805,65 @@ def load_module_image(context, image):
                   _module_finalizer(context, handle))
 
 
-def _make_mem_finalizer(dtor):
+def _make_mem_finalizer(dtor, bytesize):
     def mem_finalize(context, handle):
-        trashing = context.trashing
         allocations = context.allocations
+        deallocations = context.deallocations
 
         def core():
-            def cleanup():
-                if allocations:
-                    del allocations[handle.value]
-                dtor(handle)
+            if allocations:
+                del allocations[handle.value]
 
-            trashing.add_trash(cleanup)
+            deallocations.add_item(dtor, handle, size=bytesize)
 
         return core
 
     return mem_finalize
 
 
-def _pinnedalloc_finalizer(trashing, handle):
+def _pinnedalloc_finalizer(deallocs, handle):
     def core():
-        trashing.add_trash(lambda: driver.cuMemFreeHost(handle))
+        deallocs.add_item(driver.cuMemFreeHost, handle)
 
     return core
 
 
-def _pinned_finalizer(trashing, handle):
+def _pinned_finalizer(deallocs, handle):
     def core():
-        trashing.add_trash(lambda: driver.cuMemHostUnregister(handle))
+        deallocs.add_item(driver.cuMemHostUnregister, handle)
 
     return core
 
 
-def _event_finalizer(trashing, handle):
+def _event_finalizer(deallocs, handle):
     def core():
-        trashing.add_trash(lambda: driver.cuEventDestroy(handle))
+        deallocs.add_item(driver.cuEventDestroy, handle)
 
     return core
 
 
-def _stream_finalizer(trashing, handle):
+def _stream_finalizer(deallocs, handle):
     def core():
-        trashing.add_trash(lambda: driver.cuStreamDestroy(handle))
+        deallocs.add_item(driver.cuStreamDestroy, handle)
 
     return core
 
 
 def _module_finalizer(context, handle):
-    trashing = context.trashing
+    dealloc = context.deallocations
     modules = context.modules
 
     def core():
-        def cleanup():
-            # All modules are owned by their parent Context.
-            # A Module is either released by a call to
-            # Context.unload_module, which clear the handle (pointer) mapping
-            # (checked by the following assertion), or, by Context.reset().
-            # Both releases the sole reference to the Module and trigger the
-            # finalizer for the Module instance.  The actual call to
-            # cuModuleUnload is deferred to the trashing service to avoid
-            # further corruption of the CUDA context if a fatal error has
-            # occurred in the CUDA driver.
-            assert handle.value not in modules
+        shutting_down = utils.shutting_down  # early bind
+
+        def module_unload(handle):
+            # If we are not shutting down, we must be called due to
+            # Context.reset() of Context.unload_module().  Both must have
+            # cleared the module reference from the context.
+            assert shutting_down() or handle.value not in modules
             driver.cuModuleUnload(handle)
 
-        trashing.add_trash(cleanup)
+        dealloc.add_item(module_unload, handle)
 
     return core
 

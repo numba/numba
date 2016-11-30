@@ -213,14 +213,21 @@ class BinOpFloorDiv(ConcreteTemplate):
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
 
+@infer_global(divmod)
+class DivMod(ConcreteTemplate):
+    _tys = machine_ints + sorted(types.real_domain)
+    cases = [signature(types.UniTuple(ty, 2), ty, ty) for ty in _tys]
+
+
 @infer
 class BinOpPower(ConcreteTemplate):
     key = "**"
     cases = list(integer_binop_cases)
+    # Ensure that float32 ** int doesn't go through DP computations
+    cases += [signature(types.float32, types.float32, op)
+              for op in (types.int32, types.int64, types.uint64)]
     cases += [signature(types.float64, types.float64, op)
-              for op in sorted(types.signed_domain)]
-    cases += [signature(types.float64, types.float64, op)
-              for op in sorted(types.unsigned_domain)]
+              for op in (types.int32, types.int64, types.uint64)]
     cases += [signature(op, op, op)
               for op in sorted(types.real_domain)]
     cases += [signature(op, op, op)
@@ -234,8 +241,15 @@ class PowerBuiltin(BinOpPower):
 
 
 class BitwiseShiftOperation(ConcreteTemplate):
-    cases = list(integer_binop_cases)
-
+    # For bitshifts, only the first operand's signedness matters
+    # to choose the operation's signedness (the second operand
+    # should always be positive but will generally be considered
+    # signed anyway, since it's often a constant integer).
+    # (also, see issue #1995 for right-shifts)
+    cases = [signature(max(op, types.intp), op, types.intp)
+             for op in sorted(types.signed_domain)]
+    cases += [signature(max(op, types.uintp), op, types.intp)
+              for op in sorted(types.unsigned_domain)]
 
 @infer
 class BitwiseLeftShift(BitwiseShiftOperation):
@@ -643,40 +657,47 @@ register_number_classes(infer_global)
 #------------------------------------------------------------------------------
 
 
-@infer_global(max)
-class Max(AbstractTemplate):
+class MinMaxBase(AbstractTemplate):
+
+    def _unify_minmax(self, tys):
+        for ty in tys:
+            if not isinstance(ty, types.Number):
+                return
+        return self.context.unify_types(*tys)
 
     def generic(self, args, kws):
+        """
+        Resolve a min() or max() call.
+        """
         assert not kws
 
-        # max(a, b, ...)
-        if len(args) < 2:
+        if not args:
             return
-        for a in args:
-            if a not in types.number_domain:
+        if len(args) == 1:
+            # max(arg) only supported if arg is an iterable
+            if isinstance(args[0], types.BaseTuple):
+                tys = list(args[0])
+                if not tys:
+                    raise TypeError("%s() argument is an empty tuple"
+                                    % (self.key.__name__,))
+            else:
                 return
-
-        retty = self.context.unify_types(*args)
+        else:
+            # max(*args)
+            tys = args
+        retty = self._unify_minmax(tys)
         if retty is not None:
             return signature(retty, *args)
+
+
+@infer_global(max)
+class Max(MinMaxBase):
+    pass
 
 
 @infer_global(min)
-class Min(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-
-        # min(a, b, ...)
-        if len(args) < 2:
-            return
-        for a in args:
-            if a not in types.number_domain:
-                return
-
-        retty = self.context.unify_types(*args)
-        if retty is not None:
-            return signature(retty, *args)
+class Min(MinMaxBase):
+    pass
 
 
 @infer_global(round)

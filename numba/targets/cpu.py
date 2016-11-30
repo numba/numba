@@ -31,6 +31,8 @@ class CPUContext(BaseContext):
     """
     Changes BaseContext calling convention
     """
+    allow_dynamic_globals = True
+
     # Overrides
     def create_module(self, name):
         return self._internal_codegen._create_empty_module(name)
@@ -56,8 +58,7 @@ class CPUContext(BaseContext):
         self.install_registry(operatorimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(randomimpl.registry)
-        # Initialize PRNG state
-        randomimpl.random_init()
+        self.install_registry(randomimpl.registry)
 
     @property
     def target_data(self):
@@ -187,6 +188,7 @@ class CPUTargetOptions(TargetOptions):
         "boundcheck": bool,
         "_nrt": bool,
         "no_rewrites": bool,
+        "no_cpython_wrapper": bool,
     }
 
 

@@ -12,3 +12,5 @@ Reference Manual
    pysupported.rst
    numpysupported.rst
    pysemantics.rst
+   fpsemantics.rst
+

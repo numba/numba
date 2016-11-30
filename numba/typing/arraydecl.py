@@ -9,6 +9,7 @@ from numba.typing.templates import (AttributeTemplate, AbstractTemplate,
 # import time side effect: array operations requires typing support of sequence
 # defined in collections: e.g. array.shape[i]
 from numba.typing import collections
+from numba.errors import TypingError
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
 
@@ -183,13 +184,11 @@ class SetItemBuffer(AbstractTemplate):
         if isinstance(res, types.Array):
             # Indexing produces an array
             if isinstance(val, types.Array):
-                if (val.ndim == res.ndim and
-                    self.context.can_convert(val.dtype, res.dtype)):
-                    # Allow assignement of same-dimensionality compatible-dtype array
-                    res = val
-                else:
-                    # NOTE: array broadcasting is unsupported
+                if not self.context.can_convert(val.dtype, res.dtype):
+                    # DType conversion not possible
                     return
+                else:
+                    res = val
             elif isinstance(val, types.Sequence):
                 if (res.ndim == 1 and
                     self.context.can_convert(val.dtype, res.dtype)):
@@ -220,7 +219,8 @@ def normalize_shape(shape):
             return types.UniTuple(dimtype, len(shape))
 
     elif isinstance(shape, types.Tuple) and shape.count == 0:
-        return shape
+        # Force (0 x intp) for consistency with other shapes
+        return types.UniTuple(types.intp, 0)
 
 
 @infer_getattr
@@ -261,6 +261,24 @@ class ArrayAttribute(AttributeTemplate):
             layout = {"C": "F", "F": "C"}.get(ary.layout, "A")
             retty = ary.copy(layout=layout)
         return retty
+
+    def resolve_real(self, ary):
+        return self._resolve_real_imag(ary, attr='real')
+
+    def resolve_imag(self, ary):
+        return self._resolve_real_imag(ary, attr='imag')
+
+    def _resolve_real_imag(self, ary, attr):
+        if ary.dtype in types.complex_domain:
+            return ary.copy(dtype=ary.dtype.underlying_float, layout='A')
+        elif ary.dtype in types.number_domain:
+            res = ary.copy(dtype=ary.dtype)
+            if attr == 'imag':
+                res = res.copy(readonly=True)
+            return res
+        else:
+            msg = "cannot access .{} of array of {}"
+            raise TypingError(msg.format(attr, ary.dtype))
 
     @bound_function("array.transpose")
     def resolve_transpose(self, ary, args, kws):
@@ -351,6 +369,13 @@ class ArrayAttribute(AttributeTemplate):
         assert not kws
         if ary.ndim == 1:
             return signature(types.none)
+
+    @bound_function("array.argsort")
+    def resolve_argsort(self, ary, args, kws):
+        assert not args
+        assert not kws
+        if ary.ndim == 1:
+            return signature(types.Array(types.intp, 1, 'C'))
 
     @bound_function("array.view")
     def resolve_view(self, ary, args, kws):

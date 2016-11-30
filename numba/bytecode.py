@@ -4,14 +4,16 @@ From NumbaPro
 """
 from __future__ import print_function, division, absolute_import
 
+from collections import namedtuple, OrderedDict
 import dis
 import inspect
 import sys
+import itertools
 from types import CodeType, ModuleType
-from collections import namedtuple
 
 from numba import errors, utils
 from numba.config import PYVERSION
+
 
 opcode_info = namedtuple('opcode_info', ['argsize'])
 
@@ -275,44 +277,46 @@ class ByteCodeIter(object):
         return buf
 
 
-class ByteCodeOperation(object):
-    def __init__(self, inst, args):
-        self.inst = inst
-        self.args = args
+class ByteCode(object):
+    """
+    The decoded bytecode of a function, and related information.
+    """
+    __slots__ = ('func_id', 'co_names', 'co_varnames', 'co_consts',
+                 'co_freevars', 'table', 'labels')
 
+    def __init__(self, func_id):
+        code = func_id.code
 
-class ByteCodeBase(object):
-    __slots__ = (
-        'func', 'func_name', 'func_qualname', 'filename',
-        'pysig', 'co_names', 'co_varnames', 'co_consts', 'co_freevars',
-        'table', 'labels', 'arg_count', 'arg_names', 'used_globals',
-        )
+        labels = set(dis.findlabels(code.co_code))
+        labels.add(0)
 
-    def __init__(self, func, func_qualname, pysig, filename, co_names,
-                 co_varnames, co_consts, co_freevars, table, labels,
-                 is_generator, arg_count=None, arg_names=None):
-        # When given, these values may not match the pysig's
-        # (when lifting loops)
-        if arg_count is None:
-            arg_count = len(pysig.parameters)
-        if arg_names is None:
-            arg_names = list(pysig.parameters)
-        self.func = func
-        self.module = inspect.getmodule(func)
-        self.is_generator = is_generator
-        self.func_qualname = func_qualname
-        self.func_name = func_qualname.split('.')[-1]
-        self.pysig = pysig
-        self.arg_count = arg_count
-        self.arg_names = arg_names
-        self.filename = filename
-        self.co_names = co_names
-        self.co_varnames = co_varnames
-        self.co_consts = co_consts
-        self.co_freevars = co_freevars
+        # A map of {offset: ByteCodeInst}
+        table = OrderedDict(ByteCodeIter(code))
+        self._compute_lineno(table, code)
+
+        self.func_id = func_id
+        self.co_names = code.co_names
+        self.co_varnames = code.co_varnames
+        self.co_consts = code.co_consts
+        self.co_freevars = code.co_freevars
         self.table = table
-        self.labels = labels
-        self.firstlineno = min(inst.lineno for inst in self.table.values())
+        self.labels = sorted(labels)
+
+    @classmethod
+    def _compute_lineno(cls, table, code):
+        """
+        Compute the line numbers for all bytecode instructions.
+        """
+        for offset, lineno in dis.findlinestarts(code):
+            if offset in table:
+                table[offset].lineno = lineno
+        known = -1
+        for inst in table.values():
+            if inst.lineno >= 0:
+                known = inst.lineno
+            else:
+                inst.lineno = known
+        return table
 
     def __iter__(self):
         return utils.itervalues(self.table)
@@ -357,7 +361,7 @@ class ByteCodeBase(object):
         # Add globals used by any nested code object
         for co in co_consts:
             if isinstance(co, CodeType):
-                subtable = utils.SortedMap(ByteCodeIter(co))
+                subtable = OrderedDict(ByteCodeIter(co))
                 d.update(cls._compute_used_globals(func, subtable,
                                                    co.co_consts, co.co_names))
         return d
@@ -367,52 +371,57 @@ class ByteCodeBase(object):
         Get a {name: value} map of the globals used by this code
         object and any nested code objects.
         """
-        return self._compute_used_globals(self.func, self.table,
+        return self._compute_used_globals(self.func_id.func, self.table,
                                           self.co_consts, self.co_names)
 
 
-class ByteCode(ByteCodeBase):
-    def __init__(self, func):
-        func = get_function_object(func)
+class FunctionIdentity(object):
+    """
+    A function's identity and metadata.
+
+    Note this typically represents a function whose bytecode is
+    being compiled, not necessarily the top-level user function
+    (the two might be distinct, e.g. in the `@generated_jit` case).
+    """
+    _unique_ids = itertools.count(1)
+
+    @classmethod
+    def from_function(cls, pyfunc):
+        """
+        Create the FunctionIdentity of the given function.
+        """
+        func = get_function_object(pyfunc)
         code = get_code_object(func)
         pysig = utils.pysignature(func)
         if not code:
             raise errors.ByteCodeSupportError(
                 "%s does not provide its bytecode" % func)
 
-        # A map of {offset: ByteCodeInst}
-        table = utils.SortedMap(ByteCodeIter(code))
-        labels = set(dis.findlabels(code.co_code))
-        labels.add(0)
-
         try:
             func_qualname = func.__qualname__
         except AttributeError:
             func_qualname = func.__name__
 
-        self._mark_lineno(table, code)
-        super(ByteCode, self).__init__(func=func,
-                                       func_qualname=func_qualname,
-                                       is_generator=inspect.isgeneratorfunction(func),
-                                       pysig=pysig,
-                                       filename=code.co_filename,
-                                       co_names=code.co_names,
-                                       co_varnames=code.co_varnames,
-                                       co_consts=code.co_consts,
-                                       co_freevars=code.co_freevars,
-                                       table=table,
-                                       labels=list(sorted(labels)))
+        self = cls()
+        self.func = pyfunc
+        self.func_qualname = func_qualname
+        self.func_name = func_qualname.split('.')[-1]
+        self.code = code
+        self.module = inspect.getmodule(func)
+        self.modname = (utils._dynamic_modname
+                        if self.module is None
+                        else self.module.__name__)
+        self.is_generator = inspect.isgeneratorfunction(func)
+        self.pysig = pysig
+        self.filename = code.co_filename
+        self.firstlineno = code.co_firstlineno
+        self.arg_count = len(pysig.parameters)
+        self.arg_names = list(pysig.parameters)
 
-    @classmethod
-    def _mark_lineno(cls, table, code):
-        '''Fill the lineno info for all bytecode inst
-        '''
-        for offset, lineno in dis.findlinestarts(code):
-            if offset in table:
-                table[offset].lineno = lineno
-        known = -1
-        for inst in table.values():
-            if inst.lineno >= 0:
-                known = inst.lineno
-            else:
-                inst.lineno = known
+        # Even the same function definition can be compiled into
+        # several different function objects with distinct closure
+        # variables, so we make sure to disambiguate using an unique id.
+        uid = next(cls._unique_ids)
+        self.unique_name = '{}${}'.format(self.func_qualname, uid)
+
+        return self

@@ -97,54 +97,49 @@ def setitem_cpointer(context, builder, sig, args):
 
 #-------------------------------------------------------------------------------
 
-@lower_builtin(max, types.VarArg(types.Any))
-def max_impl(context, builder, sig, args):
-    argtys = sig.args
-    for a in argtys:
-        if a not in types.number_domain:
-            raise AssertionError("only implemented for numeric types")
+def do_minmax(context, builder, argtys, args, cmpop):
+    assert len(argtys) == len(args), (argtys, args)
+    assert len(args) > 0
 
-    def domax(a, b):
-        at, av = a
-        bt, bv = b
-        ty = context.typing_context.unify_types(at, bt)
+    def binary_minmax(accumulator, value):
+        # This is careful to reproduce Python's algorithm, e.g.
+        # max(1.5, nan, 2.5) should return 2.5 (not nan or 1.5)
+        accty, acc = accumulator
+        vty, v = value
+        ty = context.typing_context.unify_types(accty, vty)
         assert ty is not None
-        cav = context.cast(builder, av, at, ty)
-        cbv = context.cast(builder, bv, bt, ty)
+        acc = context.cast(builder, acc, accty, ty)
+        v = context.cast(builder, v, vty, ty)
         cmpsig = typing.signature(types.boolean, ty, ty)
-        ge = context.get_function(">=", cmpsig)
-        pred = ge(builder, (cav, cbv))
-        res = builder.select(pred, cav, cbv)
+        ge = context.get_function(cmpop, cmpsig)
+        pred = ge(builder, (v, acc))
+        res = builder.select(pred, v, acc)
         return ty, res
 
     typvals = zip(argtys, args)
-    resty, resval = reduce(domax, typvals)
-    return impl_ret_borrowed(context, builder, sig.return_type, resval)
+    resty, resval = reduce(binary_minmax, typvals)
+    return resval
 
+
+@lower_builtin(max, types.BaseTuple)
+def max_iterable(context, builder, sig, args):
+    argtys = list(sig.args[0])
+    args = cgutils.unpack_tuple(builder, args[0])
+    return do_minmax(context, builder, argtys, args, '>')
+
+@lower_builtin(max, types.VarArg(types.Any))
+def max_vararg(context, builder, sig, args):
+    return do_minmax(context, builder, sig.args, args, '>')
+
+@lower_builtin(min, types.BaseTuple)
+def min_iterable(context, builder, sig, args):
+    argtys = list(sig.args[0])
+    args = cgutils.unpack_tuple(builder, args[0])
+    return do_minmax(context, builder, argtys, args, '<')
 
 @lower_builtin(min, types.VarArg(types.Any))
-def min_impl(context, builder, sig, args):
-    argtys = sig.args
-    for a in argtys:
-        if a not in types.number_domain:
-            raise AssertionError("only implemented for numeric types")
-
-    def domax(a, b):
-        at, av = a
-        bt, bv = b
-        ty = context.typing_context.unify_types(at, bt)
-        assert ty is not None
-        cav = context.cast(builder, av, at, ty)
-        cbv = context.cast(builder, bv, bt, ty)
-        cmpsig = typing.signature(types.boolean, ty, ty)
-        le = context.get_function("<=", cmpsig)
-        pred = le(builder, (cav, cbv))
-        res = builder.select(pred, cav, cbv)
-        return ty, res
-
-    typvals = zip(argtys, args)
-    resty, resval = reduce(domax, typvals)
-    return impl_ret_borrowed(context, builder, sig.return_type, resval)
+def min_vararg(context, builder, sig, args):
+    return do_minmax(context, builder, sig.args, args, '<')
 
 
 def _round_intrinsic(tp):
@@ -269,9 +264,9 @@ def constant_dummy(context, builder, ty, pyval):
 @lower_constant(types.ExternalFunctionPointer)
 def constant_function_pointer(context, builder, ty, pyval):
     ptrty = context.get_function_pointer_type(ty)
-    ptrval = context.get_constant_generic(builder, types.intp,
-                                          ty.get_pointer(pyval))
-    return builder.inttoptr(ptrval, ptrty)
+    ptrval = context.add_dynamic_addr(builder, ty.get_pointer(pyval),
+                                      info=str(pyval))
+    return builder.bitcast(ptrval, ptrty)
 
 
 # -----------------------------------------------------------------------------

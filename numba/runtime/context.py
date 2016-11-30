@@ -158,7 +158,7 @@ class NRTContext(object):
         """
         self._require_nrt()
 
-        from numba.runtime.atomicops import meminfo_data_ty
+        from numba.runtime.nrtdynmod import meminfo_data_ty
 
         mod = builder.module
         fn = mod.get_or_insert_function(meminfo_data_ty,
@@ -169,7 +169,7 @@ class NRTContext(object):
                                 funcname, getters=()):
         self._require_nrt()
 
-        from numba.runtime.atomicops import incref_decref_ty
+        from numba.runtime.nrtdynmod import incref_decref_ty
 
         data_model = self._context.data_model_manager[typ]
 

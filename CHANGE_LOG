@@ -1,3 +1,109 @@
+Version 0.29.0
+--------------
+
+This release extends the support of recursive functions to include direct and
+indirect recursion without explicit function type annotations.  See new example
+in `examples/mergesort.py`.  Newly supported numpy features include array
+stacking functions, np.linalg.eig* functions, np.linalg.matrix_power, np.roots
+and array to array broadcasting in assignments.
+
+This release depends on llvmlite 0.14.0 and supports CUDA 8 but it is not
+required.
+
+Improvements:
+
+* PR #2130, #2137: Add type-inferred recursion with docs and examples.
+* PR #2134: Add ``np.linalg.matrix_power``.
+* PR #2125: Add ``np.roots``.
+* PR #2129: Add ``np.linalg.{eigvals,eigh,eigvalsh}``.
+* PR #2126: Add array-to-array broadcasting.
+* PR #2069: Add hstack and related functions.
+* PR #2128: Allow for vectorizing a jitted function. (thanks to @dhirschfeld)
+* PR #2117: Update examples and make them test-able.
+* PR #2127: Refactor interpreter class and its results.
+
+Fixes:
+
+* PR #2149: Workaround MSVC9.0 SP1 fmod bug kb982107.
+* PR #2145, Issue #2009: Fixes kwargs for jitclass ``__init__`` method.
+* PR #2150: Fix slowdown in objmode fallback.
+* PR #2050, Issue #1259: Fix liveness problem with some generator loops.
+* PR #2072, Issue #1995: Right shift of unsigned LHS should be logical.
+* PR #2115, Issue #1466: Fix inspect_types() error due to mangled variable name.
+* PR #2119, Issue #2118: Fix array type created from record-dtype.
+* PR #2122, Issue #1808: Fix returning a generator due to datamodel error.
+
+
+Version 0.28.1
+--------------
+
+This is a bug-fix release to resolve packaging issues with setuptools
+dependency.
+
+
+Version 0.28.0
+--------------
+
+Amongst other improvements, this version improves again the level of
+support for linear algebra -- functions from the :mod:`numpy.linalg`
+module.  Also, our random generator is now guaranteed to be thread-safe
+and fork-safe.
+
+Improvements:
+
+* PR #2019: Add the ``@intrinsic`` decorator to define low-level
+  subroutines callable from JIT functions (this is considered
+  a private API for now).
+* PR #2059: Implement ``np.concatenate`` and ``np.stack``.
+* PR #2048: Make random generation fork-safe and thread-safe, producing
+  independent streams of random numbers for each thread or process.
+* PR #2031: Add documentation of floating-point pitfalls.
+* Issue #2053: Avoid polling in parallel CPU target (fixes severe performance
+  regression on Windows).
+* Issue #2029: Make default arguments fast.
+* PR #2052: Add logging to the CUDA driver.
+* PR #2049: Implement the built-in ``divmod()`` function.
+* PR #2036: Implement the ``argsort()`` method on arrays.
+* PR #2046: Improving CUDA memory management by deferring deallocations
+  until certain thresholds are reached, so as to avoid breaking asynchronous
+  execution.
+* PR #2040: Switch the CUDA driver implementation to use CUDA's
+  "primary context" API.
+* PR #2017: Allow ``min(tuple)`` and ``max(tuple)``.
+* PR #2039: Reduce fork() detection overhead in CUDA.
+* PR #2021: Handle structured dtypes with titles.
+* PR #1996: Rewrite looplifting as a transformation on Numba IR.
+* PR #2014: Implement ``np.linalg.matrix_rank``.
+* PR #2012: Implement ``np.linalg.cond``.
+* PR #1985: Rewrite even trivial array expressions, which opens the door
+  for other optimizations (for example, ``array ** 2`` can be converted
+  into ``array * array``).
+* PR #1950: Have ``typeof()`` always raise ValueError on failure.
+  Previously, it would either raise or return None, depending on the input.
+* PR #1994: Implement ``np.linalg.norm``.
+* PR #1987: Implement ``np.linalg.det`` and ``np.linalg.slogdet``.
+* Issue #1979: Document integer width inference and how to workaround.
+* PR #1938: Numba is now compatible with LLVM 3.8.
+* PR #1967: Restrict ``np.linalg`` functions to homogenous dtypes.  Users
+  wanting to pass mixed-typed inputs have to convert explicitly, which
+  makes the performance implications more obvious.
+
+Fixes:
+
+* PR #2006: ``array(float32) ** int`` should return ``array(float32)``.
+* PR #2044: Allow reshaping empty arrays.
+* Issue #2051: Fix refcounting issue when concatenating tuples.
+* Issue #2000: Make Numpy optional for setup.py, to allow ``pip install``
+  to work without Numpy pre-installed.
+* PR #1989: Fix assertion in ``Dispatcher.disable_compile()``.
+* Issue #2028: Ignore filesystem errors when caching from multiple processes.
+* Issue #2003: Allow unicode variable and function names (on Python 3).
+* Issue #1998: Fix deadlock in parallel ufuncs that reacquire the GIL.
+* PR #1997: Fix random crashes when AOT compiling on certain Windows platforms.
+* Issue #1988: Propagate jitclass docstring.
+* Issue #1933: Ensure array constants are emitted with the right alignment.
+
+
 Version 0.27.0
 --------------
 

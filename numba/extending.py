@@ -1,5 +1,7 @@
 
 import inspect
+import uuid
+import weakref
 
 from numba import types
 
@@ -11,7 +13,6 @@ from .targets.imputils import (
     lower_setattr, lower_setattr_generic, lower_cast)
 from .datamodel import models, register_default as register_model
 from .pythonapi import box, unbox, reflect, NativeValue
-
 
 def type_callable(func):
     """
@@ -42,7 +43,12 @@ def type_callable(func):
     return decorate
 
 
-def overload(func):
+# By default, an *overload* does not have a cpython wrapper because it is not
+# callable from python.
+_overload_default_jit_options = {'no_cpython_wrapper': True}
+
+
+def overload(func, jit_options={}):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode.
@@ -61,17 +67,53 @@ def overload(func):
                     return n
                 return len_impl
 
+    Compiler options can be passed as an dictionary using the **jit_options**
+    argument.
     """
     from .typing.templates import make_overload_template, infer_global
 
+    # set default options
+    opts = _overload_default_jit_options.copy()
+    opts.update(jit_options)  # let user options override
+
     def decorate(overload_func):
-        template = make_overload_template(func, overload_func)
+        template = make_overload_template(func, overload_func, opts)
         infer(template)
         if hasattr(func, '__module__'):
             infer_global(func, types.Function(template))
         return overload_func
 
     return decorate
+
+
+def register_jitable(*args, **kwargs):
+    """
+    Register a regular python function that can be executed by the python
+    interpreter and can be compiled into a nopython function when referenced
+    by other jit'ed functions.  Can be used as::
+
+        @register_jitable
+        def foo(x, y):
+            return x + y
+
+    Or, with compiler options::
+
+        @register_jitable(_nrt=False) # disable runtime allocation
+        def foo(x, y):
+            return x + y
+
+    """
+    def wrap(fn):
+        # It is just a wrapper for @overload
+        @overload(fn, jit_options=kwargs)
+        def ov_wrap(*args, **kwargs):
+            return fn
+        return fn
+
+    if kwargs:
+        return wrap
+    else:
+        return wrap(*args)
 
 
 def overload_attribute(typ, attr):
@@ -166,3 +208,118 @@ def make_attribute_wrapper(typeclass, struct_attr, python_attr):
         attrty = get_attr_fe_type(typ)
         attrval = getattr(val, struct_attr)
         return impl_ret_borrowed(context, builder, attrty, attrval)
+
+
+class _Intrinsic(object):
+    """
+    Dummy callable for intrinsic
+    """
+    _memo = weakref.WeakValueDictionary()
+    __uuid = None
+
+    def __init__(self, name, defn):
+        self._name = name
+        self._defn = defn
+
+    @property
+    def _uuid(self):
+        """
+        An instance-specific UUID, to avoid multiple deserializations of
+        a given instance.
+
+        Note this is lazily-generated, for performance reasons.
+        """
+        u = self.__uuid
+        if u is None:
+            u = str(uuid.uuid1())
+            self._set_uuid(u)
+        return u
+
+    def _set_uuid(self, u):
+        assert self.__uuid is None
+        self.__uuid = u
+        self._memo[u] = self
+
+    def _register(self):
+        from .typing.templates import make_intrinsic_template, infer_global
+
+        template = make_intrinsic_template(self, self._defn, self._name)
+        infer(template)
+        infer_global(self, types.Function(template))
+
+    def __call__(self, *args, **kwargs):
+        """
+        This is only defined to pretend to be a callable from CPython.
+        """
+        msg = '{0} is not usable in pure-python'.format(self)
+        raise NotImplementedError(msg)
+
+    def __repr__(self):
+        return "<intrinsic {0}>".format(self._name)
+
+    def __reduce__(self):
+        from numba import serialize
+
+        def reduce_func(fn):
+            gs = serialize._get_function_globals_for_reduction(fn)
+            return serialize._reduce_function(fn, gs)
+
+        return (serialize._rebuild_reduction,
+                (self.__class__, str(self._uuid), self._name,
+                 reduce_func(self._defn)))
+
+    @classmethod
+    def _rebuild(cls, uuid, name, defn_reduced):
+        from numba import serialize
+
+        try:
+            return cls._memo[uuid]
+        except KeyError:
+            defn = serialize._rebuild_function(*defn_reduced)
+
+            llc = cls(name=name, defn=defn)
+            llc._register()
+            llc._set_uuid(uuid)
+            return llc
+
+
+def intrinsic(func):
+    """
+    A decorator marking the decorated function as typing and implementing
+    *func* in nopython mode using the llvmlite IRBuilder API.  This is an escape
+    hatch for expert users to build custom LLVM IR that will be inlined to
+    the caller.
+
+    The first argument to *func* is the typing context.  The rest of the
+    arguments corresponds to the type of arguments of the decorated function.
+    These arguments are also used as the formal argument of the decorated
+    function.  If *func* has the signature ``foo(typing_context, arg0, arg1)``,
+    the decorated function will have the signature ``foo(arg0, arg1)``.
+
+    The return values of *func* should be a 2-tuple of expected type signature,
+    and a code-generation function that will passed to ``lower_builtin``.
+    For unsupported operation, return None.
+
+    Here is an example implementing a ``cast_int_to_byte_ptr`` that cast
+    any integer to a byte pointer::
+
+        @intrinsic
+        def cast_int_to_byte_ptr(typingctx, src):
+            # check for accepted types
+            if isinstance(src, types.Integer):
+                # create the expected type signature
+                result_type = types.CPointer(types.uint8)
+                sig = result_type(types.uintp)
+                # defines the custom code generation
+                def codegen(context, builder, signature, args):
+                    # llvm IRBuilder code here
+                    [src] = args
+                    rtype = signature.return_type
+                    llrtype = context.get_value_type(rtype)
+                    return builder.inttoptr(src, llrtype)
+                return sig, codegen
+    """
+    name = getattr(func, '__name__', str(func))
+    llc = _Intrinsic(name, func)
+    llc._register()
+    return llc

@@ -584,6 +584,24 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(Apple.foo.__doc__, 'foo method docstring')
         self.assertEqual(Apple.aval.__doc__, 'aval property docstring')
 
+    def test_kwargs(self):
+        spec = [('a', int32),
+                ('b', float64)]
+
+        @jitclass(spec)
+        class TestClass(object):
+            def __init__(self, x, y, z):
+                self.a = x * y
+                self.b = z
+
+        x = 2
+        y = 2
+        z = 1.1
+        kwargs = {'y': y, 'z': z}
+        tc = TestClass(x=2, **kwargs)
+        self.assertEqual(tc.a, x * y)
+        self.assertEqual(tc.b, z)
+
 
 if __name__ == '__main__':
     unittest.main()

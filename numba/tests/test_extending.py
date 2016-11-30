@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from collections import namedtuple
 import math
 import sys
+import pickle
 
 import numpy as np
 
@@ -17,6 +18,8 @@ from numba.extending import (typeof_impl, type_callable,
                              models, register_model,
                              box, unbox, NativeValue,
                              make_attribute_wrapper,
+                             intrinsic, _Intrinsic,
+                             register_jitable,
                              )
 from numba.typing.templates import (
     ConcreteTemplate, signature, infer)
@@ -239,6 +242,28 @@ def clip_usecase(x, lo, hi):
     return x.clip(lo, hi)
 
 
+# -----------------------------------------------------------------------
+
+def return_non_boxable():
+    return np
+
+
+@overload(return_non_boxable)
+def overload_return_non_boxable():
+    def imp():
+        return np
+    return imp
+
+
+def non_boxable_ok_usecase(sz):
+    mod = return_non_boxable()
+    return mod.arange(sz)
+
+
+def non_boxable_bad_usecase():
+    return return_non_boxable()
+
+
 class TestLowLevelExtending(TestCase):
     """
     Test the low-level two-tier extension API.
@@ -415,6 +440,203 @@ class TestHighLevelExtending(TestCase):
         with captured_stdout():
             cfunc(MyDummy())
             self.assertEqual(sys.stdout.getvalue(), "hello!\n")
+
+    def test_no_cpython_wrapper(self):
+        """
+        Test overloading whose return value cannot be represented in CPython.
+        """
+        # Test passing Module type from a @overload implementation to ensure
+        # that the *no_cpython_wrapper* flag works
+        ok_cfunc = jit(nopython=True)(non_boxable_ok_usecase)
+        n = 10
+        got = ok_cfunc(n)
+        expect = non_boxable_ok_usecase(n)
+        np.testing.assert_equal(expect, got)
+        # Verify that the Module type cannot be returned to CPython
+        bad_cfunc = jit(nopython=True)(non_boxable_bad_usecase)
+        with self.assertRaises(NotImplementedError) as raises:
+            bad_cfunc()
+        errmsg = str(raises.exception)
+        expectmsg = "cannot convert native Module"
+        self.assertIn(expectmsg, errmsg)
+
+
+class TestIntrinsic(TestCase):
+    def test_ll_pointer_cast(self):
+        """
+        Usecase test: custom reinterpret cast to turn int values to pointers
+        """
+        from ctypes import CFUNCTYPE, POINTER, c_float, c_int
+
+        # Use intrinsic to make a reinterpret_cast operation
+        def unsafe_caster(result_type):
+            assert isinstance(result_type, types.CPointer)
+
+            @intrinsic
+            def unsafe_cast(typingctx, src):
+                if isinstance(src, types.Integer):
+                    sig = result_type(types.uintp)
+
+                    # defines the custom code generation
+                    def codegen(context, builder, signature, args):
+                        [src] = args
+                        rtype = signature.return_type
+                        llrtype = context.get_value_type(rtype)
+                        return builder.inttoptr(src, llrtype)
+
+                    return sig, codegen
+
+            return unsafe_cast
+
+        # make a nopython function to use our cast op.
+        # this is not usable from cpython due to the returning of a pointer.
+        def unsafe_get_ctypes_pointer(src):
+            raise NotImplementedError("not callable from python")
+
+        @overload(unsafe_get_ctypes_pointer)
+        def array_impl_unsafe_get_ctypes_pointer(arrtype):
+            if isinstance(arrtype, types.Array):
+                unsafe_cast = unsafe_caster(types.CPointer(arrtype.dtype))
+
+                def array_impl(arr):
+                    return unsafe_cast(src=arr.ctypes.data)
+                return array_impl
+
+        # the ctype wrapped function for use in nopython mode
+        def my_c_fun_raw(ptr, n):
+            for i in range(n):
+                print(ptr[i])
+
+        prototype = CFUNCTYPE(None, POINTER(c_float), c_int)
+        my_c_fun = prototype(my_c_fun_raw)
+
+        # Call our pointer-cast in a @jit compiled function and use
+        # the pointer in a ctypes function
+        @jit(nopython=True)
+        def foo(arr):
+            ptr = unsafe_get_ctypes_pointer(arr)
+            my_c_fun(ptr, arr.size)
+
+        # Test
+        arr = np.arange(10, dtype=np.float32)
+        foo(arr)
+        with captured_stdout() as buf:
+            foo(arr)
+            got = buf.getvalue().splitlines()
+        buf.close()
+        expect = list(map(str, arr))
+        self.assertEqual(expect, got)
+
+    def test_serialization(self):
+        """
+        Test serialization of intrinsic objects
+        """
+        # define a intrinsic
+        @intrinsic
+        def identity(context, x):
+            def codegen(context, builder, signature, args):
+                return args[0]
+
+            sig = x(x)
+            return sig, codegen
+
+        # use in a jit function
+        @jit(nopython=True)
+        def foo(x):
+            return identity(x)
+
+        self.assertEqual(foo(1), 1)
+
+        # get serialization memo
+        memo = _Intrinsic._memo
+        memo_size = len(memo)
+
+        # pickle foo and check memo size
+        serialized_foo = pickle.dumps(foo)
+        # increases the memo size
+        memo_size += 1
+        self.assertEqual(memo_size, len(memo))
+        # unpickle
+        foo_rebuilt = pickle.loads(serialized_foo)
+        self.assertEqual(memo_size, len(memo))
+        # check rebuilt foo
+        self.assertEqual(foo(1), foo_rebuilt(1))
+
+        # pickle identity directly
+        serialized_identity = pickle.dumps(identity)
+        # memo size unchanged
+        self.assertEqual(memo_size, len(memo))
+        # unpickle
+        identity_rebuilt = pickle.loads(serialized_identity)
+        # must be the same object
+        self.assertIs(identity, identity_rebuilt)
+        # memo size unchanged
+        self.assertEqual(memo_size, len(memo))
+
+    def test_deserialization(self):
+        """
+        Test deserialization of intrinsic
+        """
+        def defn(context, x):
+            def codegen(context, builder, signature, args):
+                return args[0]
+
+            return x(x), codegen
+
+        memo = _Intrinsic._memo
+        memo_size = len(memo)
+        # invoke _Intrinsic indirectly to avoid registration which keeps an
+        # internal reference inside the compiler
+        original = _Intrinsic('foo', defn)
+        self.assertIs(original._defn, defn)
+        pickled = pickle.dumps(original)
+        # by pickling, a new memo entry is created
+        memo_size += 1
+        self.assertEqual(memo_size, len(memo))
+        del original  # remove original before unpickling
+        # by deleting, the memo entry is removed
+        memo_size -= 1
+        self.assertEqual(memo_size, len(memo))
+
+        rebuilt = pickle.loads(pickled)
+        # verify that the rebuilt object is different
+        self.assertIsNot(rebuilt._defn, defn)
+
+        # the second rebuilt object is the same as the first
+        second = pickle.loads(pickled)
+        self.assertIs(rebuilt._defn, second._defn)
+
+
+class TestRegisterJitable(unittest.TestCase):
+    def test_no_flags(self):
+        @register_jitable
+        def foo(x, y):
+            return x + y
+
+        def bar(x, y):
+            return foo(x, y)
+
+        cbar = jit(nopython=True)(bar)
+
+        expect = bar(1, 2)
+        got = cbar(1, 2)
+        self.assertEqual(expect, got)
+
+    def test_flags_no_nrt(self):
+        @register_jitable(_nrt=False)
+        def foo(n):
+            return np.arange(n)
+
+        def bar(n):
+            return foo(n)
+
+        self.assertEqual(bar(3).tolist(), [0, 1, 2])
+
+        cbar = jit(nopython=True)(bar)
+        with self.assertRaises(errors.TypingError) as raises:
+            cbar(2)
+        msg = "Only accept returning of array passed into the function as argument"
+        self.assertIn(msg, str(raises.exception))
 
 
 if __name__ == '__main__':

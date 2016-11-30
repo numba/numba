@@ -9,6 +9,10 @@ set -v -e
 pushd docs
 if [ "$BUILD_DOC" == "yes" ]; then make SPHINXOPTS=-W clean html; fi
 popd
+# Run system info tool
+pushd bin
+numba -s
+popd
 # First check that the test discovery works
 python -m numba.tests.test_runtests
 # Now run the Numba test suite

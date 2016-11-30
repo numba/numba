@@ -15,6 +15,7 @@ from numba.numpy_support import as_dtype
 from . import _internal
 from .sigparse import parse_signature
 from .wrappers import build_ufunc_wrapper, build_gufunc_wrapper
+from numba.caching import FunctionCache, NullCache
 
 
 import llvmlite.llvmpy.core as lc
@@ -51,6 +52,10 @@ class UFuncDispatcher(object):
         self.overloads = utils.UniqueDict()
         self.targetoptions = targetoptions
         self.locals = locals
+        self.cache = NullCache()
+
+    def enable_caching(self):
+        self.cache = FunctionCache(self.py_func)
 
     def compile(self, sig, locals={}, **targetoptions):
         locs = self.locals.copy()
@@ -61,23 +66,34 @@ class UFuncDispatcher(object):
 
         flags = compiler.Flags()
         self.targetdescr.options.parse_as_flags(flags, topt)
-        flags.set("no_compile")
+
         flags.set("no_cpython_wrapper")
         flags.set("error_model", "numpy")
         # Disable loop lifting
         # The feature requires a real python function
         flags.unset("enable_looplift")
 
+        cres = self._compile_core(sig, flags, locals)
+        self.overloads[cres.signature] = cres
+        return cres
+
+    def _compile_core(self, sig, flags, locals):
+        """
+        Trigger the compiler on the core function or load a previously
+        compiled version from the cache.  Returns the CompileResult.
+        """
         typingctx = self.targetdescr.typing_context
         targetctx = self.targetdescr.target_context
-
+        cres = self.cache.load_overload(sig, targetctx)
+        if cres is not None:
+            # Use cached version
+            return cres
+        # Compile
         args, return_type = sigutils.normalize_signature(sig)
-
         cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
                                       args=args, return_type=return_type,
                                       flags=flags, locals=locals)
-
-        self.overloads[cres.signature] = cres
+        self.cache.save_overload(sig, cres)
         return cres
 
 
@@ -114,7 +130,7 @@ def _build_element_wise_ufunc_wrapper(cres, signature):
     '''
     ctx = cres.target_context
     library = cres.library
-    llvm_func = library.get_function(cres.fndesc.llvm_func_name)
+    fname = cres.fndesc.llvm_func_name
 
     env = None
     if cres.objectmode:
@@ -127,9 +143,8 @@ def _build_element_wise_ufunc_wrapper(cres, signature):
     else:
         envptr = None
 
-    wrapper = build_ufunc_wrapper(library, ctx, llvm_func, signature,
-                                  cres.objectmode, envptr, env)
-    ptr = library.get_pointer_to_function(wrapper.name)
+    ptr = build_ufunc_wrapper(library, ctx, fname, signature,
+                              cres.objectmode, envptr, env)
 
     # Get dtypes
     dtypenums = [as_dtype(a).num for a in signature.args]
@@ -181,10 +196,10 @@ class _BaseUFuncBuilder(object):
 
 class UFuncBuilder(_BaseUFuncBuilder):
 
-    def __init__(self, py_func, identity=None, targetoptions={}):
+    def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
         self.py_func = py_func
         self.identity = parse_identity(identity)
-        self.nb_func = jit(target='npyufunc', **targetoptions)(py_func)
+        self.nb_func = jit(target='npyufunc', cache=cache, **targetoptions)(py_func)
         self._sigs = []
         self._cres = {}
 
@@ -240,10 +255,11 @@ class UFuncBuilder(_BaseUFuncBuilder):
 class GUFuncBuilder(_BaseUFuncBuilder):
 
     # TODO handle scalar
-    def __init__(self, py_func, signature, identity=None, targetoptions={}):
+    def __init__(self, py_func, signature, identity=None, cache=False,
+                 targetoptions={}):
         self.py_func = py_func
         self.identity = parse_identity(identity)
-        self.nb_func = jit(target='npyufunc')(py_func)
+        self.nb_func = jit(target='npyufunc', cache=cache)(py_func)
         self.signature = signature
         self.sin, self.sout = parse_signature(signature)
         self.targetoptions = targetoptions
@@ -293,13 +309,10 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         ctx = cres.target_context
         library = cres.library
         signature = cres.signature
-        llvm_func = library.get_function(cres.fndesc.llvm_func_name)
-        wrapper, env = build_gufunc_wrapper(library, ctx, llvm_func,
+        ptr, env = build_gufunc_wrapper(library, ctx,
                                             signature, self.sin, self.sout,
                                             fndesc=cres.fndesc,
                                             env=cres.environment)
-
-        ptr = library.get_pointer_to_function(wrapper.name)
 
         # Get dtypes
         dtypenums = []

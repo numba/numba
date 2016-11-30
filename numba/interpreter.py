@@ -5,7 +5,7 @@ import dis
 import sys
 from copy import copy
 
-from . import ir, controlflow, dataflow, utils, errors, consts, analysis
+from . import config, ir, controlflow, dataflow, utils, errors
 from .utils import builtins
 
 
@@ -60,120 +60,41 @@ class Assigner(object):
         return None
 
 
-class YieldPoint(object):
-
-    def __init__(self, block, inst):
-        assert isinstance(block, ir.Block)
-        assert isinstance(inst, ir.Yield)
-        self.block = block
-        self.inst = inst
-        self.live_vars = None
-        self.weak_live_vars = None
-
-
-class GeneratorInfo(object):
-
-    def __init__(self):
-        # { index: YieldPoint }
-        self.yield_points = {}
-        # Ordered list of variable names
-        self.state_vars = []
-
-    def get_yield_points(self):
-        """
-        Return an iterable of YieldPoint instances.
-        """
-        return self.yield_points.values()
-
-
-class VariableLifetime(object):
-    """
-    For lazily building information of variable lifetime
-    """
-    def __init__(self, blocks):
-        self._blocks = blocks
-
-    @utils.cached_property
-    def cfg(self):
-        return analysis.compute_cfg_from_blocks(self._blocks)
-
-    @utils.cached_property
-    def usedefs(self):
-        return analysis.compute_use_defs(self._blocks)
-
-    @utils.cached_property
-    def livemap(self):
-        return analysis.compute_live_map(self.cfg, self._blocks,
-                                         self.usedefs.usemap,
-                                         self.usedefs.defmap)
-
-    @utils.cached_property
-    def deadmaps(self):
-        return analysis.compute_dead_maps(self.cfg, self._blocks, self.livemap,
-                                          self.usedefs.defmap)
-
-
 class Interpreter(object):
     """A bytecode interpreter that builds up the IR.
     """
 
-    @classmethod
-    def from_blocks(cls, bytecode, blocks, used_globals={},
-                    force_non_generator=None, override_args=None):
-        if override_args is not None:
-            # XXX patch bytecode
-            bytecode = copy(bytecode)
-            bytecode.arg_names = tuple(override_args)
-            bytecode.arg_count = len(bytecode.arg_names)
-
-        interp = cls(bytecode=bytecode)
-        firstblock = blocks[min(blocks)]
-        interp.blocks = blocks
-        interp.loc = firstblock.loc
-        if force_non_generator:
-            interp.generator_info = None
-        interp.used_globals = used_globals
-        interp._post_processing()
-        return interp
-
-    def __init__(self, bytecode):
-        self.bytecode = bytecode
-        self.loc = ir.Loc(filename=bytecode.filename, line=1)
-        self.arg_count = bytecode.arg_count
-        self.arg_names = bytecode.arg_names
+    def __init__(self, func_id):
+        self.func_id = func_id
+        self.arg_count = func_id.arg_count
+        self.arg_names = func_id.arg_names
+        self.loc = self.first_loc = ir.Loc.from_function_id(func_id)
+        self.is_generator = func_id.is_generator
 
         # { inst offset : ir.Block }
         self.blocks = {}
-        # { name: value } of global variables used by the bytecode
-        self.used_globals = {}
         # { name: [definitions] } of local variables
         self.definitions = collections.defaultdict(list)
-        # { ir.Block: { variable names (potentially) alive at start of block } }
-        self.block_entry_vars = {}
 
-        self.reset()
+    def interpret(self, bytecode):
+        """
+        Generate IR for this bytecode.
+        """
+        self.bytecode = bytecode
 
-    def reset(self):
-        """
-        Reset all internal state and release resources.
-        """
         self.scopes = []
         global_scope = ir.Scope(parent=None, loc=self.loc)
         self.scopes.append(global_scope)
 
         # Control flow analysis
-        self.cfa = controlflow.ControlFlowAnalysis(self.bytecode)
+        self.cfa = controlflow.ControlFlowAnalysis(bytecode)
         self.cfa.run()
+        if config.DUMP_CFG:
+            self.cfa.dump()
+
         # Data flow analysis
         self.dfa = dataflow.DataFlowAnalysis(self.cfa)
         self.dfa.run()
-        # Constant inference
-        self.consts = consts.ConstantInference(self)
-
-        if self.bytecode.is_generator:
-            self.generator_info = GeneratorInfo()
-        else:
-            self.generator_info = None
 
         # Temp states during interpretation
         self.current_block = None
@@ -181,173 +102,15 @@ class Interpreter(object):
         self.syntax_blocks = []
         self.dfainfo = None
 
-    def get_used_globals(self):
-        """
-        Return a dictionary of global variables used by the bytecode.
-        """
-        return self.used_globals
-
-    def get_block_entry_vars(self, block):
-        """
-        Return a set of variable names possibly alive at the beginning of
-        the block.
-        """
-        return self.block_entry_vars[block]
-
-    def infer_constant(self, name):
-        """
-        Try to infer the constant value of a given variable.
-        """
-        if isinstance(name, ir.Var):
-            name = name.name
-        return self.consts.infer_constant(name)
-
-    def interpret(self):
-        """
-        Generate IR for this bytecode.
-        """
         firstblk = min(self.cfa.blocks.keys())
-        self.loc = ir.Loc(filename=self.bytecode.filename,
-                          line=self.bytecode[firstblk].lineno)
         self.scopes.append(ir.Scope(parent=self.current_scope, loc=self.loc))
         # Interpret loop
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
 
-        # post-processing
-        self._post_processing()
-
-    @utils.cached_property
-    def variable_lifetime(self):
-        return VariableLifetime(self.blocks)
-
-    def _post_processing(self):
-        """
-        Post-processing and analysis on generated IR
-        """
-        # emit del nodes
-        self._insert_var_dels()
-
-        vlt = self.variable_lifetime
-        bev = analysis.compute_live_variables(vlt.cfg, self.blocks,
-                                              vlt.usedefs.defmap,
-                                              vlt.deadmaps.combined)
-        for offset, ir_block in self.blocks.items():
-            self.block_entry_vars[ir_block] = bev[offset]
-
-        if self.generator_info:
-            self._compute_generator_info()
-
-    def _populate_generator_info(self):
-        """
-        Fill `index` for the Yield instruction and create YieldPoints.
-        """
-        dct = self.generator_info.yield_points
-        assert not dct, 'rerunning _populate_generator_info'
-        for block in self.blocks.values():
-            for inst in block.body:
-                if isinstance(inst, ir.Assign):
-                    yieldinst = inst.value
-                    if isinstance(yieldinst, ir.Yield):
-                        index = len(dct) + 1
-                        yieldinst.index = index
-                        yp = YieldPoint(block, yieldinst)
-                        dct[yieldinst.index] = yp
-
-    def _compute_generator_info(self):
-        """
-        Compute the generator's state variables as the union of live variables
-        at all yield points.
-        """
-        self._populate_generator_info()
-
-        gi = self.generator_info
-        for yp in gi.get_yield_points():
-            live_vars = set(self.block_entry_vars[yp.block])
-            weak_live_vars = set()
-            stmts = iter(yp.block.body)
-            for stmt in stmts:
-                if isinstance(stmt, ir.Assign):
-                    if stmt.value is yp.inst:
-                        break
-                    live_vars.add(stmt.target.name)
-                elif isinstance(stmt, ir.Del):
-                    live_vars.remove(stmt.value)
-            else:
-                assert 0, "couldn't find yield point"
-            # Try to optimize out any live vars that are deleted immediately
-            # after the yield point.
-            for stmt in stmts:
-                if isinstance(stmt, ir.Del):
-                    name = stmt.value
-                    if name in live_vars:
-                        live_vars.remove(name)
-                        weak_live_vars.add(name)
-                else:
-                    break
-            yp.live_vars = live_vars
-            yp.weak_live_vars = weak_live_vars
-
-        st = set()
-        for yp in gi.get_yield_points():
-            st |= yp.live_vars
-            st |= yp.weak_live_vars
-        gi.state_vars = sorted(st)
-
-    def _insert_var_dels(self):
-        """
-        Insert del statements for each variable.
-        Returns a 2-tuple of (variable definition map, variable deletion map)
-        which indicates variables defined and deleted in each block.
-
-        The algorithm avoids relying on explicit knowledge on loops and
-        distinguish between variables that are defined locally vs variables that
-        come from incoming blocks.
-        We start with simple usage (variable reference) and definition (variable
-        creation) maps on each block. Propagate the liveness info to predecessor
-        blocks until it stabilize, at which point we know which variables must
-        exist before entering each block. Then, we compute the end of variable
-        lives and insert del statements accordingly. Variables are deleted after
-        the last use. Variable referenced by terminators (e.g. conditional
-        branch and return) are deleted by the successors or the caller.
-        """
-        vlt = self.variable_lifetime
-        self._patch_var_dels(vlt.deadmaps.internal, vlt.deadmaps.escaping)
-
-    def _patch_var_dels(self, internal_dead_map, escaping_dead_map):
-        """
-        Insert delete in each block
-        """
-        for offset, ir_block in self.blocks.items():
-            # for each internal var, insert delete after the last use
-            internal_dead_set = internal_dead_map[offset].copy()
-            delete_pts = []
-            # for each statement in reverse order
-            for stmt in reversed(ir_block.body[:-1]):
-                # internal vars that are used here
-                live_set = set(v.name for v in stmt.list_vars())
-                dead_set = live_set & internal_dead_set
-                # used here but not afterwards
-                delete_pts.append((stmt, dead_set))
-                internal_dead_set -= dead_set
-
-            # rewrite body and insert dels
-            body = []
-            for stmt, delete_set in reversed(delete_pts):
-                # Ignore dels (assuming no user inserted deletes)
-                if not isinstance(stmt, ir.Del):
-                    body.append(stmt)
-                # note: the reverse sort is not necessary for correctness
-                #       it is just to minimize changes to test for now
-                for var_name in sorted(delete_set, reverse=True):
-                    body.append(ir.Del(var_name, loc=ir_block.loc))
-            body.append(ir_block.body[-1])  # terminator
-            ir_block.body = body
-
-            # vars to delete at the start
-            escape_dead_set = escaping_dead_map[offset]
-            for var_name in sorted(escape_dead_set):
-                ir_block.prepend(ir.Del(var_name, loc=ir_block.loc))
+        return ir.FunctionIR(self.blocks, self.is_generator, self.func_id,
+                             self.first_loc, self.definitions,
+                             self.arg_count, self.arg_names)
 
     def init_first_block(self):
         # Define variables receiving the function arguments
@@ -361,16 +124,15 @@ class Interpreter(object):
             self._start_new_block(firstinst)
             if blkct == 0:
                 # Is first block
+                self.loc = self.loc.with_lineno(firstinst.lineno)
                 self.init_first_block()
             for offset, kws in self.dfainfo.insts:
                 inst = self.bytecode[offset]
-                self.loc = ir.Loc(filename=self.bytecode.filename,
-                                  line=inst.lineno)
+                self.loc = self.loc.with_lineno(inst.lineno)
                 yield inst, kws
             self._end_current_block()
 
     def _start_new_block(self, inst):
-        self.loc = ir.Loc(filename=self.bytecode.filename, line=inst.lineno)
         oldblock = self.current_block
         self.insert_block(inst.offset)
         # Ensure the last block is terminated
@@ -420,7 +182,7 @@ class Interpreter(object):
         as a builtins (second).  If both failed, return a ir.UNDEFINED.
         """
         try:
-            return utils.get_function_globals(self.bytecode.func)[name]
+            return utils.get_function_globals(self.func_id.func)[name]
         except KeyError:
             return getattr(builtins, name, ir.UNDEFINED)
 
@@ -429,7 +191,7 @@ class Interpreter(object):
         Get a value from the cell contained in this function's closure.
         If not set, return a ir.UNDEFINED.
         """
-        cell = self.bytecode.func.__closure__[index]
+        cell = self.func_id.func.__closure__[index]
         try:
             return cell.cell_contents
         except ValueError:
@@ -470,22 +232,6 @@ class Interpreter(object):
                     e.loc = self.loc
                 raise e
 
-    def dump(self, file=None):
-        # Avoid early bind of sys.stdout as default value
-        file = file or sys.stdout
-        for offset, block in sorted(self.blocks.items()):
-            print('label %s:' % (offset,), file=file)
-            block.dump(file=file)
-
-    def dump_generator_info(self, file=None):
-        file = file or sys.stdout
-        gi = self.generator_info
-        print("generator state variables:", sorted(gi.state_vars), file=file)
-        for index, yp in sorted(gi.yield_points.items()):
-            print("yield point #%d: live variables = %s, weak live variables = %s"
-                  % (index, sorted(yp.live_vars), sorted(yp.weak_live_vars)),
-                  file=file)
-
 
     # --- Scope operations ---
 
@@ -514,27 +260,6 @@ class Interpreter(object):
         if var is None:
             var = self.current_scope.get(name)
         return var
-
-    def get_definition(self, value):
-        """
-        Get the definition site for the given variable name or instance.
-        A Expr instance is returned.
-        """
-        while True:
-            if isinstance(value, ir.Var):
-                name = value.name
-            elif isinstance(value, str):
-                name = value
-            else:
-                return value
-            defs = self.definitions[name]
-            if len(defs) == 0:
-                raise KeyError("no definition for %r"
-                               % (name,))
-            if len(defs) > 1:
-                raise KeyError("more than one definition for %r"
-                               % (name,))
-            value = defs[0]
 
     # --- Block operations ---
 
@@ -839,7 +564,6 @@ class Interpreter(object):
     def op_LOAD_GLOBAL(self, inst, res):
         name = self.code_names[inst.arg]
         value = self.get_global_value(name)
-        self.used_globals[name] = value
         gl = ir.Global(name, value, loc=self.loc)
         self.store(gl, res)
 
