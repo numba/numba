@@ -41,26 +41,11 @@ def array_flat_sum(arr):
 def array_flat_len(arr):
     return len(arr.flat)
 
-def array_flat_premature_free(size):
-    x = np.arange(size)
-    res = np.zeros_like(x, dtype=np.intp)
-    for i, v in enumerate(x.flat):
-        res[i] = v
-    return res
-
 def array_ndenumerate_sum(arr):
     s = 0
     for (i, j), v in np.ndenumerate(arr):
         s = s + (i + 1) * (j + 1) * v
     return s
-
-def array_ndenumerate_premature_free(size):
-    # test premature free (see issue #2112)
-    x = np.arange(size)
-    res = np.zeros_like(x, dtype=np.intp)
-    for i, v in np.ndenumerate(x):
-        res[i] = v
-    return res
 
 def np_ndindex_empty():
     s = 0
@@ -105,6 +90,30 @@ def iter_next(arr):
     it = iter(arr)
     it2 = iter(arr)
     return next(it), next(it), next(it2)
+
+
+#
+# Test premature free (see issue #2112).
+# The following test allocates an array ``x`` inside the body.
+# The compiler will put a ``del x`` right after the last use of ``x``,
+# which is right after the creation of the array iterator and
+# before the loop is entered.  If the iterator does not incref the array,
+# the iterator will be reading garbage data of free'ed memory.
+#
+
+def array_flat_premature_free(size):
+    x = np.arange(size)
+    res = np.zeros_like(x, dtype=np.intp)
+    for i, v in enumerate(x.flat):
+        res[i] = v
+    return res
+
+def array_ndenumerate_premature_free(size):
+    x = np.arange(size)
+    res = np.zeros_like(x, dtype=np.intp)
+    for i, v in np.ndenumerate(x):
+        res[i] = v
+    return res
 
 
 class TestArrayIterators(MemoryLeakMixin, TestCase):
