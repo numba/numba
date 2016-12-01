@@ -965,8 +965,11 @@ class TypeInferer(object):
                                               loc=inst.loc))
 
     def typeof_const(self, inst, target, const):
-        self.lock_type(target.name, self.resolve_value_type(inst, const),
-                       loc=inst.loc)
+        ty = self.resolve_value_type(inst, const)
+        # Special case string constant as Const type
+        if ty == types.string:
+            ty = types.Const(value=const)
+        self.lock_type(target.name, ty, loc=inst.loc)
 
     def typeof_yield(self, inst, target, yield_):
         # Sending values into generators isn't supported.

@@ -269,6 +269,7 @@ class EnumModel(ProxyModel):
 @register_default(types.PyObject)
 @register_default(types.RawPointer)
 @register_default(types.NoneType)
+@register_default(types.Const)
 @register_default(types.EllipsisType)
 @register_default(types.Function)
 @register_default(types.Type)

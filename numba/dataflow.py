@@ -181,7 +181,8 @@ class DataFlowAnalysis(object):
 
     def op_BUILD_SET(self, info, inst):
         count = inst.arg
-        items = [info.pop() for _ in range(count)]
+        # Note: related python bug http://bugs.python.org/issue26020
+        items = list(reversed([info.pop() for _ in range(count)]))
         res = info.make_temp()
         info.append(inst, items=items, res=res)
         info.push(res)
@@ -267,30 +268,78 @@ class DataFlowAnalysis(object):
         info.append(inst, iterator=iterator, pair=pair, indval=indval, pred=pred)
         info.push(indval)
 
-    def _op_call_function(self, info, inst, has_vararg):
-        narg = inst.arg & 0xff
-        nkws = (inst.arg >> 8) & 0xff
+    if utils.PYVERSION < (3, 6):
 
-        def pop_kws():
-            val = info.pop()
-            key = info.pop()
-            return key, val
+        def _op_call_function(self, info, inst, has_vararg):
+            narg = inst.arg & 0xff
+            nkws = (inst.arg >> 8) & 0xff
 
-        vararg = info.pop() if has_vararg else None
-        kws = list(reversed([pop_kws() for _ in range(nkws)]))
-        args = list(reversed([info.pop() for _ in range(narg)]))
-        func = info.pop()
+            def pop_kws():
+                val = info.pop()
+                key = info.pop()
+                return key, val
 
+            vararg = info.pop() if has_vararg else None
+            kws = list(reversed([pop_kws() for _ in range(nkws)]))
+            args = list(reversed([info.pop() for _ in range(narg)]))
+            func = info.pop()
+
+            res = info.make_temp()
+            info.append(inst, func=func, args=args, kws=kws, res=res,
+                        vararg=vararg)
+            info.push(res)
+
+        def op_CALL_FUNCTION(self, info, inst):
+            self._op_call_function(info, inst, has_vararg=False)
+
+        def op_CALL_FUNCTION_VAR(self, info, inst):
+            self._op_call_function(info, inst, has_vararg=True)
+
+    else:
+        def op_CALL_FUNCTION(self, info, inst):
+            narg = inst.arg
+            args = list(reversed([info.pop() for _ in range(narg)]))
+            func = info.pop()
+
+            res = info.make_temp()
+            info.append(inst, func=func, args=args, res=res)
+            info.push(res)
+
+        def op_CALL_FUNCTION_KW(self, info, inst):
+            narg = inst.arg
+            names = info.pop()  # tuple of names
+            args = list(reversed([info.pop() for _ in range(narg)]))
+            func = info.pop()
+
+            res = info.make_temp()
+            info.append(inst, func=func, args=args, names=names, res=res)
+            info.push(res)
+
+        def op_CALL_FUNCTION_EX(self, info, inst):
+            if inst.arg & 1:
+                errmsg = 'CALL_FUNCTION_EX with **kwargs not supported'
+                raise NotImplementedError(errmsg)
+            vararg = info.pop()
+            func = info.pop()
+            res = info.make_temp()
+            info.append(inst, func=func, vararg=vararg, res=res)
+            info.push(res)
+
+    def op_BUILD_TUPLE_UNPACK_WITH_CALL(self, info, inst):
+        # Builds tuple from other tuples on the stack
+        tuples = list(reversed([info.pop() for _ in range(inst.arg)]))
+        temps = [info.make_temp() for _ in range(len(tuples) - 1)]
+        info.append(inst, tuples=tuples, temps=temps)
+        # The result is in the last temp var
+        info.push(temps[-1])
+
+    def op_BUILD_CONST_KEY_MAP(self, info, inst):
+        keys = info.pop()
+        vals = list(reversed([info.pop() for _ in range(inst.arg)]))
+        keytmps = [info.make_temp() for _ in range(inst.arg)]
         res = info.make_temp()
-        info.append(inst, func=func, args=args, kws=kws, res=res,
-                    vararg=vararg)
+        info.append(inst, keys=keys, keytmps=keytmps, values=vals, res=res)
         info.push(res)
-
-    def op_CALL_FUNCTION(self, info, inst):
-        self._op_call_function(info, inst, has_vararg=False)
-
-    def op_CALL_FUNCTION_VAR(self, info, inst):
-        self._op_call_function(info, inst, has_vararg=True)
 
     def op_PRINT_ITEM(self, info, inst):
         warnings.warn("Python2 style print partially supported.  Please use "

@@ -6,7 +6,7 @@ import sys
 from copy import copy
 
 from . import config, ir, controlflow, dataflow, utils, errors
-from .utils import builtins
+from .utils import builtins, PYVERSION
 
 
 class Assigner(object):
@@ -578,31 +578,89 @@ class Interpreter(object):
         loop = ir.Loop(inst.offset, exit=(inst.next + inst.arg))
         self.syntax_blocks.append(loop)
 
-    def op_CALL_FUNCTION(self, inst, func, args, kws, res, vararg):
-        func = self.get(func)
-        args = [self.get(x) for x in args]
-        if vararg is not None:
-            vararg = self.get(vararg)
+    if PYVERSION < (3, 6):
 
-        # Process keywords
-        keyvalues = []
-        removethese = []
-        for k, v in kws:
-            k, v = self.get(k), self.get(v)
+        def op_CALL_FUNCTION(self, inst, func, args, kws, res, vararg):
+            func = self.get(func)
+            args = [self.get(x) for x in args]
+            if vararg is not None:
+                vararg = self.get(vararg)
+
+            # Process keywords
+            keyvalues = []
+            removethese = []
+            for k, v in kws:
+                k, v = self.get(k), self.get(v)
+                for inst in self.current_block.body:
+                    if isinstance(inst, ir.Assign) and inst.target is k:
+                        removethese.append(inst)
+                        keyvalues.append((inst.value.value, v))
+
+            # Remove keyword constant statements
+            for inst in removethese:
+                self.current_block.remove(inst)
+
+            expr = ir.Expr.call(func, args, keyvalues, loc=self.loc,
+                                vararg=vararg)
+            self.store(expr, res)
+
+        op_CALL_FUNCTION_VAR = op_CALL_FUNCTION
+    else:
+        def op_CALL_FUNCTION(self, inst, func, args, res):
+            func = self.get(func)
+            args = [self.get(x) for x in args]
+            expr = ir.Expr.call(func, args, (), loc=self.loc)
+            self.store(expr, res)
+
+        def op_CALL_FUNCTION_KW(self, inst, func, args, names, res):
+            func = self.get(func)
+            args = [self.get(x) for x in args]
+            # Find names const
+            names = self.get(names)
             for inst in self.current_block.body:
-                if isinstance(inst, ir.Assign) and inst.target is k:
-                    removethese.append(inst)
-                    keyvalues.append((inst.value.value, v))
+                if isinstance(inst, ir.Assign) and inst.target is names:
+                    self.current_block.remove(inst)
+                    keys = inst.value.value
+                    break
 
-        # Remove keyword constant statements
-        for inst in removethese:
-            self.current_block.remove(inst)
+            nkeys = len(keys)
+            posvals = args[:-nkeys]
+            kwvals = args[-nkeys:]
+            keyvalues = list(zip(keys, kwvals))
 
-        expr = ir.Expr.call(func, args, keyvalues, loc=self.loc,
-                            vararg=vararg)
+            expr = ir.Expr.call(func, posvals, keyvalues, loc=self.loc)
+            self.store(expr, res)
+
+        def op_CALL_FUNCTION_EX(self, inst, func, vararg, res):
+            func = self.get(func)
+            vararg = self.get(vararg)
+            expr = ir.Expr.call(func, [], [], loc=self.loc, vararg=vararg)
+            self.store(expr, res)
+
+    def op_BUILD_TUPLE_UNPACK_WITH_CALL(self, inst, tuples, temps):
+        first = self.get(tuples[0])
+        for other, tmp in zip(map(self.get, tuples[1:]), temps):
+            out = ir.Expr.binop(fn='+', lhs=first, rhs=other, loc=self.loc)
+            self.store(out, tmp)
+            first = tmp
+
+    def op_BUILD_CONST_KEY_MAP(self, inst, keys, keytmps, values, res):
+        # Unpack the constant key-tuple and reused build_map which takes
+        # a sequence of (key, value) pair.
+        keyvar = self.get(keys)
+        # TODO: refactor this pattern. occurred several times.
+        for inst in self.current_block.body:
+            if isinstance(inst, ir.Assign) and inst.target is keyvar:
+                self.current_block.remove(inst)
+                keytup = inst.value.value
+                break
+        assert len(keytup) == len(values)
+        keyconsts = [ir.Const(value=x, loc=self.loc) for x in keytup]
+        for kval, tmp in zip(keyconsts, keytmps):
+            self.store(kval, tmp)
+        items = list(zip(map(self.get, keytmps), map(self.get, values)))
+        expr = ir.Expr.build_map(items=items, size=2, loc=self.loc)
         self.store(expr, res)
-
-    op_CALL_FUNCTION_VAR = op_CALL_FUNCTION
 
     def op_GET_ITER(self, inst, value, res):
         expr = ir.Expr.getiter(value=self.get(value), loc=self.loc)
