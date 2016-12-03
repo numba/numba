@@ -130,7 +130,7 @@ def get_ext_modules():
                                             "numba/_pymodule.h"],
                                    **np_compile_args)
 
-    tbb_root = os.environ['TBBROOT']
+    tbb_root = os.getenv('TBBROOT')
 
     if tbb_root:
         print("Using TBBROOT=", tbb_root)
