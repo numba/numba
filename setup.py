@@ -130,11 +130,28 @@ def get_ext_modules():
                                             "numba/_pymodule.h"],
                                    **np_compile_args)
 
-    ext_npyufunc_workqueue = Extension(
-        name='numba.npyufunc.workqueue',
-        sources=['numba/npyufunc/workqueue.c'],
-        depends=['numba/npyufunc/workqueue.h'])
+    tbb_root = os.environ['TBBROOT']
 
+    if tbb_root:
+        print("Using TBBROOT=", tbb_root)
+        Q = '/Q' if sys.platform.startswith('win') or sys.platform == 'cygwin' else '-'
+        ext_npyufunc_workqueue = Extension(
+            name='numba.npyufunc.workqueue',
+            sources=['numba/npyufunc/tbbpool.cpp'],
+            depends=['numba/npyufunc/workqueue.h'],
+            include_dirs=[os.path.join(tbb_root, 'include')],
+            extra_compile_args=[Q+'std=c++11'],
+            libraries   =['tbb'],
+            library_dirs=[os.path.join(tbb_root, 'lib', 'intel64', 'gcc4.4'),  # for Linux
+                          os.path.join(tbb_root, 'lib'),                       # for MacOS
+                          os.path.join(tbb_root, 'lib', 'intel64', 'vc_mt'),   # for Windows
+                         ],
+            )
+    else:
+        ext_npyufunc_workqueue = Extension(
+            name='numba.npyufunc.workqueue',
+            sources=['numba/npyufunc/workqueue.c'],
+            depends=['numba/npyufunc/workqueue.h'])
 
     ext_mviewbuf = Extension(name='numba.mviewbuf',
                              sources=['numba/mviewbuf.c'])
