@@ -9,8 +9,8 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 #include "workqueue.h"
 #include "../_pymodule.h"
 
-static tbb::task_group *tg;
-static tbb::task_scheduler_init *tsi;
+static tbb::task_group *tg = NULL;
+static tbb::task_scheduler_init *tsi = NULL;
 static int tsi_count = 0;
 
 static void
