@@ -187,11 +187,8 @@ def dgpu_count():
     else:
         ngpus = 0
         for a in hsa.agents:
-            if a.is_component:
-                name = getattr(a, "name").lower()
-                for g in known_dgpus:
-                    if g.lower() in name:
-                        ngpus += 1
+            if a.is_component and a.device == 'GPU':
+                ngpus += 1
         return ngpus
 
 def dgpu_present():
