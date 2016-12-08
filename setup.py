@@ -134,13 +134,12 @@ def get_ext_modules():
 
     if tbb_root:
         print("Using TBBROOT=", tbb_root)
-        Q = '/Q' if sys.platform.startswith('win') or sys.platform == 'cygwin' else '-'
         ext_npyufunc_workqueue = Extension(
             name='numba.npyufunc.workqueue',
             sources=['numba/npyufunc/tbbpool.cpp'],
             depends=['numba/npyufunc/workqueue.h'],
             include_dirs=[os.path.join(tbb_root, 'include')],
-            extra_compile_args=[Q+'std=c++11'],
+            extra_compile_args=[] if sys.platform.startswith('win') else ['-std=c++11'],
             libraries   =['tbb'],
             library_dirs=[os.path.join(tbb_root, 'lib', 'intel64', 'gcc4.4'),  # for Linux
                           os.path.join(tbb_root, 'lib'),                       # for MacOS
