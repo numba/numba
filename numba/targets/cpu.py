@@ -195,6 +195,7 @@ class CPUTargetOptions(TargetOptions):
         "no_cpython_wrapper": bool,
         "fastmath": bool,
         "error_model": str,
+        "parallel": bool,
     }
 
 

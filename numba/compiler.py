@@ -42,6 +42,7 @@ class Flags(utils.ConfigOptions):
         'boundcheck': False,
         'forceinline': False,
         'no_cpython_wrapper': False,
+        'auto_parallel': False,
         'nrt': False,
         'no_rewrites': False,
         'error_model': 'python',
@@ -683,6 +684,8 @@ def _make_subtarget(targetctx, flags):
         subtargetoptions['enable_boundcheck'] = True
     if flags.nrt:
         subtargetoptions['enable_nrt'] = True
+    if flags.auto_parallel:
+        subtargetoptions['auto_parallel'] = True
     if flags.fastmath:
         subtargetoptions['enable_fastmath'] = True
     error_model = callconv.create_error_model(flags.error_model, targetctx)

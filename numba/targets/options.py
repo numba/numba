@@ -64,6 +64,9 @@ class TargetOptions(object):
         if kws.pop('no_cpython_wrapper', False):
             flags.set('no_cpython_wrapper')
 
+        if kws.pop('parallel', False):
+            flags.set('auto_parallel')
+
         if kws.pop('fastmath', False):
             flags.set('fastmath')
 
