@@ -1,5 +1,5 @@
 '''
-Copyright (c) 2015, Intel Corporation
+Copyright (c) 2016, Intel Corporation
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without 
@@ -23,38 +23,24 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 '''
 
-import numba 
+import numba
 import numpy as np
-# from scipy.special import erf
-import math
 import argparse
 import time
 
 parallel = numba.config.NUMBA_NUM_THREADS > 1
 
-@numba.vectorize(nopython=True)
-def erf(x):
-  return math.erf(x)
-
 @numba.njit(parallel=parallel)
-def cndf2(inp):
-    out = 0.5 + 0.5 * erf(0.707106781 * inp)
-    return out
+def logistic_regression(labels, points, w, iterations):
+    # synthetic but deterministic initial values
+    points1 = points.transpose()
+    for i in range(iterations):
+       y = (1.0+np.exp(-labels*(np.dot(w,points))))
+       w -= np.dot(((1.0/y-1.0)*labels), points1)
+       #y = (1.0/(1.0+np.exp(-labels*(np.dot(w,points))))-1.0) * labels
+       #w -= np.dot(y, points1)
 
-@numba.njit(parallel=parallel)
-def blackscholes(sptprice, strike, rate, volatility, time):
-    logterm = np.log10(sptprice / strike)
-    powterm = 0.5 * volatility * volatility
-    den = volatility * np.sqrt(time)
-    d1 = (((rate + powterm) * time) + logterm) / den
-    d2 = d1 - den
-    NofXd1 = cndf2(d1)
-    NofXd2 = cndf2(d2)
-    futureValue = strike * np.exp(- rate * time)
-    c1 = futureValue * NofXd2
-    call = sptprice * NofXd1 - c1
-    put  = call - futureValue + sptprice
-    return put
+    return w
 
 all_tics = []
 def tic():
@@ -65,29 +51,38 @@ def toq():
     global all_tics
     return (time.time() - all_tics.pop())
 
-
-def run(iterations):
-    sptprice   = np.full((iterations,), 42.0)
-    initStrike = 40 + (np.arange(iterations) + 1.0) / iterations
-    rate       = np.full((iterations,), 0.5)
-    volatility = np.full((iterations,), 0.2)
-    time       = np.full((iterations,), 0.5)
-
-    tic()
-    put = blackscholes(sptprice, initStrike, rate, volatility, time)
-    t = toq()
-    print("checksum: ", sum(put))
-    print("SELFTIMED ", t)
-
 def main():
-    parser = argparse.ArgumentParser(description='Black-Scholes')
-    parser.add_argument('--options', dest='options', type=int, default=10000000)
+    parser = argparse.ArgumentParser(description='Logistic Regression.')
+    parser.add_argument('--dimension', dest='dimension', type=int, default=10)
+    parser.add_argument('--points', dest='points', type=int, default=20000000)
+    parser.add_argument('--iterations', dest='iterations', type=int, default=30)
     args = parser.parse_args()
-    options = args.options
 
-    run(10)
-    print("options = ", options)
-    run(options)
+    np.random.seed(0)
+    D = 3
+    N = 4
+    iterations = 10
+    points = np.ones((D, N))
+    labels = np.ones((1, N))
+    w = 2.0*np.ones((1,D))-1.3
+    tic()
+    w = logistic_regression(labels, points, w, iterations)
+    compiletime = toq()
+    print("SELFPRIMED ", compiletime) 
+    print("checksum ", w)
+ 
+    D = args.dimension
+    N = args.points
+    iterations = args.iterations
+    print("D=",D," N=",N," iterations=",iterations)
+    points = np.random.random((D, N))
+    labels = np.random.random((1, N))
+    w = 2.0*np.ones((1,D))-1.3
+    tic()
+    w = logistic_regression(labels, points, w, iterations)
+    selftimed = toq()
+    print("SELFTIMED ", selftimed) 
+    print("checksum: ", np.sum(w))
 
 main()
-
+ 

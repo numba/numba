@@ -29,7 +29,10 @@ import argparse
 import time
 import math
 
-@numba.jit(nopython=True)
+#parallel = numba.config.NUMBA_NUM_THREADS > 1
+parallel = False
+
+@numba.njit
 def argmin(dist):
   N, numCenter = dist.shape
   mins = np.empty((N,), dtype=np.int64)
@@ -43,7 +46,8 @@ def argmin(dist):
     mins[i] = k
   return mins 
 
-@numba.jit(nopython=True)
+
+@numba.njit(parallel=parallel)
 def kmeans(numCenter, iterNum, points):
     N, D = points.shape # number of features, instances
     centroids = np.random.rand(numCenter, D)
@@ -55,8 +59,9 @@ def kmeans(numCenter, iterNum, points):
             for j in range(numCenter):
                 dist[i, j] = math.sqrt(np.sum(np.power(points[i,:] - centroids[j,:], 2.0)))
         # labels :: Array{Int, 1} = [indmin(dist[i]) for i in 1:N]
-        labels = argmin(dist) 
-        #labels = np.argmin(dist, 1)
+        labels = argmin(dist)
+        # labels = np.argmin(dist, 1) 
+        # labels = dist.argmin(1)
         # centroids :: Array{Float64,2} = [ sum(points[j,labels.==i])/sum(labels.==i) for j in 1:D, i in 1:numCenter]
         for i in range(numCenter):
           m = np.sum(labels == i)

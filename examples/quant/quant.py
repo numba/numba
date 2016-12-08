@@ -22,12 +22,15 @@ CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF 
 THE POSSIBILITY OF SUCH DAMAGE.
 '''
-from numba import *
+import numba 
 import numpy as np
 import numpy.linalg as la
 import math
 import argparse
 import time
+
+#parallel = numba.config.NUMBA_NUM_THREADS > 1
+parallel = False
 
 spot = 100.0
 strike = 110.0
@@ -51,7 +54,8 @@ def init(numPaths, numSteps):
         asset.append(asset[s] * pow(2.0, fwdFactor_log2e + vsqrtdt_log2e * np.random.randn(numPaths)))
     return(asset)
 
-@jit("float64[:](float64, float64[:], float64[:])", nopython=True)
+#@jit("float64[:](float64, float64[:], float64[:])", nopython=True)
+@numba.njit(parallel=parallel)
 def model_kernel(strike, curasset, cashFlowPut):
     vcond = curasset <= strike
     valPut0 = curasset * 0.0 # zeros(numPaths)
@@ -102,7 +106,7 @@ def model(strike, numPaths, numSteps, asset):
     putpayoff = np.maximum(strike - asset[numSteps], 0.0)
     cashFlowPut = putpayoff * avgPathFactor 
     # Now go back in time using regression
-    print(typeof(strike), typeof(asset[0]), typeof(cashFlowPut))
+    #print(typeof(strike), typeof(asset[0]), typeof(cashFlowPut))
     for s in range(numSteps,1,-1):
         curasset = asset[s]
         cashFloatPut = model_kernel(strike, curasset, cashFlowPut)
