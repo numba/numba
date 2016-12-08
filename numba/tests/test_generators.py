@@ -622,5 +622,26 @@ class TestGeneratorModel(test_factory()):
                               has_finalizer=False)
 
 
+class TestIteratorInGenerator(MemoryLeakMixin, TestCase):
+    """
+    Test iterators in generators.
+    Related issues: https://github.com/numba/numba/pull/2165
+    """
+    def test_basic(self):
+        @njit
+        def foo():
+            a = iter(range(6))
+            for i in a:
+                yield i
+            yield 99
+            for i in a:
+                yield i
+
+        got = list(foo())
+        expect = list(foo.py_func())
+
+        self.assertEqual(got, expect)
+
+
 if __name__ == '__main__':
     unittest.main()

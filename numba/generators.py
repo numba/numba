@@ -3,10 +3,13 @@ Support for lowering generators.
 """
 from __future__ import print_function, division, absolute_import
 
+from collections import defaultdict
+
 from llvmlite.llvmpy.core import Constant, Type, Builder
 
 from . import cgutils, types, config
 from .funcdesc import FunctionDescriptor
+from numba import ir
 
 
 class GeneratorDescriptor(FunctionDescriptor):
@@ -309,6 +312,50 @@ class LowerYield(object):
         self.live_vars = live_vars
         self.live_var_indices = [lower.generator_info.state_vars.index(v)
                                  for v in live_vars]
+        self._aliases = self._find_alias()
+
+    def _find_alias(self):
+        typemap = self.lower.fndesc.typemap
+        blocks = self.lower.blocks
+        alias_map = {}
+        # Find all assignments with a right-hand print() call
+        for block in blocks.values():
+            for inst in block.find_insts(ir.Assign):
+                lhs = inst.target.name
+                if isinstance(inst.value, ir.Expr) and inst.value.op == 'getiter':
+                    expr = inst.value
+                    rhs = expr.value.name
+                    lhs_type = typemap[lhs]
+                    rhs_type = typemap[rhs]
+                    if isinstance(lhs_type, types.IteratorType):
+                        if lhs_type == rhs_type:
+                            alias_map[lhs] = alias_map.get(rhs, rhs)
+                elif isinstance(inst.value, ir.Var):
+                    rhs = inst.value.name
+                    lhs_type = typemap[lhs]
+                    rhs_type = typemap[rhs]
+                    if isinstance(lhs_type, types.IteratorType):
+                        if lhs_type == rhs_type:
+                            alias_map[lhs] = alias_map.get(rhs, rhs)
+
+        # Create alias sets
+        aliases = defaultdict(set)
+        for k, v in alias_map.items():
+            aliases[v].add(v)
+            aliases[v].add(k)
+
+        for vs in aliases.values():
+            vs &= set(self.live_vars)
+
+        from pprint import pprint
+        pprint(aliases)
+        return aliases
+
+    def _get_alias_set(self, name):
+        for aset in self._aliases.values():
+            if name in aset:
+                return aset
+        return
 
     def lower_yield_suspend(self):
         self.lower.debug_print("# generator suspend")
@@ -333,13 +380,24 @@ class LowerYield(object):
         # Emit resumption point
         self.genlower.create_resumption_block(self.lower, self.inst.index)
         self.lower.debug_print("# generator resume")
+
+        aliased = set()
         # Reload live vars from state
         for state_index, name in zip(self.live_var_indices, self.live_vars):
+            if name in aliased:
+                continue
             state_slot = cgutils.gep_inbounds(self.builder, self.gen_state_ptr,
                                               0, state_index)
             ty = self.gentype.state_types[state_index]
+
+            alias_set = self._get_alias_set(name)
             val = self.context.unpack_value(self.builder, ty, state_slot)
-            self.lower.storevar(val, name)
+            if alias_set:
+                for target in alias_set:
+                    self.lower.storevar(val, target)
+                aliased |= alias_set
+            else:
+                self.lower.storevar(val, name)
             # Previous storevar is making an extra incref
             if self.context.enable_nrt:
                 self.context.nrt.decref(self.builder, ty, val)
