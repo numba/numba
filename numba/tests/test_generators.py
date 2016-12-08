@@ -639,7 +639,20 @@ class TestIteratorInGenerator(MemoryLeakMixin, TestCase):
 
         got = list(foo())
         expect = list(foo.py_func())
+        self.assertEqual(got, expect)
 
+    def test_nested_loop(self):
+        @njit
+        def foo():
+            i = iter(range(6))
+            for j in range(3):
+                for x in i:
+                    yield (j, x)
+                # `i` is exhausted at this point and in future iteration
+                yield (j, 99)
+
+        got = list(foo())
+        expect = list(foo.py_func())
         self.assertEqual(got, expect)
 
 

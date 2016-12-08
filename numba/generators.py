@@ -347,8 +347,6 @@ class LowerYield(object):
         for vs in aliases.values():
             vs &= set(self.live_vars)
 
-        from pprint import pprint
-        pprint(aliases)
         return aliases
 
     def _get_alias_set(self, name):
