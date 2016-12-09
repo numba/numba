@@ -9,7 +9,7 @@ from llvmlite.llvmpy.core import Constant, Type, Builder
 
 from . import cgutils, types, config
 from .funcdesc import FunctionDescriptor
-from numba import ir
+from numba import ir, analysis
 
 
 class GeneratorDescriptor(FunctionDescriptor):
@@ -309,51 +309,43 @@ class LowerYield(object):
         self.resume_index_ptr = self.genlower.resume_index_ptr
         self.yp = yield_point
         self.inst = self.yp.inst
+
+        # Added for issue https://github.com/numba/numba/issues/2165
+        # Use alias analysis to filter out aliasing iterator states
+        self.alias_vars = {}
+        live_vars = self._filter_aliasing_variables(live_vars, self.alias_vars)
+
         self.live_vars = live_vars
         self.live_var_indices = [lower.generator_info.state_vars.index(v)
                                  for v in live_vars]
-        self._aliases = self._find_alias()
 
-    def _find_alias(self):
-        typemap = self.lower.fndesc.typemap
+    def _filter_aliasing_variables(self, live_vars, alias_vars):
+        """
+        Filter out aliasing variables in `live_vars` and store them into
+        the `alias_vars`.
+        Returns the filtered `live_vars`
+        """
         blocks = self.lower.blocks
-        alias_map = {}
-        # Find all assignments with a right-hand print() call
-        for block in blocks.values():
-            for inst in block.find_insts(ir.Assign):
-                lhs = inst.target.name
-                if isinstance(inst.value, ir.Expr) and inst.value.op == 'getiter':
-                    expr = inst.value
-                    rhs = expr.value.name
-                    lhs_type = typemap[lhs]
-                    rhs_type = typemap[rhs]
-                    if isinstance(lhs_type, types.IteratorType):
-                        if lhs_type == rhs_type:
-                            alias_map[lhs] = alias_map.get(rhs, rhs)
-                elif isinstance(inst.value, ir.Var):
-                    rhs = inst.value.name
-                    lhs_type = typemap[lhs]
-                    rhs_type = typemap[rhs]
-                    if isinstance(lhs_type, types.IteratorType):
-                        if lhs_type == rhs_type:
-                            alias_map[lhs] = alias_map.get(rhs, rhs)
-
-        # Create alias sets
-        aliases = defaultdict(set)
-        for k, v in alias_map.items():
-            aliases[v].add(v)
-            aliases[v].add(k)
-
-        for vs in aliases.values():
-            vs &= set(self.live_vars)
-
-        return aliases
-
-    def _get_alias_set(self, name):
-        for aset in self._aliases.values():
-            if name in aset:
-                return aset
-        return
+        typemap = self.lower.fndesc.typemap
+        # Get alias sets
+        aliases = analysis.find_aliasing_iterator_variables(blocks, typemap)
+        lvs = []
+        ignored = set()
+        for lv in live_vars:
+            # Skip ignored
+            if lv in ignored:
+                continue
+            lvs.append(lv)
+            for als in aliases:
+                # If the live-var belongs to this alias-set
+                if lv in als:
+                    # Get other vars aliased by this
+                    aliased = (als & live_vars) - {lv}
+                    alias_vars[lv] = aliased
+                    # Add all aliased to ignored set
+                    ignored |= aliased
+                    break
+        return lvs
 
     def lower_yield_suspend(self):
         self.lower.debug_print("# generator suspend")
@@ -378,24 +370,16 @@ class LowerYield(object):
         # Emit resumption point
         self.genlower.create_resumption_block(self.lower, self.inst.index)
         self.lower.debug_print("# generator resume")
-
-        aliased = set()
         # Reload live vars from state
         for state_index, name in zip(self.live_var_indices, self.live_vars):
-            if name in aliased:
-                continue
             state_slot = cgutils.gep_inbounds(self.builder, self.gen_state_ptr,
                                               0, state_index)
             ty = self.gentype.state_types[state_index]
-
-            alias_set = self._get_alias_set(name)
             val = self.context.unpack_value(self.builder, ty, state_slot)
-            if alias_set:
-                for target in alias_set:
-                    self.lower.storevar(val, target)
-                aliased |= alias_set
-            else:
-                self.lower.storevar(val, name)
+            self.lower.storevar(val, name)
+            # Store to aliasing variables if any
+            for other in self.alias_vars.get(name, ()):
+                self.lower.storevar(val, other)
             # Previous storevar is making an extra incref
             if self.context.enable_nrt:
                 self.context.nrt.decref(self.builder, ty, val)

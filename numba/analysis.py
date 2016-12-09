@@ -5,7 +5,7 @@ import operator
 from functools import reduce
 from collections import namedtuple, defaultdict
 
-from numba import ir
+from numba import ir, types
 from numba.controlflow import CFGraph
 
 #
@@ -224,3 +224,42 @@ def find_top_level_loops(cfg):
     for loop in cfg.loops().values():
         if loop.header not in blocks_in_loop:
             yield loop
+
+
+def find_aliasing_iterator_variables(blocks, typemap):
+    """
+    Find aliasing iterator variables in the given basicblocks mapping.
+    Returns a list of sets of aliasing variables.
+    """
+    ordered_blocks = [v for k, v in sorted(blocks.items())]
+    # A mapping that stores the var of the original iterator object
+    alias_map = {}
+    for block in ordered_blocks:
+        # Match Assign
+        for inst in block.find_insts(ir.Assign):
+            lhs = inst.target.name
+            lhs_type = typemap[lhs]
+            # LHS must be of an IteratorType (the matched operations are all
+            # identity functions)
+            if isinstance(lhs_type, types.IteratorType):
+                # Matches getiter(IteratorType)
+                if (isinstance(inst.value, ir.Expr) and
+                        inst.value.op == 'getiter'):
+                    expr = inst.value
+                    rhs = expr.value.name
+                    rhs_type = typemap[rhs]
+                    if lhs_type == rhs_type:
+                        alias_map[lhs] = alias_map.get(rhs, rhs)
+                # Matches RHS of var of IteratorType (simple re-assignments)
+                elif isinstance(inst.value, ir.Var):
+                    rhs = inst.value.name
+                    rhs_type = typemap[rhs]
+                    if lhs_type == rhs_type:
+                        alias_map[lhs] = alias_map.get(rhs, rhs)
+    # Creates alias sets --- var in the same sets alias each other
+    aliases = defaultdict(set)
+    for k, v in alias_map.items():
+        # Group by the first object
+        aliases[v].add(v)
+        aliases[v].add(k)
+    return list(aliases.values())
