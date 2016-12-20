@@ -1,14 +1,14 @@
 Version 0.30.0
 ---------------
 
-This release adds preliminary support for Python3.6, but no official build is
+This release adds preliminary support for Python 3.6, but no official build is
 available yet.  A new system reporting tool (``numba --sysinfo``) is added to
 provide system information to help core developers in replication and debugging.
 See below for other improvements and bug fixes.
 
 Improvements:
 
-* PR #2209: Support Python3.6.
+* PR #2209: Support Python 3.6.
 * PR #2175: Support ``np.trace()``, ``np.outer()`` and ``np.kron()``.
 * PR #2197: Support ``np.nanprod()``.
 * PR #2190: Support caching for ufunc.
@@ -21,12 +21,12 @@ Fixes:
   exhaustion.
 * PR #2185, Issue #2159, #2169: Fix rewrite pass affecting objmode fallback.
 * PR #2204, Issue #2178: Fix annotation for liftedloop.
-* PR #2203: Fix Appveyor segfault with Python3.5.
+* PR #2203: Fix Appveyor segfault with Python 3.5.
 * PR #2202, Issue #2198: Fix target context not initialized when loading from
   ufunc cache.
 * PR #2172, Issue #2171: Fix optional type unpacking.
 * PR #2189, Issue #2188: Disable freezing of big (>1MB) global arrays.
-* PR #2189, Issue #2179: Fix invalid variable version in looplifting.
+* PR #2180, Issue #2179: Fix invalid variable version in looplifting.
 * PR #2156, Issue #2155: Fix divmod, floordiv segfault on CUDA.
 
 
