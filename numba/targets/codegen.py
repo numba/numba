@@ -415,7 +415,7 @@ class RuntimeLinker(object):
     PREFIX = '.numba.unresolved$'
 
     def __init__(self):
-        self._unresolved = defaultdict(list)
+        self._unresolved = utils.UniqueDict()
         self._defined = set()
         self._resolved = []
 
@@ -429,11 +429,14 @@ class RuntimeLinker(object):
         for gv in module.global_variables:
             if gv.name.startswith(prefix):
                 sym = gv.name[len(prefix):]
+                # Avoid remapping to existing GV
+                if engine.get_global_value_address(gv.name):
+                    continue
                 # Allocate a memory space for the pointer
                 abortfn = engine.get_function_address('nrt_unresolved_abort')
                 ptr = ctypes.c_void_p(abortfn)
                 engine.add_global_mapping(gv, ctypes.addressof(ptr))
-                self._unresolved[sym].append(ptr)
+                self._unresolved[sym] = ptr
 
     def scan_defined_symbols(self, module):
         """
@@ -454,9 +457,9 @@ class RuntimeLinker(object):
             # Get runtime address
             fnptr = engine.get_function_address(name)
             # Fix all usage
-            for ptr in self._unresolved[name]:
-                ptr.value = fnptr
-                self._resolved.append((name, ptr))   # keep ptr alive
+            ptr = self._unresolved[name]
+            ptr.value = fnptr
+            self._resolved.append((name, ptr))   # keep ptr alive
             # Delete resolved
             del self._unresolved[name]
 
