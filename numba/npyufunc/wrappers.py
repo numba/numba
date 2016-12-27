@@ -266,21 +266,38 @@ class UArrayArg(object):
 
 
 class _GufuncWrapper(object):
-    def __init__(self, library, context, signature, sin, sout, fndesc,
-                 env):
-        self.library = library
-        self.context = context
-        self.call_conv = context.call_conv
-        self.signature = signature
+    def __init__(self, cres, sin, sout):
+        self.cres = cres
         self.sin = sin
         self.sout = sout
-        self.fndesc = fndesc
         self.is_objectmode = self.signature.return_type == types.pyobject
-        self.env = env
+        self.wrapperlib = self.context.codegen().create_library(str(self))
 
-        self.wrapperlib = context.codegen().create_library(str(self))
+    @property
+    def library(self):
+        return self.cres.library
 
-    def build(self):
+    @property
+    def context(self):
+        return self.cres.target_context
+
+    @property
+    def call_conv(self):
+        return self.context.call_conv
+
+    @property
+    def signature(self):
+        return self.cres.signature
+
+    @property
+    def fndesc(self):
+        return self.cres.fndesc
+
+    @property
+    def env(self):
+        return self.cres.environment
+
+    def _build_wrapper(self):
         byte_t = Type.int(8)
         byte_ptr_t = Type.pointer(byte_t)
         byte_ptr_ptr_t = Type.pointer(byte_ptr_t)
@@ -356,11 +373,14 @@ class _GufuncWrapper(object):
         self.gen_epilogue(builder, pyapi)
 
         builder.ret_void()
+        return wrapper_module, wrapper.name
 
+    def build(self):
+        wrapper_module, wrapper_name = self._build_wrapper()
         # Link and finalize
         self.wrapperlib.add_ir_module(wrapper_module)
         self.wrapperlib.add_linking_library(self.library)
-        ptr = self.wrapperlib.get_pointer_to_function(wrapper.name)
+        ptr = self.wrapperlib.get_pointer_to_function(wrapper_name)
         return ptr, self.env
 
     def gen_loop_body(self, builder, pyapi, func, args):
@@ -404,12 +424,12 @@ class _GufuncObjectWrapper(_GufuncWrapper):
         pyapi.gil_release(self.gil)
 
 
-def build_gufunc_wrapper(library, context, signature, sin, sout, fndesc,
-                         env):
+def build_gufunc_wrapper(cres, sin, sout):
+    signature = cres.signature
     wrapcls = (_GufuncObjectWrapper
                if signature.return_type == types.pyobject
                else _GufuncWrapper)
-    return wrapcls(library, context, signature, sin, sout, fndesc, env).build()
+    return wrapcls(cres, sin, sout).build()
 
 
 def _prepare_call_to_object_mode(context, builder, pyapi, func,

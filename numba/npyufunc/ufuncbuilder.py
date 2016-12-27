@@ -306,13 +306,8 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         Returns (dtype numbers, function ptr, EnvironmentObject)
         """
         # Buider wrapper for ufunc entry point
-        ctx = cres.target_context
-        library = cres.library
         signature = cres.signature
-        ptr, env = build_gufunc_wrapper(library, ctx,
-                                            signature, self.sin, self.sout,
-                                            fndesc=cres.fndesc,
-                                            env=cres.environment)
+        ptr, env = build_gufunc_wrapper(cres, self.sin, self.sout)
 
         # Get dtypes
         dtypenums = []
