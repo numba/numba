@@ -301,6 +301,12 @@ class _GufuncWrapper(object):
         return self.cres.environment
 
     def _build_wrapper(self, library, name):
+        """
+        The LLVM IRBuilder code to create the gufunc wrapper.
+        The *library* arg is the CodeLibrary for which the wrapper should
+        be added to.  The *name* arg is the name of the wrapper function being
+        created.
+        """
         byte_t = Type.int(8)
         byte_ptr_t = Type.pointer(byte_t)
         byte_ptr_ptr_t = Type.pointer(byte_ptr_t)
@@ -376,22 +382,24 @@ class _GufuncWrapper(object):
         self.gen_epilogue(builder, pyapi)
 
         builder.ret_void()
-        return wrapper_module, wrapper.name
+
+        # Link
+        library.add_ir_module(wrapper_module)
+        library.add_linking_library(self.library)
 
     def build(self):
         wrapperlib = self.cache.load_overload(self.cres.signature, self.cres.target_context)
         wrapper_name = "__gufunc__." + self.fndesc.mangled_name
 
         if wrapperlib is None:
+            # Create library and enable caching
             wrapperlib = self.context.codegen().create_library(str(self))
             wrapperlib.enable_object_caching()
-
-            wrapper_module, wrapper_name = self._build_wrapper(wrapperlib, wrapper_name)
-            # Link and finalize
-            wrapperlib.add_ir_module(wrapper_module)
-            wrapperlib.add_linking_library(self.library)
+            # Build wrapper
+            self._build_wrapper(wrapperlib, wrapper_name)
+            # Cache
             self.cache.save_overload(self.cres.signature, wrapperlib)
-
+        # Finalize and get function pointer
         ptr = wrapperlib.get_pointer_to_function(wrapper_name)
         return ptr, self.env
 

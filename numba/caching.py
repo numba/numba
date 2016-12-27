@@ -531,20 +531,28 @@ class FunctionCache(_Cache):
     def _dump(self, obj):
         return pickle.dumps(obj, protocol=-1)
 
-    def _reduce(self, payload):
-        return payload._reduce()
+    def _reduce(self, cres):
+        """
+        Returns a serialized CompileResult
+        """
+        return cres._reduce()
 
     def _rebuild(self, target_context, payload):
+        """
+        Returns the unserialized CompileResult
+        """
         return compiler.CompileResult._rebuild(target_context, *payload)
 
 
 class LibraryCache(FunctionCache):
     """
     Extends FunctionCache to provide caching of related CodeLibrary objects.
+    This stores the serialized library in the same cache file as other overload
+    entries for the associated function.
     """
     def __init__(self, py_func, identifier):
         """
-        The *py_func* arg is the underlying function being cached.
+        The *py_func* arg is the associated function being cached.
         The *identifier* arg is an arbitrary object to identity the feature for
         which this cache is serving.
         """
@@ -565,7 +573,13 @@ class LibraryCache(FunctionCache):
         return (self._identifier, sig, codegen.magic_tuple())
 
     def _reduce(self, payload):
+        """
+        Returns a serialized library
+        """
         return payload.serialize_using_object_code()
 
     def _rebuild(self, target_context, payload):
+        """
+        Returns the unserialized library
+        """
         return target_context.codegen().unserialize_library(payload)
