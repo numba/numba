@@ -272,7 +272,9 @@ class _GufuncWrapper(object):
         self.sin = sin
         self.sout = sout
         self.is_objectmode = self.signature.return_type == types.pyobject
-        self.cache = LibraryCache(py_func=self.py_func) if cache else NullCache()
+        self.cache = (LibraryCache(py_func=self.py_func,
+                                   identifier=type(self))
+                      if cache else NullCache())
 
     @property
     def library(self):

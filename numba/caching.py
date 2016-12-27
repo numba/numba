@@ -22,28 +22,23 @@ from .six import add_metaclass
 import numba
 from . import compiler, config, utils
 from .errors import NumbaWarning
-
-from functools import singledispatch
 from numba.targets.base import BaseContext
 from numba.targets.codegen import CodeLibrary
 from numba.compiler import CompileResult
 
-@singledispatch
-def _get_index_key(obj):
-    raise TypeError(type(obj))
 
-
-@_get_index_key.register(BaseContext)
-def _(ctx):
-    return ctx.codegen()
-
-@_get_index_key.register(CodeLibrary)
-def _(cl):
-    return cl.codegen
-
-@_get_index_key.register(CompileResult)
-def _(cr):
-    return cr.target_context.codegen()
+def _get_codegen(obj):
+    """
+    Returns the Codegen associated with the given object.
+    """
+    if isinstance(obj, BaseContext):
+        return obj.codegen()
+    elif isinstance(obj, CodeLibrary):
+        return obj.codegen
+    elif isinstance(obj, CompileResult):
+        return obj.target_context.codegen()
+    else:
+        raise TypeError(type(obj))
 
 
 def _cache_log(msg, *args):
@@ -376,7 +371,7 @@ class FunctionCache(_Cache):
         if not self._enabled:
             return
         overloads = self._load_index()
-        key = self._index_key(sig, _get_index_key(target_context))
+        key = self._index_key(sig, _get_codegen(target_context))
         data_name = overloads.get(key)
         if data_name is None:
             return
@@ -400,7 +395,7 @@ class FunctionCache(_Cache):
             return
         self._locator.ensure_cache_path()
         overloads = self._load_index()
-        key = self._index_key(sig, _get_index_key(cres))
+        key = self._index_key(sig, _get_codegen(cres))
         try:
             # If key already exists, we will overwrite the file
             data_name = overloads[key]
@@ -515,7 +510,7 @@ class FunctionCache(_Cache):
             data = f.read()
         tup = pickle.loads(data)
         _cache_log("[cache] data loaded from %r", path)
-        return compiler.CompileResult._rebuild(target_context, *tup)
+        return self._rebuild(target_context, tup)
 
     def _save_index(self, overloads):
         data = self._source_stamp, overloads
@@ -526,7 +521,7 @@ class FunctionCache(_Cache):
         _cache_log("[cache] index saved to %r", self._index_path)
 
     def _save_data(self, name, cres):
-        data = cres._reduce()
+        data = self._reduce(cres)
         data = self._dump(data)
         path = self._data_path(name)
         with self._open_for_write(path) as f:
@@ -536,22 +531,41 @@ class FunctionCache(_Cache):
     def _dump(self, obj):
         return pickle.dumps(obj, protocol=-1)
 
+    def _reduce(self, payload):
+        return payload._reduce()
+
+    def _rebuild(self, target_context, payload):
+        return compiler.CompileResult._rebuild(target_context, *payload)
+
 
 class LibraryCache(FunctionCache):
-    def _check_cachable(self, library):
-        return True
+    """
+    Extends FunctionCache to provide caching of related CodeLibrary objects.
+    """
+    def __init__(self, py_func, identifier):
+        """
+        The *py_func* arg is the underlying function being cached.
+        The *identifier* arg is an arbitrary object to identity the feature for
+        which this cache is serving.
+        """
+        self._identifier = identifier
+        super(LibraryCache, self).__init__(py_func)
 
-    def _load_data(self, name, target_context):
-        path = self._data_path(name)
-        with open(path, "rb") as f:
-            data = f.read()
-        tup = pickle.loads(data)
-        _cache_log("[cache] data loaded from %r", path)
-        return CodeLibrary._rebuild(target_context, *tup)
+    def _check_cachable(self, library):
+        """
+        Check cachability of the given library.
+        """
+        return True
 
     def _index_key(self, sig, codegen):
         """
         Compute index key for the given signature and codegen.
         It includes a description of the OS and target architecture.
         """
-        return ('wrapper', sig, codegen.magic_tuple())
+        return (self._identifier, sig, codegen.magic_tuple())
+
+    def _reduce(self, payload):
+        return payload.serialize_using_object_code()
+
+    def _rebuild(self, target_context, payload):
+        return target_context.codegen().unserialize_library(payload)
