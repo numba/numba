@@ -139,8 +139,10 @@ class TestDUfuncCacheTest(UfuncCacheTest):
 class TestGUfuncCacheTest(UfuncCacheTest):
 
     def test_direct_gufunc_cache(self, **kwargs):
+        # 2 cache entry for the 2 overloads
+        # and 2 cache entry for the gufunc wrapper
         new_ufunc, cached_ufunc = self.check_ufunc_cache(
-            "direct_gufunc_cache_usecase", n_overloads=2, **kwargs)
+            "direct_gufunc_cache_usecase", n_overloads=2 + 2, **kwargs)
         # Test the cached and original versions
         inp = np.random.random(10).astype(np.float64)
         np.testing.assert_equal(new_ufunc(inp), cached_ufunc(inp))
@@ -154,6 +156,8 @@ class TestGUfuncCacheTest(UfuncCacheTest):
         self.test_direct_gufunc_cache(target='parallel')
 
     def test_indirect_gufunc_cache(self, **kwargs):
+        # 3 cache entry for the 3 overloads
+        # and no cache entry for the gufunc wrapper
         new_ufunc, cached_ufunc = self.check_ufunc_cache(
             "indirect_gufunc_cache_usecase", n_overloads=3, **kwargs)
         # Test the cached and original versions
