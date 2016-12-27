@@ -23,6 +23,28 @@ import numba
 from . import compiler, config, utils
 from .errors import NumbaWarning
 
+from functools import singledispatch
+from numba.targets.base import BaseContext
+from numba.targets.codegen import CodeLibrary
+from numba.compiler import CompileResult
+
+@singledispatch
+def _get_index_key(obj):
+    raise TypeError(type(obj))
+
+
+@_get_index_key.register(BaseContext)
+def _(ctx):
+    return ctx.codegen()
+
+@_get_index_key.register(CodeLibrary)
+def _(cl):
+    return cl.codegen
+
+@_get_index_key.register(CompileResult)
+def _(cr):
+    return cr.target_context.codegen()
+
 
 def _cache_log(msg, *args):
     if config.DEBUG_CACHE:
@@ -354,7 +376,7 @@ class FunctionCache(_Cache):
         if not self._enabled:
             return
         overloads = self._load_index()
-        key = self._index_key(sig, target_context.codegen())
+        key = self._index_key(sig, _get_index_key(target_context))
         data_name = overloads.get(key)
         if data_name is None:
             return
@@ -378,7 +400,7 @@ class FunctionCache(_Cache):
             return
         self._locator.ensure_cache_path()
         overloads = self._load_index()
-        key = self._index_key(sig, cres.library.codegen)
+        key = self._index_key(sig, _get_index_key(cres))
         try:
             # If key already exists, we will overwrite the file
             data_name = overloads[key]
@@ -513,3 +535,23 @@ class FunctionCache(_Cache):
 
     def _dump(self, obj):
         return pickle.dumps(obj, protocol=-1)
+
+
+class LibraryCache(FunctionCache):
+    def _check_cachable(self, library):
+        return True
+
+    def _load_data(self, name, target_context):
+        path = self._data_path(name)
+        with open(path, "rb") as f:
+            data = f.read()
+        tup = pickle.loads(data)
+        _cache_log("[cache] data loaded from %r", path)
+        return CodeLibrary._rebuild(target_context, *tup)
+
+    def _index_key(self, sig, codegen):
+        """
+        Compute index key for the given signature and codegen.
+        It includes a description of the OS and target architecture.
+        """
+        return ('wrapper', sig, codegen.magic_tuple())

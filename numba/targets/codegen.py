@@ -365,6 +365,13 @@ class CodeLibrary(object):
         else:
             raise ValueError("unsupported serialization kind %r" % (kind,))
 
+    def _reduce(self):
+        return (self.serialize_using_object_code(),)
+
+    @classmethod
+    def _rebuild(cls, target_context, libdata):
+        return target_context.codegen().unserialize_library(libdata)
+
 
 class AOTCodeLibrary(CodeLibrary):
 

@@ -263,6 +263,7 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         self.signature = signature
         self.sin, self.sout = parse_signature(signature)
         self.targetoptions = targetoptions
+        self.cache = cache
         self._sigs = []
         self._cres = {}
 
@@ -307,7 +308,8 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         """
         # Buider wrapper for ufunc entry point
         signature = cres.signature
-        ptr, env = build_gufunc_wrapper(cres, self.sin, self.sout)
+        ptr, env = build_gufunc_wrapper(self.py_func, cres, self.sin, self.sout,
+                                        cache=self.cache)
 
         # Get dtypes
         dtypenums = []

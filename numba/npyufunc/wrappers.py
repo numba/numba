@@ -1,10 +1,10 @@
 from __future__ import print_function, division, absolute_import
 import numpy as np
 
-from llvmlite.llvmpy.core import (Type, Builder, LINKAGE_INTERNAL,
-                                  ICMP_EQ, Constant)
+from llvmlite.llvmpy.core import Type, Builder, ICMP_EQ, Constant
 
 from numba import types, cgutils
+from ..caching import LibraryCache, NullCache
 
 
 def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
@@ -266,12 +266,13 @@ class UArrayArg(object):
 
 
 class _GufuncWrapper(object):
-    def __init__(self, cres, sin, sout):
+    def __init__(self, py_func, cres, sin, sout, cache):
+        self.py_func = py_func
         self.cres = cres
         self.sin = sin
         self.sout = sout
         self.is_objectmode = self.signature.return_type == types.pyobject
-        self.wrapperlib = self.context.codegen().create_library(str(self))
+        self.cache = LibraryCache(py_func=self.py_func) if cache else NullCache()
 
     @property
     def library(self):
@@ -297,7 +298,7 @@ class _GufuncWrapper(object):
     def env(self):
         return self.cres.environment
 
-    def _build_wrapper(self):
+    def _build_wrapper(self, library, name):
         byte_t = Type.int(8)
         byte_ptr_t = Type.pointer(byte_t)
         byte_ptr_ptr_t = Type.pointer(byte_ptr_t)
@@ -307,14 +308,14 @@ class _GufuncWrapper(object):
         fnty = Type.function(Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                            intp_ptr_t, byte_ptr_t])
 
-        wrapper_module = self.wrapperlib.create_ir_module('')
+        wrapper_module = library.create_ir_module('')
         func_type = self.call_conv.get_function_type(self.fndesc.restype,
                                                      self.fndesc.argtypes)
         fname = self.fndesc.llvm_func_name
         func = wrapper_module.add_function(func_type, name=fname)
 
         func.attributes.add("alwaysinline")
-        wrapper = wrapper_module.add_function(fnty, "__gufunc__." + fname)
+        wrapper = wrapper_module.add_function(fnty, name)
         arg_args, arg_dims, arg_steps, arg_data = wrapper.args
         arg_args.name = "args"
         arg_dims.name = "dims"
@@ -376,11 +377,20 @@ class _GufuncWrapper(object):
         return wrapper_module, wrapper.name
 
     def build(self):
-        wrapper_module, wrapper_name = self._build_wrapper()
-        # Link and finalize
-        self.wrapperlib.add_ir_module(wrapper_module)
-        self.wrapperlib.add_linking_library(self.library)
-        ptr = self.wrapperlib.get_pointer_to_function(wrapper_name)
+        wrapperlib = self.cache.load_overload(self.cres.signature, self.cres.target_context)
+        wrapper_name = "__gufunc__." + self.fndesc.mangled_name
+
+        if wrapperlib is None:
+            wrapperlib = self.context.codegen().create_library(str(self))
+            wrapperlib.enable_object_caching()
+
+            wrapper_module, wrapper_name = self._build_wrapper(wrapperlib, wrapper_name)
+            # Link and finalize
+            wrapperlib.add_ir_module(wrapper_module)
+            wrapperlib.add_linking_library(self.library)
+            self.cache.save_overload(self.cres.signature, wrapperlib)
+
+        ptr = wrapperlib.get_pointer_to_function(wrapper_name)
         return ptr, self.env
 
     def gen_loop_body(self, builder, pyapi, func, args):
@@ -424,12 +434,12 @@ class _GufuncObjectWrapper(_GufuncWrapper):
         pyapi.gil_release(self.gil)
 
 
-def build_gufunc_wrapper(cres, sin, sout):
+def build_gufunc_wrapper(py_func, cres, sin, sout, cache):
     signature = cres.signature
     wrapcls = (_GufuncObjectWrapper
                if signature.return_type == types.pyobject
                else _GufuncWrapper)
-    return wrapcls(cres, sin, sout).build()
+    return wrapcls(py_func, cres, sin, sout, cache).build()
 
 
 def _prepare_call_to_object_mode(context, builder, pyapi, func,
