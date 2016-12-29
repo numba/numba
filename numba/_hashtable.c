@@ -1,4 +1,15 @@
-/* The implementation of the hash table (_Py_hashtable_t) is based on the cfuhash
+/*
+ * This file and _hashtable.h are from CPython 3.5.  The symbols have been
+ * renamed from _Py_hashxxx to _Numba_hashxxx to avoid name clashes with
+ * the CPython definitions (including at runtime through dynamic linking).
+ * Those CPython APIs are private and can change in incompatible ways at
+ * any time.
+ *
+ * Command line used for renaming:
+ * $ sed -i -r 's/\b_Py_(has[h]table)/_Numba_\1/ig' numba/_hashtable.h numba/_hashtable.c
+ */
+
+/* The implementation of the hash table (_Numba_hashtable_t) is based on the cfuhash
    project:
    http://sourceforge.net/projects/libcfu/
 
@@ -53,16 +64,16 @@
 #define HASHTABLE_REHASH_FACTOR 2.0 / (HASHTABLE_LOW + HASHTABLE_HIGH)
 
 #define BUCKETS_HEAD(SLIST) \
-        ((_Py_hashtable_entry_t *)_Py_SLIST_HEAD(&(SLIST)))
+        ((_Numba_hashtable_entry_t *)_Py_SLIST_HEAD(&(SLIST)))
 #define TABLE_HEAD(HT, BUCKET) \
-        ((_Py_hashtable_entry_t *)_Py_SLIST_HEAD(&(HT)->buckets[BUCKET]))
+        ((_Numba_hashtable_entry_t *)_Py_SLIST_HEAD(&(HT)->buckets[BUCKET]))
 #define ENTRY_NEXT(ENTRY) \
-        ((_Py_hashtable_entry_t *)_Py_SLIST_ITEM_NEXT(ENTRY))
+        ((_Numba_hashtable_entry_t *)_Py_SLIST_ITEM_NEXT(ENTRY))
 #define HASHTABLE_ITEM_SIZE(HT) \
-        (sizeof(_Py_hashtable_entry_t) + (HT)->data_size)
+        (sizeof(_Numba_hashtable_entry_t) + (HT)->data_size)
 
 /* Forward declaration */
-static void hashtable_rehash(_Py_hashtable_t *ht);
+static void hashtable_rehash(_Numba_hashtable_t *ht);
 
 static void
 _Py_slist_init(_Py_slist_t *list)
@@ -88,19 +99,19 @@ _Py_slist_remove(_Py_slist_t *list, _Py_slist_item_t *previous,
 }
 
 Py_uhash_t
-_Py_hashtable_hash_int(const void *key)
+_Numba_hashtable_hash_int(const void *key)
 {
     return (Py_uhash_t)key;
 }
 
 Py_uhash_t
-_Py_hashtable_hash_ptr(const void *key)
+_Numba_hashtable_hash_ptr(const void *key)
 {
     return (Py_uhash_t)_Py_HashPointer((void *)key);
 }
 
 int
-_Py_hashtable_compare_direct(const void *key, const _Py_hashtable_entry_t *entry)
+_Numba_hashtable_compare_direct(const void *key, const _Numba_hashtable_entry_t *entry)
 {
     return entry->key == key;
 }
@@ -118,18 +129,18 @@ round_size(size_t s)
     return i;
 }
 
-_Py_hashtable_t *
-_Py_hashtable_new_full(size_t data_size, size_t init_size,
-                       _Py_hashtable_hash_func hash_func,
-                       _Py_hashtable_compare_func compare_func,
-                       _Py_hashtable_copy_data_func copy_data_func,
-                       _Py_hashtable_free_data_func free_data_func,
-                       _Py_hashtable_get_data_size_func get_data_size_func,
-                       _Py_hashtable_allocator_t *allocator)
+_Numba_hashtable_t *
+_Numba_hashtable_new_full(size_t data_size, size_t init_size,
+                       _Numba_hashtable_hash_func hash_func,
+                       _Numba_hashtable_compare_func compare_func,
+                       _Numba_hashtable_copy_data_func copy_data_func,
+                       _Numba_hashtable_free_data_func free_data_func,
+                       _Numba_hashtable_get_data_size_func get_data_size_func,
+                       _Numba_hashtable_allocator_t *allocator)
 {
-    _Py_hashtable_t *ht;
+    _Numba_hashtable_t *ht;
     size_t buckets_size;
-    _Py_hashtable_allocator_t alloc;
+    _Numba_hashtable_allocator_t alloc;
 
     if (allocator == NULL) {
         alloc.malloc = PyMem_RawMalloc;
@@ -138,7 +149,7 @@ _Py_hashtable_new_full(size_t data_size, size_t init_size,
     else
         alloc = *allocator;
 
-    ht = (_Py_hashtable_t *)alloc.malloc(sizeof(_Py_hashtable_t));
+    ht = (_Numba_hashtable_t *)alloc.malloc(sizeof(_Numba_hashtable_t));
     if (ht == NULL)
         return ht;
 
@@ -163,26 +174,26 @@ _Py_hashtable_new_full(size_t data_size, size_t init_size,
     return ht;
 }
 
-_Py_hashtable_t *
-_Py_hashtable_new(size_t data_size,
-                  _Py_hashtable_hash_func hash_func,
-                  _Py_hashtable_compare_func compare_func)
+_Numba_hashtable_t *
+_Numba_hashtable_new(size_t data_size,
+                  _Numba_hashtable_hash_func hash_func,
+                  _Numba_hashtable_compare_func compare_func)
 {
-    return _Py_hashtable_new_full(data_size, HASHTABLE_MIN_SIZE,
+    return _Numba_hashtable_new_full(data_size, HASHTABLE_MIN_SIZE,
                                   hash_func, compare_func,
                                   NULL, NULL, NULL, NULL);
 }
 
 size_t
-_Py_hashtable_size(_Py_hashtable_t *ht)
+_Numba_hashtable_size(_Numba_hashtable_t *ht)
 {
     size_t size;
     size_t hv;
 
-    size = sizeof(_Py_hashtable_t);
+    size = sizeof(_Numba_hashtable_t);
 
     /* buckets */
-    size += ht->num_buckets * sizeof(_Py_hashtable_entry_t *);
+    size += ht->num_buckets * sizeof(_Numba_hashtable_entry_t *);
 
     /* entries */
     size += ht->entries * HASHTABLE_ITEM_SIZE(ht);
@@ -190,12 +201,12 @@ _Py_hashtable_size(_Py_hashtable_t *ht)
     /* data linked from entries */
     if (ht->get_data_size_func) {
         for (hv = 0; hv < ht->num_buckets; hv++) {
-            _Py_hashtable_entry_t *entry;
+            _Numba_hashtable_entry_t *entry;
 
             for (entry = TABLE_HEAD(ht, hv); entry; entry = ENTRY_NEXT(entry)) {
                 void *data;
 
-                data = _Py_HASHTABLE_ENTRY_DATA_AS_VOID_P(entry);
+                data = _Numba_HASHTABLE_ENTRY_DATA_AS_VOID_P(entry);
                 size += ht->get_data_size_func(data);
             }
         }
@@ -205,15 +216,15 @@ _Py_hashtable_size(_Py_hashtable_t *ht)
 
 #ifdef Py_DEBUG
 void
-_Py_hashtable_print_stats(_Py_hashtable_t *ht)
+_Numba_hashtable_print_stats(_Numba_hashtable_t *ht)
 {
     size_t size;
     size_t chain_len, max_chain_len, total_chain_len, nchains;
-    _Py_hashtable_entry_t *entry;
+    _Numba_hashtable_entry_t *entry;
     size_t hv;
     double load;
 
-    size = _Py_hashtable_size(ht);
+    size = _Numba_hashtable_size(ht);
 
     load = (double)ht->entries / ht->num_buckets;
 
@@ -244,12 +255,12 @@ _Py_hashtable_print_stats(_Py_hashtable_t *ht)
 #endif
 
 /* Get an entry. Return NULL if the key does not exist. */
-_Py_hashtable_entry_t *
-_Py_hashtable_get_entry(_Py_hashtable_t *ht, const void *key)
+_Numba_hashtable_entry_t *
+_Numba_hashtable_get_entry(_Numba_hashtable_t *ht, const void *key)
 {
     Py_uhash_t key_hash;
     size_t index;
-    _Py_hashtable_entry_t *entry;
+    _Numba_hashtable_entry_t *entry;
 
     key_hash = ht->hash_func(key);
     index = key_hash & (ht->num_buckets - 1);
@@ -263,11 +274,11 @@ _Py_hashtable_get_entry(_Py_hashtable_t *ht, const void *key)
 }
 
 static int
-_hashtable_pop_entry(_Py_hashtable_t *ht, const void *key, void *data, size_t data_size)
+_hashtable_pop_entry(_Numba_hashtable_t *ht, const void *key, void *data, size_t data_size)
 {
     Py_uhash_t key_hash;
     size_t index;
-    _Py_hashtable_entry_t *entry, *previous;
+    _Numba_hashtable_entry_t *entry, *previous;
 
     key_hash = ht->hash_func(key);
     index = key_hash & (ht->num_buckets - 1);
@@ -287,7 +298,7 @@ _hashtable_pop_entry(_Py_hashtable_t *ht, const void *key, void *data, size_t da
     ht->entries--;
 
     if (data != NULL)
-        _Py_HASHTABLE_ENTRY_READ_DATA(ht, data, data_size, entry);
+        _Numba_HASHTABLE_ENTRY_READ_DATA(ht, data, data_size, entry);
     ht->alloc.free(entry);
 
     if ((float)ht->entries / (float)ht->num_buckets < HASHTABLE_LOW)
@@ -298,19 +309,19 @@ _hashtable_pop_entry(_Py_hashtable_t *ht, const void *key, void *data, size_t da
 /* Add a new entry to the hash. The key must not be present in the hash table.
    Return 0 on success, -1 on memory error. */
 int
-_Py_hashtable_set(_Py_hashtable_t *ht, const void *key,
+_Numba_hashtable_set(_Numba_hashtable_t *ht, const void *key,
                   void *data, size_t data_size)
 {
     Py_uhash_t key_hash;
     size_t index;
-    _Py_hashtable_entry_t *entry;
+    _Numba_hashtable_entry_t *entry;
 
     assert(data != NULL || data_size == 0);
 #ifndef NDEBUG
     /* Don't write the assertion on a single line because it is interesting
        to know the duplicated entry if the assertion failed. The entry can
        be read using a debugger. */
-    entry = _Py_hashtable_get_entry(ht, key);
+    entry = _Numba_hashtable_get_entry(ht, key);
     assert(entry == NULL);
 #endif
 
@@ -327,7 +338,7 @@ _Py_hashtable_set(_Py_hashtable_t *ht, const void *key,
     entry->key_hash = key_hash;
 
     assert(data_size == ht->data_size);
-    memcpy(_Py_HASHTABLE_ENTRY_DATA(entry), data, data_size);
+    memcpy(_Numba_HASHTABLE_ENTRY_DATA(entry), data, data_size);
 
     _Py_slist_prepend(&ht->buckets[index], (_Py_slist_item_t*)entry);
     ht->entries++;
@@ -340,21 +351,21 @@ _Py_hashtable_set(_Py_hashtable_t *ht, const void *key,
 /* Get data from an entry. Copy entry data into data and return 1 if the entry
    exists, return 0 if the entry does not exist. */
 int
-_Py_hashtable_get(_Py_hashtable_t *ht, const void *key, void *data, size_t data_size)
+_Numba_hashtable_get(_Numba_hashtable_t *ht, const void *key, void *data, size_t data_size)
 {
-    _Py_hashtable_entry_t *entry;
+    _Numba_hashtable_entry_t *entry;
 
     assert(data != NULL);
 
-    entry = _Py_hashtable_get_entry(ht, key);
+    entry = _Numba_hashtable_get_entry(ht, key);
     if (entry == NULL)
         return 0;
-    _Py_HASHTABLE_ENTRY_READ_DATA(ht, data, data_size, entry);
+    _Numba_HASHTABLE_ENTRY_READ_DATA(ht, data, data_size, entry);
     return 1;
 }
 
 int
-_Py_hashtable_pop(_Py_hashtable_t *ht, const void *key, void *data, size_t data_size)
+_Numba_hashtable_pop(_Numba_hashtable_t *ht, const void *key, void *data, size_t data_size)
 {
     assert(data != NULL);
     assert(ht->free_data_func == NULL);
@@ -363,7 +374,7 @@ _Py_hashtable_pop(_Py_hashtable_t *ht, const void *key, void *data, size_t data_
 
 /* Delete an entry. The entry must exist. */
 void
-_Py_hashtable_delete(_Py_hashtable_t *ht, const void *key)
+_Numba_hashtable_delete(_Numba_hashtable_t *ht, const void *key)
 {
 #ifndef NDEBUG
     int found = _hashtable_pop_entry(ht, key, NULL, 0);
@@ -377,11 +388,11 @@ _Py_hashtable_delete(_Py_hashtable_t *ht, const void *key)
    key/value pair in the hash by hashtable_foreach().  Iteration
    stops if a non-zero value is returned. */
 int
-_Py_hashtable_foreach(_Py_hashtable_t *ht,
-                      int (*func) (_Py_hashtable_entry_t *entry, void *arg),
+_Numba_hashtable_foreach(_Numba_hashtable_t *ht,
+                      int (*func) (_Numba_hashtable_entry_t *entry, void *arg),
                       void *arg)
 {
-    _Py_hashtable_entry_t *entry;
+    _Numba_hashtable_entry_t *entry;
     size_t hv;
 
     for (hv = 0; hv < ht->num_buckets; hv++) {
@@ -395,7 +406,7 @@ _Py_hashtable_foreach(_Py_hashtable_t *ht,
 }
 
 static void
-hashtable_rehash(_Py_hashtable_t *ht)
+hashtable_rehash(_Numba_hashtable_t *ht)
 {
     size_t buckets_size, new_size, bucket;
     _Py_slist_t *old_buckets = NULL;
@@ -421,7 +432,7 @@ hashtable_rehash(_Py_hashtable_t *ht)
     ht->num_buckets = new_size;
 
     for (bucket = 0; bucket < old_num_buckets; bucket++) {
-        _Py_hashtable_entry_t *entry, *next;
+        _Numba_hashtable_entry_t *entry, *next;
         for (entry = BUCKETS_HEAD(old_buckets[bucket]); entry != NULL; entry = next) {
             size_t entry_index;
 
@@ -437,16 +448,16 @@ hashtable_rehash(_Py_hashtable_t *ht)
 }
 
 void
-_Py_hashtable_clear(_Py_hashtable_t *ht)
+_Numba_hashtable_clear(_Numba_hashtable_t *ht)
 {
-    _Py_hashtable_entry_t *entry, *next;
+    _Numba_hashtable_entry_t *entry, *next;
     size_t i;
 
     for (i=0; i < ht->num_buckets; i++) {
         for (entry = TABLE_HEAD(ht, i); entry != NULL; entry = next) {
             next = ENTRY_NEXT(entry);
             if (ht->free_data_func)
-                ht->free_data_func(_Py_HASHTABLE_ENTRY_DATA_AS_VOID_P(entry));
+                ht->free_data_func(_Numba_HASHTABLE_ENTRY_DATA_AS_VOID_P(entry));
             ht->alloc.free(entry);
         }
         _Py_slist_init(&ht->buckets[i]);
@@ -456,7 +467,7 @@ _Py_hashtable_clear(_Py_hashtable_t *ht)
 }
 
 void
-_Py_hashtable_destroy(_Py_hashtable_t *ht)
+_Numba_hashtable_destroy(_Numba_hashtable_t *ht)
 {
     size_t i;
 
@@ -465,7 +476,7 @@ _Py_hashtable_destroy(_Py_hashtable_t *ht)
         while (entry) {
             _Py_slist_item_t *entry_next = entry->next;
             if (ht->free_data_func)
-                ht->free_data_func(_Py_HASHTABLE_ENTRY_DATA_AS_VOID_P(entry));
+                ht->free_data_func(_Numba_HASHTABLE_ENTRY_DATA_AS_VOID_P(entry));
             ht->alloc.free(entry);
             entry = entry_next;
         }
@@ -476,16 +487,16 @@ _Py_hashtable_destroy(_Py_hashtable_t *ht)
 }
 
 /* Return a copy of the hash table */
-_Py_hashtable_t *
-_Py_hashtable_copy(_Py_hashtable_t *src)
+_Numba_hashtable_t *
+_Numba_hashtable_copy(_Numba_hashtable_t *src)
 {
-    _Py_hashtable_t *dst;
-    _Py_hashtable_entry_t *entry;
+    _Numba_hashtable_t *dst;
+    _Numba_hashtable_entry_t *entry;
     size_t bucket;
     int err;
     void *data, *new_data;
 
-    dst = _Py_hashtable_new_full(src->data_size, src->num_buckets,
+    dst = _Numba_hashtable_new_full(src->data_size, src->num_buckets,
                             src->hash_func, src->compare_func,
                             src->copy_data_func, src->free_data_func,
                             src->get_data_size_func, &src->alloc);
@@ -496,20 +507,20 @@ _Py_hashtable_copy(_Py_hashtable_t *src)
         entry = TABLE_HEAD(src, bucket);
         for (; entry; entry = ENTRY_NEXT(entry)) {
             if (src->copy_data_func) {
-                data = _Py_HASHTABLE_ENTRY_DATA_AS_VOID_P(entry);
+                data = _Numba_HASHTABLE_ENTRY_DATA_AS_VOID_P(entry);
                 new_data = src->copy_data_func(data);
                 if (new_data != NULL)
-                    err = _Py_hashtable_set(dst, entry->key,
+                    err = _Numba_hashtable_set(dst, entry->key,
                                         &new_data, src->data_size);
                 else
                     err = 1;
             }
             else {
-                data = _Py_HASHTABLE_ENTRY_DATA(entry);
-                err = _Py_hashtable_set(dst, entry->key, data, src->data_size);
+                data = _Numba_HASHTABLE_ENTRY_DATA(entry);
+                err = _Numba_hashtable_set(dst, entry->key, data, src->data_size);
             }
             if (err) {
-                _Py_hashtable_destroy(dst);
+                _Numba_hashtable_destroy(dst);
                 return NULL;
             }
         }
