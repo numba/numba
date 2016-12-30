@@ -153,6 +153,7 @@ def get_ext_modules():
             depends=['numba/npyufunc/workqueue.h'])
 
     ext_mviewbuf = Extension(name='numba.mviewbuf',
+                             extra_link_args=install_name_tool_fixer,
                              sources=['numba/mviewbuf.c'])
 
     ext_nrt_python = Extension(name='numba.runtime._nrt_python',
