@@ -138,6 +138,19 @@ class Cuda_atomic_max(AbstractTemplate):
             return signature(ary.dtype, ary, idx, ary.dtype)
 
 
+@intrinsic
+class Cuda_atomic_compare_and_swap(AbstractTemplate):
+    key = cuda.atomic.compare_and_swap
+
+    def generic(self, args, kws):
+        assert not kws
+        ary, old, val = args
+        dty = ary.dtype
+        # only support int32
+        if dty == types.int32 and ary.ndim == 1:
+            return signature(dty, ary, dty, dty)
+
+
 @intrinsic_attr
 class Cuda_threadIdx(AttributeTemplate):
     key = types.Module(cuda.threadIdx)
@@ -227,6 +240,9 @@ class CudaAtomicTemplate(AttributeTemplate):
 
     def resolve_max(self, mod):
         return types.Function(Cuda_atomic_max)
+
+    def resolve_compare_and_swap(self, mod):
+        return types.Function(Cuda_atomic_compare_and_swap)
 
 
 @intrinsic_attr

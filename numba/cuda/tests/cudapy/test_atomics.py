@@ -1,4 +1,6 @@
 from __future__ import print_function, division, absolute_import
+
+import random
 import numpy as np
 from numba import cuda, uint32, uint64, float32, float64
 from numba.cuda.testing import unittest
@@ -150,6 +152,13 @@ def atomic_max_double_shared(res, ary):
     cuda.syncthreads()
     if tid == 0:
         res[0] = smres[0]
+
+
+def atomic_compare_and_swap(res, old, ary):
+    gid = cuda.grid(1)
+    if gid < res.size:
+        out = cuda.atomic.compare_and_swap(res[gid:], -99, ary[gid])
+        old[gid] = out
 
 
 class TestCudaAtomics(unittest.TestCase):
@@ -316,6 +325,32 @@ class TestCudaAtomics(unittest.TestCase):
 
         gold = np.max(vals)
         np.testing.assert_equal(res, gold)
+
+    def test_atomic_compare_and_swap(self):
+        n = 100
+        res = [-99] * (n // 2) + [-1] * (n // 2)
+        random.shuffle(res)
+        res = np.asarray(res, dtype=np.int32)
+        out = np.zeros_like(res)
+        ary = np.random.randint(1, 10, size=res.size).astype(res.dtype)
+
+        fill_mask = res == -99
+        unfill_mask = res == -1
+
+        expect_res = np.zeros_like(res)
+        expect_res[fill_mask] = ary[fill_mask]
+        expect_res[unfill_mask] = -1
+
+        expect_out = np.zeros_like(out)
+        expect_out[fill_mask] = res[fill_mask]
+        expect_out[unfill_mask] = -1
+
+        cuda_func = cuda.jit(atomic_compare_and_swap)
+        cuda_func[10, 10](res, out, ary)
+
+        np.testing.assert_array_equal(expect_res, res)
+        np.testing.assert_array_equal(expect_out, out)
+
 
 if __name__ == '__main__':
     unittest.main()

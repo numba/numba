@@ -310,3 +310,12 @@ class atomic(Stub):
 
         Supported on float64 operands only.
         """
+
+    class compare_and_swap(Stub):
+        """compare_and_swap(ary, old, val)
+
+        Conditionally assign ``val`` to the first element of an 1D array ``ary``
+        if the current value matches ``old``.
+
+        Returns the current value
+        """

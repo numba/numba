@@ -5,6 +5,13 @@ from .cudadrv import nvvm
 from numba import cgutils
 
 
+def declare_atomic_cas_int32(lmod):
+    fname = '___numba_cas_hack'
+    fnty = lc.Type.function(lc.Type.int(32),
+           (lc.Type.pointer(lc.Type.int(32)), lc.Type.int(32), lc.Type.int(32)))
+    return lmod.get_or_insert_function(fnty, fname)
+
+
 def declare_atomic_add_float32(lmod):
     fname = 'llvm.nvvm.atomic.load.add.f32.p0f32'
     fnty = lc.Type.function(lc.Type.float(),
