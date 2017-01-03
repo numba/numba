@@ -4,7 +4,7 @@ import numpy as np
 from llvmlite.llvmpy.core import Type, Builder, ICMP_EQ, Constant
 
 from numba import types, cgutils
-from ..caching import LibraryCache, NullCache
+from ..caching import make_library_cache, NullCache
 
 
 def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
@@ -265,6 +265,9 @@ class UArrayArg(object):
         self.context.pack_value(self.builder, self.fe_type, value, ptr)
 
 
+GufWrapperCache = make_library_cache('guf')
+
+
 class _GufuncWrapper(object):
     def __init__(self, py_func, cres, sin, sout, cache):
         self.py_func = py_func
@@ -272,8 +275,7 @@ class _GufuncWrapper(object):
         self.sin = sin
         self.sout = sout
         self.is_objectmode = self.signature.return_type == types.pyobject
-        self.cache = (LibraryCache(py_func=self.py_func,
-                                   identifier=type(self))
+        self.cache = (GufWrapperCache(py_func=self.py_func)
                       if cache else NullCache())
 
     @property

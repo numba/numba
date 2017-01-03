@@ -276,142 +276,57 @@ class _IPythonCacheLocator(_CacheLocator):
         return self
 
 
-class FunctionCache(_Cache):
-    """
-    A per-function compilation cache.  The cache saves data in separate
-    data files and maintains information in an index file.
+@add_metaclass(ABCMeta)
+class _CacheImpl(object):
 
-    There is one index file per function and Python version
-    ("function_name-<lineno>.pyXY.nbi") which contains a mapping of
-    signatures and architectures to data files.
-    It is prefixed by a versioning key and a timestamp of the Python source
-    file containing the function.
-
-    There is one data file ("function_name-<lineno>.pyXY.<number>.nbc")
-    per function, function signature, target architecture and Python version.
-
-    Separate index and data files per Python version avoid pickle
-    compatibility problems.
-    """
-
-    _source_stamp = None
     _locator_classes = [_InTreeCacheLocator, _UserWideCacheLocator,
                         _IPythonCacheLocator]
 
+    _filename_prefix = ''
+
     def __init__(self, py_func):
-        try:
-            qualname = py_func.__qualname__
-        except AttributeError:
-            qualname = py_func.__name__
-        # Keep the last dotted component, since the package name is already
-        # encoded in the directory.
-        modname = py_func.__module__.split('.')[-1]
-        self._funcname = qualname.split('.')[-1]
-        self._fullname = "%s.%s" % (modname, qualname)
         self._is_closure = bool(py_func.__closure__)
+        self._funcname = py_func.__name__
         self._lineno = py_func.__code__.co_firstlineno
-        abiflags = getattr(sys, 'abiflags', '')
-
-        # Find a locator
-        self._source_path = inspect.getfile(py_func)
-        for cls in self._locator_classes:
-            self._locator = cls.from_function(py_func, self._source_path)
-            if self._locator is not None:
-                break
-        else:
-            raise RuntimeError("cannot cache function %r: no locator available "
-                               "for file %r" % (qualname, self._source_path))
-        self._cache_path = self._locator.get_cache_path()
-
-        # '<' and '>' can appear in the qualname (e.g. '<locals>') but
-        # are forbidden in Windows filenames
-        fixed_fullname = self._fullname.replace('<', '').replace('>', '')
-        filename_base = (
-            '%s-%s.py%d%d%s' % (fixed_fullname, self._locator.get_disambiguator(),
-                                sys.version_info[0], sys.version_info[1],
-                                abiflags)
-            )
-        self._index_name = '%s.nbi' % (filename_base,)
-        self._index_path = os.path.join(self._cache_path, self._index_name)
-        self._data_name_pattern = '%s.{number:d}.nbc' % (filename_base,)
-
-        self.enable()
-
-    def __repr__(self):
-        return "<%s fullname=%r>" % (self.__class__.__name__, self._fullname)
+        self._locator = get_locator(py_func, self._locator_classes)
+        self._filename_base = get_filename_base(py_func, self._locator)
 
     @property
-    def cache_path(self):
-        return self._cache_path
+    def filename_base(self):
+        return self._filename_prefix + self._filename_base
 
-    def enable(self):
-        self._enabled = True
-        # This may be a bit strict but avoids us maintaining a magic number
-        self._version = numba.__version__
-        self._source_stamp = self._locator.get_source_stamp()
+    @property
+    def locator(self):
+        return self._locator
 
-    def disable(self):
-        self._enabled = False
+    @abstractmethod
+    def reduce(self, data):
+        pass
 
-    def flush(self):
-        self._save_index({})
+    @abstractmethod
+    def rebuild(self, target_context, reduced_data):
+        pass
 
-    def load_overload(self, sig, target_context):
+    @abstractmethod
+    def check_cachable(self, data):
+        pass
+
+
+class CompileResultCacheImpl(_CacheImpl):
+
+    def reduce(self, cres):
         """
-        Load and recreate the cached CompileResult for the given signature,
-        using the *target_context*.
+        Returns a serialized CompileResult
         """
-        # Refresh the context to ensure it is initialized
-        target_context.refresh()
-        with self._guard_against_spurious_io_errors():
-            return self._load_overload(sig, target_context)
-        # None returned if the `with` block swallows an exception
+        return cres._reduce()
 
-    def _load_overload(self, sig, target_context):
-        if not self._enabled:
-            return
-        overloads = self._load_index()
-        key = self._index_key(sig, _get_codegen(target_context))
-        data_name = overloads.get(key)
-        if data_name is None:
-            return
-        try:
-            return self._load_data(data_name, target_context)
-        except EnvironmentError:
-            # File could have been removed while the index still refers it.
-            return
-
-    def save_overload(self, sig, cres):
+    def rebuild(self, target_context, payload):
         """
-        Save the CompileResult for the given signature in the cache.
+        Returns the unserialized CompileResult
         """
-        with self._guard_against_spurious_io_errors():
-            self._save_overload(sig, cres)
+        return compiler.CompileResult._rebuild(target_context, *payload)
 
-    def _save_overload(self, sig, cres):
-        if not self._enabled:
-            return
-        if not self._check_cachable(cres):
-            return
-        self._locator.ensure_cache_path()
-        overloads = self._load_index()
-        key = self._index_key(sig, _get_codegen(cres))
-        try:
-            # If key already exists, we will overwrite the file
-            data_name = overloads[key]
-        except KeyError:
-            # Find an available name for the data file
-            existing = set(overloads.values())
-            for i in itertools.count(1):
-                data_name = self._data_name(i)
-                if data_name not in existing:
-                    break
-            overloads[key] = data_name
-            self._save_index(overloads)
-
-        self._save_data(data_name, cres)
-
-    def _check_cachable(self, cres):
+    def check_cachable(self, cres):
         """
         Check cachability of the given compile result.
         """
@@ -427,57 +342,43 @@ class FunctionCache(_Cache):
             msg = ('Cannot cache compiled function "%s" %s'
                    % (self._funcname, cannot_cache))
             warnings.warn_explicit(msg, NumbaWarning,
-                                   self._source_path, self._lineno)
+                                   self._locator._py_file, self._lineno)
             return False
         return True
 
-    def _index_key(self, sig, codegen):
+
+class CodeLibraryCacheImpl(_CacheImpl):
+    _filename_prefix = None  # must be overriden
+
+    def reduce(self, codelib):
         """
-        Compute index key for the given signature and codegen.
-        It includes a description of the OS and target architecture.
+        Returns a serialized library
         """
-        return (sig, codegen.magic_tuple())
+        return codelib.serialize_using_object_code()
 
-    def _data_name(self, number):
-        return self._data_name_pattern.format(number=number)
-
-    def _data_path(self, name):
-        return os.path.join(self._cache_path, name)
-
-    @contextlib.contextmanager
-    def _guard_against_spurious_io_errors(self):
-        if os.name == 'nt':
-            # Guard against permission errors due to accessing the file
-            # from several processes (see #2028)
-            try:
-                yield
-            except EnvironmentError as e:
-                if e.errno != errno.EACCES:
-                    raise
-        else:
-            # No such conditions under non-Windows OSes
-            yield
-
-    @contextlib.contextmanager
-    def _open_for_write(self, filepath):
+    def rebuild(self, target_context, payload):
         """
-        Open *filepath* for writing in a race condition-free way
-        (hopefully).
+        Returns the unserialized library
         """
-        tmpname = '%s.tmp.%d' % (filepath, os.getpid())
-        try:
-            with open(tmpname, "wb") as f:
-                yield f
-            utils.file_replace(tmpname, filepath)
-        except Exception:
-            # In case of error, remove dangling tmp file
-            try:
-                os.unlink(tmpname)
-            except OSError:
-                pass
-            raise
+        return target_context.codegen().unserialize_library(payload)
 
-    def _load_index(self):
+    def check_cachable(self, codelib):
+        """
+        Check cachability of the given library.
+        """
+        return not self._is_closure
+
+
+class IndexDataCacheFile(object):
+    def __init__(self, cache_path, filename_base, source_stamp):
+        self._cache_path = cache_path
+        self._index_name = '%s.nbi' % (filename_base,)
+        self._index_path = os.path.join(self._cache_path, self._index_name)
+        self._data_name_pattern = '%s.{number:d}.nbc' % (filename_base,)
+        self._source_stamp = source_stamp
+        self._version = numba.__version__
+
+    def load_index(self):
         """
         Load the cache index and return it as a dictionary (possibly
         empty if cache is empty or obsolete).
@@ -504,15 +405,7 @@ class FunctionCache(_Cache):
         else:
             return overloads
 
-    def _load_data(self, name, target_context):
-        path = self._data_path(name)
-        with open(path, "rb") as f:
-            data = f.read()
-        tup = pickle.loads(data)
-        _cache_log("[cache] data loaded from %r", path)
-        return self._rebuild(target_context, tup)
-
-    def _save_index(self, overloads):
+    def save_index(self, overloads):
         data = self._source_stamp, overloads
         data = self._dump(data)
         with self._open_for_write(self._index_path) as f:
@@ -520,66 +413,244 @@ class FunctionCache(_Cache):
             f.write(data)
         _cache_log("[cache] index saved to %r", self._index_path)
 
-    def _save_data(self, name, cres):
-        data = self._reduce(cres)
+    def _data_name(self, number):
+        return self._data_name_pattern.format(number=number)
+
+    def _data_path(self, name):
+        return os.path.join(self._cache_path, name)
+
+    def _dump(self, obj):
+        return pickle.dumps(obj, protocol=-1)
+
+    @contextlib.contextmanager
+    def _open_for_write(self, filepath):
+        """
+        Open *filepath* for writing in a race condition-free way
+        (hopefully).
+        """
+        tmpname = '%s.tmp.%d' % (filepath, os.getpid())
+        try:
+            with open(tmpname, "wb") as f:
+                yield f
+            utils.file_replace(tmpname, filepath)
+        except Exception:
+            # In case of error, remove dangling tmp file
+            try:
+                os.unlink(tmpname)
+            except OSError:
+                pass
+            raise
+
+    def load_data(self, name):
+        path = self._data_path(name)
+        with open(path, "rb") as f:
+            data = f.read()
+        tup = pickle.loads(data)
+        _cache_log("[cache] data loaded from %r", path)
+        return tup
+
+    def save_data(self, name, data):
         data = self._dump(data)
         path = self._data_path(name)
         with self._open_for_write(path) as f:
             f.write(data)
         _cache_log("[cache] data saved to %r", path)
 
-    def _dump(self, obj):
-        return pickle.dumps(obj, protocol=-1)
+    def save(self, key, data):
+        overloads = self.load_index()
+        try:
+            # If key already exists, we will overwrite the file
+            data_name = overloads[key]
+        except KeyError:
+            # Find an available name for the data file
+            existing = set(overloads.values())
+            for i in itertools.count(1):
+                data_name = self._data_name(i)
+                if data_name not in existing:
+                    break
+            overloads[key] = data_name
+            self.save_index(overloads)
+        self.save_data(data_name, data)
 
-    def _reduce(self, cres):
-        """
-        Returns a serialized CompileResult
-        """
-        return cres._reduce()
+    def load(self, key):
+        overloads = self.load_index()
+        data_name = overloads.get(key)
+        if data_name is None:
+            return
+        try:
+            return self.load_data(data_name)
+        except EnvironmentError:
+            # File could have been removed while the index still refers it.
+            return
 
-    def _rebuild(self, target_context, payload):
-        """
-        Returns the unserialized CompileResult
-        """
-        return compiler.CompileResult._rebuild(target_context, *payload)
+
+def _get_qualname(py_func):
+    try:
+        return py_func.__qualname__
+    except AttributeError:
+        return py_func.__name__
 
 
-class LibraryCache(FunctionCache):
+def get_locator(py_func, locator_classes):
+    qualname = _get_qualname(py_func)
+    # Find a locator
+    source_path = inspect.getfile(py_func)
+    for cls in locator_classes:
+        locator = cls.from_function(py_func, source_path)
+        if locator is not None:
+            break
+    else:
+        raise RuntimeError("cannot cache function %r: no locator available "
+                           "for file %r" % (qualname, source_path))
+
+    return locator
+
+
+def get_filename_base(py_func, locator):
+    qualname = _get_qualname(py_func)
+    # Keep the last dotted component, since the package name is already
+    # encoded in the directory.
+    modname = py_func.__module__.split('.')[-1]
+    fullname = "%s.%s" % (modname, qualname)
+    abiflags = getattr(sys, 'abiflags', '')
+
+    # '<' and '>' can appear in the qualname (e.g. '<locals>') but
+    # are forbidden in Windows filenames
+    fixed_fullname = fullname.replace('<', '').replace('>', '')
+    filename_base = (
+        '%s-%s.py%d%d%s' % (fixed_fullname, locator.get_disambiguator(),
+                            sys.version_info[0], sys.version_info[1],
+                            abiflags)
+        )
+    return filename_base
+
+
+class Cache(_Cache):
     """
-    Extends FunctionCache to provide caching of related CodeLibrary objects.
-    This stores the serialized library in the same cache file as other overload
-    entries for the associated function.
-    """
-    def __init__(self, py_func, identifier):
-        """
-        The *py_func* arg is the associated function being cached.
-        The *identifier* arg is an arbitrary object to identity the feature for
-        which this cache is serving.
-        """
-        self._identifier = identifier
-        super(LibraryCache, self).__init__(py_func)
+    A per-function compilation cache.  The cache saves data in separate
+    data files and maintains information in an index file.
 
-    def _check_cachable(self, library):
+    There is one index file per function and Python version
+    ("function_name-<lineno>.pyXY.nbi") which contains a mapping of
+    signatures and architectures to data files.
+    It is prefixed by a versioning key and a timestamp of the Python source
+    file containing the function.
+
+    There is one data file ("function_name-<lineno>.pyXY.<number>.nbc")
+    per function, function signature, target architecture and Python version.
+
+    Separate index and data files per Python version avoid pickle
+    compatibility problems.
+    """
+    def __init__(self, py_func):
+        self._name = repr(py_func)
+        self._impl = self._impl_class(py_func)
+        self._cache_path = self._impl.locator.get_cache_path()
+        # This may be a bit strict but avoids us maintaining a magic number
+        source_stamp = self._impl.locator.get_source_stamp()
+        filename_base = self._impl.filename_base
+        self._cache_file = IndexDataCacheFile(cache_path=self._cache_path,
+                                              filename_base=filename_base,
+                                              source_stamp=source_stamp)
+        self.enable()
+
+    def __repr__(self):
+        return "<%s py_func=%r>" % (self.__class__.__name__, self._name)
+
+    @property
+    def cache_path(self):
+        return self._cache_path
+
+    def enable(self):
+        self._enabled = True
+
+    def disable(self):
+        self._enabled = False
+
+    def flush(self):
+        self._cache_file.save_index({})
+
+    def load_overload(self, sig, target_context):
         """
-        Check cachability of the given library.
+        Load and recreate the cached CompileResult for the given signature,
+        using the *target_context*.
         """
-        return True
+        # Refresh the context to ensure it is initialized
+        target_context.refresh()
+        with self._guard_against_spurious_io_errors():
+            return self._load_overload(sig, target_context)
+        # None returned if the `with` block swallows an exception
+
+    def _load_overload(self, sig, target_context):
+        if not self._enabled:
+            return
+        key = self._index_key(sig, _get_codegen(target_context))
+        data = self._cache_file.load(key)
+        if data is not None:
+            data = self._impl.rebuild(target_context, data)
+        return data
+
+    def save_overload(self, sig, data):
+        """
+        Save the CompileResult for the given signature in the cache.
+        """
+        with self._guard_against_spurious_io_errors():
+            self._save_overload(sig, data)
+
+    def _save_overload(self, sig, data):
+        if not self._enabled:
+            return
+        if not self._impl.check_cachable(data):
+            return
+        self._impl.locator.ensure_cache_path()
+        key = self._index_key(sig, _get_codegen(data))
+        data = self._impl.reduce(data)
+        self._cache_file.save(key, data)
+
+    @contextlib.contextmanager
+    def _guard_against_spurious_io_errors(self):
+        if os.name == 'nt':
+            # Guard against permission errors due to accessing the file
+            # from several processes (see #2028)
+            try:
+                yield
+            except EnvironmentError as e:
+                if e.errno != errno.EACCES:
+                    raise
+        else:
+            # No such conditions under non-Windows OSes
+            yield
 
     def _index_key(self, sig, codegen):
         """
         Compute index key for the given signature and codegen.
         It includes a description of the OS and target architecture.
         """
-        return (self._identifier, sig, codegen.magic_tuple())
+        return (sig, codegen.magic_tuple())
 
-    def _reduce(self, payload):
-        """
-        Returns a serialized library
-        """
-        return payload.serialize_using_object_code()
 
-    def _rebuild(self, target_context, payload):
+class FunctionCache(Cache):
+    _impl_class = CompileResultCacheImpl
+
+
+_lib_cache_prefixes = set()
+
+
+def make_library_cache(prefix):
+    assert prefix not in _lib_cache_prefixes
+    _lib_cache_prefixes.add(prefix)
+
+    class CustomCodeLibraryCacheImpl(CodeLibraryCacheImpl):
+        _filename_prefix = prefix
+
+    class LibraryCache(Cache):
         """
-        Returns the unserialized library
+        Extends FunctionCache to provide caching of related CodeLibrary objects.
+        This stores the serialized library in the same cache file as other overload
+        entries for the associated function.
         """
-        return target_context.codegen().unserialize_library(payload)
+        _impl_class = CustomCodeLibraryCacheImpl
+
+    return LibraryCache
+
+
