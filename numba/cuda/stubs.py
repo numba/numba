@@ -308,7 +308,18 @@ class atomic(Stub):
         differs from Python and Numpy behaviour, where max(a, b) is always
         a when either a or b is a NaN.
 
-        Supported on float64 operands only.
+        Supported on int32, int64, uint32, uint64, float64 operands only.
+        """
+
+    class min(Stub):
+        """max(ary, idx, val)
+
+        Perform atomic ary[idx] = min(ary[idx], val). NaN is treated as a
+        missing value, so min(NaN, n) == min(n, NaN) == n. Note that this
+        differs from Python and Numpy behaviour, where min(a, b) is always
+        a when either a or b is a NaN.
+
+        Supported on int32, int64, uint32, uint64, float64 operands only.
         """
 
     class compare_and_swap(Stub):

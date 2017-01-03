@@ -127,9 +127,30 @@ class Cuda_atomic_max(AbstractTemplate):
         assert not kws
         ary, idx, val = args
 
-        # Implementation presently supports float64 only,
-        # so fail typing otherwise
-        if ary.dtype != types.float64:
+        # Implementation presently supports float64, int32, int64, uint32,
+        # uint64 only, so fail typing otherwise
+        if ary.dtype not in (types.float64, types.int32, types.uint32,
+                             types.uint32, types.uint64):
+            return
+
+        if ary.ndim == 1:
+            return signature(ary.dtype, ary, types.intp, ary.dtype)
+        elif ary.ndim > 1:
+            return signature(ary.dtype, ary, idx, ary.dtype)
+
+
+@intrinsic
+class Cuda_atomic_min(AbstractTemplate):
+    key = cuda.atomic.min
+
+    def generic(self, args, kws):
+        assert not kws
+        ary, idx, val = args
+
+        # Implementation presently supports float64, int32, int64, uint32,
+        # uint64 only, so fail typing otherwise
+        if ary.dtype not in (types.float64, types.int32, types.uint32,
+                             types.uint32, types.uint64):
             return
 
         if ary.ndim == 1:
@@ -240,6 +261,9 @@ class CudaAtomicTemplate(AttributeTemplate):
 
     def resolve_max(self, mod):
         return types.Function(Cuda_atomic_max)
+
+    def resolve_min(self, mod):
+        return types.Function(Cuda_atomic_min)
 
     def resolve_compare_and_swap(self, mod):
         return types.Function(Cuda_atomic_compare_and_swap)

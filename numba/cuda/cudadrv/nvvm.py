@@ -415,6 +415,37 @@ done:
 """
 
 
+ir_numba_atomic_double_min = """
+define internal double @___numba_atomic_double_min(double* %ptr, double %val) alwaysinline {
+entry:
+    %ptrval = load volatile double, double* %ptr
+    ; Check if val is a NaN and return *ptr early if so
+    %valnan = fcmp uno double %val, %val
+    br i1 %valnan, label %done, label %gt_check
+
+gt_check:
+    %dold = phi double [ %ptrval, %entry ], [ %dcas, %attempt ]
+    ; Continue attempts if dold < val or dold is NaN (using ult semantics)
+    %lt = fcmp ugt double %dold, %val
+    br i1 %lt, label %attempt, label %done
+
+attempt:
+    ; Attempt to swap in the smaller value
+    %iold = bitcast double %dold to i64
+    %iptr = bitcast double* %ptr to i64*
+    %ival = bitcast double %val to i64
+    %cas = cmpxchg volatile i64* %iptr, i64 %iold, i64 %ival monotonic
+    %dcas = bitcast i64 %cas to double
+    br label %gt_check
+
+done:
+    ; Return max
+    %ret = phi double [ %ptrval, %entry ], [ %dold, %gt_check ]
+    ret double %ret
+}
+"""
+
+
 def _replace_datalayout(llvmir):
     """
     Find the line containing the datalayout and replace it
@@ -441,7 +472,10 @@ def llvm_to_ptx(llvmir, **opts):
         ('declare double @___numba_atomic_double_add(double*, double)',
          ir_numba_atomic_double_add),
         ('declare double @___numba_atomic_double_max(double*, double)',
-         ir_numba_atomic_double_max)]
+         ir_numba_atomic_double_max),
+        ('declare double @___numba_atomic_double_min(double*, double)',
+         ir_numba_atomic_double_min),
+    ]
 
     for decl, fn in replacements:
         llvmir = llvmir.replace(decl, fn)

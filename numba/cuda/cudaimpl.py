@@ -299,37 +299,29 @@ def ptx_atomic_add_tuple(context, builder, sig, args):
         return builder.atomic_rmw('add', ptr, val, 'monotonic')
 
 
-@lower(stubs.atomic.max, types.Array, types.intp, types.Any)
-def ptx_atomic_max_intp(context, builder, sig, args):
-    aryty, indty, valty = sig.args
-    ary, ind, val = args
-    dtype = aryty.dtype
-
-    if dtype != valty:
-        raise TypeError("expect %s but got %s" % (dtype, valty))
-    if aryty.ndim != 1:
-        raise TypeError("indexing %d-D array with 1-D index" % (aryty.ndim,))
-
-    lary = context.make_array(aryty)(context, builder, ary)
-    ptr = cgutils.get_item_pointer(builder, aryty, lary, [ind])
-
-    if dtype == types.float64:
-        lmod = builder.module
-        return builder.call(nvvmutils.declare_atomic_max_float64(lmod), (ptr, val))
+def _normalize_indices(context, builder, indty, inds):
+    """
+    Convert integer indices into tuple of intp
+    """
+    if indty in types.integer_domain:
+        indty = types.UniTuple(dtype=indty, count=1)
+        indices = [inds]
     else:
-        raise TypeError('Unimplemented atomic max with %s array' % dtype)
+        indices = cgutils.unpack_tuple(builder, inds, count=len(indty))
+    indices = [context.cast(builder, i, t, types.intp)
+               for t, i in zip(indty, indices)]
+    return indty, indices
 
 
+@lower(stubs.atomic.max, types.Array, types.intp, types.Any)
 @lower(stubs.atomic.max, types.Array, types.Tuple, types.Any)
 @lower(stubs.atomic.max, types.Array, types.UniTuple, types.Any)
-def ptx_atomic_max_tuple(context, builder, sig, args):
+def ptx_atomic_max(context, builder, sig, args):
     aryty, indty, valty = sig.args
     ary, inds, val = args
     dtype = aryty.dtype
 
-    indices = cgutils.unpack_tuple(builder, inds, count=len(indty))
-    indices = [context.cast(builder, i, t, types.intp)
-               for t, i in zip(indty, indices)]
+    indty, indices = _normalize_indices(context, builder, indty, inds)
 
     if dtype != valty:
         raise TypeError("expect %s but got %s" % (dtype, valty))
@@ -341,11 +333,46 @@ def ptx_atomic_max_tuple(context, builder, sig, args):
     lary = context.make_array(aryty)(context, builder, ary)
     ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
 
-    if aryty.dtype == types.float64:
+    if dtype == types.float64:
         lmod = builder.module
         return builder.call(nvvmutils.declare_atomic_max_float64(lmod), (ptr, val))
+    elif dtype in (types.int32, types.int64):
+        return builder.atomic_rmw('max', ptr, val, ordering='monotonic')
+    elif dtype in (types.uint32, types.uint64):
+        return builder.atomic_rmw('umax', ptr, val, ordering='monotonic')
     else:
         raise TypeError('Unimplemented atomic max with %s array' % dtype)
+
+
+@lower(stubs.atomic.min, types.Array, types.intp, types.Any)
+@lower(stubs.atomic.min, types.Array, types.Tuple, types.Any)
+@lower(stubs.atomic.min, types.Array, types.UniTuple, types.Any)
+def ptx_atomic_min(context, builder, sig, args):
+    aryty, indty, valty = sig.args
+    ary, inds, val = args
+    dtype = aryty.dtype
+
+    indty, indices = _normalize_indices(context, builder, indty, inds)
+
+    if dtype != valty:
+        raise TypeError("expect %s but got %s" % (dtype, valty))
+
+    if aryty.ndim != len(indty):
+        raise TypeError("indexing %d-D array with %d-D index" %
+                        (aryty.ndim, len(indty)))
+
+    lary = context.make_array(aryty)(context, builder, ary)
+    ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
+
+    if dtype == types.float64:
+        lmod = builder.module
+        return builder.call(nvvmutils.declare_atomic_min_float64(lmod), (ptr, val))
+    elif dtype in (types.int32, types.int64):
+        return builder.atomic_rmw('min', ptr, val, ordering='monotonic')
+    elif dtype in (types.uint32, types.uint64):
+        return builder.atomic_rmw('umin', ptr, val, ordering='monotonic')
+    else:
+        raise TypeError('Unimplemented atomic min with %s array' % dtype)
 
 
 @lower(stubs.atomic.compare_and_swap, types.Array, types.Any, types.Any)
