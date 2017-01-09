@@ -268,6 +268,20 @@ class TestDispatcher(BaseTest):
             strict_foo([])
         self.assertIn(errmsg, str(raises.exception))
 
+        # Test in loop lifting context
+        @jit
+        def bar():
+            object()  # force looplifting
+            x = []
+            for i in range(10):
+                x = foo(x)
+            return x
+
+        self.assertEqual(bar(), [])
+        # Make sure it was looplifted
+        [cr] = bar.overloads.values()
+        self.assertEqual(len(cr.lifted), 1)
+
 
 class TestSignatureHandling(BaseTest):
     """
