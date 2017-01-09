@@ -16,6 +16,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import utils, vectorize, jit, generated_jit, types, appdirs
+from numba import _dispatcher
 from numba.errors import NumbaWarning
 from .support import TestCase, tag, temp_directory, import_dynamic
 
@@ -243,6 +244,29 @@ class TestDispatcher(BaseTest):
             bar()
         m = "No matching definition for argument type(s) array(float64, 1d, C)"
         self.assertEqual(str(raises.exception), m)
+
+    def test_fingerprint_failure(self):
+        """
+        Failure in computing the fingerprint cannot affect a nopython=False
+        function.  On the other hand, with nopython=True, a ValueError should
+        be raised to report the failure with fingerprint.
+        """
+        @jit
+        def foo(x):
+            return x
+
+        # Empty list will trigger failure in compile_fingerprint
+        errmsg = 'cannot compute fingerprint of empty list'
+        with self.assertRaises(ValueError) as raises:
+            _dispatcher.compute_fingerprint([])
+        self.assertIn(errmsg, str(raises.exception))
+        # It should work in fallback
+        self.assertEqual(foo([]), [])
+        # But, not in nopython=True
+        strict_foo = jit(nopython=True)(foo.py_func)
+        with self.assertRaises(ValueError) as raises:
+            strict_foo([])
+        self.assertIn(errmsg, str(raises.exception))
 
 
 class TestSignatureHandling(BaseTest):
