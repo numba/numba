@@ -286,13 +286,17 @@ pycfunction_new(PyObject *module, PyObject *name, PyObject *doc,
                 PyCFunction fnaddr, EnvironmentObject *env, PyObject *keepalive)
 {
     PyObject *funcobj;
+    PyObject *modname;
     ClosureObject *closure;
 
     closure = closure_new(module, name, doc, fnaddr, env, keepalive);
     if (closure == NULL)
         return NULL;
-    funcobj = PyCFunction_NewEx(&closure->def, (PyObject *) closure, module);
+
+    modname = PyString_FromString(PyModule_GetName(module));
+    funcobj = PyCFunction_NewEx(&closure->def, (PyObject *) closure, modname);
     Py_DECREF(closure);
+    Py_DECREF(modname);
     return funcobj;
 }
 
