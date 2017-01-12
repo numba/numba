@@ -68,10 +68,10 @@ the llvmlite library::
 
 Then create an environment with the right dependencies::
 
-   $ <path_to_miniconda>/conda create -n numbaenv python=3.4 llvmlite numpy
+   $ <path_to_miniconda>/conda create -n numbaenv python=3.5 llvmlite numpy
 
 .. note::
-   This installs an environment based on Python 3.4, but you can of course
+   This installs an environment based on Python 3.5, but you can of course
    choose another version supported by Numba.
 
 To activate the environment for the current shell session::
@@ -96,13 +96,14 @@ required dependencies::
 Building Numba
 ''''''''''''''
 
-For a quick development workaround, we recommend you build Numba inside
+For a convenient development workflow, we recommend you build Numba inside
 its source checkout::
 
    $ python setup.py build_ext --inplace
 
 This assumes you have a working C compiler and runtime on your development
-system.
+system.  You will have to run this command again whenever you modify
+C files inside the Numba source tree.
 
 Running tests
 '''''''''''''
@@ -111,29 +112,31 @@ Numba is validated using a test suite comprised of various kind of tests
 (unit tests, functional tests). The test suite is written using the
 standard :py:mod:`unittest` framework.
 
-The tests can be executed via `python -m numba.testing`. Various
-options are supported to influence test running and reporting. Pass ``-h``
-or ``--help`` to get a glimpse at those options. Examples:
+The tests can be executed via ``python -m numba.runtests``.  If you are
+running Numba from a source checkout, you can type ``./runtests.py``
+as a shortcut.  Various options are supported to influence test running
+and reporting.  Pass ``-h`` or ``--help`` to get a glimpse at those options.
+Examples:
 
 * to list all available tests::
 
-    $ python -m numba.testing -l
+    $ python -m numba.runtests -l
 
 * to list tests from a specific (sub-)suite::
 
-    $ python -m numba.testing -l numba.tests.test_usecases
+    $ python -m numba.runtests -l numba.tests.test_usecases
 
 * to run those tests::
 
-    $ python -m numba.testing numba.tests.test_usecases
+    $ python -m numba.runtests -l numba.tests.test_usecases
 
 * to run all tests in parallel, using multiple sub-processes::
 
-    $ python -m numba.testing -m
+    $ python -m numba.runtests -m
     
 * For a detailed list of all options::
 
-    $ python -m numba.testing -h
+    $ python -m numba.runtests -h
 
 
 Development rules
@@ -175,8 +178,8 @@ also needs to pass the test suite before it is merged in.
 Platform support
 ''''''''''''''''
 
-Numba is to be kept compatible with Python 2.6, 2.7, 3.3 and 3.4 under
-at least Linux, OS X and Windows.  Also, Numpy versions 1.6 and upwards
+Numba is to be kept compatible with Python 2.7, 3.4 and 3.5 under
+at least Linux, OS X and Windows.  Also, Numpy versions 1.7 and upwards
 are supported.
 
 We don't expect invidual contributors to test those combinations

@@ -44,14 +44,17 @@ def open_cudalib(lib, ccc=False):
     return _dllopener(path)
 
 
-def test(_platform=None):
+def test(_platform=None, print_paths=True):
     failed = False
     libs = 'cublas cusparse cufft curand nvvm'.split()
     for lib in libs:
         path = get_cudalib(lib, _platform)
         print('Finding', lib)
         if path:
-            print('\tlocated at', path)
+            if print_paths:
+                print('\tlocated at', path)
+            else:
+                print('\tnamed ', os.path.basename(path))
         else:
             print('\tERROR: can\'t locate lib')
             failed = True
@@ -66,7 +69,7 @@ def test(_platform=None):
                 # NOTE: ignore failure of dlopen on cuBlas on OSX 10.5
                 failed = True if not _if_osx_10_5() else False
 
-    archs = 'compute_20', 'compute_30', 'compute_35'
+    archs = 'compute_20', 'compute_30', 'compute_35', 'compute_50'
     for arch in archs:
         print('\tfinding libdevice for', arch, end='...')
         path = get_libdevice(arch)

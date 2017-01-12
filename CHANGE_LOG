@@ -1,3 +1,354 @@
+Version 0.29.0
+--------------
+
+This release extends the support of recursive functions to include direct and
+indirect recursion without explicit function type annotations.  See new example
+in `examples/mergesort.py`.  Newly supported numpy features include array
+stacking functions, np.linalg.eig* functions, np.linalg.matrix_power, np.roots
+and array to array broadcasting in assignments.
+
+This release depends on llvmlite 0.14.0 and supports CUDA 8 but it is not
+required.
+
+Improvements:
+
+* PR #2130, #2137: Add type-inferred recursion with docs and examples.
+* PR #2134: Add ``np.linalg.matrix_power``.
+* PR #2125: Add ``np.roots``.
+* PR #2129: Add ``np.linalg.{eigvals,eigh,eigvalsh}``.
+* PR #2126: Add array-to-array broadcasting.
+* PR #2069: Add hstack and related functions.
+* PR #2128: Allow for vectorizing a jitted function. (thanks to @dhirschfeld)
+* PR #2117: Update examples and make them test-able.
+* PR #2127: Refactor interpreter class and its results.
+
+Fixes:
+
+* PR #2149: Workaround MSVC9.0 SP1 fmod bug kb982107.
+* PR #2145, Issue #2009: Fixes kwargs for jitclass ``__init__`` method.
+* PR #2150: Fix slowdown in objmode fallback.
+* PR #2050, Issue #1259: Fix liveness problem with some generator loops.
+* PR #2072, Issue #1995: Right shift of unsigned LHS should be logical.
+* PR #2115, Issue #1466: Fix inspect_types() error due to mangled variable name.
+* PR #2119, Issue #2118: Fix array type created from record-dtype.
+* PR #2122, Issue #1808: Fix returning a generator due to datamodel error.
+
+
+Version 0.28.1
+--------------
+
+This is a bug-fix release to resolve packaging issues with setuptools
+dependency.
+
+
+Version 0.28.0
+--------------
+
+Amongst other improvements, this version improves again the level of
+support for linear algebra -- functions from the :mod:`numpy.linalg`
+module.  Also, our random generator is now guaranteed to be thread-safe
+and fork-safe.
+
+Improvements:
+
+* PR #2019: Add the ``@intrinsic`` decorator to define low-level
+  subroutines callable from JIT functions (this is considered
+  a private API for now).
+* PR #2059: Implement ``np.concatenate`` and ``np.stack``.
+* PR #2048: Make random generation fork-safe and thread-safe, producing
+  independent streams of random numbers for each thread or process.
+* PR #2031: Add documentation of floating-point pitfalls.
+* Issue #2053: Avoid polling in parallel CPU target (fixes severe performance
+  regression on Windows).
+* Issue #2029: Make default arguments fast.
+* PR #2052: Add logging to the CUDA driver.
+* PR #2049: Implement the built-in ``divmod()`` function.
+* PR #2036: Implement the ``argsort()`` method on arrays.
+* PR #2046: Improving CUDA memory management by deferring deallocations
+  until certain thresholds are reached, so as to avoid breaking asynchronous
+  execution.
+* PR #2040: Switch the CUDA driver implementation to use CUDA's
+  "primary context" API.
+* PR #2017: Allow ``min(tuple)`` and ``max(tuple)``.
+* PR #2039: Reduce fork() detection overhead in CUDA.
+* PR #2021: Handle structured dtypes with titles.
+* PR #1996: Rewrite looplifting as a transformation on Numba IR.
+* PR #2014: Implement ``np.linalg.matrix_rank``.
+* PR #2012: Implement ``np.linalg.cond``.
+* PR #1985: Rewrite even trivial array expressions, which opens the door
+  for other optimizations (for example, ``array ** 2`` can be converted
+  into ``array * array``).
+* PR #1950: Have ``typeof()`` always raise ValueError on failure.
+  Previously, it would either raise or return None, depending on the input.
+* PR #1994: Implement ``np.linalg.norm``.
+* PR #1987: Implement ``np.linalg.det`` and ``np.linalg.slogdet``.
+* Issue #1979: Document integer width inference and how to workaround.
+* PR #1938: Numba is now compatible with LLVM 3.8.
+* PR #1967: Restrict ``np.linalg`` functions to homogenous dtypes.  Users
+  wanting to pass mixed-typed inputs have to convert explicitly, which
+  makes the performance implications more obvious.
+
+Fixes:
+
+* PR #2006: ``array(float32) ** int`` should return ``array(float32)``.
+* PR #2044: Allow reshaping empty arrays.
+* Issue #2051: Fix refcounting issue when concatenating tuples.
+* Issue #2000: Make Numpy optional for setup.py, to allow ``pip install``
+  to work without Numpy pre-installed.
+* PR #1989: Fix assertion in ``Dispatcher.disable_compile()``.
+* Issue #2028: Ignore filesystem errors when caching from multiple processes.
+* Issue #2003: Allow unicode variable and function names (on Python 3).
+* Issue #1998: Fix deadlock in parallel ufuncs that reacquire the GIL.
+* PR #1997: Fix random crashes when AOT compiling on certain Windows platforms.
+* Issue #1988: Propagate jitclass docstring.
+* Issue #1933: Ensure array constants are emitted with the right alignment.
+
+
+Version 0.27.0
+--------------
+
+Improvements:
+
+* Issue #1976: improve error message when non-integral dimensions are given
+  to a CUDA kernel.
+* PR #1970: Optimize the power operator with a static exponent.
+* PR #1710: Improve contextual information for compiler errors.
+* PR #1961: Support printing constant strings.
+* PR #1959: Support more types in the print() function.
+* PR #1823: Support ``compute_50`` in CUDA backend.
+* PR #1955: Support ``np.linalg.pinv``.
+* PR #1896: Improve the ``SmartArray`` API.
+* PR #1947: Support ``np.linalg.solve``.
+* Issue #1943: Improve error message when an argument fails typing.4
+* PR #1927: Support ``np.linalg.lstsq``.
+* PR #1934: Use system functions for hypot() where possible, instead of our
+  own implementation.
+* PR #1929: Add cffi support to ``@cfunc`` objects.
+* PR #1932: Add user-controllable thread pool limits for parallel CPU target.
+* PR #1928: Support self-recursion when the signature is explicit.
+* PR #1890: List all lowering implementations in the developer docs.
+* Issue #1884: Support ``np.lib.stride_tricks.as_strided()``.
+
+Fixes:
+
+* Issue #1960: Fix sliced assignment when source and destination areas are
+  overlapping.
+* PR #1963: Make CUDA print() atomic.
+* PR #1956: Allow 0d array constants.
+* Issue #1945: Allow using Numpy ufuncs in AOT compiled code.
+* Issue #1916: Fix documentation example for ``@generated_jit``.
+* Issue #1926: Fix regression when caching functions in an IPython session.
+* Issue #1923: Allow non-intp integer arguments to carray() and farray().
+* Issue #1908: Accept non-ASCII unicode docstrings on Python 2.
+* Issue #1874: Allow ``del container[key]`` in object mode.
+* Issue #1913: Fix set insertion bug when the lookup chain contains deleted
+  entries.
+* Issue #1911: Allow function annotations on jitclass methods.
+
+
+Version 0.26.0
+--------------
+
+This release adds support for ``cfunc`` decorator for exporting numba jitted
+functions to 3rd party API that takes C callbacks.  Most of the overhead of
+using jitclasses inside the interpreter are eliminated.  Support for
+decompositions in ``numpy.linalg`` are added.  Finally, Numpy 1.11 is
+supported.
+
+Improvements:
+
+* PR #1889: Export BLAS and LAPACK wrappers for pycc.
+* PR #1888: Faster array power.
+* Issue #1867: Allow "out" keyword arg for dufuncs.
+* PR #1871: ``carray()`` and ``farray()`` for creating arrays from pointers.
+* PR #1855: ``@cfunc`` decorator for exporting as ctypes function.
+* PR #1862: Add support for ``numpy.linalg.qr``.
+* PR #1851: jitclass support for '_' and '__' prefixed attributes.
+* PR #1842: Optimize jitclass in Python interpreter.
+* Issue #1837: Fix CUDA simulator issues with device function.
+* PR #1839: Add support for decompositions from ``numpy.linalg``.
+* PR #1829: Support Python enums.
+* PR #1828: Add support for ``numpy.random.rand()``` and
+  ``numpy.random.randn()``
+* Issue #1825: Use of 0-darray in place of scalar index.
+* Issue #1824: Scalar arguments to object mode gufuncs.
+* Issue #1813: Let bitwise bool operators return booleans, not integers.
+* Issue #1760: Optional arguments in generators.
+* PR #1780: Numpy 1.11 support.
+
+
+Version 0.25.0
+--------------
+
+This release adds support for ``set`` objects in nopython mode.  It also
+adds support for many missing Numpy features and functions.  It improves
+Numba's compatibility and performance when using a distributed execution
+framework such as dask, distributed or Spark.  Finally, it removes
+compatibility with Python 2.6, Python 3.3 and Numpy 1.6.
+
+Improvements:
+
+* Issue #1800: Add erf(), erfc(), gamma() and lgamma() to CUDA targets.
+* PR #1793: Implement more Numpy functions: np.bincount(), np.diff(),
+  np.digitize(), np.histogram(), np.searchsorted() as well as NaN-aware
+  reduction functions (np.nansum(), np.nanmedian(), etc.)
+* PR #1789: Optimize some reduction functions such as np.sum(), np.prod(),
+  np.median(), etc.
+* PR #1752: Make CUDA features work in dask, distributed and Spark.
+* PR #1787: Support np.nditer() for fast multi-array indexing with
+  broadcasting.
+* PR #1799: Report JIT-compiled functions as regular Python functions
+  when profiling (allowing to see the filename and line number where a
+  function is defined).
+* PR #1782: Support np.any() and np.all().
+* Issue #1788: Support the iter() and next() built-in functions.
+* PR #1778: Support array.astype().
+* Issue #1775: Allow the user to set the target CPU model for AOT compilation.
+* PR #1758: Support creating random arrays using the ``size`` parameter
+  to the np.random APIs.
+* PR #1757: Support len() on array.flat objects.
+* PR #1749: Remove Numpy 1.6 compatibility.
+* PR #1748: Remove Python 2.6 and 3.3 compatibility.
+* PR #1735: Support the ``not in`` operator as well as operator.contains().
+* PR #1724: Support homogenous sets in nopython mode.
+* Issue #875: make compilation of array constants faster.
+
+Fixes:
+
+* PR #1795: Fix a massive performance issue when calling Numba functions
+  with distributed, Spark or a similar mechanism using serialization.
+* Issue #1784: Make jitclasses usable with NUMBA_DISABLE_JIT=1.
+* Issue #1786: Allow using linear algebra functions when profiling.
+* Issue #1796: Fix np.dot() memory leak on non-contiguous inputs.
+* PR #1792: Fix static negative indexing of tuples.
+* Issue #1771: Use fallback cache directory when __pycache__ isn't writable,
+  such as when user code is installed in a system location.
+* Issue #1223: Use Numpy error model in array expressions (e.g. division
+  by zero returns ``inf`` or ``nan`` instead of raising an error).
+* Issue #1640: Fix np.random.binomial() for large n values.
+* Issue #1643: Improve error reporting when passing an invalid spec to
+  ``@jitclass``.
+* PR #1756: Fix slicing with a negative step and an omitted start.
+
+
+Version 0.24.0
+--------------
+
+This release introduces several major changes, including the ``@generated_jit``
+decorator for flexible specializations as with Julia's "``@generated``" macro,
+or the SmartArray array wrapper type that allows seamless transfer of array
+data between the CPU and the GPU.
+
+This will be the last version to support Python 2.6, Python 3.3 and Numpy 1.6.
+
+Improvements:
+
+* PR #1723: Improve compatibility of JIT functions with the Python profiler.
+* PR #1509: Support array.ravel() and array.flatten().
+* PR #1676: Add SmartArray type to support transparent data management in
+  multiple address spaces (host & GPU).
+* PR #1689: Reduce startup overhead of importing Numba.
+* PR #1705: Support registration of CFFI types as corresponding to known
+  Numba types.
+* PR #1686: Document the extension API.
+* PR #1698: Improve warnings raised during type inference.
+* PR #1697: Support np.dot() and friends on non-contiguous arrays.
+* PR #1692: cffi.from_buffer() improvements (allow more pointer types,
+  allow non-Numpy buffer objects).
+* PR #1648: Add the ``@generated_jit`` decorator.
+* PR #1651: Implementation of np.linalg.inv using LAPACK.  Thanks to
+  Matthieu Dartiailh.
+* PR #1674: Support np.diag().
+* PR #1673: Improve error message when looking up an attribute on an
+  unknown global.
+* Issue #1569: Implement runtime check for the LLVM locale bug.
+* PR #1612: Switch to LLVM 3.7 in sync with llvmlite.
+* PR #1624: Allow slice assignment of sequence to array.
+* PR #1622: Support slicing tuples with a constant slice.
+
+Fixes:
+
+* Issue #1722: Fix returning an optional boolean (bool or None).
+* Issue #1734: NRT decref bug when variable is del'ed before being defined,
+  leading to a possible memory leak.
+* PR #1732: Fix tuple getitem regression for CUDA target.
+* PR #1718: Mishandling of optional to optional casting.
+* PR #1714: Fix .compile() on a JIT function not respecting ._can_compile.
+* Issue #1667: Fix np.angle() on arrays.
+* Issue #1690: Fix slicing with an omitted stop and a negative step value.
+* PR #1693: Fix gufunc bug in handling scalar formal arg with non-scalar
+  input value.
+* PR #1683: Fix parallel testing under Windows.
+* Issue #1616: Use system-provided versions of C99 math where possible.
+* Issue #1652: Reductions of bool arrays (e.g. sum() or mean()) should
+  return integers or floats, not bools.
+* Issue #1664: Fix regression when indexing a record array with a constant
+  index.
+* PR #1661: Disable AVX on old Linux kernels.
+* Issue #1636: Allow raising an exception looked up on a module.
+
+
+Version 0.23.1
+--------------
+
+This is a bug-fix release to address several regressions introduced
+in the 0.23.0 release, and a couple other issues.
+
+Fixes:
+
+* Issue #1645: CUDA ufuncs were broken in 0.23.0.
+* Issue #1638: Check tuple sizes when passing a list of tuples.
+* Issue #1630: Parallel ufunc would keep eating CPU even after finishing
+  under Windows.
+* Issue #1628: Fix ctypes and cffi tests under Windows with Python 3.5.
+* Issue #1627: Fix xrange() support.
+* PR #1611: Rewrite variable liveness analysis.
+* Issue #1610: Allow nested calls between explicitly-typed ufuncs.
+* Issue #1593: Fix `*args` in object mode.
+
+
+Version 0.23.0
+--------------
+
+This release introduces JIT classes using the new ``@jitclass`` decorator,
+allowing user-defined structures for nopython mode.  Other improvements
+and bug fixes are listed below.
+
+Improvements:
+
+* PR #1609: Speed up some simple math functions by inlining them
+  in their caller
+* PR #1571: Implement JIT classes
+* PR #1584: Improve typing of array indexing
+* PR #1583: Allow printing booleans
+* PR #1542: Allow negative values in np.reshape()
+* PR #1560: Support vector and matrix dot product, including ``np.dot()``
+  and the ``@`` operator in Python 3.5
+* PR #1546: Support field lookup on record arrays and scalars (i.e.
+  ``array['field']`` in addition to ``array.field``)
+* PR #1440: Support the HSA wavebarrier() and activelanepermute_wavewidth()
+  intrinsics
+* PR #1540: Support np.angle()
+* PR #1543: Implement CPU multithreaded gufuncs (target="parallel")
+* PR #1551: Allow scalar arguments in np.where(), np.empty_like().
+* PR #1516: Add some more examples from NumbaPro
+* PR #1517: Support np.sinc()
+
+Fixes:
+
+* Issue #1603: Fix calling a non-cached function from a cached function
+* Issue #1594: Ensure a list is homogenous when unboxing
+* Issue #1595: Replace deprecated use of get_pointer_to_function()
+* Issue #1586: Allow tests to be run by different users on the same machine
+* Issue #1587: Make CudaAPIError picklable
+* Issue #1568: Fix using Numba from inside Visual Studio 2015
+* Issue #1559: Fix serializing a jit function referring a renamed module
+* PR #1508: Let reshape() accept integer argument(s), not just a tuple
+* Issue #1545: Improve error checking when unboxing list objects
+* Issue #1538: Fix array broadcasting in CUDA gufuncs
+* Issue #1526: Fix a reference count handling bug
+
+
 Version 0.22.1
 --------------
 
@@ -10,7 +361,7 @@ Fixes:
   source tar files.
 * PR #1518: Fix reference counting bug caused by hidden alias
 * PR #1519: Fix erroneous assert when passing nopython=True to guvectorize.
-
+* PR #1521: Fix cuda.test()
 
 Version 0.22.0
 --------------

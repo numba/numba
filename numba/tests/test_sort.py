@@ -12,7 +12,7 @@ from numba.compiler import compile_isolated, Flags
 from numba import jit, types, utils
 import numba.unittest_support as unittest
 from numba import testing
-from .support import TestCase, MemoryLeakMixin
+from .support import TestCase, MemoryLeakMixin, tag
 
 from numba.targets.quicksort import make_py_quicksort, make_jit_quicksort
 from .timsort import make_py_timsort, make_jit_timsort, MergeRun
@@ -41,6 +41,9 @@ jit_quicksort = make_jit_quicksort()
 def sort_usecase(val):
     val.sort()
 
+def argsort_usecase(val):
+    return val.argsort()
+
 def sorted_usecase(val):
     return sorted(val)
 
@@ -49,6 +52,9 @@ def sorted_reverse_usecase(val, b):
 
 def np_sort_usecase(val):
     return np.sort(val)
+
+def np_argsort_usecase(val):
+    return np.argsort(val)
 
 def list_sort_usecase(n):
     np.random.seed(42)
@@ -155,6 +161,7 @@ class BaseTimsortTest(BaseSortingTest):
         f = self.timsort.merge_init
         return f(keys)
 
+    @tag('important')
     def test_binarysort(self):
         n = 20
         def check(l, n, start=0):
@@ -240,6 +247,7 @@ class BaseTimsortTest(BaseSortingTest):
         for i in range(len(l) - 1):
             check(l, i, n)
 
+    @tag('important')
     def test_gallop_left(self):
         n = 20
         f = self.timsort.gallop_left
@@ -546,11 +554,13 @@ class TestTimsortArrays(JITTimsortMixin, BaseTimsortTest, TestCase):
 
 class BaseQuicksortTest(BaseSortingTest):
 
+    # NOTE these tests assume a non-argsort quicksort.
+
     def test_insertion_sort(self):
         n = 20
         def check(l, n):
             res = self.array_factory([9999] + l + [-9999])
-            f(res, 1, n)
+            f(res, res, 1, n)
             self.assertEqual(res[0], 9999)
             self.assertEqual(res[-1], -9999)
             self.assertSorted(l, res[1:-1])
@@ -573,7 +583,7 @@ class BaseQuicksortTest(BaseSortingTest):
         n = 20
         def check(l, n):
             res = self.array_factory([9999] + l + [-9999])
-            index = f(res, 1, n)
+            index = f(res, res, 1, n)
             self.assertEqual(res[0], 9999)
             self.assertEqual(res[-1], -9999)
             pivot = res[index]
@@ -626,6 +636,7 @@ class BaseQuicksortTest(BaseSortingTest):
         l = self.duprandom_list(n)
         check(l, n)
 
+    @tag('important')
     def test_run_quicksort(self):
         f = self.quicksort.run_quicksort
 
@@ -701,6 +712,29 @@ class TestNumpySort(TestCase):
     def setUp(self):
         np.random.seed(42)
 
+    def int_arrays(self):
+        for size in (5, 20, 50, 500):
+            yield np.random.randint(99, size=size)
+
+    def float_arrays(self):
+        for size in (5, 20, 50, 500):
+            yield np.random.random(size=size) * 100
+        # Now with NaNs.  Numpy sorts them at the end.
+        for size in (5, 20, 50, 500):
+            orig = np.random.random(size=size) * 100
+            orig[np.random.random(size=size) < 0.1] = float('nan')
+            yield orig
+
+    def has_duplicates(self, arr):
+        """
+        Whether the array has duplicates.  Takes NaNs into account.
+        """
+        if np.count_nonzero(np.isnan(arr)) > 1:
+            return True
+        if np.unique(arr).size < arr.size:
+            return True
+        return False
+
     def check_sort_inplace(self, pyfunc, cfunc, val):
         expected = copy.copy(val)
         got = copy.copy(val)
@@ -716,34 +750,39 @@ class TestNumpySort(TestCase):
         # The original wasn't mutated
         self.assertPreciseEqual(val, orig)
 
+    def check_argsort(self, pyfunc, cfunc, val):
+        orig = copy.copy(val)
+        expected = pyfunc(val)
+        got = cfunc(val)
+        self.assertPreciseEqual(orig[got], np.sort(orig),
+                                msg="the array wasn't argsorted")
+        # Numba and Numpy results may differ if there are duplicates
+        # in the array
+        if not self.has_duplicates(orig):
+            self.assertPreciseEqual(got, expected)
+        # The original wasn't mutated
+        self.assertPreciseEqual(val, orig)
+
     def test_array_sort_int(self):
         pyfunc = sort_usecase
         cfunc = jit(nopython=True)(pyfunc)
 
-        for size in (5, 20, 50, 500):
-            orig = np.random.randint(99, size=size)
+        for orig in self.int_arrays():
             self.check_sort_inplace(pyfunc, cfunc, orig)
 
+    @tag('important')
     def test_array_sort_float(self):
         pyfunc = sort_usecase
         cfunc = jit(nopython=True)(pyfunc)
 
-        for size in (5, 20, 50, 500):
-            orig = np.random.random(size=size) * 100
-            self.check_sort_inplace(pyfunc, cfunc, orig)
-
-        # Now with NaNs.  Numpy sorts them at the end.
-        for size in (5, 20, 50, 500):
-            orig = np.random.random(size=size) * 100
-            orig[np.random.random(size=size) < 0.1] = float('nan')
+        for orig in self.float_arrays():
             self.check_sort_inplace(pyfunc, cfunc, orig)
 
     def test_np_sort_int(self):
         pyfunc = np_sort_usecase
         cfunc = jit(nopython=True)(pyfunc)
 
-        for size in (5, 20, 50, 500):
-            orig = np.random.randint(99, size=size)
+        for orig in self.int_arrays():
             self.check_sort_copy(pyfunc, cfunc, orig)
 
     def test_np_sort_float(self):
@@ -755,9 +794,29 @@ class TestNumpySort(TestCase):
             orig[np.random.random(size=size) < 0.1] = float('nan')
             self.check_sort_copy(pyfunc, cfunc, orig)
 
+    def test_argsort_int(self):
+        def check(pyfunc):
+            cfunc = jit(nopython=True)(pyfunc)
+            for orig in self.int_arrays():
+                self.check_argsort(pyfunc, cfunc, orig)
+
+        check(argsort_usecase)
+        check(np_argsort_usecase)
+
+    @tag('important')
+    def test_argsort_float(self):
+        def check(pyfunc):
+            cfunc = jit(nopython=True)(pyfunc)
+            for orig in self.float_arrays():
+                self.check_argsort(pyfunc, cfunc, orig)
+
+        check(argsort_usecase)
+        check(np_argsort_usecase)
+
 
 class TestPythonSort(TestCase):
 
+    @tag('important')
     def test_list_sort(self):
         pyfunc = list_sort_usecase
         cfunc = jit(nopython=True)(pyfunc)

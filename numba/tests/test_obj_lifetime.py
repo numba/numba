@@ -30,10 +30,6 @@ class _Dummy(object):
         assert isinstance(other, _Dummy)
         return _Dummy(self.recorder, "%s + %s" % (self.name, other.name))
 
-    def __iadd__(self, other):
-        assert isinstance(other, _Dummy)
-        return _Dummy(self.recorder, "%s += %s" % (self.name, other.name))
-
     def __iter__(self):
         return _DummyIterator(self.recorder, "iter(%s)" % self.name)
 
@@ -94,11 +90,6 @@ class RefRecorder(object):
         A list of objects which haven't been deleted yet.
         """
         return [wr() for wr in self._wrs]
-        for wr in list(self._wrs):
-            o = wr()
-            if o is not None:
-                objs.append(o)
-        return objs
 
     @property
     def recorded(self):
@@ -232,6 +223,20 @@ def del_before_definition(rec):
     return -1
 
 
+def inf_loop_multiple_back_edge(rec):
+    """
+    test to reveal bug of invalid liveness when infinite loop has multiple
+    backedge.
+    """
+    while True:
+        rec.mark("yield")
+        yield
+        p = rec('p')
+        if p:
+            rec.mark('bra')
+            pass
+
+
 class TestObjLifetime(TestCase):
     """
     Test lifetime of Python objects inside jit-compiled functions.
@@ -363,6 +368,19 @@ class TestObjLifetime(TestCase):
         with self.assertRefCount(MyError):
             rec = self.compile_and_record(raising_usecase3, raises=MyError)
             self.assertFalse(rec.alive)
+
+    def test_inf_loop_multiple_back_edge(self):
+        cfunc = self.compile(inf_loop_multiple_back_edge)
+        rec = RefRecorder()
+        iterator = iter(cfunc(rec))
+        next(iterator)
+        self.assertEqual(rec.alive, [])
+        next(iterator)
+        self.assertEqual(rec.alive, [])
+        next(iterator)
+        self.assertEqual(rec.alive, [])
+        self.assertEqual(rec.recorded,
+                         ['yield', 'p', 'bra', 'yield', 'p', 'bra', 'yield'])
 
 
 if __name__ == "__main__":

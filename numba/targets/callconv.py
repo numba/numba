@@ -55,23 +55,28 @@ class BaseCallConv(object):
 
     def return_optional_value(self, builder, retty, valty, value):
         if valty == types.none:
+            # Value is none
             self.return_native_none(builder)
 
         elif retty == valty:
-            optcls = self.context.make_optional(retty)
-            optval = optcls(self.context, builder, value=value)
+            # Value is an optional, need a runtime switch
+            optval = self.context.make_helper(builder, retty, value=value)
 
             validbit = cgutils.as_bool_bit(builder, optval.valid)
             with builder.if_then(validbit):
-                self.return_value(builder, optval.data)
+                retval = self.context.get_return_value(builder, retty.type,
+                                                       optval.data)
+                self.return_value(builder, retval)
 
             self.return_native_none(builder)
 
         elif not isinstance(valty, types.Optional):
+            # Value is not an optional, need a cast
             if valty != retty.type:
                 value = self.context.cast(builder, value, fromty=valty,
                                           toty=retty.type)
-            self.return_value(builder, value)
+            retval = self.context.get_return_value(builder, retty.type, value)
+            self.return_value(builder, retval)
 
         else:
             raise NotImplementedError("returning {0} for {1}".format(valty,
@@ -134,6 +139,28 @@ class BaseCallConv(object):
 
         builder.position_at_end(bbend)
 
+    def decode_arguments(self, builder, argtypes, func):
+        """
+        Get the decoded (unpacked) Python arguments with *argtypes*
+        from LLVM function *func*.  A tuple of LLVM values is returned.
+        """
+        raw_args = self.get_arguments(func)
+        arginfo = self._get_arg_packer(argtypes)
+        return arginfo.from_arguments(builder, raw_args)
+
+    def _fix_argtypes(self, argtypes):
+        """
+        Fix argument types, removing any omitted arguments.
+        """
+        return tuple(ty for ty in argtypes
+                     if not isinstance(ty, types.Omitted))
+
+    def _get_arg_packer(self, argtypes):
+        """
+        Get an argument packer for the given argument types.
+        """
+        return self.context.get_arg_packer(argtypes)
+
 
 class MinimalCallConv(BaseCallConv):
     """
@@ -160,8 +187,12 @@ class MinimalCallConv(BaseCallConv):
         self._return_errcode_raw(builder, RETCODE_OK)
 
     def return_user_exc(self, builder, exc, exc_args=None):
-        assert (exc is None or issubclass(exc, BaseException)), exc
-        assert (exc_args is None or isinstance(exc_args, tuple)), exc_args
+        if exc is not None and not issubclass(exc, BaseException):
+            raise TypeError("exc should be None or exception class, got %r"
+                            % (exc,))
+        if exc_args is not None and not isinstance(exc_args, tuple):
+            raise TypeError("exc_args should be None or tuple, got %r"
+                            % (exc_args,))
         call_helper = self._get_call_helper(builder)
         exc_id = call_helper._add_exception(exc, exc_args)
         self._return_errcode_raw(builder, _const_int(exc_id))
@@ -200,7 +231,7 @@ class MinimalCallConv(BaseCallConv):
         """
         Get the implemented Function type for *restype* and *argtypes*.
         """
-        arginfo = self.context.get_arg_packer(argtypes)
+        arginfo = self._get_arg_packer(argtypes)
         argtypes = list(arginfo.argument_types)
         resptr = self.get_return_type(restype)
         fnty = ir.FunctionType(errcode_t, [resptr] + argtypes)
@@ -210,7 +241,7 @@ class MinimalCallConv(BaseCallConv):
         """
         Set names and attributes of function arguments.
         """
-        arginfo = self.context.get_arg_packer(fe_argtypes)
+        arginfo = self._get_arg_packer(fe_argtypes)
         arginfo.assign_names(self.get_arguments(fn),
                              ['arg.' + a for a in args])
         fn.args[0].name = ".ret"
@@ -219,7 +250,6 @@ class MinimalCallConv(BaseCallConv):
     def get_arguments(self, func):
         """
         Get the Python-level arguments of LLVM *func*.
-        See get_function_type() for the calling convention.
         """
         return func.args[1:]
 
@@ -233,7 +263,7 @@ class MinimalCallConv(BaseCallConv):
         # initialize return value
         builder.store(cgutils.get_null_value(retty), retvaltmp)
 
-        arginfo = self.context.get_arg_packer(argtys)
+        arginfo = self._get_arg_packer(argtys)
         args = arginfo.as_arguments(builder, args)
         realargs = [retvaltmp] + list(args)
         code = builder.call(callee, realargs)
@@ -301,8 +331,12 @@ class CPUCallConv(BaseCallConv):
         self._return_errcode_raw(builder, RETCODE_OK)
 
     def return_user_exc(self, builder, exc, exc_args=None):
-        assert (exc is None or issubclass(exc, BaseException)), exc
-        assert (exc_args is None or isinstance(exc_args, tuple)), exc_args
+        if exc is not None and not issubclass(exc, BaseException):
+            raise TypeError("exc should be None or exception class, got %r"
+                            % (exc,))
+        if exc_args is not None and not isinstance(exc_args, tuple):
+            raise TypeError("exc_args should be None or tuple, got %r"
+                            % (exc_args,))
         pyapi = self.context.get_python_api(builder)
         # Build excinfo struct
         if exc_args is not None:
@@ -348,8 +382,7 @@ class CPUCallConv(BaseCallConv):
         """
         Get the implemented Function type for *restype* and *argtypes*.
         """
-
-        arginfo = self.context.get_arg_packer(argtypes)
+        arginfo = self._get_arg_packer(argtypes)
         argtypes = list(arginfo.argument_types)
         resptr = self.get_return_type(restype)
         fnty = ir.FunctionType(errcode_t,
@@ -361,7 +394,7 @@ class CPUCallConv(BaseCallConv):
         """
         Set names of function arguments, and add useful attributes to them.
         """
-        arginfo = self.context.get_arg_packer(fe_argtypes)
+        arginfo = self._get_arg_packer(fe_argtypes)
         arginfo.assign_names(self.get_arguments(fn),
                              ['arg.' + a for a in args])
         retarg = self._get_return_argument(fn)
@@ -405,7 +438,11 @@ class CPUCallConv(BaseCallConv):
             # (nopython functions).
             env = cgutils.get_null_value(PYOBJECT)
         is_generator_function = isinstance(resty, types.Generator)
-        retty = self._get_return_argument(callee).type.pointee
+
+        # XXX better fix for callees that are not function values
+        #     (pointers to function; thus have no `.args` attribute)
+        retty = self._get_return_argument(callee.function_type).pointee
+
         retvaltmp = cgutils.alloca_once(builder, retty)
         # initialize return value to zeros
         builder.store(cgutils.get_null_value(retty), retvaltmp)
@@ -413,16 +450,13 @@ class CPUCallConv(BaseCallConv):
         excinfoptr = cgutils.alloca_once(builder, ir.PointerType(excinfo_t),
                                          name="excinfo")
 
-        arginfo = self.context.get_arg_packer(argtys)
+        arginfo = self._get_arg_packer(argtys)
         args = list(arginfo.as_arguments(builder, args))
         realargs = [retvaltmp, excinfoptr, env] + args
         code = builder.call(callee, realargs)
         status = self._get_return_status(builder, code,
                                          builder.load(excinfoptr))
-        if is_generator_function:
-            retval = retvaltmp
-        else:
-            retval = builder.load(retvaltmp)
+        retval = builder.load(retvaltmp)
         out = self.context.get_returned_value(builder, resty, retval)
         return status, out
 
@@ -466,3 +500,10 @@ error_models = {
     'python': PythonErrorModel,
     'numpy': NumpyErrorModel,
     }
+
+
+def create_error_model(model_name, context):
+    """
+    Create an error model instance for the given target context.
+    """
+    return error_models[model_name](context.call_conv)

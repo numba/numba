@@ -3,9 +3,10 @@ from __future__ import print_function, division, absolute_import
 import collections
 import dis
 import sys
+from copy import copy
 
-from numba import ir, controlflow, dataflow, utils, errors
-from numba.utils import builtins
+from . import config, ir, controlflow, dataflow, utils, errors
+from .utils import builtins
 
 
 class Assigner(object):
@@ -59,66 +60,41 @@ class Assigner(object):
         return None
 
 
-class YieldPoint(object):
-
-    def __init__(self, block, inst):
-        assert isinstance(block, ir.Block)
-        assert isinstance(inst, ir.Yield)
-        self.block = block
-        self.inst = inst
-        self.live_vars = None
-        self.weak_live_vars = None
-
-
-class GeneratorInfo(object):
-
-    def __init__(self):
-        # { index: YieldPoint }
-        self.yield_points = {}
-        # Ordered list of variable names
-        self.state_vars = []
-
-    def get_yield_points(self):
-        """
-        Return an iterable of YieldPoint instances.
-        """
-        return self.yield_points.values()
-
-
 class Interpreter(object):
     """A bytecode interpreter that builds up the IR.
     """
 
-    def __init__(self, bytecode):
-        self.bytecode = bytecode
-        self.scopes = []
-        self.loc = ir.Loc(filename=bytecode.filename, line=1)
-        self.arg_count = bytecode.arg_count
-        self.arg_names = bytecode.arg_names
-        # Control flow analysis
-        self.cfa = controlflow.ControlFlowAnalysis(bytecode)
-        self.cfa.run()
-        # Data flow analysis
-        self.dfa = dataflow.DataFlowAnalysis(self.cfa)
-        self.dfa.run()
-
-        global_scope = ir.Scope(parent=None, loc=self.loc)
-        self._fill_global_scope(global_scope)
-        self.scopes.append(global_scope)
+    def __init__(self, func_id):
+        self.func_id = func_id
+        self.arg_count = func_id.arg_count
+        self.arg_names = func_id.arg_names
+        self.loc = self.first_loc = ir.Loc.from_function_id(func_id)
+        self.is_generator = func_id.is_generator
 
         # { inst offset : ir.Block }
         self.blocks = {}
-        # { name: value } of global variables used by the bytecode
-        self.used_globals = {}
         # { name: [definitions] } of local variables
         self.definitions = collections.defaultdict(list)
-        # { ir.Block: { variable names (potentially) alive at start of block } }
-        self.block_entry_vars = {}
 
-        if self.bytecode.is_generator:
-            self.generator_info = GeneratorInfo()
-        else:
-            self.generator_info = None
+    def interpret(self, bytecode):
+        """
+        Generate IR for this bytecode.
+        """
+        self.bytecode = bytecode
+
+        self.scopes = []
+        global_scope = ir.Scope(parent=None, loc=self.loc)
+        self.scopes.append(global_scope)
+
+        # Control flow analysis
+        self.cfa = controlflow.ControlFlowAnalysis(bytecode)
+        self.cfa.run()
+        if config.DUMP_CFG:
+            self.cfa.dump()
+
+        # Data flow analysis
+        self.dfa = dataflow.DataFlowAnalysis(self.cfa)
+        self.dfa.run()
 
         # Temp states during interpretation
         self.current_block = None
@@ -126,235 +102,15 @@ class Interpreter(object):
         self.syntax_blocks = []
         self.dfainfo = None
 
-    def _fill_global_scope(self, scope):
-        """TODO
-        """
-        pass
-
-    def get_used_globals(self):
-        """
-        Return a dictionary of global variables used by the bytecode.
-        """
-        return self.used_globals
-
-    def get_block_entry_vars(self, block):
-        """
-        Return a set of variable names possibly alive at the beginning of
-        the block.
-        """
-        return self.block_entry_vars[block]
-
-    def interpret(self):
         firstblk = min(self.cfa.blocks.keys())
-        self.loc = ir.Loc(filename=self.bytecode.filename,
-                          line=self.bytecode[firstblk].lineno)
         self.scopes.append(ir.Scope(parent=self.current_scope, loc=self.loc))
         # Interpret loop
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
-        # Post-processing and analysis on generated IR
-        self._insert_var_dels()
-        self._compute_live_variables()
-        if self.generator_info:
-            self._compute_generator_info()
 
-    def _compute_live_variables(self):
-        """
-        Compute the live variables at the beginning of each block
-        and at each yield point.
-        This must be done after insertion of ir.Dels.
-        """
-        # Scan for variable additions and deletions in each block
-        block_var_adds = {}
-        block_var_dels = {}
-        cfg = self.cfa.graph
-
-        for ir_block in self.blocks.values():
-            self.block_entry_vars[ir_block] = set()
-            adds = block_var_adds[ir_block] = set()
-            dels = block_var_dels[ir_block] = set()
-            for stmt in ir_block.body:
-                if isinstance(stmt, ir.Assign):
-                    name = stmt.target.name
-                    adds.add(name)
-                    dels.discard(name)
-                elif isinstance(stmt, ir.Del):
-                    name = stmt.value
-                    adds.discard(name)
-                    dels.add(name)
-
-        # Propagate defined variables from every block to its successors.
-        # (note the entry block automatically gets an empty set)
-        changed = True
-        while changed:
-            # We iterate until the result stabilizes.  This is necessary
-            # because of loops in the graph.
-            changed = False
-            for i in cfg.topo_order():
-                ir_block = self.blocks[i]
-                v = self.block_entry_vars[ir_block].copy()
-                v |= block_var_adds[ir_block]
-                v -= block_var_dels[ir_block]
-                for j, _ in cfg.successors(i):
-                    succ = self.blocks[j]
-                    succ_entry_vars = self.block_entry_vars[succ]
-                    if not succ_entry_vars >= v:
-                        succ_entry_vars.update(v)
-                        changed = True
-
-    def _compute_generator_info(self):
-        """
-        Compute the generator's state variables as the union of live variables
-        at all yield points.
-        """
-        gi = self.generator_info
-        for yp in gi.get_yield_points():
-            live_vars = set(self.block_entry_vars[yp.block])
-            weak_live_vars = set()
-            stmts = iter(yp.block.body)
-            for stmt in stmts:
-                if isinstance(stmt, ir.Assign):
-                    if stmt.value is yp.inst:
-                        break
-                    live_vars.add(stmt.target.name)
-                elif isinstance(stmt, ir.Del):
-                    live_vars.remove(stmt.value)
-            else:
-                assert 0, "couldn't find yield point"
-            # Try to optimize out any live vars that are deleted immediately
-            # after the yield point.
-            for stmt in stmts:
-                if isinstance(stmt, ir.Del):
-                    name = stmt.value
-                    if name in live_vars:
-                        live_vars.remove(name)
-                        weak_live_vars.add(name)
-                else:
-                    break
-            yp.live_vars = live_vars
-            yp.weak_live_vars = weak_live_vars
-
-        st = set()
-        for yp in gi.get_yield_points():
-            st |= yp.live_vars
-            st |= yp.weak_live_vars
-        gi.state_vars = sorted(st)
-
-    def _insert_var_dels(self):
-        """
-        Insert ir.Del statements where necessary for the various
-        variables defined within the IR.
-        """
-        # { var name -> { block offset -> stmt of last use } }
-        var_use = collections.defaultdict(dict)
-        cfg = self.cfa.graph
-
-        for offset, ir_block in self.blocks.items():
-            for stmt in ir_block.body:
-                for var_name in stmt.list_vars():
-                    if stmt.is_terminator and not stmt.is_exit:
-                        # Move the "last use" at the beginning of successor
-                        # blocks.
-                        for succ, _ in cfg.successors(offset):
-                            var_use[var_name.name].setdefault(succ, None)
-                    else:
-                        var_use[var_name.name][offset] = stmt
-
-        for name in sorted(var_use):
-            var_use_map = var_use[name]
-            blocks = self._compute_var_disposal(name, var_use_map)
-            self._patch_var_disposal(name, var_use_map, blocks)
-
-    def _patch_var_disposal(self, var_name, use_map, disposal_blocks):
-        """
-        Insert ir.Del statements into each of the *disposal_blocks*
-        for variable *var_name*, at the appropriate points in the blocks.
-        """
-        for b in disposal_blocks:
-            # Either this is an original use point and we will insert after
-            # that statement, or it's a computed one and we will insert
-            # at the beginning of the block.
-            stmt = use_map.get(b)
-            ir_block = self.blocks[b]
-            if stmt is None:
-                ir_block.prepend(ir.Del(var_name, loc=ir_block.loc))
-            else:
-                # If the variable is used in an exiting statement
-                # (e.g. raise or return), we don't insert anything.
-                if not stmt.is_exit:
-                    ir_block.insert_after(ir.Del(var_name, loc=stmt.loc), stmt)
-
-    def _compute_var_disposal(self, var_name, use_map):
-        """
-        Compute a set of blocks in which *var_name* should be disposed of.
-        """
-        cfg = self.cfa.graph
-
-        # Compute a set of blocks where we want the variable to be
-        # kept alive.
-        live_points = set()
-
-        # Find the loops the variable is used in
-        loops = set()
-        # Each enclosing loop encloses *all* use points
-        enclosing_loops = None
-        for block in use_map:
-            block_loops = cfg.in_loops(block)
-            loops.update(block_loops)
-            if enclosing_loops is None:
-                enclosing_loops = set(block_loops)
-            else:
-                enclosing_loops.intersection_update(block_loops)
-
-        spanned_loops = loops - enclosing_loops
-
-        for loop in spanned_loops:
-            # As there are blocks outside the loop, the variable must be
-            # kept alive accross loop iterations => we only consider
-            # loop exit points.
-            # (otherwise it means the variable is *defined* inside the loop
-            #  and need not be kept alive accross iterations)
-            live_points.update(loop.exits)
-
-        for block in use_map:
-            live_points.add(block)
-
-        # Now compute a set of *exclusive* blocks covering all paths
-        # stemming from the live points. This ensures that each variable
-        # is del'ed at most once per possible code path.
-        tails = set()
-        # We use the todo list as a stack, so we really iterate in
-        # reverse topo order.
-        todo = list(cfg.topo_sort(live_points))
-        seen = set()
-        infinite_loops = set()
-        while todo:
-            b = todo.pop()
-            if b in seen:
-                continue
-            seen.add(b)
-            block_loops = cfg.in_loops(b)
-            if block_loops:
-                loop = block_loops[0]
-                if loop not in enclosing_loops:
-                    if not loop.exits:
-                        # Fix-up for infinite loops: we temporarily add
-                        # the loop header to the tails, so that the variable
-                        # isn't del'ed before the loop.
-                        tails.add(loop.header)
-                        infinite_loops.add(loop.header)
-                    continue
-            if cfg.descendents(b) & tails:
-                for succ, _ in cfg.successors(b):
-                    if succ not in tails:
-                        todo.append(succ)
-            else:
-                tails.add(b)
-
-        # Remove temporary entries for infinite loops
-        tails -= infinite_loops
-
-        return tails
+        return ir.FunctionIR(self.blocks, self.is_generator, self.func_id,
+                             self.first_loc, self.definitions,
+                             self.arg_count, self.arg_names)
 
     def init_first_block(self):
         # Define variables receiving the function arguments
@@ -368,16 +124,15 @@ class Interpreter(object):
             self._start_new_block(firstinst)
             if blkct == 0:
                 # Is first block
+                self.loc = self.loc.with_lineno(firstinst.lineno)
                 self.init_first_block()
             for offset, kws in self.dfainfo.insts:
                 inst = self.bytecode[offset]
-                self.loc = ir.Loc(filename=self.bytecode.filename,
-                                  line=inst.lineno)
+                self.loc = self.loc.with_lineno(inst.lineno)
                 yield inst, kws
             self._end_current_block()
 
     def _start_new_block(self, inst):
-        self.loc = ir.Loc(filename=self.bytecode.filename, line=inst.lineno)
         oldblock = self.current_block
         self.insert_block(inst.offset)
         # Ensure the last block is terminated
@@ -427,15 +182,20 @@ class Interpreter(object):
         as a builtins (second).  If both failed, return a ir.UNDEFINED.
         """
         try:
-            return utils.get_function_globals(self.bytecode.func)[name]
+            return utils.get_function_globals(self.func_id.func)[name]
         except KeyError:
             return getattr(builtins, name, ir.UNDEFINED)
 
     def get_closure_value(self, index):
         """
         Get a value from the cell contained in this function's closure.
+        If not set, return a ir.UNDEFINED.
         """
-        return self.bytecode.func.__closure__[index].cell_contents
+        cell = self.func_id.func.__closure__[index]
+        try:
+            return cell.cell_contents
+        except ValueError:
+            return ir.UNDEFINED
 
     @property
     def current_scope(self):
@@ -472,21 +232,6 @@ class Interpreter(object):
                     e.loc = self.loc
                 raise e
 
-    def dump(self, file=None):
-        file = file or sys.stdout
-        for offset, block in sorted(self.blocks.items()):
-            print('label %s:' % (offset,), file=file)
-            block.dump(file=file)
-
-    def dump_generator_info(self, file=None):
-        file = file or sys.stdout
-        gi = self.generator_info
-        print("generator state variables:", sorted(gi.state_vars), file=file)
-        for index, yp in sorted(gi.yield_points.items()):
-            print("yield point #%d: live variables = %s, weak live variables = %s"
-                  % (index, sorted(yp.live_vars), sorted(yp.weak_live_vars)),
-                  file=file)
-
 
     # --- Scope operations ---
 
@@ -503,7 +248,7 @@ class Interpreter(object):
             value = self.assigner.assign(value, target)
         stmt = ir.Assign(value=value, target=target, loc=self.loc)
         self.current_block.append(stmt)
-        self.definitions[name].append(value)
+        self.definitions[target.name].append(value)
 
     def get(self, name):
         """
@@ -516,23 +261,6 @@ class Interpreter(object):
             var = self.current_scope.get(name)
         return var
 
-    def get_definition(self, value):
-        """
-        Get the definition site for the given Var instance.
-        A Expr instance is returned.
-        """
-        while True:
-            if not isinstance(value, ir.Var):
-                return value
-            defs = self.definitions[value.name]
-            if len(defs) == 0:
-                raise KeyError("no definition for %r"
-                               % (value.name,))
-            if len(defs) > 1:
-                raise KeyError("more than one definition for %r"
-                               % (value.name,))
-            value = defs[0]
-
     # --- Block operations ---
 
     def insert_block(self, offset, scope=None, loc=None):
@@ -543,13 +271,6 @@ class Interpreter(object):
         self.current_block = blk
         self.current_block_offset = offset
         return blk
-
-    def block_constains_opname(self, offset, opname):
-        for offset in self.cfa.blocks[offset]:
-            inst = self.bytecode[offset]
-            if inst.opname == opname:
-                return True
-        return False
 
     # --- Bytecode handlers ---
 
@@ -576,7 +297,8 @@ class Interpreter(object):
         # then index the tuple-like object to extract the values
         for i, st in enumerate(stores):
             expr = ir.Expr.static_getitem(self.get(tupleobj),
-                                          index=i, loc=self.loc)
+                                          index=i, index_var=None,
+                                          loc=self.loc)
             self.store(expr, st)
 
     def op_BUILD_SLICE(self, inst, start, stop, step, res, slicevar):
@@ -842,7 +564,6 @@ class Interpreter(object):
     def op_LOAD_GLOBAL(self, inst, res):
         name = self.code_names[inst.arg]
         value = self.get_global_value(name)
-        self.used_globals[name] = value
         gl = ir.Global(name, value, loc=self.loc)
         self.store(gl, res)
 
@@ -1012,6 +733,9 @@ class Interpreter(object):
     def op_BINARY_POWER(self, inst, lhs, rhs, res):
         self._binop('**', lhs, rhs, res)
 
+    def op_BINARY_MATRIX_MULTIPLY(self, inst, lhs, rhs, res):
+        self._binop('@', lhs, rhs, res)
+
     def op_BINARY_LSHIFT(self, inst, lhs, rhs, res):
         self._binop('<<', lhs, rhs, res)
 
@@ -1050,6 +774,9 @@ class Interpreter(object):
 
     def op_INPLACE_POWER(self, inst, lhs, rhs, res):
         self._inplace_binop('**', lhs, rhs, res)
+
+    def op_INPLACE_MATRIX_MULTIPLY(self, inst, lhs, rhs, res):
+        self._inplace_binop('@', lhs, rhs, res)
 
     def op_INPLACE_LSHIFT(self, inst, lhs, rhs, res):
         self._inplace_binop('<<', lhs, rhs, res)
@@ -1128,9 +855,7 @@ class Interpreter(object):
         self.current_block.append(stmt)
 
     def op_YIELD_VALUE(self, inst, value, res):
-        dct = self.generator_info.yield_points
-        index = len(dct) + 1
+        # initialize index to None.  it's being set later in post-processing
+        index = None
         inst = ir.Yield(value=self.get(value), index=index, loc=self.loc)
-        yp = YieldPoint(self.current_block, inst)
-        dct[index] = yp
         return self.store(inst, res)

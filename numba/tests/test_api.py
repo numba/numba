@@ -3,7 +3,7 @@ from __future__ import division
 import numba
 
 from numba import unittest_support as unittest
-from .support import TestCase
+from .support import TestCase, tag
 
 
 class TestNumbaModule(TestCase):
@@ -15,6 +15,7 @@ class TestNumbaModule(TestCase):
         self.assertTrue(hasattr(numba, name), name)
         self.assertIn(name, numba.__all__)
 
+    @tag('important')
     def test_numba_module(self):
         # jit
         self.check_member("jit")
@@ -25,9 +26,6 @@ class TestNumbaModule(TestCase):
         # errors
         self.check_member("NumbaError")
         self.check_member("TypingError")
-        # pycc
-        self.check_member("export")
-        self.check_member("exportmany")
         # types
         self.check_member("int32")
         # misc

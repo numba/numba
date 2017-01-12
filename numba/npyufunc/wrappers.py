@@ -126,10 +126,11 @@ def build_fast_loop_body(context, func, builder, arrays, out, offsets,
                                   out, offsets, store_offset, signature, pyapi)
 
 
-def build_ufunc_wrapper(library, context, func, signature, objmode, envptr, env):
+def build_ufunc_wrapper(library, context, fname, signature, objmode, envptr, env):
     """
     Wrap the scalar function with a loop that iterates over the arguments
     """
+    assert isinstance(fname, str)
     byte_t = Type.int(8)
     byte_ptr_t = Type.pointer(byte_t)
     byte_ptr_ptr_t = Type.pointer(byte_ptr_t)
@@ -139,16 +140,16 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, envptr, env)
     fnty = Type.function(Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                        intp_ptr_t, byte_ptr_t])
 
-    wrapper_module = library.create_ir_module('')
+    wrapperlib = context.codegen().create_library('ufunc_wrapper')
+    wrapper_module = wrapperlib.create_ir_module('')
     if objmode:
         func_type = context.call_conv.get_function_type(
             types.pyobject, [types.pyobject] * len(signature.args))
     else:
         func_type = context.call_conv.get_function_type(
             signature.return_type, signature.args)
-    oldfunc = func
-    func = wrapper_module.add_function(func_type,
-                                       name=func.name)
+
+    func = wrapper_module.add_function(func_type, name=fname)
     func.attributes.add("alwaysinline")
 
     wrapper = wrapper_module.add_function(fnty, "__ufunc__." + func.name)
@@ -158,7 +159,7 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, envptr, env)
     arg_steps.name = "steps"
     arg_data.name = "data"
 
-    builder = Builder.new(wrapper.append_basic_block("entry"))
+    builder = Builder(wrapper.append_basic_block("entry"))
 
     loopcount = builder.load(arg_dims, name="loopcount")
 
@@ -218,11 +219,10 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, envptr, env)
         builder.ret_void()
     del builder
 
-    # Run optimizer
-    library.add_ir_module(wrapper_module)
-    wrapper = library.get_function(wrapper.name)
-
-    return wrapper
+    # Link and finalize
+    wrapperlib.add_ir_module(wrapper_module)
+    wrapperlib.add_linking_library(library)
+    return wrapperlib.get_pointer_to_function(wrapper.name)
 
 
 class UArrayArg(object):
@@ -266,18 +266,19 @@ class UArrayArg(object):
 
 
 class _GufuncWrapper(object):
-    def __init__(self, library, context, func, signature, sin, sout, fndesc,
+    def __init__(self, library, context, signature, sin, sout, fndesc,
                  env):
         self.library = library
         self.context = context
         self.call_conv = context.call_conv
-        self.func = func
         self.signature = signature
         self.sin = sin
         self.sout = sout
         self.fndesc = fndesc
         self.is_objectmode = self.signature.return_type == types.pyobject
         self.env = env
+
+        self.wrapperlib = context.codegen().create_library(str(self))
 
     def build(self):
         byte_t = Type.int(8)
@@ -289,20 +290,21 @@ class _GufuncWrapper(object):
         fnty = Type.function(Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                            intp_ptr_t, byte_ptr_t])
 
-        wrapper_module = self.library.create_ir_module('')
+        wrapper_module = self.wrapperlib.create_ir_module('')
         func_type = self.call_conv.get_function_type(self.fndesc.restype,
                                                      self.fndesc.argtypes)
-        func = wrapper_module.add_function(func_type, name=self.func.name)
+        fname = self.fndesc.llvm_func_name
+        func = wrapper_module.add_function(func_type, name=fname)
+
         func.attributes.add("alwaysinline")
-        wrapper = wrapper_module.add_function(fnty,
-                                              "__gufunc__." + self.func.name)
+        wrapper = wrapper_module.add_function(fnty, "__gufunc__." + fname)
         arg_args, arg_dims, arg_steps, arg_data = wrapper.args
         arg_args.name = "args"
         arg_dims.name = "dims"
         arg_steps.name = "steps"
         arg_data.name = "data"
 
-        builder = Builder.new(wrapper.append_basic_block("entry"))
+        builder = Builder(wrapper.append_basic_block("entry"))
         loopcount = builder.load(arg_dims, name="loopcount")
         pyapi = self.context.get_python_api(builder)
 
@@ -355,13 +357,11 @@ class _GufuncWrapper(object):
 
         builder.ret_void()
 
-        self.library.add_ir_module(wrapper_module)
-        wrapper = self.library.get_function(wrapper.name)
-
-        # Set core function to internal so that it is not generated
-        self.func.linkage = LINKAGE_INTERNAL
-
-        return wrapper, self.env
+        # Link and finalize
+        self.wrapperlib.add_ir_module(wrapper_module)
+        self.wrapperlib.add_linking_library(self.library)
+        ptr = self.wrapperlib.get_pointer_to_function(wrapper.name)
+        return ptr, self.env
 
     def gen_loop_body(self, builder, pyapi, func, args):
         status, retval = self.call_conv.call_function(builder, func,
@@ -404,13 +404,12 @@ class _GufuncObjectWrapper(_GufuncWrapper):
         pyapi.gil_release(self.gil)
 
 
-def build_gufunc_wrapper(library, context, func, signature, sin, sout, fndesc,
+def build_gufunc_wrapper(library, context, signature, sin, sout, fndesc,
                          env):
     wrapcls = (_GufuncObjectWrapper
                if signature.return_type == types.pyobject
                else _GufuncWrapper)
-    return wrapcls(library, context, func, signature, sin, sout, fndesc,
-                   env).build()
+    return wrapcls(library, context, signature, sin, sout, fndesc, env).build()
 
 
 def _prepare_call_to_object_mode(context, builder, pyapi, func,
@@ -441,46 +440,55 @@ def _prepare_call_to_object_mode(context, builder, pyapi, func,
     # Convert each llarray into pyobject
     error_pointer = cgutils.alloca_once(builder, Type.int(1), name='error')
     builder.store(cgutils.true_bit, error_pointer)
-    ndarray_pointers = []
-    ndarray_objects = []
-    for i, (arr, arrtype) in enumerate(zip(args, signature.args)):
-        ptr = cgutils.alloca_once(builder, ll_pyobj)
-        ndarray_pointers.append(ptr)
 
-        builder.store(Constant.null(ll_pyobj), ptr)   # initialize to NULL
+    # The PyObject* arguments to the kernel function
+    object_args = []
+    object_pointers = []
 
-        arycls = context.make_array(arrtype)
-        array = arycls(context, builder, value=arr)
+    for i, (arg, argty) in enumerate(zip(args, signature.args)):
+        # Allocate NULL-initialized slot for this argument
+        objptr = cgutils.alloca_once(builder, ll_pyobj, zfill=True)
+        object_pointers.append(objptr)
 
-        zero = Constant.int(ll_int, 0)
+        if isinstance(argty, types.Array):
+            # Special case arrays: we don't need full-blown NRT reflection
+            # since the argument will be gone at the end of the kernel
+            arycls = context.make_array(argty)
+            array = arycls(context, builder, value=arg)
 
-        # Extract members of the llarray
-        nd = Constant.int(ll_int, arrtype.ndim)
-        dims = builder.gep(array._get_ptr_by_name('shape'), [zero, zero])
-        strides = builder.gep(array._get_ptr_by_name('strides'), [zero, zero])
-        data = builder.bitcast(array.data, ll_voidptr)
-        dtype = np.dtype(str(arrtype.dtype))
+            zero = Constant.int(ll_int, 0)
 
-        # Prepare other info for reconstruction of the PyArray
-        type_num = Constant.int(ll_int, dtype.num)
-        itemsize = Constant.int(ll_int, dtype.itemsize)
+            # Extract members of the llarray
+            nd = Constant.int(ll_int, argty.ndim)
+            dims = builder.gep(array._get_ptr_by_name('shape'), [zero, zero])
+            strides = builder.gep(array._get_ptr_by_name('strides'), [zero, zero])
+            data = builder.bitcast(array.data, ll_voidptr)
+            dtype = np.dtype(str(argty.dtype))
 
-        # Call helper to reconstruct PyArray objects
-        obj = builder.call(fn_array_new, [nd, dims, strides, data,
-                                          type_num, itemsize])
-        builder.store(obj, ptr)
-        ndarray_objects.append(obj)
+            # Prepare other info for reconstruction of the PyArray
+            type_num = Constant.int(ll_int, dtype.num)
+            itemsize = Constant.int(ll_int, dtype.itemsize)
+
+            # Call helper to reconstruct PyArray objects
+            obj = builder.call(fn_array_new, [nd, dims, strides, data,
+                                              type_num, itemsize])
+        else:
+            # Other argument types => use generic boxing
+            obj = pyapi.from_native_value(argty, arg)
+
+        builder.store(obj, objptr)
+        object_args.append(obj)
 
         obj_is_null = cgutils.is_null(builder, obj)
         builder.store(obj_is_null, error_pointer)
         cgutils.cbranch_or_continue(builder, obj_is_null, bb_core_return)
 
     # Call ufunc core function
-    object_sig = [types.pyobject] * len(ndarray_objects)
+    object_sig = [types.pyobject] * len(object_args)
 
     status, retval = context.call_conv.call_function(
         builder, func, types.pyobject, object_sig,
-        ndarray_objects, env=env)
+        object_args, env=env)
     builder.store(status.is_error, error_pointer)
 
     # Release returned object
@@ -490,9 +498,9 @@ def _prepare_call_to_object_mode(context, builder, pyapi, func,
     # At return block
     builder.position_at_end(bb_core_return)
 
-    # Release argument object
-    for ndary_ptr in ndarray_pointers:
-        pyapi.decref(builder.load(ndary_ptr))
+    # Release argument objects
+    for objptr in object_pointers:
+        pyapi.decref(builder.load(objptr))
 
     innercall = status.code
     return innercall, builder.load(error_pointer)
@@ -510,6 +518,9 @@ class GUArrayArg(object):
         data = builder.load(builder.gep(args, [offset], name="data.ptr"),
                             name="data")
         self.data = data
+
+        core_step_ptr = builder.gep(steps, [offset], name="core.step.ptr")
+        core_step = builder.load(core_step_ptr)
 
         if isinstance(typ, types.Array):
             as_scalar = not syms
@@ -542,9 +553,6 @@ class GUArrayArg(object):
                      if as_scalar
                      else _ArrayArgLoader)
 
-            core_step_ptr = builder.gep(steps, [offset], name="core.step.ptr")
-            core_step = builder.load(core_step_ptr)
-
             self._loader = ldcls(dtype=typ.dtype,
                                  ndim=ndim,
                                  core_step=core_step,
@@ -556,7 +564,7 @@ class GUArrayArg(object):
             if syms:
                 raise TypeError("scalar type {0} given for non scalar "
                                 "argument #{1}".format(typ, i + 1))
-            self._loader = _ScalarArgLoader(dtype=typ)
+            self._loader = _ScalarArgLoader(dtype=typ, stride=core_step)
 
     def get_array_at_offset(self, ind):
         return self._loader.load(context=self.context, builder=self.builder,
@@ -567,13 +575,17 @@ class _ScalarArgLoader(object):
     """
     Handle GFunc argument loading where a scalar type is used in the core
     function.
+    Note: It still has a stride because the input to the gufunc can be an array
+          for this argument.
     """
 
-    def __init__(self, dtype):
+    def __init__(self, dtype, stride):
         self.dtype = dtype
+        self.stride = stride
 
     def load(self, context, builder, data, ind):
-        # Always load from base position, ignoring `ind`
+        # Load at base + ind * stride
+        data = builder.gep(data, [builder.mul(ind, self.stride)])
         dptr = builder.bitcast(data,
                                context.get_data_type(self.dtype).as_pointer())
         return builder.load(dptr)

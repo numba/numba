@@ -7,16 +7,14 @@ import sys
 
 from llvmlite import ir
 import llvmlite.llvmpy.core as lc
-import llvmlite.llvmpy.ee as le
-import llvmlite.llvmpy.passes as lp
 import llvmlite.binding as ll
 
 from numba import cgutils
 from numba.utils import IS_PY3
 from . import llvm_types as lt
 from numba.compiler import compile_extra, Flags
-from numba.targets.registry import CPUTarget
-from numba.runtime import atomicops
+from numba.targets.registry import cpu_target
+from numba.runtime import nrtdynmod
 
 
 logger = logging.getLogger(__name__)
@@ -105,7 +103,8 @@ class _ModuleCompiler(object):
     env_def_ty = lc.Type.struct((lt._void_star, lt._int32))
     env_def_ptr = lc.Type.pointer(env_def_ty)
 
-    def __init__(self, export_entries, module_name, use_nrt=False):
+    def __init__(self, export_entries, module_name, use_nrt=False,
+                 **aot_options):
         self.module_name = module_name
         self.export_python_wrap = False
         self.dll_exports = []
@@ -114,8 +113,9 @@ class _ModuleCompiler(object):
         self.external_init_function = None
         self.use_nrt = use_nrt
 
-        self.typing_context = CPUTarget.typing_context
-        self.context = CPUTarget.target_context.with_aot_codegen(self.module_name)
+        self.typing_context = cpu_target.typing_context
+        self.context = cpu_target.target_context.with_aot_codegen(
+            self.module_name, **aot_options)
 
     def _mangle_method_symbol(self, func_name):
         return "._pycc_method_%s" % (func_name,)
@@ -143,7 +143,7 @@ class _ModuleCompiler(object):
         if self.use_nrt:
             flags.set("nrt")
             # Compile NRT helpers
-            nrt_module, _ = atomicops.create_nrt_module(self.context)
+            nrt_module, _ = nrtdynmod.create_nrt_module(self.context)
             library.add_ir_module(nrt_module)
 
         for entry in self.export_entries:
@@ -310,7 +310,7 @@ class ModuleCompilerPy2(_ModuleCompiler):
         # Define the module initialization function.
         mod_init_fn = llvm_module.add_function(*self.module_init_definition)
         entry = mod_init_fn.append_basic_block('Entry')
-        builder = lc.Builder.new(entry)
+        builder = lc.Builder(entry)
         pyapi = self.context.get_python_api(builder)
 
         # Python C API module creation function.
@@ -471,7 +471,7 @@ class ModuleCompilerPy3(_ModuleCompiler):
         # Define the module initialization function.
         mod_init_fn = llvm_module.add_function(*self.module_init_definition)
         entry = mod_init_fn.append_basic_block('Entry')
-        builder = lc.Builder.new(entry)
+        builder = lc.Builder(entry)
         pyapi = self.context.get_python_api(builder)
 
         mod = builder.call(create_module_fn,

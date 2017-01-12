@@ -5,8 +5,8 @@ Implementation of the range object for fixed-size integers.
 import llvmlite.llvmpy.core as lc
 
 from numba import types, cgutils
-from numba.targets.imputils import (builtin, implement, iterator_impl,
-                                    impl_ret_untracked)
+from numba.targets.imputils import (lower_builtin, lower_cast,
+                                    iterator_impl, impl_ret_untracked)
 
 
 def make_range_iterator(typ):
@@ -20,8 +20,7 @@ def make_range_iterator(typ):
 def make_range_impl(range_state_type, range_iter_type, int_type):
     RangeState = cgutils.create_struct_proxy(range_state_type)
 
-    @builtin
-    @implement(types.range_type, int_type)
+    @lower_builtin(range, int_type)
     def range1_impl(context, builder, sig, args):
         """
         range(stop: int) -> range object
@@ -36,8 +35,7 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
                                   range_state_type,
                                   state._getvalue())
 
-    @builtin
-    @implement(types.range_type, int_type, int_type)
+    @lower_builtin(range, int_type, int_type)
     def range2_impl(context, builder, sig, args):
         """
         range(start: int, stop: int) -> range object
@@ -52,8 +50,7 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
                                   range_state_type,
                                   state._getvalue())
 
-    @builtin
-    @implement(types.range_type, int_type, int_type, int_type)
+    @lower_builtin(range, int_type, int_type, int_type)
     def range3_impl(context, builder, sig, args):
         """
         range(start: int, stop: int, step: int) -> range object
@@ -68,8 +65,7 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
                                   range_state_type,
                                   state._getvalue())
 
-    @builtin
-    @implement('getiter', range_state_type)
+    @lower_builtin('getiter', range_state_type)
     def getiter_range32_impl(context, builder, sig, args):
         """
         range.__iter__
@@ -149,3 +145,11 @@ make_range_impl(types.range_state32_type, types.range_iter32_type, types.int32)
 make_range_impl(types.range_state64_type, types.range_iter64_type, types.int64)
 make_range_impl(types.unsigned_range_state64_type, types.unsigned_range_iter64_type,
                 types.uint64)
+
+
+@lower_cast(types.RangeType, types.RangeType)
+def range_to_range(context, builder, fromty, toty, val):
+    olditems = cgutils.unpack_tuple(builder, val, 3)
+    items = [context.cast(builder, v, fromty.dtype, toty.dtype)
+             for v in olditems]
+    return cgutils.make_anonymous_struct(builder, items)

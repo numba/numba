@@ -88,7 +88,7 @@ def _find_driver():
 
 
 PLATFORM_NOT_SUPPORTED_ERROR = """
-HSA is not currently ussported in this platform ({0}).
+HSA is not currently supported on this platform ({0}).
 """
 
 
@@ -459,7 +459,7 @@ class Agent(HsaWrapper):
         group_segment_size = (ctypes.c_uint32(-1)
                               if group_segment_size is None
                               else group_segment_size)
-        hsa.hsa_queue_create(self._id, 2, queue_type, cb, data,
+        hsa.hsa_queue_create(self._id, size, queue_type, cb, data,
                              private_segment_size, group_segment_size,
                              ctypes.byref(result))
 
@@ -641,8 +641,12 @@ class Queue(object):
                  signal=None):
         dims = len(workgroup_size)
         assert dims == len(grid_size)
-        assert dims <= 3
+        assert 0 < dims <= 3
         assert grid_size >= workgroup_size
+        if workgroup_size > tuple(self._agent.workgroup_max_dim)[:dims]:
+            msg = "workgroupsize is too big {0} > {1}"
+            raise HsaDriverError(msg.format(workgroup_size,
+                                tuple(self._agent.workgroup_max_dim)[:dims]))
         s = signal if signal is not None else hsa.create_signal(1)
 
         # Note: following vector_copy.c
@@ -676,7 +680,9 @@ class Queue(object):
         packet.completion_signal = s._id
 
         packet.kernel_object = symbol.kernel_object
-        packet.kernarg_address = ctypes.addressof(kernargs)
+
+        packet.kernarg_address = (0 if kernargs is None
+                                  else ctypes.addressof(kernargs))
 
         packet.private_segment_size = symbol.private_segment_size
         packet.group_segment_size = symbol.group_segment_size

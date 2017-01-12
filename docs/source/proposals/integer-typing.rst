@@ -1,10 +1,12 @@
+.. _nbep-1:
+
 =================================
 NBEP 1: Changes in integer typing
 =================================
 
 :Author: Antoine Pitrou
 :Date: July 2015
-:Status: Accepted
+:Status: Final
 
 
 Current semantics

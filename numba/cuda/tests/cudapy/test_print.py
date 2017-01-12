@@ -1,6 +1,6 @@
 from __future__ import print_function
 
-import numpy
+import numpy as np
 
 from numba import cuda
 from numba import unittest_support as unittest
@@ -10,6 +10,7 @@ from numba.cuda.testing import captured_cuda_stdout
 def cuhello():
     i = cuda.grid(1)
     print(i, 999)
+    print(-42)
 
 
 def printfloat():
@@ -17,9 +18,9 @@ def printfloat():
     print(i, 23, 34.75, 321)
 
 
-def cuprintary(A):
+def printstring():
     i = cuda.grid(1)
-    print("A[", i, "]", A[i])
+    print(i, "hop!", 999)
 
 
 def printempty():
@@ -32,10 +33,12 @@ class TestPrint(unittest.TestCase):
         jcuhello = cuda.jit('void()', debug=False)(cuhello)
         with captured_cuda_stdout() as stdout:
             jcuhello[2, 3]()
-        # The output of GPU threads is intermingled, just sanity check it
+        # The output of GPU threads is intermingled, but each print()
+        # call is still atomic
         out = stdout.getvalue()
-        expected = ''.join('%d 999\n' % i for i in range(6))
-        self.assertEqual(sorted(out), sorted(expected))
+        lines = sorted(out.splitlines(True))
+        expected = ['-42\n'] * 6 + ['%d 999\n' % i for i in range(6)]
+        self.assertEqual(lines, expected)
 
     def test_printfloat(self):
         jprintfloat = cuda.jit('void()', debug=False)(printfloat)
@@ -51,15 +54,14 @@ class TestPrint(unittest.TestCase):
             cufunc()
         self.assertEqual(stdout.getvalue(), "\n")
 
-    @unittest.skipIf(True, "Print string not implemented yet")
-    def test_print_array(self):
-        """
-        Eyeballing required
-        """
-        jcuprintary = cuda.jit('void(float32[:])')(cuprintary)
-        A = numpy.arange(10, dtype=numpy.float32)
-        jcuprintary[2, 5](A)
-        cuda.synchronize()
+    def test_string(self):
+        cufunc = cuda.jit('void()', debug=False)(printstring)
+        with captured_cuda_stdout() as stdout:
+            cufunc[1, 3]()
+        out = stdout.getvalue()
+        lines = sorted(out.splitlines(True))
+        expected = ['%d hop! 999\n' % i for i in range(3)]
+        self.assertEqual(lines, expected)
 
 
 if __name__ == '__main__':

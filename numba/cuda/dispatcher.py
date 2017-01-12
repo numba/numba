@@ -7,20 +7,13 @@ from numba.targets.options import TargetOptions
 from numba import cuda
 from numba.cuda import jit, autojit
 from numba.cuda.cudadrv import devicearray
+from .descriptor import CUDATargetDesc
 from numba.npyufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
                                         GUFuncCallSteps)
 
 
-class CUDATargetOptions(TargetOptions):
-    OPTIONS = {}
-
-
-class CUDATarget(TargetDescriptor):
-    options = CUDATargetOptions
-
-
 class CUDADispatcher(object):
-    targetdescr = CUDATarget
+    targetdescr = CUDATargetDesc
 
     def __init__(self, py_func, locals={}, targetoptions={}):
         assert not locals
@@ -180,6 +173,15 @@ class CUDAGenerializedUFunc(GenerializedUFunc):
     def _broadcast_scalar_input(self, ary, shape):
         return devicearray.DeviceNDArray(shape=shape,
                                          strides=(0,),
+                                         dtype=ary.dtype,
+                                         gpu_data=ary.gpu_data)
+
+    def _broadcast_add_axis(self, ary, newshape):
+        newax = len(newshape) - len(ary.shape)
+        # Add 0 strides for missing dimension
+        newstrides = (0,) * newax + ary.strides
+        return devicearray.DeviceNDArray(shape=newshape,
+                                         strides=newstrides,
                                          dtype=ary.dtype,
                                          gpu_data=ary.gpu_data)
 

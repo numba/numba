@@ -19,7 +19,7 @@ All functions described here are threadsafe.
 #endif
 
 /* TypeDefs */
-typedef void (*NRT_dtor_function)(void *ptr, void *info);
+typedef void (*NRT_dtor_function)(void *ptr, size_t size, void *info);
 typedef size_t (*NRT_atomic_inc_dec_func)(size_t *ptr);
 typedef int (*NRT_atomic_cas_func)(void * volatile *ptr, void *cmp, void *repl,
                                    void **oldptr);
@@ -126,6 +126,12 @@ VISIBILITY_HIDDEN
 NRT_MemInfo *NRT_MemInfo_alloc_safe(size_t size);
 
 /*
+ * Similar to NRT_MemInfo_alloc_safe but with a custom dtor.
+ */
+VISIBILITY_HIDDEN
+NRT_MemInfo* NRT_MemInfo_alloc_dtor_safe(size_t size, NRT_dtor_function dtor);
+
+/*
  * Aligned versions of the NRT_MemInfo_alloc and NRT_MemInfo_alloc_safe.
  * These take an additional argument `align` for number of bytes to align to.
  */
@@ -177,10 +183,13 @@ size_t NRT_MemInfo_size(NRT_MemInfo* mi);
  * NRT API for resizable buffers.
  */
 VISIBILITY_HIDDEN
-NRT_MemInfo *NRT_MemInfo_varsize_alloc(size_t size);
+NRT_MemInfo *NRT_MemInfo_new_varsize(size_t size);
+VISIBILITY_HIDDEN
+void *NRT_MemInfo_varsize_alloc(NRT_MemInfo *mi, size_t size);
 VISIBILITY_HIDDEN
 void *NRT_MemInfo_varsize_realloc(NRT_MemInfo *mi, size_t size);
-
+VISIBILITY_HIDDEN
+void NRT_MemInfo_varsize_free(NRT_MemInfo *mi, void *ptr);
 
 /*
  * Print debug info to FILE

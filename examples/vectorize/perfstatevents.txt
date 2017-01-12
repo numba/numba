@@ -1,0 +1,1 @@
+-e cpu-cycles -e instructions -e cache-references -e cache-misses -e branch-instructions -e branch-misses -e bus-cycles -e cpu-clock -e task-clock -e page-faults -e minor-faults -e major-faults -e context-switches -e cpu-migrations -e alignment-faults

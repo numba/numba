@@ -4,9 +4,9 @@ import os
 import platform
 import textwrap
 
-from .support import TestCase, override_config, captured_stdout
+from .support import TestCase, override_config, captured_stdout, forbid_codegen
 from numba import unittest_support as unittest
-from numba import types
+from numba import jit, jitclass, types
 from numba.compiler import compile_isolated
 
 
@@ -17,6 +17,16 @@ def simple_nopython(somearg):
 def simple_gen(x, y):
     yield x
     yield y
+
+
+class SimpleClass(object):
+    def __init__(self):
+        self.h = 5
+
+simple_class_spec = [('h', types.int32)]
+
+def simple_class_user(obj):
+    return obj.h
 
 
 class DebugTestBase(TestCase):
@@ -142,6 +152,29 @@ class TestGeneratorDebugOutput(DebugTestBase):
             yield point #2: live variables = [], weak live variables = ['y']
             """)
         self.assertIn(expected_gen_info, out)
+
+
+class TestDisableJIT(DebugTestBase):
+    """
+    Test the NUMBA_DISABLE_JIT environment variable.
+    """
+
+    def test_jit(self):
+        with override_config('DISABLE_JIT', True):
+            with forbid_codegen():
+                cfunc = jit(nopython=True)(simple_nopython)
+                self.assertPreciseEqual(cfunc(2), 3)
+
+    def test_jitclass(self):
+        with override_config('DISABLE_JIT', True):
+            with forbid_codegen():
+                SimpleJITClass = jitclass(simple_class_spec)(SimpleClass)
+
+                obj = SimpleJITClass()
+                self.assertPreciseEqual(obj.h, 5)
+
+                cfunc = jit(nopython=True)(simple_class_user)
+                self.assertPreciseEqual(cfunc(obj), 5)
 
 
 class TestEnvironmentOverride(FunctionDebugTestBase):

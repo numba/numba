@@ -1,5 +1,5 @@
 """
-Typing declarations for numpy.timedelta64.
+Typing declarations for np.timedelta64.
 """
 
 from __future__ import print_function, division, absolute_import
@@ -9,8 +9,8 @@ from itertools import product
 from numba import npdatetime, types
 from numba.utils import PYVERSION
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                    AbstractTemplate, builtin_global, builtin,
-                                    builtin_attr, signature)
+                                    AbstractTemplate, infer_global, infer,
+                                    infer_getattr, signature)
 
 
 # timedelta64-only operations
@@ -111,71 +111,71 @@ class TimedeltaDivOp(AbstractTemplate):
             return signature(left, left, types.int64)
 
 
-@builtin
+@infer
 class TimedeltaUnaryPos(TimedeltaUnaryOp):
     key = "+"
 
-@builtin
+@infer
 class TimedeltaUnaryNeg(TimedeltaUnaryOp):
     key = "-"
 
-@builtin
+@infer
 class TimedeltaBinAdd(TimedeltaBinOp):
     key = "+"
 
-@builtin
+@infer
 class TimedeltaBinSub(TimedeltaBinOp):
     key = "-"
 
-@builtin
+@infer
 class TimedeltaBinMult(TimedeltaMixOp):
     key = "*"
 
-@builtin
+@infer
 class TimedeltaTrueDiv(TimedeltaDivOp):
     key = "/"
 
-@builtin
+@infer
 class TimedeltaFloorDiv(TimedeltaDivOp):
     key = "//"
 
-@builtin
+@infer
 class TimedeltaLegacyDiv(TimedeltaDivOp):
     key = "/?"
 
-@builtin
+@infer
 class TimedeltaCmpEq(TimedeltaCmpOp):
     key = '=='
 
-@builtin
+@infer
 class TimedeltaCmpNe(TimedeltaCmpOp):
     key = '!='
 
-@builtin
+@infer
 class TimedeltaCmpLt(TimedeltaOrderedCmpOp):
     key = '<'
 
-@builtin
+@infer
 class TimedeltaCmpLE(TimedeltaOrderedCmpOp):
     key = '<='
 
-@builtin
+@infer
 class TimedeltaCmpGt(TimedeltaOrderedCmpOp):
     key = '>'
 
-@builtin
+@infer
 class TimedeltaCmpGE(TimedeltaOrderedCmpOp):
     key = '>='
 
 
-@builtin
+@infer_global(abs)
 class TimedeltaAbs(TimedeltaUnaryOp):
-    key = types.abs_type
+    pass
 
 
 # datetime64 operations
 
-@builtin
+@infer
 class DatetimePlusTimedelta(AbstractTemplate):
     key = '+'
 
@@ -197,7 +197,7 @@ class DatetimePlusTimedelta(AbstractTemplate):
             if unit is not None:
                 return signature(types.NPDatetime(unit), left, right)
 
-@builtin
+@infer
 class DatetimeMinusTimedelta(AbstractTemplate):
     key = '-'
 
@@ -211,7 +211,7 @@ class DatetimeMinusTimedelta(AbstractTemplate):
             if unit is not None:
                 return signature(types.NPDatetime(unit), dt, td)
 
-@builtin
+@infer
 class DatetimeMinusDatetime(AbstractTemplate):
     key = '-'
 
@@ -236,26 +236,26 @@ class DatetimeCmpOp(AbstractTemplate):
         return signature(types.boolean, left, right)
 
 
-@builtin
+@infer
 class DatetimeCmpEq(DatetimeCmpOp):
     key = '=='
 
-@builtin
+@infer
 class DatetimeCmpNe(DatetimeCmpOp):
     key = '!='
 
-@builtin
+@infer
 class DatetimeCmpLt(DatetimeCmpOp):
     key = '<'
 
-@builtin
+@infer
 class DatetimeCmpLE(DatetimeCmpOp):
     key = '<='
 
-@builtin
+@infer
 class DatetimeCmpGt(DatetimeCmpOp):
     key = '>'
 
-@builtin
+@infer
 class DatetimeCmpGE(DatetimeCmpOp):
     key = '>='

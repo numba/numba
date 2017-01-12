@@ -2,6 +2,9 @@
 Numba
 =====
 
+A compiler for Python array and numerical functions
+---------------------------------------------------
+
 Numba is an Open Source NumPy-aware optimizing compiler for Python
 sponsored by Continuum Analytics, Inc.  It uses the
 remarkable LLVM compiler infrastructure to compile Python syntax to
@@ -24,8 +27,7 @@ Dependencies
 ============
 
 * llvmlite
-* numpy (version 1.6 or higher)
-* argparse (for pycc in python2.6)
+* numpy (version 1.7 or higher)
 * funcsigs (for Python 2)
 
 
@@ -33,7 +35,7 @@ Installing
 ==========
 
 The easiest way to install numba and get updates is by using the Anaconda
-Distribution: https://store.continuum.io/cshop/anaconda/
+Distribution: https://www.continuum.io/downloads
 
 ::
 
@@ -48,15 +50,15 @@ development environments.  To create a new environment for Numba development::
 To select the installed version, append "=VERSION" to the package name,
 where, "VERSION" is the version number.  For example::
 
-   $ conda create -p ~/dev/mynumba python=2.7 numpy=1.6 llvmlite
+   $ conda create -p ~/dev/mynumba python=2.7 numpy=1.9 llvmlite
 
-to use Python 2.7 and Numpy 1.6.
+to use Python 2.7 and Numpy 1.9.
 
 If you need CUDA support, you should also install the CUDA toolkit::
 
    $ conda install cudatoolkit
 
-This installs the CUDA Toolkit version 6.0, which requires driver version 331.00
+This installs the CUDA Toolkit version 7.5, which requires driver version 352.79
 or later to be installed.
 
 Custom Python Environments
@@ -68,7 +70,7 @@ Building and installing llvmlite
 ''''''''''''''''''''''''''''''''
 
 See https://github.com/numba/llvmlite for the most up-to-date instructions.
-You will need a build of LLVM 3.5.
+You will need a build of LLVM 3.7.
 
 ::
 
@@ -93,7 +95,7 @@ or simply
 
    $ pip install numba
 
-If you want to enable CUDA support, you will need to install CUDA Toolkit 6.0.
+If you want to enable CUDA support, you will need to install CUDA Toolkit 7.5.
 After installing the toolkit, you might have to specify environment variables
 in order to override the standard search paths:
 

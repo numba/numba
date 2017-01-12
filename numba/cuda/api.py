@@ -3,8 +3,11 @@ API that are reported to numba.cuda
 """
 
 from __future__ import print_function, absolute_import
+
 import contextlib
+
 import numpy as np
+
 from .cudadrv import devicearray, devices, driver
 
 
@@ -28,7 +31,7 @@ def to_device(obj, stream=0, copy=True, to=None):
 
     To copy host->device a numpy array::
 
-        ary = numpy.arange(10)
+        ary = np.arange(10)
         d_ary = cuda.to_device(ary)
 
     To enqueue the transfer to a stream::
@@ -44,7 +47,7 @@ def to_device(obj, stream=0, copy=True, to=None):
 
     To copy device->host to an existing array::
 
-        ary = numpy.empty(shape=d_ary.shape, dtype=d_ary.dtype)
+        ary = np.empty(shape=d_ary.shape, dtype=d_ary.dtype)
         d_ary.copy_to_host(ary)
 
     To enqueue the transfer to a stream::
@@ -75,8 +78,8 @@ def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
 def pinned_array(shape, dtype=np.float, strides=None, order='C'):
     """pinned_array(shape, dtype=np.float, strides=None, order='C')
 
-    Allocate a numpy.ndarray with a buffer that is pinned (pagelocked).
-    Similar to numpy.empty().
+    Allocate a np.ndarray with a buffer that is pinned (pagelocked).
+    Similar to np.empty().
     """
     shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
                                                          order)
@@ -93,7 +96,7 @@ def mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0,
     """mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0, portable=False, wc=False)
 
     Allocate a mapped ndarray with a buffer that is pinned and mapped on
-    to the device. Similar to numpy.empty()
+    to the device. Similar to np.empty()
 
     :param portable: a boolean flag to allow the allocated device memory to be
               usable in multiple devices.
@@ -279,8 +282,21 @@ def detect():
 
 @contextlib.contextmanager
 def defer_cleanup():
-    tserv = get_current_device().trashing
-    with tserv.defer_cleanup:
+    """
+    Temporarily disable memory deallocation.
+    Use this to prevent resource deallocation breaking asynchronous execution.
+
+    For example::
+
+        with defer_cleanup():
+            # all cleanup is deferred in here
+            do_speed_critical_code()
+        # cleanup can occur here
+
+    Note: this context manager can be nested.
+    """
+    deallocs = current_context().deallocations
+    with deallocs.disable():
         yield
 
 

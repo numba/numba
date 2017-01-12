@@ -49,6 +49,31 @@ supported from Numba-compiled code.  However, you can temporarily disable
 compilation by setting the :envvar:`NUMBA_DISABLE_JIT` environment
 variable.
 
+How can I create a Fortran-ordered array?
+-----------------------------------------
+
+Numba currently doesn't support the ``order`` argument to most Numpy
+functions such as :func:`numpy.empty` (because of limitations in the
+:term:`type inference` algorithm).  You can work around this issue by
+creating a C-ordered array and then transposing it.  For example::
+
+   a = np.empty((3, 5), order='F')
+   b = np.zeros(some_shape, order='F')
+
+can be rewritten as::
+
+   a = np.empty((5, 3)).T
+   b = np.zeros(some_shape[::-1]).T
+
+How can I increase integer width?
+---------------------------------
+
+By default, Numba will generally use machine integer width for integer
+variables.  On a 32-bit machine, you may sometimes need the magnitude of
+64-bit integers instead.  You can simply initialize relevant variables as
+``np.int64`` (for example ``np.int64(0)`` instead of ``0``).  It will
+propagate to all computations involving those variables.
+
 
 Performance
 ===========
@@ -126,6 +151,26 @@ modules" button, and add ``numba`` inside the text box that pops up.
 
 To see the setting take effect, be sure to restart the IPython console or
 kernel.
+
+.. _llvm-locale-bug:
+
+Why does Numba complain about the current locale?
+-------------------------------------------------
+
+If you get an error message such as the following::
+
+   RuntimeError: Failed at nopython (nopython mode backend)
+   LLVM will produce incorrect floating-point code in the current locale
+
+it means you have hit a LLVM bug which causes incorrect handling of
+floating-point constants.  This is known to happen with certain third-party
+libraries such as the Qt backend to matplotlib.
+
+To work around the bug, you need to force back the locale to its default
+value, for example::
+
+   import locale
+   locale.setlocale(locale.LC_NUMERIC, 'C')
 
 
 .. _NumbaPro: http://docs.continuum.io/numbapro/

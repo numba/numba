@@ -12,6 +12,13 @@ Glossary
       independently.  This is the traditional kind of compilation known
       in languages such as C, C++ or Fortran.
 
+   bytecode
+   Python bytecode
+      The original form in which Python functions are executed.  Python
+      bytecode describes a stack-machine executing abstract (untyped)
+      operations using operands from both the function stack and the
+      execution environment (e.g. global variables).
+
    compile-time constant
       An expression whose value Numba can infer and freeze at compile-time.
       Global variables and closure variables are compile-time constants.
@@ -27,14 +34,17 @@ Glossary
       the :ref:`@jit <jit>` decorator."
 
    loop-lifting
-      See :term:`loop-jitting`.
-
    loop-jitting
       A feature of compilation in :term:`object mode` where a loop can be
       automatically extracted and compiled in :term:`nopython mode`.  This
-      allows functions with operations unsupported in nopython mode (such as
-      array creation) to see significant performance improvements if they
-      contain loops with only nopython-supported operations.
+      allows functions with operations unsupported in nopython mode to see 
+      significant performance improvements if they contain loops with only 
+      nopython-supported operations.
+
+   lowering
+      The act of translating :term:`Numba IR` into LLVM IR.  The term
+      "lowering" stems from the fact that LLVM IR is low-level and
+      machine-specific while Numba IR is high-level and abstract.
 
    nopython mode
       A Numba compilation mode that generates code that does not access the
@@ -43,6 +53,12 @@ Glossary
       can be :term:`inferred <type inference>`.  Unless otherwise instructed,
       the ``@jit`` decorator will automatically fall back to :term:`object
       mode` if nopython mode cannot be used.
+
+   Numba IR
+   Numba intermediate representation
+      A representation of a piece of Python code which is more amenable
+      to analysis and transformations than the original Python
+      :term:`bytecode`.
 
    object mode
       A Numba compilation mode that generates code that handles all values
@@ -58,6 +74,9 @@ Glossary
       functions are used that are not recognized by Numba.  Sucessful
       type inference is a prerequisite for compilation in
       :term:`nopython mode`.
+
+   typing
+      The act of running :term:`type inference` on a value or operation.
 
    ufunc
       A NumPy `universal function <http://docs.scipy.org/doc/numpy/reference/ufuncs.html>`_.

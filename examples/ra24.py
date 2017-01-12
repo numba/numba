@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from numba import jit
 import numpy as np
 import math

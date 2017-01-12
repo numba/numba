@@ -9,6 +9,7 @@ from types import BuiltinFunctionType
 import ctypes
 
 from numba import types
+from numba.errors import TypingError
 from . import templates
 
 try:
@@ -63,7 +64,7 @@ def _type_map():
     global _cached_type_map
     if _cached_type_map is None:
         _cached_type_map = {
-            ffi.typeof('char') :                types.int8,
+            ffi.typeof('char') :                types.char,
             ffi.typeof('short') :               types.short,
             ffi.typeof('int') :                 types.intc,
             ffi.typeof('long') :                types.long_,
@@ -83,11 +84,6 @@ def _type_map():
             ffi.typeof('uint64_t') :            types.ulonglong,
             ffi.typeof('float') :               types.float_,
             ffi.typeof('double') :              types.double,
-            ffi.typeof('char *') :              types.voidptr,
-            ffi.typeof('void *') :              types.voidptr,
-            ffi.typeof('uint8_t *') :           types.CPointer(types.uint8),
-            ffi.typeof('float *') :             types.CPointer(types.float32),
-            ffi.typeof('double *') :            types.CPointer(types.float64),
             ffi.typeof('ssize_t') :             types.intp,
             ffi.typeof('size_t') :              types.uintp,
             ffi.typeof('void') :                types.void,
@@ -100,21 +96,25 @@ def map_type(cffi_type):
     Map CFFI type to numba type.
     """
     kind = getattr(cffi_type, 'kind', '')
-    if kind in ('struct', 'union'):
-        raise TypeError("No support for struct or union")
+    if kind == 'union':
+        raise TypeError("No support for CFFI union")
     elif kind == 'function':
         if cffi_type.ellipsis:
             raise TypeError("vararg function is not supported")
         restype = map_type(cffi_type.result)
         argtypes = [map_type(arg) for arg in cffi_type.args]
         return templates.signature(restype, *argtypes)
+    elif kind == 'pointer':
+        pointee = cffi_type.item
+        if pointee.kind == 'void':
+            return types.voidptr
+        else:
+            return types.CPointer(map_type(pointee))
     else:
         result = _type_map().get(cffi_type)
-
-    if result is None:
-        raise TypeError(cffi_type)
-
-    return result
+        if result is None:
+            raise TypeError(cffi_type)
+        return result
 
 
 def make_function_type(cffi_func):
@@ -122,22 +122,10 @@ def make_function_type(cffi_func):
     Return a Numba type for the given CFFI function pointer.
     """
     cffi_type = _ool_func_types.get(cffi_func) or ffi.typeof(cffi_func)
+    if getattr(cffi_type, 'kind', '') == 'struct':
+        raise TypeError('No support for CFFI struct values')
     sig = map_type(cffi_type)
     return types.ExternalFunctionPointer(sig, get_pointer=get_pointer)
-
-
-class ExternCFunction(types.ExternalFunction):
-    # XXX unused?
-
-    def __init__(self, symbol, cstring):
-        """Parse C function declaration/signature"""
-        parser = cffi.cparser.Parser()
-        rft = parser.parse_type(cstring) # "RawFunctionType"
-        type_map = _type_map()
-        self.restype = type_map[rft.result.build_backend_type(ffi, None)]
-        self.argtypes = [type_map[arg.build_backend_type(ffi, None)] for arg in rft.args]
-        signature = templates.signature(self.restype, *self.argtypes)
-        super(ExternCFunction, self).__init__(symbol, signature)
 
 
 registry = templates.Registry()
@@ -147,11 +135,15 @@ class FFI_from_buffer(templates.AbstractTemplate):
     key = 'ffi.from_buffer'
 
     def generic(self, args, kws):
-        if kws or (len(args) != 1):
+        if kws or len(args) != 1:
             return
         [ary] = args
-        if not (isinstance(ary, types.Array) and ary.layout in ('C', 'F')):
-            return
+        if not isinstance(ary, types.Buffer):
+            raise TypingError("from_buffer() expected a buffer object, got %s"
+                              % (ary,))
+        if ary.layout not in ('C', 'F'):
+            raise TypingError("from_buffer() unsupported on non-contiguous buffers (got %s)"
+                              % (ary,))
         ptr = types.CPointer(ary.dtype)
         return templates.signature(ptr, ary)
 
@@ -174,3 +166,10 @@ def register_module(mod):
             addr = mod.ffi.addressof(mod.lib, f.__name__)
             _ool_func_ptr[f] = int(mod.ffi.cast("uintptr_t", addr))
         _ffi_instances.add(mod.ffi)
+
+def register_type(cffi_type, numba_type):
+    """
+    Add typing for a given CFFI type to the typemap
+    """
+    tm = _type_map()
+    tm[cffi_type] = numba_type

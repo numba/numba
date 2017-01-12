@@ -132,6 +132,9 @@ class EnvironmentManager(object):
         return self.pyapi.list_getitem(self.env_body.consts, index)
 
 
+_IteratorLoop = namedtuple('_IteratorLoop', ('value', 'do_break'))
+
+
 class PythonAPI(object):
     """
     Code generation facilities to call into the CPython C API (and related
@@ -166,6 +169,10 @@ class PythonAPI(object):
         self.cstring = Type.pointer(Type.int(8))
         self.gil_state = Type.int(_helperlib.py_gil_state_size * 8)
         self.py_buffer_t = ir.ArrayType(ir.IntType(8), _helperlib.py_buffer_size)
+        if PYVERSION >= (3, 0):
+            self.py_hash_t = self.py_ssize_t
+        else:
+            self.py_hash_t = self.long
 
     def get_env_manager(self, env, env_body, env_ptr):
         return EnvironmentManager(self, env, env_body, env_ptr)
@@ -201,6 +208,11 @@ class PythonAPI(object):
         fnty = Type.function(Type.void(), [self.pyobj])
         fn = self._get_function(fnty, name="Py_DecRef")
         self.builder.call(fn, [obj])
+
+    def get_type(self, obj):
+        fnty = Type.function(self.pyobj, [self.pyobj])
+        fn = self._get_function(fnty, name="numba_py_type")
+        return self.builder.call(fn, [obj])
 
     #
     # Argument unpacking
@@ -255,6 +267,15 @@ class PythonAPI(object):
             msg = self.context.insert_const_string(self.module, msg)
         return self.builder.call(fn, (exctype, msg))
 
+    def err_format(self, exctype, msg, *format_args):
+        fnty = Type.function(Type.void(), [self.pyobj, self.cstring], var_arg=True)
+        fn = self._get_function(fnty, name="PyErr_Format")
+        if isinstance(exctype, str):
+            exctype = self.get_c_object(exctype)
+        if isinstance(msg, str):
+            msg = self.context.insert_const_string(self.module, msg)
+        return self.builder.call(fn, (exctype, msg) + tuple(format_args))
+
     def raise_object(self, exc=None):
         """
         Raise an arbitrary exception (type or value or (type, args)
@@ -263,7 +284,7 @@ class PythonAPI(object):
         fnty = Type.function(Type.void(), [self.pyobj])
         fn = self._get_function(fnty, name="numba_do_raise")
         if exc is None:
-            exc = self.get_null_object()
+            exc = self.make_none()
         return self.builder.call(fn, (exc,))
 
     def err_set_object(self, exctype, excval):
@@ -348,6 +369,7 @@ class PythonAPI(object):
     def fatal_error(self, msg):
         fnty = Type.function(Type.void(), [self.cstring])
         fn = self._get_function(fnty, name="Py_FatalError")
+        fn.attributes.add("noreturn")
         cstr = self.context.insert_const_string(self.module, msg)
         self.builder.call(fn, (cstr,))
 
@@ -567,6 +589,10 @@ class PythonAPI(object):
     def number_remainder(self, lhs, rhs, inplace=False):
         return self._call_number_operator("Remainder", lhs, rhs, inplace=inplace)
 
+    def number_matrix_multiply(self, lhs, rhs, inplace=False):
+        assert PYVERSION >= (3, 5)
+        return self._call_number_operator("MatrixMultiply", lhs, rhs, inplace=inplace)
+
     def number_lshift(self, lhs, rhs, inplace=False):
         return self._call_number_operator("Lshift", lhs, rhs, inplace=inplace)
 
@@ -644,16 +670,16 @@ class PythonAPI(object):
     # Concrete slice API
     #
 
-    def slice_as_ints(self, obj, defaults):
+    def slice_as_ints(self, obj):
         """
         Read the members of a slice of integers.
+
         Returns a (ok, start, stop, step) tuple where ok is a boolean and
         the following members are pointer-sized ints.
         """
-        defaults = [ir.Constant(self.py_ssize_t, v) for v in defaults]
-        pstart = cgutils.alloca_once_value(self.builder, defaults[0])
-        pstop = cgutils.alloca_once_value(self.builder, defaults[1])
-        pstep = cgutils.alloca_once_value(self.builder, defaults[2])
+        pstart = cgutils.alloca_once(self.builder, self.py_ssize_t)
+        pstop = cgutils.alloca_once(self.builder, self.py_ssize_t)
+        pstep = cgutils.alloca_once(self.builder, self.py_ssize_t)
         fnty = Type.function(Type.int(),
                              [self.pyobj] + [self.py_ssize_t.as_pointer()] * 3)
         fn = self._get_function(fnty, name="numba_unpack_slice")
@@ -793,6 +819,55 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PySet_Add")
         return self.builder.call(fn, [set, value])
 
+    def set_clear(self, set):
+        fnty = Type.function(Type.int(), [self.pyobj])
+        fn = self._get_function(fnty, name="PySet_Clear")
+        return self.builder.call(fn, [set])
+
+    def set_size(self, set):
+        fnty = Type.function(self.py_ssize_t, [self.pyobj])
+        fn = self._get_function(fnty, name="PySet_Size")
+        return self.builder.call(fn, [set])
+
+    def set_update(self, set, iterable):
+        fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="_PySet_Update")
+        return self.builder.call(fn, [set, iterable])
+
+    def set_next_entry(self, set, posptr, keyptr, hashptr):
+        fnty = Type.function(Type.int(),
+                             [self.pyobj, self.py_ssize_t.as_pointer(),
+                              self.pyobj.as_pointer(), self.py_hash_t.as_pointer()])
+        fn = self._get_function(fnty, name="_PySet_NextEntry")
+        return self.builder.call(fn, (set, posptr, keyptr, hashptr))
+
+    @contextlib.contextmanager
+    def set_iterate(self, set):
+        builder = self.builder
+
+        hashptr = cgutils.alloca_once(builder, self.py_hash_t, name="hashptr")
+        keyptr = cgutils.alloca_once(builder, self.pyobj, name="keyptr")
+        posptr = cgutils.alloca_once_value(builder,
+                                           ir.Constant(self.py_ssize_t, 0),
+                                           name="posptr")
+
+        bb_body = builder.append_basic_block("bb_body")
+        bb_end = builder.append_basic_block("bb_end")
+
+        builder.branch(bb_body)
+        def do_break():
+            builder.branch(bb_end)
+
+        with builder.goto_block(bb_body):
+            r = self.set_next_entry(set, posptr, keyptr, hashptr)
+            finished = cgutils.is_null(builder, r)
+            with builder.if_then(finished, likely=False):
+                builder.branch(bb_end)
+            yield _IteratorLoop(builder.load(keyptr), do_break)
+            builder.branch(bb_body)
+
+        builder.position_at_end(bb_end)
+
     #
     # GIL APIs
     #
@@ -836,6 +911,26 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyEval_RestoreThread")
         self.builder.call(fn, [thread_state])
 
+    #
+    # Generic object private data (a way of associating an arbitrary void *
+    # pointer to an arbitrary Python object).
+    #
+
+    def object_get_private_data(self, obj):
+        fnty = Type.function(self.voidptr, [self.pyobj])
+        fn = self._get_function(fnty, name="numba_get_pyobject_private_data")
+        return self.builder.call(fn, (obj,))
+
+    def object_set_private_data(self, obj, ptr):
+        fnty = Type.function(Type.void(), [self.pyobj, self.voidptr])
+        fn = self._get_function(fnty, name="numba_set_pyobject_private_data")
+        return self.builder.call(fn, (obj, ptr))
+
+    def object_reset_private_data(self, obj):
+        fnty = Type.function(Type.void(), [self.pyobj])
+        fn = self._get_function(fnty, name="numba_reset_pyobject_private_data")
+        return self.builder.call(fn, (obj,))
+
 
     #
     # Other APIs (organize them better!)
@@ -850,6 +945,19 @@ class PythonAPI(object):
         fnty = Type.function(self.pyobj, [self.pyobj], var_arg=True)
         fn = self._get_function(fnty, name="PyObject_CallFunctionObjArgs")
         args = [callee] + list(objargs)
+        args.append(self.context.get_constant_null(types.pyobject))
+        return self.builder.call(fn, args)
+
+    def call_method(self, callee, method, objargs=()):
+        cname = self.context.insert_const_string(self.module, method)
+        fnty = Type.function(self.pyobj, [self.pyobj, self.cstring, self.cstring],
+                             var_arg=True)
+        fn = self._get_function(fnty, name="PyObject_CallMethod")
+        fmt = 'O' * len(objargs)
+        cfmt = self.context.insert_const_string(self.module, fmt)
+        args = [callee, cname, cfmt]
+        if objargs:
+            args.extend(objargs)
         args.append(self.context.get_constant_null(types.pyobject))
         return self.builder.call(fn, args)
 
@@ -890,7 +998,7 @@ class PythonAPI(object):
         elif opstr == 'is not':
             bitflag = self.builder.icmp(lc.ICMP_NE, lhs, rhs)
             return self.from_native_value(types.boolean, bitflag)
-        elif opstr == 'in':
+        elif opstr in ('in', 'not in'):
             fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
             fn = self._get_function(fnty, name="PySequence_Contains")
             status = self.builder.call(fn, (rhs, lhs))
@@ -901,6 +1009,8 @@ class PythonAPI(object):
                                                Constant.null(self.pyobj))
             # If PySequence_Contains returns non-error value
             with cgutils.if_likely(self.builder, is_good):
+                if opstr == 'not in':
+                    status = self.builder.not_(status)
                 # Store the status as a boolean object
                 truncated = self.builder.trunc(status, Type.int(1))
                 self.builder.store(self.bool_from_bool(truncated),
@@ -954,14 +1064,28 @@ class PythonAPI(object):
         return self.object_setattr(obj, attr, self.get_null_object())
 
     def object_getitem(self, obj, key):
+        """
+        Return obj[key]
+        """
         fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyObject_GetItem")
         return self.builder.call(fn, (obj, key))
 
     def object_setitem(self, obj, key, val):
+        """
+        obj[key] = val
+        """
         fnty = Type.function(Type.int(), [self.pyobj, self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyObject_SetItem")
         return self.builder.call(fn, (obj, key, val))
+
+    def object_delitem(self, obj, key):
+        """
+        del obj[key]
+        """
+        fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="PyObject_DelItem")
+        return self.builder.call(fn, (obj, key))
 
     def string_as_string(self, strobj):
         fnty = Type.function(self.cstring, [self.pyobj])
@@ -1199,12 +1323,16 @@ class PythonAPI(object):
         return cgutils.is_not_null(self.builder, self.err_occurred())
 
     def to_native_value(self, typ, obj):
+        """
+        Unbox the Python object as the given Numba type.
+        A NativeValue instance is returned.
+        """
         impl = _unboxers.lookup(typ.__class__)
         if impl is None:
             raise NotImplementedError("cannot convert %s to native value" % (typ,))
 
         c = _UnboxContext(self.context, self.builder, self)
-        return impl(c, typ, obj)
+        return impl(typ, obj, c)
 
     def from_native_return(self, typ, val, env_manager):
         assert not isinstance(typ, types.Optional), "callconv should have " \
@@ -1214,12 +1342,17 @@ class PythonAPI(object):
         return out
 
     def from_native_value(self, typ, val, env_manager=None):
+        """
+        Box the native value of the given Numba type.  A Python object
+        pointer is returned (NULL if an error occurred).
+        This method steals any native (NRT) reference embedded in *val*.
+        """
         impl = _boxers.lookup(typ.__class__)
         if impl is None:
             raise NotImplementedError("cannot convert native %s to Python object" % (typ,))
 
         c = _BoxContext(self.context, self.builder, self, env_manager)
-        return impl(c, typ, val)
+        return impl(typ, val, c)
 
     def reflect_native_value(self, typ, val, env_manager=None):
         """
@@ -1234,7 +1367,7 @@ class PythonAPI(object):
         is_error = cgutils.alloca_once_value(self.builder, cgutils.false_bit)
         c = _ReflectContext(self.context, self.builder, self, env_manager,
                             is_error)
-        impl(c, typ, val)
+        impl(typ, val, c)
         return self.builder.load(c.is_error)
 
     def to_native_generator(self, obj, typ):

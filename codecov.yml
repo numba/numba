@@ -1,0 +1,22 @@
+# Configuration for codecov.io
+# When editing this file, please validate its contents using:
+#   curl -X POST --data-binary @- https://codecov.io/validate < codecov.yml
+
+comment:
+    layout: "header, diff, changes, uncovered"
+
+coverage:
+    ignore:
+        - "numba/cuda/.*"
+        - "numba/hsa/.*"
+
+    status:
+        project:
+            default:
+                # The build fails if total project coverage drops by more than 3%
+                target: auto
+                threshold: "3%"
+        # These checks can mark a build failed if too much new code
+        # is not covered (which happens often with JITted functions).
+        changes: false
+        patch: false

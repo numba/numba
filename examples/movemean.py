@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 A moving average function using @guvectorize.
 """

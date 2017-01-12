@@ -5,7 +5,7 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import numpy_support, types
-from .support import TestCase
+from .support import TestCase, tag
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -86,6 +86,7 @@ class IterationTest(TestCase):
     def test_int_tuple_iter(self, flags=force_pyobj_flags):
         self.run_nullary_func(int_tuple_iter_usecase, flags)
 
+    @tag('important')
     def test_int_tuple_iter_npm(self):
         self.test_int_tuple_iter(flags=no_pyobj_flags)
 
@@ -101,18 +102,21 @@ class IterationTest(TestCase):
     def test_tuple_tuple_iter(self, flags=force_pyobj_flags):
         self.run_nullary_func(tuple_tuple_iter_usecase, flags)
 
+    @tag('important')
     def test_tuple_tuple_iter_npm(self):
         self.test_tuple_tuple_iter(flags=no_pyobj_flags)
 
     def test_enumerate_nested_tuple(self, flags=force_pyobj_flags):
         self.run_nullary_func(enumerate_nested_tuple_usecase, flags)
 
+    @tag('important')
     def test_enumerate_nested_tuple_npm(self):
         self.test_enumerate_nested_tuple(flags=no_pyobj_flags)
 
     def test_nested_enumerate(self, flags=force_pyobj_flags):
         self.run_nullary_func(nested_enumerate_usecase, flags)
 
+    @tag('important')
     def test_nested_enumerate_npm(self):
         self.test_nested_enumerate(flags=no_pyobj_flags)
 
@@ -133,6 +137,7 @@ class IterationTest(TestCase):
     def test_array_1d_complex(self, flags=force_pyobj_flags):
         self.run_array_1d(types.complex128, np.arange(5.0) * 1.0j, flags)
 
+    @tag('important')
     def test_array_1d_complex_npm(self):
         self.test_array_1d_complex(no_pyobj_flags)
 
@@ -166,7 +171,7 @@ class IterationTest(TestCase):
         pyfunc(expected)
         got = arr.copy()
         cfunc(got)
-        self.assertTrue(np.all(expected == got))
+        self.assertPreciseEqual(expected, got)
 
     def test_array_1d_record_mutate(self):
         self.test_array_1d_record_mutate_npm(flags=force_pyobj_flags)

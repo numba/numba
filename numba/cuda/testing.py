@@ -3,6 +3,7 @@ from __future__ import print_function, absolute_import, division
 import contextlib
 import io
 import os
+import sys
 
 from numba import config, unittest_support as unittest
 from numba.tests.support import captured_stdout
@@ -60,6 +61,9 @@ def captured_cuda_stdout():
     Return a minimal stream-like object capturing the text output of
     either CUDA or the simulator.
     """
+    # Prevent accidentally capturing previously output text
+    sys.stdout.flush()
+
     if config.ENABLE_CUDASIM:
         # The simulator calls print() on Python stdout
         with captured_stdout() as stream:
@@ -67,6 +71,7 @@ def captured_cuda_stdout():
     else:
         # The CUDA runtime writes onto the system stdout
         from numba import cuda
-        with redirect_fd(1) as stream:
+        fd = sys.__stdout__.fileno()
+        with redirect_fd(fd) as stream:
             yield CUDATextCapture(stream)
             cuda.synchronize()

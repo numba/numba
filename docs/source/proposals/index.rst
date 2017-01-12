@@ -18,6 +18,8 @@ Implemented proposals
 .. toctree::
    :maxdepth: 1
 
+   integer-typing.rst
+
 
 Other proposals
 ---------------
@@ -25,4 +27,9 @@ Other proposals
 .. toctree::
    :maxdepth: 1
 
-   integer-typing.rst
+   extension-points.rst
+   jit-classes.rst
+   cfunc.rst
+   type-inference.rst
+   typing_recursion.rst
+

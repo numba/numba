@@ -5,9 +5,10 @@ from __future__ import print_function, absolute_import, division
 import sys, logging, re
 from ctypes import (c_void_p, c_int, POINTER, c_char_p, c_size_t, byref,
                     c_char)
+import threading
 from numba import config
 from .error import NvvmError, NvvmSupportError
-from .libs import open_libdevice, open_cudalib
+from .libs import get_libdevice, open_libdevice, open_cudalib
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,8 @@ def is_available():
     else:
         return True
 
+
+_nvvm_lock = threading.Lock()
 
 class NVVM(object):
     '''Process-wide singleton.
@@ -96,22 +99,23 @@ class NVVM(object):
     __INSTANCE = None
 
     def __new__(cls):
-        if not cls.__INSTANCE:
-            cls.__INSTANCE = inst = object.__new__(cls)
-            try:
-                inst.driver = open_cudalib('nvvm', ccc=True)
-            except OSError as e:
-                cls.__INSTANCE = None
-                errmsg = ("libNVVM cannot be found. Do `conda install "
-                          "cudatoolkit`:\n%s")
-                raise NvvmSupportError(errmsg % e)
+        with _nvvm_lock:
+            if cls.__INSTANCE is None:
+                cls.__INSTANCE = inst = object.__new__(cls)
+                try:
+                    inst.driver = open_cudalib('nvvm', ccc=True)
+                except OSError as e:
+                    cls.__INSTANCE = None
+                    errmsg = ("libNVVM cannot be found. Do `conda install "
+                              "cudatoolkit`:\n%s")
+                    raise NvvmSupportError(errmsg % e)
 
-            # Find & populate functions
-            for name, proto in inst._PROTOTYPES.items():
-                func = getattr(inst.driver, name)
-                func.restype = proto[0]
-                func.argtypes = proto[1:]
-                setattr(inst, name, func)
+                # Find & populate functions
+                for name, proto in inst._PROTOTYPES.items():
+                    func = getattr(inst.driver, name)
+                    func.restype = proto[0]
+                    func.argtypes = proto[1:]
+                    setattr(inst, name, func)
 
         return cls.__INSTANCE
 
@@ -302,7 +306,14 @@ def get_arch_option(major, minor):
 MISSING_LIBDEVICE_MSG = '''
 Please define environment variable NUMBAPRO_LIBDEVICE=/path/to/libdevice
 /path/to/libdevice -- is the path to the directory containing the libdevice.*.bc
-files in the installation of CUDA.  (requires CUDA >=5.5)
+files in the installation of CUDA.  (requires CUDA >=7.5)
+'''
+
+MISSING_LIBDEVICE_FILE_MSG = '''Missing libdevice file for {arch}.
+Please ensure you have package cudatoolkit 7.5.
+Install package by:
+
+    conda install cudatoolkit=7.5
 '''
 
 
@@ -312,6 +323,7 @@ class LibDevice(object):
         "compute_20",
         "compute_30",
         "compute_35",
+        "compute_50",
     ]
 
     def __init__(self, arch):
@@ -320,6 +332,8 @@ class LibDevice(object):
         """
         if arch not in self._cache_:
             arch = self._get_closest_arch(arch)
+            if get_libdevice(arch) is None:
+                raise RuntimeError(MISSING_LIBDEVICE_FILE_MSG.format(arch=arch))
             self._cache_[arch] = open_libdevice(arch)
 
         self.arch = arch
@@ -348,7 +362,7 @@ ir_numba_atomic_double_add = """
 define internal double @___numba_atomic_double_add(double* %ptr, double %val) alwaysinline {
 entry:
     %iptr = bitcast double* %ptr to i64*
-    %old2 = load volatile i64* %iptr
+    %old2 = load volatile i64, i64* %iptr
     br label %attempt
 
 attempt:
@@ -369,7 +383,7 @@ done:
 ir_numba_atomic_double_max = """
 define internal double @___numba_atomic_double_max(double* %ptr, double %val) alwaysinline {
 entry:
-    %ptrval = load volatile double* %ptr
+    %ptrval = load volatile double, double* %ptr
     ; Check if val is a NaN and return *ptr early if so
     %valnan = fcmp uno double %val, %val
     br i1 %valnan, label %done, label %lt_check
@@ -428,7 +442,8 @@ def llvm_to_ptx(llvmir, **opts):
     for decl, fn in replacements:
         llvmir = llvmir.replace(decl, fn)
 
-    llvmir = llvm36_to_34_ir(llvmir)
+    llvmir = llvm38_to_34_ir(llvmir)
+
     cu.add_module(llvmir.encode('utf8'))
     cu.add_module(libdevice.get())
     ptx = cu.compile(**opts)
@@ -438,21 +453,85 @@ def llvm_to_ptx(llvmir, **opts):
 re_metadata_def = re.compile(r"\!\d+\s*=")
 re_metadata_correct_usage = re.compile(r"metadata\s*\![{'\"]")
 
+re_attributes_def = re.compile(r"^attributes #\d+ = \{ ([\w\s]+)\ }")
+unsupported_attributes = {'argmemonly', 'inaccessiblememonly',
+                          'inaccessiblemem_or_argmemonly', 'norecurse'}
 
-def llvm36_to_34_ir(ir):
-    """
-    Convert LLVM 3.6 IR for LLVM 3.4.
+re_getelementptr = re.compile(r"\Wgetelementptr\s(?:inbounds )?\(?")
 
-    Rewrite metadata since llvm3.6 dropped the "metadata" type prefix.
+re_load = re.compile(r"\Wload\s(?:volatile )?")
+
+re_call = re.compile(r"(call\s[^@]+\))(\s@)")
+
+re_type_tok = re.compile(r"[,{}()[\]]")
+
+re_annotations = re.compile(r"\Wnonnull\W")
+
+
+def llvm38_to_34_ir(ir):
     """
+    Convert LLVM 3.8 IR for LLVM 3.4.
+    """
+    def parse_out_leading_type(s):
+        par_level = 0
+        pos = 0
+        # Parse out the first <ty> (which may be an aggregate type)
+        while True:
+            m = re_type_tok.search(s, pos)
+            if m is None:
+                # End of line
+                raise RuntimeError("failed parsing leading type: %s" % (s,))
+                break
+            pos = m.end()
+            tok = m.group(0)
+            if tok == ',':
+                if par_level == 0:
+                    # End of operand
+                    break
+            elif tok in '{[(':
+                par_level += 1
+            elif tok in ')]}':
+                par_level -= 1
+        return s[pos:].lstrip()
+
     buf = []
     for line in ir.splitlines():
-        # If the line is a metadata
+        orig = line
         if re_metadata_def.match(line):
-            # Does not contain any correct usage (Maybe already fixed)
+            # Rewrite metadata since LLVM 3.7 dropped the "metadata" type prefix.
             if None is re_metadata_correct_usage.search(line):
                 line = line.replace('!{', 'metadata !{')
                 line = line.replace('!"', 'metadata !"')
+        if line.startswith('attributes #'):
+            # Remove function attributes unsupported pre-3.8
+            m = re_attributes_def.match(line)
+            attrs = m.group(1).split()
+            attrs = ' '.join(a for a in attrs if a not in unsupported_attributes)
+            line = line.replace(m.group(1), attrs)
+        if 'getelementptr ' in line:
+            # Rewrite "getelementptr ty, ty* ptr, ..."
+            # to "getelementptr ty *ptr, ..."
+            m = re_getelementptr.search(line)
+            if m is None:
+                raise RuntimeError("failed parsing getelementptr: %s" % (line,))
+            pos = m.end()
+            line = line[:pos] + parse_out_leading_type(line[pos:])
+        if 'load ' in line:
+            # Rewrite "load ty, ty* ptr"
+            # to "load ty *ptr"
+            m = re_load.search(line)
+            if m is None:
+                raise RuntimeError("failed parsing load: %s" % (line,))
+            pos = m.end()
+            line = line[:pos] + parse_out_leading_type(line[pos:])
+        if 'call ' in line:
+            # Rewrite "call ty (...) @foo"
+            # to "call ty (...)* @foo"
+            line = re_call.sub(r"\1*\2", line)
+
+        # Remove unknown annotations
+        line = re_annotations.sub('', line)
+
         buf.append(line)
 
     return '\n'.join(buf)

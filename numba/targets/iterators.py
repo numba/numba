@@ -4,12 +4,12 @@ Implementation of various iterable and iterator types.
 
 from numba import types, cgutils
 from numba.targets.imputils import (
-    builtin, implement, iternext_impl, call_iternext, call_getiter,
+    lower_builtin, iternext_impl, call_iternext, call_getiter,
     impl_ret_borrowed, impl_ret_new_ref)
 
 
-@builtin
-@implement('getiter', types.Kind(types.IteratorType))
+
+@lower_builtin('getiter', types.IteratorType)
 def iterator_getiter(context, builder, sig, args):
     [it] = args
     return impl_ret_borrowed(context, builder, sig.return_type, it)
@@ -17,17 +17,8 @@ def iterator_getiter(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # builtin `enumerate` implementation
 
-def make_enumerate_cls(enum_type):
-    """
-    Return the Structure representation of the given *enum_type* (an
-    instance of types.EnumerateType).
-    """
-    return cgutils.create_struct_proxy(enum_type)
-
-
-@builtin
-@implement(enumerate, types.Kind(types.IterableType))
-@implement(enumerate, types.Kind(types.IterableType), types.Kind(types.Integer))
+@lower_builtin(enumerate, types.IterableType)
+@lower_builtin(enumerate, types.IterableType, types.Integer)
 def make_enumerate_object(context, builder, sig, args):
     assert len(args) == 1 or len(args) == 2 # enumerate(it) or enumerate(it, start)
     srcty = sig.args[0]
@@ -41,8 +32,7 @@ def make_enumerate_object(context, builder, sig, args):
 
     iterobj = call_getiter(context, builder, srcty, src)
 
-    enumcls = make_enumerate_cls(sig.return_type)
-    enum = enumcls(context, builder)
+    enum = context.make_helper(builder, sig.return_type)
 
     countptr = cgutils.alloca_once(builder, start_val.type)
     builder.store(start_val, countptr)
@@ -53,15 +43,13 @@ def make_enumerate_object(context, builder, sig, args):
     res = enum._getvalue()
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@builtin
-@implement('iternext', types.Kind(types.EnumerateType))
+@lower_builtin('iternext', types.EnumerateType)
 @iternext_impl
 def iternext_enumerate(context, builder, sig, args, result):
     [enumty] = sig.args
     [enum] = args
 
-    enumcls = make_enumerate_cls(enumty)
-    enum = enumcls(context, builder, value=enum)
+    enum = context.make_helper(builder, enumty, value=enum)
 
     count = builder.load(enum.count)
     ncount = builder.add(count, context.get_constant(types.intp, 1))
@@ -80,22 +68,13 @@ def iternext_enumerate(context, builder, sig, args, result):
 #-------------------------------------------------------------------------------
 # builtin `zip` implementation
 
-def make_zip_cls(zip_type):
-    """
-    Return the Structure representation of the given *zip_type* (an
-    instance of types.ZipType).
-    """
-    return cgutils.create_struct_proxy(zip_type)
-
-@builtin
-@implement(zip, types.VarArg(types.Any))
+@lower_builtin(zip, types.VarArg(types.Any))
 def make_zip_object(context, builder, sig, args):
     zip_type = sig.return_type
 
     assert len(args) == len(zip_type.source_types)
 
-    zipcls = make_zip_cls(zip_type)
-    zipobj = zipcls(context, builder)
+    zipobj = context.make_helper(builder, zip_type)
 
     for i, (arg, srcty) in enumerate(zip(args, sig.args)):
         zipobj[i] = call_getiter(context, builder, srcty, arg)
@@ -103,15 +82,13 @@ def make_zip_object(context, builder, sig, args):
     res = zipobj._getvalue()
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@builtin
-@implement('iternext', types.Kind(types.ZipType))
+@lower_builtin('iternext', types.ZipType)
 @iternext_impl
 def iternext_zip(context, builder, sig, args, result):
     [zip_type] = sig.args
     [zipobj] = args
 
-    zipcls = make_zip_cls(zip_type)
-    zipobj = zipcls(context, builder, value=zipobj)
+    zipobj = context.make_helper(builder, zip_type, value=zipobj)
 
     if len(zipobj) == 0:
         # zip() is an empty iterator
@@ -134,8 +111,7 @@ def iternext_zip(context, builder, sig, args, result):
 #-------------------------------------------------------------------------------
 # generator implementation
 
-@builtin
-@implement('iternext', types.Kind(types.Generator))
+@lower_builtin('iternext', types.Generator)
 @iternext_impl
 def iternext_zip(context, builder, sig, args, result):
     genty, = sig.args

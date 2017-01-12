@@ -1,15 +1,15 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import namedtuple
-import itertools
 
-from numba import types, intrinsics
-from numba.utils import PYVERSION
-from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                    AbstractTemplate, builtin_global, builtin,
-                                    builtin_attr, signature, bound_function,
-                                    make_callable_template)
-
+from numba import types
+from numba.typing.templates import (AttributeTemplate, AbstractTemplate,
+                                    infer, infer_getattr, signature,
+                                    bound_function)
+# import time side effect: array operations requires typing support of sequence
+# defined in collections: e.g. array.shape[i]
+from numba.typing import collections
+from numba.errors import TypingError
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
 
@@ -42,12 +42,17 @@ def get_array_index_type(ary, idx):
                 raise TypeError("only one ellipsis allowed in array index "
                                 "(got %s)" % (idx,))
             ellipsis_met = True
-        elif ty is types.slice3_type:
+        elif isinstance(ty, types.SliceType):
             pass
         elif isinstance(ty, types.Integer):
             # Normalize integer index
             ty = types.intp if ty.signed else types.uintp
             # Integer indexing removes the given dimension
+            ndim -= 1
+            has_integer = True
+        elif (isinstance(ty, types.Array) and ty.ndim == 0
+              and isinstance(ty.dtype, types.Integer)):
+            # 0-d array used as integer index
             ndim -= 1
             has_integer = True
         elif (isinstance(ty, types.Array)
@@ -70,13 +75,15 @@ def get_array_index_type(ary, idx):
 
     # Check indices and result dimensionality
     all_indices = left_indices + right_indices
+    if ellipsis_met:
+        assert right_indices[0] is types.ellipsis
+        del right_indices[0]
+
     n_indices = len(all_indices) - ellipsis_met
     if n_indices > ary.ndim:
         raise TypeError("cannot index %s with %d indices: %s"
                         % (ary, n_indices, idx))
-    if (n_indices == ary.ndim
-        and all(isinstance(ty, types.Integer) for ty in all_indices)
-        and not ellipsis_met):
+    if n_indices == ary.ndim and ndim == 0 and not ellipsis_met:
         # Full integer indexing => scalar result
         # (note if ellipsis is present, a 0-d view is returned instead)
         res = ary.dtype
@@ -94,6 +101,26 @@ def get_array_index_type(ary, idx):
 
         # Infer layout
         layout = ary.layout
+
+        def keeps_contiguity(ty, is_innermost):
+            # A slice can only keep an array contiguous if it is the
+            # innermost index and it is not strided
+            return (ty is types.ellipsis or isinstance(ty, types.Integer)
+                    or (is_innermost and isinstance(ty, types.SliceType)
+                        and not ty.has_step))
+
+        def check_contiguity(outer_indices):
+            """
+            Whether indexing with the given indices (from outer to inner in
+            physical layout order) can keep an array contiguous.
+            """
+            for ty in outer_indices[:-1]:
+                if not keeps_contiguity(ty, False):
+                    return False
+            if outer_indices and not keeps_contiguity(outer_indices[-1], True):
+                return False
+            return True
+
         if layout == 'C':
             # Integer indexing on the left keeps the array C-contiguous
             if n_indices == ary.ndim:
@@ -102,12 +129,8 @@ def get_array_index_type(ary, idx):
                 right_indices = []
             if right_indices:
                 layout = 'A'
-            else:
-                for ty in left_indices:
-                    if ty is not types.ellipsis and not isinstance(ty, types.Integer):
-                        # Slicing cannot guarantee to keep the array contiguous
-                        layout = 'A'
-                        break
+            elif not check_contiguity(left_indices):
+                layout = 'A'
         elif layout == 'F':
             # Integer indexing on the right keeps the array F-contiguous
             if n_indices == ary.ndim:
@@ -116,12 +139,8 @@ def get_array_index_type(ary, idx):
                 left_indices = []
             if left_indices:
                 layout = 'A'
-            else:
-                for ty in right_indices:
-                    if ty is not types.ellipsis and not isinstance(ty, types.Integer):
-                        # Slicing cannot guarantee to keep the array contiguous
-                        layout = 'A'
-                        break
+            elif not check_contiguity(right_indices[::-1]):
+                layout = 'A'
 
         res = ary.copy(ndim=ndim, layout=layout)
 
@@ -134,7 +153,7 @@ def get_array_index_type(ary, idx):
     return Indexing(idx, res, advanced)
 
 
-@builtin
+@infer
 class GetItemBuffer(AbstractTemplate):
     key = "getitem"
 
@@ -145,7 +164,7 @@ class GetItemBuffer(AbstractTemplate):
         if out is not None:
             return signature(out.result, ary, out.index)
 
-@builtin
+@infer
 class SetItemBuffer(AbstractTemplate):
     key = "setitem"
 
@@ -164,17 +183,27 @@ class SetItemBuffer(AbstractTemplate):
         res = out.result
         if isinstance(res, types.Array):
             # Indexing produces an array
-            if not isinstance(val, types.Array):
-                # Allow scalar broadcasting
-                res = res.dtype
-            elif (val.ndim == res.ndim and
-                  self.context.can_convert(val.dtype, res.dtype)):
-                # Allow assignement of same-dimensionality compatible-dtype array
-                res = val
+            if isinstance(val, types.Array):
+                if not self.context.can_convert(val.dtype, res.dtype):
+                    # DType conversion not possible
+                    return
+                else:
+                    res = val
+            elif isinstance(val, types.Sequence):
+                if (res.ndim == 1 and
+                    self.context.can_convert(val.dtype, res.dtype)):
+                    # Allow assignement of sequence to 1d array
+                    res = val
+                else:
+                    # NOTE: sequence-to-array broadcasting is unsupported
+                    return
             else:
-                # Unexpected dimensionality of assignment source
-                # (array broadcasting is unsupported)
-                return
+                # Allow scalar broadcasting
+                if self.context.can_convert(val, res.dtype):
+                    res = res.dtype
+                else:
+                    # Incompatible scalar type
+                    return
         elif not isinstance(val, types.Array):
             # Single item assignment
             res = val
@@ -190,10 +219,11 @@ def normalize_shape(shape):
             return types.UniTuple(dimtype, len(shape))
 
     elif isinstance(shape, types.Tuple) and shape.count == 0:
-        return shape
+        # Force (0 x intp) for consistency with other shapes
+        return types.UniTuple(types.intp, 0)
 
 
-@builtin_attr
+@infer_getattr
 class ArrayAttribute(AttributeTemplate):
     key = types.Array
 
@@ -232,6 +262,24 @@ class ArrayAttribute(AttributeTemplate):
             retty = ary.copy(layout=layout)
         return retty
 
+    def resolve_real(self, ary):
+        return self._resolve_real_imag(ary, attr='real')
+
+    def resolve_imag(self, ary):
+        return self._resolve_real_imag(ary, attr='imag')
+
+    def _resolve_real_imag(self, ary, attr):
+        if ary.dtype in types.complex_domain:
+            return ary.copy(dtype=ary.dtype.underlying_float, layout='A')
+        elif ary.dtype in types.number_domain:
+            res = ary.copy(dtype=ary.dtype)
+            if attr == 'imag':
+                res = res.copy(readonly=True)
+            return res
+        else:
+            msg = "cannot access .{} of array of {}"
+            raise TypingError(msg.format(attr, ary.dtype))
+
     @bound_function("array.transpose")
     def resolve_transpose(self, ary, args, kws):
         assert not args
@@ -242,8 +290,26 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_copy(self, ary, args, kws):
         assert not args
         assert not kws
-        retty = ary.copy(layout="C")
+        retty = ary.copy(layout="C", readonly=False)
         return signature(retty)
+
+    @bound_function("array.item")
+    def resolve_item(self, ary, args, kws):
+        assert not kws
+        # We don't support explicit arguments as that's exactly equivalent
+        # to regular indexing.  The no-argument form is interesting to
+        # allow some degree of genericity when writing functions.
+        if not args:
+            return signature(ary.dtype)
+
+    @bound_function("array.itemset")
+    def resolve_itemset(self, ary, args, kws):
+        assert not kws
+        # We don't support explicit arguments as that's exactly equivalent
+        # to regular indexing.  The no-argument form is interesting to
+        # allow some degree of genericity when writing functions.
+        if len(args) == 1:
+            return signature(types.none, ary.dtype)
 
     @bound_function("array.nonzero")
     def resolve_nonzero(self, ary, args, kws):
@@ -256,20 +322,46 @@ class ArrayAttribute(AttributeTemplate):
 
     @bound_function("array.reshape")
     def resolve_reshape(self, ary, args, kws):
+        def sentry_shape_scalar(ty):
+            if ty in types.number_domain:
+                # Guard against non integer type
+                if not isinstance(ty, types.Integer):
+                    raise TypeError("reshape() arg cannot be {0}".format(ty))
+                return True
+            else:
+                return False
+
         assert not kws
-        shape, = args
-        shape = normalize_shape(shape)
-        if shape is None:
-            return
-        if ary.layout == "C":
-            # Given order='C' (the only supported value), a C-contiguous
-            # array is always returned for a C-contiguous input.
-            layout = "C"
+        if ary.layout not in 'CF':
+            # only work for contiguous array
+            raise TypeError("reshape() supports contiguous array only")
+
+        if len(args) == 1:
+            # single arg
+            shape, = args
+
+            if sentry_shape_scalar(shape):
+                ndim = 1
+            else:
+                shape = normalize_shape(shape)
+                if shape is None:
+                    return
+                ndim = shape.count
+            retty = ary.copy(ndim=ndim)
+            return signature(retty, shape)
+
+        elif len(args) == 0:
+            # no arg
+            raise TypeError("reshape() take at least one arg")
+
         else:
-            layout = "A"
-        ndim = shape.count if isinstance(shape, types.BaseTuple) else 1
-        retty = ary.copy(ndim=ndim)
-        return signature(retty, shape)
+            # vararg case
+            if any(not sentry_shape_scalar(a) for a in args):
+                raise TypeError("reshape({0}) is not supported".format(
+                    ', '.join(args)))
+
+            retty = ary.copy(ndim=len(args))
+            return signature(retty, *args)
 
     @bound_function("array.sort")
     def resolve_sort(self, ary, args, kws):
@@ -278,14 +370,53 @@ class ArrayAttribute(AttributeTemplate):
         if ary.ndim == 1:
             return signature(types.none)
 
+    @bound_function("array.argsort")
+    def resolve_argsort(self, ary, args, kws):
+        assert not args
+        assert not kws
+        if ary.ndim == 1:
+            return signature(types.Array(types.intp, 1, 'C'))
+
     @bound_function("array.view")
     def resolve_view(self, ary, args, kws):
         from .npydecl import _parse_dtype
         assert not kws
         dtype, = args
         dtype = _parse_dtype(dtype)
+        if dtype is None:
+            return
         retty = ary.copy(dtype=dtype)
         return signature(retty, *args)
+
+    @bound_function("array.astype")
+    def resolve_astype(self, ary, args, kws):
+        from .npydecl import _parse_dtype
+        assert not kws
+        dtype, = args
+        dtype = _parse_dtype(dtype)
+        if dtype is None:
+            return
+        if not self.context.can_convert(ary.dtype, dtype):
+            raise TypeError("astype(%s) not supported on %s: "
+                            "cannot convert from %s to %s"
+                            % (dtype, ary, ary.dtype, dtype))
+        layout = ary.layout if ary.layout in 'CF' else 'C'
+        retty = ary.copy(dtype=dtype, layout=layout)
+        return signature(retty, *args)
+
+    @bound_function("array.ravel")
+    def resolve_ravel(self, ary, args, kws):
+        # Only support no argument version (default order='C')
+        assert not kws
+        assert not args
+        return signature(ary.copy(ndim=1, layout='C'))
+
+    @bound_function("array.flatten")
+    def resolve_flatten(self, ary, args, kws):
+        # Only support no argument version (default order='C')
+        assert not kws
+        assert not args
+        return signature(ary.copy(ndim=1, layout='C'))
 
     def generic_resolve(self, ary, attr):
         # Resolution of other attributes, for record arrays
@@ -294,7 +425,54 @@ class ArrayAttribute(AttributeTemplate):
                 return ary.copy(dtype=ary.dtype.typeof(attr), layout='A')
 
 
-@builtin_attr
+@infer
+class StaticGetItemArray(AbstractTemplate):
+    key = "static_getitem"
+
+    def generic(self, args, kws):
+        # Resolution of members for record and structured arrays
+        ary, idx = args
+        if (isinstance(ary, types.Array) and isinstance(idx, str) and
+            isinstance(ary.dtype, types.Record)):
+            if idx in ary.dtype.fields:
+                return ary.copy(dtype=ary.dtype.typeof(idx), layout='A')
+
+
+@infer_getattr
+class RecordAttribute(AttributeTemplate):
+    key = types.Record
+
+    def generic_resolve(self, record, attr):
+        ret = record.typeof(attr)
+        assert ret
+        return ret
+
+@infer
+class StaticGetItemRecord(AbstractTemplate):
+    key = "static_getitem"
+
+    def generic(self, args, kws):
+        # Resolution of members for records
+        record, idx = args
+        if isinstance(record, types.Record) and isinstance(idx, str):
+            ret = record.typeof(idx)
+            assert ret
+            return ret
+
+@infer
+class StaticSetItemRecord(AbstractTemplate):
+    key = "static_setitem"
+
+    def generic(self, args, kws):
+        # Resolution of members for record and structured arrays
+        record, idx, value = args
+        if isinstance(record, types.Record) and isinstance(idx, str):
+            expectedty = record.typeof(idx)
+            if self.context.can_convert(value, expectedty) is not None:
+                return signature(types.void, record, types.Const(idx), value)
+
+
+@infer_getattr
 class ArrayCTypesAttribute(AttributeTemplate):
     key = types.ArrayCTypes
 
@@ -302,7 +480,7 @@ class ArrayCTypesAttribute(AttributeTemplate):
         return types.uintp
 
 
-@builtin_attr
+@infer_getattr
 class ArrayFlagsAttribute(AttributeTemplate):
     key = types.ArrayFlags
 
@@ -316,7 +494,7 @@ class ArrayFlagsAttribute(AttributeTemplate):
         return types.boolean
 
 
-@builtin_attr
+@infer_getattr
 class NestedArrayAttribute(ArrayAttribute):
     key = types.NestedArray
 
@@ -330,6 +508,8 @@ def _expand_integer(ty):
             return max(types.intp, ty)
         else:
             return max(types.uintp, ty)
+    elif isinstance(ty, types.Boolean):
+        return types.intp
     else:
         return ty
 
@@ -350,7 +530,7 @@ def generic_expand_cumulative(self, args, kws):
 def generic_hetero_real(self, args, kws):
     assert not args
     assert not kws
-    if self.this.dtype in types.integer_domain:
+    if isinstance(self.this.dtype, (types.Integer, types.Boolean)):
         return signature(types.float64, recvr=self.this)
     return signature(self.this.dtype, recvr=self.this)
 
@@ -381,7 +561,7 @@ for fname in ["cumsum", "cumprod"]:
     install_array_method(fname, generic_expand_cumulative)
 
 # Functions that require integer arrays get promoted to float64 return
-for fName in ["mean", "median", "var", "std"]:
+for fName in ["mean", "var", "std"]:
     install_array_method(fName, generic_hetero_real)
 
 # Functions that return an index (intp)
@@ -389,7 +569,7 @@ install_array_method("argmin", generic_index)
 install_array_method("argmax", generic_index)
 
 
-@builtin
+@infer
 class CmpOpEqArray(AbstractTemplate):
     key = '=='
 

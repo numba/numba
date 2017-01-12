@@ -7,8 +7,8 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba import jit, types
-from .support import TestCase, MemoryLeakMixin
+from numba import jit, types, errors
+from .support import TestCase, MemoryLeakMixin, tag
 
 
 Rect = collections.namedtuple('Rect', ('width', 'height'))
@@ -31,8 +31,21 @@ def tuple_second(tup):
 def tuple_index(tup, idx):
     return tup[idx]
 
+def tuple_index_static(tup):
+    # Note the negative index
+    return tup[-2]
+
+def tuple_slice2(tup):
+    return tup[1:-1]
+
+def tuple_slice3(tup):
+    return tup[1::2]
+
 def len_usecase(tup):
     return len(tup)
+
+def add_usecase(a, b):
+    return a + b
 
 def eq_usecase(a, b):
     return a == b
@@ -51,6 +64,9 @@ def lt_usecase(a, b):
 
 def le_usecase(a, b):
     return a <= b
+
+def in_usecase(a, b):
+    return a in b
 
 def bool_usecase(tup):
     return bool(tup), (3 if tup else 2)
@@ -73,18 +89,22 @@ def make_point_nrt(n):
 def type_usecase(tup, *args):
     return type(tup)(*args)
 
+def identity(tup):
+    return tup
+
 
 class TestTupleReturn(TestCase):
 
+    @tag('important')
     def test_array_tuple(self):
         aryty = types.Array(types.float64, 1, 'C')
         cres = compile_isolated(tuple_return_usecase, (aryty, aryty))
         a = b = np.arange(5, dtype='float64')
         ra, rb = cres.entry_point(a, b)
-        self.assertTrue((ra == a).all())
-        self.assertTrue((rb == b).all())
+        self.assertPreciseEqual(ra, a)
+        self.assertPreciseEqual(rb, b)
         del a, b
-        self.assertTrue((ra == rb).all())
+        self.assertPreciseEqual(ra, rb)
 
     def test_scalar_tuple(self):
         scalarty = types.float32
@@ -94,6 +114,7 @@ class TestTupleReturn(TestCase):
         self.assertEqual(ra, a)
         self.assertEqual(rb, b)
 
+    @tag('important')
     def test_hetero_tuple(self):
         alltypes = []
         allvalues = []
@@ -115,6 +136,7 @@ class TestTupleReturn(TestCase):
 
 class TestTuplePassing(TestCase):
 
+    @tag('important')
     def test_unituple(self):
         tuple_type = types.UniTuple(types.int32, 2)
         cr_first = compile_isolated(tuple_first, (tuple_type,))
@@ -122,6 +144,7 @@ class TestTuplePassing(TestCase):
         self.assertPreciseEqual(cr_first.entry_point((4, 5)), 4)
         self.assertPreciseEqual(cr_second.entry_point((4, 5)), 5)
 
+    @tag('important')
     def test_hetero_tuple(self):
         tuple_type = types.Tuple((types.int64, types.float32))
         cr_first = compile_isolated(tuple_first, (tuple_type,))
@@ -129,9 +152,19 @@ class TestTuplePassing(TestCase):
         self.assertPreciseEqual(cr_first.entry_point((2**61, 1.5)), 2**61)
         self.assertPreciseEqual(cr_second.entry_point((2**61, 1.5)), 1.5)
 
+    def test_size_mismatch(self):
+        # Issue #1638: tuple size should be checked when unboxing
+        tuple_type = types.UniTuple(types.int32, 2)
+        cr = compile_isolated(tuple_first, (tuple_type,))
+        with self.assertRaises(ValueError) as raises:
+            cr.entry_point((4, 5, 6))
+        self.assertEqual(str(raises.exception),
+                         "size mismatch for tuple, expected 2 element(s) but got 3")
+
 
 class TestOperations(TestCase):
 
+    @tag('important')
     def test_len(self):
         pyfunc = len_usecase
         cr = compile_isolated(pyfunc,
@@ -141,13 +174,50 @@ class TestOperations(TestCase):
                               [types.UniTuple(types.int64, 3)])
         self.assertPreciseEqual(cr.entry_point((4, 5, 6)), 3)
 
+    @tag('important')
     def test_index(self):
         pyfunc = tuple_index
         cr = compile_isolated(pyfunc,
                               [types.UniTuple(types.int64, 3), types.int64])
-        tup = (4, 5, 6)
+        tup = (4, 3, 6)
         for i in range(len(tup)):
             self.assertPreciseEqual(cr.entry_point(tup, i), tup[i])
+
+        # With a compile-time static index (the code generation path is different)
+        pyfunc = tuple_index_static
+        for typ in (types.UniTuple(types.int64, 4),
+                    types.Tuple((types.int64, types.int32, types.int64, types.int32))):
+            cr = compile_isolated(pyfunc, (typ,))
+            tup = (4, 3, 42, 6)
+            self.assertPreciseEqual(cr.entry_point(tup), pyfunc(tup))
+
+        typ = types.UniTuple(types.int64, 1)
+        with self.assertTypingError():
+            cr = compile_isolated(pyfunc, (typ,))
+
+    def test_in(self):
+        pyfunc = in_usecase
+        cr = compile_isolated(pyfunc,
+                              [types.int64, types.UniTuple(types.int64, 3)])
+        tup = (4, 1, 5)
+        for i in range(5):
+            self.assertPreciseEqual(cr.entry_point(i, tup), pyfunc(i, tup))
+
+    def check_slice(self, pyfunc):
+        tup = (4, 5, 6, 7)
+        cr = compile_isolated(pyfunc,
+                              [types.UniTuple(types.int64, 4)])
+        self.assertPreciseEqual(cr.entry_point(tup), pyfunc(tup))
+        cr = compile_isolated(
+            pyfunc,
+            [types.Tuple((types.int64, types.int32, types.int64, types.int32))])
+        self.assertPreciseEqual(cr.entry_point(tup), pyfunc(tup))
+
+    def test_slice2(self):
+        self.check_slice(tuple_slice2)
+
+    def test_slice3(self):
+        self.check_slice(tuple_slice3)
 
     def test_bool(self):
         pyfunc = bool_usecase
@@ -162,6 +232,20 @@ class TestOperations(TestCase):
         cr = compile_isolated(pyfunc,
                               [types.Tuple(())])
         self.assertPreciseEqual(cr.entry_point(()), pyfunc(()))
+
+    @tag('important')
+    def test_add(self):
+        pyfunc = add_usecase
+        samples = [(types.Tuple(()), ()),
+                   (types.UniTuple(types.int32, 0), ()),
+                   (types.UniTuple(types.int32, 1), (42,)),
+                   (types.Tuple((types.int64, types.float32)), (3, 4.5)),
+                   ]
+        for (ta, a), (tb, b) in itertools.product(samples, samples):
+            cr = compile_isolated(pyfunc, (ta, tb))
+            expected = pyfunc(a, b)
+            got = cr.entry_point(a, b)
+            self.assertPreciseEqual(got, expected, msg=(ta, tb))
 
     def _test_compare(self, pyfunc):
         def eq(pyfunc, cfunc, args):
@@ -189,21 +273,27 @@ class TestOperations(TestCase):
                      ((4, 5), (4, 6, 7))]:
             eq(pyfunc, cfunc, args)
 
+    @tag('important')
     def test_eq(self):
         self._test_compare(eq_usecase)
 
+    @tag('important')
     def test_ne(self):
         self._test_compare(ne_usecase)
 
+    @tag('important')
     def test_gt(self):
         self._test_compare(gt_usecase)
 
+    @tag('important')
     def test_ge(self):
         self._test_compare(ge_usecase)
 
+    @tag('important')
     def test_lt(self):
         self._test_compare(lt_usecase)
 
+    @tag('important')
     def test_le(self):
         self._test_compare(le_usecase)
 
@@ -274,9 +364,11 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
                      ((4, 5), (4, 6, 7))]:
             eq(pyfunc, cfunc, (Rect(*a), Point(*b)))
 
+    @tag('important')
     def test_eq(self):
         self._test_compare(eq_usecase)
 
+    @tag('important')
     def test_ne(self):
         self._test_compare(ne_usecase)
 
@@ -292,6 +384,7 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
     def test_le(self):
         self._test_compare(le_usecase)
 
+    @tag('important')
     def test_getattr(self):
         pyfunc = getattr_usecase
         cfunc = jit(nopython=True)(pyfunc)
@@ -300,6 +393,7 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
             p = Point(*args)
             self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
+    @tag('important')
     def test_construct(self):
         def check(pyfunc):
             cfunc = jit(nopython=True)(pyfunc)
@@ -326,6 +420,20 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
             self.assertPreciseEqual(got, expected)
 
 
+class TestTupleNRT(TestCase, MemoryLeakMixin):
+    def test_tuple_add(self):
+        def pyfunc(x):
+            a = np.arange(3)
+            return (a,) + (x,)
+
+        cfunc = jit(nopython=True)(pyfunc)
+        x = 123
+        expect_a, expect_x = pyfunc(x)
+        got_a, got_x = cfunc(x)
+        np.testing.assert_equal(got_a, expect_a)
+        self.assertEqual(got_x, expect_x)
+
+
 class TestNamedTupleNRT(TestCase, MemoryLeakMixin):
 
     def test_return(self):
@@ -338,6 +446,34 @@ class TestNamedTupleNRT(TestCase, MemoryLeakMixin):
             got = cfunc(arg)
             self.assertIs(type(got), type(expected))
             self.assertPreciseEqual(got, expected)
+
+
+class TestConversions(TestCase):
+    """
+    Test implicit conversions between tuple types.
+    """
+
+    def check_conversion(self, fromty, toty, val):
+        pyfunc = identity
+        cr = compile_isolated(pyfunc, (fromty,), toty)
+        cfunc = cr.entry_point
+        res = cfunc(val)
+        self.assertEqual(res, val)
+
+    def test_conversions(self):
+        check = self.check_conversion
+        fromty = types.UniTuple(types.int32, 2)
+        check(fromty, types.UniTuple(types.float32, 2), (4, 5))
+        check(fromty, types.Tuple((types.float32, types.int16)), (4, 5))
+        aty = types.UniTuple(types.int32, 0)
+        bty = types.Tuple(())
+        check(aty, bty, ())
+        check(bty, aty, ())
+
+        with self.assertRaises(errors.TypingError) as raises:
+            check(fromty, types.Tuple((types.float32,)), (4, 5))
+        self.assertIn("No conversion from (int32 x 2) to (float32 x 1)",
+                      str(raises.exception))
 
 
 if __name__ == '__main__':

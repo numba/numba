@@ -4,14 +4,13 @@ Implementation of some CFFI functions
 
 from __future__ import print_function, absolute_import, division
 
-from numba.targets.imputils import implement, Registry
+from numba.targets.imputils import Registry
 from numba import types
 from . import arrayobj
 
 registry = Registry()
 
-@registry.register
-@implement('ffi.from_buffer', types.Kind(types.Array))
+@registry.lower('ffi.from_buffer', types.Buffer)
 def from_buffer(context, builder, sig, args):
     assert len(sig.args) == 1
     assert len(args) == 1

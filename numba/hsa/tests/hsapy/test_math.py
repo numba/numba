@@ -12,14 +12,10 @@ class TestMath(unittest.TestCase):
     def _get_tol(self, math_fn, ty):
         """gets the tolerance for functions when the input is of type 'ty'"""
 
-        if utils.PYVERSION > (2, 6):
-            low_res = {
-                (math.gamma, np.float64): 1e-14,
-                (math.lgamma, np.float64): 1e-13,
-            }
-        else:
-            low_res = {}
-
+        low_res = {
+            (math.gamma, np.float64): 1e-14,
+            (math.lgamma, np.float64): 1e-13,
+        }
         default = 1e-15 if ty == np.float64 else 1e-6
         return low_res.get((math_fn, ty), default)
 
@@ -135,8 +131,6 @@ class TestMath(unittest.TestCase):
             self._generic_test_unary(fn, getattr(np, fn.__name__),
                                      span=(-30, 30))
 
-    @unittest.skipIf(utils.PYVERSION <= (2, 6), "math.expm1 not available in "
-                                                "python2.6")
     def test_unary_expm1(self):
         funcs = [math.expm1]
         for fn in funcs:
@@ -170,8 +164,6 @@ class TestMath(unittest.TestCase):
         for fn, npy_fn in funcs:
             self._generic_test_binary(fn, npy_fn)
 
-    @unittest.skipIf(utils.PYVERSION <= (2, 6), "math.erf* not supported in "
-                                                "python 2.6")
     def test_erf(self):
         funcs = [math.erf, math.erfc]
         for fn in funcs:

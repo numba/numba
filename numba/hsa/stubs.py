@@ -2,67 +2,102 @@ from __future__ import print_function, absolute_import
 from numba import types, ir, typing, macro
 
 
+_stub_error = NotImplementedError("This is a stub.")
+
+
 def get_global_id(*args, **kargs):
     """
     OpenCL get_global_id()
     """
-    raise NotImplementedError("This is a stub.")
+    raise _stub_error
 
 
 def get_local_id(*args, **kargs):
     """
     OpenCL get_local_id()
     """
-    raise NotImplementedError("This is a stub.")
+    raise _stub_error
 
 
 def get_global_size(*args, **kargs):
     """
     OpenCL get_global_size()
     """
-    raise NotImplementedError("This is a stub.")
+    raise _stub_error
 
 
 def get_local_size(*args, **kargs):
     """
     OpenCL get_local_size()
     """
-    raise NotImplementedError("This is a stub.")
+    raise _stub_error
 
 
 def get_group_id(*args, **kargs):
     """
     OpenCL get_group_id()
     """
-    raise NotImplementedError("This is a stub.")
+    raise _stub_error
 
 
 def get_num_groups(*args, **kargs):
     """
     OpenCL get_num_groups()
     """
-    raise NotImplementedError("This is a stub.")
+    raise _stub_error
 
 
 def get_work_dim(*args, **kargs):
     """
     OpenCL get_work_dim()
     """
-    raise NotImplementedError("This is a stub.")
+    raise _stub_error
 
 
 def barrier(*args, **kargs):
     """
     OpenCL barrier()
+
+    Example:
+
+        # workgroup barrier + local memory fence
+        hsa.barrier(hsa.CLK_LOCAL_MEM_FENCE)
+        # workgroup barrier + global memory fence
+        hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
+        # workgroup barrier + global memory fence
+        hsa.barrier()
+
     """
-    raise NotImplementedError("This is a stub.")
+    raise _stub_error
 
 
 def mem_fence(*args, **kargs):
     """
     OpenCL mem_fence()
+
+    Example:
+
+        # local memory fence
+        hsa.mem_fence(hsa.CLK_LOCAL_MEM_FENCE)
+        # global memory fence
+        hsa.mem_fence(hsa.CLK_GLOBAL_MEM_FENCE)
     """
-    raise NotImplementedError("This is a stub.")
+    raise _stub_error
+
+
+def wavebarrier():
+    """
+    HSAIL wavebarrier
+    """
+    raise _stub_error
+
+
+def activelanepermute_wavewidth(src, laneid, identity, useidentity):
+    """
+    HSAIL activelanepermute_wavewidth_*
+    """
+    raise _stub_error
+
 
 
 class Stub(object):

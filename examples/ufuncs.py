@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from numba import vectorize
 from numba import autojit, double, jit
 import math

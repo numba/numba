@@ -1,16 +1,18 @@
 from __future__ import print_function, division, absolute_import
 
 import functools
-import sys
+import locale
 import weakref
+from collections import defaultdict
+import ctypes
 
 import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.passes as lp
 import llvmlite.binding as ll
 import llvmlite.ir as llvmir
 
-from numba import config, utils
-from numba.runtime.atomicops import remove_redundant_nrt_refct
+from numba import config, utils, cgutils
+from numba.runtime.nrtopt import remove_redundant_nrt_refct
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
                       'i886', 'i986'])
@@ -42,10 +44,16 @@ class CodeLibrary(object):
         self._linking_libraries = set()
         self._final_module = ll.parse_assembly(
             str(self._codegen._create_empty_module(self._name)))
-        self._final_module.name = self._name
+        self._final_module.name = cgutils.normalize_ir_text(self._name)
         # Remember this on the module, for the object cache hooks
         self._final_module.__library = weakref.proxy(self)
         self._shared_module = None
+        # Track names of the dynamic globals
+        self._dynamic_globals = []
+
+    @property
+    def has_dynamic_globals(self):
+        return len(self._dynamic_globals) > 0
 
     @property
     def codegen(self):
@@ -95,6 +103,7 @@ class CodeLibrary(object):
 
         See discussion in https://github.com/numba/numba/pull/890
         """
+        self._ensure_finalized()
         if self._shared_module is not None:
             return self._shared_module
         mod = self._final_module
@@ -142,12 +151,22 @@ class CodeLibrary(object):
         """
         self._raise_if_finalized()
         assert isinstance(ir_module, llvmir.Module)
-        ll_module = ll.parse_assembly(str(ir_module))
+        ir = cgutils.normalize_ir_text(str(ir_module))
+        ll_module = ll.parse_assembly(ir)
         ll_module.name = ir_module.name
         ll_module.verify()
         self.add_llvm_module(ll_module)
 
+    def _scan_dynamic_globals(self, ll_module):
+        """
+        Scan for dynanmic globals and track their names
+        """
+        for gv in ll_module.global_variables:
+            if gv.name.startswith("numba.dynamic.globals"):
+                self._dynamic_globals.append(gv.name)
+
     def add_llvm_module(self, ll_module):
+        self._scan_dynamic_globals(ll_module)
         self._optimize_functions(ll_module)
         # TODO: we shouldn't need to recreate the LLVM module object
         ll_module = remove_redundant_nrt_refct(ll_module)
@@ -159,6 +178,9 @@ class CodeLibrary(object):
         Finalization involves various stages of code optimization and
         linking.
         """
+        # Report any LLVM-related problems to the user
+        self._codegen._check_llvm_bugs()
+
         self._raise_if_finalized()
 
         if config.DUMP_FUNC_OPT:
@@ -315,11 +337,13 @@ class CodeLibrary(object):
     def serialize_using_object_code(self):
         """
         Serialize this library using its object code as the cached
-        representation.
+        representation.  We also include its bitcode for further inlining
+        with other libraries.
         """
         self._ensure_finalized()
-        ll_module = self._final_module
-        return (self._name, 'object', self._get_compiled_object())
+        data = (self._get_compiled_object(),
+                self._get_module_for_linking().as_bitcode())
+        return (self._name, 'object', data)
 
     @classmethod
     def _unserialize(cls, codegen, state):
@@ -332,8 +356,10 @@ class CodeLibrary(object):
             self._finalize_final_module()
             return self
         elif kind == 'object':
+            object_code, shared_bitcode = data
             self.enable_object_caching()
-            self._set_compiled_object(data)
+            self._set_compiled_object(object_code)
+            self._shared_module = ll.parse_bitcode(shared_bitcode)
             self._finalize_final_module()
             return self
         else:
@@ -378,30 +404,87 @@ class JITCodeLibrary(CodeLibrary):
         return self._codegen._engine.get_function_address(name)
 
     def _finalize_specific(self):
+        self._codegen._scan_and_fix_unresolved_refs(self._final_module)
         self._codegen._engine.finalize_object()
 
 
+class RuntimeLinker(object):
+    """
+    For tracking unresolved symbols generated at runtime due to recursion.
+    """
+    PREFIX = '.numba.unresolved$'
+
+    def __init__(self):
+        self._unresolved = defaultdict(list)
+        self._defined = set()
+        self._resolved = []
+
+    def scan_unresolved_symbols(self, module, engine):
+        """
+        Scan and track all unresolved external symbols in the module and
+        allocate memory for it.
+        """
+        prefix = self.PREFIX
+
+        for gv in module.global_variables:
+            if gv.name.startswith(prefix):
+                sym = gv.name[len(prefix):]
+                # Allocate a memory space for the pointer
+                abortfn = engine.get_function_address('nrt_unresolved_abort')
+                ptr = ctypes.c_void_p(abortfn)
+                engine.add_global_mapping(gv, ctypes.addressof(ptr))
+                self._unresolved[sym].append(ptr)
+
+    def scan_defined_symbols(self, module):
+        """
+        Scan and track all defined symbols.
+        """
+        for fn in module.functions:
+            if not fn.is_declaration:
+                self._defined.add(fn.name)
+
+    def resolve(self, engine):
+        """
+        Fix unresolved symbols if they are defined.
+        """
+        # An iterator to get all unresolved but available symbols
+        pending = [name for name in self._unresolved if name in self._defined]
+        # Resolve pending symbols
+        for name in pending:
+            # Get runtime address
+            fnptr = engine.get_function_address(name)
+            # Fix all usage
+            for ptr in self._unresolved[name]:
+                ptr.value = fnptr
+                self._resolved.append((name, ptr))   # keep ptr alive
+            # Delete resolved
+            del self._unresolved[name]
+
+
 class BaseCPUCodegen(object):
+    _llvm_initialized = False
 
     def __init__(self, module_name):
+        initialize_llvm()
+
         self._libraries = set()
         self._data_layout = None
         self._llvm_module = ll.parse_assembly(
             str(self._create_empty_module(module_name)))
         self._llvm_module.name = "global_codegen_module"
+        self._rtlinker = RuntimeLinker()
         self._init(self._llvm_module)
 
     def _init(self, llvm_module):
         assert list(llvm_module.global_variables) == [], "Module isn't empty"
 
-        target = ll.Target.from_default_triple()
-        tm_options = dict(cpu='', features='', opt=config.OPT)
+        target = ll.Target.from_triple(ll.get_process_triple())
+        tm_options = dict(opt=config.OPT)
+        self._tm_features = self._customize_tm_features()
         self._customize_tm_options(tm_options)
         tm = target.create_target_machine(**tm_options)
         engine = ll.create_mcjit_compiler(llvm_module, tm)
-        tli = ll.create_target_library_info(llvm_module.triple)
 
-        self._tli = tli
         self._tm = tm
         self._engine = engine
         self._target_data = engine.target_data
@@ -412,8 +495,8 @@ class BaseCPUCodegen(object):
                                       self._library_class._object_getbuffer_hook)
 
     def _create_empty_module(self, name):
-        ir_module = lc.Module.new(name)
-        ir_module.triple = ll.get_default_triple()
+        ir_module = lc.Module(cgutils.normalize_ir_text(name))
+        ir_module.triple = ll.get_process_triple()
         if self._data_layout:
             ir_module.data_layout = self._data_layout
         return ir_module
@@ -447,7 +530,6 @@ class BaseCPUCodegen(object):
         pm = ll.create_module_pass_manager()
         dl = ll.create_target_data(self._data_layout)
         dl.add_pass(pm)
-        self._tli.add_pass(pm)
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder() as pmb:
             pmb.populate(pm)
@@ -456,7 +538,6 @@ class BaseCPUCodegen(object):
     def _function_pass_manager(self, llvm_module):
         pm = ll.create_function_pass_manager(llvm_module)
         self._target_data.add_pass(pm)
-        self._tli.add_pass(pm)
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder() as pmb:
             pmb.populate(pm)
@@ -475,12 +556,58 @@ class BaseCPUCodegen(object):
             opt=config.OPT, loop_vectorize=config.LOOP_VECTORIZE)
         return pmb
 
+    def _check_llvm_bugs(self):
+        """
+        Guard against some well-known LLVM bug(s).
+        """
+        # Check the locale bug at https://github.com/numba/numba/issues/1569
+        # Note we can't cache the result as locale settings can change
+        # accross a process's lifetime.  Also, for this same reason,
+        # the check here is a mere heuristic (there may be a race condition
+        # between now and actually compiling IR).
+        ir = """
+            define double @func()
+            {
+                ret double 1.23e+01
+            }
+            """
+        mod = ll.parse_assembly(ir)
+        ir_out = str(mod)
+        if "12.3" in ir_out or "1.23" in ir_out:
+            # Everything ok
+            return
+        if "1.0" in ir_out:
+            loc = locale.getlocale()
+            raise RuntimeError(
+                "LLVM will produce incorrect floating-point code "
+                "in the current locale %s.\nPlease read "
+                "http://numba.pydata.org/numba-doc/dev/user/faq.html#llvm-locale-bug "
+                "for more information."
+                % (loc,))
+        raise AssertionError("Unexpected IR:\n%s\n" % (ir_out,))
+
     def magic_tuple(self):
         """
         Return a tuple unambiguously describing the codegen behaviour.
         """
         return (self._llvm_module.triple, ll.get_host_cpu_name(),
-                config.ENABLE_AVX)
+                self._tm_features)
+
+    def _scan_and_fix_unresolved_refs(self, module):
+        self._rtlinker.scan_unresolved_symbols(module, self._engine)
+        self._rtlinker.scan_defined_symbols(module)
+        self._rtlinker.resolve(self._engine)
+
+    def insert_unresolved_ref(self, builder, fnty, name):
+        voidptr = llvmir.IntType(8).as_pointer()
+        ptrname = self._rtlinker.PREFIX + name
+        llvm_mod = builder.module
+        fnptr = llvm_mod.get_global(ptrname)
+        # Not defined?
+        if fnptr is None:
+            fnptr = llvmir.GlobalVariable(llvm_mod, voidptr, name=ptrname)
+            fnptr.linkage = 'external'
+        return builder.bitcast(builder.load(fnptr), fnty.as_pointer())
 
 
 class AOTCPUCodegen(BaseCPUCodegen):
@@ -491,9 +618,24 @@ class AOTCPUCodegen(BaseCPUCodegen):
 
     _library_class = AOTCodeLibrary
 
+    def __init__(self, module_name, cpu_name=None):
+        # By default, use generic cpu model for the arch
+        self._cpu_name = cpu_name or ''
+        BaseCPUCodegen.__init__(self, module_name)
+
     def _customize_tm_options(self, options):
+        cpu_name = self._cpu_name
+        if cpu_name == 'host':
+            cpu_name = ll.get_host_cpu_name()
+        options['cpu'] = cpu_name
         options['reloc'] = 'pic'
         options['codemodel'] = 'default'
+        options['features'] = self._tm_features
+
+    def _customize_tm_features(self):
+        # ISA features are selected according to the requested CPU model
+        # in _customize_tm_options()
+        return ''
 
     def _add_module(self, module):
         pass
@@ -507,8 +649,6 @@ class JITCPUCodegen(BaseCPUCodegen):
     _library_class = JITCodeLibrary
 
     def _customize_tm_options(self, options):
-        features = []
-
         # As long as we don't want to ship the code to another machine,
         # we can specialize for this CPU.
         options['cpu'] = ll.get_host_cpu_name()
@@ -516,19 +656,38 @@ class JITCPUCodegen(BaseCPUCodegen):
         options['reloc'] = 'default'
         options['codemodel'] = 'jitdefault'
 
-        # There are various performance issues with AVX and LLVM 3.5
-        # (list at http://llvm.org/bugs/buglist.cgi?quicksearch=avx).
-        # For now we'd rather disable it, since it can pessimize the code.
-        if not config.ENABLE_AVX:
-            features.append('-avx')
-
-        # Set feature attributes
-        options['features'] = ','.join(features)
+        # Set feature attributes (such as ISA extensions)
+        # This overrides default feature selection by CPU model above
+        options['features'] = self._tm_features
 
         # Enable JIT debug
         options['jitdebug'] = True
+
+    def _customize_tm_features(self):
+        # For JIT target, we will use LLVM to get the feature map
+        features = ll.get_host_cpu_features()
+
+        if not config.ENABLE_AVX:
+            # Disable all features with name starting with 'avx'
+            for k in features:
+                if k.startswith('avx'):
+                    features[k] = False
+
+        # Set feature attributes
+        return features.flatten()
 
     def _add_module(self, module):
         self._engine.add_module(module)
         # Early bind the engine method to avoid keeping a reference to self.
         return functools.partial(self._engine.remove_module, module)
+
+
+_llvm_initialized = False
+
+def initialize_llvm():
+    global _llvm_initialized
+    if not _llvm_initialized:
+        ll.initialize()
+        ll.initialize_native_target()
+        ll.initialize_native_asmprinter()
+        _llvm_initialized = True

@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
-import numpy
+
+import numpy as np
+
 from numba.compiler import compile_isolated
 from numba import typeof
 from numba import unittest_support as unittest
@@ -19,7 +21,7 @@ def array_return_start_with_loop(a):
 
 class TestArrayReturn(MemoryLeakMixin, unittest.TestCase):
     def test_array_return(self):
-        a = numpy.arange(10)
+        a = np.arange(10)
         i = 2
         at, it = typeof(a), typeof(i)
         cres = compile_isolated(array_return, (at, it))
@@ -30,7 +32,7 @@ class TestArrayReturn(MemoryLeakMixin, unittest.TestCase):
         """
         A bug breaks array return if the function starts with a loop
         """
-        a = numpy.arange(10)
+        a = np.arange(10)
         at = typeof(a)
         cres = compile_isolated(array_return_start_with_loop, [at])
         cfunc = cres.entry_point

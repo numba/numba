@@ -43,9 +43,6 @@ class TargetOptions(object):
         if kws.pop('looplift', True):
             flags.set("enable_looplift")
 
-        if kws.pop('wraparound', True) == False:
-            flags.set("no_wraparound")
-
         if kws.pop('boundcheck', False):
             flags.set("boundcheck")
 
@@ -60,6 +57,9 @@ class TargetOptions(object):
 
         if kws.pop('no_rewrites', False):
             flags.set('no_rewrites')
+
+        if kws.pop('no_cpython_wrapper', False):
+            flags.set('no_cpython_wrapper')
 
         flags.set("enable_pyobject_looplift")
 

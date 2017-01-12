@@ -4,7 +4,7 @@ Testing object mode specifics.
 """
 from __future__ import print_function
 
-import numpy
+import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
@@ -18,6 +18,9 @@ def complex_constant(n):
 
 def long_constant(n):
     return n + 100000000000000000000000000000000000000000000000
+
+def delitem_usecase(x):
+    del x[:]
 
 
 forceobj = Flags()
@@ -73,7 +76,7 @@ class TestObjectMode(TestCase):
 
     def test_array_of_object(self):
         cfunc = jit(array_of_object)
-        objarr = numpy.array([object()] * 10)
+        objarr = np.array([object()] * 10)
         self.assertIs(cfunc(objarr), objarr)
 
     def test_sequence_contains(self):
@@ -92,6 +95,17 @@ class TestObjectMode(TestCase):
             foo(None, None)
 
         self.assertIn("is not iterable", str(raises.exception))
+
+    def test_delitem(self):
+        pyfunc = delitem_usecase
+        cres = compile_isolated(pyfunc, (), flags=forceobj)
+        cfunc = cres.entry_point
+
+        l = [3, 4, 5]
+        cfunc(l)
+        self.assertPreciseEqual(l, [])
+        with self.assertRaises(TypeError):
+            cfunc(42)
 
 
 if __name__ == '__main__':

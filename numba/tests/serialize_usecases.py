@@ -5,7 +5,7 @@ to avoid issues with __main__.
 
 import math
 
-from numba import jit, types
+from numba import jit, generated_jit, types
 
 
 @jit((types.int32, types.int32))
@@ -22,7 +22,7 @@ def add_nopython(a, b):
 
 @jit(nopython=True)
 def add_nopython_fail(a, b):
-    print(a.__class__)
+    object()
     return a + b
 
 def closure(a):
@@ -53,6 +53,15 @@ def other_function(x, y):
 def get_global_objmode(x):
     return K * x
 
+import numpy as np
+import numpy.random as nprand
+
+@jit(nopython=True)
+def get_renamed_module(x):
+    nprand.seed(42)
+    return np.cos(x), nprand.random()
+
+
 def closure_calling_other_function(x):
     @jit(nopython=True)
     def inner(y, z):
@@ -68,6 +77,23 @@ def closure_calling_other_closure(x):
     def inner(y):
         return other_inner(y) + x
     return inner
+
+
+# A generated function using some globals and closure vars
+
+k1 = 5
+k2 = 42
+
+@generated_jit(nopython=True)
+def generated_add(x, y):
+    k3 = 1
+    if isinstance(x, types.Complex):
+        def impl(x, y):
+            return x + y + k1
+    else:
+        def impl(x, y):
+            return x + y + k2 + k3
+    return impl
 
 
 # A dynamic function calling a builtin function

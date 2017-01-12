@@ -1,12 +1,12 @@
 package:
    name: numba
-   version: {{ environ.get('GIT_DESCRIBE_TAG','') }}
+   version: {{ GIT_DESCRIBE_TAG }}
 
 source:
    path: ../..
 
 build:
-  number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
+  number: {{ GIT_DESCRIBE_NUMBER|int }}
   entry_points:
     - pycc = numba.pycc:main
     - numba = numba.numba_entry:main
@@ -16,27 +16,36 @@ requirements:
   # when we also set install_requires in setup.py
   build:
     - python
-    - argparse        [py26]
     - numpy x.x
-    # On channel https://binstar.org/numba/
-    - llvmlite 0.8*
-    - funcsigs       [py26 or py27]
-    - singledispatch [py26 or py27 or py33]
+    - setuptools
+    # On channel https://anaconda.org/numba/
+    - llvmlite 0.14.*
+    - funcsigs       [py27]
+    - singledispatch [py27]
   run:
     - python
-    - argparse        [py26]
     - numpy x.x
-    # On channel https://binstar.org/numba/
-    - llvmlite 0.8*
-    - funcsigs       [py26 or py27]
-    - singledispatch [py26 or py27 or py33]
+    # On channel https://anaconda.org/numba/
+    - llvmlite 0.14.*
+    - funcsigs       [py27]
+    - singledispatch [py27]
 test:
   requires:
-    - argparse       [py26]
-    - unittest2      [py26]
     - jinja2
+    # Required to test optional Numba features
+    - cffi
+    - scipy
+    - ipython
+    - setuptools
   files:
     - mandel.py
   commands:
+    # Check Numba executables are there
     - pycc -h
     - numba -h
+    # run system info tool
+    - numba -s
+    # Check test discovery works
+    - python -m numba.tests.test_runtests
+    # Run the whole test suite
+    - python -m numba.runtests -m -b

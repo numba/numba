@@ -3,10 +3,10 @@ import sys
 import math
 from llvmlite.llvmpy.core import Type
 from numba import cgutils, types
-from numba.targets.imputils import implement, Registry
+from numba.targets.imputils import Registry
 
 registry = Registry()
-register = registry.register
+lower = registry.lower
 
 float_set = types.float32, types.float64
 
@@ -62,10 +62,8 @@ def powi_implement(nvname):
     return core
 
 
-register(implement(math.pow, types.float32, types.int32)(powi_implement(
-    '__nv_powif')))
-register(implement(math.pow, types.float64, types.int32)(
-    powi_implement('__nv_powi')))
+lower(math.pow, types.float32, types.int32)(powi_implement('__nv_powif'))
+lower(math.pow, types.float64, types.int32)(powi_implement('__nv_powi'))
 
 
 booleans = []
@@ -77,8 +75,11 @@ unarys += [('__nv_ceil', '__nv_ceilf', math.ceil)]
 unarys += [('__nv_floor', '__nv_floorf', math.floor)]
 unarys += [('__nv_fabs', '__nv_fabsf', math.fabs)]
 unarys += [('__nv_exp', '__nv_expf', math.exp)]
-if sys.version_info[:2] >= (2, 7):
-    unarys += [('__nv_expm1', '__nv_expm1f', math.expm1)]
+unarys += [('__nv_expm1', '__nv_expm1f', math.expm1)]
+unarys += [('__nv_erf', '__nv_erff', math.erf)]
+unarys += [('__nv_erfc', '__nv_erfcf', math.erfc)]
+unarys += [('__nv_tgamma', '__nv_tgammaf', math.gamma)]
+unarys += [('__nv_lgamma', '__nv_lgammaf', math.lgamma)]
 unarys += [('__nv_sqrt', '__nv_sqrtf', math.sqrt)]
 unarys += [('__nv_log', '__nv_logf', math.log)]
 unarys += [('__nv_log10', '__nv_log10f', math.log10)]
@@ -106,19 +107,19 @@ binarys += [('__nv_hypot', '__nv_hypotf', math.hypot)]
 
 for name64, name32, key in booleans:
     impl64 = bool_implement(name64, types.float64)
-    register(implement(key, types.float64)(impl64))
+    lower(key, types.float64)(impl64)
     impl32 = bool_implement(name32, types.float32)
-    register(implement(key, types.float32)(impl32))
+    lower(key, types.float32)(impl32)
 
 
 for name64, name32, key in unarys:
     impl64 = unary_implement(name64, types.float64)
-    register(implement(key, types.float64)(impl64))
+    lower(key, types.float64)(impl64)
     impl32 = unary_implement(name32, types.float32)
-    register(implement(key, types.float32)(impl32))
+    lower(key, types.float32)(impl32)
 
 for name64, name32, key in binarys:
     impl64 = binary_implement(name64, types.float64)
-    register(implement(key, types.float64, types.float64)(impl64))
+    lower(key, types.float64, types.float64)(impl64)
     impl32 = binary_implement(name32, types.float32)
-    register(implement(key, types.float32, types.float32)(impl32))
+    lower(key, types.float32, types.float32)(impl32)

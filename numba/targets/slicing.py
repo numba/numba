@@ -8,8 +8,7 @@ from llvmlite import ir
 
 from numba.six.moves import zip_longest
 from numba import cgutils, types, typing
-from .imputils import (builtin, builtin_attr, implement,
-                       impl_attribute, impl_attribute_generic,
+from .imputils import (lower_builtin, lower_getattr,
                        iternext_impl, impl_ret_borrowed,
                        impl_ret_new_ref, impl_ret_untracked)
 
@@ -104,67 +103,107 @@ def get_slice_length(builder, slicestruct):
     return builder.select(is_zero_length, zero, nominal_length)
 
 
+def get_slice_bounds(builder, slicestruct):
+    """
+    Return the [lower, upper) indexing bounds of a slice.
+    """
+    start = slicestruct.start
+    stop = slicestruct.stop
+    zero = start.type(0)
+    one = start.type(1)
+    # This is a bit pessimal, e.g. it will return [1, 5) instead
+    # of [1, 4) for `1:5:2`
+    is_step_negative = builder.icmp_signed('<', slicestruct.step, zero)
+    lower = builder.select(is_step_negative,
+                           builder.add(stop, one), start)
+    upper = builder.select(is_step_negative,
+                           builder.add(start, one), stop)
+    return lower, upper
+
+
 def fix_stride(builder, slice, stride):
     """
     Fix the given stride for the slice's step.
     """
     return builder.mul(slice.step, stride)
 
+def guard_invalid_slice(context, builder, typ, slicestruct):
+    """
+    Guard against *slicestruct* having a zero step (and raise ValueError).
+    """
+    if typ.has_step:
+        cgutils.guard_null(context, builder, slicestruct.step,
+                           (ValueError, "slice step cannot be zero"))
+
 
 def get_defaults(context):
     """
-    Get the default values for a slice's three members.
+    Get the default values for a slice's members:
+    (start for positive step, start for negative step,
+     stop for positive step, stop for negative step, step)
     """
     maxint = (1 << (context.address_size - 1)) - 1
-    return (0, maxint, 1)
+    return (0, maxint, maxint, - maxint - 1, 1)
 
 
 #---------------------------------------------------------------------------
 # The slice structure
 
-class Slice(cgutils.Structure):
-    _fields = [('start', types.intp),
-               ('stop', types.intp),
-               ('step', types.intp), ]
-
-
-@builtin
-@implement(types.slice_type, types.VarArg(types.Any))
+@lower_builtin(slice, types.VarArg(types.Any))
 def slice_constructor_impl(context, builder, sig, args):
-    maxint = (1 << (context.address_size - 1)) - 1
+    default_start_pos, default_start_neg, default_stop_pos, default_stop_neg, default_step = \
+        [context.get_constant(types.intp, x) for x in get_defaults(context)]
 
-    slice_args = []
-    for ty, val, default in zip_longest(sig.args, args, (0, maxint, 1)):
-        if ty in (types.none, None):
-            # Omitted or None
-            slice_args.append(context.get_constant(types.intp, default))
+    # Fetch non-None arguments
+    slice_args = [None] * 3
+    for i, (ty, val) in enumerate(zip(sig.args, args)):
+        if ty is types.none:
+            slice_args[i] = None
         else:
-            slice_args.append(val)
-    start, stop, step = slice_args
+            slice_args[i] = val
 
-    slice3 = Slice(context, builder)
-    slice3.start = start
-    slice3.stop = stop
-    slice3.step = step
+    # Fill omitted arguments
+    def get_arg_value(i, default):
+        val = slice_args[i]
+        if val is None:
+            return default
+        else:
+            return val
 
-    res = slice3._getvalue()
+    step = get_arg_value(2, default_step)
+    is_step_negative = builder.icmp_signed('<', step,
+                                           context.get_constant(types.intp, 0))
+    default_stop = builder.select(is_step_negative,
+                                  default_stop_neg, default_stop_pos)
+    default_start = builder.select(is_step_negative,
+                                   default_start_neg, default_start_pos)
+    stop = get_arg_value(1, default_stop)
+    start = get_arg_value(0, default_start)
+
+    ty = sig.return_type
+    sli = context.make_helper(builder, sig.return_type)
+    sli.start = start
+    sli.stop = stop
+    sli.step = step
+
+    res = sli._getvalue()
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@builtin_attr
-@impl_attribute(types.slice3_type, "start")
+@lower_getattr(types.SliceType, "start")
 def slice_start_impl(context, builder, typ, value):
-    slice3 = Slice(context, builder, value)
-    return slice3.start
+    sli = context.make_helper(builder, typ, value)
+    return sli.start
 
-@builtin_attr
-@impl_attribute(types.slice3_type, "stop")
+@lower_getattr(types.SliceType, "stop")
 def slice_stop_impl(context, builder, typ, value):
-    slice3 = Slice(context, builder, value)
-    return slice3.stop
+    sli = context.make_helper(builder, typ, value)
+    return sli.stop
 
-@builtin_attr
-@impl_attribute(types.slice3_type, "step")
+@lower_getattr(types.SliceType, "step")
 def slice_step_impl(context, builder, typ, value):
-    slice3 = Slice(context, builder, value)
-    return slice3.step
+    if typ.has_step:
+        sli = context.make_helper(builder, typ, value)
+        return sli.step
+    else:
+        return context.get_constant(types.intp, 1)

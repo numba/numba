@@ -44,23 +44,21 @@ def _get_function_globals_for_reduction(func):
     Analyse *func* and return a dictionary of global values suitable for
     reduction.
     """
-    # XXX It would be better to have a high-level API in the compiler
-    # module.
-    bc = bytecode.ByteCode(func)
-    interpreter = compiler.translate_stage(bc)
-    globs = dict(interpreter.get_used_globals())
+    func_id = bytecode.FunctionIdentity.from_function(func)
+    bc = bytecode.ByteCode(func_id)
+    globs = bc.get_used_globals()
     for k, v in globs.items():
         # Make modules picklable by name
         if isinstance(v, ModuleType):
-            globs[k] = _ModuleRef(k)
+            globs[k] = _ModuleRef(v.__name__)
     # Remember the module name so that the function gets a proper __module__
     # when rebuilding.  This is used to recreate the environment.
     globs['__name__'] = func.__module__
     return globs
 
-def _reduce_function(func):
+def _reduce_function(func, globs):
     """
-    Reduce a Python function to picklable components.
+    Reduce a Python function and its globals to picklable components.
     If there are cell variables (i.e. references to a closure), their
     values will be frozen.
     """
@@ -68,7 +66,6 @@ def _reduce_function(func):
         cells = [cell.cell_contents for cell in func.__closure__]
     else:
         cells = None
-    globs = _get_function_globals_for_reduction(func)
     return _reduce_code(func.__code__), globs, func.__name__, cells
 
 def _reduce_code(code):

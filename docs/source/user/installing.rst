@@ -2,6 +2,20 @@
 Getting started
 ===============
 
+Compatibility
+-------------
+
+Numba is compatible with Python 2.7 and 3.4 or later, and Numpy versions 1.7 to 1.11.
+
+Our supported platforms are:
+
+* Linux x86 (32-bit and 64-bit)
+* Windows 7 and later (32-bit and 64-bit)
+* OS X 10.9 and later (64-bit)
+* NVIDIA GPUs of compute capability 2.0 and later
+* AMD APUs supported by the HSA 1.0 final runtime (Kaveri, Carrizo)
+
+
 Installing using Conda
 ----------------------
 

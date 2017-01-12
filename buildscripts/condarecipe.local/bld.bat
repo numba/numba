@@ -1,6 +1,4 @@
-%PYTHON% setup.py install
-if errorlevel 1 exit 1
+%PYTHON% buildscripts/remove_unwanted_files.py
+%PYTHON% setup.py build install
 
-if "%PY3K%"=="1" (
-    rd /s /q %SP_DIR%\numpy
-)
+exit /b %errorlevel%

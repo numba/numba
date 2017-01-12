@@ -1,5 +1,5 @@
 """
-Test numpy.datetime64 and numpy.timedelta64 support.
+Test np.datetime64 and np.timedelta64 support.
 """
 
 # NOTE: datetime64 and timedelta64 ufuncs are tested in test_ufuncs.
@@ -15,7 +15,7 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba import config, jit, npdatetime, types, vectorize, numpy_support
 from numba.errors import TypingError
-from .support import TestCase, skip_on_numpy_16
+from .support import TestCase, tag
 
 
 def value_unit(val):
@@ -78,7 +78,6 @@ def make_add_constant(const):
     return add_constant
 
 
-@skip_on_numpy_16
 class TestModuleHelpers(TestCase):
     """
     Test the various helpers in numba.npdatetime.
@@ -201,7 +200,6 @@ TD = np.timedelta64
 DT = np.datetime64
 
 
-@skip_on_numpy_16
 class TestMiscCompiling(TestCase):
 
     def test_jit_explicit_signature(self):
@@ -256,7 +254,6 @@ class TestMiscCompiling(TestCase):
         check(TD('NaT', 'D'))
 
 
-@skip_on_numpy_16
 class TestTimedeltaArithmetic(TestCase):
 
     jitargs = dict(forceobj=True)
@@ -264,6 +261,7 @@ class TestTimedeltaArithmetic(TestCase):
     def jit(self, pyfunc):
         return jit(**self.jitargs)(pyfunc)
 
+    @tag('important')
     def test_add(self):
         f = self.jit(add_usecase)
         def check(a, b, expected):
@@ -286,6 +284,7 @@ class TestTimedeltaArithmetic(TestCase):
         with self.assertRaises((TypeError, TypingError)):
             f(TD(1, 'M'), TD(1, 'D'))
 
+    @tag('important')
     def test_sub(self):
         f = self.jit(sub_usecase)
         def check(a, b, expected):
@@ -376,6 +375,7 @@ class TestTimedeltaArithmetic(TestCase):
         with self.assertRaises((TypeError, TypingError)):
             div(TD(1, 'M'), TD(1, 'D'))
 
+    @tag('important')
     def test_eq_ne(self):
         eq = self.jit(eq_usecase)
         ne = self.jit(ne_usecase)
@@ -500,13 +500,11 @@ class TestTimedeltaArithmetic(TestCase):
         check(TD('NaT', 'ms'))
 
 
-@skip_on_numpy_16
 class TestTimedeltaArithmeticNoPython(TestTimedeltaArithmetic):
 
     jitargs = dict(nopython=True)
 
 
-@skip_on_numpy_16
 class TestDatetimeArithmetic(TestCase):
 
     jitargs = dict(forceobj=True)
@@ -524,6 +522,7 @@ class TestDatetimeArithmetic(TestCase):
                                     category=DeprecationWarning)
             yield
 
+    @tag('important')
     def test_add_sub_timedelta(self):
         """
         Test `datetime64 + timedelta64` and `datetime64 - timedelta64`.
@@ -646,6 +645,7 @@ class TestDatetimeArithmetic(TestCase):
                     continue
                 self.assertPreciseEqual(sub(a, b), a - b, (a, b))
 
+    @tag('important')
     def test_comparisons(self):
         # Test all datetime comparisons all at once
         eq = self.jit(eq_usecase)
@@ -730,13 +730,11 @@ class TestDatetimeArithmetic(TestCase):
                 check_lt(b - np.timedelta64(1, unit), a, True)
 
 
-@skip_on_numpy_16
 class TestDatetimeArithmeticNoPython(TestDatetimeArithmetic):
 
     jitargs = dict(nopython=True)
 
 
-@skip_on_numpy_16
 class TestMetadataScalingFactor(TestCase):
     """
     Tests than non-1 scaling factors are not supported in datetime64

@@ -8,31 +8,11 @@ import math
 
 from llvmlite import ir
 from numba import types, cgutils, typing
-from numba.targets.imputils import (builtin, builtin_attr, implement,
-                                    impl_attribute, impl_attribute_generic,
+from numba.targets.imputils import (lower_builtin, lower_cast,
                                     iternext_impl, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.utils import cached_property
 from . import quicksort, slicing
-
-
-def make_list_cls(list_type):
-    """
-    Return the Structure representation of the given *list_type*
-    (an instance of types.List).
-    """
-    return cgutils.create_struct_proxy(list_type)
-
-
-def make_payload_cls(list_type):
-    """
-    Return the Structure representation of the given *list_type*'s payload
-    (an instance of types.List).
-    """
-    # Note the payload is stored durably in memory, so we consider it
-    # data and not value.
-    return cgutils.create_struct_proxy(types.ListPayload(list_type),
-                                       kind='data')
 
 
 def get_list_payload(context, builder, list_type, value):
@@ -40,10 +20,11 @@ def get_list_payload(context, builder, list_type, value):
     Given a list value and type, get its payload structure (as a
     reference, so that mutations are seen by all).
     """
-    payload_type = context.get_data_type(types.ListPayload(list_type))
-    payload = context.nrt_meminfo_data(builder, value.meminfo)
-    payload = builder.bitcast(payload, payload_type.as_pointer())
-    return make_payload_cls(list_type)(context, builder, ref=payload)
+    payload_type = types.ListPayload(list_type)
+    payload = context.nrt.meminfo_data(builder, value.meminfo)
+    ptrty = context.get_data_type(payload_type).as_pointer()
+    payload = builder.bitcast(payload, ptrty)
+    return context.make_data_helper(builder, payload_type, ref=payload)
 
 
 def get_itemsize(context, list_type):
@@ -144,7 +125,7 @@ class ListInstance(_ListPayloadMixin):
         self._context = context
         self._builder = builder
         self._ty = list_type
-        self._list = make_list_cls(list_type)(context, builder, list_val)
+        self._list = context.make_helper(builder, list_type, list_val)
         self._itemsize = get_itemsize(context, list_type)
         self._datamodel = context.data_model_manager[list_type.dtype]
 
@@ -205,6 +186,8 @@ class ListInstance(_ListPayloadMixin):
         payload_size = context.get_abi_sizeof(payload_type)
 
         itemsize = get_itemsize(context, list_type)
+        # Account for the fact that the payload struct contains one entry
+        payload_size -= itemsize
 
         ok = cgutils.alloca_once_value(builder, cgutils.true_bit)
         self = cls(context, builder, list_type, None)
@@ -217,7 +200,7 @@ class ListInstance(_ListPayloadMixin):
             builder.store(cgutils.false_bit, ok)
 
         with builder.if_then(builder.load(ok), likely=True):
-            meminfo = context.nrt_meminfo_varsize_alloc(builder, size=allocsize)
+            meminfo = context.nrt.meminfo_new_varsize(builder, size=allocsize)
             with builder.if_else(cgutils.is_null(builder, meminfo),
                                  likely=False) as (if_error, if_ok):
                 with if_error:
@@ -255,7 +238,7 @@ class ListInstance(_ListPayloadMixin):
         self = cls(context, builder, list_type, None)
         self._list.meminfo = meminfo
         self._list.parent = context.get_constant_null(types.pyobject)
-        context.nrt_incref(builder, list_type, self.value)
+        context.nrt.incref(builder, list_type, self.value)
         # Payload is part of the meminfo, no need to touch it
         return self
 
@@ -266,6 +249,8 @@ class ListInstance(_ListPayloadMixin):
         def _payload_realloc(new_allocated):
             payload_type = context.get_data_type(types.ListPayload(self._ty))
             payload_size = context.get_abi_sizeof(payload_type)
+            # Account for the fact that the payload struct contains one entry
+            payload_size -= itemsize
 
             allocsize, ovf = cgutils.muladd_with_overflow(
                 builder, new_allocated,
@@ -275,7 +260,7 @@ class ListInstance(_ListPayloadMixin):
                 context.call_conv.return_user_exc(builder, MemoryError,
                                                   ("cannot resize list",))
 
-            ptr = context.nrt_meminfo_varsize_realloc(builder, self._list.meminfo,
+            ptr = context.nrt.meminfo_varsize_realloc(builder, self._list.meminfo,
                                                       size=allocsize)
             cgutils.guard_memory_error(context, builder, ptr,
                                        "cannot resize list")
@@ -319,8 +304,8 @@ class ListInstance(_ListPayloadMixin):
         """
         dest_ptr = self._gep(dest_idx)
         src_ptr = self._gep(src_idx)
-        cgutils.memmove(self._builder, dest_ptr, src_ptr,
-                        count, itemsize=self._itemsize)
+        cgutils.raw_memmove(self._builder, dest_ptr, src_ptr,
+                            count, itemsize=self._itemsize)
         self.set_dirty(True)
 
 
@@ -330,12 +315,12 @@ class ListIterInstance(_ListPayloadMixin):
         self._context = context
         self._builder = builder
         self._ty = iter_type
-        self._iter = make_listiter_cls(iter_type)(context, builder, iter_val)
+        self._iter = context.make_helper(builder, iter_type, iter_val)
         self._datamodel = context.data_model_manager[iter_type.yield_type]
 
     @classmethod
     def from_list(cls, context, builder, iter_type, list_val):
-        list_inst = ListInstance(context, builder, iter_type.list_type, list_val)
+        list_inst = ListInstance(context, builder, iter_type.container, list_val)
         self = cls(context, builder, iter_type, None)
         index = context.get_constant(types.intp, 0)
         self._iter.index = cgutils.alloca_once_value(builder, index)
@@ -346,7 +331,7 @@ class ListIterInstance(_ListPayloadMixin):
     def _payload(self):
         # This cannot be cached as it can be reallocated
         return get_list_payload(self._context, self._builder,
-                                self._ty.list_type, self._iter)
+                                self._ty.container, self._iter)
 
     @property
     def value(self):
@@ -378,8 +363,7 @@ def build_list(context, builder, list_type, items):
     return impl_ret_new_ref(context, builder, list_type, inst.value)
 
 
-@builtin
-@implement(list, types.Kind(types.IterableType))
+@lower_builtin(list, types.IterableType)
 def list_constructor(context, builder, sig, args):
 
     def list_impl(iterable):
@@ -393,28 +377,17 @@ def list_constructor(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # Various operations
 
-@builtin
-@implement(types.len_type, types.Kind(types.List))
+@lower_builtin(len, types.List)
 def list_len(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     return inst.size
 
-
-def make_listiter_cls(iterator_type):
-    """
-    Return the Structure representation of the given *iterator_type* (an
-    instance of types.ListIter).
-    """
-    return cgutils.create_struct_proxy(iterator_type)
-
-@builtin
-@implement('getiter', types.Kind(types.List))
+@lower_builtin('getiter', types.List)
 def getiter_list(context, builder, sig, args):
     inst = ListIterInstance.from_list(context, builder, sig.return_type, args[0])
     return impl_ret_borrowed(context, builder, sig.return_type, inst.value)
 
-@builtin
-@implement('iternext', types.Kind(types.ListIter))
+@lower_builtin('iternext', types.ListIter)
 @iternext_impl
 def iternext_listiter(context, builder, sig, args, result):
     inst = ListIterInstance(context, builder, sig.args[0], args[0])
@@ -429,8 +402,7 @@ def iternext_listiter(context, builder, sig, args, result):
         inst.index = builder.add(index, context.get_constant(types.intp, 1))
 
 
-@builtin
-@implement('getitem', types.Kind(types.List), types.Kind(types.Integer))
+@lower_builtin('getitem', types.List, types.Integer)
 def getitem_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     index = args[1]
@@ -440,8 +412,7 @@ def getitem_list(context, builder, sig, args):
 
     return impl_ret_borrowed(context, builder, sig.return_type, result)
 
-@builtin
-@implement('setitem', types.Kind(types.List), types.Kind(types.Integer), types.Any)
+@lower_builtin('setitem', types.List, types.Integer, types.Any)
 def setitem_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     index = args[1]
@@ -452,12 +423,11 @@ def setitem_list(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-@builtin
-@implement('getitem', types.Kind(types.List), types.slice3_type)
+@lower_builtin('getitem', types.List, types.SliceType)
 def getslice_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
-    slice = slicing.Slice(context, builder, value=args[1])
-    cgutils.guard_invalid_slice(context, builder, slice)
+    slice = context.make_helper(builder, sig.args[1], args[1])
+    slicing.guard_invalid_slice(context, builder, sig.args[1], slice)
     inst.fix_slice(slice)
 
     # Allocate result and populate it
@@ -476,14 +446,13 @@ def getslice_list(context, builder, sig, args):
 
     return impl_ret_new_ref(context, builder, sig.return_type, result.value)
 
-@builtin
-@implement('setitem', types.Kind(types.List), types.slice3_type, types.Any)
+@lower_builtin('setitem', types.List, types.SliceType, types.Any)
 def setitem_list(context, builder, sig, args):
     dest = ListInstance(context, builder, sig.args[0], args[0])
-    slice = slicing.Slice(context, builder, value=args[1])
     src = ListInstance(context, builder, sig.args[2], args[2])
 
-    cgutils.guard_invalid_slice(context, builder, slice)
+    slice = context.make_helper(builder, sig.args[1], args[1])
+    slicing.guard_invalid_slice(context, builder, sig.args[1], slice)
     dest.fix_slice(slice)
 
     src_size = src.size
@@ -537,13 +506,12 @@ def setitem_list(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-@builtin
-@implement('delitem', types.Kind(types.List), types.slice3_type)
+@lower_builtin('delitem', types.List, types.SliceType)
 def setitem_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
-    slice = slicing.Slice(context, builder, value=args[1])
+    slice = context.make_helper(builder, sig.args[1], args[1])
 
-    cgutils.guard_invalid_slice(context, builder, slice)
+    slicing.guard_invalid_slice(context, builder, sig.args[1], slice)
     inst.fix_slice(slice)
 
     slice_len = slicing.get_slice_length(builder, slice)
@@ -566,21 +534,19 @@ def setitem_list(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-@builtin
-@implement("in", types.Any, types.Kind(types.List))
-def in_list(context, builder, sig, args):
-    def list_contains_impl(value, lst):
+# XXX should there be a specific module for Sequence or collection base classes?
+
+@lower_builtin("in", types.Any, types.Sequence)
+def in_seq(context, builder, sig, args):
+    def seq_contains_impl(value, lst):
         for elem in lst:
             if elem == value:
                 return True
         return False
 
-    return context.compile_internal(builder, list_contains_impl, sig, args)
+    return context.compile_internal(builder, seq_contains_impl, sig, args)
 
-
-# XXX should there be a specific module for Sequence or collection base classes?
-@builtin
-@implement(bool, types.Kind(types.Sequence))
+@lower_builtin(bool, types.Sequence)
 def sequence_bool(context, builder, sig, args):
     def sequence_bool_impl(seq):
         return len(seq) != 0
@@ -588,8 +554,7 @@ def sequence_bool(context, builder, sig, args):
     return context.compile_internal(builder, sequence_bool_impl, sig, args)
 
 
-@builtin
-@implement("+", types.Kind(types.List), types.Kind(types.List))
+@lower_builtin("+", types.List, types.List)
 def list_add(context, builder, sig, args):
     a = ListInstance(context, builder, sig.args[0], args[0])
     b = ListInstance(context, builder, sig.args[1], args[1])
@@ -611,8 +576,7 @@ def list_add(context, builder, sig, args):
 
     return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
 
-@builtin
-@implement("+=", types.Kind(types.List), types.Kind(types.List))
+@lower_builtin("+=", types.List, types.List)
 def list_add_inplace(context, builder, sig, args):
     assert sig.args[0].dtype == sig.return_type.dtype
     dest = _list_extend_list(context, builder, sig, args)
@@ -620,8 +584,7 @@ def list_add_inplace(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, dest.value)
 
 
-@builtin
-@implement("*", types.Kind(types.List), types.Kind(types.Integer))
+@lower_builtin("*", types.List, types.Integer)
 def list_mul(context, builder, sig, args):
     src = ListInstance(context, builder, sig.args[0], args[0])
     src_size = src.size
@@ -641,8 +604,7 @@ def list_mul(context, builder, sig, args):
 
     return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
 
-@builtin
-@implement("*=", types.Kind(types.List), types.Kind(types.Integer))
+@lower_builtin("*=", types.List, types.Integer)
 def list_mul_inplace(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     src_size = inst.size
@@ -665,8 +627,7 @@ def list_mul_inplace(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # Comparisons
 
-@builtin
-@implement('is', types.Kind(types.List), types.Kind(types.List))
+@lower_builtin('is', types.List, types.List)
 def list_is(context, builder, sig, args):
     a = ListInstance(context, builder, sig.args[0], args[0])
     b = ListInstance(context, builder, sig.args[1], args[1])
@@ -674,8 +635,7 @@ def list_is(context, builder, sig, args):
     mb = builder.ptrtoint(b.meminfo, cgutils.intp_t)
     return builder.icmp_signed('==', ma, mb)
 
-@builtin
-@implement('==', types.Kind(types.List), types.Kind(types.List))
+@lower_builtin('==', types.List, types.List)
 def list_eq(context, builder, sig, args):
     aty, bty = sig.args
     a = ListInstance(context, builder, aty, args[0])
@@ -699,8 +659,7 @@ def list_eq(context, builder, sig, args):
 
     return builder.load(res)
 
-@builtin
-@implement('!=', types.Kind(types.List), types.Kind(types.List))
+@lower_builtin('!=', types.List, types.List)
 def list_ne(context, builder, sig, args):
 
     def list_ne_impl(a, b):
@@ -708,8 +667,7 @@ def list_ne(context, builder, sig, args):
 
     return context.compile_internal(builder, list_ne_impl, sig, args)
 
-@builtin
-@implement('<=', types.Kind(types.List), types.Kind(types.List))
+@lower_builtin('<=', types.List, types.List)
 def list_le(context, builder, sig, args):
 
     def list_le_impl(a, b):
@@ -724,8 +682,7 @@ def list_le(context, builder, sig, args):
 
     return context.compile_internal(builder, list_le_impl, sig, args)
 
-@builtin
-@implement('<', types.Kind(types.List), types.Kind(types.List))
+@lower_builtin('<', types.List, types.List)
 def list_lt(context, builder, sig, args):
 
     def list_lt_impl(a, b):
@@ -740,8 +697,7 @@ def list_lt(context, builder, sig, args):
 
     return context.compile_internal(builder, list_lt_impl, sig, args)
 
-@builtin
-@implement('>=', types.Kind(types.List), types.Kind(types.List))
+@lower_builtin('>=', types.List, types.List)
 def list_ge(context, builder, sig, args):
 
     def list_ge_impl(a, b):
@@ -749,8 +705,7 @@ def list_ge(context, builder, sig, args):
 
     return context.compile_internal(builder, list_ge_impl, sig, args)
 
-@builtin
-@implement('>', types.Kind(types.List), types.Kind(types.List))
+@lower_builtin('>', types.List, types.List)
 def list_gt(context, builder, sig, args):
 
     def list_gt_impl(a, b):
@@ -761,8 +716,7 @@ def list_gt(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # Methods
 
-@builtin
-@implement("list.append", types.Kind(types.List), types.Any)
+@lower_builtin("list.append", types.List, types.Any)
 def list_append(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     item = args[1]
@@ -774,24 +728,21 @@ def list_append(context, builder, sig, args):
 
     return context.get_dummy_value()
 
-@builtin
-@implement("list.clear", types.Kind(types.List))
+@lower_builtin("list.clear", types.List)
 def list_clear(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     inst.resize(context.get_constant(types.intp, 0))
 
     return context.get_dummy_value()
 
-@builtin
-@implement("list.copy", types.Kind(types.List))
+@lower_builtin("list.copy", types.List)
 def list_copy(context, builder, sig, args):
     def list_copy_impl(lst):
         return list(lst)
 
     return context.compile_internal(builder, list_copy_impl, sig, args)
 
-@builtin
-@implement("list.count", types.Kind(types.List), types.Any)
+@lower_builtin("list.count", types.List, types.Any)
 def list_count(context, builder, sig, args):
 
     def list_count_impl(lst, value):
@@ -820,8 +771,7 @@ def _list_extend_list(context, builder, sig, args):
 
     return dest
 
-@builtin
-@implement("list.extend", types.Kind(types.List), types.Kind(types.IterableType))
+@lower_builtin("list.extend", types.List, types.IterableType)
 def list_extend(context, builder, sig, args):
     if isinstance(sig.args[1], types.List):
         # Specialize for list operands, for speed.
@@ -836,8 +786,7 @@ def list_extend(context, builder, sig, args):
 
     return context.compile_internal(builder, list_extend, sig, args)
 
-@builtin
-@implement("list.index", types.Kind(types.List), types.Any)
+@lower_builtin("list.index", types.List, types.Any)
 def list_index(context, builder, sig, args):
 
     def list_index_impl(lst, value):
@@ -849,9 +798,8 @@ def list_index(context, builder, sig, args):
 
     return context.compile_internal(builder, list_index_impl, sig, args)
 
-@builtin
-@implement("list.index", types.Kind(types.List), types.Any,
-           types.Kind(types.Integer))
+@lower_builtin("list.index", types.List, types.Any,
+           types.Integer)
 def list_index(context, builder, sig, args):
 
     def list_index_impl(lst, value, start):
@@ -868,9 +816,8 @@ def list_index(context, builder, sig, args):
 
     return context.compile_internal(builder, list_index_impl, sig, args)
 
-@builtin
-@implement("list.index", types.Kind(types.List), types.Any,
-           types.Kind(types.Integer), types.Kind(types.Integer))
+@lower_builtin("list.index", types.List, types.Any,
+           types.Integer, types.Integer)
 def list_index(context, builder, sig, args):
 
     def list_index_impl(lst, value, start, stop):
@@ -891,8 +838,7 @@ def list_index(context, builder, sig, args):
 
     return context.compile_internal(builder, list_index_impl, sig, args)
 
-@builtin
-@implement("list.insert", types.Kind(types.List), types.Kind(types.Integer),
+@lower_builtin("list.insert", types.List, types.Integer,
            types.Any)
 def list_insert(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
@@ -909,8 +855,7 @@ def list_insert(context, builder, sig, args):
 
     return context.get_dummy_value()
 
-@builtin
-@implement("list.pop", types.Kind(types.List))
+@lower_builtin("list.pop", types.List)
 def list_pop(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
 
@@ -922,8 +867,7 @@ def list_pop(context, builder, sig, args):
     inst.resize(n)
     return res
 
-@builtin
-@implement("list.pop", types.Kind(types.List), types.Kind(types.Integer))
+@lower_builtin("list.pop", types.List, types.Integer)
 def list_pop(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     idx = inst.fix_index(args[1])
@@ -941,8 +885,7 @@ def list_pop(context, builder, sig, args):
     inst.resize(n)
     return res
 
-@builtin
-@implement("list.remove", types.Kind(types.List), types.Any)
+@lower_builtin("list.remove", types.List, types.Any)
 def list_remove(context, builder, sig, args):
 
     def list_remove_impl(lst, value):
@@ -955,8 +898,7 @@ def list_remove(context, builder, sig, args):
 
     return context.compile_internal(builder, list_remove_impl, sig, args)
 
-@builtin
-@implement("list.reverse", types.Kind(types.List))
+@lower_builtin("list.reverse", types.List)
 def list_reverse(context, builder, sig, args):
 
     def list_reverse_impl(lst):
@@ -990,9 +932,8 @@ def load_sorts():
     g['_sorting_init'] = True
 
 
-@builtin
-@implement("list.sort", types.Kind(types.List))
-@implement("list.sort", types.Kind(types.List), types.Kind(types.Boolean))
+@lower_builtin("list.sort", types.List)
+@lower_builtin("list.sort", types.List, types.Boolean)
 def list_sort(context, builder, sig, args):
     load_sorts()
 
@@ -1002,15 +943,14 @@ def list_sort(context, builder, sig, args):
 
     def list_sort_impl(lst, reverse):
         if reverse:
-            return run_reversed_sort(lst)
+            run_reversed_sort(lst)
         else:
-            return run_default_sort(lst)
+            run_default_sort(lst)
 
     return context.compile_internal(builder, list_sort_impl, sig, args)
 
-@builtin
-@implement(sorted, types.Kind(types.IterableType))
-@implement(sorted, types.Kind(types.IterableType), types.Kind(types.Boolean))
+@lower_builtin(sorted, types.IterableType)
+@lower_builtin(sorted, types.IterableType, types.Boolean)
 def sorted_impl(context, builder, sig, args):
     if len(args) == 1:
         sig = typing.signature(sig.return_type, *sig.args + (types.boolean,))
@@ -1022,3 +962,13 @@ def sorted_impl(context, builder, sig, args):
         return lst
 
     return context.compile_internal(builder, sorted_impl, sig, args)
+
+
+# -----------------------------------------------------------------------------
+# Implicit casting
+
+@lower_cast(types.List, types.List)
+def list_to_list(context, builder, fromty, toty, val):
+    # Casting from non-reflected to reflected
+    assert fromty.dtype == toty.dtype
+    return val

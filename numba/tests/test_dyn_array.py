@@ -1,18 +1,44 @@
 from __future__ import print_function, absolute_import, division
 
+import contextlib
 import sys
 import numpy as np
-import threading
 import random
+import threading
 
 from numba import unittest_support as unittest
 from numba import njit
 from numba import utils
 from numba.numpy_support import version as numpy_version
-from .support import MemoryLeakMixin, TestCase
+from .support import MemoryLeakMixin, TestCase, tag
 
 
 nrtjit = njit(_nrt=True, nogil=True)
+
+
+def np_concatenate1(a, b, c):
+    return np.concatenate((a, b, c))
+
+def np_concatenate2(a, b, c, axis):
+    return np.concatenate((a, b, c), axis=axis)
+
+def np_stack1(a, b, c):
+    return np.stack((a, b, c))
+
+def np_stack2(a, b, c, axis):
+    return np.stack((a, b, c), axis=axis)
+
+def np_hstack(a, b, c):
+    return np.hstack((a, b, c))
+
+def np_vstack(a, b, c):
+    return np.vstack((a, b, c))
+
+def np_dstack(a, b, c):
+    return np.dstack((a, b, c))
+
+def np_column_stack(a, b, c):
+    return np.column_stack((a, b, c))
 
 
 class BaseTest(TestCase):
@@ -31,11 +57,9 @@ class BaseTest(TestCase):
                 np.testing.assert_allclose(expected, ret)
 
 
-
 class NrtRefCtTest(MemoryLeakMixin):
     def assert_array_nrt_refct(self, arr, expect):
         self.assertEqual(arr.base.refcount, expect)
-
 
 
 class TestDynArray(NrtRefCtTest, TestCase):
@@ -102,6 +126,7 @@ class TestDynArray(NrtRefCtTest, TestCase):
 
         del got_arr
 
+    @tag('important')
     def test_empty_3d(self):
         def pyfunc(m, n, p):
             arr = np.empty((m, n, p), np.int32)
@@ -127,6 +152,7 @@ class TestDynArray(NrtRefCtTest, TestCase):
 
         del got_arr
 
+    @tag('important')
     def test_empty_2d_sliced(self):
         def pyfunc(m, n, p):
             arr = np.empty((m, n), np.int32)
@@ -151,6 +177,7 @@ class TestDynArray(NrtRefCtTest, TestCase):
 
         del got_arr
 
+    @tag('important')
     def test_return_global_array(self):
         y = np.ones(4, dtype=np.float32)
         initrefct = sys.getrefcount(y)
@@ -176,6 +203,7 @@ class TestDynArray(NrtRefCtTest, TestCase):
         # y is no longer referenced by cfunc
         self.assertEqual(initrefct, sys.getrefcount(y))
 
+    @tag('important')
     def test_return_global_array_sliced(self):
         y = np.ones(4, dtype=np.float32)
 
@@ -206,6 +234,7 @@ class TestDynArray(NrtRefCtTest, TestCase):
         self.assertIs(expected, arr)
         self.assertIs(expected, got)
 
+    @tag('important')
     def test_array_pass_through_sliced(self):
         def pyfunc(y):
             return y[y.size // 2:]
@@ -584,6 +613,7 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
             return pyfunc((m, n))
         self.check_2d(func)
 
+    @tag('important')
     def test_2d_dtype_kwarg(self):
         pyfunc = self.pyfunc
         def func(m, n):
@@ -672,6 +702,9 @@ class ConstructorLikeBaseTest(object):
             if arr.ndim > 0:
                 check_arr(arr[::2])
 
+        # Scalar argument => should produce a 0-d array
+        check_arr(orig[0])
+
 
 class TestNdEmptyLike(ConstructorLikeBaseTest, TestCase):
 
@@ -731,18 +764,13 @@ class TestNdZerosLike(TestNdEmptyLike):
     def check_result_value(self, ret, expected):
         np.testing.assert_equal(ret, expected)
 
-    @unittest.skipIf(numpy_version <= (1, 6),
-                     "zeros_like() broken on Numpy 1.6 with structured dtype")
     def test_like_structured(self):
         super(TestNdZerosLike, self).test_like_structured()
 
-    @unittest.skipIf(numpy_version <= (1, 6),
-                     "zeros_like() broken on Numpy 1.6 with structured dtype")
     def test_like_dtype_structured(self):
         super(TestNdZerosLike, self).test_like_dtype_structured()
 
 
-@unittest.skipIf(numpy_version < (1, 7), "test requires Numpy 1.7 or later")
 class TestNdOnesLike(TestNdZerosLike):
 
     def setUp(self):
@@ -851,6 +879,73 @@ class TestNdEye(BaseTest):
         self.check_eye_n_m_k(func)
 
 
+class TestNdDiag(TestCase):
+
+    def setUp(self):
+        v = np.array([1, 2, 3])
+        hv = np.array([[1, 2, 3]])
+        vv = np.transpose(hv)
+        self.vectors = [v, hv, vv]
+        a3x4 = np.arange(12).reshape(3, 4)
+        a4x3 = np.arange(12).reshape(4, 3)
+        self.matricies = [a3x4, a4x3]
+        def func(q):
+            return np.diag(q)
+        self.py = func
+        self.jit = nrtjit(func)
+
+        def func_kwarg(q, k=0):
+            return np.diag(q, k=k)
+        self.py_kw = func_kwarg
+        self.jit_kw = nrtjit(func_kwarg)
+
+    def check_diag(self, pyfunc, nrtfunc, *args, **kwargs):
+        expected = pyfunc(*args, **kwargs)
+        computed = nrtfunc(*args, **kwargs)
+        self.assertEqual(computed.size, expected.size)
+        self.assertEqual(computed.dtype, expected.dtype)
+        # NOTE: stride not tested as np returns a RO view, nb returns new data
+        np.testing.assert_equal(expected, computed)
+
+    # create a diag matrix from a vector
+    def test_diag_vect_create(self):
+        for d in self.vectors:
+            self.check_diag(self.py, self.jit, d)
+
+    # create a diag matrix from a vector at a given offset
+    def test_diag_vect_create_kwarg(self):
+        for k in range(-10, 10):
+            for d in self.vectors:
+                self.check_diag(self.py_kw, self.jit_kw, d, k=k)
+
+    # extract the diagonal
+    def test_diag_extract(self):
+        for d in self.matricies:
+            self.check_diag(self.py, self.jit, d)
+
+    # extract a diagonal at a given offset
+    def test_diag_extract_kwarg(self):
+        for k in range(-4, 4):
+            for d in self.matricies:
+                self.check_diag(self.py_kw, self.jit_kw, d, k=k)
+
+    # check error handling
+    def test_error_handling(self):
+        from numba.errors import TypingError
+        d = np.array([[[1.]]])
+        cfunc = nrtjit(self.py)
+
+        # missing arg
+        with self.assertRaises(TypeError):
+            cfunc()
+
+        # > 2d
+        with self.assertRaises(TypingError):
+            cfunc(d)
+        with self.assertRaises(TypingError):
+            dfunc = nrtjit(self.py_kw)
+            dfunc(d, k=3)
+
 class TestNdArange(BaseTest):
 
     def test_linspace_2(self):
@@ -917,6 +1012,408 @@ class TestNpyEmptyKeyword(TestCase):
         # That will cause a TypingError due to missing shape argument
         with self.assertRaises(TypingError):
             cfunc()
+
+
+class TestNpArray(MemoryLeakMixin, BaseTest):
+
+    def test_0d(self):
+        def pyfunc(arg):
+            return np.array(arg)
+
+        cfunc = nrtjit(pyfunc)
+        got = cfunc(42)
+        self.assertPreciseEqual(got, np.array(42, dtype=np.intp))
+        got = cfunc(2.5)
+        self.assertPreciseEqual(got, np.array(2.5))
+
+    def test_0d_with_dtype(self):
+        def pyfunc(arg):
+            return np.array(arg, dtype=np.int16)
+
+        self.check_outputs(pyfunc, [(42,), (3.5,)])
+
+    def test_1d(self):
+        def pyfunc(arg):
+            return np.array(arg)
+
+        cfunc = nrtjit(pyfunc)
+        # A list
+        got = cfunc([2, 3, 42])
+        self.assertPreciseEqual(got, np.intp([2, 3, 42]))
+        # A heterogenous tuple
+        got = cfunc((1.0, 2.5j, 42))
+        self.assertPreciseEqual(got, np.array([1.0, 2.5j, 42]))
+        # An empty tuple
+        got = cfunc(())
+        self.assertPreciseEqual(got, np.float64(()))
+
+    def test_1d_with_dtype(self):
+        def pyfunc(arg):
+            return np.array(arg, dtype=np.float32)
+
+        self.check_outputs(pyfunc,
+                           [([2, 42],),
+                            ([3.5, 1.0],),
+                            ((1, 3.5, 42),),
+                            ((),),
+                            ])
+
+    @tag('important')
+    def test_2d(self):
+        def pyfunc(arg):
+            return np.array(arg)
+
+        cfunc = nrtjit(pyfunc)
+        # A list of tuples
+        got = cfunc([(1, 2), (3, 4)])
+        self.assertPreciseEqual(got, np.intp([[1, 2], [3, 4]]))
+        got = cfunc([(1, 2.5), (3, 4.5)])
+        self.assertPreciseEqual(got, np.float64([[1, 2.5], [3, 4.5]]))
+        # A tuple of lists
+        got = cfunc(([1, 2], [3, 4]))
+        self.assertPreciseEqual(got, np.intp([[1, 2], [3, 4]]))
+        got = cfunc(([1, 2], [3.5, 4.5]))
+        self.assertPreciseEqual(got, np.float64([[1, 2], [3.5, 4.5]]))
+        # A tuple of tuples
+        got = cfunc(((1.5, 2), (3.5, 4.5)))
+        self.assertPreciseEqual(got, np.float64([[1.5, 2], [3.5, 4.5]]))
+        got = cfunc(((), ()))
+        self.assertPreciseEqual(got, np.float64(((), ())))
+
+    def test_2d_with_dtype(self):
+        def pyfunc(arg):
+            return np.array(arg, dtype=np.int32)
+
+        cfunc = nrtjit(pyfunc)
+        got = cfunc([(1, 2.5), (3, 4.5)])
+        self.assertPreciseEqual(got, np.int32([[1, 2], [3, 4]]))
+
+
+class TestNpConcatenate(MemoryLeakMixin, TestCase):
+    """
+    Tests for np.concatenate().
+    """
+
+    def _3d_arrays(self):
+        a = np.arange(24).reshape((4, 3, 2))
+        b = a + 10
+        c = (b + 10).copy(order='F')
+        d = (c + 10)[::-1]
+        e = (d + 10)[...,::-1]
+        return a, b, c, d, e
+
+    @contextlib.contextmanager
+    def assert_invalid_sizes_over_dim(self, axis):
+        with self.assertRaises(ValueError) as raises:
+            yield
+        self.assertIn("input sizes over dimension %d do not match" % axis,
+                      str(raises.exception))
+
+    @tag('important')
+    def test_3d(self):
+        pyfunc = np_concatenate2
+        cfunc = nrtjit(pyfunc)
+
+        def check(a, b, c, axis):
+            for ax in (axis, -3 + axis):
+                expected = pyfunc(a, b, c, axis=ax)
+                got = cfunc(a, b, c, axis=ax)
+                self.assertPreciseEqual(got, expected)
+
+        def check_all_axes(a, b, c):
+            for axis in range(3):
+                check(a, b, c, axis)
+
+        a, b, c, d, e = self._3d_arrays()
+
+        # Inputs with equal sizes
+        # C, C, C
+        check_all_axes(a, b, b)
+        # C, C, F
+        check_all_axes(a, b, c)
+        # F, F, F
+        check_all_axes(a.T, b.T, a.T)
+        # F, F, C
+        check_all_axes(a.T, b.T, c.T)
+        # F, F, A
+        check_all_axes(a.T, b.T, d.T)
+        # A, A, A
+        # (note Numpy may select the layout differently for other inputs)
+        check_all_axes(d.T, e.T, d.T)
+
+        # Inputs with compatible sizes
+        check(a[1:], b, c[::-1], axis=0)
+        check(a, b[:,1:], c, axis=1)
+        check(a, b, c[:,:,1:], axis=2)
+
+        # Different but compatible dtypes
+        check_all_axes(a, b.astype(np.float64), b)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        # Incompatible sizes
+        for axis in (1, 2, -2, -1):
+            with self.assert_invalid_sizes_over_dim(0):
+                cfunc(a[1:], b, b, axis)
+        for axis in (0, 2, -3, -1):
+            with self.assert_invalid_sizes_over_dim(1):
+                cfunc(a, b[:,1:], b, axis)
+
+    def test_3d_no_axis(self):
+        pyfunc = np_concatenate1
+        cfunc = nrtjit(pyfunc)
+
+        def check(a, b, c):
+            expected = pyfunc(a, b, c)
+            got = cfunc(a, b, c)
+            self.assertPreciseEqual(got, expected)
+
+        a, b, c, d, e = self._3d_arrays()
+
+        # Inputs with equal sizes
+        # C, C, C
+        check(a, b, b)
+        # C, C, F
+        check(a, b, c)
+        # F, F, F
+        check(a.T, b.T, a.T)
+        # F, F, C
+        check(a.T, b.T, c.T)
+        # F, F, A
+        check(a.T, b.T, d.T)
+        # A, A, A
+        # (note Numpy may select the layout differently for other inputs)
+        check(d.T, e.T, d.T)
+
+        # Inputs with compatible sizes
+        check(a[1:], b, c[::-1])
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        # Incompatible sizes
+        with self.assert_invalid_sizes_over_dim(1):
+            cfunc(a, b[:,1:], b)
+
+    def test_typing_errors(self):
+        pyfunc = np_concatenate1
+        cfunc = nrtjit(pyfunc)
+
+        a = np.arange(15)
+        b = a.reshape((3, 5))
+        c = a.astype(np.dtype([('x', np.int8)]))
+        d = np.array(42)
+
+        # Different dimensionalities
+        with self.assertTypingError() as raises:
+            cfunc(a, b, b)
+        self.assertIn("all the input arrays must have same number of dimensions",
+                      str(raises.exception))
+
+        # Incompatible dtypes
+        with self.assertTypingError() as raises:
+            cfunc(a, c, c)
+        self.assertIn("input arrays must have compatible dtypes",
+                      str(raises.exception))
+
+        # 0-d arrays
+        with self.assertTypingError() as raises:
+            cfunc(d, d, d)
+        self.assertIn("zero-dimensional arrays cannot be concatenated",
+                      str(raises.exception))
+
+
+@unittest.skipUnless(hasattr(np, "stack"), "this Numpy doesn't have np.stack()")
+class TestNpStack(MemoryLeakMixin, TestCase):
+    """
+    Tests for np.stack().
+    """
+
+    def _3d_arrays(self):
+        a = np.arange(24).reshape((4, 3, 2))
+        b = a + 10
+        c = (b + 10).copy(order='F')
+        d = (c + 10)[::-1]
+        e = (d + 10)[...,::-1]
+        return a, b, c, d, e
+
+    @contextlib.contextmanager
+    def assert_invalid_sizes(self):
+        with self.assertRaises(ValueError) as raises:
+            yield
+        self.assertIn("all input arrays must have the same shape",
+                      str(raises.exception))
+
+    def check_stack(self, pyfunc, cfunc, args):
+        expected = pyfunc(*args)
+        got = cfunc(*args)
+        # Numba doesn't choose the same layout as Numpy.
+        # We would like to check the result is contiguous, but we can't
+        # rely on the "flags" attribute when there are 1-sized
+        # dimensions.
+        self.assertEqual(got.shape, expected.shape)
+        self.assertPreciseEqual(got.flatten(), expected.flatten())
+
+    def check_3d(self, pyfunc, cfunc, generate_starargs):
+        def check(a, b, c, args):
+            self.check_stack(pyfunc, cfunc, (a, b, c) + args)
+
+        def check_all_axes(a, b, c):
+            for args in generate_starargs():
+                check(a, b, c, args)
+
+        a, b, c, d, e = self._3d_arrays()
+
+        # C, C, C
+        check_all_axes(a, b, b)
+        # C, C, F
+        check_all_axes(a, b, c)
+        # F, F, F
+        check_all_axes(a.T, b.T, a.T)
+        # F, F, C
+        check_all_axes(a.T, b.T, c.T)
+        # F, F, A
+        check_all_axes(a.T, b.T, d.T)
+        # A, A, A
+        check_all_axes(d.T, e.T, d.T)
+
+        # Different but compatible dtypes
+        check_all_axes(a, b.astype(np.float64), b)
+
+    def check_runtime_errors(self, cfunc, generate_starargs):
+        # Exceptions leak references
+        self.assert_no_memory_leak()
+        self.disable_leak_check()
+
+        # Inputs have different shapes
+        a, b, c, d, e = self._3d_arrays()
+        with self.assert_invalid_sizes():
+            args = next(generate_starargs())
+            cfunc(a[:-1], b, c, *args)
+
+    @tag('important')
+    def test_3d(self):
+        """
+        stack(3d arrays, axis)
+        """
+        pyfunc = np_stack2
+        cfunc = nrtjit(pyfunc)
+
+        def generate_starargs():
+            for axis in range(3):
+                yield (axis,)
+                yield (-3 + axis,)
+
+        self.check_3d(pyfunc, cfunc, generate_starargs)
+        self.check_runtime_errors(cfunc, generate_starargs)
+
+    def test_3d_no_axis(self):
+        """
+        stack(3d arrays)
+        """
+        pyfunc = np_stack1
+        cfunc = nrtjit(pyfunc)
+
+        def generate_starargs():
+            yield()
+
+        self.check_3d(pyfunc, cfunc, generate_starargs)
+        self.check_runtime_errors(cfunc, generate_starargs)
+
+    def test_0d(self):
+        """
+        stack(0d arrays)
+        """
+        pyfunc = np_stack1
+        cfunc = nrtjit(pyfunc)
+
+        a = np.array(42)
+        b = np.array(-5j)
+        c = np.array(True)
+
+        self.check_stack(pyfunc, cfunc, (a, b, c))
+
+    def check_xxstack(self, pyfunc, cfunc):
+        """
+        3d and 0d tests for hstack(), vstack(), dstack().
+        """
+        def generate_starargs():
+            yield()
+
+        self.check_3d(pyfunc, cfunc, generate_starargs)
+        # 0d
+        a = np.array(42)
+        b = np.array(-5j)
+        c = np.array(True)
+        self.check_stack(pyfunc, cfunc, (a, b, a))
+
+    @tag('important')
+    def test_hstack(self):
+        pyfunc = np_hstack
+        cfunc = nrtjit(pyfunc)
+
+        self.check_xxstack(pyfunc, cfunc)
+        # 1d
+        a = np.arange(5)
+        b = np.arange(6) + 10
+        self.check_stack(pyfunc, cfunc, (a, b, b))
+        # 2d
+        a = np.arange(6).reshape((2, 3))
+        b = np.arange(8).reshape((2, 4)) + 100
+        self.check_stack(pyfunc, cfunc, (a, b, a))
+
+    @tag('important')
+    def test_vstack(self):
+        pyfunc = np_vstack
+        cfunc = nrtjit(pyfunc)
+
+        self.check_xxstack(pyfunc, cfunc)
+        # 1d
+        a = np.arange(5)
+        b = a + 10
+        self.check_stack(pyfunc, cfunc, (a, b, b))
+        # 2d
+        a = np.arange(6).reshape((3, 2))
+        b = np.arange(8).reshape((4, 2)) + 100
+        self.check_stack(pyfunc, cfunc, (a, b, b))
+
+    @tag('important')
+    def test_dstack(self):
+        pyfunc = np_dstack
+        cfunc = nrtjit(pyfunc)
+
+        self.check_xxstack(pyfunc, cfunc)
+        # 1d
+        a = np.arange(5)
+        b = a + 10
+        self.check_stack(pyfunc, cfunc, (a, b, b))
+        # 2d
+        a = np.arange(12).reshape((3, 4))
+        b = a + 100
+        self.check_stack(pyfunc, cfunc, (a, b, b))
+
+    @tag('important')
+    def test_column_stack(self):
+        pyfunc = np_column_stack
+        cfunc = nrtjit(pyfunc)
+
+        a = np.arange(4)
+        b = a + 10
+        c = np.arange(12).reshape((4, 3))
+        self.check_stack(pyfunc, cfunc, (a, b, c))
+
+        # Exceptions leak references
+        self.assert_no_memory_leak()
+        self.disable_leak_check()
+
+        # Invalid dims
+        a = np.array(42)
+        with self.assertTypingError():
+            cfunc((a, a, a))
+        a = a.reshape((1, 1, 1))
+        with self.assertTypingError():
+            cfunc((a, a, a))
 
 
 def benchmark_refct_speed():

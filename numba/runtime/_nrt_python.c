@@ -12,18 +12,13 @@
 #include "../_arraystruct.h"
 #include "nrt.h"
 
-/* For Numpy 1.6 */
-#ifndef NPY_ARRAY_BEHAVED
-    #define NPY_ARRAY_BEHAVED NPY_BEHAVED
-#endif
-
 
 /*
  * Create a NRT MemInfo for data owned by a PyObject.
  */
 
 static void
-pyobject_dtor(void *ptr, void* info) {
+pyobject_dtor(void *ptr, size_t size, void* info) {
     PyGILState_STATE gstate;
     PyObject *ownerobj = info;
 
@@ -318,7 +313,8 @@ NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
         PyObject *obj = try_to_return_parent(arystruct, ndim, descr);
         if (obj) {
             /* Release NRT reference to the numpy array */
-            NRT_MemInfo_release(arystruct->meminfo);
+            if (arystruct->meminfo)
+                NRT_MemInfo_release(arystruct->meminfo);
             return obj;
         }
     }

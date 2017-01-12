@@ -4,7 +4,7 @@ import math
 import sys
 
 from numba import jit, utils
-from .support import TestCase
+from .support import TestCase, tag
 
 
 max_uint64 = 18446744073709551615
@@ -46,6 +46,7 @@ class IntWidthTest(TestCase):
         pyfunc = usecase_uint64_constant
         self.check_nullary_func(pyfunc, nopython=nopython)
 
+    @tag('important')
     def test_constant_uint64_npm(self):
         self.test_constant_uint64(nopython=True)
 
@@ -77,6 +78,7 @@ class IntWidthTest(TestCase):
         if utils.PYVERSION < (3, 0):
             self.assertEqual(f(long(0xffffffffffffffff)), 64)
 
+    @tag('important')
     def test_constant_int64(self, nopython=False):
         self.check_nullary_func(usecase_int64_pos, nopython=nopython)
         self.check_nullary_func(usecase_int64_neg, nopython=nopython)

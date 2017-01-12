@@ -24,16 +24,19 @@ public:
         int selected;
         matches = 0;
         if (0 == ovct) {
+            // No overloads registered
             return NULL;
         }
-        if (overloads.size() > 0) {
-            matches = tm->selectOverload(sig, &overloads[0], selected, argct,
-                                         ovct, allow_unsafe);
-        } else if (argct == 0){
+        if (argct == 0) {
+            // Nullary function: trivial match on first overload
             matches = 1;
             selected = 0;
         }
-        if (matches == 1){
+        else {
+            matches = tm->selectOverload(sig, &overloads[0], selected, argct,
+                                         ovct, allow_unsafe);
+        }
+        if (matches == 1) {
             return functions[selected];
         }
         return NULL;
@@ -49,8 +52,11 @@ public:
 private:
     const int argct;
     TypeManager *tm;
-    TypeTable overloads;
+    // An array of overloads
     Functions functions;
+    // A flattened array of argument types to all overloads
+    // (invariant: sizeof(overloads) == argct * sizeof(functions))
+    TypeTable overloads;
 };
 
 

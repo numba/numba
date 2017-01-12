@@ -72,12 +72,12 @@ class TestMatMul(unittest.TestCase):
                 sA[tx, ty] = A[x, ty + i * blocksize]
                 sB[tx, ty] = B[tx + i * blocksize, y]
                 # wait for preload to end
-                hsa.barrier(1)
+                hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
                 # compute loop
                 for j in range(blocksize):
                     tmp += sA[tx, j] * sB[j, ty]
                 # wait for compute to end
-                hsa.barrier(1)
+                hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
 
             C[x, y] = tmp
 

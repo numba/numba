@@ -1,6 +1,7 @@
 Just-in-Time compilation
 ========================
 
+
 JIT functions
 -------------
 
@@ -61,7 +62,10 @@ JIT functions
    If true, *cache* enables a file-based cache to shorten compilation times
    when the function was already compiled in a previous invocation.
    The cache is maintained in the ``__pycache__`` subdirectory of
-   the directory containing the source file.
+   the directory containing the source file; if the current user is not
+   allowed to write to it, though, it falls back to a platform-specific
+   user-wide cache directory (such as ``$HOME/.cache/numba`` on Unix
+   platforms).
 
    Not all functions can be cached, since some functionality cannot be
    always persisted to disk.  When a function cannot be cached, a
@@ -88,7 +92,7 @@ JIT functions
       @jit()
       def f(x): ...
 
-   The decorator returns a Dispatcher object.
+   The decorator returns a :class:`Dispatcher` object.
 
    .. note::
       If no *signature* is given, compilation errors will be raised when
@@ -99,11 +103,32 @@ JIT functions
       Compilation can be influenced by some dedicated :ref:`numba-envvars`.
 
 
+Generated JIT functions
+-----------------------
+
+.. decorator:: numba.generated_jit(nopython=False, nogil=False, cache=False, forceobj=False, locals={})
+
+   Like the :func:`~numba.jit` decorator, but calls the decorated function at
+   compile-time, passing the *types* of the function's arguments.
+   The decorated function must return a callable which will be compiled as
+   the function's implementation for those types, allowing flexible kinds of
+   specialization.
+
+   The :func:`~numba.generated_jit` decorator returns a :class:`Dispatcher` object.
+
+
+Dispatcher objects
+------------------
+
 .. class:: Dispatcher
 
-   The class of objects created by calling :func:`numba.jit`.  You shouldn't
-   try to create such an object in any other way.  Dispatcher objects have
-   the following methods and attributes:
+   The class of objects created by calling :func:`~numba.jit` or
+   :func:`~numba.generated_jit`.  You shouldn't try to create such an object
+   in any other way.  Calling a Dispatcher object calls the compiled
+   specialization for the arguments with which it is called, letting it
+   act as an accelerated replacement for the Python function which was compiled.
+
+   In addition, Dispatcher objects have the following methods and attributes:
 
    .. attribute:: py_func
 
@@ -120,17 +145,17 @@ JIT functions
 
    .. method:: inspect_llvm(signature=None)
 
-      Return a dictionary keying compiled function signatures to the human 
-      readable LLVM IR generated for the function.  If the signature 
-      keyword is specified a string corresponding to that individual 
-      signature is returned.  
+      Return a dictionary keying compiled function signatures to the human
+      readable LLVM IR generated for the function.  If the signature
+      keyword is specified a string corresponding to that individual
+      signature is returned.
 
    .. method:: inspect_asm(signature=None)
 
       Return a dictionary keying compiled function signatures to the
-      human-readable native assembler code for the function.  If the 
-      signature keyword is specified a string corresponding to that 
-      individual signature is returned.  
+      human-readable native assembler code for the function.  If the
+      signature keyword is specified a string corresponding to that
+      individual signature is returned.
 
    .. method:: recompile()
 
@@ -143,7 +168,7 @@ JIT functions
 Vectorized functions (ufuncs and DUFuncs)
 -----------------------------------------
 
-.. decorator:: numba.vectorize(*, signatures=[], identity=None, nopython=True, target='cpu', forceobj=False, locals={})
+.. decorator:: numba.vectorize(*, signatures=[], identity=None, nopython=True, target='cpu', forceobj=False, cache=False, locals={})
 
    Compile the decorated function and wrap it either as a `Numpy
    ufunc`_ or a Numba :class:`~numba.DUFunc`.  The optional
@@ -164,8 +189,7 @@ Vectorized functions (ufuncs and DUFuncs)
    ``"reorderable"``.  The default is None.  Both None and
    ``"reorderable"`` mean the function has no identity value;
    ``"reorderable"`` additionally specifies that reductions along multiple
-   axes can be reordered.  (Note that ``"reorderable"`` is only supported in
-   Numpy 1.7 or later.)
+   axes can be reordered.
 
    If there are several *signatures*, they must be ordered from the more
    specific to the least specific.  Otherwise, Numpy's type-based
@@ -193,8 +217,12 @@ Vectorized functions (ufuncs and DUFuncs)
       @vectorize(["float64(float64)", "float32(float32)"], target='cuda')
       def f(x): ...
 
+   The compiled function can be cached to reduce future compilation time.
+   It is enabled by setting *cache* to True. Only the "cpu" and "parallel"
+   targets support caching.
 
-.. decorator:: numba.guvectorize(signatures, layout, *, identity=None, nopython=True, target='cpu', forceobj=False, locals={})
+
+.. decorator:: numba.guvectorize(signatures, layout, *, identity=None, nopython=True, target='cpu', forceobj=False, cache=False, locals={})
 
    Generalized version of :func:`numba.vectorize`.  While
    :func:`numba.vectorize` will produce a simple ufunc whose core
@@ -233,6 +261,9 @@ Vectorized functions (ufuncs and DUFuncs)
       as supported by Numpy.  Note that Numpy uses the term "signature",
       which we unfortunately use for something else.
 
+   The compiled function can be cached to reduce future compilation time.
+   It is enabled by setting *cache* to True. Only the "cpu" and "parallel"
+   targets support caching.
 
 .. _Numpy ufunc: http://docs.scipy.org/doc/numpy/reference/ufuncs.html
 
@@ -325,6 +356,12 @@ Vectorized functions (ufuncs and DUFuncs)
       elements specified by *indices*.  If you are using Numpy 1.7 or
       earlier, this method will not be present.  See `ufunc.at`_.
 
+
+.. note::
+   Vectorized functions can, in rare circumstances, show
+   :ref:`unexpected warnings or errors <ufunc-fpu-errors>`.
+
+
 .. _`ufunc.nin`: http://docs.scipy.org/doc/numpy/reference/generated/numpy.ufunc.nin.html#numpy.ufunc.nin
 
 .. _`ufunc.nout`: http://docs.scipy.org/doc/numpy/reference/generated/numpy.ufunc.nout.html#numpy.ufunc.nout
@@ -346,3 +383,61 @@ Vectorized functions (ufuncs and DUFuncs)
 .. _`ufunc.outer`: http://docs.scipy.org/doc/numpy/reference/generated/numpy.ufunc.outer.html#numpy.ufunc.outer
 
 .. _`ufunc.at`: http://docs.scipy.org/doc/numpy/reference/generated/numpy.ufunc.at.html#numpy.ufunc.at
+
+
+C callbacks
+-----------
+
+.. decorator:: numba.cfunc(signature, nopython=False, cache=False, locals={})
+
+   Compile the decorated function on-the-fly to produce efficient machine
+   code.  The compiled code is wrapped in a thin C callback that makes it
+   callable using the natural C ABI.
+
+   The *signature* is a single signature representing the signature of the
+   C callback.  It must have the same form as in :func:`~numba.jit`.
+   The decorator does not check that the types in the signature have
+   a well-defined representation in C.
+
+   *nopython* and *cache* are boolean flags.  *locals* is a mapping of
+   local variable names to :ref:`numba-types`.  They all have the same
+   meaning as in :func:`~numba.jit`.
+
+   The decorator returns a :class:`CFunc` object.
+
+   .. note::
+      C callbacks currently do not support :term:`object mode`.
+
+
+.. class:: CFunc
+
+   The class of objects created by :func:`~numba.cfunc`.  :class:`CFunc`
+   objects expose the following attributes and methods:
+
+   .. attribute:: address
+
+      The address of the compiled C callback, as an integer.
+
+   .. attribute:: cffi
+
+      A `cffi`_ function pointer instance, to be passed as an argument to
+      `cffi`_-wrapped functions.  The pointer's type is ``void *``, so
+      only minimal type checking will happen when passing it to `cffi`_.
+
+   .. attribute:: ctypes
+
+      A :mod:`ctypes` callback instance, as if it were created using
+      :func:`ctypes.CFUNCTYPE`.
+
+   .. attribute:: native_name
+
+      The name of the compiled C callback.
+
+   .. method:: inspect_llvm()
+
+      Return the human-readable LLVM IR generated for the C callback.
+      :attr:`native_name` is the name under which this callback is defined
+      in the IR.
+
+
+.. _cffi: https://cffi.readthedocs.org/

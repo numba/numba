@@ -1,45 +1,43 @@
 from __future__ import print_function, absolute_import, division
+
 from functools import reduce
 import operator
+
 from llvmlite.llvmpy.core import Type
 import llvmlite.llvmpy.core as lc
-import llvmlite.llvmpy.ee as le
 import llvmlite.binding as ll
-from numba.targets.imputils import implement, Registry
+
+from numba.targets.imputils import Registry
 from numba import cgutils
 from numba import types
 from .cudadrv import nvvm
 from . import nvvmutils, stubs
 
 registry = Registry()
-register = registry.register
+lower = registry.lower
 
 
-@register
-@implement('ptx.grid.1d', types.intp)
+@lower('ptx.grid.1d', types.intp)
 def ptx_grid1d(context, builder, sig, args):
     assert len(args) == 1
     return nvvmutils.get_global_id(builder, dim=1)
 
 
-@register
-@implement('ptx.grid.2d', types.intp)
+@lower('ptx.grid.2d', types.intp)
 def ptx_grid2d(context, builder, sig, args):
     assert len(args) == 1
     r1, r2 = nvvmutils.get_global_id(builder, dim=2)
     return cgutils.pack_array(builder, [r1, r2])
 
 
-@register
-@implement('ptx.grid.3d', types.intp)
+@lower('ptx.grid.3d', types.intp)
 def ptx_grid3d(context, builder, sig, args):
     assert len(args) == 1
     r1, r2, r3 = nvvmutils.get_global_id(builder, dim=3)
     return cgutils.pack_array(builder, [r1, r2, r3])
 
 
-@register
-@implement('ptx.gridsize.1d', types.intp)
+@lower('ptx.gridsize.1d', types.intp)
 def ptx_gridsize1d(context, builder, sig, args):
     assert len(args) == 1
     ntidx = nvvmutils.call_sreg(builder, "ntid.x")
@@ -49,8 +47,7 @@ def ptx_gridsize1d(context, builder, sig, args):
     return res
 
 
-@register
-@implement('ptx.gridsize.2d', types.intp)
+@lower('ptx.gridsize.2d', types.intp)
 def ptx_gridsize2d(context, builder, sig, args):
     assert len(args) == 1
     ntidx = nvvmutils.call_sreg(builder, "ntid.x")
@@ -64,8 +61,7 @@ def ptx_gridsize2d(context, builder, sig, args):
     return cgutils.pack_array(builder, [r1, r2])
 
 
-@register
-@implement('ptx.gridsize.3d', types.intp)
+@lower('ptx.gridsize.3d', types.intp)
 def ptx_gridsize3d(context, builder, sig, args):
     assert len(args) == 1
     ntidx = nvvmutils.call_sreg(builder, "ntid.x")
@@ -95,13 +91,12 @@ def ptx_sreg_template(sreg):
 
 # Dynamic create all special register
 for sreg in nvvmutils.SREG_MAPPING.keys():
-    register(implement(sreg)(ptx_sreg_template(sreg)))
+    lower(sreg)(ptx_sreg_template(sreg))
 
 
 # -----------------------------------------------------------------------------
 
-@register
-@implement('ptx.cmem.arylike', types.Kind(types.Array))
+@lower('ptx.cmem.arylike', types.Array)
 def ptx_cmem_arylike(context, builder, sig, args):
     lmod = builder.module
     [arr] = args
@@ -169,8 +164,7 @@ def _get_unique_smem_id(name):
     return "{0}_{1}".format(name, _unique_smem_id)
 
 
-@register
-@implement('ptx.smem.alloc', types.intp, types.Any)
+@lower('ptx.smem.alloc', types.intp, types.Any)
 def ptx_smem_alloc_intp(context, builder, sig, args):
     length, dtype = args
     return _generic_array(context, builder, shape=(length,), dtype=dtype,
@@ -179,8 +173,7 @@ def ptx_smem_alloc_intp(context, builder, sig, args):
                           can_dynsized=True)
 
 
-@register
-@implement('ptx.smem.alloc', types.Kind(types.UniTuple), types.Any)
+@lower('ptx.smem.alloc', types.UniTuple, types.Any)
 def ptx_smem_alloc_array(context, builder, sig, args):
     shape, dtype = args
     return _generic_array(context, builder, shape=shape, dtype=dtype,
@@ -189,8 +182,7 @@ def ptx_smem_alloc_array(context, builder, sig, args):
                           can_dynsized=True)
 
 
-@register
-@implement('ptx.lmem.alloc', types.intp, types.Any)
+@lower('ptx.lmem.alloc', types.intp, types.Any)
 def ptx_lmem_alloc_intp(context, builder, sig, args):
     length, dtype = args
     return _generic_array(context, builder, shape=(length,), dtype=dtype,
@@ -199,8 +191,7 @@ def ptx_lmem_alloc_intp(context, builder, sig, args):
                           can_dynsized=False)
 
 
-@register
-@implement('ptx.lmem.alloc', types.Kind(types.UniTuple), types.Any)
+@lower('ptx.lmem.alloc', types.UniTuple, types.Any)
 def ptx_lmem_alloc_array(context, builder, sig, args):
     shape, dtype = args
     return _generic_array(context, builder, shape=shape, dtype=dtype,
@@ -209,8 +200,7 @@ def ptx_lmem_alloc_array(context, builder, sig, args):
                           can_dynsized=False)
 
 
-@register
-@implement(stubs.syncthreads)
+@lower(stubs.syncthreads)
 def ptx_syncthreads(context, builder, sig, args):
     assert not args
     fname = 'llvm.nvvm.barrier0'
@@ -221,8 +211,7 @@ def ptx_syncthreads(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-@register
-@implement(stubs.threadfence_block)
+@lower(stubs.threadfence_block)
 def ptx_threadfence_block(context, builder, sig, args):
     assert not args
     fname = 'llvm.nvvm.membar.cta'
@@ -233,8 +222,7 @@ def ptx_threadfence_block(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-@register
-@implement(stubs.threadfence_system)
+@lower(stubs.threadfence_system)
 def ptx_threadfence_system(context, builder, sig, args):
     assert not args
     fname = 'llvm.nvvm.membar.sys'
@@ -245,8 +233,7 @@ def ptx_threadfence_system(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-@register
-@implement(stubs.threadfence)
+@lower(stubs.threadfence)
 def ptx_threadfence_device(context, builder, sig, args):
     assert not args
     fname = 'llvm.nvvm.membar.gl'
@@ -257,8 +244,7 @@ def ptx_threadfence_device(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-@register
-@implement(stubs.atomic.add, types.Kind(types.Array), types.intp, types.Any)
+@lower(stubs.atomic.add, types.Array, types.intp, types.Any)
 def ptx_atomic_add_intp(context, builder, sig, args):
     aryty, indty, valty = sig.args
     ary, ind, val = args
@@ -282,11 +268,8 @@ def ptx_atomic_add_intp(context, builder, sig, args):
         return builder.atomic_rmw('add', ptr, val, 'monotonic')
 
 
-@register
-@implement(stubs.atomic.add, types.Kind(types.Array),
-           types.Kind(types.UniTuple), types.Any)
-@implement(stubs.atomic.add, types.Kind(types.Array),
-           types.Kind(types.Tuple), types.Any)
+@lower(stubs.atomic.add, types.Array, types.UniTuple, types.Any)
+@lower(stubs.atomic.add, types.Array, types.Tuple, types.Any)
 def ptx_atomic_add_tuple(context, builder, sig, args):
     aryty, indty, valty = sig.args
     ary, inds, val = args
@@ -316,8 +299,7 @@ def ptx_atomic_add_tuple(context, builder, sig, args):
         return builder.atomic_rmw('add', ptr, val, 'monotonic')
 
 
-@register
-@implement(stubs.atomic.max, types.Kind(types.Array), types.intp, types.Any)
+@lower(stubs.atomic.max, types.Array, types.intp, types.Any)
 def ptx_atomic_max_intp(context, builder, sig, args):
     aryty, indty, valty = sig.args
     ary, ind, val = args
@@ -338,11 +320,8 @@ def ptx_atomic_max_intp(context, builder, sig, args):
         raise TypeError('Unimplemented atomic max with %s array' % dtype)
 
 
-@register
-@implement(stubs.atomic.max, types.Kind(types.Array),
-           types.Kind(types.Tuple), types.Any)
-@implement(stubs.atomic.max, types.Kind(types.Array),
-           types.Kind(types.UniTuple), types.Any)
+@lower(stubs.atomic.max, types.Array, types.Tuple, types.Any)
+@lower(stubs.atomic.max, types.Array, types.UniTuple, types.Any)
 def ptx_atomic_max_tuple(context, builder, sig, args):
     aryty, indty, valty = sig.args
     ary, inds, val = args

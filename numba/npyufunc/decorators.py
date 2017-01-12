@@ -2,10 +2,9 @@ from __future__ import print_function, division, absolute_import
 import inspect
 
 from . import _internal, dufunc
-from .ufuncbuilder import UFuncBuilder, GUFuncBuilder
-from .parallel import ParallelUFuncBuilder
+from .ufuncbuilder import GUFuncBuilder
+from .parallel import ParallelUFuncBuilder, ParallelGUFuncBuilder
 
-from numba.cuda.vectorizers import CUDAVectorize, CUDAGUFuncVectorize 
 from numba.targets.registry import TargetRegistry
 
 
@@ -14,6 +13,10 @@ class _BaseVectorize(object):
     @classmethod
     def get_identity(cls, kwargs):
         return kwargs.pop('identity', None)
+
+    @classmethod
+    def get_cache(cls, kwargs):
+        return kwargs.pop('cache', False)
 
     @classmethod
     def get_target_implementation(cls, kwargs):
@@ -25,22 +28,26 @@ class _BaseVectorize(object):
 
 
 class Vectorize(_BaseVectorize):
-    target_registry = TargetRegistry({'cpu': UFuncBuilder,
-                                      'parallel': ParallelUFuncBuilder})
+    target_registry = TargetRegistry({'cpu': dufunc.DUFunc,
+                                      'parallel': ParallelUFuncBuilder,})
 
     def __new__(cls, func, **kws):
         identity = cls.get_identity(kws)
+        cache = cls.get_cache(kws)
         imp = cls.get_target_implementation(kws)
-        return imp(func, identity, kws)
+        return imp(func, identity=identity, cache=cache, targetoptions=kws)
 
 
 class GUVectorize(_BaseVectorize):
-    target_registry = TargetRegistry({'cpu': GUFuncBuilder})
+    target_registry = TargetRegistry({'cpu': GUFuncBuilder,
+                                      'parallel': ParallelGUFuncBuilder,})
 
     def __new__(cls, func, signature, **kws):
         identity = cls.get_identity(kws)
+        cache = cls.get_cache(kws)
         imp = cls.get_target_implementation(kws)
-        return imp(func, signature, identity, kws)
+        return imp(func, signature, identity=identity, cache=cache,
+                   targetoptions=kws)
 
 
 def vectorize(ftylist_or_function=(), **kws):
@@ -74,6 +81,10 @@ def vectorize(ftylist_or_function=(), **kws):
         being implemented.  Allowed values are None (the default), 0, 1,
         and "reorderable".
 
+    cache: bool
+        Turns on caching.
+
+
     Returns
     --------
 
@@ -104,12 +115,12 @@ def vectorize(ftylist_or_function=(), **kws):
         ftylist = ftylist_or_function
 
     def wrap(func):
+        vec = Vectorize(func, **kws)
+        for sig in ftylist:
+            vec.add(sig)
         if len(ftylist) > 0:
-            vec = Vectorize(func, **kws)
-            for fty in ftylist:
-                vec.add(fty)
-            return vec.build_ufunc()
-        return dufunc.DUFunc(func, **kws)
+            vec.disable_compile()
+        return vec.build_ufunc()
 
     return wrap
 
@@ -135,6 +146,9 @@ def guvectorize(ftylist, signature, **kws):
         The identity (or unit) value for the element-wise function
         being implemented.  Allowed values are None (the default), 0, 1,
         and "reorderable".
+
+    cache: bool
+        Turns on caching.
 
     target: str
             A string for code generation target.  Defaults to "cpu".
@@ -166,5 +180,3 @@ def guvectorize(ftylist, signature, **kws):
         return guvec.build_ufunc()
 
     return wrap
-
-

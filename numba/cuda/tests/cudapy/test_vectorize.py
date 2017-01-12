@@ -1,8 +1,9 @@
 from __future__ import print_function, absolute_import
+
 import numpy as np
+
 from numba import vectorize
 from numba import cuda, int32, float32, float64
-from timeit import default_timer as time
 from numba import unittest_support as unittest
 from numba.cuda.testing import skip_on_cudasim
 from numba.cuda.testing import CUDATestCase
@@ -23,6 +24,7 @@ test_dtypes = np.float32, np.int32
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
 class TestCUDAVectorize(CUDATestCase):
+    N = 1000001
 
     def test_scalar(self):
 
@@ -48,25 +50,10 @@ class TestCUDAVectorize(CUDATestCase):
 
         # test it out
         def test(ty):
-            print("Test %s" % ty)
-            data = np.array(np.random.random(1e+6 + 1), dtype=ty)
+            data = np.array(np.random.random(self.N), dtype=ty)
 
-            ts = time()
             result = cuda_ufunc(data, data)
-            tnumba = time() - ts
-
-            ts = time()
             gold = np_ufunc(data, data)
-            tnumpy = time() - ts
-
-            print("Numpy time: %fs" % tnumpy)
-            print("Numba time: %fs" % tnumba)
-
-            if tnumba < tnumpy:
-                print("Numba is FASTER by %fx" % (tnumpy / tnumba))
-            else:
-                print("Numba is SLOWER by %fx" % (tnumba / tnumpy))
-
             self.assertTrue(np.allclose(gold, result), (gold, result))
 
         test(np.double)
@@ -86,28 +73,15 @@ class TestCUDAVectorize(CUDATestCase):
 
         # test it out
         def test(ty):
-            print("Test %s" % ty)
-            data = np.array(np.random.random(1e+6 + 1), dtype=ty)
+            data = np.array(np.random.random(self.N), dtype=ty)
 
-            ts = time()
             stream = cuda.stream()
             device_data = cuda.to_device(data, stream)
             dresult = cuda_ufunc(device_data, device_data, stream=stream)
             result = dresult.copy_to_host()
             stream.synchronize()
-            tnumba = time() - ts
 
-            ts = time()
             gold = np_ufunc(data, data)
-            tnumpy = time() - ts
-
-            print("Numpy time: %fs" % tnumpy)
-            print("Numba time: %fs" % tnumba)
-
-            if tnumba < tnumpy:
-                print("Numba is FASTER by %fx" % (tnumpy / tnumba))
-            else:
-                print("Numba is SLOWER by %fx" % (tnumba / tnumpy))
 
             self.assertTrue(np.allclose(gold, result), (gold, result))
 

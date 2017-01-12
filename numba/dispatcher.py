@@ -2,30 +2,140 @@
 
 from __future__ import print_function, division, absolute_import
 
-import contextlib
+import collections
 import functools
-import errno
-import hashlib
-import itertools
-import inspect
 import os
-from .six.moves import cPickle as pickle
 import struct
 import sys
-import warnings
+import uuid
+import weakref
+import threading
 
 import numba
-from numba import _dispatcher, compiler, utils, types
+from numba import _dispatcher, compiler, utils, types, config, errors
 from numba.typeconv.rules import default_type_manager
-from numba import sigutils, serialize, types, typing
+from numba import sigutils, serialize, typing
 from numba.typing.templates import fold_arguments
-from numba.typing.typeof import typeof
+from numba.typing.typeof import Purpose, typeof, typeof_impl
 from numba.bytecode import get_code_object
 from numba.six import create_bound_method, next
-from .config import NumbaWarning
+from .caching import NullCache, FunctionCache
 
 
-class _OverloadedBase(_dispatcher.Dispatcher):
+class OmittedArg(object):
+    """
+    A placeholder for omitted arguments with a default value.
+    """
+
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self):
+        return "omitted arg(%r)" % (self.value,)
+
+    @property
+    def _numba_type_(self):
+        return types.Omitted(self.value)
+
+
+class _FunctionCompiler(object):
+
+    def __init__(self, py_func, targetdescr, targetoptions, locals):
+        self.py_func = py_func
+        self.targetdescr = targetdescr
+        self.targetoptions = targetoptions
+        self.locals = locals
+        self.pysig = utils.pysignature(self.py_func)
+
+    def fold_argument_types(self, args, kws):
+        """
+        Given positional and named argument types, fold keyword arguments
+        and resolve defaults by inserting types.Omitted() instances.
+
+        A (pysig, argument types) tuple is returned.
+        """
+        def normal_handler(index, param, value):
+            return value
+        def default_handler(index, param, default):
+            return types.Omitted(default)
+        def stararg_handler(index, param, values):
+            return types.Tuple(values)
+        # For now, we take argument values from the @jit function, even
+        # in the case of generated jit.
+        args = fold_arguments(self.pysig, args, kws,
+                              normal_handler,
+                              default_handler,
+                              stararg_handler)
+        return self.pysig, args
+
+    def compile(self, args, return_type):
+        flags = compiler.Flags()
+        self.targetdescr.options.parse_as_flags(flags, self.targetoptions)
+        flags = self._customize_flags(flags)
+
+        impl = self._get_implementation(args, {})
+        cres = compiler.compile_extra(self.targetdescr.typing_context,
+                                      self.targetdescr.target_context,
+                                      impl,
+                                      args=args, return_type=return_type,
+                                      flags=flags, locals=self.locals)
+        # Check typing error if object mode is used
+        if cres.typing_error is not None and not flags.enable_pyobject:
+            raise cres.typing_error
+        return cres
+
+    def get_globals_for_reduction(self):
+        return serialize._get_function_globals_for_reduction(self.py_func)
+
+    def _get_implementation(self, args, kws):
+        return self.py_func
+
+    def _customize_flags(self, flags):
+        return flags
+
+
+class _GeneratedFunctionCompiler(_FunctionCompiler):
+
+    def __init__(self, py_func, targetdescr, targetoptions, locals):
+        super(_GeneratedFunctionCompiler, self).__init__(
+            py_func, targetdescr, targetoptions, locals)
+        self.impls = set()
+
+    def get_globals_for_reduction(self):
+        # This will recursively get the globals used by any nested
+        # implementation function.
+        return serialize._get_function_globals_for_reduction(self.py_func)
+
+    def _get_implementation(self, args, kws):
+        impl = self.py_func(*args, **kws)
+        # Check the generating function and implementation signatures are
+        # compatible, otherwise compiling would fail later.
+        pysig = utils.pysignature(self.py_func)
+        implsig = utils.pysignature(impl)
+        ok = len(pysig.parameters) == len(implsig.parameters)
+        if ok:
+            for pyparam, implparam in zip(pysig.parameters.values(),
+                                          implsig.parameters.values()):
+                # We allow the implementation to omit default values, but
+                # if it mentions them, they should have the same value...
+                if (pyparam.name != implparam.name or
+                    pyparam.kind != implparam.kind or
+                    (implparam.default is not implparam.empty and
+                     implparam.default != pyparam.default)):
+                    ok = False
+        if not ok:
+            raise TypeError("generated implementation %s should be compatible "
+                            "with signature '%s', but has signature '%s'"
+                            % (impl, pysig, implsig))
+        self.impls.add(impl)
+        return impl
+
+
+_CompileStats = collections.namedtuple(
+    '_CompileStats', ('cache_path', 'cache_hits', 'cache_misses'))
+
+
+class _DispatcherBase(_dispatcher.Dispatcher):
     """
     Common base class for dispatcher Implementations.
     """
@@ -35,10 +145,8 @@ class _OverloadedBase(_dispatcher.Dispatcher):
     def __init__(self, arg_count, py_func, pysig):
         self._tm = default_type_manager
 
-        # A mapping of signatures to entry points
-        self.overloads = utils.OrderedDict()
         # A mapping of signatures to compile results
-        self._compileinfos = utils.OrderedDict()
+        self.overloads = collections.OrderedDict()
 
         self.py_func = py_func
         # other parts of Numba assume the old Python 2 name for code object
@@ -46,11 +154,11 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         # but newer python uses a different name
         self.__code__ = self.func_code
 
-        self._pysig = pysig
-        argnames = tuple(self._pysig.parameters)
-        defargs = self.py_func.__defaults__ or ()
+        argnames = tuple(pysig.parameters)
+        default_values = self.py_func.__defaults__ or ()
+        defargs = tuple(OmittedArg(val) for val in default_values)
         try:
-            lastarg = list(self._pysig.parameters.values())[-1]
+            lastarg = list(pysig.parameters.values())[-1]
         except IndexError:
             has_stararg = False
         else:
@@ -61,14 +169,13 @@ class _OverloadedBase(_dispatcher.Dispatcher):
                                         has_stararg)
 
         self.doc = py_func.__doc__
-        self._compile_lock = utils.NonReentrantLock()
+        self._compile_lock = threading.RLock()
 
         utils.finalize(self, self._make_finalizer())
 
     def _reset_overloads(self):
         self._clear()
         self.overloads.clear()
-        self._compileinfos.clear()
 
     def _make_finalizer(self):
         """
@@ -87,9 +194,9 @@ class _OverloadedBase(_dispatcher.Dispatcher):
                 return
             # This function must *not* hold any reference to self:
             # we take care to bind the necessary objects in the closure.
-            for func in overloads.values():
+            for cres in overloads.values():
                 try:
-                    targetctx.remove_user_function(func)
+                    targetctx.remove_user_function(cres.entry_point)
                 except KeyError:
                     pass
 
@@ -104,42 +211,40 @@ class _OverloadedBase(_dispatcher.Dispatcher):
 
     @property
     def nopython_signatures(self):
-        return [cres.signature for cres in self._compileinfos.values()
+        return [cres.signature for cres in self.overloads.values()
                 if not cres.objectmode and not cres.interpmode]
 
     def disable_compile(self, val=True):
         """Disable the compilation of new signatures at call time.
         """
         # If disabling compilation then there must be at least one signature
-        assert val or len(self.signatures) > 0
+        assert (not val) or len(self.signatures) > 0
         self._can_compile = not val
 
     def add_overload(self, cres):
         args = tuple(cres.signature.args)
         sig = [a._code for a in args]
         self._insert(sig, cres.entry_point, cres.objectmode, cres.interpmode)
-        self.overloads[args] = cres.entry_point
-        self._compileinfos[args] = cres
+        self.overloads[args] = cres
+
+    def fold_argument_types(self, args, kws):
+        return self._compiler.fold_argument_types(args, kws)
 
     def get_call_template(self, args, kws):
         """
         Get a typing.ConcreteTemplate for this dispatcher and the given
         *args* and *kws* types.  This allows to resolve the return type.
+
+        A (template, pysig, args, kws) tuple is returned.
         """
+        # XXX how about a dispatcher template class automating the
+        # following?
+
         # Fold keyword arguments and resolve default values
-        def normal_handler(index, param, value):
-            return value
-        def default_handler(index, param, default):
-            return self.typeof_pyval(default)
-        def stararg_handler(index, param, values):
-            return types.Tuple(values)
-        args = fold_arguments(self._pysig, args, kws,
-                              normal_handler,
-                              default_handler,
-                              stararg_handler)
+        pysig, args = self._compiler.fold_argument_types(args, kws)
         kws = {}
-        # Ensure an overload is available, but avoid compiler re-entrance
-        if self._can_compile and not self.is_compiling:
+        # Ensure an overload is available
+        if self._can_compile:
             self.compile(tuple(args))
 
         # Create function type for typing
@@ -149,18 +254,21 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         # so avoid keeping a reference to `cfunc`.
         call_template = typing.make_concrete_template(
             name, key=func_name, signatures=self.nopython_signatures)
-        return call_template, args, kws
+        return call_template, pysig, args, kws
 
     def get_overload(self, sig):
+        """
+        Return the compiled function for the given signature.
+        """
         args, return_type = sigutils.normalize_signature(sig)
-        return self.overloads[tuple(args)]
+        return self.overloads[tuple(args)].entry_point
 
     @property
     def is_compiling(self):
         """
         Whether a specialization is currently being compiled.
         """
-        return self._compile_lock.is_owned()
+        return self._compile_lock._is_owned()
 
     def _compile_for_args(self, *args, **kws):
         """
@@ -168,19 +276,48 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         for the given *args* and *kws*, and return the resulting callable.
         """
         assert not kws
-        sig = tuple([self.typeof_pyval(a) for a in args])
-        return self.compile(sig)
+        argtypes = []
+        for a in args:
+            if isinstance(a, OmittedArg):
+                argtypes.append(types.Omitted(a.value))
+            else:
+                argtypes.append(self.typeof_pyval(a))
+        try:
+            return self.compile(tuple(argtypes))
+        except errors.TypingError as e:
+            # Intercept typing error that may be due to an argument
+            # that failed inferencing as a Numba type
+            failed_args = []
+            for i, arg in enumerate(args):
+                val = arg.value if isinstance(arg, OmittedArg) else arg
+                try:
+                    tp = typeof(val, Purpose.argument)
+                except ValueError as typeof_exc:
+                    failed_args.append((i, str(typeof_exc)))
+                else:
+                    if tp is None:
+                        failed_args.append(
+                            (i,
+                             "cannot determine Numba type of value %r" % (val,)))
+            if failed_args:
+                # Patch error message to ease debugging
+                msg = str(e).rstrip() + (
+                    "\n\nThis error may have been caused by the following argument(s):\n%s\n"
+                    % "\n".join("- argument %d: %s" % (i, err)
+                                for i, err in failed_args))
+                e.patch_message(msg)
+            raise e
 
     def inspect_llvm(self, signature=None):
         if signature is not None:
-            lib = self._compileinfos[signature].library
+            lib = self.overloads[signature].library
             return lib.get_llvm_str()
 
         return dict((sig, self.inspect_llvm(sig)) for sig in self.signatures)
 
     def inspect_asm(self, signature=None):
         if signature is not None:
-            lib = self._compileinfos[signature].library
+            lib = self.overloads[signature].library
             return lib.get_asm_str()
 
         return dict((sig, self.inspect_asm(sig)) for sig in self.signatures)
@@ -189,7 +326,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         if file is None:
             file = sys.stdout
 
-        for ver, res in utils.iteritems(self._compileinfos):
+        for ver, res in utils.iteritems(self.overloads):
             print("%s %s" % (self.py_func.__name__, ver), file=file)
             print('-' * 80, file=file)
             print(res.type_annotation, file=file)
@@ -244,14 +381,18 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         cannot decide the type.
         """
         # Not going through the resolve_argument_type() indirection
-        # can shape a couple µs.
-        tp = typeof(val)
-        if tp is None:
+        # can save a couple µs.
+        try:
+            tp = typeof(val, Purpose.argument)
+        except ValueError:
             tp = types.pyobject
+        else:
+            if tp is None:
+                tp = types.pyobject
         return tp
 
 
-class Overloaded(_OverloadedBase):
+class Dispatcher(_DispatcherBase):
     """
     Implementation of user-facing dispatcher objects (i.e. created using
     the @jit decorator).
@@ -259,8 +400,15 @@ class Overloaded(_OverloadedBase):
     class attribute.
     """
     _fold_args = True
+    _impl_kinds = {
+        'direct': _FunctionCompiler,
+        'generated': _GeneratedFunctionCompiler,
+        }
+    # A {uuid -> instance} mapping, for deserialization
+    _memo = weakref.WeakValueDictionary()
+    __uuid = None
 
-    def __init__(self, py_func, locals={}, targetoptions={}):
+    def __init__(self, py_func, locals={}, targetoptions={}, impl_kind='direct'):
         """
         Parameters
         ----------
@@ -277,15 +425,22 @@ class Overloaded(_OverloadedBase):
         pysig = utils.pysignature(py_func)
         arg_count = len(pysig.parameters)
 
-        _OverloadedBase.__init__(self, arg_count, py_func, pysig)
+        _DispatcherBase.__init__(self, arg_count, py_func, pysig)
 
         functools.update_wrapper(self, py_func)
 
         self.targetoptions = targetoptions
         self.locals = locals
         self._cache = NullCache()
+        compiler_class = self._impl_kinds[impl_kind]
+        self._impl_kind = impl_kind
+        self._compiler = compiler_class(py_func, self.targetdescr,
+                                        targetoptions, locals)
+        self._cache_hits = collections.Counter()
+        self._cache_misses = collections.Counter()
 
-        self.typingctx.insert_overloaded(self)
+        self._type = types.Dispatcher(self)
+        self.typingctx.insert_global(self, self._type)
 
     def enable_caching(self):
         self._cache = FunctionCache(self.py_func)
@@ -306,34 +461,66 @@ class Overloaded(_OverloadedBase):
         if self._can_compile:
             sigs = []
         else:
-            sigs = [cr.signature for cr in self._compileinfos.values()]
+            sigs = [cr.signature for cr in self.overloads.values()]
+        globs = self._compiler.get_globals_for_reduction()
         return (serialize._rebuild_reduction,
-                (self.__class__, serialize._reduce_function(self.py_func),
-                 self.locals, self.targetoptions, self._can_compile, sigs))
+                (self.__class__, str(self._uuid),
+                 serialize._reduce_function(self.py_func, globs),
+                 self.locals, self.targetoptions, self._impl_kind,
+                 self._can_compile, sigs))
 
     @classmethod
-    def _rebuild(cls, func_reduced, locals, targetoptions, can_compile, sigs):
+    def _rebuild(cls, uuid, func_reduced, locals, targetoptions, impl_kind,
+                 can_compile, sigs):
         """
-        Rebuild an Overloaded instance after it was __reduce__'d.
+        Rebuild an Dispatcher instance after it was __reduce__'d.
         """
+        try:
+            return cls._memo[uuid]
+        except KeyError:
+            pass
         py_func = serialize._rebuild_function(*func_reduced)
-        self = cls(py_func, locals, targetoptions)
+        self = cls(py_func, locals, targetoptions, impl_kind)
+        # Make sure this deserialization will be merged with subsequent ones
+        self._set_uuid(uuid)
         for sig in sigs:
             self.compile(sig)
         self._can_compile = can_compile
         return self
 
+    @property
+    def _uuid(self):
+        """
+        An instance-specific UUID, to avoid multiple deserializations of
+        a given instance.
+
+        Note this is lazily-generated, for performance reasons.
+        """
+        u = self.__uuid
+        if u is None:
+            u = str(uuid.uuid1())
+            self._set_uuid(u)
+        return u
+
+    def _set_uuid(self, u):
+        assert self.__uuid is None
+        self.__uuid = u
+        self._memo[u] = self
+
     def compile(self, sig):
+        if not self._can_compile:
+            raise RuntimeError("compilation disabled")
         with self._compile_lock:
             args, return_type = sigutils.normalize_signature(sig)
             # Don't recompile if signature already exists
             existing = self.overloads.get(tuple(args))
             if existing is not None:
-                return existing
+                return existing.entry_point
 
             # Try to load from disk cache
             cres = self._cache.load_overload(sig, self.targetctx)
             if cres is not None:
+                self._cache_hits[sig] += 1
                 # XXX fold this in add_overload()? (also see compiler.py)
                 if not cres.objectmode and not cres.interpmode:
                     self.targetctx.insert_user_function(cres.entry_point,
@@ -341,18 +528,8 @@ class Overloaded(_OverloadedBase):
                 self.add_overload(cres)
                 return cres.entry_point
 
-            flags = compiler.Flags()
-            self.targetdescr.options.parse_as_flags(flags, self.targetoptions)
-
-            cres = compiler.compile_extra(self.typingctx, self.targetctx,
-                                          self.py_func,
-                                          args=args, return_type=return_type,
-                                          flags=flags, locals=self.locals)
-
-            # Check typing error if object mode is used
-            if cres.typing_error is not None and not flags.enable_pyobject:
-                raise cres.typing_error
-
+            self._cache_misses[sig] += 1
+            cres = self._compiler.compile(args, return_type)
             self.add_overload(cres)
             self._cache.save_overload(sig, cres)
             return cres.entry_point
@@ -361,9 +538,6 @@ class Overloaded(_OverloadedBase):
         """
         Recompile all signatures afresh.
         """
-        # A subtle point: self.overloads has argument type tuples, while
-        # while self._compileinfos has full signatures including return
-        # types.  This has an effect on cache lookups...
         sigs = list(self.overloads)
         old_can_compile = self._can_compile
         # Ensure the old overloads are disposed of, including compiled functions.
@@ -377,34 +551,43 @@ class Overloaded(_OverloadedBase):
         finally:
             self._can_compile = old_can_compile
 
+    @property
+    def stats(self):
+        return _CompileStats(
+            cache_path=self._cache.cache_path,
+            cache_hits=self._cache_hits,
+            cache_misses=self._cache_misses,
+            )
 
-class LiftedLoop(_OverloadedBase):
+
+class LiftedLoop(_DispatcherBase):
     """
     Implementation of the hidden dispatcher objects used for lifted loop
     (a lifted loop is really compiled as a separate function).
     """
     _fold_args = False
 
-    def __init__(self, bytecode, typingctx, targetctx, locals, flags):
+    def __init__(self, func_ir, typingctx, targetctx, flags, locals):
+        self.func_ir = func_ir
+        self.lifted_from = None
+
         self.typingctx = typingctx
         self.targetctx = targetctx
-
-        _OverloadedBase.__init__(self, bytecode.arg_count, bytecode.func,
-                                 bytecode.pysig)
-
-        self.locals = locals
         self.flags = flags
-        self.bytecode = bytecode
-        self.lifted_from = None
+        self.locals = locals
+
+        _DispatcherBase.__init__(self, self.func_ir.arg_count,
+                                 self.func_ir.func_id.func,
+                                 self.func_ir.func_id.pysig)
 
     def get_source_location(self):
         """Return the starting line number of the loop.
         """
-        return next(iter(self.bytecode)).lineno
+        return self.func_ir.loc.line
 
     def compile(self, sig):
         with self._compile_lock:
-            # FIXME this is mostly duplicated from Overloaded
+            # XXX this is mostly duplicated from Dispatcher.
             flags = self.flags
             args, return_type = sigutils.normalize_signature(sig)
 
@@ -415,14 +598,13 @@ class LiftedLoop(_OverloadedBase):
                 return existing.entry_point
 
             assert not flags.enable_looplift, "Enable looplift flags is on"
-            cres = compiler.compile_bytecode(typingctx=self.typingctx,
-                                             targetctx=self.targetctx,
-                                             bc=self.bytecode,
-                                             args=args,
-                                             return_type=return_type,
-                                             flags=flags,
-                                             locals=self.locals,
-                                             lifted=(), lifted_from=self.lifted_from)
+            cres = compiler.compile_ir(typingctx=self.typingctx,
+                                       targetctx=self.targetctx,
+                                       func_ir=self.func_ir,
+                                       args=args, return_type=return_type,
+                                       flags=flags, locals=self.locals,
+                                       lifted=(),
+                                       lifted_from=self.lifted_from)
 
             # Check typing error if object mode is used
             if cres.typing_error is not None and not flags.enable_pyobject:
@@ -433,339 +615,6 @@ class LiftedLoop(_OverloadedBase):
 
 
 # Initialize typeof machinery
-_dispatcher.typeof_init(dict((str(t), t._code) for t in types.number_domain))
-
-
-class NullCache(object):
-
-    def load_overload(self, sig, target_context):
-        pass
-
-    def save_overload(self, sig, cres):
-        pass
-
-    def enable(self):
-        pass
-
-    def disable(self):
-        pass
-
-    def flush(self):
-        pass
-
-
-class _CacheLocator(object):
-
-    def get_cache_path(self):
-        raise NotImplementedError
-
-    def get_source_stamp(self):
-        raise NotImplementedError
-
-    def get_disambiguator(self):
-        raise NotImplementedError
-
-    @classmethod
-    def from_function(cls, py_func, py_file):
-        raise NotImplementedError
-
-
-class _SourceCacheLocator(_CacheLocator):
-    """
-    A locator for functions backed by a regular Python module.
-    """
-
-    def __init__(self, py_func, py_file):
-        self._py_file = py_file
-        self._lineno = py_func.__code__.co_firstlineno
-
-    def get_cache_path(self):
-        # NOTE: this assumes the __pycache__ directory is writable, which
-        # is false for system installs, but true for conda environments
-        # and local work directories.
-        return os.path.join(os.path.dirname(self._py_file), '__pycache__')
-
-    def get_source_stamp(self):
-        st = os.stat(self._py_file)
-        # We use both timestamp and size as some filesystems only have second
-        # granularity.
-        return st.st_mtime, st.st_size
-
-    def get_disambiguator(self):
-        return str(self._lineno)
-
-    @classmethod
-    def from_function(cls, py_func, py_file):
-        if not os.path.exists(py_file):
-            # Perhaps a placeholder (e.g. "<ipython-XXX>")
-            return
-        return cls(py_func, py_file)
-
-
-class _IPythonCacheLocator(_CacheLocator):
-    """
-    A locator for functions entered at the IPython prompt (notebook or other).
-    """
-
-    def __init__(self, py_func, py_file):
-        self._py_file = py_file
-        # Note IPython enhances the linecache module to be able to
-        # inspect source code of functions defined on the interactive prompt.
-        source = inspect.getsource(py_func)
-        if isinstance(source, bytes):
-            self._bytes_source = source
-        else:
-            self._bytes_source = source.encode('utf-8')
-
-    def get_cache_path(self):
-        # We could also use jupyter_core.paths.jupyter_runtime_dir()
-        # In both cases this is a user-wide directory, so we need to
-        # be careful when disambiguating if we don't want too many
-        # conflicts (see below).
-        try:
-            from IPython.paths import get_ipython_cache_dir
-        except ImportError:
-            # older IPython version
-            from IPython.utils.path import get_ipython_cache_dir
-        return os.path.join(get_ipython_cache_dir(), 'numba')
-
-    def get_source_stamp(self):
-        return hashlib.sha256(self._bytes_source).hexdigest()
-
-    def get_disambiguator(self):
-        # Heuristic: we don't want too many variants being saved, but
-        # we don't want similar named functions (e.g. "f") to compete
-        # for the cache, so we hash the first two lines of the function
-        # source (usually this will be the @jit decorator + the function
-        # signature).
-        firstlines = b''.join(self._bytes_source.splitlines(True)[:2])
-        return hashlib.sha256(firstlines).hexdigest()[:10]
-
-    @classmethod
-    def from_function(cls, py_func, py_file):
-        if not py_file.startswith("<ipython-"):
-            return
-        return cls(py_func, py_file)
-
-
-class FunctionCache(object):
-    """
-    A per-function compilation cache.  The cache saves data in separate
-    data files and maintains information in an index file.
-
-    There is one index file per function and Python version
-    ("function_name-<lineno>.pyXY.nbi") which contains a mapping of
-    signatures and architectures to data files.
-    It is prefixed by a versioning key and a timestamp of the Python source
-    file containing the function.
-
-    There is one data file ("function_name-<lineno>.pyXY.<number>.nbc")
-    per function, function signature, target architecture and Python version.
-
-    Separate index and data files per Python version avoid pickle
-    compatibility problems.
-    """
-
-    _source_stamp = None
-    _locator_classes = [_SourceCacheLocator, _IPythonCacheLocator]
-
-    def __init__(self, py_func):
-        try:
-            qualname = py_func.__qualname__
-        except AttributeError:
-            qualname = py_func.__name__
-        # Keep the last dotted component, since the package name is already
-        # encoded in the directory.
-        modname = py_func.__module__.split('.')[-1]
-        self._funcname = qualname.split('.')[-1]
-        self._fullname = "%s.%s" % (modname, qualname)
-        self._is_closure = bool(py_func.__closure__)
-        self._lineno = py_func.__code__.co_firstlineno
-        abiflags = getattr(sys, 'abiflags', '')
-
-        # Find a locator
-        self._source_path = inspect.getfile(py_func)
-        for cls in self._locator_classes:
-            self._locator = cls.from_function(py_func, self._source_path)
-            if self._locator is not None:
-                break
-        else:
-            raise RuntimeError("cannot cache function %r: no locator available "
-                               "for file %r" % (qualname, self._source_path))
-        self._cache_path = self._locator.get_cache_path()
-
-        # '<' and '>' can appear in the qualname (e.g. '<locals>') but
-        # are forbidden in Windows filenames
-        fixed_fullname = self._fullname.replace('<', '').replace('>', '')
-        filename_base = (
-            '%s-%s.py%d%d%s' % (fixed_fullname, self._locator.get_disambiguator(),
-                                sys.version_info[0], sys.version_info[1],
-                                abiflags)
-            )
-        self._index_name = '%s.nbi' % (filename_base,)
-        self._index_path = os.path.join(self._cache_path, self._index_name)
-        self._data_name_pattern = '%s.{number:d}.nbc' % (filename_base,)
-
-        self.enable()
-
-    def __repr__(self):
-        return "<%s fullname=%r>" % (self.__class__.__name__, self._fullname)
-
-    def enable(self):
-        self._enabled = True
-        # This may be a bit strict but avoids us maintaining a magic number
-        self._version = numba.__version__
-        self._source_stamp = self._locator.get_source_stamp()
-
-    def disable(self):
-        self._enabled = False
-
-    def flush(self):
-        self._save_index({})
-
-    def load_overload(self, sig, target_context):
-        """
-        Load and recreate the cached CompileResult for the given signature,
-        using the *target_context*.
-        """
-        if not self._enabled:
-            return
-        overloads = self._load_index()
-        key = self._index_key(sig, target_context.codegen())
-        data_name = overloads.get(key)
-        if data_name is None:
-            return
-        try:
-            return self._load_data(data_name, target_context)
-        except EnvironmentError:
-            # File could have been removed while the index still refers it.
-            return
-
-    def save_overload(self, sig, cres):
-        """
-        Save the CompileResult for the given signature in the cache.
-        """
-        if not self._enabled:
-            return
-        if not self._check_cachable(cres):
-            return
-        try:
-            os.mkdir(self._cache_path)
-        except OSError as e:
-            if e.errno != errno.EEXIST:
-                raise
-        overloads = self._load_index()
-        key = self._index_key(sig, cres.library.codegen)
-        try:
-            # If key already exists, we will overwrite the file
-            data_name = overloads[key]
-        except KeyError:
-            # Find an available name for the data file
-            existing = set(overloads.values())
-            for i in itertools.count(1):
-                data_name = self._data_name(i)
-                if data_name not in existing:
-                    break
-            overloads[key] = data_name
-            self._save_index(overloads)
-
-        self._save_data(data_name, cres)
-
-    def _check_cachable(self, cres):
-        """
-        Check cachability of the given compile result.
-        """
-        cannot_cache = None
-        if self._is_closure:
-            cannot_cache = "as it uses outer variables in a closure"
-        elif cres.lifted:
-            cannot_cache = "as it uses lifted loops"
-        elif cres.has_dynamic_globals:
-            cannot_cache = "as it uses dynamic globals (such as ctypes pointers)"
-        if cannot_cache:
-            msg = ('Cannot cache compiled function "%s" %s'
-                   % (self._funcname, cannot_cache))
-            warnings.warn_explicit(msg, NumbaWarning,
-                                   self._source_path, self._lineno)
-            return False
-        return True
-
-    def _index_key(self, sig, codegen):
-        """
-        Compute index key for the given signature and codegen.
-        It includes a description of the OS and target architecture.
-        """
-        return (sig, codegen.magic_tuple())
-
-    def _data_name(self, number):
-        return self._data_name_pattern.format(number=number)
-
-    def _data_path(self, name):
-        return os.path.join(self._cache_path, name)
-
-    @contextlib.contextmanager
-    def _open_for_write(self, filepath):
-        """
-        Open *filepath* for writing in a race condition-free way
-        (hopefully).
-        """
-        tmpname = '%s.tmp.%d' % (filepath, os.getpid())
-        try:
-            with open(tmpname, "wb") as f:
-                yield f
-            utils.file_replace(tmpname, filepath)
-        except Exception:
-            # In case of error, remove dangling tmp file
-            try:
-                os.unlink(tmpname)
-            except OSError:
-                pass
-            raise
-
-    def _load_index(self):
-        """
-        Load the cache index and return it as a dictionary (possibly
-        empty if cache is empty or obsolete).
-        """
-        try:
-            with open(self._index_path, "rb") as f:
-                version = pickle.load(f)
-                data = f.read()
-        except EnvironmentError as e:
-            # Index doesn't exist yet?
-            if e.errno in (errno.ENOENT,):
-                return {}
-            raise
-        if version != self._version:
-            # This is another version.  Avoid trying to unpickling the
-            # rest of the stream, as that may fail.
-            return {}
-        stamp, overloads = pickle.loads(data)
-        if stamp != self._source_stamp:
-            # Cache is not fresh.  Stale data files will be eventually
-            # overwritten, since they are numbered in incrementing order.
-            return {}
-        else:
-            return overloads
-
-    def _load_data(self, name, target_context):
-        with open(self._data_path(name), "rb") as f:
-            data = f.read()
-        tup = pickle.loads(data)
-        return compiler.CompileResult._rebuild(target_context, *tup)
-
-    def _save_index(self, overloads):
-        data = self._source_stamp, overloads
-        data = self._dump(data)
-        with self._open_for_write(self._index_path) as f:
-            pickle.dump(self._version, f, protocol=-1)
-            f.write(data)
-
-    def _save_data(self, name, cres):
-        data = cres._reduce()
-        data = self._dump(data)
-        with self._open_for_write(self._data_path(name)) as f:
-            f.write(data)
-
-    def _dump(self, obj):
-        return pickle.dumps(obj, protocol=-1)
+_dispatcher.typeof_init(
+    OmittedArg,
+    dict((str(t), t._code) for t in types.number_domain))

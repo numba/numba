@@ -3,7 +3,6 @@ from __future__ import print_function, absolute_import
 import sys
 
 import llvmlite.llvmpy.core as lc
-import llvmlite.llvmpy.ee as le
 import llvmlite.binding as ll
 
 from numba import _dynfunc, config
@@ -11,9 +10,7 @@ from numba.callwrapper import PyCallWrapper
 from .base import BaseContext, PYOBJECT
 from numba import utils, cgutils, types
 from numba.utils import cached_property
-from numba.targets import (
-    callconv, cffiimpl, codegen, externals, intrinsics, listobj, cmathimpl,
-    mathimpl, npyimpl, operatorimpl, printimpl, randomimpl)
+from numba.targets import callconv, codegen, externals, intrinsics, listobj, setobj
 from .options import TargetOptions
 from numba.runtime import rtsys
 
@@ -34,6 +31,8 @@ class CPUContext(BaseContext):
     """
     Changes BaseContext calling convention
     """
+    allow_dynamic_globals = True
+
     # Overrides
     def create_module(self, name):
         return self._internal_codegen._create_empty_module(name)
@@ -44,9 +43,14 @@ class CPUContext(BaseContext):
 
         # Map external C functions.
         externals.c_math_functions.install(self)
-        externals.c_numpy_functions.install(self)
 
+        # Initialize NRT runtime
+        rtsys.initialize(self)
+
+    def load_additional_registries(self):
         # Add target specific implementations
+        from . import (cffiimpl, cmathimpl, mathimpl, npyimpl, operatorimpl,
+                       printimpl, randomimpl)
         self.install_registry(cmathimpl.registry)
         self.install_registry(cffiimpl.registry)
         self.install_registry(mathimpl.registry)
@@ -54,16 +58,15 @@ class CPUContext(BaseContext):
         self.install_registry(operatorimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(randomimpl.registry)
-
-        # Initialize NRT runtime
-        rtsys.initialize(self)
+        self.install_registry(randomimpl.registry)
 
     @property
     def target_data(self):
         return self._internal_codegen.target_data
 
-    def with_aot_codegen(self, name):
-        return self.subtarget(_internal_codegen=codegen.AOTCPUCodegen(name),
+    def with_aot_codegen(self, name, **aot_options):
+        aot_codegen = codegen.AOTCPUCodegen(name, **aot_options)
+        return self.subtarget(_internal_codegen=aot_codegen,
                               aot_mode=True)
 
     def codegen(self):
@@ -111,6 +114,12 @@ class CPUContext(BaseContext):
         """
         return listobj.build_list(self, builder, list_type, items)
 
+    def build_set(self, builder, set_type, items):
+        """
+        Build a set from the Numba *set_type* and its initial *items*.
+        """
+        return setobj.build_set(self, builder, set_type, items)
+
     def post_lowering(self, mod, library):
         if self.is32bit:
             # 32-bit machine needs to replace all 64-bit div/rem to avoid
@@ -147,9 +156,12 @@ class CPUContext(BaseContext):
         baseptr = library.get_pointer_to_function(fndesc.llvm_func_name)
         fnptr = library.get_pointer_to_function(fndesc.llvm_cpython_wrapper_name)
 
+        # Note: we avoid reusing the original docstring to avoid encoding
+        # issues on Python 2, see issue #1908
+        doc = "compiled wrapper for %r" % (fndesc.qualname,)
         cfunc = _dynfunc.make_function(fndesc.lookup_module(),
                                        fndesc.qualname.split('.')[-1],
-                                       fndesc.doc, fnptr, env,
+                                       doc, fnptr, env,
                                        # objects to keepalive with the function
                                        (library,)
                                        )
@@ -173,10 +185,10 @@ class CPUTargetOptions(TargetOptions):
         "nogil": bool,
         "forceobj": bool,
         "looplift": bool,
-        "wraparound": bool,
         "boundcheck": bool,
         "_nrt": bool,
         "no_rewrites": bool,
+        "no_cpython_wrapper": bool,
     }
 
 

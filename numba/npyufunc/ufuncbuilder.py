@@ -1,18 +1,21 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
+
 import warnings
 import inspect
+
 import numpy as np
 
 from numba.decorators import jit
-from numba.targets.registry import target_registry
+from numba.targets.descriptors import TargetDescriptor
 from numba.targets.options import TargetOptions
+from numba.targets.registry import dispatcher_registry, cpu_target
 from numba import utils, compiler, types, sigutils
 from numba.numpy_support import as_dtype
 from . import _internal
 from .sigparse import parse_signature
 from .wrappers import build_ufunc_wrapper, build_gufunc_wrapper
-from numba.targets import registry
+from numba.caching import FunctionCache, NullCache
 
 
 import llvmlite.llvmpy.core as lc
@@ -24,18 +27,35 @@ class UFuncTargetOptions(TargetOptions):
     }
 
 
-class UFuncTarget(registry.CPUTarget):
+class UFuncTarget(TargetDescriptor):
     options = UFuncTargetOptions
+
+    @property
+    def typing_context(self):
+        return cpu_target.typing_context
+
+    @property
+    def target_context(self):
+        return cpu_target.target_context
+
+ufunc_target = UFuncTarget()
 
 
 class UFuncDispatcher(object):
-    targetdescr = UFuncTarget()
+    """
+    An object handling compilation of various signatures for a ufunc.
+    """
+    targetdescr = ufunc_target
 
     def __init__(self, py_func, locals={}, targetoptions={}):
         self.py_func = py_func
         self.overloads = utils.UniqueDict()
         self.targetoptions = targetoptions
         self.locals = locals
+        self.cache = NullCache()
+
+    def enable_caching(self):
+        self.cache = FunctionCache(self.py_func)
 
     def compile(self, sig, locals={}, **targetoptions):
         locs = self.locals.copy()
@@ -46,47 +66,47 @@ class UFuncDispatcher(object):
 
         flags = compiler.Flags()
         self.targetdescr.options.parse_as_flags(flags, topt)
-        flags.set("no_compile")
+
         flags.set("no_cpython_wrapper")
         flags.set("error_model", "numpy")
         # Disable loop lifting
         # The feature requires a real python function
         flags.unset("enable_looplift")
 
-        typingctx = self.targetdescr.typing_context
-        targetctx = self.targetdescr.target_context
-
-        args, return_type = sigutils.normalize_signature(sig)
-
-        cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
-                                      args=args, return_type=return_type,
-                                      flags=flags, locals=locals)
-
+        cres = self._compile_core(sig, flags, locals)
         self.overloads[cres.signature] = cres
         return cres
 
+    def _compile_core(self, sig, flags, locals):
+        """
+        Trigger the compiler on the core function or load a previously
+        compiled version from the cache.  Returns the CompileResult.
+        """
+        typingctx = self.targetdescr.typing_context
+        targetctx = self.targetdescr.target_context
+        cres = self.cache.load_overload(sig, targetctx)
+        if cres is not None:
+            # Use cached version
+            return cres
+        # Compile
+        args, return_type = sigutils.normalize_signature(sig)
+        cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
+                                      args=args, return_type=return_type,
+                                      flags=flags, locals=locals)
+        self.cache.save_overload(sig, cres)
+        return cres
 
-target_registry['npyufunc'] = UFuncDispatcher
+
+dispatcher_registry['npyufunc'] = UFuncDispatcher
+
 
 # Utility functions
 
-def _compile_element_wise_function(nb_func, targetoptions, sig=None,
-                                   argtypes=None, restype=None):
-    # Handle argtypes
-    if argtypes is not None:
-        warnings.warn("Keyword argument argtypes is deprecated",
-                      DeprecationWarning)
-        assert sig is None
-        if restype is None:
-            sig = tuple(argtypes)
-        else:
-            sig = restype(*argtypes)
-
+def _compile_element_wise_function(nb_func, targetoptions, sig):
     # Do compilation
     # Return CompileResult to test
     cres = nb_func.compile(sig, **targetoptions)
     args, return_type = sigutils.normalize_signature(sig)
-
     return cres, args, return_type
 
 def _finalize_ufunc_signature(cres, args, return_type):
@@ -110,7 +130,7 @@ def _build_element_wise_ufunc_wrapper(cres, signature):
     '''
     ctx = cres.target_context
     library = cres.library
-    llvm_func = library.get_function(cres.fndesc.llvm_func_name)
+    fname = cres.fndesc.llvm_func_name
 
     env = None
     if cres.objectmode:
@@ -123,53 +143,63 @@ def _build_element_wise_ufunc_wrapper(cres, signature):
     else:
         envptr = None
 
-    wrapper = build_ufunc_wrapper(library, ctx, llvm_func, signature,
-                                  cres.objectmode, envptr, env)
-    ptr = library.get_pointer_to_function(wrapper.name)
+    ptr = build_ufunc_wrapper(library, ctx, fname, signature,
+                              cres.objectmode, envptr, env)
 
     # Get dtypes
     dtypenums = [as_dtype(a).num for a in signature.args]
     dtypenums.append(as_dtype(signature.return_type).num)
     return dtypenums, ptr, env
 
+
+_identities = {
+    0: _internal.PyUFunc_Zero,
+    1: _internal.PyUFunc_One,
+    None: _internal.PyUFunc_None,
+    "reorderable": _internal.PyUFunc_ReorderableNone,
+    }
+
+def parse_identity(identity):
+    """
+    Parse an identity value and return the corresponding low-level value
+    for Numpy.
+    """
+    try:
+        identity = _identities[identity]
+    except KeyError:
+        raise ValueError("Invalid identity value %r" % (identity,))
+    return identity
+
+
 # Class definitions
 
 class _BaseUFuncBuilder(object):
 
-    _identities = {
-        0: _internal.PyUFunc_Zero,
-        1: _internal.PyUFunc_One,
-        None: _internal.PyUFunc_None,
-        }
-    if np.__version__ >= '1.7':
-        _identities["reorderable"] = _internal.PyUFunc_ReorderableNone
-
-    @classmethod
-    def parse_identity(cls, identity):
-        try:
-            identity = cls._identities[identity]
-        except KeyError:
-            raise ValueError("Invalid identity value %r" % (identity,))
-        return identity
-
-    def add(self, sig=None, argtypes=None, restype=None):
+    def add(self, sig=None):
         if hasattr(self, 'targetoptions'):
             targetoptions = self.targetoptions
         else:
             targetoptions = self.nb_func.targetoptions
         cres, args, return_type = _compile_element_wise_function(
-            self.nb_func, targetoptions, sig, argtypes, restype)
+            self.nb_func, targetoptions, sig)
         sig = self._finalize_signature(cres, args, return_type)
         self._sigs.append(sig)
         self._cres[sig] = cres
         return cres
 
+    def disable_compile(self):
+        """
+        Disable the compilation of new signatures at call time.
+        """
+        # Override this for implementations that support lazy compilation
+
+
 class UFuncBuilder(_BaseUFuncBuilder):
 
-    def __init__(self, py_func, identity=None, targetoptions={}):
+    def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
         self.py_func = py_func
-        self.identity = self.parse_identity(identity)
-        self.nb_func = jit(target='npyufunc', **targetoptions)(py_func)
+        self.identity = parse_identity(identity)
+        self.nb_func = jit(target='npyufunc', cache=cache, **targetoptions)(py_func)
         self._sigs = []
         self._cres = {}
 
@@ -225,10 +255,11 @@ class UFuncBuilder(_BaseUFuncBuilder):
 class GUFuncBuilder(_BaseUFuncBuilder):
 
     # TODO handle scalar
-    def __init__(self, py_func, signature, identity=None, targetoptions={}):
+    def __init__(self, py_func, signature, identity=None, cache=False,
+                 targetoptions={}):
         self.py_func = py_func
-        self.identity = self.parse_identity(identity)
-        self.nb_func = jit(target='npyufunc')(py_func)
+        self.identity = parse_identity(identity)
+        self.nb_func = jit(target='npyufunc', cache=cache)(py_func)
         self.signature = signature
         self.sin, self.sout = parse_signature(signature)
         self.targetoptions = targetoptions
@@ -278,13 +309,10 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         ctx = cres.target_context
         library = cres.library
         signature = cres.signature
-        llvm_func = library.get_function(cres.fndesc.llvm_func_name)
-        wrapper, env = build_gufunc_wrapper(library, ctx, llvm_func,
+        ptr, env = build_gufunc_wrapper(library, ctx,
                                             signature, self.sin, self.sout,
                                             fndesc=cres.fndesc,
                                             env=cres.environment)
-
-        ptr = library.get_pointer_to_function(wrapper.name)
 
         # Get dtypes
         dtypenums = []
@@ -295,4 +323,3 @@ class GUFuncBuilder(_BaseUFuncBuilder):
                 ty = a
             dtypenums.append(as_dtype(ty).num)
         return dtypenums, ptr, env
-

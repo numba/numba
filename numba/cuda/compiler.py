@@ -1,20 +1,44 @@
 from __future__ import absolute_import, print_function
+
 import copy
+from functools import reduce, wraps
+import operator
 import sys
+import threading
+import warnings
 
 from numba import ctypes_support as ctypes
 from numba.typing.templates import AbstractTemplate
 from numba import config, compiler, types
 from numba.typing.templates import ConcreteTemplate
-from numba import funcdesc, typing, utils
+from numba import funcdesc, typing, utils, serialize
 
 from .cudadrv.autotune import AutoTuner
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
-from .errors import KernelRuntimeError
+from .errors import KernelRuntimeError, normalize_kernel_dimensions
 from .api import get_current_device
 
 
+_cuda_compiler_lock = threading.RLock()
+
+
+def nonthreadsafe(fn):
+    """
+    Wraps a function to prevent multiple threads from executing it in parallel
+    due to LLVM is not threadsafe.
+    This is preferred over contextmanager due to llvm.Module.__del__ being
+    non-threadsafe and it is cumbersome to manually keep track of when it is
+    triggered.
+    """
+    @wraps(fn)
+    def core(*args, **kwargs):
+        with _cuda_compiler_lock:
+            return fn(*args, **kwargs)
+    return core
+
+
+@nonthreadsafe
 def compile_cuda(pyfunc, return_type, args, debug, inline):
     # First compilation will trigger the initialization of the CUDA backend.
     from .descriptor import CUDATargetDesc
@@ -45,13 +69,15 @@ def compile_cuda(pyfunc, return_type, args, debug, inline):
     return cres
 
 
+@nonthreadsafe
 def compile_kernel(pyfunc, args, link, debug=False, inline=False,
                    fastmath=False):
     cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=inline)
-    func = cres.library.get_function(cres.fndesc.llvm_func_name)
-    kernel = cres.target_context.prepare_cuda_kernel(func,
-                                                     cres.signature.args)
-    cukern = CUDAKernel(llvm_module=cres.library._final_module,
+    fname = cres.fndesc.llvm_func_name
+    lib, kernel = cres.target_context.prepare_cuda_kernel(cres.library, fname,
+                                                          cres.signature.args)
+
+    cukern = CUDAKernel(llvm_module=lib._final_module,
                         name=kernel.name,
                         pretty_name=cres.fndesc.qualname,
                         argtypes=cres.signature.args,
@@ -71,6 +97,17 @@ class DeviceFunctionTemplate(object):
         self.debug = debug
         self.inline = inline
         self._compileinfos = {}
+
+    def __reduce__(self):
+        glbls = serialize._get_function_globals_for_reduction(self.py_func)
+        func_reduced = serialize._reduce_function(self.py_func, glbls)
+        args = (self.__class__, func_reduced, self.debug, self.inline)
+        return (serialize._rebuild_reduction, args)
+
+    @classmethod
+    def _rebuild(cls, func_reduced, debug, inline):
+        func = serialize._rebuild_function(*func_reduced)
+        return compile_device_template(func, debug=debug, inline=inline)
 
     def compile(self, args):
         """Compile the function for the given argument types.
@@ -119,16 +156,7 @@ def compile_device_template(pyfunc, debug=False, inline=False):
 
 
 def compile_device(pyfunc, return_type, args, inline=True, debug=False):
-    cres = compile_cuda(pyfunc, return_type, args, debug=debug, inline=inline)
-    devfn = DeviceFunction(cres)
-
-    class device_function_template(ConcreteTemplate):
-        key = devfn
-        cases = [cres.signature]
-
-    cres.typing_context.insert_user_function(devfn, device_function_template)
-    cres.target_context.insert_user_function(devfn, cres.fndesc, [cres.library])
-    return devfn
+    return DeviceFunction(pyfunc, return_type, args, inline=True, debug=False)
 
 
 def declare_device_function(name, restype, argtypes):
@@ -151,14 +179,48 @@ def declare_device_function(name, restype, argtypes):
 
 
 class DeviceFunction(object):
-    def __init__(self, cres):
+
+    def __init__(self, pyfunc, return_type, args, inline, debug):
+        self.py_func = pyfunc
+        self.return_type = return_type
+        self.args = args
+        self.inline = True
+        self.debug = False
+        cres = compile_cuda(self.py_func, self.return_type, self.args,
+                            debug=self.debug, inline=self.inline)
         self.cres = cres
+        # Register
+        class device_function_template(ConcreteTemplate):
+            key = self
+            cases = [cres.signature]
+
+        cres.typing_context.insert_user_function(
+            self, device_function_template)
+        cres.target_context.insert_user_function(self, cres.fndesc,
+                                                 [cres.library])
+
+    def __reduce__(self):
+        globs = serialize._get_function_globals_for_reduction(self.py_func)
+        func_reduced = serialize._reduce_function(self.py_func, globs)
+        args = (self.__class__, func_reduced, self.return_type, self.args,
+                self.inline, self.debug)
+        return (serialize._rebuild_reduction, args)
+
+    @classmethod
+    def _rebuild(cls, func_reduced, return_type, args, inline, debug):
+        return cls(serialize._rebuild_function(*func_reduced), return_type,
+                   args, inline, debug)
+
+    def __repr__(self):
+        fmt = "<DeviceFunction py_func={0} signature={1}>"
+        return fmt.format(self.py_func, self.cres.signature)
 
 
 class ExternFunction(object):
     def __init__(self, name, sig):
         self.name = name
         self.sig = sig
+
 
 def _compute_thread_per_block(kernel, tpb):
     if tpb != 0:
@@ -194,6 +256,7 @@ class ForAll(object):
         return kernel.configure(blkct, tpb, stream=self.stream,
                                 sharedmem=self.sharedmem)(*args)
 
+
 class CUDAKernelBase(object):
     """Define interface for configurable kernels
     """
@@ -205,26 +268,19 @@ class CUDAKernelBase(object):
         self.stream = 0
 
     def copy(self):
-        return copy.copy(self)
+        """
+        Shallow copy the instance
+        """
+        # Note: avoid using ``copy`` which calls __reduce__
+        cls = self.__class__
+        # new bare instance
+        new = cls.__new__(cls)
+        # update the internal states
+        new.__dict__.update(self.__dict__)
+        return new
 
     def configure(self, griddim, blockdim, stream=0, sharedmem=0):
-        if not isinstance(griddim, (tuple, list)):
-            griddim = [griddim]
-        else:
-            griddim = list(griddim)
-        if len(griddim) > 3:
-            raise ValueError('griddim must be a tuple/list of three ints')
-        while len(griddim) < 3:
-            griddim.append(1)
-
-        if not isinstance(blockdim, (tuple, list)):
-            blockdim = [blockdim]
-        else:
-            blockdim = list(blockdim)
-        if len(blockdim) > 3:
-            raise ValueError('blockdim must be tuple/list of three ints')
-        while len(blockdim) < 3:
-            blockdim.append(1)
+        griddim, blockdim = normalize_kernel_dimensions(griddim, blockdim)
 
         clone = self.copy()
         clone.griddim = tuple(griddim)
@@ -247,6 +303,20 @@ class CUDAKernelBase(object):
         - the kernel must check if the thread id is valid."""
 
         return ForAll(self, ntasks, tpb=tpb, stream=stream, sharedmem=sharedmem)
+
+    def _serialize_config(self):
+        """
+        Helper for serializing the grid, block and shared memory configuration.
+        CUDA stream config is not serialized.
+        """
+        return self.griddim, self.blockdim, self.sharedmem
+
+    def _deserialize_config(self, config):
+        """
+        Helper for deserializing the grid, block and shared memory
+        configuration.
+        """
+        self.griddim, self.blockdim, self.sharedmem = config
 
 
 class CachedPTX(object):
@@ -321,6 +391,26 @@ class CachedCUFunction(object):
         ci = self.ccinfos[device.id]
         return ci
 
+    def __reduce__(self):
+        """
+        Reduce the instance for serialization.
+        Pre-compiled PTX code string is serialized inside the `ptx` (CachedPTX).
+        Loaded CUfunctions are discarded. They are recreated when unserialized.
+        """
+        if self.linking:
+            msg = ('cannot pickle CUDA kernel function with additional '
+                   'libraries to link against')
+            raise RuntimeError(msg)
+        args = (self.__class__, self.entry_name, self.ptx, self.linking)
+        return (serialize._rebuild_reduction, args)
+
+    @classmethod
+    def _rebuild(cls, entry_name, ptx, linking):
+        """
+        Rebuild an instance.
+        """
+        return cls(entry_name, ptx, linking)
+
 
 class CUDAKernel(CUDAKernelBase):
     '''
@@ -328,16 +418,10 @@ class CUDAKernel(CUDAKernelBase):
     object will validate that the argument types match those for which it is
     specialized, and then launch the kernel on the device.
     '''
-    def __init__(self, llvm_module, name, pretty_name,
-                 argtypes, call_helper,
-                 link=(), debug=False, fastmath=False,
-                 type_annotation=None):
+    def __init__(self, llvm_module, name, pretty_name, argtypes, call_helper,
+                 link=(), debug=False, fastmath=False, type_annotation=None):
         super(CUDAKernel, self).__init__()
-        self.entry_name = name
-        self.argument_types = tuple(argtypes)
-        self.linking = tuple(link)
-        self._type_annotation = type_annotation
-
+        # initialize CUfunction
         options = {}
         if fastmath:
             options.update(dict(ftz=True,
@@ -346,9 +430,49 @@ class CUDAKernel(CUDAKernelBase):
                                 fma=True))
 
         ptx = CachedPTX(pretty_name, str(llvm_module), options=options)
-        self._func = CachedCUFunction(self.entry_name, ptx, link)
+        cufunc = CachedCUFunction(name, ptx, link)
+        # populate members
+        self.entry_name = name
+        self.argument_types = tuple(argtypes)
+        self.linking = tuple(link)
+        self._type_annotation = type_annotation
+        self._func = cufunc
         self.debug = debug
         self.call_helper = call_helper
+
+    @classmethod
+    def _rebuild(cls, name, argtypes, cufunc, link, debug, call_helper, config):
+        """
+        Rebuild an instance.
+        """
+        instance = cls.__new__(cls)
+        # invoke parent constructor
+        super(cls, instance).__init__()
+        # populate members
+        instance.entry_name = name
+        instance.argument_types = tuple(argtypes)
+        instance.linking = tuple(link)
+        instance._type_annotation = None
+        instance._func = cufunc
+        instance.debug = debug
+        instance.call_helper = call_helper
+        # update config
+        instance._deserialize_config(config)
+        return instance
+
+    def __reduce__(self):
+        """
+        Reduce the instance for serialization.
+        Compiled definitions are serialized in PTX form.
+        Type annotation are discarded.
+        Thread, block and shared memory configuration are serialized.
+        Stream information is discarded.
+        """
+        config = self._serialize_config()
+        args = (self.__class__, self.entry_name, self.argument_types,
+                self._func, self.linking, self.debug, self.call_helper,
+                config)
+        return (serialize._rebuild_reduction, args)
 
     def __call__(self, *args, **kwargs):
         assert not kwargs
@@ -465,9 +589,15 @@ class CUDAKernel(CUDAKernelBase):
         Convert arguments to ctypes and append to kernelargs
         """
         if isinstance(ty, types.Array):
-            devary, conv = devicearray.auto_device(val, stream=stream)
-            if conv:
-                retr.append(lambda: devary.copy_to_host(val, stream=stream))
+            if isinstance(ty, types.SmartArrayType):
+                devary = val.get('gpu')
+                retr.append(lambda: val.mark_changed('gpu'))
+                outer_parent = ctypes.c_void_p(0)
+                kernelargs.append(outer_parent)
+            else:
+                devary, conv = devicearray.auto_device(val, stream=stream)
+                if conv:
+                    retr.append(lambda: devary.copy_to_host(val, stream=stream))
 
             c_intp = ctypes.c_ssize_t
 
@@ -542,7 +672,6 @@ class CUDAKernel(CUDAKernelBase):
         current configuration."""
         thread_per_block = reduce(operator.mul, self.blockdim, 1)
         return self.autotune.closest(thread_per_block)
-
 
 
 class AutoJitCUDAKernel(CUDAKernelBase):
@@ -624,3 +753,25 @@ class AutoJitCUDAKernel(CUDAKernelBase):
 
         for ver, defn in utils.iteritems(self.definitions):
             defn.inspect_types(file=file)
+
+    @classmethod
+    def _rebuild(cls, func_reduced, bind, targetoptions, config):
+        """
+        Rebuild an instance.
+        """
+        func = serialize._rebuild_function(*func_reduced)
+        instance = cls(func, bind, targetoptions)
+        instance._deserialize_config(config)
+        return instance
+
+    def __reduce__(self):
+        """
+        Reduce the instance for serialization.
+        Compiled definitions are serialized in PTX form.
+        """
+        glbls = serialize._get_function_globals_for_reduction(self.py_func)
+        func_reduced = serialize._reduce_function(self.py_func, glbls)
+        config = self._serialize_config()
+        args = (self.__class__, func_reduced, self.bind, self.targetoptions,
+                config)
+        return (serialize._rebuild_reduction, args)

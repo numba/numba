@@ -41,7 +41,6 @@ extensions = [
     #'sphinx.ext.mathjax',
     'sphinx.ext.autodoc',
     #'sphinx.ext.graphviz',
-    'sphinxjp.themecore',
 ]
 
 todo_include_todos = True
@@ -280,5 +279,19 @@ texinfo_documents = [
 # and the Numpy documentation.
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
-    'numpy': ('https://docs.scipy.org/doc/numpy', None),
+    'numpy': ('http://docs.scipy.org/doc/numpy', None),
+    'llvmlite': ('http://llvmlite.pydata.org/en/latest/', None),
     }
+
+
+# -- Custom autogeneration ------------------------------------------------
+
+def _autogenerate():
+    from numba.scripts.generate_lower_listing import gen_lower_listing
+
+    basedir = os.path.dirname(__file__)
+    gen_lower_listing(os.path.join(basedir,
+                                   'developer/autogen_lower_listing.rst'))
+
+
+_autogenerate()

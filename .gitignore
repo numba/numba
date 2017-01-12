@@ -16,6 +16,8 @@ docs/gh-pages/
 dist/
 htmlcov/
 .idea/
+.vscode/
 .ipynb_checkpoints/
 __pycache__/
 
+docs/source/developer/autogen*

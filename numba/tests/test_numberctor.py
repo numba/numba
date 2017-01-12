@@ -6,7 +6,7 @@ from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba import jit, types
 
-from .support import TestCase
+from .support import TestCase, tag
 
 
 def dobool(a):
@@ -45,7 +45,22 @@ def converter(tp):
     return f
 
 
-class TestNumberCtor(TestCase):
+def real_np_types():
+    for tp_name in ('int8', 'int16', 'int32', 'int64',
+                    'uint8', 'uint16', 'uint32', 'uint64',
+                    'intc', 'uintc', 'intp', 'uintp',
+                    'float32', 'float64', 'bool_'):
+        yield tp_name
+
+def complex_np_types():
+    for tp_name in ('complex64', 'complex128'):
+        yield tp_name
+
+
+class TestScalarNumberCtor(TestCase):
+    """
+    Test <number class>(some scalar)
+    """
 
     def check_int_constructor(self, pyfunc):
         x_types = [
@@ -58,12 +73,15 @@ class TestNumberCtor(TestCase):
             cfunc = cres.entry_point
             self.assertPreciseEqual(pyfunc(x), cfunc(x))
 
+    @tag('important')
     def test_bool(self):
         self.check_int_constructor(dobool)
 
+    @tag('important')
     def test_int(self):
         self.check_int_constructor(doint)
 
+    @tag('important')
     def test_float(self):
         pyfunc = dofloat
 
@@ -78,6 +96,7 @@ class TestNumberCtor(TestCase):
             self.assertPreciseEqual(pyfunc(x), cfunc(x),
                 prec='single' if ty is types.float32 else 'exact')
 
+    @tag('important')
     def test_complex(self):
         pyfunc = docomplex
 
@@ -107,6 +126,7 @@ class TestNumberCtor(TestCase):
         cfunc = cres.entry_point
         self.assertGreater(cfunc(x), 1.0)
 
+    @tag('important')
     def test_complex2(self):
         pyfunc = docomplex2
 
@@ -159,15 +179,12 @@ class TestNumberCtor(TestCase):
     def check_number_types(self, tp_factory):
         values = [0, 1, -1, 100003, 10000000000007, -100003, -10000000000007,
                   1.5, -3.5]
-        for tp_name in ('int8', 'int16', 'int32', 'int64',
-                        'uint8', 'uint16', 'uint32', 'uint64',
-                        'intc', 'uintc', 'intp', 'uintp',
-                        'float32', 'float64', 'bool_'):
+        for tp_name in real_np_types():
             np_type = getattr(np, tp_name)
             tp = tp_factory(tp_name)
             self.check_type_converter(tp, np_type, values)
         values.append(1.5+3j)
-        for tp_name in ('complex64', 'complex128'):
+        for tp_name in complex_np_types():
             np_type = getattr(np, tp_name)
             tp = tp_factory(tp_name)
             self.check_type_converter(tp, np_type, values)
@@ -187,6 +204,52 @@ class TestNumberCtor(TestCase):
         def tp_factory(tp_name):
             return getattr(np, tp_name)
         self.check_number_types(tp_factory)
+
+
+class TestArrayNumberCtor(TestCase):
+    """
+    Test <number class>(some sequence)
+    """
+
+    def check_type_constructor(self, np_type, values):
+        pyfunc = converter(np_type)
+        cfunc = jit(nopython=True)(pyfunc)
+        for val in values:
+            expected = np_type(val)
+            got = cfunc(val)
+            self.assertPreciseEqual(got, expected)
+
+    def test_1d(self):
+        values = [
+            (1.0, 2.5),
+            (1, 2.5),
+            [1.0, 2.5],
+            (),
+            ]
+        for tp_name in real_np_types():
+            np_type = getattr(np, tp_name)
+            self.check_type_constructor(np_type, values)
+        values = [
+            (1j, 2.5),
+            [1.0, 2.5],
+            ]
+        for tp_name in complex_np_types():
+            np_type = getattr(np, tp_name)
+            self.check_type_constructor(np_type, values)
+
+    def test_2d(self):
+        values = [
+            ((1.0, 2.5), (3.5, 4)),
+            [(1.0, 2.5), (3.5, 4)],
+            ([1.0, 2.5], [3.5, 4.0]),
+            [(), ()],
+            ]
+        for tp_name in real_np_types():
+            np_type = getattr(np, tp_name)
+            self.check_type_constructor(np_type, values)
+        for tp_name in complex_np_types():
+            np_type = getattr(np, tp_name)
+            self.check_type_constructor(np_type, values)
 
 
 if __name__ == '__main__':

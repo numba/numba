@@ -4,13 +4,16 @@ From NumbaPro
 """
 from __future__ import print_function, division, absolute_import
 
+from collections import namedtuple, OrderedDict
 import dis
-import sys
 import inspect
-from collections import namedtuple
+import sys
+import itertools
+from types import CodeType, ModuleType
 
 from numba import errors, utils
 from numba.config import PYVERSION
+
 
 opcode_info = namedtuple('opcode_info', ['argsize'])
 
@@ -33,20 +36,9 @@ def get_code_object(obj):
 
 
 def _make_bytecode_table():
-    if sys.version_info[:2] == (2, 6):  # python 2.6
-        version_specific = [
-            ('JUMP_IF_FALSE', 2),
-            ('JUMP_IF_TRUE', 2),
-        ]
-
-    if sys.version_info[:2] >= (2, 7):  # python 2.7+
-        version_specific = [
-            ('BUILD_SET', 2),
-            ('POP_JUMP_IF_FALSE', 2),
-            ('POP_JUMP_IF_TRUE', 2),
-            ('JUMP_IF_TRUE_OR_POP', 2),
-            ('JUMP_IF_FALSE_OR_POP', 2),
-        ]
+    # Note some opcodes are supported here for analysis but not later
+    # in the compilation pipeline.
+    version_specific = []
 
     if sys.version_info[0] == 2:
         version_specific += [
@@ -80,6 +72,12 @@ def _make_bytecode_table():
             ('STORE_MAP', 0),
         ]
 
+    if sys.version_info[:2] >= (3, 5):   # python 3.5+
+        version_specific += [
+            ('BINARY_MATRIX_MULTIPLY', 0),
+            ('INPLACE_MATRIX_MULTIPLY', 0),
+        ]
+
     bytecodes = [
         # opname, operandlen
         ('BINARY_ADD', 0),
@@ -98,6 +96,7 @@ def _make_bytecode_table():
         ('BREAK_LOOP', 0),
         ('BUILD_LIST', 2),
         ('BUILD_MAP', 2),
+        ('BUILD_SET', 2),
         ('BUILD_SLICE', 2),
         ('BUILD_TUPLE', 2),
         ('CALL_FUNCTION', 2),
@@ -123,12 +122,19 @@ def _make_bytecode_table():
         ('INPLACE_RSHIFT', 0),
         ('JUMP_ABSOLUTE', 2),
         ('JUMP_FORWARD', 2),
+        ('JUMP_IF_TRUE_OR_POP', 2),
+        ('JUMP_IF_FALSE_OR_POP', 2),
         ('LOAD_ATTR', 2),
+        ('LOAD_CLOSURE', 2),
         ('LOAD_CONST', 2),
         ('LOAD_FAST', 2),
         ('LOAD_GLOBAL', 2),
         ('LOAD_DEREF', 2),
+        ('MAKE_CLOSURE', 2),
+        ('MAKE_FUNCTION', 2),
         ('POP_BLOCK', 0),
+        ('POP_JUMP_IF_FALSE', 2),
+        ('POP_JUMP_IF_TRUE', 2),
         ('POP_TOP', 0),
         ('RAISE_VARARGS', 2),
         ('RETURN_VALUE', 0),
@@ -136,6 +142,7 @@ def _make_bytecode_table():
         ('ROT_TWO', 0),
         ('SETUP_LOOP', 2),
         ('STORE_ATTR', 2),
+        ('STORE_DEREF', 2),
         ('STORE_FAST', 2),
         ('STORE_SUBSCR', 0),
         ('UNARY_POSITIVE', 0),
@@ -270,44 +277,46 @@ class ByteCodeIter(object):
         return buf
 
 
-class ByteCodeOperation(object):
-    def __init__(self, inst, args):
-        self.inst = inst
-        self.args = args
+class ByteCode(object):
+    """
+    The decoded bytecode of a function, and related information.
+    """
+    __slots__ = ('func_id', 'co_names', 'co_varnames', 'co_consts',
+                 'co_freevars', 'table', 'labels')
 
+    def __init__(self, func_id):
+        code = func_id.code
 
-class ByteCodeBase(object):
-    __slots__ = (
-        'func', 'func_name', 'func_qualname', 'filename',
-        'pysig', 'co_names', 'co_varnames', 'co_consts', 'co_freevars',
-        'table', 'labels', 'arg_count', 'arg_names',
-        )
+        labels = set(dis.findlabels(code.co_code))
+        labels.add(0)
 
-    def __init__(self, func, func_qualname, pysig, filename, co_names,
-                 co_varnames, co_consts, co_freevars, table, labels,
-                 is_generator, arg_count=None, arg_names=None):
-        # When given, these values may not match the pysig's
-        # (when lifting loops)
-        if arg_count is None:
-            arg_count = len(pysig.parameters)
-        if arg_names is None:
-            arg_names = list(pysig.parameters)
-        self.func = func
-        self.module = inspect.getmodule(func)
-        self.is_generator = is_generator
-        self.func_qualname = func_qualname
-        self.func_name = func_qualname.split('.')[-1]
-        self.pysig = pysig
-        self.arg_count = arg_count
-        self.arg_names = arg_names
-        self.filename = filename
-        self.co_names = co_names
-        self.co_varnames = co_varnames
-        self.co_consts = co_consts
-        self.co_freevars = co_freevars
+        # A map of {offset: ByteCodeInst}
+        table = OrderedDict(ByteCodeIter(code))
+        self._compute_lineno(table, code)
+
+        self.func_id = func_id
+        self.co_names = code.co_names
+        self.co_varnames = code.co_varnames
+        self.co_consts = code.co_consts
+        self.co_freevars = code.co_freevars
         self.table = table
-        self.labels = labels
-        self.firstlineno = min(inst.lineno for inst in self.table.values())
+        self.labels = sorted(labels)
+
+    @classmethod
+    def _compute_lineno(cls, table, code):
+        """
+        Compute the line numbers for all bytecode instructions.
+        """
+        for offset, lineno in dis.findlinestarts(code):
+            if offset in table:
+                table[offset].lineno = lineno
+        known = -1
+        for inst in table.values():
+            if inst.lineno >= 0:
+                known = inst.lineno
+            else:
+                inst.lineno = known
+        return table
 
     def __iter__(self):
         return utils.itervalues(self.table)
@@ -328,58 +337,91 @@ class ByteCodeBase(object):
         return '\n'.join('%s %10s\t%s' % ((label_marker(i),) + i)
                          for i in utils.iteritems(self.table))
 
+    @classmethod
+    def _compute_used_globals(cls, func, table, co_consts, co_names):
+        """
+        Compute the globals used by the function with the given
+        bytecode table.
+        """
+        d = {}
+        globs = func.__globals__
+        builtins = globs.get('__builtins__', utils.builtins)
+        if isinstance(builtins, ModuleType):
+            builtins = builtins.__dict__
+        # Look for LOAD_GLOBALs in the bytecode
+        for inst in table.values():
+            if inst.opname == 'LOAD_GLOBAL':
+                name = co_names[inst.arg]
+                if name not in d:
+                    try:
+                        value = globs[name]
+                    except KeyError:
+                        value = builtins[name]
+                    d[name] = value
+        # Add globals used by any nested code object
+        for co in co_consts:
+            if isinstance(co, CodeType):
+                subtable = OrderedDict(ByteCodeIter(co))
+                d.update(cls._compute_used_globals(func, subtable,
+                                                   co.co_consts, co.co_names))
+        return d
 
-class CustomByteCode(ByteCodeBase):
+    def get_used_globals(self):
+        """
+        Get a {name: value} map of the globals used by this code
+        object and any nested code objects.
+        """
+        return self._compute_used_globals(self.func_id.func, self.table,
+                                          self.co_consts, self.co_names)
+
+
+class FunctionIdentity(object):
     """
-    A simplified ByteCode class, used for hosting inner loops
-    when loop-lifting.
+    A function's identity and metadata.
+
+    Note this typically represents a function whose bytecode is
+    being compiled, not necessarily the top-level user function
+    (the two might be distinct, e.g. in the `@generated_jit` case).
     """
+    _unique_ids = itertools.count(1)
 
-
-class ByteCode(ByteCodeBase):
-    def __init__(self, func):
-        func = get_function_object(func)
+    @classmethod
+    def from_function(cls, pyfunc):
+        """
+        Create the FunctionIdentity of the given function.
+        """
+        func = get_function_object(pyfunc)
         code = get_code_object(func)
         pysig = utils.pysignature(func)
         if not code:
             raise errors.ByteCodeSupportError(
                 "%s does not provide its bytecode" % func)
-        if code.co_cellvars:
-            raise NotImplementedError("cell vars are not supported")
-
-        table = utils.SortedMap(ByteCodeIter(code))
-        labels = set(dis.findlabels(code.co_code))
-        labels.add(0)
 
         try:
             func_qualname = func.__qualname__
         except AttributeError:
             func_qualname = func.__name__
 
-        self._mark_lineno(table, code)
-        super(ByteCode, self).__init__(func=func,
-                                       func_qualname=func_qualname,
-                                       is_generator=inspect.isgeneratorfunction(func),
-                                       pysig=pysig,
-                                       filename=code.co_filename,
-                                       co_names=code.co_names,
-                                       co_varnames=code.co_varnames,
-                                       co_consts=code.co_consts,
-                                       co_freevars=code.co_freevars,
-                                       table=table,
-                                       labels=list(sorted(labels)))
+        self = cls()
+        self.func = pyfunc
+        self.func_qualname = func_qualname
+        self.func_name = func_qualname.split('.')[-1]
+        self.code = code
+        self.module = inspect.getmodule(func)
+        self.modname = (utils._dynamic_modname
+                        if self.module is None
+                        else self.module.__name__)
+        self.is_generator = inspect.isgeneratorfunction(func)
+        self.pysig = pysig
+        self.filename = code.co_filename
+        self.firstlineno = code.co_firstlineno
+        self.arg_count = len(pysig.parameters)
+        self.arg_names = list(pysig.parameters)
 
-    @classmethod
-    def _mark_lineno(cls, table, code):
-        '''Fill the lineno info for all bytecode inst
-        '''
-        for offset, lineno in dis.findlinestarts(code):
-            if offset in table:
-                table[offset].lineno = lineno
-        known = -1
-        for inst in table.values():
-            if inst.lineno >= 0:
-                known = inst.lineno
-            else:
-                inst.lineno = known
+        # Even the same function definition can be compiled into
+        # several different function objects with distinct closure
+        # variables, so we make sure to disambiguate using an unique id.
+        uid = next(cls._unique_ids)
+        self.unique_name = '{}${}'.format(self.func_qualname, uid)
 
+        return self

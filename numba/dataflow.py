@@ -333,6 +333,7 @@ class DataFlowAnalysis(object):
     op_INPLACE_FLOOR_DIVIDE = _binaryop
     op_INPLACE_MODULO = _binaryop
     op_INPLACE_POWER = _binaryop
+    op_INPLACE_MATRIX_MULTIPLY = _binaryop
 
     op_INPLACE_LSHIFT = _binaryop
     op_INPLACE_RSHIFT = _binaryop
@@ -348,6 +349,7 @@ class DataFlowAnalysis(object):
     op_BINARY_FLOOR_DIVIDE = _binaryop
     op_BINARY_MODULO = _binaryop
     op_BINARY_POWER = _binaryop
+    op_BINARY_MATRIX_MULTIPLY = _binaryop
 
     op_BINARY_LSHIFT = _binaryop
     op_BINARY_RSHIFT = _binaryop

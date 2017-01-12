@@ -5,7 +5,7 @@ import sys
 from numba.compiler import compile_isolated, Flags
 from numba import jit, types
 from numba import unittest_support as unittest
-from .support import TestCase
+from .support import TestCase, tag
 
 
 force_pyobj_flags = Flags()
@@ -27,6 +27,9 @@ def raise_class(exc):
             raise exc
         elif i == 2:
             raise ValueError
+        elif i == 3:
+            # The exception type is looked up on a module (issue #1624)
+            raise np.linalg.LinAlgError
         return i
     return raiser
 
@@ -36,6 +39,8 @@ def raise_instance(exc, arg):
             raise exc(arg, 1)
         elif i == 2:
             raise ValueError(arg, 2)
+        elif i == 3:
+            raise np.linalg.LinAlgError(arg, 3)
         return i
     return raiser
 
@@ -83,7 +88,11 @@ class TestRaising(TestCase):
         with self.assertRaises(ValueError) as cm:
             cfunc(2)
         self.assertEqual(cm.exception.args, ())
+        with self.assertRaises(np.linalg.LinAlgError) as cm:
+            cfunc(3)
+        self.assertEqual(cm.exception.args, ())
 
+    @tag('important')
     def test_raise_class_nopython(self):
         self.check_raise_class(flags=no_pyobj_flags)
 
@@ -102,10 +111,14 @@ class TestRaising(TestCase):
         with self.assertRaises(ValueError) as cm:
             cfunc(2)
         self.assertEqual(cm.exception.args, ("some message", 2))
+        with self.assertRaises(np.linalg.LinAlgError) as cm:
+            cfunc(3)
+        self.assertEqual(cm.exception.args, ("some message", 3))
 
     def test_raise_instance_objmode(self):
         self.check_raise_instance(flags=force_pyobj_flags)
 
+    @tag('important')
     def test_raise_instance_nopython(self):
         self.check_raise_instance(flags=no_pyobj_flags)
 
@@ -130,21 +143,24 @@ class TestRaising(TestCase):
     def test_raise_nested(self):
         self.check_raise_nested(forceobj=True)
 
+    @tag('important')
     def test_raise_nested_npm(self):
         self.check_raise_nested(nopython=True)
 
     def check_reraise(self, flags):
         pyfunc = reraise
         cres = compile_isolated(pyfunc, (), flags=flags)
+        cfunc = cres.entry_point
         with self.assertRaises(ZeroDivisionError):
             try:
                 1/0
             except ZeroDivisionError as e:
-                pyfunc()
+                cfunc()
 
     def test_reraise_objmode(self):
         self.check_reraise(flags=force_pyobj_flags)
 
+    @tag('important')
     def test_reraise_nopython(self):
         self.check_reraise(flags=no_pyobj_flags)
 
@@ -167,8 +183,6 @@ class TestRaising(TestCase):
         with self.assertTypingError():
             self.check_raise_invalid_class(1, flags=no_pyobj_flags)
 
-    @unittest.skipIf(sys.version_info < (2, 7),
-                     "assert statement uses unsupported 2-argument raise bytecode on 2.6")
     def check_assert_statement(self, flags):
         pyfunc = assert_usecase
         cres = compile_isolated(pyfunc, (types.int32,), flags=flags)

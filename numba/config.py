@@ -1,12 +1,16 @@
 from __future__ import print_function, division, absolute_import
 
+import platform
 import struct
 import sys
 import os
 import re
 import warnings
+import multiprocessing
 
 import llvmlite.binding as ll
+
+from .errors import NumbaWarning, PerformanceWarning
 
 
 IS_WIN32 = sys.platform.startswith('win32')
@@ -14,12 +18,6 @@ MACHINE_BITS = tuple.__itemsize__ * 8
 IS_32BITS = MACHINE_BITS == 32
 # Python version in (major, minor) tuple
 PYVERSION = sys.version_info[:2]
-
-_cpu_name = ll.get_host_cpu_name()
-
-
-class NumbaWarning(Warning):
-    pass
 
 
 def _parse_cc(text):
@@ -36,6 +34,32 @@ def _parse_cc(text):
                              "and minor are decimals")
         grp = m.groups()
         return int(grp[0]), int(grp[1])
+
+
+def _os_supports_avx():
+    """
+    Whether the current OS supports AVX, regardless of the CPU.
+
+    This is necessary because the user may be running a very old Linux
+    kernel (e.g. CentOS 5) on a recent CPU.
+    """
+    if (not sys.platform.startswith('linux')
+        or platform.machine() not in ('i386', 'i586', 'i686', 'x86_64')):
+        return True
+    # Executing the CPUID instruction may report AVX available even though
+    # the kernel doesn't support it, so parse /proc/cpuinfo instead.
+    try:
+        f = open('/proc/cpuinfo', 'r')
+    except OSError:
+        # If /proc isn't available, assume yes
+        return True
+    with f:
+        for line in f:
+            head, _, body = line.partition(':')
+            if head.strip() == 'flags' and 'avx' in body.split():
+                return True
+        else:
+            return False
 
 
 class _EnvReloader(object):
@@ -62,18 +86,10 @@ class _EnvReloader(object):
             self.old_environ = dict(new_environ)
 
     def process_environ(self, environ):
-        for env_name, value in environ.items():
-            config_name = env_name[6:]
-            meth = getattr(self, 'parse_' + config_name)
-            globals()[config_name] = meth(value)
-        # Store a copy
-        self.old_environ = dict(os.environ)
-
-    def process_environ(self, environ):
         def _readenv(name, ctor, default):
             value = environ.get(name)
             if value is None:
-                return default
+                return default() if callable(default) else default
             try:
                 return ctor(value)
             except Exception:
@@ -96,6 +112,9 @@ class _EnvReloader(object):
 
         # Enable debugging of front-end operation (up to and including IR generation)
         DEBUG_FRONTEND = _readenv("NUMBA_DEBUG_FRONTEND", int, 0)
+
+        # Enable logging of cache operation
+        DEBUG_CACHE = _readenv("NUMBA_DEBUG_CACHE", int, DEBUG)
 
         # Enable tracing support
         TRACE = _readenv("NUMBA_TRACE", int, 0)
@@ -137,36 +156,81 @@ class _EnvReloader(object):
         ANNOTATE = _readenv("NUMBA_DUMP_ANNOTATION", int, 0)
 
         # Dump type annotation in html format
-        HTML = _readenv("NUMBA_DUMP_HTML", str, None)
+        def fmt_html_path(path):
+            if path is None:
+                return path
+            else:
+                return os.path.abspath(path)
 
-        # Disable CUDA support
-        DISABLE_CUDA = _readenv("NUMBA_DISABLE_CUDA", int, int(MACHINE_BITS==32))
+        HTML = _readenv("NUMBA_DUMP_HTML", fmt_html_path, None)
 
         # Allow interpreter fallback so that Numba @jit decorator will never fail
         # Use for migrating from old numba (<0.12) which supported closure, and other
         # yet-to-be-supported features.
         COMPATIBILITY_MODE = _readenv("NUMBA_COMPATIBILITY_MODE", int, 0)
 
-        # Force CUDA compute capability to a specific version
-        FORCE_CUDA_CC = _readenv("NUMBA_FORCE_CUDA_CC", _parse_cc, None)
-
         # x86-64 specific
         # Enable AVX on supported platforms where it won't degrade performance.
-        ENABLE_AVX = _readenv("NUMBA_ENABLE_AVX", int,
-                              _cpu_name not in ('corei7-avx', 'core-avx-i'))
+        def avx_default():
+            if not _os_supports_avx():
+                warnings.warn("your operating system doesn't support "
+                              "AVX, this may degrade performance on "
+                              "some numerical code", PerformanceWarning)
+                return False
+            else:
+                # There are various performance issues with AVX and LLVM
+                # on some CPUs (list at
+                # http://llvm.org/bugs/buglist.cgi?quicksearch=avx).
+                # For now we'd rather disable it, since it can pessimize the code.
+                cpu_name = ll.get_host_cpu_name()
+                return cpu_name not in ('corei7-avx', 'core-avx-i',
+                                        'sandybridge', 'ivybridge')
+
+        ENABLE_AVX = _readenv("NUMBA_ENABLE_AVX", int, avx_default)
 
         # Disable jit for debugging
         DISABLE_JIT = _readenv("NUMBA_DISABLE_JIT", int, 0)
 
+        # CUDA Configs
+
+        # Force CUDA compute capability to a specific version
+        FORCE_CUDA_CC = _readenv("NUMBA_FORCE_CUDA_CC", _parse_cc, None)
+
+        # Disable CUDA support
+        DISABLE_CUDA = _readenv("NUMBA_DISABLE_CUDA", int, int(MACHINE_BITS==32))
+
         # Enable CUDA simulator
         ENABLE_CUDASIM = _readenv("NUMBA_ENABLE_CUDASIM", int, 0)
+
+        # CUDA logging level
+        # Any level name from the *logging* module.  Case insensitive.
+        # Defaults to CRITICAL if not set or invalid.
+        # Note: This setting only applies when logging is not configured.
+        #       Any existing logging configuration is preserved.
+        CUDA_LOG_LEVEL = _readenv("NUMBA_CUDA_LOG_LEVEL", str, '')
+
+        # Maximum number of pending CUDA deallocations (default: 10)
+        CUDA_DEALLOCS_COUNT = _readenv("NUMBA_CUDA_MAX_PENDING_DEALLOCS_COUNT",
+                                       int, 10)
+
+        # Maximum ratio of pending CUDA deallocations to capacity (default: 0.2)
+        CUDA_DEALLOCS_RATIO = _readenv("NUMBA_CUDA_MAX_PENDING_DEALLOCS_RATIO",
+                                       float, 0.2)
 
         # HSA Configs
 
         # Disable HSA support
         DISABLE_HSA = _readenv("NUMBA_DISABLE_HSA", int, 0)
+
+        # The default number of threads to use.
+        NUMBA_DEFAULT_NUM_THREADS = max(1, multiprocessing.cpu_count())
+
+        # Numba thread pool size (defaults to number of CPUs on the system).
+        NUMBA_NUM_THREADS = _readenv("NUMBA_NUM_THREADS", int,
+                                     NUMBA_DEFAULT_NUM_THREADS)
+
         # Inject the configuration values into the module globals
-        for name, value in locals().items():
+        for name, value in locals().copy().items():
             if name.isupper():
                 globals()[name] = value
 

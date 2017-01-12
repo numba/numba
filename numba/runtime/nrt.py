@@ -2,7 +2,7 @@ from __future__ import print_function, absolute_import, division
 
 from collections import namedtuple
 
-from . import atomicops
+from . import nrtdynmod
 from llvmlite import binding as ll
 
 from numba.utils import finalize as _finalize
@@ -32,7 +32,7 @@ class _Runtime(object):
             ll.add_symbol(c_name, c_address)
 
         # Compile atomic operations
-        self._library = atomicops.compile_nrt_functions(ctx)
+        self._library = nrtdynmod.compile_nrt_functions(ctx)
 
         self._ptr_inc = self._library.get_pointer_to_function("nrt_atomic_add")
         self._ptr_dec = self._library.get_pointer_to_function("nrt_atomic_sub")

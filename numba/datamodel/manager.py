@@ -1,5 +1,7 @@
 from __future__ import print_function, absolute_import
 
+import weakref
+
 from numba import types
 
 
@@ -8,10 +10,10 @@ class DataModelManager(object):
     """
 
     def __init__(self):
-        # handler map
-        # key: numba.types.Type subclass
-        # value: function
+        # { numba type class -> model factory }
         self._handlers = {}
+        # { numba type instance -> model instance }
+        self._cache = weakref.WeakKeyDictionary()
 
     def register(self, fetypecls, handler):
         """Register the datamodel factory corresponding to a frontend-type class
@@ -22,8 +24,13 @@ class DataModelManager(object):
     def lookup(self, fetype):
         """Returns the corresponding datamodel given the frontend-type instance
         """
+        try:
+            return self._cache[fetype]
+        except KeyError:
+            pass
         handler = self._handlers[type(fetype)]
-        return handler(self, fetype)
+        model = self._cache[fetype] = handler(self, fetype)
+        return model
 
     def __getitem__(self, fetype):
         """Shorthand for lookup()

@@ -10,11 +10,12 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba import config, numpy_support, types
-from .support import TestCase, skip_on_numpy_16
+from .support import TestCase, tag
 
 
 class TestFromDtype(TestCase):
 
+    @tag('important')
     def test_number_types(self):
         """
         Test from_dtype() and as_dtype() with the various scalar number types.
@@ -80,7 +81,6 @@ class TestFromDtype(TestCase):
         check('a11', types.CharSeq(11))
         check('U12', types.UnicodeCharSeq(12))
 
-    @skip_on_numpy_16
     def check_datetime_types(self, letter, nb_class):
         def check(dtype, numba_type, code):
             tp = numpy_support.from_dtype(dtype)
@@ -92,18 +92,21 @@ class TestFromDtype(TestCase):
         # Unit-less ("generic") type
         check(np.dtype(letter), nb_class(''), 14)
 
+    @tag('important')
     def test_datetime_types(self):
         """
         Test from_dtype() and as_dtype() with the datetime types.
         """
         self.check_datetime_types('M', types.NPDatetime)
 
+    @tag('important')
     def test_timedelta_types(self):
         """
         Test from_dtype() and as_dtype() with the timedelta types.
         """
         self.check_datetime_types('m', types.NPTimedelta)
 
+    @tag('important')
     def test_struct_types(self):
         def check(dtype, fields, size, aligned):
             tp = numpy_support.from_dtype(dtype)
@@ -173,14 +176,12 @@ class ValueTypingTestBase(object):
             # This ensures the unit hasn't been lost
             self.assertEqual(tp, nb_type(unit))
 
-    @skip_on_numpy_16
     def check_datetime_values(self, func):
         """
         Test *func*() with np.datetime64 values.
         """
         self._base_check_datetime_values(func, np.datetime64, types.NPDatetime)
 
-    @skip_on_numpy_16
     def check_timedelta_values(self, func):
         """
         Test *func*() with np.timedelta64 values.
@@ -190,12 +191,14 @@ class ValueTypingTestBase(object):
 
 class TestArrayScalars(ValueTypingTestBase, TestCase):
 
+    @tag('important')
     def test_number_values(self):
         """
         Test map_arrayscalar_type() with scalar number values.
         """
         self.check_number_values(numpy_support.map_arrayscalar_type)
 
+    @tag('important')
     def test_datetime_values(self):
         """
         Test map_arrayscalar_type() with np.datetime64 values.
@@ -207,6 +210,7 @@ class TestArrayScalars(ValueTypingTestBase, TestCase):
         with self.assertRaises(NotImplementedError):
             f(t)
 
+    @tag('important')
     def test_timedelta_values(self):
         """
         Test map_arrayscalar_type() with np.timedelta64 values.
@@ -233,7 +237,7 @@ class FakeUFunc(object):
             assert len(in_) == self.nin
             assert len(out) == self.nout
 
-# Typical types for np.add, np.multiply
+# Typical types for np.add, np.multiply, np.isnan
 _add_types = ['??->?', 'bb->b', 'BB->B', 'hh->h', 'HH->H', 'ii->i', 'II->I',
               'll->l', 'LL->L', 'qq->q', 'QQ->Q', 'ee->e', 'ff->f', 'dd->d',
               'gg->g', 'FF->F', 'DD->D', 'GG->G', 'Mm->M', 'mm->m', 'mM->M',
@@ -243,6 +247,10 @@ _mul_types = ['??->?', 'bb->b', 'BB->B', 'hh->h', 'HH->H', 'ii->i', 'II->I',
               'll->l', 'LL->L', 'qq->q', 'QQ->Q', 'ee->e', 'ff->f', 'dd->d',
               'gg->g', 'FF->F', 'DD->D', 'GG->G', 'mq->m', 'qm->m', 'md->m',
               'dm->m', 'OO->O']
+
+# Those ones only have floating-point loops
+_isnan_types = ['e->?', 'f->?', 'd->?', 'g->?', 'F->?', 'D->?', 'G->?']
+_sqrt_types = ['e->e', 'f->f', 'd->d', 'g->g', 'F->F', 'D->D', 'G->G', 'O->O']
 
 
 class TestUFuncs(TestCase):
@@ -254,6 +262,8 @@ class TestUFuncs(TestCase):
         f = numpy_support.ufunc_find_matching_loop
         np_add = FakeUFunc(_add_types)
         np_mul = FakeUFunc(_mul_types)
+        np_isnan = FakeUFunc(_isnan_types)
+        np_sqrt = FakeUFunc(_sqrt_types)
 
         def check(ufunc, input_types, sigs, output_types=()):
             """
@@ -264,7 +274,10 @@ class TestUFuncs(TestCase):
             self.assertTrue(loop)
             if isinstance(sigs, str):
                 sigs = (sigs,)
-            self.assertIn(loop.ufunc_sig, sigs)
+            self.assertIn(loop.ufunc_sig, sigs,
+                          "inputs=%s and outputs=%s should have selected "
+                          "one of %s, got %s"
+                          % (input_types, output_types, sigs, loop.ufunc_sig))
             self.assertEqual(len(loop.numpy_inputs), len(loop.inputs))
             self.assertEqual(len(loop.numpy_outputs), len(loop.outputs))
             if not output_types:
@@ -279,6 +292,9 @@ class TestUFuncs(TestCase):
             return loop
 
         def check_exact(ufunc, input_types, sigs, output_types=()):
+            """
+            Like check(), but also ensure no casting of inputs occurred.
+            """
             loop = check(ufunc, input_types, sigs, output_types)
             self.assertEqual(loop.inputs, list(input_types))
 
@@ -316,6 +332,21 @@ class TestUFuncs(TestCase):
         check(np_add, (types.int16, types.uint16), 'ii->i')
         check(np_add, (types.complex64, types.float64), 'DD->D')
         check(np_add, (types.float64, types.complex64), 'DD->D')
+        # Integers, when used together with floating-point numbers,
+        # should cast to any real or complex (see #2006)
+        int_types = [types.int32, types.uint32, types.int64, types.uint64]
+        for intty in int_types:
+            check(np_add, (types.float32, intty), 'ff->f')
+            check(np_add, (types.float64, intty), 'dd->d')
+            check(np_add, (types.complex64, intty), 'FF->F')
+            check(np_add, (types.complex128, intty), 'DD->D')
+        # However, when used alone, they should cast only to
+        # floating-point types of sufficient precision
+        # (typical use case: np.sqrt(2) should give an accurate enough value)
+        for intty in int_types:
+            check(np_sqrt, (intty,), 'd->d')
+            check(np_isnan, (intty,), 'd->?')
+
         # With some timedelta64 arguments as well
         check(np_mul, (types.NPTimedelta('s'), types.int32),
               'mq->m', output_types=(types.NPTimedelta('s'),))

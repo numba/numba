@@ -10,7 +10,7 @@ from numba.compiler import compile_isolated
 from numba import types, typeinfer, typing, jit, errors
 from numba.typeconv import Conversion
 
-from .support import TestCase
+from .support import TestCase, tag
 from .test_typeconv import CompatibilityTestMixin
 
 
@@ -130,8 +130,9 @@ class TestUnify(unittest.TestCase):
                              msg=template.format(bty, aty, unified, expected))
 
     def assert_unify_failure(self, aty, bty):
-        self.assert_unify(aty, bty, types.pyobject)
+        self.assert_unify(aty, bty, None)
 
+    @tag('important')
     def test_integer(self):
         ctx = typing.Context()
         for aty, bty in itertools.product(types.integer_domain,
@@ -143,6 +144,7 @@ class TestUnify(unittest.TestCase):
                 expected = self.int_unify[key[::-1]]
             self.assert_unify(aty, bty, getattr(types, expected))
 
+    @tag('important')
     def test_bool(self):
         aty = types.boolean
         for bty in types.integer_domain:
@@ -186,6 +188,7 @@ class TestUnify(unittest.TestCase):
             for res in results:
                 self.assertEqual(res, expected)
 
+    @tag('important')
     def test_none(self):
         aty = types.none
         bty = types.none
@@ -203,9 +206,10 @@ class TestUnify(unittest.TestCase):
         self.assert_unify(aty, bty, types.Optional(i64))
         # Failure
         aty = types.Optional(i32)
-        bty = types.Optional(types.len_type)
+        bty = types.Optional(types.slice3_type)
         self.assert_unify_failure(aty, bty)
 
+    @tag('important')
     def test_tuple(self):
         aty = types.UniTuple(i32, 3)
         bty = types.UniTuple(i64, 3)
@@ -238,12 +242,12 @@ class TestUnify(unittest.TestCase):
                           types.UniTuple(types.Tuple((i64, f32)), 2))
         # Failures
         aty = types.UniTuple(i32, 1)
-        bty = types.UniTuple(types.len_type, 1)
+        bty = types.UniTuple(types.slice3_type, 1)
         self.assert_unify_failure(aty, bty)
         aty = types.UniTuple(i32, 1)
         bty = types.UniTuple(i32, 2)
         self.assert_unify_failure(aty, bty)
-        aty = types.Tuple((i8, types.len_type))
+        aty = types.Tuple((i8, types.slice3_type))
         bty = types.Tuple((i32, i8))
         self.assert_unify_failure(aty, bty)
 
@@ -265,6 +269,7 @@ class TestUnify(unittest.TestCase):
         self.assert_unify(aty, bty, types.Tuple((types.Optional(i32),
                                                  types.Optional(i64))))
 
+    @tag('important')
     def test_arrays(self):
         aty = types.Array(i32, 3, "C")
         bty = types.Array(i32, 3, "A")
@@ -287,6 +292,7 @@ class TestUnify(unittest.TestCase):
         bty = types.Array(u32, 2, "C")
         self.assert_unify_failure(aty, bty)
 
+    @tag('important')
     def test_list(self):
         aty = types.List(types.undefined)
         bty = types.List(i32)
@@ -308,6 +314,18 @@ class TestUnify(unittest.TestCase):
         bty = types.List(types.Tuple([i16]))
         self.assert_unify_failure(aty, bty)
 
+    def test_set(self):
+        # Different reflections
+        aty = types.Set(i16, reflected=True)
+        bty = types.Set(i32)
+        cty = types.Set(i32, reflected=True)
+        self.assert_unify(aty, bty, cty)
+        # Incompatible dtypes
+        aty = types.Set(i16)
+        bty = types.Set(types.Tuple([i16]))
+        self.assert_unify_failure(aty, bty)
+
+    @tag('important')
     def test_range(self):
         aty = types.range_state32_type
         bty = types.range_state64_type
@@ -329,6 +347,7 @@ class TestTypeConversion(CompatibilityTestMixin, unittest.TestCase):
         got = ctx.can_convert(aty, bty)
         self.assertIsNone(got)
 
+    @tag('important')
     def test_convert_number_types(self):
         # Check that Context.can_convert() is compatible with the default
         # number conversion rules registered in the typeconv module
@@ -336,6 +355,7 @@ class TestTypeConversion(CompatibilityTestMixin, unittest.TestCase):
         ctx = typing.Context()
         self.check_number_compatibility(ctx.can_convert)
 
+    @tag('important')
     def test_tuple(self):
         # UniTuple -> UniTuple
         aty = types.UniTuple(i32, 3)
@@ -369,6 +389,7 @@ class TestTypeConversion(CompatibilityTestMixin, unittest.TestCase):
         aty = types.UniTuple(i64, 2)
         bty = types.UniTuple(i64, 3)
 
+    @tag('important')
     def test_arrays(self):
         # Different layouts
         aty = types.Array(i32, 3, "C")
@@ -493,6 +514,7 @@ class TestUnifyUseCases(unittest.TestCase):
         cres = compile_isolated(pyfunc, argtys)
         return (pyfunc, cres)
 
+    @tag('important')
     def test_complex_unify_issue599(self):
         pyfunc, cres = self._actually_test_complex_unify()
         arg = np.array([1.0j])
@@ -514,6 +536,7 @@ class TestUnifyUseCases(unittest.TestCase):
             subproc.wait()
             self.assertEqual(subproc.returncode, 0, 'Child process failed.')
 
+    @tag('important')
     def test_int_tuple_unify(self):
         """
         Test issue #493
@@ -619,6 +642,7 @@ def issue_1394(a):
 
 class TestMiscIssues(TestCase):
 
+    @tag('important')
     def test_issue_797(self):
         """https://github.com/numba/numba/issues/797#issuecomment-58592401
 
@@ -628,6 +652,7 @@ class TestMiscIssues(TestCase):
         g = np.zeros(shape=(10, 10), dtype=np.int32)
         foo(np.int32(0), np.int32(0), np.int32(1), np.int32(1), g)
 
+    @tag('important')
     def test_issue_1080(self):
         """https://github.com/numba/numba/issues/1080
 
@@ -636,6 +661,7 @@ class TestMiscIssues(TestCase):
         foo = jit(nopython=True)(issue_1080)
         foo(True, False)
 
+    @tag('important')
     def test_list_unify1(self):
         """
         Exercise back-propagation of refined list type.
@@ -646,6 +672,7 @@ class TestMiscIssues(TestCase):
             res = cfunc(n)
             self.assertPreciseEqual(res, pyfunc(n))
 
+    @tag('important')
     def test_list_unify2(self):
         pyfunc = list_unify_usecase2
         cfunc = jit(nopython=True)(pyfunc)
@@ -654,6 +681,7 @@ class TestMiscIssues(TestCase):
         # converted values).
         self.assertEqual(res, pyfunc(3))
 
+    @tag('important')
     def test_range_unify(self):
         pyfunc = range_unify_usecase
         cfunc = jit(nopython=True)(pyfunc)
@@ -661,6 +689,7 @@ class TestMiscIssues(TestCase):
             res = cfunc(v)
             self.assertPreciseEqual(res, pyfunc(v))
 
+    @tag('important')
     def test_issue_1394(self):
         pyfunc = issue_1394
         cfunc = jit(nopython=True)(pyfunc)

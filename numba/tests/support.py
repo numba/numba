@@ -4,15 +4,20 @@ Assorted utilities for use in tests.
 
 import cmath
 import contextlib
+import enum
 import errno
+import gc
 import math
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
+import time
 
 import numpy as np
 
-from numba import config, errors, typing, utils, numpy_support
+from numba import config, errors, typing, utils, numpy_support, testing
 from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
 from numba.targets import cpu
 import numba.unittest_support as unittest
@@ -27,10 +32,11 @@ force_pyobj_flags.set("force_pyobject")
 
 no_pyobj_flags = Flags()
 
+nrt_flags = Flags()
+nrt_flags.set("nrt")
 
-is_on_numpy_16 = numpy_support.version == (1, 6)
-skip_on_numpy_16 = unittest.skipIf(is_on_numpy_16,
-                                   "test requires Numpy 1.7 or later")
+
+tag = testing.make_tag_decorator(['important'])
 
 
 class CompilationCache(object):
@@ -49,12 +55,17 @@ class CompilationCache(object):
         Compile the function or retrieve an already compiled result
         from the cache.
         """
+        from numba.targets.registry import cpu_target
+
         cache_key = (func, args, return_type, flags)
         try:
             cr = self.cr_cache[cache_key]
         except KeyError:
-            cr = compile_extra(self.typingctx, self.targetctx, func,
-                               args, return_type, flags, locals={})
+            # Register the contexts in case for nested @jit or @overload calls
+            # (same as compile_isolated())
+            with cpu_target.nested_context(self.typingctx, self.targetctx):
+                cr = compile_extra(self.typingctx, self.targetctx, func,
+                                   args, return_type, flags, locals={})
             self.cr_cache[cache_key] = cr
         return cr
 
@@ -98,7 +109,7 @@ class TestCase(unittest.TestCase):
         """
         A context manager that asserts the given objects have the
         same reference counts before and after executing the
-        enclosed blocks.
+        enclosed block.
         """
         old_refcounts = [sys.getrefcount(x) for x in objects]
         yield
@@ -108,7 +119,27 @@ class TestCase(unittest.TestCase):
                 self.fail("Refcount changed from %d to %d for object: %r"
                           % (old, new, obj))
 
-    _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (np.integer,), (utils.text_type), ]
+    @contextlib.contextmanager
+    def assertNoNRTLeak(self):
+        """
+        A context manager that asserts no NRT leak was created during
+        the execution of the enclosed block.
+        """
+        old = rtsys.get_allocation_stats()
+        yield
+        new = rtsys.get_allocation_stats()
+        total_alloc = new.alloc - old.alloc
+        total_free = new.free - old.free
+        total_mi_alloc = new.mi_alloc - old.mi_alloc
+        total_mi_free = new.mi_free - old.mi_free
+        self.assertEqual(total_alloc, total_free,
+                         "number of data allocs != number of data frees")
+        self.assertEqual(total_mi_alloc, total_mi_free,
+                         "number of meminfo allocs != number of meminfo frees")
+
+
+    _bool_types = (bool, np.bool_)
+    _exact_typesets = [_bool_types, utils.INT_TYPES, (str,), (np.integer,), (utils.text_type), ]
     _approx_typesets = [(float,), (complex,), (np.inexact)]
     _sequence_typesets = [(tuple, list)]
     _float_types = (float, np.floating)
@@ -122,6 +153,9 @@ class TestCase(unittest.TestCase):
         """
         if isinstance(numeric_object, np.ndarray):
             return "ndarray"
+
+        if isinstance(numeric_object, enum.Enum):
+            return "enum"
 
         for tp in self._sequence_typesets:
             if isinstance(numeric_object, tp):
@@ -158,9 +192,12 @@ class TestCase(unittest.TestCase):
         Return the strides of the given array, fixed for comparison.
         Strides for 0- or 1-sized dimensions are ignored.
         """
-        return [stride / arr.itemsize
-                for (stride, shape) in zip(arr.strides, arr.shape)
-                if shape > 1]
+        if arr.size == 0:
+            return [0] * arr.ndim
+        else:
+            return [stride / arr.itemsize
+                    for (stride, shape) in zip(arr.strides, arr.shape)
+                    if shape > 1]
 
     def assertStridesEqual(self, first, second):
         """
@@ -172,10 +209,21 @@ class TestCase(unittest.TestCase):
                          "strides differ")
 
     def assertPreciseEqual(self, first, second, prec='exact', ulps=1,
-                           msg=None):
+                           msg=None, ignore_sign_on_zero=False,
+                           abs_tol=None
+                           ):
         """
-        Test that two scalars have similar types and are equal up to
-        a computed precision.
+        Versatile equality testing function with more built-in checks than
+        standard assertEqual().
+
+        For arrays, test that layout, dtype, shape are identical, and
+        recursively call assertPreciseEqual() on the contents.
+
+        For other sequences, recursively call assertPreciseEqual() on
+        the contents.
+
+        For scalars, test that two scalars or have similar types and are
+        equal up to a computed precision.
         If the scalars are instances of exact types or if *prec* is
         'exact', they are compared exactly.
         If the scalars are instances of inexact types (float, complex)
@@ -183,12 +231,22 @@ class TestCase(unittest.TestCase):
         is computed according to the value of *prec*: 53 bits if *prec*
         is 'double', 24 bits if *prec* is single.  This number of bits
         can be lowered by raising the *ulps* value.
+        ignore_sign_on_zero can be set to True if zeros are to be considered
+        equal regardless of their sign bit.
+        abs_tol if this is set to a float value its value is used in the
+        following. If, however, this is set to the string "eps" then machine
+        precision of the type(first) is used in the following instead. This
+        kwarg is used to check if the absolute difference in value between first
+        and second is less than the value set, if so the numbers being compared
+        are considered equal. (This is to handle small numbers typically of
+        magnitude less than machine precision).
 
         Any value of *prec* other than 'exact', 'single' or 'double'
         will raise an error.
         """
         try:
-            self._assertPreciseEqual(first, second, prec, ulps, msg)
+            self._assertPreciseEqual(first, second, prec, ulps, msg,
+                ignore_sign_on_zero, abs_tol)
         except AssertionError as exc:
             failure_msg = str(exc)
             # Fall off of the 'except' scope to avoid Python 3 exception
@@ -199,7 +257,8 @@ class TestCase(unittest.TestCase):
         self.fail("when comparing %s and %s: %s" % (first, second, failure_msg))
 
     def _assertPreciseEqual(self, first, second, prec='exact', ulps=1,
-                            msg=None):
+                            msg=None, ignore_sign_on_zero=False,
+                            abs_tol=None):
         """Recursive workhorse for assertPreciseEqual()."""
 
         def _assertNumberEqual(first, second, delta=None):
@@ -207,20 +266,23 @@ class TestCase(unittest.TestCase):
                 or math.isinf(first) or math.isinf(second)):
                 self.assertEqual(first, second, msg=msg)
                 # For signed zeros
-                try:
-                    if math.copysign(1, first) != math.copysign(1, second):
-                        self.fail(
-                            self._formatMessage(msg,
-                                                "%s != %s" % (first, second)))
-                except TypeError:
-                    pass
+                if not ignore_sign_on_zero:
+                    try:
+                        if math.copysign(1, first) != math.copysign(1, second):
+                            self.fail(
+                                self._formatMessage(msg,
+                                                    "%s != %s" %
+                                                    (first, second)))
+                    except TypeError:
+                        pass
             else:
                 self.assertAlmostEqual(first, second, delta=delta, msg=msg)
 
         first_family = self._detect_family(first)
         second_family = self._detect_family(second)
 
-        assertion_message = "Type Family mismatch. (%s != %s)" % (first_family, second_family)
+        assertion_message = "Type Family mismatch. (%s != %s)" % (first_family,
+            second_family)
         if msg:
             assertion_message += ': %s' % (msg,)
         self.assertEqual(first_family, second_family, msg=assertion_message)
@@ -239,38 +301,59 @@ class TestCase(unittest.TestCase):
             self.assertEqual(first.flags.writeable, second.flags.writeable,
                              "different mutability")
             # itemsize is already checked by the dtype test above
-            self.assertEqual(self._fix_strides(first), self._fix_strides(second),
-                             "different strides")
+            self.assertEqual(self._fix_strides(first),
+                self._fix_strides(second), "different strides")
             if first.dtype != dtype:
                 first = first.astype(dtype)
             if second.dtype != dtype:
                 second = second.astype(dtype)
             for a, b in zip(first.flat, second.flat):
-                self._assertPreciseEqual(a, b, prec, ulps, msg)
+                self._assertPreciseEqual(a, b, prec, ulps, msg,
+                                         ignore_sign_on_zero, abs_tol)
             return
 
-        if compare_family == "sequence":
+        elif compare_family == "sequence":
             self.assertEqual(len(first), len(second), msg=msg)
             for a, b in zip(first, second):
-                self._assertPreciseEqual(a, b, prec, ulps, msg)
+                self._assertPreciseEqual(a, b, prec, ulps, msg,
+                                         ignore_sign_on_zero, abs_tol)
             return
 
-        if compare_family == "exact":
+        elif compare_family == "exact":
             exact_comparison = True
 
-        if compare_family in ["complex", "approximate"]:
+        elif compare_family in ["complex", "approximate"]:
             exact_comparison = False
 
-        if compare_family == "unknown":
+        elif compare_family == "enum":
+            self.assertIs(first.__class__, second.__class__)
+            self._assertPreciseEqual(first.value, second.value,
+                                     prec, ulps, msg,
+                                     ignore_sign_on_zero, abs_tol)
+            return
+
+        elif compare_family == "unknown":
             # Assume these are non-numeric types: we will fall back
             # on regular unittest comparison.
             self.assertIs(first.__class__, second.__class__)
             exact_comparison = True
 
+        else:
+            assert 0, "unexpected family"
+
         # If a Numpy scalar, check the dtype is exactly the same too
         # (required for datetime64 and timedelta64).
         if hasattr(first, 'dtype') and hasattr(second, 'dtype'):
             self.assertEqual(first.dtype, second.dtype)
+
+        # Mixing bools and non-bools should always fail
+        if (isinstance(first, self._bool_types) !=
+            isinstance(second, self._bool_types)):
+            assertion_message = ("Mismatching return types (%s vs. %s)"
+                                 % (first.__class__, second.__class__))
+            if msg:
+                assertion_message += ': %s' % (msg,)
+            self.fail(assertion_message)
 
         try:
             if cmath.isnan(first) and cmath.isnan(second):
@@ -279,6 +362,18 @@ class TestCase(unittest.TestCase):
         except TypeError:
             # Not floats.
             pass
+
+        # if absolute comparison is set, use it
+        if abs_tol is not None:
+            if abs_tol == "eps":
+                rtol = np.finfo(type(first)).eps
+            elif isinstance(abs_tol, float):
+                rtol = abs_tol
+            else:
+                raise ValueError("abs_tol is not \"eps\" or a float, found %s"
+                    % abs_tol)
+            if abs(first - second) < rtol:
+                return
 
         exact_comparison = exact_comparison or prec == 'exact'
 
@@ -334,7 +429,7 @@ def compile_function(name, code, globs):
     Given a *code* string, compile it with globals *globs* and return
     the function named *name*.
     """
-    co = compile(code, "<string>", "exec")
+    co = compile(code.rstrip(), "<string>", "single")
     ns = {}
     eval(co, globs, ns)
     return ns[name]
@@ -364,20 +459,74 @@ def tweak_code(func, codestring=None, consts=None):
                       co.co_lnotab)
     func.__code__ = new_code
 
-def static_temp_directory(dirname):
-    """
-    Create a directory in the temp dir with a given name. Statically-named
-    temp dirs created using this function are needed because we can't delete a
-    DLL under Windows (this is a bit fragile if stale files can influence the
-    result of future test runs).
-    """
-    tmpdir = os.path.join(tempfile.gettempdir(), dirname)
+
+_trashcan_dir = 'numba-tests'
+
+if os.name == 'nt':
+    # Under Windows, gettempdir() points to the user-local temp dir
+    _trashcan_dir = os.path.join(tempfile.gettempdir(), _trashcan_dir)
+else:
+    # Mix the UID into the directory name to allow different users to
+    # run the test suite without permission errors (issue #1586)
+    _trashcan_dir = os.path.join(tempfile.gettempdir(),
+                                 "%s.%s" % (_trashcan_dir, os.getuid()))
+
+# Stale temporary directories are deleted after they are older than this value.
+# The test suite probably won't ever take longer than this...
+_trashcan_timeout = 24 * 3600  # 1 day
+
+def _create_trashcan_dir():
     try:
-        os.mkdir(tmpdir)
+        os.mkdir(_trashcan_dir)
     except OSError as e:
         if e.errno != errno.EEXIST:
             raise
-    return tmpdir
+
+def _purge_trashcan_dir():
+    freshness_threshold = time.time() - _trashcan_timeout
+    for fn in sorted(os.listdir(_trashcan_dir)):
+        fn = os.path.join(_trashcan_dir, fn)
+        try:
+            st = os.stat(fn)
+            if st.st_mtime < freshness_threshold:
+                shutil.rmtree(fn, ignore_errors=True)
+        except OSError as e:
+            # In parallel testing, several processes can attempt to
+            # remove the same entry at once, ignore.
+            pass
+
+def _create_trashcan_subdir(prefix):
+    _purge_trashcan_dir()
+    path = tempfile.mkdtemp(prefix=prefix + '-', dir=_trashcan_dir)
+    return path
+
+def temp_directory(prefix):
+    """
+    Create a temporary directory with the given *prefix* that will survive
+    at least as long as this process invocation.  The temporary directory
+    will be eventually deleted when it becomes stale enough.
+
+    This is necessary because a DLL file can't be deleted while in use
+    under Windows.
+
+    An interesting side-effect is to be able to inspect the test files
+    shortly after a test suite run.
+    """
+    _create_trashcan_dir()
+    return _create_trashcan_subdir(prefix)
+
+
+def import_dynamic(modname):
+    """
+    Import and return a module of the given name.  Care is taken to
+    avoid issues due to Python's internal directory caching.
+    """
+    if sys.version_info >= (3, 3):
+        import importlib
+        importlib.invalidate_caches()
+    __import__(modname)
+    return sys.modules[modname]
+
 
 # From CPython
 
@@ -416,18 +565,23 @@ class MemoryLeak(object):
     __enable_leak_check = True
 
     def memory_leak_setup(self):
+        # Clean up any NRT-backed objects hanging in a dead reference cycle
+        gc.collect()
         self.__init_stats = rtsys.get_allocation_stats()
 
     def memory_leak_teardown(self):
         if self.__enable_leak_check:
-            old = self.__init_stats
-            new = rtsys.get_allocation_stats()
-            total_alloc = new.alloc - old.alloc
-            total_free = new.free - old.free
-            total_mi_alloc = new.mi_alloc - old.mi_alloc
-            total_mi_free = new.mi_free - old.mi_free
-            self.assertEqual(total_alloc, total_free)
-            self.assertEqual(total_mi_alloc, total_mi_free)
+            self.assert_no_memory_leak()
+
+    def assert_no_memory_leak(self):
+        old = self.__init_stats
+        new = rtsys.get_allocation_stats()
+        total_alloc = new.alloc - old.alloc
+        total_free = new.free - old.free
+        total_mi_alloc = new.mi_alloc - old.mi_alloc
+        total_mi_free = new.mi_free - old.mi_free
+        self.assertEqual(total_alloc, total_free)
+        self.assertEqual(total_mi_alloc, total_mi_free)
 
     def disable_leak_check(self):
         # For per-test use when MemoryLeakMixin is injected into a TestCase
@@ -443,3 +597,36 @@ class MemoryLeakMixin(MemoryLeak):
     def tearDown(self):
         super(MemoryLeakMixin, self).tearDown()
         self.memory_leak_teardown()
+
+
+@contextlib.contextmanager
+def forbid_codegen():
+    """
+    Forbid LLVM code generation during the execution of the context
+    manager's enclosed block.
+
+    If code generation is invoked, a RuntimeError is raised.
+    """
+    from numba.targets import codegen
+    patchpoints = ['CodeLibrary._finalize_final_module']
+
+    old = {}
+    def fail(*args, **kwargs):
+        raise RuntimeError("codegen forbidden by test case")
+    try:
+        # XXX use the mock library instead?
+        for name in patchpoints:
+            parts = name.split('.')
+            obj = codegen
+            for attrname in parts[:-1]:
+                obj = getattr(obj, attrname)
+            attrname = parts[-1]
+            value = getattr(obj, attrname)
+            assert callable(value), ("%r should be callable" % name)
+            old[obj, attrname] = value
+            setattr(obj, attrname, fail)
+        yield
+    finally:
+        for (obj, attrname), value in old.items():
+            setattr(obj, attrname, value)
+

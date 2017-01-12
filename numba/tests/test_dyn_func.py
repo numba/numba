@@ -1,7 +1,9 @@
 from __future__ import print_function
+
 import numpy as np
-import numba.unittest_support as unittest
+
 import numba
+from .support import TestCase
 
 
 class Issue455(object):
@@ -30,12 +32,13 @@ class Issue455(object):
         return a
 
 
-class TestDynFunc(unittest.TestCase):
+class TestDynFunc(TestCase):
+
     def test_issue_455(self):
         inst = Issue455()
         inst.create_f()
         a = inst.call_f()
-        self.assertTrue(np.all(a == np.ones(a.size)))
+        self.assertPreciseEqual(a, np.ones_like(a))
 
 
 if __name__ == '__main__':

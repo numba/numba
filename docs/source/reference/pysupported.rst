@@ -17,7 +17,7 @@ Constructs
 ----------
 
 Numba strives to support as much of the Python language as possible, but
-some language features are not available inside Numba-compiled functions:
+some language features are not available inside Numba-compiled functions. The following Python language features are not currently supported:
 
 * Function definition
 * Class definition
@@ -43,6 +43,17 @@ Numba supports function calls using positional and named arguments, as well
 as arguments with default values and ``*args`` (note the argument for
 ``*args`` can only be a tuple, not a list).  Explicit ``**kwargs`` are
 not supported.
+
+Recursive calls
+'''''''''''''''
+
+Most recursive call patterns are supported.  The only restriction is that the
+recursive callee must have a control-flow path that returns without recursing.
+Numba is able to type-infer recursive functions without specifying the function
+type signature (which is required in numba 0.28 and earlier).
+Recursive calls can even call into a different overload of the function.
+
+.. XXX add reference to NBEP
 
 Generators
 ----------
@@ -85,27 +96,46 @@ The following attributes and methods are supported:
 tuple
 -----
 
-Tuple construction and unpacking is supported, as well as the following
-operations:
+The following operations are supported:
 
+* tuple construction
+* tuple unpacking
 * comparison between tuples
 * iteration and indexing over homogenous tuples
+* addition (concatenation) between tuples
+* slicing tuples with a constant slice
 
 list
 ----
 
 Creating and returning lists from JIT-compiled functions is supported,
-as well as all methods and operations.
+as well as all methods and operations.  Lists must be strictly homogenous:
+Numba will reject any list containing objects of different types, even if
+the types are compatible (for example, ``[1, 2.5]`` is rejected as it
+contains a :class:`int` and a :class:`float`).
 
 .. note::
    When passing a list into a JIT-compiled function, any modifications
-   made to the list will not be visible by the Python interpreter until
+   made to the list will not be visible to the Python interpreter until
    the function returns.
 
 .. warning::
    List sorting currently uses a quicksort algorithm, which has different
    performance characterics than the algorithm used by Python.
 
+set
+---
+
+All methods and operations on sets are supported in JIT-compiled functions.
+
+Sets must be strictly homogenous: Numba will reject any set containing
+objects of different types, even if the types are compatible (for example,
+``{1, 2.5}`` is rejected as it contains a :class:`int` and a :class:`float`).
+
+.. note::
+   When passing a set into a JIT-compiled function, any modifications
+   made to the set will not be visible to the Python interpreter until
+   the function returns.
 
 None
 ----
@@ -141,12 +171,15 @@ The following built-in functions are supported:
 * :func:`abs`
 * :class:`bool`
 * :class:`complex`
+* :func:`divmod`
 * :func:`enumerate`
 * :class:`float`
 * :class:`int`: only the one-argument form
+* :func:`iter`: only the one-argument form
 * :func:`len`
-* :func:`min`: only the multiple-argument form
-* :func:`max`: only the multiple-argument form
+* :func:`min`
+* :func:`max`
+* :func:`next`: only the one-argument form
 * :func:`print`: only numbers and strings; no ``file`` or ``sep`` argument
 * :class:`range`: semantics are similar to those of Python 3 even in Python 2:
   a range object is returned instead of an array of values.
@@ -223,6 +256,11 @@ and return types:
 * :class:`ctypes.c_double`
 * :class:`ctypes.c_void_p`
 
+``enum``
+--------
+
+Both :class:`enum.Enum` and :class:`enum.IntEnum` subclasses are supported.
+
 ``math``
 --------
 
@@ -283,6 +321,7 @@ The following functions from the :mod:`operator` module are supported:
 * :func:`operator.idiv` (Python 2 only)
 * :func:`operator.ifloordiv`
 * :func:`operator.ilshift`
+* :func:`operator.imatmul` (Python 3.5 and above)
 * :func:`operator.imod`
 * :func:`operator.imul`
 * :func:`operator.invert`
@@ -295,6 +334,7 @@ The following functions from the :mod:`operator` module are supported:
 * :func:`operator.le`
 * :func:`operator.lshift`
 * :func:`operator.lt`
+* :func:`operator.matmul` (Python 3.5 and above)
 * :func:`operator.mod`
 * :func:`operator.mul`
 * :func:`operator.ne`
@@ -366,7 +406,7 @@ Third-party modules
 --------
 
 Similarly to ctypes, Numba is able to call into `cffi`_-declared external
-functions, using the following C types:
+functions, using the following C types and any derived pointer types:
 
 * :c:type:`char`
 * :c:type:`short`
@@ -388,18 +428,22 @@ functions, using the following C types:
 * :c:type:`uint64_t`
 * :c:type:`float`
 * :c:type:`double`
-* :c:type:`char *`
-* :c:type:`void *`
-* :c:type:`uint8_t *`
-* :c:type:`float *`
-* :c:type:`double *`
 * :c:type:`ssize_t`
 * :c:type:`size_t`
 * :c:type:`void`
 
-The ``from_buffer`` method of ``cffi.FFI`` and ``CompiledFFI`` objects is
-supported for passing NumPy arrays of ``float32`` and ``float64`` values to C
-function parameters of type ``float *`` and ``double *`` respectively.
+The ``from_buffer()`` method of ``cffi.FFI`` and ``CompiledFFI`` objects is
+supported for passing Numpy arrays and other buffer-like objects.  Only
+*contiguous* arguments are accepted.  The argument to ``from_buffer()``
+is converted to a raw pointer of the appropriate C type (for example a
+``double *`` for a ``float64`` array).
+
+Additional type mappings for the conversion from a buffer to the appropriate C
+type may be registered with Numba. This may include struct types, though it is
+only permitted to call functions that accept pointers to structs - passing a
+struct by value is unsupported. For registering a mapping, use:
+
+.. function:: numba.cffi_support.register_type(cffi_type, numba_type)
 
 Out-of-line cffi modules must be registered with Numba prior to the use of any
 of their functions from within Numba-compiled functions:

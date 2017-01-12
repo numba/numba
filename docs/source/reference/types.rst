@@ -122,8 +122,9 @@ Inference
 
 .. function:: numba.typeof(value)
 
-   Create a Numba type accurately describing the given *value*.  ``None``
-   is returned if the value isn't supported in :term:`nopython mode`.
+   Create a Numba type accurately describing the given Python *value*.
+   ``ValueError`` is raised if the value isn't supported in
+   :term:`nopython mode`.
 
    ::
 
@@ -146,9 +147,10 @@ structured types can also be constructed programmatically.
    Create a Numba type corresponding to the given Numpy *dtype*::
 
       >>> struct_dtype = np.dtype([('row', np.float64), ('col', np.float64)])
-      >>> tp
+      >>> ty = numba.from_dtype(struct_dtype)
+      >>> ty
       Record([('row', '<f8'), ('col', '<f8')])
-      >>> tp[:, :]
+      >>> ty[:, :]
       unaligned array(Record([('row', '<f8'), ('col', '<f8')]), 2d, A)
 
 .. class:: numba.types.NPDatetime(unit)

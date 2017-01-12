@@ -48,7 +48,7 @@ class _ArgManager(object):
             # (happens after the native value cleanup as the latter
             #  may need the native value)
             if self.context.enable_nrt:
-                self.context.nrt_decref(self.builder, ty, native.value)
+                self.context.nrt.decref(self.builder, ty, native.value)
 
         self.cleanups.append(cleanup_arg)
 
@@ -99,7 +99,7 @@ class PyCallWrapper(object):
         self.release_gil = release_gil
 
     def build(self):
-        wrapname = "wrapper.%s" % self.func.name
+        wrapname = self.fndesc.llvm_cpython_wrapper_name
 
         # This is the signature of PyCFunctionWithKeywords
         # (see CPython's methodobject.h)
@@ -107,7 +107,7 @@ class PyCallWrapper(object):
         wrapty = Type.function(pyobj, [pyobj, pyobj, pyobj])
         wrapper = self.module.add_function(wrapty, name=wrapname)
 
-        builder = Builder.new(wrapper.append_basic_block('entry'))
+        builder = Builder(wrapper.append_basic_block('entry'))
 
         # - `closure` will receive the `self` pointer stored in the
         #   PyCFunction object (see _dynfunc.c)
@@ -124,10 +124,11 @@ class PyCallWrapper(object):
         return wrapper, api
 
     def build_wrapper(self, api, builder, closure, args, kws):
-        nargs = len(self.fndesc.args)
+        nargs = len(self.fndesc.argtypes)
 
         objs = [api.alloca_obj() for _ in range(nargs)]
-        parseok = api.unpack_tuple(args, self.fndesc.qualname, nargs, nargs, *objs)
+        parseok = api.unpack_tuple(args, self.fndesc.qualname,
+                                   nargs, nargs, *objs)
 
         pred = builder.icmp(lc.ICMP_EQ, parseok, Constant.null(parseok.type))
         with cgutils.if_unlikely(builder, pred):
@@ -144,10 +145,15 @@ class PyCallWrapper(object):
         cleanup_manager = _ArgManager(self.context, builder, api,
                                       env_manager, endblk, nargs)
 
+        # Compute the arguments to the compiled Numba function.
         innerargs = []
         for obj, ty in zip(objs, self.fndesc.argtypes):
-            val = cleanup_manager.add_arg(builder.load(obj), ty)
-            innerargs.append(val)
+            if isinstance(ty, types.Omitted):
+                # It's an omitted value => ignore dummy Python object
+                innerargs.append(None)
+            else:
+                val = cleanup_manager.add_arg(builder.load(obj), ty)
+                innerargs.append(val)
 
         if self.release_gil:
             cleanup_manager = _GilManager(builder, api, cleanup_manager)

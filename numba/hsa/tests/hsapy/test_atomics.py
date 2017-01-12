@@ -10,10 +10,10 @@ def atomic_add(ary):
     tid = hsa.get_local_id(0)
     sm = hsa.shared.array(32, numba.uint32)
     sm[tid] = 0
-    hsa.barrier(1)
+    hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
     bin = ary[tid] % 32
     hsa.atomic.add(sm, bin, 1)
-    hsa.barrier(1)
+    hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
     ary[tid] = sm[tid]
 
 
@@ -22,9 +22,9 @@ def atomic_add2(ary):
     ty = hsa.get_local_id(1)
     sm = hsa.shared.array((4, 8), numba.uint32)
     sm[tx, ty] = ary[tx, ty]
-    hsa.barrier(1)
+    hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
     hsa.atomic.add(sm, (tx, ty), 1)
-    hsa.barrier(1)
+    hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
     ary[tx, ty] = sm[tx, ty]
 
 
@@ -33,9 +33,9 @@ def atomic_add3(ary):
     ty = hsa.get_local_id(1)
     sm = hsa.shared.array((4, 8), numba.uint32)
     sm[tx, ty] = ary[tx, ty]
-    hsa.barrier(1)
+    hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
     hsa.atomic.add(sm, (tx, numba.uint64(ty)), 1)
-    hsa.barrier(1)
+    hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
     ary[tx, ty] = sm[tx, ty]
 
 

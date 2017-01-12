@@ -8,6 +8,7 @@ from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba.funcdesc import transform_arg_name
 from numba.utils import IS_PY3
+from .support import tag
 
 
 def get_a(ary, i):
@@ -19,6 +20,20 @@ def get_b(ary, i):
 def get_c(ary, i):
     return ary[i].c
 
+def make_getitem(item):
+    # This also exercises constant lookup from a closure variable
+    def get_xx(ary, i):
+        return ary[i][item]
+    return get_xx
+
+# Issue #1664: constant index lookup should fall back to regular getitem
+def get_zero_a(ary, _unused):
+    return ary[0].a
+
+getitem_a = make_getitem('a')
+getitem_b = make_getitem('b')
+getitem_c = make_getitem('c')
+
 def get_a_subarray(ary, i):
     return ary.a[i]
 
@@ -28,6 +43,18 @@ def get_b_subarray(ary, i):
 def get_c_subarray(ary, i):
     return ary.c[i]
 
+def get_a_zero(ary, _unused):
+    return ary.a[0]
+
+def make_getitem_subarray(item):
+    # This also exercises constant lookup from a closure variable
+    def get_xx_subarray(ary, i):
+        return ary[item][i]
+    return get_xx_subarray
+
+getitem_a_subarray = make_getitem_subarray('a')
+getitem_b_subarray = make_getitem_subarray('b')
+getitem_c_subarray = make_getitem_subarray('c')
 
 def get_two_arrays_a(ary1, ary2, i):
     return ary1[i].a + ary2[i].a
@@ -52,6 +79,15 @@ def set_b(ary, i, v):
 def set_c(ary, i, v):
     ary[i].c = v
 
+def make_setitem(item):
+    def set_xx(ary, i, v):
+        ary[i][item] = v
+    return set_xx
+
+setitem_a = make_setitem('a')
+setitem_b = make_setitem('b')
+setitem_c = make_setitem('c')
+
 def set_a_subarray(ary, i, v):
     ary.a[i] = v
 
@@ -60,6 +96,15 @@ def set_b_subarray(ary, i, v):
 
 def set_c_subarray(ary, i, v):
     ary.c[i] = v
+
+def make_setitem_subarray(item):
+    def set_xx_subarray(ary, i, v):
+        ary[item][i] = v
+    return set_xx_subarray
+
+setitem_a_subarray = make_setitem('a')
+setitem_b_subarray = make_setitem('b')
+setitem_c_subarray = make_setitem('c')
 
 def set_record(ary, i, j):
     ary[i] = ary[j]
@@ -266,17 +311,26 @@ class TestRecordDtype(unittest.TestCase):
         for i in range(self.refsample1d.size):
             self.assertEqual(pyfunc(self.refsample1d, i), cfunc(self.nbsample1d, i))
 
+    @tag('important')
     def test_get_a(self):
         self._test_get_equal(get_a)
         self._test_get_equal(get_a_subarray)
+        self._test_get_equal(getitem_a)
+        self._test_get_equal(getitem_a_subarray)
+        self._test_get_equal(get_a_zero)
+        self._test_get_equal(get_zero_a)
 
     def test_get_b(self):
         self._test_get_equal(get_b)
         self._test_get_equal(get_b_subarray)
+        self._test_get_equal(getitem_b)
+        self._test_get_equal(getitem_b_subarray)
 
     def test_get_c(self):
         self._test_get_equal(get_c)
         self._test_get_equal(get_c_subarray)
+        self._test_get_equal(getitem_c)
+        self._test_get_equal(getitem_c_subarray)
 
     def _test_get_two_equal(self, pyfunc):
         '''
@@ -322,8 +376,9 @@ class TestRecordDtype(unittest.TestCase):
             cfunc(got, i, value)
 
             # Match the entire array to ensure no memory corruption
-            self.assertTrue(np.all(expect == got))
+            np.testing.assert_equal(expect, got)
 
+    @tag('important')
     def test_set_a(self):
         def check(pyfunc):
             self._test_set_equal(pyfunc, 3.1415, types.float64)
@@ -331,6 +386,8 @@ class TestRecordDtype(unittest.TestCase):
             self._test_set_equal(pyfunc, 3., types.float32)
         check(set_a)
         check(set_a_subarray)
+        check(setitem_a)
+        check(setitem_a_subarray)
 
     def test_set_b(self):
         def check(pyfunc):
@@ -339,7 +396,10 @@ class TestRecordDtype(unittest.TestCase):
             self._test_set_equal(pyfunc, 123, types.float64)
         check(set_b)
         check(set_b_subarray)
+        check(setitem_b)
+        check(setitem_b_subarray)
 
+    @tag('important')
     def test_set_c(self):
         def check(pyfunc):
             self._test_set_equal(pyfunc, 43j, types.complex64)
@@ -347,7 +407,10 @@ class TestRecordDtype(unittest.TestCase):
             self._test_set_equal(pyfunc, 43j, types.complex128)
         check(set_c)
         check(set_c_subarray)
+        check(setitem_c)
+        check(setitem_c_subarray)
 
+    @tag('important')
     def test_set_record(self):
         pyfunc = set_record
         rec = numpy_support.from_dtype(recordtype)
@@ -364,8 +427,7 @@ class TestRecordDtype(unittest.TestCase):
             # Match the entire array to ensure no memory corruption
             self.assertEqual(expect[i], expect[j])
             self.assertEqual(got[i], got[j])
-            self.assertTrue(np.all(expect == got))
-
+            np.testing.assert_equal(expect, got)
 
     def _test_record_args(self, revargs):
         """
@@ -476,6 +538,7 @@ class TestRecordDtype(unittest.TestCase):
         np.testing.assert_equal(expected, nbval)
 
 
+    @tag('important')
     def test_record_write_2d_array(self):
         '''
         Test writing to a 2D array within a structured type
@@ -509,6 +572,7 @@ class TestRecordDtype(unittest.TestCase):
         np.testing.assert_equal(res, nbval[0].h[1])
 
 
+    @tag('important')
     def test_record_read_2d_array(self):
         '''
         Test reading from a 2D array within a structured type
@@ -530,6 +594,7 @@ class TestRecordDtype(unittest.TestCase):
         np.testing.assert_equal(res, nbval[0].j[1, 0])
 
 
+    @tag('important')
     def test_record_return(self):
         """
         Testing scalar record value as return value.
@@ -598,8 +663,41 @@ class TestRecordDtype(unittest.TestCase):
         cfunc = self.get_cfunc(pyfunc, (nbrecord,))
         self.assertEqual(cfunc(rec), pyfunc(rec))
 
+    def test_structure_dtype_with_titles(self):
+        # the following is the definition of int4 vector type from pyopencl
+        vecint4 = np.dtype([(('x', 's0'), 'i4'), (('y', 's1'), 'i4'),
+                            (('z', 's2'), 'i4'), (('w', 's3'), 'i4')])
+        nbtype = numpy_support.from_dtype(vecint4)
+        self.assertEqual(len(nbtype.fields), len(vecint4.fields))
+
+        arr = np.zeros(10, dtype=vecint4)
+
+        def pyfunc(a):
+            for i in range(a.size):
+                j = i + 1
+                a[i]['s0'] = j * 2
+                a[i]['x'] += -1
+
+                a[i]['s1'] = j * 3
+                a[i]['y'] += -2
+
+                a[i]['s2'] = j * 4
+                a[i]['z'] += -3
+
+                a[i]['s3'] = j * 5
+                a[i]['w'] += -4
+
+            return a
+
+        expect = pyfunc(arr.copy())
+        cfunc = self.get_cfunc(pyfunc, (nbtype[:],))
+        got = cfunc(arr.copy())
+        np.testing.assert_equal(expect, got)
+
+
 def _get_cfunc_nopython(pyfunc, argspec):
     return jit(argspec, nopython=True)(pyfunc)
+
 
 class TestRecordDtypeWithDispatcher(TestRecordDtype):
     '''
@@ -610,6 +708,7 @@ class TestRecordDtypeWithDispatcher(TestRecordDtype):
 
     def get_cfunc(self, pyfunc, argspec):
         return _get_cfunc_nopython(pyfunc, argspec)
+
 
 class TestRecordDtypeWithStructArrays(TestRecordDtype):
     '''
@@ -646,6 +745,7 @@ class TestRecordDtypeWithStructArraysAndDispatcher(TestRecordDtypeWithStructArra
 
 
 class TestRecordDtypeWithCharSeq(unittest.TestCase):
+
     def _createSampleaArray(self):
         self.refsample1d = np.recarray(3, dtype=recordwithcharseq)
         self.nbsample1d = np.zeros(3, dtype=recordwithcharseq)
@@ -653,9 +753,10 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
     def _fillData(self, arr):
         for i in range(arr.size):
             arr[i]['m'] = i
-            arr[i]['n'] = "%d" % i
 
         arr[0]['n'] = 'abcde'  # no null-byte
+        arr[1]['n'] = 'xyz'  # null-byte
+        arr[2]['n'] = 'u\x00v\x00\x00'  # null-byte at the middle and then at end
 
     def setUp(self):
         self._createSampleaArray()

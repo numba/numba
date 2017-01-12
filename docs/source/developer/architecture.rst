@@ -2,7 +2,7 @@
 .. _architecture:
 
 ==================
-Numba Architecture
+Numba architecture
 ==================
 
 Introduction
@@ -10,7 +10,7 @@ Introduction
 
 Numba is a compiler for Python bytecode with optional type-specialization.
 
-Suppose you type a function like this into the standard Python interpreter
+Suppose you enter a function like this into the standard Python interpreter
 (henceforward referred to as "CPython")::
 
     def add(a, b):
@@ -55,33 +55,61 @@ Python runtime, we say the function has been compiled in :term:`nopython mode`.
 Numeric code compiled in nopython mode can be hundreds of times faster
 than the original Python.
 
+
+Compiler architecture
+=====================
+
+Like many compilers, Numba can be conceptually divided into a
+*frontend* and a *backend*.
+
+The Numba *frontend* comprises the stages which analyze the Python bytecode,
+translate it to :term:`Numba IR` and perform various transformations and
+analysis steps on the IR.  One of the key steps is :term:`type inference`.
+The frontend must succeed in typing all variables unambiguously in order
+for the backend to generate code in :term:`nopython mode`, because the
+backend uses type information to match appropriate code generators with
+the values they operate on.
+
+The Numba *backend* walks the Numba IR resulting from the frontend analyses
+and exploits the type information deduced by the type inference phase to
+produce the right LLVM code for each encountered operation.  After LLVM
+code is produced, the LLVM library is asked to optimize it and generate
+native processor code for the final, native function.
+
+There are other pieces besides the compiler frontend and backend, such
+as the caching machinery for JIT functions.  Those pieces are not considered
+in this document.
+
+
 Contexts
 ========
 
 Numba is quite flexible, allowing it to generate code for different hardware
-architectures like CPUs and GPUs (just CUDA, for now).  In order to support
-these different applications, Numba uses a *typing context* and a *target
-context*.
+architectures like CPUs and GPUs.  In order to support these different
+applications, Numba uses a *typing context* and a *target context*.
 
-A typing context is used in the compiler frontend to perform type inference on
-values in the function.  Similar typing contexts could be used for many
-architectures because for nearly all cases, typing inference is hardware-independent.
-However, Numba currently has a different typing context for each target.
+A *typing context* is used in the compiler frontend to perform type inference
+on operations and values in the function.  Similar typing contexts could be
+used for many architectures because for nearly all cases, typing inference
+is hardware-independent.  However, Numba currently has a different typing
+context for each target.
 
-A target context is used to generate the specific instruction sequence
+A *target context* is used to generate the specific instruction sequence
 required to operate on the Numba types identified during type inference.
-Target contexts are architecture specific.  For example, Numba has a "cpu" and
-a "gpu" context, and NumbaPro adds a "parallel" context which produces
-multithreaded CPU code.
+Target contexts are architecture-specific and are flexible in defining
+the execution model and available Python APIs.  For example, Numba has a "cpu"
+and a "cuda" context for those two kinds of architecture, and a "parallel"
+context which produces multithreaded CPU code.
 
-Compiler Stages
+
+Compiler stages
 ===============
 
-The ``@jit`` decorator in Numba ultimately calls
+The :func:`~numba.jit` decorator in Numba ultimately calls
 ``numba.compiler.compile_extra()`` which compiles the Python function in a
 multi-stage process, described below.
 
-Stage 1: Analyze Bytecode
+Stage 1: Analyze bytecode
 -------------------------
 
 At the start of compilation, the function bytecode is passed to an instance of
@@ -208,10 +236,13 @@ the ``add()`` function described above, the Numba IR looks like::
        del $0.3                                 []
        return $0.4                              ['$0.4']
 
-The ``del`` instructions are produced by live variable analysis.  Those
-instructions ensure references are not leaked in :term:`object mode`,
-where each variable contains an owned reference to a PyObject.  They are
-no-ops in :term:`nopython mode`.
+The ``del`` instructions are produced by :ref:`live variable analysis`.
+Those instructions ensure references are not leaked.
+In :term:`nopython mode`, some objects are tracked by the numba runtime and
+some are not.  For tracked objects, a dereference operation is emitted;
+otherwise, the instruction is an no-op.
+In :term:`object mode` each variable contains an owned reference to a PyObject.
+
 
 Stage 3: Macro expansion
 ------------------------
@@ -247,9 +278,45 @@ translated into::
 which represents an instance of the ``Intrinsic`` IR node for calling the
 ``tid.x`` intrinsic function.
 
+.. _`rewrite-untyped-ir`:
+
+Stage 4: Rewrite untyped IR
+---------------------------
+
+Before running type inference, it may be desired to run certain
+transformations on the Numba IR.  One such example is to detect ``raise``
+statements which have an implicitly constant argument, so as to
+support them in :term:`nopython mode`.  Let's say you compile the
+following function with Numba::
+
+   def f(x):
+      if x == 0:
+         raise ValueError("x cannot be zero")
+
+If you set the :envvar:`NUMBA_DUMP_IR` environment variable to ``1``,
+you'll see the IR being rewritten before the type inference phase::
+
+   REWRITING:
+       del $0.3                                 []
+       $12.1 = global(ValueError: <class 'ValueError'>) ['$12.1']
+       $const12.2 = const(str, x cannot be zero) ['$const12.2']
+       $12.3 = call $12.1($const12.2)           ['$12.1', '$12.3', '$const12.2']
+       del $const12.2                           []
+       del $12.1                                []
+       raise $12.3                              ['$12.3']
+   ____________________________________________________________
+       del $0.3                                 []
+       $12.1 = global(ValueError: <class 'ValueError'>) ['$12.1']
+       $const12.2 = const(str, x cannot be zero) ['$const12.2']
+       $12.3 = call $12.1($const12.2)           ['$12.1', '$12.3', '$const12.2']
+       del $const12.2                           []
+       del $12.1                                []
+       raise <class 'ValueError'>('x cannot be zero') []
+
+
 .. _arch_type_inference:
 
-Stage 4: Infer Types
+Stage 5: Infer types
 --------------------
 
 Now that the Numba IR has been generated and macro-expanded, type analysis
@@ -298,13 +365,11 @@ types, language features, or functions are used in the function body.
 
 .. _`rewrite-typed-ir`:
 
-Stage 5: Rewrite Typed IR
+Stage 6: Rewrite typed IR
 -------------------------
 
-Numba implements a user-extensible rewriting pass that reads and
-possibly rewrites Numba IR.  This pass's purpose is to perform any
-high-level optimizations that still require, or could at least benefit
-from, Numba IR type information.
+This pass's purpose is to perform any high-level optimizations that still
+require, or could at least benefit from, Numba IR type information.
 
 One example of a problem domain that isn't as easily optimized once
 lowered is the domain of multidimensional array operations.  When
@@ -366,13 +431,13 @@ ufunc-like function that is inlined into a single loop that only
 allocates a single result array.
 
 
-Stage 6a: Generate No-Python LLVM IR
-------------------------------------
+Stage 7a: Generate nopython LLVM IR
+-----------------------------------
 
 If type inference succeeds in finding a Numba type for every intermediate
 variable, then Numba can (potentially) generate specialized native code.  This
-process is called *lowering*.  The Numba IR tree is translated into LLVM IR by
-using helper classes from `llvmlite <https://github.com/numba/llvmlite>`_.
+process is called :term:`lowering`.  The Numba IR tree is translated into
+LLVM IR by using helper classes from `llvmlite <http://llvmlite.pydata.org/>`_.
 The  machine-generated LLVM IR can seem unnecessarily verbose, but the LLVM
 toolchain is able to optimize it quite easily into compact, efficient code.
 
@@ -428,7 +493,7 @@ generated above quite significantly:
         ret i32 0
    }
 
-Stage 6b: Generate Object Mode LLVM IR
+Stage 7b: Generate object mode LLVM IR
 --------------------------------------
 
 If type inference fails to find Numba types for all values inside a function,
@@ -516,15 +581,16 @@ function.  Loop-lifting helps improve the performance of functions that
 need to access uncompilable code (such as I/O or plotting code) but still
 contain a time-intensive section of compilable code.
 
-Stage 7: Compile LLVM IR to Machine Code
+Stage 8: Compile LLVM IR to machine code
 ----------------------------------------
 
-In both "object mode" and "nopython mode", the generated LLVM IR is compiled
-by the LLVM JIT compiler and the machine code is loaded into memory.  A Python
-wrapper is also created (defined in ``numba.dispatcher.Overloaded``) which can
-do the dynamic dispatch to the correct version of the compiled function if
-multiple type specializations were generated (for example, for both
-``float32`` and ``float64`` versions of the same function).
+In both :term:`object mode` and :term:`nopython mode`, the generated LLVM IR
+is compiled by the LLVM JIT compiler and the machine code is loaded into
+memory.  A Python wrapper is also created (defined in
+``numba.dispatcher.Dispatcher``) which can do the dynamic dispatch to the
+correct version of the compiled function if multiple type specializations
+were generated (for example, for both ``float32`` and ``float64`` versions
+of the same function).
 
 The machine assembly code generated by LLVM can be dumped to the screen by
 setting the :envvar:`NUMBA_DUMP_ASSEMBLY` environment variable to 1:
@@ -540,7 +606,5 @@ setting the :envvar:`NUMBA_DUMP_ASSEMBLY` environment variable to 1:
            xorl    %eax, %eax
            retq
 
-
 The assembly output will also include the generated wrapper function that
 translates the Python arguments to native data types.
-

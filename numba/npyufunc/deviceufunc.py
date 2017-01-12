@@ -2,13 +2,17 @@
 Implements custom ufunc dispatch mechanism for non-CPU devices.
 """
 from __future__ import print_function, absolute_import
+
+from collections import OrderedDict
 import operator
 import warnings
 from functools import reduce
+
 import numpy as np
-from numba.utils import longint, OrderedDict
+
+from numba.utils import longint
 from numba.utils import IS_PY3
-from numba.npyufunc.ufuncbuilder import _BaseUFuncBuilder
+from numba.npyufunc.ufuncbuilder import _BaseUFuncBuilder, parse_identity
 from numba import sigutils, types
 from numba.typing import signature
 from numba.npyufunc.sigparse import parse_signature
@@ -162,7 +166,7 @@ class UFuncMechanism(object):
 
     def _get_actual_args(self):
         """Return the actual arguments
-        Casts scalar arguments to numpy.array.
+        Casts scalar arguments to np.array.
         """
         for i in self.scalarpos:
             self.arrays[i] = np.array([self.args[i]], dtype=self.argtypes[i])
@@ -353,10 +357,12 @@ def to_dtype(ty):
 
 
 class DeviceVectorize(_BaseUFuncBuilder):
-    def __init__(self, func, identity=None, targetoptions={}):
+    def __init__(self, func, identity=None, cache=False, targetoptions={}):
+        if cache:
+            raise TypeError("caching is not supported")
         assert not targetoptions
         self.py_func = func
-        self.identity = self.parse_identity(identity)
+        self.identity = parse_identity(identity)
         # { arg_dtype: (return_dtype), cudakernel }
         self.kernelmap = OrderedDict()
 
@@ -417,10 +423,20 @@ class DeviceVectorize(_BaseUFuncBuilder):
 
 
 class DeviceGUFuncVectorize(_BaseUFuncBuilder):
-    def __init__(self, func, sig, identity=None, targetoptions={}):
-        assert not targetoptions
+    def __init__(self, func, sig, identity=None, cache=False, targetoptions={}):
+        if cache:
+            raise TypeError("caching is not supported")
+        # Allow nopython flag to be set.
+        if not targetoptions.pop('nopython', True):
+            raise TypeError("nopython flag must be True")
+        # Are there any more target options?
+        if targetoptions:
+            opts = ', '.join([repr(k) for k in targetoptions.keys()])
+            fmt = "The following target options are not supported: {0}"
+            raise TypeError(fmt.format(opts))
+
         self.py_func = func
-        self.identity = self.parse_identity(identity)
+        self.identity = parse_identity(identity)
         self.signature = sig
         self.inputsig, self.outputsig = parse_signature(self.signature)
         assert len(self.outputsig) == 1, "only support 1 output"
@@ -686,9 +702,28 @@ class GenerializedUFunc(object):
                 newparams.append(devary)
             else:
                 # Broadcast vector input
-                newparams.append(p.reshape(odim, *cs))
+                newparams.append(self._broadcast_array(p, odim, cs))
         newretval = retval.reshape(odim, *schedule.oshapes[0])
         return newparams, newretval
+
+    def _broadcast_array(self, ary, newdim, innerdim):
+        newshape = (newdim,) + innerdim
+        # No change in shape
+        if ary.shape == newshape:
+            return ary
+
+        # Creating new dimension
+        elif len(ary.shape) < len(newshape):
+            assert newshape[-len(ary.shape):] == ary.shape, \
+               "cannot add dim and reshape at the same time"
+            return self._broadcast_add_axis(ary, newshape)
+
+        # Collapsing dimension
+        else:
+            return ary.reshape(*newshape)
+
+    def _broadcast_add_axis(self, ary, newshape):
+        raise NotImplementedError("cannot add new axis")
 
     def _broadcast_scalar_input(self, ary, shape):
         raise NotImplementedError

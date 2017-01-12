@@ -6,7 +6,7 @@ from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
 
 registry = Registry()
 builtin_attr = registry.register_attr
-builtin_global = registry.register_global
+infer_global = registry.register_global
 
 
 @builtin_attr
@@ -142,9 +142,8 @@ class Math_exp(Math_unary):
     key = math.exp
 
 
-if utils.PYVERSION > (2, 6):
-    class Math_expm1(Math_unary):
-        key = math.expm1
+class Math_expm1(Math_unary):
+    key = math.expm1
 
 
 class Math_sqrt(Math_unary):
@@ -251,18 +250,17 @@ class Math_degrees(Math_unary):
 #     ]
 
 
-if utils.PYVERSION > (2, 6):
-    class Math_erf(Math_unary):
-        key = math.erf
+class Math_erf(Math_unary):
+    key = math.erf
 
-    class Math_erfc(Math_unary):
-        key = math.erfc
+class Math_erfc(Math_unary):
+    key = math.erfc
 
-    class Math_gamma(Math_unary):
-        key = math.gamma
+class Math_gamma(Math_unary):
+    key = math.gamma
 
-    class Math_lgamma(Math_unary):
-        key = math.lgamma
+class Math_lgamma(Math_unary):
+    key = math.lgamma
 
 
 class Math_binary(ConcreteTemplate):
@@ -310,41 +308,39 @@ class Math_isinf(ConcreteTemplate):
     ]
 
 
-builtin_global(math, types.Module(math))
-builtin_global(math.fabs, types.Function(Math_fabs))
-builtin_global(math.exp, types.Function(Math_exp))
-if utils.PYVERSION > (2, 6):
-    builtin_global(math.expm1, types.Function(Math_expm1))
-builtin_global(math.sqrt, types.Function(Math_sqrt))
-builtin_global(math.log, types.Function(Math_log))
-builtin_global(math.log1p, types.Function(Math_log1p))
-builtin_global(math.log10, types.Function(Math_log10))
-builtin_global(math.sin, types.Function(Math_sin))
-builtin_global(math.cos, types.Function(Math_cos))
-builtin_global(math.tan, types.Function(Math_tan))
-builtin_global(math.sinh, types.Function(Math_sinh))
-builtin_global(math.cosh, types.Function(Math_cosh))
-builtin_global(math.tanh, types.Function(Math_tanh))
-builtin_global(math.asin, types.Function(Math_asin))
-builtin_global(math.acos, types.Function(Math_acos))
-builtin_global(math.atan, types.Function(Math_atan))
-builtin_global(math.atan2, types.Function(Math_atan2))
-builtin_global(math.asinh, types.Function(Math_asinh))
-builtin_global(math.acosh, types.Function(Math_acosh))
-builtin_global(math.atanh, types.Function(Math_atanh))
-# builtin_global(math.hypot, types.Function(Math_hypot))
-builtin_global(math.floor, types.Function(Math_floor))
-builtin_global(math.ceil, types.Function(Math_ceil))
-builtin_global(math.trunc, types.Function(Math_trunc))
-builtin_global(math.isnan, types.Function(Math_isnan))
-builtin_global(math.isinf, types.Function(Math_isinf))
-builtin_global(math.degrees, types.Function(Math_degrees))
-builtin_global(math.radians, types.Function(Math_radians))
-builtin_global(math.copysign, types.Function(Math_copysign))
-builtin_global(math.fmod, types.Function(Math_fmod))
-builtin_global(math.pow, types.Function(Math_pow))
-if utils.PYVERSION > (2, 6):
-    builtin_global(math.erf, types.Function(Math_erf))
-    builtin_global(math.erfc, types.Function(Math_erfc))
-    builtin_global(math.gamma, types.Function(Math_gamma))
-    builtin_global(math.lgamma, types.Function(Math_lgamma))
+infer_global(math, types.Module(math))
+infer_global(math.fabs, types.Function(Math_fabs))
+infer_global(math.exp, types.Function(Math_exp))
+infer_global(math.expm1, types.Function(Math_expm1))
+infer_global(math.sqrt, types.Function(Math_sqrt))
+infer_global(math.log, types.Function(Math_log))
+infer_global(math.log1p, types.Function(Math_log1p))
+infer_global(math.log10, types.Function(Math_log10))
+infer_global(math.sin, types.Function(Math_sin))
+infer_global(math.cos, types.Function(Math_cos))
+infer_global(math.tan, types.Function(Math_tan))
+infer_global(math.sinh, types.Function(Math_sinh))
+infer_global(math.cosh, types.Function(Math_cosh))
+infer_global(math.tanh, types.Function(Math_tanh))
+infer_global(math.asin, types.Function(Math_asin))
+infer_global(math.acos, types.Function(Math_acos))
+infer_global(math.atan, types.Function(Math_atan))
+infer_global(math.atan2, types.Function(Math_atan2))
+infer_global(math.asinh, types.Function(Math_asinh))
+infer_global(math.acosh, types.Function(Math_acosh))
+infer_global(math.atanh, types.Function(Math_atanh))
+# infer_global(math.hypot, types.Function(Math_hypot))
+infer_global(math.floor, types.Function(Math_floor))
+infer_global(math.ceil, types.Function(Math_ceil))
+infer_global(math.trunc, types.Function(Math_trunc))
+infer_global(math.isnan, types.Function(Math_isnan))
+infer_global(math.isinf, types.Function(Math_isinf))
+infer_global(math.degrees, types.Function(Math_degrees))
+infer_global(math.radians, types.Function(Math_radians))
+infer_global(math.copysign, types.Function(Math_copysign))
+infer_global(math.fmod, types.Function(Math_fmod))
+infer_global(math.pow, types.Function(Math_pow))
+infer_global(math.erf, types.Function(Math_erf))
+infer_global(math.erfc, types.Function(Math_erfc))
+infer_global(math.gamma, types.Function(Math_gamma))
+infer_global(math.lgamma, types.Function(Math_lgamma))

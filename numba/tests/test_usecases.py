@@ -7,7 +7,7 @@ import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types, utils
 from numba.tests import usecases
-from .support import TestCase
+from .support import TestCase, tag
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -18,6 +18,7 @@ force_pyobj_flags.set("force_pyobject")
 
 class TestUsecases(TestCase):
 
+    @tag('important')
     def test_andor(self):
         pyfunc = usecases.andor
         cr = compile_isolated(pyfunc, (types.int32, types.int32))
@@ -30,6 +31,7 @@ class TestUsecases(TestCase):
         for args in itertools.product(xs, ys):
             self.assertEqual(pyfunc(*args), cfunc(*args), "args %s" % (args,))
 
+    @tag('important')
     def test_sum1d(self):
         pyfunc = usecases.sum1d
         cr = compile_isolated(pyfunc, (types.int32, types.int32))
@@ -64,6 +66,7 @@ class TestUsecases(TestCase):
         print(utils.benchmark(bm_python, maxsec=.1))
         print(utils.benchmark(bm_numba, maxsec=.1))
 
+    @tag('important')
     def test_sum2d(self):
         pyfunc = usecases.sum2d
         cr = compile_isolated(pyfunc, (types.int32, types.int32))
@@ -75,6 +78,7 @@ class TestUsecases(TestCase):
         for args in itertools.product(ss, es):
             self.assertEqual(pyfunc(*args), cfunc(*args), args)
 
+    @tag('important')
     def test_while_count(self):
         pyfunc = usecases.while_count
         cr = compile_isolated(pyfunc, (types.int32, types.int32))
@@ -100,8 +104,9 @@ class TestUsecases(TestCase):
             args = a, b
 
             cfunc(*args)
-            self.assertTrue(np.all(a == b), args)
+            self.assertPreciseEqual(a, b, msg=str(args))
 
+    @tag('important')
     def test_copy_arrays2d(self):
         pyfunc = usecases.copy_arrays2d
         arraytype = types.Array(types.int32, 2, 'A')
@@ -117,16 +122,7 @@ class TestUsecases(TestCase):
             args = a, b
 
             cfunc(*args)
-            self.assertTrue(np.all(a == b), args)
-
-    def test_ifelse1(self):
-        self.run_ifelse(usecases.ifelse1)
-
-    def test_ifelse2(self):
-        self.run_ifelse(usecases.ifelse2)
-
-    def test_ifelse3(self):
-        self.run_ifelse(usecases.ifelse3)
+            self.assertPreciseEqual(a, b, msg=str(args))
 
     def run_ifelse(self, pyfunc):
         cr = compile_isolated(pyfunc, (types.int32, types.int32))
@@ -231,44 +227,6 @@ class TestUsecases(TestCase):
             args = (d,)
             self.assertEqual(pyfunc(*args), cfunc(*args), args)
 
-    def test_array_slicing(self):
-        pyfunc = usecases.slicing
-
-        arraytype = types.Array(types.int32, 1, 'C')
-        argtys = (arraytype, types.intp, types.intp, types.intp)
-        cr = compile_isolated(pyfunc, argtys, flags=enable_pyobj_flags)
-        cfunc = cr.entry_point
-
-        a = np.arange(10, dtype='i4')
-
-        cases = [
-            (a, 0, 10, 1),
-            (a, 0, 10, 2),
-            (a, 0, 10, -1),
-            (a, 2, 3, 1),
-            (a, 10, 0, 1),
-        ]
-        for args in cases:
-            self.assertTrue(np.all(pyfunc(*args) == cfunc(*args)))
-
-        arraytype = types.Array(types.int32, 2, 'C')
-        argtys = (arraytype, types.intp, types.intp, types.intp)
-        cr = compile_isolated(pyfunc, argtys, flags=enable_pyobj_flags)
-        cfunc = cr.entry_point
-
-        a = np.arange(100, dtype='i4').reshape(10, 10)
-
-        cases = [
-            (a, 0, 10, 1),
-            (a, 0, 10, 2),
-            (a, 0, 10, -1),
-            (a, 2, 3, 1),
-            (a, 10, 0, 1),
-        ]
-        for args in cases:
-            self.assertTrue(np.all(pyfunc(*args) == cfunc(*args)))
-
 
 if __name__ == '__main__':
     unittest.main()
-

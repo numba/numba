@@ -3,7 +3,7 @@ from __future__ import print_function
 import textwrap
 
 import numba.unittest_support as unittest
-from numba import bytecode, interpreter, ir
+from numba import compiler, ir
 from numba.utils import PYVERSION, StringIO
 
 
@@ -87,20 +87,20 @@ class TestIR(unittest.TestCase):
         local = ir.Scope(parent=top, loc=ir.Loc(filename=filename, line=2))
 
         apple = local.define('apple', loc=ir.Loc(filename=filename, line=3))
-        self.assertTrue(local.get('apple') is apple)
+        self.assertIs(local.get('apple'), apple)
         self.assertEqual(len(local.localvars), 1)
 
         orange = top.define('orange', loc=ir.Loc(filename=filename, line=4))
         self.assertEqual(len(local.localvars), 1)
         self.assertEqual(len(top.localvars), 1)
-        self.assertTrue(top.get('orange') is orange)
-        self.assertTrue(local.get('orange') is orange)
+        self.assertIs(top.get('orange'), orange)
+        self.assertIs(local.get('orange'), orange)
 
         more_orange = local.define('orange', loc=ir.Loc(filename=filename,
                                                         line=5))
-        self.assertTrue(top.get('orange') is orange)
-        self.assertTrue(local.get('orange') is not orange)
-        self.assertTrue(local.get('orange') is more_orange)
+        self.assertIs(top.get('orange'), orange)
+        self.assertIsNot(local.get('orange'), not orange)
+        self.assertIs(local.get('orange'), more_orange)
 
         try:
             bad_orange = local.define('orange', loc=ir.Loc(filename=filename,
@@ -120,15 +120,12 @@ class TestIRDump(unittest.TestCase):
     """
 
     def get_ir(self, pyfunc):
-        bc = bytecode.ByteCode(func=pyfunc)
-        interp = interpreter.Interpreter(bc)
-        interp.interpret()
-        return interp
+        return compiler.run_frontend(pyfunc)
 
     def check_ir_dump(self, pyfunc):
-        interp = self.get_ir(pyfunc)
+        func_ir = self.get_ir(pyfunc)
         out = StringIO()
-        interp.dump(file=out)
+        func_ir.dump(file=out)
         expected = textwrap.dedent(pyfunc.__doc__).strip().splitlines()
         got = out.getvalue().strip().splitlines()
         self.assertEqual(got, expected,
@@ -139,8 +136,6 @@ class TestIRDump(unittest.TestCase):
         # This exercises removal of unused temporaries.
         self.check_ir_dump(var_swapping)
 
-    @unittest.skipIf(PYVERSION < (2, 7),
-                     "2.6 bytecode gives slightly different IR dump")
     def test_var_propagate1(self):
         # This exercises generation of phi nodes.
         self.check_ir_dump(var_propagate1)

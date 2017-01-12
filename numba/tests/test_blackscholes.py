@@ -1,7 +1,6 @@
 from __future__ import print_function
 
 import math
-from timeit import default_timer as timer
 
 import numpy as np
 
@@ -146,21 +145,8 @@ class TestBlackScholes(TestCase):
 
         args = stockPrice, optionStrike, optionYears, RISKFREE, VOLATILITY
 
-        ts = timer()
-        for i in range(iterations):
-            callResultGold, putResultGold = blackscholes_arrayexpr(*args)
-        te = timer()
-        pytime = te - ts
-
-        ts = timer()
-        for i in range(iterations):
-            callResultNumba, putResultNumba = jitted_bs(*args)
-        te = timer()
-        jittime = te - ts
-
-        print("Python", pytime)
-        print("Numba", jittime)
-        print("Speedup: %s" % (pytime / jittime))
+        callResultGold, putResultGold = blackscholes_arrayexpr(*args)
+        callResultNumba, putResultNumba = jitted_bs(*args)
 
         delta = np.abs(callResultGold - callResultNumba)
         L1norm = delta.sum() / np.abs(callResultGold).sum()
@@ -205,21 +191,8 @@ class TestBlackScholes(TestCase):
 
         args = stockPrice, optionStrike, optionYears, RISKFREE, VOLATILITY
 
-        ts = timer()
-        for i in range(iterations):
-             blackscholes_scalar(callResultGold, putResultGold, *args)
-        te = timer()
-        pytime = te - ts
-
-        ts = timer()
-        for i in range(iterations):
-            jitted_bs(callResultNumba, putResultNumba, *args)
-        te = timer()
-        jittime = te - ts
-
-        print("Python", pytime)
-        print("Numba", jittime)
-        print("Speedup: %s" % (pytime / jittime))
+        blackscholes_scalar(callResultGold, putResultGold, *args)
+        jitted_bs(callResultNumba, putResultNumba, *args)
 
         delta = np.abs(callResultGold - callResultNumba)
         L1norm = delta.sum() / np.abs(callResultGold).sum()

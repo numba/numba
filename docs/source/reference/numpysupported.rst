@@ -55,7 +55,8 @@ The operations supported on scalar Numpy numbers are the same as on the
 equivalent built-in types such as ``int`` or ``float``.  You can use
 a type's constructor to convert from a different type or width.
 
-Structured scalars support attribute getting and setting.
+Structured scalars support attribute getting and setting, as well as
+member lookup using constant strings.
 
 .. seealso::
    `Numpy scalars <http://docs.scipy.org/doc/numpy/reference/arrays.scalars.html>`_
@@ -95,6 +96,8 @@ The following attributes of Numpy arrays are supported:
 * :attr:`~numpy.ndarray.size`
 * :attr:`~numpy.ndarray.strides`
 * :attr:`~numpy.ndarray.T`
+* :attr:`~numpy.ndarray.real`
+* :attr:`~numpy.ndarray.imag`
 
 The ``flags`` object
 ''''''''''''''''''''
@@ -109,12 +112,29 @@ The object returned by the :attr:`~numpy.ndarray.flat` attribute supports
 iteration and indexing, but be careful: indexing is very slow on
 non-C-contiguous arrays.
 
+The ``real`` and ``imag`` attributes
+''''''''''''''''''''''''''''''''''''
+
+Numpy supports these attributes regardless of the dtype but Numba chooses to
+limit their support to avoid potential user error.  For numeric dtypes,
+Numba follows Numpy's behavior.  The :attr:`~numpy.ndarray.real` attribute
+returns a view of the real part of the complex array and it behaves as an identity
+function for other numeric dtypes.  The :attr:`~numpy.ndarray.imag` attribute
+returns a view of the imaginary part of the complex array and it returns a zero
+array with the same shape and dtype for other numeric dtypes.  For non-numeric
+dtypes, including all structured/record dtypes, using these attributes will
+result in a compile-time (`TypingError`) error.  This behavior differs from
+Numpy's but it is chosen to avoid the potential confusion with field names that
+overlap these attributes.
+
 Calculation
 -----------
 
 The following methods of Numpy arrays are supported in their basic form
 (without any optional arguments):
 
+* :meth:`~numpy.ndarray.all`
+* :meth:`~numpy.ndarray.any`
 * :meth:`~numpy.ndarray.argmax`
 * :meth:`~numpy.ndarray.argmin`
 * :meth:`~numpy.ndarray.cumprod`
@@ -136,11 +156,18 @@ Other methods
 
 The following methods of Numpy arrays are supported:
 
+* :meth:`~numpy.ndarray.argsort` (without arguments)
+* :meth:`~numpy.ndarray.astype` (only the 1-argument form)
 * :meth:`~numpy.ndarray.copy` (without arguments)
+* :meth:`~numpy.ndarray.flatten` (no order argument; 'C' order only)
+* :meth:`~numpy.ndarray.item` (without arguments)
+* :meth:`~numpy.ndarray.itemset` (only the 1-argument form)
+* :meth:`~numpy.ndarray.ravel` (no order argument; 'C' order only)
 * :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
 * :meth:`~numpy.ndarray.sort` (without arguments)
 * :meth:`~numpy.ndarray.transpose` (without arguments, and without copying)
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
+
 
 .. warning::
    Sorting may be slightly slower than Numpy's implementation.
@@ -149,29 +176,108 @@ The following methods of Numpy arrays are supported:
 Functions
 =========
 
+Linear algebra
+--------------
+
+Basic linear algebra is supported on 1-D and 2-D contiguous arrays of
+floating-point and complex numbers:
+
+* :func:`numpy.dot`
+* :func:`numpy.vdot`
+* On Python 3.5 and above, the matrix multiplication operator from
+  :pep:`465` (i.e. ``a @ b`` where ``a`` and ``b`` are 1-D or 2-D arrays).
+* :func:`numpy.linalg.cholesky`
+* :func:`numpy.linalg.cond` (only non string values in ``p``).
+* :func:`numpy.linalg.det`
+* :func:`numpy.linalg.eig` (only running with data that does not cause a domain
+  change is supported e.g. real input -> real
+  output, complex input -> complex output).
+* :func:`numpy.linalg.eigh` (only the first argument).
+* :func:`numpy.linalg.eigvals` (only running with data that does not cause a 
+  domain change is supported e.g. real input -> real output,
+  complex input -> complex output).
+* :func:`numpy.linalg.eigvalsh` (only the first argument).
+* :func:`numpy.linalg.inv`
+* :func:`numpy.linalg.lstsq`
+* :func:`numpy.linalg.matrix_power`
+* :func:`numpy.linalg.matrix_rank`
+* :func:`numpy.linalg.norm` (only the 2 first arguments and only non string
+  values in ``ord``).
+* :func:`numpy.linalg.pinv`
+* :func:`numpy.linalg.qr` (only the first argument).
+* :func:`numpy.linalg.slogdet`
+* :func:`numpy.linalg.solve`
+* :func:`numpy.linalg.svd` (only the 2 first arguments).
+
+.. note::
+   The implementation of these functions needs Scipy 0.16+ to be installed.
+
+Reductions
+----------
+
+The following reduction functions are supported:
+
+* :func:`numpy.diff` (only the 2 first arguments)
+* :func:`numpy.median` (only the first argument)
+* :func:`numpy.nanmax` (only the first argument)
+* :func:`numpy.nanmean` (only the first argument)
+* :func:`numpy.nanmedian` (only the first argument)
+* :func:`numpy.nanmin` (only the first argument)
+* :func:`numpy.nanprod` (only the first argument)
+* :func:`numpy.nanstd` (only the first argument)
+* :func:`numpy.nansum` (only the first argument)
+* :func:`numpy.nanvar` (only the first argument)
+
+Other functions
+---------------
+
 The following top-level functions are supported:
 
 * :func:`numpy.arange`
-* :func:`numpy.empty`
-* :func:`numpy.empty_like`
+* :func:`numpy.argsort` (no optional arguments)
+* :func:`numpy.array` (only the 2 first arguments)
+* :func:`numpy.asfortranarray` (only the first argument)
+* :func:`numpy.atleast_1d`
+* :func:`numpy.atleast_2d`
+* :func:`numpy.atleast_3d`
+* :func:`numpy.bincount` (only the 2 first arguments)
+* :func:`numpy.column_stack`
+* :func:`numpy.concatenate`
+* :func:`numpy.copy` (only the first argument)
+* :func:`numpy.diag`
+* :func:`numpy.digitize`
+* :func:`numpy.dstack`
+* :func:`numpy.empty` (only the 2 first arguments)
+* :func:`numpy.empty_like` (only the 2 first arguments)
+* :func:`numpy.expand_dims`
 * :func:`numpy.eye`
+* :func:`numpy.flatten` (no order argument; 'C' order only)
 * :func:`numpy.frombuffer` (only the 2 first arguments)
-* :func:`numpy.full`
-* :func:`numpy.full_like`
+* :func:`numpy.full` (only the 3 first arguments)
+* :func:`numpy.full_like` (only the 3 first arguments)
+* :func:`numpy.histogram` (only the 3 first arguments)
+* :func:`numpy.hstack`
 * :func:`numpy.identity`
 * :func:`numpy.linspace` (only the 3-argument form)
-* :func:`numpy.median` (only the first argument)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
-* :func:`numpy.ones`
-* :func:`numpy.ones_like`
+* :class:`numpy.nditer` (only the first argument)
+* :func:`numpy.ones` (only the 2 first arguments)
+* :func:`numpy.ones_like` (only the 2 first arguments)
+* :func:`numpy.ravel` (no order argument; 'C' order only)
+* :func:`numpy.roots`
 * :func:`numpy.round_`
+* :func:`numpy.searchsorted` (only the 2 first arguments)
+* :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
+* :func:`numpy.stack`
+* :func:`numpy.vstack`
 * :func:`numpy.where`
-* :func:`numpy.zeros`
-* :func:`numpy.zeros_like`
+* :func:`numpy.zeros` (only the 2 first arguments)
+* :func:`numpy.zeros_like` (only the 2 first arguments)
 
-The following constructors are supported, only with a numeric input:
+The following constructors are supported, both with a numeric input (to
+construct a scalar) or a sequence (to construct an array):
 
 * :class:`numpy.bool_`
 * :class:`numpy.complex64`
@@ -191,6 +297,18 @@ The following constructors are supported, only with a numeric input:
 * :class:`numpy.uintc`
 * :class:`numpy.uintp`
 
+Literal arrays
+--------------
+
+.. XXX should this part of the user's guide?
+
+Neither Python nor Numba has actual array literals, but you can construct
+arbitrary arrays by calling :func:`numpy.array` on a nested tuple::
+
+   a = numpy.array(((a, b, c), (d, e, f)))
+
+(nested lists are not yet supported by Numba)
+
 
 Modules
 =======
@@ -208,8 +326,7 @@ random module <pysupported-random>` (and therefore the same notes apply),
 but with an independent internal state: seeding or drawing numbers from
 one generator won't affect the other.
 
-The following functions are supported, but only with scalar output: you can't
-pass a *size* argument.
+The following functions are supported.
 
 Initialization
 ''''''''''''''
@@ -219,9 +336,9 @@ Initialization
 Simple random data
 ''''''''''''''''''
 
-* :func:`numpy.random.rand`: only without argument
+* :func:`numpy.random.rand`
 * :func:`numpy.random.randint`
-* :func:`numpy.random.randn`: only without argument
+* :func:`numpy.random.randn`
 * :func:`numpy.random.random`
 * :func:`numpy.random.random_sample`
 * :func:`numpy.random.ranf`
@@ -229,6 +346,9 @@ Simple random data
 
 Permutations
 ''''''''''''
+
+* :func:`numpy.random.choice`: the optional *p* argument (probabilities
+  array) is not supported
 
 * :func:`numpy.random.shuffle`: the sequence argument must be a one-dimension
   Numpy array or buffer-providing object (such as a :class:`bytearray`
@@ -250,6 +370,7 @@ Distributions
 * :func:`numpy.random.logistic`
 * :func:`numpy.random.lognormal`
 * :func:`numpy.random.logseries`
+* :func:`numpy.random.multibinomial`
 * :func:`numpy.random.negative_binomial`
 * :func:`numpy.random.normal`
 * :func:`numpy.random.pareto`
@@ -281,6 +402,16 @@ Distributions
    the parent's state and will therefore produce the same sequence of
    numbers (except when using the "forkserver" start method under Python 3.4
    and later).
+
+
+``stride_tricks``
+-----------------
+
+The following function from the :mod:`numpy.lib.stride_tricks` module
+is supported:
+
+* :func:`~numpy.lib.stride_tricks.as_strided` (the *strides* argument
+  is mandatory, the *subok* argument is not supported)
 
 
 Standard ufuncs
