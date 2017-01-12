@@ -245,9 +245,12 @@ class ExhaustIterConstraint(object):
             typevars = typeinfer.typevars
             oset = typevars[self.target]
             for tp in typevars[self.iterator.name].get():
+                # unpack optional
+                tp = tp.type if isinstance(tp, types.Optional) else tp
                 if isinstance(tp, types.BaseTuple):
                     if len(tp) == self.count:
                         typeinfer.add_type(self.target, tp, loc=self.loc)
+                        break
                     else:
                         raise ValueError("wrong tuple length for %r: "
                                          "expected %d, got %d"
@@ -256,6 +259,9 @@ class ExhaustIterConstraint(object):
                     tup = types.UniTuple(dtype=tp.iterator_type.yield_type,
                                          count=self.count)
                     typeinfer.add_type(self.target, tup, loc=self.loc)
+                    break
+            else:
+                raise TypingError("failed to unpack {}".format(tp), loc=self.loc)
 
 
 class PairFirstConstraint(object):
@@ -1046,8 +1052,7 @@ class TypeInferer(object):
 
         if isinstance(typ, types.Array):
             # Global array in nopython mode is constant
-            # XXX why layout='C'?
-            typ = typ.copy(layout='C', readonly=True)
+            typ = typ.copy(readonly=True)
 
         self.sentry_modified_builtin(inst, gvar)
         self.lock_type(target.name, typ, loc=inst.loc)

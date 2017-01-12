@@ -421,6 +421,27 @@ def np_nansum(a):
 
     return nansum_impl
 
+if numpy_version >= (1, 10):
+    @overload(np.nanprod)
+    def np_nanprod(a):
+        if not isinstance(a, types.Array):
+            return
+        if isinstance(a.dtype, types.Integer):
+            retty = types.intp
+        else:
+            retty = a.dtype
+        one = retty(1)
+        isnan = get_isnan(a.dtype)
+
+        def nanprod_impl(arr):
+            c = one
+            for view in np.nditer(arr):
+                v = view.item()
+                if not isnan(v):
+                    c *= v
+            return c
+
+        return nanprod_impl
 
 #----------------------------------------------------------------------------
 # Median and partitioning

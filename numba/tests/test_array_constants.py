@@ -5,7 +5,7 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba.errors import TypingError
-from numba import jit, types
+from numba import jit, types, typeof
 
 
 a0 = np.array(42)
@@ -133,6 +133,45 @@ class TestConstantArray(unittest.TestCase):
         cres = compile_isolated(pyfunc, ())
         out = cres.entry_point()
         self.assertEqual(out, 86)
+
+    def test_too_big_to_freeze(self):
+        """
+        Test issue https://github.com/numba/numba/issues/2188 where freezing
+        a constant array into the code thats prohibitively long and consume
+        too much RAM.
+        """
+        def test(biggie):
+            expect = np.copy(biggie)
+            self.assertEqual(typeof(biggie), typeof(expect))
+
+            def pyfunc():
+                return biggie
+
+            cres = compile_isolated(pyfunc, ())
+            # Check that the array is not frozen into the LLVM IR.
+            # LLVM size must be less than the array size.
+            self.assertLess(len(cres.library.get_llvm_str()), biggie.nbytes)
+            # Run and test result
+            out = cres.entry_point()
+            self.assertIs(biggie, out)
+            # Remove all local references to biggie
+            del out
+            biggie = None  #  del biggie is syntax error in py2
+            # Run again and verify result
+            out = cres.entry_point()
+            np.testing.assert_equal(expect, out)
+            self.assertEqual(typeof(expect), typeof(out))
+
+        nelem = 10**7   # 10 million items
+
+        c_array = np.arange(nelem).reshape(nelem)
+        f_array = np.asfortranarray(np.random.random((2, nelem // 2)))
+        self.assertEqual(typeof(c_array).layout, 'C')
+        self.assertEqual(typeof(f_array).layout, 'F')
+        # Test C contig
+        test(c_array)
+        # Test F contig
+        test(f_array)
 
 
 if __name__ == '__main__':

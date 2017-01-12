@@ -264,9 +264,9 @@ def constant_dummy(context, builder, ty, pyval):
 @lower_constant(types.ExternalFunctionPointer)
 def constant_function_pointer(context, builder, ty, pyval):
     ptrty = context.get_function_pointer_type(ty)
-    ptrval = context.get_constant_generic(builder, types.intp,
-                                          ty.get_pointer(pyval))
-    return builder.inttoptr(ptrval, ptrty)
+    ptrval = context.add_dynamic_addr(builder, ty.get_pointer(pyval),
+                                      info=str(pyval))
+    return builder.bitcast(ptrval, ptrty)
 
 
 # -----------------------------------------------------------------------------

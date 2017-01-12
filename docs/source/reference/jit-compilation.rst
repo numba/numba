@@ -168,7 +168,7 @@ Dispatcher objects
 Vectorized functions (ufuncs and DUFuncs)
 -----------------------------------------
 
-.. decorator:: numba.vectorize(*, signatures=[], identity=None, nopython=True, target='cpu', forceobj=False, locals={})
+.. decorator:: numba.vectorize(*, signatures=[], identity=None, nopython=True, target='cpu', forceobj=False, cache=False, locals={})
 
    Compile the decorated function and wrap it either as a `Numpy
    ufunc`_ or a Numba :class:`~numba.DUFunc`.  The optional
@@ -217,8 +217,12 @@ Vectorized functions (ufuncs and DUFuncs)
       @vectorize(["float64(float64)", "float32(float32)"], target='cuda')
       def f(x): ...
 
+   The compiled function can be cached to reduce future compilation time.
+   It is enabled by setting *cache* to True. Only the "cpu" and "parallel"
+   targets support caching.
 
-.. decorator:: numba.guvectorize(signatures, layout, *, identity=None, nopython=True, target='cpu', forceobj=False, locals={})
+
+.. decorator:: numba.guvectorize(signatures, layout, *, identity=None, nopython=True, target='cpu', forceobj=False, cache=False, locals={})
 
    Generalized version of :func:`numba.vectorize`.  While
    :func:`numba.vectorize` will produce a simple ufunc whose core
@@ -257,6 +261,9 @@ Vectorized functions (ufuncs and DUFuncs)
       as supported by Numpy.  Note that Numpy uses the term "signature",
       which we unfortunately use for something else.
 
+   The compiled function can be cached to reduce future compilation time.
+   It is enabled by setting *cache* to True. Only the "cpu" and "parallel"
+   targets support caching.
 
 .. _Numpy ufunc: http://docs.scipy.org/doc/numpy/reference/ufuncs.html
 

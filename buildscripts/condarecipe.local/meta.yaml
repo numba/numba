@@ -43,6 +43,8 @@ test:
     # Check Numba executables are there
     - pycc -h
     - numba -h
+    # run system info tool
+    - numba -s
     # Check test discovery works
     - python -m numba.tests.test_runtests
     # Run the whole test suite
