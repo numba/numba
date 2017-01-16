@@ -13,7 +13,9 @@ class TestCudaConstString(unittest.TestCase):
         from numba.cuda.cudadrv.nvvm import llvm_to_ptx, ADDRSPACE_CONSTANT
 
         targetctx = CUDATargetDesc.targetctx
-        mod = targetctx.create_module("")
+        codegen = targetctx.codegen()
+        library = codegen.create_library(name='test_const_string')
+        mod = library.create_ir_module(name='test_const_string')
         textstring = 'A Little Brown Fox'
         gv0 = targetctx.insert_const_string(mod, textstring)
         gv1 = targetctx.insert_const_string(mod, textstring)
@@ -45,7 +47,11 @@ class TestCudaConstString(unittest.TestCase):
                              r"19\s+x\s+i8\]", str(mod))
         self.assertEqual(len(matches), 1)
 
-        ptx = llvm_to_ptx(str(mod)).decode('ascii')
+        library.add_ir_module(mod)
+        library.finalize()
+
+
+        ptx = llvm_to_ptx(str(library._final_module)).decode('ascii')
         matches = list(re.findall(r"\.const.*__conststring__", ptx))
 
         self.assertEqual(len(matches), 1)

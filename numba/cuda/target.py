@@ -142,14 +142,8 @@ class CUDATargetContext(BaseContext):
 
             # Use atomic cmpxchg to prevent rewriting the error status
             # Only the first error is recorded
-
-            casfnty = lc.Type.function(old.type, [gv_exc.type, old.type,
-                                                  old.type])
-
-            casfn = wrapper_module.add_function(casfnty,
-                                                name="___numba_cas_hack")
-            xchg = builder.call(casfn, [gv_exc, old, status.code])
-            changed = builder.icmp(ICMP_EQ, xchg, old)
+            xchg_pair = builder.cmpxchg(ptr=gv_exc, cmp=old, val=status.code, ordering='monotonic')
+            xchg, changed = cgutils.unpack_tuple(builder, xchg_pair)
 
             # If the xchange is successful, save the thread ID.
             sreg = nvvmutils.SRegBuilder(builder)

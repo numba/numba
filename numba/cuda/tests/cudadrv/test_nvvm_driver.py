@@ -136,7 +136,7 @@ declare i32 @llvm.nvvm.read.ptx.sreg.ntid.x() nounwind readnone
 declare i32 @llvm.nvvm.read.ptx.sreg.tid.x() nounwind readnone
 
 !nvvm.annotations = !{!1}
-!1 = metadata !{void (i32*)* @simple, metadata !"kernel", i32 1}
+!1 = !{void (i32*)* @simple, !"kernel", i32 1}
 '''
 
 gpu32 = '''
@@ -171,7 +171,7 @@ declare i32 @llvm.nvvm.read.ptx.sreg.ntid.x() nounwind readnone
 declare i32 @llvm.nvvm.read.ptx.sreg.tid.x() nounwind readnone
 
 !nvvm.annotations = !{!1}
-!1 = metadata !{void (i32*)* @simple, metadata !"kernel", i32 1}
+!1 = !{void (i32*)* @simple, !"kernel", i32 1}
 
 '''
 
