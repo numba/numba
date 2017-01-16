@@ -138,9 +138,26 @@ class TestDUfuncCacheTest(UfuncCacheTest):
 
 class TestGUfuncCacheTest(UfuncCacheTest):
 
+    def test_filename_prefix(self):
+        mod = self.import_module()
+        usecase = getattr(mod, "direct_gufunc_cache_usecase")
+        with self.capture_cache_log() as out:
+            usecase()
+        cachelog = out.getvalue()
+        # find number filename with "guf-" prefix
+        prefixed = re.findall(r'/__pycache__/guf-{}'.format(self.modname),
+                              cachelog)
+        normal = re.findall(r'/__pycache__/{}'.format(self.modname), cachelog)
+        # expecting 2 overloads
+        self.assertGreater(len(normal), 2)
+        # expecting equal number of wrappers and overloads cache entries
+        self.assertEqual(len(normal), len(prefixed))
+
     def test_direct_gufunc_cache(self, **kwargs):
+        # 2 cache entry for the 2 overloads
+        # and 2 cache entry for the gufunc wrapper
         new_ufunc, cached_ufunc = self.check_ufunc_cache(
-            "direct_gufunc_cache_usecase", n_overloads=2, **kwargs)
+            "direct_gufunc_cache_usecase", n_overloads=2 + 2, **kwargs)
         # Test the cached and original versions
         inp = np.random.random(10).astype(np.float64)
         np.testing.assert_equal(new_ufunc(inp), cached_ufunc(inp))
@@ -154,6 +171,8 @@ class TestGUfuncCacheTest(UfuncCacheTest):
         self.test_direct_gufunc_cache(target='parallel')
 
     def test_indirect_gufunc_cache(self, **kwargs):
+        # 3 cache entry for the 3 overloads
+        # and no cache entry for the gufunc wrapper
         new_ufunc, cached_ufunc = self.check_ufunc_cache(
             "indirect_gufunc_cache_usecase", n_overloads=3, **kwargs)
         # Test the cached and original versions
