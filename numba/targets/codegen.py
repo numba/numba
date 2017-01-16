@@ -531,8 +531,6 @@ class BaseCPUCodegen(object):
 
     def _module_pass_manager(self):
         pm = ll.create_module_pass_manager()
-        dl = ll.create_target_data(self._data_layout)
-        dl.add_pass(pm)
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder() as pmb:
             pmb.populate(pm)
@@ -540,7 +538,6 @@ class BaseCPUCodegen(object):
 
     def _function_pass_manager(self, llvm_module):
         pm = ll.create_function_pass_manager(llvm_module)
-        self._target_data.add_pass(pm)
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder() as pmb:
             pmb.populate(pm)
