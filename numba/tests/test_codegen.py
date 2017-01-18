@@ -90,8 +90,8 @@ class JITCPUCodegenTestCase(TestCase):
         self.assertEqual(cfunc(2, 3), 5)
 
         # Same, but with dependency on another library
-        library = self.compile_module(asm_sum_outer, asm_sum_inner)
-        ptr = library.get_pointer_to_function("sum")
+        library2 = self.compile_module(asm_sum_outer, asm_sum_inner)
+        ptr = library2.get_pointer_to_function("sum")
         self.assertIsInstance(ptr, utils.integer_types)
         cfunc = ctypes_sum_ty(ptr)
         self.assertEqual(cfunc(2, 3), 5)
