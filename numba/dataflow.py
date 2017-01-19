@@ -77,8 +77,13 @@ class DataFlowAnalysis(object):
 
     def dispatch(self, info, inst):
         fname = "op_%s" % inst.opname.replace('+', '_')
-        fn = getattr(self, fname)
+        fn = getattr(self, fname, self.handle_unknown_opcode)
         fn(info, inst)
+
+    def handle_unknown_opcode(self, info, inst):
+        msg = "Use of unknown opcode {} at line {} of {}"
+        raise NotImplementedError(msg.format(inst.opname, inst.lineno,
+                                             self.bytecode.func_id.filename))
 
     def dup_topx(self, info, inst, count):
         orig = [info.pop() for _ in range(count)]
