@@ -28,6 +28,7 @@ class DIBuilder(object):
         self.module = module
         self.filepath = os.path.abspath(filepath)
         self.difile = self._di_file()
+        self.dicompileunit = self._di_compile_unit()
         self.subprograms = []
 
     def mark_location(self, builder, loc):
@@ -39,9 +40,8 @@ class DIBuilder(object):
         function.set_metadata("dbg", di_subp)
 
     def finalize(self):
-        dicompileunit = self._di_compile_unit()
         dbgcu = self.module.get_or_insert_named_metadata(self.DBG_CU_NAME)
-        dbgcu.add(dicompileunit)
+        dbgcu.add(self.dicompileunit)
         self._set_module_flags()
 
     #
@@ -68,8 +68,8 @@ class DIBuilder(object):
             'file': self.difile,
             'producer': 'Numba',
             'runtimeVersion': 0,
-            'subprograms': self.module.add_metadata(self.subprograms),
             'isOptimized': True,
+            'emissionKind': 1,  # 0-NoDebug, 1-FullDebug
         }, is_distinct=True)
 
     def _di_subroutine_type(self):
@@ -90,6 +90,7 @@ class DIBuilder(object):
             'scopeLine': line,
             'isOptimized': True,
             'variables': self.module.add_metadata([]),
+            'unit': self.dicompileunit,
         }, is_distinct=True)
 
     def _di_location(self, line):
