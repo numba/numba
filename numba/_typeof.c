@@ -325,7 +325,7 @@ compute_fingerprint(string_writer_t *w, PyObject *val)
         PyObject *item;
         Py_ssize_t pos = 0;
         /* Only one item is considered, as in typeof.py */
-        if (!_PySet_NextEntry(val, &pos, &item, &h)) {
+        if (PySet_GET_SIZE(val) == 0) {
             /* Empty set */
             PyErr_SetString(PyExc_ValueError,
                             "cannot compute fingerprint of empty set");
