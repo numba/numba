@@ -596,6 +596,7 @@ class MemoryLeakMixin(MemoryLeak):
 
     def tearDown(self):
         super(MemoryLeakMixin, self).tearDown()
+        gc.collect()
         self.memory_leak_teardown()
 
 

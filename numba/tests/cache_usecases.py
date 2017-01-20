@@ -102,6 +102,13 @@ closure1 = make_closure(3)
 closure2 = make_closure(5)
 
 
+biggie = np.arange(10**6)
+
+@jit(cache=True, nopython=True)
+def use_big_array():
+    return biggie
+
+
 Z = 1
 
 # Exercise returning a record instance.  This used to hardcode the dtype

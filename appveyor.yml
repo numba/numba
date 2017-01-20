@@ -11,7 +11,7 @@ environment:
   matrix:
     # Since appveyor is quite slow, we only use a single configuration
     # and a subset of the test suite (see test_script below)
-    - PYTHON: "3.5"
+    - PYTHON: "3.4"
       ARCH: "64"
       NUMPY: "1.11"
       CONDA_ENV: testenv
@@ -31,6 +31,12 @@ install:
   - buildscripts\\incremental\\build.cmd
 
 build: false
+
+before_test:
+  # Run system info tool
+  - ps: pushd bin
+  - ps: python numba -s
+  - ps: popd
 
 test_script:
   # Run a subset of the test suite, as AppVeyor is quite slow.

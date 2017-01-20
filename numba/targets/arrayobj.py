@@ -2790,11 +2790,10 @@ def make_array_flatiter(context, builder, arrty, arr):
     flatitercls = make_array_flat_cls(types.NumpyFlatType(arrty))
     flatiter = flatitercls(context, builder)
 
-    arrayptr = cgutils.alloca_once_value(builder, arr)
-    flatiter.array = arrayptr
+    flatiter.array = arr
 
     arrcls = context.make_array(arrty)
-    arr = arrcls(context, builder, ref=arrayptr)
+    arr = arrcls(context, builder, ref=flatiter._get_ptr_by_name('array'))
 
     flatiter.init_specific(context, builder, arrty, arr)
 
@@ -2813,7 +2812,7 @@ def iternext_numpy_flatiter(context, builder, sig, args, result):
 
     arrty = flatiterty.array_type
     arrcls = context.make_array(arrty)
-    arr = arrcls(context, builder, value=builder.load(flatiter.array))
+    arr = arrcls(context, builder, value=flatiter.array)
 
     flatiter.iternext_specific(context, builder, arrty, arr, result)
 
@@ -2828,7 +2827,7 @@ def iternext_numpy_getitem(context, builder, sig, args):
 
     arrty = flatiterty.array_type
     arrcls = context.make_array(arrty)
-    arr = arrcls(context, builder, value=builder.load(flatiter.array))
+    arr = arrcls(context, builder, value=flatiter.array)
 
     res = flatiter.getitem(context, builder, arrty, arr, index)
     return impl_ret_borrowed(context, builder, sig.return_type, res)
@@ -2845,7 +2844,7 @@ def iternext_numpy_getitem(context, builder, sig, args):
 
     arrty = flatiterty.array_type
     arrcls = context.make_array(arrty)
-    arr = arrcls(context, builder, value=builder.load(flatiter.array))
+    arr = arrcls(context, builder, value=flatiter.array)
 
     res = flatiter.setitem(context, builder, arrty, arr, index, value)
     return context.get_dummy_value()
@@ -2858,7 +2857,7 @@ def iternext_numpy_getitem(context, builder, sig, args):
     flatiter = flatitercls(context, builder, value=args[0])
 
     arrcls = context.make_array(flatiterty.array_type)
-    arr = arrcls(context, builder, value=builder.load(flatiter.array))
+    arr = arrcls(context, builder, value=flatiter.array)
     return arr.nitems
 
 
@@ -2869,11 +2868,10 @@ def make_array_ndenumerate(context, builder, sig, args):
     nditercls = make_array_ndenumerate_cls(types.NumpyNdEnumerateType(arrty))
     nditer = nditercls(context, builder)
 
-    arrayptr = cgutils.alloca_once_value(builder, arr)
-    nditer.array = arrayptr
+    nditer.array = arr
 
     arrcls = context.make_array(arrty)
-    arr = arrcls(context, builder, ref=arrayptr)
+    arr = arrcls(context, builder, ref=nditer._get_ptr_by_name('array'))
 
     nditer.init_specific(context, builder, arrty, arr)
 
@@ -2892,7 +2890,7 @@ def iternext_numpy_nditer(context, builder, sig, args, result):
 
     arrty = nditerty.array_type
     arrcls = context.make_array(arrty)
-    arr = arrcls(context, builder, value=builder.load(nditer.array))
+    arr = arrcls(context, builder, value=nditer.array)
 
     nditer.iternext_specific(context, builder, arrty, arr, result)
 

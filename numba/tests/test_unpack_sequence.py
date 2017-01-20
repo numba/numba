@@ -232,6 +232,12 @@ class TestUnpack(MemoryLeakMixin, TestCase):
         cfunc = cr.entry_point
         self.assertPreciseEqual(cfunc(), pyfunc())
 
+    def test_invalid_unpack(self):
+        pyfunc = unpack_arbitrary
+        with self.assertRaises(errors.TypingError) as raises:
+            compile_isolated(pyfunc, (types.int32,), flags=no_pyobj_flags)
+        self.assertIn("failed to unpack int32", str(raises.exception))
+
 
 if __name__ == '__main__':
     unittest.main()

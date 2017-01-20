@@ -183,6 +183,9 @@ Basic linear algebra is supported on 1-D and 2-D contiguous arrays of
 floating-point and complex numbers:
 
 * :func:`numpy.dot`
+* :func:`numpy.kron`
+* :func:`numpy.outer`
+* :func:`numpy.trace` (only the first argument).
 * :func:`numpy.vdot`
 * On Python 3.5 and above, the matrix multiplication operator from
   :pep:`465` (i.e. ``a @ b`` where ``a`` and ``b`` are 1-D or 2-D arrays).
@@ -223,6 +226,7 @@ The following reduction functions are supported:
 * :func:`numpy.nanmean` (only the first argument)
 * :func:`numpy.nanmedian` (only the first argument)
 * :func:`numpy.nanmin` (only the first argument)
+* :func:`numpy.nanprod` (only the first argument)
 * :func:`numpy.nanstd` (only the first argument)
 * :func:`numpy.nansum` (only the first argument)
 * :func:`numpy.nanvar` (only the first argument)

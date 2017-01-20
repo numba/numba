@@ -269,6 +269,7 @@ class EnumModel(ProxyModel):
 @register_default(types.PyObject)
 @register_default(types.RawPointer)
 @register_default(types.NoneType)
+@register_default(types.Const)
 @register_default(types.EllipsisType)
 @register_default(types.Function)
 @register_default(types.Type)
@@ -984,7 +985,7 @@ class CContiguousFlatIter(StructModel):
         array_type = fe_type.array_type
         dtype = array_type.dtype
         ndim = array_type.ndim
-        members = [('array', types.EphemeralPointer(array_type)),
+        members = [('array', array_type),
                    ('stride', types.intp),
                    ('index', types.EphemeralPointer(types.intp)),
                    ]
@@ -999,7 +1000,7 @@ class FlatIter(StructModel):
         array_type = fe_type.array_type
         dtype = array_type.dtype
         ndim = array_type.ndim
-        members = [('array', types.EphemeralPointer(array_type)),
+        members = [('array', array_type),
                    ('pointers', types.EphemeralArray(types.CPointer(dtype), ndim)),
                    ('indices', types.EphemeralArray(types.intp, ndim)),
                    ('exhausted', types.EphemeralPointer(types.boolean)),

@@ -104,6 +104,9 @@ def array_nanmean(arr):
 def array_nansum(arr):
     return np.nansum(arr)
 
+def array_nanprod(arr):
+    return np.nanprod(arr)
+
 def array_nanstd(arr):
     return np.nanstd(arr)
 
@@ -270,6 +273,11 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         # it returns Nan while later Numpy returns 0.
         self.check_reduction_basic(array_nansum,
                                    all_nans=np_version >= (1, 9))
+
+    @tag('important')
+    @unittest.skipUnless(np_version >= (1, 10), "nanprod needs Numpy 1.10+")
+    def test_nanprod_basic(self):
+        self.check_reduction_basic(array_nanprod)
 
     @tag('important')
     @unittest.skipUnless(np_version >= (1, 8), "nanstd needs Numpy 1.8+")
@@ -531,6 +539,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                            ]
         if np_version >= (1, 8):
             reduction_funcs += [array_nanmean, array_nanstd, array_nanvar]
+        if np_version >= (1, 10):
+            reduction_funcs += [array_nanprod]
 
         dtypes_to_test = [np.int32, np.float32, np.bool_]
 

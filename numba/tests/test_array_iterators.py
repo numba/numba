@@ -92,6 +92,30 @@ def iter_next(arr):
     return next(it), next(it), next(it2)
 
 
+#
+# Test premature free (see issue #2112).
+# The following test allocates an array ``x`` inside the body.
+# The compiler will put a ``del x`` right after the last use of ``x``,
+# which is right after the creation of the array iterator and
+# before the loop is entered.  If the iterator does not incref the array,
+# the iterator will be reading garbage data of free'ed memory.
+#
+
+def array_flat_premature_free(size):
+    x = np.arange(size)
+    res = np.zeros_like(x, dtype=np.intp)
+    for i, v in enumerate(x.flat):
+        res[i] = v
+    return res
+
+def array_ndenumerate_premature_free(size):
+    x = np.arange(size)
+    res = np.zeros_like(x, dtype=np.intp)
+    for i, v in np.ndenumerate(x):
+        res[i] = v
+    return res
+
+
 class TestArrayIterators(MemoryLeakMixin, TestCase):
     """
     Test array.flat, np.ndenumerate(), etc.
@@ -285,6 +309,14 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         arr = np.array([42]).reshape(())
         check(arr)
 
+    def test_array_flat_premature_free(self):
+        cres = compile_isolated(array_flat_premature_free, [types.intp])
+        cfunc = cres.entry_point
+        expect = array_flat_premature_free(6)
+        got = cfunc(6)
+        self.assertTrue(got.sum())
+        self.assertPreciseEqual(expect, got)
+
     @tag('important')
     def test_array_ndenumerate_2d(self):
         arr = np.arange(12).reshape(4, 3)
@@ -328,6 +360,14 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         self.check_array_flat_sum(arr, arrty)
         arrty = types.Array(types.int32, 2, layout='A')
         self.check_array_flat_sum(arr, arrty)
+
+    def test_array_ndenumerate_premature_free(self):
+        cres = compile_isolated(array_ndenumerate_premature_free, [types.intp])
+        cfunc = cres.entry_point
+        expect = array_ndenumerate_premature_free(6)
+        got = cfunc(6)
+        self.assertTrue(got.sum())
+        self.assertPreciseEqual(expect, got)
 
     def test_np_ndindex(self):
         func = np_ndindex

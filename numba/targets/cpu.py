@@ -31,6 +31,8 @@ class CPUContext(BaseContext):
     """
     Changes BaseContext calling convention
     """
+    allow_dynamic_globals = True
+
     # Overrides
     def create_module(self, name):
         return self._internal_codegen._create_empty_module(name)

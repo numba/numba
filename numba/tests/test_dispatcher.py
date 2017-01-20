@@ -689,6 +689,20 @@ class TestCache(BaseCacheTest):
                          'Cannot cache compiled function "looplifted" '
                          'as it uses lifted loops')
 
+    def test_big_array(self):
+        # Code references big array globals cannot be cached
+        mod = self.import_module()
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaWarning)
+
+            f = mod.use_big_array
+            np.testing.assert_equal(f(), mod.biggie)
+            self.check_pycache(0)
+
+        self.assertEqual(len(w), 1)
+        self.assertIn('Cannot cache compiled function "use_big_array" '
+                      'as it uses dynamic globals', str(w[0].message))
+
     def test_ctypes(self):
         # Functions using a ctypes pointer can't be cached and raise
         # a warning.

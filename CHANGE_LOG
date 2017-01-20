@@ -1,3 +1,35 @@
+Version 0.30.0
+---------------
+
+This release adds preliminary support for Python 3.6, but no official build is
+available yet.  A new system reporting tool (``numba --sysinfo``) is added to
+provide system information to help core developers in replication and debugging.
+See below for other improvements and bug fixes.
+
+Improvements:
+
+* PR #2209: Support Python 3.6.
+* PR #2175: Support ``np.trace()``, ``np.outer()`` and ``np.kron()``.
+* PR #2197: Support ``np.nanprod()``.
+* PR #2190: Support caching for ufunc.
+* PR #2186: Add system reporting tool.
+
+Fixes:
+
+* PR #2214, Issue #2212: Fix memory error with ndenumerate and flat iterators.
+* PR #2206, Issue #2163: Fix ``zip()`` consuming extra elements in early
+  exhaustion.
+* PR #2185, Issue #2159, #2169: Fix rewrite pass affecting objmode fallback.
+* PR #2204, Issue #2178: Fix annotation for liftedloop.
+* PR #2203: Fix Appveyor segfault with Python 3.5.
+* PR #2202, Issue #2198: Fix target context not initialized when loading from
+  ufunc cache.
+* PR #2172, Issue #2171: Fix optional type unpacking.
+* PR #2189, Issue #2188: Disable freezing of big (>1MB) global arrays.
+* PR #2180, Issue #2179: Fix invalid variable version in looplifting.
+* PR #2156, Issue #2155: Fix divmod, floordiv segfault on CUDA.
+
+
 Version 0.29.0
 --------------
 
@@ -27,7 +59,7 @@ Fixes:
 * PR #2149: Workaround MSVC9.0 SP1 fmod bug kb982107.
 * PR #2145, Issue #2009: Fixes kwargs for jitclass ``__init__`` method.
 * PR #2150: Fix slowdown in objmode fallback.
-* PR #2050, Issue #1258: Fix liveness problem with some generator loops.
+* PR #2050, Issue #1259: Fix liveness problem with some generator loops.
 * PR #2072, Issue #1995: Right shift of unsigned LHS should be logical.
 * PR #2115, Issue #1466: Fix inspect_types() error due to mangled variable name.
 * PR #2119, Issue #2118: Fix array type created from record-dtype.

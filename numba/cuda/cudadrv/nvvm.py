@@ -448,7 +448,7 @@ def llvm_to_ptx(llvmir, **opts):
     for decl, fn in replacements:
         llvmir = llvmir.replace(decl, fn)
 
-    llvmir = llvm38_to_34_ir(llvmir)
+    llvmir = llvm39_to_34_ir(llvmir)
 
     cu.add_module(llvmir.encode('utf8'))
     cu.add_module(libdevice.get())
@@ -484,20 +484,22 @@ re_attributes_def = re.compile(r"^attributes #\d+ = \{ ([\w\s]+)\ }")
 unsupported_attributes = {'argmemonly', 'inaccessiblememonly',
                           'inaccessiblemem_or_argmemonly', 'norecurse'}
 
-re_getelementptr = re.compile(r"\Wgetelementptr\s(?:inbounds )?\(?")
+re_getelementptr = re.compile(r"\bgetelementptr\s(?:inbounds )?\(?")
 
-re_load = re.compile(r"\Wload\s(?:volatile )?")
+re_load = re.compile(r"\bload\s(?:\bvolatile\s)?")
 
 re_call = re.compile(r"(call\s[^@]+\))(\s@)")
 
 re_type_tok = re.compile(r"[,{}()[\]]")
 
-re_annotations = re.compile(r"\Wnonnull\W")
+re_annotations = re.compile(r"\bnonnull\b")
+
+re_unsupported_keywords = re.compile(r"\b(local_unnamed_addr|writeonly)\b")
 
 
-def llvm38_to_34_ir(ir):
+def llvm39_to_34_ir(ir):
     """
-    Convert LLVM 3.8 IR for LLVM 3.4.
+    Convert LLVM 3.9 IR for LLVM 3.4.
     """
     def parse_out_leading_type(s):
         par_level = 0
@@ -523,6 +525,7 @@ def llvm38_to_34_ir(ir):
 
     buf = []
     for line in ir.splitlines():
+        
         # Fix llvm.dbg.cu
         if line.startswith('!numba.llvm.dbg.cu'):
             line = line.replace('!numba.llvm.dbg.cu', '!llvm.dbg.cu')
@@ -537,12 +540,19 @@ def llvm38_to_34_ir(ir):
             if None is re_metadata_correct_usage.search(line):
                 line = line.replace('!{', 'metadata !{')
                 line = line.replace('!"', 'metadata !"')
+                
                 assigpos = line.find('=')
                 lhs, rhs = line[:assigpos + 1], line[assigpos + 1:]
                 # Fix metadata reference
                 def fix_metadata_ref(m):
                     return 'metadata ' + m.group(0)
                 line = ' '.join((lhs, re_metadata_ref.sub(fix_metadata_ref, rhs)))
+
+        if line.startswith('source_filename ='):
+            line = ''   # skip line
+        if re_unsupported_keywords.search(line) is not None:
+            line = re_unsupported_keywords.sub(lambda m: '', line)
+
         if line.startswith('attributes #'):
             # Remove function attributes unsupported pre-3.8
             m = re_attributes_def.match(line)
