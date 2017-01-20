@@ -9,6 +9,18 @@
 #include "frameobject.h"
 
 /*
+ * Call tracing is not presently supported on PyPy.
+ */
+
+#ifndef PYPY_VERSION
+#define CALL_TRACING 1
+#else
+#define CALL_TRACING 0
+#endif
+
+#if CALL_TRACING
+
+/*
  * The following call_trace and call_trace_protected functions
  * as well as the C_TRACE macro are taken from ceval.c
  *
@@ -53,6 +65,8 @@ call_trace_protected(Py_tracefunc func, PyObject *obj,
         return -1;
     }
 }
+
+#endif // CALL_TRACING
 
 /*
  * The original C_TRACE macro (from ceval.c) would call
@@ -292,6 +306,8 @@ call_cfunc(DispatcherObject *self, PyObject *cfunc, PyObject *args, PyObject *kw
     assert(PyCFunction_Check(cfunc));
     assert(PyCFunction_GET_FLAGS(cfunc) == METH_VARARGS | METH_KEYWORDS);
     fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
+
+#if CALL_TRACING
     tstate = PyThreadState_GET();
     if (tstate->use_tracing && tstate->c_profilefunc)
     {
@@ -339,8 +355,10 @@ call_cfunc(DispatcherObject *self, PyObject *cfunc, PyObject *args, PyObject *kw
         Py_XDECREF(code);
         return result;
     }
-    else
-        return fn(PyCFunction_GET_SELF(cfunc), args, kws);
+#endif // CALL_TRACING
+
+    return fn(PyCFunction_GET_SELF(cfunc), args, kws);
+
 }
 
 static
@@ -499,8 +517,12 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     PyObject *cfunc;
     PyThreadState *ts = PyThreadState_Get();
     PyObject *locals = NULL;
+
+#if CALL_TRACING
     if (ts->use_tracing && ts->c_profilefunc)
         locals = PyEval_GetLocals();
+#endif
+
     if (self->fold_args) {
         if (find_named_args(self, &args, &kws))
             return NULL;
