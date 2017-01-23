@@ -142,7 +142,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
     __numba__ = "py_func"
 
-    def __init__(self, arg_count, py_func, pysig):
+    def __init__(self, arg_count, py_func, pysig, can_fallback):
         self._tm = default_type_manager
 
         # A mapping of signatures to compile results
@@ -166,6 +166,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         _dispatcher.Dispatcher.__init__(self, self._tm.get_pointer(),
                                         arg_count, self._fold_args,
                                         argnames, defargs,
+                                        can_fallback,
                                         has_stararg)
 
         self.doc = py_func.__doc__
@@ -424,8 +425,8 @@ class Dispatcher(_DispatcherBase):
 
         pysig = utils.pysignature(py_func)
         arg_count = len(pysig.parameters)
-
-        _DispatcherBase.__init__(self, arg_count, py_func, pysig)
+        can_fallback = not targetoptions.get('nopython', False)
+        _DispatcherBase.__init__(self, arg_count, py_func, pysig, can_fallback)
 
         functools.update_wrapper(self, py_func)
 
@@ -578,7 +579,8 @@ class LiftedLoop(_DispatcherBase):
 
         _DispatcherBase.__init__(self, self.func_ir.arg_count,
                                  self.func_ir.func_id.func,
-                                 self.func_ir.func_id.pysig)
+                                 self.func_ir.func_id.pysig,
+                                 can_fallback=True)
 
     def get_source_location(self):
         """Return the starting line number of the loop.
