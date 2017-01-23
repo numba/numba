@@ -504,7 +504,7 @@ def llvm39_to_34_ir(ir):
                 line = line.replace('!{', 'metadata !{')
                 line = line.replace('!"', 'metadata !"')
         if line.startswith('source_filename ='):
-            line = ''   # skip line
+            continue    # skip line
         if re_unsupported_keywords.search(line) is not None:
             line = re_unsupported_keywords.sub(lambda m: '', line)
         if line.startswith('attributes #'):
