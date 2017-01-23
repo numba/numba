@@ -246,7 +246,6 @@ class CompilationUnit(object):
         # get log
         self.log = self.get_log()
 
-        # XXX remove debug_pubnames
         return ptxbuf[:]
 
     def _try_error(self, err, msg):
@@ -453,6 +452,7 @@ def llvm_to_ptx(llvmir, **opts):
     cu.add_module(libdevice.get())
 
     ptx = cu.compile(**opts)
+    # XXX remove debug_pubnames seems to be necessary sometimes
     return patch_ptx_debug_pubnames(ptx)
 
 

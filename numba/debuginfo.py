@@ -1,9 +1,36 @@
+"""
+Implements helpers to build LLVM debuginfo.
+"""
+
+from __future__ import absolute_import
+
+import abc
 import os.path
 
 from llvmlite import ir
 
 
-class DummyDIBuilder(object):
+class AbstractDIBuilder(abc.ABC):
+    @abc.abstractmethod
+    def mark_location(self, builder, loc):
+        """Emit source location information to the given IRBuilder.
+        """
+        pass
+
+    @abc.abstractmethod
+    def mark_subprogram(self, function, name, line):
+        """Emit source location information for the given function.
+        """
+        pass
+
+    @abc.abstractmethod
+    def finalize(self):
+        """Finalize the debuginfo by emitting all necessary metadata.
+        """
+        pass
+
+
+class DummyDIBuilder(AbstractDIBuilder):
 
     def __init__(self, module, filepath):
         pass
@@ -18,10 +45,9 @@ class DummyDIBuilder(object):
         pass
 
 
-class DIBuilder(object):
+class DIBuilder(AbstractDIBuilder):
     DWARF_VERSION = 4
     DEBUG_INFO_VERSION = 3
-
     DBG_CU_NAME = 'llvm.dbg.cu'
 
     def __init__(self, module, filepath):
@@ -48,13 +74,55 @@ class DIBuilder(object):
     # Internal APIs
     #
 
+    def _set_module_flags(self):
+        """Set the module flags metadata
+        """
+        module = self.module
+        mflags = module.get_or_insert_named_metadata('llvm.module.flags')
+        if self.DWARF_VERSION is not None:
+            dwarf_version = module.add_metadata([
+                self._const_int(2),
+                "Dwarf Version",
+                self._const_int(self.DWARF_VERSION)
+            ])
+            if dwarf_version not in mflags.operands:
+                mflags.add(dwarf_version)
+        debuginfo_version = module.add_metadata([
+            self._const_int(2),
+            "Debug Info Version",
+            self._const_int(self.DEBUG_INFO_VERSION)
+        ])
+        if debuginfo_version not in mflags.operands:
+            mflags.add(debuginfo_version)
+
+    def _add_subprogram(self, name, linkagename, line):
+        """Emit subprogram metdata
+        """
+        subp = self._di_subprogram(name, linkagename, line)
+        self.subprograms.append(subp)
+        return subp
+
+    def _add_location(self, line):
+        """Emit location metatdaa
+        """
+        loc = self._di_location(line)
+        return loc
+
     @classmethod
     def _const_int(cls, num, bits=32):
+        """Util to create constant int in metadata
+        """
         return ir.IntType(bits)(num)
 
     @classmethod
     def _const_bool(cls, boolean):
+        """Util to create constant boolean in metadata
+        """
         return ir.IntType(1)(boolean)
+
+    #
+    # Helpers to emit the metadata nodes
+    #
 
     def _di_file(self):
         return self.module.add_debug_info('DIFile', {
@@ -100,54 +168,23 @@ class DIBuilder(object):
             'scope': self.subprograms[-1],
         })
 
-    def _set_module_flags(self):
-        module = self.module
-        mflags = module.get_or_insert_named_metadata('llvm.module.flags')
-        if self.DWARF_VERSION is not None:
-            dwarf_version = module.add_metadata([
-                self._const_int(2),
-                "Dwarf Version",
-                self._const_int(self.DWARF_VERSION)
-            ])
-            if dwarf_version not in mflags.operands:
-                mflags.add(dwarf_version)
-        debuginfo_version = module.add_metadata([
-            self._const_int(2),
-            "Debug Info Version",
-            self._const_int(self.DEBUG_INFO_VERSION)
-        ])
-        if debuginfo_version not in mflags.operands:
-            mflags.add(debuginfo_version)
-
-    def _add_subprogram(self, name, linkagename, line):
-        subp = self._di_subprogram(name, linkagename, line)
-        self.subprograms.append(subp)
-        return subp
-
-    def _add_location(self, line):
-        loc = self._di_location(line)
-        return loc
-
 
 class NvvmDIBuilder(DIBuilder):
     """
     Only implemented the minimal metadata to get line number information.
     See http://llvm.org/releases/3.4/docs/LangRef.html
-
-    These actually uses DEBUG_INFO_VERSION=2 but parse_assembly would strip the
-    lineinfo metadata due to the old version number.  We will patch it before
-    PTX generation.
     """
     # These constants are copied from llvm3.4
     DW_LANG_Python = 0x0014
     DI_Compile_unit = 786449
     DI_Subroutine_type = 786453
     DI_Subprogram = 786478
+    DI_File = 786473
 
-    DWARF_VERSION = None
-    DEBUG_INFO_VERSION = 1
-    # Hide the debug info from llvm.parse_assembly() which strips invalid/outdated
-    # debug metadata
+    DWARF_VERSION = None  # don't emit DWARF version
+    DEBUG_INFO_VERSION = 1  # as required by NVVM IR Spec
+    # Rename DIComputeUnit MD to hide it from llvm.parse_assembly()
+    # which strips invalid/outdated debug metadata
     DBG_CU_NAME = 'numba.llvm.dbg.cu'
 
     # Default member
@@ -159,7 +196,7 @@ class NvvmDIBuilder(DIBuilder):
         if self._last_lineno == loc.line:
             return
         self._last_lineno = loc.line
-        # Add inline asm as stub to mark line location
+        # Add call to an inline asm to mark line location
         asmty = ir.FunctionType(ir.VoidType(), [])
         asm = ir.InlineAsm(asmty, "// dbg {}".format(loc.line), "",
                            side_effect=True)
@@ -170,6 +207,10 @@ class NvvmDIBuilder(DIBuilder):
     def mark_subprogram(self, function, name, line):
         self._add_subprogram(name=name, linkagename=function.name, line=line)
 
+    #
+    # Helper methods to create the metadata nodes.
+    #
+
     def _filepair(self):
         return self.module.add_metadata([
             os.path.basename(self.filepath),
@@ -178,7 +219,7 @@ class NvvmDIBuilder(DIBuilder):
 
     def _di_file(self):
         return self.module.add_metadata([
-            self._const_int(786473),
+            self._const_int(self.DI_File),
             self._filepair(),
         ])
 
