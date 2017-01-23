@@ -199,6 +199,7 @@ class TestCC(BasePYCCTest):
         with self.check_cc_compiled(cc) as lib:
             res = lib.multi(123, 321)
             self.assertPreciseEqual(res, 123 * 321)
+            self.assertEqual(lib.multi.__module__, 'pycc_test_simple')
 
     def test_compile_for_cpu(self):
         # Compiling for the host CPU should always succeed

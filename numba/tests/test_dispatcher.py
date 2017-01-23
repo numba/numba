@@ -74,6 +74,16 @@ class BaseTest(TestCase):
 
 class TestDispatcher(BaseTest):
 
+    def test_dyn_pyfunc(self):
+        @jit
+        def foo(x):
+            return x
+
+        foo(1)
+        [cr] = foo.overloads.values()
+        # __module__ must be match that of foo
+        self.assertEqual(cr.entry_point.__module__, foo.py_func.__module__)
+
     def test_no_argument(self):
         @jit
         def foo():
