@@ -10,7 +10,7 @@ import os.path
 from llvmlite import ir
 
 
-class AbstractDIBuilder(abc.ABC):
+class AbstractDIBuilder(abc.ABCMeta):
     @abc.abstractmethod
     def mark_location(self, builder, loc):
         """Emit source location information to the given IRBuilder.
