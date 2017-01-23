@@ -3,6 +3,8 @@ Target Options
 """
 from __future__ import print_function, division, absolute_import
 
+from .. import config
+
 
 class TargetOptions(object):
     OPTIONS = {}
@@ -49,7 +51,7 @@ class TargetOptions(object):
         if kws.pop('_nrt', True):
             flags.set("nrt")
 
-        if kws.pop('debug', False):
+        if kws.pop('debug', config.DBG_DEFAULT):
             flags.set("debuginfo")
             flags.set("boundcheck")
 

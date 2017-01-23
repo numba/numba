@@ -5,7 +5,8 @@ from .compiler import (compile_kernel, compile_device, declare_device_function,
                        AutoJitCUDAKernel, compile_device_template)
 from .simulator.kernel import FakeCUDAKernel
 
-def jitdevice(func, link=[], debug=False, inline=False):
+
+def jitdevice(func, link=[], debug=config.DBG_CUDA_DEFAULT, inline=False):
     """Wrapper for device-jit.
     """
     if link:
@@ -14,7 +15,7 @@ def jitdevice(func, link=[], debug=False, inline=False):
 
 
 def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
-        link=[], debug=False, **kws):
+        link=[], debug=config.DBG_CUDA_DEFAULT, **kws):
     """
     JIT compile a python function conforming to the CUDA Python specification.
     If a signature is supplied, then a function is returned that takes a
@@ -63,7 +64,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
         else:
             if config.ENABLE_CUDASIM:
                 return FakeCUDAKernel(func_or_sig, device=device, fastmath=fastmath,
-                                       debug=debug)
+                                      debug=debug)
             elif device:
                 return jitdevice(func_or_sig, debug=debug, **kws)
             else:

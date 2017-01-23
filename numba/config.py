@@ -229,6 +229,12 @@ class _EnvReloader(object):
         NUMBA_NUM_THREADS = _readenv("NUMBA_NUM_THREADS", int,
                                      NUMBA_DEFAULT_NUM_THREADS)
 
+        # Debug Info
+
+        # The default value for the `debug` flag
+        DBG_DEFAULT = _readenv("NUMBA_DEBUGINFO", int, 0)
+        DBG_CUDA_DEFAULT = _readenv("NUMBA_CUDA_DEBUGINFO", int, 0)
+
         # Inject the configuration values into the module globals
         for name, value in locals().copy().items():
             if name.isupper():
