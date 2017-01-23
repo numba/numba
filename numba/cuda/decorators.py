@@ -6,16 +6,17 @@ from .compiler import (compile_kernel, compile_device, declare_device_function,
 from .simulator.kernel import FakeCUDAKernel
 
 
-def jitdevice(func, link=[], debug=config.DBG_CUDA_DEFAULT, inline=False):
+def jitdevice(func, link=[], debug=None, inline=False):
     """Wrapper for device-jit.
     """
+    debug = config.DBG_CUDA_DEFAULT if debug is None else debug
     if link:
         raise ValueError("link keyword invalid for device function")
     return compile_device_template(func, debug=debug, inline=inline)
 
 
 def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
-        link=[], debug=config.DBG_CUDA_DEFAULT, **kws):
+        link=[], debug=None, **kws):
     """
     JIT compile a python function conforming to the CUDA Python specification.
     If a signature is supplied, then a function is returned that takes a
@@ -37,12 +38,14 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
     :type link: list
     :param debug: If True, check for exceptions thrown when executing the
        kernel. Since this degrades performance, this should only be used for
-       debugging purposes.
+       debugging purposes.  Defaults to False.  (The default value can be
+       overriden by setting environment variable ``NUMBA_CUDA_DEBUGINFO=1`.)
     :param fastmath: If true, enables flush-to-zero and fused-multiply-add,
        disables precise division and square root. This parameter has no effect
        on device function, whose fastmath setting depends on the kernel function
        from which they are called.
     """
+    debug = config.DBG_CUDA_DEFAULT if debug is None else debug
 
     if link and config.ENABLE_CUDASIM:
         raise NotImplementedError('Cannot link PTX in the simulator')
