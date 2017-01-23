@@ -16,6 +16,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import utils, vectorize, jit, generated_jit, types, appdirs
+from numba import _dispatcher
 from numba.errors import NumbaWarning
 from .support import TestCase, tag, temp_directory, import_dynamic
 
@@ -73,6 +74,16 @@ class BaseTest(TestCase):
 
 
 class TestDispatcher(BaseTest):
+
+    def test_dyn_pyfunc(self):
+        @jit
+        def foo(x):
+            return x
+
+        foo(1)
+        [cr] = foo.overloads.values()
+        # __module__ must be match that of foo
+        self.assertEqual(cr.entry_point.__module__, foo.py_func.__module__)
 
     def test_no_argument(self):
         @jit
@@ -243,6 +254,43 @@ class TestDispatcher(BaseTest):
             bar()
         m = "No matching definition for argument type(s) array(float64, 1d, C)"
         self.assertEqual(str(raises.exception), m)
+
+    def test_fingerprint_failure(self):
+        """
+        Failure in computing the fingerprint cannot affect a nopython=False
+        function.  On the other hand, with nopython=True, a ValueError should
+        be raised to report the failure with fingerprint.
+        """
+        @jit
+        def foo(x):
+            return x
+
+        # Empty list will trigger failure in compile_fingerprint
+        errmsg = 'cannot compute fingerprint of empty list'
+        with self.assertRaises(ValueError) as raises:
+            _dispatcher.compute_fingerprint([])
+        self.assertIn(errmsg, str(raises.exception))
+        # It should work in fallback
+        self.assertEqual(foo([]), [])
+        # But, not in nopython=True
+        strict_foo = jit(nopython=True)(foo.py_func)
+        with self.assertRaises(ValueError) as raises:
+            strict_foo([])
+        self.assertIn(errmsg, str(raises.exception))
+
+        # Test in loop lifting context
+        @jit
+        def bar():
+            object()  # force looplifting
+            x = []
+            for i in range(10):
+                x = foo(x)
+            return x
+
+        self.assertEqual(bar(), [])
+        # Make sure it was looplifted
+        [cr] = bar.overloads.values()
+        self.assertEqual(len(cr.lifted), 1)
 
 
 class TestSignatureHandling(BaseTest):
@@ -927,7 +975,11 @@ class TestMultiprocessCache(BaseCacheTest):
         # necessary to reproduce the issue.
         f = mod.simple_usecase_caller
         n = 3
-        pool = multiprocessing.Pool(n)
+        try:
+            ctx = multiprocessing.get_context('spawn')
+        except AttributeError:
+            ctx = multiprocessing
+        pool = ctx.Pool(n)
         try:
             res = sum(pool.imap(f, range(n)))
         finally:

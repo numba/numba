@@ -547,7 +547,7 @@ def llvm39_to_34_ir(ir):
                 line = ' '.join((lhs, re_metadata_ref.sub(fix_metadata_ref, rhs)))
 
         if line.startswith('source_filename ='):
-            line = ''   # skip line
+            continue    # skip line
         if re_unsupported_keywords.search(line) is not None:
             line = re_unsupported_keywords.sub(lambda m: '', line)
 
