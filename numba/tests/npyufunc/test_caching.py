@@ -136,6 +136,12 @@ class TestDUfuncCacheTest(UfuncCacheTest):
         self.check_dufunc_usecase('indirect_dufunc_cache_usecase')
 
 
+def _fix_raw_path(rstr):
+    if config.IS_WIN32:
+        rstr = rstr.replace(r'/', r'\\\\')
+    return rstr
+
+
 class TestGUfuncCacheTest(UfuncCacheTest):
 
     def test_filename_prefix(self):
@@ -145,9 +151,10 @@ class TestGUfuncCacheTest(UfuncCacheTest):
             usecase()
         cachelog = out.getvalue()
         # find number filename with "guf-" prefix
-        prefixed = re.findall(r'/__pycache__/guf-{}'.format(self.modname),
-                              cachelog)
-        normal = re.findall(r'/__pycache__/{}'.format(self.modname), cachelog)
+        fmt1 = _fix_raw_path(r'/__pycache__/guf-{}')
+        prefixed = re.findall(fmt1.format(self.modname), cachelog)
+        fmt2 = _fix_raw_path(r'/__pycache__/{}')
+        normal = re.findall(fmt2.format(self.modname), cachelog)
         # expecting 2 overloads
         self.assertGreater(len(normal), 2)
         # expecting equal number of wrappers and overloads cache entries
