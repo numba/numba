@@ -927,7 +927,11 @@ class TestMultiprocessCache(BaseCacheTest):
         # necessary to reproduce the issue.
         f = mod.simple_usecase_caller
         n = 3
-        pool = multiprocessing.Pool(n)
+        try:
+            ctx = multiprocessing.get_context('spawn')
+        except AttributeError:
+            ctx = multiprocessing
+        pool = ctx.Pool(n)
         try:
             res = sum(pool.imap(f, range(n)))
         finally:
