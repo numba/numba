@@ -449,7 +449,6 @@ def llvm_to_ptx(llvmir, **opts):
         llvmir = llvmir.replace(decl, fn)
 
     llvmir = llvm39_to_34_ir(llvmir)
-
     cu.add_module(llvmir.encode('utf8'))
     cu.add_module(libdevice.get())
 
@@ -525,22 +524,21 @@ def llvm39_to_34_ir(ir):
 
     buf = []
     for line in ir.splitlines():
-        
+
         # Fix llvm.dbg.cu
         if line.startswith('!numba.llvm.dbg.cu'):
             line = line.replace('!numba.llvm.dbg.cu', '!llvm.dbg.cu')
 
-        # Fix debug info version
-        def fix_debuginfo_ver(m):
-            return '!{i32 2, !"Debug Info Version", i32 1}'
-        line = re_metadata_debuginfo.sub(fix_debuginfo_ver, line, count=1)
+        if (line.lstrip().startswith('tail call void asm sideeffect "// dbg') and
+                '!numba.dbg' in line):
+            line = line.replace('!numba.dbg', '!dbg')
 
         if re_metadata_def.match(line):
             # Rewrite metadata since LLVM 3.7 dropped the "metadata" type prefix.
             if None is re_metadata_correct_usage.search(line):
                 line = line.replace('!{', 'metadata !{')
                 line = line.replace('!"', 'metadata !"')
-                
+
                 assigpos = line.find('=')
                 lhs, rhs = line[:assigpos + 1], line[assigpos + 1:]
                 # Fix metadata reference

@@ -28,8 +28,8 @@ class DIBuilder(object):
         self.module = module
         self.filepath = os.path.abspath(filepath)
         self.difile = self._di_file()
-        self.dicompileunit = self._di_compile_unit()
         self.subprograms = []
+        self.dicompileunit = self._di_compile_unit()
 
     def mark_location(self, builder, loc):
         builder.debug_metadata = self._add_location(loc.line)
@@ -103,19 +103,19 @@ class DIBuilder(object):
     def _set_module_flags(self):
         module = self.module
         mflags = module.get_or_insert_named_metadata('llvm.module.flags')
-        dwarf_version = module.add_metadata([
-            self._const_int(2),
-            "Dwarf Version",
-            self._const_int(self.DWARF_VERSION)
-        ])
+        if self.DWARF_VERSION is not None:
+            dwarf_version = module.add_metadata([
+                self._const_int(2),
+                "Dwarf Version",
+                self._const_int(self.DWARF_VERSION)
+            ])
+            if dwarf_version not in mflags.operands:
+                mflags.add(dwarf_version)
         debuginfo_version = module.add_metadata([
             self._const_int(2),
             "Debug Info Version",
             self._const_int(self.DEBUG_INFO_VERSION)
         ])
-        # XXX fix llvmlite to treat the metadata operands as a set?
-        if dwarf_version not in mflags.operands:
-            mflags.add(dwarf_version)
         if debuginfo_version not in mflags.operands:
             mflags.add(debuginfo_version)
 
@@ -144,9 +144,31 @@ class NvvmDIBuilder(DIBuilder):
     DI_Subroutine_type = 786453
     DI_Subprogram = 786478
 
+    DWARF_VERSION = None
+    DEBUG_INFO_VERSION = 1
     # Hide the debug info from llvm.parse_assembly() which strips invalid/outdated
     # debug metadata
     DBG_CU_NAME = 'numba.llvm.dbg.cu'
+
+    # Default member
+    # Used in mark_location to remember last lineno to avoid duplication
+    _last_lineno = None
+
+    def mark_location(self, builder, loc):
+        # Avoid duplication
+        if self._last_lineno == loc.line:
+            return
+        self._last_lineno = loc.line
+        # Add inline asm as stub to mark line location
+        asmty = ir.FunctionType(ir.VoidType(), [])
+        asm = ir.InlineAsm(asmty, "// dbg {}".format(loc.line), "",
+                           side_effect=True)
+        call = builder.call(asm, [])
+        md = self._di_location(loc.line)
+        call.set_metadata('numba.dbg', md)
+
+    def mark_subprogram(self, function, name, line):
+        self._add_subprogram(name=name, linkagename=function.name, line=line)
 
     def _filepair(self):
         return self.module.add_metadata([

@@ -35,6 +35,23 @@ class Loc(object):
         else:
             return "%s (%s)" % (self.filename, self.line)
 
+    def __eq__(self, other):
+        if other is None:
+            return False
+        if isinstance(other, Loc):
+            lhs = self.filename, self.line, self.col
+            rhs = other.filename, other.line, other.col
+            return lhs == rhs
+
+        return NotImplemented
+
+    def __ne__(self, other):
+        eq = self == other
+        if eq is NotImplemented:
+            return eq
+        else:
+            return not eq
+
     def strformat(self):
         try:
             # Try to get a relative path
