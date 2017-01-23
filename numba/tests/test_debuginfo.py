@@ -1,5 +1,7 @@
 from __future__ import print_function, absolute_import
 
+import re
+
 from .support import TestCase, override_config, tag
 from numba import unittest_support as unittest
 from numba import jit, types
@@ -15,8 +17,9 @@ class TestDebugInfo(TestCase):
 
     def _check(self, fn, sig, expect):
         asm = self._getasm(fn, sig=sig)
-        assertfn = self.assertIn if expect else self.assertNotIn
-        assertfn('DWARF', asm, msg=asm)
+        m = re.search(r"\.section.+debug", asm, re.I)
+        got = m is not None
+        self.assertEqual(expect, got, msg='debug info not found in:\n%s' % asm)
 
     def test_no_debuginfo_in_asm(self):
         @jit(nopython=True, debug=False)
