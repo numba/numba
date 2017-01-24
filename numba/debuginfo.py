@@ -6,6 +6,8 @@ from __future__ import absolute_import
 
 import abc
 import os.path
+from enum import IntEnum
+from collections import defaultdict
 
 from llvmlite import ir
 
@@ -15,13 +17,19 @@ from .six import add_metaclass
 @add_metaclass(abc.ABCMeta)
 class AbstractDIBuilder(object):
     @abc.abstractmethod
+    def mark_variable(self, builder, allocavalue, name, lltype, size, loc):
+        """Emit debug info for the variable.
+        """
+        pass
+
+    @abc.abstractmethod
     def mark_location(self, builder, loc):
         """Emit source location information to the given IRBuilder.
         """
         pass
 
     @abc.abstractmethod
-    def mark_subprogram(self, function, name, line):
+    def mark_subprogram(self, function, name, loc):
         """Emit source location information for the given function.
         """
         pass
@@ -38,10 +46,13 @@ class DummyDIBuilder(AbstractDIBuilder):
     def __init__(self, module, filepath):
         pass
 
+    def mark_variable(self, builder, allocavalue, name, lltype, size, loc):
+        pass
+
     def mark_location(self, builder, loc):
         pass
 
-    def mark_subprogram(self, function, name, line):
+    def mark_subprogram(self, function, name, loc):
         pass
 
     def finalize(self):
@@ -60,12 +71,68 @@ class DIBuilder(AbstractDIBuilder):
         self.subprograms = []
         self.dicompileunit = self._di_compile_unit()
 
+    def _var_type(self, lltype, size):
+        m = self.module
+        bitsize = size * 8
+
+        int_type = ir.IntType,
+        real_type = ir.FloatType, ir.DoubleType
+        # For simple numeric types, choose the closest encoding.
+        # We don't handle treat all integers as unsigned.
+        if isinstance(lltype, int_type + real_type):
+            mdtype = m.add_debug_info('DIBasicType', {
+                'name': str(lltype),
+                'size': bitsize,
+                'encoding': (ir.DIToken('DW_ATE_unsigned')
+                             if isinstance(lltype, int_type)
+                             else ir.DIToken('DW_ATE_float')),
+            })
+        # For all other types, describe it as sequence of bytes
+        else:
+            count = size
+            mdrange = m.add_debug_info('DISubrange', {
+                'count': count,
+            })
+            mdbase = m.add_debug_info('DIBasicType', {
+                'name': 'byte',
+                'size': 8,
+                'encoding': ir.DIToken('DW_ATE_unsigned_char'),
+            })
+            mdtype = m.add_debug_info('DICompositeType', {
+                'tag': ir.DIToken('DW_TAG_array_type'),
+                'baseType': mdbase,
+                'name': str(lltype),
+                'size': bitsize,
+                'identifier': str(lltype),
+                'elements': m.add_metadata([mdrange]),
+            })
+        return mdtype
+
+    def mark_variable(self, builder, allocavalue, name, lltype, size, loc):
+        m = self.module
+        fnty = ir.FunctionType(ir.VoidType(), [ir.MetaDataType()] * 3)
+        decl = m.get_or_insert_function(fnty, name='llvm.dbg.declare')
+
+        mdtype = self._var_type(lltype, size)
+        name = name.replace('.', '$')    # for gdb to work correctly
+        mdlocalvar = m.add_debug_info('DILocalVariable', {
+            'name': name,
+            'arg': 0,
+            'scope': self.subprograms[-1],
+            'file': self.difile,
+            'line': loc.line,
+            'type': mdtype,
+        })
+        mdexpr = m.add_debug_info('DIExpression', {})
+
+        return builder.call(decl, [allocavalue, mdlocalvar, mdexpr])
+
     def mark_location(self, builder, loc):
         builder.debug_metadata = self._add_location(loc.line)
 
-    def mark_subprogram(self, function, name, line):
+    def mark_subprogram(self, function, name, loc):
         di_subp = self._add_subprogram(name=name, linkagename=function.name,
-                                       line=line)
+                                       line=loc.line)
         function.set_metadata("dbg", di_subp)
         # disable inlining for this function for easier debugging
         function.attributes.add('noinline')
@@ -196,6 +263,10 @@ class NvvmDIBuilder(DIBuilder):
     # Used in mark_location to remember last lineno to avoid duplication
     _last_lineno = None
 
+    def mark_variable(self, builder, allocavalue, name, lltype, size, loc):
+        # unsupported
+        pass
+
     def mark_location(self, builder, loc):
         # Avoid duplication
         if self._last_lineno == loc.line:
@@ -209,8 +280,9 @@ class NvvmDIBuilder(DIBuilder):
         md = self._di_location(loc.line)
         call.set_metadata('numba.dbg', md)
 
-    def mark_subprogram(self, function, name, line):
-        self._add_subprogram(name=name, linkagename=function.name, line=line)
+    def mark_subprogram(self, function, name, loc):
+        self._add_subprogram(name=name, linkagename=function.name,
+                             line=loc.line)
 
     #
     # Helper methods to create the metadata nodes.

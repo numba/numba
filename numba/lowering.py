@@ -113,7 +113,7 @@ class BaseLower(object):
         self.pyapi = None
         self.debuginfo.mark_subprogram(function=self.builder.function,
                                        name=self.fndesc.qualname,
-                                       line=self.func_ir.loc.line)
+                                       loc=self.func_ir.loc)
 
     def post_lower(self):
         """
@@ -948,7 +948,14 @@ class Lower(BaseLower):
         return self.alloca_lltype(name, lltype)
 
     def alloca_lltype(self, name, lltype):
-        return cgutils.alloca_once(self.builder, lltype, name=name, zfill=True)
+        is_uservar = not name.startswith('$')
+        aptr = cgutils.alloca_once(self.builder, lltype, name=name, zfill=True)
+        if is_uservar:
+            sizeof = self.context.get_abi_sizeof(lltype)
+            self.debuginfo.mark_variable(self.builder, aptr, name=name,
+                                         lltype=lltype, size=sizeof,
+                                         loc=self.loc)
+        return aptr
 
     def incref(self, typ, val):
         if not self.context.enable_nrt:
