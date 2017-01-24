@@ -1,9 +1,9 @@
-=====
+*****
 Numba
-=====
+*****
 
 A compiler for Python array and numerical functions
----------------------------------------------------
+###################################################
 
 Numba is an Open Source NumPy-aware optimizing compiler for Python
 sponsored by Continuum Analytics, Inc.  It uses the

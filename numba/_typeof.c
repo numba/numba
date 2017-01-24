@@ -489,7 +489,7 @@ int typecode_fallback_keep_ref(PyObject *dispatcher, PyObject *val) {
 
 
 /* A cache mapping fingerprints (string_writer_t *) to typecodes (int). */
-static _Py_hashtable_t *fingerprint_hashtable = NULL;
+static _Numba_hashtable_t *fingerprint_hashtable = NULL;
 
 static Py_uhash_t
 hash_writer(const void *key)
@@ -512,7 +512,7 @@ hash_writer(const void *key)
 }
 
 static int
-compare_writer(const void *key, const _Py_hashtable_entry_t *entry)
+compare_writer(const void *key, const _Numba_hashtable_entry_t *entry)
 {
     string_writer_t *v = (string_writer_t *) key;
     string_writer_t *w = (string_writer_t *) entry->key;
@@ -542,7 +542,7 @@ typecode_using_fingerprint(PyObject *dispatcher, PyObject *val)
         }
         return -1;
     }
-    if (_Py_HASHTABLE_GET(fingerprint_hashtable, &w, typecode) > 0) {
+    if (_Numba_HASHTABLE_GET(fingerprint_hashtable, &w, typecode) > 0) {
         /* Cache hit */
         string_writer_clear(&w);
         return typecode;
@@ -564,7 +564,7 @@ typecode_using_fingerprint(PyObject *dispatcher, PyObject *val)
          * to the hash table.
          */
         string_writer_move(key, &w);
-        if (_Py_HASHTABLE_SET(fingerprint_hashtable, key, typecode)) {
+        if (_Numba_HASHTABLE_SET(fingerprint_hashtable, key, typecode)) {
             string_writer_clear(&w);
             PyErr_NoMemory();
             return -1;
@@ -885,7 +885,7 @@ typeof_init(PyObject *self, PyObject *args)
         return NULL;
     }
 
-    fingerprint_hashtable = _Py_hashtable_new(sizeof(int),
+    fingerprint_hashtable = _Numba_hashtable_new(sizeof(int),
                                               hash_writer,
                                               compare_writer);
     if (fingerprint_hashtable == NULL) {

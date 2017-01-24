@@ -223,16 +223,12 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
         _init()
 
         # Build wrapper for ufunc entry point
-        ctx = cres.target_context
-        library = cres.library
-        signature = cres.signature
-        ptr, env = build_gufunc_wrapper(library, ctx, signature, self.sin,
-                                        self.sout, fndesc=cres.fndesc,
-                                        env=cres.environment)
+        ptr, env = build_gufunc_wrapper(self.py_func, cres, self.sin, self.sout,
+                                        cache=self.cache)
 
         # Get dtypes
         dtypenums = []
-        for a in signature.args:
+        for a in cres.signature.args:
             if isinstance(a, types.Array):
                 ty = a.dtype
             else:
@@ -242,10 +238,12 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
         return dtypenums, ptr, env
 
 
-def build_gufunc_wrapper(library, ctx, signature, sin, sout, fndesc, env):
-    innerfunc, env = ufuncbuilder.build_gufunc_wrapper(library, ctx,
-                                                       signature, sin, sout,
-                                                       fndesc=fndesc, env=env)
+def build_gufunc_wrapper(py_func, cres, sin, sout, cache):
+    library = cres.library
+    ctx = cres.target_context
+    signature = cres.signature
+    innerfunc, env = ufuncbuilder.build_gufunc_wrapper(py_func, cres, sin, sout,
+                                                       cache=cache)
     sym_in = set(sym for term in sin for sym in term)
     sym_out = set(sym for term in sout for sym in term)
     inner_ndim = len(sym_in | sym_out)
