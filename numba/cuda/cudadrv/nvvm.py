@@ -200,9 +200,8 @@ class CompilationUnit(object):
         # stringify options
         opts = []
         if 'debug' in options:
-            if options['debug']:
+            if options.pop('debug'):
                 opts.append('-g')
-            options.pop('debug')
 
         if options.get('opt'):
             opts.append('-opt=%d' % options.pop('opt'))
@@ -461,6 +460,7 @@ def patch_ptx_debug_pubnames(ptx):
     Patch PTX to workaround .debug_pubnames NVVM error::
 
         ptxas fatal   : Internal error: overlapping non-identical data
+
     """
     while True:
         # Repeatedly remove debug_pubnames sections
@@ -529,23 +529,25 @@ def llvm39_to_34_ir(ir):
         if line.startswith('!numba.llvm.dbg.cu'):
             line = line.replace('!numba.llvm.dbg.cu', '!llvm.dbg.cu')
 
+        # We insert a dummy inlineasm to put debuginfo
         if (line.lstrip().startswith('tail call void asm sideeffect "// dbg') and
                 '!numba.dbg' in line):
+            # Fix the metadata
             line = line.replace('!numba.dbg', '!dbg')
-
         if re_metadata_def.match(line):
             # Rewrite metadata since LLVM 3.7 dropped the "metadata" type prefix.
             if None is re_metadata_correct_usage.search(line):
+                # Reintroduce the "metadata" prefix
                 line = line.replace('!{', 'metadata !{')
                 line = line.replace('!"', 'metadata !"')
 
                 assigpos = line.find('=')
                 lhs, rhs = line[:assigpos + 1], line[assigpos + 1:]
+
                 # Fix metadata reference
                 def fix_metadata_ref(m):
                     return 'metadata ' + m.group(0)
                 line = ' '.join((lhs, re_metadata_ref.sub(fix_metadata_ref, rhs)))
-
         if line.startswith('source_filename ='):
             continue    # skip line
         if re_unsupported_keywords.search(line) is not None:

@@ -948,9 +948,12 @@ class Lower(BaseLower):
         return self.alloca_lltype(name, lltype)
 
     def alloca_lltype(self, name, lltype):
+        # Is user variable?
         is_uservar = not name.startswith('$')
+        # Allocate space for variable
         aptr = cgutils.alloca_once(self.builder, lltype, name=name, zfill=True)
         if is_uservar:
+            # Emit debug info for user variable
             sizeof = self.context.get_abi_sizeof(lltype)
             self.debuginfo.mark_variable(self.builder, aptr, name=name,
                                          lltype=lltype, size=sizeof,

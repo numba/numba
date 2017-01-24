@@ -6,8 +6,6 @@ from __future__ import absolute_import
 
 import abc
 import os.path
-from enum import IntEnum
-from collections import defaultdict
 
 from llvmlite import ir
 
@@ -151,16 +149,19 @@ class DIBuilder(AbstractDIBuilder):
         """
         module = self.module
         mflags = module.get_or_insert_named_metadata('llvm.module.flags')
+        # Set *require* behavior to warning
+        # See http://llvm.org/docs/LangRef.html#module-flags-metadata
+        require_warning_behavior = self._const_int(2)
         if self.DWARF_VERSION is not None:
             dwarf_version = module.add_metadata([
-                self._const_int(2),
+                require_warning_behavior,
                 "Dwarf Version",
                 self._const_int(self.DWARF_VERSION)
             ])
             if dwarf_version not in mflags.operands:
                 mflags.add(dwarf_version)
         debuginfo_version = module.add_metadata([
-            self._const_int(2),
+            require_warning_behavior,
             "Debug Info Version",
             self._const_int(self.DEBUG_INFO_VERSION)
         ])
