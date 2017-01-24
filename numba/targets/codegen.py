@@ -28,6 +28,32 @@ def dump(header, body):
     print('=' * 80)
 
 
+class _CFG(object):
+    """
+    Wraps the CFG graph for different display method.
+
+    Instance of the class can be stringified (``__repr__`` is defined) to get
+    the graph in DOT format.  The ``.display()`` method plots the graph in
+    PDF.  If in IPython notebook, the returned image can be inlined.
+    """
+    def __init__(self, dot):
+        self.dot = dot
+
+    def display(self, filename=None, view=False):
+        """
+        Plot the CFG.  In IPython notebook, the return image object can be
+        inlined.
+
+        The *filename* option can be set to a specific path for the rendered
+        output to write to.  If *view* option is True, the plot is opened by
+        the system default application for the image format (PDF).
+        """
+        return ll.view_dot_graph(self.dot, filename=filename, view=view)
+
+    def __repr__(self):
+        return self.dot
+
+
 class CodeLibrary(object):
     """
     An interface for bundling LLVM code together and compiling it.
@@ -249,6 +275,14 @@ class CodeLibrary(object):
         Get the human-readable assembly.
         """
         return str(self._codegen._tm.emit_assembly(self._final_module))
+
+    def get_function_cfg(self, name):
+        """
+        Get control-flow graph of the LLVM function
+        """
+        fn = self.get_function(name)
+        dot = ll.get_function_cfg(fn)
+        return _CFG(dot)
 
     #
     # Object cache hooks and serialization

@@ -1,21 +1,18 @@
 from __future__ import print_function, division, absolute_import
 
 import errno
-import imp
 import multiprocessing
 import os
 import shutil
-import stat
 import subprocess
 import sys
-import tempfile
 import threading
 import warnings
 
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import utils, vectorize, jit, generated_jit, types, appdirs
+from numba import utils, jit, generated_jit, types, typeof
 from numba import _dispatcher
 from numba.errors import NumbaWarning
 from .support import TestCase, tag, temp_directory, import_dynamic
@@ -494,6 +491,53 @@ class TestDispatcherMethods(TestCase):
         for asm in asms.values():
             # Look for the function name
             self.assertTrue("foo" in asm)
+
+    def test_inspect_cfg(self):
+        # Exercise the .inspect_cfg().  These are minimal tests and does not
+        # fully checks the correctness of the function.
+        @jit
+        def foo(the_array):
+            return the_array.sum()
+
+        # Generate 3 overloads
+        a1 = np.ones(1)
+        a2 = np.ones((1, 1))
+        a3 = np.ones((1, 1, 1))
+        foo(a1)
+        foo(a2)
+        foo(a3)
+
+        # Call inspect_cfg() without arguments
+        cfgs = foo.inspect_cfg()
+
+        # Correct count of overloads
+        self.assertEqual(len(cfgs), 3)
+
+        # Makes sure all the signatures are correct
+        [s1, s2, s3] = cfgs.keys()
+        self.assertEqual(set([s1, s2, s3]),
+                         set(map(lambda x: (typeof(x),), [a1, a2, a3])))
+
+        def check_display(cfg, wrapper=''):
+            # simple stringify test
+            prefix = 'digraph "CFG for \'{}numba.'.format(wrapper)
+            self.assertTrue(str(cfg).startswith(prefix))
+            # .display() requires an optional dependency on `graphviz`.
+            # just test for the attribute without running it.
+            self.assertTrue(callable(cfg.display))
+
+        for cfg in cfgs.values():
+            check_display(cfg)
+        self.assertEqual(len(list(cfgs.values())), 3)
+
+        # Call inspect_cfg(signature)
+        cfg = foo.inspect_cfg(signature=foo.signatures[0])
+        check_display(cfg)
+
+        # Call inspect_cfg(signature, show_wrapper="python")
+        cfg = foo.inspect_cfg(signature=foo.signatures[0],
+                              show_wrapper="python")
+        check_display(cfg, wrapper='cpython.')
 
     def test_inspect_types(self):
         @jit

@@ -333,6 +333,28 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             print(res.type_annotation, file=file)
             print('=' * 80, file=file)
 
+    def inspect_cfg(self, signature=None, show_wrapper=None):
+        """
+        For inspecting the CFG of the function.
+
+        By default the CFG of the user function is showed.  The *show_wrapper*
+        option can be set to "python" or "cfunc" to show the python wrapper
+        function or the *cfunc* wrapper function, respectively.
+        """
+        if signature is not None:
+            cres = self.overloads[signature]
+            lib = cres.library
+            if show_wrapper == 'python':
+                fname = cres.fndesc.llvm_cpython_wrapper_name
+            elif show_wrapper == 'cfunc':
+                fname = cres.fndesc.llvm_cfunc_wrapper_name
+            else:
+                fname = cres.fndesc.mangled_name
+            return lib.get_function_cfg(fname)
+
+        return dict((sig, self.inspect_cfg(sig, show_wrapper=show_wrapper))
+                    for sig in self.signatures)
+
     def _explain_ambiguous(self, *args, **kws):
         """
         Callback for the C _Dispatcher object.
