@@ -6,7 +6,6 @@ Reference: http://mentorembedded.github.io/cxx-abi/abi.html
 
 from __future__ import print_function, absolute_import
 from numba import types
-import re
 
 
 PREFIX = "_Z"
@@ -54,28 +53,39 @@ N2C = {
 def _encode(ch):
     """
     Encode a single character.
-    Anything not valid as Python identifier is encoded as '%N' where N
+    Anything not valid as Python identifier is encoded as '$N' where N
     is a decimal number of the character code point.
     """
-    if ch.isalnum() or ch in '_':
+    if ch.isalnum() or ch == '_':
         out = ch
     else:
-        out = "%%%d" % ord(ch)
+        out = "$%d" % ord(ch)
     return out
 
 
-def mangle_identifier(ident):
+def _fix_lead_digit(text):
+    """
+    Fix text with leading digit
+    """
+    if text and text[0].isdigit():
+        return '_' + text[0]
+    else:
+        return text
+
+
+def mangle_identifier(ident, template_params=''):
     """
     Mangle the identifier
 
     This treats '.' as '::' in C++
     """
+
     splitted = (''.join(map(_encode, x)) for x in ident.split('.'))
-    parts = ["%d%s" % (len(x), x) for x in splitted]
+    parts = ["%d%s" % (len(x), x) for x in map(_fix_lead_digit, splitted)]
     if len(parts) > 1:
-        return 'N%sE' % ''.join(parts)
+        return 'N%s%sE' % (''.join(parts), template_params)
     else:
-        return parts[0]
+        return '%s%s' % (parts[0], template_params)
 
 
 def mangle_type_c(typ):
@@ -90,18 +100,32 @@ def mangle_type_c(typ):
     if typ in C2CODE:
         return C2CODE[typ]
     else:
-        return 'u' + mangle_identifier(typ)
+        return mangle_identifier(typ)
 
 
 def mangle_type(typ):
     """
-    Mangle Numba type
+    Mangle type parameter.
     """
-    if typ in N2C:
-        typename = N2C[typ]
+    # Handle numba types
+    if isinstance(typ, types.Type):
+        if typ in N2C:
+            return mangle_type_c(N2C[typ])
+        else:
+            return mangle_templated_ident(*typ.mangling_args)
+    # Handle integer literal
+    elif isinstance(typ, int):
+        return 'Li%dE' % typ
+    # Otherwise
+    return mangle_identifier(str(typ))
+
+
+def mangle_templated_ident(identifier, parameters):
+    if parameters:
+        template_params = 'I%sE' % ''.join(map(mangle_type, parameters))
     else:
-        typename = str(typ)
-    return mangle_type_c(typename)
+        template_params = ''
+    return mangle_identifier(identifier, template_params)
 
 
 def mangle_args_c(argtys):
@@ -130,3 +154,34 @@ def mangle(ident, argtys):
     Mangle identifier with Numba type objects
     """
     return PREFIX + mangle_identifier(ident) + mangle_args(argtys)
+
+
+def prepend_namespace(mangled, ns):
+    """
+    Prepend namespace to mangled name.
+    """
+    assert mangled.startswith(PREFIX)
+    if mangled.startswith(PREFIX + 'N'):
+        # nested
+        remaining = mangled[3:]
+        ret = PREFIX + 'N' + mangle_identifier(ns) + remaining
+    else:
+        # non-nested
+        remaining = mangled[2:]
+        head, tail = _split_mangled_ident(remaining)
+        ret = PREFIX + 'N' + mangle_identifier(ns) + head + 'E' + tail
+
+    return ret
+
+
+def _split_mangled_ident(mangled):
+    """
+    Returns `(head, tail)` where `head` is the `<len> + <name>` encoded
+    identifier and `tail` is the remaining.
+    """
+    ct = int(mangled)
+    ctlen = len(str(ct))
+    at = ctlen + ct
+    return mangled[:at], mangled[at:]
+
+

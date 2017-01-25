@@ -59,7 +59,7 @@ class TestItaniumManager(unittest.TestCase):
     def test_custom_type(self):
         got = itanium_mangler.mangle_type(range_iter32_type)
         name = str(range_iter32_type)
-        expect = "u{n}{name}".format(n=len(name), name=name)
+        expect = "{n}{name}".format(n=len(name), name=name)
         self.assertEqual(expect, got)
 
 
