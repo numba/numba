@@ -267,7 +267,7 @@ Internal details:
 
   Each assignments will store to a different variable name.  In the debugger,
   the variables will be ``x``, ``x$1`` and ``x$2``.  (In the Numba IR, they are
-  ``x``, ``x.1`` and ``x.3``.)
+  ``x``, ``x.1`` and ``x.2``.)
 
 * When debug is enabled, inlining of the function is disabled.
 
