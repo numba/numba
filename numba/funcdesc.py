@@ -6,11 +6,12 @@ from __future__ import print_function, division, absolute_import
 from collections import defaultdict
 import sys
 
-from . import types
+from . import types, itanium_mangler
 from .utils import PY3, _dynamic_modname, _dynamic_module
 
 
 def transform_arg_name(arg):
+    # XXX deadcode?
     if isinstance(arg, types.Record):
         return "Record_%s" % arg._code
     elif (isinstance(arg, types.Array) and
@@ -23,14 +24,7 @@ def transform_arg_name(arg):
 
 
 def default_mangler(name, argtypes):
-    codedargs = '.'.join(transform_arg_name(a).replace(' ', '_')
-                         for a in argtypes)
-    fullname = '.'.join([name, codedargs])
-    out = fullname.encode('ascii', 'backslashreplace')
-    # for py3, convert bytes back to  str
-    if PY3:
-        out = out.decode('ascii')
-    return out
+    return itanium_mangler.mangle(name, argtypes)
 
 
 def qualifying_prefix(modname, qualname):
@@ -116,7 +110,8 @@ class FunctionDescriptor(object):
         The LLVM-registered name for a CPython-compatible wrapper of the
         raw function (i.e. a PyCFunctionWithKeywords).
         """
-        return 'cpython.' + self.mangled_name
+        return itanium_mangler.prepend_namespace(self.mangled_name,
+                                                 ns='cpython')
 
     @property
     def llvm_cfunc_wrapper_name(self):
