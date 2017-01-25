@@ -342,8 +342,55 @@ error.
 Debugging CUDA Python code
 ==========================
 
+Using the simulator
+-------------------
+
 CUDA Python code can be run in the Python interpreter using the CUDA Simulator,
 allowing it to be debugged with the Python debugger or with print statements. To
 enable the CUDA simulator, set the environment variable
 :envvar:`NUMBA_ENABLE_CUDASIM` to 1. For more information on the CUDA Simulator,
 see :ref:`the CUDA Simulator documentation <simulator>`.
+
+
+Debug Info
+----------
+
+By setting the ``debug`` argument to ``cuda.jit`` to ``True``
+(``@cuda.jit(debug=True)``), Numba will emit source location in the compiled
+CUDA code.  Unlike the CPU target, only filename and line information are
+available, but no variable type information is emitted.  The information
+is sufficient to debug memory error with
+`cuda-memcheck <http://docs.nvidia.com/cuda/cuda-memcheck/index.html>`_.
+
+For example, given the following cuda python code:
+
+.. code-block:: python
+  :linenos:
+
+  import numpy as np
+  from numba import cuda
+
+  @cuda.jit(debug=True)
+  def foo(arr):
+      arr[cuda.threadIdx.x] = 1
+
+  arr = np.arange(30)
+  foo[1, 32](arr)   # more threads than array elements
+
+We can use ``cuda-memcheck`` to find the memory error:
+
+.. code-block:: none
+
+  $ cuda-memcheck python chk_cuda_debug.py
+  ========= CUDA-MEMCHECK
+  ========= Invalid __global__ write of size 8
+  =========     at 0x00000148 in /home/user/chk_cuda_debug.py:6:cudaPy__5F__5F_main_5F__5F__2E_foo_24_1_2E_array_28_int64_2C__20_1d_2C__20_C_29_
+  =========     by thread (31,0,0) in block (0,0,0)
+  =========     Address 0x500a600f8 is out of bounds
+  ...
+  =========
+  ========= Invalid __global__ write of size 8
+  =========     at 0x00000148 in /home/user/chk_cuda_debug.py:6:cudaPy__5F__5F_main_5F__5F__2E_foo_24_1_2E_array_28_int64_2C__20_1d_2C__20_C_29_
+  =========     by thread (30,0,0) in block (0,0,0)
+  =========     Address 0x500a600f0 is out of bounds
+  ...
