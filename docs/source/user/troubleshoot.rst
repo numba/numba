@@ -255,10 +255,15 @@ Known issues:
   * At O1 optimization (e.g. ``NUMBA_OPT=1``), stepping is stable but some
     variables are optimized out.
 
+* Memory consumption increases significantly with debug info enabled.
+  The compiler emits extra information (`DWARF <http://www.dwarfstd.org/>`_)
+  along with the instructions.  The emitted object code can be 2x bigger with
+  debug info.
+
 Internal details:
 
-* Since Python semantic allows variables to bind to value of different types,
-  Numba internally creates multiple version of the variable for each type.
+* Since Python semantics allow variables to bind to value of different types,
+  Numba internally creates multiple versions of the variable for each type.
   So for code like::
 
     x = 1         # type int

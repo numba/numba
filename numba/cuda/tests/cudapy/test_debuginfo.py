@@ -35,7 +35,7 @@ class TestCudaDebugInfo(TestCase):
         self._check(foo, sig=(types.int32[:],), expect=True)
 
     def test_environment_override(self):
-        with override_config('DBG_CUDA_DEFAULT', 1):
+        with override_config('CUDA_DEBUGINFO_DEFAULT', 1):
             # Using default value
             @cuda.jit
             def foo(x):

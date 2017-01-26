@@ -76,7 +76,7 @@ class DIBuilder(AbstractDIBuilder):
         int_type = ir.IntType,
         real_type = ir.FloatType, ir.DoubleType
         # For simple numeric types, choose the closest encoding.
-        # We don't handle treat all integers as unsigned.
+        # We treat all integers as unsigned.
         if isinstance(lltype, int_type + real_type):
             mdtype = m.add_debug_info('DIBasicType', {
                 'name': str(lltype),

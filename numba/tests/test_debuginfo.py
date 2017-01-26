@@ -37,7 +37,7 @@ class TestDebugInfo(TestCase):
         self._check(foo, sig=(types.int32,), expect=True)
 
     def test_environment_override(self):
-        with override_config('DBG_DEFAULT', 1):
+        with override_config('DEBUGINFO_DEFAULT', 1):
             # Using default value
             @jit(nopython=True)
             def foo(x):
