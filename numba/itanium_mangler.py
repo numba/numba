@@ -2,6 +2,30 @@
 Itanium CXX ABI Mangler
 
 Reference: http://mentorembedded.github.io/cxx-abi/abi.html
+
+The basic of the mangling scheme.
+
+We are hijacking the CXX mangling scheme for our use.  We map Python modules
+into CXX namespace.  A `module1.submodule2.foo` is mapped to
+`module1::submodule2::foo`.   For parameterized numba types, we treat them as
+templated types; for example, `array(int64, 1d, C)` becomes an
+`array<int64, 1, C>`.
+
+All mangled names are prefixed with "_Z".  It is followed by the name of the
+entity.  A name contains one or more identifiers.  Each identifier is encoded
+in as "<num of char><name>".   If the name is namespaced and, therefore,
+multiple identifiers, the entire name is encoded as "N<name>E".
+
+For functions, arguments types follow.  There are condensed encoding for basic
+built-in types; e.g. "i" for int, "f" for float.  For other types, the
+previously mentioned name encoding should be used.
+
+For templated types, the template parameters are encoded immediately after the
+name.  If it is namespaced, it should be within the 'N' 'E' marker.  Template
+parameters are encoded in "I<params>E", where each parameter is encoded using
+the mentioned name encoding scheme.  Template parameters can contain literal
+values like the '1' in the array type shown earlier.  There is special encoding
+scheme for them to avoid leading digits.
 """
 
 from __future__ import print_function, absolute_import
