@@ -35,11 +35,14 @@ import re
 from numba import types
 
 
+# According the scheme, valid characters for mangled names are [a-zA-Z0-9_$].
+# We borrow the '$' as the escape character to encode invalid char into
+# '$xx' where 'xx' is the hex codepoint.
 _re_invalid_char = re.compile(r'[^a-z0-9_]', re.I)
-
 
 PREFIX = "_Z"
 
+# C names to mangled type code
 C2CODE = {
     'void': 'v',
     'wchar_t': 'w',
@@ -64,6 +67,7 @@ C2CODE = {
     'ellipsis': 'z',
 }
 
+# Numba types to C names
 N2C = {
     types.void: 'void',
     types.boolean: 'bool',
@@ -100,20 +104,29 @@ def _fix_lead_digit(text):
     Fix text with leading digit
     """
     if text and text[0].isdigit():
-        return '_' + text[0]
+        return '_' + text
     else:
         return text
 
 
+def _len_encoded(string):
+    """
+    Prefix string with digit indicating the length.
+    Add underscore if string is prefixed with digits.
+    """
+    string = _fix_lead_digit(string)
+    return '%u%s' % (len(string), string)
+
+
 def mangle_identifier(ident, template_params=''):
     """
-    Mangle the identifier
+    Mangle the identifier with optional template parameters.
 
-    This treats '.' as '::' in C++
+    Note:
+
+    This treats '.' as '::' in C++.
     """
-
-    splitted = [_escape_string(x) for x in ident.split('.')]
-    parts = ["%d%s" % (len(x), x) for x in map(_fix_lead_digit, splitted)]
+    parts = [_len_encoded(_escape_string(x)) for x in ident.split('.')]
     if len(parts) > 1:
         return 'N%s%sE' % (''.join(parts), template_params)
     else:
@@ -135,9 +148,9 @@ def mangle_type_c(typ):
         return mangle_identifier(typ)
 
 
-def mangle_type(typ):
+def mangle_type_or_value(typ):
     """
-    Mangle type parameter.
+    Mangle type parameter and arbitrary value.
     """
     # Handle numba types
     if isinstance(typ, types.Type):
@@ -148,15 +161,26 @@ def mangle_type(typ):
     # Handle integer literal
     elif isinstance(typ, int):
         return 'Li%dE' % typ
+    # Handle str as identifier
+    elif isinstance(typ, str):
+        return mangle_identifier(typ)
     # Otherwise
-    return mangle_identifier(str(typ))
+    else:
+        enc = _escape_string(str(typ))
+        return _len_encoded(enc)
+
+
+# Alias
+mangle_type = mangle_type_or_value
+mangle_value = mangle_type_or_value
 
 
 def mangle_templated_ident(identifier, parameters):
-    if parameters:
-        template_params = 'I%sE' % ''.join(map(mangle_type, parameters))
-    else:
-        template_params = ''
+    """
+    Mangle templated identifier.
+    """
+    template_params = ('I%sE' % ''.join(map(mangle_type_or_value, parameters))
+                       if parameters else '')
     return mangle_identifier(identifier, template_params)
 
 
@@ -169,9 +193,9 @@ def mangle_args_c(argtys):
 
 def mangle_args(argtys):
     """
-    Mangle sequence of Numba type objects
+    Mangle sequence of Numba type objects and arbitrary values.
     """
-    return ''.join([mangle_type(t) for t in argtys])
+    return ''.join([mangle_type_or_value(t) for t in argtys])
 
 
 def mangle_c(ident, argtys):
@@ -183,7 +207,7 @@ def mangle_c(ident, argtys):
 
 def mangle(ident, argtys):
     """
-    Mangle identifier with Numba type objects
+    Mangle identifier with Numba type objects and arbitrary values.
     """
     return PREFIX + mangle_identifier(ident) + mangle_args(argtys)
 
@@ -192,8 +216,9 @@ def prepend_namespace(mangled, ns):
     """
     Prepend namespace to mangled name.
     """
-    assert mangled.startswith(PREFIX)
-    if mangled.startswith(PREFIX + 'N'):
+    if not mangled.startswith(PREFIX):
+        raise ValueError('input is not a mangled name')
+    elif mangled.startswith(PREFIX + 'N'):
         # nested
         remaining = mangled[3:]
         ret = PREFIX + 'N' + mangle_identifier(ns) + remaining
@@ -202,7 +227,6 @@ def prepend_namespace(mangled, ns):
         remaining = mangled[2:]
         head, tail = _split_mangled_ident(remaining)
         ret = PREFIX + 'N' + mangle_identifier(ns) + head + 'E' + tail
-
     return ret
 
 

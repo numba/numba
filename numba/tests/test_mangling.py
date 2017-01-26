@@ -36,7 +36,7 @@ class TestMangling(TestCase):
         expect = '_Z{}{}if'.format(len(text), text)
         self.assertEqual(name, expect)
         # ensure result chars are in the right charset
-        self.assertIsNotNone(re.match(r'^_Z[a-zA-Z0-9_\$]+$', name))
+        self.assertRegexpMatches(name, r'^_Z[a-zA-Z0-9_\$]+$')
 
 if __name__ == '__main__':
     unittest.main()
