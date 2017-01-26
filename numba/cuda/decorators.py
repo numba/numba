@@ -9,7 +9,7 @@ from .simulator.kernel import FakeCUDAKernel
 def jitdevice(func, link=[], debug=None, inline=False):
     """Wrapper for device-jit.
     """
-    debug = config.DBG_CUDA_DEFAULT if debug is None else debug
+    debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
     if link:
         raise ValueError("link keyword invalid for device function")
     return compile_device_template(func, debug=debug, inline=inline)
@@ -45,7 +45,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
        on device function, whose fastmath setting depends on the kernel function
        from which they are called.
     """
-    debug = config.DBG_CUDA_DEFAULT if debug is None else debug
+    debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
 
     if link and config.ENABLE_CUDASIM:
         raise NotImplementedError('Cannot link PTX in the simulator')

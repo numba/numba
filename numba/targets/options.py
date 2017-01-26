@@ -51,7 +51,7 @@ class TargetOptions(object):
         if kws.pop('_nrt', True):
             flags.set("nrt")
 
-        if kws.pop('debug', config.DBG_DEFAULT):
+        if kws.pop('debug', config.DEBUGINFO_DEFAULT):
             flags.set("debuginfo")
             flags.set("boundcheck")
 
