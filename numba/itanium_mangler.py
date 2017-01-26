@@ -5,7 +5,13 @@ Reference: http://mentorembedded.github.io/cxx-abi/abi.html
 """
 
 from __future__ import print_function, absolute_import
+
+import re
+
 from numba import types
+
+
+_re_invalid_char = re.compile(r'[^a-z0-9_]', re.I)
 
 
 PREFIX = "_Z"
@@ -50,17 +56,19 @@ N2C = {
 }
 
 
-def _encode(ch):
+def _escape_string(text):
+    """Escape the given string so that it only contains ASCII characters
+    of [a-zA-Z0-9_$].
+
+    The dollar symbol ($) and other invalid characters are escaped into
+    the string sequence of "$xx" where "xx" is the hex codepoint of the char.
+
+    Multibyte characters are encoded into utf8 and converted into the above
+    hex format.
     """
-    Encode a single character.
-    Anything not valid as Python identifier is encoded as '$N' where N
-    is a decimal number of the character code point.
-    """
-    if ch.isalnum() or ch == '_':
-        out = ch
-    else:
-        out = "$%d" % ord(ch)
-    return out
+    def repl(m):
+        return ''.join(('$%02x' % ch) for ch in m.group(0).encode('utf8'))
+    return re.sub(_re_invalid_char, repl, text)
 
 
 def _fix_lead_digit(text):
@@ -80,7 +88,7 @@ def mangle_identifier(ident, template_params=''):
     This treats '.' as '::' in C++
     """
 
-    splitted = (''.join(map(_encode, x)) for x in ident.split('.'))
+    splitted = [_escape_string(x) for x in ident.split('.')]
     parts = ["%d%s" % (len(x), x) for x in map(_fix_lead_digit, splitted)]
     if len(parts) > 1:
         return 'N%s%sE' % (''.join(parts), template_params)
