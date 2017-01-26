@@ -33,6 +33,7 @@ class Flags(utils.ConfigOptions):
         # Release GIL inside the native function
         'release_gil': False,
         'no_compile': False,
+        'debuginfo': False,
         'boundcheck': False,
         'forceinline': False,
         'no_cpython_wrapper': False,
@@ -670,6 +671,8 @@ def _make_subtarget(targetctx, flags):
     Make a new target context from the given target context and flags.
     """
     subtargetoptions = {}
+    if flags.debuginfo:
+        subtargetoptions['enable_debuginfo'] = True
     if flags.boundcheck:
         subtargetoptions['enable_boundcheck'] = True
     if flags.nrt:

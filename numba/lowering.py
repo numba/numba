@@ -12,6 +12,7 @@ from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
 from .errors import LoweringError, new_error_context
 from .targets import imputils
 from .funcdesc import default_mangler
+from . import debuginfo
 
 
 class Environment(_dynfunc.Environment):
@@ -63,6 +64,14 @@ class BaseLower(object):
         self.firstblk = min(self.blocks.keys())
         self.loc = -1
 
+        # Debuginfo
+        dibuildercls = (self.context.DIBuilder
+                        if self.context.enable_debuginfo
+                        else debuginfo.DummyDIBuilder)
+
+        self.debuginfo = dibuildercls(module=self.module,
+                                      filepath=func_ir.loc.filename)
+
         # Subclass initialization
         self.init()
 
@@ -102,11 +111,15 @@ class BaseLower(object):
         # (for generators) and it's important to use a new API and
         # EnvironmentManager.
         self.pyapi = None
+        self.debuginfo.mark_subprogram(function=self.builder.function,
+                                       name=self.fndesc.qualname,
+                                       loc=self.func_ir.loc)
 
     def post_lower(self):
         """
         Called after all blocks are lowered
         """
+        self.debuginfo.finalize()
 
     def pre_block(self, block):
         """
@@ -235,6 +248,8 @@ class Lower(BaseLower):
     GeneratorLower = generators.GeneratorLower
 
     def lower_inst(self, inst):
+        # Set debug location for all subsequent LL instructions
+        self.debuginfo.mark_location(self.builder, self.loc)
         self.debug_print(str(inst))
         if isinstance(inst, ir.Assign):
             ty = self.typeof(inst.target.name)
@@ -933,7 +948,17 @@ class Lower(BaseLower):
         return self.alloca_lltype(name, lltype)
 
     def alloca_lltype(self, name, lltype):
-        return cgutils.alloca_once(self.builder, lltype, name=name, zfill=True)
+        # Is user variable?
+        is_uservar = not name.startswith('$')
+        # Allocate space for variable
+        aptr = cgutils.alloca_once(self.builder, lltype, name=name, zfill=True)
+        if is_uservar:
+            # Emit debug info for user variable
+            sizeof = self.context.get_abi_sizeof(lltype)
+            self.debuginfo.mark_variable(self.builder, aptr, name=name,
+                                         lltype=lltype, size=sizeof,
+                                         loc=self.loc)
+        return aptr
 
     def incref(self, typ, val):
         if not self.context.enable_nrt:

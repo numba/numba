@@ -223,11 +223,179 @@ When this mode is enabled, the ``vectorize`` and ``guvectorize`` decorators will
 still result in compilation of a ufunc, as there is no straightforward pure
 Python implementation of these functions.
 
+
+Debugging JIT compiled code with GDB
+====================================
+
+Setting the ``debug`` keyword argument in the ``jit`` decorator
+(e.g. ``@jit(debug=True)``) enables the emission of debug info in the jitted
+code.  To debug, GDB version 7.0 or above is required.  Currently, the following
+debug info is available:
+
+* Function name will be shown in the backtrace.  But, no type information.
+* Source location (filename and line number) is available.  For example,
+  user can set break point by the absolute filename and line number;
+  e.g. ``break /path/to/myfile.py:6``.
+* Local variables in the current function can be shown with ``info locals``.
+* Type of variable with ``whatis myvar``.
+* Value of variable with ``print myvar`` or ``display myvar``.
+
+  * Simple numeric types, i.e. int, float and double, are shown in their
+    native representation.  But, integers are assumed to be signed.
+  * Other types are shown as sequence of bytes.
+
+Known issues:
+
+* Stepping depends heavily on optimization level.
+
+  * At full optimization (equivalent to O3), most of the variables are
+    optimized out.
+  * With no optimization (e.g. ``NUMBA_OPT=0``), source location jumps around
+    when stepping through the code.
+  * At O1 optimization (e.g. ``NUMBA_OPT=1``), stepping is stable but some
+    variables are optimized out.
+
+* Memory consumption increases significantly with debug info enabled.
+  The compiler emits extra information (`DWARF <http://www.dwarfstd.org/>`_)
+  along with the instructions.  The emitted object code can be 2x bigger with
+  debug info.
+
+Internal details:
+
+* Since Python semantics allow variables to bind to value of different types,
+  Numba internally creates multiple versions of the variable for each type.
+  So for code like::
+
+    x = 1         # type int
+    x = 2.3       # type float
+    x = (1, 2, 3) # type 3-tuple of int
+
+  Each assignments will store to a different variable name.  In the debugger,
+  the variables will be ``x``, ``x$1`` and ``x$2``.  (In the Numba IR, they are
+  ``x``, ``x.1`` and ``x.2``.)
+
+* When debug is enabled, inlining of the function is disabled.
+
+Example debug usage
+-------------------
+
+The python source:
+
+.. code-block:: python
+  :linenos:
+
+  from numba import njit
+
+  @njit(debug=True)
+  def foo(a):
+      b = a + 1
+      c = a * 2.34
+      d = (a, b, c)
+      print(a, b, c, d)
+
+  r= foo(123)
+  print(r)
+
+In the terminal:
+
+.. code-block:: none
+  :emphasize-lines: 1, 8, 13, 15, 20, 25, 27, 29
+
+  $ NUMBA_OPT=1 gdb -q python
+  Reading symbols from python...done.
+  (gdb) break /home/user/chk_debug.py:5
+  No source file named /home/user/chk_debug.py.
+  Make breakpoint pending on future shared library load? (y or [n]) y
+
+  Breakpoint 1 (/home/user/chk_debug.py:5) pending.
+  (gdb) run chk_debug.py
+  Starting program: /home/user/miniconda/bin/python chk_debug.py
+  ...
+  Breakpoint 1, __main__.foo$1.int64 () at chk_debug.py:5
+  5	    b = a + 1
+  (gdb) n
+  6	    c = a * 2.34
+  (gdb) bt
+  #0  __main__.foo$1.int64 () at chk_debug.py:6
+  #1  0x00007ffff7fec47c in cpython..main..foo$1.int64 ()
+  #2  0x00007fffeb7976e2 in call_cfunc (locals=0x0, kws=0x0, args=0x7fffeb486198,
+  ...
+  (gdb) info locals
+  a = 0
+  d = <error reading variable d (DWARF-2 expression error: `DW_OP_stack_value' operations must be used either alone or in conjunction with DW_OP_piece or DW_OP_bit_piece.)>
+  c = 0
+  b = 124
+  (gdb) whatis b
+  type = i64
+  (gdb) whatis d
+  type = {i64, i64, double}
+  (gdb) print b
+  $2 = 124
+
+Globally override debug setting
+-------------------------------
+
+It is possible to enable debug for the full application by setting environment
+variable ``NUMBA_DEBUGINFO=1``.  This sets the default value of the ``debug``
+option in ``jit``.  Debug can be turned off on individual functions by setting
+``debug=False``.
+
+Beware that enabling debug info significantly increases the memory consumption
+for each compiled function.  For large application, this may cause out-of-memory
+error.
+
 Debugging CUDA Python code
 ==========================
+
+Using the simulator
+-------------------
 
 CUDA Python code can be run in the Python interpreter using the CUDA Simulator,
 allowing it to be debugged with the Python debugger or with print statements. To
 enable the CUDA simulator, set the environment variable
 :envvar:`NUMBA_ENABLE_CUDASIM` to 1. For more information on the CUDA Simulator,
 see :ref:`the CUDA Simulator documentation <simulator>`.
+
+
+Debug Info
+----------
+
+By setting the ``debug`` argument to ``cuda.jit`` to ``True``
+(``@cuda.jit(debug=True)``), Numba will emit source location in the compiled
+CUDA code.  Unlike the CPU target, only filename and line information are
+available, but no variable type information is emitted.  The information
+is sufficient to debug memory error with
+`cuda-memcheck <http://docs.nvidia.com/cuda/cuda-memcheck/index.html>`_.
+
+For example, given the following cuda python code:
+
+.. code-block:: python
+  :linenos:
+
+  import numpy as np
+  from numba import cuda
+
+  @cuda.jit(debug=True)
+  def foo(arr):
+      arr[cuda.threadIdx.x] = 1
+
+  arr = np.arange(30)
+  foo[1, 32](arr)   # more threads than array elements
+
+We can use ``cuda-memcheck`` to find the memory error:
+
+.. code-block:: none
+
+  $ cuda-memcheck python chk_cuda_debug.py
+  ========= CUDA-MEMCHECK
+  ========= Invalid __global__ write of size 8
+  =========     at 0x00000148 in /home/user/chk_cuda_debug.py:6:cudaPy__5F__5F_main_5F__5F__2E_foo_24_1_2E_array_28_int64_2C__20_1d_2C__20_C_29_
+  =========     by thread (31,0,0) in block (0,0,0)
+  =========     Address 0x500a600f8 is out of bounds
+  ...
+  =========
+  ========= Invalid __global__ write of size 8
+  =========     at 0x00000148 in /home/user/chk_cuda_debug.py:6:cudaPy__5F__5F_main_5F__5F__2E_foo_24_1_2E_array_28_int64_2C__20_1d_2C__20_C_29_
+  =========     by thread (30,0,0) in block (0,0,0)
+  =========     Address 0x500a600f0 is out of bounds
+  ...
