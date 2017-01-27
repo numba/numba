@@ -311,13 +311,13 @@ In the terminal:
   (gdb) run chk_debug.py
   Starting program: /home/user/miniconda/bin/python chk_debug.py
   ...
-  Breakpoint 1, __main__.foo$1.int64 () at chk_debug.py:5
+  Breakpoint 1, __main__::foo$241(long long) () at chk_debug.py:5
   5	    b = a + 1
   (gdb) n
   6	    c = a * 2.34
   (gdb) bt
-  #0  __main__.foo$1.int64 () at chk_debug.py:6
-  #1  0x00007ffff7fec47c in cpython..main..foo$1.int64 ()
+  #0  __main__::foo$241(long long) () at chk_debug.py:6
+  #1  0x00007ffff7fec47c in cpython::__main__::foo$241(long long) ()
   #2  0x00007fffeb7976e2 in call_cfunc (locals=0x0, kws=0x0, args=0x7fffeb486198,
   ...
   (gdb) info locals
@@ -389,13 +389,13 @@ We can use ``cuda-memcheck`` to find the memory error:
   $ cuda-memcheck python chk_cuda_debug.py
   ========= CUDA-MEMCHECK
   ========= Invalid __global__ write of size 8
-  =========     at 0x00000148 in /home/user/chk_cuda_debug.py:6:cudaPy__5F__5F_main_5F__5F__2E_foo_24_1_2E_array_28_int64_2C__20_1d_2C__20_C_29_
+  =========     at 0x00000148 in /home/user/chk_cuda_debug.py:6:cudapy::__main__::foo$241(Array<__int64, int=1, C, mutable, aligned>)
   =========     by thread (31,0,0) in block (0,0,0)
   =========     Address 0x500a600f8 is out of bounds
   ...
   =========
   ========= Invalid __global__ write of size 8
-  =========     at 0x00000148 in /home/user/chk_cuda_debug.py:6:cudaPy__5F__5F_main_5F__5F__2E_foo_24_1_2E_array_28_int64_2C__20_1d_2C__20_C_29_
+  =========     at 0x00000148 in /home/user/chk_cuda_debug.py:6:cudapy::__main__::foo$241(Array<__int64, int=1, C, mutable, aligned>)
   =========     by thread (30,0,0) in block (0,0,0)
   =========     Address 0x500a600f0 is out of bounds
   ...
