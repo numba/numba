@@ -630,18 +630,17 @@ class TestRecordDtype(unittest.TestCase):
         self.assertNotIn('first', transformed)
         self.assertNotIn('second', transformed)
         # len(transformed) is generally 10, but could be longer if a large
-        # number of typecodes are in use. Checking <16 should provide enough
+        # number of typecodes are in use. Checking <20 should provide enough
         # tolerance.
-        self.assertLess(len(transformed), 16)
+        self.assertLess(len(transformed), 20)
 
         struct_arr = types.Array(rec, 1, 'C')
         transformed = mangle_type(struct_arr)
         self.assertIn('Array', transformed)
         self.assertNotIn('first', transformed)
         self.assertNotIn('second', transformed)
-        # Length is usually 34 - 5 chars tolerance as above.
-        self.assertLess(len(transformed), 40)
-
+        # Length is usually 50 - 5 chars tolerance as above.
+        self.assertLess(len(transformed), 50)
 
     def test_record_two_arrays(self):
         """
