@@ -7,20 +7,7 @@ from collections import defaultdict
 import sys
 
 from . import types, itanium_mangler
-from .utils import PY3, _dynamic_modname, _dynamic_module
-
-
-def transform_arg_name(arg):
-    # XXX deadcode?
-    if isinstance(arg, types.Record):
-        return "Record_%s" % arg._code
-    elif (isinstance(arg, types.Array) and
-          isinstance(arg.dtype, types.Record)):
-        type_name = "array" if arg.mutable else "readonly array"
-        return ("%s(Record_%s, %sd, %s)"
-                % (type_name, arg.dtype._code, arg.ndim, arg.layout))
-    else:
-        return str(arg)
+from .utils import _dynamic_modname, _dynamic_module
 
 
 def default_mangler(name, argtypes):

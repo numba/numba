@@ -67,6 +67,10 @@ class Record(Type):
         # (https://github.com/numpy/numpy/issues/5715)
         return (self.descr, self.size, self.aligned)
 
+    @property
+    def mangling_args(self):
+        return self.__class__.__name__, (self._code,)
+
     def __len__(self):
         return len(self.fields)
 

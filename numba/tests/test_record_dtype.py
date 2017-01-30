@@ -6,7 +6,7 @@ import numpy as np
 from numba import jit, numpy_support, types
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba.funcdesc import transform_arg_name
+from numba.itanium_mangler import mangle_type
 from numba.utils import IS_PY3
 from .support import tag
 
@@ -626,7 +626,7 @@ class TestRecordDtype(unittest.TestCase):
         transformed name being excessively long.
         """
         rec = numpy_support.from_dtype(recordtype3)
-        transformed = transform_arg_name(rec)
+        transformed = mangle_type(rec)
         self.assertNotIn('first', transformed)
         self.assertNotIn('second', transformed)
         # len(transformed) is generally 10, but could be longer if a large
@@ -635,8 +635,8 @@ class TestRecordDtype(unittest.TestCase):
         self.assertLess(len(transformed), 16)
 
         struct_arr = types.Array(rec, 1, 'C')
-        transformed = transform_arg_name(struct_arr)
-        self.assertIn('array', transformed)
+        transformed = mangle_type(struct_arr)
+        self.assertIn('Array', transformed)
         self.assertNotIn('first', transformed)
         self.assertNotIn('second', transformed)
         # Length is usually 34 - 5 chars tolerance as above.
