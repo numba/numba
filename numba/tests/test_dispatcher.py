@@ -520,8 +520,10 @@ class TestDispatcherMethods(TestCase):
 
         def check_display(cfg, wrapper=''):
             # simple stringify test
-            prefix = 'digraph "CFG for \'{}numba.'.format(wrapper)
-            self.assertTrue(str(cfg).startswith(prefix))
+            if wrapper:
+                wrapper = "{}{}".format(len(wrapper), wrapper)
+            prefix = r'^digraph "CFG for \'_ZN{}5numba'.format(wrapper)
+            self.assertRegexpMatches(str(cfg), prefix)
             # .display() requires an optional dependency on `graphviz`.
             # just test for the attribute without running it.
             self.assertTrue(callable(cfg.display))
@@ -537,7 +539,7 @@ class TestDispatcherMethods(TestCase):
         # Call inspect_cfg(signature, show_wrapper="python")
         cfg = foo.inspect_cfg(signature=foo.signatures[0],
                               show_wrapper="python")
-        check_display(cfg, wrapper='cpython.')
+        check_display(cfg, wrapper='cpython')
 
     def test_inspect_types(self):
         @jit
