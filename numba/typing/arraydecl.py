@@ -425,6 +425,15 @@ class ArrayAttribute(AttributeTemplate):
                 return ary.copy(dtype=ary.dtype.typeof(attr), layout='A')
 
 
+@infer_getattr
+class DTypeAttr(AttributeTemplate):
+    key = types.DType
+
+    def resolve_type(self, ary):
+        # Wrap the numeric type in NumberClass
+        return types.NumberClass(ary.dtype)
+
+
 @infer
 class StaticGetItemArray(AbstractTemplate):
     key = "static_getitem"

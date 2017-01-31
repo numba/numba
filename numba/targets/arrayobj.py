@@ -1968,6 +1968,15 @@ def array_complex_attr(context, builder, typ, value, attr):
 
 
 #-------------------------------------------------------------------------------
+# DType attribute
+
+@lower_getattr(types.DType, 'type')
+def dtype_type(context, builder, dtypety, dtypeval):
+    # Just return a dummy opaque value
+    return context.get_dummy_value()
+
+
+#-------------------------------------------------------------------------------
 # Structured / record lookup
 
 @lower_getattr_generic(types.Array)
