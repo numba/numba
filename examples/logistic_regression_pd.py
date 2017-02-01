@@ -9,7 +9,7 @@ def logistic_regression(X,Y,w,iterations):
     for i in range(iterations):
         w -= ((1.0 / (1.0 + np.exp(-Y * np.dot(X,w))) - 1.0) * Y * X.T).sum(1)
     return w
-    
+
 
 if __name__ == "__main__":
 
@@ -28,11 +28,10 @@ if __name__ == "__main__":
     X = np.random.ranf(size=(N,D))
     Y = np.random.ranf(size=(N))
 
-    start = time.time()
-
     w = 2 * np.random.ranf(size=D) - 1
     print("Initial w: " + str(w))
-    logistic_regression(X,Y,w,iterations)
 
-    print("Final w: " + str(w))
+    start = time.time()
+    logistic_regression(X,Y,w,iterations)
     print("lr exec time %f" % (time.time()-start))
+    print("Final w: " + str(w))

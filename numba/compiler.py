@@ -13,9 +13,11 @@ from .tracing import trace, event
 
 from numba import (bytecode, interpreter, funcdesc, postproc,
                    typing, typeinfer, lowering, objmode, utils, config,
-                   errors, types, ir, types, rewrites, transforms)
+                   errors, types, ir, types, rewrites, transforms,
+                   array_analysis)
 from numba.targets import cpu, callconv
 from numba.annotations import type_annotations
+from numba.array_analysis import ArrayAnalysis
 
 
 # Lock for the preventing multiple compiler execution
@@ -481,6 +483,15 @@ class Pipeline(object):
             rewrites.rewrite_registry.apply('after-inference',
                                             self, self.func_ir)
 
+    def stage_array_analysis(self):
+        """
+        analyze array computations such as equivalence classes
+        """
+        # Ensure we have an IR and type information.
+        assert self.func_ir
+        array_analysis = ArrayAnalysis(self.func_ir, self.type_annotation)
+        array_analysis.run()
+
     def stage_annotate_type(self):
         """
         Create type annotation after type inference
@@ -629,6 +640,7 @@ class Pipeline(object):
                 pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
             pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
             pm.add_stage(self.stage_annotate_type, "annotate type")
+            pm.add_stage(self.stage_array_analysis, "analyze array computations")
             if not self.flags.no_rewrites:
                 pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
             pm.add_stage(self.stage_nopython_backend, "nopython mode backend")
