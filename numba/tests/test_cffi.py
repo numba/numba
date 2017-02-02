@@ -155,6 +155,7 @@ class TestCFFI(TestCase):
         def foo(x):
             return inner(x) + my_sin(x + 1)
 
+        # Error occurs when foo is being compiled
         x = 1.123
         self.assertEqual(foo(x), my_sin(x) + my_sin(x + 1))
 

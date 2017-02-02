@@ -978,7 +978,12 @@ class BaseContext(object):
         mod = builder.module
         llvoidptr = self.get_value_type(types.voidptr)
         addr = self.get_constant(types.uintp, intaddr).inttoptr(llvoidptr)
-        gv = mod.add_global_variable(llvoidptr, name='numba.dynamic.globals')
+        # Use a unique name by embedding the address value
+        symname = 'numba.dynamic.globals.{:x}'.format(intaddr)
+        gv = mod.add_global_variable(llvoidptr, name=symname)
+        # Use linkonce linkage to allow merging with other GV of the same name.
+        # And, avoid optimization from assuming its value.
+        gv.linkage = 'linkonce'
         gv.initializer = addr
         return builder.load(gv)
 
