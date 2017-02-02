@@ -117,7 +117,6 @@ class TestCFFI(TestCase):
         imag_cfunc(x, y)
         np.testing.assert_equal(x.imag, y)
 
-
     @unittest.skipIf(sys.version_info < (3,),
                      "buffer protocol on array.array needs Python 3+")
     def test_from_buffer_pyarray(self):
@@ -137,6 +136,27 @@ class TestCFFI(TestCase):
             cfunc(x, y)
         self.assertIn("from_buffer() unsupported on non-contiguous buffers",
                       str(raises.exception))
+
+    def test_indirect_multiple_use(self):
+        """
+        Issue #2263
+
+        Linkage error due to multiple definition of global tracking symbol.
+        """
+        my_sin = mod.cffi_sin
+
+        # Use two jit functions that references `my_sin` to ensure multiple
+        # modules
+        @jit(nopython=True)
+        def inner(x):
+            return my_sin(x)
+
+        @jit(nopython=True)
+        def foo(x):
+            return inner(x) + my_sin(x + 1)
+
+        x = 1.123
+        self.assertEqual(foo(x), my_sin(x) + my_sin(x + 1))
 
 
 if __name__ == '__main__':
