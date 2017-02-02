@@ -328,11 +328,20 @@ errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "
                             ".ascontiguousarray()")
 
 
+def _single_buffer(ary):
+    i = np.argmax(ary.strides)
+    size = ary.strides[i] * ary.shape[i]
+    return size == ary.nbytes
+
+
 def sentry_contiguous(ary):
     if not ary.flags['C_CONTIGUOUS'] and not ary.flags['F_CONTIGUOUS']:
         if ary.strides[0] == 0:
             # Broadcasted, ensure inner contiguous
             return sentry_contiguous(ary[0])
+
+        elif _single_buffer(ary):
+            return True
 
         else:
             raise ValueError(errmsg_contiguous_buffer)
