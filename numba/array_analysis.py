@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 from numba import ir
 #from numba.annotations import type_annotations
 from numba import types
+from numba.typing import npydecl
 
 class ArrayAnalysis(object):
     '''Analysis of array computations such as shapes and equivalence classes
@@ -37,8 +38,28 @@ class ArrayAnalysis(object):
             self._analyze_assign(inst)
 
     def _analyze_assign(self, assign):
-        if isinstance(assign.value, ir.Arg) and self._isarray(assign.value.name):
-            self._add_array_corr(assign.value.name)
+
+        #if isinstance(assign.value, ir.Arg) and self._isarray(assign.value.name):
+        #    self._add_array_corr(assign.value.name)
+        # lhs is always var?
+        assert isinstance(assign.target, ir.Var)
+        lhs = assign.target.name
+        if self._isarray(lhs):
+            self.array_shape_classes[lhs] = self._get_rhs_class(assign.value)
+
+    # lhs is array so rhs has to return array
+    def _get_rhs_class(self, node):
+        if isinstance(node, ir.Arg):
+            assert self._isarray(node.name)
+            return self._add_array_corr(node.name)
+        if isinstance(node, ir.Expr):
+            if node.op=='unary' and node.fn in UNARY_MAP_OP:
+                assert isinstance(node.value, ir.Var)
+                in_var = node.value.name
+                assert self._isarray(in_var)
+                return self.array_shape_classes[in_var]
+            #elif node.op
+        return [-1]
 
     def _isarray(self, varname):
         return isinstance(self.type_annotation.typemap[varname],
@@ -51,8 +72,11 @@ class ArrayAnalysis(object):
         for i in range(0,arr_typ.ndim):
             new_class = self._get_next_class()
             self.array_shape_classes[varname].append(new_class)
+        return self.array_shape_classes[varname]
 
     def _get_next_class(self):
         m = self.next_eq_class
         self.next_eq_class += 1
         return m
+
+UNARY_MAP_OP = npydecl.NumpyRulesUnaryArrayOperator._op_map.keys()
