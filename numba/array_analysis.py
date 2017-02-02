@@ -19,7 +19,10 @@ class ArrayAnalysis(object):
         # example: {'A':[1,2]}
         #          {1:[n,a],2:[k,m,3]}
         self.array_shape_classes = {}
-        self.class_sizes = {}
+        # class zero especial and is size 1 for constants
+        # and added broadcast dimensions
+        # -1 class means unknown
+        self.class_sizes = {0:[1]}
         #print("ARRAY ANALYSIS")
 
     def run(self):
@@ -52,14 +55,60 @@ class ArrayAnalysis(object):
         if isinstance(node, ir.Arg):
             assert self._isarray(node.name)
             return self._add_array_corr(node.name)
-        if isinstance(node, ir.Expr):
+        elif isinstance(node, ir.Var):
+            return self.array_shape_classes[node.name]
+        elif isinstance(node, ir.Expr):
             if node.op=='unary' and node.fn in UNARY_MAP_OP:
                 assert isinstance(node.value, ir.Var)
                 in_var = node.value.name
                 assert self._isarray(in_var)
                 return self.array_shape_classes[in_var]
-            #elif node.op
-        return [-1]
+            elif node.op=='binop' and node.fn in BINARY_MAP_OP:
+                arg1 = node.lhs.name
+                arg2 = node.rhs.name
+                return self._broadcast_and_match_shapes(arg1, arg2)
+            elif node.op=='inplace_binop' and node.immutable_fn in BINARY_MAP_OP:
+                arg1 = node.lhs.name
+                arg2 = node.rhs.name
+                return self._broadcast_and_match_shapes(arg1, arg2)
+            elif node.op=='cast':
+                return self.array_shape_classes[node.value.name]
+            else:
+                print("can't find shape classes for expr",node," of op",node.op)
+        print("can't find shape classes for node",node," of type ",type(node))
+        return []
+
+    def _broadcast_and_match_shapes(self, arg1, arg2):
+        """Infer shape equivalence of arguments based on Numpy broadcast rules
+        and return shape of output
+        https://docs.scipy.org/doc/numpy/user/basics.broadcasting.html
+        """
+        # one input has to be an array
+        assert self._isarray(arg1) or self._isarray(arg2)
+
+        if self._isarray(arg1):
+            eq1 = self.array_shape_classes[arg1]
+        else:
+            eq1 = [0]
+        if self._isarray(arg2):
+            eq2 = self.array_shape_classes[arg2]
+        else:
+            eq2 = [0]
+
+        while len(eq1)<len(eq2):
+            eq1.insert(0,0)
+        while len(eq2)<len(eq1):
+            eq2.insert(0,0)
+        ndim = len(eq1)
+
+        out_eq = [-1 for i in range(0,ndim)]
+        for i in range(0,ndim):
+            if eq1[i]==0:
+                out_eq[i] = eq2[i]
+            elif eq2[i]==0:
+                out_eq[i] = eq1[i]
+        return out_eq
+
 
     def _isarray(self, varname):
         return isinstance(self.type_annotation.typemap[varname],
@@ -80,3 +129,4 @@ class ArrayAnalysis(object):
         return m
 
 UNARY_MAP_OP = npydecl.NumpyRulesUnaryArrayOperator._op_map.keys()
+BINARY_MAP_OP = npydecl.NumpyRulesArrayOperator._op_map.keys()
