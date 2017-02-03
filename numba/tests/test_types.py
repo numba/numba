@@ -531,5 +531,27 @@ class TestRecordDtype(unittest.TestCase):
         self.assertEqual(b, arr[0]['b'])
 
 
+class TestDType(TestCase):
+    def test_type_attr(self):
+        # Test .type attribute of dtype
+        def conv(arr, val):
+            return arr.dtype.type(val)
+
+        jit_conv = jit(nopython=True)(conv)
+
+        def assert_matches(arr, val, exact):
+            expect = conv(arr, val)
+            got = jit_conv(arr, val)
+            self.assertPreciseEqual(expect, exact)
+            self.assertPreciseEqual(typeof(expect), typeof(got))
+            self.assertPreciseEqual(expect, got)
+
+        arr = np.zeros(5)
+        assert_matches(arr.astype(np.intp), 1.2, 1)
+        assert_matches(arr.astype(np.float64), 1.2, 1.2)
+        assert_matches(arr.astype(np.complex128), 1.2, (1.2 + 0j))
+        assert_matches(arr.astype(np.complex128), 1.2j, 1.2j)
+
+
 if __name__ == '__main__':
     unittest.main()
