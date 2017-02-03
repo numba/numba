@@ -40,6 +40,7 @@ class Flags(utils.ConfigOptions):
         'nrt': False,
         'no_rewrites': False,
         'error_model': 'python',
+        'fastmath': False,
     }
 
 
@@ -677,6 +678,8 @@ def _make_subtarget(targetctx, flags):
         subtargetoptions['enable_boundcheck'] = True
     if flags.nrt:
         subtargetoptions['enable_nrt'] = True
+    if flags.fastmath:
+        subtargetoptions['enable_fastmath'] = True
     error_model = callconv.create_error_model(flags.error_model, targetctx)
     subtargetoptions['error_model'] = error_model
 
