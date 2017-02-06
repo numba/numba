@@ -23,6 +23,10 @@ class ArrayAnalysis(object):
         # and added broadcast dimensions
         # -1 class means unknown
         self.class_sizes = {0:[1]}
+        # keep a list of numpy Global variables to find numpy calls
+        self.numpy_globals = []
+        # keep numpy call variables with their call names
+        self.numpy_calls = {}
         #print("ARRAY ANALYSIS")
 
     def run(self):
@@ -30,6 +34,8 @@ class ArrayAnalysis(object):
         for (key, block) in self.func_ir.blocks.items():
             self._analyze_block(block)
         print(self.array_shape_classes)
+        print("numpy globals ", self.numpy_globals)
+        print("numpy calls ", self.numpy_calls)
         #print("RUN ARRAY ANALYSIS")
 
     def _analyze_block(self, block):
@@ -47,11 +53,18 @@ class ArrayAnalysis(object):
         # lhs is always var?
         assert isinstance(assign.target, ir.Var)
         lhs = assign.target.name
+        rhs = assign.value
+        if isinstance(rhs, ir.Global) and rhs.value.__name__=='numpy':
+            self.numpy_globals.append(lhs)
+        if isinstance(rhs, ir.Expr) and rhs.op=='getattr' and rhs.value.name in self.numpy_globals:
+            self.numpy_calls[lhs] = rhs.attr
+
+        #rhs_class_out = self._analyze_rhs_classes(rhs)
         if self._isarray(lhs):
-            self.array_shape_classes[lhs] = self._get_rhs_class(assign.value)
+            self.array_shape_classes[lhs] = self._analyze_rhs_classes(rhs)
 
     # lhs is array so rhs has to return array
-    def _get_rhs_class(self, node):
+    def _analyze_rhs_classes(self, node):
         if isinstance(node, ir.Arg):
             assert self._isarray(node.name)
             return self._add_array_corr(node.name)
@@ -73,10 +86,56 @@ class ArrayAnalysis(object):
                 return self._broadcast_and_match_shapes(arg1, arg2)
             elif node.op=='cast':
                 return self.array_shape_classes[node.value.name]
+            elif node.op=='call' and node.func.name in self.numpy_calls.keys():
+                return self._analyze_np_call(node.func.name, node.args)
             else:
                 print("can't find shape classes for expr",node," of op",node.op)
         print("can't find shape classes for node",node," of type ",type(node))
         return []
+
+    def _analyze_np_call(self, call_var, args):
+        call_name = self.numpy_calls[call_var]
+        if call_name=='dot':
+            # https://docs.scipy.org/doc/numpy/reference/generated/numpy.dot.html
+            # for multi-dimensional arrays, last dimension of arg1 and second
+            # to last dimension of arg2 should be equal since used in dot product.
+            # if arg2 is 1D, its only dimension is used for dot product and
+            # should be equal to second to last of arg1.
+            assert len(args)==2 or len(args)==3
+            in1 = args[0].name
+            in2 = args[1].name
+            ndims1 = self._get_ndims(in1)
+            ndims2 = self._get_ndims(in2)
+            c1 = self.array_shape_classes[in1][ndims1-1]
+            c2 = 0
+
+            if ndims2==1:
+                c2 = self.array_shape_classes[in2][0]
+            else:
+                c2 = self.array_shape_classes[in2][ndims2-2]
+
+            c_inner = self._merge_classes(c1,c2)
+            self.array_shape_classes[in1][ndims1-1] = c_inner
+
+            if ndims2==1:
+                self.array_shape_classes[in2][0] = c_inner
+            else:
+                self.array_shape_classes[in2][ndims2-2] = c_inner
+
+            c_out = []
+            for i in range(0,ndims1-1):
+                c_out.append(self.array_shape_classes[in1][i])
+            for i in range(0,ndims2-2):
+                c_out.append(self.array_shape_classes[in2][i])
+            if ndims2>1:
+                c_out.append(self.array_shape_classes[in2][ndims2-1])
+            print("dot class ",c_out)
+            return c_out
+        print("unknown numpy call:",call_name)
+        return [0]
+
+    def _merge_classes(self, c1, c2):
+        return self._get_next_class()
 
     def _broadcast_and_match_shapes(self, arg1, arg2):
         """Infer shape equivalence of arguments based on Numpy broadcast rules
@@ -127,6 +186,9 @@ class ArrayAnalysis(object):
         m = self.next_eq_class
         self.next_eq_class += 1
         return m
+
+    def _get_ndims(self, arr):
+        return len(self.array_shape_classes[arr])
 
 UNARY_MAP_OP = npydecl.NumpyRulesUnaryArrayOperator._op_map.keys()
 BINARY_MAP_OP = npydecl.NumpyRulesArrayOperator._op_map.keys()
