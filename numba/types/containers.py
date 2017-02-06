@@ -196,6 +196,10 @@ class UniTuple(BaseAnonymousTuple, _HomogenousTuple, Sequence):
         super(UniTuple, self).__init__(name)
 
     @property
+    def mangling_args(self):
+        return self.__class__.__name__, (self.dtype, self.count)
+
+    @property
     def key(self):
         return self.dtype, self.count
 
@@ -245,6 +249,10 @@ class Tuple(BaseAnonymousTuple, _HeterogenousTuple):
         self.count = len(self.types)
         name = "(%s)" % ', '.join(str(i) for i in self.types)
         super(Tuple, self).__init__(name)
+
+    @property
+    def mangling_args(self):
+        return self.__class__.__name__, tuple(t for t in self.types)
 
     @property
     def key(self):
