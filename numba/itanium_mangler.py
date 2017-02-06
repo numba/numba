@@ -33,6 +33,7 @@ from __future__ import print_function, absolute_import
 import re
 
 from numba import types
+from numba import types, utils
 
 
 # According the scheme, valid characters for mangled names are [a-zA-Z0-9_$].
@@ -95,8 +96,13 @@ def _escape_string(text):
     hex format.
     """
     def repl(m):
-        return ''.join(('$%02x' % ch) for ch in m.group(0).encode('utf8'))
-    return re.sub(_re_invalid_char, repl, text)
+        return ''.join(('$%02x' % utils.asbyteint(ch))
+                       for ch in m.group(0).encode('utf8'))
+    ret = re.sub(_re_invalid_char, repl, text)
+    # Return str if we got a unicode (for py2)
+    if not isinstance(ret, str):
+        return ret.encode('ascii')
+    return ret
 
 
 def _fix_lead_digit(text):

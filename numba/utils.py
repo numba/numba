@@ -33,6 +33,7 @@ if IS_PY3:
     get_ident = threading.get_ident
     intern = sys.intern
     file_replace = os.replace
+    asbyteint = int
 
     def erase_traceback(exc_value):
         """
@@ -49,6 +50,10 @@ else:
     longint = long
     get_ident = thread.get_ident
     intern = intern
+    def asbyteint(x):
+        # convert 1-char str into int
+        return ord(x)
+
     if sys.platform == 'win32':
         def file_replace(src, dest):
             # Best-effort emulation of os.replace()
