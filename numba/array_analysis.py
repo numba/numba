@@ -88,6 +88,12 @@ class ArrayAnalysis(object):
                 return self.array_shape_classes[node.value.name]
             elif node.op=='call' and node.func.name in self.numpy_calls.keys():
                 return self._analyze_np_call(node.func.name, node.args)
+            elif node.op=='getattr' and self._isarray(node.value.name):
+                # matrix transpose
+                if node.attr=='T':
+                    out_eqs = self.array_shape_classes[node.value.name].copy()
+                    out_eqs.reverse()
+                    return out_eqs
             else:
                 print("can't find shape classes for expr",node," of op",node.op)
         print("can't find shape classes for node",node," of type ",type(node))
@@ -131,6 +137,12 @@ class ArrayAnalysis(object):
                 c_out.append(self.array_shape_classes[in2][ndims2-1])
             print("dot class ",c_out)
             return c_out
+        elif call_name in UFUNC_MAP_OP:
+            arg1 = arg2 = 'NULL'
+            if len(args)>0: arg1 = args[0].name
+            if len(args)>1: arg2 = args[1].name
+            return self._broadcast_and_match_shapes(arg1, arg2)
+
         print("unknown numpy call:",call_name)
         return [0]
 
@@ -143,13 +155,13 @@ class ArrayAnalysis(object):
         https://docs.scipy.org/doc/numpy/user/basics.broadcasting.html
         """
         # one input has to be an array
-        assert self._isarray(arg1) or self._isarray(arg2)
+        assert (arg1!='NULL' and self._isarray(arg1)) or (arg2!='NULL' and self._isarray(arg2))
 
-        if self._isarray(arg1):
+        if arg1!='NULL' and self._isarray(arg1):
             eq1 = self.array_shape_classes[arg1]
         else:
             eq1 = [0]
-        if self._isarray(arg2):
+        if arg2!='NULL' and self._isarray(arg2):
             eq2 = self.array_shape_classes[arg2]
         else:
             eq2 = [0]
@@ -192,3 +204,4 @@ class ArrayAnalysis(object):
 
 UNARY_MAP_OP = npydecl.NumpyRulesUnaryArrayOperator._op_map.keys()
 BINARY_MAP_OP = npydecl.NumpyRulesArrayOperator._op_map.keys()
+UFUNC_MAP_OP = [f.__name__ for f in npydecl.supported_ufuncs]
