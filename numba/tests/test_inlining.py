@@ -39,11 +39,13 @@ class TestInlining(TestCase):
 
     def assert_has_pattern(self, fullname, text):
         pat = self.make_pattern(fullname)
-        self.assertRegexpMatches(text, pat, msg=text)
+        self.assertIsNotNone(re.search(pat, text),
+                             msg='expected {}'.format(pat))
 
     def assert_not_has_pattern(self, fullname, text):
         pat = self.make_pattern(fullname)
-        self.assertNotRegexpMatches(text, pat, msg=text)
+        self.assertIsNone(re.search(pat, text),
+                          msg='unexpected {}'.format(pat))
 
     def test_inner_function(self):
         with override_config('DUMP_ASSEMBLY', True):
