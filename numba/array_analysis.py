@@ -122,12 +122,6 @@ class ArrayAnalysis(object):
                 c2 = self.array_shape_classes[in2][ndims2-2]
 
             c_inner = self._merge_classes(c1,c2)
-            self.array_shape_classes[in1][ndims1-1] = c_inner
-
-            if ndims2==1:
-                self.array_shape_classes[in2][0] = c_inner
-            else:
-                self.array_shape_classes[in2][ndims2-2] = c_inner
 
             c_out = []
             for i in range(0,ndims1-1):
