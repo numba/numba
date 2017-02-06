@@ -210,6 +210,9 @@ class BaseContext(object):
     # Whether dynamic globals (CPU runtime addresses) is allowed
     allow_dynamic_globals = False
 
+    # Fast math flags
+    enable_fastmath = False
+
     def __init__(self, typing_context):
         _load_global_helpers()
 

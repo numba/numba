@@ -24,6 +24,7 @@ class UFuncTargetOptions(TargetOptions):
     OPTIONS = {
         "nopython" : bool,
         "forceobj" : bool,
+        "fastmath" : bool,
     }
 
 

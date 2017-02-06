@@ -13,6 +13,7 @@ from numba.utils import cached_property
 from numba.targets import callconv, codegen, externals, intrinsics, listobj, setobj
 from .options import TargetOptions
 from numba.runtime import rtsys
+from . import fastmathpass
 
 # Keep those structures in sync with _dynfunc.c.
 
@@ -121,6 +122,9 @@ class CPUContext(BaseContext):
         return setobj.build_set(self, builder, set_type, items)
 
     def post_lowering(self, mod, library):
+        if self.enable_fastmath:
+            fastmathpass.rewrite_module(mod)
+
         if self.is32bit:
             # 32-bit machine needs to replace all 64-bit div/rem to avoid
             # calls to compiler-rt
@@ -190,6 +194,7 @@ class CPUTargetOptions(TargetOptions):
         "_nrt": bool,
         "no_rewrites": bool,
         "no_cpython_wrapper": bool,
+        "fastmath": bool,
     }
 
 
