@@ -61,7 +61,8 @@ class ArrayAnalysis(object):
 
         #rhs_class_out = self._analyze_rhs_classes(rhs)
         if self._isarray(lhs):
-            self.array_shape_classes[lhs] = self._analyze_rhs_classes(rhs)
+            self.array_shape_classes[lhs] = self._analyze_rhs_classes(rhs).copy()
+        #print(self.array_shape_classes)
 
     # lhs is array so rhs has to return array
     def _analyze_rhs_classes(self, node):
@@ -69,13 +70,13 @@ class ArrayAnalysis(object):
             assert self._isarray(node.name)
             return self._add_array_corr(node.name)
         elif isinstance(node, ir.Var):
-            return self.array_shape_classes[node.name]
+            return self.array_shape_classes[node.name].copy()
         elif isinstance(node, ir.Expr):
             if node.op=='unary' and node.fn in UNARY_MAP_OP:
                 assert isinstance(node.value, ir.Var)
                 in_var = node.value.name
                 assert self._isarray(in_var)
-                return self.array_shape_classes[in_var]
+                return self.array_shape_classes[in_var].copy()
             elif node.op=='binop' and node.fn in BINARY_MAP_OP:
                 arg1 = node.lhs.name
                 arg2 = node.rhs.name
@@ -85,7 +86,7 @@ class ArrayAnalysis(object):
                 arg2 = node.rhs.name
                 return self._broadcast_and_match_shapes(arg1, arg2)
             elif node.op=='cast':
-                return self.array_shape_classes[node.value.name]
+                return self.array_shape_classes[node.value.name].copy()
             elif node.op=='call' and node.func.name in self.numpy_calls.keys():
                 return self._analyze_np_call(node.func.name, node.args)
             elif node.op=='getattr' and self._isarray(node.value.name):
@@ -135,7 +136,7 @@ class ArrayAnalysis(object):
                 c_out.append(self.array_shape_classes[in2][i])
             if ndims2>1:
                 c_out.append(self.array_shape_classes[in2][ndims2-1])
-            print("dot class ",c_out)
+            #print("dot class ",c_out)
             return c_out
         elif call_name in UFUNC_MAP_OP:
             arg1 = arg2 = 'NULL'
@@ -144,28 +145,39 @@ class ArrayAnalysis(object):
             return self._broadcast_and_match_shapes(arg1, arg2)
 
         print("unknown numpy call:",call_name)
-        return [0]
+        return [-1]
 
     def _merge_classes(self, c1, c2):
-        return self._get_next_class()
+        # no need to merge if equal classes already
+        if c1==c2:
+            return c1
+
+        new_class = self._get_next_class()
+        for l in self.array_shape_classes.values():
+            for i in range(0,len(l)):
+                if l[i]==c1 or l[i]==c2:
+                    l[i] = new_class
+        # TODO: merge symbols
+        return new_class
 
     def _broadcast_and_match_shapes(self, arg1, arg2):
         """Infer shape equivalence of arguments based on Numpy broadcast rules
         and return shape of output
         https://docs.scipy.org/doc/numpy/user/basics.broadcasting.html
         """
-        # one input has to be an array
+        # one input has to be an array, NULL means no input
         assert (arg1!='NULL' and self._isarray(arg1)) or (arg2!='NULL' and self._isarray(arg2))
 
         if arg1!='NULL' and self._isarray(arg1):
-            eq1 = self.array_shape_classes[arg1]
+            eq1 = self.array_shape_classes[arg1].copy()
         else:
             eq1 = [0]
         if arg2!='NULL' and self._isarray(arg2):
-            eq2 = self.array_shape_classes[arg2]
+            eq2 = self.array_shape_classes[arg2].copy()
         else:
             eq2 = [0]
 
+        # prepend zeros to match shapes (broadcast rules)
         while len(eq1)<len(eq2):
             eq1.insert(0,0)
         while len(eq2)<len(eq1):
@@ -178,8 +190,10 @@ class ArrayAnalysis(object):
                 out_eq[i] = eq2[i]
             elif eq2[i]==0:
                 out_eq[i] = eq1[i]
-        return out_eq
+            else:
+                out_eq[i] = self._merge_classes(eq1[i], eq2[i])
 
+        return out_eq
 
     def _isarray(self, varname):
         return isinstance(self.type_annotation.typemap[varname],
