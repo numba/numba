@@ -2,12 +2,17 @@ from __future__ import print_function, division, absolute_import
 
 import random
 import numpy as np
+
+from numba import config
 from numba import cuda, uint32, uint64, float32, float64
 from numba.cuda.testing import unittest
 
 
 def cc_32_or_above():
-    return cuda.current_context().device.compute_capability >= (3, 2)
+    if not config.ENABLE_CUDASIM:
+        return cuda.current_context().device.compute_capability >= (3, 2)
+    else:
+        return True
 
 
 def skip_unless_cc_32(fn):

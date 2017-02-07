@@ -98,6 +98,9 @@ class FakeCUDAShared(object):
 
 addlock = threading.Lock()
 maxlock = threading.Lock()
+minlock = threading.Lock()
+caslock = threading.Lock()
+
 
 class FakeCUDAAtomic(object):
     def add(self, array, index, val):
@@ -114,6 +117,26 @@ class FakeCUDAAtomic(object):
             elif np.isnan(val):
                 return
             array[index] = max(array[index], val)
+
+    def min(self, array, index, val):
+        with minlock:
+            # CUDA Python's semantics for min differ from Numpy's Python's,
+            # so we have special handling here (CUDA Python treats NaN as
+            # missing data).
+            if np.isnan(array[index]):
+                array[index] = val
+            elif np.isnan(val):
+                return
+            array[index] = min(array[index], val)
+
+    def compare_and_swap(self, array, old, val):
+        with caslock:
+            index = (0,) * array.ndim
+            loaded = array[index]
+            if loaded == old:
+                array[index] = val
+            return loaded
+
 
 class FakeCUDAModule(object):
     '''
