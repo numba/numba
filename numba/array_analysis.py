@@ -27,6 +27,8 @@ class ArrayAnalysis(object):
         self.numpy_globals = []
         # keep numpy call variables with their call names
         self.numpy_calls = {}
+        # keep attr calls to arrays like t=A.sum() as {t:('sum',A)}
+        self.array_attr_calls = {}
         #print("ARRAY ANALYSIS")
 
     def run(self):
@@ -36,6 +38,7 @@ class ArrayAnalysis(object):
         print(self.array_shape_classes)
         print("numpy globals ", self.numpy_globals)
         print("numpy calls ", self.numpy_calls)
+        print("array attr calls ", self.array_attr_calls)
         #print("RUN ARRAY ANALYSIS")
 
     def _analyze_block(self, block):
@@ -56,8 +59,11 @@ class ArrayAnalysis(object):
         rhs = assign.value
         if isinstance(rhs, ir.Global) and rhs.value.__name__=='numpy':
             self.numpy_globals.append(lhs)
-        if isinstance(rhs, ir.Expr) and rhs.op=='getattr' and rhs.value.name in self.numpy_globals:
-            self.numpy_calls[lhs] = rhs.attr
+        if isinstance(rhs, ir.Expr) and rhs.op=='getattr':
+            if rhs.value.name in self.numpy_globals:
+                self.numpy_calls[lhs] = rhs.attr
+            elif self._isarray(rhs.value.name):
+                self.array_attr_calls[lhs] = (rhs.attr, rhs.value.name)
 
         #rhs_class_out = self._analyze_rhs_classes(rhs)
         if self._isarray(lhs):
@@ -87,22 +93,31 @@ class ArrayAnalysis(object):
                 return self._broadcast_and_match_shapes(arg1, arg2)
             elif node.op=='cast':
                 return self.array_shape_classes[node.value.name].copy()
-            elif node.op=='call' and node.func.name in self.numpy_calls.keys():
-                return self._analyze_np_call(node.func.name, node.args)
+            elif node.op=='call':
+                call_name = 'NULL'
+                args = node.args.copy()
+                if node.func.name in self.numpy_calls.keys():
+                    call_name = self.numpy_calls[node.func.name]
+                elif node.func.name in self.array_attr_calls.keys():
+                    call_name, arr = self.array_attr_calls[node.func.name]
+                    args.insert(0,arr)
+                return self._analyze_np_call(call_name, args)
             elif node.op=='getattr' and self._isarray(node.value.name):
                 # matrix transpose
                 if node.attr=='T':
-                    out_eqs = self.array_shape_classes[node.value.name].copy()
-                    out_eqs.reverse()
-                    return out_eqs
+                    return self._analyze_np_call('transpose', [node.value])
             else:
                 print("can't find shape classes for expr",node," of op",node.op)
         print("can't find shape classes for node",node," of type ",type(node))
         return []
 
-    def _analyze_np_call(self, call_var, args):
-        call_name = self.numpy_calls[call_var]
-        if call_name=='dot':
+    def _analyze_np_call(self, call_name, args):
+        print("numpy call ",call_name,args)
+        if call_name=='transpose':
+            out_eqs = self.array_shape_classes[args[0].name].copy()
+            out_eqs.reverse()
+            return out_eqs
+        elif call_name=='dot':
             # https://docs.scipy.org/doc/numpy/reference/generated/numpy.dot.html
             # for multi-dimensional arrays, last dimension of arg1 and second
             # to last dimension of arg2 should be equal since used in dot product.
