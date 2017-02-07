@@ -244,61 +244,6 @@ def ptx_threadfence_device(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-@lower(stubs.atomic.add, types.Array, types.intp, types.Any)
-def ptx_atomic_add_intp(context, builder, sig, args):
-    aryty, indty, valty = sig.args
-    ary, ind, val = args
-    dtype = aryty.dtype
-
-    if dtype != valty:
-        raise TypeError("expect %s but got %s" % (dtype, valty))
-    if aryty.ndim != 1:
-        raise TypeError("indexing %d-D array with 1-D index" % (aryty.ndim,))
-
-    lary = context.make_array(aryty)(context, builder, ary)
-    ptr = cgutils.get_item_pointer(builder, aryty, lary, [ind])
-
-    if aryty.dtype == types.float32:
-        lmod = builder.module
-        return builder.call(nvvmutils.declare_atomic_add_float32(lmod), (ptr, val))
-    elif aryty.dtype == types.float64:
-        lmod = builder.module
-        return builder.call(nvvmutils.declare_atomic_add_float64(lmod), (ptr, val))
-    else:
-        return builder.atomic_rmw('add', ptr, val, 'monotonic')
-
-
-@lower(stubs.atomic.add, types.Array, types.UniTuple, types.Any)
-@lower(stubs.atomic.add, types.Array, types.Tuple, types.Any)
-def ptx_atomic_add_tuple(context, builder, sig, args):
-    aryty, indty, valty = sig.args
-    ary, inds, val = args
-    dtype = aryty.dtype
-
-    indices = cgutils.unpack_tuple(builder, inds, count=len(indty))
-    indices = [context.cast(builder, i, t, types.intp)
-               for t, i in zip(indty, indices)]
-
-    if dtype != valty:
-        raise TypeError("expect %s but got %s" % (dtype, valty))
-
-    if aryty.ndim != len(indty):
-        raise TypeError("indexing %d-D array with %d-D index" %
-                        (aryty.ndim, len(indty)))
-
-    lary = context.make_array(aryty)(context, builder, ary)
-    ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
-
-    if aryty.dtype == types.float32:
-        lmod = builder.module
-        return builder.call(nvvmutils.declare_atomic_add_float32(lmod), (ptr, val))
-    elif aryty.dtype == types.float64:
-        lmod = builder.module
-        return builder.call(nvvmutils.declare_atomic_add_float64(lmod), (ptr, val))
-    else:
-        return builder.atomic_rmw('add', ptr, val, 'monotonic')
-
-
 def _normalize_indices(context, builder, indty, inds):
     """
     Convert integer indices into tuple of intp
@@ -313,26 +258,49 @@ def _normalize_indices(context, builder, indty, inds):
     return indty, indices
 
 
+def _atomic_dispatcher(dispatch_fn):
+    def imp(context, builder, sig, args):
+        # The common argument handling code
+        aryty, indty, valty = sig.args
+        ary, inds, val = args
+        dtype = aryty.dtype
+
+        indty, indices = _normalize_indices(context, builder, indty, inds)
+
+        if dtype != valty:
+            raise TypeError("expect %s but got %s" % (dtype, valty))
+
+        if aryty.ndim != len(indty):
+            raise TypeError("indexing %d-D array with %d-D index" %
+                            (aryty.ndim, len(indty)))
+
+        lary = context.make_array(aryty)(context, builder, ary)
+        ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
+        # dispatcher to implementation base on dtype
+        return dispatch_fn(context, builder, dtype, ptr, val)
+    return imp
+
+
+@lower(stubs.atomic.add, types.Array, types.intp, types.Any)
+@lower(stubs.atomic.add, types.Array, types.UniTuple, types.Any)
+@lower(stubs.atomic.add, types.Array, types.Tuple, types.Any)
+@_atomic_dispatcher
+def ptx_atomic_add_tuple(context, builder, dtype, ptr, val):
+    if dtype == types.float32:
+        lmod = builder.module
+        return builder.call(nvvmutils.declare_atomic_add_float32(lmod), (ptr, val))
+    elif dtype == types.float64:
+        lmod = builder.module
+        return builder.call(nvvmutils.declare_atomic_add_float64(lmod), (ptr, val))
+    else:
+        return builder.atomic_rmw('add', ptr, val, 'monotonic')
+
+
 @lower(stubs.atomic.max, types.Array, types.intp, types.Any)
 @lower(stubs.atomic.max, types.Array, types.Tuple, types.Any)
 @lower(stubs.atomic.max, types.Array, types.UniTuple, types.Any)
-def ptx_atomic_max(context, builder, sig, args):
-    aryty, indty, valty = sig.args
-    ary, inds, val = args
-    dtype = aryty.dtype
-
-    indty, indices = _normalize_indices(context, builder, indty, inds)
-
-    if dtype != valty:
-        raise TypeError("expect %s but got %s" % (dtype, valty))
-
-    if aryty.ndim != len(indty):
-        raise TypeError("indexing %d-D array with %d-D index" %
-                        (aryty.ndim, len(indty)))
-
-    lary = context.make_array(aryty)(context, builder, ary)
-    ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
-
+@_atomic_dispatcher
+def ptx_atomic_max(context, builder, dtype, ptr, val):
     lmod = builder.module
     if dtype == types.float64:
         return builder.call(nvvmutils.declare_atomic_max_float64(lmod), (ptr, val))
@@ -349,23 +317,8 @@ def ptx_atomic_max(context, builder, sig, args):
 @lower(stubs.atomic.min, types.Array, types.intp, types.Any)
 @lower(stubs.atomic.min, types.Array, types.Tuple, types.Any)
 @lower(stubs.atomic.min, types.Array, types.UniTuple, types.Any)
-def ptx_atomic_min(context, builder, sig, args):
-    aryty, indty, valty = sig.args
-    ary, inds, val = args
-    dtype = aryty.dtype
-
-    indty, indices = _normalize_indices(context, builder, indty, inds)
-
-    if dtype != valty:
-        raise TypeError("expect %s but got %s" % (dtype, valty))
-
-    if aryty.ndim != len(indty):
-        raise TypeError("indexing %d-D array with %d-D index" %
-                        (aryty.ndim, len(indty)))
-
-    lary = context.make_array(aryty)(context, builder, ary)
-    ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
-
+@_atomic_dispatcher
+def ptx_atomic_min(context, builder, dtype, ptr, val):
     lmod = builder.module
     if dtype == types.float64:
         return builder.call(nvvmutils.declare_atomic_min_float64(lmod), (ptr, val))
@@ -380,7 +333,7 @@ def ptx_atomic_min(context, builder, sig, args):
 
 
 @lower(stubs.atomic.compare_and_swap, types.Array, types.Any, types.Any)
-def ptx_atomic_max_tuple(context, builder, sig, args):
+def ptx_atomic_cas_tuple(context, builder, sig, args):
     aryty, oldty, valty = sig.args
     ary, old, val = args
     dtype = aryty.dtype
@@ -393,7 +346,6 @@ def ptx_atomic_max_tuple(context, builder, sig, args):
         return builder.call(nvvmutils.declare_atomic_cas_int32(lmod), (ptr, old, val))
     else:
         raise TypeError('Unimplemented atomic compare_and_swap with %s array' % dtype)
-
 
 
 # -----------------------------------------------------------------------------
