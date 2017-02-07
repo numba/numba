@@ -572,10 +572,9 @@ def llvm39_to_34_ir(ir):
             # Rewrite "load ty, ty* ptr"
             # to "load ty *ptr"
             m = re_load.search(line)
-            if m is None:
-                raise RuntimeError("failed parsing load: %s" % (line,))
-            pos = m.end()
-            line = line[:pos] + parse_out_leading_type(line[pos:])
+            if m:
+                pos = m.end()
+                line = line[:pos] + parse_out_leading_type(line[pos:])
         if 'call ' in line:
             # Rewrite "call ty (...) @foo"
             # to "call ty (...)* @foo"
