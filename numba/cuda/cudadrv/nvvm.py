@@ -480,12 +480,13 @@ re_metadata_ref = re.compile(r"\!\d+")
 re_metadata_debuginfo = re.compile(r"\!{i32 \d, \!\"Debug Info Version\", i32 \d}".replace(' ', r'\s+'))
 
 re_attributes_def = re.compile(r"^attributes #\d+ = \{ ([\w\s]+)\ }")
-unsupported_attributes = {'argmemonly', 'inaccessiblememonly',
-                          'inaccessiblemem_or_argmemonly', 'norecurse'}
+supported_attributes = {'alwaysinline', 'cold', 'inlinehint', 'minsize',
+                        'noduplicate', 'noinline', 'noreturn', 'nounwind',
+                        'optnone', 'optisze', 'readnone', 'readonly'}
 
 re_getelementptr = re.compile(r"\bgetelementptr\s(?:inbounds )?\(?")
 
-re_load = re.compile(r"\bload\s(?:\bvolatile\s)?")
+re_load = re.compile(r"=\s*\bload\s(?:\bvolatile\s)?")
 
 re_call = re.compile(r"(call\s[^@]+\))(\s@)")
 
@@ -557,7 +558,7 @@ def llvm39_to_34_ir(ir):
             # Remove function attributes unsupported pre-3.8
             m = re_attributes_def.match(line)
             attrs = m.group(1).split()
-            attrs = ' '.join(a for a in attrs if a not in unsupported_attributes)
+            attrs = ' '.join(a for a in attrs if a in supported_attributes)
             line = line.replace(m.group(1), attrs)
         if 'getelementptr ' in line:
             # Rewrite "getelementptr ty, ty* ptr, ..."
