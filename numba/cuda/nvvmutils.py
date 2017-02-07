@@ -26,10 +26,24 @@ def declare_atomic_add_float64(lmod):
     return lmod.get_or_insert_function(fnty, fname)
 
 
+def declare_atomic_max_float32(lmod):
+    fname = '___numba_atomic_float_max'
+    fnty = lc.Type.function(lc.Type.float(),
+        (lc.Type.pointer(lc.Type.float()), lc.Type.float()))
+    return lmod.get_or_insert_function(fnty, fname)
+
+
 def declare_atomic_max_float64(lmod):
     fname = '___numba_atomic_double_max'
     fnty = lc.Type.function(lc.Type.double(),
         (lc.Type.pointer(lc.Type.double()), lc.Type.double()))
+    return lmod.get_or_insert_function(fnty, fname)
+
+
+def declare_atomic_min_float32(lmod):
+    fname = '___numba_atomic_float_min'
+    fnty = lc.Type.function(lc.Type.float(),
+        (lc.Type.pointer(lc.Type.float()), lc.Type.float()))
     return lmod.get_or_insert_function(fnty, fname)
 
 

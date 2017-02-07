@@ -333,9 +333,11 @@ def ptx_atomic_max(context, builder, sig, args):
     lary = context.make_array(aryty)(context, builder, ary)
     ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
 
+    lmod = builder.module
     if dtype == types.float64:
-        lmod = builder.module
         return builder.call(nvvmutils.declare_atomic_max_float64(lmod), (ptr, val))
+    elif dtype == types.float32:
+        return builder.call(nvvmutils.declare_atomic_max_float32(lmod), (ptr, val))
     elif dtype in (types.int32, types.int64):
         return builder.atomic_rmw('max', ptr, val, ordering='monotonic')
     elif dtype in (types.uint32, types.uint64):
@@ -364,9 +366,11 @@ def ptx_atomic_min(context, builder, sig, args):
     lary = context.make_array(aryty)(context, builder, ary)
     ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
 
+    lmod = builder.module
     if dtype == types.float64:
-        lmod = builder.module
         return builder.call(nvvmutils.declare_atomic_min_float64(lmod), (ptr, val))
+    elif dtype == types.float32:
+        return builder.call(nvvmutils.declare_atomic_min_float32(lmod), (ptr, val))
     elif dtype in (types.int32, types.int64):
         return builder.atomic_rmw('min', ptr, val, ordering='monotonic')
     elif dtype in (types.uint32, types.uint64):

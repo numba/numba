@@ -127,9 +127,9 @@ class Cuda_atomic_max(AbstractTemplate):
         assert not kws
         ary, idx, val = args
 
-        # Implementation presently supports float64, int32, int64, uint32,
+        # Implementation presently supports float64, float32, int32, int64, uint32,
         # uint64 only, so fail typing otherwise
-        if ary.dtype not in (types.float64, types.int32, types.uint32,
+        if ary.dtype not in (types.float64, types.float32, types.int32, types.uint32,
                              types.uint32, types.uint64):
             return
 
@@ -147,9 +147,9 @@ class Cuda_atomic_min(AbstractTemplate):
         assert not kws
         ary, idx, val = args
 
-        # Implementation presently supports float64, int32, int64, uint32,
+        # Implementation presently supports float64, float32, int32, int64, uint32,
         # uint64 only, so fail typing otherwise
-        if ary.dtype not in (types.float64, types.int32, types.uint32,
+        if ary.dtype not in (types.float64, types.float32, types.int32, types.uint32,
                              types.uint32, types.uint64):
             return
 
