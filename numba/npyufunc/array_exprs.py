@@ -437,8 +437,7 @@ def make_parallel_loop(lowerer, impl, inner_sig, outer_sig, expr_args):
     #dtypenums, wrapper, env = ufunc.build(cres, sig) 
     _launch_threads()
     _init() 
-    llvm_func = cres.library.get_function(cres.fndesc.llvm_func_name)
-    wrapper = build_ufunc_wrapper(cres.library, cres.target_context, llvm_func, cres.signature)
+    wrapper, wrapper_func = build_ufunc_wrapper(cres.library, cres.target_context, cres.fndesc.llvm_func_name, cres.signature)
     cres.library._ensure_finalized()
 
     #print("parallel function = ", wrapper, cres, sig)
@@ -503,7 +502,7 @@ def make_parallel_loop(lowerer, impl, inner_sig, outer_sig, expr_args):
     #result = context.call_function_pointer(builder, wrapper, [args, dims, steps, data])
     fnty = lc.Type.function(lc.Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                              intp_ptr_t, byte_ptr_t])
-    fn = builder.module.get_or_insert_function(fnty, name=wrapper.name)
+    fn = builder.module.get_or_insert_function(fnty, name=wrapper_func.name)
     #cgutils.printf(builder, "before calling kernel %p\n", fn)
     result = builder.call(fn, [args, dims, steps, data])
     #print("result = ", result)
