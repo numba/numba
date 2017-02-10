@@ -21,7 +21,7 @@ python -m numba.tests.test_runtests
 if [ "$RUN_COVERAGE" == "yes" ]; then
     export PYTHONPATH=.
     coverage erase
-    coverage run runtests.py -b -m numba.tests
+    coverage run runtests.py -v -b -m numba.tests
 else
-    NUMBA_ENABLE_CUDASIM=1 python -m numba.runtests -b -m numba.tests
+    NUMBA_ENABLE_CUDASIM=1 python -m numba.runtests -v -b -m numba.tests
 fi
