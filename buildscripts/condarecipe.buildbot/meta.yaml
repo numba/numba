@@ -57,3 +57,8 @@ test:
     - python -m numba.tests.test_runtests
     # Run the CUDA test suite
     - python -m numba.runtests -v -m -b numba.cuda.tests
+about:
+  home: http://numba.pydata.org/
+  license: BSD
+  license_file: LICENSE
+  summary: a just-in-time Python function compiler based on LLVM
