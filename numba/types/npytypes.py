@@ -67,6 +67,10 @@ class Record(Type):
         # (https://github.com/numpy/numpy/issues/5715)
         return (self.descr, self.size, self.aligned)
 
+    @property
+    def mangling_args(self):
+        return self.__class__.__name__, (self._code,)
+
     def __len__(self):
         return len(self.fields)
 
@@ -282,6 +286,13 @@ class Array(Buffer):
                 type_name = "unaligned " + type_name
             name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
         super(Array, self).__init__(dtype, ndim, layout, name=name)
+
+    @property
+    def mangling_args(self):
+        args = [self.dtype, self.ndim, self.layout,
+                'mutable' if self.mutable else 'readonly',
+                'aligned' if self.aligned else 'unaligned']
+        return self.__class__.__name__, args
 
     def copy(self, dtype=None, ndim=None, layout=None, readonly=None):
         if dtype is None:

@@ -4,7 +4,7 @@ Test function name mangling.
 The mangling affects the ABI of numba compiled binaries.
 """
 
-from numba import types
+from numba import types, utils
 from numba.funcdesc import default_mangler
 from .support import unittest, TestCase
 
@@ -14,22 +14,28 @@ class TestMangling(TestCase):
         fname = 'foo'
         argtypes = types.int32,
         name = default_mangler(fname, argtypes)
-        self.assertEqual(name, 'foo.int32')
+        self.assertEqual(name, '_Z3fooi')
 
     def test_two_args(self):
         fname = 'foo'
         argtypes = types.int32, types.float32
         name = default_mangler(fname, argtypes)
-        self.assertEqual(name, 'foo.int32.float32')
+        self.assertEqual(name, '_Z3fooif')
 
     def test_unicode_fname(self):
         fname = u'foಠ'
         argtypes = types.int32, types.float32
         name = default_mangler(fname, argtypes)
         self.assertIsInstance(name, str)
-        expect = 'fo\\u{0:04x}.int32.float32'.format(ord(u'ಠ'))
+        # manually encode it
+        unichar = fname[2]
+        enc = ''.join('${:02x}'.format(utils.asbyteint(c))
+                      for c in unichar.encode('utf8'))
+        text = 'fo' + enc
+        expect = '_Z{}{}if'.format(len(text), text)
         self.assertEqual(name, expect)
-
+        # ensure result chars are in the right charset
+        self.assertRegexpMatches(name, r'^_Z[a-zA-Z0-9_\$]+$')
 
 if __name__ == '__main__':
     unittest.main()

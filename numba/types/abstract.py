@@ -93,6 +93,17 @@ class Type(object):
         """
         return self.name
 
+    @property
+    def mangling_args(self):
+        """
+        Returns `(basename, args)` where `basename` is the name of the type
+        and `args` is a sequence of parameters of the type.
+
+        Subclass should override to specialize the behavior.
+        By default, this returns `(self.name, ())`.
+        """
+        return self.name, ()
+
     def __repr__(self):
         return self.name
 
