@@ -3,7 +3,7 @@ Itanium CXX ABI Mangler
 
 Reference: http://mentorembedded.github.io/cxx-abi/abi.html
 
-The basic of the mangling scheme.
+The basics of the mangling scheme.
 
 We are hijacking the CXX mangling scheme for our use.  We map Python modules
 into CXX namespace.  A `module1.submodule2.foo` is mapped to
@@ -13,10 +13,10 @@ templated types; for example, `array(int64, 1d, C)` becomes an
 
 All mangled names are prefixed with "_Z".  It is followed by the name of the
 entity.  A name contains one or more identifiers.  Each identifier is encoded
-in as "<num of char><name>".   If the name is namespaced and, therefore,
-multiple identifiers, the entire name is encoded as "N<name>E".
+as "<num of char><name>".   If the name is namespaced and, therefore,
+has multiple identifiers, the entire name is encoded as "N<name>E".
 
-For functions, arguments types follow.  There are condensed encoding for basic
+For functions, arguments types follow.  There are condensed encodings for basic
 built-in types; e.g. "i" for int, "f" for float.  For other types, the
 previously mentioned name encoding should be used.
 
@@ -32,7 +32,6 @@ from __future__ import print_function, absolute_import
 
 import re
 
-from numba import types
 from numba import types, utils
 
 
