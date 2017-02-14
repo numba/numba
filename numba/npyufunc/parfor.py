@@ -126,7 +126,7 @@ class RewriteParfor(rewrites.Rewrite):
         block, returning a Parfor block.
         '''
         array_exprs = self.array_exprs
-        result = Block(self.crnt_block.scope, self.crnt_block.loc)
+        result = ir.Block(self.crnt_block.scope, self.crnt_block.loc)
         block = self.crnt_block
         scope = block.scope
         for instr in block.body:
