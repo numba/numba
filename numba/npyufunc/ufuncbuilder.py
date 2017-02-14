@@ -264,7 +264,11 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         self.identity = parse_identity(identity)
         self.nb_func = jit(target='npyufunc', cache=cache)(py_func)
         self.signature = signature
-        self.sin, self.sout = parse_signature(signature)
+        # allow internal use to pass in data structure that represents signature
+        if isinstance(signature, tuple):
+          self.sin, self.sout = signature
+        else:
+          self.sin, self.sout = parse_signature(signature)
         self.targetoptions = targetoptions
         self.cache = cache
         self._sigs = []
