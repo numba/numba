@@ -37,19 +37,19 @@ class LoopNest(object):
         self.range_variable = range_variable
 
 class Parfor(ir.Expr):
-    '''The Parfor class holds necessary information for a parallelizable 
-    looping computation over a given set of LoopNests. 
+    '''The Parfor class holds necessary information for a parallelizable
+    looping computation over a given set of LoopNests.
     '''
     def __init__(self, expr, loop_body = [], input_info = [], output_info = [], loop_nests = [], pre_parfor = [], post_parfor = [], reductions = [], namespace = []):
         super(Parfor, self).__init__(
-            op   = "parfor", 
+            op   = "parfor",
             loc  = expr.loc,
             expr = expr,
             ty   = expr.ty
         )
 
         self.input_info  = input_info
-        self.output_info = output_info 
+        self.output_info = output_info
         self.loop_body   = loop_body
         self.pre_parfor  = pre_parfor
         self.post_parfor = post_parfor
@@ -126,8 +126,7 @@ class RewriteParfor(rewrites.Rewrite):
         block, returning a Parfor block.
         '''
         array_exprs = self.array_exprs
-        result = self.crnt_block.copy()
-        result.clear()
+        result = Block(self.crnt_block.scope, self.crnt_block.loc)
         block = self.crnt_block
         scope = block.scope
         for instr in block.body:
@@ -135,15 +134,15 @@ class RewriteParfor(rewrites.Rewrite):
                 if instr.target.name in array_exprs:
                     expr = instr.value
                     #print("Parfor apply: ", expr.expr)
-                    #expr.op = 'parfor'    
+                    #expr.op = 'parfor'
                     #ast_body, namespace = _arr_expr_to_ast(expr.expr)
                     #print("namespace = ", namespace)
                     #expr.expr = Parfor(namespace, ast_body, {})
                     #expr.expr = Parfor("parfor", expr.loc, {}, expr.expr, {})
                     instr.value = _arr_expr_to_parfor(instr.target.name, expr, self.typemap)
-                    
+
             result.append(instr)
-            
+
         return result
 
 def _arr_expr_to_ast(expr, typemap, subscripts):
@@ -186,19 +185,19 @@ def _arr_expr_to_ast(expr, typemap, subscripts):
                         col_offset=expr.loc.col if expr.loc.col else 0)
         typ = typemap[name]
         if isinstance(typ, types.Array):
-            var = ast.Subscript(        
+            var = ast.Subscript(
                 value = var,
-                slice = ast.Index(value = _mk_tuple([ast.Name(v, ast.Load()) for v in subscripts])), 
+                slice = ast.Index(value = _mk_tuple([ast.Name(v, ast.Load()) for v in subscripts])),
                 ctx = ast.Load())
         return var, {}
-        
+
     elif isinstance(expr, ir.Const):
         return ast.Num(expr.value), {}
     raise NotImplementedError(
         "Don't know how to translate array expression '%r'" % (expr,))
 
 def _arr_expr_to_parfor(out_var, expr, typemap):
-    expr_var_list = expr.list_vars() 
+    expr_var_list = expr.list_vars()
     #print("out_var", out_var)
     #print("expr_var_list", expr_var_list)
     expr_var_unique = sorted(set(expr_var_list), key=lambda var: var.name)
@@ -221,7 +220,7 @@ def _arr_expr_to_parfor(out_var, expr, typemap):
                 if ndim != typ.ndim:
                     raise NotImplementedError(
                         "Don't know how to make loop nests of unmatching dimension, expect {0} but got {1}.".format(ndim, typ.ndim))
-    if ndim == 0: 
+    if ndim == 0:
         raise NotImplementedError("Don't know to make loop nests when no arrays are found")
     #print("ndim = ", ndim)
     # Make variables that calculate the size of each dimension
@@ -232,21 +231,21 @@ def _arr_expr_to_parfor(out_var, expr, typemap):
     pre = [ ast.Assign(
               targets = [ast.Tuple(elts = [ast.Name(v, ast.Store()) for v in size_vars], ctx = ast.Store())],
               value = ast.Attribute(
-                  value = ast.Name(out_var, ast.Load()), 
-                  attr = 'shape', 
+                  value = ast.Name(out_var, ast.Load()),
+                  attr = 'shape',
                   ctx = ast.Load())) ]
     #print("pre = ", ast.dump(pre[0]))
     # body is assigning expr to out_var, but replacing all array with explicit subscripts
     body_ast, namespace = _arr_expr_to_ast(expr.expr, typemap, idx_vars)
     body = [ ast.Assign(
               targets = [ ast.Subscript(
-                value = ast.Name(out_var, ast.Load()), 
+                value = ast.Name(out_var, ast.Load()),
                 slice = ast.Index(value = _mk_tuple([ast.Name(v, ast.Load()) for v in idx_vars])),
                 ctx = ast.Store()) ],
               value = body_ast) ]
     #print("body = ", ast.dump(body[0]))
     loop_nests = [ LoopNest(i, r) for (i, r) in zip(idx_vars, size_vars) ]
-    parfor = Parfor(expr, loop_body = body, input_info = input_info, output_info = output_info, 
+    parfor = Parfor(expr, loop_body = body, input_info = input_info, output_info = output_info,
                   loop_nests = loop_nests, pre_parfor = pre, namespace = namespace)
     #print("parfor = ", ast.dump(ast.Module(body = parfor.to_ast())))
     return parfor
@@ -308,7 +307,7 @@ def _lower_parfor(lowerer, expr):
     # get the legalized name dictionary
     namedict = legalize.namedict
     #print("namedict = ", namedict)
-    # argument contain inputs and outputs, since we are lowering parfor to gufunc 
+    # argument contain inputs and outputs, since we are lowering parfor to gufunc
     expr_var_list = list(expr.input_info) + list(expr.output_info)
     # Arguments are the names external to the new closure
     expr_args = [ var[0] for var in expr_var_list ]
@@ -363,7 +362,7 @@ def _lower_parfor(lowerer, expr):
             gu_sin.append(dim_syms)
     gu_signature = (gu_sin, gu_sout)
     #print("gu_signature = ", gu_signature)
-    
+
     # 4. Now compile a gufunc using the Python function as kernel.
     context = lowerer.context
     builder = lowerer.builder
@@ -448,9 +447,9 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
     #print("_sigs = ", ufunc._sigs)
     sig = ufunc._sigs[0]
     cres = ufunc._cres[sig]
-    #dtypenums, wrapper, env = ufunc.build(cres, sig) 
+    #dtypenums, wrapper, env = ufunc.build(cres, sig)
     #_launch_threads()
-    #_init() 
+    #_init()
     llvm_func = cres.library.get_function(cres.fndesc.llvm_func_name)
     wrapper_ptr, env, wrapper_name = build_gufunc_wrapper(llvm_func, cres, sin, sout, {})
     cres.library._ensure_finalized()
@@ -474,8 +473,8 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
         dst = builder.gep(args, [lc.Constant.int(lc.Type.int(), i)])
         #cgutils.printf(builder, "arg[" + str(i) + "] = %p\n", arguments[i])
         builder.store(builder.bitcast(arguments[i], byte_ptr_t), dst)
-    
-    # prepare dims, which is only a single number, since N-D arrays is treated as 1D array by ufunc 
+
+    # prepare dims, which is only a single number, since N-D arrays is treated as 1D array by ufunc
     ndims = len(output.shape)
     # dims = cgutils.alloca_once(builder, intp_t, size = 1, name = "pshape")
     dims = builder.alloca(intp_t)
@@ -505,10 +504,10 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
     # cgutils.printf(builder, "stepsize = %d\n", stepsize)
     # dst = builder.gep(steps, [lc.Constant.int(lc.Type.int(), num_args)])
     # builder.store(stepsize, dst)
-     
-    # prepare data 
+
+    # prepare data
     data = builder.inttoptr(lc.Constant.int(lc.Type.int(), 0), byte_ptr_t)
- 
+
     #result = context.call_function_pointer(builder, wrapper, [args, dims, steps, data])
     fnty = lc.Type.function(lc.Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                              intp_ptr_t, byte_ptr_t])
