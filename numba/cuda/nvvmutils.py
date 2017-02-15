@@ -5,6 +5,13 @@ from .cudadrv import nvvm
 from numba import cgutils
 
 
+def declare_atomic_cas_int32(lmod):
+    fname = '___numba_cas_hack'
+    fnty = lc.Type.function(lc.Type.int(32),
+           (lc.Type.pointer(lc.Type.int(32)), lc.Type.int(32), lc.Type.int(32)))
+    return lmod.get_or_insert_function(fnty, fname)
+
+
 def declare_atomic_add_float32(lmod):
     fname = 'llvm.nvvm.atomic.load.add.f32.p0f32'
     fnty = lc.Type.function(lc.Type.float(),
@@ -19,8 +26,29 @@ def declare_atomic_add_float64(lmod):
     return lmod.get_or_insert_function(fnty, fname)
 
 
+def declare_atomic_max_float32(lmod):
+    fname = '___numba_atomic_float_max'
+    fnty = lc.Type.function(lc.Type.float(),
+        (lc.Type.pointer(lc.Type.float()), lc.Type.float()))
+    return lmod.get_or_insert_function(fnty, fname)
+
+
 def declare_atomic_max_float64(lmod):
     fname = '___numba_atomic_double_max'
+    fnty = lc.Type.function(lc.Type.double(),
+        (lc.Type.pointer(lc.Type.double()), lc.Type.double()))
+    return lmod.get_or_insert_function(fnty, fname)
+
+
+def declare_atomic_min_float32(lmod):
+    fname = '___numba_atomic_float_min'
+    fnty = lc.Type.function(lc.Type.float(),
+        (lc.Type.pointer(lc.Type.float()), lc.Type.float()))
+    return lmod.get_or_insert_function(fnty, fname)
+
+
+def declare_atomic_min_float64(lmod):
+    fname = '___numba_atomic_double_min'
     fnty = lc.Type.function(lc.Type.double(),
         (lc.Type.pointer(lc.Type.double()), lc.Type.double()))
     return lmod.get_or_insert_function(fnty, fname)

@@ -384,34 +384,65 @@ done:
 }
 """
 
-ir_numba_atomic_double_max = """
-define internal double @___numba_atomic_double_max(double* %ptr, double %val) alwaysinline {
+ir_numba_atomic_max = """
+define internal {T} @___numba_atomic_{T}_max({T}* %ptr, {T} %val) alwaysinline {{
 entry:
-    %ptrval = load volatile double, double* %ptr
+    %ptrval = load volatile {T}, {T}* %ptr
     ; Check if val is a NaN and return *ptr early if so
-    %valnan = fcmp uno double %val, %val
+    %valnan = fcmp uno {T} %val, %val
     br i1 %valnan, label %done, label %lt_check
 
 lt_check:
-    %dold = phi double [ %ptrval, %entry ], [ %dcas, %attempt ]
+    %dold = phi {T} [ %ptrval, %entry ], [ %dcas, %attempt ]
     ; Continue attempts if dold < val or dold is NaN (using ult semantics)
-    %lt = fcmp ult double %dold, %val
+    %lt = fcmp ult {T} %dold, %val
     br i1 %lt, label %attempt, label %done
 
 attempt:
     ; Attempt to swap in the larger value
-    %iold = bitcast double %dold to i64
-    %iptr = bitcast double* %ptr to i64*
-    %ival = bitcast double %val to i64
-    %cas = cmpxchg volatile i64* %iptr, i64 %iold, i64 %ival monotonic
-    %dcas = bitcast i64 %cas to double
+    %iold = bitcast {T} %dold to {Ti}
+    %iptr = bitcast {T}* %ptr to {Ti}*
+    %ival = bitcast {T} %val to {Ti}
+    %cas = cmpxchg volatile {Ti}* %iptr, {Ti} %iold, {Ti} %ival monotonic
+    %dcas = bitcast {Ti} %cas to {T}
     br label %lt_check
 
 done:
     ; Return max
-    %ret = phi double [ %ptrval, %entry ], [ %dold, %lt_check ]
-    ret double %ret
-}
+    %ret = phi {T} [ %ptrval, %entry ], [ %dold, %lt_check ]
+    ret {T} %ret
+}}
+"""
+
+
+ir_numba_atomic_min = """
+define internal {T} @___numba_atomic_{T}_min({T}* %ptr, {T} %val) alwaysinline{{
+entry:
+    %ptrval = load volatile {T}, {T}* %ptr
+    ; Check if val is a NaN and return *ptr early if so
+    %valnan = fcmp uno {T} %val, %val
+    br i1 %valnan, label %done, label %gt_check
+
+gt_check:
+    %dold = phi {T} [ %ptrval, %entry ], [ %dcas, %attempt ]
+    ; Continue attempts if dold > val or dold is NaN (using ugt semantics)
+    %lt = fcmp ugt {T} %dold, %val
+    br i1 %lt, label %attempt, label %done
+
+attempt:
+    ; Attempt to swap in the smaller value
+    %iold = bitcast {T} %dold to {Ti}
+    %iptr = bitcast {T}* %ptr to {Ti}*
+    %ival = bitcast {T} %val to {Ti}
+    %cas = cmpxchg volatile {Ti}* %iptr, {Ti} %iold, {Ti} %ival monotonic
+    %dcas = bitcast {Ti} %cas to {T}
+    br label %gt_check
+
+done:
+    ; Return min
+    %ret = phi {T} [ %ptrval, %entry ], [ %dold, %gt_check ]
+    ret {T} %ret
+}}
 """
 
 
@@ -440,8 +471,15 @@ def llvm_to_ptx(llvmir, **opts):
          ir_numba_cas_hack),
         ('declare double @___numba_atomic_double_add(double*, double)',
          ir_numba_atomic_double_add),
+        ('declare float @___numba_atomic_float_max(float*, float)',
+         ir_numba_atomic_max.format(T='float', Ti='i32')),
         ('declare double @___numba_atomic_double_max(double*, double)',
-         ir_numba_atomic_double_max)]
+         ir_numba_atomic_max.format(T='double', Ti='i64')),
+        ('declare float @___numba_atomic_float_min(float*, float)',
+         ir_numba_atomic_min.format(T='float', Ti='i32')),
+        ('declare double @___numba_atomic_double_min(double*, double)',
+         ir_numba_atomic_min.format(T='double', Ti='i64')),
+    ]
 
     for decl, fn in replacements:
         llvmir = llvmir.replace(decl, fn)
