@@ -57,7 +57,7 @@ def atomic_add_float(ary):
     sm = cuda.shared.array(32, float32)
     sm[tid] = 0
     cuda.syncthreads()
-    bin = ary[tid] % 32
+    bin = int(ary[tid] % 32)
     cuda.atomic.add(sm, bin, 1.0)
     cuda.syncthreads()
     ary[tid] = sm[tid]
@@ -210,7 +210,7 @@ class TestCudaAtomics(unittest.TestCase):
 
     def test_atomic_add_float(self):
         ary = np.random.randint(0, 32, size=32).astype(np.float32)
-        orig = ary.copy()
+        orig = ary.copy().astype(np.intp)
         cuda_atomic_add_float = cuda.jit('void(float32[:])')(atomic_add_float)
         cuda_atomic_add_float[1, 32](ary)
 
