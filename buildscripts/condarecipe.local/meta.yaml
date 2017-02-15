@@ -49,3 +49,9 @@ test:
     - python -m numba.tests.test_runtests
     # Run the whole test suite
     - python -m numba.runtests -m -b
+
+about:
+  home: http://numba.pydata.org/
+  license: BSD
+  license_file: LICENSE
+  summary: a just-in-time Python function compiler based on LLVM
