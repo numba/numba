@@ -48,6 +48,6 @@ test:
     - python -m numba.tests.test_runtests
 about:
   home: http://numba.pydata.org/
-  license: BSD (+ MIT third party libraries)
+  license: BSD
   license_file: LICENSE
   summary: a just-in-time Python function compiler based on LLVM
