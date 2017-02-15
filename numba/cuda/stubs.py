@@ -298,6 +298,9 @@ class atomic(Stub):
 
         Perform atomic ary[idx] += val. Supported on int32, float32, and
         float64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
         """
 
     class max(Stub):
@@ -309,6 +312,9 @@ class atomic(Stub):
         a when either a or b is a NaN.
 
         Supported on int32, int64, uint32, uint64, float32, float64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
         """
 
     class min(Stub):
@@ -328,5 +334,5 @@ class atomic(Stub):
         Conditionally assign ``val`` to the first element of an 1D array ``ary``
         if the current value matches ``old``.
 
-        Returns the current value
+        Returns the current value as if it is loaded atomically.
         """

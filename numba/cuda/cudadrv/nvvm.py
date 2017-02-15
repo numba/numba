@@ -425,7 +425,7 @@ entry:
 
 gt_check:
     %dold = phi {T} [ %ptrval, %entry ], [ %dcas, %attempt ]
-    ; Continue attempts if dold < val or dold is NaN (using ult semantics)
+    ; Continue attempts if dold > val or dold is NaN (using ugt semantics)
     %lt = fcmp ugt {T} %dold, %val
     br i1 %lt, label %attempt, label %done
 
@@ -439,7 +439,7 @@ attempt:
     br label %gt_check
 
 done:
-    ; Return max
+    ; Return min
     %ret = phi {T} [ %ptrval, %entry ], [ %dold, %gt_check ]
     ret {T} %ret
 }}
