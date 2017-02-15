@@ -247,7 +247,7 @@ class TestUFuncs(BaseUFuncTest, TestCase):
     def binary_ufunc_test(self, ufunc, flags=no_pyobj_flags,
                          skip_inputs=[], additional_inputs=[],
                          int_output_type=None, float_output_type=None,
-                         kinds='ifc'):
+                         kinds='ifc', positive_only=False):
 
         ufunc = _make_binary_ufunc_usecase(ufunc)
 
@@ -259,6 +259,8 @@ class TestUFuncs(BaseUFuncTest, TestCase):
             input_type = input_tuple[1]
 
             if input_type in skip_inputs:
+                continue
+            if positive_only and np.any(input_operand < 0):
                 continue
 
             # Some ufuncs don't allow all kinds of arguments, and implicit
@@ -348,7 +350,7 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
     @tag('important')
     def test_power_ufunc(self, flags=no_pyobj_flags):
-        self.binary_ufunc_test(np.power, flags=flags)
+        self.binary_ufunc_test(np.power, flags=flags, positive_only=True)
 
     @tag('important')
     def test_remainder_ufunc(self, flags=no_pyobj_flags):
@@ -1184,7 +1186,7 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
 
     @tag('important')
     def test_power_array_op(self):
-        self.binary_op_test('**')
+        self.binary_op_test('**', positive_rhs=True)
 
     @tag('important')
     def test_left_shift_array_op(self):
