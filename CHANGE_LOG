@@ -1,10 +1,15 @@
 Version 0.31.0
 --------------
 
-In this release, preliminary support for debugging with GDB version >= 7.0 is
-added by adding the `debug=True` option to `@jit`.  The CUDA backend also gained
-limited debugging support so that source locations are showed in memory-checking
-and profiling tools.  For details, see :ref:`troubleshooting`.
+In this release, we added preliminary support for debugging with GDB
+version >= 7.0. The feature is enabled by setting the ``debug=True`` compiler
+option, which causes GDB compatible debug info to be generated.
+The CUDA backend also gained limited debugging support so that source locations
+are showed in memory-checking and profiling tools.
+For details, see :ref:`troubleshooting`.
+
+Also, we added the ``fastmath=True`` compiler option to enable unsafe
+floating-point transformations, which allows LLVM to auto-vectorize more code.
 
 Other important changes include upgrading to LLVM 3.9.1 and adding support for
 Numpy 1.12.
