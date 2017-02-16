@@ -36,18 +36,27 @@ class ArrayAnalysis(object):
         for (key, block) in self.func_ir.blocks.items():
             self._analyze_block(block)
         print(self.array_shape_classes)
-        print("numpy globals ", self.numpy_globals)
-        print("numpy calls ", self.numpy_calls)
-        print("array attr calls ", self.array_attr_calls)
+        #print("numpy globals ", self.numpy_globals)
+        #print("numpy calls ", self.numpy_calls)
+        #print("array attr calls ", self.array_attr_calls)
         #print("RUN ARRAY ANALYSIS")
 
     def _analyze_block(self, block):
+        out_body = []
         for inst in block.body:
-            self._analyze_inst(inst)
+            # instructions can generate extra size calls to be appended
+            # if an array doesn't have a size variable, it should be generated
+            # when it is created
+            generated_size_calls = self._analyze_inst(inst)
+            out_body.append(inst)
+            for node in generated_size_calls:
+                out_body.append(node)
+        block.body = out_body
 
     def _analyze_inst(self, inst):
         if isinstance(inst, ir.Assign):
-            self._analyze_assign(inst)
+            return self._analyze_assign(inst)
+        return []
 
     def _analyze_assign(self, assign):
 
@@ -66,10 +75,26 @@ class ArrayAnalysis(object):
                 self.array_attr_calls[lhs] = (rhs.attr, rhs.value.name)
 
         #rhs_class_out = self._analyze_rhs_classes(rhs)
+        size_calls = []
         if self._isarray(lhs):
-            self.array_shape_classes[lhs] = self._analyze_rhs_classes(rhs).copy()
-        #print(self.array_shape_classes)
+            rhs_corr = self._analyze_rhs_classes(rhs).copy()
+            self.array_shape_classes[lhs] = rhs_corr
+            for corr in rhs_corr:
+                if corr not in self.class_sizes.keys():
+                    nodes = self._gen_size_call(assign.target, corr)
+                    size_calls += nodes
 
+        #print(self.array_shape_classes)
+        return size_calls
+
+    def _gen_size_var(self, var, corr):
+        out = []
+        shape_attr_call = ir.Expr.getattr(var.name, "shape", var.loc)
+        attr_var = ir.Var(var.scope, var.name+"_sh_attr", var.loc)
+        attr_assign = ir.Assign(shape_attr_call, attr_var, var.loc)
+        #out.append(attr_assign)
+        #const_assign =
+        return out
     # lhs is array so rhs has to return array
     def _analyze_rhs_classes(self, node):
         if isinstance(node, ir.Arg):
