@@ -61,6 +61,21 @@ class Parfor(ir.Expr):
         self.name        = "Parfor"
         self.namespace   = namespace
 
+    def __str__(self):
+        if self.reductions == []:
+            red_str = ""
+        else:
+            red_str = "\n\t\t\tReductions: " + str(self.reductions)
+        pre_body = "Parfor:\n\t\t\tInputInfo: " + str(self.input_info) + "\n\t\t\tOutputInfo: " + str(self.output_info) + "\n\t\t\tPrestatements: " + str(self.pre_parfor) + "\n\t\t\tLoopNests: " + str(self.loop_nests) + "\n\t\t\tBody:\n"
+        body = ""
+        for stmt in self.loop_body:
+            body += "\t\t\t\t" + ast.dump(stmt)
+        post_body = red_str + "\n\t\t\tPoststatements: " + str(self.post_parfor) + "\n\t\t\tNamespace: " + str(self.namespace)
+        return pre_body + body + post_body
+
+    def __repr__(self):
+        return self.__str__()
+
     '''Convert Parfor to nested for loops in Python ast. The result
     can be treated as the body of a python function and compile
     separately.
