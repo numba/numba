@@ -1,3 +1,43 @@
+Version 0.31.0
+--------------
+
+In this release, preliminary support for debugging with GDB version >= 7.0 is
+added by adding the `debug=True` option to `@jit`.  The CUDA backend also gained
+limited debugging support so that source locations are showed in memory-checking
+and profiling tools.  For details, see :ref:`troubleshooting`.
+
+Other important changes include upgrading to LLVM 3.9.1 and adding support for
+Numpy 1.12.
+
+Improvements:
+
+* PR #2281: Update for numpy1.12
+* PR #2278: Add CUDA atomic.{max, min, compare_and_swap}
+* PR #2277: Add about section to conda recipies to identify license and other
+  metadata in Anaconda Cloud
+* PR #2271: Adopt itanium C++-style mangling for CPU and CUDA targets
+* PR #2267: Add fastmath flags
+* PR #2261: Support dtype.type
+* PR #2249: Changes for llvm3.9
+* PR #2234: Bump llvmlite requirement to 0.16 and add install_name_tool_fixer to
+  mviewbuf for OS X
+* PR #2230: Add python3.6 to TravisCi
+* PR #2227: Enable caching for gufunc wrapper
+* PR #2170: Add debugging support
+* PR #2037: inspect_cfg() for easier visualization of the function operation
+
+Fixes:
+
+* PR #2274: Fix nvvm ir patch in mishandling "load"
+* PR #2272: Fix breakage to cuda7.5
+* PR #2269: Fix caching of copy_strides kernel in cuda.reduce
+* PR #2265: Fix #2263: error when linking two modules with dynamic globals
+* PR #2252: Fix path separator in test
+* PR #2246: Fix overuse of memory in some system with fork
+* PR #2241: Fix #2240: __module__ in dynamically created function not a str
+* PR #2239: Fix fingerprint computation failure preventing fallback
+
+
 Version 0.30.1
 --------------
 
@@ -16,7 +56,7 @@ Improvements:
 
 
 Version 0.30.0
----------------
+--------------
 
 This release adds preliminary support for Python 3.6, but no official build is
 available yet.  A new system reporting tool (``numba --sysinfo``) is added to
