@@ -105,11 +105,7 @@ caslock = threading.Lock()
 class FakeCUDAAtomic(object):
     def add(self, array, index, val):
         with addlock:
-            try:
-                array[index] += val
-            except:
-                print(index)
-                raise
+            array[index] += val
 
     def max(self, array, index, val):
         with maxlock:
