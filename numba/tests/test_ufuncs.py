@@ -11,7 +11,7 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba import types, typing, utils, typeof, numpy_support, njit
 from numba.compiler import compile_isolated, Flags, DEFAULT_FLAGS
-from numba.numpy_support import from_dtype
+from numba.numpy_support import from_dtype, version as numpy_version
 from numba import jit, vectorize
 from numba.config import PYVERSION
 from numba.errors import LoweringError, TypingError
@@ -21,6 +21,7 @@ from numba.typing.npydecl import supported_ufuncs, all_ufuncs
 
 is32bits = tuple.__itemsize__ == 4
 iswindows = sys.platform.startswith('win32')
+after_numpy_112 = numpy_version >= (1, 12)
 
 # NOTE: to test the implementation of Numpy ufuncs, we disable rewriting
 # of array expressions.
@@ -247,7 +248,7 @@ class TestUFuncs(BaseUFuncTest, TestCase):
     def binary_ufunc_test(self, ufunc, flags=no_pyobj_flags,
                          skip_inputs=[], additional_inputs=[],
                          int_output_type=None, float_output_type=None,
-                         kinds='ifc'):
+                         kinds='ifc', positive_only=False):
 
         ufunc = _make_binary_ufunc_usecase(ufunc)
 
@@ -259,6 +260,8 @@ class TestUFuncs(BaseUFuncTest, TestCase):
             input_type = input_tuple[1]
 
             if input_type in skip_inputs:
+                continue
+            if positive_only and np.any(input_operand < 0):
                 continue
 
             # Some ufuncs don't allow all kinds of arguments, and implicit
@@ -348,7 +351,8 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
     @tag('important')
     def test_power_ufunc(self, flags=no_pyobj_flags):
-        self.binary_ufunc_test(np.power, flags=flags)
+        self.binary_ufunc_test(np.power, flags=flags,
+                               positive_only=after_numpy_112)
 
     @tag('important')
     def test_remainder_ufunc(self, flags=no_pyobj_flags):
@@ -1184,7 +1188,7 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
 
     @tag('important')
     def test_power_array_op(self):
-        self.binary_op_test('**')
+        self.binary_op_test('**', positive_rhs=after_numpy_112)
 
     @tag('important')
     def test_left_shift_array_op(self):
