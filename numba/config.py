@@ -139,6 +139,9 @@ class _EnvReloader(object):
         DUMP_IR = _readenv("NUMBA_DUMP_IR", int,
                            DEBUG_FRONTEND or DEBUG_TYPEINFER)
 
+        # print debug info of analysis and optimization on array operations
+        DEBUG_ARRAY_OPT = _readenv("NUMBA_DEBUG_ARRAY_OPT", int, 0)
+
         # Force dump of LLVM IR
         DUMP_LLVM = _readenv("NUMBA_DUMP_LLVM", int, DEBUG)
 

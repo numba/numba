@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 from numba import ir
 #from numba.annotations import type_annotations
-from numba import types
+from numba import types, config
 from numba.typing import npydecl
 
 class ArrayAnalysis(object):
@@ -35,11 +35,12 @@ class ArrayAnalysis(object):
         # TODO: ignoring CFG for now
         for (key, block) in self.func_ir.blocks.items():
             self._analyze_block(block)
-        print(self.array_shape_classes)
-        #print("numpy globals ", self.numpy_globals)
-        #print("numpy calls ", self.numpy_calls)
-        #print("array attr calls ", self.array_attr_calls)
-        #print("RUN ARRAY ANALYSIS")
+        if config.DEBUG_ARRAY_OPT==1:
+            print("classes: ", self.array_shape_classes)
+            print("class sizes: ", self.class_sizes)
+            print("numpy globals ", self.numpy_globals)
+            print("numpy calls ", self.numpy_calls)
+            print("array attr calls ", self.array_attr_calls)
 
     def _analyze_block(self, block):
         out_body = []
@@ -87,7 +88,7 @@ class ArrayAnalysis(object):
         #print(self.array_shape_classes)
         return size_calls
 
-    def _gen_size_var(self, var, corr):
+    def _gen_size_call(self, var, corr):
         out = []
         shape_attr_call = ir.Expr.getattr(var.name, "shape", var.loc)
         attr_var = ir.Var(var.scope, var.name+"_sh_attr", var.loc)
@@ -137,7 +138,7 @@ class ArrayAnalysis(object):
         return []
 
     def _analyze_np_call(self, call_name, args):
-        print("numpy call ",call_name,args)
+        #print("numpy call ",call_name,args)
         if call_name=='transpose':
             out_eqs = self.array_shape_classes[args[0].name].copy()
             out_eqs.reverse()
