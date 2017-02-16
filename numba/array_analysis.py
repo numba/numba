@@ -23,6 +23,8 @@ class ArrayAnalysis(object):
         # and added broadcast dimensions
         # -1 class means unknown
         self.class_sizes = {0:[1]}
+        # size variable to use for each array dimension
+        self.array_size_vars = {}
         # keep a list of numpy Global variables to find numpy calls
         self.numpy_globals = []
         # keep numpy call variables with their call names
@@ -80,21 +82,50 @@ class ArrayAnalysis(object):
         if self._isarray(lhs):
             rhs_corr = self._analyze_rhs_classes(rhs).copy()
             self.array_shape_classes[lhs] = rhs_corr
-            for corr in rhs_corr:
-                if corr not in self.class_sizes.keys():
-                    nodes = self._gen_size_call(assign.target, corr)
+            self.array_size_vars[lhs] = [-1]*self._get_ndims(lhs)
+            # make sure output lhs array has size variables for each dimension
+            for (i,corr) in enumerate(rhs_corr):
+                # if corr unknown or new
+                if corr==-1 or corr not in self.class_sizes.keys():
+                    # generate size call nodes for this dimension
+                    nodes = self._gen_size_call(assign.target, i)
                     size_calls += nodes
+                    assert isinstance(nodes[-1], ir.Assign)
+                    size_var = nodes[-1].target
+                    if corr!=-1:
+                        self.class_sizes[corr] = [size_var]
+                    self.array_size_vars[lhs][i] = size_var
+                else:
+                    # reuse a size variable from this correlation
+                    # TODO: consider CFG?
+                    self.array_size_vars[lhs][i] = self.class_sizes[corr][0]
 
         #print(self.array_shape_classes)
         return size_calls
 
-    def _gen_size_call(self, var, corr):
+    def _gen_size_call(self, var, i):
         out = []
-        shape_attr_call = ir.Expr.getattr(var.name, "shape", var.loc)
-        attr_var = ir.Var(var.scope, var.name+"_sh_attr", var.loc)
+        ndims = self._get_ndims(var.name)
+        int_typ = types.scalars.Integer.from_bitwidth(64)
+        # attr call: A_sh_attr = getattr(A, shape)
+        shape_attr_call = ir.Expr.getattr(var, "shape", var.loc)
+        attr_var = ir.Var(var.scope, var.name+"_sh_attr"+str(i), var.loc)
+        self.type_annotation.typemap[attr_var.name] = types.containers.UniTuple(int_typ, ndims)
         attr_assign = ir.Assign(shape_attr_call, attr_var, var.loc)
-        #out.append(attr_assign)
-        #const_assign =
+        out.append(attr_assign)
+        # const var for dim: $constA0 = Const(0)
+        const_node = ir.Const(i, var.loc)
+        const_var = ir.Var(var.scope, "$const"+var.name+str(i), var.loc)
+        self.type_annotation.typemap[const_var.name] = int_typ
+        const_assign = ir.Assign(const_node, const_var, var.loc)
+        out.append(const_assign)
+        # get size: Asize0 = A_sh_attr[0]
+        size_var = ir.Var(var.scope, var.name+"size"+str(i), var.loc)
+        self.type_annotation.typemap[size_var.name] = int_typ
+        getitem_node = ir.Expr.static_getitem(attr_var, i, const_var, var.loc)
+        self.type_annotation.calltypes[getitem_node] = None
+        getitem_assign = ir.Assign(getitem_node, size_var, var.loc)
+        out.append(getitem_assign)
         return out
     # lhs is array so rhs has to return array
     def _analyze_rhs_classes(self, node):
@@ -192,7 +223,8 @@ class ArrayAnalysis(object):
             for i in range(0,len(l)):
                 if l[i]==c1 or l[i]==c2:
                     l[i] = new_class
-        # TODO: merge symbols
+        # merge lists of size vars and remove previous classes
+        self.class_sizes[new_class] = self.class_sizes.pop(c1)+self.class_sizes.pop(c2)
         return new_class
 
     def _broadcast_and_match_shapes(self, arg1, arg2):
