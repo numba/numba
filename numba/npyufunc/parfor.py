@@ -32,15 +32,18 @@ class LoopNest(object):
     the index variable (of a non-negative integer value), and the
     range variable, e.g. range(r) is 0 to r-1 with step size 1.
     '''
-    def __init__(self, index_variable, range_variable):
+    def __init__(self, index_variable, range_variable, correlation=-1):
         self.index_variable = index_variable
         self.range_variable = range_variable
+        self.correlation = correlation
 
 class Parfor(ir.Expr):
     '''The Parfor class holds necessary information for a parallelizable
     looping computation over a given set of LoopNests.
     '''
-    def __init__(self, expr, loop_body = [], input_info = [], output_info = [], loop_nests = [], pre_parfor = [], post_parfor = [], reductions = [], namespace = []):
+    def __init__(self, expr, loop_body = [], input_info = [], output_info = [],
+                 loop_nests = [], pre_parfor = [], post_parfor = [],
+                 reductions = [], namespace = []):
         super(Parfor, self).__init__(
             op   = "parfor",
             loc  = expr.loc,
@@ -135,13 +138,22 @@ class RewriteParforExtra(rewrites.Rewrite):
         """check if we support parfor translation for
         this Numpy call.
         """
+        return False # turn off for now
         if not (isinstance(expr, ir.Expr) and expr.op == 'call'):
             return False
-        return False # turn off for now
-        # TODO: add more calls, check arguments?
-        return (expr.func.name in self.array_analysis.numpy_calls.keys() and
-                 self.array_analysis.numpy_calls[expr.func.name]=='dot')
+        if expr.func.name not in self.array_analysis.numpy_calls.keys():
+            return False
+        # TODO: add more calls
+        if self.array_analysis.numpy_calls[expr.func.name]=='dot':
+            #only translate matrix/vector and vector/vector multiply to parfor
+            # (don't translate matrix/matrix multiply)
+            if (self._get_ndims(expr.args[0].name)<=2 and
+                    self._get_ndims(expr.args[1].name)==1):
+                return True
+        return False
 
+    def _get_ndims(self, arr):
+        return len(self.array_analysis.array_shape_classes[arr])
 
     def _numpy_to_parfor(self, lhs, expr):
         assert isinstance(expr, ir.Expr) and expr.op == 'call'
@@ -151,8 +163,21 @@ class RewriteParforExtra(rewrites.Rewrite):
             assert len(args)==2 #TODO: or len(args)==3
             in1 = args[0].name
             in2 = args[1].name
-        # return the call unmodified if we couldn't handle it
-        return expr
+            assert self._get_ndims(in1)<=2 and self._get_ndims(in2)==1
+            # loop range correlation is same as first dimention of 1st input
+            corr = self.array_analysis.array_shape_classes[in1][0]
+            size_var = self.array_analysis.array_size_vars[in1][0]
+            index_var = ir.Var(lhs.scope, _make_unique_var("parfor_index"), lhs.loc)
+            self.type_annotation.typemap[index_var.name] = int_typ
+            loopnests = [ LoopNest(index_var, size_var, corr) ]
+            if self._get_ndims(in1)==2:
+                # for 2D input, there is an inner loop
+                # correlation of inner dimension
+                inner_size_var = self.array_analysis.array_size_vars[in1][1]
+                body = []
+
+        # return error if we couldn't handle it (avoid rewrite infinite loop)
+        raise NotImplementedError("parfor translation failed for ", expr)
 
 
 @rewrites.register_rewrite('after-inference')
