@@ -12,6 +12,7 @@ from ..typing import npydecl, signature
 from ..targets import npyimpl, imputils
 from .dufunc import DUFunc
 from .array_exprs import _is_ufunc, _unaryops, _binops, _cmpops
+from numba import config
 import llvmlite.llvmpy.core as lc
 
 unique_var_count = 0
@@ -36,6 +37,16 @@ class LoopNest(object):
         self.index_variable = index_variable
         self.range_variable = range_variable
         self.correlation = correlation
+
+class ParforReduction(object):
+    '''The ParforReduction class holds information about reductions
+    in a parfor.  The var field is the reduction variable.  The 
+    init_value field is the initial value for the reduction variable.
+    The func field is the function used to reduce two variables.'''
+    def __init__(self, var, init_value, func):
+        self.var = var
+        self.init_value = init_value
+        self.func = func
 
 class Parfor(ir.Expr):
     '''The Parfor class holds necessary information for a parallelizable
@@ -247,10 +258,12 @@ class RewriteParfor(rewrites.Rewrite):
             if isinstance(instr, ir.Assign):
                 if instr.target.name in array_exprs:
                     expr = instr.value
-                    #print("Parfor apply: ", expr.expr)
+                    if config.DEBUG_ARRAY_OPT:
+                        print("Parfor apply: ", expr.expr)
                     #expr.op = 'parfor'
                     #ast_body, namespace = _arr_expr_to_ast(expr.expr)
-                    #print("namespace = ", namespace)
+                    #if config.DEBUG_ARRAY_OPT:
+                    #    print("namespace = ", namespace)
                     #expr.expr = Parfor(namespace, ast_body, {})
                     #expr.expr = Parfor("parfor", expr.loc, {}, expr.expr, {})
                     instr.value = _arr_expr_to_parfor(instr.target.name, expr, self.typemap)
@@ -312,18 +325,23 @@ def _arr_expr_to_ast(expr, typemap, subscripts):
 
 def _arr_expr_to_parfor(out_var, expr, typemap):
     expr_var_list = expr.list_vars()
-    #print("out_var", out_var)
-    #print("expr_var_list", expr_var_list)
+    if config.DEBUG_ARRAY_OPT:
+        print("_arr_expr_to_parfor")
+        print("out_var", out_var)
+        print("expr_var_list", expr_var_list)
     expr_var_unique = sorted(set(expr_var_list), key=lambda var: var.name)
-    #print("expr_var_unique", expr_var_unique)
+    if config.DEBUG_ARRAY_OPT:
+        print("expr_var_unique", expr_var_unique)
     expr_inps = [ var.name for var in expr_var_unique ]
     inp_types = [ typemap[name] for name in expr_inps ]
     input_info = list(zip(expr_inps, inp_types))
-    #print("expr input_info = ", input_info)
+    if config.DEBUG_ARRAY_OPT:
+        print("expr input_info = ", input_info)
     expr_outs = [ out_var ]
     out_types = [ typemap[out_var] ]
     output_info = list(zip(expr_outs, out_types))
-    #print("expr output_info = ", output_info)
+    if config.DEBUG_ARRAY_OPT:
+        print("expr output_info = ", output_info)
     ndim = 0
     # Find out number of dimensions, all arrays must match
     for idx, typ in enumerate(out_types + inp_types):
@@ -336,7 +354,8 @@ def _arr_expr_to_parfor(out_var, expr, typemap):
                         "Don't know how to make loop nests of unmatching dimension, expect {0} but got {1}.".format(ndim, typ.ndim))
     if ndim == 0:
         raise NotImplementedError("Don't know to make loop nests when no arrays are found")
-    #print("ndim = ", ndim)
+    if config.DEBUG_ARRAY_OPT:
+        print("ndim = ", ndim)
     # Make variables that calculate the size of each dimension
     size_vars = [ _make_unique_var("s" + str(i)) for i in range(ndim) ]
     # Make index variables for the loop nest
@@ -348,7 +367,8 @@ def _arr_expr_to_parfor(out_var, expr, typemap):
                   value = ast.Name(out_var, ast.Load()),
                   attr = 'shape',
                   ctx = ast.Load())) ]
-    #print("pre = ", ast.dump(pre[0]))
+    if config.DEBUG_ARRAY_OPT:
+        print("pre = ", ast.dump(pre[0]))
     # body is assigning expr to out_var, but replacing all array with explicit subscripts
     body_ast, namespace = _arr_expr_to_ast(expr.expr, typemap, idx_vars)
     body = [ ast.Assign(
@@ -357,11 +377,14 @@ def _arr_expr_to_parfor(out_var, expr, typemap):
                 slice = ast.Index(value = _mk_tuple([ast.Name(v, ast.Load()) for v in idx_vars])),
                 ctx = ast.Store()) ],
               value = body_ast) ]
-    #print("body = ", ast.dump(body[0]))
+    if config.DEBUG_ARRAY_OPT:
+        print("body = ", ast.dump(body[0]))
     loop_nests = [ LoopNest(i, r) for (i, r) in zip(idx_vars, size_vars) ]
     parfor = Parfor(expr, loop_body = body, input_info = input_info, output_info = output_info,
                   loop_nests = loop_nests, pre_parfor = pre, namespace = namespace)
-    #print("parfor = ", ast.dump(ast.Module(body = parfor.to_ast())))
+    if config.DEBUG_ARRAY_OPT:
+        print("parfor = ", ast.dump(ast.Module(body = parfor.to_ast())))
+
     return parfor
 
 class LegalizeNames(ast.NodeTransformer):
@@ -384,6 +407,28 @@ class LegalizeNames(ast.NodeTransformer):
         ast.fix_missing_locations(new_node)
         return ast.Name(new_name, node.ctx)
 
+@contextlib.contextmanager
+def _legalize_parameter_names(var_list):
+    """
+    Legalize names in the variable list for use as a Python function's
+    parameter names.
+    """
+    var_map = OrderedDict()
+    for var in var_list:
+        old_name = var.name
+        new_name = old_name.replace("$", "_").replace(".", "_")
+        # Caller should ensure the names are unique
+        assert new_name not in var_map
+        var_map[new_name] = var, old_name
+        var.name = new_name
+    param_names = list(var_map)
+    try:
+        yield param_names
+    finally:
+        # Make sure the old names are restored, to avoid confusing
+        # other parts of Numba (see issue #1466)
+        for var, old_name in var_map.values():
+            var.name = old_name
 
 def _lower_parfor(lowerer, expr):
     '''Lower an array expression built by RewriteParfor.
@@ -392,20 +437,25 @@ def _lower_parfor(lowerer, expr):
     expr_filename = expr.loc.filename
     # generate the ast
     parfor_ast = expr.to_ast()
-    #print("parfor_ast = ", ast.dump(ast.Module(body = parfor_ast)))
+    if config.DEBUG_ARRAY_OPT:
+        print("_lower_parfor: expr = ", expr)
+        print("parfor_ast = ", ast.dump(ast.Module(body = parfor_ast)))
     legalize = LegalizeNames()
     parfor_ast = legalize.visit(ast.Module(body = parfor_ast)).body
     # get the legalized name dictionary
     namedict = legalize.namedict
-    #print("namedict = ", namedict)
+    if config.DEBUG_ARRAY_OPT:
+        print("namedict = ", namedict)
     # argument contain inputs and outputs, since we are lowering parfor to gufunc
     expr_var_list = list(expr.input_info) + list(expr.output_info)
     # Arguments are the names external to the new closure
     expr_args = [ var[0] for var in expr_var_list ]
     # Parameters are what we need to declare the function formal params
-    #print("expr_args = ", expr_args)
+    if config.DEBUG_ARRAY_OPT:
+        print("expr_args = ", expr_args, " ", type(expr_args))
     expr_params = [ namedict[name] for name in expr_args ]
-    #print("expr_params = ", expr_params)
+    if config.DEBUG_ARRAY_OPT:
+        print("expr_params = ", expr_params, " ", type(expr_params))
     # 1. Create an AST tree from the array expression.
     if hasattr(ast, "arg"):
         # Should be Python 3.x
@@ -425,19 +475,23 @@ def _lower_parfor(lowerer, expr):
     ast.fix_missing_locations(ast_module)
 
     # 2. Compile the AST module and extract the Python function.
-    #print("lower_parfor: ast_module = ", ast.dump(ast_module)," namespace=", namespace)
+    if config.DEBUG_ARRAY_OPT:
+        print("lower_parfor: ast_module = ", ast.dump(ast_module)," namespace=", namespace)
     code_obj = compile(ast_module, expr_filename, 'exec')
     six.exec_(code_obj, namespace)
     impl = namespace[expr_name]
-    #print("impl = ", impl)
+    if config.DEBUG_ARRAY_OPT:
+        print("impl = ", impl, " ", type(impl))
 
     # 3. Prepare signatures as well as a gu_signature in the form of ('m','n',...)
     outer_typs = []
     gu_sin = []
     gu_sout = []
-    #print("input_info = ", list(expr.input_info))
+    if config.DEBUG_ARRAY_OPT:
+        print("input_info = ", list(expr.input_info))
     num_inputs = len(list(expr.input_info))
-    #print("num_inputs = ", num_inputs)
+    if config.DEBUG_ARRAY_OPT:
+        print("num_inputs = ", num_inputs)
     count = 0
     for var, typ in expr_var_list:
         #print("var = ", var, " typ = ", typ)
@@ -452,7 +506,8 @@ def _lower_parfor(lowerer, expr):
         else:
             gu_sin.append(dim_syms)
     gu_signature = (gu_sin, gu_sout)
-    #print("gu_signature = ", gu_signature)
+    if config.DEBUG_ARRAY_OPT:
+        print("gu_signature = ", gu_signature, " ", type(gu_signature))
 
     # 4. Now compile a gufunc using the Python function as kernel.
     context = lowerer.context
@@ -461,11 +516,46 @@ def _lower_parfor(lowerer, expr):
     #outer_sig = expr.ty(*outer_typs)
     outer_sig = signature(types.none, *outer_typs)
 
+    if config.DEBUG_ARRAY_OPT:
+        print("outer_sig = ", outer_sig, " ", type(outer_sig))
+
+    _create_sched_wrapper(expr, expr_var_list, expr_args, "some_gufunc")
+
     if context.auto_parallel:
         return make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args)
     else:
         return make_sequential_loop(lowerer, impl, gu_signature, outer_sig, expr_args)
 
+'''Here we create a function in text form and eval it into existence.
+This function creates the schedule for the gufunc call and creates and
+initializes reduction arrays equal to the thread count and initialized 
+to the initial value of the reduction var.  The gufunc is called and
+then the reduction function is applied across the reduction arrays
+before returning the final answer.
+'''
+def _create_sched_wrapper(parfor, expr_var_list, expr_args, gufunc):
+    out_args = [ var[0] for var in list(parfor.output_info)]
+    if config.DEBUG_ARRAY_OPT:
+        print("_create_sched_wrapper ", type(parfor), " ", parfor, " args = ", type(expr_args), " ", expr_args)
+    sched_func_name = "__numba_parfor_sched_%s" % (hex(hash(parfor)).replace("-", "_"))
+    if config.DEBUG_ARRAY_OPT:
+        print("sched_func_name ", type(sched_func_name), " ", sched_func_name)
+    sched_func = "def " + sched_func_name + "("
+    sched_func += (",".join(['arg' + str(i) for i in range(len(expr_args))]))
+    sched_func += "):\n"
+    assert isinstance(expr_var_list[0][1], types.Array)
+    sched_func += "    full_iteration_space = numba.runtime.gufunc_scheduler.create_full_iteration(arg0)\n"
+    sched_func += "    sched = numba.runtime.gufunc_scheduler.create_schedule(full_iteration_space, numba.npyufunc.parallel.get_thread_count())\n"
+    red_arrays = ""
+    red_reduces = ""
+    for one_red_index in range(len(parfor.reductions)):
+        sched_func += "    red" + str(one_red_index) + " = np.full((numba.npyufunc.parallel.get_thread_count(),), parfor.reductions[one_red_index].init_value)\n"
+        red_arrays += ", red" + str(one_red_index)
+        red_reduces += "functools.reduce(lambda a,b: " + str(parfor.reductions[one_red_index].func) + "(a,b), red" + str(one_red_index) + ", " + parfor.reductions[one_red_index].init_value + "),"
+    sched_func += "    " + gufunc + "(sched, " + (",".join(['arg' + str(i) for i in range(len(expr_args))])) + red_arrays + ")\n"
+    sched_func += "    return (" + ",".join(out_args) + red_reduces + ")\n"
+    if config.DEBUG_ARRAY_OPT:
+        print("sched_func ", type(sched_func), "\n", sched_func)
 
 def _prepare_arguments(lowerer, gu_signature, outer_sig, expr_args):
     context = lowerer.context
@@ -528,16 +618,19 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
     #from .parallel import ParallelGUFuncBuilder, build_gufunc_wrapper, _launch_threads, _init
     from .ufuncbuilder import GUFuncBuilder, build_gufunc_wrapper #, _launch_threads, _init
 
-    #print("args = ", expr_args)
-    #print("outer_sig = ", outer_sig.args, outer_sig.return_type, outer_sig.recvr, outer_sig.pysig)
-    #print("inner_sig = ", inner_sig.args, inner_sig.return_type, inner_sig.recvr, inner_sig.pysig)
+    if config.DEBUG_ARRAY_OPT:
+        print("make_parallel_loop")
+        print("args = ", expr_args)
+        print("outer_sig = ", outer_sig.args, outer_sig.return_type, outer_sig.recvr, outer_sig.pysig)
+        print("inner_sig = ", inner_sig.args, inner_sig.return_type, inner_sig.recvr, inner_sig.pysig)
     # The ufunc takes 4 arguments: args, dims, steps, data
     # ufunc = ParallelGUFuncBuilder(impl, gu_signature)
     sin, sout = gu_signature
     ufunc = GUFuncBuilder(impl, gu_signature)
     ufunc.add(outer_sig)
     #wrapper_func = ufunc.build_ufunc()
-    #print("_sigs = ", ufunc._sigs)
+    if config.DEBUG_ARRAY_OPT:
+        print("_sigs = ", ufunc._sigs)
     sig = ufunc._sigs[0]
     cres = ufunc._cres[sig]
     #dtypenums, wrapper, env = ufunc.build(cres, sig)
@@ -547,7 +640,8 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
     wrapper_ptr, env, wrapper_name = build_gufunc_wrapper(llvm_func, cres, sin, sout, {})
     cres.library._ensure_finalized()
 
-    #print("parallel function = ", wrapper, cres, sig)
+    if config.DEBUG_ARRAY_OPT:
+        print("parallel function = ", wrapper, cres, sig)
 
     byte_t = lc.Type.int(8)
     byte_ptr_t = lc.Type.pointer(byte_t)
@@ -574,7 +668,8 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
     dims = cgutils.alloca_once(builder, intp_t, size = 2, name = "pshape")
     # dims = builder.alloca(intp_t)
     size = one
-    # print("ndims = ", ndims)
+    if config.DEBUG_ARRAY_OPT:
+         print("ndims = ", ndims)
     for i in range(ndims):
        #cgutils.printf(builder, "dims[" + str(i) + "] = %d\n", output.shape[i])
        size = builder.mul(size, output.shape[i])
@@ -610,7 +705,8 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
     #cgutils.printf(builder, "before calling kernel %p\n", fn)
     result = builder.call(fn, [args, dims, steps, data])
     #cgutils.printf(builder, "after calling kernel %p\n", fn)
-    #print("result = ", result)
+    if config.DEBUG_ARRAY_OPT:
+        print("result = ", result)
 
     # return builder.bitcast(output.return_val, ret_ty)
     return imputils.impl_ret_new_ref(context, builder, out_ty, output.return_val)

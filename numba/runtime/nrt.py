@@ -3,6 +3,7 @@ from __future__ import print_function, absolute_import, division
 from collections import namedtuple
 
 from . import nrtdynmod
+from . import gufunc_scheduler
 from llvmlite import binding as ll
 
 from numba.utils import finalize as _finalize
