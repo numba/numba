@@ -489,8 +489,8 @@ class Pipeline(object):
         """
         # Ensure we have an IR and type information.
         assert self.func_ir
-        array_analysis = ArrayAnalysis(self.func_ir, self.type_annotation)
-        array_analysis.run()
+        self.array_analysis = ArrayAnalysis(self.func_ir, self.type_annotation)
+        self.array_analysis.run()
 
     def stage_annotate_type(self):
         """
