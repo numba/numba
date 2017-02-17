@@ -82,6 +82,80 @@ class Parfor(ir.Expr):
         return self.pre_parfor + mk_loop(self.loop_nests, self.loop_body) + self.post_parfor
 
 @rewrites.register_rewrite('after-inference')
+class RewriteParforExtra(rewrites.Rewrite):
+    """The RewriteParforExtra class is responsible for converting Numpy
+    calls in Numba intermediate representation to Parfors, which
+    will lower into either sequential or parallel loops during lowering
+    stage.
+    """
+    def __init__(self, pipeline, *args, **kws):
+        super(RewriteParforExtra, self).__init__(pipeline, *args, **kws)
+        self.array_analysis = pipeline.array_analysis
+        # Install a lowering hook if we are using this rewrite.
+        special_ops = self.pipeline.targetctx.special_ops
+        if 'parfor' not in special_ops:
+            special_ops['parfor'] = _lower_parfor
+
+    def match(self, interp, block, typemap, calltypes):
+        """Match Numpy calls.
+        Return True when one or more matches were found, False otherwise.
+        """
+        # We can trivially reject everything if there are no
+        # calls in the type results.
+        if len(calltypes) == 0:
+            return False
+
+        self.current_block = block
+        self.typemap = typemap
+
+        assignments = block.find_insts(ir.Assign)
+        for instr in assignments:
+            expr = instr.value
+            # is it a Numpy call?
+            if self._is_supported_npycall(expr):
+                return True
+        return False
+
+    def apply(self):
+        """When we've found Numpy calls in a basic block, replace Numpy calls
+        with Parfors when possible.
+        """
+        result = ir.Block(self.current_block.scope, self.current_block.loc)
+        block = self.current_block
+        for instr in block.body:
+            if isinstance(instr, ir.Assign):
+                expr = instr.value
+                lhs = instr.target
+                if self._is_supported_npycall(expr):
+                    instr = self._numpy_to_parfor(lhs, expr)
+            result.append(instr)
+        return result
+
+    def _is_supported_npycall(self, expr):
+        """check if we support parfor translation for
+        this Numpy call.
+        """
+        if not (isinstance(expr, ir.Expr) and expr.op == 'call'):
+            return False
+        return False # turn off for now
+        # TODO: add more calls, check arguments?
+        return (expr.func.name in self.array_analysis.numpy_calls.keys() and
+                 self.array_analysis.numpy_calls[expr.func.name]=='dot')
+
+
+    def _numpy_to_parfor(self, lhs, expr):
+        assert isinstance(expr, ir.Expr) and expr.op == 'call'
+        call_name = self.array_analysis.numpy_calls[expr.func.name]
+        args = expr.args
+        if call_name=='dot':
+            assert len(args)==2 #TODO: or len(args)==3
+            in1 = args[0].name
+            in2 = args[1].name
+        # return the call unmodified if we couldn't handle it
+        return expr
+
+
+@rewrites.register_rewrite('after-inference')
 class RewriteParfor(rewrites.Rewrite):
     '''The RewriteParfor class is responsible for converting ArrayExpr
     expressions in Numba intermediate representation to Parfors, which
