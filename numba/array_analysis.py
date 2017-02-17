@@ -5,12 +5,12 @@ from numba import types, config
 from numba.typing import npydecl
 
 class ArrayAnalysis(object):
-    '''Analysis of array computations such as shapes and equivalence classes
-    '''
+    """Analyzes Numpy array computations for properties such as shapes
+    and equivalence classes.
+    """
 
     def __init__(self, func_ir, type_annotation):
-        '''Constructor for the Rewrite class.
-        '''
+        """Constructor for the Rewrite class."""
         self.func_ir = func_ir
         self.type_annotation = type_annotation
         self.next_eq_class = 1
@@ -31,7 +31,6 @@ class ArrayAnalysis(object):
         self.numpy_calls = {}
         # keep attr calls to arrays like t=A.sum() as {t:('sum',A)}
         self.array_attr_calls = {}
-        #print("ARRAY ANALYSIS")
 
     def run(self):
         # TODO: ignoring CFG for now
