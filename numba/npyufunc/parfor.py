@@ -468,7 +468,8 @@ def _prepare_arguments(lowerer, gu_signature, outer_sig, expr_args):
         #print("arg_ty = ", arg_ty)
         if i < num_inputs:
             #print("as input")
-            arg = npyimpl._prepare_argument(context, builder, lowerer.loadvar(expr_args[i]), arg_ty)
+            var = lowerer.loadvar(expr_args[i])
+            arg = npyimpl._prepare_argument(context, builder, var, arg_ty)
             arguments.append(arg)
             inputs.append(arg)
         else:
@@ -499,6 +500,7 @@ def make_sequential_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
 
     inputs, output, out_ty = _prepare_arguments(lowerer, gu_signature, outer_sig, expr_args)
     args = [ x.return_val for x in inputs + [output] ]
+    # cgutils.printf(builder, "args[0].data = %p\n", inputs[0].data)
     result = context.call_internal(builder, cres.fndesc, outer_sig, args)
     return imputils.impl_ret_new_ref(context, builder, out_ty, output.return_val)
 
@@ -537,6 +539,8 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
     byte_ptr_ptr_t = lc.Type.pointer(byte_ptr_t)
     intp_t = context.get_value_type(types.intp)
     intp_ptr_t = lc.Type.pointer(intp_t)
+    zero = context.get_constant(types.intp, 0)
+    one = context.get_constant(types.intp, 1)
 
     # prepare arguments: args, dims, steps, data
     inputs, output, out_ty = _prepare_arguments(lowerer, gu_signature, outer_sig, expr_args)
@@ -544,35 +548,35 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
     arguments = [ x.data for x in inputs + [output] ]
     num_args = len(arguments)
     # prepare input/output array args
-    args = cgutils.alloca_once(builder, byte_ptr_t, size = lc.Constant.int(lc.Type.int(), num_args), name = "pargs")
+    args = cgutils.alloca_once(builder, byte_ptr_t, size = context.get_constant(types.intp, num_args), name = "pargs")
     for i in range(num_args):
-        dst = builder.gep(args, [lc.Constant.int(lc.Type.int(), i)])
+        dst = builder.gep(args, [context.get_constant(types.intp, i)])
         #cgutils.printf(builder, "arg[" + str(i) + "] = %p\n", arguments[i])
         builder.store(builder.bitcast(arguments[i], byte_ptr_t), dst)
 
     # prepare dims, which is only a single number, since N-D arrays is treated as 1D array by ufunc
     ndims = len(output.shape)
-    # dims = cgutils.alloca_once(builder, intp_t, size = 1, name = "pshape")
-    dims = builder.alloca(intp_t)
-    size = context.get_constant(types.intp, 1)
+    dims = cgutils.alloca_once(builder, intp_t, size = 2, name = "pshape")
+    # dims = builder.alloca(intp_t)
+    size = one
     # print("ndims = ", ndims)
     for i in range(ndims):
        #cgutils.printf(builder, "dims[" + str(i) + "] = %d\n", output.shape[i])
        size = builder.mul(size, output.shape[i])
     #cgutils.printf(builder, wrapper.name + " " + cres.fndesc.llvm_func_name + " total size = %d\n", size)
     # We can't directly use size here, must separate core dimension and loop dimension
-    # builder.store(size, dims)
-    builder.store(context.get_constant(types.intp, 1), dims)
+    builder.store(one,  builder.gep(dims, [ zero ]))
+    builder.store(size, builder.gep(dims, [ one ]))
 
     # prepare steps for each argument
-    steps = cgutils.alloca_once(builder, intp_t, size = lc.Constant.int(lc.Type.int(), num_args + 1), name = "psteps")
+    steps = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, num_args + 1), name = "psteps")
     for i in range(num_args):
         # all steps are 0
         # sizeof = context.get_abi_sizeof(context.get_value_type(arguments[i].base_type))
         # stepsize = context.get_constant(types.intp, sizeof)
-        stepsize = context.get_constant(types.intp, 0)
+        stepsize = zero
         #cgutils.printf(builder, "stepsize = %d\n", stepsize)
-        dst = builder.gep(steps, [lc.Constant.int(lc.Type.int(), i)])
+        dst = builder.gep(steps, [context.get_constant(types.intp, i)])
         builder.store(stepsize, dst)
     # steps for output array goes last
     # sizeof = context.get_abi_sizeof(context.get_value_type(output.base_type))
@@ -582,7 +586,7 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
     # builder.store(stepsize, dst)
 
     # prepare data
-    data = builder.inttoptr(lc.Constant.int(lc.Type.int(), 0), byte_ptr_t)
+    data = builder.inttoptr(zero, byte_ptr_t)
 
     #result = context.call_function_pointer(builder, wrapper, [args, dims, steps, data])
     fnty = lc.Type.function(lc.Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
