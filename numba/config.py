@@ -94,7 +94,7 @@ class _EnvReloader(object):
                 return ctor(value)
             except Exception:
                 warnings.warn("environ %s defined but failed to parse '%s'" %
-                              (name, res), RuntimeWarning)
+                              (name, value), RuntimeWarning)
                 return default
 
         # Print warnings to screen about function compilation
