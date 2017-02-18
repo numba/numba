@@ -40,7 +40,7 @@ class LoopNest(object):
 
 class ParforReduction(object):
     '''The ParforReduction class holds information about reductions
-    in a parfor.  The var field is the reduction variable.  The 
+    in a parfor.  The var field is the reduction variable.  The
     init_value field is the initial value for the reduction variable.
     The func field is the function used to reduce two variables.'''
     def __init__(self, var, init_value, func):
@@ -194,6 +194,7 @@ class RewriteParforExtra(rewrites.Rewrite):
             assert len(args)==2 #TODO: or len(args)==3
             in1 = args[0].name
             in2 = args[1].name
+            el_typ = self.typemap[lhs.name].dtype
             assert self._get_ndims(in1)<=2 and self._get_ndims(in2)==1
             # loop range correlation is same as first dimention of 1st input
             corr = self.array_analysis.array_shape_classes[in1][0]
@@ -217,6 +218,14 @@ class RewriteParforExtra(rewrites.Rewrite):
                 body_label = self._next_label()
                 out_block = ir.Block(scope, loc)
                 out_label = self._next_label()
+                # sum_var = 0
+                const_node = ir.Const(0, loc)
+                const_var = ir.Var(scope, _make_unique_var("$const"), loc)
+                self.typemap[const_var.name] = el_typ
+                const_assign = ir.Assign(const_node, const_var, loc)
+                sum_var = ir.Var(scope, _make_unique_var("$sum_var"), loc)
+                self.typemap[sum_var.name] = el_typ
+                sum_assign = ir.Assign(sum_var, const_var, loc)
                 # g_range_var = Global(range)
                 g_range_var = ir.Var(scope, _make_unique_var("$range_g_var"), loc)
                 self.typemap[g_range_var.name] = _get_range_func_typ()
@@ -238,8 +247,9 @@ class RewriteParforExtra(rewrites.Rewrite):
                 phi_assign = ir.Assign(iter_var, phi_var, loc)
                 # jump to header
                 jump_header = ir.Jump(header_label, loc)
-                range_block.body = [g_range_assign, range_call_assign,
-                    iter_call_assign, phi_assign, jump_header]
+                range_block.body = [const_assign, sum_assign, g_range_assign,
+                    range_call_assign, iter_call_assign, phi_assign, jump_header]
+
                 # iternext_var = iternext(phi_var)
                 iternext_var = ir.Var(scope, _make_unique_var("$iternext_var"), loc)
                 bool_typ = numba.types.scalars.Boolean()
@@ -264,6 +274,44 @@ class RewriteParforExtra(rewrites.Rewrite):
                 branch = ir.Branch(pair_second_var, body_label, out_label)
                 header_block.body = [iternext_assign, pair_first_assign,
                     pair_second_assign, phi_b_assign, branch]
+
+                # inner_index = phi_b_var
+                inner_index = ir.Var(scope, _make_unique_var("$inner_index"), loc)
+                self.typemap[inner_index.name] = int_typ
+                inner_index_assign = ir.Assign(phi_b_var, inner_index, loc)
+                # tuple_var = build_tuple(index_var, inner_index)
+                tuple_var = ir.Var(scope, _make_unique_var("$tuple_var"), loc)
+                self.typemap[tuple_var.name] = numba.types.containers.UniTuple(int_typ, 2)
+                tuple_call = ir.Expr.build_tuple([index_var, inner_index], loc)
+                tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
+                # X_val = getitem(X, tuple_var)
+                X_val = ir.Var(scope, _make_unique_var("$"+in1+"_val"), loc)
+                self.typemap[X_val.name] = el_typ
+                getitem_call = ir.Expr.getitem(in1, tuple_var, loc)
+                getitem_assign = ir.Assign(getitem_call, X_val, loc)
+                # v_val = getitem(X, inner_index)
+                v_val = ir.Var(scope, _make_unique_var("$"+in2+"_val"), loc)
+                self.typemap[X_val.name] = el_typ
+                v_getitem_call = ir.Expr.getitem(in2, inner_index, loc)
+                v_getitem_assign = ir.Assign(v_getitem_call, v_val, loc)
+                # add_var = X_val + v_val
+                add_var = ir.Var(scope, _make_unique_var("$add_var"), loc)
+                self.typemap[add_var.name] = el_typ
+                add_call = ir.Expr.binop('+', X_val, v_val, loc)
+                add_assign = ir.Assign(add_call, add_var, loc)
+                # acc_var = sum_var + add_var
+                acc_var = ir.Var(scope, _make_unique_var("$acc_var"), loc)
+                self.typemap[acc_var.name] = el_typ
+                acc_call = ir.Expr.inplace_binop('+=', '+', sum_var, add_var, loc)
+                acc_assign = ir.Assign(acc_call, acc_var, loc)
+                # sum_var = acc_var
+                final_assign = ir.Assign(acc_var, sum_var, loc)
+                # jump to header
+                b_jump_header = ir.Jump(header_label, loc)
+                body_block.body = [inner_index_assign, tuple_assign,
+                    getitem_assign, v_getitem_assign, add_assign, acc_assign,
+                    final_assign, b_jump_header]
+
 
 
 
@@ -598,7 +646,7 @@ def _lower_parfor(lowerer, expr):
 
 '''Here we create a function in text form and eval it into existence.
 This function creates the schedule for the gufunc call and creates and
-initializes reduction arrays equal to the thread count and initialized 
+initializes reduction arrays equal to the thread count and initialized
 to the initial value of the reduction var.  The gufunc is called and
 then the reduction function is applied across the reduction arrays
 before returning the final answer.
