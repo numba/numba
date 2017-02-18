@@ -120,6 +120,7 @@ class RewriteParforExtra(rewrites.Rewrite):
     def __init__(self, pipeline, *args, **kws):
         super(RewriteParforExtra, self).__init__(pipeline, *args, **kws)
         self.array_analysis = pipeline.array_analysis
+        self._max_label = max(pipeline.func_ir.blocks.keys())
         # Install a lowering hook if we are using this rewrite.
         special_ops = self.pipeline.targetctx.special_ops
         if 'parfor' not in special_ops:
@@ -181,6 +182,10 @@ class RewriteParforExtra(rewrites.Rewrite):
     def _get_ndims(self, arr):
         return len(self.array_analysis.array_shape_classes[arr])
 
+    def _next_label(self):
+        self._max_label += 1
+        return self._max_label
+
     def _numpy_to_parfor(self, lhs, expr):
         assert isinstance(expr, ir.Expr) and expr.op == 'call'
         call_name = self.array_analysis.numpy_calls[expr.func.name]
@@ -193,18 +198,83 @@ class RewriteParforExtra(rewrites.Rewrite):
             # loop range correlation is same as first dimention of 1st input
             corr = self.array_analysis.array_shape_classes[in1][0]
             size_var = self.array_analysis.array_size_vars[in1][0]
-            index_var = ir.Var(lhs.scope, _make_unique_var("parfor_index"), lhs.loc)
+            scope = self.current_block.scope
+            loc = expr.loc
+            index_var = ir.Var(scope, _make_unique_var("parfor_index"), lhs.loc)
             self.type_annotation.typemap[index_var.name] = int_typ
             loopnests = [ LoopNest(index_var, size_var, corr) ]
+            body = {}
             if self._get_ndims(in1)==2:
                 # for 2D input, there is an inner loop
                 # correlation of inner dimension
                 inner_size_var = self.array_analysis.array_size_vars[in1][1]
-                body = []
+                # loop structure: range block, header block, body
+                range_block = ir.Block(scope, loc)
+                range_label = self._next_label()
+                header_block = ir.Block(scope, loc)
+                header_label = self._next_label()
+                body_block = ir.Block(scope, loc)
+                body_label = self._next_label()
+                out_block = ir.Block(scope, loc)
+                out_label = self._next_label()
+                # g_range_var = Global(range)
+                g_range_var = ir.Var(scope, _make_unique_var("$range_g_var"), loc)
+                self.typemap[g_range_var.name] = _get_range_func_typ()
+                g_range = ir.Global('range', range, loc)
+                g_range_assign = ir.Assign(g_range, g_range_var, loc)
+                # range_call_var = call g_range_var(inner_size_var)
+                range_call = ir.Expr.call(g_range_var, [inner_size_var], (), loc)
+                range_call_var = ir.Var(scope, _make_unique_var("$range_c_var"), loc)
+                self.typemap[range_call_var.name] = numba.types.iterators.RangeType(int_typ)
+                range_call_assign = ir.Assign(range_call, range_call_var, loc)
+                # iter_var = getiter(range_call_var)
+                iter_call = ir.Expr.getiter(range_call_var ,loc)
+                iter_var = ir.Var(scope, _make_unique_var("$iter_var"), loc)
+                self.typemap[iter_var.name] = numba.types.iterators.RangeIteratorType(int_typ)
+                iter_call_assign = ir.Assign(iter_call, iter_var, loc)
+                # $phi = iter_var
+                phi_var = ir.Var(scope, _make_unique_var("$phi"+str(header_label)), loc)
+                self.typemap[phi_var.name] = numba.types.iterators.RangeIteratorType(int_typ)
+                phi_assign = ir.Assign(iter_var, phi_var, loc)
+                # jump to header
+                jump_header = ir.Jump(header_label, loc)
+                range_block.body = [g_range_assign, range_call_assign,
+                    iter_call_assign, phi_assign, jump_header]
+                # iternext_var = iternext(phi_var)
+                iternext_var = ir.Var(scope, _make_unique_var("$iternext_var"), loc)
+                bool_typ = numba.types.scalars.Boolean()
+                self.typemap[iternext_var.name] = numba.types.containers.Pair(int_typ, bool_typ)
+                iternext_call = ir.Expr.iternext(phi_var, loc)
+                iternext_assign = ir.Assign(iternext_call, iternext_var, loc)
+                # pair_first_var = pair_first(iternext_var)
+                pair_first_var = ir.Var(scope, _make_unique_var("$pair_first_var"), loc)
+                self.typemap[pair_first_var.name] = int_typ
+                pair_first_call = ir.Expr.pair_first(iternext_var, loc)
+                pair_first_assign = ir.Assign(pair_first_call, pair_first_var, loc)
+                # pair_second_var = pair_second(iternext_var)
+                pair_second_var = ir.Var(scope, _make_unique_var("$pair_second_var"), loc)
+                self.typemap[pair_second_var.name] = bool_typ
+                pair_second_call = ir.Expr.pair_second(iternext_var, loc)
+                pair_second_assign = ir.Assign(pair_second_call, pair_second_var, loc)
+                # phi_b_var = pair_first_var
+                phi_b_var = ir.Var(scope, _make_unique_var("$phi"+str(body_label)), loc)
+                self.typemap[phi_b_var.name] = int_typ
+                phi_b_assign = ir.Assign(pair_first_var, phi_b_var, loc)
+                # branch pair_second_var body_block out_block
+                branch = ir.Branch(pair_second_var, body_label, out_label)
+                header_block.body = [iternext_assign, pair_first_assign,
+                    pair_second_assign, phi_b_assign, branch]
+
+
 
         # return error if we couldn't handle it (avoid rewrite infinite loop)
         raise NotImplementedError("parfor translation failed for ", expr)
 
+def _get_range_func_typ():
+    for (k,v) in numba.typing.templates.builtin_registry.globals:
+        if k==range:
+            return v
+    raise RuntimeError("range type not found")
 
 @rewrites.register_rewrite('after-inference')
 class RewriteParfor(rewrites.Rewrite):
