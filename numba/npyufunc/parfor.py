@@ -105,9 +105,9 @@ class Parfor(ir.Expr):
         #debug = [ ast.Expr(ast.Call(ast.Name('print', ast.Load()), [ast.Attribute(ast.Name(self.output_info[0][0], ast.Load()), 'shape', ast.Load())], [])) ]
         return self.pre_parfor + mk_loop(self.loop_nests, self.loop_body) + self.post_parfor
 
-class Parfor2(ir.Expr):
+class Parfor2(ir.Expr, ir.Stmt):
     def __init__(self, loop_body, loop_nests, loc):
-        super(Parfor, self).__init__(
+        super(Parfor2, self).__init__(
             op   = 'parfor2',
             loc  = loc
         )
@@ -210,7 +210,7 @@ class RewriteParforExtra(rewrites.Rewrite):
             scope = self.current_block.scope
             loc = expr.loc
             index_var = ir.Var(scope, mk_unique_var("parfor_index"), lhs.loc)
-            self.type_annotation.typemap[index_var.name] = INT_TYPE
+            self.typemap[index_var.name] = INT_TYPE
             loopnests = [ LoopNest(index_var, size_var, corr) ]
             parfor = Parfor2({}, loopnests,loc)
             if self._get_ndims(in1)==2:
@@ -220,7 +220,6 @@ class RewriteParforExtra(rewrites.Rewrite):
                 # loop structure: range block, header block, body
 
                 range_label = self._next_label()
-                header_block = ir.Block(scope, loc)
                 header_label = self._next_label()
                 body_block = ir.Block(scope, loc)
                 body_label = self._next_label()
@@ -242,30 +241,10 @@ class RewriteParforExtra(rewrites.Rewrite):
                 range_block.body.insert(0, const_assign)
                 range_block.body.insert(1, sum_assign)
 
-                # iternext_var = iternext(phi_var)
-                iternext_var = ir.Var(scope, mk_unique_var("$iternext_var"), loc)
-                bool_typ = numba.types.scalars.Boolean()
-                self.typemap[iternext_var.name] = numba.types.containers.Pair(INT_TYPE, bool_typ)
-                iternext_call = ir.Expr.iternext(phi_var, loc)
-                iternext_assign = ir.Assign(iternext_call, iternext_var, loc)
-                # pair_first_var = pair_first(iternext_var)
-                pair_first_var = ir.Var(scope, mk_unique_var("$pair_first_var"), loc)
-                self.typemap[pair_first_var.name] = INT_TYPE
-                pair_first_call = ir.Expr.pair_first(iternext_var, loc)
-                pair_first_assign = ir.Assign(pair_first_call, pair_first_var, loc)
-                # pair_second_var = pair_second(iternext_var)
-                pair_second_var = ir.Var(scope, mk_unique_var("$pair_second_var"), loc)
-                self.typemap[pair_second_var.name] = bool_typ
-                pair_second_call = ir.Expr.pair_second(iternext_var, loc)
-                pair_second_assign = ir.Assign(pair_second_call, pair_second_var, loc)
-                # phi_b_var = pair_first_var
-                phi_b_var = ir.Var(scope, mk_unique_var("$phi"+str(body_label)), loc)
-                self.typemap[phi_b_var.name] = INT_TYPE
-                phi_b_assign = ir.Assign(pair_first_var, phi_b_var, loc)
-                # branch pair_second_var body_block out_block
-                branch = ir.Branch(pair_second_var, body_label, out_label)
-                header_block.body = [iternext_assign, pair_first_assign,
-                    pair_second_assign, phi_b_assign, branch]
+                header_block = mk_loop_header(self.typemap, phi_var, scope, loc)
+                range_block.body[-1].truebr = body_label
+                range_block.body[-1].falsebr = out_label
+                phi_b_var = range_block.body[-2].target
 
                 # inner_index = phi_b_var
                 inner_index = ir.Var(scope, mk_unique_var("$inner_index"), loc)
@@ -273,7 +252,7 @@ class RewriteParforExtra(rewrites.Rewrite):
                 inner_index_assign = ir.Assign(phi_b_var, inner_index, loc)
                 # tuple_var = build_tuple(index_var, inner_index)
                 tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
-                self.typemap[tuple_var.name] = numba.types.containers.UniTuple(INT_TYPE, 2)
+                self.typemap[tuple_var.name] = types.containers.UniTuple(INT_TYPE, 2)
                 tuple_call = ir.Expr.build_tuple([index_var, inner_index], loc)
                 tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
                 # X_val = getitem(X, tuple_var)
@@ -283,7 +262,7 @@ class RewriteParforExtra(rewrites.Rewrite):
                 getitem_assign = ir.Assign(getitem_call, X_val, loc)
                 # v_val = getitem(X, inner_index)
                 v_val = ir.Var(scope, mk_unique_var("$"+in2+"_val"), loc)
-                self.typemap[X_val.name] = el_typ
+                self.typemap[v_val.name] = el_typ
                 v_getitem_call = ir.Expr.getitem(in2, inner_index, loc)
                 v_getitem_assign = ir.Assign(v_getitem_call, v_val, loc)
                 # add_var = X_val + v_val
@@ -314,6 +293,9 @@ class RewriteParforExtra(rewrites.Rewrite):
             return parfor
         # return error if we couldn't handle it (avoid rewrite infinite loop)
         raise NotImplementedError("parfor translation failed for ", expr)
+
+def _lower_parfor2(lowerer, expr):
+    return expr
 
 @rewrites.register_rewrite('after-inference')
 class RewriteParfor(rewrites.Rewrite):
