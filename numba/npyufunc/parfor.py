@@ -110,6 +110,19 @@ class Parfor(ir.Expr):
         #debug = [ ast.Expr(ast.Call(ast.Name('print', ast.Load()), [ast.Attribute(ast.Name(self.output_info[0][0], ast.Load()), 'shape', ast.Load())], [])) ]
         return self.pre_parfor + mk_loop(self.loop_nests, self.loop_body) + self.post_parfor
 
+class Parfor2(ir.Expr):
+    def __init__(self, loop_body, loop_nests, loc):
+        super(Parfor, self).__init__(
+            op   = 'parfor2',
+            loc  = loc
+        )
+
+        #self.input_info  = input_info
+        #self.output_info = output_info
+        self.loop_body   = loop_body
+        self.loop_nests  = loop_nests
+
+
 @rewrites.register_rewrite('after-inference')
 class RewriteParforExtra(rewrites.Rewrite):
     """The RewriteParforExtra class is responsible for converting Numpy
@@ -123,8 +136,8 @@ class RewriteParforExtra(rewrites.Rewrite):
         self._max_label = max(pipeline.func_ir.blocks.keys())
         # Install a lowering hook if we are using this rewrite.
         special_ops = self.pipeline.targetctx.special_ops
-        if 'parfor' not in special_ops:
-            special_ops['parfor'] = _lower_parfor
+        if 'parfor2' not in special_ops:
+            special_ops['parfor2'] = _lower_parfor2
 
     def match(self, interp, block, typemap, calltypes):
         """Match Numpy calls.
@@ -204,7 +217,7 @@ class RewriteParforExtra(rewrites.Rewrite):
             index_var = ir.Var(scope, _make_unique_var("parfor_index"), lhs.loc)
             self.type_annotation.typemap[index_var.name] = int_typ
             loopnests = [ LoopNest(index_var, size_var, corr) ]
-            body = {}
+            parfor = Parfor2({}, loopnests,loc)
             if self._get_ndims(in1)==2:
                 # for 2D input, there is an inner loop
                 # correlation of inner dimension
@@ -312,9 +325,14 @@ class RewriteParforExtra(rewrites.Rewrite):
                     getitem_assign, v_getitem_assign, add_assign, acc_assign,
                     final_assign, b_jump_header]
 
-
-
-
+                # lhs[parfor_index] = sum_var
+                setitem_node = ir.SetItem(lhs, index_var, sum_var, loc)
+                out_block.body = [setitem_node]
+                parfor.loop_body = {range_label:range_block, header_label:header_block,
+                    body_label:body_block, out_label:out_block}
+            else: # self._get_ndims(in1)==1 (reduction)
+                NotImplementedError("no reduction for dot() "+expr)
+            return parfor
         # return error if we couldn't handle it (avoid rewrite infinite loop)
         raise NotImplementedError("parfor translation failed for ", expr)
 
