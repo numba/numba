@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 from numba import ir
+from numba.ir_utils import *
 #from numba.annotations import type_annotations
 from numba import types, config
 from numba.typing import npydecl
@@ -105,22 +106,21 @@ class ArrayAnalysis(object):
     def _gen_size_call(self, var, i):
         out = []
         ndims = self._get_ndims(var.name)
-        int_typ = types.scalars.Integer.from_bitwidth(64)
         # attr call: A_sh_attr = getattr(A, shape)
         shape_attr_call = ir.Expr.getattr(var, "shape", var.loc)
         attr_var = ir.Var(var.scope, var.name+"_sh_attr"+str(i), var.loc)
-        self.type_annotation.typemap[attr_var.name] = types.containers.UniTuple(int_typ, ndims)
+        self.type_annotation.typemap[attr_var.name] = types.containers.UniTuple(INT_TYPE, ndims)
         attr_assign = ir.Assign(shape_attr_call, attr_var, var.loc)
         out.append(attr_assign)
         # const var for dim: $constA0 = Const(0)
         const_node = ir.Const(i, var.loc)
         const_var = ir.Var(var.scope, "$const"+var.name+str(i), var.loc)
-        self.type_annotation.typemap[const_var.name] = int_typ
+        self.type_annotation.typemap[const_var.name] = INT_TYPE
         const_assign = ir.Assign(const_node, const_var, var.loc)
         out.append(const_assign)
         # get size: Asize0 = A_sh_attr[0]
         size_var = ir.Var(var.scope, var.name+"size"+str(i), var.loc)
-        self.type_annotation.typemap[size_var.name] = int_typ
+        self.type_annotation.typemap[size_var.name] = INT_TYPE
         getitem_node = ir.Expr.static_getitem(attr_var, i, const_var, var.loc)
         self.type_annotation.calltypes[getitem_node] = None
         getitem_assign = ir.Assign(getitem_node, size_var, var.loc)

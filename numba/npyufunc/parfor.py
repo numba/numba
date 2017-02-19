@@ -8,6 +8,7 @@ import sys
 import numpy as np
 
 from .. import compiler, ir, types, rewrites, six, cgutils
+from numba.ir_utils import *
 from ..typing import npydecl, signature
 from ..targets import npyimpl, imputils
 from .dufunc import DUFunc
@@ -15,12 +16,6 @@ from .array_exprs import _is_ufunc, _unaryops, _binops, _cmpops
 from numba import config
 import llvmlite.llvmpy.core as lc
 
-unique_var_count = 0
-def _make_unique_var(prefix):
-    global unique_var_count
-    var = prefix + "." + str(unique_var_count)
-    unique_var_count = unique_var_count + 1
-    return var
 
 def _mk_tuple(elts):
     if len(elts) == 1:
@@ -214,8 +209,8 @@ class RewriteParforExtra(rewrites.Rewrite):
             size_var = self.array_analysis.array_size_vars[in1][0]
             scope = self.current_block.scope
             loc = expr.loc
-            index_var = ir.Var(scope, _make_unique_var("parfor_index"), lhs.loc)
-            self.type_annotation.typemap[index_var.name] = int_typ
+            index_var = ir.Var(scope, mk_unique_var("parfor_index"), lhs.loc)
+            self.type_annotation.typemap[index_var.name] = INT_TYPE
             loopnests = [ LoopNest(index_var, size_var, corr) ]
             parfor = Parfor2({}, loopnests,loc)
             if self._get_ndims(in1)==2:
@@ -223,7 +218,7 @@ class RewriteParforExtra(rewrites.Rewrite):
                 # correlation of inner dimension
                 inner_size_var = self.array_analysis.array_size_vars[in1][1]
                 # loop structure: range block, header block, body
-                range_block = ir.Block(scope, loc)
+
                 range_label = self._next_label()
                 header_block = ir.Block(scope, loc)
                 header_label = self._next_label()
@@ -233,55 +228,39 @@ class RewriteParforExtra(rewrites.Rewrite):
                 out_label = self._next_label()
                 # sum_var = 0
                 const_node = ir.Const(0, loc)
-                const_var = ir.Var(scope, _make_unique_var("$const"), loc)
+                const_var = ir.Var(scope, mk_unique_var("$const"), loc)
                 self.typemap[const_var.name] = el_typ
                 const_assign = ir.Assign(const_node, const_var, loc)
-                sum_var = ir.Var(scope, _make_unique_var("$sum_var"), loc)
+                sum_var = ir.Var(scope, mk_unique_var("$sum_var"), loc)
                 self.typemap[sum_var.name] = el_typ
                 sum_assign = ir.Assign(sum_var, const_var, loc)
-                # g_range_var = Global(range)
-                g_range_var = ir.Var(scope, _make_unique_var("$range_g_var"), loc)
-                self.typemap[g_range_var.name] = _get_range_func_typ()
-                g_range = ir.Global('range', range, loc)
-                g_range_assign = ir.Assign(g_range, g_range_var, loc)
-                # range_call_var = call g_range_var(inner_size_var)
-                range_call = ir.Expr.call(g_range_var, [inner_size_var], (), loc)
-                range_call_var = ir.Var(scope, _make_unique_var("$range_c_var"), loc)
-                self.typemap[range_call_var.name] = numba.types.iterators.RangeType(int_typ)
-                range_call_assign = ir.Assign(range_call, range_call_var, loc)
-                # iter_var = getiter(range_call_var)
-                iter_call = ir.Expr.getiter(range_call_var ,loc)
-                iter_var = ir.Var(scope, _make_unique_var("$iter_var"), loc)
-                self.typemap[iter_var.name] = numba.types.iterators.RangeIteratorType(int_typ)
-                iter_call_assign = ir.Assign(iter_call, iter_var, loc)
-                # $phi = iter_var
-                phi_var = ir.Var(scope, _make_unique_var("$phi"+str(header_label)), loc)
-                self.typemap[phi_var.name] = numba.types.iterators.RangeIteratorType(int_typ)
-                phi_assign = ir.Assign(iter_var, phi_var, loc)
-                # jump to header
-                jump_header = ir.Jump(header_label, loc)
-                range_block.body = [const_assign, sum_assign, g_range_assign,
-                    range_call_assign, iter_call_assign, phi_assign, jump_header]
+
+                range_block = mk_range_block(self.typemap, inner_size_var,
+                    scope, loc)
+                range_block.body[-1].target = header_label # fix jump target
+                phi_var = range_block.body[-2].target
+                range_block.body.insert(0, const_assign)
+                range_block.body.insert(1, sum_assign)
 
                 # iternext_var = iternext(phi_var)
-                iternext_var = ir.Var(scope, _make_unique_var("$iternext_var"), loc)
+                iternext_var = ir.Var(scope, mk_unique_var("$iternext_var"), loc)
                 bool_typ = numba.types.scalars.Boolean()
-                self.typemap[iternext_var.name] = numba.types.containers.Pair(int_typ, bool_typ)
+                self.typemap[iternext_var.name] = numba.types.containers.Pair(INT_TYPE, bool_typ)
                 iternext_call = ir.Expr.iternext(phi_var, loc)
                 iternext_assign = ir.Assign(iternext_call, iternext_var, loc)
                 # pair_first_var = pair_first(iternext_var)
-                pair_first_var = ir.Var(scope, _make_unique_var("$pair_first_var"), loc)
-                self.typemap[pair_first_var.name] = int_typ
+                pair_first_var = ir.Var(scope, mk_unique_var("$pair_first_var"), loc)
+                self.typemap[pair_first_var.name] = INT_TYPE
                 pair_first_call = ir.Expr.pair_first(iternext_var, loc)
                 pair_first_assign = ir.Assign(pair_first_call, pair_first_var, loc)
                 # pair_second_var = pair_second(iternext_var)
-                pair_second_var = ir.Var(scope, _make_unique_var("$pair_second_var"), loc)
+                pair_second_var = ir.Var(scope, mk_unique_var("$pair_second_var"), loc)
                 self.typemap[pair_second_var.name] = bool_typ
                 pair_second_call = ir.Expr.pair_second(iternext_var, loc)
                 pair_second_assign = ir.Assign(pair_second_call, pair_second_var, loc)
                 # phi_b_var = pair_first_var
-                phi_b_var = ir.Var(scope, _make_unique_var("$phi"+str(body_label)), loc)
-                self.typemap[phi_b_var.name] = int_typ
+                phi_b_var = ir.Var(scope, mk_unique_var("$phi"+str(body_label)), loc)
+                self.typemap[phi_b_var.name] = INT_TYPE
                 phi_b_assign = ir.Assign(pair_first_var, phi_b_var, loc)
                 # branch pair_second_var body_block out_block
                 branch = ir.Branch(pair_second_var, body_label, out_label)
@@ -289,31 +268,31 @@ class RewriteParforExtra(rewrites.Rewrite):
                     pair_second_assign, phi_b_assign, branch]
 
                 # inner_index = phi_b_var
-                inner_index = ir.Var(scope, _make_unique_var("$inner_index"), loc)
-                self.typemap[inner_index.name] = int_typ
+                inner_index = ir.Var(scope, mk_unique_var("$inner_index"), loc)
+                self.typemap[inner_index.name] = INT_TYPE
                 inner_index_assign = ir.Assign(phi_b_var, inner_index, loc)
                 # tuple_var = build_tuple(index_var, inner_index)
-                tuple_var = ir.Var(scope, _make_unique_var("$tuple_var"), loc)
-                self.typemap[tuple_var.name] = numba.types.containers.UniTuple(int_typ, 2)
+                tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
+                self.typemap[tuple_var.name] = numba.types.containers.UniTuple(INT_TYPE, 2)
                 tuple_call = ir.Expr.build_tuple([index_var, inner_index], loc)
                 tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
                 # X_val = getitem(X, tuple_var)
-                X_val = ir.Var(scope, _make_unique_var("$"+in1+"_val"), loc)
+                X_val = ir.Var(scope, mk_unique_var("$"+in1+"_val"), loc)
                 self.typemap[X_val.name] = el_typ
                 getitem_call = ir.Expr.getitem(in1, tuple_var, loc)
                 getitem_assign = ir.Assign(getitem_call, X_val, loc)
                 # v_val = getitem(X, inner_index)
-                v_val = ir.Var(scope, _make_unique_var("$"+in2+"_val"), loc)
+                v_val = ir.Var(scope, mk_unique_var("$"+in2+"_val"), loc)
                 self.typemap[X_val.name] = el_typ
                 v_getitem_call = ir.Expr.getitem(in2, inner_index, loc)
                 v_getitem_assign = ir.Assign(v_getitem_call, v_val, loc)
                 # add_var = X_val + v_val
-                add_var = ir.Var(scope, _make_unique_var("$add_var"), loc)
+                add_var = ir.Var(scope, mk_unique_var("$add_var"), loc)
                 self.typemap[add_var.name] = el_typ
                 add_call = ir.Expr.binop('+', X_val, v_val, loc)
                 add_assign = ir.Assign(add_call, add_var, loc)
                 # acc_var = sum_var + add_var
-                acc_var = ir.Var(scope, _make_unique_var("$acc_var"), loc)
+                acc_var = ir.Var(scope, mk_unique_var("$acc_var"), loc)
                 self.typemap[acc_var.name] = el_typ
                 acc_call = ir.Expr.inplace_binop('+=', '+', sum_var, add_var, loc)
                 acc_assign = ir.Assign(acc_call, acc_var, loc)
@@ -335,12 +314,6 @@ class RewriteParforExtra(rewrites.Rewrite):
             return parfor
         # return error if we couldn't handle it (avoid rewrite infinite loop)
         raise NotImplementedError("parfor translation failed for ", expr)
-
-def _get_range_func_typ():
-    for (k,v) in numba.typing.templates.builtin_registry.globals:
-        if k==range:
-            return v
-    raise RuntimeError("range type not found")
 
 @rewrites.register_rewrite('after-inference')
 class RewriteParfor(rewrites.Rewrite):
@@ -493,9 +466,9 @@ def _arr_expr_to_parfor(out_var, expr, typemap):
     if config.DEBUG_ARRAY_OPT:
         print("ndim = ", ndim)
     # Make variables that calculate the size of each dimension
-    size_vars = [ _make_unique_var("s" + str(i)) for i in range(ndim) ]
+    size_vars = [ mk_unique_var("s" + str(i)) for i in range(ndim) ]
     # Make index variables for the loop nest
-    idx_vars = [ _make_unique_var("i" + str(i)) for i in range(ndim) ]
+    idx_vars = [ mk_unique_var("i" + str(i)) for i in range(ndim) ]
     # make prestatement: (s0,...) = out.shape()
     pre = [ ast.Assign(
               targets = [ast.Tuple(elts = [ast.Name(v, ast.Store()) for v in size_vars], ctx = ast.Store())],
