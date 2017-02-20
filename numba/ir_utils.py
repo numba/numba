@@ -1,4 +1,5 @@
 from numba import ir, types, typing
+from numba.typing.templates import signature
 import numpy
 
 _unique_var_count = 0
@@ -54,7 +55,7 @@ def _get_empty_func_typ():
             return v
     raise RuntimeError("empty() type not found")
 
-def mk_range_block(typemap, size_var, scope, loc):
+def mk_range_block(typemap, size_var, calltypes, scope, loc):
     """make a block that initializes loop range and iteration variables.
     target label in jump needs to be set.
     """
@@ -65,11 +66,14 @@ def mk_range_block(typemap, size_var, scope, loc):
     g_range_assign = ir.Assign(g_range, g_range_var, loc)
     # range_call_var = call g_range_var(size_var)
     range_call = ir.Expr.call(g_range_var, [size_var], (), loc)
+    calltypes[range_call] = signature(types.range_state64_type, types.int64)
     range_call_var = ir.Var(scope, mk_unique_var("$range_c_var"), loc)
     typemap[range_call_var.name] = types.iterators.RangeType(INT_TYPE)
     range_call_assign = ir.Assign(range_call, range_call_var, loc)
     # iter_var = getiter(range_call_var)
     iter_call = ir.Expr.getiter(range_call_var ,loc)
+    calltypes[iter_call] = signature(types.range_iter64_type,
+        types.range_state64_type)
     iter_var = ir.Var(scope, mk_unique_var("$iter_var"), loc)
     typemap[iter_var.name] = types.iterators.RangeIteratorType(INT_TYPE)
     iter_call_assign = ir.Assign(iter_call, iter_var, loc)
@@ -90,7 +94,7 @@ def _get_range_func_typ():
             return v
     raise RuntimeError("range type not found")
 
-def mk_loop_header(typemap, phi_var, scope, loc):
+def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
     """make a block that is a loop header updating iteration variables.
     target labels in branch need to be set.
     """
@@ -98,6 +102,8 @@ def mk_loop_header(typemap, phi_var, scope, loc):
     iternext_var = ir.Var(scope, mk_unique_var("$iternext_var"), loc)
     typemap[iternext_var.name] = types.containers.Pair(INT_TYPE, BOOL_TYPE)
     iternext_call = ir.Expr.iternext(phi_var, loc)
+    calltypes[iternext_call] = signature(
+        types.containers.Pair(INT_TYPE, BOOL_TYPE), types.range_iter64_type)
     iternext_assign = ir.Assign(iternext_call, iternext_var, loc)
     # pair_first_var = pair_first(iternext_var)
     pair_first_var = ir.Var(scope, mk_unique_var("$pair_first_var"), loc)

@@ -166,7 +166,8 @@ class RewriteParfor2(rewrites.Rewrite):
                 range_block.body[-1].target = header_label # fix jump target
                 phi_var = range_block.body[-2].target
 
-                header_block = mk_loop_header(self.typemap, phi_var, scope, loc)
+                header_block = mk_loop_header(self.typemap, phi_var,
+                    self.calltypes, scope, loc)
                 header_block.body[-1].truebr = body_label
                 header_block.body[-1].falsebr = out_label
                 phi_b_var = header_block.body[-2].target
@@ -262,7 +263,8 @@ def lower_parfor2(func_ir, typemap, calltypes):
                 range_block.body[-1].target = header_label # fix jump target
                 phi_var = range_block.body[-2].target
                 new_blocks[range_label] = range_block
-                header_block = mk_loop_header(typemap, phi_var, scope, loc)
+                header_block = mk_loop_header(typemap, phi_var, calltypes,
+                    scope, loc)
                 # first body block to jump to
                 body_label = min(inst.loop_body.keys())
                 header_block.body[-1].truebr = body_label

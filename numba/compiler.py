@@ -499,7 +499,8 @@ class Pipeline(object):
         """
         # Ensure we have an IR and type information.
         assert self.func_ir
-        lower_parfor2(self.func_ir, self.type_annotation.typemap)
+        lower_parfor2(self.func_ir, self.type_annotation.typemap,
+            self.type_annotation.calltypes)
 
     def stage_annotate_type(self):
         """
