@@ -32,6 +32,8 @@ class ArrayAnalysis(object):
         self.numpy_calls = {}
         # keep attr calls to arrays like t=A.sum() as {t:('sum',A)}
         self.array_attr_calls = {}
+        # keep tuple builds like {'t':[a,b],}
+        self.tuple_table = {}
 
     def run(self):
         # TODO: ignoring CFG for now
@@ -43,6 +45,7 @@ class ArrayAnalysis(object):
             print("numpy globals ", self.numpy_globals)
             print("numpy calls ", self.numpy_calls)
             print("array attr calls ", self.array_attr_calls)
+            print("tuple table ", self.tuple_table)
 
     def _analyze_block(self, block):
         out_body = []
@@ -76,6 +79,8 @@ class ArrayAnalysis(object):
                 self.numpy_calls[lhs] = rhs.attr
             elif self._isarray(rhs.value.name):
                 self.array_attr_calls[lhs] = (rhs.attr, rhs.value.name)
+        if isinstance(rhs, ir.Expr) and rhs.op=='build_tuple':
+            self.tuple_table[lhs] = rhs.items
 
         #rhs_class_out = self._analyze_rhs_classes(rhs)
         size_calls = []
@@ -173,6 +178,20 @@ class ArrayAnalysis(object):
             out_eqs = self.array_shape_classes[args[0].name].copy()
             out_eqs.reverse()
             return out_eqs
+        elif call_name=='empty':
+            # shape is either Int or tuple of Int
+            arg_typ = self.type_annotation.typemap[args[0].name]
+            if isinstance(arg_typ, types.scalars.Integer):
+                new_class = self._get_next_class()
+                self.class_sizes[new_class] = [args[0]]
+                return [new_class]
+            assert isinstance(arg_typ, types.containers.UniTuple)
+            out_eqs = []
+            for i in range(arg_typ.count):
+                new_class = self._get_next_class()
+                out_eqs.append(new_class)
+                self.class_sizes[new_class] = [self.tuple_table[args[0].name][i]]
+            return out_eqs
         elif call_name=='dot':
             # https://docs.scipy.org/doc/numpy/reference/generated/numpy.dot.html
             # for multi-dimensional arrays, last dimension of arg1 and second
@@ -209,7 +228,7 @@ class ArrayAnalysis(object):
             if len(args)>1: arg2 = args[1].name
             return self._broadcast_and_match_shapes(arg1, arg2)
 
-        print("unknown numpy call:",call_name)
+        print("unknown numpy call:", call_name)
         return [-1]
 
     def _merge_classes(self, c1, c2):

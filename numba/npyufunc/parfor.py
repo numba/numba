@@ -34,8 +34,8 @@ class LoopNest(object):
         self.correlation = correlation
 
     def __repr__(self):
-        return ("LoopNest(index_variable=%s, " % self.index_variable.name
-                + "range_variable=%s, " % self.range_variable.name
+        return ("LoopNest(index_variable=%s, " % self.index_variable
+                + "range_variable=%s, " % self.range_variable
                 + "correlation=%d)" % self.correlation)
 
 class ParforReduction(object):
