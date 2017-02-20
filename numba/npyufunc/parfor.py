@@ -33,6 +33,11 @@ class LoopNest(object):
         self.range_variable = range_variable
         self.correlation = correlation
 
+    def __repr__(self):
+        return ("LoopNest(index_variable=%s, " % self.index_variable.name
+                + "range_variable=%s, " % self.range_variable.name
+                + "correlation=%d)" % self.correlation)
+
 class ParforReduction(object):
     '''The ParforReduction class holds information about reductions
     in a parfor.  The var field is the reduction variable.  The
@@ -114,8 +119,18 @@ class Parfor2(ir.Expr, ir.Stmt):
 
         #self.input_info  = input_info
         #self.output_info = output_info
-        self.loop_body   = loop_body
         self.loop_nests  = loop_nests
+        self.loop_body   = loop_body
+
+    def __repr__(self):
+        return repr(self.loop_nests) + repr(self.loop_body)
+
+    def dump(self):
+        for loopnest in self.loop_nests:
+            print(loopnest)
+        for offset, block in sorted(self.loop_body.items()):
+            print('label %s:' % (offset,))
+            block.dump()
 
 
 @rewrites.register_rewrite('after-inference')
@@ -290,6 +305,7 @@ class RewriteParforExtra(rewrites.Rewrite):
                     body_label:body_block, out_label:out_block}
             else: # self._get_ndims(in1)==1 (reduction)
                 NotImplementedError("no reduction for dot() "+expr)
+            parfor.dump()
             return parfor
         # return error if we couldn't handle it (avoid rewrite infinite loop)
         raise NotImplementedError("parfor translation failed for ", expr)
