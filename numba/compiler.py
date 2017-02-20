@@ -18,6 +18,7 @@ from numba import (bytecode, interpreter, funcdesc, postproc,
 from numba.targets import cpu, callconv
 from numba.annotations import type_annotations
 from numba.array_analysis import ArrayAnalysis
+from numba.parfor2 import lower_parfor2
 
 
 # Lock for the preventing multiple compiler execution
@@ -492,6 +493,14 @@ class Pipeline(object):
         self.array_analysis = ArrayAnalysis(self.func_ir, self.type_annotation)
         self.array_analysis.run()
 
+    def stage_parfor_lowering(self):
+        """
+        lower parfors to sequential or parallel Numba IR code
+        """
+        # Ensure we have an IR and type information.
+        assert self.func_ir
+        lower_parfor2(self.func_ir, self.type_annotation.typemap)
+
     def stage_annotate_type(self):
         """
         Create type annotation after type inference
@@ -643,6 +652,7 @@ class Pipeline(object):
             pm.add_stage(self.stage_array_analysis, "analyze array computations")
             if not self.flags.no_rewrites:
                 pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
+            pm.add_stage(self.stage_parfor_lowering, "parfor lowering")
             pm.add_stage(self.stage_nopython_backend, "nopython mode backend")
             pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
 

@@ -10,6 +10,7 @@ def mk_unique_var(prefix):
 
 _max_label = 0
 def next_label():
+    global _max_label
     _max_label += 1
     return _max_label
 
