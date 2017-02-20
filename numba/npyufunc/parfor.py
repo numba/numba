@@ -236,9 +236,7 @@ class RewriteParforExtra(rewrites.Rewrite):
 
                 range_label = self._next_label()
                 header_label = self._next_label()
-                body_block = ir.Block(scope, loc)
                 body_label = self._next_label()
-                out_block = ir.Block(scope, loc)
                 out_label = self._next_label()
                 # sum_var = 0
                 const_node = ir.Const(0, loc)
@@ -247,7 +245,7 @@ class RewriteParforExtra(rewrites.Rewrite):
                 const_assign = ir.Assign(const_node, const_var, loc)
                 sum_var = ir.Var(scope, mk_unique_var("$sum_var"), loc)
                 self.typemap[sum_var.name] = el_typ
-                sum_assign = ir.Assign(sum_var, const_var, loc)
+                sum_assign = ir.Assign(const_var, sum_var, loc)
 
                 range_block = mk_range_block(self.typemap, inner_size_var,
                     scope, loc)
@@ -257,47 +255,15 @@ class RewriteParforExtra(rewrites.Rewrite):
                 range_block.body.insert(1, sum_assign)
 
                 header_block = mk_loop_header(self.typemap, phi_var, scope, loc)
-                range_block.body[-1].truebr = body_label
-                range_block.body[-1].falsebr = out_label
-                phi_b_var = range_block.body[-2].target
+                header_block.body[-1].truebr = body_label
+                header_block.body[-1].falsebr = out_label
+                phi_b_var = header_block.body[-2].target
 
-                # inner_index = phi_b_var
-                inner_index = ir.Var(scope, mk_unique_var("$inner_index"), loc)
-                self.typemap[inner_index.name] = INT_TYPE
-                inner_index_assign = ir.Assign(phi_b_var, inner_index, loc)
-                # tuple_var = build_tuple(index_var, inner_index)
-                tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
-                self.typemap[tuple_var.name] = types.containers.UniTuple(INT_TYPE, 2)
-                tuple_call = ir.Expr.build_tuple([index_var, inner_index], loc)
-                tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
-                # X_val = getitem(X, tuple_var)
-                X_val = ir.Var(scope, mk_unique_var("$"+in1+"_val"), loc)
-                self.typemap[X_val.name] = el_typ
-                getitem_call = ir.Expr.getitem(in1, tuple_var, loc)
-                getitem_assign = ir.Assign(getitem_call, X_val, loc)
-                # v_val = getitem(X, inner_index)
-                v_val = ir.Var(scope, mk_unique_var("$"+in2+"_val"), loc)
-                self.typemap[v_val.name] = el_typ
-                v_getitem_call = ir.Expr.getitem(in2, inner_index, loc)
-                v_getitem_assign = ir.Assign(v_getitem_call, v_val, loc)
-                # add_var = X_val + v_val
-                add_var = ir.Var(scope, mk_unique_var("$add_var"), loc)
-                self.typemap[add_var.name] = el_typ
-                add_call = ir.Expr.binop('+', X_val, v_val, loc)
-                add_assign = ir.Assign(add_call, add_var, loc)
-                # acc_var = sum_var + add_var
-                acc_var = ir.Var(scope, mk_unique_var("$acc_var"), loc)
-                self.typemap[acc_var.name] = el_typ
-                acc_call = ir.Expr.inplace_binop('+=', '+', sum_var, add_var, loc)
-                acc_assign = ir.Assign(acc_call, acc_var, loc)
-                # sum_var = acc_var
-                final_assign = ir.Assign(acc_var, sum_var, loc)
-                # jump to header
-                b_jump_header = ir.Jump(header_label, loc)
-                body_block.body = [inner_index_assign, tuple_assign,
-                    getitem_assign, v_getitem_assign, add_assign, acc_assign,
-                    final_assign, b_jump_header]
+                body_block = _mk_mvdot_body(self.typemap, phi_b_var, index_var,
+                    in1, in2, sum_var, scope, loc, el_typ)
+                body_block.body[-1].target = header_label
 
+                out_block = ir.Block(scope, loc)
                 # lhs[parfor_index] = sum_var
                 setitem_node = ir.SetItem(lhs, index_var, sum_var, loc)
                 out_block.body = [setitem_node]
@@ -309,6 +275,47 @@ class RewriteParforExtra(rewrites.Rewrite):
             return parfor
         # return error if we couldn't handle it (avoid rewrite infinite loop)
         raise NotImplementedError("parfor translation failed for ", expr)
+
+def _mk_mvdot_body(typemap, phi_b_var, index_var, in1, in2, sum_var, scope,
+        loc, el_typ):
+    body_block = ir.Block(scope, loc)
+    # inner_index = phi_b_var
+    inner_index = ir.Var(scope, mk_unique_var("$inner_index"), loc)
+    typemap[inner_index.name] = INT_TYPE
+    inner_index_assign = ir.Assign(phi_b_var, inner_index, loc)
+    # tuple_var = build_tuple(index_var, inner_index)
+    tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
+    typemap[tuple_var.name] = types.containers.UniTuple(INT_TYPE, 2)
+    tuple_call = ir.Expr.build_tuple([index_var, inner_index], loc)
+    tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
+    # X_val = getitem(X, tuple_var)
+    X_val = ir.Var(scope, mk_unique_var("$"+in1+"_val"), loc)
+    typemap[X_val.name] = el_typ
+    getitem_call = ir.Expr.getitem(in1, tuple_var, loc)
+    getitem_assign = ir.Assign(getitem_call, X_val, loc)
+    # v_val = getitem(V, inner_index)
+    v_val = ir.Var(scope, mk_unique_var("$"+in2+"_val"), loc)
+    typemap[v_val.name] = el_typ
+    v_getitem_call = ir.Expr.getitem(in2, inner_index, loc)
+    v_getitem_assign = ir.Assign(v_getitem_call, v_val, loc)
+    # add_var = X_val + v_val
+    add_var = ir.Var(scope, mk_unique_var("$add_var"), loc)
+    typemap[add_var.name] = el_typ
+    add_call = ir.Expr.binop('+', X_val, v_val, loc)
+    add_assign = ir.Assign(add_call, add_var, loc)
+    # acc_var = sum_var + add_var
+    acc_var = ir.Var(scope, mk_unique_var("$acc_var"), loc)
+    typemap[acc_var.name] = el_typ
+    acc_call = ir.Expr.inplace_binop('+=', '+', sum_var, add_var, loc)
+    acc_assign = ir.Assign(acc_call, acc_var, loc)
+    # sum_var = acc_var
+    final_assign = ir.Assign(acc_var, sum_var, loc)
+    # jump to header
+    b_jump_header = ir.Jump(-1, loc)
+    body_block.body = [inner_index_assign, tuple_assign,
+        getitem_assign, v_getitem_assign, add_assign, acc_assign,
+        final_assign, b_jump_header]
+    return body_block
 
 def _lower_parfor2(lowerer, expr):
     return expr
