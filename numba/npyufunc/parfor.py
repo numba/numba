@@ -234,10 +234,12 @@ class RewriteParforExtra(rewrites.Rewrite):
                 inner_size_var = self.array_analysis.array_size_vars[in1][1]
                 # loop structure: range block, header block, body
 
+                init_label = self._next_label()
                 range_label = self._next_label()
                 header_label = self._next_label()
                 body_label = self._next_label()
                 out_label = self._next_label()
+
                 # sum_var = 0
                 const_node = ir.Const(0, loc)
                 const_var = ir.Var(scope, mk_unique_var("$const"), loc)
@@ -246,13 +248,16 @@ class RewriteParforExtra(rewrites.Rewrite):
                 sum_var = ir.Var(scope, mk_unique_var("$sum_var"), loc)
                 self.typemap[sum_var.name] = el_typ
                 sum_assign = ir.Assign(const_var, sum_var, loc)
+                init_block = ir.Block(scope, loc)
+                alloc_nodes = mk_alloc(self.typemap, lhs, size_var, el_typ, scope,
+                    loc)
+                init_block.body = alloc_nodes + [const_assign, sum_assign,
+                    ir.Jump(range_label, loc)]
 
                 range_block = mk_range_block(self.typemap, inner_size_var,
                     scope, loc)
                 range_block.body[-1].target = header_label # fix jump target
                 phi_var = range_block.body[-2].target
-                range_block.body.insert(0, const_assign)
-                range_block.body.insert(1, sum_assign)
 
                 header_block = mk_loop_header(self.typemap, phi_var, scope, loc)
                 header_block.body[-1].truebr = body_label
@@ -267,7 +272,8 @@ class RewriteParforExtra(rewrites.Rewrite):
                 # lhs[parfor_index] = sum_var
                 setitem_node = ir.SetItem(lhs, index_var, sum_var, loc)
                 out_block.body = [setitem_node]
-                parfor.loop_body = {range_label:range_block, header_label:header_block,
+                parfor.loop_body = {init_label:init_block,
+                    range_label:range_block, header_label:header_block,
                     body_label:body_block, out_label:out_block}
             else: # self._get_ndims(in1)==1 (reduction)
                 NotImplementedError("no reduction for dot() "+expr)

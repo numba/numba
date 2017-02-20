@@ -1,4 +1,5 @@
 from numba import ir, types, typing
+import numpy
 
 unique_var_count = 0
 def mk_unique_var(prefix):
@@ -9,6 +10,43 @@ def mk_unique_var(prefix):
 
 INT_TYPE = types.scalars.Integer.from_bitwidth(64)
 BOOL_TYPE = types.scalars.Boolean("bool")
+
+def mk_alloc(typemap, lhs, size_var, dtype, scope, loc):
+    """generate an array allocation with np.empty() and return list of nodes.
+    size_var can be an int variable or tuple of int variables.
+    """
+    out = []
+    if isinstance(size_var, tuple):
+        # tuple_var = build_tuple([size_var...])
+        tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
+        typemap[tuple_var.name] = types.containers.UniTuple(INT_TYPE,
+            len(size_var))
+        tuple_call = ir.Expr.build_tuple(list(size_var), loc)
+        tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
+        out.append(tuple_assign)
+        size_var = tuple_var
+    # g_np_var = Global(numpy)
+    g_np_var = ir.Var(scope, mk_unique_var("$np_g_var"), loc)
+    typemap[g_np_var.name] = types.misc.Module(numpy)
+    g_np = ir.Global('np', numpy, loc)
+    g_np_assign = ir.Assign(g_np, g_np_var, loc)
+    # attr call: empty_attr = getattr(g_np_var, empty)
+    empty_attr_call = ir.Expr.getattr(g_np_var, "empty", loc)
+    attr_var = ir.Var(scope, mk_unique_var("empty_attr_attr"), loc)
+    typemap[attr_var.name] = _get_empty_func_typ()
+    attr_assign = ir.Assign(empty_attr_call, attr_var, loc)
+    # alloc call: lhs = empty_attr(size_var)
+    alloc_call = ir.Expr.call(attr_var, [size_var, dtype], (), loc)
+    alloc_assign = ir.Assign(alloc_call, lhs, loc)
+
+    out.extend([g_np_assign, attr_assign, alloc_assign])
+    return out
+
+def _get_empty_func_typ():
+    for (k,v) in typing.npydecl.registry.globals:
+        if k==numpy.empty:
+            return v
+    raise RuntimeError("empty() type not found")
 
 def mk_range_block(typemap, size_var, scope, loc):
     """make a block that initializes loop range and iteration variables.
