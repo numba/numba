@@ -178,7 +178,7 @@ class ArrayAnalysis(object):
             out_eqs = self.array_shape_classes[args[0].name].copy()
             out_eqs.reverse()
             return out_eqs
-        elif call_name=='empty':
+        elif call_name in ['empty', 'zeros', 'ones']:
             # shape is either Int or tuple of Int
             arg_typ = self.type_annotation.typemap[args[0].name]
             if isinstance(arg_typ, types.scalars.Integer):
@@ -192,6 +192,9 @@ class ArrayAnalysis(object):
                 out_eqs.append(new_class)
                 self.class_sizes[new_class] = [self.tuple_table[args[0].name][i]]
             return out_eqs
+        elif call_name in ['empty_like', 'zeros_like', 'ones_like']:
+            # shape same as input
+            return self.array_shape_classes[args[0].name].copy()
         elif call_name=='dot':
             # https://docs.scipy.org/doc/numpy/reference/generated/numpy.dot.html
             # for multi-dimensional arrays, last dimension of arg1 and second
