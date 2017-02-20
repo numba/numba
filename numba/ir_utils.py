@@ -1,12 +1,17 @@
 from numba import ir, types, typing
 import numpy
 
-unique_var_count = 0
+_unique_var_count = 0
 def mk_unique_var(prefix):
-    global unique_var_count
-    var = prefix + "." + str(unique_var_count)
-    unique_var_count = unique_var_count + 1
+    global _unique_var_count
+    var = prefix + "." + str(_unique_var_count)
+    _unique_var_count = _unique_var_count + 1
     return var
+
+_max_label = 0
+def next_label():
+    _max_label += 1
+    return _max_label
 
 INT_TYPE = types.scalars.Integer.from_bitwidth(64)
 BOOL_TYPE = types.scalars.Boolean("bool")

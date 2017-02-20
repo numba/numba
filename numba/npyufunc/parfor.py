@@ -111,7 +111,7 @@ class Parfor(ir.Expr):
         return self.pre_parfor + mk_loop(self.loop_nests, self.loop_body) + self.post_parfor
 
 class Parfor2(ir.Expr, ir.Stmt):
-    def __init__(self, loop_body, loop_nests, loc):
+    def __init__(self, loop_nests, init_block, loop_body, loc):
         super(Parfor2, self).__init__(
             op   = 'parfor2',
             loc  = loc
@@ -119,8 +119,9 @@ class Parfor2(ir.Expr, ir.Stmt):
 
         #self.input_info  = input_info
         #self.output_info = output_info
-        self.loop_nests  = loop_nests
-        self.loop_body   = loop_body
+        self.loop_nests = loop_nests
+        self.init_block = init_block
+        self.loop_body = loop_body
 
     def __repr__(self):
         return repr(self.loop_nests) + repr(self.loop_body)
@@ -128,6 +129,8 @@ class Parfor2(ir.Expr, ir.Stmt):
     def dump(self):
         for loopnest in self.loop_nests:
             print(loopnest)
+        print("init block:")
+        self.init_block.dump()
         for offset, block in sorted(self.loop_body.items()):
             print('label %s:' % (offset,))
             block.dump()
@@ -143,11 +146,11 @@ class RewriteParforExtra(rewrites.Rewrite):
     def __init__(self, pipeline, *args, **kws):
         super(RewriteParforExtra, self).__init__(pipeline, *args, **kws)
         self.array_analysis = pipeline.array_analysis
-        self._max_label = max(pipeline.func_ir.blocks.keys())
+        _max_label = max(pipeline.func_ir.blocks.keys())
         # Install a lowering hook if we are using this rewrite.
         special_ops = self.pipeline.targetctx.special_ops
-        if 'parfor2' not in special_ops:
-            special_ops['parfor2'] = _lower_parfor2
+        #if 'parfor2' not in special_ops:
+        #    special_ops['parfor2'] = _lower_parfor2
 
     def match(self, interp, block, typemap, calltypes):
         """Match Numpy calls.
@@ -205,10 +208,6 @@ class RewriteParforExtra(rewrites.Rewrite):
     def _get_ndims(self, arr):
         return len(self.array_analysis.array_shape_classes[arr])
 
-    def _next_label(self):
-        self._max_label += 1
-        return self._max_label
-
     def _numpy_to_parfor(self, lhs, expr):
         assert isinstance(expr, ir.Expr) and expr.op == 'call'
         call_name = self.array_analysis.numpy_calls[expr.func.name]
@@ -227,18 +226,18 @@ class RewriteParforExtra(rewrites.Rewrite):
             index_var = ir.Var(scope, mk_unique_var("parfor_index"), lhs.loc)
             self.typemap[index_var.name] = INT_TYPE
             loopnests = [ LoopNest(index_var, size_var, corr) ]
-            parfor = Parfor2({}, loopnests,loc)
+            init_block = ir.Block(scope, loc)
+            parfor = Parfor2(loopnests, init_block, {}, loc)
             if self._get_ndims(in1)==2:
                 # for 2D input, there is an inner loop
                 # correlation of inner dimension
                 inner_size_var = self.array_analysis.array_size_vars[in1][1]
                 # loop structure: range block, header block, body
 
-                init_label = self._next_label()
-                range_label = self._next_label()
-                header_label = self._next_label()
-                body_label = self._next_label()
-                out_label = self._next_label()
+                range_label = next_label()
+                header_label = next_label()
+                body_label = next_label()
+                out_label = next_label()
 
                 # sum_var = 0
                 const_node = ir.Const(0, loc)
@@ -248,11 +247,9 @@ class RewriteParforExtra(rewrites.Rewrite):
                 sum_var = ir.Var(scope, mk_unique_var("$sum_var"), loc)
                 self.typemap[sum_var.name] = el_typ
                 sum_assign = ir.Assign(const_var, sum_var, loc)
-                init_block = ir.Block(scope, loc)
                 alloc_nodes = mk_alloc(self.typemap, lhs, size_var, el_typ, scope,
                     loc)
-                init_block.body = alloc_nodes + [const_assign, sum_assign,
-                    ir.Jump(range_label, loc)]
+                init_block.body = alloc_nodes + [const_assign, sum_assign]
 
                 range_block = mk_range_block(self.typemap, inner_size_var,
                     scope, loc)
@@ -272,9 +269,9 @@ class RewriteParforExtra(rewrites.Rewrite):
                 # lhs[parfor_index] = sum_var
                 setitem_node = ir.SetItem(lhs, index_var, sum_var, loc)
                 out_block.body = [setitem_node]
-                parfor.loop_body = {init_label:init_block,
-                    range_label:range_block, header_label:header_block,
-                    body_label:body_block, out_label:out_block}
+                parfor.loop_body = {range_label:range_block,
+                    header_label:header_block, body_label:body_block,
+                    out_label:out_block}
             else: # self._get_ndims(in1)==1 (reduction)
                 NotImplementedError("no reduction for dot() "+expr)
             parfor.dump()
@@ -322,9 +319,6 @@ def _mk_mvdot_body(typemap, phi_b_var, index_var, in1, in2, sum_var, scope,
         getitem_assign, v_getitem_assign, add_assign, acc_assign,
         final_assign, b_jump_header]
     return body_block
-
-def _lower_parfor2(lowerer, expr):
-    return expr
 
 @rewrites.register_rewrite('after-inference')
 class RewriteParfor(rewrites.Rewrite):
