@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from numba import ir, types, rewrites
+from numba import ir, ir_utils, types, rewrites
 from numba.ir_utils import *
 
 class LoopNest(object):
@@ -55,7 +55,7 @@ class RewriteParfor2(rewrites.Rewrite):
     def __init__(self, pipeline, *args, **kws):
         super(RewriteParfor2, self).__init__(pipeline, *args, **kws)
         self.array_analysis = pipeline.array_analysis
-        _max_label = max(pipeline.func_ir.blocks.keys())
+        ir_utils._max_label = max(pipeline.func_ir.blocks.keys())
         # Install a lowering hook if we are using this rewrite.
         special_ops = self.pipeline.targetctx.special_ops
         #if 'parfor2' not in special_ops:
@@ -278,4 +278,6 @@ def lower_parfor2(func_ir, typemap, calltypes):
         # old block stays either way
         new_blocks[block_label] = block
     func_ir.blocks = new_blocks
+    print("function after parfor lowering:")
+    func_ir.dump()
     return None
