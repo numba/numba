@@ -266,11 +266,15 @@ def lower_parfor2(func_ir, typemap, calltypes):
                 header_block = mk_loop_header(typemap, phi_var, calltypes,
                     scope, loc)
                 # first body block to jump to
-                body_label = min(inst.loop_body.keys())
-                header_block.body[-1].truebr = body_label
+                body_first_label = min(inst.loop_body.keys())
+                header_block.body[-1].truebr = body_first_label
                 header_block.body[-1].falsebr = block_label
                 header_block.body[-2].target = loopnest.index_variable
                 new_blocks[header_label] = header_block
+                # last block jump to header
+                body_last_label = max(inst.loop_body.keys())
+                inst.loop_body[body_last_label].body.append(
+                    ir.Jump(header_label, loc))
                 # add parfor body to blocks
                 for (l, b) in inst.loop_body.items():
                     new_blocks[l] = b
