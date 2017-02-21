@@ -52,9 +52,11 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
     np_typ_getattr = ir.Expr.getattr(g_np_var, str(dtype), loc)
     typ_var_assign = ir.Assign(np_typ_getattr, typ_var, loc)
     alloc_call = ir.Expr.call(attr_var, [size_var, typ_var], (), loc)
-    calltypes[alloc_call] = signature(
-        types.npytypes.Array(dtype, ndims, 'C'), size_typ,
-        types.functions.NumberClass(dtype))
+    calltypes[alloc_call] = typemap[attr_var.name].get_call_type(
+        typing.Context(), [size_typ, types.functions.NumberClass(dtype)], {})
+    #signature(
+    #    types.npytypes.Array(dtype, ndims, 'C'), size_typ,
+    #    types.functions.NumberClass(dtype))
     alloc_assign = ir.Assign(alloc_call, lhs, loc)
 
     out.extend([g_np_assign, attr_assign, typ_var_assign, alloc_assign])
