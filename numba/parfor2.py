@@ -159,8 +159,8 @@ class RewriteParfor2(rewrites.Rewrite):
                 sum_var = ir.Var(scope, mk_unique_var("$sum_var"), loc)
                 self.typemap[sum_var.name] = el_typ
                 sum_assign = ir.Assign(const_var, sum_var, loc)
-                alloc_nodes = mk_alloc(self.typemap, lhs, size_var, el_typ, scope,
-                    loc)
+                alloc_nodes = mk_alloc(self.typemap, self.calltypes, lhs,
+                    size_var, el_typ, scope, loc)
                 init_block.body = alloc_nodes + [const_assign, sum_assign]
 
                 range_block = mk_range_block(self.typemap, inner_size_var,

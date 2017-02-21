@@ -18,20 +18,23 @@ def next_label():
 INT_TYPE = types.scalars.Integer.from_bitwidth(64)
 BOOL_TYPE = types.scalars.Boolean("bool")
 
-def mk_alloc(typemap, lhs, size_var, dtype, scope, loc):
+def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
     """generate an array allocation with np.empty() and return list of nodes.
     size_var can be an int variable or tuple of int variables.
     """
     out = []
+    ndims = 1
+    size_typ = INT_TYPE
     if isinstance(size_var, tuple):
         # tuple_var = build_tuple([size_var...])
+        ndims = len(size_var)
         tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
-        typemap[tuple_var.name] = types.containers.UniTuple(INT_TYPE,
-            len(size_var))
+        typemap[tuple_var.name] = types.containers.UniTuple(INT_TYPE, ndims)
         tuple_call = ir.Expr.build_tuple(list(size_var), loc)
         tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
         out.append(tuple_assign)
         size_var = tuple_var
+        size_typ = types.containers.UniTuple(INT_TYPE, ndims)
     # g_np_var = Global(numpy)
     g_np_var = ir.Var(scope, mk_unique_var("$np_g_var"), loc)
     typemap[g_np_var.name] = types.misc.Module(numpy)
@@ -42,11 +45,19 @@ def mk_alloc(typemap, lhs, size_var, dtype, scope, loc):
     attr_var = ir.Var(scope, mk_unique_var("empty_attr_attr"), loc)
     typemap[attr_var.name] = _get_empty_func_typ()
     attr_assign = ir.Assign(empty_attr_call, attr_var, loc)
-    # alloc call: lhs = empty_attr(size_var)
-    alloc_call = ir.Expr.call(attr_var, [size_var, dtype], (), loc)
+    # alloc call: lhs = empty_attr(size_var, typ_var)
+    typ_var = ir.Var(scope, mk_unique_var("$np_typ_var"), loc)
+    typemap[typ_var.name] = types.functions.NumberClass(dtype)
+    # assuming str(dtype) returns valid np dtype string
+    np_typ_getattr = ir.Expr.getattr(g_np_var, str(dtype), loc)
+    typ_var_assign = ir.Assign(np_typ_getattr, typ_var, loc)
+    alloc_call = ir.Expr.call(attr_var, [size_var, typ_var], (), loc)
+    calltypes[alloc_call] = signature(
+        types.npytypes.Array(dtype, ndims, 'C'), size_typ,
+        types.functions.NumberClass(dtype))
     alloc_assign = ir.Assign(alloc_call, lhs, loc)
 
-    out.extend([g_np_assign, attr_assign, alloc_assign])
+    out.extend([g_np_assign, attr_assign, typ_var_assign, alloc_assign])
     return out
 
 def _get_empty_func_typ():
