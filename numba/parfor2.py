@@ -2,6 +2,8 @@ from __future__ import print_function, division, absolute_import
 
 from numba import ir, ir_utils, types, rewrites
 from numba.ir_utils import *
+from numba.analysis import compute_cfg_from_blocks
+from numba.controlflow import CFGraph
 
 class LoopNest(object):
     '''The LoopNest class holds information of a single loop including
@@ -282,6 +284,34 @@ def lower_parfor2(func_ir, typemap, calltypes):
         # old block stays either way
         new_blocks[block_label] = block
     func_ir.blocks = new_blocks
+    func_ir.blocks = _rename_labels(func_ir.blocks)
     print("function after parfor lowering:")
     func_ir.dump()
     return None
+
+def _rename_labels(blocks):
+    """rename labels of function body blocks according to topological sort.
+    lowering requires this order.
+    """
+    cfg = compute_cfg_from_blocks(blocks)
+    topo_order = cfg.topo_order()
+    label_map = {}
+    new_label = 0
+    for label in topo_order:
+        label_map[label] = new_label
+        new_label += 1
+    # update target labels in jumps/branches
+    for b in blocks.values():
+        term = b.terminator
+        if isinstance(term, ir.Jump):
+            term.target = label_map[term.target]
+        if isinstance(term, ir.Branch):
+            term.truebr = label_map[term.truebr]
+            term.falsebr = label_map[term.falsebr]
+    # update blocks dictionary keys
+    new_blocks = {}
+    for k, b in blocks.items():
+        new_label = label_map[k]
+        new_blocks[new_label] = b
+
+    return new_blocks
