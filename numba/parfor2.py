@@ -103,7 +103,7 @@ class RewriteParfor2(rewrites.Rewrite):
         """check if we support parfor translation for
         this Numpy call.
         """
-        return False # turn off for now
+        #return False # turn off for now
         if not (isinstance(expr, ir.Expr) and expr.op == 'call'):
             return False
         if expr.func.name not in self.array_analysis.numpy_calls.keys():
@@ -126,13 +126,13 @@ class RewriteParfor2(rewrites.Rewrite):
         args = expr.args
         if call_name=='dot':
             assert len(args)==2 #TODO: or len(args)==3
-            in1 = args[0].name
-            in2 = args[1].name
+            in1 = args[0]
+            in2 = args[1]
             el_typ = self.typemap[lhs.name].dtype
-            assert self._get_ndims(in1)<=2 and self._get_ndims(in2)==1
+            assert self._get_ndims(in1.name)<=2 and self._get_ndims(in2.name)==1
             # loop range correlation is same as first dimention of 1st input
-            corr = self.array_analysis.array_shape_classes[in1][0]
-            size_var = self.array_analysis.array_size_vars[in1][0]
+            corr = self.array_analysis.array_shape_classes[in1.name][0]
+            size_var = self.array_analysis.array_size_vars[in1.name][0]
             scope = self.current_block.scope
             loc = expr.loc
             index_var = ir.Var(scope, mk_unique_var("parfor_index"), lhs.loc)
@@ -140,10 +140,10 @@ class RewriteParfor2(rewrites.Rewrite):
             loopnests = [ LoopNest(index_var, size_var, corr) ]
             init_block = ir.Block(scope, loc)
             parfor = Parfor2(loopnests, init_block, {}, loc)
-            if self._get_ndims(in1)==2:
+            if self._get_ndims(in1.name)==2:
                 # for 2D input, there is an inner loop
                 # correlation of inner dimension
-                inner_size_var = self.array_analysis.array_size_vars[in1][1]
+                inner_size_var = self.array_analysis.array_size_vars[in1.name][1]
                 # loop structure: range block, header block, body
 
                 range_label = next_label()
@@ -174,25 +174,28 @@ class RewriteParfor2(rewrites.Rewrite):
                 header_block.body[-1].falsebr = out_label
                 phi_b_var = header_block.body[-2].target
 
-                body_block = _mk_mvdot_body(self.typemap, phi_b_var, index_var,
-                    in1, in2, sum_var, scope, loc, el_typ)
+                body_block = _mk_mvdot_body(self.typemap, self.calltypes,
+                    phi_b_var, index_var, in1, in2,
+                    sum_var, scope, loc, el_typ)
                 body_block.body[-1].target = header_label
 
                 out_block = ir.Block(scope, loc)
                 # lhs[parfor_index] = sum_var
                 setitem_node = ir.SetItem(lhs, index_var, sum_var, loc)
+                self.calltypes[setitem_node] = signature(types.none,
+                    self.typemap[lhs.name], INT_TYPE, el_typ)
                 out_block.body = [setitem_node]
                 parfor.loop_body = {range_label:range_block,
                     header_label:header_block, body_label:body_block,
                     out_label:out_block}
-            else: # self._get_ndims(in1)==1 (reduction)
+            else: # self._get_ndims(in1.name)==1 (reduction)
                 NotImplementedError("no reduction for dot() "+expr)
             parfor.dump()
             return parfor
         # return error if we couldn't handle it (avoid rewrite infinite loop)
         raise NotImplementedError("parfor translation failed for ", expr)
 
-def _mk_mvdot_body(typemap, phi_b_var, index_var, in1, in2, sum_var, scope,
+def _mk_mvdot_body(typemap, calltypes, phi_b_var, index_var, in1, in2, sum_var, scope,
         loc, el_typ):
     body_block = ir.Block(scope, loc)
     # inner_index = phi_b_var
@@ -205,24 +208,29 @@ def _mk_mvdot_body(typemap, phi_b_var, index_var, in1, in2, sum_var, scope,
     tuple_call = ir.Expr.build_tuple([index_var, inner_index], loc)
     tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
     # X_val = getitem(X, tuple_var)
-    X_val = ir.Var(scope, mk_unique_var("$"+in1+"_val"), loc)
+    X_val = ir.Var(scope, mk_unique_var("$"+in1.name+"_val"), loc)
     typemap[X_val.name] = el_typ
     getitem_call = ir.Expr.getitem(in1, tuple_var, loc)
+    calltypes[getitem_call] = signature(el_typ, typemap[in1.name],
+        typemap[tuple_var.name])
     getitem_assign = ir.Assign(getitem_call, X_val, loc)
     # v_val = getitem(V, inner_index)
-    v_val = ir.Var(scope, mk_unique_var("$"+in2+"_val"), loc)
+    v_val = ir.Var(scope, mk_unique_var("$"+in2.name+"_val"), loc)
     typemap[v_val.name] = el_typ
     v_getitem_call = ir.Expr.getitem(in2, inner_index, loc)
+    calltypes[v_getitem_call] = signature(el_typ, typemap[in2.name], INT_TYPE)
     v_getitem_assign = ir.Assign(v_getitem_call, v_val, loc)
     # add_var = X_val + v_val
     add_var = ir.Var(scope, mk_unique_var("$add_var"), loc)
     typemap[add_var.name] = el_typ
     add_call = ir.Expr.binop('+', X_val, v_val, loc)
+    calltypes[add_call] = signature(el_typ, el_typ, el_typ)
     add_assign = ir.Assign(add_call, add_var, loc)
     # acc_var = sum_var + add_var
     acc_var = ir.Var(scope, mk_unique_var("$acc_var"), loc)
     typemap[acc_var.name] = el_typ
     acc_call = ir.Expr.inplace_binop('+=', '+', sum_var, add_var, loc)
+    calltypes[acc_call] = signature(el_typ, el_typ, el_typ)
     acc_assign = ir.Assign(acc_call, acc_var, loc)
     # sum_var = acc_var
     final_assign = ir.Assign(acc_var, sum_var, loc)
