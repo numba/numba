@@ -491,7 +491,7 @@ class TestOverloadMethodCaching(TestCase):
         except AttributeError:
             ctx = multiprocessing
         q = ctx.Queue()
-        p = ctx.Process(target=self.run_caching_overload_method, args=(q,))
+        p = ctx.Process(target=run_caching_overload_method, args=(q,))
         p.start()
         q.put(MyDummy())
         p.join()
@@ -500,12 +500,15 @@ class TestOverloadMethodCaching(TestCase):
         res = q.get(timeout=1)
         self.assertEqual(res, 13)
 
-    @staticmethod
-    def run_caching_overload_method(q):
-        arg = q.get()
-        cfunc = jit(nopython=True, cache=True)(cache_overload_method_usecase)
-        res = cfunc(arg)
-        q.put(res)
+
+def run_caching_overload_method(q):
+    """
+    Used by TestOverloadMethodCaching.test_caching_overload_method
+    """
+    arg = q.get()
+    cfunc = jit(nopython=True, cache=True)(cache_overload_method_usecase)
+    res = cfunc(arg)
+    q.put(res)
 
 
 class TestIntrinsic(TestCase):
