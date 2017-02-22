@@ -318,7 +318,7 @@ class TestCudaAtomics(unittest.TestCase):
         self.check_atomic_max(dtype=np.float64, lo=-65535, hi=65535)
 
     def check_atomic_min(self, dtype, lo, hi):
-        vals = np.random.randint(-65535, 65535, size=(32, 32)).astype(dtype)
+        vals = np.random.randint(lo, hi, size=(32, 32)).astype(dtype)
         res = np.array([65535], dtype=vals.dtype)
         cuda_func = cuda.jit(atomic_min)
         cuda_func[32, 32](res, vals)
