@@ -471,6 +471,12 @@ class TestHighLevelExtending(TestCase):
         expectmsg = "cannot convert native Module"
         self.assertIn(expectmsg, errmsg)
 
+
+class TestOverloadMethodCaching(TestCase):
+    # Nested multiprocessing.Pool raises AssertionError:
+    # "daemonic processes are not allowed to have children"
+    _numba_parallel_test_ = False
+
     def test_caching_overload_method(self):
         cfunc = jit(nopython=True, cache=True)(cache_overload_method_usecase)
         self.assertPreciseEqual(cfunc(MyDummy()), 13)
