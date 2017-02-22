@@ -1,20 +1,21 @@
 from __future__ import print_function, division, absolute_import
 
-from collections import namedtuple
 import math
 import sys
 import pickle
+import multiprocessing
 
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import jit, types, errors, typeof, numpy_support, cgutils
+from numba import jit, types, errors
 from numba.compiler import compile_isolated
 from .support import TestCase, captured_stdout, tag
 
 from numba.extending import (typeof_impl, type_callable,
                              lower_builtin, lower_cast,
                              overload, overload_attribute,
+                             overload_method,
                              models, register_model,
                              box, unbox, NativeValue,
                              make_attribute_wrapper,
@@ -23,7 +24,6 @@ from numba.extending import (typeof_impl, type_callable,
                              )
 from numba.typing.templates import (
     ConcreteTemplate, signature, infer)
-from numba.targets.imputils import impl_ret_borrowed
 
 # Pandas-like API implementation
 from .pdlike_usecase import Index, Series
@@ -206,6 +206,17 @@ def overload_len_dummy(arg):
             return 13
 
         return len_impl
+
+
+@overload_method(MyDummyType, 'length')
+def overload_method_length(arg):
+    def imp(arg):
+        return len(arg)
+    return imp
+
+
+def cache_overload_method_usecase(x):
+    return x.length()
 
 
 def call_func1_nullary():
@@ -459,6 +470,36 @@ class TestHighLevelExtending(TestCase):
         errmsg = str(raises.exception)
         expectmsg = "cannot convert native Module"
         self.assertIn(expectmsg, errmsg)
+
+    def test_caching_overload_method(self):
+        cfunc = jit(nopython=True, cache=True)(cache_overload_method_usecase)
+        self.assertPreciseEqual(cfunc(MyDummy()), 13)
+        llvmir = cfunc.inspect_llvm((mydummy_type,))
+        # Ensure the inner method is not a declaration
+        decls = [ln for ln in llvmir.splitlines()
+                 if ln.startswith('declare') and 'overload_method_length' in ln]
+        self.assertEqual(len(decls), 0)
+        # Test in a separate process
+        try:
+            ctx = multiprocessing.get_context('spawn')
+        except AttributeError:
+            ctx = multiprocessing
+        q = ctx.Queue()
+        p = ctx.Process(target=self.run_caching_overload_method, args=(q,))
+        p.start()
+        q.put(MyDummy())
+        p.join()
+        # Ensure subprocess exited normally
+        self.assertEqual(p.exitcode, 0)
+        res = q.get(timeout=1)
+        self.assertEqual(res, 13)
+
+    @staticmethod
+    def run_caching_overload_method(q):
+        arg = q.get()
+        cfunc = jit(nopython=True, cache=True)(cache_overload_method_usecase)
+        res = cfunc(arg)
+        q.put(res)
 
 
 class TestIntrinsic(TestCase):
