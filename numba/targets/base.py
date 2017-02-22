@@ -779,7 +779,7 @@ class BaseContext(object):
         if ty is None:
             cres = self.compile_subroutine_no_cache(builder, impl, sig,
                                                     locals=locals)
-            ty = types.NumbaFunction(cres.fndesc, sig)
+            ty = types.InternalFunction(cres.fndesc, sig)
             self.cached_internal_func[cache_key] = ty
         return ty
 

@@ -302,7 +302,7 @@ class BaseContext(object):
         else:
             return ty
 
-        if isinstance(val, (types.ExternalFunction, types.NumbaFunction)):
+        if isinstance(val, (types.ExternalFunction,)):
             return val
 
         # Try to look up target specific typing information

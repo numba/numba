@@ -244,7 +244,7 @@ class ExternalFunction(Function):
         return self.symbol, self.sig
 
 
-class NumbaFunction(Function):
+class InternalFunction(Function):
     """
     A named native function with the Numba calling convention
     (resolvable by LLVM).
@@ -257,7 +257,7 @@ class NumbaFunction(Function):
         self.sig = sig
         template = typing.make_concrete_template(fndesc.qualname,
                                                  fndesc.qualname, [sig])
-        super(NumbaFunction, self).__init__(template)
+        super(InternalFunction, self).__init__(template)
 
     @property
     def key(self):
