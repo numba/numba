@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from numba import ir, ir_utils, types, rewrites
+from numba import ir, ir_utils, types, rewrites, config
 from numba.ir_utils import *
 from numba.analysis import compute_cfg_from_blocks
 from numba.controlflow import CFGraph
@@ -47,57 +47,35 @@ class Parfor2(ir.Expr, ir.Stmt):
             block.dump()
 
 
-@rewrites.register_rewrite('after-inference')
-class RewriteParfor2(rewrites.Rewrite):
-    """The RewriteParforExtra class is responsible for converting Numpy
+class ParforPass(object):
+    """ParforPass class is responsible for converting Numpy
     calls in Numba intermediate representation to Parfors, which
     will lower into either sequential or parallel loops during lowering
     stage.
     """
-    def __init__(self, pipeline, *args, **kws):
-        super(RewriteParfor2, self).__init__(pipeline, *args, **kws)
-        self.array_analysis = pipeline.array_analysis
-        ir_utils._max_label = max(pipeline.func_ir.blocks.keys())
-        # Install a lowering hook if we are using this rewrite.
-        special_ops = self.pipeline.targetctx.special_ops
-        #if 'parfor2' not in special_ops:
-        #    special_ops['parfor2'] = _lower_parfor2
-
-    def match(self, interp, block, typemap, calltypes):
-        """Match Numpy calls.
-        Return True when one or more matches were found, False otherwise.
-        """
-        # We can trivially reject everything if there are no
-        # calls in the type results.
-        if len(calltypes) == 0:
-            return False
-
-        self.current_block = block
+    def __init__(self, func_ir, typemap, calltypes, array_analysis):
+        self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
+        self.array_analysis = array_analysis
+        ir_utils._max_label = max(func_ir.blocks.keys())
 
-        assignments = block.find_insts(ir.Assign)
-        for instr in assignments:
-            expr = instr.value
-            # is it a Numpy call?
-            if self._is_supported_npycall(expr):
-                return True
-        return False
+    def run(self):
+        """run parfor conversion pass: replace Numpy calls
+        with Parfors when possible."""
 
-    def apply(self):
-        """When we've found Numpy calls in a basic block, replace Numpy calls
-        with Parfors when possible.
-        """
-        result = ir.Block(self.current_block.scope, self.current_block.loc)
-        block = self.current_block
-        for instr in block.body:
-            if isinstance(instr, ir.Assign):
-                expr = instr.value
-                lhs = instr.target
-                if self._is_supported_npycall(expr):
-                    instr = self._numpy_to_parfor(lhs, expr)
-            result.append(instr)
-        return result
+        for (key, block) in self.func_ir.blocks.items():
+            new_body = []
+            for instr in block.body:
+                if isinstance(instr, ir.Assign):
+                    expr = instr.value
+                    lhs = instr.target
+                    if self._is_supported_npycall(expr):
+                        instr = self._numpy_to_parfor(lhs, expr)
+                new_body.append(instr)
+            block.body = new_body
+
+        return
 
     def _is_supported_npycall(self, expr):
         """check if we support parfor translation for
@@ -133,7 +111,7 @@ class RewriteParfor2(rewrites.Rewrite):
             # loop range correlation is same as first dimention of 1st input
             corr = self.array_analysis.array_shape_classes[in1.name][0]
             size_var = self.array_analysis.array_size_vars[in1.name][0]
-            scope = self.current_block.scope
+            scope = lhs.scope
             loc = expr.loc
             index_var = ir.Var(scope, mk_unique_var("parfor_index"), lhs.loc)
             self.typemap[index_var.name] = INT_TYPE
@@ -293,8 +271,9 @@ def lower_parfor2(func_ir, typemap, calltypes):
         new_blocks[block_label] = block
     func_ir.blocks = new_blocks
     func_ir.blocks = _rename_labels(func_ir.blocks)
-    print("function after parfor lowering:")
-    func_ir.dump()
+    if config.DEBUG_ARRAY_OPT==1:
+        print("function after parfor lowering:")
+        func_ir.dump()
     return None
 
 def _rename_labels(blocks):
