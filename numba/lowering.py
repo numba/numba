@@ -658,7 +658,7 @@ class Lower(BaseLower):
     def lower_call_normal(self, fnty, signature, argvals):
         # Normal function resolution
         self.debug_print("# calling normal function: {0}".format(fnty))
-        return self.context.call_function(self.builder, fnty, signature, argvals)
+        return self.context.apply_definition(self.builder, fnty, signature, argvals)
 
     def lower_call(self, resty, expr):
         signature = self.fndesc.calltypes[expr]
