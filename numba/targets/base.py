@@ -477,7 +477,7 @@ class BaseContext(object):
         definition is emitted directly into the "caller".
         """
         # Resolve
-        impl = self.get_function(fn, sig)
+        impl = self.get_definition(fn, sig)
         # Call
         result = impl(builder, args)
         # Link in dependencies
@@ -490,9 +490,9 @@ class BaseContext(object):
         module.add_named_metadata('.numba.linker.libs',
                                   [llvmir.IntType(64)(uid), str(library)])
 
-    def get_function(self, fn, sig, _firstcall=True):
+    def get_definition(self, fn, sig, _firstcall=True):
         """
-        Return the implementation of function *fn* for signature *sig*.
+        Return the definition of function *fn* for signature *sig*.
         The return value is a callable with the signature (builder, args).
         """
         sig = sig.as_function()
@@ -511,7 +511,7 @@ class BaseContext(object):
         if isinstance(fn, types.Type):
             # It's a type instance => try to find a definition for the type class
             try:
-                return self.get_function(type(fn), sig)
+                return self.get_definition(type(fn), sig)
             except NotImplementedError:
                 # Raise exception for the type instance, for a better error message
                 pass
@@ -520,7 +520,7 @@ class BaseContext(object):
         # calling the first time.
         if _firstcall:
             self.refresh()
-            return self.get_function(fn, sig, _firstcall=False)
+            return self.get_definition(fn, sig, _firstcall=False)
 
         raise NotImplementedError("No definition for lowering %s%s" % (key, sig))
 
@@ -677,7 +677,7 @@ class BaseContext(object):
         cav = self.cast(builder, av, at, ty)
         cbv = self.cast(builder, bv, bt, ty)
         cmpsig = typing.signature(types.boolean, ty, ty)
-        cmpfunc = self.get_function(key, cmpsig)
+        cmpfunc = self.get_definition(key, cmpsig)
         return cmpfunc(builder, (cav, cbv))
 
     def make_optional_none(self, builder, valtype):
@@ -695,7 +695,7 @@ class BaseContext(object):
         """
         Return the truth value of a value of the given Numba type.
         """
-        impl = self.get_function(bool, typing.signature(types.boolean, typ))
+        impl = self.get_definition(bool, typing.signature(types.boolean, typ))
         return impl(builder, (val,))
 
     def get_c_value(self, builder, typ, name, dllimport=False):

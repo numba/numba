@@ -25,7 +25,7 @@ def map_operator(name, inplace_name, op):
         if reverse_args:
             args = args[::-1]
             sig = typing.signature(sig.return_type, *sig.args[::-1])
-        impl = context.get_function(op, sig)
+        impl = context.get_definition(op, sig)
         return impl(builder, args)
 
     if inplace_name:
@@ -35,9 +35,9 @@ def map_operator(name, inplace_name, op):
         def binop_inplace_impl(context, builder, sig, args):
             first = sig.args[0]
             if first.mutable:
-                impl = context.get_function(op + '=', sig)
+                impl = context.get_definition(op + '=', sig)
             else:
-                impl = context.get_function(op, sig)
+                impl = context.get_definition(op, sig)
             return impl(builder, args)
 
 

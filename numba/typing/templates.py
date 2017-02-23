@@ -438,7 +438,7 @@ class _OverloadAttributeTemplate(AttributeTemplate):
             disp = cls._get_dispatcher(typing_context, typ, attr, sig_args, sig_kws)
             disp_type = types.Dispatcher(disp)
             sig = disp_type.get_call_type(typing_context, sig_args, sig_kws)
-            call = context.get_function(disp_type, sig)
+            call = context.get_definition(disp_type, sig)
             return call(builder, (value,))
 
     @classmethod

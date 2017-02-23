@@ -266,7 +266,7 @@ def _build_array(context, builder, array_ty, input_types, inputs):
     array_wrapper_ty = input_types[array_wrapper_index]
     try:
         # __array_wrap__(source wrapped array, out array) -> out wrapped array
-        array_wrap = context.get_function('__array_wrap__',
+        array_wrap = context.get_definition('__array_wrap__',
                                           array_ty(array_wrapper_ty, real_array_ty))
     except NotImplementedError:
         # If it's the same priority as a regular array, assume we

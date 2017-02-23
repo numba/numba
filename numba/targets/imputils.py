@@ -315,7 +315,7 @@ def call_getiter(context, builder, iterable_type, val):
     of value *val*, and return the corresponding LLVM inst.
     """
     getiter_sig = typing.signature(iterable_type.iterator_type, iterable_type)
-    getiter_impl = context.get_function('getiter', getiter_sig)
+    getiter_impl = context.get_definition('getiter', getiter_sig)
     return getiter_impl(builder, (val,))
 
 
@@ -328,7 +328,7 @@ def call_iternext(context, builder, iterator_type, val):
     itemty = iterator_type.yield_type
     pair_type = types.Pair(itemty, types.boolean)
     iternext_sig = typing.signature(pair_type, iterator_type)
-    iternext_impl = context.get_function('iternext', iternext_sig)
+    iternext_impl = context.get_definition('iternext', iternext_sig)
     val = iternext_impl(builder, (val,))
     pairobj = context.make_helper(builder, pair_type, val)
     return _IternextResult(context, builder, pairobj)
@@ -340,7 +340,7 @@ def call_len(context, builder, ty, val):
     this type.
     """
     try:
-        len_impl = context.get_function(len, typing.signature(types.intp, ty,))
+        len_impl = context.get_definition(len, typing.signature(types.intp, ty,))
     except NotImplementedError:
         return None
     else:

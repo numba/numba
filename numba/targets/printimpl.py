@@ -72,7 +72,7 @@ def print_varargs_impl(context, builder, sig, args):
 
     for i, (argtype, argval) in enumerate(zip(sig.args, args)):
         signature = typing.signature(types.none, argtype)
-        imp = context.get_function("print_item", signature)
+        imp = context.get_definition("print_item", signature)
         imp(builder, [argval])
         if i < len(args) - 1:
             pyapi.print_string(' ')

@@ -100,7 +100,7 @@ def hash_tuple(context, builder, sig, args):
         # h = h * mult
         h = builder.mul(h, mult)
         val = builder.extract_value(tup, i)
-        hash_impl = context.get_function(hash,
+        hash_impl = context.get_definition(hash,
                                          typing.signature(sig.return_type, ty))
         h_val = hash_impl(builder, (val,))
         # h = h ^ hash(val)

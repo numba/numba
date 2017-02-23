@@ -66,11 +66,11 @@ def ctor({args}):
 
 def _getargs(fn):
     """
-    Returns list of positional and keyword argument names in order. 
+    Returns list of positional and keyword argument names in order.
     """
     sig = utils.pysignature(fn)
     params = sig.parameters
-    args = [k for k, v in params.items() 
+    args = [k for k, v in params.items()
             if (v.kind & v.POSITIONAL_OR_KEYWORD) == v.POSITIONAL_OR_KEYWORD]
     return args
 
@@ -294,7 +294,7 @@ class ClassBuilder(object):
             instance_type = sig.args[0]
             method = instance_type.jitmethods[attr]
             disp_type = types.Dispatcher(method)
-            call = context.get_function(disp_type, sig)
+            call = context.get_definition(disp_type, sig)
             out = call(builder, args)
             return imputils.impl_ret_new_ref(context, builder,
                                              sig.return_type, out)
@@ -353,7 +353,7 @@ def attr_impl(context, builder, typ, value, attr):
         sig = templates.signature(None, typ)
         dispatcher = types.Dispatcher(getter)
         sig = dispatcher.get_call_type(context.typing_context, [typ], {})
-        call = context.get_function(dispatcher, sig)
+        call = context.get_definition(dispatcher, sig)
         out = call(builder, [value])
         return imputils.impl_ret_new_ref(context, builder, sig.return_type, out)
 
@@ -392,7 +392,7 @@ def attr_impl(context, builder, sig, args, attr):
         disp_type = types.Dispatcher(setter)
         sig = disp_type.get_call_type(context.typing_context,
                                       (typ, valty), {})
-        call = context.get_function(disp_type, sig)
+        call = context.get_definition(disp_type, sig)
         call(builder, (target, val))
 
     else:
@@ -458,7 +458,7 @@ def ctor_impl(context, builder, sig, args):
 
     init = inst_typ.jitmethods['__init__']
     disp_type = types.Dispatcher(init)
-    call = context.get_function(disp_type, types.void(*init_sig))
+    call = context.get_definition(disp_type, types.void(*init_sig))
     realargs = [inst_struct._getvalue()] + list(args)
     call(builder, realargs)
 

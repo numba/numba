@@ -677,7 +677,7 @@ def real_divmod_func_body(context, builder, vx, wx):
         realtypemap = {'float': types.float32,
                        'double': types.float64}
         realtype = realtypemap[str(wx.type)]
-        floorfn = context.get_function(math.floor,
+        floorfn = context.get_definition(math.floor,
                                        typing.signature(realtype, realtype))
         floordiv = floorfn(builder, [div])
         floordivdiff = builder.fsub(div, floordiv)
@@ -764,7 +764,7 @@ def real_power_impl(context, builder, sig, args):
     x, y = args
     module = builder.module
     if context.implement_powi_as_math_call:
-        imp = context.get_function(math.pow, sig)
+        imp = context.get_definition(math.pow, sig)
         res = imp(builder, args)
     else:
         fn = lc.Function.intrinsic(module, lc.INTR_POW, [y.type])
@@ -805,7 +805,7 @@ def real_ne_impl(context, builder, sig, args):
 def real_abs_impl(context, builder, sig, args):
     [ty] = sig.args
     sig = typing.signature(ty, ty)
-    impl = context.get_function(math.fabs, sig)
+    impl = context.get_definition(math.fabs, sig)
     return impl(builder, args)
 
 

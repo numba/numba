@@ -400,5 +400,5 @@ unary_math_int_impl(math.degrees, degrees_float_impl)
 @lower(math.pow, types.Float, types.Float)
 @lower(math.pow, types.Float, types.Integer)
 def pow_impl(context, builder, sig, args):
-    impl = context.get_function("**", sig)
+    impl = context.get_definition("**", sig)
     return impl(builder, args)

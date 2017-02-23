@@ -21,7 +21,7 @@ def generic_is_not(context, builder, sig, args):
     """
     Implement `x is not y` as `not (x is y)`.
     """
-    is_impl = context.get_function('is', sig)
+    is_impl = context.get_definition('is', sig)
     return builder.not_(is_impl(builder, args))
 
 
@@ -40,7 +40,7 @@ def generic_is(context, builder, sig, args):
             else:
                 # fallbacks to `==`
                 try:
-                    eq_impl = context.get_function('==', sig)
+                    eq_impl = context.get_definition('==', sig)
                 except NotImplementedError:
                     # no `==` implemented for this type
                     return cgutils.false_bit
@@ -111,7 +111,7 @@ def do_minmax(context, builder, argtys, args, cmpop):
         acc = context.cast(builder, acc, accty, ty)
         v = context.cast(builder, v, vty, ty)
         cmpsig = typing.signature(types.boolean, ty, ty)
-        ge = context.get_function(cmpop, cmpsig)
+        ge = context.get_definition(cmpop, cmpsig)
         pred = ge(builder, (v, acc))
         res = builder.select(pred, v, acc)
         return ty, res
@@ -244,7 +244,7 @@ def number_constructor(context, builder, sig, args):
     """
     if isinstance(sig.return_type, types.Array):
         # Array constructor
-        impl = context.get_function(np.array, sig)
+        impl = context.get_definition(np.array, sig)
         return impl(builder, args)
     else:
         # Scalar constructor

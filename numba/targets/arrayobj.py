@@ -64,7 +64,7 @@ def make_array(array_type):
         def _make_refs(self, ref):
             sig = signature(real_array_type, array_type)
             try:
-                array_impl = self._context.get_function('__array__', sig)
+                array_impl = self._context.get_definition('__array__', sig)
             except NotImplementedError:
                 return super(ArrayStruct, self)._make_refs(ref)
 
@@ -1324,7 +1324,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         # Check shape is equal to sequence length
         index_shape = indexer.get_shape()
         assert len(index_shape) == 1
-        len_impl = context.get_function(len, signature(types.intp, srcty))
+        len_impl = context.get_definition(len, signature(types.intp, srcty))
         seq_len = len_impl(builder, (src,))
 
         shape_error = builder.icmp_signed('!=', index_shape[0], seq_len)
@@ -1335,7 +1335,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 
         def src_getitem(source_indices):
             idx, = source_indices
-            getitem_impl = context.get_function('getitem',
+            getitem_impl = context.get_definition('getitem',
                                                 signature(src_dtype, srcty, types.intp))
             return getitem_impl(builder, (src, idx))
 
@@ -3643,7 +3643,7 @@ def _get_seq_size(context, builder, seqty, seq):
     if isinstance(seqty, types.BaseTuple):
         return context.get_constant(types.intp, len(seqty))
     elif isinstance(seqty, types.Sequence):
-        len_impl = context.get_function(len, signature(types.intp, seqty,))
+        len_impl = context.get_definition(len, signature(types.intp, seqty,))
         return len_impl(builder, (seq,))
     else:
         assert 0
@@ -3653,7 +3653,7 @@ def _get_borrowing_getitem(context, seqty):
     Return a getitem() implementation that doesn't incref its result.
     """
     retty = seqty.dtype
-    getitem_impl = context.get_function('getitem',
+    getitem_impl = context.get_definition('getitem',
                                         signature(retty, seqty, types.intp))
     def wrap(builder, args):
         ret = getitem_impl(builder, args)

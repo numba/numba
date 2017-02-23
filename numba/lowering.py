@@ -291,7 +291,7 @@ class Lower(BaseLower):
             signature = self.fndesc.calltypes[inst]
             assert signature is not None
             try:
-                impl = self.context.get_function('static_setitem', signature)
+                impl = self.context.get_definition('static_setitem', signature)
             except NotImplementedError:
                 return self.lower_setitem(inst.target, inst.index_var, inst.value, signature)
             else:
@@ -319,7 +319,7 @@ class Lower(BaseLower):
 
             signature = self.fndesc.calltypes[inst]
             assert signature is not None
-            impl = self.context.get_function('delitem', signature)
+            impl = self.context.get_definition('delitem', signature)
 
             assert targetty == signature.args[0]
             index = self.context.cast(self.builder, index, indexty,
@@ -362,7 +362,7 @@ class Lower(BaseLower):
         valuety = self.typeof(value_var.name)
         indexty = self.typeof(index_var.name)
 
-        impl = self.context.get_function('setitem', signature)
+        impl = self.context.get_definition('setitem', signature)
 
         # Convert argument to match
         if isinstance(targetty, types.Optional):
@@ -470,7 +470,7 @@ class Lower(BaseLower):
                 return None
             static_sig = typing.signature(signature.return_type, *tys)
             try:
-                static_impl = self.context.get_function(op, static_sig)
+                static_impl = self.context.get_definition(op, static_sig)
                 return static_impl(self.builder, args)
             except NotImplementedError:
                 return None
@@ -491,14 +491,14 @@ class Lower(BaseLower):
             return cast_result(res)
 
         # Normal implementation for generic arguments
-        impl = self.context.get_function(op, signature)
+        impl = self.context.get_definition(op, signature)
         res = impl(self.builder, (lhs, rhs))
         return cast_result(res)
 
     def lower_getitem(self, resty, expr, value, index, signature):
         baseval = self.loadvar(value.name)
         indexval = self.loadvar(index.name)
-        impl = self.context.get_function("getitem", signature)
+        impl = self.context.get_definition("getitem", signature)
         argvals = (baseval, indexval)
         argtyps = (self.typeof(value.name),
                    self.typeof(index.name))
@@ -589,7 +589,7 @@ class Lower(BaseLower):
         fixed_sig.pysig = sig.pysig
 
         argvals = self.fold_call_args(fnty, sig, pos_args, inst.vararg, {})
-        impl = self.context.get_function(print, fixed_sig)
+        impl = self.context.get_definition(print, fixed_sig)
         impl(self.builder, argvals)
 
     def lower_call_external_function(self, fnty, argvals):
@@ -715,7 +715,7 @@ class Lower(BaseLower):
             typ = self.typeof(expr.value.name)
             # Get function
             signature = self.fndesc.calltypes[expr]
-            impl = self.context.get_function(expr.fn, signature)
+            impl = self.context.get_definition(expr.fn, signature)
             # Convert argument to match
             val = self.context.cast(self.builder, val, typ, signature.args[0])
             res = impl(self.builder, [val])
@@ -745,7 +745,7 @@ class Lower(BaseLower):
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
             signature = self.fndesc.calltypes[expr]
-            impl = self.context.get_function(expr.op, signature)
+            impl = self.context.get_definition(expr.op, signature)
             [fty] = signature.args
             castval = self.context.cast(self.builder, val, ty, fty)
             res = impl(self.builder, (castval,))
@@ -772,10 +772,10 @@ class Lower(BaseLower):
             tup = self.context.get_constant_undef(resty)
             pairty = types.Pair(itemty, types.boolean)
             getiter_sig = typing.signature(ty.iterator_type, ty)
-            getiter_impl = self.context.get_function('getiter',
+            getiter_impl = self.context.get_definition('getiter',
                                                      getiter_sig)
             iternext_sig = typing.signature(pairty, ty.iterator_type)
-            iternext_impl = self.context.get_function('iternext',
+            iternext_impl = self.context.get_definition('iternext',
                                                       iternext_sig)
             iterobj = getiter_impl(self.builder, (val,))
             # We call iternext() as many times as desired (`expr.count`).
@@ -834,7 +834,7 @@ class Lower(BaseLower):
             try:
                 # Both get_function() and the returned implementation can
                 # raise NotImplementedError if the types aren't supported
-                impl = self.context.get_function("static_getitem", signature)
+                impl = self.context.get_definition("static_getitem", signature)
                 return impl(self.builder, (self.loadvar(expr.value.name), expr.index))
             except NotImplementedError:
                 if expr.index_var is None:

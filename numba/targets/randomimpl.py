@@ -1219,7 +1219,7 @@ for typing_key, arity in [
         arr = arrayobj._empty_nd_impl(context, builder, arrty, shapes)
 
         # ... and populate it in natural order
-        scalar_impl = context.get_function(typing_key, scalar_sig)
+        scalar_impl = context.get_definition(typing_key, scalar_sig)
         with cgutils.for_range(builder, arr.nitems) as loop:
             val = scalar_impl(builder, scalar_args)
             ptr = cgutils.gep(builder, arr.data, loop.index)

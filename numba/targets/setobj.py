@@ -58,7 +58,7 @@ def get_hash_value(context, builder, typ, value):
     Compute the hash of the given value.
     """
     sig = typing.signature(types.intp, typ)
-    fn = context.get_function(hash, sig)
+    fn = context.get_definition(hash, sig)
     h = fn(builder, (value,))
     # Fixup reserved values
     is_ok = is_hash_used(context, builder, h)
@@ -184,7 +184,7 @@ class _SetPayload(object):
 
         mask = self.mask
         dtype = self._ty.dtype
-        eqfn = context.get_function('==',
+        eqfn = context.get_definition('==',
                                     typing.signature(types.boolean, dtype, dtype))
 
         one = ir.Constant(intp_t, 1)
