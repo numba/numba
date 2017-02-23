@@ -548,32 +548,39 @@ class ParallelTestRunner(runner.TextTestRunner):
         # We hijack TextTestRunner.run()'s inner logic by passing this
         # method as if it were a test case.
         child_runner = _MinimalRunner(self.runner_cls, self.runner_args)
-        pool = multiprocessing.Pool()
 
-        try:
-            self._run_parallel_tests(result, pool, child_runner)
-        except:
-            # On exception, kill still active workers immediately
-            pool.terminate()
-            # Make sure exception is reported and not ignored
-            raise
-        else:
-            # Close the pool cleanly unless asked to early out
-            if result.shouldStop:
+        # Split the tests and recycle the worker process to tame memory usage.
+        chunk_size = 500
+        splitted_tests = [self._ptests[i:i + chunk_size]
+                          for i in range(0, len(self._ptests), chunk_size)]
+
+        for tests in splitted_tests:
+            pool = multiprocessing.Pool()
+            try:
+                self._run_parallel_tests(result, pool, child_runner, tests)
+            except:
+                # On exception, kill still active workers immediately
                 pool.terminate()
+                # Make sure exception is reported and not ignored
+                raise
             else:
-                pool.close()
-        finally:
-            # Always join the pool (this is necessary for coverage.py)
-            pool.join()
+                # Close the pool cleanly unless asked to early out
+                if result.shouldStop:
+                    pool.terminate()
+                    break
+                else:
+                    pool.close()
+            finally:
+                # Always join the pool (this is necessary for coverage.py)
+                pool.join()
         if not result.shouldStop:
             stests = SerialSuite(self._stests)
             stests.run(result)
             return result
 
-    def _run_parallel_tests(self, result, pool, child_runner):
-        remaining_ids = set(t.id() for t in self._ptests)
-        it = pool.imap_unordered(child_runner, self._ptests)
+    def _run_parallel_tests(self, result, pool, child_runner, tests):
+        remaining_ids = set(t.id() for t in tests)
+        it = pool.imap_unordered(child_runner, tests)
         while True:
             try:
                 child_result = it.__next__(self.timeout)
