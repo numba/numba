@@ -466,6 +466,26 @@ class BaseContext(object):
         lty = self.get_value_type(ty)
         return Constant.null(lty)
 
+    def call_function(self, builder, fn, sig, args):
+        """
+        Resolve function using `get_function` and call it.
+        *fn* and *sig* are the same as in `get_function`.
+        *builder* is the llvm IR builder.
+        *args* is a sequence of llvm IR values for the arguments.
+
+        Note: this doesn't actually "call" any function.  The "function"
+        definition is emitted directly into the "caller".
+        """
+        # Resolve
+        impl = self.get_function(fn, sig)
+        # Call
+        result = impl(builder, args)
+        # Link in dependencies
+        cg = self.codegen()
+        for lib in getattr(impl, "libs", ()):
+            cg.add_linking_library(lib)
+        return result
+
     def get_function(self, fn, sig, _firstcall=True):
         """
         Return the implementation of function *fn* for signature *sig*.

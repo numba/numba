@@ -603,13 +603,6 @@ class Lower(BaseLower):
             self.builder, func, fndesc.argtypes, argvals)
         return res
 
-    def lower_call_numba_function(self, fnty, argvals):
-        # Handle a compiled Numba function
-        self.debug_print("# calling numba function")
-        res = self.context.call_internal(self.builder, fnty.fndesc, fnty.sig,
-                                         argvals)
-        return res
-
     def lower_call_external_function_pointer(self, fnty, pointer, signature,
                                              argvals):
         self.debug_print("# calling external function pointer")
@@ -665,12 +658,7 @@ class Lower(BaseLower):
     def lower_call_normal(self, fnty, signature, argvals):
         # Normal function resolution
         self.debug_print("# calling normal function: {0}".format(fnty))
-        impl = self.context.get_function(fnty, signature)
-        res = impl(self.builder, argvals)
-        libs = getattr(impl, "libs", ())
-        for lib in libs:
-            self.library.add_linking_library(lib)
-        return res
+        return self.context.call_function(self.builder, fnty, signature, argvals)
 
     def lower_call(self, resty, expr):
         signature = self.fndesc.calltypes[expr]

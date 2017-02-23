@@ -503,12 +503,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
             disp = cls._get_dispatcher(typing_context, typ, attr, sig.args, {})
             disp_type = types.Dispatcher(disp)
             sig = disp_type.get_call_type(typing_context, sig.args, {})
-            call = context.get_function(disp_type, sig)
-            # Link dependent library
-            cg = context.codegen()
-            for lib in getattr(call, 'libs', ()):
-                cg.add_linking_library(lib)
-            return call(builder, args)
+            return context.call_function(builder, disp_type, sig, args)
 
     def _resolve(self, typ, attr):
         if self._attr != attr:
