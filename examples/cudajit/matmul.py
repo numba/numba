@@ -1,16 +1,19 @@
 #! /usr/bin/env python
+from __future__ import print_function
 
-from numba import *
-import numpy as np
-import math
 from timeit import default_timer as time
+
+import numpy as np
+
+from numba import cuda
 
 
 bpg = 50
 tpb = 32
 n = bpg * tpb
 
-@cuda.jit(argtypes=[f4[:,:], f4[:,:], f4[:,:]])
+
+@cuda.jit('(float32[:,:], float32[:,:], float32[:,:])')
 def cu_square_matrix_mul(A, B, C):
     tx = cuda.threadIdx.x
     ty = cuda.threadIdx.y

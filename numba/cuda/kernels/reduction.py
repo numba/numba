@@ -124,6 +124,47 @@ def reduction_template(binop, typ, blocksize):
     return reducer
 
 
+_get_copy_strides_kernel_cache = None
+
+
+def _get_copy_strides_kernel():
+    # Partial reduction kernels write their output strided - this kernel is
+    # used to copy the strided output to a compacted array which can be used
+    # as input to the next kernel.
+    from numba import cuda
+
+    global _get_copy_strides_kernel_cache
+
+    if _get_copy_strides_kernel_cache is None:
+        @cuda.jit
+        def copy_strides(arr, n, stride, tpb):
+            sm = cuda.shared.array(1, dtype=uint32)
+            i = cuda.threadIdx.x
+            base = 0
+            if i == 0:
+                sm[0] = 0
+
+            val = arr[0]
+            while base < n:
+                idx = base + i
+                if idx < n:
+                    val = arr[idx * stride]
+
+                cuda.syncthreads()
+
+                if base + i < n:
+                    arr[sm[0] + i] = val
+
+                if i == 0:
+                    sm[0] += tpb
+
+                base += tpb
+
+        _get_copy_strides_kernel_cache = copy_strides
+
+    return _get_copy_strides_kernel_cache
+
+
 class Reduce(object):
     # The reduction kernels are precompiled for all block sizes at the time when
     # the reduction operation is first called. A single reduction can use
@@ -168,33 +209,7 @@ class Reduce(object):
         from numba import cuda
 
         nbtype, size = self._type_and_size(dary, size)
-
-        # Partial reduction kernels write their output strided - this kernel is
-        # used to copy the strided output to a compacted array which can be used
-        # as input to the next kernel.
-        @cuda.jit
-        def copy_strides(arr, n, stride, tpb):
-            sm = cuda.shared.array(1, dtype=uint32)
-            i = cuda.threadIdx.x
-            base = 0
-            if i == 0:
-                sm[0] = 0
-
-            val = arr[0]
-            while base < n:
-                idx = base + i
-                if idx < n:
-                    val = arr[idx * stride]
-
-                cuda.syncthreads()
-
-                if base + i < n:
-                    arr[sm[0] + i] = val
-
-                if i == 0:
-                    sm[0] += tpb
-
-                base += tpb
+        copy_strides = _get_copy_strides_kernel()
 
         # The reduction is split into multiple steps, because each block writes
         # a partial result out, which cannot be used as input to other blocks

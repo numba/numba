@@ -35,6 +35,9 @@ class TestOperatorModule(unittest.TestCase):
     def test_truediv(self):
         self.operator_template(operator.truediv)
 
+    def test_floordiv(self):
+        self.operator_template(operator.floordiv)
+
 
 if __name__ == '__main__':
     unittest.main()

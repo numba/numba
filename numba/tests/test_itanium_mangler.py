@@ -1,4 +1,7 @@
+# -*- coding: utf8 -*-
 from __future__ import print_function, absolute_import
+
+import re
 
 from numba import unittest_support as unittest
 from numba import itanium_mangler
@@ -59,8 +62,22 @@ class TestItaniumManager(unittest.TestCase):
     def test_custom_type(self):
         got = itanium_mangler.mangle_type(range_iter32_type)
         name = str(range_iter32_type)
-        expect = "u{n}{name}".format(n=len(name), name=name)
+        expect = "{n}{name}".format(n=len(name), name=name)
         self.assertEqual(expect, got)
+
+    def test_mangle_literal(self):
+        # check int
+        got = itanium_mangler.mangle_value(123)
+        expect = "Li123E"
+        self.assertEqual(expect, got)
+        # check float (not handled using standard)
+        got = itanium_mangler.mangle_value(12.3)
+        self.assertRegexpMatches(got, r'^\d+_12\$[0-9a-z][0-9a-z]3$')
+
+    def test_mangle_unicode(self):
+        name = u'f∂ƒ©z'
+        got = itanium_mangler.mangle_identifier(name)
+        self.assertRegexpMatches(got, r'^\d+f(\$[a-z0-9][a-z0-9])+z$')
 
 
 if __name__ == '__main__':

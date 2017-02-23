@@ -32,14 +32,15 @@ def unset_macosx_deployment_target():
     """Unset MACOSX_DEPLOYMENT_TARGET because we are not building portable
     libraries
     """
-    macosx_target = os.environ.get('MACOSX_DEPLOYMENT_TARGET', None)
-    if macosx_target is not None:
+    if 'MACOSX_DEPLOYMENT_TARGET' in os.environ:
         del os.environ['MACOSX_DEPLOYMENT_TARGET']
 
 
 class BasePYCCTest(TestCase):
 
     def setUp(self):
+        unset_macosx_deployment_target()
+
         self.tmpdir = temp_directory('test_pycc')
         # Make sure temporary files and directories created by
         # distutils don't clutter the top-level /tmp
@@ -69,8 +70,6 @@ class TestLegacyAPI(BasePYCCTest):
         """
         Test creating a C shared library object using pycc.
         """
-        unset_macosx_deployment_target()
-
         source = os.path.join(base_path, 'compile_with_pycc.py')
         cdll_modulename = 'test_dll_legacy' + find_shared_ending()
         cdll_path = os.path.join(self.tmpdir, cdll_modulename)
@@ -100,7 +99,6 @@ class TestLegacyAPI(BasePYCCTest):
         Test creating a CPython extension module using pycc.
         """
         self.skipTest("lack of environment can make the extension crash")
-        unset_macosx_deployment_target()
 
         source = os.path.join(base_path, 'compile_with_pycc.py')
         modulename = 'test_pyext_legacy'
@@ -121,8 +119,6 @@ class TestLegacyAPI(BasePYCCTest):
         """
         Test creating a LLVM bitcode file using pycc.
         """
-        unset_macosx_deployment_target()
-
         modulename = os.path.join(base_path, 'compile_with_pycc')
         bitcode_modulename = os.path.join(self.tmpdir, 'test_bitcode_legacy.bc')
         if os.path.exists(bitcode_modulename):
@@ -203,6 +199,7 @@ class TestCC(BasePYCCTest):
         with self.check_cc_compiled(cc) as lib:
             res = lib.multi(123, 321)
             self.assertPreciseEqual(res, 123 * 321)
+            self.assertEqual(lib.multi.__module__, 'pycc_test_simple')
 
     def test_compile_for_cpu(self):
         # Compiling for the host CPU should always succeed
@@ -271,6 +268,8 @@ class TestCC(BasePYCCTest):
 class TestDistutilsSupport(TestCase):
 
     def setUp(self):
+        unset_macosx_deployment_target()
+
         # Copy the test project into a temp directory to avoid
         # keeping any build leftovers in the source tree
         self.tmpdir = temp_directory('test_pycc_distutils')

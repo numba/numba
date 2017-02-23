@@ -26,37 +26,56 @@ race condition.
 #include "workqueue.h"
 #include "../_pymodule.h"
 
-static cas_function_t *cas = NULL;
-
-static void
-cas_wait(volatile int *ptr, const int old, const int repl) {
-    int out = repl;
-    int timeout = 1;   /* starting from 1us nap */
-    static const int MAX_WAIT_TIME = 20 * 1000; /* max wait is 20ms */
-
-    while (1) {
-        if (cas) { /* protect against CAS function being released by LLVM during
-                      interpreter teardown. */
-            out = cas(ptr, old, repl);
-            if (out == old) return;
-        }
-
-        take_a_nap(timeout);
-
-        /* Exponentially increase the wait time until the max has reached*/
-        timeout <<= 1;
-        if (timeout >= MAX_WAIT_TIME) {
-            timeout = MAX_WAIT_TIME;
-        }
-    }
-}
-
 /* As the thread-pool isn't inherited by children,
    free the task-queue, too. */
 static void reset_after_fork(void);
 
 /* PThread */
 #ifdef NUMBA_PTHREAD
+
+typedef struct {
+    pthread_cond_t cond;
+    pthread_mutex_t mutex;
+} queue_condition_t;
+
+static int
+queue_condition_init(queue_condition_t *qc)
+{
+    int r;
+    if ((r = pthread_cond_init(&qc->cond, NULL)))
+        return r;
+    if ((r = pthread_mutex_init(&qc->mutex, NULL)))
+        return r;
+    return 0;
+}
+
+static void
+queue_condition_lock(queue_condition_t *qc)
+{
+    /* XXX errors? */
+    pthread_mutex_lock(&qc->mutex);
+}
+
+static void
+queue_condition_unlock(queue_condition_t *qc)
+{
+    /* XXX errors? */
+    pthread_mutex_unlock(&qc->mutex);
+}
+
+static void
+queue_condition_signal(queue_condition_t *qc)
+{
+    /* XXX errors? */
+    pthread_cond_signal(&qc->cond);
+}
+
+static void
+queue_condition_wait(queue_condition_t *qc)
+{
+    /* XXX errors? */
+    pthread_cond_wait(&qc->cond, &qc->mutex);
+}
 
 static thread_pointer
 numba_new_thread(void *worker, void *arg)
@@ -81,16 +100,47 @@ numba_new_thread(void *worker, void *arg)
     return (thread_pointer)th;
 }
 
-static void
-take_a_nap(int usec) {
-    usleep(usec);
-}
-
-
 #endif
 
 /* Win Thread */
 #ifdef NUMBA_WINTHREAD
+
+typedef struct {
+    CONDITION_VARIABLE cv;
+    CRITICAL_SECTION cs;
+} queue_condition_t;
+
+static int
+queue_condition_init(queue_condition_t *qc)
+{
+    InitializeConditionVariable(&qc->cv);
+    InitializeCriticalSection(&qc->cs);
+    return 0;
+}
+
+static void
+queue_condition_lock(queue_condition_t *qc)
+{
+    EnterCriticalSection(&qc->cs);
+}
+
+static void
+queue_condition_unlock(queue_condition_t *qc)
+{
+    LeaveCriticalSection(&qc->cs);
+}
+
+static void
+queue_condition_signal(queue_condition_t *qc)
+{
+    WakeConditionVariable(&qc->cv);
+}
+
+static void
+queue_condition_wait(queue_condition_t *qc)
+{
+    SleepConditionVariableCS(&qc->cv, &qc->cs, INFINITE);
+}
 
 /* Adapted from Python/thread_nt.h */
 typedef struct {
@@ -133,14 +183,6 @@ numba_new_thread(void *worker, void *arg)
     return (thread_pointer)handle;
 }
 
-static void
-take_a_nap(int usec) {
-    /* Note that Sleep(0) will relinquish the current time slice, allowing
-       other threads to run. */
-    Sleep(usec / 1000);
-}
-
-
 #endif
 
 typedef struct Task{
@@ -149,7 +191,8 @@ typedef struct Task{
 } Task;
 
 typedef struct {
-    volatile int lock;
+    queue_condition_t cond;
+    int state;
     Task task;
 } Queue;
 
@@ -159,8 +202,17 @@ static int queue_count;
 static int queue_pivot = 0;
 
 static void
-set_cas(void *ptr) {
-    cas = ptr;
+queue_state_wait(Queue *queue, int old, int repl)
+{
+    queue_condition_t *cond = &queue->cond;
+
+    queue_condition_lock(cond);
+    while (queue->state != old) {
+        queue_condition_wait(cond);
+    }
+    queue->state = repl;
+    queue_condition_unlock(cond);
+    queue_condition_signal(cond);
 }
 
 static void
@@ -188,12 +240,16 @@ void thread_worker(void *arg) {
     Task *task;
 
     while (1) {
-        cas_wait(&queue->lock, READY, RUNNING);
+        /* Wait for the queue to be in READY state (i.e. for some task
+         * to need running), and switch it to RUNNING.
+         */
+        queue_state_wait(queue, READY, RUNNING);
 
         task = &queue->task;
         task->func(task->args, task->dims, task->steps, task->data);
 
-        cas_wait(&queue->lock, RUNNING, DONE);
+        /* Task is done. */
+        queue_state_wait(queue, RUNNING, DONE);
     }
 }
 
@@ -201,30 +257,32 @@ static void launch_threads(int count) {
     if (!queues) {
         /* If queues are not yet allocated,
            create them, one for each thread. */
-       int i;
-       size_t sz = sizeof(Queue) * count;
+        int i;
+        size_t sz = sizeof(Queue) * count;
 
-       queues = malloc(sz);     /* this memory will leak */
-       memset(queues, 0, sz);
-       queue_count = count;
+        queues = malloc(sz);     /* this memory will leak */
+        /* Note this initializes the state to IDLE */
+        memset(queues, 0, sz);
+        queue_count = count;
 
-       for (i = 0; i < count; ++i) {
+        for (i = 0; i < count; ++i) {
+            queue_condition_init(&queues[i].cond);
             numba_new_thread(thread_worker, &queues[i]);
-       }
+        }
     }
 }
 
 static void synchronize(void) {
     int i;
     for (i = 0; i < queue_count; ++i) {
-        cas_wait(&queues[i].lock, DONE, IDLE);
+        queue_state_wait(&queues[i], DONE, IDLE);
     }
 }
 
 static void ready(void) {
     int i;
     for (i = 0; i < queue_count; ++i) {
-        cas_wait(&queues[i].lock, IDLE, READY);
+        queue_state_wait(&queues[i], IDLE, READY);
     }
 }
 
@@ -240,8 +298,6 @@ MOD_INIT(workqueue) {
     if (m == NULL)
         return MOD_ERROR_VAL;
 
-    PyObject_SetAttrString(m, "set_cas",
-                           PyLong_FromVoidPtr(&set_cas));
     PyObject_SetAttrString(m, "launch_threads",
                            PyLong_FromVoidPtr(&launch_threads));
     PyObject_SetAttrString(m, "synchronize",

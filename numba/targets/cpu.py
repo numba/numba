@@ -13,6 +13,7 @@ from numba.utils import cached_property
 from numba.targets import callconv, codegen, externals, intrinsics, listobj, setobj
 from .options import TargetOptions
 from numba.runtime import rtsys
+from . import fastmathpass
 
 # Keep those structures in sync with _dynfunc.c.
 
@@ -31,6 +32,8 @@ class CPUContext(BaseContext):
     """
     Changes BaseContext calling convention
     """
+    allow_dynamic_globals = True
+
     # Overrides
     def create_module(self, name):
         return self._internal_codegen._create_empty_module(name)
@@ -56,8 +59,7 @@ class CPUContext(BaseContext):
         self.install_registry(operatorimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(randomimpl.registry)
-        # Initialize PRNG state
-        randomimpl.random_init()
+        self.install_registry(randomimpl.registry)
 
     @property
     def target_data(self):
@@ -120,6 +122,9 @@ class CPUContext(BaseContext):
         return setobj.build_set(self, builder, set_type, items)
 
     def post_lowering(self, mod, library):
+        if self.enable_fastmath:
+            fastmathpass.rewrite_module(mod)
+
         if self.is32bit:
             # 32-bit machine needs to replace all 64-bit div/rem to avoid
             # calls to compiler-rt
@@ -185,8 +190,11 @@ class CPUTargetOptions(TargetOptions):
         "forceobj": bool,
         "looplift": bool,
         "boundcheck": bool,
+        "debug": bool,
         "_nrt": bool,
         "no_rewrites": bool,
+        "no_cpython_wrapper": bool,
+        "fastmath": bool,
     }
 
 

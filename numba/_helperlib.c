@@ -25,6 +25,29 @@
  * Other helpers.
  */
 
+
+/* Fix fmod() and fmodf() for windows x64 VC 9.0 (VS 2008)
+https://support.microsoft.com/en-us/kb/982107
+*/
+static  void (*fnclex)(void) = NULL;
+
+NUMBA_EXPORT_FUNC(double)
+numba_fixed_fmod(double x, double y){
+    fnclex();  /* no inline asm in x64 =( */
+    return fmod(x, y);
+}
+
+NUMBA_EXPORT_FUNC(float)
+numba_fixed_fmodf(float x, float y) {
+    fnclex();  /* no inline asm in x64 =( */
+    return fmodf(x, y);
+}
+
+NUMBA_EXPORT_FUNC(void)
+numba_set_fnclex(void *fn){
+    fnclex = fn;
+}
+
 /* provide 64-bit division function to 32-bit platforms */
 NUMBA_EXPORT_FUNC(int64_t)
 numba_sdiv(int64_t a, int64_t b) {
@@ -382,6 +405,26 @@ numba_ndarray_new(int nd,
     return ndary;
 }
 
+
+/*
+ * Handle reshaping of zero-sized array.
+ * See numba_attempt_nocopy_reshape() below.
+ */
+static int
+nocopy_empty_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *strides,
+                     npy_intp newnd, const npy_intp *newdims,
+                     npy_intp *newstrides, npy_intp itemsize,
+                     int is_f_order)
+{
+    int i;
+    /* Just make the strides vaguely reasonable
+     * (they can have any value in theory).
+     */
+    for (i = 0; i < newnd; i++)
+        newstrides[i] = itemsize;
+    return 1;  /* reshape successful */
+}
+
 /*
  * Straight from Numpy's _attempt_nocopy_reshape()
  * (np/core/src/multiarray/shape.c).
@@ -394,6 +437,7 @@ numba_ndarray_new(int nd,
  * If no copy is needed, returns 1 and fills `npy_intp *newstrides`
  *     with appropriate strides
  */
+
 NUMBA_EXPORT_FUNC(int)
 numba_attempt_nocopy_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *strides,
                              npy_intp newnd, const npy_intp *newdims,
@@ -433,8 +477,10 @@ numba_attempt_nocopy_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *
     }
 
     if (np == 0) {
-        /* the current code does not handle 0-sized arrays, so give up */
-        return 0;
+        /* the Numpy code does not handle 0-sized arrays */
+        return nocopy_empty_reshape(nd, dims, strides,
+                                    newnd, newdims, newstrides,
+                                    itemsize, is_f_order);
     }
 
     /* oi to oj and ni to nj give the axis ranges currently worked with */

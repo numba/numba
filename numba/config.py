@@ -94,7 +94,7 @@ class _EnvReloader(object):
                 return ctor(value)
             except Exception:
                 warnings.warn("environ %s defined but failed to parse '%s'" %
-                              (name, res), RuntimeWarning)
+                              (name, value), RuntimeWarning)
                 return default
 
         # Print warnings to screen about function compilation
@@ -156,7 +156,13 @@ class _EnvReloader(object):
         ANNOTATE = _readenv("NUMBA_DUMP_ANNOTATION", int, 0)
 
         # Dump type annotation in html format
-        HTML = _readenv("NUMBA_DUMP_HTML", str, None)
+        def fmt_html_path(path):
+            if path is None:
+                return path
+            else:
+                return os.path.abspath(path)
+
+        HTML = _readenv("NUMBA_DUMP_HTML", fmt_html_path, None)
 
         # Allow interpreter fallback so that Numba @jit decorator will never fail
         # Use for migrating from old numba (<0.12) which supported closure, and other
@@ -196,6 +202,13 @@ class _EnvReloader(object):
         # Enable CUDA simulator
         ENABLE_CUDASIM = _readenv("NUMBA_ENABLE_CUDASIM", int, 0)
 
+        # CUDA logging level
+        # Any level name from the *logging* module.  Case insensitive.
+        # Defaults to CRITICAL if not set or invalid.
+        # Note: This setting only applies when logging is not configured.
+        #       Any existing logging configuration is preserved.
+        CUDA_LOG_LEVEL = _readenv("NUMBA_CUDA_LOG_LEVEL", str, '')
+
         # Maximum number of pending CUDA deallocations (default: 10)
         CUDA_DEALLOCS_COUNT = _readenv("NUMBA_CUDA_MAX_PENDING_DEALLOCS_COUNT",
                                        int, 10)
@@ -218,6 +231,12 @@ class _EnvReloader(object):
 
         # Declare a dGPU is present
         NUMBA_HSA_DGPU_PRESENT = _readenv("NUMBA_HSA_DGPU_PRESENT", int, 0)
+
+        # Debug Info
+
+        # The default value for the `debug` flag
+        DEBUGINFO_DEFAULT = _readenv("NUMBA_DEBUGINFO", int, 0)
+        CUDA_DEBUGINFO_DEFAULT = _readenv("NUMBA_CUDA_DEBUGINFO", int, 0)
 
         # Inject the configuration values into the module globals
         for name, value in locals().copy().items():

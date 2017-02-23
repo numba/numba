@@ -1,6 +1,6 @@
 from __future__ import absolute_import, print_function
 
-import copy
+
 from functools import reduce, wraps
 import operator
 import sys
@@ -8,15 +8,14 @@ import threading
 import warnings
 
 from numba import ctypes_support as ctypes
-from numba.typing.templates import AbstractTemplate
-from numba import config, compiler, types
-from numba.typing.templates import ConcreteTemplate
+from numba import config, compiler, types, sigutils
+from numba.typing.templates import AbstractTemplate, ConcreteTemplate
 from numba import funcdesc, typing, utils, serialize
 
 from .cudadrv.autotune import AutoTuner
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
-from .errors import KernelRuntimeError, normalize_kernel_dimensions
+from .errors import normalize_kernel_dimensions
 from .api import get_current_device
 
 
@@ -52,6 +51,7 @@ def compile_cuda(pyfunc, return_type, args, debug, inline):
     flags.set('no_cpython_wrapper')
     if debug:
         flags.set('boundcheck')
+        flags.set('debuginfo')
     if inline:
         flags.set('forceinline')
     # Run compilation pipeline
@@ -422,7 +422,7 @@ class CUDAKernel(CUDAKernelBase):
                  link=(), debug=False, fastmath=False, type_annotation=None):
         super(CUDAKernel, self).__init__()
         # initialize CUfunction
-        options = {}
+        options = {'debug': debug}
         if fastmath:
             options.update(dict(ftz=True,
                                 prec_sqrt=False,
@@ -709,6 +709,16 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         '''
         argtypes = tuple(
             [self.typingctx.resolve_argument_type(a) for a in args])
+        kernel = self.compile(argtypes)
+        return kernel
+
+    def compile(self, sig):
+        '''
+        Compile and bind to the current context a version of this kernel
+        specialized for the given signature.
+        '''
+        argtypes, return_type = sigutils.normalize_signature(sig)
+        assert return_type is None
         kernel = self.definitions.get(argtypes)
         if kernel is None:
             if 'link' not in self.targetoptions:

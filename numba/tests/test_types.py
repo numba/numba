@@ -18,7 +18,7 @@ from numba import unittest_support as unittest
 from numba.utils import IS_PY3
 from numba import sigutils, types, typing
 from numba.types.abstract import _typecache
-from numba import jit, numpy_support
+from numba import jit, numpy_support, typeof
 from .support import TestCase, tag
 from .enum_usecases import *
 
@@ -80,36 +80,6 @@ class TestTypes(TestCase):
 
         # Different dtypes
         self.assertNotEqual(types.DType(types.int32), types.DType(types.int64))
-
-    def test_ordering(self):
-        def check_order(values):
-            for i in range(len(values)):
-                self.assertLessEqual(values[i], values[i])
-                self.assertGreaterEqual(values[i], values[i])
-                self.assertFalse(values[i] < values[i])
-                self.assertFalse(values[i] > values[i])
-                for j in range(i):
-                    self.assertLess(values[j], values[i])
-                    self.assertLessEqual(values[j], values[i])
-                    self.assertGreater(values[i], values[j])
-                    self.assertGreaterEqual(values[i], values[j])
-                    self.assertFalse(values[i] < values[j])
-                    self.assertFalse(values[i] <= values[j])
-                    self.assertFalse(values[j] > values[i])
-                    self.assertFalse(values[j] >= values[i])
-
-        check_order([types.int8, types.int16, types.int32, types.int64])
-        check_order([types.uint8, types.uint16, types.uint32, types.uint64])
-        check_order([types.float32, types.float64])
-        check_order([types.complex64, types.complex128])
-
-        if IS_PY3:
-            with self.assertRaises(TypeError):
-                types.int8 <= types.uint32
-            with self.assertRaises(TypeError):
-                types.int8 <= types.float32
-            with self.assertRaises(TypeError):
-                types.float64 <= types.complex128
 
     def test_weaktype(self):
         d = Dummy()
@@ -206,6 +176,19 @@ class TestTypes(TestCase):
         check(scalar[:,::1], scalar, 2, 'C')
         check(scalar[::1,:], scalar, 2, 'F')
 
+    def test_array_notation_for_dtype(self):
+        def check(arrty, scalar, ndim, layout):
+            self.assertIs(arrty.dtype, scalar)
+            self.assertEqual(arrty.ndim, ndim)
+            self.assertEqual(arrty.layout, layout)
+        scalar = types.int32
+        dtyped = types.DType(scalar)
+        check(dtyped[:], scalar, 1, 'A')
+        check(dtyped[::1], scalar, 1, 'C')
+        check(dtyped[:,:], scalar, 2, 'A')
+        check(dtyped[:,::1], scalar, 2, 'C')
+        check(dtyped[::1,:], scalar, 2, 'F')
+
     @tag('important')
     def test_call_notation(self):
         # Function call signature
@@ -227,17 +210,63 @@ class TestTypes(TestCase):
         self.assertPreciseEqual(ty(5), np.timedelta64(5))
         self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT'))
 
-    def test_bitwidth_number_types(self):
+
+class TestNumbers(TestCase):
+    """
+    Tests for number types.
+    """
+
+    def test_bitwidth(self):
         """
         All numeric types have bitwidth attribute
         """
         for ty in types.number_domain:
             self.assertTrue(hasattr(ty, "bitwidth"))
 
+    def test_minval_maxval(self):
+        self.assertEqual(types.int8.maxval, 127)
+        self.assertEqual(types.int8.minval, -128)
+        self.assertEqual(types.uint8.maxval, 255)
+        self.assertEqual(types.uint8.minval, 0)
+        self.assertEqual(types.int64.maxval, (1<<63) - 1)
+        self.assertEqual(types.int64.minval, -(1<<63))
+        self.assertEqual(types.uint64.maxval, (1<<64) - 1)
+        self.assertEqual(types.uint64.minval, 0)
+
     def test_from_bidwidth(self):
         f = types.Integer.from_bitwidth
         self.assertIs(f(32), types.int32)
         self.assertIs(f(8, signed=False), types.uint8)
+
+    def test_ordering(self):
+        def check_order(values):
+            for i in range(len(values)):
+                self.assertLessEqual(values[i], values[i])
+                self.assertGreaterEqual(values[i], values[i])
+                self.assertFalse(values[i] < values[i])
+                self.assertFalse(values[i] > values[i])
+                for j in range(i):
+                    self.assertLess(values[j], values[i])
+                    self.assertLessEqual(values[j], values[i])
+                    self.assertGreater(values[i], values[j])
+                    self.assertGreaterEqual(values[i], values[j])
+                    self.assertFalse(values[i] < values[j])
+                    self.assertFalse(values[i] <= values[j])
+                    self.assertFalse(values[j] > values[i])
+                    self.assertFalse(values[j] >= values[i])
+
+        check_order([types.int8, types.int16, types.int32, types.int64])
+        check_order([types.uint8, types.uint16, types.uint32, types.uint64])
+        check_order([types.float32, types.float64])
+        check_order([types.complex64, types.complex128])
+
+        if IS_PY3:
+            with self.assertRaises(TypeError):
+                types.int8 <= types.uint32
+            with self.assertRaises(TypeError):
+                types.int8 <= types.float32
+            with self.assertRaises(TypeError):
+                types.float64 <= types.complex128
 
 
 class TestNdIter(TestCase):
@@ -472,6 +501,56 @@ class TestSignatures(TestCase):
         check_error((types.Integer,), "invalid signature")
         check_error((None,), "invalid signature")
         check_error([], "invalid signature")
+
+
+class TestRecordDtype(unittest.TestCase):
+    def test_record_type_equiv(self):
+        rec_dt = np.dtype([('a', np.int32), ('b', np.float32)])
+        rec_ty = typeof(rec_dt)
+        art1 = rec_ty[::1]
+        arr = np.zeros(5, dtype=rec_dt)
+        art2 = typeof(arr)
+        self.assertEqual(art2.dtype.dtype, rec_ty)
+        self.assertEqual(art1, art2)
+
+    def test_user_specified(self):
+        rec_dt = np.dtype([('a', np.int32), ('b', np.float32)])
+        rec_type = typeof(rec_dt)
+
+        @jit((rec_type[:],), nopython=True)
+        def foo(x):
+            return x['a'], x['b']
+
+        arr = np.zeros(1, dtype=rec_dt)
+        arr[0]['a'] = 123
+        arr[0]['b'] = 32.1
+
+        a, b = foo(arr)
+
+        self.assertEqual(a, arr[0]['a'])
+        self.assertEqual(b, arr[0]['b'])
+
+
+class TestDType(TestCase):
+    def test_type_attr(self):
+        # Test .type attribute of dtype
+        def conv(arr, val):
+            return arr.dtype.type(val)
+
+        jit_conv = jit(nopython=True)(conv)
+
+        def assert_matches(arr, val, exact):
+            expect = conv(arr, val)
+            got = jit_conv(arr, val)
+            self.assertPreciseEqual(expect, exact)
+            self.assertPreciseEqual(typeof(expect), typeof(got))
+            self.assertPreciseEqual(expect, got)
+
+        arr = np.zeros(5)
+        assert_matches(arr.astype(np.intp), 1.2, 1)
+        assert_matches(arr.astype(np.float64), 1.2, 1.2)
+        assert_matches(arr.astype(np.complex128), 1.2, (1.2 + 0j))
+        assert_matches(arr.astype(np.complex128), 1.2j, 1.2j)
 
 
 if __name__ == '__main__':

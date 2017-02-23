@@ -47,13 +47,13 @@ not supported.
 Recursive calls
 '''''''''''''''
 
-Only a very limited form of recursion is supported:
+Most recursive call patterns are supported.  The only restriction is that the
+recursive callee must have a control-flow path that returns without recursing.
+Numba is able to type-infer recursive functions without specifying the function
+type signature (which is required in numba 0.28 and earlier).
+Recursive calls can even call into a different overload of the function.
 
-* only self-recursion is allowed (mutual recursion is unsupported)
-* you must specify an explicit signature in the :func:`~numba.jit`
-  decorator
-* the signature in the recursive call must be compatible with the signature
-  being compiled
+.. XXX add reference to NBEP
 
 Generators
 ----------
@@ -171,6 +171,7 @@ The following built-in functions are supported:
 * :func:`abs`
 * :class:`bool`
 * :class:`complex`
+* :func:`divmod`
 * :func:`enumerate`
 * :class:`float`
 * :class:`int`: only the one-argument form

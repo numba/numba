@@ -3,7 +3,7 @@ from __future__ import print_function
 import textwrap
 
 import numba.unittest_support as unittest
-from numba import bytecode, interpreter, ir
+from numba import compiler, ir
 from numba.utils import PYVERSION, StringIO
 
 
@@ -45,7 +45,7 @@ def var_swapping(a, b, c, d, e):
     c, d, e = e, c, d
     return a + b + c + d + e
 
-def var_propagate1(a, b):
+def var_propagate1_pre36(a, b):
     """
     label 0:
         a = arg(0, name=a)                       ['a']
@@ -77,6 +77,44 @@ def var_propagate1(a, b):
     """
     c = (a if a > b else b) + 5
     return c
+
+def var_propagate1_post36(a, b):
+    """
+    label 0:
+        a = arg(0, name=a)                       ['a']
+        b = arg(1, name=b)                       ['b']
+        $0.3 = a > b                             ['$0.3', 'a', 'b']
+        branch $0.3, 8, 12                       ['$0.3']
+    label 8:
+        del b                                    []
+        del $0.3                                 []
+        $phi14.2 = a                             ['$phi14.2', 'a']
+        del a                                    []
+        jump 14                                  []
+    label 12:
+        del a                                    []
+        del $0.3                                 []
+        $phi14.2 = b                             ['$phi14.2', 'b']
+        del b                                    []
+        jump 14                                  []
+    label 14:
+        $const14.1 = const(int, 5)               ['$const14.1']
+        $14.3 = $phi14.2 + $const14.1            ['$14.3', '$const14.1', '$phi14.2']
+        del $phi14.2                             []
+        del $const14.1                           []
+        c = $14.3                                ['$14.3', 'c']
+        del $14.3                                []
+        $14.5 = cast(value=c)                    ['$14.5', 'c']
+        del c                                    []
+        return $14.5                             ['$14.5']
+    """
+    c = (a if a > b else b) + 5
+    return c
+
+
+var_propagate1 = (var_propagate1_post36
+                  if PYVERSION >= (3, 6)
+                  else var_propagate1_pre36)
 
 
 class TestIR(unittest.TestCase):
@@ -120,15 +158,12 @@ class TestIRDump(unittest.TestCase):
     """
 
     def get_ir(self, pyfunc):
-        bc = bytecode.ByteCode(func=pyfunc)
-        interp = interpreter.Interpreter(bc)
-        interp.interpret()
-        return interp
+        return compiler.run_frontend(pyfunc)
 
     def check_ir_dump(self, pyfunc):
-        interp = self.get_ir(pyfunc)
+        func_ir = self.get_ir(pyfunc)
         out = StringIO()
-        interp.dump(file=out)
+        func_ir.dump(file=out)
         expected = textwrap.dedent(pyfunc.__doc__).strip().splitlines()
         got = out.getvalue().strip().splitlines()
         self.assertEqual(got, expected,

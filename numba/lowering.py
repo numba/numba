@@ -11,6 +11,8 @@ from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
 from .errors import LoweringError, new_error_context
 from .targets import imputils
+from .funcdesc import default_mangler
+from . import debuginfo
 
 
 class Environment(_dynfunc.Environment):
@@ -40,18 +42,14 @@ class BaseLower(object):
     """
     Lower IR to LLVM
     """
-
-    # If true, then can't cache LLVM module accross process calls
-    has_dynamic_globals = False
-
-    def __init__(self, context, library, fndesc, interp):
+    def __init__(self, context, library, fndesc, func_ir):
         self.context = context
         self.library = library
         self.fndesc = fndesc
-        self.blocks = utils.SortedMap(utils.iteritems(interp.blocks))
-        self.interp = interp
+        self.blocks = utils.SortedMap(utils.iteritems(func_ir.blocks))
+        self.func_ir = func_ir
         self.call_conv = context.call_conv
-        self.generator_info = self.interp.generator_info
+        self.generator_info = func_ir.generator_info
 
         # Initialize LLVM
         self.module = self.library.create_ir_module(self.fndesc.unique_name)
@@ -65,6 +63,14 @@ class BaseLower(object):
         self.varmap = {}
         self.firstblk = min(self.blocks.keys())
         self.loc = -1
+
+        # Debuginfo
+        dibuildercls = (self.context.DIBuilder
+                        if self.context.enable_debuginfo
+                        else debuginfo.DummyDIBuilder)
+
+        self.debuginfo = dibuildercls(module=self.module,
+                                      filepath=func_ir.loc.filename)
 
         # Subclass initialization
         self.init()
@@ -105,11 +111,15 @@ class BaseLower(object):
         # (for generators) and it's important to use a new API and
         # EnvironmentManager.
         self.pyapi = None
+        self.debuginfo.mark_subprogram(function=self.builder.function,
+                                       name=self.fndesc.qualname,
+                                       loc=self.func_ir.loc)
 
     def post_lower(self):
         """
         Called after all blocks are lowered
         """
+        self.debuginfo.finalize()
 
     def pre_block(self, block):
         """
@@ -226,11 +236,20 @@ class BaseLower(object):
         if config.DEBUG_JIT:
             self.context.debug_print(self.builder, "DEBUGJIT: {0}".format(msg))
 
+    @property
+    def has_dynamic_globals(self):
+        """
+        If true, then can't cache LLVM module accross process calls.
+        """
+        return self.library.has_dynamic_globals
+
 
 class Lower(BaseLower):
     GeneratorLower = generators.GeneratorLower
 
     def lower_inst(self, inst):
+        # Set debug location for all subsequent LL instructions
+        self.debuginfo.mark_location(self.builder, self.loc)
         self.debug_print(str(inst))
         if isinstance(inst, ir.Assign):
             ty = self.typeof(inst.target.name)
@@ -370,9 +389,6 @@ class Lower(BaseLower):
         value = inst.value
         # In nopython mode, closure vars are frozen like globals
         if isinstance(value, (ir.Const, ir.Global, ir.FreeVar)):
-            if isinstance(ty, types.ExternalFunctionPointer):
-                self.has_dynamic_globals = True
-
             res = self.context.get_constant_generic(self.builder, ty,
                                                     value.value)
             self.incref(ty, res)
@@ -534,9 +550,10 @@ class Lower(BaseLower):
                     self.builder, signature.args[index], default)
 
             def stararg_handler(index, param, vars):
+                stararg_ty = signature.args[index]
+                assert isinstance(stararg_ty, types.BaseTuple), stararg_ty
                 values = [self._cast_var(var, sigty)
-                          for var, sigty in
-                          zip(vars, signature.args[index])]
+                          for var, sigty in zip(vars, stararg_ty)]
                 return cgutils.make_anonymous_struct(self.builder, values)
 
             argvals = typing.fold_arguments(pysig,
@@ -643,9 +660,17 @@ class Lower(BaseLower):
                                                          argvals, fnty.cconv)
 
         elif isinstance(fnty, types.RecursiveCall):
-            # Self-recursive call
-            impl = imputils.user_function(self.fndesc, ())
-            res = impl(self.context, self.builder, signature, argvals)
+            # Recursive call
+            qualprefix = fnty.overloads[signature.args]
+            mangler = self.context.mangler or default_mangler
+            mangled_name = mangler(qualprefix, signature.args)
+            # special case self recursion
+            if self.builder.function.name.startswith(mangled_name):
+                res = self.context.call_internal(self.builder, self.fndesc,
+                                                 signature, argvals)
+            else:
+                res = self.context.call_unresolved(self.builder, mangled_name,
+                                                   signature, argvals)
 
         else:
             # Normal function resolution
@@ -724,6 +749,11 @@ class Lower(BaseLower):
         elif expr.op == 'exhaust_iter':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
+            # Unpack optional
+            if isinstance(ty, types.Optional):
+                val = self.context.cast(self.builder, val, ty, ty.type)
+                ty = ty.type
+
             # If we have a tuple, we needn't do anything
             # (and we can't iterate over the heterogenous ones).
             if isinstance(ty, types.BaseTuple):
@@ -918,7 +948,17 @@ class Lower(BaseLower):
         return self.alloca_lltype(name, lltype)
 
     def alloca_lltype(self, name, lltype):
-        return cgutils.alloca_once(self.builder, lltype, name=name, zfill=True)
+        # Is user variable?
+        is_uservar = not name.startswith('$')
+        # Allocate space for variable
+        aptr = cgutils.alloca_once(self.builder, lltype, name=name, zfill=True)
+        if is_uservar:
+            # Emit debug info for user variable
+            sizeof = self.context.get_abi_sizeof(lltype)
+            self.debuginfo.mark_variable(self.builder, aptr, name=name,
+                                         lltype=lltype, size=sizeof,
+                                         loc=self.loc)
+        return aptr
 
     def incref(self, typ, val):
         if not self.context.enable_nrt:

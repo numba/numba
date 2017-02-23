@@ -3,6 +3,10 @@ call activate %CONDA_ENV%
 
 @rem Ensure that the documentation builds without warnings
 if "%BUILD_DOC%" == "yes" python setup.py build_doc
+@rem Run system info tool
+pushd bin
+numba -s
+popd
 @rem First check that the test discovery works
 python -m numba.tests.test_runtests
 @rem Now run the Numba test suite

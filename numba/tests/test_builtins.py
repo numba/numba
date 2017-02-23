@@ -20,6 +20,9 @@ forceobj_flags.set("force_pyobject")
 
 no_pyobj_flags = Flags()
 
+nrt_no_pyobj_flags = Flags()
+nrt_no_pyobj_flags.set("nrt")
+
 
 def abs_usecase(x):
     return abs(x)
@@ -55,6 +58,9 @@ def cmp_usecase(x, y):
 
 def complex_usecase(x, y):
     return complex(x, y)
+
+def divmod_usecase(x, y):
+    return divmod(x, y)
 
 def enumerate_usecase():
     result = 0
@@ -177,6 +183,17 @@ def zip_3_usecase():
     for i, j, k in zip((1, 2), (3, 4, 5), (6.7, 8.9)):
         result += i * j * k
     return result
+
+
+def zip_first_exhausted():
+    iterable = range(7)
+    n = 3
+    it = iter(iterable)
+    # 1st iterator is shorter
+    front = list(zip(range(n), it))
+    # Make sure that we didn't skip one in `it`
+    back = list(it)
+    return front, back
 
 
 def pow_op_usecase(x, y):
@@ -331,6 +348,60 @@ class TestBuiltins(TestCase):
     @tag('important')
     def test_complex_npm(self):
         self.test_complex(flags=no_pyobj_flags)
+
+    def test_divmod_ints(self, flags=enable_pyobj_flags):
+        pyfunc = divmod_usecase
+
+        cr = compile_isolated(pyfunc, (types.int64, types.int64),
+                              flags=flags)
+        cfunc = cr.entry_point
+
+        def truncate_result(x, bits=64):
+            # Remove any extraneous bits (since Numba will return
+            # a 64-bit result by definition)
+            if x >= 0:
+                x &= (1 << (bits - 1)) - 1
+            return x
+
+        denominators = [1, 3, 7, 15, -1, -3, -7, -15, 2**63 - 1, -2**63]
+        numerators = denominators + [0]
+        for x, y, in itertools.product(numerators, denominators):
+            expected_quot, expected_rem = pyfunc(x, y)
+            quot, rem = cfunc(x, y)
+            f = truncate_result
+            self.assertPreciseEqual((f(quot), f(rem)),
+                                    (f(expected_quot), f(expected_rem)))
+
+        for x in numerators:
+            with self.assertRaises(ZeroDivisionError):
+                cfunc(x, 0)
+
+    @tag('important')
+    def test_divmod_ints_npm(self):
+        self.test_divmod_ints(flags=no_pyobj_flags)
+
+    def test_divmod_floats(self, flags=enable_pyobj_flags):
+        pyfunc = divmod_usecase
+
+        cr = compile_isolated(pyfunc, (types.float64, types.float64),
+                              flags=flags)
+        cfunc = cr.entry_point
+
+        denominators = [1., 3.5, 1e100, -2., -7.5, -1e101,
+                        np.inf, -np.inf, np.nan]
+        numerators = denominators + [-0.0, 0.0]
+        for x, y, in itertools.product(numerators, denominators):
+            expected_quot, expected_rem = pyfunc(x, y)
+            quot, rem = cfunc(x, y)
+            self.assertPreciseEqual((quot, rem), (expected_quot, expected_rem))
+
+        for x in numerators:
+            with self.assertRaises(ZeroDivisionError):
+                cfunc(x, 0.0)
+
+    @tag('important')
+    def test_divmod_floats_npm(self):
+        self.test_divmod_floats(flags=no_pyobj_flags)
 
     def test_enumerate(self, flags=enable_pyobj_flags):
         self.run_nullary_func(enumerate_usecase, flags)
@@ -845,6 +916,17 @@ class TestBuiltins(TestCase):
 
     def test_zip_0_npm(self):
         self.test_zip_0(flags=no_pyobj_flags)
+
+    def test_zip_first_exhausted(self, flags=forceobj_flags):
+        """
+        Test side effect to the input iterators when a left iterator has been
+        exhausted before the ones on the right.
+        """
+        self.run_nullary_func(zip_first_exhausted, flags)
+
+    @tag('important')
+    def test_zip_first_exhausted_npm(self):
+        self.test_zip_first_exhausted(flags=nrt_no_pyobj_flags)
 
     def test_pow_op_usecase(self):
         args = [

@@ -15,6 +15,7 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba import cffi_support, numpy_support, types
 from numba.special import typeof
+from numba.dispatcher import OmittedArg
 from numba._dispatcher import compute_fingerprint
 
 from .support import TestCase, tag
@@ -301,6 +302,17 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         ty = typeof(Custom())
         self.assertEqual(ty, types.UniTuple(types.boolean, 42))
 
+    def test_omitted_args(self):
+        ty0 = typeof(OmittedArg(0.0))
+        ty1 = typeof(OmittedArg(1))
+        ty2 = typeof(OmittedArg(1.0))
+        ty3 = typeof(OmittedArg(1.0))
+        self.assertEqual(ty0, types.Omitted(0.0))
+        self.assertEqual(ty1, types.Omitted(1))
+        self.assertEqual(ty2, types.Omitted(1.0))
+        self.assertEqual(len({ty0, ty1, ty2}), 3)
+        self.assertEqual(ty3, ty2)
+
 
 class DistinctChecker(object):
 
@@ -528,6 +540,20 @@ class TestFingerprint(TestCase):
             compute_fingerprint(set())
         with self.assertRaises(NotImplementedError):
             compute_fingerprint(frozenset([2, 3]))
+
+    def test_omitted_args(self):
+        distinct = DistinctChecker()
+
+        v0 = OmittedArg(0.0)
+        v1 = OmittedArg(1.0)
+        v2 = OmittedArg(1)
+
+        s = compute_fingerprint(v0)
+        self.assertEqual(compute_fingerprint(v1), s)
+        distinct.add(s)
+        distinct.add(compute_fingerprint(v2))
+        distinct.add(compute_fingerprint(0.0))
+        distinct.add(compute_fingerprint(1))
 
     def test_complicated_type(self):
         # Generating a large fingerprint

@@ -1,7 +1,5 @@
 from __future__ import print_function
 
-import sys
-
 import numpy as np
 
 import numba.unittest_support as unittest
@@ -9,6 +7,7 @@ from numba.compiler import compile_isolated
 from numba.numpy_support import from_dtype
 from numba import types, njit, typeof, numpy_support
 from .support import TestCase, CompilationCache, MemoryLeakMixin, tag
+from numba.errors import TypingError
 
 
 def array_dtype(a):
@@ -77,6 +76,14 @@ def size_after_slicing_usecase(buf, i):
 
 def array_ctypes_data(arr):
     return arr.ctypes.data
+
+
+def array_real(arr):
+    return arr.real
+
+
+def array_imag(arr):
+    return arr.imag
 
 
 class TestArrayAttr(MemoryLeakMixin, TestCase):
@@ -223,6 +230,103 @@ class TestArrayCTypes(MemoryLeakMixin, unittest.TestCase):
         cfunc = njit(pyfunc)
         arr = np.arange(3)
         self.assertEqual(pyfunc(arr), cfunc(arr))
+
+
+class TestRealImagAttr(MemoryLeakMixin, TestCase):
+    def check_complex(self, pyfunc):
+        cfunc = njit(pyfunc)
+        # test 1D
+        size = 10
+        arr = np.arange(size) + np.arange(size) * 10j
+        self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+        # test 2D
+        arr = arr.reshape(2, 5)
+        self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+
+    def test_complex_real(self):
+        self.check_complex(array_real)
+
+    def test_complex_imag(self):
+        self.check_complex(array_imag)
+
+    def check_number_real(self, dtype):
+        pyfunc = array_real
+        cfunc = njit(pyfunc)
+        # test 1D
+        size = 10
+        arr = np.arange(size, dtype=dtype)
+        self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+        # test 2D
+        arr = arr.reshape(2, 5)
+        self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+        # test identity
+        self.assertEqual(arr.data, pyfunc(arr).data)
+        self.assertEqual(arr.data, cfunc(arr).data)
+        # test writable
+        real = cfunc(arr)
+        self.assertNotEqual(arr[0, 0], 5)
+        real[0, 0] = 5
+        self.assertEqual(arr[0, 0], 5)
+
+    def test_number_real(self):
+        """
+        Testing .real of non-complex dtypes
+        """
+        for dtype in [np.uint8, np.int32, np.float32, np.float64]:
+            self.check_number_real(dtype)
+
+    def check_number_imag(self, dtype):
+        pyfunc = array_imag
+        cfunc = njit(pyfunc)
+        # test 1D
+        size = 10
+        arr = np.arange(size, dtype=dtype)
+        self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+        # test 2D
+        arr = arr.reshape(2, 5)
+        self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+        # test are zeros
+        self.assertEqual(cfunc(arr).tolist(), np.zeros_like(arr).tolist())
+        # test readonly
+        imag = cfunc(arr)
+        with self.assertRaises(ValueError) as raises:
+            imag[0] = 1
+        self.assertEqual('assignment destination is read-only',
+                         str(raises.exception))
+
+    def test_number_imag(self):
+        """
+        Testing .imag of non-complex dtypes
+        """
+        for dtype in [np.uint8, np.int32, np.float32, np.float64]:
+            self.check_number_imag(dtype)
+
+    def test_record_real(self):
+        rectyp = np.dtype([('real', np.float32), ('imag', np.complex64)])
+        arr = np.zeros(3, dtype=rectyp)
+        arr['real'] = np.random.random(arr.size)
+        arr['imag'] = np.random.random(arr.size) * 1.3j
+
+        # check numpy behavior
+        # .real is identity
+        self.assertIs(array_real(arr), arr)
+        # .imag is zero_like
+        self.assertEqual(array_imag(arr).tolist(), np.zeros_like(arr).tolist())
+
+        # check numba behavior
+        # it's most likely a user error, anyway
+        jit_array_real = njit(array_real)
+        jit_array_imag = njit(array_imag)
+
+        with self.assertRaises(TypingError) as raises:
+            jit_array_real(arr)
+        self.assertIn("cannot access .real of array of Record",
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            jit_array_imag(arr)
+        self.assertIn("cannot access .imag of array of Record",
+                      str(raises.exception))
 
 
 if __name__ == '__main__':

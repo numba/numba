@@ -88,10 +88,14 @@ class JITCPUCodegenTestCase(TestCase):
         self.assertIsInstance(ptr, utils.integer_types)
         cfunc = ctypes_sum_ty(ptr)
         self.assertEqual(cfunc(2, 3), 5)
+        # Note: With llvm3.9.1, deleting `library` will cause memory error in
+        #       the following code during running of optimization passes in
+        #       LLVM. The reason of the error is unclear. The error is known to
+        #       replicate on osx64 and linux64.
 
         # Same, but with dependency on another library
-        library = self.compile_module(asm_sum_outer, asm_sum_inner)
-        ptr = library.get_pointer_to_function("sum")
+        library2 = self.compile_module(asm_sum_outer, asm_sum_inner)
+        ptr = library2.get_pointer_to_function("sum")
         self.assertIsInstance(ptr, utils.integer_types)
         cfunc = ctypes_sum_ty(ptr)
         self.assertEqual(cfunc(2, 3), 5)

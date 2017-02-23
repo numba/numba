@@ -220,6 +220,24 @@ class TestOptional(TestCase):
         self.assertEqual(pyfunc(), cfunc())
         self.assertEqual(pyfunc(3), cfunc(3))
 
+    def test_optional_unpack(self):
+        """
+        Issue 2171
+        """
+        def pyfunc(x):
+            if x is None:
+                return
+            else:
+                a, b = x
+                return a, b
+
+        tup = types.Tuple([types.intp] * 2)
+        opt_tup = types.Optional(tup)
+        sig = (opt_tup,)
+        cfunc = njit(sig)(pyfunc)
+        self.assertEqual(pyfunc(None), cfunc(None))
+        self.assertEqual(pyfunc((1, 2)), cfunc((1, 2)))
+
 
 if __name__ == '__main__':
     unittest.main()

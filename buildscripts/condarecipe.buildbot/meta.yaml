@@ -24,19 +24,16 @@ requirements:
   build:
     - python
     - numpy x.x
-    # Avoid https://github.com/pypa/setuptools/issues/728
-    - setuptools 23.*
+    - setuptools
     # On channel https://anaconda.org/numba/
-    - llvmlite 0.13.*
+    - llvmlite 0.16.*
     - funcsigs       [py27]
     - singledispatch [py27]
   run:
     - python
     - numpy x.x
-    # Avoid https://github.com/pypa/setuptools/issues/728
-    - setuptools 23.*
     # On channel https://anaconda.org/numba/
-    - llvmlite 0.13.*
+    - llvmlite 0.16.*
     - funcsigs       [py27]
     - singledispatch [py27]
 test:
@@ -47,13 +44,21 @@ test:
     - scipy
     - ipython
     - cudatoolkit
+    - setuptools
   files:
     - mandel.py
   commands:
     # Check Numba executables are there
     - pycc -h
     - numba -h
+    # run system info tool
+    - numba -s
     # Check test discovery works
     - python -m numba.tests.test_runtests
     # Run the CUDA test suite
     - python -m numba.runtests -v -m -b numba.cuda.tests
+about:
+  home: http://numba.pydata.org/
+  license: BSD
+  license_file: LICENSE
+  summary: a just-in-time Python function compiler based on LLVM

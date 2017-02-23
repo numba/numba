@@ -3,6 +3,8 @@ Target Options
 """
 from __future__ import print_function, division, absolute_import
 
+from .. import config
+
 
 class TargetOptions(object):
     OPTIONS = {}
@@ -15,8 +17,8 @@ class TargetOptions(object):
             try:
                 ctor = self.OPTIONS[k]
             except KeyError:
-                fmt = "Does not support option: '%s'"
-                raise KeyError(fmt % k)
+                fmt = "%r does not support option: '%s'"
+                raise KeyError(fmt % (self.__class__, k))
             else:
                 self.values[k] = ctor(v)
 
@@ -49,7 +51,8 @@ class TargetOptions(object):
         if kws.pop('_nrt', True):
             flags.set("nrt")
 
-        if kws.pop('debug', False):
+        if kws.pop('debug', config.DEBUGINFO_DEFAULT):
+            flags.set("debuginfo")
             flags.set("boundcheck")
 
         if kws.pop('nogil', False):
@@ -57,6 +60,12 @@ class TargetOptions(object):
 
         if kws.pop('no_rewrites', False):
             flags.set('no_rewrites')
+
+        if kws.pop('no_cpython_wrapper', False):
+            flags.set('no_cpython_wrapper')
+
+        if kws.pop('fastmath', False):
+            flags.set('fastmath')
 
         flags.set("enable_pyobject_looplift")
 

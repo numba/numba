@@ -213,14 +213,21 @@ class BinOpFloorDiv(ConcreteTemplate):
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
 
+@infer_global(divmod)
+class DivMod(ConcreteTemplate):
+    _tys = machine_ints + sorted(types.real_domain)
+    cases = [signature(types.UniTuple(ty, 2), ty, ty) for ty in _tys]
+
+
 @infer
 class BinOpPower(ConcreteTemplate):
     key = "**"
     cases = list(integer_binop_cases)
+    # Ensure that float32 ** int doesn't go through DP computations
+    cases += [signature(types.float32, types.float32, op)
+              for op in (types.int32, types.int64, types.uint64)]
     cases += [signature(types.float64, types.float64, op)
-              for op in sorted(types.signed_domain)]
-    cases += [signature(types.float64, types.float64, op)
-              for op in sorted(types.unsigned_domain)]
+              for op in (types.int32, types.int64, types.uint64)]
     cases += [signature(op, op, op)
               for op in sorted(types.real_domain)]
     cases += [signature(op, op, op)
@@ -234,8 +241,15 @@ class PowerBuiltin(BinOpPower):
 
 
 class BitwiseShiftOperation(ConcreteTemplate):
-    cases = list(integer_binop_cases)
-
+    # For bitshifts, only the first operand's signedness matters
+    # to choose the operation's signedness (the second operand
+    # should always be positive but will generally be considered
+    # signed anyway, since it's often a constant integer).
+    # (also, see issue #1995 for right-shifts)
+    cases = [signature(max(op, types.intp), op, types.intp)
+             for op in sorted(types.signed_domain)]
+    cases += [signature(max(op, types.uintp), op, types.intp)
+              for op in sorted(types.unsigned_domain)]
 
 @infer
 class BitwiseLeftShift(BitwiseShiftOperation):

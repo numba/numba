@@ -1,19 +1,24 @@
 #! /usr/bin/env python
+from __future__ import print_function
+
+import sys
+from timeit import default_timer as time
+
+import numpy as np
+
+from numba import vectorize, cuda
 
 import polynomial as poly
-from numba import *
-import numpy as np
-from timeit import default_timer as time
-import sys
+
 
 def main():
-    cu_discriminant = vectorize([f4(f4, f4, f4), f8(f8, f8, f8)],
+    cu_discriminant = vectorize(['f4(f4, f4, f4)', 'f8(f8, f8, f8)'],
                                 target='cuda')(poly.discriminant)
 
     N = 1e+8 // 2
 
     print('Data size', N)
-    
+
     A, B, C = poly.generate_input(N, dtype=np.float32)
     D = np.empty(A.shape, dtype=A.dtype)
 
@@ -32,7 +37,7 @@ def main():
         dD.to_host(stream)
 
     te = time()
-    
+
 
     total_time = (te - ts)
 

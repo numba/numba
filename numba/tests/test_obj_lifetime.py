@@ -223,6 +223,20 @@ def del_before_definition(rec):
     return -1
 
 
+def inf_loop_multiple_back_edge(rec):
+    """
+    test to reveal bug of invalid liveness when infinite loop has multiple
+    backedge.
+    """
+    while True:
+        rec.mark("yield")
+        yield
+        p = rec('p')
+        if p:
+            rec.mark('bra')
+            pass
+
+
 class TestObjLifetime(TestCase):
     """
     Test lifetime of Python objects inside jit-compiled functions.
@@ -354,6 +368,19 @@ class TestObjLifetime(TestCase):
         with self.assertRefCount(MyError):
             rec = self.compile_and_record(raising_usecase3, raises=MyError)
             self.assertFalse(rec.alive)
+
+    def test_inf_loop_multiple_back_edge(self):
+        cfunc = self.compile(inf_loop_multiple_back_edge)
+        rec = RefRecorder()
+        iterator = iter(cfunc(rec))
+        next(iterator)
+        self.assertEqual(rec.alive, [])
+        next(iterator)
+        self.assertEqual(rec.alive, [])
+        next(iterator)
+        self.assertEqual(rec.alive, [])
+        self.assertEqual(rec.recorded,
+                         ['yield', 'p', 'bra', 'yield', 'p', 'bra', 'yield'])
 
 
 if __name__ == "__main__":

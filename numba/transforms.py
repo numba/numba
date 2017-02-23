@@ -71,20 +71,19 @@ def _loop_lift_modify_call_block(liftedloop, block, inputs, outputs, returnto):
     scope = block.scope
     loc = block.loc
     blk = ir.Block(scope=scope, loc=loc)
-
     # load loop
     fn = ir.Const(value=liftedloop, loc=loc)
     fnvar = scope.make_temp(loc=loc)
     blk.append(ir.Assign(target=fnvar, value=fn, loc=loc))
     # call loop
-    args = [scope.get(name) for name in inputs]
+    args = [scope.get_exact(name) for name in inputs]
     callexpr = ir.Expr.call(func=fnvar, args=args, kws=(), loc=loc)
     # temp variable for the return value
     callres = scope.make_temp(loc=loc)
     blk.append(ir.Assign(target=callres, value=callexpr, loc=loc))
     # unpack return value
     for i, out in enumerate(outputs):
-        target = scope.get(out)
+        target = scope.get_exact(out)
         getitem = ir.Expr.static_getitem(value=callres, index=i,
                                          index_var=None, loc=loc)
         blk.append(ir.Assign(target=target, value=getitem, loc=loc))
@@ -128,7 +127,7 @@ def _loop_lift_prepare_loop_func(loopinfo, blocks):
 
         block = ir.Block(scope=scope, loc=loc)
         # prepare tuples to return
-        vals = [scope.get(name=name) for name in loopinfo.outputs]
+        vals = [scope.get_exact(name=name) for name in loopinfo.outputs]
         tupexpr = ir.Expr.build_tuple(items=vals, loc=loc)
         tup = scope.make_temp(loc=loc)
         block.append(ir.Assign(target=tup, value=tupexpr, loc=loc))
@@ -142,7 +141,7 @@ def _loop_lift_prepare_loop_func(loopinfo, blocks):
     blocks[loopinfo.returnto] = make_epilogue()
 
 
-def _loop_lift_modify_blocks(bytecode, loopinfo, blocks,
+def _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
                              typingctx, targetctx, flags, locals):
     """
     Modify the block inplace to call to the lifted-loop.
@@ -156,11 +155,15 @@ def _loop_lift_modify_blocks(bytecode, loopinfo, blocks,
     loopblocks = dict((k, blocks[k].copy()) for k in loopblockkeys)
     # Modify the loop blocks
     _loop_lift_prepare_loop_func(loopinfo, loopblocks)
-    # Create an intrepreter for the lifted loop
-    interp = Interpreter.from_blocks(bytecode=bytecode, blocks=loopblocks,
-                                     override_args=loopinfo.inputs,
-                                     force_non_generator=True)
-    liftedloop = LiftedLoop(interp, typingctx, targetctx, flags, locals)
+
+    # Create a new IR for the lifted loop
+    lifted_ir = func_ir.derive(blocks=loopblocks,
+                               arg_names=tuple(loopinfo.inputs),
+                               arg_count=len(loopinfo.inputs),
+                               force_non_generator=True)
+    liftedloop = LiftedLoop(lifted_ir,
+                            typingctx, targetctx, flags, locals)
+
     # modify for calling into liftedloop
     callblock = _loop_lift_modify_call_block(liftedloop, blocks[loopinfo.callfrom],
                                              loopinfo.inputs, loopinfo.outputs,
@@ -173,26 +176,102 @@ def _loop_lift_modify_blocks(bytecode, loopinfo, blocks,
     return liftedloop
 
 
-def loop_lifting(interp, typingctx, targetctx, flags, locals):
+def loop_lifting(func_ir, typingctx, targetctx, flags, locals):
     """
     Loop lifting transformation.
 
-    Given a interpreter `interp` returns a 2 tuple of
+    Given a interpreter `func_ir` returns a 2 tuple of
     `(toplevel_interp, [loop0_interp, loop1_interp, ....])`
     """
-    blocks = interp.blocks.copy()
+    blocks = func_ir.blocks.copy()
     cfg = compute_cfg_from_blocks(blocks)
     loopinfos = _loop_lift_get_candidate_infos(cfg, blocks,
-                                               interp.variable_lifetime.livemap)
+                                               func_ir.variable_lifetime.livemap)
     loops = []
     for loopinfo in loopinfos:
-        lifted = _loop_lift_modify_blocks(interp.bytecode, loopinfo, blocks,
+        lifted = _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
                                           typingctx, targetctx, flags, locals)
         loops.append(lifted)
-    # make main interpreter
-    main = Interpreter.from_blocks(bytecode=interp.bytecode,
-                                   blocks=blocks,
-                                   used_globals=interp.used_globals)
+
+    # Make main IR
+    main = func_ir.derive(blocks=blocks)
 
     return main, loops
 
+
+def canonicalize_cfg_single_backedge(blocks):
+    """
+    Rewrite loops that have multiple backedges.
+    """
+    cfg = compute_cfg_from_blocks(blocks)
+    newblocks = blocks.copy()
+
+    def new_block_id():
+        return max(newblocks.keys()) + 1
+
+    def has_multiple_backedges(loop):
+        count = 0
+        for k in loop.body:
+            blk = blocks[k]
+            edges = blk.terminator.get_targets()
+            # is a backedge?
+            if loop.header in edges:
+                count += 1
+                if count > 1:
+                    # early exit
+                    return True
+        return False
+
+    def yield_loops_with_multiple_backedges():
+        for lp in cfg.loops().values():
+            if has_multiple_backedges(lp):
+                yield lp
+
+    def replace_target(term, src, dst):
+        def replace(target):
+            return (dst if target == src else target)
+
+        if isinstance(term, ir.Branch):
+            return ir.Branch(cond=term.cond,
+                             truebr=replace(term.truebr),
+                             falsebr=replace(term.falsebr),
+                             loc=term.loc)
+        elif isinstance(term, ir.Jump):
+            return ir.Jump(target=replace(term.target), loc=term.loc)
+        else:
+            assert not term.get_targets()
+            return term
+
+    def rewrite_single_backedge(loop):
+        """
+        Add new tail block that gathers all the backedges
+        """
+        header = loop.header
+        tailkey = new_block_id()
+        for blkkey in loop.body:
+            blk = newblocks[blkkey]
+            if header in blk.terminator.get_targets():
+                newblk = blk.copy()
+                # rewrite backedge into jumps to new tail block
+                newblk.body[-1] = replace_target(blk.terminator, header,
+                                                 tailkey)
+                newblocks[blkkey] = newblk
+        # create new tail block
+        entryblk = newblocks[header]
+        tailblk = ir.Block(scope=entryblk.scope, loc=entryblk.loc)
+        # add backedge
+        tailblk.append(ir.Jump(target=header, loc=tailblk.loc))
+        newblocks[tailkey] = tailblk
+
+    for loop in yield_loops_with_multiple_backedges():
+        rewrite_single_backedge(loop)
+
+    return newblocks
+
+
+def canonicalize_cfg(blocks):
+    """
+    Rewrite the given blocks to canonicalize the CFG.
+    Returns a new dictionary of blocks.
+    """
+    return canonicalize_cfg_single_backedge(blocks)

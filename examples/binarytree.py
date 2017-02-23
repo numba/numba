@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 """
 This is a more complicated jitclasses example.
 Here, we implement a binarytree and iterative preorder and inorder traversal
@@ -5,7 +8,7 @@ function using a handwritten stack.
 """
 from __future__ import print_function, absolute_import
 import random
-from numba.utils import OrderedDict
+from collections import OrderedDict
 from numba import njit
 from numba import jitclass
 from numba import int32, deferred_type, optional

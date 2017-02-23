@@ -4,11 +4,14 @@
 Example vectorize usage.
 '''
 
-import numpy as np
-from numba import *
-from timeit import default_timer as time
 import math
 import sys
+from timeit import default_timer as time
+
+import numpy as np
+
+from numba import vectorize
+
 
 def generate_input(n, dtype):
     A = np.array(np.random.sample(n), dtype=dtype)
@@ -33,7 +36,7 @@ def main():
     print('Data size', N)
 
     targets = ['cpu', 'parallel']
-    
+
     # run just one target if is specified in the argument
     for t in targets:
         if t in sys.argv[1:]:
@@ -42,8 +45,8 @@ def main():
 
     for target in targets:
         print('== Target', target)
-        vect_discriminant = vectorize([f4(f4, f4, f4), f8(f8, f8, f8)],
-                                    target=target)(discriminant)
+        vect_discriminant = vectorize(['f4(f4, f4, f4)', 'f8(f8, f8, f8)'],
+                                      target=target)(discriminant)
 
         A, B, C = generate_input(N, dtype=np.float32)
         D = np.empty(A.shape, dtype=A.dtype)
@@ -56,7 +59,6 @@ def main():
 
         print('Execution time %.4f' % total_time)
         print('Throughput %.4f' % (N / total_time))
-
 
 
         if '-verify' in sys.argv[1:]:
