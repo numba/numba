@@ -4,6 +4,10 @@ from numba import ir, ir_utils, types, rewrites, config
 from numba.ir_utils import *
 from numba.analysis import compute_cfg_from_blocks
 from numba.controlflow import CFGraph
+from numba.typing import npydecl
+from numba.types.functions import Function
+import numpy as np
+# circular dependency: import numba.npyufunc.dufunc.DUFunc
 
 class LoopNest(object):
     '''The LoopNest class holds information of a single loop including
@@ -72,10 +76,50 @@ class ParforPass(object):
                     lhs = instr.target
                     if self._is_supported_npycall(expr):
                         instr = self._numpy_to_parfor(lhs, expr)
+                    if isinstance(expr, ir.Expr) and expr.op == 'arrayexpr':
+                        instr = self._arrayexpr_to_parfor(lhs, expr)
                 new_body.append(instr)
             block.body = new_body
 
         return
+
+    def _arrayexpr_to_parfor(self, lhs, arrayexpr):
+        """generate parfor from arrayexpr node, which is essentially a
+        map with recursive tree.
+        """
+        expr = arrayexpr.expr
+        arr_typ = self.typemap[lhs.name]
+        # TODO: support mutilple dimensions
+        assert arr_typ.ndim==1
+        el_typ = arr_typ.dtype
+        corr = self.array_analysis.array_shape_classes[lhs.name][0]
+        size_var = self.array_analysis.array_size_vars[lhs.name][0]
+        scope = lhs.scope
+        loc = lhs.loc
+        index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
+        self.typemap[index_var.name] = INT_TYPE
+        loopnests = [ LoopNest(index_var, size_var, corr) ]
+        init_block = ir.Block(scope, loc)
+        parfor = Parfor2(loopnests, init_block, {}, loc)
+
+        init_block.body = mk_alloc(self.typemap, self.calltypes, lhs,
+            size_var, el_typ, scope, loc)
+        body_label = next_label()
+        body_block = ir.Block(scope, loc)
+        expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
+        self.typemap[expr_out_var.name] = el_typ
+        body_block.body = _arrayexpr_tree_to_ir(self.typemap, self.calltypes,
+            expr_out_var, expr, index_var)
+        # lhs[parfor_index] = expr_out_var
+        setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
+        self.calltypes[setitem_node] = signature(types.none,
+            self.typemap[lhs.name], INT_TYPE, el_typ)
+        body_block.body.append(setitem_node)
+        parfor.loop_body = {body_label:body_block}
+        if config.DEBUG_ARRAY_OPT==1:
+            print("generated parfor for arrayexpr:")
+            parfor.dump()
+        return parfor
 
     def _is_supported_npycall(self, expr):
         """check if we support parfor translation for
@@ -168,7 +212,9 @@ class ParforPass(object):
                     out_label:out_block}
             else: # self._get_ndims(in1.name)==1 (reduction)
                 NotImplementedError("no reduction for dot() "+expr)
-            parfor.dump()
+            if config.DEBUG_ARRAY_OPT==1:
+                print("generated parfor for numpy call:")
+                parfor.dump()
             return parfor
         # return error if we couldn't handle it (avoid rewrite infinite loop)
         raise NotImplementedError("parfor translation failed for ", expr)
@@ -219,6 +265,70 @@ def _mk_mvdot_body(typemap, calltypes, phi_b_var, index_var, in1, in2, sum_var, 
         final_assign, b_jump_header]
     return body_block
 
+def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr, parfor_index):
+    """generate IR from array_expr's expr tree recursively. Assign output to
+    expr_out_var and returne the whole IR as a list of Assign nodes.
+    """
+    el_typ = typemap[expr_out_var.name]
+    scope = expr_out_var.scope
+    loc = expr_out_var.loc
+    out_ir = []
+
+    if isinstance(expr, tuple):
+        op, arr_expr_args = expr
+        arg_vars = []
+        for arg in arr_expr_args:
+            arg_out_var = ir.Var(scope, mk_unique_var("$arg_out_var"), loc)
+            typemap[arg_out_var.name] = el_typ
+            out_ir += _arrayexpr_tree_to_ir(typemap, calltypes,
+                arg_out_var, arg, parfor_index)
+            arg_vars.append(arg_out_var)
+        if op in npydecl.supported_array_operators:
+            if len(arg_vars)==2:
+                ir_expr = ir.Expr.binop(op, arg_vars[0], arg_vars[1], loc)
+                calltypes[ir_expr] = signature(el_typ, el_typ, el_typ)
+            else:
+                ir_expr = ir.Expr.unary(op, arg_vars[0], loc)
+                calltypes[ir_expr] = signature(el_typ, el_typ)
+            out_ir.append(ir.Assign(ir_expr, expr_out_var, loc))
+        elif isinstance(op, np.ufunc):
+            # elif isinstance(op, (np.ufunc, DUFunc)):
+            # function calls are stored in variables which are not removed
+            # op is typing_key to the variables type
+            func_var = ir.Var(scope, _find_func_var(typemap, op), loc)
+            ir_expr = ir.Expr.call(func_var, arg_vars, (), loc)
+            calltypes[ir_expr] = typemap[func_var.name].get_call_type(
+                typing.Context(), [el_typ], {})
+            #signature(el_typ, el_typ)
+            out_ir.append(ir.Assign(ir_expr, expr_out_var, loc))
+    elif isinstance(expr, ir.Var):
+        if isinstance(typemap[expr.name], types.Array):
+            # TODO: support multi-dimensional arrays
+            assert typemap[expr.name].ndim==1
+            ir_expr = ir.Expr.getitem(expr, parfor_index, loc)
+            calltypes[ir_expr] = signature(el_typ, typemap[expr.name],
+                INT_TYPE)
+        else:
+            assert typemap[expr.name]==el_typ
+            ir_expr = expr
+        out_ir.append(ir.Assign(ir_expr, expr_out_var, loc))
+    elif isinstance(expr, ir.Const):
+        out_ir.append(ir.Assign(expr, expr_out_var, loc))
+
+    if len(out_ir)==0:
+        raise NotImplementedError(
+            "Don't know how to translate array expression '%r'" % (expr,))
+    return out_ir
+
+def _find_func_var(typemap, func):
+    """find variable in typemap which represents the function func.
+    """
+    for k,v in typemap.items():
+        # Function types store actual functions in typing_key.
+        if isinstance(v, Function) and v.typing_key==func:
+            return k
+    raise RuntimeError("ufunc call variable not found")
+
 def lower_parfor2(func_ir, typemap, calltypes):
     """lower parfor to sequential or parallel Numba IR.
     """
@@ -226,46 +336,48 @@ def lower_parfor2(func_ir, typemap, calltypes):
     new_blocks = {}
     for (block_label, block) in func_ir.blocks.items():
         scope = block.scope
-        for (i, inst) in enumerate(block.body):
-            if isinstance(inst, Parfor2):
-                loc = inst.init_block.loc
-                # split block across parfor
-                prev_block = ir.Block(scope, loc)
-                prev_block.body = block.body[:i]
-                block.body = block.body[i+1:]
-                # previous block jump to parfor init block
-                init_label = next_label()
-                prev_block.body.append(ir.Jump(init_label, loc))
-                new_blocks[init_label] = inst.init_block
-                new_blocks[block_label] = prev_block
-                block_label = next_label()
-                if len(inst.loop_nests)>1:
-                    raise NotImplementedError("multi-dimensional parfor")
-                loopnest = inst.loop_nests[0]
-                # create range block for loop
-                range_label = next_label()
-                inst.init_block.body.append(ir.Jump(range_label, loc))
-                header_label = next_label()
-                range_block = mk_range_block(typemap, loopnest.range_variable,
-                    calltypes, scope, loc)
-                range_block.body[-1].target = header_label # fix jump target
-                phi_var = range_block.body[-2].target
-                new_blocks[range_label] = range_block
-                header_block = mk_loop_header(typemap, phi_var, calltypes,
-                    scope, loc)
-                # first body block to jump to
-                body_first_label = min(inst.loop_body.keys())
-                header_block.body[-1].truebr = body_first_label
-                header_block.body[-1].falsebr = block_label
-                header_block.body[-2].target = loopnest.index_variable
-                new_blocks[header_label] = header_block
-                # last block jump to header
-                body_last_label = max(inst.loop_body.keys())
-                inst.loop_body[body_last_label].body.append(
-                    ir.Jump(header_label, loc))
-                # add parfor body to blocks
-                for (l, b) in inst.loop_body.items():
-                    new_blocks[l] = b
+        i = _find_first_parfor(block.body)
+        while i!=-1:
+            inst = block.body[i]
+            loc = inst.init_block.loc
+            # split block across parfor
+            prev_block = ir.Block(scope, loc)
+            prev_block.body = block.body[:i]
+            block.body = block.body[i+1:]
+            # previous block jump to parfor init block
+            init_label = next_label()
+            prev_block.body.append(ir.Jump(init_label, loc))
+            new_blocks[init_label] = inst.init_block
+            new_blocks[block_label] = prev_block
+            block_label = next_label()
+            if len(inst.loop_nests)>1:
+                raise NotImplementedError("multi-dimensional parfor")
+            loopnest = inst.loop_nests[0]
+            # create range block for loop
+            range_label = next_label()
+            inst.init_block.body.append(ir.Jump(range_label, loc))
+            header_label = next_label()
+            range_block = mk_range_block(typemap, loopnest.range_variable,
+                calltypes, scope, loc)
+            range_block.body[-1].target = header_label # fix jump target
+            phi_var = range_block.body[-2].target
+            new_blocks[range_label] = range_block
+            header_block = mk_loop_header(typemap, phi_var, calltypes,
+                scope, loc)
+            # first body block to jump to
+            body_first_label = min(inst.loop_body.keys())
+            header_block.body[-1].truebr = body_first_label
+            header_block.body[-1].falsebr = block_label
+            header_block.body[-2].target = loopnest.index_variable
+            new_blocks[header_label] = header_block
+            # last block jump to header
+            body_last_label = max(inst.loop_body.keys())
+            inst.loop_body[body_last_label].body.append(
+                ir.Jump(header_label, loc))
+            # add parfor body to blocks
+            for (l, b) in inst.loop_body.items():
+                new_blocks[l] = b
+            i = _find_first_parfor(block.body)
 
         # old block stays either way
         new_blocks[block_label] = block
@@ -275,6 +387,12 @@ def lower_parfor2(func_ir, typemap, calltypes):
         print("function after parfor lowering:")
         func_ir.dump()
     return None
+
+def _find_first_parfor(body):
+    for (i, inst) in enumerate(body):
+        if isinstance(inst, Parfor2):
+            return i
+    return -1
 
 def _rename_labels(blocks):
     """rename labels of function body blocks according to topological sort.
