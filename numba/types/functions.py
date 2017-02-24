@@ -251,10 +251,11 @@ class InternalFunction(Function):
     For internal use only.
     """
 
-    def __init__(self, fndesc, sig):
+    def __init__(self, fndesc, sig, libs):
         from .. import typing
         self.fndesc = fndesc
         self.sig = sig
+        self.libs = libs
         template = typing.make_concrete_template(fndesc.qualname,
                                                  fndesc.qualname, [sig])
         super(InternalFunction, self).__init__(template)

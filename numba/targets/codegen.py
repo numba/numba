@@ -177,11 +177,26 @@ class CodeLibrary(object):
         """
         self._raise_if_finalized()
         assert isinstance(ir_module, llvmir.Module)
+        self._scan_linking_libs(ir_module)
         ir = cgutils.normalize_ir_text(str(ir_module))
         ll_module = ll.parse_assembly(ir)
         ll_module.name = ir_module.name
         ll_module.verify()
         self.add_llvm_module(ll_module)
+
+    def _scan_linking_libs(self, ir_module):
+        """
+        Scan linking libraries encoded into the module as named metadata
+        """
+        try:
+            md = ir_module.get_named_metadata('.numba.linker.libs')
+        except KeyError:
+            pass
+        else:
+            for mdlib in md.operands:
+                uid = mdlib.operands[0].constant
+                lib = self._codegen.get_library(uid)
+                self.add_linking_library(lib)
 
     def _scan_dynamic_globals(self, ll_module):
         """
@@ -216,10 +231,7 @@ class CodeLibrary(object):
         for library in self._linking_libraries:
             self._final_module.link_in(
                 library._get_module_for_linking(), preserve=True)
-        for library in self._codegen._libraries:
-            self._final_module.link_in(
-                library._get_module_for_linking(), preserve=True)
-
+        assert not self._codegen._libraries  # XXX remove _libraries attr
         # Optimize the module after all dependences are linked in above,
         # to allow for inlining.
         self._optimize_final_module()
@@ -498,6 +510,22 @@ class RuntimeLinker(object):
             del self._unresolved[name]
 
 
+class Librarian(object):
+    def __init__(self):
+        self._libs = {}
+        self._refs = {}
+
+    def add(self, lib):
+        if lib not in self._libs:
+            uid = len(self._libs)
+            self._libs[lib] = uid
+            self._refs[uid] = lib
+        return self._libs[lib]
+
+    def get(self, uid):
+        return self._refs[uid]
+
+
 class BaseCPUCodegen(object):
     _llvm_initialized = False
 
@@ -510,6 +538,7 @@ class BaseCPUCodegen(object):
             str(self._create_empty_module(module_name)))
         self._llvm_module.name = "global_codegen_module"
         self._rtlinker = RuntimeLinker()
+        self._librarian = Librarian()
         self._init(self._llvm_module)
 
     def _init(self, llvm_module):
@@ -545,13 +574,12 @@ class BaseCPUCodegen(object):
         """
         return self._target_data
 
-    def add_linking_library(self, library):
-        """
-        Add a library for linking into all libraries created by this
-        codegen object, without losing the original library.
-        """
+    def register_library(self, library):
         library._ensure_finalized()
-        self._libraries.add(library)
+        return self._librarian.add(library)
+
+    def get_library(self, uid):
+        return self._librarian.get(uid)
 
     def create_library(self, name):
         """

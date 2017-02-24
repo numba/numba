@@ -481,10 +481,14 @@ class BaseContext(object):
         # Call
         result = impl(builder, args)
         # Link in dependencies
-        cg = self.codegen()
         for lib in getattr(impl, "libs", ()):
-            cg.add_linking_library(lib)
+            self.insert_linking_library(builder.module, lib)
         return result
+
+    def insert_linking_library(self, module, library):
+        uid = self.codegen().register_library(library)
+        module.add_named_metadata('.numba.linker.libs',
+                                  [llvmir.IntType(64)(uid), str(library)])
 
     def get_function(self, fn, sig, _firstcall=True):
         """
@@ -779,9 +783,6 @@ class BaseContext(object):
                                          impl, sig.args,
                                          sig.return_type, flags,
                                          locals=locals)
-
-        # Allow inlining the function inside callers.
-        codegen.add_linking_library(cres.library)
         return cres
 
     def compile_subroutine(self, builder, impl, sig, locals={}):
@@ -799,7 +800,7 @@ class BaseContext(object):
         if ty is None:
             cres = self.compile_subroutine_no_cache(builder, impl, sig,
                                                     locals=locals)
-            ty = types.InternalFunction(cres.fndesc, sig)
+            ty = types.InternalFunction(cres.fndesc, sig, libs=[cres.library])
             self.cached_internal_func[cache_key] = ty
         return ty
 
@@ -809,9 +810,9 @@ class BaseContext(object):
         *args*.
         """
         ty = self.compile_subroutine(builder, impl, sig, locals)
-        return self.call_internal(builder, ty.fndesc, sig, args)
+        return self.call_internal(builder, ty.fndesc, sig, args, libs=ty.libs)
 
-    def call_internal(self, builder, fndesc, sig, args):
+    def call_internal(self, builder, fndesc, sig, args, libs=()):
         """
         Given the function descriptor of an internally compiled function,
         emit a call to that function with the given arguments.
@@ -824,6 +825,10 @@ class BaseContext(object):
 
         with cgutils.if_unlikely(builder, status.is_error):
             self.call_conv.return_status_propagate(builder, status)
+
+        # Allow inlining the function inside callers.
+        for lib in libs:
+            self.insert_linking_library(builder.module, lib)
         return res
 
     def call_unresolved(self, builder, name, sig, args):

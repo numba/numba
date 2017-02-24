@@ -396,7 +396,7 @@ def _lower_array_expr(lowerer, expr):
             cast_args = [self.cast(val, inty, outty)
                          for val, inty, outty in arg_zip]
             result = self.context.call_internal(
-                builder, cres.fndesc, inner_sig, cast_args)
+                builder, cres.fndesc, inner_sig, cast_args, libs=[cres.library])
             return self.cast(result, inner_sig.return_type,
                              self.outer_sig.return_type)
 
