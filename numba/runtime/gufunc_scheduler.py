@@ -27,8 +27,11 @@ class RangeActual():
     def iters_per_dim(self):
         return [self.end[x] - self.start[x] + 1 for x in range(len(self.start))]
 
-def create_full_iteration(real_array):
+def create_full_iteration_from_array(real_array):
     return RangeActual([0] * real_array.ndim, [x-1 for x in np.shape(real_array)])
+
+def create_full_iteration(loop_ranges):
+    return RangeActual([0] * len(loop_ranges), [x-1 for x in loop_ranges])
 
 class dimlength():
     def __init__(self, dim, length):
