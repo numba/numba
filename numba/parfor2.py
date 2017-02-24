@@ -7,6 +7,7 @@ from numba.controlflow import CFGraph
 from numba.typing import npydecl
 from numba.types.functions import Function
 import numpy as np
+import numba.parfor2
 # circular dependency: import numba.npyufunc.dufunc.DUFunc
 
 class LoopNest(object):
@@ -334,7 +335,12 @@ def _find_func_var(typemap, func):
 def lower_parfor2(func_ir, typemap, calltypes):
     """lower parfor to sequential or parallel Numba IR.
     """
-    # TODO: lower to parallel
+    if "lower_parfor2_parallel" in dir(numba.parfor2):
+        lower_parfor2_parallel(func_ir, typemap, calltypes)
+    else:
+        lower_parfor2_sequential(func_ir, typemap, calltypes)
+
+def lower_parfor2_sequential(func_ir, typemap, calltypes):
     new_blocks = {}
     for (block_label, block) in func_ir.blocks.items():
         scope = block.scope
@@ -388,7 +394,7 @@ def lower_parfor2(func_ir, typemap, calltypes):
     if config.DEBUG_ARRAY_OPT==1:
         print("function after parfor lowering:")
         func_ir.dump()
-    return None
+    return
 
 def _find_first_parfor(body):
     for (i, inst) in enumerate(body):

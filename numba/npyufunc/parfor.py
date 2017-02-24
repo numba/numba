@@ -16,6 +16,8 @@ from .array_exprs import _is_ufunc, _unaryops, _binops, _cmpops
 from numba import config
 import llvmlite.llvmpy.core as lc
 from numba.parfor2 import LoopNest
+import numba
+from numba import parfor2
 
 def _mk_tuple(elts):
     if len(elts) == 1:
@@ -332,6 +334,8 @@ def _lower_parfor(lowerer, expr):
         print("parfor_ast = ", ast.dump(ast.Module(body = parfor_ast)))
     legalize = LegalizeNames()
     parfor_ast = legalize.visit(ast.Module(body = parfor_ast)).body
+    if config.DEBUG_ARRAY_OPT:
+        print("parfor_ast after legalizing = ", ast.dump(ast.Module(body = parfor_ast)))
     # get the legalized name dictionary
     namedict = legalize.namedict
     if config.DEBUG_ARRAY_OPT:
@@ -409,7 +413,7 @@ def _lower_parfor(lowerer, expr):
     if config.DEBUG_ARRAY_OPT:
         print("outer_sig = ", outer_sig, " ", type(outer_sig))
 
-    _create_sched_wrapper(expr, expr_var_list, expr_args, "some_gufunc")
+    #_create_sched_wrapper(expr, expr_var_list, expr_args, expr_params, namedict, impl)
 
     if context.auto_parallel:
         return make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args)
@@ -423,18 +427,26 @@ to the initial value of the reduction var.  The gufunc is called and
 then the reduction function is applied across the reduction arrays
 before returning the final answer.
 '''
-def _create_sched_wrapper(parfor, expr_var_list, expr_args, gufunc):
-    out_args = [ var[0] for var in list(parfor.output_info)]
+def _create_sched_wrapper(parfor, expr_var_list, expr_args, expr_params, namedict, impl):
+    first_input = parfor.input_info[0]
+    first_input_typ = first_input[1]
+    parfor_dim = first_input_typ.ndim
     if config.DEBUG_ARRAY_OPT:
         print("_create_sched_wrapper ", type(parfor), " ", parfor, " args = ", type(expr_args), " ", expr_args)
+        print("First input = ", first_input, " type = ", first_input_typ, " ", type(first_input_typ))
+    # Determine the unique names of the scheduling and gufunc functions.
     sched_func_name = "__numba_parfor_sched_%s" % (hex(hash(parfor)).replace("-", "_"))
+    gufunc_name = "__numba_parfor_gufunc_%s" % (hex(hash(parfor)).replace("-", "_"))
     if config.DEBUG_ARRAY_OPT:
         print("sched_func_name ", type(sched_func_name), " ", sched_func_name)
+        print("gufunc_name ", type(gufunc_name), " ", gufunc_name)
+
+    # Create the scheduling function as text.
     sched_func = "def " + sched_func_name + "("
-    sched_func += (",".join(['arg' + str(i) for i in range(len(expr_args))]))
+    sched_func += (", ".join(expr_params))
     sched_func += "):\n"
     assert isinstance(expr_var_list[0][1], types.Array)
-    sched_func += "    full_iteration_space = numba.runtime.gufunc_scheduler.create_full_iteration(arg0)\n"
+    sched_func += "    full_iteration_space = numba.runtime.gufunc_scheduler.create_full_iteration(" + expr_params[0] + ")\n"
     sched_func += "    sched = numba.runtime.gufunc_scheduler.create_schedule(full_iteration_space, numba.npyufunc.parallel.get_thread_count())\n"
     red_arrays = ""
     red_reduces = ""
@@ -442,10 +454,167 @@ def _create_sched_wrapper(parfor, expr_var_list, expr_args, gufunc):
         sched_func += "    red" + str(one_red_index) + " = np.full((numba.npyufunc.parallel.get_thread_count(),), parfor.reductions[one_red_index].init_value)\n"
         red_arrays += ", red" + str(one_red_index)
         red_reduces += "functools.reduce(lambda a,b: " + str(parfor.reductions[one_red_index].func) + "(a,b), red" + str(one_red_index) + ", " + parfor.reductions[one_red_index].init_value + "),"
-    sched_func += "    " + gufunc + "(sched, " + (",".join(['arg' + str(i) for i in range(len(expr_args))])) + red_arrays + ")\n"
-    sched_func += "    return (" + ",".join(out_args) + red_reduces + ")\n"
+    sched_func += "    " + gufunc_name + "(sched, " + (", ".join(expr_params)) + red_arrays + ")\n"
+    out_args = [ namedict[var[0]] for var in list(parfor.output_info)]
+    if config.DEBUG_ARRAY_OPT:
+        print("out_args = ", out_args)
+    sched_func += "    return (" + " ".join([str(i) + ", " for i in out_args]) + red_reduces + ")\n"
     if config.DEBUG_ARRAY_OPT:
         print("sched_func ", type(sched_func), "\n", sched_func)
+
+    # Create the gufunc function.
+    gufunc_txt = "def " + gufunc_name + "(sched, " + (", ".join(expr_params)) + "):\n"
+    for eachdim in range(parfor_dim):
+        for indent in range(eachdim+1):
+            gufunc_txt += "    "
+        gufunc_txt += "for i" + str(eachdim) + " in range(sched[" + str(eachdim) + "], sched[" + str(eachdim + parfor_dim) + "] + 1):\n"
+    for indent in range(parfor_dim+1):
+        gufunc_txt += "    "
+    gufunc_txt += "None"
+
+    if config.DEBUG_ARRAY_OPT:
+        print("gufunc_txt = ", type(gufunc_txt), "\n", gufunc_txt)
+    exec(gufunc_txt)
+    gufunc_func = eval(gufunc_name)
+    if config.DEBUG_ARRAY_OPT:
+        print("gufunc_func = ", type(gufunc_func), "\n", gufunc_func)
+    gufunc_ir = compiler.run_frontend(gufunc_func)
+    gufunc_ir.dump()
+
+    impl_ir = compiler.run_frontend(impl)
+    if config.DEBUG_ARRAY_OPT:
+        print("impl_ir dump")
+    impl_ir.dump()
+
+    # Create the scheduling function from its text.
+    exec(sched_func)
+
+def lower_parfor2_parallel(func_ir, typemap, calltypes):
+    """lower parfor to sequential or parallel Numba IR.
+    """
+    print("-"*10, " new parfor2 lower ", "-"*10)
+    # TODO: lower to parallel
+    new_blocks = {}
+    for (block_label, block) in func_ir.blocks.items():
+        scope = block.scope
+        i = parfor2._find_first_parfor(block.body)
+        while i!=-1:
+            inst = block.body[i]
+            _create_sched_wrapper2(inst)
+        new_blocks[block_label] = block
+    func_ir.blocks = new_blocks
+    func_ir.blocks = _rename_labels(func_ir.blocks)
+    if config.DEBUG_ARRAY_OPT==1:
+        print("function after parfor lowering:")
+        func_ir.dump()
+    return
+
+# numba.parfor2.lower_parfor2_parallel = lower_parfor2_parallel
+
+'''Here we create a function in text form and eval it into existence.
+This function creates the schedule for the gufunc call and creates and
+initializes reduction arrays equal to the thread count and initialized
+to the initial value of the reduction var.  The gufunc is called and
+then the reduction function is applied across the reduction arrays
+before returning the final answer.
+'''
+def _create_sched_wrapper2(parfor):
+
+    parfor_dim = len(parfor.loop_nests)
+    assert parfor_dim==1
+    loop_ranges = [l.range_variable.name for l in parfor.loop_nests]
+
+    parfor_params = _get_parfor_params(parfor) + loop_ranges
+    param_dict = _legalize_names(parfor_params)
+    _replace_names(parfor.loop_body, param_dict)
+    parfor_params = list(param_dict.values())
+
+    loop_ranges = [ param_dict[v] for v in loop_ranges ]
+
+    if config.DEBUG_ARRAY_OPT==1:
+        print("_create_sched_wrapper ", type(parfor), " ", parfor,
+        " args = ", type(parfor_params), " ", parfor_params, " loop_ranges ",
+        type(loop_ranges), loop_ranges)
+
+    # Determine the unique names of the scheduling and gufunc functions.
+    sched_func_name = "__numba_parfor_sched_%s" % (hex(hash(parfor)).replace("-", "_"))
+    gufunc_name = "__numba_parfor_gufunc_%s" % (hex(hash(parfor)).replace("-", "_"))
+    if config.DEBUG_ARRAY_OPT:
+        print("sched_func_name ", type(sched_func_name), " ", sched_func_name)
+        print("gufunc_name ", type(gufunc_name), " ", gufunc_name)
+
+    # Create the scheduling function as text.
+    sched_func = "def " + sched_func_name + "("
+    sched_func += (", ".join(parfor_params))
+    sched_func += "):\n"
+
+    sched_func += "    full_iteration_space = numba.runtime.gufunc_scheduler"
+    + ".create_full_iteration(" + loop_ranges + ")\n"
+    sched_func += "    sched = numba.runtime.gufunc_scheduler.create_schedule"
+    + "(full_iteration_space, numba.npyufunc.parallel.get_thread_count())\n"
+
+    red_arrays = ""
+    red_reduces = ""
+    # for one_red_index in range(len(parfor.reductions)):
+    #     sched_func += "    red" + str(one_red_index)
+    #     + " = np.full((numba.npyufunc.parallel.get_thread_count(),),"
+    #     + " parfor.reductions[one_red_index].init_value)\n"
+    #     red_arrays += ", red" + str(one_red_index)
+    #     red_reduces += "functools.reduce(lambda a,b: "
+    #     + str(parfor.reductions[one_red_index].func) + "(a,b), red"
+    #     + str(one_red_index) + ", "
+    #     + parfor.reductions[one_red_index].init_value + "),"
+    sched_func += "    " + gufunc_name + "(sched, " + (", ".join(parfor_params)) + red_arrays + ")\n"
+
+    sched_func += "    return (" + red_reduces + ")\n"
+    if config.DEBUG_ARRAY_OPT:
+        print("sched_func ", type(sched_func), "\n", sched_func)
+
+    # Create the gufunc function.
+    gufunc_txt = "def " + gufunc_name + "(sched, " + (", ".join(parfor_params)) + "):\n"
+    for eachdim in range(parfor_dim):
+        for indent in range(eachdim+1):
+            gufunc_txt += "    "
+        gufunc_txt += "for i" + str(eachdim) + " in range(sched[" + str(eachdim)
+        + "], sched[" + str(eachdim + parfor_dim) + "] + 1):\n"
+    for indent in range(parfor_dim+1):
+        gufunc_txt += "    "
+    gufunc_txt += "__sentinel__ = 0\n"
+    gufunc_txt += "     None\n"
+
+    if config.DEBUG_ARRAY_OPT:
+        print("gufunc_txt = ", type(gufunc_txt), "\n", gufunc_txt)
+    exec(gufunc_txt)
+    gufunc_func = eval(gufunc_name)
+    if config.DEBUG_ARRAY_OPT:
+        print("gufunc_func = ", type(gufunc_func), "\n", gufunc_func)
+    gufunc_ir = compiler.run_frontend(gufunc_func)
+    gufunc_ir.dump()
+    for label, block in gufunc_ir.blocks.items():
+        for i, inst in enumerate(block.body):
+            if isinstance(inst, ir.Assign) and inst.target.name=="__sentinel__":
+                loc = inst.loc
+                scope = block.scope
+                # split block across __sentinel__
+                prev_block = ir.Block(scope, loc)
+                prev_block.body = block.body[:i]
+                block.body = block.body[i+1:]
+                new_label = next_label()
+                body_first_label = min(parfor.loop_body.keys())
+                prev_block.append(ir.Jump(body_first_label, loc))
+                for (l, b) in inst.loop_body.items():
+                    gufunc_ir.blocks[l] = b
+                body_last_label = max(parfor.loop_body.keys())
+                gufunc_ir.blocks[new_label] = block
+                gufunc_ir.blocks[label] = prev_block
+
+    # TODO: implement get params etc. functions
+    # merege body ir
+    # run type inference
+    # run backend
+
+    # Create the scheduling function from its text.
+    exec(sched_func)
 
 def _prepare_arguments(lowerer, gu_signature, outer_sig, expr_args):
     context = lowerer.context
