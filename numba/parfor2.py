@@ -332,11 +332,11 @@ def _find_func_var(typemap, func):
             return k
     raise RuntimeError("ufunc call variable not found")
 
-def lower_parfor2(func_ir, typemap, calltypes):
+def lower_parfor2(func_ir, typemap, calltypes, typingctx, targetctx, flags, locals):
     """lower parfor to sequential or parallel Numba IR.
     """
     if "lower_parfor2_parallel" in dir(numba.parfor2):
-        lower_parfor2_parallel(func_ir, typemap, calltypes)
+        lower_parfor2_parallel(func_ir, typemap, calltypes, typingctx, targetctx, flags, locals)
     else:
         lower_parfor2_sequential(func_ir, typemap, calltypes)
 

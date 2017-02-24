@@ -497,7 +497,7 @@ def _create_sched_wrapper(parfor, expr_var_list, expr_args, expr_params, namedic
     # Create the scheduling function from its text.
     exec(sched_func)
 
-def lower_parfor2_parallel(func_ir, typemap, calltypes):
+def lower_parfor2_parallel(func_ir, typemap, calltypes, typingctx, targetctx, flags, locals):
     """lower parfor to sequential or parallel Numba IR.
     """
     print("-"*10, " new parfor2 lower ", "-"*10)
@@ -508,7 +508,7 @@ def lower_parfor2_parallel(func_ir, typemap, calltypes):
         i = parfor2._find_first_parfor(block.body)
         while i!=-1:
             inst = block.body[i]
-            _create_sched_wrapper2(inst, typemap)
+            _create_sched_wrapper2(inst, typemap, typingctx, targetctx, flags, locals)
         new_blocks[block_label] = block
     func_ir.blocks = new_blocks
     func_ir.blocks = _rename_labels(func_ir.blocks)
@@ -517,7 +517,7 @@ def lower_parfor2_parallel(func_ir, typemap, calltypes):
         func_ir.dump()
     return
 
-# numba.parfor2.lower_parfor2_parallel = lower_parfor2_parallel
+numba.parfor2.lower_parfor2_parallel = lower_parfor2_parallel
 
 '''Here we create a function in text form and eval it into existence.
 This function creates the schedule for the gufunc call and creates and
@@ -526,7 +526,7 @@ to the initial value of the reduction var.  The gufunc is called and
 then the reduction function is applied across the reduction arrays
 before returning the final answer.
 '''
-def _create_sched_wrapper2(parfor, typemap):
+def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals):
 
     parfor_dim = len(parfor.loop_nests)
     assert parfor_dim==1
@@ -600,23 +600,26 @@ def _create_sched_wrapper2(parfor, typemap):
         print("gufunc_func = ", type(gufunc_func), "\n", gufunc_func)
     gufunc_ir = compiler.run_frontend(gufunc_func)
     gufunc_ir.dump()
-    for label, block in gufunc_ir.blocks.items():
-        for i, inst in enumerate(block.body):
-            if isinstance(inst, ir.Assign) and inst.target.name=="__sentinel__":
-                loc = inst.loc
-                scope = block.scope
-                # split block across __sentinel__
-                prev_block = ir.Block(scope, loc)
-                prev_block.body = block.body[:i]
-                block.body = block.body[i+1:]
-                new_label = next_label()
-                body_first_label = min(parfor.loop_body.keys())
-                prev_block.append(ir.Jump(body_first_label, loc))
-                for (l, b) in inst.loop_body.items():
-                    gufunc_ir.blocks[l] = b
-                body_last_label = max(parfor.loop_body.keys())
-                gufunc_ir.blocks[new_label] = block
-                gufunc_ir.blocks[label] = prev_block
+
+    #compiler.compile_ir(typingctx, targetctx, gufunc_ir, args, numba.types.NoneType, flags, locals)
+
+    #    for label, block in gufunc_ir.blocks.items():
+    #        for i, inst in enumerate(block.body):
+    #            if isinstance(inst, ir.Assign) and inst.target.name=="__sentinel__":
+    #                loc = inst.loc
+    #                scope = block.scope
+    #                # split block across __sentinel__
+    #                prev_block = ir.Block(scope, loc)
+    #                prev_block.body = block.body[:i]
+    #                block.body = block.body[i+1:]
+    #                new_label = next_label()
+    #                body_first_label = min(parfor.loop_body.keys())
+    #                prev_block.append(ir.Jump(body_first_label, loc))
+    #                for (l, b) in inst.loop_body.items():
+    #                    gufunc_ir.blocks[l] = b
+    #                body_last_label = max(parfor.loop_body.keys())
+    #                gufunc_ir.blocks[new_label] = block
+    #                gufunc_ir.blocks[label] = prev_block
 
     # TODO: implement get params etc. functions
     # merege body ir
