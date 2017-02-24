@@ -173,6 +173,10 @@ class ParforPass(object):
                 body_label = next_label()
                 out_label = next_label()
 
+                alloc_nodes = mk_alloc(self.typemap, self.calltypes, lhs,
+                    size_var, el_typ, scope, loc)
+                init_block.body = alloc_nodes
+
                 # sum_var = 0
                 const_node = ir.Const(0, loc)
                 const_var = ir.Var(scope, mk_unique_var("$const"), loc)
@@ -181,12 +185,10 @@ class ParforPass(object):
                 sum_var = ir.Var(scope, mk_unique_var("$sum_var"), loc)
                 self.typemap[sum_var.name] = el_typ
                 sum_assign = ir.Assign(const_var, sum_var, loc)
-                alloc_nodes = mk_alloc(self.typemap, self.calltypes, lhs,
-                    size_var, el_typ, scope, loc)
-                init_block.body = alloc_nodes + [const_assign, sum_assign]
 
                 range_block = mk_range_block(self.typemap, inner_size_var,
                     self.calltypes, scope, loc)
+                range_block.body = [const_assign, sum_assign] + range_block.body
                 range_block.body[-1].target = header_label # fix jump target
                 phi_var = range_block.body[-2].target
 
@@ -244,10 +246,10 @@ def _mk_mvdot_body(typemap, calltypes, phi_b_var, index_var, in1, in2, sum_var, 
     v_getitem_call = ir.Expr.getitem(in2, inner_index, loc)
     calltypes[v_getitem_call] = signature(el_typ, typemap[in2.name], INT_TYPE)
     v_getitem_assign = ir.Assign(v_getitem_call, v_val, loc)
-    # add_var = X_val + v_val
+    # add_var = X_val * v_val
     add_var = ir.Var(scope, mk_unique_var("$add_var"), loc)
     typemap[add_var.name] = el_typ
-    add_call = ir.Expr.binop('+', X_val, v_val, loc)
+    add_call = ir.Expr.binop('*', X_val, v_val, loc)
     calltypes[add_call] = signature(el_typ, el_typ, el_typ)
     add_assign = ir.Assign(add_call, add_var, loc)
     # acc_var = sum_var + add_var
