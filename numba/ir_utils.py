@@ -79,7 +79,9 @@ def mk_range_block(typemap, size_var, calltypes, scope, loc):
     g_range_assign = ir.Assign(g_range, g_range_var, loc)
     # range_call_var = call g_range_var(size_var)
     range_call = ir.Expr.call(g_range_var, [size_var], (), loc)
-    calltypes[range_call] = signature(types.range_state64_type, types.int64)
+    calltypes[range_call] = typemap[g_range_var.name].get_call_type(
+        typing.Context(), [types.int64], {})
+    #signature(types.range_state64_type, types.int64)
     range_call_var = ir.Var(scope, mk_unique_var("$range_c_var"), loc)
     typemap[range_call_var.name] = types.iterators.RangeType(INT_TYPE)
     range_call_assign = ir.Assign(range_call, range_call_var, loc)
