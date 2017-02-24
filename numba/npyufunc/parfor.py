@@ -158,7 +158,7 @@ class RewriteParfor(rewrites.Rewrite):
                     #    print("namespace = ", namespace)
                     #expr.expr = Parfor(namespace, ast_body, {})
                     #expr.expr = Parfor("parfor", expr.loc, {}, expr.expr, {})
-                    instr.value = _arr_expr_to_parfor(instr.target.name, expr, self.typemap)
+                    instr.value = _arr_expr_to_parfor(instr.target.name, expr, self.typemap, self.pipeline)
 
             result.append(instr)
 
@@ -215,7 +215,7 @@ def _arr_expr_to_ast(expr, typemap, subscripts):
     raise NotImplementedError(
         "Don't know how to translate array expression '%r'" % (expr,))
 
-def _arr_expr_to_parfor(out_var, expr, typemap):
+def _arr_expr_to_parfor(out_var, expr, typemap, pipeline):
     expr_var_list = expr.list_vars()
     if config.DEBUG_ARRAY_OPT:
         print("_arr_expr_to_parfor")
@@ -274,10 +274,14 @@ def _arr_expr_to_parfor(out_var, expr, typemap):
     loop_nests = [ LoopNest(i, r) for (i, r) in zip(idx_vars, size_vars) ]
     parfor = Parfor(expr, loop_body = body, input_info = input_info, output_info = output_info,
                   loop_nests = loop_nests, pre_parfor = pre, namespace = namespace)
+    parfor.array_shape_classes = pipeline.array_analysis.array_shape_classes
+    if config.DEBUG_ARRAY_OPT:
+        print("array_shape_classes = ", parfor.array_shape_classes)
     if config.DEBUG_ARRAY_OPT:
         print("parfor = ", ast.dump(ast.Module(body = parfor.to_ast())))
 
     return parfor
+
 
 class LegalizeNames(ast.NodeTransformer):
     def __init__(self):
@@ -378,6 +382,7 @@ def _lower_parfor(lowerer, expr):
         print("impl = ", impl, " ", type(impl))
 
     # 3. Prepare signatures as well as a gu_signature in the form of ('m','n',...)
+    classes = expr.array_shape_classes
     outer_typs = []
     gu_sin = []
     gu_sout = []
@@ -392,7 +397,10 @@ def _lower_parfor(lowerer, expr):
         count = count + 1
         outer_typs.append(typ)
         if isinstance(typ, types.Array):
-            dim_syms = tuple([ chr(109 + i) for i in range(typ.ndim) ]) # chr(109) = 'm'
+            assert var in classes
+            var_shape = classes[var]
+            assert len(var_shape) == typ.ndim
+            dim_syms = tuple([ chr(97 + i) for i in var_shape ]) # chr(97) = 'a'
         else:
             dim_syms = ()
         if (count > num_inputs):
@@ -713,29 +721,41 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
     # prepare arguments: args, dims, steps, data
     inputs, output, out_ty = _prepare_arguments(lowerer, gu_signature, outer_sig, expr_args)
 
-    arguments = [ x.data for x in inputs + [output] ]
-    num_args = len(arguments)
-    # prepare input/output array args
+    all_args = inputs + [output]
+    num_args = len(all_args)
+    num_inps = len(inputs)
     args = cgutils.alloca_once(builder, byte_ptr_t, size = context.get_constant(types.intp, num_args), name = "pargs")
+
     for i in range(num_args):
+        arg = all_args[i]
         dst = builder.gep(args, [context.get_constant(types.intp, i)])
-        #cgutils.printf(builder, "arg[" + str(i) + "] = %p\n", arguments[i])
-        builder.store(builder.bitcast(arguments[i], byte_ptr_t), dst)
+        if isinstance(arg, npyimpl._ArrayHelper):
+            builder.store(builder.bitcast(arg.data, byte_ptr_t), dst)
+        else:
+            if i < num_inps: 
+                # Scalar input, must store the value first
+                builder.store(arg.val, arg._ptr)
+            builder.store(builder.bitcast(arg._ptr, byte_ptr_t), dst)
+
+    # Next, we prepare the individual dimension info recorded in gu_signature
+    sig_dim_dict = {}
+    for var, gu_sig in zip(all_args, sin + sout):
+        for sig in gu_sig:
+            i = 0
+            for dim_sym in sig:
+                sig_dim_dict[dim_sym] = var.shape[i]
+                i = i + 1
 
     # prepare dims, which is only a single number, since N-D arrays is treated as 1D array by ufunc
-    ndims = len(output.shape)
-    dims = cgutils.alloca_once(builder, intp_t, size = 2, name = "pshape")
-    # dims = builder.alloca(intp_t)
-    size = one
-    if config.DEBUG_ARRAY_OPT:
-         print("ndims = ", ndims)
-    for i in range(ndims):
-       #cgutils.printf(builder, "dims[" + str(i) + "] = %d\n", output.shape[i])
-       size = builder.mul(size, output.shape[i])
-    #cgutils.printf(builder, wrapper.name + " " + cres.fndesc.llvm_func_name + " total size = %d\n", size)
-    # We can't directly use size here, must separate core dimension and loop dimension
+    ndims = len(sig_dim_dict) + 1    
+    dims = cgutils.alloca_once(builder, intp_t, size = ndims, name = "pshape")
+    # For now, outer loop dimension is always one!
     builder.store(one,  builder.gep(dims, [ zero ]))
-    builder.store(size, builder.gep(dims, [ one ]))
+    # dimension for sorted signature symbols follows
+    i = 1
+    for dim_sym in sorted(sig_dim_dict):
+        builder.store(sig_dim_dict[dim_sym], builder.gep(dims, [ context.get_constant(types.intp, i) ]))
+        i = i + 1
 
     # prepare steps for each argument
     steps = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, num_args + 1), name = "psteps")
