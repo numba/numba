@@ -140,3 +140,14 @@ def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
     header_block.body = [iternext_assign, pair_first_assign,
         pair_second_assign, phi_b_assign, branch]
     return header_block
+
+def legalize_names(varnames):
+    """returns a dictionary for conversion of variable names to legal
+    parameter names.
+    """
+    var_map = {}
+    for var in varnames:
+        new_name = var.replace("_","__").replace("$", "_").replace(".", "_")
+        assert new_name not in var_map
+        var_map[var] = new_name
+    return var_map

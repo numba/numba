@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from numba import ir, ir_utils, types, rewrites, config
 from numba.ir_utils import *
-from numba.analysis import compute_cfg_from_blocks
+from numba.analysis import *
 from numba.controlflow import CFGraph
 from numba.typing import npydecl
 from numba.types.functions import Function
@@ -428,3 +428,21 @@ def _rename_labels(blocks):
         new_blocks[new_label] = b
 
     return new_blocks
+
+# TODO: handle nested parfors in use-def and liveness
+
+def get_parfor_params(parfor):
+    """find variables used in body of parfor from outside.
+    computed as live variables at entry of first block.
+    """
+    blocks = parfor.loop_body
+    # add a dummpy return to last block for CFG call
+    last_label = max(blocks.keys())
+    loc = blocks[last_label].body[-1].loc
+    blocks[last_label].body.append(ir.Return(0,loc))
+    cfg = compute_cfg_from_blocks(blocks)
+    blocks[last_label].body.pop() # remove dummy return
+    usedefs = compute_use_defs(blocks)
+    live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
+    first_block = min(blocks.keys())
+    return live_map[first_block]

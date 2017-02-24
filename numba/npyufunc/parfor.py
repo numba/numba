@@ -524,8 +524,8 @@ def _create_sched_wrapper2(parfor):
     assert parfor_dim==1
     loop_ranges = [l.range_variable.name for l in parfor.loop_nests]
 
-    parfor_params = _get_parfor_params(parfor) + loop_ranges
-    param_dict = _legalize_names(parfor_params)
+    parfor_params = parfor2.get_parfor_params(parfor).union(loop_ranges)
+    param_dict = legalize_names(parfor_params)
     _replace_names(parfor.loop_body, param_dict)
     parfor_params = list(param_dict.values())
 
