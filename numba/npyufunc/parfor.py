@@ -508,7 +508,7 @@ def lower_parfor2_parallel(func_ir, typemap, calltypes):
         i = parfor2._find_first_parfor(block.body)
         while i!=-1:
             inst = block.body[i]
-            _create_sched_wrapper2(inst)
+            _create_sched_wrapper2(inst, typemap)
         new_blocks[block_label] = block
     func_ir.blocks = new_blocks
     func_ir.blocks = _rename_labels(func_ir.blocks)
@@ -526,7 +526,7 @@ to the initial value of the reduction var.  The gufunc is called and
 then the reduction function is applied across the reduction arrays
 before returning the final answer.
 '''
-def _create_sched_wrapper2(parfor):
+def _create_sched_wrapper2(parfor, typemap):
 
     parfor_dim = len(parfor.loop_nests)
     assert parfor_dim==1
@@ -534,8 +534,10 @@ def _create_sched_wrapper2(parfor):
 
     parfor_params = parfor2.get_parfor_params(parfor).union(loop_ranges)
     param_dict = legalize_names(parfor_params)
-    _replace_names(parfor.loop_body, param_dict)
+    param_types = { param_dict[v]:typemap[v] for v in parfor_params }
+    replace_var_names(parfor.loop_body, param_dict)
     parfor_params = list(param_dict.values())
+    param_types = [typemap[v] for v in parfor_params]
 
     loop_ranges = [ param_dict[v] for v in loop_ranges ]
 
@@ -732,7 +734,7 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
         if isinstance(arg, npyimpl._ArrayHelper):
             builder.store(builder.bitcast(arg.data, byte_ptr_t), dst)
         else:
-            if i < num_inps: 
+            if i < num_inps:
                 # Scalar input, must store the value first
                 builder.store(arg.val, arg._ptr)
             builder.store(builder.bitcast(arg._ptr, byte_ptr_t), dst)
@@ -747,7 +749,7 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
                 i = i + 1
 
     # prepare dims, which is only a single number, since N-D arrays is treated as 1D array by ufunc
-    ndims = len(sig_dim_dict) + 1    
+    ndims = len(sig_dim_dict) + 1
     dims = cgutils.alloca_once(builder, intp_t, size = ndims, name = "pshape")
     # For now, outer loop dimension is always one!
     builder.store(one,  builder.gep(dims, [ zero ]))
