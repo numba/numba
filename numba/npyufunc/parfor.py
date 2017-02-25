@@ -537,7 +537,6 @@ def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals)
     param_types = { param_dict[v]:typemap[v] for v in parfor_params }
     replace_var_names(parfor.loop_body, param_dict)
     parfor_params = list(param_dict.values())
-    param_types = [typemap[v] for v in parfor_params]
 
     loop_ranges = [ param_dict[v] for v in loop_ranges ]
 
@@ -558,10 +557,10 @@ def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals)
     sched_func += (", ".join(parfor_params))
     sched_func += "):\n"
 
-    sched_func += "    full_iteration_space = numba.runtime.gufunc_scheduler"
-    + ".create_full_iteration(" + loop_ranges + ")\n"
-    sched_func += "    sched = numba.runtime.gufunc_scheduler.create_schedule"
-    + "(full_iteration_space, numba.npyufunc.parallel.get_thread_count())\n"
+    sched_func += ("    full_iteration_space = numba.runtime.gufunc_scheduler"
+    + ".create_full_iteration(" + ", ".join(loop_ranges) + ")\n")
+    sched_func += ("    sched = numba.runtime.gufunc_scheduler.create_schedule"
+    + "(full_iteration_space, numba.npyufunc.parallel.get_thread_count())\n")
 
     red_arrays = ""
     red_reduces = ""
@@ -585,8 +584,8 @@ def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals)
     for eachdim in range(parfor_dim):
         for indent in range(eachdim+1):
             gufunc_txt += "    "
-        gufunc_txt += "for i" + str(eachdim) + " in range(sched[" + str(eachdim)
-        + "], sched[" + str(eachdim + parfor_dim) + "] + 1):\n"
+        gufunc_txt += ( "for i" + str(eachdim) + " in range(sched[" + str(eachdim)
+        + "], sched[" + str(eachdim + parfor_dim) + "] + 1):\n" )
     for indent in range(parfor_dim+1):
         gufunc_txt += "    "
     gufunc_txt += "__sentinel__ = 0\n"
