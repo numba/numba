@@ -151,3 +151,57 @@ def legalize_names(varnames):
         assert new_name not in var_map
         var_map[var] = new_name
     return var_map
+
+def replace_var_names(blocks, namedict):
+    """go over statements of block bodies and replace variable names with
+    dictionary.
+    """
+    for block in blocks.values():
+        for stmt in block.body:
+            if isinstance(stmt, ir.Assign):
+                _replace_rec(stmt.target, namedict)
+                _replace_rec(stmt.value, namedict)
+            elif isinstance(stmt, ir.Return):
+                _replace_rec(stmt.value, namedict)
+            elif isinstance(stmt, ir.Branch):
+                _replace_rec(stmt.cond, namedict)
+            elif isinstance(stmt, ir.Jump):
+                _replace_rec(stmt.target, namedict)
+            elif isinstance(stmt, ir.Del):
+                _replace_rec(stmt.value, namedict)
+            elif isinstance(stmt, ir.DelAttr):
+                _replace_rec(stmt.target, namedict)
+                _replace_rec(stmt.attr, namedict)
+            elif isinstance(stmt, ir.SetAttr):
+                _replace_rec(stmt.target, namedict)
+                _replace_rec(stmt.attr, namedict)
+                _replace_rec(stmt.value, namedict)
+            elif isinstance(stmt, ir.DelItem):
+                _replace_rec(stmt.target, namedict)
+                _replace_rec(stmt.index, namedict)
+            elif isinstance(stmt, ir.StaticSetItem):
+                _replace_rec(stmt.target, namedict)
+                _replace_rec(stmt.index_var, namedict)
+                _replace_rec(stmt.value, namedict)
+            elif isinstance(stmt, ir.SetItem):
+                _replace_rec(stmt.target, namedict)
+                _replace_rec(stmt.index, namedict)
+                _replace_rec(stmt.value, namedict)
+            else:
+                raise NotImplementedError("no replacement for IR node: ", stmt)
+    return
+
+def _replace_rec(node, namedict):
+    if isinstance(node, ir.Var):
+        node.name = namedict.get(node.name, node.name)
+    elif isinstance(node, list):
+        [_replace_rec(n, namedict) for n in node]
+    elif isinstance(node, ir.Expr):
+        # if node.op in ['binop', 'inplace_binop']:
+        #     lhs = node.lhs.name
+        #     rhs = node.rhs.name
+        #     node.lhs.name = namedict.get(lhs, lhs)
+        #     node.rhs.name = namedict.get(rhs, rhs)
+        for arg in node._kws.keys():
+            _replace_rec(node._kws[arg], namedict)
+    return
