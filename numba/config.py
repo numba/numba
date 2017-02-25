@@ -116,6 +116,10 @@ class _EnvReloader(object):
         # Enable logging of cache operation
         DEBUG_CACHE = _readenv("NUMBA_DEBUG_CACHE", int, DEBUG)
 
+        # Redirect cache directory
+        # Contains path to the directory
+        CACHE_DIR = _readenv("NUMBA_CACHE_DIR", str, "")
+
         # Enable tracing support
         TRACE = _readenv("NUMBA_TRACE", int, 0)
 

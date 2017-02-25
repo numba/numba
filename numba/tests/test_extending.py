@@ -10,7 +10,8 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import jit, types, errors
 from numba.compiler import compile_isolated
-from .support import TestCase, captured_stdout, tag
+from .support import (TestCase, captured_stdout, tag, temp_directory,
+                      override_config)
 
 from numba.extending import (typeof_impl, type_callable,
                              lower_builtin, lower_cast,
@@ -472,14 +473,29 @@ class TestHighLevelExtending(TestCase):
         self.assertIn(expectmsg, errmsg)
 
 
+def _assert_cache_stats(cfunc, expect_hit, expect_misses):
+    hit = cfunc._cache_hits[cfunc.signatures[0]]
+    if hit != expect_hit:
+        raise AssertionError('cache not used')
+    miss = cfunc._cache_misses[cfunc.signatures[0]]
+    if miss != expect_misses:
+        raise AssertionError('cache not used')
+
+
 class TestOverloadMethodCaching(TestCase):
     # Nested multiprocessing.Pool raises AssertionError:
     # "daemonic processes are not allowed to have children"
     _numba_parallel_test_ = False
 
     def test_caching_overload_method(self):
+        self._cache_dir = temp_directory(self.__class__.__name__)
+        with override_config('CACHE_DIR', self._cache_dir):
+            self.run_caching_overload_method()
+
+    def run_caching_overload_method(self):
         cfunc = jit(nopython=True, cache=True)(cache_overload_method_usecase)
         self.assertPreciseEqual(cfunc(MyDummy()), 13)
+        _assert_cache_stats(cfunc, 0, 1)
         llvmir = cfunc.inspect_llvm((mydummy_type,))
         # Ensure the inner method is not a declaration
         decls = [ln for ln in llvmir.splitlines()
@@ -491,7 +507,8 @@ class TestOverloadMethodCaching(TestCase):
         except AttributeError:
             ctx = multiprocessing
         q = ctx.Queue()
-        p = ctx.Process(target=run_caching_overload_method, args=(q,))
+        p = ctx.Process(target=run_caching_overload_method,
+                        args=(q, self._cache_dir))
         p.start()
         q.put(MyDummy())
         p.join()
@@ -501,15 +518,17 @@ class TestOverloadMethodCaching(TestCase):
         self.assertEqual(res, 13)
 
 
-def run_caching_overload_method(q):
+def run_caching_overload_method(q, cache_dir):
     """
     Used by TestOverloadMethodCaching.test_caching_overload_method
     """
-    arg = q.get()
-    cfunc = jit(nopython=True, cache=True)(cache_overload_method_usecase)
-    res = cfunc(arg)
-    q.put(res)
-
+    with override_config('CACHE_DIR', cache_dir):
+        arg = q.get()
+        cfunc = jit(nopython=True, cache=True)(cache_overload_method_usecase)
+        res = cfunc(arg)
+        q.put(res)
+        # Check cache stat
+        _assert_cache_stats(cfunc, 1, 0)
 
 class TestIntrinsic(TestCase):
     def test_ll_pointer_cast(self):
