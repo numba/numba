@@ -152,50 +152,61 @@ def legalize_names(varnames):
         var_map[var] = new_name
     return var_map
 
+# other packages that define new nodes add calls to replace variables in them
+# format: {type:function}
+replace_var_names_extensions = {}
+
 def replace_var_names(blocks, namedict):
     """go over statements of block bodies and replace variable names with
     dictionary.
     """
     for block in blocks.values():
         for stmt in block.body:
+            # let external calls handle stmt if type matches
+            for t,f in replace_var_names_extensions.items():
+                if isinstance(stmt,t):
+                    f(stmt, namedict)
+                    return
             if isinstance(stmt, ir.Assign):
-                _replace_rec(stmt.target, namedict)
-                _replace_rec(stmt.value, namedict)
+                replace_var_names_inner(stmt.target, namedict)
+                replace_var_names_inner(stmt.value, namedict)
+            elif isinstance(stmt, ir.Arg):
+                replace_var_names_inner(stmt.name, namedict)
             elif isinstance(stmt, ir.Return):
-                _replace_rec(stmt.value, namedict)
+                replace_var_names_inner(stmt.value, namedict)
             elif isinstance(stmt, ir.Branch):
-                _replace_rec(stmt.cond, namedict)
+                replace_var_names_inner(stmt.cond, namedict)
             elif isinstance(stmt, ir.Jump):
-                _replace_rec(stmt.target, namedict)
+                replace_var_names_inner(stmt.target, namedict)
             elif isinstance(stmt, ir.Del):
-                _replace_rec(stmt.value, namedict)
+                replace_var_names_inner(stmt.value, namedict)
             elif isinstance(stmt, ir.DelAttr):
-                _replace_rec(stmt.target, namedict)
-                _replace_rec(stmt.attr, namedict)
+                replace_var_names_inner(stmt.target, namedict)
+                replace_var_names_inner(stmt.attr, namedict)
             elif isinstance(stmt, ir.SetAttr):
-                _replace_rec(stmt.target, namedict)
-                _replace_rec(stmt.attr, namedict)
-                _replace_rec(stmt.value, namedict)
+                replace_var_names_inner(stmt.target, namedict)
+                replace_var_names_inner(stmt.attr, namedict)
+                replace_var_names_inner(stmt.value, namedict)
             elif isinstance(stmt, ir.DelItem):
-                _replace_rec(stmt.target, namedict)
-                _replace_rec(stmt.index, namedict)
+                replace_var_names_inner(stmt.target, namedict)
+                replace_var_names_inner(stmt.index, namedict)
             elif isinstance(stmt, ir.StaticSetItem):
-                _replace_rec(stmt.target, namedict)
-                _replace_rec(stmt.index_var, namedict)
-                _replace_rec(stmt.value, namedict)
+                replace_var_names_inner(stmt.target, namedict)
+                replace_var_names_inner(stmt.index_var, namedict)
+                replace_var_names_inner(stmt.value, namedict)
             elif isinstance(stmt, ir.SetItem):
-                _replace_rec(stmt.target, namedict)
-                _replace_rec(stmt.index, namedict)
-                _replace_rec(stmt.value, namedict)
+                replace_var_names_inner(stmt.target, namedict)
+                replace_var_names_inner(stmt.index, namedict)
+                replace_var_names_inner(stmt.value, namedict)
             else:
                 raise NotImplementedError("no replacement for IR node: ", stmt)
     return
 
-def _replace_rec(node, namedict):
+def replace_var_names_inner(node, namedict):
     if isinstance(node, ir.Var):
         node.name = namedict.get(node.name, node.name)
     elif isinstance(node, list):
-        [_replace_rec(n, namedict) for n in node]
+        [replace_var_names_inner(n, namedict) for n in node]
     elif isinstance(node, ir.Expr):
         # if node.op in ['binop', 'inplace_binop']:
         #     lhs = node.lhs.name
@@ -203,5 +214,5 @@ def _replace_rec(node, namedict):
         #     node.lhs.name = namedict.get(lhs, lhs)
         #     node.rhs.name = namedict.get(rhs, rhs)
         for arg in node._kws.keys():
-            _replace_rec(node._kws[arg], namedict)
+            replace_var_names_inner(node._kws[arg], namedict)
     return

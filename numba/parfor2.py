@@ -82,6 +82,7 @@ class ParforPass(object):
                 new_body.append(instr)
             block.body = new_body
 
+        # self.func_ir.dump()
         return
 
     def _arrayexpr_to_parfor(self, lhs, arrayexpr):
@@ -446,3 +447,17 @@ def get_parfor_params(parfor):
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
     first_block = min(blocks.keys())
     return live_map[first_block]
+
+def replace_var_names_parfor2(parfor, namedict):
+    if config.DEBUG_ARRAY_OPT==1:
+        print("replacing parfor names for:",parfor)
+        print("dict: ", namedict)
+    for l in parfor.loop_nests:
+        replace_var_names_inner(l.index_variable, namedict)
+        replace_var_names_inner(l.range_variable, namedict)
+    replace_var_names({-1:parfor.init_block}, namedict)
+    replace_var_names(parfor.loop_body, namedict)
+    return
+
+# add call to replace parfor variable names
+ir_utils.replace_var_names_extensions[Parfor2] = replace_var_names_parfor2
