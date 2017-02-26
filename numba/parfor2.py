@@ -42,6 +42,25 @@ class Parfor2(ir.Expr, ir.Stmt):
     def __repr__(self):
         return repr(self.loop_nests) + repr(self.loop_body)
 
+    def list_vars(self):
+        """list variables used (read/written) in this parfor by recursively
+        calling compute_use_defs() on body and combining block uses.
+        """
+        all_uses = set()
+        usedefs = compute_use_defs(self.loop_body)
+        for label in self.loop_body.keys():
+            all_uses = all_uses.union(usedefs.usemap[label])
+            all_uses = all_uses.union(usedefs.defmap[label])
+
+        for loop in self.loop_nests:
+            all_uses.add(loop.index_variable.name)
+            all_uses.add(loop.range_variable.name)
+
+        init_usedefs = compute_use_defs({0:self.init_block})
+        all_uses = all_uses.union(init_usedefs.usemap[0])
+        all_uses = all_uses.union(init_usedefs.defmap[0])
+        return list(all_uses)
+
     def dump(self):
         for loopnest in self.loop_nests:
             print(loopnest)
