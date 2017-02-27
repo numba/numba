@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from numba import ir, ir_utils, types, rewrites, config
+from numba import ir, ir_utils, types, rewrites, config, analysis
 from numba.ir_utils import *
 from numba.analysis import *
 from numba.controlflow import CFGraph
@@ -43,23 +43,22 @@ class Parfor2(ir.Expr, ir.Stmt):
         return repr(self.loop_nests) + repr(self.loop_body)
 
     def list_vars(self):
-        """list variables used (read/written) in this parfor by recursively
-        calling compute_use_defs() on body and combining block uses.
+        """list variables used (read/written) in this parfor by
+        traversing the body and combining block uses.
         """
-        all_uses = set()
-        usedefs = compute_use_defs(self.loop_body)
-        for label in self.loop_body.keys():
-            all_uses = all_uses.union(usedefs.usemap[label])
-            all_uses = all_uses.union(usedefs.defmap[label])
+        all_uses = []
+        for l,b in self.loop_body.items():
+            for stmt in b.body:
+                all_uses += stmt.list_vars()
 
         for loop in self.loop_nests:
-            all_uses.add(loop.index_variable.name)
-            all_uses.add(loop.range_variable.name)
+            all_uses.append(loop.index_variable)
+            all_uses.append(loop.range_variable)
 
-        init_usedefs = compute_use_defs({0:self.init_block})
-        all_uses = all_uses.union(init_usedefs.usemap[0])
-        all_uses = all_uses.union(init_usedefs.defmap[0])
-        return list(all_uses)
+        for stmt in self.init_block.body:
+            all_uses += stmt.list_vars()
+
+        return all_uses
 
     def dump(self):
         for loopnest in self.loop_nests:
@@ -102,6 +101,7 @@ class ParforPass(object):
             block.body = new_body
 
         # self.func_ir.dump()
+        # usedefs = compute_use_defs(self.func_ir.blocks)
         return
 
     def _arrayexpr_to_parfor(self, lhs, arrayexpr):
@@ -480,3 +480,31 @@ def replace_var_names_parfor2(parfor, namedict):
 
 # add call to replace parfor variable names
 ir_utils.replace_var_names_extensions[Parfor2] = replace_var_names_parfor2
+
+def parfor_defs(parfor):
+    """list variables written in this parfor by recursively
+    calling compute_use_defs() on body and combining block defs.
+    """
+    all_defs = set()
+    # index variables are sematically defined here
+    for l in parfor.loop_nests:
+        all_defs.add(l.index_variable.name)
+
+    # all defs of body blocks
+    for l,b in parfor.loop_body.items():
+        for stmt in b.body:
+            if isinstance(stmt, ir.Assign):
+                all_defs.add(stmt.target.name)
+            elif isinstance(stmt, Parfor2):
+                all_defs.update(parfor_defs(stmt))
+
+    # all defs of init block
+    for stmt in parfor.init_block.body:
+        if isinstance(stmt, ir.Assign):
+            all_defs.add(stmt.target.name)
+        elif isinstance(stmt, Parfor2):
+            all_defs.update(parfor_defs(stmt))
+
+    return all_defs
+
+analysis.ir_extension_defs[Parfor2] = parfor_defs
