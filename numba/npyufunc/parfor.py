@@ -502,16 +502,15 @@ def lower_parfor2_parallel(func_ir, typemap, calltypes, typingctx, targetctx, fl
     """
     print("-"*10, " new parfor2 lower ", "-"*10)
     # TODO: lower to parallel
-    new_blocks = {}
     for (block_label, block) in func_ir.blocks.items():
+        new_block = ir.Block(block.scope, block.loc)
         scope = block.scope
-        i = parfor2._find_first_parfor(block.body)
-        while i!=-1:
-            inst = block.body[i]
-            _create_sched_wrapper2(inst, typemap, typingctx, targetctx, flags, locals)
-        new_blocks[block_label] = block
-    func_ir.blocks = new_blocks
-    func_ir.blocks = _rename_labels(func_ir.blocks)
+        for (i, inst) in enumerate(block.body):
+            if isinstance(inst, numba.parfor2.Parfor2):
+                new_block.body.extend(_create_sched_wrapper2(inst, typemap, typingctx, targetctx, flags, locals))
+            else:
+                new_block.body.append(inst)
+        func_ir.blocks[block_label] = new_block
     if config.DEBUG_ARRAY_OPT==1:
         print("function after parfor lowering:")
         func_ir.dump()
@@ -527,23 +526,47 @@ then the reduction function is applied across the reduction arrays
 before returning the final answer.
 '''
 def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals):
+    if config.DEBUG_ARRAY_OPT==1:
+        print("_create_sched_wrapper2 ", type(parfor), " ", parfor)
+        print("typemap = ", typemap)
 
     parfor_dim = len(parfor.loop_nests)
     assert parfor_dim==1
     loop_ranges = [l.range_variable.name for l in parfor.loop_nests]
 
     parfor_params = parfor2.get_parfor_params(parfor).union(loop_ranges)
+    if config.DEBUG_ARRAY_OPT==1:
+        print("parfor_params = ", parfor_params, " ", type(parfor_params))
+        print("loop_ranges = ", loop_ranges, " ", type(loop_ranges))
+        print("parfor.loop_body = ", parfor.loop_body, " ", type(parfor.loop_body))
+        for label, block in parfor.loop_body.items():
+            print("label: ", label)
+            for i, inst in enumerate(block.body):
+                print("    ", i, " ", inst)
+
     param_dict = legalize_names(parfor_params)
-    param_types = { param_dict[v]:typemap[v] for v in parfor_params }
+    if config.DEBUG_ARRAY_OPT==1:
+        print("param_dict = ", param_dict, " ", type(param_dict))
+
+    for pd in parfor_params:
+        print("pd = ", pd)
+        print("pd type = ", typemap[pd], " ", type(typemap[pd]))
+    param_types_dict = { v:typemap[v] for v in parfor_params }
+    param_types = [ typemap[v] for v in parfor_params ]
+    if config.DEBUG_ARRAY_OPT==1:
+        print("param_types_dict = ", param_types_dict, " ", type(param_types_dict))
+        print("param_types = ", param_types, " ", type(param_types))
+
     replace_var_names(parfor.loop_body, param_dict)
-    parfor_params = list(param_dict.values())
+    parfor_params = [ param_dict[v] for v in parfor_params ]
+
+    if config.DEBUG_ARRAY_OPT==1:
+        print("legal parfor_params = ", parfor_params, " ", type(parfor_params))
 
     loop_ranges = [ param_dict[v] for v in loop_ranges ]
 
     if config.DEBUG_ARRAY_OPT==1:
-        print("_create_sched_wrapper ", type(parfor), " ", parfor,
-        " args = ", type(parfor_params), " ", parfor_params, " loop_ranges ",
-        type(loop_ranges), loop_ranges)
+        print("legal loop_ranges ", type(loop_ranges), loop_ranges)
 
     # Determine the unique names of the scheduling and gufunc functions.
     sched_func_name = "__numba_parfor_sched_%s" % (hex(hash(parfor)).replace("-", "_"))
@@ -589,7 +612,7 @@ def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals)
     for indent in range(parfor_dim+1):
         gufunc_txt += "    "
     gufunc_txt += "__sentinel__ = 0\n"
-    gufunc_txt += "     None\n"
+    gufunc_txt += "    return None\n"
 
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_txt = ", type(gufunc_txt), "\n", gufunc_txt)
@@ -600,7 +623,10 @@ def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals)
     gufunc_ir = compiler.run_frontend(gufunc_func)
     gufunc_ir.dump()
 
-    #compiler.compile_ir(typingctx, targetctx, gufunc_ir, args, numba.types.NoneType, flags, locals)
+    gufunc_param_types = [numba.types.npytypes.Array(numba.int64, 1, "C")] + param_types
+    if config.DEBUG_ARRAY_OPT:
+        print("gufunc_param_types = ", type(gufunc_param_types), "\n", gufunc_param_types)
+    compiler.compile_ir(typingctx, targetctx, gufunc_ir, gufunc_param_types, numba.types.NoneType, flags, locals)
 
     #    for label, block in gufunc_ir.blocks.items():
     #        for i, inst in enumerate(block.body):
@@ -626,7 +652,13 @@ def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals)
     # run backend
 
     # Create the scheduling function from its text.
-    exec(sched_func)
+    #exec(sched_func)
+
+    # Return list of instructions including pre-statements and call to scheduling function.
+    if config.DEBUG_ARRAY_OPT:
+        print("init_block = ", parfor.init_block, " ", type(parfor.init_block)) 
+    replacement_instrs = []
+    return replacement_instrs
 
 def _prepare_arguments(lowerer, gu_signature, outer_sig, expr_args):
     context = lowerer.context
