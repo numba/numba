@@ -800,7 +800,7 @@ class BaseContext(object):
         if ty is None:
             cres = self.compile_subroutine_no_cache(builder, impl, sig,
                                                     locals=locals)
-            ty = types.InternalFunction(cres.fndesc, sig, libs=[cres.library])
+            ty = types.InternalFunction(cres=cres)
             self.cached_internal_func[cache_key] = ty
         return ty
 
@@ -810,12 +810,15 @@ class BaseContext(object):
         *args*.
         """
         ty = self.compile_subroutine(builder, impl, sig, locals)
-        return self.call_internal(builder, ty.fndesc, sig, args, libs=ty.libs)
+        return self.call_internal(builder, ty.cres.fndesc, sig, args,
+                                  libs=[ty.cres.library])
 
     def call_internal(self, builder, fndesc, sig, args, libs=()):
         """
         Given the function descriptor of an internally compiled function,
         emit a call to that function with the given arguments.
+        Optionally, linking libraries are provided by *libs* as a sequence
+        of `CodeLibrary` objects.
         """
         # Add call to the generated function
         llvm_mod = builder.module

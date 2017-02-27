@@ -251,18 +251,17 @@ class InternalFunction(Function):
     For internal use only.
     """
 
-    def __init__(self, fndesc, sig, libs):
+    def __init__(self, cres):
         from .. import typing
-        self.fndesc = fndesc
-        self.sig = sig
-        self.libs = libs
-        template = typing.make_concrete_template(fndesc.qualname,
-                                                 fndesc.qualname, [sig])
+        self.cres = cres
+        template = typing.make_concrete_template(cres.fndesc.qualname,
+                                                 cres.fndesc.qualname,
+                                                 [cres.signature])
         super(InternalFunction, self).__init__(template)
 
     @property
     def key(self):
-        return self.fndesc.unique_name, self.sig
+        return self.cres.fndesc.unique_name, self.cres.signature
 
 
 class NamedTupleClass(Callable, Opaque):
