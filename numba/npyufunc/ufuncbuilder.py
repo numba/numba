@@ -147,7 +147,7 @@ def _build_element_wise_ufunc_wrapper(cres, signature):
         envptr = None
 
     ptr = build_ufunc_wrapper(library, ctx, fname, signature,
-                              cres.objectmode, envptr, env)[0]
+                              cres.objectmode, envptr, env)
 
     # Get dtypes
     dtypenums = [as_dtype(a).num for a in signature.args]
