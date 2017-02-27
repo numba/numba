@@ -36,9 +36,14 @@ parallel = numba.config.NUMBA_NUM_THREADS > 1
 def erf(x):
   return math.erf(x)
 
-@numba.njit(parallel=parallel)
+#@numba.njit(parallel=parallel)
+#def cndf2(inp):
+#    out = 0.5 + 0.5 * erf(0.707106781 * inp)
+#    return out
+
+@numba.vectorize(nopython=True)
 def cndf2(inp):
-    out = 0.5 + 0.5 * erf(0.707106781 * inp)
+    out = 0.5 + 0.5 * math.erf(0.707106781 * inp)
     return out
 
 @numba.njit(parallel=parallel)
