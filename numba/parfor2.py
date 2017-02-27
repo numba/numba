@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from numba import ir, ir_utils, types, rewrites, config, analysis
+from numba import array_analysis
 from numba.ir_utils import *
 from numba.analysis import *
 from numba.controlflow import CFGraph
@@ -314,16 +315,17 @@ def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr, parfor_index):
                 ir_expr = ir.Expr.unary(op, arg_vars[0], loc)
                 calltypes[ir_expr] = signature(el_typ, el_typ)
             out_ir.append(ir.Assign(ir_expr, expr_out_var, loc))
-        elif isinstance(op, np.ufunc):
-            # elif isinstance(op, (np.ufunc, DUFunc)):
-            # function calls are stored in variables which are not removed
-            # op is typing_key to the variables type
-            func_var = ir.Var(scope, _find_func_var(typemap, op), loc)
-            ir_expr = ir.Expr.call(func_var, arg_vars, (), loc)
-            calltypes[ir_expr] = typemap[func_var.name].get_call_type(
-                typing.Context(), [el_typ], {})
-            #signature(el_typ, el_typ)
-            out_ir.append(ir.Assign(ir_expr, expr_out_var, loc))
+        for T in array_analysis.MAP_TYPES:
+            if isinstance(op, T):
+                # elif isinstance(op, (np.ufunc, DUFunc)):
+                # function calls are stored in variables which are not removed
+                # op is typing_key to the variables type
+                func_var = ir.Var(scope, _find_func_var(typemap, op), loc)
+                ir_expr = ir.Expr.call(func_var, arg_vars, (), loc)
+                calltypes[ir_expr] = typemap[func_var.name].get_call_type(
+                    typing.Context(), [el_typ], {})
+                #signature(el_typ, el_typ)
+                out_ir.append(ir.Assign(ir_expr, expr_out_var, loc))
     elif isinstance(expr, ir.Var):
         if isinstance(typemap[expr.name], types.Array):
             # TODO: support multi-dimensional arrays

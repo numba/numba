@@ -5,6 +5,9 @@ from numba.ir_utils import *
 from numba import types, config
 from numba.typing import npydecl
 
+import numpy
+MAP_TYPES = [numpy.ufunc]
+
 class ArrayAnalysis(object):
     """Analyzes Numpy array computations for properties such as shapes
     and equivalence classes.
@@ -28,6 +31,8 @@ class ArrayAnalysis(object):
         self.array_size_vars = {}
         # keep a list of numpy Global variables to find numpy calls
         self.numpy_globals = []
+        # calls that are essentially maps like DUFunc
+        self.map_calls = []
         # keep numpy call variables with their call names
         self.numpy_calls = {}
         # keep attr calls to arrays like t=A.sum() as {t:('sum',A)}
@@ -72,8 +77,12 @@ class ArrayAnalysis(object):
         assert isinstance(assign.target, ir.Var)
         lhs = assign.target.name
         rhs = assign.value
-        if isinstance(rhs, ir.Global) and rhs.value.__name__=='numpy':
-            self.numpy_globals.append(lhs)
+        if isinstance(rhs, ir.Global):
+            for T in MAP_TYPES:
+                if isinstance(rhs.value, T):
+                    self.map_calls.append(lhs)
+            if rhs.value.__name__=='numpy':
+                self.numpy_globals.append(lhs)
         if isinstance(rhs, ir.Expr) and rhs.op=='getattr':
             if rhs.value.name in self.numpy_globals:
                 self.numpy_calls[lhs] = rhs.attr
@@ -131,6 +140,7 @@ class ArrayAnalysis(object):
         getitem_assign = ir.Assign(getitem_node, size_var, var.loc)
         out.append(getitem_assign)
         return out
+
     # lhs is array so rhs has to return array
     def _analyze_rhs_classes(self, node):
         if isinstance(node, ir.Arg):
@@ -157,11 +167,14 @@ class ArrayAnalysis(object):
             elif node.op=='call':
                 call_name = 'NULL'
                 args = node.args.copy()
+                if node.func.name in self.map_calls:
+                    return self.array_shape_classes[args[0].name].copy()
                 if node.func.name in self.numpy_calls.keys():
                     call_name = self.numpy_calls[node.func.name]
                 elif node.func.name in self.array_attr_calls.keys():
                     call_name, arr = self.array_attr_calls[node.func.name]
                     args.insert(0,arr)
+                assert call_name is not 'NULL'
                 return self._analyze_np_call(call_name, args)
             elif node.op=='getattr' and self._isarray(node.value.name):
                 # matrix transpose
