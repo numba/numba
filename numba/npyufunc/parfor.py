@@ -18,6 +18,7 @@ import llvmlite.llvmpy.core as lc
 from numba.parfor2 import LoopNest
 import numba
 from numba import parfor2
+import copy
 
 def _mk_tuple(elts):
     if len(elts) == 1:
@@ -536,6 +537,8 @@ def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals)
         print("_create_sched_wrapper2 ", type(parfor), " ", parfor)
         print("typemap = ", typemap)
 
+    parfor.loop_body = copy.deepcopy(parfor.loop_body)
+
     from .ufuncbuilder import GUFuncBuilder, build_gufunc_wrapper #, _launch_threads, _init
 
     parfor_dim = len(parfor.loop_nests)
@@ -675,9 +678,10 @@ def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals)
             continue
         break
     if config.DEBUG_ARRAY_OPT:
+        print("gufunc_ir last dump")
         gufunc_ir.dump()
 
-#    gufunc_func = compiler.compile_ir(typingctx, targetctx, gufunc_ir, gufunc_param_types, numba.types.NoneType, flags, locals)
+    gufunc_func = compiler.compile_ir(typingctx, targetctx, gufunc_ir, gufunc_param_types, types.none, flags, locals)
 
     # Create gufunc from gufunc_func.
 
