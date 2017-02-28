@@ -804,11 +804,14 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
 
     # Next, we prepare the individual dimension info recorded in gu_signature
     sig_dim_dict = {}
+    occurances = []
     for var, gu_sig in zip(all_args, sin + sout):
         for sig in gu_sig:
             i = 0
             for dim_sym in sig:
                 sig_dim_dict[dim_sym] = var.shape[i]
+                if not (dim_sym in occurances): 
+                    occurances.append(dim_sym)
                 i = i + 1
 
     # prepare dims, which is only a single number, since N-D arrays is treated as 1D array by ufunc
@@ -818,7 +821,7 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
     builder.store(one,  builder.gep(dims, [ zero ]))
     # dimension for sorted signature symbols follows
     i = 1
-    for dim_sym in sorted(sig_dim_dict):
+    for dim_sym in occurances:
         builder.store(sig_dim_dict[dim_sym], builder.gep(dims, [ context.get_constant(types.intp, i) ]))
         i = i + 1
 
