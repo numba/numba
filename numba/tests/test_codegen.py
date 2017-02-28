@@ -148,6 +148,7 @@ class JITCPUCodegenTestCase(TestCase):
 
     # Lifetime tests
 
+    @unittest.expectedFailure  # MCJIT removeModule leaks and it is disabled
     def test_library_lifetime(self):
         library = self.compile_module(asm_sum_outer, asm_sum_inner)
         # Exercise code generation
