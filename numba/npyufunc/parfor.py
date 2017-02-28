@@ -518,6 +518,12 @@ def lower_parfor2_parallel(func_ir, typemap, calltypes, typingctx, targetctx, fl
 
 numba.parfor2.lower_parfor2_parallel = lower_parfor2_parallel
 
+def _print_body(body_dict):
+    for label, block in body_dict.items():
+        print("label: ", label)
+        for i, inst in enumerate(block.body):
+            print("    ", i, " ", inst)
+
 '''Here we create a function in text form and eval it into existence.
 This function creates the schedule for the gufunc call and creates and
 initializes reduction arrays equal to the thread count and initialized
@@ -530,23 +536,30 @@ def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals)
         print("_create_sched_wrapper2 ", type(parfor), " ", parfor)
         print("typemap = ", typemap)
 
+    from .ufuncbuilder import GUFuncBuilder, build_gufunc_wrapper #, _launch_threads, _init
+
     parfor_dim = len(parfor.loop_nests)
     assert parfor_dim==1
     loop_ranges = [l.range_variable.name for l in parfor.loop_nests]
+    loop_indices = [l.index_variable.name for l in parfor.loop_nests]
 
     parfor_params = parfor2.get_parfor_params(parfor).union(loop_ranges)
     if config.DEBUG_ARRAY_OPT==1:
         print("parfor_params = ", parfor_params, " ", type(parfor_params))
         print("loop_ranges = ", loop_ranges, " ", type(loop_ranges))
+        print("loop_indices = ", loop_indices, " ", type(loop_indices))
         print("parfor.loop_body = ", parfor.loop_body, " ", type(parfor.loop_body))
-        for label, block in parfor.loop_body.items():
-            print("label: ", label)
-            for i, inst in enumerate(block.body):
-                print("    ", i, " ", inst)
+        _print_body(parfor.loop_body)
 
     param_dict = legalize_names(parfor_params)
     if config.DEBUG_ARRAY_OPT==1:
         print("param_dict = ", param_dict, " ", type(param_dict))
+
+    ind_dict = legalize_names(loop_indices)
+    legal_loop_indices = [ ind_dict[v] for v in loop_indices]
+    if config.DEBUG_ARRAY_OPT==1:
+        print("ind_dict = ", ind_dict, " ", type(ind_dict))
+        print("legal_loop_indices = ", legal_loop_indices, " ", type(legal_loop_indices))
 
     for pd in parfor_params:
         print("pd = ", pd)
@@ -559,6 +572,7 @@ def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals)
 
     replace_var_names(parfor.loop_body, param_dict)
     parfor_params = [ param_dict[v] for v in parfor_params ]
+    replace_var_names(parfor.loop_body, ind_dict)
 
     if config.DEBUG_ARRAY_OPT==1:
         print("legal parfor_params = ", parfor_params, " ", type(parfor_params))
@@ -607,7 +621,7 @@ def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals)
     for eachdim in range(parfor_dim):
         for indent in range(eachdim+1):
             gufunc_txt += "    "
-        gufunc_txt += ( "for i" + str(eachdim) + " in range(sched[" + str(eachdim)
+        gufunc_txt += ( "for " + legal_loop_indices[eachdim] + " in range(sched[" + str(eachdim)
         + "], sched[" + str(eachdim + parfor_dim) + "] + 1):\n" )
     for indent in range(parfor_dim+1):
         gufunc_txt += "    "
@@ -621,37 +635,52 @@ def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals)
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_func = ", type(gufunc_func), "\n", gufunc_func)
     gufunc_ir = compiler.run_frontend(gufunc_func)
-    gufunc_ir.dump()
+    if config.DEBUG_ARRAY_OPT:
+        print("gufunc_ir dump ", type(gufunc_ir))
+        gufunc_ir.dump()
+        print("parfor.loop_body dump ", type(parfor.loop_body))
+        _print_body(parfor.loop_body)
 
     gufunc_param_types = [numba.types.npytypes.Array(numba.int64, 1, "C")] + param_types
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_param_types = ", type(gufunc_param_types), "\n", gufunc_param_types)
-    compiler.compile_ir(typingctx, targetctx, gufunc_ir, gufunc_param_types, numba.types.NoneType, flags, locals)
 
-    #    for label, block in gufunc_ir.blocks.items():
-    #        for i, inst in enumerate(block.body):
-    #            if isinstance(inst, ir.Assign) and inst.target.name=="__sentinel__":
-    #                loc = inst.loc
-    #                scope = block.scope
-    #                # split block across __sentinel__
-    #                prev_block = ir.Block(scope, loc)
-    #                prev_block.body = block.body[:i]
-    #                block.body = block.body[i+1:]
-    #                new_label = next_label()
-    #                body_first_label = min(parfor.loop_body.keys())
-    #                prev_block.append(ir.Jump(body_first_label, loc))
-    #                for (l, b) in inst.loop_body.items():
-    #                    gufunc_ir.blocks[l] = b
-    #                body_last_label = max(parfor.loop_body.keys())
-    #                gufunc_ir.blocks[new_label] = block
-    #                gufunc_ir.blocks[label] = prev_block
+    gufunc_stub_last_label = max(gufunc_ir.blocks.keys())
 
-    # TODO: implement get params etc. functions
-    # merege body ir
-    # run type inference
-    # run backend
+    # Add gufunc stub last label to each parfor.loop_body label to prevent label conflicts.
+    parfor.loop_body = add_offset_to_labels(parfor.loop_body, gufunc_stub_last_label)
+    if config.DEBUG_ARRAY_OPT:
+        _print_body(parfor.loop_body)
 
-    # Create the scheduling function from its text.
+    for label, block in gufunc_ir.blocks.items():
+        for i, inst in enumerate(block.body):
+            if isinstance(inst, ir.Assign) and inst.target.name=="__sentinel__":
+                loc = inst.loc
+                scope = block.scope
+                # split block across __sentinel__
+                prev_block = ir.Block(scope, loc)
+                prev_block.body = block.body[:i]
+                block.body = block.body[i+1:]
+                new_label = next_label()
+                body_first_label = min(parfor.loop_body.keys())
+                prev_block.append(ir.Jump(body_first_label, loc))
+                for (l, b) in parfor.loop_body.items():
+                    gufunc_ir.blocks[l] = b
+                body_last_label = max(parfor.loop_body.keys())
+                gufunc_ir.blocks[new_label] = block
+                gufunc_ir.blocks[label] = prev_block
+                gufunc_ir.blocks[body_last_label].append(ir.Jump(new_label, loc))
+                break
+        else:
+            continue
+        break
+    if config.DEBUG_ARRAY_OPT:
+        gufunc_ir.dump()
+
+    gufunc_func = compiler.compile_ir(typingctx, targetctx, gufunc_ir, gufunc_param_types, numba.types.NoneType, flags, locals)
+
+    # Create gufunc from gufunc_func.
+
     #exec(sched_func)
 
     # Return list of instructions including pre-statements and call to scheduling function.
