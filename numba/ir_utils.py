@@ -1,6 +1,7 @@
 from numba import ir, types, typing
 from numba.typing.templates import signature
 import numpy
+from numba.analysis import *
 
 _unique_var_count = 0
 def mk_unique_var(prefix):
@@ -230,3 +231,35 @@ def add_offset_to_labels(blocks, offset):
             term.falsebr += offset
         new_blocks[l+offset] = b
     return new_blocks
+
+def remove_dels(blocks):
+    for block in blocks.values():
+        new_body = []
+        for stmt in block.body:
+            if not isinstance(stmt, ir.Del):
+                new_body.append(stmt)
+        block.body = new_body
+    return
+
+def remove_dead_assign(blocks):
+    cfg = compute_cfg_from_blocks(blocks)
+    usedefs = compute_use_defs(blocks)
+    live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
+
+    for label, block in blocks.items():
+        # find live variables at each statement to delete dead assignment
+        lives = { v.name for v in block.terminator.list_vars() }
+        # find live variables at the end of block
+        for out_blk, _data in cfg.successors(label):
+            lives |= live_map[out_blk]
+        # add statements in reverse order
+        new_body = [block.terminator]
+        # for each statement in reverse order, excluding terminator
+        for stmt in reversed(block.body[:-1]):
+            # ignore assignments that their lhs is not live
+            if not isinstance(stmt, ir.Assign) or stmt.target.name in lives:
+                lives |= { v.name for v in stmt.list_vars() }
+                new_body.append(stmt)
+        new_body.reverse()
+        block.body = new_body
+    return
