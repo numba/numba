@@ -482,12 +482,14 @@ def get_parfor_params(parfor):
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
     blocks[0].body.pop() # remove dummy jump
     blocks[last_label].body.pop() # remove dummy return
+    keylist = sorted(live_map.keys())
+    first_non_init_block = keylist[1]
 
     # remove parfor index variables since they are not input
     for l in parfor.loop_nests:
-        live_map[0].remove(l.index_variable.name)
+        live_map[first_non_init_block].remove(l.index_variable.name)
 
-    return live_map[0]
+    return live_map[first_non_init_block]
 
 def replace_var_names_parfor2(parfor, namedict):
     if config.DEBUG_ARRAY_OPT==1:
