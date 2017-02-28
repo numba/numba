@@ -466,17 +466,28 @@ def get_parfor_params(parfor):
     """find variables used in body of parfor from outside.
     computed as live variables at entry of first block.
     """
-    blocks = parfor.loop_body
-    # add a dummpy return to last block for CFG call
+    blocks = parfor.loop_body.copy() # shallow copy is enough
+    first_body_block = min(blocks.keys())
+    assert first_body_block > 0 # we are using 0 for init block here
     last_label = max(blocks.keys())
     loc = blocks[last_label].body[-1].loc
+
+    # add dummy jump in init_block for CFG to work
+    blocks[0] = parfor.init_block
+    blocks[0].body.append(ir.Jump(first_body_block, loc))
+    # add a dummpy return to last block for CFG call
     blocks[last_label].body.append(ir.Return(0,loc))
     cfg = compute_cfg_from_blocks(blocks)
-    blocks[last_label].body.pop() # remove dummy return
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
-    first_block = min(blocks.keys())
-    return live_map[first_block]
+    blocks[0].body.pop() # remove dummy jump
+    blocks[last_label].body.pop() # remove dummy return
+
+    # remove parfor index variables since they are not input
+    for l in parfor.loop_nests:
+        live_map[0].remove(l.index_variable.name)
+
+    return live_map[0]
 
 def replace_var_names_parfor2(parfor, namedict):
     if config.DEBUG_ARRAY_OPT==1:
