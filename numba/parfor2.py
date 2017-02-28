@@ -101,7 +101,9 @@ class ParforPass(object):
                 new_body.append(instr)
             block.body = new_body
 
-        # self.func_ir.dump()
+        if config.DEBUG_ARRAY_OPT==1:
+            print("-"*30,"IR after parfor pass","-"*30)
+            self.func_ir.dump()
         # usedefs = compute_use_defs(self.func_ir.blocks)
         return
 
