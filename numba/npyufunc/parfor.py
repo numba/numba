@@ -677,7 +677,7 @@ def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals)
     if config.DEBUG_ARRAY_OPT:
         gufunc_ir.dump()
 
-    gufunc_func = compiler.compile_ir(typingctx, targetctx, gufunc_ir, gufunc_param_types, numba.types.NoneType, flags, locals)
+#    gufunc_func = compiler.compile_ir(typingctx, targetctx, gufunc_ir, gufunc_param_types, numba.types.NoneType, flags, locals)
 
     # Create gufunc from gufunc_func.
 
@@ -686,7 +686,11 @@ def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals)
     # Return list of instructions including pre-statements and call to scheduling function.
     if config.DEBUG_ARRAY_OPT:
         print("init_block = ", parfor.init_block, " ", type(parfor.init_block)) 
-    replacement_instrs = []
+    replacement_instrs = [x for x in parfor.init_block.body]
+    if config.DEBUG_ARRAY_OPT:
+        print("replacement_instrs = ", replacement_instrs, " ", type(replacement_instrs)) 
+        for ri in replacement_instrs:
+            print(ri)
     return replacement_instrs
 
 def _prepare_arguments(lowerer, gu_signature, outer_sig, expr_args):
