@@ -301,7 +301,7 @@ class LegalizeNames(ast.NodeTransformer):
         new_node = ast.Name(new_name, node.ctx)
         ast.copy_location(new_node, node)
         ast.fix_missing_locations(new_node)
-        return ast.Name(new_name, node.ctx)
+        return new_node
 
 @contextlib.contextmanager
 def _legalize_parameter_names(var_list):
