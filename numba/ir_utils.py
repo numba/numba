@@ -153,69 +153,75 @@ def legalize_names(varnames):
         var_map[var] = new_name
     return var_map
 
-# other packages that define new nodes add calls to replace variables in them
-# format: {type:function}
-replace_var_names_extensions = {}
-
 def replace_var_names(blocks, namedict):
+    def replace_name(var, namedict):
+        assert isinstance(var, ir.Var)
+        var.name = namedict.get(var.name, var.name)
+    visit_vars(blocks, replace_name, namedict)
+
+# other packages that define new nodes add calls to visit variables in them
+# format: {type:function}
+visit_vars_extensions = {}
+
+def visit_vars(blocks, callback, cbdata):
     """go over statements of block bodies and replace variable names with
     dictionary.
     """
     for block in blocks.values():
         for stmt in block.body:
             # let external calls handle stmt if type matches
-            for t,f in replace_var_names_extensions.items():
+            for t,f in visit_vars_extensions.items():
                 if isinstance(stmt,t):
-                    f(stmt, namedict)
+                    f(stmt, callback, cbdata)
                     return
             if isinstance(stmt, ir.Assign):
-                replace_var_names_inner(stmt.target, namedict)
-                replace_var_names_inner(stmt.value, namedict)
+                visit_vars_inner(stmt.target, callback, cbdata)
+                visit_vars_inner(stmt.value, callback, cbdata)
             elif isinstance(stmt, ir.Arg):
-                replace_var_names_inner(stmt.name, namedict)
+                visit_vars_inner(stmt.name, callback, cbdata)
             elif isinstance(stmt, ir.Return):
-                replace_var_names_inner(stmt.value, namedict)
+                visit_vars_inner(stmt.value, callback, cbdata)
             elif isinstance(stmt, ir.Branch):
-                replace_var_names_inner(stmt.cond, namedict)
+                visit_vars_inner(stmt.cond, callback, cbdata)
             elif isinstance(stmt, ir.Jump):
-                replace_var_names_inner(stmt.target, namedict)
+                visit_vars_inner(stmt.target, callback, cbdata)
             elif isinstance(stmt, ir.Del):
-                replace_var_names_inner(stmt.value, namedict)
+                visit_vars_inner(stmt.value, callback, cbdata)
             elif isinstance(stmt, ir.DelAttr):
-                replace_var_names_inner(stmt.target, namedict)
-                replace_var_names_inner(stmt.attr, namedict)
+                visit_vars_inner(stmt.target, callback, cbdata)
+                visit_vars_inner(stmt.attr, callback, cbdata)
             elif isinstance(stmt, ir.SetAttr):
-                replace_var_names_inner(stmt.target, namedict)
-                replace_var_names_inner(stmt.attr, namedict)
-                replace_var_names_inner(stmt.value, namedict)
+                visit_vars_inner(stmt.target, callback, cbdata)
+                visit_vars_inner(stmt.attr, callback, cbdata)
+                visit_vars_inner(stmt.value, callback, cbdata)
             elif isinstance(stmt, ir.DelItem):
-                replace_var_names_inner(stmt.target, namedict)
-                replace_var_names_inner(stmt.index, namedict)
+                visit_vars_inner(stmt.target, callback, cbdata)
+                visit_vars_inner(stmt.index, callback, cbdata)
             elif isinstance(stmt, ir.StaticSetItem):
-                replace_var_names_inner(stmt.target, namedict)
-                replace_var_names_inner(stmt.index_var, namedict)
-                replace_var_names_inner(stmt.value, namedict)
+                visit_vars_inner(stmt.target, callback, cbdata)
+                visit_vars_inner(stmt.index_var, callback, cbdata)
+                visit_vars_inner(stmt.value, callback, cbdata)
             elif isinstance(stmt, ir.SetItem):
-                replace_var_names_inner(stmt.target, namedict)
-                replace_var_names_inner(stmt.index, namedict)
-                replace_var_names_inner(stmt.value, namedict)
+                visit_vars_inner(stmt.target, callback, cbdata)
+                visit_vars_inner(stmt.index, callback, cbdata)
+                visit_vars_inner(stmt.value, callback, cbdata)
             else:
                 raise NotImplementedError("no replacement for IR node: ", stmt)
     return
 
-def replace_var_names_inner(node, namedict):
+def visit_vars_inner(node, callback, cbdata):
     if isinstance(node, ir.Var):
-        node.name = namedict.get(node.name, node.name)
+        callback(node, cbdata)
     elif isinstance(node, list):
-        [replace_var_names_inner(n, namedict) for n in node]
+        [visit_vars_inner(n, callback, cbdata) for n in node]
     elif isinstance(node, ir.Expr):
         # if node.op in ['binop', 'inplace_binop']:
         #     lhs = node.lhs.name
         #     rhs = node.rhs.name
-        #     node.lhs.name = namedict.get(lhs, lhs)
-        #     node.rhs.name = namedict.get(rhs, rhs)
+        #     node.lhs.name = callback, cbdata.get(lhs, lhs)
+        #     node.rhs.name = callback, cbdata.get(rhs, rhs)
         for arg in node._kws.keys():
-            replace_var_names_inner(node._kws[arg], namedict)
+            visit_vars_inner(node._kws[arg], callback, cbdata)
     return
 
 def add_offset_to_labels(blocks, offset):

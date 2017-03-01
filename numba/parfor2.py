@@ -495,19 +495,19 @@ def get_parfor_params(parfor):
 
     return live_map[first_non_init_block]
 
-def replace_var_names_parfor2(parfor, namedict):
+def visit_vars_parfor2(parfor, callback, cbdata):
     if config.DEBUG_ARRAY_OPT==1:
-        print("replacing parfor names for:",parfor)
-        print("dict: ", namedict)
+        print("visiting parfor vars for:",parfor)
+        print("cbdata: ", cbdata)
     for l in parfor.loop_nests:
-        replace_var_names_inner(l.index_variable, namedict)
-        replace_var_names_inner(l.range_variable, namedict)
-    replace_var_names({-1:parfor.init_block}, namedict)
-    replace_var_names(parfor.loop_body, namedict)
+        visit_vars_inner(l.index_variable, callback, cbdata)
+        visit_vars_inner(l.range_variable, callback, cbdata)
+    visit_vars({-1:parfor.init_block}, callback, cbdata)
+    visit_vars(parfor.loop_body, callback, cbdata)
     return
 
-# add call to replace parfor variable names
-ir_utils.replace_var_names_extensions[Parfor2] = replace_var_names_parfor2
+# add call to visit parfor variable
+ir_utils.visit_vars_extensions[Parfor2] = visit_vars_parfor2
 
 def parfor_defs(parfor):
     """list variables written in this parfor by recursively
@@ -589,9 +589,9 @@ def try_fuse(parfor1, parfor2):
         dprint("try_fuse parfor2 init block depends on parfor1 body")
         return None
 
-    return fuse_parfors(parfor1, parfor2)
+    return fuse_parfors_inner(parfor1, parfor2)
 
-def fuse_parfors(parfor1, parfor2):
+def fuse_parfors_inner(parfor1, parfor2):
     # fuse parfor2 into parfor1
     # append parfor2's init block on parfor1's
     parfor1.init_block.body.extend(parfor2.init_block.body)
