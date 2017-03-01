@@ -159,6 +159,15 @@ def replace_var_names(blocks, namedict):
         var.name = namedict.get(var.name, var.name)
     visit_vars(blocks, replace_name, namedict)
 
+def replace_vars(blocks, vardict):
+    def replace_var(var, vardict):
+        assert isinstance(var, ir.Var)
+        new_var = vardict.get(var, var)
+        var.scope = new_var.scope
+        var.name = new_var.name
+        var.loc = new_var.loc
+    visit_vars(blocks, replace_var, vardict)
+
 # other packages that define new nodes add calls to visit variables in them
 # format: {type:function}
 visit_vars_extensions = {}

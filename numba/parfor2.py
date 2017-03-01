@@ -607,8 +607,13 @@ def fuse_parfors_inner(parfor1, parfor2):
     parfor1.loop_body.pop(parfor2_first_label)
 
     # replace parfor2 indices with parfor1's
-    # return parfor1
-    return None
+    ndims = len(parfor1.loop_nests)
+    index_dict = {}
+    for i in range(ndims):
+        index_dict[parfor2.loop_nests[i].index_variable] = parfor1.loop_nests[i].index_variable
+    replace_vars(parfor1.loop_body, index_dict)
+
+    return parfor1
 
 def has_cross_iter_dep(parfor):
     # we consevatively assume there is cross iteration dependency when
