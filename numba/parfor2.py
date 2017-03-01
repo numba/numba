@@ -557,4 +557,56 @@ def fuse_parfors(blocks):
     return
 
 def try_fuse(parfor1, parfor2):
+    """try to fuse parfors and return a fused parfor, otherwise return None
+    """
+    dprint("try_fuse trying to fuse \n",parfor1,"\n",parfor2)
+
+    # fusion of parfors with different dimensions not supported yet
+    if len(parfor1.loop_nests)!=len(parfor1.loop_nests):
+        dprint("try_fuse parfors number of dimensions mismatch")
+        return None
+
+    ndims = len(parfor1.loop_nests)
+    # all loops should be equal length
+    for i in range(ndims):
+        if parfor1.loop_nests[i].correlation!=parfor2.loop_nests[i].correlation:
+            dprint("try_fuse parfor dimension correlation mismatch", i)
+            return None
+
+    # TODO: make sure parfor1's reduction output is not used in parfor2
+    # only data parallel loops
+    if has_cross_iter_dep(parfor1) or has_cross_iter_dep(parfor2):
+        dprint("try_fuse parfor cross iteration dependency found")
+        return None
+
+    # TODO: check init blocks?
+    # fuse parfor2 into parfor1
+    # return parfor1
     return None
+
+def has_cross_iter_dep(parfor):
+    # we consevatively assume there is cross iteration dependency when
+    # the parfor index is used in any expression since the expression could
+    # be used for indexing arrays
+    # TODO: make it more accurate using ud-chains
+    indices = { l.index_variable for l in parfor.loop_nests }
+    for b in parfor.loop_body.values():
+        for stmt in b.body:
+            # GetItem/SetItem nodes are fine since can't have expression inside
+            # and only simple indices are possible
+            if isinstance(stmt, (ir.SetItem, ir.StaticSetItem)):
+                continue
+            # tuples are immutable so no expression on parfor possible
+            if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
+                op = stmt.value.op
+                if op in ['build_tuple', 'getitem', 'static_getitem']:
+                    continue
+            # other statements can have potential violations
+            if not indices.isdisjoint(stmt.list_vars()):
+                dprint("has_cross_iter_dep found", indices, stmt)
+                return True
+    return False
+
+def dprint(*s):
+    if config.DEBUG_ARRAY_OPT==1:
+        print(*s)
