@@ -43,7 +43,7 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
     g_np_assign = ir.Assign(g_np, g_np_var, loc)
     # attr call: empty_attr = getattr(g_np_var, empty)
     empty_attr_call = ir.Expr.getattr(g_np_var, "empty", loc)
-    attr_var = ir.Var(scope, mk_unique_var("empty_attr_attr"), loc)
+    attr_var = ir.Var(scope, mk_unique_var("$empty_attr_attr"), loc)
     typemap[attr_var.name] = _get_empty_func_typ()
     attr_assign = ir.Assign(empty_attr_call, attr_var, loc)
     # alloc call: lhs = empty_attr(size_var, typ_var)

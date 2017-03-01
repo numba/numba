@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from numba import ir, ir_utils, types, rewrites, config, analysis
-from numba import array_analysis
+from numba import array_analysis, postproc
 from numba.ir_utils import *
 from numba.analysis import *
 from numba.controlflow import CFGraph
@@ -107,6 +107,10 @@ class ParforPass(object):
 
         remove_dels(self.func_ir.blocks)
         remove_dead_assign(self.func_ir.blocks)
+        fuse_parfors(self.func_ir.blocks)
+        # run post processor again to generate Del nodes
+        # post_proc = postproc.PostProcessor(self.func_ir)
+        # post_proc.run()
 
         if config.DEBUG_ARRAY_OPT==1:
             print("-"*30,"IR after optimization","-"*30)
@@ -532,3 +536,25 @@ def parfor_defs(parfor):
     return all_defs
 
 analysis.ir_extension_defs[Parfor2] = parfor_defs
+
+def fuse_parfors(blocks):
+    for block in blocks.values():
+        i = 0
+        new_body = []
+        while i<len(block.body)-1:
+            stmt = block.body[i]
+            next_stmt = block.body[i+1]
+            if isinstance(stmt, Parfor2) and isinstance(next_stmt, Parfor2):
+                fused_node = try_fuse(stmt, next_stmt)
+                if fused_node is not None:
+                    new_body.append(fused_node)
+                    i += 2
+                    continue
+            new_body.append(stmt)
+            i += 1
+        new_body.append(block.body[-1])
+        block.body = new_body
+    return
+
+def try_fuse(parfor1, parfor2):
+    return None
