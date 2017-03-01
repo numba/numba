@@ -579,8 +579,34 @@ def try_fuse(parfor1, parfor2):
         dprint("try_fuse parfor cross iteration dependency found")
         return None
 
-    # TODO: check init blocks?
+    # make sure parfor2's init block isn't using any output of parfor1
+    parfor1_body_usedefs = compute_use_defs(parfor1.loop_body)
+    parfor1_body_vardefs = set()
+    for defs in parfor1_body_usedefs.defmap.values():
+        parfor1_body_vardefs |= defs
+    init2_uses = compute_use_defs({0:parfor2.init_block}).usemap[0]
+    if not parfor1_body_vardefs.isdisjoint(init2_uses):
+        dprint("try_fuse parfor2 init block depends on parfor1 body")
+        return None
+
+    return fuse_parfors(parfor1, parfor2)
+
+def fuse_parfors(parfor1, parfor2):
     # fuse parfor2 into parfor1
+    # append parfor2's init block on parfor1's
+    parfor1.init_block.body.extend(parfor2.init_block.body)
+
+    # append parfor2's first block to parfor1's last block
+    parfor2_first_label = min(parfor2.loop_body.keys())
+    parfor2_first_block = parfor2.loop_body[parfor2_first_label].body
+    parfor1_last_label = max(parfor1.loop_body.keys())
+    parfor1.loop_body[parfor1_last_label].body.extend(parfor2_first_block)
+
+    # add parfor2 body blocks to parfor1's except first
+    parfor1.loop_body.update(parfor2.loop_body)
+    parfor1.loop_body.pop(parfor2_first_label)
+
+    # replace parfor2 indices with parfor1's
     # return parfor1
     return None
 
