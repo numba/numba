@@ -647,7 +647,6 @@ def dprint(*s):
         print(*s)
 
 def remove_dead_parfor(parfor, lives):
-    curr_lives = lives.copy()
     # remove dead get/sets in last block
     # TODO: extend to multi-dimensional
     assert len(parfor.loop_nests)==1
@@ -670,22 +669,32 @@ def remove_dead_parfor(parfor, lives):
                 stmt.value = saved_values.get(rhs.value, rhs)
         new_body.append(stmt)
     last_block.body = new_body
-
-    # blocks = parfor.loop_body.copy() # shallow copy is enough
-    # first_body_block = min(blocks.keys())
-    # assert first_body_block > 0 # we are using 0 for init block here
-    # last_label = max(blocks.keys())
-    # loc = blocks[last_label].body[-1].loc
-    #
-    # # add dummy jump in init_block for CFG to work
-    # blocks[0] = parfor.init_block
-    # blocks[0].body.append(ir.Jump(first_body_block, loc))
-    # # add a dummpy return to last block for CFG call
-    # blocks[last_label].body.append(ir.Return(0,loc))
-    # cfg = compute_cfg_from_blocks(blocks)
-    # usedefs = compute_use_defs(blocks)
-    # live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
-    # blocks[0].body.pop() # remove dummy jump
-    # blocks[last_label].body.pop() # remove dummy return
+    # process parfor body recursively
+    remove_dead_parfor_recursive(parfor, lives)
+    return
 
 ir_utils.remove_dead_extensions[Parfor2] = remove_dead_parfor
+
+def remove_dead_parfor_recursive(parfor, lives):
+    """create a dummy function from parfor and call remove dead recursively
+    """
+    blocks = parfor.loop_body.copy() # shallow copy is enough
+    first_body_block = min(blocks.keys())
+    assert first_body_block > 0 # we are using 0 for init block here
+    last_label = max(blocks.keys())
+    loc = blocks[last_label].body[-1].loc
+    scope = blocks[last_label].scope
+
+    # add dummy jump in init_block for CFG to work
+    blocks[0] = parfor.init_block
+    blocks[0].body.append(ir.Jump(first_body_block, loc))
+    # add lives in a dummpy return to last block to avoid their removal
+    tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
+    tuple_call = ir.Expr.build_tuple(list(lives), loc)
+    blocks[last_label].body.append(ir.Assign(tuple_call, tuple_var, loc))
+    blocks[last_label].body.append(ir.Return(tuple_var,loc))
+    remove_dead(blocks)
+    blocks[0].body.pop() # remove dummy jump
+    blocks[last_label].body.pop() # remove dummy return
+    blocks[last_label].body.pop() # remove dummy tupple
+    return
