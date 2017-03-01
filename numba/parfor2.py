@@ -105,9 +105,13 @@ class ParforPass(object):
             print("-"*30,"IR after parfor pass","-"*30)
             self.func_ir.dump()
 
+        # remove Del statements for easier optimization
         remove_dels(self.func_ir.blocks)
-        remove_dead_assign(self.func_ir.blocks)
+        # remove dead code to enable fusion
+        remove_dead(self.func_ir.blocks)
         fuse_parfors(self.func_ir.blocks)
+        # remove dead code after fusion to remove extra arrays and variables
+        remove_dead(self.func_ir.blocks)
         # run post processor again to generate Del nodes
         # post_proc = postproc.PostProcessor(self.func_ir)
         # post_proc.run()
@@ -641,3 +645,47 @@ def has_cross_iter_dep(parfor):
 def dprint(*s):
     if config.DEBUG_ARRAY_OPT==1:
         print(*s)
+
+def remove_dead_parfor(parfor, lives):
+    curr_lives = lives.copy()
+    # remove dead get/sets in last block
+    # TODO: extend to multi-dimensional
+    assert len(parfor.loop_nests)==1
+    parfor_index = parfor.loop_nests[0].index_variable.name
+    last_label = max(parfor.loop_body.keys())
+    last_block = parfor.loop_body[last_label]
+
+    # save array values set to replace getitems
+    saved_values = {}
+    new_body = []
+    for stmt in last_block.body:
+        if (isinstance(stmt, ir.SetItem) and stmt.index.name==parfor_index
+                and stmt.target.name not in lives):
+            saved_values[stmt.target] = stmt.value
+            continue
+        if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
+            rhs = stmt.value
+            if rhs.op=='getitem' and rhs.index.name==parfor_index:
+                # replace getitem if value saved
+                stmt.value = saved_values.get(rhs.value, rhs)
+        new_body.append(stmt)
+    last_block.body = new_body
+
+    # blocks = parfor.loop_body.copy() # shallow copy is enough
+    # first_body_block = min(blocks.keys())
+    # assert first_body_block > 0 # we are using 0 for init block here
+    # last_label = max(blocks.keys())
+    # loc = blocks[last_label].body[-1].loc
+    #
+    # # add dummy jump in init_block for CFG to work
+    # blocks[0] = parfor.init_block
+    # blocks[0].body.append(ir.Jump(first_body_block, loc))
+    # # add a dummpy return to last block for CFG call
+    # blocks[last_label].body.append(ir.Return(0,loc))
+    # cfg = compute_cfg_from_blocks(blocks)
+    # usedefs = compute_use_defs(blocks)
+    # live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
+    # blocks[0].body.pop() # remove dummy jump
+    # blocks[last_label].body.pop() # remove dummy return
+
+ir_utils.remove_dead_extensions[Parfor2] = remove_dead_parfor

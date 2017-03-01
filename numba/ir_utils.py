@@ -256,7 +256,7 @@ def remove_dels(blocks):
         block.body = new_body
     return
 
-def remove_dead_assign(blocks):
+def remove_dead(blocks):
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
@@ -267,14 +267,26 @@ def remove_dead_assign(blocks):
         # find live variables at the end of block
         for out_blk, _data in cfg.successors(label):
             lives |= live_map[out_blk]
-        # add statements in reverse order
-        new_body = [block.terminator]
-        # for each statement in reverse order, excluding terminator
-        for stmt in reversed(block.body[:-1]):
-            # ignore assignments that their lhs is not live
-            if not isinstance(stmt, ir.Assign) or stmt.target.name in lives:
-                lives |= { v.name for v in stmt.list_vars() }
-                new_body.append(stmt)
-        new_body.reverse()
-        block.body = new_body
+        remove_dead_block(block, lives)
+    return
+
+# other packages that define new nodes add calls to remove dead code in them
+# format: {type:function}
+remove_dead_extensions = {}
+
+def remove_dead_block(block, lives):
+    # add statements in reverse order
+    new_body = [block.terminator]
+    # for each statement in reverse order, excluding terminator
+    for stmt in reversed(block.body[:-1]):
+        # let external calls handle stmt if type matches
+        for t,f in remove_dead_extensions.items():
+            if isinstance(stmt,t):
+                f(stmt, lives)
+        # ignore assignments that their lhs is not live
+        if not isinstance(stmt, ir.Assign) or stmt.target.name in lives:
+            lives |= { v.name for v in stmt.list_vars() }
+            new_body.append(stmt)
+    new_body.reverse()
+    block.body = new_body
     return
