@@ -511,7 +511,7 @@ class Pipeline(object):
         assert self.func_ir
         lower_parfor2(self.func_ir, self.type_annotation.typemap,
             self.type_annotation.calltypes, self.typingctx, self.targetctx,
-            self.flags, self.locals)
+            self.flags, self.locals, self.array_analysis)
 
     def stage_annotate_type(self):
         """
