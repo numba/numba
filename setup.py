@@ -136,7 +136,7 @@ def get_ext_modules():
         print("Using TBBROOT=", tbb_root)
         ext_npyufunc_workqueue = Extension(
             name='numba.npyufunc.workqueue',
-            sources=['numba/npyufunc/tbbpool.cpp'],
+            sources=['numba/npyufunc/tbbpool.cpp', 'numba/npyufunc/gufunc_scheduler.cpp'],
             depends=['numba/npyufunc/workqueue.h'],
             include_dirs=[os.path.join(tbb_root, 'include')],
             extra_compile_args=[] if sys.platform.startswith('win') else ['-std=c++11'],
@@ -149,7 +149,7 @@ def get_ext_modules():
     else:
         ext_npyufunc_workqueue = Extension(
             name='numba.npyufunc.workqueue',
-            sources=['numba/npyufunc/workqueue.c'],
+            sources=['numba/npyufunc/workqueue.c', 'numba/npyufunc/gufunc_scheduler.cpp'],
             depends=['numba/npyufunc/workqueue.h'])
 
     ext_mviewbuf = Extension(name='numba.mviewbuf',

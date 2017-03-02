@@ -413,6 +413,7 @@ def _init():
     ll.add_symbol('numba_add_task', lib.add_task)
     ll.add_symbol('numba_synchronize', lib.synchronize)
     ll.add_symbol('numba_ready', lib.ready)
+    ll.add_symbol('do_scheduling', lib.do_scheduling)
 
     _is_initialized = True
 

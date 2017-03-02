@@ -8,6 +8,7 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 #include <stdio.h>
 #include "workqueue.h"
 #include "../_pymodule.h"
+#include "gufunc_scheduler.h"
 
 #if TBB_INTERFACE_VERSION >= 9106
     #define TSI_INIT(count) tbb::task_scheduler_init(count)
@@ -108,6 +109,9 @@ MOD_INIT(workqueue) {
                            PyLong_FromVoidPtr((void*)&ready));
     PyObject_SetAttrString(m, "add_task",
                            PyLong_FromVoidPtr((void*)&add_task));
+    PyObject_SetAttrString(m, "do_scheduling",
+                           PyLong_FromVoidPtr(&do_scheduling));
+
 
     return MOD_SUCCESS_VAL(m);
 }
