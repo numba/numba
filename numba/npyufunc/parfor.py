@@ -79,7 +79,7 @@ class Parfor(ir.Expr):
     can be treated as the body of a python function and compile
     separately.
     '''
-    def to_ast(self):
+    def to_ast(self, range_maker = None):
         def mk_loop(loop_nests, loop_body):
             if len(loop_nests) == 0:
                 #print("return loop_body: ", len(loop_body))
@@ -90,12 +90,20 @@ class Parfor(ir.Expr):
                     target = ast.Name(nest.index_variable, ast.Store()),
                     iter = ast.Call(
                         func = ast.Name('range', ast.Load()),
-                        args = [ast.Name(nest.range_variable, ast.Load())],
+                        args = [ast.Name(nest.range_variable, ast.Load())] if range_maker == None else range_maker(nest),
                         keywords = []),
                     body = mk_loop(nests, loop_body),
                     orelse = []) ]
         #print("number of loop nests = ", len(self.loop_nests))
-        #debug = [ ast.Expr(ast.Call(ast.Name('print', ast.Load()), [ast.Attribute(ast.Name(self.output_info[0][0], ast.Load()), 'shape', ast.Load())], [])) ]
+        """
+        debug = [ ast.Expr(ast.Call(ast.Name('print', ast.Load()), [ast.Attribute(ast.Name(self.output_info[0][0], ast.Load()), 'shape', ast.Load())], [])),
+                  ast.Expr(ast.Call(ast.Name('print', ast.Load()), [
+                        ast.Subscript(ast.Name("sched", ast.Load()), ast.Index(ast.Num(0)), ast.Load()),
+                        ast.Subscript(ast.Name("sched", ast.Load()), ast.Index(ast.Num(1)), ast.Load()) ], [])) #,
+                        #ast.Subscript(ast.Name("sched", ast.Load()), ast.Index(ast.Num(2)), ast.Load()),
+                        #ast.Subscript(ast.Name("sched", ast.Load()), ast.Index(ast.Num(3)), ast.Load()) ], []))
+                ]
+        """
         return self.pre_parfor + mk_loop(self.loop_nests, self.loop_body) + self.post_parfor
 
 
@@ -330,10 +338,22 @@ def _legalize_parameter_names(var_list):
 def _lower_parfor(lowerer, expr):
     '''Lower an array expression built by RewriteParfor.
     '''
+    context = lowerer.context
     expr_name = "__numba_parfor_%s" % (hex(hash(expr)).replace("-", "_"))
     expr_filename = expr.loc.filename
-    # generate the ast
-    parfor_ast = expr.to_ast()
+    # generate the ast, use sched as range when auto_parallel
+    loop_nests = expr.loop_nests
+    num_nests = len(loop_nests)
+    loop_ranges = [l.range_variable for l in loop_nests]
+    def range_maker(nest):
+        i = 0
+        while i < num_nests and nest != loop_nests[i]:
+            i = i + 1
+        assert(i < num_nests)
+        sched = ast.Name("sched", ast.Load())
+        return [ast.Subscript(sched, ast.Index(ast.Num(i)), ast.Load()),
+                ast.BinOp(ast.Subscript(sched, ast.Index(ast.Num(i+ num_nests)), ast.Load()), ast.Add(), ast.Num(1))]
+    parfor_ast = expr.to_ast(range_maker if context.auto_parallel else None)
     if config.DEBUG_ARRAY_OPT:
         print("_lower_parfor: expr = ", expr)
         print("parfor_ast = ", ast.dump(ast.Module(body = parfor_ast)))
@@ -346,7 +366,16 @@ def _lower_parfor(lowerer, expr):
     if config.DEBUG_ARRAY_OPT:
         print("namedict = ", namedict)
     # argument contain inputs and outputs, since we are lowering parfor to gufunc
+    if config.DEBUG_ARRAY_OPT:
+        print("input_info = ", list(expr.input_info))
+    num_inputs = len(list(expr.input_info))
+    if config.DEBUG_ARRAY_OPT:
+        print("num_inputs = ", num_inputs)
     expr_var_list = list(expr.input_info) + list(expr.output_info)
+    # append 'sched' variable to the frnot of expr_args if auto_parallel
+    if context.auto_parallel:
+        expr_var_list = [ ("sched", types.Array(types.intp, 1, "C")) ] + expr_var_list
+        num_inputs = num_inputs + 1 
     # Arguments are the names external to the new closure
     expr_args = [ var[0] for var in expr_var_list ]
     # Parameters are what we need to declare the function formal params
@@ -384,23 +413,24 @@ def _lower_parfor(lowerer, expr):
 
     # 3. Prepare signatures as well as a gu_signature in the form of ('m','n',...)
     classes = expr.array_shape_classes
+    max_shape_num = max(sum([list(x) for x in classes.values()], []))
     outer_typs = []
     gu_sin = []
     gu_sout = []
-    if config.DEBUG_ARRAY_OPT:
-        print("input_info = ", list(expr.input_info))
-    num_inputs = len(list(expr.input_info))
-    if config.DEBUG_ARRAY_OPT:
-        print("num_inputs = ", num_inputs)
     count = 0
     for var, typ in expr_var_list:
         #print("var = ", var, " typ = ", typ)
         count = count + 1
         outer_typs.append(typ)
         if isinstance(typ, types.Array):
-            assert var in classes
-            var_shape = classes[var]
-            assert len(var_shape) == typ.ndim
+            if var in classes:
+                var_shape = classes[var]
+                assert len(var_shape) == typ.ndim
+            else:
+                var_shape = []
+                for i in range(typ.ndim):
+                    max_shape_num = max_shape_num + 1
+                    var_shape.append(max_shape_num)
             dim_syms = tuple([ chr(97 + i) for i in var_shape ]) # chr(97) = 'a'
         else:
             dim_syms = ()
@@ -413,7 +443,6 @@ def _lower_parfor(lowerer, expr):
         print("gu_signature = ", gu_signature, " ", type(gu_signature))
 
     # 4. Now compile a gufunc using the Python function as kernel.
-    context = lowerer.context
     builder = lowerer.builder
     library = lowerer.library
     #outer_sig = expr.ty(*outer_typs)
@@ -755,18 +784,18 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
     builder = lowerer.builder
     library = lowerer.library
 
-    #from .parallel import ParallelGUFuncBuilder, build_gufunc_wrapper, _launch_threads, _init
-    from .ufuncbuilder import GUFuncBuilder, build_gufunc_wrapper #, _launch_threads, _init
+    from .parallel import ParallelGUFuncBuilder, build_gufunc_wrapper, get_thread_count, _launch_threads, _init
+    #from .ufuncbuilder import GUFuncBuilder, build_gufunc_wrapper #, _launch_threads, _init
 
     if config.DEBUG_ARRAY_OPT:
         print("make_parallel_loop")
         print("args = ", expr_args)
         print("outer_sig = ", outer_sig.args, outer_sig.return_type, outer_sig.recvr, outer_sig.pysig)
-        print("inner_sig = ", inner_sig.args, inner_sig.return_type, inner_sig.recvr, inner_sig.pysig)
+        #print("inner_sig = ", inner_sig.args, inner_sig.return_type, inner_sig.recvr, inner_sig.pysig)
     # The ufunc takes 4 arguments: args, dims, steps, data
-    # ufunc = ParallelGUFuncBuilder(impl, gu_signature)
     sin, sout = gu_signature
-    ufunc = GUFuncBuilder(impl, gu_signature)
+    ufunc = ParallelGUFuncBuilder(impl, gu_signature)
+    #ufunc = GUFuncBuilder(impl, gu_signature)
     ufunc.add(outer_sig)
     #wrapper_func = ufunc.build_ufunc()
     if config.DEBUG_ARRAY_OPT:
@@ -774,34 +803,62 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
     sig = ufunc._sigs[0]
     cres = ufunc._cres[sig]
     #dtypenums, wrapper, env = ufunc.build(cres, sig)
-    #_launch_threads()
-    #_init()
+    _launch_threads()
+    _init()
     llvm_func = cres.library.get_function(cres.fndesc.llvm_func_name)
     wrapper_ptr, env, wrapper_name = build_gufunc_wrapper(llvm_func, cres, sin, sout, {})
     cres.library._ensure_finalized()
 
     if config.DEBUG_ARRAY_OPT:
-        print("parallel function = ", wrapper, cres, sig)
+        print("parallel function = ", wrapper_name, cres, sig)
 
     byte_t = lc.Type.int(8)
     byte_ptr_t = lc.Type.pointer(byte_t)
     byte_ptr_ptr_t = lc.Type.pointer(byte_ptr_t)
     intp_t = context.get_value_type(types.intp)
+    uintp_t = context.get_value_type(types.uintp)
     intp_ptr_t = lc.Type.pointer(intp_t)
     zero = context.get_constant(types.intp, 0)
     one = context.get_constant(types.intp, 1)
+    sizeof_intp = context.get_abi_sizeof(intp_t)
 
+    # prepare sched, first pop it out of expr_args, outer_sig, and gu_signature
+    sched_name = expr_args.pop(0)
+    sched_typ = outer_sig.args[0]
+    _outer_sig = signature(types.none, *(outer_sig.args[1:]))
+    sched_sig  = sin.pop(0)
+    # prepare input/output arguments
+    inputs, output, out_ty = _prepare_arguments(lowerer, gu_signature, _outer_sig, expr_args)
+
+    # call do_scheduling with appropriate arguments
+    num_dim = len(output.shape) 
+    out_dims = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, num_dim), name = "dims")
+    for i in range(num_dim):
+        builder.store(output.shape[i], builder.gep(out_dims, [context.get_constant(types.intp, i)]))
+    sched_size = get_thread_count() * num_dim * 2
+    sched = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, sched_size), name = "sched")
+    scheduling_fnty = lc.Type.function(intp_ptr_t, [intp_t, intp_ptr_t, uintp_t, intp_ptr_t])
+    do_scheduling = builder.module.get_or_insert_function(scheduling_fnty, name="do_scheduling")
+    builder.call(do_scheduling, [context.get_constant(types.intp, num_dim), out_dims, 
+                                 context.get_constant(types.uintp, get_thread_count()), sched])
+
+    if config.DEBUG_ARRAY_OPT:
+      for i in range(get_thread_count()):
+        cgutils.printf(builder, "sched[" + str(i) + "] = ")
+        for j in range(num_dim * 2):
+            cgutils.printf(builder, "%d ", builder.load(builder.gep(sched, [context.get_constant(types.intp, i * num_dim * 2 + j)])))
+        cgutils.printf(builder, "\n")
+    
     # prepare arguments: args, dims, steps, data
-    inputs, output, out_ty = _prepare_arguments(lowerer, gu_signature, outer_sig, expr_args)
-
     all_args = inputs + [output]
     num_args = len(all_args)
     num_inps = len(inputs)
-    args = cgutils.alloca_once(builder, byte_ptr_t, size = context.get_constant(types.intp, num_args), name = "pargs")
+    args = cgutils.alloca_once(builder, byte_ptr_t, size = context.get_constant(types.intp, 1 + num_args), name = "pargs")
+    builder.store(builder.bitcast(sched, byte_ptr_t), args)
 
     for i in range(num_args):
         arg = all_args[i]
-        dst = builder.gep(args, [context.get_constant(types.intp, i)])
+        dst = builder.gep(args, [context.get_constant(types.intp, i + 1)])
         if isinstance(arg, npyimpl._ArrayHelper):
             builder.store(builder.bitcast(arg.data, byte_ptr_t), dst)
         else:
@@ -813,6 +870,8 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
     # Next, we prepare the individual dimension info recorded in gu_signature
     sig_dim_dict = {}
     occurances = []
+    occurances = [sched_sig[0]]
+    sig_dim_dict[sched_sig[0]] = context.get_constant(types.intp, 2 * num_dim)
     for var, gu_sig in zip(all_args, sin + sout):
         for sig in gu_sig:
             i = 0
@@ -825,8 +884,8 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
     # prepare dims, which is only a single number, since N-D arrays is treated as 1D array by ufunc
     ndims = len(sig_dim_dict) + 1
     dims = cgutils.alloca_once(builder, intp_t, size = ndims, name = "pshape")
-    # For now, outer loop dimension is always one!
-    builder.store(one,  builder.gep(dims, [ zero ]))
+    # For now, outer loop dimension is two
+    builder.store(context.get_constant(types.intp, get_thread_count()), dims)
     # dimension for sorted signature symbols follows
     i = 1
     for dim_sym in occurances:
@@ -835,13 +894,14 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
 
     # prepare steps for each argument
     steps = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, num_args + 1), name = "psteps")
+    builder.store(context.get_constant(types.intp, 2 * num_dim * sizeof_intp), steps)
     for i in range(num_args):
         # all steps are 0
         # sizeof = context.get_abi_sizeof(context.get_value_type(arguments[i].base_type))
         # stepsize = context.get_constant(types.intp, sizeof)
         stepsize = zero
         #cgutils.printf(builder, "stepsize = %d\n", stepsize)
-        dst = builder.gep(steps, [context.get_constant(types.intp, i)])
+        dst = builder.gep(steps, [context.get_constant(types.intp, 1 + i)])
         builder.store(stepsize, dst)
     # steps for output array goes last
     # sizeof = context.get_abi_sizeof(context.get_value_type(output.base_type))

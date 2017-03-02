@@ -110,7 +110,7 @@ MOD_INIT(workqueue) {
     PyObject_SetAttrString(m, "add_task",
                            PyLong_FromVoidPtr((void*)&add_task));
     PyObject_SetAttrString(m, "do_scheduling",
-                           PyLong_FromVoidPtr(&do_scheduling));
+                           PyLong_FromVoidPtr((void*)&do_scheduling));
 
 
     return MOD_SUCCESS_VAL(m);
