@@ -499,6 +499,18 @@ def get_parfor_params(parfor):
 
     return live_map[first_non_init_block]
 
+def get_parfor_outputs(parfor):
+    # TODO: reduction output
+    # TODO: multi-dimensional
+    assert len(parfor.loop_nests)==1
+    parfor_index = parfor.loop_nests[0].index_variable.name
+    last_label = max(parfor.loop_body.keys())
+    outputs = []
+    for stmt in parfor.loop_body[last_label].body:
+        if isinstance(stmt, ir.SetItem) and stmt.index.name==parfor_index:
+            outputs.append(stmt.target.name)
+    return outputs
+
 def visit_vars_parfor2(parfor, callback, cbdata):
     if config.DEBUG_ARRAY_OPT==1:
         print("visiting parfor vars for:",parfor)
