@@ -170,14 +170,13 @@ void divide_work(const RangeActual &full_iteration_space,
 
 void flatten_schedule(const std::vector<RangeActual> &sched, intp *out_sched) {
     uintp outer = sched.size();
-    uintp inner = sched[0].start.size() * 2; // start and end are the same size so multiply by 2
-    uintp end_offset = sched[0].start.size();
+    uintp inner = sched[0].start.size(); 
     for(uintp i = 0; i < outer; ++i) {
         for(uintp j = 0; j < inner; ++j) {
-            out_sched[(i*inner) + j] = sched[i].start[j];
+            out_sched[(i*inner*2) + j] = sched[i].start[j];
         }
         for(uintp j = 0; j < inner; ++j) {
-            out_sched[(i*inner) + j + end_offset] = sched[i].end[j];
+            out_sched[(i*inner*2) + j + inner] = sched[i].end[j];
         }
     }
 }
