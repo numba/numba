@@ -154,20 +154,31 @@ def legalize_names(varnames):
         var_map[var] = new_name
     return var_map
 
+def get_name_var_table(blocks):
+    def get_name_var_visit(var, namevar):
+        namevar[var.name] = var
+    namevar = {}
+    visit_vars(blocks, get_name_var_visit, namevar)
+    return namevar
+
 def replace_var_names(blocks, namedict):
     def replace_name(var, namedict):
         assert isinstance(var, ir.Var)
         var.name = namedict.get(var.name, var.name)
     visit_vars(blocks, replace_name, namedict)
 
+def replace_var_callback(var, vardict):
+    assert isinstance(var, ir.Var)
+    new_var = vardict.get(var, var)
+    var.scope = new_var.scope
+    var.name = new_var.name
+    var.loc = new_var.loc
+
 def replace_vars(blocks, vardict):
-    def replace_var(var, vardict):
-        assert isinstance(var, ir.Var)
-        new_var = vardict.get(var, var)
-        var.scope = new_var.scope
-        var.name = new_var.name
-        var.loc = new_var.loc
-    visit_vars(blocks, replace_var, vardict)
+    visit_vars(blocks, replace_var_callback, vardict)
+
+def replace_vars_stmt(stmt, vardict):
+    visit_vars_stmt(stmt, replace_var_callback, vardict)
 
 # other packages that define new nodes add calls to visit variables in them
 # format: {type:function}
@@ -179,44 +190,48 @@ def visit_vars(blocks, callback, cbdata):
     """
     for block in blocks.values():
         for stmt in block.body:
-            # let external calls handle stmt if type matches
-            for t,f in visit_vars_extensions.items():
-                if isinstance(stmt,t):
-                    f(stmt, callback, cbdata)
-                    return
-            if isinstance(stmt, ir.Assign):
-                visit_vars_inner(stmt.target, callback, cbdata)
-                visit_vars_inner(stmt.value, callback, cbdata)
-            elif isinstance(stmt, ir.Arg):
-                visit_vars_inner(stmt.name, callback, cbdata)
-            elif isinstance(stmt, ir.Return):
-                visit_vars_inner(stmt.value, callback, cbdata)
-            elif isinstance(stmt, ir.Branch):
-                visit_vars_inner(stmt.cond, callback, cbdata)
-            elif isinstance(stmt, ir.Jump):
-                visit_vars_inner(stmt.target, callback, cbdata)
-            elif isinstance(stmt, ir.Del):
-                visit_vars_inner(stmt.value, callback, cbdata)
-            elif isinstance(stmt, ir.DelAttr):
-                visit_vars_inner(stmt.target, callback, cbdata)
-                visit_vars_inner(stmt.attr, callback, cbdata)
-            elif isinstance(stmt, ir.SetAttr):
-                visit_vars_inner(stmt.target, callback, cbdata)
-                visit_vars_inner(stmt.attr, callback, cbdata)
-                visit_vars_inner(stmt.value, callback, cbdata)
-            elif isinstance(stmt, ir.DelItem):
-                visit_vars_inner(stmt.target, callback, cbdata)
-                visit_vars_inner(stmt.index, callback, cbdata)
-            elif isinstance(stmt, ir.StaticSetItem):
-                visit_vars_inner(stmt.target, callback, cbdata)
-                visit_vars_inner(stmt.index_var, callback, cbdata)
-                visit_vars_inner(stmt.value, callback, cbdata)
-            elif isinstance(stmt, ir.SetItem):
-                visit_vars_inner(stmt.target, callback, cbdata)
-                visit_vars_inner(stmt.index, callback, cbdata)
-                visit_vars_inner(stmt.value, callback, cbdata)
-            else:
-                raise NotImplementedError("no replacement for IR node: ", stmt)
+            visit_vars_stmt(stmt, callback, cbdata)
+    return
+
+def visit_vars_stmt(stmt, callback, cbdata):
+    # let external calls handle stmt if type matches
+    for t,f in visit_vars_extensions.items():
+        if isinstance(stmt,t):
+            f(stmt, callback, cbdata)
+            return
+    if isinstance(stmt, ir.Assign):
+        visit_vars_inner(stmt.target, callback, cbdata)
+        visit_vars_inner(stmt.value, callback, cbdata)
+    elif isinstance(stmt, ir.Arg):
+        visit_vars_inner(stmt.name, callback, cbdata)
+    elif isinstance(stmt, ir.Return):
+        visit_vars_inner(stmt.value, callback, cbdata)
+    elif isinstance(stmt, ir.Branch):
+        visit_vars_inner(stmt.cond, callback, cbdata)
+    elif isinstance(stmt, ir.Jump):
+        visit_vars_inner(stmt.target, callback, cbdata)
+    elif isinstance(stmt, ir.Del):
+        visit_vars_inner(stmt.value, callback, cbdata)
+    elif isinstance(stmt, ir.DelAttr):
+        visit_vars_inner(stmt.target, callback, cbdata)
+        visit_vars_inner(stmt.attr, callback, cbdata)
+    elif isinstance(stmt, ir.SetAttr):
+        visit_vars_inner(stmt.target, callback, cbdata)
+        visit_vars_inner(stmt.attr, callback, cbdata)
+        visit_vars_inner(stmt.value, callback, cbdata)
+    elif isinstance(stmt, ir.DelItem):
+        visit_vars_inner(stmt.target, callback, cbdata)
+        visit_vars_inner(stmt.index, callback, cbdata)
+    elif isinstance(stmt, ir.StaticSetItem):
+        visit_vars_inner(stmt.target, callback, cbdata)
+        visit_vars_inner(stmt.index_var, callback, cbdata)
+        visit_vars_inner(stmt.value, callback, cbdata)
+    elif isinstance(stmt, ir.SetItem):
+        visit_vars_inner(stmt.target, callback, cbdata)
+        visit_vars_inner(stmt.index, callback, cbdata)
+        visit_vars_inner(stmt.value, callback, cbdata)
+    else:
+        pass # TODO: raise NotImplementedError("no replacement for IR node: ", stmt)
     return
 
 def visit_vars_inner(node, callback, cbdata):
@@ -284,10 +299,17 @@ def remove_dead_block(block, lives):
         for t,f in remove_dead_extensions.items():
             if isinstance(stmt,t):
                 f(stmt, lives)
-        # ignore assignments that their lhs is not live
-        if not isinstance(stmt, ir.Assign) or stmt.target.name in lives:
-            lives |= { v.name for v in stmt.list_vars() }
-            new_body.append(stmt)
+        # ignore assignments that their lhs is not live or lhs==rhs
+        if isinstance(stmt, ir.Assign):
+            lhs = stmt.target
+            rhs = stmt.value
+            if lhs.name not in lives:
+                continue
+            if isinstance(rhs, ir.Var) and lhs.name==rhs.name:
+                continue
+
+        lives |= { v.name for v in stmt.list_vars() }
+        new_body.append(stmt)
     new_body.reverse()
     block.body = new_body
     return
@@ -323,7 +345,7 @@ def copy_propagate(blocks):
         new_point = copy.deepcopy(set(out_copies))
     if config.DEBUG_ARRAY_OPT==1:
         print("copy propagate out_copies:", out_copies)
-    return out_copies
+    return in_copies, out_copies
 
 def init_copy_propagate_data(blocks, entry):
     # gen is all definite copies, extra_kill is additional ones that may hit
@@ -380,3 +402,27 @@ def get_block_copies(blocks):
                 assign_dict[lhs] = rhs
         block_copies[label] = set(assign_dict.items())
     return block_copies, extra_kill
+
+
+def apply_copy_propagate(blocks, in_copies, name_var_table):
+    # TODO: make it recursive on parfors?
+    for label, block in blocks.items():
+        var_dict = {name_var_table[l]:name_var_table[r] for l,r in in_copies[label]}
+        # assignments as dict to replace with latest value
+        for stmt in block.body:
+            replace_vars_stmt(stmt, var_dict)
+            for T,f in copy_propagate_extensions.items():
+                if isinstance(stmt,T):
+                    gen_set, kill_set = f(stmt)
+                    for lhs,rhs in gen_set:
+                        var_dict[name_var_table[lhs]] = name_var_table[rhs]
+                    for l,r in var_dict.copy().items():
+                        if l.name in kill_set or r.name in kill_set:
+                            var_dict.pop(l)
+            if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Var):
+                lhs = stmt.target.name
+                rhs = stmt.value.name
+                # rhs could be replaced with lhs from previous copies
+                if lhs!=rhs:
+                    var_dict[name_var_table[lhs]] = name_var_table[rhs]
+    return

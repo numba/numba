@@ -107,7 +107,10 @@ class ParforPass(object):
 
         # remove Del statements for easier optimization
         remove_dels(self.func_ir.blocks)
-        copy_propagate(self.func_ir.blocks)
+        in_cps, out_cps = copy_propagate(self.func_ir.blocks)
+        # table mapping variable names to ir.Var objects to help replacement
+        name_var_table = get_name_var_table(self.func_ir.blocks)
+        apply_copy_propagate(self.func_ir.blocks, in_cps, name_var_table)
         # remove dead code to enable fusion
         remove_dead(self.func_ir.blocks)
         fuse_parfors(self.func_ir.blocks)
@@ -724,7 +727,7 @@ def get_copies_parfor(parfor):
     blocks[0] = parfor.init_block
     blocks[0].body.append(ir.Jump(first_body_block, loc))
     blocks[last_label].body.append(ir.Return(0,loc))
-    out_copies_parfor = copy_propagate(blocks)
+    in_copies_parfor, out_copies_parfor = copy_propagate(blocks)
     in_gen_copies, in_extra_kill = get_block_copies(blocks)
     blocks[0].body.pop() # remove dummy jump
     blocks[last_label].body.pop() # remove dummy return
