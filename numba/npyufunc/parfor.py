@@ -375,7 +375,7 @@ def _lower_parfor(lowerer, expr):
     # append 'sched' variable to the frnot of expr_args if auto_parallel
     if context.auto_parallel:
         expr_var_list = [ ("sched", types.Array(types.intp, 1, "C")) ] + expr_var_list
-        num_inputs = num_inputs + 1 
+        num_inputs = num_inputs + 1
     # Arguments are the names external to the new closure
     expr_args = [ var[0] for var in expr_var_list ]
     # Parameters are what we need to declare the function formal params
@@ -527,7 +527,7 @@ def _create_sched_wrapper(parfor, expr_var_list, expr_args, expr_params, namedic
     # Create the scheduling function from its text.
     exec(sched_func)
 
-def lower_parfor2_parallel(func_ir, typemap, calltypes, typingctx, targetctx, flags, locals):
+def lower_parfor2_parallel(func_ir, typemap, calltypes, typingctx, targetctx, flags, locals, array_analysis):
     """lower parfor to sequential or parallel Numba IR.
     """
     print("-"*10, " new parfor2 lower ", "-"*10)
@@ -718,10 +718,10 @@ def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals)
 
     # Return list of instructions including pre-statements and call to scheduling function.
     if config.DEBUG_ARRAY_OPT:
-        print("init_block = ", parfor.init_block, " ", type(parfor.init_block)) 
+        print("init_block = ", parfor.init_block, " ", type(parfor.init_block))
     replacement_instrs = [x for x in parfor.init_block.body]
     if config.DEBUG_ARRAY_OPT:
-        print("replacement_instrs = ", replacement_instrs, " ", type(replacement_instrs)) 
+        print("replacement_instrs = ", replacement_instrs, " ", type(replacement_instrs))
         for ri in replacement_instrs:
             print(ri)
     return replacement_instrs
@@ -831,7 +831,7 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
     inputs, output, out_ty = _prepare_arguments(lowerer, gu_signature, _outer_sig, expr_args)
 
     # call do_scheduling with appropriate arguments
-    num_dim = len(output.shape) 
+    num_dim = len(output.shape)
     out_dims = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, num_dim), name = "dims")
     for i in range(num_dim):
         builder.store(output.shape[i], builder.gep(out_dims, [context.get_constant(types.intp, i)]))
@@ -839,7 +839,7 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
     sched = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, sched_size), name = "sched")
     scheduling_fnty = lc.Type.function(intp_ptr_t, [intp_t, intp_ptr_t, uintp_t, intp_ptr_t])
     do_scheduling = builder.module.get_or_insert_function(scheduling_fnty, name="do_scheduling")
-    builder.call(do_scheduling, [context.get_constant(types.intp, num_dim), out_dims, 
+    builder.call(do_scheduling, [context.get_constant(types.intp, num_dim), out_dims,
                                  context.get_constant(types.uintp, get_thread_count()), sched])
 
     if config.DEBUG_ARRAY_OPT:
@@ -848,7 +848,7 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
         for j in range(num_dim * 2):
             cgutils.printf(builder, "%d ", builder.load(builder.gep(sched, [context.get_constant(types.intp, i * num_dim * 2 + j)])))
         cgutils.printf(builder, "\n")
-    
+
     # prepare arguments: args, dims, steps, data
     all_args = inputs + [output]
     num_args = len(all_args)
@@ -877,7 +877,7 @@ def make_parallel_loop(lowerer, impl, gu_signature, outer_sig, expr_args):
             i = 0
             for dim_sym in sig:
                 sig_dim_dict[dim_sym] = var.shape[i]
-                if not (dim_sym in occurances): 
+                if not (dim_sym in occurances):
                     occurances.append(dim_sym)
                 i = i + 1
 
