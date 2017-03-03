@@ -64,6 +64,7 @@ class Parfor2(ir.Expr, ir.Stmt):
 
     def dump(self,  file=None):
         file = file or sys.stdout
+        print(("begin parfor").center(20,'-'), file=file)
         for loopnest in self.loop_nests:
             print(loopnest, file=file)
         print("init block:", file=file)
@@ -71,6 +72,7 @@ class Parfor2(ir.Expr, ir.Stmt):
         for offset, block in sorted(self.loop_body.items()):
             print('label %s:' % (offset,), file=file)
             block.dump(file)
+        print(("end parfor").center(20,'-'), file=file)
 
 
 class ParforPass(object):
@@ -103,13 +105,10 @@ class ParforPass(object):
                 new_body.append(instr)
             block.body = new_body
 
-        if config.DEBUG_ARRAY_OPT==1:
-            name = self.func_ir.func_id.func_qualname
-            print(("IR after parfor pass: %s" % name).center(80, "-"))
-            self.func_ir.dump()
-
         # remove Del statements for easier optimization
         remove_dels(self.func_ir.blocks)
+        dprint_func_ir(self.func_ir, "after parfor pass")
+
         in_cps, out_cps = copy_propagate(self.func_ir.blocks)
         # table mapping variable names to ir.Var objects to help replacement
         name_var_table = get_name_var_table(self.func_ir.blocks)
@@ -123,10 +122,7 @@ class ParforPass(object):
         # post_proc = postproc.PostProcessor(self.func_ir)
         # post_proc.run()
 
-        if config.DEBUG_ARRAY_OPT==1:
-            name = self.func_ir.func_id.func_qualname
-            print(("IR after optimization: %s" % name).center(80, "-"))
-            self.func_ir.dump()
+        dprint_func_ir(self.func_ir, "after optimization")
         # usedefs = compute_use_defs(self.func_ir.blocks)
         return
 
@@ -438,9 +434,7 @@ def lower_parfor2_sequential(func_ir, typemap, calltypes):
         new_blocks[block_label] = block
     func_ir.blocks = new_blocks
     func_ir.blocks = _rename_labels(func_ir.blocks)
-    if config.DEBUG_ARRAY_OPT==1:
-        print("function after parfor lowering:")
-        func_ir.dump()
+    dprint_func_ir(func_ir, "after parfor sequential lowering")
     return
 
 def _find_first_parfor(body):
@@ -448,6 +442,13 @@ def _find_first_parfor(body):
         if isinstance(inst, Parfor2):
             return i
     return -1
+
+def dprint_func_ir(func_ir, title):
+    if config.DEBUG_ARRAY_OPT==1:
+        name = func_ir.func_id.func_qualname
+        print(("IR %s: %s" % (title, name)).center(80, "-"))
+        func_ir.dump()
+        print("-"*40)
 
 def _rename_labels(blocks):
     """rename labels of function body blocks according to topological sort.
@@ -680,13 +681,13 @@ def remove_dead_parfor(parfor, lives):
     for stmt in last_block.body:
         if (isinstance(stmt, ir.SetItem) and stmt.index.name==parfor_index
                 and stmt.target.name not in lives):
-            saved_values[stmt.target] = stmt.value
+            saved_values[stmt.target.name] = stmt.value
             continue
         if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
             rhs = stmt.value
             if rhs.op=='getitem' and rhs.index.name==parfor_index:
                 # replace getitem if value saved
-                stmt.value = saved_values.get(rhs.value, rhs)
+                stmt.value = saved_values.get(rhs.value.name, rhs)
         new_body.append(stmt)
     last_block.body = new_body
     # process parfor body recursively
