@@ -711,3 +711,31 @@ def remove_dead_parfor_recursive(parfor, lives):
     blocks[last_label].body.pop() # remove dummy return
     blocks[last_label].body.pop() # remove dummy tupple
     return
+
+def get_copies_parfor(parfor):
+    blocks = parfor.loop_body.copy() # shallow copy is enough
+    first_body_block = min(blocks.keys())
+    assert first_body_block > 0 # we are using 0 for init block here
+    last_label = max(blocks.keys())
+    loc = blocks[last_label].body[-1].loc
+    scope = blocks[last_label].scope
+
+    # add dummy jump in init_block for CFG to work
+    blocks[0] = parfor.init_block
+    blocks[0].body.append(ir.Jump(first_body_block, loc))
+    blocks[last_label].body.append(ir.Return(0,loc))
+    out_copies_parfor = copy_propagate(blocks)
+    in_gen_copies, in_extra_kill = get_block_copies(blocks)
+    blocks[0].body.pop() # remove dummy jump
+    blocks[last_label].body.pop() # remove dummy return
+
+    # parfor's extra kill is all possible gens and kills of it's loop
+    kill_set = in_extra_kill[0]
+    for label in parfor.loop_body.keys():
+        kill_set |= { l for l,r in in_gen_copies[label] }
+    if config.DEBUG_ARRAY_OPT==1:
+        print("copy propagate parfor out_copies:",
+            out_copies_parfor[last_label], "kill_set",kill_set)
+    return out_copies_parfor[last_label], kill_set
+
+copy_propagate_extensions[Parfor2] = get_copies_parfor

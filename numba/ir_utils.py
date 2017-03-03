@@ -1,4 +1,4 @@
-from numba import ir, types, typing
+from numba import ir, types, typing, config
 from numba.typing.templates import signature
 import numpy
 from numba.analysis import *
@@ -321,10 +321,14 @@ def copy_propagate(blocks):
                 | (in_copies[label] - kill_copies[label]))
         old_point = new_point
         new_point = copy.deepcopy(set(out_copies))
-    return
+    if config.DEBUG_ARRAY_OPT==1:
+        print("copy propagate out_copies:", out_copies)
+    return out_copies
 
 def init_copy_propagate_data(blocks, entry):
-    gen_copies = get_block_copies(blocks)
+    # gen is all definite copies, extra_kill is additional ones that may hit
+    # for example, parfors can have control flow so they may hit extra copies
+    gen_copies, extra_kill = get_block_copies(blocks)
     # set of all program copies
     all_copies = set()
     for l,s in gen_copies.items():
@@ -333,7 +337,13 @@ def init_copy_propagate_data(blocks, entry):
     for label, gen_set in gen_copies.items():
         kill_copies[label] = set()
         for lhs,rhs in all_copies:
-            if lhs in gen_set or rhs in gen_set:
+            if lhs in extra_kill[label] or rhs in extra_kill[label]:
+                kill_copies[label].add((lhs,rhs))
+            # a copy is killed if it is not in this block and lhs or rhs are
+            # assigned in this block
+            assigned = { lhs for lhs,rhs in gen_set }
+            if ((lhs,rhs) not in gen_set
+                    and (lhs in assigned or rhs in assigned)):
                 kill_copies[label].add((lhs,rhs))
     # set initial values
     in_copies = { l:all_copies.copy() for l in blocks.keys() }
@@ -346,15 +356,27 @@ def init_copy_propagate_data(blocks, entry):
     out_copies[entry] = gen_copies[entry]
     return (gen_copies, all_copies, kill_copies, in_copies, out_copies)
 
+# other packages that define new nodes add calls to get copies in them
+# format: {type:function}
+copy_propagate_extensions = {}
+
 def get_block_copies(blocks):
     block_copies = {}
+    extra_kill = {}
     for label, block in blocks.items():
         assign_dict = {}
+        extra_kill[label] = set()
         # assignments as dict to replace with latest value
         for stmt in block.body:
+            for T,f in copy_propagate_extensions.items():
+                if isinstance(stmt,T):
+                    gen_set, kill_set = f(stmt)
+                    for lhs,rhs in gen_set:
+                        assign_dict[lhs] = rhs
+                    extra_kill[label] |= kill_set
             if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Var):
                 lhs = stmt.target.name
                 rhs = stmt.value.name
                 assign_dict[lhs] = rhs
         block_copies[label] = set(assign_dict.items())
-    return block_copies
+    return block_copies, extra_kill
