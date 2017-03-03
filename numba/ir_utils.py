@@ -2,6 +2,7 @@ from numba import ir, types, typing
 from numba.typing.templates import signature
 import numpy
 from numba.analysis import *
+import copy
 
 _unique_var_count = 0
 def mk_unique_var(prefix):
@@ -290,3 +291,70 @@ def remove_dead_block(block, lives):
     new_body.reverse()
     block.body = new_body
     return
+
+def copy_propagate(blocks):
+    cfg = compute_cfg_from_blocks(blocks)
+    entry = cfg.entry_point()
+    # usedefs = compute_use_defs(blocks)
+    # live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
+
+    # format: dict of block labels to copies as tuples
+    # label -> (l,r)
+    c_data = init_copy_propagate_data(blocks, entry)
+    (gen_copies, all_copies, kill_copies, in_copies, out_copies) = c_data
+
+    old_point = None
+    new_point = copy.deepcopy(set(out_copies))
+    # comparison works since dictionary of built-in types
+    while old_point!=new_point:
+        for label in blocks.keys():
+            if label==entry:
+                continue
+            predecs = [i for i,_d in cfg.predecessors(label)]
+            # in_b =  intersect(predec(B))
+            in_copies[label] = out_copies[predecs[0]].copy()
+            for p in predecs:
+                in_copies[label] &= out_copies[p]
+
+            # out_b = gen_b | (in_b - kill_b)
+            out_copies[label] = (gen_copies[label]
+                | (in_copies[label] - kill_copies[label]))
+        old_point = new_point
+        new_point = copy.deepcopy(set(out_copies))
+    return
+
+def init_copy_propagate_data(blocks, entry):
+    gen_copies = get_block_copies(blocks)
+    # set of all program copies
+    all_copies = set()
+    for l,s in gen_copies.items():
+        all_copies |= gen_copies[l]
+    kill_copies = {}
+    for label, gen_set in gen_copies.items():
+        kill_copies[label] = set()
+        for lhs,rhs in all_copies:
+            if lhs in gen_set or rhs in gen_set:
+                kill_copies[label].add((lhs,rhs))
+    # set initial values
+    in_copies = { l:all_copies.copy() for l in blocks.keys() }
+    in_copies[entry] = set()
+    out_copies = {}
+    for label in blocks.keys():
+        # out_b = gen_b | (in_b - kill_b)
+        out_copies[label] = (gen_copies[label]
+            | (in_copies[label] - kill_copies[label]))
+    out_copies[entry] = gen_copies[entry]
+    return (gen_copies, all_copies, kill_copies, in_copies, out_copies)
+
+def get_block_copies(blocks):
+    block_copies = {}
+    for label, block in blocks.items():
+        assign_dict = {}
+        # assignments as dict to replace with latest value
+        for stmt in block.body:
+            if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Var):
+                lhs = stmt.target.name
+                rhs = stmt.value.name
+                assign_dict[lhs] = rhs
+        block_copies[label] = set(assign_dict.items())
+    return block_copies

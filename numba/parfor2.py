@@ -107,6 +107,7 @@ class ParforPass(object):
 
         # remove Del statements for easier optimization
         remove_dels(self.func_ir.blocks)
+        copy_propagate(self.func_ir.blocks)
         # remove dead code to enable fusion
         remove_dead(self.func_ir.blocks)
         fuse_parfors(self.func_ir.blocks)
