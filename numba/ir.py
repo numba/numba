@@ -754,8 +754,11 @@ class Block(object):
         # Avoid early bind of sys.stdout as default value
         file = file or sys.stdout
         for inst in self.body:
-            inst_vars = sorted(str(v) for v in inst.list_vars())
-            print('    %-40s %s' % (inst, inst_vars), file=file)
+            if hasattr(inst, 'dump'):
+                inst.dump(file)
+            else:
+                inst_vars = sorted(str(v) for v in inst.list_vars())
+                print('    %-40s %s' % (inst, inst_vars), file=file)
 
     @property
     def terminator(self):

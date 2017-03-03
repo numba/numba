@@ -1,4 +1,5 @@
 from __future__ import print_function, division, absolute_import
+import sys
 
 from numba import ir, ir_utils, types, rewrites, config, analysis
 from numba import array_analysis, postproc
@@ -61,14 +62,15 @@ class Parfor2(ir.Expr, ir.Stmt):
 
         return all_uses
 
-    def dump(self):
+    def dump(self,  file=None):
+        file = file or sys.stdout
         for loopnest in self.loop_nests:
-            print(loopnest)
-        print("init block:")
+            print(loopnest, file=file)
+        print("init block:", file=file)
         self.init_block.dump()
         for offset, block in sorted(self.loop_body.items()):
-            print('label %s:' % (offset,))
-            block.dump()
+            print('label %s:' % (offset,), file=file)
+            block.dump(file)
 
 
 class ParforPass(object):
@@ -102,7 +104,8 @@ class ParforPass(object):
             block.body = new_body
 
         if config.DEBUG_ARRAY_OPT==1:
-            print("-"*30,"IR after parfor pass","-"*30)
+            name = self.func_ir.func_id.func_qualname
+            print(("IR after parfor pass: %s" % name).center(80, "-"))
             self.func_ir.dump()
 
         # remove Del statements for easier optimization
@@ -121,7 +124,8 @@ class ParforPass(object):
         # post_proc.run()
 
         if config.DEBUG_ARRAY_OPT==1:
-            print("-"*30,"IR after optimization","-"*30)
+            name = self.func_ir.func_id.func_qualname
+            print(("IR after optimization: %s" % name).center(80, "-"))
             self.func_ir.dump()
         # usedefs = compute_use_defs(self.func_ir.blocks)
         return
