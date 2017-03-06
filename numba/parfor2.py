@@ -512,13 +512,16 @@ def get_parfor_params(parfor):
 def get_parfor_outputs(parfor):
     # TODO: reduction output
     # TODO: multi-dimensional
+    # FIXME: The following assumes the target of all SetItem  are outputs, which is wrong!
     assert len(parfor.loop_nests)==1
     parfor_index = parfor.loop_nests[0].index_variable.name
     last_label = max(parfor.loop_body.keys())
     outputs = []
-    for stmt in parfor.loop_body[last_label].body:
-        if isinstance(stmt, ir.SetItem) and stmt.index.name==parfor_index:
-            outputs.append(stmt.target.name)
+    for blk in parfor.loop_body.values():
+        for stmt in blk.body:
+            if isinstance(stmt, ir.SetItem):
+                if stmt.index.name==parfor_index:
+                    outputs.append(stmt.target.name)
     return outputs
 
 def visit_vars_parfor2(parfor, callback, cbdata):
