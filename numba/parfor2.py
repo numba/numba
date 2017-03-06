@@ -29,7 +29,7 @@ class LoopNest(object):
 
 
 class Parfor2(ir.Expr, ir.Stmt):
-    def __init__(self, loop_nests, init_block, loop_body, loc):
+    def __init__(self, loop_nests, init_block, loop_body, loc, array_analysis):
         super(Parfor2, self).__init__(
             op   = 'parfor2',
             loc  = loc
@@ -40,6 +40,7 @@ class Parfor2(ir.Expr, ir.Stmt):
         self.loop_nests = loop_nests
         self.init_block = init_block
         self.loop_body = loop_body
+        self.array_analysis = array_analysis
 
     def __repr__(self):
         return repr(self.loop_nests) + repr(self.loop_body)
@@ -143,7 +144,7 @@ class ParforPass(object):
         self.typemap[index_var.name] = INT_TYPE
         loopnests = [ LoopNest(index_var, size_var, corr) ]
         init_block = ir.Block(scope, loc)
-        parfor = Parfor2(loopnests, init_block, {}, loc)
+        parfor = Parfor2(loopnests, init_block, {}, loc, self.array_analysis)
 
         init_block.body = mk_alloc(self.typemap, self.calltypes, lhs,
             size_var, el_typ, scope, loc)
@@ -204,7 +205,7 @@ class ParforPass(object):
             self.typemap[index_var.name] = INT_TYPE
             loopnests = [ LoopNest(index_var, size_var, corr) ]
             init_block = ir.Block(scope, loc)
-            parfor = Parfor2(loopnests, init_block, {}, loc)
+            parfor = Parfor2(loopnests, init_block, {}, loc, self.array_analysis)
             if self._get_ndims(in1.name)==2:
                 # for 2D input, there is an inner loop
                 # correlation of inner dimension
