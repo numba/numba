@@ -339,7 +339,7 @@ class _IntrinsicTemplate(AbstractTemplate):
         try:
             return self._impl_cache[cache_key]
         except KeyError:
-            result = self._definition_func(self, *args, **kws)
+            result = self._definition_func(self.context, *args, **kws)
             if result is None:
                 return
             [sig, imp] = result
