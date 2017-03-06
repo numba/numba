@@ -379,9 +379,9 @@ def _find_func_var(typemap, func):
 def lower_parfor2(func_ir, typemap, calltypes, typingctx, targetctx, flags, locals, array_analysis):
     """lower parfor to sequential or parallel Numba IR.
     """
-    if "lower_parfor2_parallel" in dir(numba.parfor2):
-        lower_parfor2_parallel(func_ir, typemap, calltypes, typingctx, targetctx, flags, locals, array_analysis)
-    else:
+    if not "lower_parfor2_parallel" in dir(numba.parfor2):
+        #lower_parfor2_parallel(func_ir, typemap, calltypes, typingctx, targetctx, flags, locals, array_analysis)
+    # else:
         lower_parfor2_sequential(func_ir, typemap, calltypes)
 
 def lower_parfor2_sequential(func_ir, typemap, calltypes):
