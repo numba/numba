@@ -537,7 +537,10 @@ def lower_parfor2_parallel(func_ir, typemap, calltypes, typingctx, targetctx, fl
         scope = block.scope
         for (i, inst) in enumerate(block.body):
             if isinstance(inst, numba.parfor2.Parfor2):
-                new_block.body.extend(_create_sched_wrapper2(inst, typemap, typingctx, targetctx, flags, locals))
+                new_block.body.extend(
+                    _create_sched_wrapper2(
+                        inst, typemap, typingctx, targetctx, flags, 
+                        locals, array_analysis, scope, calltypes))
             else:
                 new_block.body.append(inst)
         func_ir.blocks[block_label] = new_block
@@ -561,23 +564,36 @@ to the initial value of the reduction var.  The gufunc is called and
 then the reduction function is applied across the reduction arrays
 before returning the final answer.
 '''
-def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals):
+def _create_sched_wrapper2(
+        parfor, typemap, typingctx, targetctx, flags, 
+        locals, array_analysis, scope, calltypes):
     if config.DEBUG_ARRAY_OPT==1:
         print("_create_sched_wrapper2 ", type(parfor), " ", parfor)
         print("typemap = ", typemap)
+        print("array_analysis = ", array_analysis.array_shape_classes, " ", array_analysis.class_sizes, " ", array_analysis.array_size_vars)
 
     parfor.loop_body = copy.deepcopy(parfor.loop_body)
 
-    from .ufuncbuilder import GUFuncBuilder, build_gufunc_wrapper #, _launch_threads, _init
+    from .parallel import ParallelGUFuncBuilder, build_gufunc_wrapper, _launch_threads, _init
+    #from .ufuncbuilder import GUFuncBuilder, build_gufunc_wrapper #, _launch_threads, _init
 
     parfor_dim = len(parfor.loop_nests)
     assert parfor_dim==1
     loop_ranges = [l.range_variable.name for l in parfor.loop_nests]
     loop_indices = [l.index_variable.name for l in parfor.loop_nests]
 
+    # Get all the parfor params.
     parfor_params = parfor2.get_parfor_params(parfor).union(loop_ranges)
+    # Get just the outputs of the parfor.
+    parfor_outputs = parfor2.get_parfor_outputs(parfor)
+    # Compute just the parfor inputs as a set difference.
+    parfor_inputs = list(set(parfor_params) - set(parfor_outputs))
+    # Reorder all the params so that inputs go first then outputs.
+    parfor_params = parfor_inputs + parfor_outputs
     if config.DEBUG_ARRAY_OPT==1:
         print("parfor_params = ", parfor_params, " ", type(parfor_params))
+        print("parfor_inputs = ", parfor_inputs, " ", type(parfor_inputs))
+        print("parfor_outputs = ", parfor_outputs, " ", type(parfor_outputs))
         print("loop_ranges = ", loop_ranges, " ", type(loop_ranges))
         print("loop_indices = ", loop_indices, " ", type(loop_indices))
         print("parfor.loop_body = ", parfor.loop_body, " ", type(parfor.loop_body))
@@ -598,16 +614,25 @@ def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals)
         print("pd type = ", typemap[pd], " ", type(typemap[pd]))
     param_types_dict = { v:typemap[v] for v in parfor_params }
     param_types = [ typemap[v] for v in parfor_params ]
+    param_input_types = [ typemap[v] for v in parfor_inputs ]
+    param_output_types = [ typemap[v] for v in parfor_outputs ]
+    legal_param_types_dict = { param_dict[v]:typemap[v] for v in parfor_params }
     if config.DEBUG_ARRAY_OPT==1:
         print("param_types_dict = ", param_types_dict, " ", type(param_types_dict))
         print("param_types = ", param_types, " ", type(param_types))
+        print("param_input_types = ", param_input_types, " ", type(param_input_types))
+        print("param_output_types = ", param_output_types, " ", type(param_output_types))
 
     replace_var_names(parfor.loop_body, param_dict)
-    parfor_params = [ param_dict[v] for v in parfor_params ]
+    legal_parfor_params = [ param_dict[v] for v in parfor_params ]
+    legal_parfor_inputs = [ param_dict[v] for v in parfor_inputs ]
+    legal_parfor_outputs = [ param_dict[v] for v in parfor_outputs ]
     replace_var_names(parfor.loop_body, ind_dict)
 
     if config.DEBUG_ARRAY_OPT==1:
-        print("legal parfor_params = ", parfor_params, " ", type(parfor_params))
+        print("legal parfor_params = ", legal_parfor_params, " ", type(legal_parfor_params))
+        print("legal parfor_inputs = ", legal_parfor_inputs, " ", type(legal_parfor_inputs))
+        print("legal parfor_outputs = ", legal_parfor_outputs, " ", type(legal_parfor_outputs))
 
     loop_ranges = [ param_dict[v] for v in loop_ranges ]
 
@@ -623,7 +648,7 @@ def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals)
 
     # Create the scheduling function as text.
     sched_func = "def " + sched_func_name + "("
-    sched_func += (", ".join(parfor_params))
+    sched_func += (", ".join(legal_parfor_params))
     sched_func += "):\n"
 
     sched_func += ("    full_iteration_space = numba.runtime.gufunc_scheduler"
@@ -642,14 +667,14 @@ def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals)
     #     + str(parfor.reductions[one_red_index].func) + "(a,b), red"
     #     + str(one_red_index) + ", "
     #     + parfor.reductions[one_red_index].init_value + "),"
-    sched_func += "    " + gufunc_name + "(sched, " + (", ".join(parfor_params)) + red_arrays + ")\n"
+    #sched_func += "    " + gufunc_name + "(sched, " + (", ".join(legal_parfor_params)) + red_arrays + ")\n"
 
     sched_func += "    return (" + red_reduces + ")\n"
     if config.DEBUG_ARRAY_OPT:
         print("sched_func ", type(sched_func), "\n", sched_func)
 
     # Create the gufunc function.
-    gufunc_txt = "def " + gufunc_name + "(sched, " + (", ".join(parfor_params)) + "):\n"
+    gufunc_txt = "def " + gufunc_name + "(sched, " + (", ".join(legal_parfor_params)) + "):\n"
     for eachdim in range(parfor_dim):
         for indent in range(eachdim+1):
             gufunc_txt += "    "
@@ -710,16 +735,114 @@ def _create_sched_wrapper2(parfor, typemap, typingctx, targetctx, flags, locals)
         print("gufunc_ir last dump")
         gufunc_ir.dump()
 
-    gufunc_func = compiler.compile_ir(typingctx, targetctx, gufunc_ir, gufunc_param_types, types.none, flags, locals)
+    gufunc_compile_res = compiler.compile_ir(typingctx, targetctx, gufunc_ir, gufunc_param_types, types.none, flags, locals)
+    gufunc_func = eval(gufunc_name)
+    if config.DEBUG_ARRAY_OPT:
+        print("gufunc_compile_res = ", gufunc_compile_res, " ", type(gufunc_compile_res))
+        print("gufunc_func = ", gufunc_func, " ", type(gufunc_func))
+
+    gufunc_builder_sig_in = "(sched_inner)"
+    gufunc_builder_sig_out = ""
+    gufunc_wrapper_sig_in = [("sched_inner",)]
+    gufunc_wrapper_sig_out = []
+
+    for i in range(len(parfor_inputs)):
+        gufunc_builder_sig_in += ","
+        if isinstance(param_input_types[i], types.npytypes.Array):
+            array_size_vars = array_analysis.array_size_vars[parfor_inputs[i]]
+            if config.DEBUG_ARRAY_OPT:
+                print("array_size_vars = ", array_size_vars)
+            gufunc_builder_sig_in += "("
+            for j in range(len(array_size_vars)):
+                if j != 0:
+                    gufunc_builder_sig_in += ","
+                gufunc_builder_sig_in += param_dict[array_size_vars[j].name]
+            gufunc_builder_sig_in += ")"
+            wrapper_list = [param_dict[v.name] for v in array_size_vars]
+            wrapper_tuple = tuple(wrapper_list)
+            gufunc_wrapper_sig_in.append(wrapper_tuple)
+            if config.DEBUG_ARRAY_OPT:
+                print("wrapper_list = ", wrapper_list)
+                print("wrapper_tuple = ", wrapper_tuple)
+                print("gufunc_wrapper_sig_in = ", gufunc_wrapper_sig_in)
+        else:
+            gufunc_builder_sig_in += "()"
+            gufunc_wrapper_sig_in.append(())
+
+    for i in range(len(parfor_outputs)):
+        if config.DEBUG_ARRAY_OPT:
+            print("in loop for parfor_outputs ", i)
+        if i != 0:
+            gufunc_builder_sig_out += ","
+        if isinstance(param_output_types[i], types.npytypes.Array):
+            array_size_vars = array_analysis.array_size_vars[parfor_outputs[i]]
+            if config.DEBUG_ARRAY_OPT:
+                print("array_size_vars = ", array_size_vars)
+            gufunc_builder_sig_out += "("
+            for j in range(len(array_size_vars)):
+                if j != 0:
+                    gufunc_builder_sig_out += ","
+                gufunc_builder_sig_out += param_dict[array_size_vars[j].name]
+            gufunc_builder_sig_out += ")"
+            wrapper_list = [param_dict[v.name] for v in array_size_vars]
+            wrapper_tuple = tuple(wrapper_list)
+            gufunc_wrapper_sig_out.append(wrapper_tuple)
+            if config.DEBUG_ARRAY_OPT:
+                print("wrapper_list = ", wrapper_list)
+                print("wrapper_tuple = ", wrapper_tuple)
+                print("gufunc_wrapper_sig_out = ", gufunc_wrapper_sig_out)
+        else:
+            gufunc_builder_sig_out += "()"
+            gufunc_wrapper_sig_out.append(())
+    gufunc_builder_full_sig = gufunc_builder_sig_in + "->" + gufunc_builder_sig_out
+
+    if config.DEBUG_ARRAY_OPT:
+        print("gufunc_builder_sig_in = ", gufunc_builder_sig_in)
+        print("gufunc_builder_sig_out = ", gufunc_builder_sig_out)
+        print("gufunc_builder_full_sig = ", gufunc_builder_full_sig)
+        print("gufunc_wrapper_sig_in = ", gufunc_wrapper_sig_in)
+        print("gufunc_wrapper_sig_out = ", gufunc_wrapper_sig_out)
 
     # Create gufunc from gufunc_func.
+    ufunc = numba.npyufunc.parallel.ParallelGUFuncBuilder(gufunc_func, gufunc_builder_full_sig)
+    sig_typs = [numba.types.npytypes.Array(numba.int64, 1, "C")] + param_types
+    if config.DEBUG_ARRAY_OPT:
+        print("sig_typs = ", sig_typs)
+    sig = numba.typing.signature(numba.types.none, *sig_typs)
+    ufunc.add(sig)
+    sig1 = ufunc._sigs[0]
+    cres = ufunc._cres[sig1]
+    llvm_func = cres.library.get_function(cres.fndesc.llvm_func_name)
+    wrapper_ptr, env, wrapper_name = numba.npyufunc.ufuncbuilder.build_gufunc_wrapper(llvm_func, cres, gufunc_wrapper_sig_in, gufunc_wrapper_sig_out, {})
+    cres.library._ensure_finalized()
+    if config.DEBUG_ARRAY_OPT:
+        print("wrapper_name = ", wrapper_name)
 
-    #exec(sched_func)
+    exec(sched_func)
+    sched_func_func = eval(sched_func_name)
 
     # Return list of instructions including pre-statements and call to scheduling function.
     if config.DEBUG_ARRAY_OPT:
         print("init_block = ", parfor.init_block, " ", type(parfor.init_block))
     replacement_instrs = [x for x in parfor.init_block.body]
+
+    # Create the call from the main function to the scheduling function.
+    sched_func_var = ir.Var(scope, mk_unique_var("$sched_func_var"), parfor.loc)
+    #sched_func_var = ir.Var(scope, mk_unique_var("$sched_func_var"), parfor.loc)
+    #typemap[sched_func_var.name] = Function(FIX FIX FIX)
+    g_sched = ir.Global(sched_func_name, sched_func_func, parfor.loc)
+    sched_func_var_assign = ir.Assign(g_sched, sched_func_var, parfor.loc)
+
+    unneeded_call_var = ir.Var(scope, mk_unique_var("$unneeded"), parfor.loc)
+    typemap[unneeded_call_var.name] = types.NoneType
+    sched_call = ir.Expr.call(sched_func_var, parfor_params, (), parfor.loc)
+    if config.DEBUG_ARRAY_OPT:
+        print("sched_call ", sched_call)
+    calltypes[sched_call] = signature(types.NoneType, *param_types)
+    sched_assign = ir.Assign(sched_call, unneeded_call_var, parfor.loc)
+
+    replacement_instrs.append(sched_func_var_assign)
+    replacement_instrs.append(sched_assign)
     if config.DEBUG_ARRAY_OPT:
         print("replacement_instrs = ", replacement_instrs, " ", type(replacement_instrs))
         for ri in replacement_instrs:
