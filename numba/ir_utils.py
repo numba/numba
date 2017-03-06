@@ -169,10 +169,11 @@ def replace_var_names(blocks, namedict):
 
 def replace_var_callback(var, vardict):
     assert isinstance(var, ir.Var)
-    new_var = vardict.get(var, var)
-    var.scope = new_var.scope
-    var.name = new_var.name
-    var.loc = new_var.loc
+    if var.name in vardict.keys():
+        new_var = vardict[var.name]
+        var.scope = new_var.scope
+        var.name = new_var.name
+        var.loc = new_var.loc
 
 def replace_vars(blocks, vardict):
     visit_vars(blocks, replace_var_callback, vardict)
@@ -407,7 +408,7 @@ def get_block_copies(blocks):
 def apply_copy_propagate(blocks, in_copies, name_var_table):
     # TODO: make it recursive on parfors?
     for label, block in blocks.items():
-        var_dict = {name_var_table[l]:name_var_table[r] for l,r in in_copies[label]}
+        var_dict = {l:name_var_table[r] for l,r in in_copies[label]}
         # assignments as dict to replace with latest value
         for stmt in block.body:
             replace_vars_stmt(stmt, var_dict)
@@ -415,14 +416,14 @@ def apply_copy_propagate(blocks, in_copies, name_var_table):
                 if isinstance(stmt,T):
                     gen_set, kill_set = f(stmt)
                     for lhs,rhs in gen_set:
-                        var_dict[name_var_table[lhs]] = name_var_table[rhs]
+                        var_dict[lhs] = name_var_table[rhs]
                     for l,r in var_dict.copy().items():
-                        if l.name in kill_set or r.name in kill_set:
+                        if l in kill_set or r.name in kill_set:
                             var_dict.pop(l)
             if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Var):
                 lhs = stmt.target.name
                 rhs = stmt.value.name
                 # rhs could be replaced with lhs from previous copies
                 if lhs!=rhs:
-                    var_dict[name_var_table[lhs]] = name_var_table[rhs]
+                    var_dict[lhs] = name_var_table[rhs]
     return

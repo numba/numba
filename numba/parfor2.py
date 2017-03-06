@@ -564,21 +564,25 @@ analysis.ir_extension_defs[Parfor2] = parfor_defs
 
 def fuse_parfors(blocks):
     for block in blocks.values():
-        i = 0
-        new_body = []
-        while i<len(block.body)-1:
-            stmt = block.body[i]
-            next_stmt = block.body[i+1]
-            if isinstance(stmt, Parfor2) and isinstance(next_stmt, Parfor2):
-                fused_node = try_fuse(stmt, next_stmt)
-                if fused_node is not None:
-                    new_body.append(fused_node)
-                    i += 2
-                    continue
-            new_body.append(stmt)
-            i += 1
-        new_body.append(block.body[-1])
-        block.body = new_body
+        fusion_happened = True
+        while fusion_happened:
+            fusion_happened = False
+            new_body = []
+            i = 0
+            while i<len(block.body)-1:
+                stmt = block.body[i]
+                next_stmt = block.body[i+1]
+                if isinstance(stmt, Parfor2) and isinstance(next_stmt, Parfor2):
+                    fused_node = try_fuse(stmt, next_stmt)
+                    if fused_node is not None:
+                        fusion_happened = True
+                        new_body.append(fused_node)
+                        i += 2
+                        continue
+                new_body.append(stmt)
+                i += 1
+            new_body.append(block.body[-1])
+            block.body = new_body
     return
 
 def try_fuse(parfor1, parfor2):
@@ -635,7 +639,7 @@ def fuse_parfors_inner(parfor1, parfor2):
     ndims = len(parfor1.loop_nests)
     index_dict = {}
     for i in range(ndims):
-        index_dict[parfor2.loop_nests[i].index_variable] = parfor1.loop_nests[i].index_variable
+        index_dict[parfor2.loop_nests[i].index_variable.name] = parfor1.loop_nests[i].index_variable
     replace_vars(parfor1.loop_body, index_dict)
 
     return parfor1
