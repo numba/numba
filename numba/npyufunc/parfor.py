@@ -131,6 +131,8 @@ class RewriteParfor(rewrites.Rewrite):
         if len(calltypes) == 0:
             return False
 
+        return False
+
         self.crnt_block = block
         self.typemap = typemap
         # { variable name: IR assignment (of 'arrayexpr') }
