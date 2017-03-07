@@ -116,6 +116,8 @@ class ParforPass(object):
         apply_copy_propagate(self.func_ir.blocks, in_cps, name_var_table)
         # remove dead code to enable fusion
         remove_dead(self.func_ir.blocks)
+        # reorder statements to maximize fusion
+        maximize_fusion(self.func_ir.blocks)
         fuse_parfors(self.func_ir.blocks)
         # remove dead code after fusion to remove extra arrays and variables
         remove_dead(self.func_ir.blocks)
@@ -565,6 +567,42 @@ def parfor_defs(parfor):
     return all_defs
 
 analysis.ir_extension_defs[Parfor2] = parfor_defs
+
+# reorder statements to maximize fusion
+def maximize_fusion(blocks):
+    for block in blocks.values():
+        order_changed = True
+        while order_changed:
+            order_changed = False
+            i = 0
+            while i<len(block.body)-2:
+                stmt = block.body[i]
+                next_stmt = block.body[i+1]
+                # swap only parfors with non-parfors
+                # if stmt hasn't written to any variable that next_stmt uses,
+                # they can be swapped
+                if isinstance(stmt, Parfor2) and not isinstance(next_stmt, Parfor2):
+                    stmt_writes = get_parfor_writes(stmt)
+                    next_accesses = {v.name for v in next_stmt.list_vars()}
+                    if stmt_writes & next_accesses == set():
+                        block.body[i] = next_stmt
+                        block.body[i+1] = stmt
+                        order_changed = True
+                i += 1
+    return
+
+def get_parfor_writes(parfor):
+    assert isinstance(parfor, Parfor2)
+    writes = set()
+    blocks = parfor.loop_body.copy()
+    blocks[-1] = parfor.init_block
+    for block in blocks.values():
+        for stmt in block.body:
+            if isinstance(stmt, (ir.Assign, ir.SetItem, ir.StaticSetItem)):
+                writes.add(stmt.target.name)
+            elif isinstance(stmt, Parfor2):
+                writes.update(get_parfor_writes(stmt))
+    return writes
 
 def fuse_parfors(blocks):
     for block in blocks.values():
