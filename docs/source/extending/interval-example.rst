@@ -232,6 +232,8 @@ get the error *"cannot convert Interval to native value"*.  This is because
 Numba doesn't yet know how to make a native interval value from a Python
 ``Interval`` instance.  Let's teach it how to do it::
 
+   from numba.extending import unbox, NativeValue
+
    @unbox(IntervalType)
    def unbox_interval(typ, obj, c):
        """
@@ -263,6 +265,8 @@ for example).
 We also want to do the reverse operation, called *boxing*, so as to return
 interval values from Numba functions::
 
+   from numba.extending import box
+
    @box(IntervalType)
    def box_interval(typ, val, c):
        """
@@ -285,6 +289,8 @@ Using it
 :term:`nopython mode` functions are now able to make use of Interval objects
 and the various operations you have defined on them.  You can try for
 example the following functions::
+
+   from numba import jit
 
    @jit(nopython=True)
    def inside_interval(interval, x):
