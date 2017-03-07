@@ -8,7 +8,7 @@ import pickle
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import jit, types, errors, typeof, numpy_support, cgutils
+from numba import jit, types, errors, typeof, numpy_support, cgutils, typing
 from numba.compiler import compile_isolated
 from .support import TestCase, captured_stdout, tag
 
@@ -474,6 +474,7 @@ class TestIntrinsic(TestCase):
 
             @intrinsic
             def unsafe_cast(typingctx, src):
+                self.assertIsInstance(typingctx, typing.Context)
                 if isinstance(src, types.Integer):
                     sig = result_type(types.uintp)
 
