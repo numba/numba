@@ -169,7 +169,7 @@ def replace_var_names(blocks, namedict):
 
 def replace_var_callback(var, vardict):
     assert isinstance(var, ir.Var)
-    if var.name in vardict.keys():
+    while var.name in vardict.keys():
         new_var = vardict[var.name]
         var.scope = new_var.scope
         var.name = new_var.name
