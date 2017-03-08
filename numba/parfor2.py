@@ -125,7 +125,8 @@ class ParforPass(object):
         # run post processor again to generate Del nodes
         # post_proc = postproc.PostProcessor(self.func_ir)
         # post_proc.run()
-
+        # after optimization, some size variables are not available anymore
+        remove_dead_class_sizes(self.func_ir.blocks, self.array_analysis)
         dprint_func_ir(self.func_ir, "after optimization")
         # usedefs = compute_use_defs(self.func_ir.blocks)
         return
@@ -765,6 +766,34 @@ def remove_dead_parfor_recursive(parfor, lives):
     blocks[0].body.pop() # remove dummy jump
     blocks[last_label].body.pop() # remove dummy return
     blocks[last_label].body.pop() # remove dummy tupple
+    return
+
+def remove_dead_class_sizes(blocks, array_analysis):
+    usedefs = compute_use_defs(blocks)
+    all_defs = set()
+    # all available variables after dead code elimination
+    for defs in usedefs.defmap.values():
+        all_defs.update(defs)
+
+    # remove dead size variables in class sizes
+    for varlist in array_analysis.class_sizes.values():
+        vars_to_remove = []
+        for v in varlist:
+            # don't remove constants
+            if isinstance(v, ir.Var) and v.name not in all_defs:
+                vars_to_remove.append(v)
+        for v in vars_to_remove:
+            varlist.remove(v)
+
+    # replace array size variables with their class size variable if available
+    for var, dim_sizes in array_analysis.array_size_vars.items():
+        ndims = len(dim_sizes)
+        shape_classes = array_analysis.array_shape_classes[var]
+        for i in range(ndims):
+            corr = shape_classes[i]
+            if len(array_analysis.class_sizes[corr])>0:
+                class_size = array_analysis.class_sizes[corr][0]
+                dim_sizes[i] = class_size
     return
 
 def get_copies_parfor(parfor):
