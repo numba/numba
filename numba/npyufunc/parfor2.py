@@ -22,7 +22,7 @@ import copy
 
 # Lowerer that converts parfor2 instr to LLVM code.
 def _lower_parfor2_parallel(lowerer, parfor):
-    # 
+    #
     typingctx = lowerer.context.typing_context
     targetctx = lowerer.context
     typemap = lowerer.fndesc.typemap
@@ -89,7 +89,7 @@ def _print_body(body_dict):
             print("    ", i, " ", inst)
 
 def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetctx, flags, locals):
-    loop_body = copy.deepcopy(parfor.loop_body)
+    loop_body = copy.copy(parfor.loop_body)
 
     parfor_dim = len(parfor.loop_nests)
     assert parfor_dim==1
@@ -140,7 +140,7 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
         print("legal parfor_params = ", parfor_params, " ", type(parfor_params))
 
 
-    
+
     #loop_ranges_dict = legalize_names(loop_ranges)
     #loop_ranges = [ loop_ranges_dict[v] for v in loop_ranges ]
 
@@ -240,7 +240,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
         #print("inner_sig = ", inner_sig.args, inner_sig.return_type, inner_sig.recvr, inner_sig.pysig)
     # The ufunc takes 4 arguments: args, dims, steps, data
     sin, sout = gu_signature
-    
+
     # build the GUFunc
     ufunc = ParallelGUFuncBuilder(cres.entry_point, gu_signature)
     args, return_type = sigutils.normalize_signature(outer_sig)
@@ -394,5 +394,3 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     return
     # return builder.bitcast(output.return_val, ret_ty)
     # return imputils.impl_ret_new_ref(context, builder, out_ty, output.return_val)
-
-
