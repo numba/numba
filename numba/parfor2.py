@@ -121,6 +121,7 @@ class ParforPass(object):
         fuse_parfors(self.func_ir.blocks)
         # remove dead code after fusion to remove extra arrays and variables
         remove_dead(self.func_ir.blocks)
+        push_call_vars(self.func_ir.blocks, {}, {})
         # run post processor again to generate Del nodes
         # post_proc = postproc.PostProcessor(self.func_ir)
         # post_proc.run()
@@ -793,3 +794,45 @@ def get_copies_parfor(parfor):
     return out_copies_parfor[last_label], kill_set
 
 copy_propagate_extensions[Parfor2] = get_copies_parfor
+
+def push_call_vars(blocks, saved_globals, saved_getattrs):
+    """push call variables to right before their call site.
+    assuming one global/getattr is created for each call site and control flow
+    doesn't change it.
+    """
+    for block in blocks.values():
+        new_body = []
+        for stmt in block.body:
+            if isinstance(stmt, ir.Assign):
+                rhs = stmt.value
+                lhs = stmt.target
+                if isinstance(rhs, ir.Global):
+                    saved_globals[lhs.name] = stmt
+                    continue
+                elif isinstance(rhs, ir.Expr) and rhs.op=='getattr':
+                    if rhs.value.name in saved_globals:
+                        saved_getattrs[lhs.name] = stmt
+                        continue
+                elif isinstance(rhs, ir.Expr) and rhs.op=='call':
+                    fname = rhs.func.name
+                    if fname in saved_globals:
+                        new_body.append(saved_globals.pop(fname))
+                    elif fname in saved_getattrs:
+                        g_name = saved_getattrs[fname].value.value.name
+                        new_body.append(saved_globals.pop(g_name))
+                        new_body.append(saved_getattrs.pop(fname))
+                    for arg in rhs.args:
+                        if arg.name in saved_getattrs:
+                            g_name = saved_getattrs[arg.name].value.value.name
+                            if g_name in saved_globals:
+                                new_body.append(saved_globals.pop(g_name))
+                            new_body.append(saved_getattrs.pop(arg.name))
+
+            elif isinstance(stmt, Parfor2):
+                pblocks = stmt.loop_body.copy()
+                pblocks[-1] = stmt.init_block
+                push_call_vars(pblocks, saved_globals, saved_getattrs)
+            new_body.append(stmt)
+        block.body = new_body
+
+    return
