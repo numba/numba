@@ -541,7 +541,7 @@ def lower_parfor2_parallel(func_ir, typemap, calltypes, typingctx, targetctx, fl
             if isinstance(inst, numba.parfor2.Parfor2):
                 new_block.body.extend(
                     _create_sched_wrapper2(
-                        inst, typemap, typingctx, targetctx, flags, 
+                        inst, typemap, typingctx, targetctx, flags,
                         locals, array_analysis, scope, calltypes))
             else:
                 new_block.body.append(inst)
@@ -551,7 +551,7 @@ def lower_parfor2_parallel(func_ir, typemap, calltypes, typingctx, targetctx, fl
         func_ir.dump()
     return
 
-numba.parfor2.lower_parfor2_parallel = lower_parfor2_parallel
+# numba.parfor2.lower_parfor2_parallel = lower_parfor2_parallel
 
 def _print_body(body_dict):
     for label, block in body_dict.items():
@@ -567,7 +567,7 @@ then the reduction function is applied across the reduction arrays
 before returning the final answer.
 '''
 def _create_sched_wrapper2(
-        parfor, typemap, typingctx, targetctx, flags, 
+        parfor, typemap, typingctx, targetctx, flags,
         locals, array_analysis, scope, calltypes):
     if config.DEBUG_ARRAY_OPT==1:
         print("_create_sched_wrapper2 ", type(parfor), " ", parfor)
