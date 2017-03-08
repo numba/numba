@@ -163,12 +163,17 @@ def get_name_var_table(blocks):
     return namevar
 
 def replace_var_names(blocks, namedict):
+    # remove identity values to avoid infinite loop
+    new_namedict = {}
+    for l,r in namedict.items():
+        if l!=r:
+            new_namedict[l] = r
     def replace_name(var, namedict):
         assert isinstance(var, ir.Var)
         while var.name in namedict:
             var = ir.Var(var.scope, namedict[var.name], var.loc)
         return var
-    visit_vars(blocks, replace_name, namedict)
+    visit_vars(blocks, replace_name, new_namedict)
 
 def replace_var_callback(var, vardict):
     assert isinstance(var, ir.Var)
@@ -178,7 +183,12 @@ def replace_var_callback(var, vardict):
     return var
 
 def replace_vars(blocks, vardict):
-    visit_vars(blocks, replace_var_callback, vardict)
+    # remove identity values to avoid infinite loop
+    new_vardict = {}
+    for l,r in vardict.items():
+        if l!=r.name:
+            new_vardict[l] = r
+    visit_vars(blocks, replace_var_callback, new_vardict)
 
 def replace_vars_stmt(stmt, vardict):
     visit_vars_stmt(stmt, replace_var_callback, vardict)
