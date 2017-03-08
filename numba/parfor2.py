@@ -532,8 +532,8 @@ def visit_vars_parfor2(parfor, callback, cbdata):
         print("visiting parfor vars for:",parfor)
         print("cbdata: ", cbdata)
     for l in parfor.loop_nests:
-        visit_vars_inner(l.index_variable, callback, cbdata)
-        visit_vars_inner(l.range_variable, callback, cbdata)
+        l.index_variable = visit_vars_inner(l.index_variable, callback, cbdata)
+        l.range_variable = visit_vars_inner(l.range_variable, callback, cbdata)
     visit_vars({-1:parfor.init_block}, callback, cbdata)
     visit_vars(parfor.loop_body, callback, cbdata)
     return
