@@ -35,7 +35,9 @@ def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
     builder.store(builder.add(builder.load(store_offset), out.step),
                   store_offset)
 
-    return status.code
+    # Return 1 if an error occurred or 0
+    return builder.select(status.is_ok, Constant.int(Type.int(), 0),
+                          Constant.int(Type.int(), 1))
 
 
 def _build_ufunc_loop_body_objmode(load, store, context, func, builder,
@@ -143,8 +145,8 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, envptr,
     intp_t = context.get_value_type(types.intp)
     intp_ptr_t = Type.pointer(intp_t)
 
-    fnty = Type.function(Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
-                                       intp_ptr_t, byte_ptr_t])
+    fnty = Type.function(Type.int(), [byte_ptr_ptr_t, intp_ptr_t,
+                                      intp_ptr_t, byte_ptr_t])
 
     wrapperlib = context.codegen().create_library('ufunc_wrapper')
     wrapper_module = wrapperlib.create_ir_module('')
@@ -194,37 +196,51 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, envptr,
         unit_strided = builder.and_(unit_strided, ary.is_unit_strided)
 
     pyapi = context.get_python_api(builder)
+    # Stack allocate error counter
+    reterr = builder.alloca(Type.int())
+    # and initialize it to 0
+    builder.store(Constant.int(reterr.type.pointee, 0), reterr)
+
     if objmode:
         # General loop
         gil = pyapi.gil_ensure()
         with cgutils.for_range(builder, loopcount, intp=intp_t):
-            slowloop = build_obj_loop_body(context, func, builder,
-                                           arrays, out, offsets,
-                                           store_offset, signature,
-                                           pyapi, envptr, env)
+            errct = build_obj_loop_body(context, func, builder,
+                                        arrays, out, offsets,
+                                        store_offset, signature,
+                                        pyapi, envptr, env)
+            # Increment the error counter
+            builder.store(builder.add(builder.load(reterr), errct),
+                          reterr)
         pyapi.gil_release(gil)
-        builder.ret_void()
+        builder.ret(builder.load(reterr))
 
     else:
         with builder.if_else(unit_strided) as (is_unit_strided, is_strided):
             with is_unit_strided:
                 with cgutils.for_range(builder, loopcount, intp=intp_t) as loop:
-                    fastloop = build_fast_loop_body(context, func, builder,
-                                                    arrays, out, offsets,
-                                                    store_offset, signature,
-                                                    loop.index, pyapi,
-                                                    warn_exception=warn_exception)
+                    errct = build_fast_loop_body(context, func, builder,
+                                                 arrays, out, offsets,
+                                                 store_offset, signature,
+                                                 loop.index, pyapi,
+                                                 warn_exception=warn_exception)
+                    # Increment the error counter
+                    builder.store(builder.add(builder.load(reterr), errct),
+                                  reterr)
 
             with is_strided:
                 # General loop
                 with cgutils.for_range(builder, loopcount, intp=intp_t):
-                    slowloop = build_slow_loop_body(context, func, builder,
-                                                    arrays, out, offsets,
-                                                    store_offset, signature,
-                                                    pyapi,
-                                                    warn_exception=warn_exception)
-
-        builder.ret_void()
+                    errct = build_slow_loop_body(context, func, builder,
+                                                 arrays, out, offsets,
+                                                 store_offset, signature,
+                                                 pyapi,
+                                                 warn_exception=warn_exception)
+                    # Increment the error counter
+                    builder.store(builder.add(builder.load(reterr), errct),
+                                  reterr)
+        # Return error count
+        builder.ret(builder.load(reterr))
     del builder
 
     # Link and finalize

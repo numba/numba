@@ -186,8 +186,9 @@ numba_new_thread(void *worker, void *arg)
 #endif
 
 typedef struct Task{
-    void (*func)(void *args, void *dims, void *steps, void *data);
+    int (*func)(void *args, void *dims, void *steps, void *data);
     void *args, *dims, *steps, *data;
+    int *ret;  /* for storing the return value from func */
 } Task;
 
 typedef struct {
@@ -216,8 +217,8 @@ queue_state_wait(Queue *queue, int old, int repl)
 }
 
 static void
-add_task(void *fn, void *args, void *dims, void *steps, void *data) {
-    void (*func)(void *args, void *dims, void *steps, void *data) = fn;
+add_task(void *fn, void *args, void *dims, void *steps, void *data, int *ret) {
+    int (*func)(void *args, void *dims, void *steps, void *data) = fn;
 
     Queue *queue = &queues[queue_pivot];
 
@@ -227,6 +228,7 @@ add_task(void *fn, void *args, void *dims, void *steps, void *data) {
     task->dims = dims;
     task->steps = steps;
     task->data = data;
+    task->ret = ret;
 
     /* Move pivot */
     if ( ++queue_pivot == queue_count ) {
@@ -238,6 +240,7 @@ static
 void thread_worker(void *arg) {
     Queue *queue = (Queue*)arg;
     Task *task;
+    int ret;
 
     while (1) {
         /* Wait for the queue to be in READY state (i.e. for some task
@@ -246,7 +249,8 @@ void thread_worker(void *arg) {
         queue_state_wait(queue, READY, RUNNING);
 
         task = &queue->task;
-        task->func(task->args, task->dims, task->steps, task->data);
+        ret = task->func(task->args, task->dims, task->steps, task->data);
+        if (task->ret) *task->ret = ret;
 
         /* Task is done. */
         queue_state_wait(queue, RUNNING, DONE);

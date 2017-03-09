@@ -13,6 +13,7 @@ from __future__ import print_function, absolute_import
 
 import sys
 import os
+from functools import reduce
 
 import numpy as np
 
@@ -22,6 +23,7 @@ import llvmlite.binding as ll
 from numba.npyufunc import ufuncbuilder
 from numba.numpy_support import as_dtype
 from numba import types, utils, cgutils, config
+
 
 def get_thread_count():
     """
@@ -167,7 +169,7 @@ def build_ufunc_kernel(library, ctx, innerfunc, sig):
             builder.store(addr, dst)
 
     # Declare external functions
-    add_task_ty = lc.Type.function(lc.Type.void(), [byte_ptr_t] * 5)
+    add_task_ty = lc.Type.function(lc.Type.void(), [byte_ptr_t] * 6)
     empty_fnty = lc.Type.function(lc.Type.void(), ())
     add_task = mod.get_or_insert_function(add_task_ty, name='numba_add_task')
     synchronize = mod.get_or_insert_function(empty_fnty,
@@ -179,9 +181,14 @@ def build_ufunc_kernel(library, ctx, innerfunc, sig):
 
     # Note: the runtime address is taken and used as a constant in the function.
     fnptr = ctx.get_constant(types.uintp, innerfunc).inttoptr(byte_ptr_t)
-    for each_args, each_dims in zip(args_list, count_list):
+
+    # stack allocate return value
+    err_ctrs = [builder.alloca(lc.Type.int())
+                for _ in range(len(args_list))]
+
+    for each_args, each_dims, each_err in zip(args_list, count_list, err_ctrs):
         innerargs = [as_void_ptr(x) for x
-                     in [each_args, each_dims, steps, data]]
+                     in [each_args, each_dims, steps, data, each_err]]
 
         builder.call(add_task, [fnptr] + innerargs)
 
@@ -191,8 +198,20 @@ def build_ufunc_kernel(library, ctx, innerfunc, sig):
     # Wait for workers
     builder.call(synchronize, ())
 
+    # Sum up all error counter
+    initial = lc.Constant.int(lc.Type.int(), 0)
+    total_errct = reduce(builder.add, map(builder.load, err_ctrs), initial)
+
     # Work is done. Reacquire the GIL
     pyapi.restore_thread(thread_state)
+
+    # Raise error if count is greater than 0
+    has_error = builder.icmp_unsigned('>', total_errct, total_errct.type(0))
+    with builder.if_then(has_error, likely=False):
+        msg = "Exceptions raised in parallel ufunc.  See warnings."
+        cstr = ctx.insert_const_string(mod, msg)
+        pyapi.err_set_string("PyExc_RuntimeError", cstr)
+
     pyapi.gil_release(gil_state)
 
     builder.ret_void()
