@@ -56,7 +56,8 @@ class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
 def build_ufunc_wrapper(library, ctx, fname, signature):
     innerfunc = ufuncbuilder.build_ufunc_wrapper(library, ctx, fname, signature,
                                                  objmode=False, env=None,
-                                                 envptr=None)
+                                                 envptr=None,
+                                                 warn_exception=True)
     return build_ufunc_kernel(library, ctx, innerfunc, signature)
 
 

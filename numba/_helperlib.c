@@ -832,6 +832,31 @@ numba_fatal_error(void)
     return 0; /* unreachable */
 }
 
+/*
+ * Convert exception into warning.
+ * The exception is cleared.
+ */
+NUMBA_EXPORT_FUNC(void)
+numba_convert_exception_to_warning(){
+    PyObject *type, *value, *traceback;
+    PyObject *exc_text, *warn_text;
+
+    if (!PyErr_Occurred()) return;
+
+    PyErr_Fetch(&type, &value, &traceback);
+    PyErr_NormalizeException(&type, &value, &traceback);
+    exc_text = PyObject_Repr(value);
+    warn_text = PyString_FromFormat("exception raised in numba threads: %s",
+                                    PyString_AsString(exc_text));
+    PyErr_WarnEx(PyExc_UserWarning, PyString_AsString(warn_text), 1);
+    /* Clean up */
+    Py_XDECREF(exc_text);
+    Py_XDECREF(warn_text);
+    Py_XDECREF(type);
+    Py_XDECREF(value);
+    Py_XDECREF(traceback);
+}
+
 /* Logic for raising an arbitrary object.  Adapted from CPython's ceval.c.
    This *consumes* a reference count to its argument. */
 NUMBA_EXPORT_FUNC(int)

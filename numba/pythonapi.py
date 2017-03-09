@@ -287,6 +287,11 @@ class PythonAPI(object):
             exc = self.make_none()
         return self.builder.call(fn, (exc,))
 
+    def convert_exception_to_warning(self):
+        fnty = Type.function(Type.void(), ())
+        fn = self._get_function(fnty, name="numba_convert_exception_to_warning")
+        return self.builder.call(fn, ())
+
     def err_set_object(self, exctype, excval):
         fnty = Type.function(Type.void(), [self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyErr_SetObject")

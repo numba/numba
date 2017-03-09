@@ -8,7 +8,8 @@ from ..caching import make_library_cache, NullCache
 
 
 def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
-                           offsets, store_offset, signature, pyapi):
+                           offsets, store_offset, signature, pyapi,
+                           warn_exception=False):
     elems = load()
 
     # Compute
@@ -23,6 +24,8 @@ def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
         with if_error:
             gil = pyapi.gil_ensure()
             context.call_conv.raise_error(builder, pyapi, status)
+            if warn_exception:
+                pyapi.convert_exception_to_warning()
             pyapi.gil_release(gil)
 
     # increment indices
@@ -67,7 +70,7 @@ def _build_ufunc_loop_body_objmode(load, store, context, func, builder,
 
 
 def build_slow_loop_body(context, func, builder, arrays, out, offsets,
-                         store_offset, signature, pyapi):
+                         store_offset, signature, pyapi, warn_exception):
     def load():
         elems = [ary.load_direct(builder.load(off))
                  for off, ary in zip(offsets, arrays)]
@@ -113,7 +116,8 @@ def build_obj_loop_body(context, func, builder, arrays, out, offsets,
 
 
 def build_fast_loop_body(context, func, builder, arrays, out, offsets,
-                         store_offset, signature, ind, pyapi):
+                         store_offset, signature, ind, pyapi,
+                         warn_exception):
     def load():
         elems = [ary.load_aligned(ind)
                  for ary in arrays]
@@ -123,10 +127,12 @@ def build_fast_loop_body(context, func, builder, arrays, out, offsets,
         out.store_aligned(retval, ind)
 
     return _build_ufunc_loop_body(load, store, context, func, builder, arrays,
-                                  out, offsets, store_offset, signature, pyapi)
+                                  out, offsets, store_offset, signature, pyapi,
+                                  warn_exception=warn_exception)
 
 
-def build_ufunc_wrapper(library, context, fname, signature, objmode, envptr, env):
+def build_ufunc_wrapper(library, context, fname, signature, objmode, envptr,
+                        env, warn_exception=False):
     """
     Wrap the scalar function with a loop that iterates over the arguments
     """
@@ -206,7 +212,8 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, envptr, env
                     fastloop = build_fast_loop_body(context, func, builder,
                                                     arrays, out, offsets,
                                                     store_offset, signature,
-                                                    loop.index, pyapi)
+                                                    loop.index, pyapi,
+                                                    warn_exception=warn_exception)
 
             with is_strided:
                 # General loop
@@ -214,7 +221,8 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, envptr, env
                     slowloop = build_slow_loop_body(context, func, builder,
                                                     arrays, out, offsets,
                                                     store_offset, signature,
-                                                    pyapi)
+                                                    pyapi,
+                                                    warn_exception=warn_exception)
 
         builder.ret_void()
     del builder
