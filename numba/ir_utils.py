@@ -28,15 +28,18 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
     ndims = 1
     size_typ = INT_TYPE
     if isinstance(size_var, tuple):
-        # tuple_var = build_tuple([size_var...])
-        ndims = len(size_var)
-        tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
-        typemap[tuple_var.name] = types.containers.UniTuple(INT_TYPE, ndims)
-        tuple_call = ir.Expr.build_tuple(list(size_var), loc)
-        tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
-        out.append(tuple_assign)
-        size_var = tuple_var
-        size_typ = types.containers.UniTuple(INT_TYPE, ndims)
+        if len(size_var) == 1:
+            size_var = size_var[0]
+        else:
+            # tuple_var = build_tuple([size_var...])
+            ndims = len(size_var)
+            tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
+            typemap[tuple_var.name] = types.containers.UniTuple(INT_TYPE, ndims)
+            tuple_call = ir.Expr.build_tuple(list(size_var), loc)
+            tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
+            out.append(tuple_assign)
+            size_var = tuple_var
+            size_typ = types.containers.UniTuple(INT_TYPE, ndims)
     # g_np_var = Global(numpy)
     g_np_var = ir.Var(scope, mk_unique_var("$np_g_var"), loc)
     typemap[g_np_var.name] = types.misc.Module(numpy)

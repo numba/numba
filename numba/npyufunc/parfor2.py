@@ -44,12 +44,15 @@ def _lower_parfor2_parallel(lowerer, parfor):
     array_shape_classes = parfor.array_analysis.array_shape_classes
     func_args = ['sched'] + func_args
     num_inputs = len(func_args) - len(parfor2.get_parfor_outputs(parfor))
-    print("num_inputs = ", num_inputs)
-    print("parfor_outputs = ", parfor2.get_parfor_outputs(parfor))
+    if config.DEBUG_ARRAY_OPT:
+        print("num_inputs = ", num_inputs)
+        print("parfor_outputs = ", parfor2.get_parfor_outputs(parfor))
     gu_signature = _create_shape_signature(array_shape_classes, num_inputs, func_args, func_sig)
     loop_ranges = [l.range_variable.name for l in parfor.loop_nests]
     # call the func in parallel by wrapping it with ParallelGUFuncWrapper
     array_size_vars = parfor.array_analysis.array_size_vars
+    if config.DEBUG_ARRAY_OPT:
+        print("array_size_vars = ", array_size_vars)
     call_parallel_gufunc(lowerer, func, gu_signature, func_sig, func_args, loop_ranges, array_size_vars)
 
 '''Create shape signature for GUFunc
@@ -92,7 +95,6 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
     loop_body = copy.copy(parfor.loop_body)
 
     parfor_dim = len(parfor.loop_nests)
-    assert parfor_dim==1
     loop_indices = [l.index_variable.name for l in parfor.loop_nests]
 
     # Get all the parfor params.
@@ -138,8 +140,6 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
 
     if config.DEBUG_ARRAY_OPT==1:
         print("legal parfor_params = ", parfor_params, " ", type(parfor_params))
-
-
 
     #loop_ranges_dict = legalize_names(loop_ranges)
     #loop_ranges = [ loop_ranges_dict[v] for v in loop_ranges ]
@@ -341,9 +341,13 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     occurances = [sched_sig[0]]
     sig_dim_dict[sched_sig[0]] = context.get_constant(types.intp, 2 * num_dim)
     for var, gu_sig in zip(expr_args, sin + sout):
+        if config.DEBUG_ARRAY_OPT:
+            print("var = ", var, " gu_sig = ", gu_sig)
         for sig in gu_sig:
             i = 0
             for dim_sym in sig:
+                if config.DEBUG_ARRAY_OPT:
+                    print("dim_sym = ", dim_sym)
                 # sig_dim_dict[dim_sym] = var.shape[i]
                 # print("var = ", var, " array_size_vars = ", array_size_vars)
                 sig_dim_dict[dim_sym] = lowerer.loadvar(array_size_vars[var][0].name)

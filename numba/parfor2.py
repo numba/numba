@@ -29,7 +29,7 @@ class LoopNest(object):
 
 
 class Parfor2(ir.Expr, ir.Stmt):
-    def __init__(self, loop_nests, init_block, loop_body, loc, array_analysis):
+    def __init__(self, loop_nests, init_block, loop_body, loc, array_analysis, index_var):
         super(Parfor2, self).__init__(
             op   = 'parfor2',
             loc  = loc
@@ -41,6 +41,7 @@ class Parfor2(ir.Expr, ir.Stmt):
         self.init_block = init_block
         self.loop_body = loop_body
         self.array_analysis = array_analysis
+        self.index_var = index_var
 
     def __repr__(self):
         return repr(self.loop_nests) + repr(self.loop_body)
@@ -137,28 +138,47 @@ class ParforPass(object):
         """
         expr = arrayexpr.expr
         arr_typ = self.typemap[lhs.name]
-        # TODO: support mutilple dimensions
-        assert arr_typ.ndim==1
         el_typ = arr_typ.dtype
-        corr = self.array_analysis.array_shape_classes[lhs.name][0]
-        size_var = self.array_analysis.array_size_vars[lhs.name][0]
+
+        loopnests = []
         scope = lhs.scope
         loc = lhs.loc
-        index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
-        self.typemap[index_var.name] = INT_TYPE
-        loopnests = [ LoopNest(index_var, size_var, corr) ]
+        size_vars = []
+        index_vars = []
+
+        for this_dim in range(arr_typ.ndim):
+            corr = self.array_analysis.array_shape_classes[lhs.name][this_dim]
+            size_var = self.array_analysis.array_size_vars[lhs.name][this_dim]
+            size_vars.append(size_var)
+            index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
+            index_vars.append(index_var)
+            self.typemap[index_var.name] = INT_TYPE
+            loopnests.append( LoopNest(index_var, size_var, corr) )
+
         init_block = ir.Block(scope, loc)
-        parfor = Parfor2(loopnests, init_block, {}, loc, self.array_analysis)
 
         init_block.body = mk_alloc(self.typemap, self.calltypes, lhs,
-            size_var, el_typ, scope, loc)
+            tuple(size_vars), el_typ, scope, loc)
         body_label = next_label()
         body_block = ir.Block(scope, loc)
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
         self.typemap[expr_out_var.name] = el_typ
         body_block.body = _arrayexpr_tree_to_ir(self.typemap, self.calltypes,
-            expr_out_var, expr, index_var)
-        # lhs[parfor_index] = expr_out_var
+            expr_out_var, expr, tuple(index_vars))
+
+        ndims = len(index_vars)
+        if ndims > 1:
+            tuple_var = ir.Var(scope, mk_unique_var("$setitem_tuple_var"), loc)
+            self.typemap[tuple_var.name] = types.containers.UniTuple(INT_TYPE, ndims)
+            tuple_call = ir.Expr.build_tuple(list(index_vars), loc)
+            tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
+            body_block.body.append(tuple_assign)
+            index_var = tuple_var
+        else:
+            index_var = index_vars[0]
+
+        parfor = Parfor2(loopnests, init_block, {}, loc, self.array_analysis, index_var)
+
         setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
         self.calltypes[setitem_node] = signature(types.none,
             self.typemap[lhs.name], INT_TYPE, el_typ)
@@ -209,7 +229,7 @@ class ParforPass(object):
             self.typemap[index_var.name] = INT_TYPE
             loopnests = [ LoopNest(index_var, size_var, corr) ]
             init_block = ir.Block(scope, loc)
-            parfor = Parfor2(loopnests, init_block, {}, loc, self.array_analysis)
+            parfor = Parfor2(loopnests, init_block, {}, loc, self.array_analysis, index_var)
             if self._get_ndims(in1.name)==2:
                 # for 2D input, there is an inner loop
                 # correlation of inner dimension
@@ -317,7 +337,7 @@ def _mk_mvdot_body(typemap, calltypes, phi_b_var, index_var, in1, in2, sum_var, 
 
 def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr, parfor_index):
     """generate IR from array_expr's expr tree recursively. Assign output to
-    expr_out_var and returne the whole IR as a list of Assign nodes.
+    expr_out_var and returns the whole IR as a list of Assign nodes.
     """
     el_typ = typemap[expr_out_var.name]
     scope = expr_out_var.scope
@@ -354,8 +374,21 @@ def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr, parfor_index):
                 out_ir.append(ir.Assign(ir_expr, expr_out_var, loc))
     elif isinstance(expr, ir.Var):
         if isinstance(typemap[expr.name], types.Array):
-            # TODO: support multi-dimensional arrays
-            assert typemap[expr.name].ndim==1
+            print("parfor_index = ", parfor_index, " ", type(parfor_index))
+            if isinstance(parfor_index, tuple) and len(parfor_index) == 1:
+                parfor_index = parfor_index[0]
+            if isinstance(parfor_index, tuple):
+                ndims = len(parfor_index)
+                assert typemap[expr.name].ndim==ndims
+                tuple_var = ir.Var(scope, mk_unique_var("$parfor_index_tuple"), loc)
+                typemap[tuple_var.name] = types.containers.UniTuple(INT_TYPE, ndims)
+                tuple_call = ir.Expr.build_tuple(list(parfor_index), loc)
+                tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
+                out_ir.append(tuple_assign)
+                parfor_index = tuple_var
+            else:
+                assert typemap[expr.name].ndim==1
+
             ir_expr = ir.Expr.getitem(expr, parfor_index, loc)
             calltypes[ir_expr] = signature(el_typ, typemap[expr.name],
                 INT_TYPE)
@@ -515,16 +548,13 @@ def get_parfor_params(parfor):
 
 def get_parfor_outputs(parfor):
     # TODO: reduction output
-    # TODO: multi-dimensional
-    # FIXME: The following assumes the target of all SetItem  are outputs, which is wrong!
-    assert len(parfor.loop_nests)==1
-    parfor_index = parfor.loop_nests[0].index_variable.name
+    # FIXME: The following assumes the target of all SetItem are outputs, which is wrong!
     last_label = max(parfor.loop_body.keys())
     outputs = []
     for blk in parfor.loop_body.values():
         for stmt in blk.body:
             if isinstance(stmt, ir.SetItem):
-                if stmt.index.name==parfor_index:
+                if stmt.index.name==parfor.index_var:
                     outputs.append(stmt.target.name)
     return outputs
 
@@ -717,9 +747,8 @@ def dprint(*s):
 
 def remove_dead_parfor(parfor, lives):
     # remove dead get/sets in last block
-    # TODO: extend to multi-dimensional
-    assert len(parfor.loop_nests)==1
-    parfor_index = parfor.loop_nests[0].index_variable.name
+    # I think that "in the last block" is not sufficient in general.  We might need to
+    # remove from any block.
     last_label = max(parfor.loop_body.keys())
     last_block = parfor.loop_body[last_label]
 
@@ -727,13 +756,13 @@ def remove_dead_parfor(parfor, lives):
     saved_values = {}
     new_body = []
     for stmt in last_block.body:
-        if (isinstance(stmt, ir.SetItem) and stmt.index.name==parfor_index
+        if (isinstance(stmt, ir.SetItem) and stmt.index.name==parfor.index_var
                 and stmt.target.name not in lives):
             saved_values[stmt.target.name] = stmt.value
             continue
         if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
             rhs = stmt.value
-            if rhs.op=='getitem' and rhs.index.name==parfor_index:
+            if rhs.op=='getitem' and rhs.index.name==parfor.index_var:
                 # replace getitem if value saved
                 stmt.value = saved_values.get(rhs.value.name, rhs)
         new_body.append(stmt)
