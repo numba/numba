@@ -216,6 +216,7 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
         print("gufunc_ir last dump")
         gufunc_ir.dump()
 
+    gufunc_ir.blocks = parfor2._rename_labels(gufunc_ir.blocks)
     kernel_func = compiler.compile_ir(typingctx, targetctx, gufunc_ir, gufunc_param_types, types.none, flags, locals)
 
     kernel_sig = signature(types.none, *gufunc_param_types)
