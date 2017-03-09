@@ -20,10 +20,9 @@ import numba
 from numba import parfor2
 import copy
 
-'''Lowerer that handles LLVM code generation for parfor. 
-'''
+
 def _lower_parfor2_parallel(lowerer, parfor):
-    '''
+    """Lowerer that handles LLVM code generation for parfor.
     This function lowers a parfor IR node to LLVM.
     The general approach is as follows:
     1) The code from the parfor's init block is lowered normally
@@ -33,8 +32,8 @@ def _lower_parfor2_parallel(lowerer, parfor):
        to divide the iteration space for each thread, allocatees
        reduction arrays, calls the gufunc function, and then invokes
        the reduction function acorss the reduction arrays to produce
-       the final reduction values. 
-    '''
+       the final reduction values.
+    """
     typingctx = lowerer.context.typing_context
     targetctx = lowerer.context
     typemap = lowerer.fndesc.typemap
@@ -77,6 +76,7 @@ numba.parfor2.lower_parfor2_parallel = _lower_parfor2_parallel
 def _create_shape_signature(classes, num_inputs, args, func_sig):
     '''Create shape signature for GUFunc
     '''
+    # maximum class number for array shapes
     max_shape_num = max(sum([list(x) for x in classes.values()], []))
     gu_sin = []
     gu_sout = []
@@ -93,6 +93,7 @@ def _create_shape_signature(classes, num_inputs, args, func_sig):
                 for i in range(typ.ndim):
                     max_shape_num = max_shape_num + 1
                     var_shape.append(max_shape_num)
+            # TODO: use prefix + class number instead of single char
             dim_syms = tuple([ chr(97 + i) for i in var_shape ]) # chr(97) = 'a'
         else:
             dim_syms = ()
@@ -123,6 +124,7 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
     for the parfor body inserted.
     '''
 
+    # TODO: need copy?
     # The parfor body and the main function body share ir.Var nodes.
     # We have to do some replacements of Var names in the parfor body to make them
     # legal parameter names.  If we don't copy then the Vars in the main function also
@@ -251,7 +253,7 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
                 # But the current block gets a new label.
                 new_label = next_label()
                 body_first_label = min(loop_body.keys())
-                # The previous block jumps to the minimum labelled block of the 
+                # The previous block jumps to the minimum labelled block of the
                 # parfor body.
                 prev_block.append(ir.Jump(body_first_label, loc))
                 # Add all the parfor loop body blocks to the gufunc function's IR.
@@ -296,7 +298,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
         print("args = ", expr_args)
         print("outer_sig = ", outer_sig.args, outer_sig.return_type, outer_sig.recvr, outer_sig.pysig)
 
-    # Build the wrapper for GUFunc 
+    # Build the wrapper for GUFunc
     ufunc = ParallelGUFuncBuilder(cres.entry_point, gu_signature)
     args, return_type = sigutils.normalize_signature(outer_sig)
     sig = ufunc._finalize_signature(cres, args, return_type)
@@ -347,13 +349,13 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
         builder.store(lowerer.loadvar(loop_ranges[i]), builder.gep(out_dims, [context.get_constant(types.intp, i)]))
     sched_size = get_thread_count() * num_dim * 2
     sched = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, sched_size), name = "sched")
-    debug_flag = 1 if config.DEBUG_ARRAY_OPT else 0 
+    debug_flag = 1 if config.DEBUG_ARRAY_OPT else 0
     scheduling_fnty = lc.Type.function(intp_ptr_t, [intp_t, intp_ptr_t, uintp_t, intp_ptr_t, intp_t])
     do_scheduling = builder.module.get_or_insert_function(scheduling_fnty, name="do_scheduling")
     builder.call(do_scheduling, [context.get_constant(types.intp, num_dim), out_dims,
                                  context.get_constant(types.uintp, get_thread_count()), sched, context.get_constant(types.intp, debug_flag)])
 
-    # TO-DO: Handle reduction array allocation here.
+    # TODO: Handle reduction array allocation here.
 
     if config.DEBUG_ARRAY_OPT:
       for i in range(get_thread_count()):
@@ -442,7 +444,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     if config.DEBUG_ARRAY_OPT:
         cgutils.printf(builder, "after calling kernel %p\n", fn)
 
-    # TO-DO: Handle running reduction operators across reduction arrays here.
+    # TODO: Handle running reduction operators across reduction arrays here.
 
     # TODO: scalar output must be assigned back to corresponding output variables
     return
