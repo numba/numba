@@ -232,18 +232,19 @@ void create_schedule(const RangeActual &full_space, uintp num_sched, intp *sched
     dims is the length of each of those dimensions.
     num_threads is the number (N) of chunks to break the iteration space into
     sched is pre-allocated memory for the schedule to be stored in and is of size NxD.
+    debug is non-zero if DEBUG_ARRAY_OPT is turned on.
 */
-extern "C" void do_scheduling(intp num_dim, intp *dims, uintp num_threads, intp *sched) {
+extern "C" void do_scheduling(intp num_dim, intp *dims, uintp num_threads, intp *sched, intp debug) {
 
-    /*
-    printf("num_dim = %d\n", num_dim);
-    printf("dims = [");
-    for (int i = 0; i < num_dim; i++) {
-        printf("%d ", dims[i]);
+    if (debug) {
+        printf("num_dim = %d\n", num_dim);
+        printf("dims = [");
+        for (int i = 0; i < num_dim; i++) {
+            printf("%d ", dims[i]);
+        }
+        printf("]\n");
+        printf("num_threads = %d\n", num_threads);
     }
-    printf("]\n");
-    printf("num_threads = %d\n", num_threads);
-    */
 
     RangeActual full_space(num_dim, dims);
     create_schedule(full_space, num_threads, sched);

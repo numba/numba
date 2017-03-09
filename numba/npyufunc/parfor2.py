@@ -288,10 +288,11 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
         builder.store(lowerer.loadvar(loop_ranges[i]), builder.gep(out_dims, [context.get_constant(types.intp, i)]))
     sched_size = get_thread_count() * num_dim * 2
     sched = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, sched_size), name = "sched")
-    scheduling_fnty = lc.Type.function(intp_ptr_t, [intp_t, intp_ptr_t, uintp_t, intp_ptr_t])
+    debug_flag = 1 if config.DEBUG_ARRAY_OPT else 0 
+    scheduling_fnty = lc.Type.function(intp_ptr_t, [intp_t, intp_ptr_t, uintp_t, intp_ptr_t, intp_t])
     do_scheduling = builder.module.get_or_insert_function(scheduling_fnty, name="do_scheduling")
     builder.call(do_scheduling, [context.get_constant(types.intp, num_dim), out_dims,
-                                 context.get_constant(types.uintp, get_thread_count()), sched])
+                                 context.get_constant(types.uintp, get_thread_count()), sched, context.get_constant(types.intp, debug_flag)])
 
     if config.DEBUG_ARRAY_OPT:
       for i in range(get_thread_count()):

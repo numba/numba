@@ -10,5 +10,5 @@
     #define uintp unsigned
 #endif
 
-void do_scheduling(intp num_dim, intp *dims, uintp num_threads, intp *sched);
+void do_scheduling(intp num_dim, intp *dims, uintp num_threads, intp *sched, intp debug);
 #endif
