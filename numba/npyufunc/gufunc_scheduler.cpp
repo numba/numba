@@ -4,9 +4,7 @@
 #include <cmath>
 #include <iostream>
 #include <stdio.h>
-extern "C" {
 #include "gufunc_scheduler.h"
-}
 
 class RangeActual {
 public:
