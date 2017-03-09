@@ -20,7 +20,8 @@ import numba
 from numba import parfor2
 import copy
 
-# Lowerer that converts parfor2 instr to LLVM code.
+'''Lowerer that handles LLVM code generation for parfor. 
+'''
 def _lower_parfor2_parallel(lowerer, parfor):
     #
     typingctx = lowerer.context.typing_context
@@ -48,12 +49,19 @@ def _lower_parfor2_parallel(lowerer, parfor):
         print("num_inputs = ", num_inputs)
         print("parfor_outputs = ", parfor2.get_parfor_outputs(parfor))
     gu_signature = _create_shape_signature(array_shape_classes, num_inputs, func_args, func_sig)
+    if config.DEBUG_ARRAY_OPT:
+        print("gu_signature = ", gu_signature)
+
+    # call the func in parallel by wrapping it with ParallelGUFuncBuilder
     loop_ranges = [l.range_variable.name for l in parfor.loop_nests]
-    # call the func in parallel by wrapping it with ParallelGUFuncWrapper
     array_size_vars = parfor.array_analysis.array_size_vars
     if config.DEBUG_ARRAY_OPT:
         print("array_size_vars = ", array_size_vars)
     call_parallel_gufunc(lowerer, func, gu_signature, func_sig, func_args, loop_ranges, array_size_vars)
+
+# A work-around to prevent circular imports
+numba.parfor2.lower_parfor2_parallel = _lower_parfor2_parallel
+
 
 '''Create shape signature for GUFunc
 '''
@@ -63,7 +71,7 @@ def _create_shape_signature(classes, num_inputs, args, func_sig):
     gu_sout = []
     count = 0
     for var, typ in zip(args, func_sig.args):
-        print("create_shape_signature: var = ", var, " typ = ", typ)
+        # print("create_shape_signature: var = ", var, " typ = ", typ)
         count = count + 1
         if isinstance(typ, types.Array):
             if var in classes:
@@ -82,8 +90,6 @@ def _create_shape_signature(classes, num_inputs, args, func_sig):
         else:
             gu_sin.append(dim_syms)
     return (gu_sin, gu_sout)
-
-numba.parfor2.lower_parfor2_parallel = _lower_parfor2_parallel
 
 def _print_body(body_dict):
     for label, block in body_dict.items():
@@ -122,10 +128,9 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
     if config.DEBUG_ARRAY_OPT==1:
         print("ind_dict = ", ind_dict, " ", type(ind_dict))
         print("legal_loop_indices = ", legal_loop_indices, " ", type(legal_loop_indices))
-
-    for pd in parfor_params:
-        print("pd = ", pd)
-        print("pd type = ", typemap[pd], " ", type(typemap[pd]))
+        for pd in parfor_params:
+            print("pd = ", pd)
+            print("pd type = ", typemap[pd], " ", type(typemap[pd]))
 
     param_types = [ typemap[v] for v in parfor_params ]
     if config.DEBUG_ARRAY_OPT==1:
@@ -141,12 +146,6 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
     if config.DEBUG_ARRAY_OPT==1:
         print("legal parfor_params = ", parfor_params, " ", type(parfor_params))
 
-    #loop_ranges_dict = legalize_names(loop_ranges)
-    #loop_ranges = [ loop_ranges_dict[v] for v in loop_ranges ]
-
-    #if config.DEBUG_ARRAY_OPT==1:
-    #    print("legal loop_ranges ", type(loop_ranges), loop_ranges)
-
     # Determine the unique names of the scheduling and gufunc functions.
     # sched_func_name = "__numba_parfor_sched_%s" % (hex(hash(parfor)).replace("-", "_"))
     gufunc_name = "__numba_parfor_gufunc_%s" % (hex(hash(parfor)).replace("-", "_"))
@@ -160,7 +159,7 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
         for indent in range(eachdim+1):
             gufunc_txt += "    "
         gufunc_txt += ( "for " + legal_loop_indices[eachdim] + " in range(sched[" + str(eachdim)
-        + "], sched[" + str(eachdim + parfor_dim) + "] + 1):\n" )
+                      + "], sched[" + str(eachdim + parfor_dim) + "] + 1):\n" )
     for indent in range(parfor_dim+1):
         gufunc_txt += "    "
     gufunc_txt += "__sentinel__ = 0\n"
@@ -232,30 +231,27 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     library = lowerer.library
 
     from .parallel import ParallelGUFuncBuilder, build_gufunc_wrapper, get_thread_count, _launch_threads, _init
-    #from .ufuncbuilder import GUFuncBuilder, build_gufunc_wrapper #, _launch_threads, _init
 
     if config.DEBUG_ARRAY_OPT:
         print("make_parallel_loop")
         print("args = ", expr_args)
         print("outer_sig = ", outer_sig.args, outer_sig.return_type, outer_sig.recvr, outer_sig.pysig)
-        #print("inner_sig = ", inner_sig.args, inner_sig.return_type, inner_sig.recvr, inner_sig.pysig)
-    # The ufunc takes 4 arguments: args, dims, steps, data
-    sin, sout = gu_signature
 
-    # build the GUFunc
+    # Build the wrapper for GUFunc 
     ufunc = ParallelGUFuncBuilder(cres.entry_point, gu_signature)
     args, return_type = sigutils.normalize_signature(outer_sig)
     sig = ufunc._finalize_signature(cres, args, return_type)
+    if config.DEBUG_ARRAY_OPT:
+        print("sig = ", sig)
     ufunc._sigs.append(sig)
     ufunc._cres[sig] = cres
+    llvm_func = cres.library.get_function(cres.fndesc.llvm_func_name)
+    sin, sout = gu_signature
 
-    if config.DEBUG_ARRAY_OPT:
-        print("_sigs = ", ufunc._sigs)
-
-    #dtypenums, wrapper, env = ufunc.build(cres, sig)
+    # These are necessary for build_gufunc_wrapper to find external symbols
     _launch_threads()
     _init()
-    llvm_func = cres.library.get_function(cres.fndesc.llvm_func_name)
+
     wrapper_ptr, env, wrapper_name = build_gufunc_wrapper(llvm_func, cres, sin, sout, {})
     cres.library._ensure_finalized()
 
@@ -268,6 +264,8 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
             cgutils.printf(builder, "%d ", lowerer.loadvar(v))
         cgutils.printf(builder, "\n")
 
+
+    # Commonly used LLVM types and constants
     byte_t = lc.Type.int(8)
     byte_ptr_t = lc.Type.pointer(byte_t)
     byte_ptr_ptr_t = lc.Type.pointer(byte_ptr_t)
@@ -278,15 +276,12 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     one = context.get_constant(types.intp, 1)
     sizeof_intp = context.get_abi_sizeof(intp_t)
 
-    # prepare sched, first pop it out of expr_args, outer_sig, and gu_signature
+    # Prepare sched, first pop it out of expr_args, outer_sig, and gu_signature
     sched_name = expr_args.pop(0)
     sched_typ = outer_sig.args[0]
-    _outer_sig = signature(types.none, *(outer_sig.args[1:]))
-    sched_sig  = sin.pop(0)
-    # prepare input/output arguments
-    # print("_outer_sig = ", _outer_sig, " gu_signature = ", gu_signature)
+    sched_sig = sin.pop(0)
 
-    # call do_scheduling with appropriate arguments
+    # Call do_scheduling with appropriate arguments
     num_dim = len(loop_ranges)
     out_dims = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, num_dim), name = "dims")
     for i in range(num_dim):
@@ -305,32 +300,29 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
             cgutils.printf(builder, "%d ", builder.load(builder.gep(sched, [context.get_constant(types.intp, i * num_dim * 2 + j)])))
         cgutils.printf(builder, "\n")
 
-    # prepare arguments: args, dims, steps, data
-    all_arg_names = expr_args
-    all_args = [ lowerer.loadvar(x) for x in expr_args ]
+    # Prepare arguments: args, shapes, steps, data
+    all_args = [ lowerer.loadvar(x) for x in expr_args ] # note that sched is already popped out
     num_args = len(all_args)
     num_inps = len(sin) + 1
     args = cgutils.alloca_once(builder, byte_ptr_t, size = context.get_constant(types.intp, 1 + num_args), name = "pargs")
+    # sched goes first
     builder.store(builder.bitcast(sched, byte_ptr_t), args)
-
+    # followed by other arguments
     for i in range(num_args):
         arg = all_args[i]
-        aty = outer_sig.args[i + 1] # skip 1st arg sched
+        aty = outer_sig.args[i + 1] # skip first argument sched
         dst = builder.gep(args, [context.get_constant(types.intp, i + 1)])
         if isinstance(aty, types.ArrayCompatible):
-            # print("array input " + all_arg_names[i] + " at " + str(i) + " has type ", aty)
             ary = context.make_array(aty)(context, builder, arg)
             builder.store(builder.bitcast(ary.data, byte_ptr_t), dst)
         else:
             if i < num_inps:
-                # Scalar input, must store the value first
-                # print("scalar input " + all_arg_names[i] + " at " + str(i) + " has type ", aty)
+                # Scalar input, need to store the value in an array of size 1
                 typ = context.get_data_type(aty) if aty != types.boolean else lc.Type.int(1)
                 ptr = cgutils.alloca_once(builder, typ)
                 builder.store(arg, ptr)
             else:
                 # Scalar output, must allocate
-                # print("scalar output " + all_arg_names[i] + " at " + str(i) + " has type ", aty)
                 typ = context.get_data_type(aty) if aty != types.boolean else lc.Type.int(1)
                 ptr = cgutils.alloca_once(builder, typ)
             builder.store(builder.bitcast(ptr, byte_ptr_t), dst)
@@ -355,47 +347,38 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
                     occurances.append(dim_sym)
                 i = i + 1
 
-    # prepare dims, which is only a single number, since N-D arrays is treated as 1D array by ufunc
-    ndims = len(sig_dim_dict) + 1
-    dims = cgutils.alloca_once(builder, intp_t, size = ndims, name = "pshape")
-    # For now, outer loop dimension is two
-    builder.store(context.get_constant(types.intp, get_thread_count()), dims)
-    # dimension for sorted signature symbols follows
+    # Prepare shapes, which is a single number (outer loop size), followed by the size of individual shape variables.
+    nshapes = len(sig_dim_dict) + 1
+    shapes = cgutils.alloca_once(builder, intp_t, size = nshapes, name = "pshape")
+    # For now, outer loop size is the same as number of threads
+    builder.store(context.get_constant(types.intp, get_thread_count()), shapes)
+    # Individual shape variables go next
     i = 1
     for dim_sym in occurances:
-        builder.store(sig_dim_dict[dim_sym], builder.gep(dims, [ context.get_constant(types.intp, i) ]))
+        builder.store(sig_dim_dict[dim_sym], builder.gep(shapes, [ context.get_constant(types.intp, i) ]))
         i = i + 1
 
-    # prepare steps for each argument
+    # Prepare steps for each argument. Note that all steps are counted in bytes.
     steps = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, num_args + 1), name = "psteps")
+    # First goes the step size for sched, which is 2 * num_dim
     builder.store(context.get_constant(types.intp, 2 * num_dim * sizeof_intp), steps)
+    # The steps for all others are 0. (TODO: except reduction results)
     for i in range(num_args):
-        # all steps are 0
-        # sizeof = context.get_abi_sizeof(context.get_value_type(arguments[i].base_type))
-        # stepsize = context.get_constant(types.intp, sizeof)
         stepsize = zero
-        #cgutils.printf(builder, "stepsize = %d\n", stepsize)
         dst = builder.gep(steps, [context.get_constant(types.intp, 1 + i)])
         builder.store(stepsize, dst)
-    # steps for output array goes last
-    # sizeof = context.get_abi_sizeof(context.get_value_type(output.base_type))
-    # stepsize = context.get_constant(types.intp, sizeof)
-    # cgutils.printf(builder, "stepsize = %d\n", stepsize)
-    # dst = builder.gep(steps, [lc.Constant.int(lc.Type.int(), num_args)])
-    # builder.store(stepsize, dst)
 
     # prepare data
     data = builder.inttoptr(zero, byte_ptr_t)
 
-    #result = context.call_function_pointer(builder, wrapper, [args, dims, steps, data])
     fnty = lc.Type.function(lc.Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                              intp_ptr_t, byte_ptr_t])
     fn = builder.module.get_or_insert_function(fnty, name=wrapper_name)
-    #cgutils.printf(builder, "before calling kernel %p\n", fn)
-    result = builder.call(fn, [args, dims, steps, data])
-    #cgutils.printf(builder, "after calling kernel %p\n", fn)
     if config.DEBUG_ARRAY_OPT:
-        print("result = ", result)
+        cgutils.printf(builder, "before calling kernel %p\n", fn)
+    result = builder.call(fn, [args, shapes, steps, data])
+    if config.DEBUG_ARRAY_OPT:
+        cgutils.printf(builder, "after calling kernel %p\n", fn)
+
+    # TODO: scalar output must be assigned back to corresponding output variables
     return
-    # return builder.bitcast(output.return_val, ret_ty)
-    # return imputils.impl_ret_new_ref(context, builder, out_ty, output.return_val)

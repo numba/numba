@@ -374,7 +374,7 @@ def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr, parfor_index):
                 out_ir.append(ir.Assign(ir_expr, expr_out_var, loc))
     elif isinstance(expr, ir.Var):
         if isinstance(typemap[expr.name], types.Array):
-            print("parfor_index = ", parfor_index, " ", type(parfor_index))
+            #print("parfor_index = ", parfor_index, " ", type(parfor_index))
             if isinstance(parfor_index, tuple) and len(parfor_index) == 1:
                 parfor_index = parfor_index[0]
             if isinstance(parfor_index, tuple):
