@@ -23,7 +23,18 @@ import copy
 '''Lowerer that handles LLVM code generation for parfor. 
 '''
 def _lower_parfor2_parallel(lowerer, parfor):
-    #
+    '''
+    This function lowers a parfor IR node to LLVM.
+    The general approach is as follows:
+    1) The code from the parfor's init block is lowered normally
+       in the context of the current function.
+    2) The body of the parfor is transformed into a gufunc function.
+    3) Code is inserted into the main function that calls do_scheduling
+       to divide the iteration space for each thread, allocatees
+       reduction arrays, calls the gufunc function, and then invokes
+       the reduction function acorss the reduction arrays to produce
+       the final reduction values. 
+    '''
     typingctx = lowerer.context.typing_context
     targetctx = lowerer.context
     typemap = lowerer.fndesc.typemap
@@ -63,9 +74,9 @@ def _lower_parfor2_parallel(lowerer, parfor):
 numba.parfor2.lower_parfor2_parallel = _lower_parfor2_parallel
 
 
-'''Create shape signature for GUFunc
-'''
 def _create_shape_signature(classes, num_inputs, args, func_sig):
+    '''Create shape signature for GUFunc
+    '''
     max_shape_num = max(sum([list(x) for x in classes.values()], []))
     gu_sin = []
     gu_sout = []
@@ -92,12 +103,30 @@ def _create_shape_signature(classes, num_inputs, args, func_sig):
     return (gu_sin, gu_sout)
 
 def _print_body(body_dict):
+    '''Pretty-print a set of IR blocks.
+    '''
     for label, block in body_dict.items():
         print("label: ", label)
         for i, inst in enumerate(block.body):
             print("    ", i, " ", inst)
 
 def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetctx, flags, locals):
+    '''
+    Takes a parfor and creates a gufunc function for its body.
+    There are two parts to this function.
+    1) Code to iterate across the iteration space as defined by the schedule.
+    2) The parfor body that does the work for a single point in the iteration space.
+    Part 1 is created as Python text for simplicity with a sentinel assignment to mark the point
+    in the IR where the parfor body should be added.
+    This Python text is 'exec'ed into existence and its IR retrieved with run_frontend.
+    The IR is scanned for the sentinel assignment where that basic block is split and the IR
+    for the parfor body inserted.
+    '''
+
+    # The parfor body and the main function body share ir.Var nodes.
+    # We have to do some replacements of Var names in the parfor body to make them
+    # legal parameter names.  If we don't copy then the Vars in the main function also
+    # would incorrectly change their name.
     loop_body = copy.copy(parfor.loop_body)
 
     parfor_dim = len(parfor.loop_nests)
@@ -119,11 +148,16 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
         print("loop_body = ", loop_body, " ", type(loop_body))
         _print_body(loop_body)
 
+    # Some Var are not legal parameter names so create a dict of potentially illegal
+    # param name to guaranteed legal name.
     param_dict = legalize_names(parfor_params)
     if config.DEBUG_ARRAY_OPT==1:
         print("param_dict = ", param_dict, " ", type(param_dict))
 
+    # Some loop_indices are not legal parameter names so create a dict of potentially illegal
+    # loop index to guaranteed legal name.
     ind_dict = legalize_names(loop_indices)
+    # Compute a new list of legal loop index names.
     legal_loop_indices = [ ind_dict[v] for v in loop_indices]
     if config.DEBUG_ARRAY_OPT==1:
         print("ind_dict = ", ind_dict, " ", type(ind_dict))
@@ -132,15 +166,19 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
             print("pd = ", pd)
             print("pd type = ", typemap[pd], " ", type(typemap[pd]))
 
+    # Get the types of each parameter.
     param_types = [ typemap[v] for v in parfor_params ]
     if config.DEBUG_ARRAY_OPT==1:
         param_types_dict = { v:typemap[v] for v in parfor_params }
         print("param_types_dict = ", param_types_dict, " ", type(param_types_dict))
         print("param_types = ", param_types, " ", type(param_types))
 
+    # Replace illegal parameter names in the loop body with legal ones.
     replace_var_names(loop_body, param_dict)
     parfor_args = parfor_params # remember the name before legalizing as the actual arguments
+    # Change parfor_params to be legal names.
     parfor_params = [ param_dict[v] for v in parfor_params ]
+    # Change parfor body to replace illegal loop index vars with legal ones.
     replace_var_names(loop_body, ind_dict)
 
     if config.DEBUG_ARRAY_OPT==1:
@@ -155,11 +193,16 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
 
     # Create the gufunc function.
     gufunc_txt = "def " + gufunc_name + "(sched, " + (", ".join(parfor_params)) + "):\n"
+    # For each dimension of the parfor, create a for loop in the generated gufunc function.
+    # Iterate across the proper values extracted from the schedule.
+    # The form of the schedule is start_dim0, start_dim1, ..., start_dimN, end_dim0,
+    # end_dim1, ..., end_dimN
     for eachdim in range(parfor_dim):
         for indent in range(eachdim+1):
             gufunc_txt += "    "
         gufunc_txt += ( "for " + legal_loop_indices[eachdim] + " in range(sched[" + str(eachdim)
                       + "], sched[" + str(eachdim + parfor_dim) + "] + 1):\n" )
+    # Add the sentinel assignment so that we can find the loop body position in the IR.
     for indent in range(parfor_dim+1):
         gufunc_txt += "    "
     gufunc_txt += "__sentinel__ = 0\n"
@@ -167,10 +210,12 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
 
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_txt = ", type(gufunc_txt), "\n", gufunc_txt)
+    # Force gufunc outline into existence.
     exec(gufunc_txt)
     gufunc_func = eval(gufunc_name)
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_func = ", type(gufunc_func), "\n", gufunc_func)
+    # Get the IR for the gufunc outline.
     gufunc_ir = compiler.run_frontend(gufunc_func)
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_ir dump ", type(gufunc_ir))
@@ -189,23 +234,34 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
     if config.DEBUG_ARRAY_OPT:
         _print_body(loop_body)
 
+    # Search all the block in the gufunc outline for the sentinel assignment.
     for label, block in gufunc_ir.blocks.items():
         for i, inst in enumerate(block.body):
             if isinstance(inst, ir.Assign) and inst.target.name=="__sentinel__":
+                # We found the sentinel assignment.
                 loc = inst.loc
                 scope = block.scope
                 # split block across __sentinel__
+                # A new block is allocated for the statements prior to the sentinel
+                # but the new block maintains the current block label.
                 prev_block = ir.Block(scope, loc)
                 prev_block.body = block.body[:i]
+                # The current block is used for statements after the sentinel.
                 block.body = block.body[i+1:]
+                # But the current block gets a new label.
                 new_label = next_label()
                 body_first_label = min(loop_body.keys())
+                # The previous block jumps to the minimum labelled block of the 
+                # parfor body.
                 prev_block.append(ir.Jump(body_first_label, loc))
+                # Add all the parfor loop body blocks to the gufunc function's IR.
                 for (l, b) in loop_body.items():
                     gufunc_ir.blocks[l] = b
                 body_last_label = max(loop_body.keys())
                 gufunc_ir.blocks[new_label] = block
                 gufunc_ir.blocks[label] = prev_block
+                # Add a jump from the last parfor body block to the block containing
+                # statements after the sentinel.
                 gufunc_ir.blocks[body_last_label].append(ir.Jump(new_label, loc))
                 break
         else:
@@ -226,6 +282,9 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
 
 
 def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop_ranges, array_size_vars):
+    '''
+    Adds the call to the gufunc function from the main function.
+    '''
     context = lowerer.context
     builder = lowerer.builder
     library = lowerer.library
@@ -293,6 +352,8 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     do_scheduling = builder.module.get_or_insert_function(scheduling_fnty, name="do_scheduling")
     builder.call(do_scheduling, [context.get_constant(types.intp, num_dim), out_dims,
                                  context.get_constant(types.uintp, get_thread_count()), sched, context.get_constant(types.intp, debug_flag)])
+
+    # TO-DO: Handle reduction array allocation here.
 
     if config.DEBUG_ARRAY_OPT:
       for i in range(get_thread_count()):
@@ -380,6 +441,8 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     result = builder.call(fn, [args, shapes, steps, data])
     if config.DEBUG_ARRAY_OPT:
         cgutils.printf(builder, "after calling kernel %p\n", fn)
+
+    # TO-DO: Handle running reduction operators across reduction arrays here.
 
     # TODO: scalar output must be assigned back to corresponding output variables
     return
