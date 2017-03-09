@@ -203,7 +203,9 @@ class Driver(object):
         self.pid = None
         try:
             if config.DISABLE_CUDA:
-                raise CudaSupportError("CUDA disabled by user")
+                msg = ("CUDA disabled by user. Disabled due to NUMBA_DISABLE_CUDA=1 or "
+                       "on a 32-bit system, which CUDA doesn't support")
+                raise CudaSupportError(msg)
             self.lib = find_driver()
         except CudaSupportError as e:
             self.is_initialized = True
