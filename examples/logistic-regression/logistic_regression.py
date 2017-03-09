@@ -31,15 +31,9 @@ import time
 parallel = numba.config.NUMBA_NUM_THREADS > 1
 
 @numba.njit(parallel=parallel)
-def logistic_regression(labels, points, w, iterations):
-    # synthetic but deterministic initial values
-    points1 = points.transpose()
+def logistic_regression(Y,X,w,iterations):
     for i in range(iterations):
-       y = (1.0+np.exp(-labels*(np.dot(w,points))))
-       w -= np.dot(((1.0/y-1.0)*labels), points1)
-       #y = (1.0/(1.0+np.exp(-labels*(np.dot(w,points))))-1.0) * labels
-       #w -= np.dot(y, points1)
-
+        w -= np.dot(((1.0 / (1.0 + np.exp(-Y * np.dot(X,w))) - 1.0) * Y),X)
     return w
 
 all_tics = []
@@ -62,9 +56,9 @@ def main():
     D = 3
     N = 4
     iterations = 10
-    points = np.ones((D, N))
-    labels = np.ones((1, N))
-    w = 2.0*np.ones((1,D))-1.3
+    points = np.ones((N, D))
+    labels = np.ones(N)
+    w = 2.0*np.ones(D)-1.3
     tic()
     w = logistic_regression(labels, points, w, iterations)
     compiletime = toq()
@@ -75,9 +69,9 @@ def main():
     N = args.points
     iterations = args.iterations
     print("D=",D," N=",N," iterations=",iterations)
-    points = np.random.random((D, N))
-    labels = np.random.random((1, N))
-    w = 2.0*np.ones((1,D))-1.3
+    points = np.random.random((N, D))
+    labels = np.random.random(N)
+    w = 2.0*np.ones(D)-1.3
     tic()
     w = logistic_regression(labels, points, w, iterations)
     selftimed = toq()
