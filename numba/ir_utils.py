@@ -342,7 +342,7 @@ def copy_propagate(blocks):
     (gen_copies, all_copies, kill_copies, in_copies, out_copies) = c_data
 
     old_point = None
-    new_point = copy.deepcopy(set(out_copies))
+    new_point = copy.deepcopy(out_copies)
     # comparison works since dictionary of built-in types
     while old_point!=new_point:
         for label in blocks.keys():
@@ -358,7 +358,7 @@ def copy_propagate(blocks):
             out_copies[label] = (gen_copies[label]
                 | (in_copies[label] - kill_copies[label]))
         old_point = new_point
-        new_point = copy.deepcopy(set(out_copies))
+        new_point = copy.deepcopy(out_copies)
     if config.DEBUG_ARRAY_OPT==1:
         print("copy propagate out_copies:", out_copies)
     return in_copies, out_copies
