@@ -18,7 +18,7 @@ from numba import (bytecode, interpreter, funcdesc, postproc,
 from numba.targets import cpu, callconv
 from numba.annotations import type_annotations
 from numba.array_analysis import ArrayAnalysis
-from numba.parfor2 import lower_parfor2, ParforPass
+from numba.parfor import lower_parfor, ParforPass
 
 
 # Lock for the preventing multiple compiler execution
@@ -509,7 +509,7 @@ class Pipeline(object):
         """
         # Ensure we have an IR and type information.
         assert self.func_ir
-        lower_parfor2(self.func_ir, self.type_annotation.typemap,
+        lower_parfor(self.func_ir, self.type_annotation.typemap,
             self.type_annotation.calltypes, self.typingctx, self.targetctx,
             self.flags, self.locals, self.array_analysis)
 

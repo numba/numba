@@ -15,13 +15,12 @@ from .dufunc import DUFunc
 from .array_exprs import _is_ufunc, _unaryops, _binops, _cmpops
 from numba import config
 import llvmlite.llvmpy.core as lc
-from numba.parfor2 import LoopNest
+from numba.parfor import LoopNest
 import numba
-from numba import parfor2
 import copy
 
 
-def _lower_parfor2_parallel(lowerer, parfor):
+def _lower_parfor_parallel(lowerer, parfor):
     """Lowerer that handles LLVM code generation for parfor.
     This function lowers a parfor IR node to LLVM.
     The general approach is as follows:
@@ -54,10 +53,10 @@ def _lower_parfor2_parallel(lowerer, parfor):
     # get the shape signature
     array_shape_classes = parfor.array_analysis.array_shape_classes
     func_args = ['sched'] + func_args
-    num_inputs = len(func_args) - len(parfor2.get_parfor_outputs(parfor))
+    num_inputs = len(func_args) - len(numba.parfor.get_parfor_outputs(parfor))
     if config.DEBUG_ARRAY_OPT:
         print("num_inputs = ", num_inputs)
-        print("parfor_outputs = ", parfor2.get_parfor_outputs(parfor))
+        print("parfor_outputs = ", numba.parfor.get_parfor_outputs(parfor))
     gu_signature = _create_shape_signature(array_shape_classes, num_inputs, func_args, func_sig)
     if config.DEBUG_ARRAY_OPT:
         print("gu_signature = ", gu_signature)
@@ -70,7 +69,7 @@ def _lower_parfor2_parallel(lowerer, parfor):
     call_parallel_gufunc(lowerer, func, gu_signature, func_sig, func_args, loop_ranges, array_size_vars)
 
 # A work-around to prevent circular imports
-numba.parfor2.lower_parfor2_parallel = _lower_parfor2_parallel
+numba.parfor.lower_parfor_parallel = _lower_parfor_parallel
 
 
 def _create_shape_signature(classes, num_inputs, args, func_sig):
@@ -135,9 +134,9 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
     loop_indices = [l.index_variable.name for l in parfor.loop_nests]
 
     # Get all the parfor params.
-    parfor_params = parfor2.get_parfor_params(parfor)
+    parfor_params = numba.parfor.get_parfor_params(parfor)
     # Get just the outputs of the parfor.
-    parfor_outputs = parfor2.get_parfor_outputs(parfor)
+    parfor_outputs = numba.parfor.get_parfor_outputs(parfor)
     # Compute just the parfor inputs as a set difference.
     parfor_inputs = list(set(parfor_params) - set(parfor_outputs))
     # Reorder all the params so that inputs go first then outputs.
@@ -273,7 +272,7 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
         print("gufunc_ir last dump")
         gufunc_ir.dump()
 
-    gufunc_ir.blocks = parfor2._rename_labels(gufunc_ir.blocks)
+    gufunc_ir.blocks = numba.parfor._rename_labels(gufunc_ir.blocks)
     kernel_func = compiler.compile_ir(typingctx, targetctx, gufunc_ir, gufunc_param_types, types.none, flags, locals)
 
     kernel_sig = signature(types.none, *gufunc_param_types)

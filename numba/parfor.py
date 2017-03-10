@@ -9,7 +9,7 @@ from numba.controlflow import CFGraph
 from numba.typing import npydecl
 from numba.types.functions import Function
 import numpy as np
-import numba.parfor2
+import numba.parfor
 # circular dependency: import numba.npyufunc.dufunc.DUFunc
 
 class LoopNest(object):
@@ -28,10 +28,10 @@ class LoopNest(object):
                 + "correlation=%d)" % self.correlation)
 
 
-class Parfor2(ir.Expr, ir.Stmt):
+class Parfor(ir.Expr, ir.Stmt):
     def __init__(self, loop_nests, init_block, loop_body, loc, array_analysis, index_var):
-        super(Parfor2, self).__init__(
-            op   = 'parfor2',
+        super(Parfor, self).__init__(
+            op   = 'parfor',
             loc  = loc
         )
 
@@ -177,7 +177,7 @@ class ParforPass(object):
         else:
             index_var = index_vars[0]
 
-        parfor = Parfor2(loopnests, init_block, {}, loc, self.array_analysis, index_var)
+        parfor = Parfor(loopnests, init_block, {}, loc, self.array_analysis, index_var)
 
         setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
         self.calltypes[setitem_node] = signature(types.none,
@@ -229,7 +229,7 @@ class ParforPass(object):
             self.typemap[index_var.name] = INT_TYPE
             loopnests = [ LoopNest(index_var, size_var, corr) ]
             init_block = ir.Block(scope, loc)
-            parfor = Parfor2(loopnests, init_block, {}, loc, self.array_analysis, index_var)
+            parfor = Parfor(loopnests, init_block, {}, loc, self.array_analysis, index_var)
             if self._get_ndims(in1.name)==2:
                 # for 2D input, there is an inner loop
                 # correlation of inner dimension
@@ -413,15 +413,15 @@ def _find_func_var(typemap, func):
             return k
     raise RuntimeError("ufunc call variable not found")
 
-def lower_parfor2(func_ir, typemap, calltypes, typingctx, targetctx, flags, locals, array_analysis):
+def lower_parfor(func_ir, typemap, calltypes, typingctx, targetctx, flags, locals, array_analysis):
     """lower parfor to sequential or parallel Numba IR.
     """
-    if not "lower_parfor2_parallel" in dir(numba.parfor2):
-        #lower_parfor2_parallel(func_ir, typemap, calltypes, typingctx, targetctx, flags, locals, array_analysis)
+    if not "lower_parfor_parallel" in dir(numba.parfor):
+        #lower_parfor_parallel(func_ir, typemap, calltypes, typingctx, targetctx, flags, locals, array_analysis)
     # else:
-        lower_parfor2_sequential(func_ir, typemap, calltypes)
+        lower_parfor_sequential(func_ir, typemap, calltypes)
 
-def lower_parfor2_sequential(func_ir, typemap, calltypes):
+def lower_parfor_sequential(func_ir, typemap, calltypes):
     new_blocks = {}
     for (block_label, block) in func_ir.blocks.items():
         scope = block.scope
@@ -477,7 +477,7 @@ def lower_parfor2_sequential(func_ir, typemap, calltypes):
 
 def _find_first_parfor(body):
     for (i, inst) in enumerate(body):
-        if isinstance(inst, Parfor2):
+        if isinstance(inst, Parfor):
             return i
     return -1
 
@@ -558,7 +558,7 @@ def get_parfor_outputs(parfor):
                     outputs.append(stmt.target.name)
     return outputs
 
-def visit_vars_parfor2(parfor, callback, cbdata):
+def visit_vars_parfor(parfor, callback, cbdata):
     if config.DEBUG_ARRAY_OPT==1:
         print("visiting parfor vars for:",parfor)
         print("cbdata: ", cbdata)
@@ -570,7 +570,7 @@ def visit_vars_parfor2(parfor, callback, cbdata):
     return
 
 # add call to visit parfor variable
-ir_utils.visit_vars_extensions[Parfor2] = visit_vars_parfor2
+ir_utils.visit_vars_extensions[Parfor] = visit_vars_parfor
 
 def parfor_defs(parfor):
     """list variables written in this parfor by recursively
@@ -586,19 +586,19 @@ def parfor_defs(parfor):
         for stmt in b.body:
             if isinstance(stmt, ir.Assign):
                 all_defs.add(stmt.target.name)
-            elif isinstance(stmt, Parfor2):
+            elif isinstance(stmt, Parfor):
                 all_defs.update(parfor_defs(stmt))
 
     # all defs of init block
     for stmt in parfor.init_block.body:
         if isinstance(stmt, ir.Assign):
             all_defs.add(stmt.target.name)
-        elif isinstance(stmt, Parfor2):
+        elif isinstance(stmt, Parfor):
             all_defs.update(parfor_defs(stmt))
 
     return all_defs
 
-analysis.ir_extension_defs[Parfor2] = parfor_defs
+analysis.ir_extension_defs[Parfor] = parfor_defs
 
 # reorder statements to maximize fusion
 def maximize_fusion(blocks):
@@ -613,7 +613,7 @@ def maximize_fusion(blocks):
                 # swap only parfors with non-parfors
                 # if stmt hasn't written to any variable that next_stmt uses,
                 # they can be swapped
-                if isinstance(stmt, Parfor2) and not isinstance(next_stmt, Parfor2):
+                if isinstance(stmt, Parfor) and not isinstance(next_stmt, Parfor):
                     stmt_writes = get_parfor_writes(stmt)
                     next_accesses = {v.name for v in next_stmt.list_vars()}
                     if stmt_writes & next_accesses == set():
@@ -624,7 +624,7 @@ def maximize_fusion(blocks):
     return
 
 def get_parfor_writes(parfor):
-    assert isinstance(parfor, Parfor2)
+    assert isinstance(parfor, Parfor)
     writes = set()
     blocks = parfor.loop_body.copy()
     blocks[-1] = parfor.init_block
@@ -632,7 +632,7 @@ def get_parfor_writes(parfor):
         for stmt in block.body:
             if isinstance(stmt, (ir.Assign, ir.SetItem, ir.StaticSetItem)):
                 writes.add(stmt.target.name)
-            elif isinstance(stmt, Parfor2):
+            elif isinstance(stmt, Parfor):
                 writes.update(get_parfor_writes(stmt))
     return writes
 
@@ -646,7 +646,7 @@ def fuse_parfors(blocks):
             while i<len(block.body)-1:
                 stmt = block.body[i]
                 next_stmt = block.body[i+1]
-                if isinstance(stmt, Parfor2) and isinstance(next_stmt, Parfor2):
+                if isinstance(stmt, Parfor) and isinstance(next_stmt, Parfor):
                     fused_node = try_fuse(stmt, next_stmt)
                     if fused_node is not None:
                         fusion_happened = True
@@ -771,7 +771,7 @@ def remove_dead_parfor(parfor, lives):
     remove_dead_parfor_recursive(parfor, lives)
     return
 
-ir_utils.remove_dead_extensions[Parfor2] = remove_dead_parfor
+ir_utils.remove_dead_extensions[Parfor] = remove_dead_parfor
 
 def remove_dead_parfor_recursive(parfor, lives):
     """create a dummy function from parfor and call remove dead recursively
@@ -851,7 +851,7 @@ def get_copies_parfor(parfor):
             out_copies_parfor[last_label], "kill_set",kill_set)
     return out_copies_parfor[last_label], kill_set
 
-copy_propagate_extensions[Parfor2] = get_copies_parfor
+copy_propagate_extensions[Parfor] = get_copies_parfor
 
 def push_call_vars(blocks, saved_globals, saved_getattrs):
     """push call variables to right before their call site.
@@ -886,7 +886,7 @@ def push_call_vars(blocks, saved_globals, saved_getattrs):
                                 new_body.append(saved_globals.pop(g_name))
                             new_body.append(saved_getattrs.pop(arg.name))
 
-            elif isinstance(stmt, Parfor2):
+            elif isinstance(stmt, Parfor):
                 pblocks = stmt.loop_body.copy()
                 pblocks[-1] = stmt.init_block
                 push_call_vars(pblocks, saved_globals, saved_getattrs)
