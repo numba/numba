@@ -126,8 +126,9 @@ class Cuda_atomic_maxmin(AbstractTemplate):
         # Implementation presently supports:
         # float64, float32, int32, int64, uint32, uint64 only,
         # so fail typing otherwise
-        supported_types = (types.float64, types.float32, types.int32,
-                           types.uint32, types.uint32, types.uint64)
+        supported_types = (types.float64, types.float32,
+                           types.int32, types.uint32,
+                           types.int64, types.uint64)
         if ary.dtype not in supported_types:
             return
 

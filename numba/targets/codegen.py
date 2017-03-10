@@ -712,8 +712,11 @@ class JITCPUCodegen(BaseCPUCodegen):
 
     def _add_module(self, module):
         self._engine.add_module(module)
-        # Early bind the engine method to avoid keeping a reference to self.
-        return functools.partial(self._engine.remove_module, module)
+        # XXX: disabling remove module due to MCJIT engine leakage in
+        #      removeModule.  The removeModule causes consistent access
+        #      violation with certain test combinations.
+        # # Early bind the engine method to avoid keeping a reference to self.
+        # return functools.partial(self._engine.remove_module, module)
 
 
 _llvm_initialized = False

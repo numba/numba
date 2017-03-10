@@ -8,7 +8,7 @@ import multiprocessing
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import jit, types, errors
+from numba import jit, types, errors, typing
 from numba.compiler import compile_isolated
 from .support import (TestCase, captured_stdout, tag, temp_directory,
                       override_config)
@@ -543,6 +543,7 @@ class TestIntrinsic(TestCase):
 
             @intrinsic
             def unsafe_cast(typingctx, src):
+                self.assertIsInstance(typingctx, typing.Context)
                 if isinstance(src, types.Integer):
                     sig = result_type(types.uintp)
 
