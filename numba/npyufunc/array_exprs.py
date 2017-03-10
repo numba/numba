@@ -7,10 +7,10 @@ import sys
 
 import numpy as np
 
-from .. import compiler, ir, types, rewrites, six, cgutils
+from .. import compiler, ir, types, rewrites, six
 from ..typing import npydecl
 from .dufunc import DUFunc
-import llvmlite.llvmpy.core as lc
+
 
 def _is_ufunc(func):
     return isinstance(func, (np.ufunc, DUFunc))
@@ -368,12 +368,10 @@ def _lower_array_expr(lowerer, expr):
     six.exec_(code_obj, namespace)
     impl = namespace[expr_name]
 
-    
     # 3. Now compile a ufunc using the Python function as kernel.
 
     context = lowerer.context
     builder = lowerer.builder
-    library = lowerer.library
     outer_sig = expr.ty(*(lowerer.typeof(name) for name in expr_args))
     inner_sig_args = []
     for argty in outer_sig.args:
@@ -382,16 +380,6 @@ def _lower_array_expr(lowerer, expr):
         else:
             inner_sig_args.append(argty)
     inner_sig = outer_sig.return_type.dtype(*inner_sig_args)
-
-    if context.auto_parallel:
-      return make_parallel_loop(lowerer, impl, inner_sig, outer_sig, expr_args)
-    else:
-      return make_sequential_loop(lowerer, impl, inner_sig, outer_sig, expr_args)
-
-def make_sequential_loop(lowerer, impl, inner_sig, outer_sig, expr_args):
-    context = lowerer.context
-    builder = lowerer.builder
-    library = lowerer.library
 
     # Follow the Numpy error model.  Note this also allows e.g. vectorizing
     # division (issue #1223).
@@ -415,106 +403,3 @@ def make_sequential_loop(lowerer, impl, inner_sig, outer_sig, expr_args):
     args = [lowerer.loadvar(name) for name in expr_args]
     return npyimpl.numpy_ufunc_kernel(
         context, builder, outer_sig, args, ExprKernel, explicit_output=False)
-
-def make_parallel_loop(lowerer, impl, inner_sig, outer_sig, expr_args):
-    context = lowerer.context
-    builder = lowerer.builder
-    library = lowerer.library
-
-    from .parallel import ParallelUFuncBuilder, build_ufunc_wrapper, _launch_threads, _init
-    from ..targets import npyimpl, imputils 
-
-    #print("args = ", expr_args)
-    #print("outer_sig = ", outer_sig.args, outer_sig.return_type, outer_sig.recvr, outer_sig.pysig)
-    #print("inner_sig = ", inner_sig.args, inner_sig.return_type, inner_sig.recvr, inner_sig.pysig)
-
-    # The ufunc takes 4 arguments: args, dims, steps, data
-    ufunc = ParallelUFuncBuilder(impl)
-    ufunc.add(inner_sig)
-    #wrapper_func = ufunc.build_ufunc()
-    sig = ufunc._sigs[0]
-    cres = ufunc._cres[sig]
-    #dtypenums, wrapper, env = ufunc.build(cres, sig) 
-    _launch_threads()
-    _init() 
-    wrapper, wrapper_func = build_ufunc_wrapper(cres.library, cres.target_context, cres.fndesc.llvm_func_name, cres.signature)
-    cres.library._ensure_finalized()
-
-    #print("parallel function = ", wrapper, cres, sig)
-
-    byte_t = lc.Type.int(8)
-    byte_ptr_t = lc.Type.pointer(byte_t)
-    byte_ptr_ptr_t = lc.Type.pointer(byte_ptr_t)
-    intp_t = context.get_value_type(types.intp)
-    intp_ptr_t = lc.Type.pointer(intp_t)
-
-    # prepare arguments: args, dims, steps, data
-    arguments = [npyimpl._prepare_argument(context, builder, lowerer.loadvar(arg), tyarg)
-                 for arg, tyarg in zip(expr_args, outer_sig.args)]
-    # allocate output
-    ret_ty = outer_sig.return_type
-    if isinstance(ret_ty, types.ArrayCompatible):
-        output = npyimpl._build_array(context, builder, ret_ty, outer_sig.args, arguments)
-    else:
-        output = npyimpl._prepare_argument(context, builder,
-                lc.Constant.null(context.get_value_type(ret_ty)), ret_ty)
-
-    # prepare input/output array args
-    num_args = len(outer_sig.args)
-    args = cgutils.alloca_once(builder, byte_ptr_t, size = lc.Constant.int(lc.Type.int(), num_args + 1), name = "pargs")
-    for i in range(num_args):
-        dst = builder.gep(args, [lc.Constant.int(lc.Type.int(), i)])
-        builder.store(builder.bitcast(arguments[i].data, byte_ptr_t), dst)
-    # output array goes last 
-    dst = builder.gep(args, [lc.Constant.int(lc.Type.int(), num_args)])
-    builder.store(builder.bitcast(output.data, byte_ptr_t), dst)
-    
-    # prepare dims, which is only a single number, since N-D arrays is treated as 1D array by ufunc 
-    ndims = len(output.shape)
-    # dims = cgutils.alloca_once(builder, intp_t, size = 1, name = "pshape")
-    dims = builder.alloca(intp_t)
-    size = context.get_constant(types.intp, 1)
-    # print("ndims = ", ndims)
-    for i in range(ndims):
-       #cgutils.printf(builder, "dims[" + str(i) + "] = %d\n", output.shape[i])
-       size = builder.mul(size, output.shape[i])
-    #cgutils.printf(builder, wrapper.name + " " + cres.fndesc.llvm_func_name + " total size = %d\n", size)
-    builder.store(size, dims)
-
-    # prepare steps for each argument
-    steps = cgutils.alloca_once(builder, intp_t, size = lc.Constant.int(lc.Type.int(), num_args + 1), name = "psteps")
-    for i in range(num_args):
-        sizeof = context.get_abi_sizeof(context.get_value_type(arguments[i].base_type))
-        stepsize = context.get_constant(types.intp, sizeof)
-        #cgutils.printf(builder, "stepsize = %d\n", stepsize)
-        dst = builder.gep(steps, [lc.Constant.int(lc.Type.int(), i)])
-        builder.store(stepsize, dst)
-    # steps for output array goes last
-    sizeof = context.get_abi_sizeof(context.get_value_type(output.base_type))
-    stepsize = context.get_constant(types.intp, sizeof)
-    #cgutils.printf(builder, "stepsize = %d\n", stepsize)
-    dst = builder.gep(steps, [lc.Constant.int(lc.Type.int(), num_args)])
-    builder.store(stepsize, dst)
-     
-    # prepare data 
-    data = builder.inttoptr(lc.Constant.int(lc.Type.int(), 0), byte_ptr_t)
- 
-    #result = context.call_function_pointer(builder, wrapper, [args, dims, steps, data])
-    fnty = lc.Type.function(lc.Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
-                                             intp_ptr_t, byte_ptr_t])
-    fn = builder.module.get_or_insert_function(fnty, name=wrapper_func.name)
-    #cgutils.printf(builder, "before calling kernel %p\n", fn)
-    result = builder.call(fn, [args, dims, steps, data])
-    #print("result = ", result)
-
-    # return builder.bitcast(output.return_val, ret_ty)
-    return imputils.impl_ret_new_ref(context, builder, outer_sig.return_type, output.return_val)
-
-    # cres = context.compile_subroutine_no_cache(builder, wrapper_func, outer_sig, flags=flags)
-    # args = [lowerer.loadvar(name) for name in expr_args]
-    # result = context.call_internal(builder, cres.fndesc, outer_sig, args)
-    # status, res = context.call_conv.call_function(builder, cres.fndesc, outer_sig.return_type,
-    #                                              outer_sig.args, expr_args)
-    #with cgutils.if_unlikely(builder, status.is_error):
-    #        context.call_conv.return_status_propagate(builder, status)
-    # return res
