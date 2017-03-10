@@ -293,7 +293,7 @@ GufWrapperCache = make_library_cache('guf')
 
 
 class _GufuncWrapper(object):
-    def __init__(self, py_func, cres, sin, sout, cache):
+    def __init__(self, py_func, cres, sin, sout, cache, warn_exception=False):
         self.py_func = py_func
         self.cres = cres
         self.sin = sin
@@ -301,6 +301,7 @@ class _GufuncWrapper(object):
         self.is_objectmode = self.signature.return_type == types.pyobject
         self.cache = (GufWrapperCache(py_func=self.py_func)
                       if cache else NullCache())
+        self.warn_exception = warn_exception
 
     @property
     def library(self):
@@ -339,8 +340,8 @@ class _GufuncWrapper(object):
         intp_t = self.context.get_value_type(types.intp)
         intp_ptr_t = Type.pointer(intp_t)
 
-        fnty = Type.function(Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
-                                           intp_ptr_t, byte_ptr_t])
+        fnty = Type.function(Type.int(), [byte_ptr_ptr_t, intp_ptr_t,
+                                          intp_ptr_t, byte_ptr_t])
 
         wrapper_module = library.create_ir_module('')
         func_type = self.call_conv.get_function_type(self.fndesc.restype,
@@ -395,9 +396,11 @@ class _GufuncWrapper(object):
         self.gen_prologue(builder, pyapi)
 
         # Loop
+        var_error = builder.alloca(Type.int(1))
         with cgutils.for_range(builder, loopcount, intp=intp_t) as loop:
             args = [a.get_array_at_offset(loop.index) for a in arrays]
             innercall, error = self.gen_loop_body(builder, pyapi, func, args)
+            builder.store(error, var_error)
             # If error, escape
             cgutils.cbranch_or_continue(builder, error, bbreturn)
 
@@ -407,7 +410,11 @@ class _GufuncWrapper(object):
         # Epilogue
         self.gen_epilogue(builder, pyapi)
 
-        builder.ret_void()
+        # Return 1 if an error is occurred; or 0
+        error = builder.load(var_error)
+        reterr = builder.select(error, Constant.int(Type.int(), 1),
+                                Constant.int(Type.int(), 0))
+        builder.ret(reterr)
 
         # Link
         library.add_ir_module(wrapper_module)
@@ -437,6 +444,8 @@ class _GufuncWrapper(object):
         with builder.if_then(status.is_error, likely=False):
             gil = pyapi.gil_ensure()
             self.context.call_conv.raise_error(builder, pyapi, status)
+            if self.warn_exception:
+                pyapi.convert_exception_to_warning()
             pyapi.gil_release(gil)
 
         return status.code, status.is_error
@@ -470,12 +479,12 @@ class _GufuncObjectWrapper(_GufuncWrapper):
         pyapi.gil_release(self.gil)
 
 
-def build_gufunc_wrapper(py_func, cres, sin, sout, cache):
+def build_gufunc_wrapper(py_func, cres, sin, sout, cache, warn_exception=False):
     signature = cres.signature
     wrapcls = (_GufuncObjectWrapper
                if signature.return_type == types.pyobject
                else _GufuncWrapper)
-    return wrapcls(py_func, cres, sin, sout, cache).build()
+    return wrapcls(py_func, cres, sin, sout, cache, warn_exception).build()
 
 
 def _prepare_call_to_object_mode(context, builder, pyapi, func,

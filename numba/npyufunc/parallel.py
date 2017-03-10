@@ -263,7 +263,8 @@ def build_gufunc_wrapper(py_func, cres, sin, sout, cache):
     ctx = cres.target_context
     signature = cres.signature
     innerfunc, env = ufuncbuilder.build_gufunc_wrapper(py_func, cres, sin, sout,
-                                                       cache=cache)
+                                                       cache=cache,
+                                                       warn_exception=True)
     sym_in = set(sym for term in sin for sym in term)
     sym_out = set(sym for term in sout for sym in term)
     inner_ndim = len(sym_in | sym_out)
@@ -324,6 +325,13 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
 
     args, dimensions, steps, data = lfunc.args
 
+    # Release the GIL (and ensure we have the GIL)
+    # Note: numpy ufunc may not always release the GIL; thus,
+    #       we need to ensure we have the GIL.
+    pyapi = ctx.get_python_api(builder)
+    gil_state = pyapi.gil_ensure()
+    thread_state = pyapi.save_thread()
+
     # Distribute work
     total = builder.load(dimensions)
     ncpu = lc.Constant.int(total.type, NUM_THREADS)
@@ -377,7 +385,7 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
             builder.store(addr, dst)
 
     # Declare external functions
-    add_task_ty = lc.Type.function(lc.Type.void(), [byte_ptr_t] * 5)
+    add_task_ty = lc.Type.function(lc.Type.void(), [byte_ptr_t] * 6)
     empty_fnty = lc.Type.function(lc.Type.void(), ())
     add_task = mod.get_or_insert_function(add_task_ty, name='numba_add_task')
     synchronize = mod.get_or_insert_function(empty_fnty,
@@ -389,15 +397,36 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
 
     # Note: the runtime address is taken and used as a constant in the function.
     fnptr = ctx.get_constant(types.uintp, innerfunc).inttoptr(byte_ptr_t)
-    for each_args, each_dims in zip(args_list, count_list):
+
+    # stack allocate return value
+    err_ctrs = [builder.alloca(lc.Type.int())
+                for _ in range(len(args_list))]
+
+    for each_args, each_dims, each_err in zip(args_list, count_list, err_ctrs):
         innerargs = [as_void_ptr(x) for x
-                     in [each_args, each_dims, steps, data]]
+                     in [each_args, each_dims, steps, data, each_err]]
         builder.call(add_task, [fnptr] + innerargs)
 
     # Signal worker that we are ready
     builder.call(ready, ())
     # Wait for workers
     builder.call(synchronize, ())
+    # Sum up all error counter
+    initial = lc.Constant.int(lc.Type.int(), 0)
+    total_errct = reduce(builder.add, map(builder.load, err_ctrs), initial)
+
+    # Work is done. Reacquire the GIL
+    pyapi.restore_thread(thread_state)
+
+    # Raise error if count is greater than 0
+    has_error = builder.icmp_unsigned('>', total_errct, total_errct.type(0))
+    with builder.if_then(has_error, likely=False):
+        msg = "Exceptions raised in parallel ufunc.  See warnings."
+        cstr = ctx.insert_const_string(mod, msg)
+        pyapi.err_set_string("PyExc_RuntimeError", cstr)
+
+    # Release the GIL
+    pyapi.gil_release(gil_state)
 
     builder.ret_void()
 
