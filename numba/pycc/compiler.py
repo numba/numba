@@ -7,7 +7,6 @@ import sys
 
 from llvmlite import ir
 import llvmlite.llvmpy.core as lc
-import llvmlite.binding as ll
 
 from numba import cgutils
 from numba.utils import IS_PY3

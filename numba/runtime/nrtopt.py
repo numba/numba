@@ -4,7 +4,7 @@ NRT specific optimizations
 import re
 from collections import defaultdict, deque
 
-from llvmlite import binding as llvm
+import numba.llvmthreadsafe as llvmts
 
 
 _regex_incref = re.compile(r'\s*call void @NRT_incref\((.*)\)')
@@ -153,4 +153,4 @@ def remove_redundant_nrt_refct(ll_module):
         processed += lines
 
     newll = '\n'.join(processed)
-    return llvm.parse_assembly(newll)
+    return llvmts.parse_assembly(newll)

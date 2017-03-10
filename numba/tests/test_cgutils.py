@@ -6,7 +6,6 @@ import struct
 import sys
 
 import llvmlite.llvmpy.core as lc
-import llvmlite.binding as ll
 import numpy as np
 
 import numba.unittest_support as unittest

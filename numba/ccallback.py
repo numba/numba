@@ -8,7 +8,7 @@ import ctypes
 
 from llvmlite import ir
 
-from . import config, sigutils, utils
+from . import config, sigutils, utils, compiler
 from .caching import NullCache, FunctionCache
 from .dispatcher import _FunctionCompiler
 from .targets import registry
@@ -60,16 +60,17 @@ class CFunc(object):
 
     def compile(self):
         # Try to load from cache
-        cres = self._cache.load_overload(self._sig, self._targetdescr.target_context)
-        if cres is None:
-            cres = self._compile_uncached()
-            self._cache.save_overload(self._sig, cres)
-        else:
-            self._cache_hits += 1
+        with compiler.lock_compiler:
+            cres = self._cache.load_overload(self._sig, self._targetdescr.target_context)
+            if cres is None:
+                cres = self._compile_uncached()
+                self._cache.save_overload(self._sig, cres)
+            else:
+                self._cache_hits += 1
 
-        self._library = cres.library
-        self._wrapper_name = cres.fndesc.llvm_cfunc_wrapper_name
-        self._wrapper_address = self._library.get_pointer_to_function(self._wrapper_name)
+            self._library = cres.library
+            self._wrapper_name = cres.fndesc.llvm_cfunc_wrapper_name
+            self._wrapper_address = self._library.get_pointer_to_function(self._wrapper_name)
 
     def _compile_uncached(self):
         sig = self._sig

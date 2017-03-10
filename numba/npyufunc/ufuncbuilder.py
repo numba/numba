@@ -85,17 +85,18 @@ class UFuncDispatcher(object):
         """
         typingctx = self.targetdescr.typing_context
         targetctx = self.targetdescr.target_context
-        cres = self.cache.load_overload(sig, targetctx)
-        if cres is not None:
-            # Use cached version
+        with compiler.lock_compiler:
+            cres = self.cache.load_overload(sig, targetctx)
+            if cres is not None:
+                # Use cached version
+                return cres
+            # Compile
+            args, return_type = sigutils.normalize_signature(sig)
+            cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
+                                        args=args, return_type=return_type,
+                                        flags=flags, locals=locals)
+            self.cache.save_overload(sig, cres)
             return cres
-        # Compile
-        args, return_type = sigutils.normalize_signature(sig)
-        cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
-                                      args=args, return_type=return_type,
-                                      flags=flags, locals=locals)
-        self.cache.save_overload(sig, cres)
-        return cres
 
 
 dispatcher_registry['npyufunc'] = UFuncDispatcher

@@ -5,7 +5,6 @@ import contextlib
 import pickle
 
 from llvmlite import ir
-import llvmlite.binding as ll
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.llvmpy.core as lc
 

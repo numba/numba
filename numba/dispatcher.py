@@ -9,7 +9,6 @@ import struct
 import sys
 import uuid
 import weakref
-import threading
 
 import numba
 from numba import _dispatcher, compiler, utils, types, config, errors
@@ -135,6 +134,28 @@ _CompileStats = collections.namedtuple(
     '_CompileStats', ('cache_path', 'cache_hits', 'cache_misses'))
 
 
+class _CompilingCounter(object):
+    """
+    A simple counter that increment in __enter__ and decrement in __exit__.
+    """
+
+    def __init__(self):
+        self.counter = 0
+
+    def __enter__(self):
+        assert self.counter >= 0
+        self.counter += 1
+
+    def __exit__(self, *args, **kwargs):
+        self.counter -= 1
+        assert self.counter >= 0
+
+    def __bool__(self):
+        return self.counter > 0
+
+    __nonzero__ = __bool__
+
+
 class _DispatcherBase(_dispatcher.Dispatcher):
     """
     Common base class for dispatcher Implementations.
@@ -170,8 +191,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                                         has_stararg)
 
         self.doc = py_func.__doc__
-        self._compile_lock = threading.RLock()
-
+        self._compiling_counter = _CompilingCounter()
         utils.finalize(self, self._make_finalizer())
 
     def _reset_overloads(self):
@@ -269,7 +289,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         """
         Whether a specialization is currently being compiled.
         """
-        return self._compile_lock._is_owned()
+        return self._compiling_counter
 
     def _compile_for_args(self, *args, **kws):
         """
@@ -533,29 +553,32 @@ class Dispatcher(_DispatcherBase):
     def compile(self, sig):
         if not self._can_compile:
             raise RuntimeError("compilation disabled")
-        with self._compile_lock:
+        with self._compiling_counter:
             args, return_type = sigutils.normalize_signature(sig)
             # Don't recompile if signature already exists
             existing = self.overloads.get(tuple(args))
             if existing is not None:
                 return existing.entry_point
 
-            # Try to load from disk cache
-            cres = self._cache.load_overload(sig, self.targetctx)
-            if cres is not None:
-                self._cache_hits[sig] += 1
-                # XXX fold this in add_overload()? (also see compiler.py)
-                if not cres.objectmode and not cres.interpmode:
-                    self.targetctx.insert_user_function(cres.entry_point,
-                                                   cres.fndesc, [cres.library])
-                self.add_overload(cres)
-                return cres.entry_point
+            # Load before loading the cache.
+            # We cannot be compiling when checking the cache.
+            with compiler.lock_compiler:
+                # Try to load from disk cache
+                cres = self._cache.load_overload(sig, self.targetctx)
+                if cres is not None:
+                    self._cache_hits[sig] += 1
+                    # XXX fold this in add_overload()? (also see compiler.py)
+                    if not cres.objectmode and not cres.interpmode:
+                        self.targetctx.insert_user_function(cres.entry_point,
+                                                    cres.fndesc, [cres.library])
+                    self.add_overload(cres)
+                    return cres.entry_point
 
-            self._cache_misses[sig] += 1
-            cres = self._compiler.compile(args, return_type)
-            self.add_overload(cres)
-            self._cache.save_overload(sig, cres)
-            return cres.entry_point
+                self._cache_misses[sig] += 1
+                cres = self._compiler.compile(args, return_type)
+                self.add_overload(cres)
+                self._cache.save_overload(sig, cres)
+                return cres.entry_point
 
     def recompile(self):
         """
@@ -610,7 +633,7 @@ class LiftedLoop(_DispatcherBase):
         return self.func_ir.loc.line
 
     def compile(self, sig):
-        with self._compile_lock:
+        with self._compiling_counter:
             # XXX this is mostly duplicated from Dispatcher.
             flags = self.flags
             args, return_type = sigutils.normalize_signature(sig)
@@ -621,21 +644,22 @@ class LiftedLoop(_DispatcherBase):
             if existing is not None:
                 return existing.entry_point
 
-            assert not flags.enable_looplift, "Enable looplift flags is on"
-            cres = compiler.compile_ir(typingctx=self.typingctx,
-                                       targetctx=self.targetctx,
-                                       func_ir=self.func_ir,
-                                       args=args, return_type=return_type,
-                                       flags=flags, locals=self.locals,
-                                       lifted=(),
-                                       lifted_from=self.lifted_from)
+            with compiler.lock_compiler:
+                assert not flags.enable_looplift, "Enable looplift flags is on"
+                cres = compiler.compile_ir(typingctx=self.typingctx,
+                                        targetctx=self.targetctx,
+                                        func_ir=self.func_ir,
+                                        args=args, return_type=return_type,
+                                        flags=flags, locals=self.locals,
+                                        lifted=(),
+                                        lifted_from=self.lifted_from)
 
-            # Check typing error if object mode is used
-            if cres.typing_error is not None and not flags.enable_pyobject:
-                raise cres.typing_error
+                # Check typing error if object mode is used
+                if cres.typing_error is not None and not flags.enable_pyobject:
+                    raise cres.typing_error
 
-            self.add_overload(cres)
-            return cres.entry_point
+                self.add_overload(cres)
+                return cres.entry_point
 
 
 # Initialize typeof machinery
