@@ -71,6 +71,7 @@ class TestExceptions(TestCase):
         out = np.zeros_like(arr)
         with self.assertRaises(ValueError) as cm:
             f(arr, 2, out)
+        self.assertIn('Value must be positive', str(cm.exception))
         # The gufunc bailed out after the error
         self.assertEqual(list(out), [2, 4, 0, 0])
 
@@ -79,6 +80,27 @@ class TestExceptions(TestCase):
 
     def test_gufunc_raise_objmode(self):
         self.check_gufunc_raise(forceobj=True)
+
+    def test_ufunc_raise_parallel(self):
+        f = vectorize(['float64(float64)'], target='parallel')(sqrt)
+        arr = np.array([1, 4, -2, 9, -1, 16], dtype=np.float64)
+        out = np.zeros_like(arr)
+        with self.assertRaises(RuntimeError) as cm:
+            f(arr, out)
+        self.assertIn('parallel ufunc', str(cm.exception))
+        # All values were computed except for the ones giving an error
+        self.assertEqual(list(out), [1, 2, 0, 3, 0, 4])
+
+    def test_gufunc_raise_parallel(self):
+        f = guvectorize(['int32[:], int32[:], int32[:]'], '(n),()->(n)',
+                        target='parallel')(gufunc_foo)
+        arr = np.array([1, 2, -3, 4], dtype=np.int32)
+        out = np.zeros_like(arr)
+        with self.assertRaises(RuntimeError) as cm:
+            f(arr, 2, out)
+        self.assertIn('parallel ufunc', str(cm.exception))
+        # The gufunc bailed out after the error
+        self.assertEqual(list(out), [2, 4, 0, 0])
 
 
 class TestFloatingPointExceptions(TestCase):
