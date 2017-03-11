@@ -13,12 +13,10 @@ from .tracing import trace, event
 
 from numba import (bytecode, interpreter, funcdesc, postproc,
                    typing, typeinfer, lowering, objmode, utils, config,
-                   errors, types, ir, types, rewrites, transforms,
-                   array_analysis)
+                   errors, types, ir, types, rewrites, transforms)
 from numba.targets import cpu, callconv
 from numba.annotations import type_annotations
-from numba.array_analysis import ArrayAnalysis
-from numba.parfor import lower_parfor, ParforPass
+from numba.parfor import ParforPass
 
 
 # Lock for the preventing multiple compiler execution
@@ -484,15 +482,6 @@ class Pipeline(object):
             rewrites.rewrite_registry.apply('after-inference',
                                             self, self.func_ir)
 
-    def stage_array_analysis(self):
-        """
-        analyze array computations such as equivalence classes
-        """
-        # Ensure we have an IR and type information.
-        assert self.func_ir
-        self.array_analysis = ArrayAnalysis(self.func_ir, self.type_annotation)
-        self.array_analysis.run()
-
     def stage_parfor_pass(self):
         """
         Convert data-parallel computations into Parfor nodes
@@ -500,18 +489,8 @@ class Pipeline(object):
         # Ensure we have an IR and type information.
         assert self.func_ir
         parfor_pass = ParforPass(self.func_ir, self.type_annotation.typemap,
-            self.type_annotation.calltypes, self.array_analysis)
+            self.type_annotation.calltypes)
         parfor_pass.run()
-
-    def stage_parfor_lowering(self):
-        """
-        lower parfors to sequential or parallel Numba IR code
-        """
-        # Ensure we have an IR and type information.
-        assert self.func_ir
-        lower_parfor(self.func_ir, self.type_annotation.typemap,
-            self.type_annotation.calltypes, self.typingctx, self.targetctx,
-            self.flags, self.locals, self.array_analysis)
 
     def stage_annotate_type(self):
         """
@@ -661,11 +640,10 @@ class Pipeline(object):
                 pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
             pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
             pm.add_stage(self.stage_annotate_type, "annotate type")
-            pm.add_stage(self.stage_array_analysis, "analyze array computations")
             if not self.flags.no_rewrites:
                 pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
-            pm.add_stage(self.stage_parfor_pass, "convert to parfors")
-            pm.add_stage(self.stage_parfor_lowering, "parfor lowering")
+            if self.flags.auto_parallel:
+                pm.add_stage(self.stage_parfor_pass, "convert to parfors")
             pm.add_stage(self.stage_nopython_backend, "nopython mode backend")
             pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
 

@@ -13,10 +13,11 @@ class ArrayAnalysis(object):
     and equivalence classes.
     """
 
-    def __init__(self, func_ir, type_annotation):
+    def __init__(self, func_ir, typemap, calltypes):
         """Constructor for the Rewrite class."""
         self.func_ir = func_ir
-        self.type_annotation = type_annotation
+        self.typemap = typemap
+        self.calltypes = calltypes
         self.next_eq_class = 1
         # equivalence classes for each dimension of each array are saved
         # string to tuple of class numbers
@@ -42,6 +43,9 @@ class ArrayAnalysis(object):
 
     def run(self):
         # TODO: ignoring CFG for now
+        if config.DEBUG_ARRAY_OPT==1:
+            print("starting array analysis")
+            self.func_ir.dump()
         for (key, block) in self.func_ir.blocks.items():
             self._analyze_block(block)
         if config.DEBUG_ARRAY_OPT==1:
@@ -123,20 +127,20 @@ class ArrayAnalysis(object):
         # attr call: A_sh_attr = getattr(A, shape)
         shape_attr_call = ir.Expr.getattr(var, "shape", var.loc)
         attr_var = ir.Var(var.scope, mk_unique_var(var.name+"_sh_attr"+str(i)), var.loc)
-        self.type_annotation.typemap[attr_var.name] = types.containers.UniTuple(INT_TYPE, ndims)
+        self.typemap[attr_var.name] = types.containers.UniTuple(INT_TYPE, ndims)
         attr_assign = ir.Assign(shape_attr_call, attr_var, var.loc)
         out.append(attr_assign)
         # const var for dim: $constA0 = Const(0)
         const_node = ir.Const(i, var.loc)
         const_var = ir.Var(var.scope, mk_unique_var("$const"+var.name+str(i)), var.loc)
-        self.type_annotation.typemap[const_var.name] = INT_TYPE
+        self.typemap[const_var.name] = INT_TYPE
         const_assign = ir.Assign(const_node, const_var, var.loc)
         out.append(const_assign)
         # get size: Asize0 = A_sh_attr[0]
         size_var = ir.Var(var.scope, mk_unique_var(var.name+"size"+str(i)), var.loc)
-        self.type_annotation.typemap[size_var.name] = INT_TYPE
+        self.typemap[size_var.name] = INT_TYPE
         getitem_node = ir.Expr.static_getitem(attr_var, i, const_var, var.loc)
-        self.type_annotation.calltypes[getitem_node] = None
+        self.calltypes[getitem_node] = None
         getitem_assign = ir.Assign(getitem_node, size_var, var.loc)
         out.append(getitem_assign)
         return out
@@ -193,7 +197,7 @@ class ArrayAnalysis(object):
             return out_eqs
         elif call_name in ['empty', 'zeros', 'ones']:
             # shape is either Int or tuple of Int
-            arg_typ = self.type_annotation.typemap[args[0].name]
+            arg_typ = self.typemap[args[0].name]
             if isinstance(arg_typ, types.scalars.Integer):
                 new_class = self._get_next_class()
                 self.class_sizes[new_class] = [args[0]]
@@ -297,13 +301,13 @@ class ArrayAnalysis(object):
         return out_eq
 
     def _isarray(self, varname):
-        return isinstance(self.type_annotation.typemap[varname],
+        return isinstance(self.typemap[varname],
                           types.npytypes.Array)
 
     def _add_array_corr(self, varname):
         assert varname not in self.array_shape_classes
         self.array_shape_classes[varname] = []
-        arr_typ = self.type_annotation.typemap[varname]
+        arr_typ = self.typemap[varname]
         for i in range(0,arr_typ.ndim):
             new_class = self._get_next_class()
             self.array_shape_classes[varname].append(new_class)

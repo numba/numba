@@ -83,17 +83,19 @@ class ParforPass(object):
     will lower into either sequential or parallel loops during lowering
     stage.
     """
-    def __init__(self, func_ir, typemap, calltypes, array_analysis):
+    def __init__(self, func_ir, typemap, calltypes):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
-        self.array_analysis = array_analysis
+        self.array_analysis = array_analysis.ArrayAnalysis(func_ir, typemap,
+            calltypes)
         ir_utils._max_label = max(func_ir.blocks.keys())
 
     def run(self):
         """run parfor conversion pass: replace Numpy calls
         with Parfors when possible."""
 
+        self.array_analysis.run()
         for (key, block) in self.func_ir.blocks.items():
             new_body = []
             for instr in block.body:
