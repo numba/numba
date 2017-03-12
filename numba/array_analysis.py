@@ -161,11 +161,15 @@ class ArrayAnalysis(object):
             elif node.op=='binop' and node.fn in BINARY_MAP_OP:
                 arg1 = node.lhs.name
                 arg2 = node.rhs.name
-                return self._broadcast_and_match_shapes(arg1, arg2)
+                return self._broadcast_and_match_shapes([arg1, arg2])
             elif node.op=='inplace_binop' and node.immutable_fn in BINARY_MAP_OP:
                 arg1 = node.lhs.name
                 arg2 = node.rhs.name
-                return self._broadcast_and_match_shapes(arg1, arg2)
+                return self._broadcast_and_match_shapes([arg1, arg2])
+            elif node.op=='arrayexpr':
+                # set to remove duplicates
+                args = {v.name for v in node.list_vars()}
+                return self._broadcast_and_match_shapes(list(args))
             elif node.op=='cast':
                 return self.array_shape_classes[node.value.name].copy()
             elif node.op=='call':
@@ -234,19 +238,16 @@ class ArrayAnalysis(object):
             c_inner = self._merge_classes(c1,c2)
 
             c_out = []
-            for i in range(0,ndims1-1):
+            for i in range(ndims1-1):
                 c_out.append(self.array_shape_classes[in1][i])
-            for i in range(0,ndims2-2):
+            for i in range(ndims2-2):
                 c_out.append(self.array_shape_classes[in2][i])
             if ndims2>1:
                 c_out.append(self.array_shape_classes[in2][ndims2-1])
             #print("dot class ",c_out)
             return c_out
         elif call_name in UFUNC_MAP_OP:
-            arg1 = arg2 = 'NULL'
-            if len(args)>0: arg1 = args[0].name
-            if len(args)>1: arg2 = args[1].name
-            return self._broadcast_and_match_shapes(arg1, arg2)
+            return self._broadcast_and_match_shapes([a.name for a in args])
 
         print("unknown numpy call:", call_name)
         return [-1]
@@ -258,45 +259,44 @@ class ArrayAnalysis(object):
 
         new_class = self._get_next_class()
         for l in self.array_shape_classes.values():
-            for i in range(0,len(l)):
+            for i in range(len(l)):
                 if l[i]==c1 or l[i]==c2:
                     l[i] = new_class
         # merge lists of size vars and remove previous classes
-        self.class_sizes[new_class] = self.class_sizes.pop(c1)+self.class_sizes.pop(c2)
+        self.class_sizes[new_class] = (self.class_sizes.pop(c1, [])
+            + self.class_sizes.pop(c2, []))
         return new_class
 
-    def _broadcast_and_match_shapes(self, arg1, arg2):
+    def _broadcast_and_match_shapes(self, args):
         """Infer shape equivalence of arguments based on Numpy broadcast rules
         and return shape of output
         https://docs.scipy.org/doc/numpy/user/basics.broadcasting.html
         """
-        # one input has to be an array, NULL means no input
-        assert (arg1!='NULL' and self._isarray(arg1)) or (arg2!='NULL' and self._isarray(arg2))
-
-        if arg1!='NULL' and self._isarray(arg1):
-            eq1 = self.array_shape_classes[arg1].copy()
-        else:
-            eq1 = [0]
-        if arg2!='NULL' and self._isarray(arg2):
-            eq2 = self.array_shape_classes[arg2].copy()
-        else:
-            eq2 = [0]
-
-        # prepend zeros to match shapes (broadcast rules)
-        while len(eq1)<len(eq2):
-            eq1.insert(0,0)
-        while len(eq2)<len(eq1):
-            eq2.insert(0,0)
-        ndim = len(eq1)
-
-        out_eq = [-1 for i in range(0,ndim)]
-        for i in range(0,ndim):
-            if eq1[i]==0:
-                out_eq[i] = eq2[i]
-            elif eq2[i]==0:
-                out_eq[i] = eq1[i]
+        # at least one input has to be array, rest are constants
+        assert any([self._isarray(a) for a in args])
+        # list of array equivalences
+        eqs = []
+        for a in args:
+            if self._isarray(a):
+                eqs.append(self.array_shape_classes[a].copy())
             else:
-                out_eq[i] = self._merge_classes(eq1[i], eq2[i])
+                eqs.append = [0] # constant variable
+        ndims = max([len(e) for e in eqs])
+        for e in eqs:
+            # prepend zeros to match shapes (broadcast rules)
+            while len(e)<ndims:
+                e.insert(0,0)
+        out_eq = [-1 for i in range(ndims)]
+
+        for i in range(ndims):
+            c = eqs[0][i]
+            for e in eqs:
+                if e[i]!=0 and e[i]!=c:
+                    if c==0:
+                        c = e[i]
+                    else:
+                        c = self._merge_classes(c, e[i])
+            out_eq[i] = c
 
         return out_eq
 
@@ -308,7 +308,7 @@ class ArrayAnalysis(object):
         assert varname not in self.array_shape_classes
         self.array_shape_classes[varname] = []
         arr_typ = self.typemap[varname]
-        for i in range(0,arr_typ.ndim):
+        for i in range(arr_typ.ndim):
             new_class = self._get_next_class()
             self.array_shape_classes[varname].append(new_class)
         return self.array_shape_classes[varname]
