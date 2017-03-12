@@ -17,16 +17,13 @@ def next_label():
     _max_label += 1
     return _max_label
 
-INT_TYPE = types.scalars.Integer.from_bitwidth(64)
-BOOL_TYPE = types.scalars.Boolean("bool")
-
 def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
     """generate an array allocation with np.empty() and return list of nodes.
     size_var can be an int variable or tuple of int variables.
     """
     out = []
     ndims = 1
-    size_typ = INT_TYPE
+    size_typ = types.int64
     if isinstance(size_var, tuple):
         if len(size_var) == 1:
             size_var = size_var[0]
@@ -34,12 +31,12 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
             # tuple_var = build_tuple([size_var...])
             ndims = len(size_var)
             tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
-            typemap[tuple_var.name] = types.containers.UniTuple(INT_TYPE, ndims)
+            typemap[tuple_var.name] = types.containers.UniTuple(types.int64, ndims)
             tuple_call = ir.Expr.build_tuple(list(size_var), loc)
             tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
             out.append(tuple_assign)
             size_var = tuple_var
-            size_typ = types.containers.UniTuple(INT_TYPE, ndims)
+            size_typ = types.containers.UniTuple(types.int64, ndims)
     # g_np_var = Global(numpy)
     g_np_var = ir.Var(scope, mk_unique_var("$np_g_var"), loc)
     typemap[g_np_var.name] = types.misc.Module(numpy)
@@ -68,6 +65,7 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
     return out
 
 def _get_empty_func_typ():
+    """get type variable for np.empty() from builtin registry"""
     for (k,v) in typing.npydecl.registry.globals:
         if k==numpy.empty:
             return v
@@ -88,18 +86,18 @@ def mk_range_block(typemap, size_var, calltypes, scope, loc):
         typing.Context(), [types.int64], {})
     #signature(types.range_state64_type, types.int64)
     range_call_var = ir.Var(scope, mk_unique_var("$range_c_var"), loc)
-    typemap[range_call_var.name] = types.iterators.RangeType(INT_TYPE)
+    typemap[range_call_var.name] = types.iterators.RangeType(types.int64)
     range_call_assign = ir.Assign(range_call, range_call_var, loc)
     # iter_var = getiter(range_call_var)
     iter_call = ir.Expr.getiter(range_call_var ,loc)
     calltypes[iter_call] = signature(types.range_iter64_type,
         types.range_state64_type)
     iter_var = ir.Var(scope, mk_unique_var("$iter_var"), loc)
-    typemap[iter_var.name] = types.iterators.RangeIteratorType(INT_TYPE)
+    typemap[iter_var.name] = types.iterators.RangeIteratorType(types.int64)
     iter_call_assign = ir.Assign(iter_call, iter_var, loc)
     # $phi = iter_var
     phi_var = ir.Var(scope, mk_unique_var("$phi"), loc)
-    typemap[phi_var.name] = types.iterators.RangeIteratorType(INT_TYPE)
+    typemap[phi_var.name] = types.iterators.RangeIteratorType(types.int64)
     phi_assign = ir.Assign(iter_var, phi_var, loc)
     # jump to header
     jump_header = ir.Jump(-1, loc)
@@ -109,6 +107,7 @@ def mk_range_block(typemap, size_var, calltypes, scope, loc):
     return range_block
 
 def _get_range_func_typ():
+    """get type variable for range() from builtin registry"""
     for (k,v) in typing.templates.builtin_registry.globals:
         if k==range:
             return v
@@ -120,24 +119,24 @@ def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
     """
     # iternext_var = iternext(phi_var)
     iternext_var = ir.Var(scope, mk_unique_var("$iternext_var"), loc)
-    typemap[iternext_var.name] = types.containers.Pair(INT_TYPE, BOOL_TYPE)
+    typemap[iternext_var.name] = types.containers.Pair(types.int64, types.boolean)
     iternext_call = ir.Expr.iternext(phi_var, loc)
     calltypes[iternext_call] = signature(
-        types.containers.Pair(INT_TYPE, BOOL_TYPE), types.range_iter64_type)
+        types.containers.Pair(types.int64, types.boolean), types.range_iter64_type)
     iternext_assign = ir.Assign(iternext_call, iternext_var, loc)
     # pair_first_var = pair_first(iternext_var)
     pair_first_var = ir.Var(scope, mk_unique_var("$pair_first_var"), loc)
-    typemap[pair_first_var.name] = INT_TYPE
+    typemap[pair_first_var.name] = types.int64
     pair_first_call = ir.Expr.pair_first(iternext_var, loc)
     pair_first_assign = ir.Assign(pair_first_call, pair_first_var, loc)
     # pair_second_var = pair_second(iternext_var)
     pair_second_var = ir.Var(scope, mk_unique_var("$pair_second_var"), loc)
-    typemap[pair_second_var.name] = BOOL_TYPE
+    typemap[pair_second_var.name] = types.boolean
     pair_second_call = ir.Expr.pair_second(iternext_var, loc)
     pair_second_assign = ir.Assign(pair_second_call, pair_second_var, loc)
     # phi_b_var = pair_first_var
     phi_b_var = ir.Var(scope, mk_unique_var("$phi"), loc)
-    typemap[phi_b_var.name] = INT_TYPE
+    typemap[phi_b_var.name] = types.int64
     phi_b_assign = ir.Assign(pair_first_var, phi_b_var, loc)
     # branch pair_second_var body_block out_block
     branch = ir.Branch(pair_second_var, -1, -1, loc)
@@ -158,6 +157,7 @@ def legalize_names(varnames):
     return var_map
 
 def get_name_var_table(blocks):
+    """create a mapping from variable names to their ir.Var objects"""
     def get_name_var_visit(var, namevar):
         namevar[var.name] = var
         return var
@@ -166,6 +166,7 @@ def get_name_var_table(blocks):
     return namevar
 
 def replace_var_names(blocks, namedict):
+    """replace variables (ir.Var to ir.Var) from dictionary (name -> name)"""
     # remove identity values to avoid infinite loop
     new_namedict = {}
     for l,r in namedict.items():
@@ -186,6 +187,7 @@ def replace_var_callback(var, vardict):
     return var
 
 def replace_vars(blocks, vardict):
+    """replace variables (ir.Var to ir.Var) from dictionary (name -> ir.Var)"""
     # remove identity values to avoid infinite loop
     new_vardict = {}
     for l,r in vardict.items():
@@ -280,6 +282,7 @@ def add_offset_to_labels(blocks, offset):
     return new_blocks
 
 def remove_dels(blocks):
+    """remove ir.Del nodes"""
     for block in blocks.values():
         new_body = []
         for stmt in block.body:
@@ -289,6 +292,7 @@ def remove_dels(blocks):
     return
 
 def remove_dead(blocks):
+    """dead code elimination using liveness and CFG info"""
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
@@ -331,10 +335,13 @@ def remove_dead_block(block, lives):
     return
 
 def copy_propagate(blocks):
+    """compute copy propagation information for each block using fixed-point
+     iteration on data flow equations:
+     in_b = intersect(predec(B))
+     out_b = gen_b | (in_b - kill_b)
+    """
     cfg = compute_cfg_from_blocks(blocks)
     entry = cfg.entry_point()
-    # usedefs = compute_use_defs(blocks)
-    # live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
 
     # format: dict of block labels to copies as tuples
     # label -> (l,r)
@@ -364,6 +371,8 @@ def copy_propagate(blocks):
     return in_copies, out_copies
 
 def init_copy_propagate_data(blocks, entry):
+    """get initial condition of copy propagation data flow for each block.
+    """
     # gen is all definite copies, extra_kill is additional ones that may hit
     # for example, parfors can have control flow so they may hit extra copies
     gen_copies, extra_kill = get_block_copies(blocks)
@@ -384,6 +393,7 @@ def init_copy_propagate_data(blocks, entry):
                     and (lhs in assigned or rhs in assigned)):
                 kill_copies[label].add((lhs,rhs))
     # set initial values
+    # all copies are in for all blocks except entry
     in_copies = { l:all_copies.copy() for l in blocks.keys() }
     in_copies[entry] = set()
     out_copies = {}
@@ -399,6 +409,8 @@ def init_copy_propagate_data(blocks, entry):
 copy_propagate_extensions = {}
 
 def get_block_copies(blocks):
+    """get copies generated and killed by each block
+    """
     block_copies = {}
     extra_kill = {}
     for label, block in blocks.items():
@@ -421,6 +433,7 @@ def get_block_copies(blocks):
 
 
 def apply_copy_propagate(blocks, in_copies, name_var_table):
+    """apply copy propagation to IR: replace variables when copies available"""
     # TODO: make it recursive on parfors?
     for label, block in blocks.items():
         var_dict = {l:name_var_table[r] for l,r in in_copies[label]}

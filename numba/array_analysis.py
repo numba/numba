@@ -121,18 +121,18 @@ class ArrayAnalysis(object):
         # attr call: A_sh_attr = getattr(A, shape)
         shape_attr_call = ir.Expr.getattr(var, "shape", var.loc)
         attr_var = ir.Var(var.scope, mk_unique_var(var.name+"_sh_attr"+str(i)), var.loc)
-        self.typemap[attr_var.name] = types.containers.UniTuple(INT_TYPE, ndims)
+        self.typemap[attr_var.name] = types.containers.UniTuple(types.int64, ndims)
         attr_assign = ir.Assign(shape_attr_call, attr_var, var.loc)
         out.append(attr_assign)
         # const var for dim: $constA0 = Const(0)
         const_node = ir.Const(i, var.loc)
         const_var = ir.Var(var.scope, mk_unique_var("$const"+var.name+str(i)), var.loc)
-        self.typemap[const_var.name] = INT_TYPE
+        self.typemap[const_var.name] = types.int64
         const_assign = ir.Assign(const_node, const_var, var.loc)
         out.append(const_assign)
         # get size: Asize0 = A_sh_attr[0]
         size_var = ir.Var(var.scope, mk_unique_var(var.name+"size"+str(i)), var.loc)
-        self.typemap[size_var.name] = INT_TYPE
+        self.typemap[size_var.name] = types.int64
         getitem_node = ir.Expr.static_getitem(attr_var, i, const_var, var.loc)
         self.calltypes[getitem_node] = None
         getitem_assign = ir.Assign(getitem_node, size_var, var.loc)
