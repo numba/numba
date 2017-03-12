@@ -14,7 +14,6 @@ class ArrayAnalysis(object):
     """
 
     def __init__(self, func_ir, typemap, calltypes):
-        """Constructor for the Rewrite class."""
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
@@ -59,9 +58,9 @@ class ArrayAnalysis(object):
     def _analyze_block(self, block):
         out_body = []
         for inst in block.body:
-            # instructions can generate extra size calls to be appended
-            # if an array doesn't have a size variable, it should be generated
-            # when it is created
+            # instructions can generate extra size calls to be appended.
+            # if an array doesn't have a size variable for a dimension,
+            # a size variable should be generated when the array is created
             generated_size_calls = self._analyze_inst(inst)
             out_body.append(inst)
             for node in generated_size_calls:
@@ -74,11 +73,6 @@ class ArrayAnalysis(object):
         return []
 
     def _analyze_assign(self, assign):
-
-        #if isinstance(assign.value, ir.Arg) and self._isarray(assign.value.name):
-        #    self._add_array_corr(assign.value.name)
-        # lhs is always var?
-        assert isinstance(assign.target, ir.Var)
         lhs = assign.target.name
         rhs = assign.value
         if isinstance(rhs, ir.Global):
