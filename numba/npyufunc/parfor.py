@@ -212,7 +212,7 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_txt = ", type(gufunc_txt), "\n", gufunc_txt)
     # Force gufunc outline into existence.
-    exec(gufunc_txt)
+    exec(gufunc_txt) in {}
     gufunc_func = eval(gufunc_name)
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_func = ", type(gufunc_func), "\n", gufunc_func)
