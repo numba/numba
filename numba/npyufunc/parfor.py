@@ -232,6 +232,8 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
 
     # Add gufunc stub last label to each parfor.loop_body label to prevent label conflicts.
     loop_body = add_offset_to_labels(loop_body, gufunc_stub_last_label)
+    # new label for splitting sentinel block
+    new_label = max(loop_body.keys())+1
     if config.DEBUG_ARRAY_OPT:
         _print_body(loop_body)
 
@@ -250,7 +252,6 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
                 # The current block is used for statements after the sentinel.
                 block.body = block.body[i+1:]
                 # But the current block gets a new label.
-                new_label = next_label()
                 body_first_label = min(loop_body.keys())
                 # The previous block jumps to the minimum labelled block of the
                 # parfor body.
