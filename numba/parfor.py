@@ -133,6 +133,7 @@ class ParforPass(object):
         # after optimization, some size variables are not available anymore
         remove_dead_class_sizes(self.func_ir.blocks, self.array_analysis)
         dprint_func_ir(self.func_ir, "after optimization")
+        # lower_parfor_sequential(self.func_ir, self.typemap, self.calltypes)
         return
 
     def _arrayexpr_to_parfor(self, lhs, arrayexpr):
