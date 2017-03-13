@@ -268,11 +268,14 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
         else:
             continue
         break
+
+    gufunc_ir.blocks = numba.parfor._rename_labels(gufunc_ir.blocks)
+    remove_dels(gufunc_ir.blocks)
+
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_ir last dump")
         gufunc_ir.dump()
 
-    gufunc_ir.blocks = numba.parfor._rename_labels(gufunc_ir.blocks)
     kernel_func = compiler.compile_ir(typingctx, targetctx, gufunc_ir, gufunc_param_types, types.none, flags, locals)
 
     kernel_sig = signature(types.none, *gufunc_param_types)
