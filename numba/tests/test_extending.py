@@ -1,20 +1,22 @@
 from __future__ import print_function, division, absolute_import
 
-from collections import namedtuple
 import math
 import sys
 import pickle
+import multiprocessing
 
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import jit, types, errors, typeof, numpy_support, cgutils, typing
+from numba import jit, types, errors, typing
 from numba.compiler import compile_isolated
-from .support import TestCase, captured_stdout, tag
+from .support import (TestCase, captured_stdout, tag, temp_directory,
+                      override_config)
 
 from numba.extending import (typeof_impl, type_callable,
                              lower_builtin, lower_cast,
                              overload, overload_attribute,
+                             overload_method,
                              models, register_model,
                              box, unbox, NativeValue,
                              make_attribute_wrapper,
@@ -23,7 +25,6 @@ from numba.extending import (typeof_impl, type_callable,
                              )
 from numba.typing.templates import (
     ConcreteTemplate, signature, infer)
-from numba.targets.imputils import impl_ret_borrowed
 
 # Pandas-like API implementation
 from .pdlike_usecase import Index, Series
@@ -206,6 +207,17 @@ def overload_len_dummy(arg):
             return 13
 
         return len_impl
+
+
+@overload_method(MyDummyType, 'length')
+def overload_method_length(arg):
+    def imp(arg):
+        return len(arg)
+    return imp
+
+
+def cache_overload_method_usecase(x):
+    return x.length()
 
 
 def call_func1_nullary():
@@ -460,6 +472,63 @@ class TestHighLevelExtending(TestCase):
         expectmsg = "cannot convert native Module"
         self.assertIn(expectmsg, errmsg)
 
+
+def _assert_cache_stats(cfunc, expect_hit, expect_misses):
+    hit = cfunc._cache_hits[cfunc.signatures[0]]
+    if hit != expect_hit:
+        raise AssertionError('cache not used')
+    miss = cfunc._cache_misses[cfunc.signatures[0]]
+    if miss != expect_misses:
+        raise AssertionError('cache not used')
+
+
+class TestOverloadMethodCaching(TestCase):
+    # Nested multiprocessing.Pool raises AssertionError:
+    # "daemonic processes are not allowed to have children"
+    _numba_parallel_test_ = False
+
+    def test_caching_overload_method(self):
+        self._cache_dir = temp_directory(self.__class__.__name__)
+        with override_config('CACHE_DIR', self._cache_dir):
+            self.run_caching_overload_method()
+
+    def run_caching_overload_method(self):
+        cfunc = jit(nopython=True, cache=True)(cache_overload_method_usecase)
+        self.assertPreciseEqual(cfunc(MyDummy()), 13)
+        _assert_cache_stats(cfunc, 0, 1)
+        llvmir = cfunc.inspect_llvm((mydummy_type,))
+        # Ensure the inner method is not a declaration
+        decls = [ln for ln in llvmir.splitlines()
+                 if ln.startswith('declare') and 'overload_method_length' in ln]
+        self.assertEqual(len(decls), 0)
+        # Test in a separate process
+        try:
+            ctx = multiprocessing.get_context('spawn')
+        except AttributeError:
+            ctx = multiprocessing
+        q = ctx.Queue()
+        p = ctx.Process(target=run_caching_overload_method,
+                        args=(q, self._cache_dir))
+        p.start()
+        q.put(MyDummy())
+        p.join()
+        # Ensure subprocess exited normally
+        self.assertEqual(p.exitcode, 0)
+        res = q.get(timeout=1)
+        self.assertEqual(res, 13)
+
+
+def run_caching_overload_method(q, cache_dir):
+    """
+    Used by TestOverloadMethodCaching.test_caching_overload_method
+    """
+    with override_config('CACHE_DIR', cache_dir):
+        arg = q.get()
+        cfunc = jit(nopython=True, cache=True)(cache_overload_method_usecase)
+        res = cfunc(arg)
+        q.put(res)
+        # Check cache stat
+        _assert_cache_stats(cfunc, 1, 0)
 
 class TestIntrinsic(TestCase):
     def test_ll_pointer_cast(self):
