@@ -24,7 +24,7 @@ public:
     }
 
     RangeActual(const std::vector<intp> &lens) {
-        for(intp i = 0; i < lens.size(); ++i) {
+        for(uintp i = 0; i < lens.size(); ++i) {
             start.push_back(0);
             end.push_back(lens[i] - 1); 
         }
@@ -43,7 +43,7 @@ public:
 
     std::vector<intp> iters_per_dim() const {
         std::vector<intp> ret;
-        for(intp i = 0; i < start.size(); ++i) {
+        for(uintp i = 0; i < start.size(); ++i) {
             ret.push_back(end[i] - start[i] + 1);
         } 
         return ret;
@@ -93,7 +93,7 @@ chunk_info chunk(intp rs, intp re, intp divisions) {
         return chunk_info(rs, re, re + 1);
     } else {
         intp len = total / divisions;
-        intp rem = total % divisions;
+        //intp rem = total % divisions;
         intp res_end = rs + len - 1;
         return chunk_info(rs, res_end, res_end + 1);
     }
@@ -196,7 +196,7 @@ void create_schedule(const RangeActual &full_space, uintp num_sched, intp *sched
             return;
         } else {
             uintp ilen = ra_len / num_sched; 
-            uintp imod = ra_len % num_sched;
+            //uintp imod = ra_len % num_sched;
 
             std::vector<RangeActual> ret;
             for(uintp i = 0; i < num_sched; ++i) {
@@ -235,13 +235,13 @@ void create_schedule(const RangeActual &full_space, uintp num_sched, intp *sched
 extern "C" void do_scheduling(intp num_dim, intp *dims, uintp num_threads, intp *sched, intp debug) {
 
     if (debug) {
-        printf("num_dim = %d\n", num_dim);
+        printf("num_dim = %d\n", (int)num_dim);
         printf("dims = [");
         for (int i = 0; i < num_dim; i++) {
-            printf("%d ", dims[i]);
+            printf("%d ", (int)dims[i]);
         }
         printf("]\n");
-        printf("num_threads = %d\n", num_threads);
+        printf("num_threads = %d\n", (int)num_threads);
     }
 
     RangeActual full_space(num_dim, dims);
