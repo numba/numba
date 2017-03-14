@@ -93,6 +93,14 @@ class ArrayAnalysis(object):
         size_calls = []
         if self._isarray(lhs):
             rhs_corr = self._analyze_rhs_classes(rhs).copy()
+            if lhs in self.array_shape_classes:
+                # if shape already inferred in another basic block,
+                # make sure this new inference is compatible
+                if self.array_shape_classes[lhs]!=rhs_corr:
+                    self.array_shape_classes[lhs] = [-1]*self._get_ndims(lhs)
+                    self.array_size_vars.pop(lhs, None)
+                    print("incompatible array shapes in control flow")
+                    return []
             self.array_shape_classes[lhs] = rhs_corr
             self.array_size_vars[lhs] = [-1]*self._get_ndims(lhs)
             # make sure output lhs array has size variables for each dimension

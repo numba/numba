@@ -102,10 +102,16 @@ class ParforPass(object):
                 if isinstance(instr, ir.Assign):
                     expr = instr.value
                     lhs = instr.target
-                    if self._is_supported_npycall(expr):
-                        instr = self._numpy_to_parfor(lhs, expr)
-                    if isinstance(expr, ir.Expr) and expr.op == 'arrayexpr':
-                        instr = self._arrayexpr_to_parfor(lhs, expr)
+                    if lhs.name in self.array_analysis.array_shape_classes:
+                        lhs_shapes = self.array_analysis.array_shape_classes[lhs.name]
+                        if -1 in lhs_shapes:
+                            # avoid parfor generation if any shape is unknown
+                            new_body.append(instr)
+                            continue
+                        if self._is_supported_npycall(expr):
+                            instr = self._numpy_to_parfor(lhs, expr)
+                        if isinstance(expr, ir.Expr) and expr.op == 'arrayexpr':
+                            instr = self._arrayexpr_to_parfor(lhs, expr)
                 new_body.append(instr)
             block.body = new_body
 
@@ -823,7 +829,7 @@ def remove_dead_class_sizes(blocks, array_analysis):
         shape_classes = array_analysis.array_shape_classes[var]
         for i in range(ndims):
             corr = shape_classes[i]
-            if len(array_analysis.class_sizes[corr])>0:
+            if corr!=-1 and len(array_analysis.class_sizes[corr])>0:
                 class_size = array_analysis.class_sizes[corr][0]
                 dim_sizes[i] = class_size
     return
