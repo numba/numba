@@ -47,6 +47,9 @@ class ArrayAnalysis(object):
             self.func_ir.dump()
         for (key, block) in self.func_ir.blocks.items():
             self._analyze_block(block)
+
+        self._merge_equivalent_classes()
+        
         if config.DEBUG_ARRAY_OPT==1:
             print("classes: ", self.array_shape_classes)
             print("class sizes: ", self.class_sizes)
@@ -262,6 +265,15 @@ class ArrayAnalysis(object):
             out_eqs.append(new_class)
             self.class_sizes[new_class] = [self.tuple_table[shape_arg][i]]
         return out_eqs
+
+    def _merge_equivalent_classes(self):
+        curr_sizes = self.class_sizes.copy()
+        for c1,sizes1 in curr_sizes.items():
+            for c2,sizes2 in curr_sizes.items():
+                if set(sizes1) & set(sizes2)!=set():
+                    self._merge_classes(c1,c2)
+
+
 
     def _merge_classes(self, c1, c2):
         # no need to merge if equal classes already
