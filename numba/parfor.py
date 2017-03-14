@@ -553,7 +553,7 @@ def get_parfor_params(parfor):
     for l in parfor.loop_nests:
         live_map[first_non_init_block].remove(l.index_variable.name)
 
-    return live_map[first_non_init_block]
+    return sorted(live_map[first_non_init_block])
 
 def get_parfor_outputs(parfor):
     # TODO: reduction output
@@ -565,7 +565,7 @@ def get_parfor_outputs(parfor):
             if isinstance(stmt, ir.SetItem):
                 if stmt.index.name==parfor.index_var:
                     outputs.append(stmt.target.name)
-    return outputs
+    return sorted(outputs)
 
 def visit_vars_parfor(parfor, callback, cbdata):
     if config.DEBUG_ARRAY_OPT==1:

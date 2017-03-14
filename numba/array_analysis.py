@@ -4,6 +4,7 @@ from numba.ir_utils import *
 #from numba.annotations import type_annotations
 from numba import types, config
 from numba.typing import npydecl
+import collections
 
 import numpy
 MAP_TYPES = [numpy.ufunc]
@@ -22,7 +23,7 @@ class ArrayAnalysis(object):
         # string to tuple of class numbers
         # example: {'A':[1,2]}
         #          {1:[n,a],2:[k,m,3]}
-        self.array_shape_classes = {}
+        self.array_shape_classes = collections.OrderedDict()
         # class zero especial and is size 1 for constants
         # and added broadcast dimensions
         # -1 class means unknown

@@ -77,6 +77,8 @@ def _create_shape_signature(classes, num_inputs, args, func_sig):
     '''
     # maximum class number for array shapes
     max_shape_num = max(sum([list(x) for x in classes.values()], []))
+    if config.DEBUG_ARRAY_OPT:
+        print("create_shape_signature = ", max_shape_num)
     gu_sin = []
     gu_sout = []
     count = 0
@@ -138,7 +140,11 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
     # Get just the outputs of the parfor.
     parfor_outputs = numba.parfor.get_parfor_outputs(parfor)
     # Compute just the parfor inputs as a set difference.
-    parfor_inputs = list(set(parfor_params) - set(parfor_outputs))
+    parfor_inputs = sorted(list(set(parfor_params) - set(parfor_outputs)))
+    if config.DEBUG_ARRAY_OPT==1:
+        print("parfor_params = ", parfor_params, " ", type(parfor_params))
+        print("parfor_outputs = ", parfor_outputs, " ", type(parfor_outputs))
+        print("parfor_inputs = ", parfor_inputs, " ", type(parfor_inputs))
     # Reorder all the params so that inputs go first then outputs.
     parfor_params = parfor_inputs + parfor_outputs
 
@@ -169,10 +175,10 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
 
     # Get the types of each parameter.
     param_types = [ typemap[v] for v in parfor_params ]
-    if config.DEBUG_ARRAY_OPT==1:
-        param_types_dict = { v:typemap[v] for v in parfor_params }
-        print("param_types_dict = ", param_types_dict, " ", type(param_types_dict))
-        print("param_types = ", param_types, " ", type(param_types))
+    #if config.DEBUG_ARRAY_OPT==1:
+    #    param_types_dict = { v:typemap[v] for v in parfor_params }
+    #    print("param_types_dict = ", param_types_dict, " ", type(param_types_dict))
+    #    print("param_types = ", param_types, " ", type(param_types))
 
     # Replace illegal parameter names in the loop body with legal ones.
     replace_var_names(loop_body, param_dict)
