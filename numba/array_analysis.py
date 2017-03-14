@@ -88,6 +88,8 @@ class ArrayAnalysis(object):
                 self.array_attr_calls[lhs] = (rhs.attr, rhs.value.name)
         if isinstance(rhs, ir.Expr) and rhs.op=='build_tuple':
             self.tuple_table[lhs] = rhs.items
+        if isinstance(rhs, ir.Const) and isinstance(rhs.value, tuple):
+            self.tuple_table[lhs] = rhs.value
 
         #rhs_class_out = self._analyze_rhs_classes(rhs)
         size_calls = []
@@ -202,22 +204,14 @@ class ArrayAnalysis(object):
             out_eqs.reverse()
             return out_eqs
         elif call_name in ['empty', 'zeros', 'ones']:
-            # shape is either Int or tuple of Int
-            arg_typ = self.typemap[args[0].name]
-            if isinstance(arg_typ, types.scalars.Integer):
-                new_class = self._get_next_class()
-                self.class_sizes[new_class] = [args[0]]
-                return [new_class]
-            assert isinstance(arg_typ, types.containers.UniTuple)
-            out_eqs = []
-            for i in range(arg_typ.count):
-                new_class = self._get_next_class()
-                out_eqs.append(new_class)
-                self.class_sizes[new_class] = [self.tuple_table[args[0].name][i]]
-            return out_eqs
+            return self._get_classes_from_shape(args[0].name)
         elif call_name in ['empty_like', 'zeros_like', 'ones_like']:
             # shape same as input
             return self.array_shape_classes[args[0].name].copy()
+        elif call_name=='reshape':
+            # TODO: infer shape from length of args[0] in case of -1 input
+            # shape is either Int or tuple of Int
+            return self._get_classes_from_shape(args[1].name)
         elif call_name=='dot':
             # https://docs.scipy.org/doc/numpy/reference/generated/numpy.dot.html
             # for multi-dimensional arrays, last dimension of arg1 and second
@@ -253,6 +247,21 @@ class ArrayAnalysis(object):
 
         print("unknown numpy call:", call_name)
         return [-1]
+
+    def _get_classes_from_shape(self, shape_arg):
+        # shape is either Int or tuple of Int
+        arg_typ = self.typemap[shape_arg]
+        if isinstance(arg_typ, types.scalars.Integer):
+            new_class = self._get_next_class()
+            self.class_sizes[new_class] = [args[0]]
+            return [new_class]
+        assert isinstance(arg_typ, types.containers.UniTuple)
+        out_eqs = []
+        for i in range(arg_typ.count):
+            new_class = self._get_next_class()
+            out_eqs.append(new_class)
+            self.class_sizes[new_class] = [self.tuple_table[shape_arg][i]]
+        return out_eqs
 
     def _merge_classes(self, c1, c2):
         # no need to merge if equal classes already
