@@ -59,8 +59,9 @@ class CFunc(object):
         self._cache = FunctionCache(self._pyfunc)
 
     def compile(self):
-        # Try to load from cache
+        # Use cache and compiler in a critical section
         with compiler.lock_compiler:
+            # Try to load from cache
             cres = self._cache.load_overload(self._sig, self._targetdescr.target_context)
             if cres is None:
                 cres = self._compile_uncached()

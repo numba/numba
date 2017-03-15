@@ -390,6 +390,7 @@ class _GufuncWrapper(object):
         library.add_linking_library(self.library)
 
     def build(self):
+        # Use cache and compiler in a critical section
         with compiler.lock_compiler:
             wrapperlib = self.cache.load_overload(self.cres.signature, self.cres.target_context)
             wrapper_name = "__gufunc__." + self.fndesc.mangled_name

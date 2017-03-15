@@ -85,6 +85,7 @@ class UFuncDispatcher(object):
         """
         typingctx = self.targetdescr.typing_context
         targetctx = self.targetdescr.target_context
+        # Use cache and compiler in a critical section
         with compiler.lock_compiler:
             cres = self.cache.load_overload(sig, targetctx)
             if cres is not None:

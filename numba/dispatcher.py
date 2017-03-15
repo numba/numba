@@ -553,6 +553,7 @@ class Dispatcher(_DispatcherBase):
     def compile(self, sig):
         if not self._can_compile:
             raise RuntimeError("compilation disabled")
+        # Use counter to track recursion compilation depth
         with self._compiling_counter:
             args, return_type = sigutils.normalize_signature(sig)
             # Don't recompile if signature already exists
@@ -560,8 +561,7 @@ class Dispatcher(_DispatcherBase):
             if existing is not None:
                 return existing.entry_point
 
-            # Load before loading the cache.
-            # We cannot be compiling when checking the cache.
+            # Use cache and compiler in a critical section
             with compiler.lock_compiler:
                 # Try to load from disk cache
                 cres = self._cache.load_overload(sig, self.targetctx)
@@ -633,6 +633,7 @@ class LiftedLoop(_DispatcherBase):
         return self.func_ir.loc.line
 
     def compile(self, sig):
+        # Use counter to track recursion compilation depth
         with self._compiling_counter:
             # XXX this is mostly duplicated from Dispatcher.
             flags = self.flags
@@ -644,15 +645,16 @@ class LiftedLoop(_DispatcherBase):
             if existing is not None:
                 return existing.entry_point
 
+            # Use cache and compiler in a critical section
             with compiler.lock_compiler:
                 assert not flags.enable_looplift, "Enable looplift flags is on"
                 cres = compiler.compile_ir(typingctx=self.typingctx,
-                                        targetctx=self.targetctx,
-                                        func_ir=self.func_ir,
-                                        args=args, return_type=return_type,
-                                        flags=flags, locals=self.locals,
-                                        lifted=(),
-                                        lifted_from=self.lifted_from)
+                                           targetctx=self.targetctx,
+                                           func_ir=self.func_ir,
+                                           args=args, return_type=return_type,
+                                           flags=flags, locals=self.locals,
+                                           lifted=(),
+                                           lifted_from=self.lifted_from)
 
                 # Check typing error if object mode is used
                 if cres.typing_error is not None and not flags.enable_pyobject:
