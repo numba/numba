@@ -218,7 +218,8 @@ class ParforPass(object):
         return False
 
     def _get_ndims(self, arr):
-        return len(self.array_analysis.array_shape_classes[arr])
+        #return len(self.array_analysis.array_shape_classes[arr])
+        return self.typemap[arr].ndim
 
     def _numpy_to_parfor(self, lhs, expr):
         assert isinstance(expr, ir.Expr) and expr.op == 'call'
