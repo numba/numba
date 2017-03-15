@@ -107,6 +107,9 @@ class ArrayAnalysis(object):
                     self.array_size_vars.pop(lhs, None)
                     print("incompatible array shapes in control flow")
                     return []
+            # if correlation wasn't found
+            if rhs_corr is None:
+                rhs_corr = [-1]*self._get_ndims(lhs)
             self.array_shape_classes[lhs] = rhs_corr
             self.array_size_vars[lhs] = [-1]*self._get_ndims(lhs)
             # make sure output lhs array has size variables for each dimension
@@ -199,7 +202,7 @@ class ArrayAnalysis(object):
             else:
                 print("can't find shape classes for expr",node," of op",node.op)
         print("can't find shape classes for node",node," of type ",type(node))
-        return []
+        return None
 
     def _analyze_np_call(self, call_name, args):
         #print("numpy call ",call_name,args)
@@ -209,7 +212,7 @@ class ArrayAnalysis(object):
             return out_eqs
         elif call_name in ['empty', 'zeros', 'ones', 'full']:
             return self._get_classes_from_shape(args[0].name)
-        elif call_name in ['empty_like', 'zeros_like', 'ones_like', 'full_like']:
+        elif call_name in ['empty_like', 'zeros_like', 'ones_like', 'full_like', 'copy']:
             # shape same as input
             return self.array_shape_classes[args[0].name].copy()
         elif call_name=='reshape':
@@ -250,7 +253,7 @@ class ArrayAnalysis(object):
             return self._broadcast_and_match_shapes([a.name for a in args])
 
         print("unknown numpy call:", call_name)
-        return [-1]
+        return None
 
     def _get_classes_from_shape(self, shape_arg):
         # shape is either Int or tuple of Int
@@ -273,8 +276,6 @@ class ArrayAnalysis(object):
             for c2,sizes2 in curr_sizes.items():
                 if set(sizes1) & set(sizes2)!=set():
                     self._merge_classes(c1,c2)
-
-
 
     def _merge_classes(self, c1, c2):
         # no need to merge if equal classes already
