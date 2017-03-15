@@ -214,6 +214,8 @@ class ArrayAnalysis(object):
         elif call_name in ['empty', 'zeros', 'ones', 'full']:
             return self._get_classes_from_shape(args[0])
         elif call_name=='eye':
+            # if one input n, output is n*n
+            # two inputs n,m, output is n*m
             new_class1 = self._get_next_class()
             self.class_sizes[new_class1] = [args[0].name]
             out_eqs = [new_class1]
@@ -221,7 +223,26 @@ class ArrayAnalysis(object):
                 new_class2 = self._get_next_class()
                 self.class_sizes[new_class2] = [args[1].name]
                 out_eqs.append(new_class2)
+            else:
+                out_eqs.append(new_class1)
             return out_eqs
+        elif call_name=='identity':
+            # input n, output is n*n
+            new_class1 = self._get_next_class()
+            self.class_sizes[new_class1] = [args[0].name]
+            return [new_class1, new_class1]
+        elif call_name=='diag':
+            # TODO: support optional k arg
+            if len(args)==1:
+                in_arr = args[0].name
+                in_class = self.array_shape_classes[in_arr][0]
+                # if 1D input v, create 2D output with v on diagonal
+                # if 2D input v, return v's diagonal
+                if self._get_ndims(in_arr)==1:
+                    return [in_class, in_class]
+                else:
+                    self._get_ndims(in_arr)==2
+                    return [in_class]
         elif call_name in ['empty_like', 'zeros_like', 'ones_like', 'full_like',
                 'copy']:
             # shape same as input
@@ -237,6 +258,15 @@ class ArrayAnalysis(object):
             # TODO: return flattened size for multi-dimensional input
             if in_ndims==1:
                 return self.array_shape_classes[in_arr].copy()
+        elif call_name=='linspace':
+            # default is 50, arg3 is size
+            LINSPACE_DEFAULT_SIZE = 50
+            new_class = self._get_next_class()
+            if len(args)<3:
+                self.class_sizes[new_class] = [LINSPACE_DEFAULT_SIZE]
+            else:
+                self.class_sizes[new_class] = [args[2].name]
+            return [new_class]
         elif call_name=='dot':
             # https://docs.scipy.org/doc/numpy/reference/generated/numpy.dot.html
             # for multi-dimensional arrays, last dimension of arg1 and second
