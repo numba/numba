@@ -405,7 +405,7 @@ def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr, parfor_index):
             calltypes[ir_expr] = signature(el_typ, typemap[expr.name],
                 types.int64)
         else:
-            assert typemap[expr.name]==el_typ
+            # assert typemap[expr.name]==el_typ
             ir_expr = expr
         out_ir.append(ir.Assign(ir_expr, expr_out_var, loc))
     elif isinstance(expr, ir.Const):
