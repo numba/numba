@@ -40,6 +40,7 @@ class ArrayAnalysis(object):
         self.array_attr_calls = {}
         # keep tuple builds like {'t':[a,b],}
         self.tuple_table = {}
+        self.list_table = {}
 
     def run(self):
         # TODO: ignoring CFG for now
@@ -92,6 +93,8 @@ class ArrayAnalysis(object):
                 self.array_attr_calls[lhs] = (rhs.attr, rhs.value.name)
         if isinstance(rhs, ir.Expr) and rhs.op=='build_tuple':
             self.tuple_table[lhs] = rhs.items
+        if isinstance(rhs, ir.Expr) and rhs.op=='build_list':
+            self.list_table[lhs] = rhs.items
         if isinstance(rhs, ir.Const) and isinstance(rhs.value, tuple):
             self.tuple_table[lhs] = rhs.value
 
@@ -251,6 +254,13 @@ class ArrayAnalysis(object):
             # TODO: infer shape from length of args[0] in case of -1 input
             # shape is either Int or tuple of Int
             return self._get_classes_from_shape(args[1])
+        elif call_name=='array':
+            # only 1D list is supported, and not ndmin arg
+            if args[0].name in self.list_table:
+                l = self.list_table[args[0].name]
+                new_class1 = self._get_next_class()
+                self.class_sizes[new_class1] = [len(l)]
+                return [new_class1]
         elif call_name in ['cumsum', 'cumprod']:
             in_arr = args[0].name
             in_ndims = self._get_ndims(in_arr)
@@ -353,7 +363,7 @@ class ArrayAnalysis(object):
             if self._isarray(a):
                 eqs.append(self.array_shape_classes[a].copy())
             else:
-                eqs.append = [0] # constant variable
+                eqs.append([0]) # constant variable
         ndims = max([len(e) for e in eqs])
         for e in eqs:
             # prepend zeros to match shapes (broadcast rules)
