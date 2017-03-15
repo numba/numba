@@ -50,7 +50,7 @@ class ArrayAnalysis(object):
             self._analyze_block(block)
 
         self._merge_equivalent_classes()
-        
+
         if config.DEBUG_ARRAY_OPT==1:
             print("classes: ", self.array_shape_classes)
             print("class sizes: ", self.class_sizes)
@@ -207,9 +207,9 @@ class ArrayAnalysis(object):
             out_eqs = self.array_shape_classes[args[0].name].copy()
             out_eqs.reverse()
             return out_eqs
-        elif call_name in ['empty', 'zeros', 'ones']:
+        elif call_name in ['empty', 'zeros', 'ones', 'full']:
             return self._get_classes_from_shape(args[0].name)
-        elif call_name in ['empty_like', 'zeros_like', 'ones_like']:
+        elif call_name in ['empty_like', 'zeros_like', 'ones_like', 'full_like']:
             # shape same as input
             return self.array_shape_classes[args[0].name].copy()
         elif call_name=='reshape':
