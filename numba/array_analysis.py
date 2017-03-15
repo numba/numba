@@ -41,6 +41,7 @@ class ArrayAnalysis(object):
         # keep tuple builds like {'t':[a,b],}
         self.tuple_table = {}
         self.list_table = {}
+        self.constant_table = {}
 
     def run(self):
         # TODO: ignoring CFG for now
@@ -97,6 +98,8 @@ class ArrayAnalysis(object):
             self.list_table[lhs] = rhs.items
         if isinstance(rhs, ir.Const) and isinstance(rhs.value, tuple):
             self.tuple_table[lhs] = rhs.value
+        if isinstance(rhs, ir.Const): # and np.isscalar(rhs.value):
+            self.constant_table[lhs] = rhs.value
 
         #rhs_class_out = self._analyze_rhs_classes(rhs)
         size_calls = []
@@ -198,7 +201,7 @@ class ArrayAnalysis(object):
                     call_name, arr = self.array_attr_calls[node.func.name]
                     args.insert(0,arr)
                 assert call_name is not 'NULL'
-                return self._analyze_np_call(call_name, args)
+                return self._analyze_np_call(call_name, args, dict(node.kws))
             elif node.op=='getattr' and self._isarray(node.value.name):
                 # matrix transpose
                 if node.attr=='T':
@@ -208,7 +211,7 @@ class ArrayAnalysis(object):
         print("can't find shape classes for node",node," of type ",type(node))
         return None
 
-    def _analyze_np_call(self, call_name, args):
+    def _analyze_np_call(self, call_name, args, kws):
         #print("numpy call ",call_name,args)
         if call_name=='transpose':
             out_eqs = self.array_shape_classes[args[0].name].copy()
@@ -261,6 +264,34 @@ class ArrayAnalysis(object):
                 new_class1 = self._get_next_class()
                 self.class_sizes[new_class1] = [len(l)]
                 return [new_class1]
+        elif call_name=='concatenate':
+            # all dimensions of output are same as inputs, except axis
+            axis = 0
+            seq_arg = args[0].name
+            arr_args = []
+            # arrays sequence argument can be tuple or list
+            if seq_arg in self.list_table:
+                arr_args = self.list_table[seq_arg]
+            if seq_arg in self.tuple_table:
+                arr_args = self.tuple_table[seq_arg]
+            if len(args)>1:
+                axis = self.constant_table[args[1].name]
+            elif 'axis' in kws:
+                axis = self.constant_table[kws['axis'].name]
+            ndims = self._get_ndims(arr_args[0].name)
+            out_eqs = [-1]*ndims
+            new_class1 = self._get_next_class()
+            # TODO: set size to sum of input array's size along axis
+            out_eqs[axis] = new_class1
+            for i in range(ndims):
+                if i==axis:
+                    continue
+                c = self.array_shape_classes[arr_args[0].name][i]
+                for v in arr_args:
+                    # all input arrays have equal dimensions, except on axis
+                    c = self._merge_classes(c, self.array_shape_classes[v.name][i])
+                out_eqs[i] = c
+            return out_eqs
         elif call_name in ['cumsum', 'cumprod']:
             in_arr = args[0].name
             in_ndims = self._get_ndims(in_arr)
