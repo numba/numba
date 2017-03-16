@@ -878,23 +878,17 @@ def push_call_vars(blocks, saved_globals, saved_getattrs):
                     saved_globals[lhs.name] = stmt
                     continue
                 elif isinstance(rhs, ir.Expr) and rhs.op=='getattr':
-                    if rhs.value.name in saved_globals:
+                    if (rhs.value.name in saved_globals
+                            or rhs.value.name in saved_getattrs):
                         saved_getattrs[lhs.name] = stmt
                         continue
                 elif isinstance(rhs, ir.Expr) and rhs.op=='call':
                     fname = rhs.func.name
-                    if fname in saved_globals:
-                        new_body.append(saved_globals.pop(fname))
-                    elif fname in saved_getattrs:
-                        g_name = saved_getattrs[fname].value.value.name
-                        new_body.append(saved_globals.pop(g_name))
-                        new_body.append(saved_getattrs.pop(fname))
+                    new_body += _get_saved_call_nodes(fname, saved_globals,
+                        saved_getattrs)
                     for arg in rhs.args:
-                        if arg.name in saved_getattrs:
-                            g_name = saved_getattrs[arg.name].value.value.name
-                            if g_name in saved_globals:
-                                new_body.append(saved_globals.pop(g_name))
-                            new_body.append(saved_getattrs.pop(arg.name))
+                        new_body += _get_saved_call_nodes(arg.name, saved_globals,
+                            saved_getattrs)
 
             elif isinstance(stmt, Parfor):
                 pblocks = stmt.loop_body.copy()
@@ -904,3 +898,16 @@ def push_call_vars(blocks, saved_globals, saved_getattrs):
         block.body = new_body
 
     return
+
+def _get_saved_call_nodes(fname, saved_globals, saved_getattrs):
+    nodes = []
+    while fname in saved_globals or fname in saved_getattrs:
+        if fname in saved_globals:
+            nodes.append(saved_globals.pop(fname))
+            fname = '_PA_DONE'
+        elif fname in saved_getattrs:
+            up_name = saved_getattrs[fname].value.value.name
+            nodes.append(saved_getattrs.pop(fname))
+            fname = up_name
+    nodes.reverse()
+    return nodes
