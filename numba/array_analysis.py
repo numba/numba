@@ -90,6 +90,11 @@ class ArrayAnalysis(object):
         if isinstance(rhs, ir.Expr) and rhs.op=='getattr':
             if rhs.value.name in self.numpy_globals:
                 self.numpy_calls[lhs] = rhs.attr
+            elif rhs.value.name in self.numpy_calls:
+                # numpy submodule call like np.random.ranf
+                # we keep random.ranf as call name
+                self.numpy_calls[lhs] = (self.numpy_calls[rhs.value.name]
+                    +'.'+rhs.attr)
             elif self._isarray(rhs.value.name):
                 self.array_attr_calls[lhs] = (rhs.attr, rhs.value.name)
         if isinstance(rhs, ir.Expr) and rhs.op=='build_tuple':
@@ -200,7 +205,7 @@ class ArrayAnalysis(object):
                 elif node.func.name in self.array_attr_calls.keys():
                     call_name, arr = self.array_attr_calls[node.func.name]
                     args.insert(0,arr)
-                assert call_name is not 'NULL'
+                # assert call_name is not 'NULL'
                 return self._analyze_np_call(call_name, args, dict(node.kws))
             elif node.op=='getattr' and self._isarray(node.value.name):
                 # matrix transpose
