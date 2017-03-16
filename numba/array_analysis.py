@@ -266,18 +266,8 @@ class ArrayAnalysis(object):
                 return [new_class1]
         elif call_name=='concatenate':
             # all dimensions of output are same as inputs, except axis
-            axis = 0
-            seq_arg = args[0].name
-            arr_args = []
-            # arrays sequence argument can be tuple or list
-            if seq_arg in self.list_table:
-                arr_args = self.list_table[seq_arg]
-            if seq_arg in self.tuple_table:
-                arr_args = self.tuple_table[seq_arg]
-            if len(args)>1:
-                axis = self.constant_table[args[1].name]
-            elif 'axis' in kws:
-                axis = self.constant_table[kws['axis'].name]
+            axis = self._get_axis_second_arg(args, kws)
+            arr_args = self._get_sequence_arrs(args[0].name)
             ndims = self._get_ndims(arr_args[0].name)
             out_eqs = [-1]*ndims
             new_class1 = self._get_next_class()
@@ -292,6 +282,56 @@ class ArrayAnalysis(object):
                     c = self._merge_classes(c, self.array_shape_classes[v.name][i])
                 out_eqs[i] = c
             return out_eqs
+        elif call_name=='stack':
+            # all dimensions of output are same as inputs, but extra on axis
+            axis = self._get_axis_second_arg(args, kws)
+            arr_args = self._get_sequence_arrs(args[0].name)
+            ndims = self._get_ndims(arr_args[0].name)
+            out_eqs = [-1]*ndims
+            # all input arrays have equal dimensions
+            for i in range(ndims):
+                c = self.array_shape_classes[arr_args[0].name][i]
+                for v in arr_args:
+                    c = self._merge_classes(c, self.array_shape_classes[v.name][i])
+                out_eqs[i] = c
+            # output has one extra dimension
+            new_class1 = self._get_next_class()
+            self.class_sizes[new_class1] = [len(arr_args)]
+            out_eqs.insert(axis, new_class1)
+            # TODO: set size to sum of input array's size along axis
+            return out_eqs
+        elif call_name=='hstack':
+            # hstack is same as concatenate with axis=1
+            dummy_one_var = ir.Var(args[0].scope, "__dummy_1", args[0].loc)
+            self.constant_table["__dummy_1"] = 1
+            args.append(dummy_one_var)
+            return self._analyze_np_call('concatenate', args, kws)
+        elif call_name=='dstack':
+            # wrong Numpy doc: dstack is same as concatenate with axis=2
+            # dstack is same as stack with axis=2
+            dummy_two_var = ir.Var(args[0].scope, "__dummy_2", args[0].loc)
+            self.constant_table["__dummy_2"] = 2
+            args.append(dummy_two_var)
+            return self._analyze_np_call('stack', args, kws)
+        elif call_name=='vstack':
+            # vstack is same as concatenate with axis=0 if 2D input dims or more
+            # TODO: set size to sum of input array's size for 1D
+            arr_args = self._get_sequence_arrs(args[0].name)
+            ndims = self._get_ndims(arr_args[0].name)
+            if ndims>=2:
+                dummy_zero_var = ir.Var(args[0].scope, "__dummy_0", args[0].loc)
+                self.constant_table["__dummy_0"] = 0
+                args.append(dummy_zero_var)
+                return self._analyze_np_call('concatenate', args, kws)
+        elif call_name=='column_stack':
+            # 1D arrays turn into columns of 2D array
+            arr_args = self._get_sequence_arrs(args[0].name)
+            c = self.array_shape_classes[arr_args[0].name][0]
+            for v in arr_args:
+                c = self._merge_classes(c, self.array_shape_classes[v.name][0])
+            new_class = self._get_next_class()
+            self.class_sizes[new_class] = [len(arr_args)]
+            return [c , new_class]
         elif call_name in ['cumsum', 'cumprod']:
             in_arr = args[0].name
             in_ndims = self._get_ndims(in_arr)
@@ -343,6 +383,24 @@ class ArrayAnalysis(object):
 
         print("unknown numpy call:", call_name," ", args)
         return None
+
+    def _get_axis_second_arg(self, args, kws):
+        axis = 0
+        if len(args)>1:
+            axis = self.constant_table[args[1].name]
+        elif 'axis' in kws:
+            axis = self.constant_table[kws['axis'].name]
+        return axis
+
+    def _get_sequence_arrs(self, seq_arg):
+        """get array sequence input to concatenate, stack etc."""
+        arr_args = []
+        # arrays sequence argument can be tuple or list
+        if seq_arg in self.list_table:
+            arr_args = self.list_table[seq_arg]
+        if seq_arg in self.tuple_table:
+            arr_args = self.tuple_table[seq_arg]
+        return arr_args
 
     def _get_classes_from_shape(self, shape_arg):
         # shape is either Int or tuple of Int
