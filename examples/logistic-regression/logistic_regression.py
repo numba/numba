@@ -44,4 +44,5 @@ def main():
     print("SELFTIMED ", selftimed)
     print("checksum: ", np.sum(w))
 
-main()
+if __name__ == '__main__':
+    main()

@@ -48,4 +48,5 @@ def main():
     print("options = ", options)
     run(options)
 
-main()
+if __name__ == '__main__':
+    main()

@@ -24,4 +24,5 @@ def main():
     print("SELFTIMED ", selftimed)
     print("result: ", pi)
 
-main()
+if __name__ == '__main__':
+    main()
