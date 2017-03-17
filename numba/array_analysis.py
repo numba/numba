@@ -210,7 +210,8 @@ class ArrayAnalysis(object):
             elif node.op=='getattr' and self._isarray(node.value.name):
                 # matrix transpose
                 if node.attr=='T':
-                    return self._analyze_np_call('transpose', [node.value])
+                    return self._analyze_np_call('transpose', [node.value],
+                        dict())
             else:
                 print("can't find shape classes for expr",node," of op",node.op)
         print("can't find shape classes for node",node," of type ",type(node))
