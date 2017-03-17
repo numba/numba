@@ -222,8 +222,12 @@ class ArrayAnalysis(object):
             out_eqs = self.array_shape_classes[args[0].name].copy()
             out_eqs.reverse()
             return out_eqs
-        elif call_name in ['empty', 'zeros', 'ones', 'full']:
+        elif call_name in ['empty', 'zeros', 'ones', 'full', 'random.ranf',
+                'random.random_sample', 'random.sample']:
             return self._get_classes_from_shape(args[0])
+        elif call_name in ['random.rand', 'random.randn']:
+            # arguments are integers, not a tuple
+            return self._get_classes_from_dim_args(args)
         elif call_name=='eye':
             # if one input n, output is n*n
             # two inputs n,m, output is n*m
@@ -421,6 +425,14 @@ class ArrayAnalysis(object):
             out_eqs.append(new_class)
             self.class_sizes[new_class] = [self.tuple_table[shape_arg.name][i]]
         return out_eqs
+
+    def _get_classes_from_dim_args(self, args):
+        out = []
+        for arg in args:
+            new_class = self._get_next_class()
+            self.class_sizes[new_class] = [arg]
+            out.append(new_class)
+        return out
 
     def _merge_equivalent_classes(self):
         curr_sizes = self.class_sizes.copy()
