@@ -198,6 +198,9 @@ def replace_vars(blocks, vardict):
 def replace_vars_stmt(stmt, vardict):
     visit_vars_stmt(stmt, replace_var_callback, vardict)
 
+def replace_vars_inner(node, vardict):
+    return visit_vars_inner(node, replace_var_callback, vardict)
+
 # other packages that define new nodes add calls to visit variables in them
 # format: {type:function}
 visit_vars_extensions = {}
@@ -439,7 +442,12 @@ def apply_copy_propagate(blocks, in_copies, name_var_table):
         var_dict = {l:name_var_table[r] for l,r in in_copies[label]}
         # assignments as dict to replace with latest value
         for stmt in block.body:
-            replace_vars_stmt(stmt, var_dict)
+            # only rhs of assignments should be replaced
+            # e.g. if x=y is available, x in x=z shouldn't be replaced
+            if isinstance(stmt, ir.Assign):
+                stmt.value = replace_vars_inner(stmt.value, var_dict)
+            else:
+                replace_vars_stmt(stmt, var_dict)
             for T,f in copy_propagate_extensions.items():
                 if isinstance(stmt,T):
                     gen_set, kill_set = f(stmt)
