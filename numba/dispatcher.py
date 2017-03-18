@@ -553,16 +553,16 @@ class Dispatcher(_DispatcherBase):
     def compile(self, sig):
         if not self._can_compile:
             raise RuntimeError("compilation disabled")
-        # Use counter to track recursion compilation depth
-        with self._compiling_counter:
-            args, return_type = sigutils.normalize_signature(sig)
-            # Don't recompile if signature already exists
-            existing = self.overloads.get(tuple(args))
-            if existing is not None:
-                return existing.entry_point
+        # Use cache and compiler in a critical section
+        with compiler.lock_compiler:
+            # Use counter to track recursion compilation depth
+            with self._compiling_counter:
+                args, return_type = sigutils.normalize_signature(sig)
+                # Don't recompile if signature already exists
+                existing = self.overloads.get(tuple(args))
+                if existing is not None:
+                    return existing.entry_point
 
-            # Use cache and compiler in a critical section
-            with compiler.lock_compiler:
                 # Try to load from disk cache
                 cres = self._cache.load_overload(sig, self.targetctx)
                 if cres is not None:
@@ -633,20 +633,20 @@ class LiftedLoop(_DispatcherBase):
         return self.func_ir.loc.line
 
     def compile(self, sig):
-        # Use counter to track recursion compilation depth
-        with self._compiling_counter:
-            # XXX this is mostly duplicated from Dispatcher.
-            flags = self.flags
-            args, return_type = sigutils.normalize_signature(sig)
+        # Use cache and compiler in a critical section
+        with compiler.lock_compiler:
+            # Use counter to track recursion compilation depth
+            with self._compiling_counter:
+                # XXX this is mostly duplicated from Dispatcher.
+                flags = self.flags
+                args, return_type = sigutils.normalize_signature(sig)
 
-            # Don't recompile if signature already exists
-            # (e.g. if another thread compiled it before we got the lock)
-            existing = self.overloads.get(tuple(args))
-            if existing is not None:
-                return existing.entry_point
+                # Don't recompile if signature already exists
+                # (e.g. if another thread compiled it before we got the lock)
+                existing = self.overloads.get(tuple(args))
+                if existing is not None:
+                    return existing.entry_point
 
-            # Use cache and compiler in a critical section
-            with compiler.lock_compiler:
                 assert not flags.enable_looplift, "Enable looplift flags is on"
                 cres = compiler.compile_ir(typingctx=self.typingctx,
                                            targetctx=self.targetctx,
