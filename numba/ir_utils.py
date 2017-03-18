@@ -326,16 +326,23 @@ def remove_dead_block(block, lives):
         if isinstance(stmt, ir.Assign):
             lhs = stmt.target
             rhs = stmt.value
-            if lhs.name not in lives:
+            if lhs.name not in lives and has_no_side_effect(rhs):
                 continue
             if isinstance(rhs, ir.Var) and lhs.name==rhs.name:
                 continue
+            # TODO: remove other nodes like SetItem etc.
 
         lives |= { v.name for v in stmt.list_vars() }
         new_body.append(stmt)
     new_body.reverse()
     block.body = new_body
     return
+
+def has_no_side_effect(rhs):
+    # TODO: find side-effect free calls like Numpy calls
+    if isinstance(rhs, ir.Expr) and rhs.op=='call':
+        return False
+    return True
 
 def copy_propagate(blocks):
     """compute copy propagation information for each block using fixed-point
