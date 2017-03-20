@@ -209,6 +209,12 @@ class ArrayAnalysis(object):
                 # assert call_name is not 'NULL'
                 return self._analyze_np_call(call_name, args, dict(node.kws))
             elif node.op=='getattr' and self._isarray(node.value.name):
+                # numpy recarray, e.g. X.a
+                val = node.value.name
+                val_typ = self.typemap[val]
+                if (isinstance(val_typ.dtype, Record)
+                        and node.attr in val_typ.dtype.fields):
+                    return self.array_shape_classes[val].copy()
                 # matrix transpose
                 if node.attr=='T':
                     return self._analyze_np_call('transpose', [node.value],
