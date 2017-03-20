@@ -133,12 +133,12 @@ class ParforPass(object):
         # push function call variables inside parfors so gufunc function
         # wouldn't need function variables as argument
         push_call_vars(self.func_ir.blocks, {}, {})
-        # run post processor again to generate Del nodes
-        # post_proc = postproc.PostProcessor(self.func_ir)
-        # post_proc.run()
         # after optimization, some size variables are not available anymore
         remove_dead_class_sizes(self.func_ir.blocks, self.array_analysis)
         dprint_func_ir(self.func_ir, "after optimization")
+        # run post processor again to generate Del nodes
+        post_proc = postproc.PostProcessor(self.func_ir)
+        post_proc.run()
         # lower_parfor_sequential(self.func_ir, self.typemap, self.calltypes)
         return
 
