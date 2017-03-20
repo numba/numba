@@ -225,12 +225,15 @@ class ParforPass(object):
         assert isinstance(expr, ir.Expr) and expr.op == 'call'
         call_name = self.array_analysis.numpy_calls[expr.func.name]
         args = expr.args
+        kws = dict(expr.kws)
         if call_name=='dot':
             assert len(args)==2 or len(args)==3
             # if 3 args, output is allocated already
             out = None
             if len(args)==3:
                 out = args[2]
+            if 'out' in kws:
+                out = kws['out']
 
             in1 = args[0]
             in2 = args[1]
