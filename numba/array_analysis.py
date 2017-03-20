@@ -219,6 +219,16 @@ class ArrayAnalysis(object):
                 if node.attr=='T':
                     return self._analyze_np_call('transpose', [node.value],
                         dict())
+            elif (node.op=='getattr'
+                    and isinstance(self.typemap[node.value.name], Record)):
+                # nested arrays in numpy records
+                val = node.value.name
+                val_typ = self.typemap[val]
+                if (node.attr in val_typ.fields
+                        and isinstance(val_typ.fields[node.attr][0],
+                        NestedArray)):
+                    shape = val_typ.fields[node.attr][0].shape
+                    return self._get_classes_from_const_shape(shape)
             elif node.op=='getitem' or node.op=='static_getitem':
                 # getitem where output is array is possibly accessing elements
                 # of numpy records, e.g. X['a']
@@ -440,6 +450,20 @@ class ArrayAnalysis(object):
             new_class = self._get_next_class()
             out_eqs.append(new_class)
             self.class_sizes[new_class] = [self.tuple_table[shape_arg.name][i]]
+        return out_eqs
+
+    def _get_classes_from_const_shape(self, shape):
+        # shape is either int or tuple/list of ints
+        if isinstance(shape, int):
+            new_class = self._get_next_class()
+            self.class_sizes[new_class] = [shape]
+            return [new_class]
+        assert isinstance(shape, (tuple,list))
+        out_eqs = []
+        for dim in shape:
+            new_class = self._get_next_class()
+            out_eqs.append(new_class)
+            self.class_sizes[new_class] = [dim]
         return out_eqs
 
     def _get_classes_from_dim_args(self, args):
