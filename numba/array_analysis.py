@@ -3,6 +3,7 @@ from numba import ir
 from numba.ir_utils import *
 #from numba.annotations import type_annotations
 from numba import types, config
+from numba.types.npytypes import *
 from numba.typing import npydecl
 import collections
 
@@ -212,6 +213,14 @@ class ArrayAnalysis(object):
                 if node.attr=='T':
                     return self._analyze_np_call('transpose', [node.value],
                         dict())
+            elif node.op=='getitem' or node.op=='static_getitem':
+                # getitem where output is array is possibly accessing elements
+                # of numpy records, e.g. X['a']
+                val = node.value.name
+                val_typ = self.typemap[val]
+                if (self._isarray(val) and isinstance(val_typ.dtype, Record)
+                        and node.index in val_typ.dtype.fields):
+                    return self.array_shape_classes[val].copy()
             else:
                 print("can't find shape classes for expr",node," of op",node.op)
         print("can't find shape classes for node",node," of type ",type(node))
