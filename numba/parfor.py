@@ -226,7 +226,12 @@ class ParforPass(object):
         call_name = self.array_analysis.numpy_calls[expr.func.name]
         args = expr.args
         if call_name=='dot':
-            assert len(args)==2 #TODO: or len(args)==3
+            assert len(args)==2 or len(args)==3
+            # if 3 args, output is allocated already
+            out = None
+            if len(args)==3:
+                out = args[2]
+
             in1 = args[0]
             in2 = args[1]
             el_typ = self.typemap[lhs.name].dtype
@@ -252,9 +257,13 @@ class ParforPass(object):
                 body_label = next_label()
                 out_label = next_label()
 
-                alloc_nodes = mk_alloc(self.typemap, self.calltypes, lhs,
-                    size_var, el_typ, scope, loc)
-                init_block.body = alloc_nodes
+                if out==None:
+                    alloc_nodes = mk_alloc(self.typemap, self.calltypes, lhs,
+                        size_var, el_typ, scope, loc)
+                    init_block.body = alloc_nodes
+                else:
+                    out_assign = ir.Assign(out, lhs, loc)
+                    init_block.body = [out_assign]
 
                 # sum_var = 0
                 const_node = ir.Const(0, loc)
