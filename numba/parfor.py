@@ -267,7 +267,8 @@ class ParforPass(object):
                 else:
                     out_assign = ir.Assign(out, lhs, loc)
                     init_block.body = [out_assign]
-
+                init_block.body.extend(_gen_dotmv_check(self.typemap,
+                    self.calltypes, in1, in2, lhs, scope, loc))
                 # sum_var = 0
                 const_node = ir.Const(0, loc)
                 const_var = ir.Var(scope, mk_unique_var("$const"), loc)
@@ -311,6 +312,26 @@ class ParforPass(object):
             return parfor
         # return error if we couldn't handle it (avoid rewrite infinite loop)
         raise NotImplementedError("parfor translation failed for ", expr)
+
+def _gen_dotmv_check(typemap, calltypes, in1, in2, out, scope, loc):
+    """compile dot() check from linalg module and insert a call to it"""
+    from numba import njit
+    from numba.targets.linalg import dot_3_mv_check_args
+    check_func = njit(dot_3_mv_check_args)
+    # g_var = Global(dot_3_mv_check_args)
+    g_var = ir.Var(scope, mk_unique_var("$check_mv"), loc)
+    func_typ = types.functions.Dispatcher(check_func)
+    typemap[g_var.name] = func_typ
+    g_obj = ir.Global("dot_3_mv_check_args", check_func, loc)
+    g_assign = ir.Assign(g_obj, g_var, loc)
+    # dummy_var = call g_var(in1, in2, out)
+    call_node = ir.Expr.call(g_var, [in1,in2,out], (), loc)
+    calltypes[call_node] = func_typ.get_call_type(typing.Context(),
+        [typemap[in1.name], typemap[in2.name], typemap[out.name]], {})
+    dummy_var = ir.Var(scope, mk_unique_var("$call_out_dummy"), loc)
+    typemap[dummy_var.name] = types.none
+    call_assign = ir.Assign(call_node, dummy_var, loc)
+    return [g_assign, call_assign]
 
 def _mk_mvdot_body(typemap, calltypes, phi_b_var, index_var, in1, in2, sum_var,
         scope, loc, el_typ):
