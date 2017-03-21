@@ -86,7 +86,7 @@ class ArrayAnalysis(object):
             for T in MAP_TYPES:
                 if isinstance(rhs.value, T):
                     self.map_calls.append(lhs)
-            if rhs.value.__name__=='numpy':
+            if rhs.value==numpy:
                 self.numpy_globals.append(lhs)
         if isinstance(rhs, ir.Expr) and rhs.op=='getattr':
             if rhs.value.name in self.numpy_globals:
