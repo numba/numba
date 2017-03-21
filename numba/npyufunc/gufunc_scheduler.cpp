@@ -233,7 +233,6 @@ void create_schedule(const RangeActual &full_space, uintp num_sched, intp *sched
     debug is non-zero if DEBUG_ARRAY_OPT is turned on.
 */
 extern "C" void do_scheduling(intp num_dim, intp *dims, uintp num_threads, intp *sched, intp debug) {
-
     if (debug) {
         printf("num_dim = %d\n", (int)num_dim);
         printf("dims = [");
@@ -243,6 +242,8 @@ extern "C" void do_scheduling(intp num_dim, intp *dims, uintp num_threads, intp 
         printf("]\n");
         printf("num_threads = %d\n", (int)num_threads);
     }
+
+    if (num_threads == 0) return;
 
     RangeActual full_space(num_dim, dims);
     create_schedule(full_space, num_threads, sched);
