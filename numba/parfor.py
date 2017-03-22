@@ -922,6 +922,10 @@ def push_call_vars(blocks, saved_globals, saved_getattrs):
                     for arg in rhs.args:
                         new_body += _get_saved_call_nodes(arg.name, saved_globals,
                             saved_getattrs)
+                    for arg in dict(rhs.kws).values():
+                        new_body += _get_saved_call_nodes(arg.name, saved_globals,
+                            saved_getattrs)
+
 
             elif isinstance(stmt, Parfor):
                 pblocks = stmt.loop_body.copy()
