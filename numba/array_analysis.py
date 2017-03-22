@@ -289,9 +289,14 @@ class ArrayAnalysis(object):
             # shape same as input
             return self.array_shape_classes[args[0].name].copy()
         elif call_name=='reshape':
+            #print("reshape args: ", args)
             # TODO: infer shape from length of args[0] in case of -1 input
-            # shape is either Int or tuple of Int
-            return self._get_classes_from_shape(args[1])
+            if len(args)==2:
+                # shape is either Int or tuple of Int
+                return self._get_classes_from_shape(args[1])
+            else:
+                # a list integers for shape
+                return self._get_classes_from_shape_list(args[1:])
         elif call_name=='array':
             # only 1D list is supported, and not ndmin arg
             if args[0].name in self.list_table:
@@ -444,12 +449,26 @@ class ArrayAnalysis(object):
             new_class = self._get_next_class()
             self.class_sizes[new_class] = [shape_arg]
             return [new_class]
-        assert isinstance(arg_typ, types.containers.UniTuple)
+        # TODO: handle A.reshape(c.shape)
+        if (not isinstance(arg_typ, types.containers.UniTuple) or
+                shape_arg.name not in self.tuple_table):
+            return None
         out_eqs = []
         for i in range(arg_typ.count):
             new_class = self._get_next_class()
             out_eqs.append(new_class)
             self.class_sizes[new_class] = [self.tuple_table[shape_arg.name][i]]
+        return out_eqs
+
+    def _get_classes_from_shape_list(self, shape_list):
+        assert isinstance(shape_list, list)
+        out_eqs = []
+        for shape_arg in shape_list:
+            arg_typ = self.typemap[shape_arg.name]
+            assert isinstance(arg_typ, types.scalars.Integer)
+            new_class = self._get_next_class()
+            self.class_sizes[new_class] = [shape_arg]
+            out_eqs.append(new_class)
         return out_eqs
 
     def _get_classes_from_const_shape(self, shape):
