@@ -13,6 +13,7 @@ import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
+from numba import llvmthreadsafe as llvmts
 from numba import types, utils, cgutils, typing, funcdesc, debuginfo
 from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
@@ -990,6 +991,7 @@ class BaseContext(object):
         gv.initializer = addr
         return builder.load(gv)
 
+    @llvmts.lock_llvm
     def get_abi_sizeof(self, ty):
         """
         Get the ABI size of LLVM type *ty*.
