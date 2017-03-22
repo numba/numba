@@ -192,7 +192,8 @@ class _UserProvidedCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
     def __init__(self, py_func, py_file):
         self._py_file = py_file
         self._lineno = py_func.__code__.co_firstlineno
-        subpath = os.path.dirname(self._py_file).lstrip(os.path.sep)
+        drive, path = os.path.splitdrive(self._py_file)
+        subpath = os.path.dirname(path).lstrip(os.path.sep)
         self._cache_path = os.path.join(config.CACHE_DIR, subpath)
 
     def get_cache_path(self):
