@@ -510,7 +510,6 @@ class RuntimeLinker(object):
 
 
 class BaseCPUCodegen(object):
-    _llvm_initialized = False
 
     def __init__(self, module_name):
         initialize_llvm()
@@ -730,13 +729,10 @@ class JITCPUCodegen(BaseCPUCodegen):
         # return functools.partial(self._engine.remove_module, module)
 
 
-_llvm_initialized = False
-
-
+@llvmts.lock_llvm
 def initialize_llvm():
-    global _llvm_initialized
-    if not _llvm_initialized:
-        ll.initialize()
-        ll.initialize_native_target()
-        ll.initialize_native_asmprinter()
-        _llvm_initialized = True
+    """Safe to use multiple times.
+    """
+    ll.initialize()
+    ll.initialize_native_target()
+    ll.initialize_native_asmprinter()
