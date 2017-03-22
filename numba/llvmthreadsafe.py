@@ -35,9 +35,29 @@ class LockLLVM(object):
 lock_llvm = LockLLVM()
 del LockLLVM
 
+
+def _set_dispose(dtor):
+    def _ts_dispose():
+        with lock_llvm:
+            dtor()
+    return _ts_dispose
+
+
 # Bind llvm API with the lock
-parse_assembly = lock_llvm(llvm.parse_assembly)
-parse_bitcode = lock_llvm(llvm.parse_bitcode)
+@lock_llvm
+def parse_assembly(*args, **kwargs):
+    mod = llvm.parse_assembly(*args, **kwargs)
+    mod._dispose = _set_dispose(mod._dispose)
+    return mod
+
+
+@lock_llvm
+def parse_bitcode(*args, **kwargs):
+    mod = llvm.parse_bitcode(*args, **kwargs)
+    mod._dispose = _set_dispose(mod._dispose)
+    return mod
+
+
 create_mcjit_compiler = lock_llvm(llvm.create_mcjit_compiler)
 create_module_pass_manager = lock_llvm(llvm.create_module_pass_manager)
 create_function_pass_manager = lock_llvm(llvm.create_function_pass_manager)
