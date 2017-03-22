@@ -839,16 +839,22 @@ numba_fatal_error(void)
 NUMBA_EXPORT_FUNC(void)
 numba_convert_exception_to_warning(){
     PyObject *type, *value, *traceback;
-    PyObject *exc_text, *warn_text;
+    PyObject *exc_text=NULL, *warn_text=NULL;
 
     if (!PyErr_Occurred()) return;
 
     PyErr_Fetch(&type, &value, &traceback);
     PyErr_NormalizeException(&type, &value, &traceback);
     exc_text = PyObject_Repr(value);
+    if (!exc_text) goto CLEANUP;
     warn_text = PyString_FromFormat("exception raised in numba threads: %s",
                                     PyString_AsString(exc_text));
-    PyErr_WarnEx(PyExc_UserWarning, PyString_AsString(warn_text), 1);
+    if (!exc_text) goto CLEANUP;
+    if (PyErr_WarnEx(PyExc_UserWarning, PyString_AsString(warn_text), 1) != 0){
+        /* (Rare error) Fail to set warning. */
+        fprintf(stderr, "** fail to set warning in %s\n", __func__);
+    }
+CLEANUP:
     /* Clean up */
     Py_XDECREF(exc_text);
     Py_XDECREF(warn_text);
