@@ -764,6 +764,11 @@ def _inv_err_handler(r):
             raise np.linalg.LinAlgError(
                 "Matrix is singular to machine precision.")
 
+@register_jitable
+def _dummy_liveness_func(a):
+    """pass a list of variables to be preseved through dead code elimination"""
+    return a[0]
+
 
 @overload(np.linalg.inv)
 def inv_impl(a):
@@ -801,8 +806,9 @@ def inv_impl(a):
         _inv_err_handler(r)
 
         # help liveness analysis
-        acpy.size
-        ipiv.size
+        #acpy.size
+        #ipiv.size
+        _dummy_liveness_func([acpy.size, ipiv.size])
         return acpy
 
     return inv_impl
@@ -1173,9 +1179,9 @@ if numpy_version >= (1, 8):
             _handle_err_maybe_convergence_problem(r)
 
             # help liveness analysis
-            acpy.size
-            w.size
-
+            #acpy.size
+            #w.size
+            _dummy_liveness_func([acpy.size, w.size])
             return (w, acpy)
 
         return eigh_impl
@@ -1226,9 +1232,9 @@ if numpy_version >= (1, 8):
             _handle_err_maybe_convergence_problem(r)
 
             # help liveness analysis
-            acpy.size
-            w.size
-
+            #acpy.size
+            #w.size
+            _dummy_liveness_func([acpy.size, w.size])
             return w
 
         return eigvalsh_impl
@@ -1295,11 +1301,11 @@ if numpy_version >= (1, 8):
             _handle_err_maybe_convergence_problem(r)
 
             # help liveness analysis
-            acpy.size
-            vt.size
-            u.size
-            s.size
-
+            #acpy.size
+            #vt.size
+            #u.size
+            #s.size
+            _dummy_liveness_func([acpy.size, vt.size, u.size, s.size])
             return (u.T, s, vt.T)
 
         return svd_impl
@@ -1378,9 +1384,9 @@ def qr_impl(a):
         _handle_err_maybe_convergence_problem(ret)
 
         # help liveness analysis
-        tau.size
-        q.size
-
+        #tau.size
+        #q.size
+        _dummy_liveness_func([tau.size, q.size])
         return (q[:, :minmn], r)
 
     return qr_impl
@@ -1612,11 +1618,11 @@ def lstsq_impl(a, b, rcond=-1.0):
         x = _lstsq_solution(b, bcpy, n)
 
         # help liveness analysis
-        acpy.size
-        bcpy.size
-        s.size
-        rank_ptr.size
-
+        #acpy.size
+        #bcpy.size
+        #s.size
+        #rank_ptr.size
+        _dummy_liveness_func([acpy.size, bcpy.size, s.size, rank_ptr.size])
         return (x, res, rank, s[:minmn])
 
     return lstsq_impl
@@ -1700,10 +1706,10 @@ def solve_impl(a, b):
         _inv_err_handler(r)
 
         # help liveness analysis
-        acpy.size
-        bcpy.size
-        ipiv.size
-
+        #acpy.size
+        #bcpy.size
+        #ipiv.size
+        _dummy_liveness_func([acpy.size, bcpy.size, ipiv.size])
         return _solve_compute_return(b, bcpy)
 
     return solve_impl
@@ -1862,13 +1868,14 @@ def pinv_impl(a, rcond=1.e-15):
         )
 
         # help liveness analysis
-        acpy.size
-        vt.size
-        u.size
-        s.size
-        one.size
-        zero.size
-
+        #acpy.size
+        #vt.size
+        #u.size
+        #s.size
+        #one.size
+        #zero.size
+        _dummy_liveness_func([acpy.size, vt.size, u.size, s.size, one.size,
+            zero.size])
         return acpy.T.ravel().reshape(a.shape).T
 
     return pinv_impl
@@ -1962,7 +1969,8 @@ def slogdet_impl(a):
             sgn = -1
 
         # help liveness analysis
-        ipiv.size
+        #ipiv.size
+        _dummy_liveness_func([ipiv.size])
         return diag_walker(n, acpy, sgn)
 
     return slogdet_impl
@@ -2058,11 +2066,11 @@ def _compute_singular_values_impl(a):
         _handle_err_maybe_convergence_problem(r)
 
         # help liveness analysis
-        acpy.size
-        vt.size
-        u.size
-        s.size
-
+        #acpy.size
+        #vt.size
+        #u.size
+        #s.size
+        _dummy_liveness_func([acpy.size, vt.size, u.size, s.size])
         return s
 
     return sv_function
@@ -2103,9 +2111,9 @@ def _oneD_norm_2_impl(a):
             assert 0   # unreachable
 
         # help liveness analysis
-        ret.size
-        a.size
-
+        #ret.size
+        #a.size
+        _dummy_liveness_func([ret.size, a.size])
         return ret[0]
 
     return impl
