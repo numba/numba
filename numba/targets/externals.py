@@ -8,6 +8,7 @@ import ctypes
 from llvmlite import ir
 import llvmlite.binding as ll
 
+from numba import llvmthreadsafe as llvmts
 from numba import utils, config
 from numba import _helperlib
 from . import intrinsics
@@ -195,7 +196,7 @@ define void @fnclex() {
 }
     """
     ll.initialize_native_asmparser()
-    library.add_llvm_module(ll.parse_assembly(ir_mod))
+    library.add_llvm_module(llvmts.parse_assembly(ir_mod))
     library.finalize()
     return library
 

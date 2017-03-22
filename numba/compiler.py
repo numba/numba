@@ -8,6 +8,7 @@ from pprint import pprint
 import sys
 import warnings
 import traceback
+import threading
 from .tracing import trace, event
 
 from numba import (bytecode, interpreter, funcdesc, postproc,
@@ -15,6 +16,10 @@ from numba import (bytecode, interpreter, funcdesc, postproc,
                    errors, types, ir, types, rewrites, transforms)
 from numba.targets import cpu, callconv
 from numba.annotations import type_annotations
+
+
+# Lock for the preventing multiple compiler execution
+lock_compiler = threading.RLock()
 
 
 class Flags(utils.ConfigOptions):

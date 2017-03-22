@@ -3,7 +3,6 @@ from __future__ import print_function, absolute_import
 import sys
 
 import llvmlite.llvmpy.core as lc
-import llvmlite.binding as ll
 
 from numba import _dynfunc, config
 from numba.callwrapper import PyCallWrapper
