@@ -36,28 +36,33 @@ lock_llvm = LockLLVM()
 del LockLLVM
 
 
-def _set_dispose(dtor):
+def _patch_dispose(llvmobj):
+    """
+    Patch the _dispose method of the llvm object to use the llvm lock.
+    """
+    dtor = llvmobj._dispose
+
     def _ts_dispose():
         with lock_llvm:
             dtor()
-    return _ts_dispose
+
+    llvmobj._dispose = _ts_dispose
+    return llvmobj
+
+
+def _patch_retval_dispose(fn):
+    """
+    Patch the _dispose method of the return value of the wrapped function.
+    """
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        return _patch_dispose(fn(*args, **kwargs))
+    return wrapper
 
 
 # Bind llvm API with the lock
-@lock_llvm
-def parse_assembly(*args, **kwargs):
-    mod = llvm.parse_assembly(*args, **kwargs)
-    mod._dispose = _set_dispose(mod._dispose)
-    return mod
-
-
-@lock_llvm
-def parse_bitcode(*args, **kwargs):
-    mod = llvm.parse_bitcode(*args, **kwargs)
-    mod._dispose = _set_dispose(mod._dispose)
-    return mod
-
-
+parse_assembly = lock_llvm(_patch_retval_dispose(llvm.parse_assembly))
+parse_bitcode = lock_llvm(_patch_retval_dispose(llvm.parse_bitcode))
 create_mcjit_compiler = lock_llvm(llvm.create_mcjit_compiler)
 create_module_pass_manager = lock_llvm(llvm.create_module_pass_manager)
 create_function_pass_manager = lock_llvm(llvm.create_function_pass_manager)
