@@ -37,6 +37,10 @@ def _lower_parfor_parallel(lowerer, parfor):
     targetctx = lowerer.context
     typemap = lowerer.fndesc.typemap
 
+    if config.DEBUG_ARRAY_OPT:
+        print("_lower_parfor_parallel")
+        parfor.dump()
+
     # produce instructions for init_block
     if config.DEBUG_ARRAY_OPT:
         print("init_block = ", parfor.init_block, " ", type(parfor.init_block))
