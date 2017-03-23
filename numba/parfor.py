@@ -44,7 +44,7 @@ class Parfor(ir.Expr, ir.Stmt):
         self.index_var = index_var
 
     def __repr__(self):
-        return repr(self.loop_nests) + repr(self.loop_body)
+        return repr(self.loop_nests) + repr(self.loop_body) + repr(self.index_var)
 
     def list_vars(self):
         """list variables used (read/written) in this parfor by
@@ -74,6 +74,7 @@ class Parfor(ir.Expr, ir.Stmt):
         for offset, block in sorted(self.loop_body.items()):
             print('label %s:' % (offset,), file=file)
             block.dump(file)
+        print("index_var = ", self.index_var)
         print(("end parfor").center(20,'-'), file=file)
 
 
@@ -597,7 +598,7 @@ def get_parfor_outputs(parfor):
     for blk in parfor.loop_body.values():
         for stmt in blk.body:
             if isinstance(stmt, ir.SetItem):
-                if stmt.index.name==parfor.index_var:
+                if stmt.index.name==parfor.index_var.name:
                     outputs.append(stmt.target.name)
     return sorted(outputs)
 
