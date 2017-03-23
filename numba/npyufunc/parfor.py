@@ -72,8 +72,10 @@ def _lower_parfor_parallel(lowerer, parfor):
     loop_ranges = [l.range_variable.name for l in parfor.loop_nests]
     array_size_vars = parfor.array_analysis.array_size_vars
     if config.DEBUG_ARRAY_OPT:
-        print("array_size_vars = ", array_size_vars)
+        print("array_size_vars = ", sorted(array_size_vars.items()))
     call_parallel_gufunc(lowerer, func, gu_signature, func_sig, func_args, loop_ranges, array_size_vars)
+    if config.DEBUG_ARRAY_OPT:
+        sys.stdout.flush()
 
 # A work-around to prevent circular imports
 numba.parfor.lower_parfor_parallel = _lower_parfor_parallel
@@ -166,7 +168,7 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
     # param name to guaranteed legal name.
     param_dict = legalize_names(parfor_params)
     if config.DEBUG_ARRAY_OPT==1:
-        print("param_dict = ", param_dict, " ", type(param_dict))
+        print("param_dict = ", sorted(param_dict.items()), " ", type(param_dict))
 
     # Some loop_indices are not legal parameter names so create a dict of potentially illegal
     # loop index to guaranteed legal name.
@@ -174,7 +176,7 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
     # Compute a new list of legal loop index names.
     legal_loop_indices = [ ind_dict[v] for v in loop_indices]
     if config.DEBUG_ARRAY_OPT==1:
-        print("ind_dict = ", ind_dict, " ", type(ind_dict))
+        print("ind_dict = ", sorted(ind_dict.items()), " ", type(ind_dict))
         print("legal_loop_indices = ", legal_loop_indices, " ", type(legal_loop_indices))
         for pd in parfor_params:
             print("pd = ", pd)

@@ -611,7 +611,7 @@ def get_parfor_outputs(parfor):
 def visit_vars_parfor(parfor, callback, cbdata):
     if config.DEBUG_ARRAY_OPT==1:
         print("visiting parfor vars for:",parfor)
-        print("cbdata: ", cbdata)
+        print("cbdata: ", sorted(cbdata.items()))
     for l in parfor.loop_nests:
         l.index_variable = visit_vars_inner(l.index_variable, callback, cbdata)
         l.range_variable = visit_vars_inner(l.range_variable, callback, cbdata)
