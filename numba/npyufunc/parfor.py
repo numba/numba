@@ -49,6 +49,9 @@ def _lower_parfor_parallel(lowerer, parfor):
             print("lower init_block instr = ", instr)
         lowerer.lower_inst(instr)
 
+    # run get_parfor_outputs() before gufunc creation since Jumps are modified
+    #  so CFG of loop_body dict is becomes invalid
+    parfor_output_arrays = numba.parfor.get_parfor_outputs(parfor)
     # compile parfor body as a separate function to be used with GUFuncWrapper
     flags = compiler.Flags()
     flags.set('error_model', 'numpy')
@@ -57,10 +60,10 @@ def _lower_parfor_parallel(lowerer, parfor):
     # get the shape signature
     array_shape_classes = parfor.array_analysis.array_shape_classes
     func_args = ['sched'] + func_args
-    num_inputs = len(func_args) - len(numba.parfor.get_parfor_outputs(parfor))
+    num_inputs = len(func_args) - len(parfor_output_arrays)
     if config.DEBUG_ARRAY_OPT:
         print("num_inputs = ", num_inputs)
-        print("parfor_outputs = ", numba.parfor.get_parfor_outputs(parfor))
+        print("parfor_outputs = ", parfor_output_arrays)
     gu_signature = _create_shape_signature(array_shape_classes, num_inputs, func_args, func_sig)
     if config.DEBUG_ARRAY_OPT:
         print("gu_signature = ", gu_signature)
