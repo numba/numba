@@ -6,6 +6,11 @@
 #include <stdio.h>
 #include "gufunc_scheduler.h"
 
+// round not available on VS2010.
+double guround (double number) {
+	return number < 0.0 ? ceil(number - 0.5) : floor(number + 0.5);
+}
+
 class RangeActual {
 public:
     std::vector<intp> start, end;
@@ -145,7 +150,7 @@ void divide_work(const RangeActual &full_iteration_space,
                 percent_dims.push_back(temp);
                 dim_prod *= temp;
             }
-            divisions_for_this_dim = intp(round(std::pow((num_threads / dim_prod), (1.0 / percent_dims.size())) * percent_dims[0]));
+            divisions_for_this_dim = intp(guround(std::pow((double)(num_threads / dim_prod), (double)(1.0 / percent_dims.size())) * percent_dims[0]));
         }
               
         uintp chunkstart = full_iteration_space.start[dims[index].dim];
