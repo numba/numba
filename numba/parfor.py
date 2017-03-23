@@ -586,11 +586,14 @@ def get_parfor_params(parfor):
 
     # remove parfor index variables since they are not input
     for l in parfor.loop_nests:
-        live_map[first_non_init_block].remove(l.index_variable.name)
+        live_map[first_non_init_block] -= {l.index_variable.name}
 
     return sorted(live_map[first_non_init_block])
 
 def get_parfor_outputs(parfor):
+    """get arrays that are written to inside the parfor and need to be passed
+    as parameters to gufunc.
+    """
     # TODO: reduction output
     # FIXME: The following assumes the target of all SetItem are outputs, which is wrong!
     last_label = max(parfor.loop_body.keys())
@@ -600,6 +603,9 @@ def get_parfor_outputs(parfor):
             if isinstance(stmt, ir.SetItem):
                 if stmt.index.name==parfor.index_var.name:
                     outputs.append(stmt.target.name)
+    parfor_params = get_parfor_params(parfor)
+    # make sure these written arrays are in parfor parameters (live coming in)
+    outputs = list(set(outputs) & set(parfor_params))
     return sorted(outputs)
 
 def visit_vars_parfor(parfor, callback, cbdata):
