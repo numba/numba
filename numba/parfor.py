@@ -174,12 +174,10 @@ class ParforPass(object):
         body_block = ir.Block(scope, loc)
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
         self.typemap[expr_out_var.name] = el_typ
-        body_block.body = _arrayexpr_tree_to_ir(self.typemap, self.calltypes,
-            expr_out_var, expr, tuple(index_vars))
 
         ndims = len(index_vars)
         if ndims > 1:
-            tuple_var = ir.Var(scope, mk_unique_var("$setitem_tuple_var"), loc)
+            tuple_var = ir.Var(scope, mk_unique_var("$parfor_index_tuple_var"), loc)
             self.typemap[tuple_var.name] = types.containers.UniTuple(types.int64, ndims)
             tuple_call = ir.Expr.build_tuple(list(index_vars), loc)
             tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
@@ -187,6 +185,9 @@ class ParforPass(object):
             index_var = tuple_var
         else:
             index_var = index_vars[0]
+
+        body_block.body.extend(_arrayexpr_tree_to_ir(self.typemap, self.calltypes,
+            expr_out_var, expr, index_var))
 
         parfor = Parfor(loopnests, init_block, {}, loc, self.array_analysis, index_var)
 
@@ -420,21 +421,6 @@ def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr, parfor_index):
                 out_ir.append(ir.Assign(ir_expr, expr_out_var, loc))
     elif isinstance(expr, ir.Var):
         if isinstance(typemap[expr.name], types.Array):
-            #print("parfor_index = ", parfor_index, " ", type(parfor_index))
-            if isinstance(parfor_index, tuple) and len(parfor_index) == 1:
-                parfor_index = parfor_index[0]
-            if isinstance(parfor_index, tuple):
-                ndims = len(parfor_index)
-                assert typemap[expr.name].ndim==ndims
-                tuple_var = ir.Var(scope, mk_unique_var("$parfor_index_tuple"), loc)
-                typemap[tuple_var.name] = types.containers.UniTuple(types.int64, ndims)
-                tuple_call = ir.Expr.build_tuple(list(parfor_index), loc)
-                tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
-                out_ir.append(tuple_assign)
-                parfor_index = tuple_var
-            else:
-                assert typemap[expr.name].ndim==1
-
             ir_expr = ir.Expr.getitem(expr, parfor_index, loc)
             calltypes[ir_expr] = signature(el_typ, typemap[expr.name],
                 types.int64)
@@ -806,13 +792,13 @@ def remove_dead_parfor(parfor, lives):
     saved_values = {}
     new_body = []
     for stmt in last_block.body:
-        if (isinstance(stmt, ir.SetItem) and stmt.index.name==parfor.index_var
+        if (isinstance(stmt, ir.SetItem) and stmt.index.name==parfor.index_var.name
                 and stmt.target.name not in lives):
             saved_values[stmt.target.name] = stmt.value
             continue
         if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
             rhs = stmt.value
-            if rhs.op=='getitem' and rhs.index.name==parfor.index_var:
+            if rhs.op=='getitem' and rhs.index.name==parfor.index_var.name:
                 # replace getitem if value saved
                 stmt.value = saved_values.get(rhs.value.name, rhs)
         new_body.append(stmt)
