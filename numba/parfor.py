@@ -12,6 +12,11 @@ import numpy as np
 import numba.parfor
 # circular dependency: import numba.npyufunc.dufunc.DUFunc
 
+_reduction_ops = {
+  'sum'  : ('+=', '+', 0),
+  'prod' : ('*=', '*', 1),
+}
+
 class LoopNest(object):
     '''The LoopNest class holds information of a single loop including
     the index variable (of a non-negative integer value), and the
@@ -92,6 +97,14 @@ class ParforPass(object):
             calltypes)
         ir_utils._max_label = max(func_ir.blocks.keys())
 
+    def _has_known_shape(self, var):
+        """Return True if the given variable has fully known shape in array_analysis.
+        """
+        if isinstance(var, ir.Var) and var.name in self.array_analysis.array_shape_classes:
+            var_shapes = self.array_analysis.array_shape_classes[var.name]
+            return not (-1 in var_shapes)
+        return False
+
     def run(self):
         """run parfor conversion pass: replace Numpy calls
         with Parfors when possible and optimize the IR."""
@@ -103,16 +116,13 @@ class ParforPass(object):
                 if isinstance(instr, ir.Assign):
                     expr = instr.value
                     lhs = instr.target
-                    if lhs.name in self.array_analysis.array_shape_classes:
-                        lhs_shapes = self.array_analysis.array_shape_classes[lhs.name]
-                        if -1 in lhs_shapes:
-                            # avoid parfor generation if any shape is unknown
-                            new_body.append(instr)
-                            continue
+                    if self._has_known_shape(lhs):
                         if self._is_supported_npycall(expr):
                             instr = self._numpy_to_parfor(lhs, expr)
-                        if isinstance(expr, ir.Expr) and expr.op == 'arrayexpr':
+                        elif isinstance(expr, ir.Expr) and expr.op == 'arrayexpr':
                             instr = self._arrayexpr_to_parfor(lhs, expr)
+                    elif self._is_supported_npyreduction(expr):
+                        instr = self._reduction_to_parfor(lhs, expr)
                 new_body.append(instr)
             block.body = new_body
 
@@ -126,11 +136,13 @@ class ParforPass(object):
         apply_copy_propagate(self.func_ir.blocks, in_cps, name_var_table)
         # remove dead code to enable fusion
         remove_dead(self.func_ir.blocks)
+        #dprint_func_ir(self.func_ir, "after remove_dead")
         # reorder statements to maximize fusion
         maximize_fusion(self.func_ir.blocks)
         fuse_parfors(self.func_ir.blocks)
         # remove dead code after fusion to remove extra arrays and variables
         remove_dead(self.func_ir.blocks)
+        #dprint_func_ir(self.func_ir, "after second remove_dead")
         # push function call variables inside parfors so gufunc function
         # wouldn't need function variables as argument
         push_call_vars(self.func_ir.blocks, {}, {})
@@ -140,8 +152,20 @@ class ParforPass(object):
         # run post processor again to generate Del nodes
         post_proc = postproc.PostProcessor(self.func_ir)
         post_proc.run()
-        # lower_parfor_sequential(self.func_ir, self.typemap, self.calltypes)
+        #lower_parfor_sequential(self.func_ir, self.typemap, self.calltypes)
         return
+
+    def _make_index_var(self, scope, index_vars, body_block):
+        ndims = len(index_vars)
+        if ndims > 1:
+            tuple_var = ir.Var(scope, mk_unique_var("$parfor_index_tuple_var"), loc)
+            self.typemap[tuple_var.name] = types.containers.UniTuple(types.int64, ndims)
+            tuple_call = ir.Expr.build_tuple(list(index_vars), loc)
+            tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
+            body_block.body.append(tuple_assign)
+            return tuple_var, types.containers.UniTuple(types.int64, ndims)
+        else:
+            return index_vars[0], types.int64
 
     def _arrayexpr_to_parfor(self, lhs, arrayexpr):
         """generate parfor from arrayexpr node, which is essentially a
@@ -175,18 +199,7 @@ class ParforPass(object):
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
         self.typemap[expr_out_var.name] = el_typ
 
-        ndims = len(index_vars)
-        if ndims > 1:
-            tuple_var = ir.Var(scope, mk_unique_var("$parfor_index_tuple_var"), loc)
-            self.typemap[tuple_var.name] = types.containers.UniTuple(types.int64, ndims)
-            tuple_call = ir.Expr.build_tuple(list(index_vars), loc)
-            tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
-            body_block.body.append(tuple_assign)
-            index_var = tuple_var
-            index_var_typ = types.containers.UniTuple(types.int64, ndims)
-        else:
-            index_var = index_vars[0]
-            index_var_typ = types.int64
+        index_var, index_var_typ = self._make_index_var(scope, index_vars, body_block)
 
         body_block.body.extend(_arrayexpr_tree_to_ir(self.typemap, self.calltypes,
             expr_out_var, expr, index_var))
@@ -219,6 +232,23 @@ class ParforPass(object):
             if (self._get_ndims(expr.args[0].name)<=2 and
                     self._get_ndims(expr.args[1].name)==1):
                 return True
+        return False
+
+    def _is_supported_npyreduction(self, expr):
+        """check if we support parfor translation for
+        this Numpy reduce call.
+        """
+        #return False # turn off for now
+        if not (isinstance(expr, ir.Expr) and expr.op == 'call'):
+            return False
+        if expr.func.name not in self.array_analysis.numpy_calls.keys():
+            return False
+        # TODO: add more calls
+        if self.array_analysis.numpy_calls[expr.func.name] in _reduction_ops:
+            for arg in expr.args:
+                if not self._has_known_shape(arg):
+                    return False
+            return True
         return False
 
     def _get_ndims(self, arr):
@@ -313,6 +343,61 @@ class ParforPass(object):
             if config.DEBUG_ARRAY_OPT==1:
                 print("generated parfor for numpy call:")
                 parfor.dump()
+            return parfor
+        # return error if we couldn't handle it (avoid rewrite infinite loop)
+        raise NotImplementedError("parfor translation failed for ", expr)
+
+    def _reduction_to_parfor(self, lhs, expr):
+        assert isinstance(expr, ir.Expr) and expr.op == 'call'
+        call_name = self.array_analysis.numpy_calls[expr.func.name]
+        args = expr.args
+        kws = dict(expr.kws)
+        if call_name in _reduction_ops:
+            acc_op, im_op, init_val = _reduction_ops[call_name]
+            assert len(args)==1
+            in1 = args[0]
+            arr_typ = self.typemap[in1.name]
+            el_typ = arr_typ.dtype
+            ndims = arr_typ.ndim
+
+            # For full reduction, loop range correlation is same as 1st input
+            corrs = self.array_analysis.array_shape_classes[in1.name]
+            sizes = self.array_analysis.array_size_vars[in1.name]
+            assert ndims == len(sizes) and ndims == len(corrs)
+            scope = lhs.scope
+            loc = expr.loc
+            loopnests = []
+            parfor_index = []
+            for i in range(ndims):
+                index_var = ir.Var(scope, mk_unique_var("$parfor_index" + str(i)), loc)
+                self.typemap[index_var.name] = types.int64
+                parfor_index.append(index_var)
+                loopnests.append(LoopNest(index_var, sizes[i], corrs[i]))
+
+            acc_var = lhs
+
+            # init value
+            init_const = ir.Const(el_typ(init_val), loc)
+
+            # init block has to init the reduction variable
+            init_block = ir.Block(scope, loc)
+            init_block.body.append(ir.Assign(init_const, acc_var, loc))
+
+            # loop body accumulates acc_var
+            acc_block = ir.Block(scope, loc)
+            tmp_var = ir.Var(scope, mk_unique_var("$val"), loc)
+            self.typemap[tmp_var.name] = el_typ
+            index_var, index_var_type = self._make_index_var(scope, parfor_index, acc_block)
+            getitem_call = ir.Expr.getitem(in1, index_var, loc)
+            self.calltypes[getitem_call] = signature(el_typ, arr_typ, index_var_type)
+            acc_block.body.append(ir.Assign(getitem_call, tmp_var, loc))
+            acc_call = ir.Expr.inplace_binop(acc_op, im_op, acc_var, tmp_var, loc)
+            self.calltypes[acc_call] = signature(el_typ, el_typ, el_typ)
+            acc_block.body.append(ir.Assign(acc_call, acc_var, loc))
+            loop_body = { next_label() : acc_block }
+
+            # parfor
+            parfor = Parfor(loopnests, init_block, loop_body, loc, self.array_analysis, index_var)
             return parfor
         # return error if we couldn't handle it (avoid rewrite infinite loop)
         raise NotImplementedError("parfor translation failed for ", expr)
@@ -590,7 +675,6 @@ def get_parfor_outputs(parfor):
     """get arrays that are written to inside the parfor and need to be passed
     as parameters to gufunc.
     """
-    # TODO: reduction output
     # FIXME: The following assumes the target of all SetItem are outputs, which is wrong!
     last_label = max(parfor.loop_body.keys())
     outputs = []
@@ -603,6 +687,23 @@ def get_parfor_outputs(parfor):
     # make sure these written arrays are in parfor parameters (live coming in)
     outputs = list(set(outputs) & set(parfor_params))
     return sorted(outputs)
+
+def get_parfor_reductions(parfor):
+    """get variables that are accumulated using inplace_binop inside the parfor
+    and need to be passed as reduction parameters to gufunc.
+    """
+    last_label = max(parfor.loop_body.keys())
+    reductions = {}
+    names = []
+    parfor_params = get_parfor_params(parfor)
+    for blk in parfor.loop_body.values():
+        for stmt in blk.body:
+            if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr) and stmt.value.op == "inplace_binop":
+                name = stmt.value.lhs.name
+                if name in parfor_params:
+                    names.append(name)
+                    reductions[name] = (stmt.value.fn, stmt.value.immutable_fn)
+    return sorted(names), reductions
 
 def visit_vars_parfor(parfor, callback, cbdata):
     if config.DEBUG_ARRAY_OPT==1:
@@ -826,6 +927,8 @@ def remove_dead_parfor_recursive(parfor, lives):
     first_body_block = min(blocks.keys())
     assert first_body_block > 0 # we are using 0 for init block here
     last_label = max(blocks.keys())
+    if len(blocks[last_label].body) == 0:
+        return
     loc = blocks[last_label].body[-1].loc
     scope = blocks[last_label].scope
 

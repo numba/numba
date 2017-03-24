@@ -49,9 +49,10 @@ def _lower_parfor_parallel(lowerer, parfor):
             print("lower init_block instr = ", instr)
         lowerer.lower_inst(instr)
 
-    # run get_parfor_outputs() before gufunc creation since Jumps are modified
-    #  so CFG of loop_body dict is becomes invalid
+    # run get_parfor_outputs() and get_parfor_reductions() before gufunc creation
+    # since Jumps are modified so CFG of loop_body dict will become invalid
     parfor_output_arrays = numba.parfor.get_parfor_outputs(parfor)
+    parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(parfor)
     # compile parfor body as a separate function to be used with GUFuncWrapper
     flags = compiler.Flags()
     flags.set('error_model', 'numpy')
@@ -60,11 +61,13 @@ def _lower_parfor_parallel(lowerer, parfor):
     # get the shape signature
     array_shape_classes = parfor.array_analysis.array_shape_classes
     func_args = ['sched'] + func_args
-    num_inputs = len(func_args) - len(parfor_output_arrays)
+    num_reductions = len(parfor_redvars)
+    num_inputs = len(func_args) - len(parfor_output_arrays) - num_reductions
     if config.DEBUG_ARRAY_OPT:
         print("num_inputs = ", num_inputs)
         print("parfor_outputs = ", parfor_output_arrays)
-    gu_signature = _create_shape_signature(array_shape_classes, num_inputs, func_args, func_sig)
+        print("parfor_redvars = ", parfor_redvars)
+    gu_signature = _create_shape_signature(array_shape_classes, num_inputs, num_reductions, func_args, func_sig)
     if config.DEBUG_ARRAY_OPT:
         print("gu_signature = ", gu_signature)
 
@@ -73,7 +76,7 @@ def _lower_parfor_parallel(lowerer, parfor):
     array_size_vars = parfor.array_analysis.array_size_vars
     if config.DEBUG_ARRAY_OPT:
         print("array_size_vars = ", sorted(array_size_vars.items()))
-    call_parallel_gufunc(lowerer, func, gu_signature, func_sig, func_args, loop_ranges, array_size_vars)
+    call_parallel_gufunc(lowerer, func, gu_signature, func_sig, func_args, loop_ranges, array_size_vars, parfor_redvars, parfor_reddict, parfor.init_block)
     if config.DEBUG_ARRAY_OPT:
         sys.stdout.flush()
 
@@ -81,9 +84,10 @@ def _lower_parfor_parallel(lowerer, parfor):
 numba.parfor.lower_parfor_parallel = _lower_parfor_parallel
 
 
-def _create_shape_signature(classes, num_inputs, args, func_sig):
+def _create_shape_signature(classes, num_inputs, num_reductions, args, func_sig):
     '''Create shape signature for GUFunc
     '''
+    num_inouts = len(args) - num_reductions
     # maximum class number for array shapes
     max_shape_num = max(sum([list(x) for x in classes.values()], []))
     if config.DEBUG_ARRAY_OPT:
@@ -107,7 +111,10 @@ def _create_shape_signature(classes, num_inputs, args, func_sig):
             dim_syms = tuple([ chr(97 + i) for i in var_shape ]) # chr(97) = 'a'
         else:
             dim_syms = ()
-        if (count > num_inputs):
+        if (count > num_inouts):
+            # assume all reduction vars are scalar
+            gu_sout.append(())
+        elif (count > num_inputs):
             gu_sout.append(dim_syms)
         else:
             gu_sin.append(dim_syms)
@@ -148,14 +155,26 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
     parfor_params = numba.parfor.get_parfor_params(parfor)
     # Get just the outputs of the parfor.
     parfor_outputs = numba.parfor.get_parfor_outputs(parfor)
+    # Get all parfor reduction vars, and operators.
+    parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(parfor)
     # Compute just the parfor inputs as a set difference.
-    parfor_inputs = sorted(list(set(parfor_params) - set(parfor_outputs)))
+    parfor_inputs = sorted(list(set(parfor_params) - set(parfor_outputs) - set(parfor_redvars)))
+
     if config.DEBUG_ARRAY_OPT==1:
         print("parfor_params = ", parfor_params, " ", type(parfor_params))
         print("parfor_outputs = ", parfor_outputs, " ", type(parfor_outputs))
         print("parfor_inputs = ", parfor_inputs, " ", type(parfor_inputs))
+        print("parfor_redvars = ", parfor_redvars, " ", type(parfor_redvars))
+
+    # Reduction variables are represented as arrays, so they go under different names.
+    parfor_redarrs = []
+    for var in parfor_redvars:
+       arr = var + "_arr"
+       parfor_redarrs.append(arr)
+       typemap[arr] = types.npytypes.Array(typemap[var], 1, "C")
+
     # Reorder all the params so that inputs go first then outputs.
-    parfor_params = parfor_inputs + parfor_outputs
+    parfor_params = parfor_inputs + parfor_outputs + parfor_redarrs
 
     if config.DEBUG_ARRAY_OPT==1:
         print("parfor_params = ", parfor_params, " ", type(parfor_params))
@@ -166,7 +185,7 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
 
     # Some Var are not legal parameter names so create a dict of potentially illegal
     # param name to guaranteed legal name.
-    param_dict = legalize_names(parfor_params)
+    param_dict = legalize_names(parfor_params + parfor_redvars)
     if config.DEBUG_ARRAY_OPT==1:
         print("param_dict = ", sorted(param_dict.items()), " ", type(param_dict))
 
@@ -209,6 +228,9 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
 
     # Create the gufunc function.
     gufunc_txt = "def " + gufunc_name + "(sched, " + (", ".join(parfor_params)) + "):\n"
+    # Add initialization of reduction variables
+    for arr, var in zip(parfor_redarrs, parfor_redvars):
+        gufunc_txt += "    " + param_dict[var] + "=" + param_dict[arr] + "[0]\n"
     # For each dimension of the parfor, create a for loop in the generated gufunc function.
     # Iterate across the proper values extracted from the schedule.
     # The form of the schedule is start_dim0, start_dim1, ..., start_dimN, end_dim0,
@@ -222,6 +244,9 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
     for indent in range(parfor_dim+1):
         gufunc_txt += "    "
     gufunc_txt += "__sentinel__ = 0\n"
+    # Add assignments of reduction variables (for returning the value)
+    for arr, var in zip(parfor_redarrs, parfor_redvars):
+        gufunc_txt += "    " + param_dict[arr] + "[0] = " + param_dict[var] + "\n"
     gufunc_txt += "    return None\n"
 
     if config.DEBUG_ARRAY_OPT:
@@ -301,7 +326,7 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
     return kernel_func, parfor_args, kernel_sig
 
 
-def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop_ranges, array_size_vars):
+def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop_ranges, array_size_vars, redvars, reddict, init_block):
     '''
     Adds the call to the gufunc function from the main function.
     '''
@@ -373,7 +398,21 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     builder.call(do_scheduling, [context.get_constant(types.intp, num_dim), out_dims,
                                  context.get_constant(types.uintp, get_thread_count()), sched, context.get_constant(types.intp, debug_flag)])
 
-    # TODO: Handle reduction array allocation here.
+    # init reduction array allocation here.
+    nredvars = len(redvars)
+    ninouts = len(expr_args) - nredvars
+    redarrs = []
+    for i in range(nredvars):
+        # arr = expr_args[-(nredvars - i)]
+        val = lowerer.loadvar(redvars[i])
+        # cgutils.printf(builder, "nredvar(" + redvars[i] + ") = %d\n", val)
+        typ = context.get_value_type(lowerer.fndesc.typemap[redvars[i]])
+        size = get_thread_count()
+        arr = cgutils.alloca_once(builder, typ, size = context.get_constant(types.intp, size))
+        redarrs.append(arr)
+        for j in range(size):
+            dst = builder.gep(arr, [ context.get_constant(types.intp, j) ])
+            builder.store(val, dst)
 
     if config.DEBUG_ARRAY_OPT:
       for i in range(get_thread_count()):
@@ -383,7 +422,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
         cgutils.printf(builder, "\n")
 
     # Prepare arguments: args, shapes, steps, data
-    all_args = [ lowerer.loadvar(x) for x in expr_args ] # note that sched is already popped out
+    all_args = [ lowerer.loadvar(x) for x in expr_args[:ninouts] ] + redarrs
     num_args = len(all_args)
     num_inps = len(sin) + 1
     args = cgutils.alloca_once(builder, byte_ptr_t, size = context.get_constant(types.intp, 1 + num_args), name = "pargs")
@@ -394,7 +433,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
         arg = all_args[i]
         aty = outer_sig.args[i + 1] # skip first argument sched
         dst = builder.gep(args, [context.get_constant(types.intp, i + 1)])
-        if isinstance(aty, types.ArrayCompatible):
+        if i >= ninouts: # reduction variables
+            builder.store(builder.bitcast(arg, byte_ptr_t), dst)
+        elif isinstance(aty, types.ArrayCompatible):
             ary = context.make_array(aty)(context, builder, arg)
             builder.store(builder.bitcast(ary.data, byte_ptr_t), dst)
         else:
@@ -414,7 +455,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     occurances = []
     occurances = [sched_sig[0]]
     sig_dim_dict[sched_sig[0]] = context.get_constant(types.intp, 2 * num_dim)
-    for var, gu_sig in zip(expr_args, sin + sout):
+    for var, gu_sig in zip(expr_args[:ninouts], sin + sout):
         if config.DEBUG_ARRAY_OPT:
             print("var = ", var, " gu_sig = ", gu_sig)
         for sig in gu_sig:
@@ -446,7 +487,13 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     builder.store(context.get_constant(types.intp, 2 * num_dim * sizeof_intp), steps)
     # The steps for all others are 0. (TODO: except reduction results)
     for i in range(num_args):
-        stepsize = zero
+        if i >= ninouts: # steps for reduction vars are abi_sizeof(typ)
+            j = i - ninouts
+            typ = context.get_value_type(lowerer.fndesc.typemap[redvars[j]])
+            sizeof = context.get_abi_sizeof(typ)
+            stepsize = context.get_constant(types.intp, sizeof)
+        else:
+            stepsize = zero
         dst = builder.gep(steps, [context.get_constant(types.intp, 1 + i)])
         builder.store(stepsize, dst)
 
@@ -462,7 +509,25 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     if config.DEBUG_ARRAY_OPT:
         cgutils.printf(builder, "after calling kernel %p\n", fn)
 
-    # TODO: Handle running reduction operators across reduction arrays here.
+    scope = init_block.scope
+    loc = init_block.loc
+    calltypes = lowerer.fndesc.calltypes
+    # Accumulate all reduction arrays back to a single value
+    for i in range(get_thread_count()):
+        for name, arr in zip(redvars, redarrs):
+            tmpname = mk_unique_var(name)
+            op, imop = reddict[name]
+            src = builder.gep(arr, [context.get_constant(types.intp, i)])
+            val = builder.load(src)
+            vty = lowerer.fndesc.typemap[name]
+            lowerer.fndesc.typemap[tmpname] = vty
+            lowerer.storevar(val, tmpname)
+            accvar = ir.Var(scope, name, loc)
+            tmpvar = ir.Var(scope, tmpname, loc)
+            acc_call = ir.Expr.inplace_binop(op, imop, accvar, tmpvar, loc)
+            calltypes[acc_call] = signature(vty, vty, vty)
+            inst = ir.Assign(acc_call, accvar, loc)
+            lowerer.lower_inst(inst)
 
     # TODO: scalar output must be assigned back to corresponding output variables
     return
