@@ -183,8 +183,10 @@ class ParforPass(object):
             tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
             body_block.body.append(tuple_assign)
             index_var = tuple_var
+            index_var_typ = types.containers.UniTuple(types.int64, ndims)
         else:
             index_var = index_vars[0]
+            index_var_typ = types.int64
 
         body_block.body.extend(_arrayexpr_tree_to_ir(self.typemap, self.calltypes,
             expr_out_var, expr, index_var))
@@ -193,7 +195,7 @@ class ParforPass(object):
 
         setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
         self.calltypes[setitem_node] = signature(types.none,
-            self.typemap[lhs.name], types.int64, el_typ)
+            self.typemap[lhs.name], index_var_typ, el_typ)
         body_block.body.append(setitem_node)
         parfor.loop_body = {body_label:body_block}
         if config.DEBUG_ARRAY_OPT==1:
@@ -423,7 +425,7 @@ def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr, parfor_index):
         if isinstance(typemap[expr.name], types.Array):
             ir_expr = ir.Expr.getitem(expr, parfor_index, loc)
             calltypes[ir_expr] = signature(el_typ, typemap[expr.name],
-                types.int64)
+                typemap[parfor_index.name])
         else:
             # assert typemap[expr.name]==el_typ
             ir_expr = expr
@@ -463,30 +465,38 @@ def lower_parfor_sequential(func_ir, typemap, calltypes):
             new_blocks[init_label] = inst.init_block
             new_blocks[block_label] = prev_block
             block_label = next_label()
-            if len(inst.loop_nests)>1:
-                raise NotImplementedError("multi-dimensional parfor")
-            loopnest = inst.loop_nests[0]
-            # create range block for loop
-            range_label = next_label()
-            inst.init_block.body.append(ir.Jump(range_label, loc))
-            header_label = next_label()
-            range_block = mk_range_block(typemap, loopnest.range_variable,
-                calltypes, scope, loc)
-            range_block.body[-1].target = header_label # fix jump target
-            phi_var = range_block.body[-2].target
-            new_blocks[range_label] = range_block
-            header_block = mk_loop_header(typemap, phi_var, calltypes,
-                scope, loc)
-            # first body block to jump to
-            body_first_label = min(inst.loop_body.keys())
-            header_block.body[-1].truebr = body_first_label
-            header_block.body[-1].falsebr = block_label
-            header_block.body[-2].target = loopnest.index_variable
-            new_blocks[header_label] = header_block
-            # last block jump to header
+
+            ndims = len(inst.loop_nests)
+            for i in range(ndims):
+                loopnest = inst.loop_nests[i]
+                # create range block for loop
+                range_label = next_label()
+                header_label = next_label()
+                range_block = mk_range_block(typemap, loopnest.range_variable,
+                    calltypes, scope, loc)
+                range_block.body[-1].target = header_label # fix jump target
+                phi_var = range_block.body[-2].target
+                new_blocks[range_label] = range_block
+                header_block = mk_loop_header(typemap, phi_var, calltypes,
+                    scope, loc)
+                header_block.body[-2].target = loopnest.index_variable
+                new_blocks[header_label] = header_block
+                # jump to this new inner loop
+                if i==0:
+                    inst.init_block.body.append(ir.Jump(range_label, loc))
+                    header_block.body[-1].falsebr = block_label
+                else:
+                    new_blocks[prev_header_label].body[-1].truebr = range_label
+                    header_block.body[-1].falsebr = prev_header_label
+                prev_header_label = header_label # to set truebr next loop
+
+            # last body block jump to inner most header
             body_last_label = max(inst.loop_body.keys())
             inst.loop_body[body_last_label].body.append(
                 ir.Jump(header_label, loc))
+            # inner most header jumps to first body block
+            body_first_label = min(inst.loop_body.keys())
+            header_block.body[-1].truebr = body_first_label
             # add parfor body to blocks
             for (l, b) in inst.loop_body.items():
                 new_blocks[l] = b
