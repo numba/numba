@@ -149,6 +149,9 @@ class ParforPass(object):
         # after optimization, some size variables are not available anymore
         remove_dead_class_sizes(self.func_ir.blocks, self.array_analysis)
         dprint_func_ir(self.func_ir, "after optimization")
+        if config.DEBUG_ARRAY_OPT==1:
+            print("variable types: ",self.typemap)
+            print("call types: ", self.calltypes)
         # run post processor again to generate Del nodes
         post_proc = postproc.PostProcessor(self.func_ir)
         post_proc.run()
@@ -489,7 +492,9 @@ def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr, parfor_index):
                 arg_out_var, arg, parfor_index)
             arg_vars.append(arg_out_var)
         if op in npydecl.supported_array_operators:
+            el_typ = typemap[arg_vars[0].name]
             if len(arg_vars)==2:
+                el_typ = choose_binop_typ(el_typ, typemap[arg_vars[1].name])
                 ir_expr = ir.Expr.binop(op, arg_vars[0], arg_vars[1], loc)
                 calltypes[ir_expr] = signature(el_typ, el_typ, el_typ)
             else:
@@ -503,17 +508,22 @@ def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr, parfor_index):
                 # op is typing_key to the variables type
                 func_var = ir.Var(scope, _find_func_var(typemap, op), loc)
                 ir_expr = ir.Expr.call(func_var, arg_vars, (), loc)
-                calltypes[ir_expr] = typemap[func_var.name].get_call_type(
+                call_typ = typemap[func_var.name].get_call_type(
                     typing.Context(), [el_typ], {})
+                calltypes[ir_expr] = call_typ
+                el_typ = call_typ.return_type
                 #signature(el_typ, el_typ)
                 out_ir.append(ir.Assign(ir_expr, expr_out_var, loc))
     elif isinstance(expr, ir.Var):
-        if isinstance(typemap[expr.name], types.Array):
+        var_typ = typemap[expr.name]
+        if isinstance(var_typ, types.Array):
+            el_typ = var_typ.dtype
             ir_expr = ir.Expr.getitem(expr, parfor_index, loc)
             calltypes[ir_expr] = signature(el_typ, typemap[expr.name],
                 typemap[parfor_index.name])
         else:
             # assert typemap[expr.name]==el_typ
+            el_typ = var_typ
             ir_expr = expr
         out_ir.append(ir.Assign(ir_expr, expr_out_var, loc))
     elif isinstance(expr, ir.Const):
@@ -522,6 +532,8 @@ def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr, parfor_index):
     if len(out_ir)==0:
         raise NotImplementedError(
             "Don't know how to translate array expression '%r'" % (expr,))
+    typemap.pop(expr_out_var.name, None)
+    typemap[expr_out_var.name] = el_typ
     return out_ir
 
 def _find_func_var(typemap, func):
