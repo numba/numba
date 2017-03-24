@@ -97,7 +97,7 @@ class ArrayAnalysis(object):
                 self.numpy_calls[lhs] = (self.numpy_calls[rhs.value.name]
                     +'.'+rhs.attr)
             elif self._isarray(rhs.value.name):
-                self.array_attr_calls[lhs] = (rhs.attr, rhs.value.name)
+                self.array_attr_calls[lhs] = (rhs.attr, rhs.value)
         if isinstance(rhs, ir.Expr) and rhs.op=='build_tuple':
             self.tuple_table[lhs] = rhs.items
         if isinstance(rhs, ir.Expr) and rhs.op=='build_list':
