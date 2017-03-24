@@ -14,7 +14,6 @@ from numba.targets import cpu
 
 class TestParfors(unittest.TestCase):
 
-    @unittest.expectedFailure
     def test_arraymap(self):
         @njit(parallel=True)
         def axy(a, x, y):
@@ -28,7 +27,6 @@ class TestParfors(unittest.TestCase):
         expected = A*X+Y
         np.testing.assert_array_equal(expected, output)
 
-    @unittest.expectedFailure
     def test_mvdot(self):
         @njit(parallel=True)
         def ddot(a, v):
@@ -39,7 +37,7 @@ class TestParfors(unittest.TestCase):
 
         output = ddot(A,v)
         expected = np.dot(A,v)
-        np.testing.assert_array_equal(expected, output)
+        np.testing.assert_array_almost_equal(expected, output, decimal=5)
 
 if __name__ == "__main__":
     unittest.main()
