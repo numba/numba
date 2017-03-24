@@ -9,10 +9,20 @@ set -v -e
 pushd docs
 if [ "$BUILD_DOC" == "yes" ]; then make SPHINXOPTS=-W clean html; fi
 popd
+
+# We only build on PyPy at present, not test.
+if [ "$PYTHON" == "pypy" ]; then
+  # Since we can't run the system info tool, just state the Python version.
+  python --version
+  exit 0
+fi
+
 # Run system info tool
 pushd bin
 numba -s
 popd
+
+
 # First check that the test discovery works
 python -m numba.tests.test_runtests
 # Now run the Numba test suite

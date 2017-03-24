@@ -14,6 +14,7 @@ matrix:
         - env: PYTHON=3.6 NUMPY=1.12 BUILD_DOC=yes CONDA_ENV=travisci
         - env: PYTHON=3.4 NUMPY=1.10 CONDA_ENV=travisci
         - env: PYTHON=2.7 NUMPY=1.9 CONDA_ENV=travisci
+        - env: PYTHON=pypy NUMPY=1.12 CONDA_ENV=travisci
 
 branches:
     only:
