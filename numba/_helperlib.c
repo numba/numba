@@ -849,6 +849,15 @@ numba_do_raise(PyObject *exc)
 
     if (exc == Py_None) {
         /* Reraise */
+#ifdef PYPY_VERSION
+        Py_DECREF(exc);
+        /* FIXME: Using PyErr_GetExcInfo and PyErr_Restore works in PyPy and
+           should work in CPython, but it loses a stack frame on PyPy. This may
+           be a PyPy bug, and needs further investigation. For now, the use of
+           PyRun_SimpleString in PyPy produces a correct result, even though its
+           use seems a little odd here. */
+        PyRun_SimpleString("raise");
+#else
         PyThreadState *tstate = PyThreadState_GET();
         PyObject *tb;
         Py_DECREF(exc);
@@ -864,6 +873,7 @@ numba_do_raise(PyObject *exc)
         Py_XINCREF(value);
         Py_XINCREF(tb);
         PyErr_Restore(type, value, tb);
+#endif // PYPY_VERSION
         return 1;
     }
 
