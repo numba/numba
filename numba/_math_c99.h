@@ -87,4 +87,18 @@ VISIBILITY_HIDDEN float m_atan2f(float y, float x);
 
 #define atan2_fixed(x, y) m_atan2(x, y)
 
+#ifdef PYPY_VERSION
+
+/* Various macros that are not defined on PyPy. These probably should be
+   available in PyPy and fixed upstream, but presently they are required to
+   build Numba. */
+
+#define Py_MATH_PI 3.14159265358979323846
+
+#define Py_IS_NAN(X) isnan(X)
+#define Py_IS_FINITE(X) isfinite(X)
+#define Py_IS_INFINITY(X) isinf(X)
+
+#endif /* PYPY_VERSION */
+
 #endif /* NUMBA_MATH_C99_H_ */
