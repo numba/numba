@@ -158,6 +158,7 @@ class ParforPass(object):
     def _make_index_var(self, scope, index_vars, body_block):
         ndims = len(index_vars)
         if ndims > 1:
+            loc = body_block.loc
             tuple_var = ir.Var(scope, mk_unique_var("$parfor_index_tuple_var"), loc)
             self.typemap[tuple_var.name] = types.containers.UniTuple(types.int64, ndims)
             tuple_call = ir.Expr.build_tuple(list(index_vars), loc)
