@@ -492,14 +492,17 @@ def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr, parfor_index):
                 arg_out_var, arg, parfor_index)
             arg_vars.append(arg_out_var)
         if op in npydecl.supported_array_operators:
-            el_typ = typemap[arg_vars[0].name]
+            el_typ1 = typemap[arg_vars[0].name]
+            el_typ2 = typemap[arg_vars[1].name]
+            func_typ_template = find_op_typ_template(op)
+            func_typ = types.Function(func_typ_template).get_call_type(
+                typing.Context(), [el_typ1, el_typ2],{})
+            el_typ = func_typ.return_type
             if len(arg_vars)==2:
-                el_typ = choose_binop_typ(el_typ, typemap[arg_vars[1].name])
                 ir_expr = ir.Expr.binop(op, arg_vars[0], arg_vars[1], loc)
-                calltypes[ir_expr] = signature(el_typ, el_typ, el_typ)
             else:
                 ir_expr = ir.Expr.unary(op, arg_vars[0], loc)
-                calltypes[ir_expr] = signature(el_typ, el_typ)
+            calltypes[ir_expr] = func_typ
             out_ir.append(ir.Assign(ir_expr, expr_out_var, loc))
         for T in array_analysis.MAP_TYPES:
             if isinstance(op, T):
@@ -527,6 +530,7 @@ def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr, parfor_index):
             ir_expr = expr
         out_ir.append(ir.Assign(ir_expr, expr_out_var, loc))
     elif isinstance(expr, ir.Const):
+        el_typ = typing.Context().resolve_value_type(expr.value)
         out_ir.append(ir.Assign(expr, expr_out_var, loc))
 
     if len(out_ir)==0:

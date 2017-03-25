@@ -145,20 +145,11 @@ def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
         pair_second_assign, phi_b_assign, branch]
     return header_block
 
-def choose_binop_typ(t1, t2):
-    """basic type selection for binary operators"""
-    # ideally, typing.context.resolve_overload() should be called
-    # through apply() of function template
-    # float64 if any is float64
-    if t1==types.float64 or t2==types.float64:
-        return types.float64
-    # float32 if any is float32 (other one could be int)
-    if t1==types.float32 or t2==types.float32:
-        return types.float32
-    if isinstance(t1, types.Integer) and isinstance(t2, types.Integer):
-        return types.builtins.choose_result_int(t1, t2)
-    # return one type arbitarily, can fail in lowering
-    return t1
+def find_op_typ_template(op):
+    for ft in typing.templates.builtin_registry.functions:
+        if ft.key==op:
+            return ft
+    raise RuntimeError("unknown array operation")
 
 def legalize_names(varnames):
     """returns a dictionary for conversion of variable names to legal
