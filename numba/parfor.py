@@ -954,7 +954,8 @@ def remove_dead_parfor_recursive(parfor, lives):
     blocks[0].body.append(ir.Jump(first_body_block, loc))
     # add lives in a dummpy return to last block to avoid their removal
     tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
-    tuple_call = ir.Expr.build_tuple(list(lives), loc)
+    live_vars = [ ir.Var(scope,v,loc) for v in lives ]
+    tuple_call = ir.Expr.build_tuple(live_vars, loc)
     blocks[last_label].body.append(ir.Assign(tuple_call, tuple_var, loc))
     blocks[last_label].body.append(ir.Return(tuple_var,loc))
     remove_dead(blocks)
