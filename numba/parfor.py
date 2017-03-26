@@ -362,9 +362,7 @@ class ParforPass(object):
             in1 = args[0]
             arr_typ = self.typemap[in1.name]
             in_typ = arr_typ.dtype
-            im_op_typ_template = find_op_typ_template(im_op)
-            im_op_func_typ = types.Function(im_op_typ_template).get_call_type(
-                typing.Context(), [in_typ, in_typ],{})
+            im_op_func_typ = find_op_typ(im_op, [in_typ, in_typ])
             el_typ = im_op_func_typ.return_type
             ndims = arr_typ.ndim
 
@@ -499,16 +497,15 @@ def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr, parfor_index):
             arg_vars.append(arg_out_var)
         if op in npydecl.supported_array_operators:
             el_typ1 = typemap[arg_vars[0].name]
-            el_typ2 = typemap[arg_vars[1].name]
-            func_typ_template = find_op_typ_template(op)
-            func_typ = types.Function(func_typ_template).get_call_type(
-                typing.Context(), [el_typ1, el_typ2],{})
-            el_typ = func_typ.return_type
             if len(arg_vars)==2:
+                el_typ2 = typemap[arg_vars[1].name]
+                func_typ = find_op_typ(op, [el_typ1, el_typ2])
                 ir_expr = ir.Expr.binop(op, arg_vars[0], arg_vars[1], loc)
             else:
+                func_typ = find_op_typ(op, [el_typ1])
                 ir_expr = ir.Expr.unary(op, arg_vars[0], loc)
             calltypes[ir_expr] = func_typ
+            el_typ = func_typ.return_type
             out_ir.append(ir.Assign(ir_expr, expr_out_var, loc))
         for T in array_analysis.MAP_TYPES:
             if isinstance(op, T):

@@ -145,10 +145,13 @@ def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
         pair_second_assign, phi_b_assign, branch]
     return header_block
 
-def find_op_typ_template(op):
+def find_op_typ(op, arg_typs):
     for ft in typing.templates.builtin_registry.functions:
         if ft.key==op:
-            return ft
+            func_typ = types.Function(ft).get_call_type(typing.Context(),
+                arg_typs, {})
+            if func_typ is not None:
+                return func_typ
     raise RuntimeError("unknown array operation")
 
 def legalize_names(varnames):
