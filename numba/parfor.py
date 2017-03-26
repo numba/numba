@@ -394,10 +394,10 @@ class ParforPass(object):
             # loop body accumulates acc_var
             acc_block = ir.Block(scope, loc)
             tmp_var = ir.Var(scope, mk_unique_var("$val"), loc)
-            self.typemap[tmp_var.name] = el_typ
+            self.typemap[tmp_var.name] = in_typ
             index_var, index_var_type = self._make_index_var(scope, parfor_index, acc_block)
             getitem_call = ir.Expr.getitem(in1, index_var, loc)
-            self.calltypes[getitem_call] = signature(el_typ, arr_typ, index_var_type)
+            self.calltypes[getitem_call] = signature(in_typ, arr_typ, index_var_type)
             acc_block.body.append(ir.Assign(getitem_call, tmp_var, loc))
             acc_call = ir.Expr.inplace_binop(acc_op, im_op, acc_var, tmp_var, loc)
             # for some reason, type template of += returns None,
