@@ -238,8 +238,9 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
     for eachdim in range(parfor_dim):
         for indent in range(eachdim+1):
             gufunc_txt += "    "
-        gufunc_txt += ( "for " + legal_loop_indices[eachdim] + " in range(sched[" + str(eachdim)
-                      + "], sched[" + str(eachdim + parfor_dim) + "] + 1):\n" )
+        sched_dim = (parfor_dim - eachdim) - 1
+        gufunc_txt += ( "for " + legal_loop_indices[eachdim] + " in range(sched[" + str(sched_dim)
+                      + "], sched[" + str(sched_dim + parfor_dim) + "] + 1):\n" )
     # Add the sentinel assignment so that we can find the loop body position in the IR.
     for indent in range(parfor_dim+1):
         gufunc_txt += "    "
