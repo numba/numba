@@ -361,7 +361,11 @@ class ParforPass(object):
             assert len(args)==1
             in1 = args[0]
             arr_typ = self.typemap[in1.name]
-            el_typ = arr_typ.dtype
+            in_typ = arr_typ.dtype
+            im_op_typ_template = find_op_typ_template(im_op)
+            im_op_func_typ = types.Function(im_op_typ_template).get_call_type(
+                typing.Context(), [in_typ, in_typ],{})
+            el_typ = im_op_func_typ.return_type
             ndims = arr_typ.ndim
 
             # For full reduction, loop range correlation is same as 1st input
@@ -396,7 +400,9 @@ class ParforPass(object):
             self.calltypes[getitem_call] = signature(el_typ, arr_typ, index_var_type)
             acc_block.body.append(ir.Assign(getitem_call, tmp_var, loc))
             acc_call = ir.Expr.inplace_binop(acc_op, im_op, acc_var, tmp_var, loc)
-            self.calltypes[acc_call] = signature(el_typ, el_typ, el_typ)
+            # for some reason, type template of += returns None,
+            # so type template of + should be used
+            self.calltypes[acc_call] = im_op_func_typ
             acc_block.body.append(ir.Assign(acc_call, acc_var, loc))
             loop_body = { next_label() : acc_block }
 
