@@ -1,4 +1,5 @@
 from __future__ import print_function, division, absolute_import
+import types as pytypes # avoid confusion with numba.types
 from numba import ir
 from numba.ir_utils import *
 #from numba.annotations import type_annotations
@@ -86,7 +87,7 @@ class ArrayAnalysis(object):
             for T in MAP_TYPES:
                 if isinstance(rhs.value, T):
                     self.map_calls.append(lhs)
-            if rhs.value==numpy:
+            if isinstance(rhs.value, pytypes.ModuleType) and rhs.value==numpy:
                 self.numpy_globals.append(lhs)
         if isinstance(rhs, ir.Expr) and rhs.op=='getattr':
             if rhs.value.name in self.numpy_globals:

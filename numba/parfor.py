@@ -1,4 +1,5 @@
 from __future__ import print_function, division, absolute_import
+import types as pytypes # avoid confusion with numba.types
 import sys
 
 from numba import ir, ir_utils, types, rewrites, config, analysis
@@ -1034,7 +1035,8 @@ def push_call_vars(blocks, saved_globals, saved_getattrs):
             if isinstance(stmt, ir.Assign):
                 rhs = stmt.value
                 lhs = stmt.target
-                if isinstance(rhs, ir.Global):
+                if (isinstance(rhs, ir.Global)
+                        and isinstance(rhs.value, pytypes.ModuleType)):
                     saved_globals[lhs.name] = stmt
                     continue
                 elif isinstance(rhs, ir.Expr) and rhs.op=='getattr':
