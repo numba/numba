@@ -180,9 +180,10 @@ class CodeLibrary(object):
         self._raise_if_finalized()
         assert isinstance(ir_module, llvmir.Module)
         ir = cgutils.normalize_ir_text(str(ir_module))
-        ll_module = llvmts.parse_assembly(ir)
-        ll_module.name = ir_module.name
-        ll_module.verify()
+        with llvmts.lock_llvm:
+            ll_module = llvmts.parse_assembly(ir)
+            ll_module.name = ir_module.name
+            ll_module.verify()
         self.add_llvm_module(ll_module)
 
     def _scan_dynamic_globals(self, ll_module):
@@ -231,6 +232,7 @@ class CodeLibrary(object):
         self._final_module.verify()
         self._finalize_final_module()
 
+    @llvmts.lock_llvm
     def _finalize_final_module(self):
         """
         Make the underlying LLVM module ready to use.
@@ -434,6 +436,7 @@ class AOTCodeLibrary(CodeLibrary):
 
 class JITCodeLibrary(CodeLibrary):
 
+    @llvmts.lock_llvm
     def get_pointer_to_function(self, name):
         """
         Generate native code for function named *name* and return a pointer
@@ -444,6 +447,7 @@ class JITCodeLibrary(CodeLibrary):
         self._ensure_finalized()
         return self._codegen._engine.get_function_address(name)
 
+    @llvmts.lock_llvm
     def _finalize_specific(self):
         self._codegen._scan_and_fix_unresolved_refs(self._final_module)
         self._codegen._engine.finalize_object()
@@ -506,7 +510,6 @@ class RuntimeLinker(object):
 
 
 class BaseCPUCodegen(object):
-    _llvm_initialized = False
 
     def __init__(self, module_name):
         initialize_llvm()
@@ -726,13 +729,10 @@ class JITCPUCodegen(BaseCPUCodegen):
         # return functools.partial(self._engine.remove_module, module)
 
 
-_llvm_initialized = False
-
-
+@llvmts.lock_llvm
 def initialize_llvm():
-    global _llvm_initialized
-    if not _llvm_initialized:
-        ll.initialize()
-        ll.initialize_native_target()
-        ll.initialize_native_asmprinter()
-        _llvm_initialized = True
+    """Safe to use multiple times.
+    """
+    ll.initialize()
+    ll.initialize_native_target()
+    ll.initialize_native_asmprinter()
