@@ -177,6 +177,16 @@ class ArrayAnalysis(object):
             return self._add_array_corr(node.name)
         elif isinstance(node, ir.Var):
             return self.array_shape_classes[node.name].copy()
+        elif isinstance(node, (ir.Global,ir.FreeVar)):
+            # XXX: currently, global variables are frozen in Numba (can change)
+            if isinstance(node.value, np.ndarray):
+                shape = node.value.shape
+                out_eqs = []
+                for c in shape:
+                    new_class = self._get_next_class()
+                    out_eqs.append(new_class)
+                    self.class_sizes[new_class] = [c]
+                    return out_eqs
         elif isinstance(node, ir.Expr):
             if node.op=='unary' and node.fn in UNARY_MAP_OP:
                 assert isinstance(node.value, ir.Var)
@@ -286,7 +296,7 @@ class ArrayAnalysis(object):
                     self._get_ndims(in_arr)==2
                     return [in_class]
         elif call_name in ['empty_like', 'zeros_like', 'ones_like', 'full_like',
-                'copy']:
+                'copy','asfortranarray']:
             # shape same as input
             return self.array_shape_classes[args[0].name].copy()
         elif call_name=='reshape':
