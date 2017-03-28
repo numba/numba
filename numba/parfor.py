@@ -1041,22 +1041,13 @@ def push_call_vars(blocks, saved_globals, saved_getattrs):
                             or rhs.value.name in saved_getattrs):
                         saved_getattrs[lhs.name] = stmt
                         continue
-                elif isinstance(rhs, ir.Expr) and rhs.op=='call':
-                    fname = rhs.func.name
-                    new_body += _get_saved_call_nodes(fname, saved_globals,
-                        saved_getattrs)
-                    for arg in rhs.args:
-                        new_body += _get_saved_call_nodes(arg.name, saved_globals,
-                            saved_getattrs)
-                    for arg in dict(rhs.kws).values():
-                        new_body += _get_saved_call_nodes(arg.name, saved_globals,
-                            saved_getattrs)
-
-
             elif isinstance(stmt, Parfor):
                 pblocks = stmt.loop_body.copy()
                 pblocks[-1] = stmt.init_block
                 push_call_vars(pblocks, saved_globals, saved_getattrs)
+            for v in stmt.list_vars():
+                new_body += _get_saved_call_nodes(v.name, saved_globals,
+                    saved_getattrs)
             new_body.append(stmt)
         block.body = new_body
 
