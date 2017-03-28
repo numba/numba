@@ -186,7 +186,7 @@ class ArrayAnalysis(object):
                     new_class = self._get_next_class()
                     out_eqs.append(new_class)
                     self.class_sizes[new_class] = [c]
-                    return out_eqs
+                return out_eqs
         elif isinstance(node, ir.Expr):
             if node.op=='unary' and node.fn in UNARY_MAP_OP:
                 assert isinstance(node.value, ir.Var)
