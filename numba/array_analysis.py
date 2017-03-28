@@ -46,10 +46,10 @@ class ArrayAnalysis(object):
         self.constant_table = {}
 
     def run(self):
-        # TODO: ignoring CFG for now
+        dprint_func_ir(self.func_ir, "starting array analysis")
         if config.DEBUG_ARRAY_OPT==1:
-            print("starting array analysis")
-            self.func_ir.dump()
+            print("variable types: ",self.typemap)
+            print("call types: ", self.calltypes)
         for (key, block) in self.func_ir.blocks.items():
             self._analyze_block(block)
 

@@ -621,13 +621,6 @@ def _find_first_parfor(body):
             return i
     return -1
 
-def dprint_func_ir(func_ir, title):
-    if config.DEBUG_ARRAY_OPT==1:
-        name = func_ir.func_id.func_qualname
-        print(("IR %s: %s" % (title, name)).center(80, "-"))
-        func_ir.dump()
-        print("-"*40)
-
 def _rename_labels(blocks):
     """rename labels of function body blocks according to topological sort.
     lowering requires this order.

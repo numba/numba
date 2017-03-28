@@ -351,6 +351,8 @@ def has_no_side_effect(rhs):
     # TODO: find side-effect free calls like Numpy calls
     if isinstance(rhs, ir.Expr) and rhs.op=='call':
         return False
+    if isinstance(rhs, ir.Yield):
+        return False
     return True
 
 def copy_propagate(blocks):
@@ -479,3 +481,11 @@ def apply_copy_propagate(blocks, in_copies, name_var_table):
                 if lhs!=rhs:
                     var_dict[lhs] = name_var_table[rhs]
     return
+
+
+def dprint_func_ir(func_ir, title):
+    if config.DEBUG_ARRAY_OPT==1:
+        name = func_ir.func_id.func_qualname
+        print(("IR %s: %s" % (title, name)).center(80, "-"))
+        func_ir.dump()
+        print("-"*40)
