@@ -7,6 +7,7 @@ from numba import types, config
 from numba.types.npytypes import *
 from numba.typing import npydecl
 import collections
+import copy
 
 import numpy
 MAP_TYPES = [numpy.ufunc]
@@ -115,7 +116,7 @@ class ArrayAnalysis(object):
             if analyze_out is None:
                 rhs_corr = self._add_array_corr(lhs)
             else:
-                rhs_corr = analyze_out.copy()
+                rhs_corr = copy.copy(analyze_out)
             if lhs in self.array_shape_classes:
                 # if shape already inferred in another basic block,
                 # make sure this new inference is compatible
@@ -176,7 +177,7 @@ class ArrayAnalysis(object):
             assert self._isarray(node.name)
             return self._add_array_corr(node.name)
         elif isinstance(node, ir.Var):
-            return self.array_shape_classes[node.name].copy()
+            return copy.copy(self.array_shape_classes[node.name])
         elif isinstance(node, (ir.Global,ir.FreeVar)):
             # XXX: currently, global variables are frozen in Numba (can change)
             if isinstance(node.value, np.ndarray):
@@ -192,7 +193,7 @@ class ArrayAnalysis(object):
                 assert isinstance(node.value, ir.Var)
                 in_var = node.value.name
                 assert self._isarray(in_var)
-                return self.array_shape_classes[in_var].copy()
+                return copy.copy(self.array_shape_classes[in_var])
             elif node.op=='binop' and node.fn in BINARY_MAP_OP:
                 arg1 = node.lhs.name
                 arg2 = node.rhs.name
@@ -206,12 +207,12 @@ class ArrayAnalysis(object):
                 args = {v.name for v in node.list_vars()}
                 return self._broadcast_and_match_shapes(list(args))
             elif node.op=='cast':
-                return self.array_shape_classes[node.value.name].copy()
+                return copy.copy(self.array_shape_classes[node.value.name])
             elif node.op=='call':
                 call_name = 'NULL'
-                args = node.args.copy()
+                args = copy.copy(node.args)
                 if node.func.name in self.map_calls:
-                    return self.array_shape_classes[args[0].name].copy()
+                    return copy.copy(self.array_shape_classes[args[0].name])
                 if node.func.name in self.numpy_calls.keys():
                     call_name = self.numpy_calls[node.func.name]
                 elif node.func.name in self.array_attr_calls.keys():
@@ -225,7 +226,7 @@ class ArrayAnalysis(object):
                 val_typ = self.typemap[val]
                 if (isinstance(val_typ.dtype, Record)
                         and node.attr in val_typ.dtype.fields):
-                    return self.array_shape_classes[val].copy()
+                    return copy.copy(self.array_shape_classes[val])
                 # matrix transpose
                 if node.attr=='T':
                     return self._analyze_np_call('transpose', [node.value],
@@ -247,7 +248,7 @@ class ArrayAnalysis(object):
                 val_typ = self.typemap[val]
                 if (self._isarray(val) and isinstance(val_typ.dtype, Record)
                         and node.index in val_typ.dtype.fields):
-                    return self.array_shape_classes[val].copy()
+                    return copy.copy(self.array_shape_classes[val])
             else:
                 print("can't find shape classes for expr",node," of op",node.op)
         print("can't find shape classes for node",node," of type ",type(node))
@@ -256,7 +257,7 @@ class ArrayAnalysis(object):
     def _analyze_np_call(self, call_name, args, kws):
         #print("numpy call ",call_name,args)
         if call_name=='transpose':
-            out_eqs = self.array_shape_classes[args[0].name].copy()
+            out_eqs = copy.copy(self.array_shape_classes[args[0].name])
             out_eqs.reverse()
             return out_eqs
         elif call_name in ['empty', 'zeros', 'ones', 'full', 'random.ranf',
@@ -298,7 +299,7 @@ class ArrayAnalysis(object):
         elif call_name in ['empty_like', 'zeros_like', 'ones_like', 'full_like',
                 'copy','asfortranarray']:
             # shape same as input
-            return self.array_shape_classes[args[0].name].copy()
+            return copy.copy(self.array_shape_classes[args[0].name])
         elif call_name=='reshape':
             #print("reshape args: ", args)
             # TODO: infer shape from length of args[0] in case of -1 input
@@ -389,7 +390,7 @@ class ArrayAnalysis(object):
             # for 1D, output has same size
             # TODO: return flattened size for multi-dimensional input
             if in_ndims==1:
-                return self.array_shape_classes[in_arr].copy()
+                return copy.copy(self.array_shape_classes[in_arr])
         elif call_name=='linspace':
             # default is 50, arg3 is size
             LINSPACE_DEFAULT_SIZE = 50
@@ -537,7 +538,7 @@ class ArrayAnalysis(object):
         eqs = []
         for a in args:
             if self._isarray(a):
-                eqs.append(self.array_shape_classes[a].copy())
+                eqs.append(copy.copy(self.array_shape_classes[a]))
             else:
                 eqs.append([0]) # constant variable
         ndims = max([len(e) for e in eqs])
