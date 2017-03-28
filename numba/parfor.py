@@ -90,10 +90,11 @@ class ParforPass(object):
     will lower into either sequential or parallel loops during lowering
     stage.
     """
-    def __init__(self, func_ir, typemap, calltypes):
+    def __init__(self, func_ir, typemap, calltypes, return_type):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
+        self.return_type = return_type
         self.array_analysis = array_analysis.ArrayAnalysis(func_ir, typemap,
             calltypes)
         ir_utils._max_label = max(func_ir.blocks.keys())
@@ -156,6 +157,9 @@ class ParforPass(object):
         # run post processor again to generate Del nodes
         post_proc = postproc.PostProcessor(self.func_ir)
         post_proc.run()
+        if self.func_ir.is_generator:
+            fix_generator_types(self.func_ir.generator_info, self.return_type,
+                self.typemap)
         #lower_parfor_sequential(self.func_ir, self.typemap, self.calltypes)
         return
 
@@ -1070,3 +1074,13 @@ def _get_saved_call_nodes(fname, saved_globals, saved_getattrs):
             fname = up_name
     nodes.reverse()
     return nodes
+
+def fix_generator_types(generator_info, return_type, typemap):
+    """postproc updates generator_info with live variables after transformations
+    but generator variables have types in return_type that are updated here.
+    """
+    new_state_types = []
+    for v in generator_info.state_vars:
+        new_state_types.append(typemap[v])
+    return_type.state_types = tuple(new_state_types)
+    return
