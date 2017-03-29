@@ -212,7 +212,7 @@ class ParforPass(object):
         index_var, index_var_typ = self._make_index_var(scope, index_vars, body_block)
 
         body_block.body.extend(_arrayexpr_tree_to_ir(self.typemap, self.calltypes,
-            expr_out_var, expr, index_var))
+            expr_out_var, expr, index_var, index_vars, self.array_analysis.array_shape_classes))
 
         parfor = Parfor(loopnests, init_block, {}, loc, self.array_analysis, index_var)
 
@@ -411,7 +411,8 @@ class ParforPass(object):
             loop_body = { next_label() : acc_block }
 
             # parfor
-            parfor = Parfor(loopnests, init_block, loop_body, loc, self.array_analysis, index_var)
+            parfor = Parfor(loopnests, init_block, loop_body, loc,
+                self.array_analysis, index_var)
             return parfor
         # return error if we couldn't handle it (avoid rewrite infinite loop)
         raise NotImplementedError("parfor translation failed for ", expr)
@@ -483,7 +484,8 @@ def _mk_mvdot_body(typemap, calltypes, phi_b_var, index_var, in1, in2, sum_var,
         final_assign, b_jump_header]
     return body_block
 
-def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr, parfor_index):
+def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr,
+        parfor_index_tuple_var, all_parfor_indices, array_shape_classes):
     """generate IR from array_expr's expr tree recursively. Assign output to
     expr_out_var and returns the whole IR as a list of Assign nodes.
     """
@@ -499,7 +501,8 @@ def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr, parfor_index):
             arg_out_var = ir.Var(scope, mk_unique_var("$arg_out_var"), loc)
             typemap[arg_out_var.name] = el_typ
             out_ir += _arrayexpr_tree_to_ir(typemap, calltypes,
-                arg_out_var, arg, parfor_index)
+                arg_out_var, arg, parfor_index_tuple_var, all_parfor_indices,
+                    array_shape_classes)
             arg_vars.append(arg_out_var)
         if op in npydecl.supported_array_operators:
             el_typ1 = typemap[arg_vars[0].name]
@@ -530,9 +533,9 @@ def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr, parfor_index):
         var_typ = typemap[expr.name]
         if isinstance(var_typ, types.Array):
             el_typ = var_typ.dtype
-            ir_expr = ir.Expr.getitem(expr, parfor_index, loc)
-            calltypes[ir_expr] = signature(el_typ, typemap[expr.name],
-                typemap[parfor_index.name])
+            ir_expr = _gen_arrayexpr_getitem(expr, parfor_index_tuple_var,
+                all_parfor_indices, el_typ, calltypes, typemap,
+                array_shape_classes, out_ir)
         else:
             # assert typemap[expr.name]==el_typ
             el_typ = var_typ
@@ -548,6 +551,52 @@ def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr, parfor_index):
     typemap.pop(expr_out_var.name, None)
     typemap[expr_out_var.name] = el_typ
     return out_ir
+
+def _gen_arrayexpr_getitem(var, parfor_index_tuple_var, all_parfor_indices,
+        el_typ, calltypes, typemap, array_shape_classes, out_ir):
+    """if there is implicit dimension broadcast, generate proper access variable
+    for getitem. For example, if indices are (i1,i2,i3) but shape correlations
+    are (c1,0,c3), generate a tuple with (i1,0,i3) for access.
+    Another example: for (i1,i2,i3) and (c1,c2) generate (i2,i3).
+    """
+    loc = var.loc
+    index_var = parfor_index_tuple_var
+    shape_corrs = copy.copy(array_shape_classes[var.name])
+    ndims = typemap[var.name].ndim
+    num_indices = len(all_parfor_indices)
+    if 0 in shape_corrs or ndims<num_indices:
+        if ndims==1:
+            # broadcast prepends dimensions, so use last index for 1D arrays
+            index_var = all_parfor_indices[-1]
+        else:
+            # broadcast prepends dimensions so ignore indices from beginning
+            ind_offset = num_indices-ndims
+            tuple_var = ir.Var(var.scope,
+                mk_unique_var("$parfor_index_tuple_var_bcast"), loc)
+            typemap[tuple_var.name] = types.containers.UniTuple(types.int64,
+                ndims)
+            # const var for size 1 dim access index: $const0 = Const(0)
+            const_node = ir.Const(0, var.loc)
+            const_var = ir.Var(var.scope, mk_unique_var("$const_ind_0"), loc)
+            typemap[const_var.name] = types.int64
+            const_assign = ir.Assign(const_node, const_var, loc)
+            out_ir.append(const_assign)
+            index_vars = []
+            for i in reversed(range(ndims)):
+                if shape_corrs[i]==0:
+                    index_vars.append(const_var)
+                else:
+                    index_vars.append(all_parfor_indices[ind_offset+i])
+            index_vars = list(reversed(index_vars))
+            tuple_call = ir.Expr.build_tuple(index_vars, loc)
+            tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
+            out_ir.append(tuple_assign)
+            index_var = tuple_var
+
+    ir_expr =  ir.Expr.getitem(var, index_var, loc)
+    calltypes[ir_expr] = signature(el_typ, typemap[var.name],
+        typemap[index_var.name])
+    return ir_expr
 
 def _find_func_var(typemap, func):
     """find variable in typemap which represents the function func.
