@@ -218,8 +218,11 @@ class ArrayAnalysis(object):
                 elif node.func.name in self.array_attr_calls.keys():
                     call_name, arr = self.array_attr_calls[node.func.name]
                     args.insert(0,arr)
-                # assert call_name is not 'NULL'
-                return self._analyze_np_call(call_name, args, dict(node.kws))
+                if call_name is not 'NULL':
+                    return self._analyze_np_call(call_name, args, dict(node.kws))
+                else:
+                    print("can't find shape for unknown call:", node)
+                    return None
             elif node.op=='getattr' and self._isarray(node.value.name):
                 # numpy recarray, e.g. X.a
                 val = node.value.name
