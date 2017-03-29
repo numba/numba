@@ -148,6 +148,7 @@ class ParforPass(object):
         # push function call variables inside parfors so gufunc function
         # wouldn't need function variables as argument
         push_call_vars(self.func_ir.blocks, {}, {})
+        remove_dead(self.func_ir.blocks)
         # after optimization, some size variables are not available anymore
         remove_dead_class_sizes(self.func_ir.blocks, self.array_analysis)
         dprint_func_ir(self.func_ir, "after optimization")
@@ -1028,40 +1029,50 @@ def push_call_vars(blocks, saved_globals, saved_getattrs):
     """
     for block in blocks.values():
         new_body = []
+        # global/attr variables that are defined in this block already,
+        #   no need to reassign them
+        block_defs = set()
         for stmt in block.body:
             if isinstance(stmt, ir.Assign):
                 rhs = stmt.value
                 lhs = stmt.target
-                if (isinstance(rhs, ir.Global)
-                        and isinstance(rhs.value, pytypes.ModuleType)):
+                if (isinstance(rhs, ir.Global)):
+                        #and isinstance(rhs.value, pytypes.ModuleType)):
                     saved_globals[lhs.name] = stmt
-                    continue
+                    block_defs.add(lhs.name)
+                    #continue
                 elif isinstance(rhs, ir.Expr) and rhs.op=='getattr':
                     if (rhs.value.name in saved_globals
                             or rhs.value.name in saved_getattrs):
                         saved_getattrs[lhs.name] = stmt
-                        continue
+                        block_defs.add(lhs.name)
+                        #continue
             elif isinstance(stmt, Parfor):
                 pblocks = stmt.loop_body.copy()
                 pblocks[-1] = stmt.init_block
                 push_call_vars(pblocks, saved_globals, saved_getattrs)
+                new_body.append(stmt)
+                continue
             for v in stmt.list_vars():
                 new_body += _get_saved_call_nodes(v.name, saved_globals,
-                    saved_getattrs)
+                    saved_getattrs, block_defs)
             new_body.append(stmt)
         block.body = new_body
 
     return
 
-def _get_saved_call_nodes(fname, saved_globals, saved_getattrs):
+def _get_saved_call_nodes(fname, saved_globals, saved_getattrs, block_defs):
     nodes = []
-    while fname in saved_globals or fname in saved_getattrs:
+    while (fname not in block_defs and (fname in saved_globals
+                or fname in saved_getattrs)):
         if fname in saved_globals:
-            nodes.append(saved_globals.pop(fname))
+            nodes.append(saved_globals[fname])
+            block_defs.add(saved_globals[fname].target.name)
             fname = '_PA_DONE'
         elif fname in saved_getattrs:
             up_name = saved_getattrs[fname].value.value.name
-            nodes.append(saved_getattrs.pop(fname))
+            nodes.append(saved_getattrs[fname])
+            block_defs.add(saved_getattrs[fname].target.name)
             fname = up_name
     nodes.reverse()
     return nodes
