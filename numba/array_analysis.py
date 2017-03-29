@@ -184,9 +184,8 @@ class ArrayAnalysis(object):
                 shape = node.value.shape
                 out_eqs = []
                 for c in shape:
-                    new_class = self._get_next_class()
+                    new_class = self._get_next_class_with_size(c)
                     out_eqs.append(new_class)
-                    self.class_sizes[new_class] = [c]
                 return out_eqs
         elif isinstance(node, ir.Expr):
             if node.op=='unary' and node.fn in UNARY_MAP_OP:
@@ -272,20 +271,17 @@ class ArrayAnalysis(object):
         elif call_name=='eye':
             # if one input n, output is n*n
             # two inputs n,m, output is n*m
-            new_class1 = self._get_next_class()
-            self.class_sizes[new_class1] = [args[0].name]
+            new_class1 = self._get_next_class_with_size(args[0].name)
             out_eqs = [new_class1]
             if len(args)>1:
-                new_class2 = self._get_next_class()
-                self.class_sizes[new_class2] = [args[1].name]
+                new_class2 = self._get_next_class_with_size(args[1].name)
                 out_eqs.append(new_class2)
             else:
                 out_eqs.append(new_class1)
             return out_eqs
         elif call_name=='identity':
             # input n, output is n*n
-            new_class1 = self._get_next_class()
-            self.class_sizes[new_class1] = [args[0].name]
+            new_class1 = self._get_next_class_with_size(args[0].name)
             return [new_class1, new_class1]
         elif call_name=='diag':
             # TODO: support optional k arg
@@ -316,8 +312,7 @@ class ArrayAnalysis(object):
             # only 1D list is supported, and not ndmin arg
             if args[0].name in self.list_table:
                 l = self.list_table[args[0].name]
-                new_class1 = self._get_next_class()
-                self.class_sizes[new_class1] = [len(l)]
+                new_class1 = self._get_next_class_with_size(len(l))
                 return [new_class1]
         elif call_name=='concatenate':
             # all dimensions of output are same as inputs, except axis
@@ -350,8 +345,7 @@ class ArrayAnalysis(object):
                     c = self._merge_classes(c, self.array_shape_classes[v.name][i])
                 out_eqs[i] = c
             # output has one extra dimension
-            new_class1 = self._get_next_class()
-            self.class_sizes[new_class1] = [len(arr_args)]
+            new_class1 = self._get_next_class_with_size(len(arr_args))
             out_eqs.insert(axis, new_class1)
             # TODO: set size to sum of input array's size along axis
             return out_eqs
@@ -384,8 +378,7 @@ class ArrayAnalysis(object):
             c = self.array_shape_classes[arr_args[0].name][0]
             for v in arr_args:
                 c = self._merge_classes(c, self.array_shape_classes[v.name][0])
-            new_class = self._get_next_class()
-            self.class_sizes[new_class] = [len(arr_args)]
+            new_class = self._get_next_class_with_size(len(arr_args))
             return [c , new_class]
         elif call_name in ['cumsum', 'cumprod']:
             in_arr = args[0].name
@@ -397,11 +390,10 @@ class ArrayAnalysis(object):
         elif call_name=='linspace':
             # default is 50, arg3 is size
             LINSPACE_DEFAULT_SIZE = 50
-            new_class = self._get_next_class()
-            if len(args)<3:
-                self.class_sizes[new_class] = [LINSPACE_DEFAULT_SIZE]
-            else:
-                self.class_sizes[new_class] = [args[2].name]
+            size = LINSPACE_DEFAULT_SIZE
+            if len(args)>=3:
+                size = args[2].name
+            new_class = self._get_next_class_with_size(size)
             return [new_class]
         elif call_name=='dot':
             # https://docs.scipy.org/doc/numpy/reference/generated/numpy.dot.html
@@ -461,8 +453,7 @@ class ArrayAnalysis(object):
         # shape is either Int or tuple of Int
         arg_typ = self.typemap[shape_arg.name]
         if isinstance(arg_typ, types.scalars.Integer):
-            new_class = self._get_next_class()
-            self.class_sizes[new_class] = [shape_arg]
+            new_class = self._get_next_class_with_size(shape_arg)
             return [new_class]
         # TODO: handle A.reshape(c.shape)
         if (not isinstance(arg_typ, types.containers.UniTuple) or
@@ -470,9 +461,9 @@ class ArrayAnalysis(object):
             return None
         out_eqs = []
         for i in range(arg_typ.count):
-            new_class = self._get_next_class()
+            new_class = self._get_next_class_with_size(
+                self.tuple_table[shape_arg.name][i])
             out_eqs.append(new_class)
-            self.class_sizes[new_class] = [self.tuple_table[shape_arg.name][i]]
         return out_eqs
 
     def _get_classes_from_shape_list(self, shape_list):
@@ -481,30 +472,26 @@ class ArrayAnalysis(object):
         for shape_arg in shape_list:
             arg_typ = self.typemap[shape_arg.name]
             assert isinstance(arg_typ, types.scalars.Integer)
-            new_class = self._get_next_class()
-            self.class_sizes[new_class] = [shape_arg]
+            new_class = self._get_next_class_with_size(shape_arg)
             out_eqs.append(new_class)
         return out_eqs
 
     def _get_classes_from_const_shape(self, shape):
         # shape is either int or tuple/list of ints
         if isinstance(shape, int):
-            new_class = self._get_next_class()
-            self.class_sizes[new_class] = [shape]
+            new_class = self._get_next_class_with_size(shape)
             return [new_class]
         assert isinstance(shape, (tuple,list))
         out_eqs = []
         for dim in shape:
-            new_class = self._get_next_class()
+            new_class = self._get_next_class_with_size(dim)
             out_eqs.append(new_class)
-            self.class_sizes[new_class] = [dim]
         return out_eqs
 
     def _get_classes_from_dim_args(self, args):
         out = []
         for arg in args:
-            new_class = self._get_next_class()
-            self.class_sizes[new_class] = [arg]
+            new_class = self._get_next_class_with_size(arg)
             out.append(new_class)
         return out
 
@@ -575,6 +562,16 @@ class ArrayAnalysis(object):
             new_class = self._get_next_class()
             self.array_shape_classes[varname].append(new_class)
         return self.array_shape_classes[varname]
+
+    def _get_next_class_with_size(self, size):
+        if isinstance(size, int) and size==1:
+            return 0
+        if (isinstance(size, ir.Var) and size.name in self.constant_table
+                and self.constant_table[size.name]==1):
+            return 0
+        new_class = self._get_next_class()
+        self.class_sizes[new_class] = [size]
+        return new_class
 
     def _get_next_class(self):
         m = self.next_eq_class
