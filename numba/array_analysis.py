@@ -55,6 +55,7 @@ class ArrayAnalysis(object):
             self._analyze_block(block)
 
         self._merge_equivalent_classes()
+        self._cleanup_analysis_data()
 
         if config.DEBUG_ARRAY_OPT==1:
             print("classes: ", self.array_shape_classes)
@@ -521,6 +522,26 @@ class ArrayAnalysis(object):
         self.class_sizes[new_class] = (self.class_sizes.pop(c1, [])
             + self.class_sizes.pop(c2, []))
         return new_class
+
+    def _cleanup_analysis_data(self):
+        # delete unused classes
+        all_used_class = set()
+        for shape_corrs in self.array_shape_classes.values():
+            all_used_class |= set(shape_corrs)
+        curr_class_sizes = self.class_sizes.copy()
+        for c in curr_class_sizes.keys():
+            if c not in all_used_class:
+                self.class_sizes.pop(c)
+
+        # delete repeated size variables
+        new_class_sizes = {}
+        for c, var_list in self.class_sizes.items():
+            const_sizes = [v for v in var_list if not isinstance(v, ir.Var)]
+            name_var_table = {v.name:v for v in var_list if isinstance(v, ir.Var)}
+            v_set = {v.name for v in var_list if isinstance(v, ir.Var)}
+            new_class_sizes[c] = [ name_var_table[vname] for vname in v_set ] + const_sizes
+        self.class_sizes = new_class_sizes
+        return
 
     def _broadcast_and_match_shapes(self, args):
         """Infer shape equivalence of arguments based on Numpy broadcast rules
