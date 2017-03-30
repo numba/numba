@@ -1042,6 +1042,9 @@ def remove_dead_class_sizes(blocks, array_analysis):
             if corr!=-1 and len(array_analysis.class_sizes[corr])>0:
                 class_size = array_analysis.class_sizes[corr][0]
                 dim_sizes[i] = class_size
+            # delete dead size vars
+            if isinstance(dim_sizes[i], ir.Var) and dim_sizes[i].name not in all_defs:
+                dim_sizes[i] = None
     return
 
 def get_copies_parfor(parfor):

@@ -58,12 +58,16 @@ class ArrayAnalysis(object):
         self._cleanup_analysis_data()
 
         if config.DEBUG_ARRAY_OPT==1:
-            print("classes: ", self.array_shape_classes)
-            print("class sizes: ", self.class_sizes)
-            print("numpy globals ", self.numpy_globals)
-            print("numpy calls ", self.numpy_calls)
-            print("array attr calls ", self.array_attr_calls)
-            print("tuple table ", self.tuple_table)
+            self.dump()
+
+    def dump(self):
+        print("array_shape_classes: ", self.array_shape_classes)
+        print("class_sizes: ", self.class_sizes)
+        print("array_size_vars: ", self.array_size_vars)
+        print("numpy globals ", self.numpy_globals)
+        print("numpy calls ", self.numpy_calls)
+        print("array attr calls ", self.array_attr_calls)
+        print("tuple table ", self.tuple_table)
 
     def _analyze_block(self, block):
         out_body = []
