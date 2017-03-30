@@ -496,11 +496,16 @@ class ArrayAnalysis(object):
         return out
 
     def _merge_equivalent_classes(self):
-        curr_sizes = self.class_sizes.copy()
-        for c1,sizes1 in curr_sizes.items():
-            for c2,sizes2 in curr_sizes.items():
-                if set(sizes1) & set(sizes2)!=set():
-                    self._merge_classes(c1,c2)
+        changed = True
+        while changed:
+            curr_sizes = self.class_sizes.copy()
+            changed = False
+            for c1,sizes1 in curr_sizes.items():
+                for c2,sizes2 in curr_sizes.items():
+                    if c1!=c2 and set(sizes1) & set(sizes2)!=set():
+                        changed = True
+                        self._merge_classes(c1,c2)
+        return
 
     def _merge_classes(self, c1, c2):
         # no need to merge if equal classes already
