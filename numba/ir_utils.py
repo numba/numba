@@ -458,13 +458,16 @@ def get_block_copies(blocks):
     return block_copies, extra_kill
 
 
-def apply_copy_propagate(blocks, in_copies, name_var_table):
+def apply_copy_propagate(blocks, in_copies, name_var_table, ext_func, ext_data):
     """apply copy propagation to IR: replace variables when copies available"""
     # TODO: make it recursive on parfors?
     for label, block in blocks.items():
         var_dict = {l:name_var_table[r] for l,r in in_copies[label]}
         # assignments as dict to replace with latest value
         for stmt in block.body:
+            ext_func(stmt, var_dict, ext_data)
+            #for ext_func in apply_copy_propagate_extensions:
+                #ext_func(stmt, var_dict)
             # only rhs of assignments should be replaced
             # e.g. if x=y is available, x in x=z shouldn't be replaced
             if isinstance(stmt, ir.Assign):

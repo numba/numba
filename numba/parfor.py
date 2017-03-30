@@ -135,7 +135,8 @@ class ParforPass(object):
         in_cps, out_cps = copy_propagate(self.func_ir.blocks)
         # table mapping variable names to ir.Var objects to help replacement
         name_var_table = get_name_var_table(self.func_ir.blocks)
-        apply_copy_propagate(self.func_ir.blocks, in_cps, name_var_table)
+        apply_copy_propagate(self.func_ir.blocks, in_cps, name_var_table,
+            array_analysis.copy_propagate_update_analysis, self.array_analysis)
         # remove dead code to enable fusion
         remove_dead(self.func_ir.blocks)
         #dprint_func_ir(self.func_ir, "after remove_dead")
