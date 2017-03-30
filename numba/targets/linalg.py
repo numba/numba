@@ -725,6 +725,9 @@ def _check_linalg_matrix(a, func_name, la_prefix=True):
     # module
     prefix = "np.linalg" if la_prefix else "np"
     interp = (prefix, func_name)
+    # Unpack optional type
+    if isinstance(a, types.Optional):
+        a = a.type
     if not isinstance(a, types.Array):
         msg = "%s.%s() only supported for array types" % interp
         raise TypingError(msg)
