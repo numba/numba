@@ -81,6 +81,11 @@ def var_swapping(a, b, c, d, e):
     a, b, c, d = b, c, d, a
     return a + b + c + d +e
 
+def unsupported_op_code():
+    # needs unsupported "MAKE_FUNCTION" opcode
+    def f():
+        pass
+    return f
 
 class TestDataFlow(TestCase):
 
@@ -190,7 +195,13 @@ class TestDataFlow(TestCase):
     def test_for_break_npm(self):
         self.test_for_break(no_pyobj_flags)
 
-
+    def test_unsupported_op_code(self, flags=force_pyobj_flags):
+        pyfunc = unsupported_op_code
+        with self.assertRaises(RuntimeError) as raises:
+            cr = compile_isolated(pyfunc, (), flags=flags)
+        msg="Use of unknown opcode MAKE_FUNCTION"
+        self.assertIn(msg, str(raises.exception))
+        
 if __name__ == '__main__':
     unittest.main()
 
