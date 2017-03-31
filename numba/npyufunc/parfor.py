@@ -73,6 +73,9 @@ def _lower_parfor_parallel(lowerer, parfor):
 
     # call the func in parallel by wrapping it with ParallelGUFuncBuilder
     loop_ranges = [l.range_variable.name for l in parfor.loop_nests]
+    if config.DEBUG_ARRAY_OPT:
+        print("loop_nests = ", parfor.loop_nests)
+        print("loop_ranges = ", loop_ranges)
     array_size_vars = parfor.array_analysis.array_size_vars
     if config.DEBUG_ARRAY_OPT:
         print("array_size_vars = ", sorted(array_size_vars.items()))
@@ -344,6 +347,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
         print("make_parallel_loop")
         print("args = ", expr_args)
         print("outer_sig = ", outer_sig.args, outer_sig.return_type, outer_sig.recvr, outer_sig.pysig)
+        print("loop_ranges = ", loop_ranges)
 
     # Build the wrapper for GUFunc
     args, return_type = sigutils.normalize_signature(outer_sig)
@@ -363,6 +367,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     if config.DEBUG_ARRAY_OPT:
         cgutils.printf(builder, "loop_ranges = ")
         for v in loop_ranges:
+            print("call_parallel_gufunc v = ", v, " ", lowerer.loadvar(v))
             cgutils.printf(builder, "%d ", lowerer.loadvar(v))
         cgutils.printf(builder, "\n")
 
