@@ -1075,7 +1075,24 @@ def get_copies_parfor(parfor):
 
 copy_propagate_extensions[Parfor] = get_copies_parfor
 
-#apply_copy_propagate_extensions[Parfor] = apply_copies_parfor
+def apply_copies_parfor(parfor, var_dict, name_var_table, ext_func, ext_data):
+    """apply copy propagate recursively in parfor"""
+    blocks = wrap_parfor_blocks(parfor)
+    # add dummy assigns for each copy
+    assign_list = []
+    for lhs_name, rhs in var_dict.items():
+        assign_list.append(ir.Assign(rhs, name_var_table[lhs_name],
+            ir.Loc("dummy",-1)))
+    blocks[0].body = assign_list+blocks[0].body
+    in_copies_parfor, out_copies_parfor = copy_propagate(blocks)
+    apply_copy_propagate(blocks, in_copies_parfor, name_var_table, ext_func,
+        ext_data)
+    unwrap_parfor_blocks(parfor)
+    # remove dummy assignments
+    blocks[0].body = blocks[0].body[len(assign_list):]
+    return
+
+apply_copy_propagate_extensions[Parfor] = apply_copies_parfor
 
 def push_call_vars(blocks, saved_globals, saved_getattrs):
     """push call variables to right before their call site.
