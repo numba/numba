@@ -715,22 +715,11 @@ def get_parfor_params(parfor):
     """find variables used in body of parfor from outside.
     computed as live variables at entry of first block.
     """
-    blocks = parfor.loop_body.copy() # shallow copy is enough
-    first_body_block = min(blocks.keys())
-    assert first_body_block > 0 # we are using 0 for init block here
-    last_label = max(blocks.keys())
-    loc = blocks[last_label].body[-1].loc
-
-    # add dummy jump in init_block for CFG to work
-    blocks[0] = parfor.init_block
-    blocks[0].body.append(ir.Jump(first_body_block, loc))
-    # add a dummpy return to last block for CFG call
-    blocks[last_label].body.append(ir.Return(0,loc))
+    blocks = wrap_parfor_blocks(parfor)
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
-    blocks[0].body.pop() # remove dummy jump
-    blocks[last_label].body.pop() # remove dummy return
+    unwrap_parfor_blocks(parfor)
     keylist = sorted(live_map.keys())
     first_non_init_block = keylist[1]
 
@@ -1047,33 +1036,46 @@ def remove_dead_class_sizes(blocks, array_analysis):
                 dim_sizes[i] = None
     return
 
-def get_copies_parfor(parfor):
+def wrap_parfor_blocks(parfor):
+    """wrap parfor blocks for analysis/optimization like CFG"""
     blocks = parfor.loop_body.copy() # shallow copy is enough
     first_body_block = min(blocks.keys())
     assert first_body_block > 0 # we are using 0 for init block here
     last_label = max(blocks.keys())
     loc = blocks[last_label].body[-1].loc
-    scope = blocks[last_label].scope
 
     # add dummy jump in init_block for CFG to work
     blocks[0] = parfor.init_block
     blocks[0].body.append(ir.Jump(first_body_block, loc))
     blocks[last_label].body.append(ir.Return(0,loc))
+    return blocks
+
+def unwrap_parfor_blocks(parfor):
+    last_label = max(parfor.loop_body.keys())
+    parfor.init_block.body.pop() # remove dummy jump
+    parfor.loop_body[last_label].body.pop() # remove dummy return
+    return
+
+def get_copies_parfor(parfor):
+    """find copies generated/killed by parfor"""
+    blocks = wrap_parfor_blocks(parfor)
     in_copies_parfor, out_copies_parfor = copy_propagate(blocks)
     in_gen_copies, in_extra_kill = get_block_copies(blocks)
-    blocks[0].body.pop() # remove dummy jump
-    blocks[last_label].body.pop() # remove dummy return
+    unwrap_parfor_blocks(parfor)
 
     # parfor's extra kill is all possible gens and kills of it's loop
     kill_set = in_extra_kill[0]
     for label in parfor.loop_body.keys():
         kill_set |= { l for l,r in in_gen_copies[label] }
+    last_label = max(parfor.loop_body.keys())
     if config.DEBUG_ARRAY_OPT==1:
         print("copy propagate parfor out_copies:",
             out_copies_parfor[last_label], "kill_set",kill_set)
     return out_copies_parfor[last_label], kill_set
 
 copy_propagate_extensions[Parfor] = get_copies_parfor
+
+#apply_copy_propagate_extensions[Parfor] = apply_copies_parfor
 
 def push_call_vars(blocks, saved_globals, saved_getattrs):
     """push call variables to right before their call site.
