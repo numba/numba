@@ -303,7 +303,7 @@ def remove_dels(blocks):
         block.body = new_body
     return
 
-def remove_dead(blocks):
+def remove_dead(blocks, args):
     """dead code elimination using liveness and CFG info"""
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
@@ -315,14 +315,23 @@ def remove_dead(blocks):
         # find live variables at the end of block
         for out_blk, _data in cfg.successors(label):
             lives |= live_map[out_blk]
-        remove_dead_block(block, lives)
+        if label in cfg.exit_points():
+            lives |= set(args)
+        remove_dead_block(block, lives, args)
     return
 
 # other packages that define new nodes add calls to remove dead code in them
 # format: {type:function}
 remove_dead_extensions = {}
 
-def remove_dead_block(block, lives):
+def remove_dead_block(block, lives, args):
+    """remove dead code using liveness info.
+    Mutable arguments (e.g. arrays) that are not definitely assigned are live
+    after return of function.
+    """
+    # TODO: find mutable args that are not definitely assigned instead of
+    # assuming all args are live after return
+
     # add statements in reverse order
     new_body = [block.terminator]
     # for each statement in reverse order, excluding terminator
@@ -330,7 +339,7 @@ def remove_dead_block(block, lives):
         # let external calls handle stmt if type matches
         for t,f in remove_dead_extensions.items():
             if isinstance(stmt,t):
-                f(stmt, lives)
+                f(stmt, lives, args)
         # ignore assignments that their lhs is not live or lhs==rhs
         if isinstance(stmt, ir.Assign):
             lhs = stmt.target
