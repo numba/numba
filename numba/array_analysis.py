@@ -30,7 +30,7 @@ class ArrayAnalysis(object):
         # class zero especial and is size 1 for constants
         # and added broadcast dimensions
         # -1 class means unknown
-        self.class_sizes = {0:[1]}
+        self.class_sizes = {0:[1], -1:[]}
         # size variable to use for each array dimension
         self.array_size_vars = {}
         # keep a list of numpy Global variables to find numpy calls
@@ -629,11 +629,13 @@ def copy_propagate_update_analysis(stmt, var_dict, array_analysis):
     # update analysis for arrays in defs
     for var in def_set:
         if var in array_shape_classes:
-            array_size_vars[var] = replace_vars_inner(array_size_vars[var],
-                var_dict)
+            if var in array_size_vars:
+                array_size_vars[var] = replace_vars_inner(array_size_vars[var],
+                    var_dict)
             shape_corrs = array_shape_classes[var]
             for c in shape_corrs:
-                class_sizes[c] = replace_vars_inner(class_sizes[c], var_dict)
+                if c!=-1:
+                    class_sizes[c] = replace_vars_inner(class_sizes[c], var_dict)
     return
 
 
