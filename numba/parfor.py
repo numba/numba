@@ -518,6 +518,8 @@ def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr,
                 el_typ2 = typemap[arg_vars[1].name]
                 func_typ = find_op_typ(op, [el_typ1, el_typ2])
                 ir_expr = ir.Expr.binop(op, arg_vars[0], arg_vars[1], loc)
+                if op=='/':
+                    func_typ, ir_expr = _gen_np_divide(arg_vars[0], arg_vars[1], out_ir, typemap)
             else:
                 func_typ = find_op_typ(op, [el_typ1])
                 ir_expr = ir.Expr.unary(op, arg_vars[0], loc)
@@ -559,6 +561,30 @@ def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr,
     typemap.pop(expr_out_var.name, None)
     typemap[expr_out_var.name] = el_typ
     return out_ir
+
+def _gen_np_divide(arg1, arg2, out_ir, typemap):
+    """generate np.divide() instead of / for array_expr to get numpy error model
+    like inf for division by zero (test_division_by_zero).
+    """
+    scope = arg1.scope
+    loc = arg1.loc
+    # g_np_var = Global(numpy)
+    g_np_var = ir.Var(scope, mk_unique_var("$np_g_var"), loc)
+    typemap[g_np_var.name] = types.misc.Module(numpy)
+    g_np = ir.Global('np', numpy, loc)
+    g_np_assign = ir.Assign(g_np, g_np_var, loc)
+    # attr call: div_attr = getattr(g_np_var, divide)
+    div_attr_call = ir.Expr.getattr(g_np_var, "divide", loc)
+    attr_var = ir.Var(scope, mk_unique_var("$div_attr"), loc)
+    func_var_typ = get_np_ufunc_typ(np.divide)
+    typemap[attr_var.name] = func_var_typ
+    attr_assign = ir.Assign(div_attr_call, attr_var, loc)
+    # divide call:  div_attr(arg1, arg2)
+    div_call = ir.Expr.call(attr_var, [arg1, arg2], (), loc)
+    func_typ = func_var_typ.get_call_type(typing.Context(),
+        [typemap[arg1.name], typemap[arg2.name]], {})
+    out_ir.extend([g_np_assign, attr_assign])
+    return func_typ, div_call
 
 def _gen_arrayexpr_getitem(var, parfor_index_tuple_var, all_parfor_indices,
         el_typ, calltypes, typemap, array_shape_classes, out_ir):

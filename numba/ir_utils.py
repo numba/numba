@@ -45,7 +45,7 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
     # attr call: empty_attr = getattr(g_np_var, empty)
     empty_attr_call = ir.Expr.getattr(g_np_var, "empty", loc)
     attr_var = ir.Var(scope, mk_unique_var("$empty_attr_attr"), loc)
-    typemap[attr_var.name] = _get_empty_func_typ()
+    typemap[attr_var.name] = get_np_ufunc_typ(numpy.empty)
     attr_assign = ir.Assign(empty_attr_call, attr_var, loc)
     # alloc call: lhs = empty_attr(size_var, typ_var)
     typ_var = ir.Var(scope, mk_unique_var("$np_typ_var"), loc)
@@ -64,10 +64,10 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
     out.extend([g_np_assign, attr_assign, typ_var_assign, alloc_assign])
     return out
 
-def _get_empty_func_typ():
+def get_np_ufunc_typ(func):
     """get type variable for np.empty() from builtin registry"""
     for (k,v) in typing.npydecl.registry.globals:
-        if k==numpy.empty:
+        if k==func:
             return v
     raise RuntimeError("empty() type not found")
 
