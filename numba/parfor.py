@@ -118,7 +118,8 @@ class ParforPass(object):
                 if isinstance(instr, ir.Assign):
                     expr = instr.value
                     lhs = instr.target
-                    if self._has_known_shape(lhs):
+                    # only translate C order since we can't allocate F
+                    if self._has_known_shape(lhs) and self._is_C_order(lhs.name):
                         if self._is_supported_npycall(expr):
                             instr = self._numpy_to_parfor(lhs, expr)
                         elif isinstance(expr, ir.Expr) and expr.op == 'arrayexpr':
@@ -165,6 +166,11 @@ class ParforPass(object):
                 self.typemap)
         #lower_parfor_sequential(self.func_ir, self.typemap, self.calltypes)
         return
+
+    def _is_C_order(self, arr_name):
+        typ = self.typemap[arr_name]
+        assert isinstance(typ, types.npytypes.Array)
+        return typ.layout=='C'
 
     def _make_index_var(self, scope, index_vars, body_block):
         ndims = len(index_vars)
