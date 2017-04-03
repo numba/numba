@@ -238,7 +238,7 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
     for eachdim in range(parfor_dim):
         for indent in range(eachdim+1):
             gufunc_txt += "    "
-        sched_dim = (parfor_dim - eachdim) - 1
+        sched_dim = eachdim
         gufunc_txt += ( "for " + legal_loop_indices[eachdim] + " in range(sched[" + str(sched_dim)
                       + "], sched[" + str(sched_dim + parfor_dim) + "] + 1):\n" )
     # Add the sentinel assignment so that we can find the loop body position in the IR.
@@ -459,17 +459,14 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     for var, gu_sig in zip(expr_args[:ninouts], sin + sout):
         if config.DEBUG_ARRAY_OPT:
             print("var = ", var, " gu_sig = ", gu_sig)
-        for sig in gu_sig:
-            i = 0
-            for dim_sym in sig:
+        i = 0
+        for dim_sym in gu_sig:
+            sig_dim_dict[dim_sym] = lowerer.loadvar(array_size_vars[var][i].name)
+            if not (dim_sym in occurances):
                 if config.DEBUG_ARRAY_OPT:
-                    print("dim_sym = ", dim_sym)
-                # sig_dim_dict[dim_sym] = var.shape[i]
-                # print("var = ", var, " array_size_vars = ", array_size_vars)
-                sig_dim_dict[dim_sym] = lowerer.loadvar(array_size_vars[var][0].name)
-                if not (dim_sym in occurances):
-                    occurances.append(dim_sym)
-                i = i + 1
+                    print("dim_sym = ", dim_sym, ", size = ", array_size_vars[var][i].name)
+                occurances.append(dim_sym)
+            i = i + 1
 
     # Prepare shapes, which is a single number (outer loop size), followed by the size of individual shape variables.
     nshapes = len(sig_dim_dict) + 1
@@ -479,6 +476,8 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     # Individual shape variables go next
     i = 1
     for dim_sym in occurances:
+        if config.DEBUG_ARRAY_OPT:
+            cgutils.printf(builder, dim_sym + " = %d\n", sig_dim_dict[dim_sym])
         builder.store(sig_dim_dict[dim_sym], builder.gep(shapes, [ context.get_constant(types.intp, i) ]))
         i = i + 1
 
