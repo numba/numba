@@ -952,11 +952,12 @@ if numpy_version >= (1, 8):
 
             # put these in to help with liveness analysis,
             # `.ctypes` doesn't keep the vars alive
-            acpy.size
-            vl.size
-            vr.size
-            wr.size
-            wi.size
+            #acpy.size
+            #vl.size
+            #vr.size
+            #wr.size
+            #wi.size
+            _dummy_liveness_func([acpy.size, vl.size, vr.size, wr.size, wi.size])
             return (wr, vr.T)
 
         def cmplx_eig_impl(a):
@@ -996,10 +997,11 @@ if numpy_version >= (1, 8):
 
             # put these in to help with liveness analysis,
             # `.ctypes` doesn't keep the vars alive
-            acpy.size
-            vl.size
-            vr.size
-            w.size
+            #acpy.size
+            #vl.size
+            #vr.size
+            #w.size
+            _dummy_liveness_func([acpy.size, vl.size, vr.size, w.size])
             return (w, vr.T)
 
         if isinstance(a.dtype, types.scalars.Complex):
@@ -1078,11 +1080,12 @@ if numpy_version >= (1, 8):
 
             # put these in to help with liveness analysis,
             # `.ctypes` doesn't keep the vars alive
-            acpy.size
-            vl.size
-            vr.size
-            wr.size
-            wi.size
+            #acpy.size
+            #vl.size
+            #vr.size
+            #wr.size
+            #wi.size
+            _dummy_liveness_func([acpy.size, vl.size, vr.size, wr.size, wi.size])
             return wr
 
         def cmplx_eigvals_impl(a):
@@ -1122,10 +1125,11 @@ if numpy_version >= (1, 8):
 
             # put these in to help with liveness analysis,
             # `.ctypes` doesn't keep the vars alive
-            acpy.size
-            vl.size
-            vr.size
-            w.size
+            #acpy.size
+            #vl.size
+            #vr.size
+            #w.size
+            _dummy_liveness_func([acpy.size, vl.size, vr.size, w.size])
             return w
 
         if isinstance(a.dtype, types.scalars.Complex):
