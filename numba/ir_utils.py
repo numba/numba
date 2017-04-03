@@ -470,7 +470,8 @@ def get_block_copies(blocks):
 # format: {type:function}
 apply_copy_propagate_extensions = {}
 
-def apply_copy_propagate(blocks, in_copies, name_var_table, ext_func, ext_data):
+def apply_copy_propagate(blocks, in_copies, name_var_table, ext_func, ext_data,
+        typemap, calltypes):
     """apply copy propagation to IR: replace variables when copies available"""
     for label, block in blocks.items():
         var_dict = {l:name_var_table[r] for l,r in in_copies[label]}
@@ -479,13 +480,15 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, ext_func, ext_data):
             ext_func(stmt, var_dict, ext_data)
             for T,f in apply_copy_propagate_extensions.items():
                 if isinstance(stmt,T):
-                    f(stmt, var_dict, name_var_table, ext_func, ext_data)
+                    f(stmt, var_dict, name_var_table, ext_func, ext_data,
+                        typemap, calltypes)
             # only rhs of assignments should be replaced
             # e.g. if x=y is available, x in x=z shouldn't be replaced
             if isinstance(stmt, ir.Assign):
                 stmt.value = replace_vars_inner(stmt.value, var_dict)
             else:
                 replace_vars_stmt(stmt, var_dict)
+            fix_setitem_type(stmt, typemap, calltypes)
             for T,f in copy_propagate_extensions.items():
                 if isinstance(stmt,T):
                     gen_set, kill_set = f(stmt)
@@ -500,6 +503,21 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, ext_func, ext_data):
                 # rhs could be replaced with lhs from previous copies
                 if lhs!=rhs:
                     var_dict[lhs] = name_var_table[rhs]
+    return
+
+def fix_setitem_type(stmt, typemap, calltypes):
+    """Copy propagation can replace setitem target variable, which can be array
+    with 'A' layout. The replaced variable can be 'C' or 'F', so we update
+    setitem call type reflect this (from matrix power test)
+    """
+    if not isinstance(stmt, (ir.SetItem, ir.StaticSetItem)):
+        return
+    t_typ = typemap[stmt.target.name]
+    s_typ = calltypes[stmt].args[0]
+    if not isinstance(s_typ, types.npytypes.Array):
+        return
+    if s_typ.layout=='A':
+        calltypes[stmt].args = (t_typ, calltypes[stmt].args[1], calltypes[stmt].args[2])
     return
 
 

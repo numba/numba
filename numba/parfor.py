@@ -136,7 +136,8 @@ class ParforPass(object):
         # table mapping variable names to ir.Var objects to help replacement
         name_var_table = get_name_var_table(self.func_ir.blocks)
         apply_copy_propagate(self.func_ir.blocks, in_cps, name_var_table,
-            array_analysis.copy_propagate_update_analysis, self.array_analysis)
+            array_analysis.copy_propagate_update_analysis, self.array_analysis,
+            self.typemap, self.calltypes)
         # remove dead code to enable fusion
         remove_dead(self.func_ir.blocks, self.func_ir.arg_names)
         #dprint_func_ir(self.func_ir, "after remove_dead")
@@ -1075,7 +1076,8 @@ def get_copies_parfor(parfor):
 
 copy_propagate_extensions[Parfor] = get_copies_parfor
 
-def apply_copies_parfor(parfor, var_dict, name_var_table, ext_func, ext_data):
+def apply_copies_parfor(parfor, var_dict, name_var_table, ext_func, ext_data,
+        typemap, calltypes):
     """apply copy propagate recursively in parfor"""
     blocks = wrap_parfor_blocks(parfor)
     # add dummy assigns for each copy
@@ -1086,7 +1088,7 @@ def apply_copies_parfor(parfor, var_dict, name_var_table, ext_func, ext_data):
     blocks[0].body = assign_list+blocks[0].body
     in_copies_parfor, out_copies_parfor = copy_propagate(blocks)
     apply_copy_propagate(blocks, in_copies_parfor, name_var_table, ext_func,
-        ext_data)
+        ext_data, typemap, calltypes)
     unwrap_parfor_blocks(parfor)
     # remove dummy assignments
     blocks[0].body = blocks[0].body[len(assign_list):]
