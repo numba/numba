@@ -128,7 +128,8 @@ class ArrayAnalysis(object):
                 if self.array_shape_classes[lhs]!=rhs_corr:
                     self.array_shape_classes[lhs] = [-1]*self._get_ndims(lhs)
                     self.array_size_vars.pop(lhs, None)
-                    print("incompatible array shapes in control flow")
+                    if config.DEBUG_ARRAY_OPT==1:
+                        print("incompatible array shapes in control flow")
                     return []
             self.array_shape_classes[lhs] = rhs_corr
             self.array_size_vars[lhs] = [-1]*self._get_ndims(lhs)
@@ -225,7 +226,8 @@ class ArrayAnalysis(object):
                 if call_name is not 'NULL':
                     return self._analyze_np_call(call_name, args, dict(node.kws))
                 else:
-                    print("can't find shape for unknown call:", node)
+                    if config.DEBUG_ARRAY_OPT==1:
+                        print("can't find shape for unknown call:", node)
                     return None
             elif node.op=='getattr' and self._isarray(node.value.name):
                 # numpy recarray, e.g. X.a
@@ -257,8 +259,10 @@ class ArrayAnalysis(object):
                         and node.index in val_typ.dtype.fields):
                     return copy.copy(self.array_shape_classes[val])
             else:
-                print("can't find shape classes for expr",node," of op",node.op)
-        print("can't find shape classes for node",node," of type ",type(node))
+                if config.DEBUG_ARRAY_OPT==1:
+                    print("can't find shape classes for expr",node," of op",node.op)
+        if config.DEBUG_ARRAY_OPT==1:
+            print("can't find shape classes for node",node," of type ",type(node))
         return None
 
     def _analyze_np_call(self, call_name, args, kws):
@@ -433,7 +437,8 @@ class ArrayAnalysis(object):
         elif call_name in UFUNC_MAP_OP:
             return self._broadcast_and_match_shapes([a.name for a in args])
 
-        print("unknown numpy call:", call_name," ", args)
+        if config.DEBUG_ARRAY_OPT==1:
+            print("unknown numpy call:", call_name," ", args)
         return None
 
     def _get_axis_second_arg(self, args, kws):
