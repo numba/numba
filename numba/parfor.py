@@ -716,12 +716,15 @@ def _rename_labels(blocks):
     cfg = compute_cfg_from_blocks(blocks)
     topo_order = cfg.topo_order()
 
+    # make a block with return last if available (just for readability)
     return_label = -1
     for l,b in blocks.items():
         if isinstance(b.body[-1], ir.Return):
             return_label = l
-    topo_order.remove(return_label)
-    topo_order.append(return_label)
+    # some cases like generators can have no return blocks
+    if return_label!=-1:
+        topo_order.remove(return_label)
+        topo_order.append(return_label)
 
     label_map = {}
     new_label = 0
