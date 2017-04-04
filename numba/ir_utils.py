@@ -503,6 +503,13 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, ext_func, ext_data,
                 # rhs could be replaced with lhs from previous copies
                 if lhs!=rhs:
                     var_dict[lhs] = name_var_table[rhs]
+                    # a=b kills previous t=a
+                    lhs_kill = []
+                    for k,v in var_dict.items():
+                        if v.name==lhs:
+                            lhs_kill.append(k)
+                    for k in lhs_kill:
+                        var_dict.pop(k, None)
     return
 
 def fix_setitem_type(stmt, typemap, calltypes):
