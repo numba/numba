@@ -343,13 +343,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
         print("outer_sig = ", outer_sig.args, outer_sig.return_type, outer_sig.recvr, outer_sig.pysig)
 
     # Build the wrapper for GUFunc
-    ufunc = ParallelGUFuncBuilder(cres.entry_point, gu_signature)
     args, return_type = sigutils.normalize_signature(outer_sig)
-    sig = ufunc._finalize_signature(cres, args, return_type)
-    if config.DEBUG_ARRAY_OPT:
-        print("sig = ", sig)
-    ufunc._sigs.append(sig)
-    ufunc._cres[sig] = cres
     llvm_func = cres.library.get_function(cres.fndesc.llvm_func_name)
     sin, sout = gu_signature
 
@@ -361,7 +355,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     cres.library._ensure_finalized()
 
     if config.DEBUG_ARRAY_OPT:
-        print("parallel function = ", wrapper_name, cres, sig)
+        print("parallel function = ", wrapper_name, cres)
 
     if config.DEBUG_ARRAY_OPT:
         cgutils.printf(builder, "loop_ranges = ")
