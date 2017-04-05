@@ -112,7 +112,9 @@ class ParforPass(object):
         with Parfors when possible and optimize the IR."""
 
         self.array_analysis.run()
-        for (key, block) in self.func_ir.blocks.items():
+        topo_order = find_topo_order(self.func_ir.blocks)
+        for label in topo_order:
+            block = self.func_ir.blocks[label]
             new_body = []
             for instr in block.body:
                 if isinstance(instr, ir.Assign):
@@ -716,8 +718,7 @@ def _rename_labels(blocks):
     """rename labels of function body blocks according to topological sort.
     lowering requires this order.
     """
-    cfg = compute_cfg_from_blocks(blocks)
-    topo_order = cfg.topo_order()
+    topo_order = find_topo_order(blocks)
 
     # make a block with return last if available (just for readability)
     return_label = -1

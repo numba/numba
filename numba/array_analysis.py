@@ -51,8 +51,7 @@ class ArrayAnalysis(object):
         if config.DEBUG_ARRAY_OPT==1:
             print("variable types: ",self.typemap)
             print("call types: ", self.calltypes)
-        cfg = compute_cfg_from_blocks(self.func_ir.blocks)
-        topo_order = cfg.topo_order()
+        topo_order = find_topo_order(self.func_ir.blocks)
         for label in topo_order:
             self._analyze_block(self.func_ir.blocks[label])
 
