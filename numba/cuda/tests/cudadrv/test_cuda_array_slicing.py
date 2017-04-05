@@ -29,6 +29,34 @@ class CudaArrayIndexing(unittest.TestCase):
                     self.assertEqual(arr[i, j, k], darr[i, j, k])
 
 
+class CudaArrayStridedSlice(unittest.TestCase):
+
+    def test_strided_index_1d(self):
+        arr = np.arange(10)
+        darr = cuda.to_device(arr)
+        for i in range(arr.size):
+            np.testing.assert_equal(arr[i::2], darr[i::2].copy_to_host())
+
+    def test_strided_index_2d(self):
+        arr = np.arange(6 ** 2).reshape(6, 6)
+        darr = cuda.to_device(arr)
+
+        for i in range(arr.shape[0]):
+            for j in range(arr.shape[1]):
+                np.testing.assert_equal(arr[i::2, j::2],
+                                        darr[i::2, j::2].copy_to_host())
+
+    def test_strided_index_3d(self):
+        arr = np.arange(6 ** 3).reshape(6, 6, 6)
+        darr = cuda.to_device(arr)
+
+        for i in range(arr.shape[0]):
+            for j in range(arr.shape[1]):
+                for k in range(arr.shape[2]):
+                    np.testing.assert_equal(arr[i::2, j::2, k::2],
+                                            darr[i::2, j::2, k::2].copy_to_host())
+
+
 class CudaArraySlicing(unittest.TestCase):
     def test_prefix_1d(self):
         arr = np.arange(5)
