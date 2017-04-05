@@ -427,6 +427,8 @@ class ParforPass(object):
 
 def _gen_dotmv_check(typemap, calltypes, in1, in2, out, scope, loc):
     """compile dot() check from linalg module and insert a call to it"""
+    # save max_label since pipeline is called recursively
+    saved_max_label = ir_utils._max_label
     from numba import njit
     from numba.targets.linalg import dot_3_mv_check_args
     check_func = njit(dot_3_mv_check_args)
@@ -443,6 +445,7 @@ def _gen_dotmv_check(typemap, calltypes, in1, in2, out, scope, loc):
     dummy_var = ir.Var(scope, mk_unique_var("$call_out_dummy"), loc)
     typemap[dummy_var.name] = types.none
     call_assign = ir.Assign(call_node, dummy_var, loc)
+    ir_utils._max_label = saved_max_label
     return [g_assign, call_assign]
 
 def _mk_mvdot_body(typemap, calltypes, phi_b_var, index_var, in1, in2, sum_var,
