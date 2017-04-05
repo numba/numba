@@ -281,6 +281,14 @@ class ArrayAnalysis(object):
         elif call_name=='eye':
             # if one input n, output is n*n
             # two inputs n,m, output is n*m
+            # N is either positional or kw arg
+            if 'N' in kws:
+                assert len(args)==0
+                args.append(kws['N'])
+            if 'M' in kws:
+                assert len(args)==1
+                args.append(kws['M'])
+
             new_class1 = self._get_next_class_with_size(args[0].name)
             out_eqs = [new_class1]
             if len(args)>1:
