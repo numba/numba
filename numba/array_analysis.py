@@ -274,7 +274,14 @@ class ArrayAnalysis(object):
             return out_eqs
         elif call_name in ['empty', 'zeros', 'ones', 'full', 'random.ranf',
                 'random.random_sample', 'random.sample']:
-            return self._get_classes_from_shape(args[0])
+            shape_arg = None
+            if len(args)>0:
+                shape_arg = args[0]
+            elif 'shape' in kws:
+                shape_arg = kws['shape']
+            else:
+                return None
+            return self._get_classes_from_shape(shape_arg)
         elif call_name in ['random.rand', 'random.randn']:
             # arguments are integers, not a tuple
             return self._get_classes_from_dim_args(args)
@@ -344,7 +351,11 @@ class ArrayAnalysis(object):
             if axis==-1: # don't know shape if axis is not constant
                 return None
             arr_args = self._get_sequence_arrs(args[0].name)
+            if len(arr_args)==0:
+                return None
             ndims = self._get_ndims(arr_args[0].name)
+            if ndims<=axis:
+                return None
             out_eqs = [-1]*ndims
             new_class1 = self._get_next_class()
             # TODO: set size to sum of input array's size along axis
@@ -364,6 +375,8 @@ class ArrayAnalysis(object):
             if axis==-1: # don't know shape if axis is not constant
                 return None
             arr_args = self._get_sequence_arrs(args[0].name)
+            if len(arr_args)==0:
+                return None
             ndims = self._get_ndims(arr_args[0].name)
             out_eqs = [-1]*ndims
             # all input arrays have equal dimensions
@@ -378,7 +391,7 @@ class ArrayAnalysis(object):
             # TODO: set size to sum of input array's size along axis
             return out_eqs
         elif call_name=='hstack':
-            # hstack is same as concatenate with axis=1
+            # hstack is same as concatenate with axis=1 for ndim>=2
             dummy_one_var = ir.Var(args[0].scope, "__dummy_1", args[0].loc)
             self.constant_table["__dummy_1"] = 1
             args.append(dummy_one_var)
@@ -394,6 +407,8 @@ class ArrayAnalysis(object):
             # vstack is same as concatenate with axis=0 if 2D input dims or more
             # TODO: set size to sum of input array's size for 1D
             arr_args = self._get_sequence_arrs(args[0].name)
+            if len(arr_args)==0:
+                return None
             ndims = self._get_ndims(arr_args[0].name)
             if ndims>=2:
                 dummy_zero_var = ir.Var(args[0].scope, "__dummy_0", args[0].loc)
@@ -403,6 +418,8 @@ class ArrayAnalysis(object):
         elif call_name=='column_stack':
             # 1D arrays turn into columns of 2D array
             arr_args = self._get_sequence_arrs(args[0].name)
+            if len(arr_args)==0:
+                return None
             c = self.array_shape_classes[arr_args[0].name][0]
             for v in arr_args:
                 c = self._merge_classes(c, self.array_shape_classes[v.name][0])
@@ -483,21 +500,23 @@ class ArrayAnalysis(object):
         return arr_args
 
     def convert_seq_to_atleast_3d(self, seq_arg_var):
+        """convert array sequence to a sequence of arrays with at least 3d dims
+        """
         arr_args = self._get_sequence_arrs(seq_arg_var.name)
         new_seq = []
         for arr in arr_args:
             curr_dims = self._get_ndims(arr.name)
-            assert curr_dims<=3
             if curr_dims<3:
-                dummy_var = ir.Var(arr.scope, "__dummy_nd", arr.loc)
+                dummy_var = ir.Var(arr.scope, mk_unique_var("__dummy_nd"), arr.loc)
                 self.typemap[dummy_var.name] = self.typemap[arr.name].copy(ndim=3)
                 corrs = self.array_shape_classes[arr.name].copy()
                 if curr_dims==0:
                     corrs = [0]*3
-                elif curr_dims==1:
+                elif curr_dims==1: # Numpy adds both prepends and appends a dim
                     corrs = [0]+corrs+[0]
-                elif curr_dims==2:
+                elif curr_dims==2: # append a dim
                     corrs = corrs+[0]
+                self.array_shape_classes[dummy_var.name] = corrs
                 new_seq.append(dummy_var)
             else:
                 new_seq.append(arr)
