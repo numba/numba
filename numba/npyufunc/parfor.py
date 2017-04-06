@@ -455,10 +455,16 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
             print("var = ", var, " gu_sig = ", gu_sig)
         i = 0
         for dim_sym in gu_sig:
-            sig_dim_dict[dim_sym] = lowerer.loadvar(array_size_vars[var][i].name)
+            dim = array_size_vars[var][i]
+            if isinstance(dim, ir.Var):
+                sig_dim_dict[dim_sym] = lowerer.loadvar(dim.name)
+            elif isinstance(dim, int):
+                sig_dim_dict[dim_sym] = context.get_constant(types.intp, dim)
+            else:
+                raise NotImplementedError("wrong dimension value encoutered: ", dim)
             if not (dim_sym in occurances):
                 if config.DEBUG_ARRAY_OPT:
-                    print("dim_sym = ", dim_sym, ", size = ", array_size_vars[var][i].name)
+                    print("dim_sym = ", dim_sym, ", size = ", array_size_vars[var][i])
                 occurances.append(dim_sym)
             i = i + 1
 
