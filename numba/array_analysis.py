@@ -384,12 +384,12 @@ class ArrayAnalysis(object):
             args.append(dummy_one_var)
             return self._analyze_np_call('concatenate', args, kws)
         elif call_name=='dstack':
-            # wrong Numpy doc: dstack is same as concatenate with axis=2
-            # dstack is same as stack with axis=2
+            # dstack is same as concatenate with axis=2, atleast_3d args
+            args[0] = self.convert_seq_to_atleast_3d(args[0])
             dummy_two_var = ir.Var(args[0].scope, "__dummy_2", args[0].loc)
             self.constant_table["__dummy_2"] = 2
             args.append(dummy_two_var)
-            return self._analyze_np_call('stack', args, kws)
+            return self._analyze_np_call('concatenate', args, kws)
         elif call_name=='vstack':
             # vstack is same as concatenate with axis=0 if 2D input dims or more
             # TODO: set size to sum of input array's size for 1D
@@ -481,6 +481,29 @@ class ArrayAnalysis(object):
         if seq_arg in self.tuple_table:
             arr_args = self.tuple_table[seq_arg]
         return arr_args
+
+    def convert_seq_to_atleast_3d(self, seq_arg_var):
+        arr_args = self._get_sequence_arrs(seq_arg_var.name)
+        new_seq = []
+        for arr in arr_args:
+            curr_dims = self._get_ndims(arr.name)
+            assert curr_dims<=3
+            if curr_dims<3:
+                dummy_var = ir.Var(arr.scope, "__dummy_nd", arr.loc)
+                self.typemap[dummy_var.name] = self.typemap[arr.name].copy(ndim=3)
+                corrs = self.array_shape_classes[arr.name].copy()
+                if curr_dims==0:
+                    corrs = [0]*3
+                elif curr_dims==1:
+                    corrs = [0]+corrs+[0]
+                elif curr_dims==2:
+                    corrs = corrs+[0]
+                new_seq.append(dummy_var)
+            else:
+                new_seq.append(arr)
+        tup_name = mk_unique_var("__dummy_tup")
+        self.tuple_table[tup_name] = new_seq
+        return ir.Var(arr_args[0].scope, tup_name, arr_args[0].loc)
 
     def _get_classes_from_shape(self, shape_arg):
         # shape is either Int or tuple of Int
