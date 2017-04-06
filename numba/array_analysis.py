@@ -341,6 +341,8 @@ class ArrayAnalysis(object):
         elif call_name=='concatenate':
             # all dimensions of output are same as inputs, except axis
             axis = self._get_axis_second_arg(args, kws)
+            if axis==-1: # don't know shape if axis is not constant
+                return None
             arr_args = self._get_sequence_arrs(args[0].name)
             ndims = self._get_ndims(arr_args[0].name)
             out_eqs = [-1]*ndims
@@ -359,6 +361,8 @@ class ArrayAnalysis(object):
         elif call_name=='stack':
             # all dimensions of output are same as inputs, but extra on axis
             axis = self._get_axis_second_arg(args, kws)
+            if axis==-1: # don't know shape if axis is not constant
+                return None
             arr_args = self._get_sequence_arrs(args[0].name)
             ndims = self._get_ndims(arr_args[0].name)
             out_eqs = [-1]*ndims
@@ -457,12 +461,16 @@ class ArrayAnalysis(object):
         return None
 
     def _get_axis_second_arg(self, args, kws):
-        axis = 0
+        axis_var = None
         if len(args)>1:
-            axis = self.constant_table[args[1].name]
+            axis_var = args[1].name
         elif 'axis' in kws:
-            axis = self.constant_table[kws['axis'].name]
-        return axis
+            axis_var = kws['axis'].name
+        if axis_var is None:
+            return 0 # default axis is 0 if no arg
+        if axis_var in self.constant_table:
+            return self.constant_table[axis_var]
+        return -1 # axis var is not constant
 
     def _get_sequence_arrs(self, seq_arg):
         """get array sequence input to concatenate, stack etc."""
