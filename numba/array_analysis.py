@@ -316,7 +316,13 @@ class ArrayAnalysis(object):
         elif call_name in ['empty_like', 'zeros_like', 'ones_like', 'full_like',
                 'copy','asfortranarray']:
             # shape same as input
-            return copy.copy(self.array_shape_classes[args[0].name])
+            if args[0].name in self.array_shape_classes:
+                return copy.copy(self.array_shape_classes[args[0].name])
+            else:
+            # array scalars: constant input results in 0-dim array
+                assert not self._isarray(args[0].name)
+                # TODO: make sure arg is scalar
+                return []
         elif call_name=='reshape':
             #print("reshape args: ", args)
             # TODO: infer shape from length of args[0] in case of -1 input
