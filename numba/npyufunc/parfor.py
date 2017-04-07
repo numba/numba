@@ -421,8 +421,10 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     num_args = len(all_args)
     num_inps = len(sin) + 1
     args = cgutils.alloca_once(builder, byte_ptr_t, size = context.get_constant(types.intp, 1 + num_args), name = "pargs")
+    array_strides = []
     # sched goes first
     builder.store(builder.bitcast(sched, byte_ptr_t), args)
+    array_strides.append(context.get_constant(types.intp, sizeof_intp))
     # followed by other arguments
     for i in range(num_args):
         arg = all_args[i]
@@ -432,6 +434,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
             builder.store(builder.bitcast(arg, byte_ptr_t), dst)
         elif isinstance(aty, types.ArrayCompatible):
             ary = context.make_array(aty)(context, builder, arg)
+            strides = cgutils.unpack_tuple(builder, ary.strides, aty.ndim)
+            for j in range(len(strides)):
+                array_strides.append(strides[j])
             builder.store(builder.bitcast(ary.data, byte_ptr_t), dst)
         else:
             if i < num_inps:
@@ -482,7 +487,8 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
         i = i + 1
 
     # Prepare steps for each argument. Note that all steps are counted in bytes.
-    steps = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, num_args + 1), name = "psteps")
+    num_steps = num_args + 1 + len(array_strides)
+    steps = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, num_steps), name = "psteps")
     # First goes the step size for sched, which is 2 * num_dim
     builder.store(context.get_constant(types.intp, 2 * num_dim * sizeof_intp), steps)
     # The steps for all others are 0. (TODO: except reduction results)
@@ -493,9 +499,13 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
             sizeof = context.get_abi_sizeof(typ)
             stepsize = context.get_constant(types.intp, sizeof)
         else:
+            # steps are strides
             stepsize = zero
         dst = builder.gep(steps, [context.get_constant(types.intp, 1 + i)])
         builder.store(stepsize, dst)
+    for j in range(len(array_strides)):
+        dst = builder.gep(steps, [context.get_constant(types.intp, 1 + num_args + j)])
+        builder.store(array_strides[j], dst)
 
     # prepare data
     data = builder.inttoptr(zero, byte_ptr_t)
