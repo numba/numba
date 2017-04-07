@@ -166,7 +166,7 @@ class ParforPass(object):
         if self.func_ir.is_generator:
             fix_generator_types(self.func_ir.generator_info, self.return_type,
                 self.typemap)
-        #lower_parfor_sequential(self.func_ir, self.typemap, self.calltypes)
+        lower_parfor_sequential(self.func_ir, self.typemap, self.calltypes)
         return
 
     def _is_C_order(self, arr_name):
@@ -647,11 +647,13 @@ def _find_func_var(typemap, func):
     raise RuntimeError("ufunc call variable not found")
 
 def lower_parfor_sequential(func_ir, typemap, calltypes):
+    parfor_found = False
     new_blocks = {}
     for (block_label, block) in func_ir.blocks.items():
         scope = block.scope
         i = _find_first_parfor(block.body)
         while i!=-1:
+            parfor_found = True
             inst = block.body[i]
             loc = inst.init_block.loc
             # split block across parfor
@@ -704,7 +706,9 @@ def lower_parfor_sequential(func_ir, typemap, calltypes):
         # old block stays either way
         new_blocks[block_label] = block
     func_ir.blocks = new_blocks
-    func_ir.blocks = _rename_labels(func_ir.blocks)
+    # rename only if parfor found and replaced (avoid test_flow_control error)
+    if parfor_found:
+        func_ir.blocks = _rename_labels(func_ir.blocks)
     dprint_func_ir(func_ir, "after parfor sequential lowering")
     return
 
