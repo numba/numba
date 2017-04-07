@@ -1,3 +1,33 @@
+Version 0.32.0
+--------------
+
+In this release, we are upgrading to LLVM 4.0.  A lot of work has been done
+to fix many race-condition issues inside LLVM when the compiler is
+used concurrently, which is likely when Numba is used with Dask.
+
+Improvements:
+
+* PR #2322: Suppress test error due to unknown but consistent error with tgamma
+* PR #2320: Update llvmlite dependency to 0.17
+* PR #2308: Add details to error message on why cuda support is disabled.
+* PR #2302: Add os x to travis
+* PR #2294: Disable remove_module on MCJIT due to memory leak inside LLVM
+* PR #2291: Split parallel tests and recycle workers to tame memory usage
+* PR #2253: Remove the pointer-stuffing hack for storing meminfos in lists
+
+Fixes:
+
+* PR #2331: Fix a bug in the GPU array indexing
+* PR #2326: Fix #2321 docs referring to non-existing function.
+* PR #2316: Fixing more race-condition problems
+* PR #2315: Fix #2314.  Relax strict type check to allow optional type.
+* PR #2310: Fix race condition due to concurrent compilation and cache loading
+* PR #2304: Fix intrinsic 1st arg not a typing.Context as stated by the docs.
+* PR #2287: Fix int64 atomic min-max
+* PR #2286: Fix #2285 `@overload_method` not linking dependent libs
+* PR #2303: Missing import statements to interval-example.rst
+
+
 Version 0.31.0
 --------------
 
