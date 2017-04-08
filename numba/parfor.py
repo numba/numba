@@ -166,7 +166,7 @@ class ParforPass(object):
         if self.func_ir.is_generator:
             fix_generator_types(self.func_ir.generator_info, self.return_type,
                 self.typemap)
-        lower_parfor_sequential(self.func_ir, self.typemap, self.calltypes)
+        #lower_parfor_sequential(self.func_ir, self.typemap, self.calltypes)
         return
 
     def _is_C_order(self, arr_name):
@@ -879,7 +879,7 @@ def parfor_insert_dels(parfor, curr_dead_set):
     post_proc = postproc.PostProcessor(DummyFuncIR(blocks))
     post_proc._patch_var_dels(dead_map.internal, escaping_dead)
     unwrap_parfor_blocks(parfor)
-    return dead_set
+    return dead_set | loop_vars
 
 postproc.ir_extension_insert_dels[Parfor] = parfor_insert_dels
 
