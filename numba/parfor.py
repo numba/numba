@@ -849,6 +849,40 @@ def parfor_defs(parfor):
 
 analysis.ir_extension_defs[Parfor] = parfor_defs
 
+def parfor_insert_dels(parfor, curr_dead_set):
+    """insert dels in parfor. input: dead variable set right after parfor.
+    returns the variables for which del was inserted.
+    """
+    blocks = wrap_parfor_blocks(parfor)
+    cfg = compute_cfg_from_blocks(blocks)
+    usedefs = compute_use_defs(blocks)
+    live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
+    dead_map = compute_dead_maps(cfg, blocks, live_map, usedefs.defmap)
+    # treat loop variables and size variables as live
+    loop_vars = {l.range_variable.name for l in parfor.loop_nests}
+    loop_vars |= {l.index_variable.name for l in parfor.loop_nests}
+    for var_list in parfor.array_analysis.array_size_vars.values():
+        loop_vars |= {v.name for v in var_list if isinstance(v, ir.Var)}
+    dead_set = set()
+    # TODO: handle escaping deads
+    escaping_dead = {}
+    for label in blocks.keys():
+        # only kill vars that are actually dead at the parfor's block
+        dead_map.internal[label] &= curr_dead_set
+        dead_map.internal[label] -= loop_vars
+        dead_set |= dead_map.internal[label]
+        escaping_dead[label] = set()
+    # dummy class to replace func_ir. _patch_var_dels only accesses blocks
+    class DummyFuncIR(object):
+        def __init__(self, blocks):
+            self.blocks = blocks
+    post_proc = postproc.PostProcessor(DummyFuncIR(blocks))
+    post_proc._patch_var_dels(dead_map.internal, escaping_dead)
+    unwrap_parfor_blocks(parfor)
+    return dead_set
+
+postproc.ir_extension_insert_dels[Parfor] = parfor_insert_dels
+
 # reorder statements to maximize fusion
 def maximize_fusion(blocks):
     for block in blocks.values():
@@ -1091,7 +1125,7 @@ def wrap_parfor_blocks(parfor):
     # add dummy jump in init_block for CFG to work
     blocks[0] = parfor.init_block
     blocks[0].body.append(ir.Jump(first_body_block, loc))
-    blocks[last_label].body.append(ir.Return(0,loc))
+    blocks[last_label].body.append(ir.Jump(first_body_block,loc))
     return blocks
 
 def unwrap_parfor_blocks(parfor):
