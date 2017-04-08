@@ -324,12 +324,16 @@ class ArrayAnalysis(object):
                 'copy','asfortranarray']:
             # shape same as input
             if args[0].name in self.array_shape_classes:
-                return copy.copy(self.array_shape_classes[args[0].name])
+                out_corrs =  copy.copy(self.array_shape_classes[args[0].name])
             else:
             # array scalars: constant input results in 0-dim array
                 assert not self._isarray(args[0].name)
                 # TODO: make sure arg is scalar
-                return []
+                out_corrs = []
+            # asfortranarray converts 0-d to 1-d automatically
+            if out_corrs==[] and call_name=='asfortranarray':
+                out_corrs = [0]
+            return out_corrs
         elif call_name=='reshape':
             #print("reshape args: ", args)
             # TODO: infer shape from length of args[0] in case of -1 input
