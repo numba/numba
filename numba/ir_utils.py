@@ -521,10 +521,12 @@ def fix_setitem_type(stmt, typemap, calltypes):
         return
     t_typ = typemap[stmt.target.name]
     s_typ = calltypes[stmt].args[0]
-    if not isinstance(s_typ, types.npytypes.Array):
+    # test_optional t_typ can be Optional with array
+    if not isinstance(s_typ, types.npytypes.Array) or not isinstance(t_typ, types.npytypes.Array):
         return
-    if s_typ.layout=='A':
-        calltypes[stmt].args = (t_typ, calltypes[stmt].args[1], calltypes[stmt].args[2])
+    if s_typ.layout=='A' and t_typ.layout!='A':
+        new_s_typ = s_typ.copy(layout=t_typ.layout)
+        calltypes[stmt].args = (new_s_typ, calltypes[stmt].args[1], calltypes[stmt].args[2])
     return
 
 
