@@ -458,7 +458,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     occurances = []
     occurances = [sched_sig[0]]
     sig_dim_dict[sched_sig[0]] = context.get_constant(types.intp, 2 * num_dim)
-    for var, gu_sig in zip(expr_args[:ninouts], sin + sout):
+    for var, arg, aty, gu_sig in zip(expr_args[:ninouts], all_args[:ninouts], outer_sig.args[1:], sin + sout):
         if config.DEBUG_ARRAY_OPT:
             print("var = ", var, " gu_sig = ", gu_sig)
         i = 0
@@ -469,7 +469,12 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
             elif isinstance(dim, int):
                 sig_dim_dict[dim_sym] = context.get_constant(types.intp, dim)
             else:
-                raise NotImplementedError("wrong dimension value encoutered: ", dim)
+                # raise NotImplementedError("wrong dimension value encoutered: ", dim)
+                if config.DEBUG_ARRAY_OPT:
+                    print("var = ", var, " type = ", aty)
+                ary = context.make_array(aty)(context, builder, arg)
+                shapes = cgutils.unpack_tuple(builder, ary.strides, aty.ndim)
+                sig_dim_dict[dim_sym] = shapes[i]
             if not (dim_sym in occurances):
                 if config.DEBUG_ARRAY_OPT:
                     print("dim_sym = ", dim_sym, ", size = ", array_size_vars[var][i])
