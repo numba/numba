@@ -95,6 +95,7 @@ def _create_shape_signature(classes, num_inputs, num_reductions, args, func_sig)
     gu_sin = []
     gu_sout = []
     count = 0
+    syms_sin = ()
     for var, typ in zip(args, func_sig.args):
         # print("create_shape_signature: var = ", var, " typ = ", typ)
         count = count + 1
@@ -114,10 +115,12 @@ def _create_shape_signature(classes, num_inputs, num_reductions, args, func_sig)
         if (count > num_inouts):
             # assume all reduction vars are scalar
             gu_sout.append(())
-        elif (count > num_inputs):
+        elif count > num_inputs and all([s in syms_sin for s in dim_syms]):
+            # only when dim_syms are found in gu_sin, we consider this as output
             gu_sout.append(dim_syms)
         else:
             gu_sin.append(dim_syms)
+            syms_sin += dim_syms
     return (gu_sin, gu_sout)
 
 def _print_body(body_dict):
