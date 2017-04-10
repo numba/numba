@@ -1,20 +1,19 @@
 from __future__ import print_function, division, absolute_import
 
 import errno
-import imp
+import multiprocessing
 import os
 import shutil
-import stat
 import subprocess
 import sys
-import tempfile
 import threading
 import warnings
 
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import utils, vectorize, jit, generated_jit, types, appdirs
+from numba import utils, jit, generated_jit, types, typeof
+from numba import _dispatcher
 from numba.errors import NumbaWarning
 from .support import TestCase, tag, temp_directory, import_dynamic
 
@@ -72,6 +71,16 @@ class BaseTest(TestCase):
 
 
 class TestDispatcher(BaseTest):
+
+    def test_dyn_pyfunc(self):
+        @jit
+        def foo(x):
+            return x
+
+        foo(1)
+        [cr] = foo.overloads.values()
+        # __module__ must be match that of foo
+        self.assertEqual(cr.entry_point.__module__, foo.py_func.__module__)
 
     def test_no_argument(self):
         @jit
@@ -242,6 +251,43 @@ class TestDispatcher(BaseTest):
             bar()
         m = "No matching definition for argument type(s) array(float64, 1d, C)"
         self.assertEqual(str(raises.exception), m)
+
+    def test_fingerprint_failure(self):
+        """
+        Failure in computing the fingerprint cannot affect a nopython=False
+        function.  On the other hand, with nopython=True, a ValueError should
+        be raised to report the failure with fingerprint.
+        """
+        @jit
+        def foo(x):
+            return x
+
+        # Empty list will trigger failure in compile_fingerprint
+        errmsg = 'cannot compute fingerprint of empty list'
+        with self.assertRaises(ValueError) as raises:
+            _dispatcher.compute_fingerprint([])
+        self.assertIn(errmsg, str(raises.exception))
+        # It should work in fallback
+        self.assertEqual(foo([]), [])
+        # But, not in nopython=True
+        strict_foo = jit(nopython=True)(foo.py_func)
+        with self.assertRaises(ValueError) as raises:
+            strict_foo([])
+        self.assertIn(errmsg, str(raises.exception))
+
+        # Test in loop lifting context
+        @jit
+        def bar():
+            object()  # force looplifting
+            x = []
+            for i in range(10):
+                x = foo(x)
+            return x
+
+        self.assertEqual(bar(), [])
+        # Make sure it was looplifted
+        [cr] = bar.overloads.values()
+        self.assertEqual(len(cr.lifted), 1)
 
 
 class TestSignatureHandling(BaseTest):
@@ -445,6 +491,55 @@ class TestDispatcherMethods(TestCase):
         for asm in asms.values():
             # Look for the function name
             self.assertTrue("foo" in asm)
+
+    def test_inspect_cfg(self):
+        # Exercise the .inspect_cfg().  These are minimal tests and does not
+        # fully checks the correctness of the function.
+        @jit
+        def foo(the_array):
+            return the_array.sum()
+
+        # Generate 3 overloads
+        a1 = np.ones(1)
+        a2 = np.ones((1, 1))
+        a3 = np.ones((1, 1, 1))
+        foo(a1)
+        foo(a2)
+        foo(a3)
+
+        # Call inspect_cfg() without arguments
+        cfgs = foo.inspect_cfg()
+
+        # Correct count of overloads
+        self.assertEqual(len(cfgs), 3)
+
+        # Makes sure all the signatures are correct
+        [s1, s2, s3] = cfgs.keys()
+        self.assertEqual(set([s1, s2, s3]),
+                         set(map(lambda x: (typeof(x),), [a1, a2, a3])))
+
+        def check_display(cfg, wrapper=''):
+            # simple stringify test
+            if wrapper:
+                wrapper = "{}{}".format(len(wrapper), wrapper)
+            prefix = r'^digraph "CFG for \'_ZN{}5numba'.format(wrapper)
+            self.assertRegexpMatches(str(cfg), prefix)
+            # .display() requires an optional dependency on `graphviz`.
+            # just test for the attribute without running it.
+            self.assertTrue(callable(cfg.display))
+
+        for cfg in cfgs.values():
+            check_display(cfg)
+        self.assertEqual(len(list(cfgs.values())), 3)
+
+        # Call inspect_cfg(signature)
+        cfg = foo.inspect_cfg(signature=foo.signatures[0])
+        check_display(cfg)
+
+        # Call inspect_cfg(signature, show_wrapper="python")
+        cfg = foo.inspect_cfg(signature=foo.signatures[0],
+                              show_wrapper="python")
+        check_display(cfg, wrapper='cpython')
 
     def test_inspect_types(self):
         @jit
@@ -688,6 +783,20 @@ class TestCache(BaseCacheTest):
                          'Cannot cache compiled function "looplifted" '
                          'as it uses lifted loops')
 
+    def test_big_array(self):
+        # Code references big array globals cannot be cached
+        mod = self.import_module()
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaWarning)
+
+            f = mod.use_big_array
+            np.testing.assert_equal(f(), mod.biggie)
+            self.check_pycache(0)
+
+        self.assertEqual(len(w), 1)
+        self.assertIn('Cannot cache compiled function "use_big_array" '
+                      'as it uses dynamic globals', str(w[0].message))
+
     def test_ctypes(self):
         # Functions using a ctypes pointer can't be cached and raise
         # a warning.
@@ -893,6 +1002,35 @@ class TestCache(BaseCacheTest):
         # Run a second time and check caching
         err = execute_with_input()
         self.assertEqual(err.strip(), "cache hits = 1")
+
+
+class TestMultiprocessCache(BaseCacheTest):
+
+    # Nested multiprocessing.Pool raises AssertionError:
+    # "daemonic processes are not allowed to have children"
+    _numba_parallel_test_ = False
+
+    here = os.path.dirname(__file__)
+    usecases_file = os.path.join(here, "cache_usecases.py")
+    modname = "dispatcher_caching_test_fodder"
+
+    def test_multiprocessing(self):
+        # Check caching works from multiple processes at once (#2028)
+        mod = self.import_module()
+        # Calling a pure Python caller of the JIT-compiled function is
+        # necessary to reproduce the issue.
+        f = mod.simple_usecase_caller
+        n = 3
+        try:
+            ctx = multiprocessing.get_context('spawn')
+        except AttributeError:
+            ctx = multiprocessing
+        pool = ctx.Pool(n)
+        try:
+            res = sum(pool.imap(f, range(n)))
+        finally:
+            pool.close()
+        self.assertEqual(res, n * (n - 1) // 2)
 
 
 if __name__ == '__main__':

@@ -16,7 +16,7 @@ class GeneratorDescriptor(FunctionDescriptor):
     __slots__ = ()
 
     @classmethod
-    def from_generator_fndesc(cls, interp, fndesc, gentype, mangler):
+    def from_generator_fndesc(cls, func_ir, fndesc, gentype, mangler):
         """
         Build a GeneratorDescriptor for the generator returned by the
         function described by *fndesc*, with type *gentype*.
@@ -52,12 +52,12 @@ class BaseGeneratorLower(object):
         self.fndesc = lower.fndesc
         self.library = lower.library
         self.call_conv = lower.call_conv
-        self.interp = lower.interp
+        self.func_ir = lower.func_ir
 
         self.geninfo = lower.generator_info
         self.gentype = self.get_generator_type()
         self.gendesc = GeneratorDescriptor.from_generator_fndesc(
-            lower.interp, self.fndesc, self.gentype, self.context.mangler)
+            lower.func_ir, self.fndesc, self.gentype, self.context.mangler)
         # Helps packing non-omitted arguments into a structure
         self.arg_packer = self.context.get_data_packer(self.fndesc.argtypes)
 
@@ -240,9 +240,9 @@ class PyGeneratorLower(BaseGeneratorLower):
         type is simply "pyobject").
         """
         return types.Generator(
-            gen_func=self.interp.bytecode.func,
+            gen_func=self.func_ir.func_id.func,
             yield_type=types.pyobject,
-            arg_types=(types.pyobject,) * self.interp.arg_count,
+            arg_types=(types.pyobject,) * self.func_ir.arg_count,
             state_types=(types.pyobject,) * len(self.geninfo.state_vars),
             has_finalizer=True,
             )

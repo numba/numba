@@ -47,6 +47,22 @@ API_PROTOTYPES = {
 'cuDeviceComputeCapability': (c_int, POINTER(c_int), POINTER(c_int),
                               cu_device),
 
+# CUresult cuDevicePrimaryCtxGetState ( CUdevice dev, unsigned int* flags, int* active )
+'cuDevicePrimaryCtxGetState': (c_int,
+                               cu_device, POINTER(c_uint), POINTER(c_int)),
+
+# CUresult cuDevicePrimaryCtxRelease ( CUdevice dev )
+'cuDevicePrimaryCtxRelease': (c_int, cu_device),
+
+# CUresult cuDevicePrimaryCtxReset ( CUdevice dev )
+'cuDevicePrimaryCtxReset': (c_int, cu_device),
+
+# CUresult cuDevicePrimaryCtxRetain ( CUcontext* pctx, CUdevice dev )
+'cuDevicePrimaryCtxRetain': (c_int, POINTER(cu_context), cu_device),
+
+# CUresult cuDevicePrimaryCtxSetFlags ( CUdevice dev, unsigned int  flags )
+'cuDevicePrimaryCtxSetFlags': (c_int, cu_device, c_uint),
+
 # CUresult cuCtxCreate(CUcontext *pctx, unsigned int flags,
 #                      CUdevice dev);
 'cuCtxCreate':          (c_int, POINTER(cu_context), c_uint, cu_device),

@@ -1,10 +1,14 @@
 #!/usr/bin/env python
-import numpy as np
+from __future__ import print_function
+
 import time
-from numba import *
+
+import numpy as np
+
+from numba import jit
 
 
-@autojit
+@jit
 def jacobi_relax_core(A, Anew):
     error = 0.0
     n = A.shape[0]
@@ -42,7 +46,7 @@ def main():
 
     while error > tol and iter < iter_max:
         error = jacobi_relax_core(A, Anew)
-    
+
         # swap A and Anew
         tmp = A
         A = Anew

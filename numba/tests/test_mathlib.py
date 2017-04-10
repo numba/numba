@@ -10,7 +10,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags, utils
 from numba import types, numpy_support
-from numba.config import PYVERSION
+from numba.config import PYVERSION, IS_WIN32, IS_32BITS
 from .support import TestCase, CompilationCache, tag
 
 enable_pyobj_flags = Flags()
@@ -592,6 +592,8 @@ class TestMathLib(TestCase):
     def test_erfc_npm(self):
         self.test_erfc(flags=no_pyobj_flags)
 
+    @unittest.skipIf(PYVERSION == (2, 7) and IS_WIN32 and not IS_32BITS,
+                     'unknown error with tgamma')
     def test_gamma(self, flags=enable_pyobj_flags):
         pyfunc = gamma
         x_values = [1., -0.9, -0.5, 0.5]

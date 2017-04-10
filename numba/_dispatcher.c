@@ -103,6 +103,7 @@ typedef struct DispatcherObject{
     /* Holds borrowed references to PyCFunction objects */
     dispatcher_t *dispatcher;
     char can_compile;        /* Can auto compile */
+    char can_fallback;       /* Can fallback */
     /* Borrowed references */
     PyObject *firstdef, *fallbackdef, *interpdef;
     /* Whether to fold named arguments and default values (false for lifted loops)*/
@@ -139,12 +140,14 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
     PyObject *tmaddrobj;
     void *tmaddr;
     int argct;
+    int can_fallback;
     int has_stararg = 0;
 
-    if (!PyArg_ParseTuple(args, "OiiO!O!|i", &tmaddrobj, &argct,
+    if (!PyArg_ParseTuple(args, "OiiO!O!i|i", &tmaddrobj, &argct,
                           &self->fold_args,
                           &PyTuple_Type, &self->argnames,
                           &PyTuple_Type, &self->defargs,
+                          &can_fallback,
                           &has_stararg)) {
         return -1;
     }
@@ -153,6 +156,7 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
     tmaddr = PyLong_AsVoidPtr(tmaddrobj);
     self->dispatcher = dispatcher_new(tmaddr, argct);
     self->can_compile = 1;
+    self->can_fallback = can_fallback;
     self->firstdef = NULL;
     self->fallbackdef = NULL;
     self->interpdef = NULL;
@@ -295,7 +299,7 @@ call_cfunc(DispatcherObject *self, PyObject *cfunc, PyObject *args, PyObject *kw
          * The following code requires some explaining:
          *
          * We want the jit-compiled function to be visible to the profiler, so we
-         * need to synthesize a frame for it. 
+         * need to synthesize a frame for it.
          * The PyFrame_New() constructor doesn't do anything with the 'locals' value if the 'code's
          * 'CO_NEWLOCALS' flag is set (which is always the case nowadays).
          * So, to get local variables into the frame, we have to manually set the 'f_locals'
@@ -515,8 +519,14 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     for (i = 0; i < argct; ++i) {
         tmptype = PySequence_Fast_GET_ITEM(args, i);
         tys[i] = typeof_typecode((PyObject *) self, tmptype);
-        if (tys[i] == -1)
-            goto CLEANUP;
+        if (tys[i] == -1) {
+            if (self->can_fallback){
+                /* We will clear the exception if fallback is allowed. */
+                PyErr_Clear();
+            } else {
+                goto CLEANUP;
+            }
+        }
     }
 
     /* We only allow unsafe conversions if compilation of new specializations

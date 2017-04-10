@@ -11,8 +11,8 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba import types, typing, utils, typeof, numpy_support, njit
 from numba.compiler import compile_isolated, Flags, DEFAULT_FLAGS
-from numba.numpy_support import from_dtype
-from numba import vectorize
+from numba.numpy_support import from_dtype, version as numpy_version
+from numba import jit, vectorize
 from numba.config import PYVERSION
 from numba.errors import LoweringError, TypingError
 from .support import TestCase, CompilationCache, MemoryLeakMixin, tag
@@ -21,6 +21,7 @@ from numba.typing.npydecl import supported_ufuncs, all_ufuncs
 
 is32bits = tuple.__itemsize__ == 4
 iswindows = sys.platform.startswith('win32')
+after_numpy_112 = numpy_version >= (1, 12)
 
 # NOTE: to test the implementation of Numpy ufuncs, we disable rewriting
 # of array expressions.
@@ -223,35 +224,31 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
             cfunc(input_operand, result)
 
-            # Need special checks if NaNs are in results
-            if np.isnan(expected).any() or np.isnan(result).any():
-                self.assertTrue(np.allclose(np.isnan(result), np.isnan(expected)))
-                if not np.isnan(expected).all() and not np.isnan(result).all():
-                    self.assertTrue(np.allclose(result[np.invert(np.isnan(result))],
-                                     expected[np.invert(np.isnan(expected))]))
-            else:
-                match = np.all(result == expected) or np.allclose(result,
-                                                                  expected)
-                if not match:
-                    if invalid_flag:
-                        # Allow output to mismatch for invalid input
-                        print("Output mismatch for invalid input",
-                              input_tuple, result, expected)
-                    else:
-                        msg = '\n'.join(["ufunc '{0}' failed",
-                                         "inputs ({1}):", "{2}",
-                                         "got({3})", "{4}",
-                                         "expected ({5}):", "{6}"
-                                     ]).format(ufunc.__name__,
-                                               input_type, input_operand,
-                                               output_type, result,
-                                               expected.dtype, expected)
-                        self.fail(msg)
+            msg = '\n'.join(["ufunc '{0}' failed",
+                             "inputs ({1}):", "{2}",
+                             "got({3})", "{4}",
+                             "expected ({5}):", "{6}"
+                             ]).format(ufunc.__name__,
+                                       input_type, input_operand,
+                                       output_type, result,
+                                       expected.dtype, expected)
+
+            try:
+                np.testing.assert_array_almost_equal(expected, result,
+                                                     decimal=5,
+                                                     err_msg=msg)
+            except AssertionError:
+                if invalid_flag:
+                    # Allow output to mismatch for invalid input
+                    print("Output mismatch for invalid input",
+                          input_tuple, result, expected)
+                else:
+                    raise
 
     def binary_ufunc_test(self, ufunc, flags=no_pyobj_flags,
                          skip_inputs=[], additional_inputs=[],
                          int_output_type=None, float_output_type=None,
-                         kinds='ifc'):
+                         kinds='ifc', positive_only=False):
 
         ufunc = _make_binary_ufunc_usecase(ufunc)
 
@@ -263,6 +260,8 @@ class TestUFuncs(BaseUFuncTest, TestCase):
             input_type = input_tuple[1]
 
             if input_type in skip_inputs:
+                continue
+            if positive_only and np.any(input_operand < 0):
                 continue
 
             # Some ufuncs don't allow all kinds of arguments, and implicit
@@ -352,7 +351,8 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
     @tag('important')
     def test_power_ufunc(self, flags=no_pyobj_flags):
-        self.binary_ufunc_test(np.power, flags=flags)
+        self.binary_ufunc_test(np.power, flags=flags,
+                               positive_only=after_numpy_112)
 
     @tag('important')
     def test_remainder_ufunc(self, flags=no_pyobj_flags):
@@ -660,28 +660,6 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
     ############################################################################
     # Other tests
-    def test_binary_ufunc_performance(self):
-
-        pyfunc = _make_binary_ufunc_usecase(np.add)
-        arraytype = types.Array(types.float32, 1, 'C')
-        cr = compile_isolated(pyfunc, (arraytype, arraytype, arraytype))
-        cfunc = cr.entry_point
-
-        nelem = 5000
-        x_operand = np.arange(nelem, dtype=np.float32)
-        y_operand = np.arange(nelem, dtype=np.float32)
-        control = np.empty_like(x_operand)
-        result = np.empty_like(x_operand)
-
-        def bm_python():
-            pyfunc(x_operand, y_operand, control)
-
-        def bm_numba():
-            cfunc(x_operand, y_operand, result)
-
-        print(utils.benchmark(bm_python, maxsec=.1))
-        print(utils.benchmark(bm_numba, maxsec=.1))
-        assert np.allclose(control, result)
 
     def binary_ufunc_mixed_types_test(self, ufunc, flags=no_pyobj_flags):
         ufunc_name = ufunc.__name__
@@ -750,15 +728,11 @@ class TestUFuncs(BaseUFuncTest, TestCase):
             cfunc(input1_operand, input2_operand, result)
             pyfunc(input1_operand, input2_operand, expected)
 
-            # Need special checks if NaNs are in results
-            if np.isnan(expected).any() or np.isnan(result).any():
-                self.assertTrue(np.allclose(np.isnan(result), np.isnan(expected)))
-                if not np.isnan(expected).all() and not np.isnan(result).all():
-                    self.assertTrue(np.allclose(result[np.invert(np.isnan(result))],
-                                     expected[np.invert(np.isnan(expected))]))
-            else:
-                self.assertTrue(np.all(result == expected) or
-                                np.allclose(result, expected))
+            scalar_type = getattr(output_type, 'dtype', output_type)
+            prec = ('single'
+                    if scalar_type in (types.float32, types.complex64)
+                    else 'double')
+            self.assertPreciseEqual(expected, result, prec=prec)
 
     def test_mixed_types(self):
         if not numpy_support.strict_ufunc_typing:
@@ -799,7 +773,7 @@ class TestUFuncs(BaseUFuncTest, TestCase):
             np.negative(x, expected)
 
             cfunc(x, result)
-            self.assertTrue(np.all(result == expected))
+            self.assertPreciseEqual(result, expected)
 
         # Test binary ufunc
         pyfunc = _make_binary_ufunc_usecase(np.add)
@@ -831,7 +805,7 @@ class TestUFuncs(BaseUFuncTest, TestCase):
             result = np.zeros(expected.shape, dtype='u8')
 
             cfunc(x, y, result)
-            self.assertTrue(np.all(result == expected))
+            self.assertPreciseEqual(result, expected)
 
     def test_implicit_output_npm(self):
         with self.assertRaises(TypeError):
@@ -1214,7 +1188,7 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
 
     @tag('important')
     def test_power_array_op(self):
-        self.binary_op_test('**')
+        self.binary_op_test('**', positive_rhs=after_numpy_112)
 
     @tag('important')
     def test_left_shift_array_op(self):
@@ -1368,7 +1342,7 @@ class TestUfuncIssues(TestCase):
 
         a = np.arange(10, dtype='f8')
         b = np.arange(10, dtype='f8')
-        self.assertTrue(np.all(foo(a, b) == (a + b) + (a + b)))
+        self.assertPreciseEqual(foo(a, b), (a + b) + (a + b))
 
     def test_issue_713(self):
         def foo(x,y):
@@ -1376,6 +1350,29 @@ class TestUfuncIssues(TestCase):
 
         cr = compile_isolated(foo, [types.complex128, types.complex128])
         self.assertEqual(foo(1j, 1j), cr.entry_point(1j, 1j))
+
+    def test_issue_2006(self):
+        """
+        <float32 ** int> should return float32, not float64.
+        """
+        def foo(x, y):
+            return np.power(x, y)
+        pyfunc = foo
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(x, y):
+            got = cfunc(x, y)
+            np.testing.assert_array_almost_equal(got, pyfunc(x, y))
+            # Check the power operation conserved the input's dtype
+            # (this is different from Numpy, whose behaviour depends on
+            #  the *values* of the arguments -- see PyArray_CanCastArrayTo).
+            self.assertEqual(got.dtype, x.dtype)
+
+        xs = [np.float32([1, 2, 3]), np.complex64([1j, 2, 3-3j])]
+        for x in xs:
+            check(x, 3)
+            check(x, np.uint64(3))
+            check(x, np.int64([2, 2, 3]))
 
 
 class _LoopTypesTester(TestCase):

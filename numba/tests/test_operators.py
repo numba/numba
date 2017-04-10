@@ -415,8 +415,8 @@ class TestOperators(TestCase):
                 x_expected = copy.copy(x)
                 got = cfunc(x_got, y)
                 expected = pyfunc(x_expected, y)
-                self.assertTrue(np.allclose(got, expected))
-                self.assertTrue(np.allclose(x_got, x_expected))
+                np.testing.assert_allclose(got, expected, rtol=1e-5)
+                np.testing.assert_allclose(x_got, x_expected, rtol=1e-5)
 
     def coerce_operand(self, op, numba_type):
         if hasattr(op, "dtype"):
@@ -547,6 +547,9 @@ class TestOperators(TestCase):
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                              flags=flags)
 
+    def run_binop_floats_floordiv(self, pyfunc, flags=force_pyobj_flags):
+        self.run_binop_floats(pyfunc, flags=flags)
+
     def run_binop_complex(self, pyfunc, flags=force_pyobj_flags):
         x_operands = [-1.1 + 0.3j, 0.0 + 0.0j, 1.1j]
         y_operands = [-1.5 - 0.7j, 0.8j, 2.1 - 2.0j]
@@ -606,7 +609,7 @@ class TestOperators(TestCase):
     generate_binop_tests(locals(),
                          ('floordiv', 'ifloordiv', 'mod', 'imod'),
                          {'ints': 'run_binop_ints',
-                          'floats': 'run_binop_floats',
+                          'floats': 'run_binop_floats_floordiv',
                           })
 
     def check_div_errors(self, usecase_name, msg, flags=force_pyobj_flags,
@@ -1243,9 +1246,10 @@ class TestMixedInts(TestCase):
                 expected = control_func(x)
                 got = cfunc(x)
                 self.assertIsInstance(got, expected_type)
-                self.assertTrue(np.all(got == expected),
-                                "mismatch for %r with type %s: %r != %r"
-                                % (x, xt, got, expected))
+                self.assertPreciseEqual(
+                    got, expected,
+                    msg="mismatch for %r with type %s: %r != %r"
+                        % (x, xt, got, expected))
 
     def run_arith_binop(self, pyfunc, opname, samples,
                         expected_type=utils.INT_TYPES):
@@ -1349,9 +1353,16 @@ class TestMixedInts(TestCase):
                            % (x, y, (xt, yt)))
                     self.assertPreciseEqual(got, expected, msg=msg)
 
-        for xt, yt in self.signed_pairs:
+        # For bitshifts, only the first operand's signedness matters
+        # to choose the operation's signedness.
+        signed_pairs = [(u, v) for u, v in self.type_pairs
+                        if u.signed]
+        unsigned_pairs = [(u, v) for u, v in self.type_pairs
+                          if not u.signed]
+
+        for xt, yt in signed_pairs:
             check(xt, yt, control_signed)
-        for xt, yt in self.unsigned_pairs:
+        for xt, yt in unsigned_pairs:
             check(xt, yt, control_unsigned)
 
     def test_lshift(self):
@@ -1432,7 +1443,7 @@ class TestStaticPower(TestCase):
 
     def test_real_values(self):
         exponents = [1, 2, 3, 5, 17, 0, -1, -2, -3, 0x111111, -0x111112]
-        vals = [1.5, 3.25, -1.25, np.float32(-1.5), float('inf'), float('nan')]
+        vals = [1.5, 3.25, -1.25, np.float32(-2.0), float('inf'), float('nan')]
 
         self._check_pow(exponents, vals)
 

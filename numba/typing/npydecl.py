@@ -367,7 +367,8 @@ def _numpy_redirect(fname):
     infer_global(numpy_function, types.Function(cls))
 
 for func in ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
-             'cumsum', 'cumprod', 'argmin', 'argmax', 'nonzero', 'ravel']:
+             'cumsum', 'cumprod', 'argmin', 'argmax', 'argsort',
+             'nonzero', 'ravel']:
     _numpy_redirect(func)
 
 
@@ -691,6 +692,195 @@ class NdCopy(CallableTemplate):
             if isinstance(a, types.Array):
                 layout = 'F' if a.layout == 'F' else 'C'
                 return a.copy(layout=layout, readonly=False)
+
+        return typer
+
+
+@infer_global(np.expand_dims)
+class NdExpandDims(CallableTemplate):
+
+    def generic(self):
+        def typer(a, axis):
+            if (not isinstance(a, types.Array)
+                or not isinstance(axis, types.Integer)):
+                return
+
+            layout = a.layout if a.ndim <= 1 else 'A'
+            return a.copy(ndim=a.ndim + 1, layout=layout)
+
+        return typer
+
+
+class BaseAtLeastNdTemplate(AbstractTemplate):
+
+    def generic(self, args, kws):
+        assert not kws
+        if not args or not all(isinstance(a, types.Array) for a in args):
+            return
+
+        rets = [self.convert_array(a) for a in args]
+        if len(rets) > 1:
+            retty = types.BaseTuple.from_types(rets)
+        else:
+            retty = rets[0]
+        return signature(retty, *args)
+
+
+@infer_global(np.atleast_1d)
+class NdAtLeast1d(BaseAtLeastNdTemplate):
+
+    def convert_array(self, a):
+        return a.copy(ndim=max(a.ndim, 1))
+
+
+@infer_global(np.atleast_2d)
+class NdAtLeast2d(BaseAtLeastNdTemplate):
+
+    def convert_array(self, a):
+        return a.copy(ndim=max(a.ndim, 2))
+
+
+@infer_global(np.atleast_3d)
+class NdAtLeast3d(BaseAtLeastNdTemplate):
+
+    def convert_array(self, a):
+        return a.copy(ndim=max(a.ndim, 3))
+
+
+def _homogenous_dims(context, func_name, arrays):
+    ndim = arrays[0].ndim
+    for a in arrays:
+        if a.ndim != ndim:
+            raise TypeError("%s(): all the input arrays "
+                            "must have same number of dimensions"
+                            % func_name)
+    return ndim
+
+def _sequence_of_arrays(context, func_name, arrays,
+                        dim_chooser=_homogenous_dims):
+    if (not isinstance(arrays, types.BaseTuple)
+        or not len(arrays)
+        or not all(isinstance(a, types.Array) for a in arrays)):
+        raise TypeError("%s(): expecting a non-empty tuple of arrays, "
+                        "got %s" % (func_name, arrays))
+
+    ndim = dim_chooser(context, func_name, arrays)
+
+    dtype = context.unify_types(*(a.dtype for a in arrays))
+    if dtype is None:
+        raise TypeError("%s(): input arrays must have "
+                        "compatible dtypes" % func_name)
+
+    return dtype, ndim
+
+def _choose_concatenation_layout(arrays):
+    # Only create a F array if all input arrays have F layout.
+    # This is a simplified version of Numpy's behaviour,
+    # while Numpy's actually processes the input strides to
+    # decide on optimal output strides
+    # (see PyArray_CreateMultiSortedStridePerm()).
+    return 'F' if all(a.layout == 'F' for a in arrays) else 'C'
+
+
+@infer_global(np.concatenate)
+class NdConcatenate(CallableTemplate):
+
+    def generic(self):
+        def typer(arrays, axis=None):
+            if axis is not None and not isinstance(axis, types.Integer):
+                # Note Numpy allows axis=None, but it isn't documented:
+                # https://github.com/numpy/numpy/issues/7968
+                return
+
+            dtype, ndim = _sequence_of_arrays(self.context,
+                                              "np.concatenate", arrays)
+            if ndim == 0:
+                raise TypeError("zero-dimensional arrays cannot be concatenated")
+
+            layout = _choose_concatenation_layout(arrays)
+
+            return types.Array(dtype, ndim, layout)
+
+        return typer
+
+
+if numpy_version >= (1, 10):
+    @infer_global(np.stack)
+    class NdStack(CallableTemplate):
+
+        def generic(self):
+            def typer(arrays, axis=None):
+                if axis is not None and not isinstance(axis, types.Integer):
+                    # Note Numpy allows axis=None, but it isn't documented:
+                    # https://github.com/numpy/numpy/issues/7968
+                    return
+
+                dtype, ndim = _sequence_of_arrays(self.context,
+                                                  "np.stack", arrays)
+
+                # This diverges from Numpy's behaviour, which simply inserts
+                # a new stride at the requested axis (therefore can return
+                # a 'A' array).
+                layout = 'F' if all(a.layout == 'F' for a in arrays) else 'C'
+
+                return types.Array(dtype, ndim + 1, layout)
+
+            return typer
+
+
+class BaseStackTemplate(CallableTemplate):
+
+    def generic(self):
+        def typer(arrays):
+            dtype, ndim = _sequence_of_arrays(self.context,
+                                              self.func_name, arrays)
+
+            ndim = max(ndim, self.ndim_min)
+            layout = _choose_concatenation_layout(arrays)
+
+            return types.Array(dtype, ndim, layout)
+
+        return typer
+
+
+@infer_global(np.hstack)
+class NdStack(BaseStackTemplate):
+    func_name = "np.hstack"
+    ndim_min = 1
+
+@infer_global(np.vstack)
+class NdStack(BaseStackTemplate):
+    func_name = "np.vstack"
+    ndim_min = 2
+
+@infer_global(np.dstack)
+class NdStack(BaseStackTemplate):
+    func_name = "np.dstack"
+    ndim_min = 3
+
+
+
+def _column_stack_dims(context, func_name, arrays):
+    # column_stack() allows stacking 1-d and 2-d arrays together
+    for a in arrays:
+        if a.ndim < 1 or a.ndim > 2:
+            raise TypeError("np.column_stack() is only defined on "
+                            "1-d and 2-d arrays")
+    return 2
+
+
+@infer_global(np.column_stack)
+class NdColumnStack(CallableTemplate):
+
+    def generic(self):
+        def typer(arrays):
+            dtype, ndim = _sequence_of_arrays(self.context,
+                                              "np.column_stack", arrays,
+                                              dim_chooser=_column_stack_dims)
+
+            layout = _choose_concatenation_layout(arrays)
+
+            return types.Array(dtype, ndim, layout)
 
         return typer
 

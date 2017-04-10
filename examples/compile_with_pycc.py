@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from numba import exportmany, export
+from numba.pycc import exportmany, export
 
 
 def mult(a, b):

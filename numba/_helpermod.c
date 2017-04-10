@@ -36,6 +36,10 @@ build_c_helpers_dict(void)
 
 #define declpointer(ptr) _declpointer(#ptr, &numba_##ptr)
 
+    declmethod(fixed_fmod);
+    declmethod(fixed_fmodf);
+    declmethod(set_fnclex);
+
     declmethod(sdiv);
     declmethod(srem);
     declmethod(udiv);
@@ -77,16 +81,12 @@ build_c_helpers_dict(void)
     declmethod(unpack_slice);
     declmethod(do_raise);
     declmethod(unpickle);
-    declmethod(rnd_shuffle);
-    declmethod(rnd_init);
-    declmethod(poisson_ptrs);
     declmethod(attempt_nocopy_reshape);
-    declmethod(get_list_private_data);
-    declmethod(set_list_private_data);
-    declmethod(reset_list_private_data);
     declmethod(get_pyobject_private_data);
     declmethod(set_pyobject_private_data);
     declmethod(reset_pyobject_private_data);
+
+    /* BLAS / LAPACK */
     declmethod(xxgemm);
     declmethod(xxgemv);
     declmethod(xxdot);
@@ -95,6 +95,7 @@ build_c_helpers_dict(void)
     declmethod(xxpotrf);
     declmethod(ez_rgeev);
     declmethod(ez_cgeev);
+    declmethod(ez_xxxevd);
     declmethod(ez_gesdd);
     declmethod(ez_geqrf);
     declmethod(ez_xxgqr);
@@ -102,9 +103,12 @@ build_c_helpers_dict(void)
     declmethod(xgesv);
     declmethod(xxnrm2);
 
-    
-    declpointer(py_random_state);
-    declpointer(np_random_state);
+    /* PRNG support */
+    declmethod(get_py_random_state);
+    declmethod(get_np_random_state);
+    declmethod(rnd_shuffle);
+    declmethod(rnd_init);
+    declmethod(poisson_ptrs);
 
 #define MATH_UNARY(F, R, A) declmethod(F);
 #define MATH_BINARY(F, R, A, B) declmethod(F);
@@ -152,6 +156,8 @@ build_npymath_exports_dict(void)
 
 static PyMethodDef ext_methods[] = {
     { "rnd_get_state", (PyCFunction) _numba_rnd_get_state, METH_O, NULL },
+    { "rnd_get_py_state_ptr", (PyCFunction) _numba_rnd_get_py_state_ptr, METH_NOARGS, NULL },
+    { "rnd_get_np_state_ptr", (PyCFunction) _numba_rnd_get_np_state_ptr, METH_NOARGS, NULL },
     { "rnd_seed", (PyCFunction) _numba_rnd_seed, METH_VARARGS, NULL },
     { "rnd_set_state", (PyCFunction) _numba_rnd_set_state, METH_VARARGS, NULL },
     { "rnd_shuffle", (PyCFunction) _numba_rnd_shuffle, METH_O, NULL },
@@ -219,9 +225,7 @@ MOD_INIT(_helperlib) {
     PyModule_AddIntConstant(m, "py_buffer_size", sizeof(Py_buffer));
     PyModule_AddIntConstant(m, "py_gil_state_size", sizeof(PyGILState_STATE));
 
-    if (_numba_rnd_random_seed(&numba_py_random_state) ||
-        _numba_rnd_random_seed(&numba_np_random_state))
-        return MOD_ERROR_VAL;
+    numba_rnd_ensure_global_init();
 
     return MOD_SUCCESS_VAL(m);
 }

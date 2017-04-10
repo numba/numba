@@ -27,7 +27,7 @@ def typeof(val, purpose=Purpose.argument):
     c = _TypeofContext(purpose)
     ty = typeof_impl(val, c)
     if ty is None:
-        msg = "cannot determine Numba type of value %r" % (val,)
+        msg = "cannot determine Numba type of %r" % (type(val),)
         raise ValueError(msg)
     return ty
 

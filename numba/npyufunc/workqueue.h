@@ -12,39 +12,9 @@ enum QUEUE_STATE {
     IDLE = 0, READY, RUNNING, DONE
 };
 
-/*
-sleep for a short time
-*/
-static
-void take_a_nap(int usec);
-
-
-/*
-CAS: compare and swap function
-
-It is generated from parallel.py by LLVM to get a portable CAS function.
-*/
-typedef int cas_function_t(volatile int *ptr, int old, int val);
-
-/*
-Do CAS until successful.
-Spin until the value in `ptr` changes from `old` to `repl`.
-Takes a 1us nap in after each CAS failure.
-*/
-static
-void cas_wait(volatile int *ptr, const int old, const int repl);
-
 /* Launch new thread */
 static
 thread_pointer numba_new_thread(void *worker, void *arg);
-
-/* Set CAS function.
-Note: During interpreter teardown, LLVM will release all function memory.
-      To protect against the fault due to calling non-executable memory,
-      Call set_cas(NULL) to disable the workqueue.
-*/
-static
-void set_cas(void *ptr);
 
 /* Launch `count` number of threads and create the associated thread queue.
 Must invoke once before each add_task() is used.

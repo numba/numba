@@ -31,7 +31,7 @@ class TestParallelLowWorkCount(unittest.TestCase):
             data = np.arange(1).astype(ty) # just one item
             result = para_ufunc(data, data)
             gold = np_ufunc(data, data)
-            self.assertTrue(np.allclose(gold, result))
+            np.testing.assert_allclose(gold, result)
 
         test(np.double)
         test(np.float32)

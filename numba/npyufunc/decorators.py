@@ -15,6 +15,10 @@ class _BaseVectorize(object):
         return kwargs.pop('identity', None)
 
     @classmethod
+    def get_cache(cls, kwargs):
+        return kwargs.pop('cache', False)
+
+    @classmethod
     def get_target_implementation(cls, kwargs):
         target = kwargs.pop('target', 'cpu')
         try:
@@ -29,8 +33,9 @@ class Vectorize(_BaseVectorize):
 
     def __new__(cls, func, **kws):
         identity = cls.get_identity(kws)
+        cache = cls.get_cache(kws)
         imp = cls.get_target_implementation(kws)
-        return imp(func, identity, kws)
+        return imp(func, identity=identity, cache=cache, targetoptions=kws)
 
 
 class GUVectorize(_BaseVectorize):
@@ -39,8 +44,10 @@ class GUVectorize(_BaseVectorize):
 
     def __new__(cls, func, signature, **kws):
         identity = cls.get_identity(kws)
+        cache = cls.get_cache(kws)
         imp = cls.get_target_implementation(kws)
-        return imp(func, signature, identity, kws)
+        return imp(func, signature, identity=identity, cache=cache,
+                   targetoptions=kws)
 
 
 def vectorize(ftylist_or_function=(), **kws):
@@ -73,6 +80,10 @@ def vectorize(ftylist_or_function=(), **kws):
         The identity (or unit) value for the element-wise function
         being implemented.  Allowed values are None (the default), 0, 1,
         and "reorderable".
+
+    cache: bool
+        Turns on caching.
+
 
     Returns
     --------
@@ -135,6 +146,9 @@ def guvectorize(ftylist, signature, **kws):
         The identity (or unit) value for the element-wise function
         being implemented.  Allowed values are None (the default), 0, 1,
         and "reorderable".
+
+    cache: bool
+        Turns on caching.
 
     target: str
             A string for code generation target.  Defaults to "cpu".

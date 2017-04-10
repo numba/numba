@@ -4,52 +4,36 @@ Function descriptors.
 from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
-import itertools
 import sys
-from types import ModuleType
 
-from . import six, types
-from .utils import PY3
-
-
-def transform_arg_name(arg):
-    if isinstance(arg, types.Record):
-        return "Record_%s" % arg._code
-    elif (isinstance(arg, types.Array) and
-          isinstance(arg.dtype, types.Record)):
-        type_name = "array" if arg.mutable else "readonly array"
-        return ("%s(Record_%s, %sd, %s)"
-                % (type_name, arg.dtype._code, arg.ndim, arg.layout))
-    else:
-        return str(arg)
+from . import types, itanium_mangler
+from .utils import _dynamic_modname, _dynamic_module
 
 
 def default_mangler(name, argtypes):
-    codedargs = '.'.join(transform_arg_name(a).replace(' ', '_')
-                         for a in argtypes)
-    fullname = '.'.join([name, codedargs])
-    out = fullname.encode('ascii', 'backslashreplace')
-    # for py3, convert bytes back to  str
-    if PY3:
-        out = out.decode('ascii')
-    return out
+    return itanium_mangler.mangle(name, argtypes)
 
-# A dummy module for dynamically-generated functions
-_dynamic_modname = '<dynamic>'
-_dynamic_module = ModuleType(_dynamic_modname)
-_dynamic_module.__builtins__ = six.moves.builtins
+
+def qualifying_prefix(modname, qualname):
+    """
+    Returns a new string that is used for the first half of the mangled name.
+    """
+    # XXX choose a different convention for object mode
+    return '{}.{}'.format(modname, qualname) if modname else qualname
 
 
 class FunctionDescriptor(object):
     """
     Base class for function descriptors: an object used to carry
     useful metadata about a natively callable function.
+
+    Note that while `FunctionIdentity` denotes a Python function
+    which is being concretely compiled by Numba, `FunctionDescriptor`
+    may be more "abstract": e.g. a function decorated with `@generated_jit`.
     """
     __slots__ = ('native', 'modname', 'qualname', 'doc', 'typemap',
                  'calltypes', 'args', 'kws', 'restype', 'argtypes',
                  'mangled_name', 'unique_name', 'inline')
-
-    _unique_ids = itertools.count(1)
 
     def __init__(self, native, modname, qualname, unique_name, doc,
                  typemap, restype, calltypes, args, kws, mangler=None,
@@ -77,12 +61,8 @@ class FunctionDescriptor(object):
         mangler = default_mangler if mangler is None else mangler
         # The mangled name *must* be unique, else the wrong function can
         # be chosen at link time.
-        if self.modname:
-            # XXX choose a different convention for object mode
-            self.mangled_name = mangler('%s.%s' % (self.modname, self.unique_name),
-                                                   self.argtypes)
-        else:
-            self.mangled_name = mangler(self.unique_name, self.argtypes)
+        qualprefix = qualifying_prefix(self.modname, self.unique_name)
+        self.mangled_name = mangler(qualprefix, self.argtypes)
         self.inline = inline
 
     def lookup_module(self):
@@ -117,7 +97,8 @@ class FunctionDescriptor(object):
         The LLVM-registered name for a CPython-compatible wrapper of the
         raw function (i.e. a PyCFunctionWithKeywords).
         """
-        return 'cpython.' + self.mangled_name
+        return itanium_mangler.prepend_namespace(self.mangled_name,
+                                                 ns='cpython')
 
     @property
     def llvm_cfunc_wrapper_name(self):
@@ -131,7 +112,7 @@ class FunctionDescriptor(object):
         return "<function descriptor %r>" % (self.unique_name)
 
     @classmethod
-    def _get_function_info(cls, interp):
+    def _get_function_info(cls, func_ir):
         """
         Returns
         -------
@@ -139,29 +120,27 @@ class FunctionDescriptor(object):
 
         ``unique_name`` must be a unique name.
         """
-        func = interp.bytecode.func
-        qualname = interp.bytecode.func_qualname
+        func = func_ir.func_id.func
+        qualname = func_ir.func_id.func_qualname
+        # XXX to func_id
         modname = func.__module__
         doc = func.__doc__ or ''
-        args = tuple(interp.arg_names)
+        args = tuple(func_ir.arg_names)
         kws = ()        # TODO
 
         if modname is None:
             # Dynamically generated function.
             modname = _dynamic_modname
 
-        # Even the same function definition can be compiled into
-        # several different function objects with distinct closure
-        # variables, so we make sure to disambiguish using an unique id.
-        unique_name = "%s$%d" % (qualname, next(cls._unique_ids))
+        unique_name = func_ir.func_id.unique_name
 
         return qualname, unique_name, modname, doc, args, kws
 
     @classmethod
-    def _from_python_function(cls, interp, typemap, restype, calltypes,
+    def _from_python_function(cls, func_ir, typemap, restype, calltypes,
                               native, mangler=None, inline=False):
         (qualname, unique_name, modname, doc, args, kws,
-         )= cls._get_function_info(interp)
+         )= cls._get_function_info(func_ir)
         self = cls(native, modname, qualname, unique_name, doc,
                    typemap, restype, calltypes,
                    args, kws, mangler=mangler, inline=inline)
@@ -175,18 +154,18 @@ class PythonFunctionDescriptor(FunctionDescriptor):
     __slots__ = ()
 
     @classmethod
-    def from_specialized_function(cls, interp, typemap, restype, calltypes,
+    def from_specialized_function(cls, func_ir, typemap, restype, calltypes,
                                   mangler, inline):
         """
         Build a FunctionDescriptor for a given specialization of a Python
         function (in nopython mode).
         """
-        return cls._from_python_function(interp, typemap, restype, calltypes,
+        return cls._from_python_function(func_ir, typemap, restype, calltypes,
                                          native=True, mangler=mangler,
                                          inline=inline)
 
     @classmethod
-    def from_object_mode_function(cls, interp):
+    def from_object_mode_function(cls, func_ir):
         """
         Build a FunctionDescriptor for an object mode variant of a Python
         function.
@@ -194,7 +173,7 @@ class PythonFunctionDescriptor(FunctionDescriptor):
         typemap = defaultdict(lambda: types.pyobject)
         calltypes = typemap.copy()
         restype = types.pyobject
-        return cls._from_python_function(interp, typemap, restype, calltypes,
+        return cls._from_python_function(func_ir, typemap, restype, calltypes,
                                          native=False)
 
 

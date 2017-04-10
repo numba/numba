@@ -5,10 +5,15 @@ from __future__ import print_function, absolute_import, division
 import sys, logging, re
 from ctypes import (c_void_p, c_int, POINTER, c_char_p, c_size_t, byref,
                     c_char)
+
 import threading
+
+from llvmlite import ir
+
 from numba import config
 from .error import NvvmError, NvvmSupportError
 from .libs import get_libdevice, open_libdevice, open_cudalib
+
 
 logger = logging.getLogger(__name__)
 
@@ -194,10 +199,9 @@ class CompilationUnit(object):
 
         # stringify options
         opts = []
-
-        if options.get('debug'):
-            opts.append('-g')
-            options.pop('debug')
+        if 'debug' in options:
+            if options.pop('debug'):
+                opts.append('-g')
 
         if options.get('opt'):
             opts.append('-opt=%d' % options.pop('opt'))
@@ -380,34 +384,65 @@ done:
 }
 """
 
-ir_numba_atomic_double_max = """
-define internal double @___numba_atomic_double_max(double* %ptr, double %val) alwaysinline {
+ir_numba_atomic_max = """
+define internal {T} @___numba_atomic_{T}_max({T}* %ptr, {T} %val) alwaysinline {{
 entry:
-    %ptrval = load volatile double, double* %ptr
+    %ptrval = load volatile {T}, {T}* %ptr
     ; Check if val is a NaN and return *ptr early if so
-    %valnan = fcmp uno double %val, %val
+    %valnan = fcmp uno {T} %val, %val
     br i1 %valnan, label %done, label %lt_check
 
 lt_check:
-    %dold = phi double [ %ptrval, %entry ], [ %dcas, %attempt ]
+    %dold = phi {T} [ %ptrval, %entry ], [ %dcas, %attempt ]
     ; Continue attempts if dold < val or dold is NaN (using ult semantics)
-    %lt = fcmp ult double %dold, %val
+    %lt = fcmp ult {T} %dold, %val
     br i1 %lt, label %attempt, label %done
 
 attempt:
     ; Attempt to swap in the larger value
-    %iold = bitcast double %dold to i64
-    %iptr = bitcast double* %ptr to i64*
-    %ival = bitcast double %val to i64
-    %cas = cmpxchg volatile i64* %iptr, i64 %iold, i64 %ival monotonic
-    %dcas = bitcast i64 %cas to double
+    %iold = bitcast {T} %dold to {Ti}
+    %iptr = bitcast {T}* %ptr to {Ti}*
+    %ival = bitcast {T} %val to {Ti}
+    %cas = cmpxchg volatile {Ti}* %iptr, {Ti} %iold, {Ti} %ival monotonic
+    %dcas = bitcast {Ti} %cas to {T}
     br label %lt_check
 
 done:
     ; Return max
-    %ret = phi double [ %ptrval, %entry ], [ %dold, %lt_check ]
-    ret double %ret
-}
+    %ret = phi {T} [ %ptrval, %entry ], [ %dold, %lt_check ]
+    ret {T} %ret
+}}
+"""
+
+
+ir_numba_atomic_min = """
+define internal {T} @___numba_atomic_{T}_min({T}* %ptr, {T} %val) alwaysinline{{
+entry:
+    %ptrval = load volatile {T}, {T}* %ptr
+    ; Check if val is a NaN and return *ptr early if so
+    %valnan = fcmp uno {T} %val, %val
+    br i1 %valnan, label %done, label %gt_check
+
+gt_check:
+    %dold = phi {T} [ %ptrval, %entry ], [ %dcas, %attempt ]
+    ; Continue attempts if dold > val or dold is NaN (using ugt semantics)
+    %lt = fcmp ugt {T} %dold, %val
+    br i1 %lt, label %attempt, label %done
+
+attempt:
+    ; Attempt to swap in the smaller value
+    %iold = bitcast {T} %dold to {Ti}
+    %iptr = bitcast {T}* %ptr to {Ti}*
+    %ival = bitcast {T} %val to {Ti}
+    %cas = cmpxchg volatile {Ti}* %iptr, {Ti} %iold, {Ti} %ival monotonic
+    %dcas = bitcast {Ti} %cas to {T}
+    br label %gt_check
+
+done:
+    ; Return min
+    %ret = phi {T} [ %ptrval, %entry ], [ %dold, %gt_check ]
+    ret {T} %ret
+}}
 """
 
 
@@ -436,41 +471,73 @@ def llvm_to_ptx(llvmir, **opts):
          ir_numba_cas_hack),
         ('declare double @___numba_atomic_double_add(double*, double)',
          ir_numba_atomic_double_add),
+        ('declare float @___numba_atomic_float_max(float*, float)',
+         ir_numba_atomic_max.format(T='float', Ti='i32')),
         ('declare double @___numba_atomic_double_max(double*, double)',
-         ir_numba_atomic_double_max)]
+         ir_numba_atomic_max.format(T='double', Ti='i64')),
+        ('declare float @___numba_atomic_float_min(float*, float)',
+         ir_numba_atomic_min.format(T='float', Ti='i32')),
+        ('declare double @___numba_atomic_double_min(double*, double)',
+         ir_numba_atomic_min.format(T='double', Ti='i64')),
+    ]
 
     for decl, fn in replacements:
         llvmir = llvmir.replace(decl, fn)
 
-    llvmir = llvm38_to_34_ir(llvmir)
-
+    llvmir = llvm39_to_34_ir(llvmir)
     cu.add_module(llvmir.encode('utf8'))
     cu.add_module(libdevice.get())
+
     ptx = cu.compile(**opts)
+    # XXX remove debug_pubnames seems to be necessary sometimes
+    return patch_ptx_debug_pubnames(ptx)
+
+
+def patch_ptx_debug_pubnames(ptx):
+    """
+    Patch PTX to workaround .debug_pubnames NVVM error::
+
+        ptxas fatal   : Internal error: overlapping non-identical data
+
+    """
+    while True:
+        # Repeatedly remove debug_pubnames sections
+        start = ptx.find(b'.section .debug_pubnames')
+        if start < 0:
+            break
+        stop = ptx.find(b'}', start)
+        if stop < 0:
+            raise ValueError('missing "}"')
+        ptx = ptx[:start] + ptx[stop + 1:]
     return ptx
 
 
 re_metadata_def = re.compile(r"\!\d+\s*=")
-re_metadata_correct_usage = re.compile(r"metadata\s*\![{'\"]")
+re_metadata_correct_usage = re.compile(r"metadata\s*\![{'\"0-9]")
+re_metadata_ref = re.compile(r"\!\d+")
+re_metadata_debuginfo = re.compile(r"\!{i32 \d, \!\"Debug Info Version\", i32 \d}".replace(' ', r'\s+'))
 
 re_attributes_def = re.compile(r"^attributes #\d+ = \{ ([\w\s]+)\ }")
-unsupported_attributes = {'argmemonly', 'inaccessiblememonly',
-                          'inaccessiblemem_or_argmemonly', 'norecurse'}
+supported_attributes = {'alwaysinline', 'cold', 'inlinehint', 'minsize',
+                        'noduplicate', 'noinline', 'noreturn', 'nounwind',
+                        'optnone', 'optisze', 'readnone', 'readonly'}
 
-re_getelementptr = re.compile(r"\Wgetelementptr\s(?:inbounds )?\(?")
+re_getelementptr = re.compile(r"\bgetelementptr\s(?:inbounds )?\(?")
 
-re_load = re.compile(r"\Wload\s(?:volatile )?")
+re_load = re.compile(r"=\s*\bload\s(?:\bvolatile\s)?")
 
 re_call = re.compile(r"(call\s[^@]+\))(\s@)")
 
 re_type_tok = re.compile(r"[,{}()[\]]")
 
-re_annotations = re.compile(r"\Wnonnull\W")
+re_annotations = re.compile(r"\bnonnull\b")
+
+re_unsupported_keywords = re.compile(r"\b(local_unnamed_addr|writeonly)\b")
 
 
-def llvm38_to_34_ir(ir):
+def llvm39_to_34_ir(ir):
     """
-    Convert LLVM 3.8 IR for LLVM 3.4.
+    Convert LLVM 3.9 IR for LLVM 3.4.
     """
     def parse_out_leading_type(s):
         par_level = 0
@@ -496,17 +563,40 @@ def llvm38_to_34_ir(ir):
 
     buf = []
     for line in ir.splitlines():
-        orig = line
+
+        # Fix llvm.dbg.cu
+        if line.startswith('!numba.llvm.dbg.cu'):
+            line = line.replace('!numba.llvm.dbg.cu', '!llvm.dbg.cu')
+
+        # We insert a dummy inlineasm to put debuginfo
+        if (line.lstrip().startswith('tail call void asm sideeffect "// dbg') and
+                '!numba.dbg' in line):
+            # Fix the metadata
+            line = line.replace('!numba.dbg', '!dbg')
         if re_metadata_def.match(line):
             # Rewrite metadata since LLVM 3.7 dropped the "metadata" type prefix.
             if None is re_metadata_correct_usage.search(line):
+                # Reintroduce the "metadata" prefix
                 line = line.replace('!{', 'metadata !{')
                 line = line.replace('!"', 'metadata !"')
+
+                assigpos = line.find('=')
+                lhs, rhs = line[:assigpos + 1], line[assigpos + 1:]
+
+                # Fix metadata reference
+                def fix_metadata_ref(m):
+                    return 'metadata ' + m.group(0)
+                line = ' '.join((lhs, re_metadata_ref.sub(fix_metadata_ref, rhs)))
+        if line.startswith('source_filename ='):
+            continue    # skip line
+        if re_unsupported_keywords.search(line) is not None:
+            line = re_unsupported_keywords.sub(lambda m: '', line)
+
         if line.startswith('attributes #'):
             # Remove function attributes unsupported pre-3.8
             m = re_attributes_def.match(line)
             attrs = m.group(1).split()
-            attrs = ' '.join(a for a in attrs if a not in unsupported_attributes)
+            attrs = ' '.join(a for a in attrs if a in supported_attributes)
             line = line.replace(m.group(1), attrs)
         if 'getelementptr ' in line:
             # Rewrite "getelementptr ty, ty* ptr, ..."
@@ -520,10 +610,9 @@ def llvm38_to_34_ir(ir):
             # Rewrite "load ty, ty* ptr"
             # to "load ty *ptr"
             m = re_load.search(line)
-            if m is None:
-                raise RuntimeError("failed parsing load: %s" % (line,))
-            pos = m.end()
-            line = line[:pos] + parse_out_leading_type(line[pos:])
+            if m:
+                pos = m.end()
+                line = line[:pos] + parse_out_leading_type(line[pos:])
         if 'call ' in line:
             # Rewrite "call ty (...) @foo"
             # to "call ty (...)* @foo"
@@ -547,6 +636,11 @@ def set_cuda_kernel(lfunc):
 
     nmd = m.get_or_insert_named_metadata('nvvm.annotations')
     nmd.add(md)
+
+    # set nvvm ir version
+    i32 = ir.IntType(32)
+    md_ver = m.add_metadata([i32(1), i32(2), i32(2), i32(0)])
+    m.add_named_metadata('nvvmir.version', md_ver)
 
 
 def fix_data_layout(module):

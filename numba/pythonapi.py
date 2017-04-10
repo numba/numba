@@ -5,7 +5,6 @@ import contextlib
 import pickle
 
 from llvmlite import ir
-import llvmlite.binding as ll
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.llvmpy.core as lc
 
@@ -745,21 +744,6 @@ class PythonAPI(object):
                                           self.py_ssize_t, self.pyobj])
         fn = self._get_function(fnty, name="PyList_SetSlice")
         return self.builder.call(fn, (lst, start, stop, obj))
-
-    def list_get_private_data(self, lst):
-        fnty = Type.function(self.voidptr, [self.pyobj])
-        fn = self._get_function(fnty, name="numba_get_list_private_data")
-        return self.builder.call(fn, (lst,))
-
-    def list_set_private_data(self, lst, ptr):
-        fnty = Type.function(Type.void(), [self.pyobj, self.voidptr])
-        fn = self._get_function(fnty, name="numba_set_list_private_data")
-        return self.builder.call(fn, (lst, ptr))
-
-    def list_reset_private_data(self, lst):
-        fnty = Type.function(Type.void(), [self.pyobj])
-        fn = self._get_function(fnty, name="numba_reset_list_private_data")
-        return self.builder.call(fn, (lst,))
 
 
     #

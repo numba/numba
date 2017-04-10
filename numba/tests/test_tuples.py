@@ -101,10 +101,10 @@ class TestTupleReturn(TestCase):
         cres = compile_isolated(tuple_return_usecase, (aryty, aryty))
         a = b = np.arange(5, dtype='float64')
         ra, rb = cres.entry_point(a, b)
-        self.assertTrue((ra == a).all())
-        self.assertTrue((rb == b).all())
+        self.assertPreciseEqual(ra, a)
+        self.assertPreciseEqual(rb, b)
         del a, b
-        self.assertTrue((ra == rb).all())
+        self.assertPreciseEqual(ra, rb)
 
     def test_scalar_tuple(self):
         scalarty = types.float32
@@ -418,6 +418,20 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
             got = cfunc(tup, *args)
             self.assertIs(type(got), type(expected))
             self.assertPreciseEqual(got, expected)
+
+
+class TestTupleNRT(TestCase, MemoryLeakMixin):
+    def test_tuple_add(self):
+        def pyfunc(x):
+            a = np.arange(3)
+            return (a,) + (x,)
+
+        cfunc = jit(nopython=True)(pyfunc)
+        x = 123
+        expect_a, expect_x = pyfunc(x)
+        got_a, got_x = cfunc(x)
+        np.testing.assert_equal(got_a, expect_a)
+        self.assertEqual(got_x, expect_x)
 
 
 class TestNamedTupleNRT(TestCase, MemoryLeakMixin):

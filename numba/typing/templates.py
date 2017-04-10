@@ -266,7 +266,6 @@ class ConcreteTemplate(FunctionTemplate):
 
     def apply(self, args, kws):
         cases = getattr(self, 'cases')
-        assert cases
         return self._select(cases, args, kws)
 
 
@@ -291,7 +290,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                 self._impl_cache[cache_key] = None
                 return
             from numba import jit
-            disp = self._impl_cache[cache_key] = jit(nopython=True)(pyfunc)
+            jitdecor = jit(nopython=True, **self._jit_options)
+            disp = self._impl_cache[cache_key] = jitdecor(pyfunc)
         else:
             if disp is None:
                 return
@@ -311,15 +311,65 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         return self._compiled_overloads[sig.args]
 
 
-def make_overload_template(func, overload_func):
+def make_overload_template(func, overload_func, jit_options):
     """
     Make a template class for function *func* overloaded by *overload_func*.
+    Compiler options are passed as a dictionary to *jit_options*.
     """
     func_name = getattr(func, '__name__', str(func))
     name = "OverloadTemplate_%s" % (func_name,)
     base = _OverloadFunctionTemplate
     dct = dict(key=func, _overload_func=staticmethod(overload_func),
-               _impl_cache={}, _compiled_overloads={})
+               _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options)
+    return type(base)(name, (base,), dct)
+
+
+class _IntrinsicTemplate(AbstractTemplate):
+    """
+    A base class of templates for intrinsic definition
+    """
+
+    def generic(self, args, kws):
+        """
+        Type the intrinsic by the arguments.
+        """
+        from numba.targets.imputils import lower_builtin
+
+        cache_key = self.context, args, tuple(kws.items())
+        try:
+            return self._impl_cache[cache_key]
+        except KeyError:
+            result = self._definition_func(self.context, *args, **kws)
+            if result is None:
+                return
+            [sig, imp] = result
+            pysig = utils.pysignature(self._definition_func)
+            # omit context argument from user function
+            parameters = list(pysig.parameters.values())[1:]
+            sig.pysig = pysig.replace(parameters=parameters)
+            self._impl_cache[cache_key] = sig
+            self._overload_cache[sig.args] = imp
+            # register the lowering
+            lower_builtin(imp, *sig.args)(imp)
+            return sig
+
+    def get_impl_key(self, sig):
+        """
+        Return the key for looking up the implementation for the given
+        signature on the target context.
+        """
+        return self._overload_cache[sig.args]
+
+
+def make_intrinsic_template(handle, defn, name):
+    """
+    Make a template class for a intrinsic handle *handle* defined by the
+    function *defn*.  The *name* is used for naming the new template class.
+    """
+    base = _IntrinsicTemplate
+    name = "_IntrinsicTemplate_%s" % (name)
+    dct = dict(key=handle, _definition_func=staticmethod(defn),
+               _impl_cache={}, _overload_cache={})
     return type(base)(name, (base,), dct)
 
 
@@ -454,6 +504,10 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
             disp_type = types.Dispatcher(disp)
             sig = disp_type.get_call_type(typing_context, sig.args, {})
             call = context.get_function(disp_type, sig)
+            # Link dependent library
+            cg = context.codegen()
+            for lib in getattr(call, 'libs', ()):
+                cg.add_linking_library(lib)
             return call(builder, args)
 
     def _resolve(self, typ, attr):

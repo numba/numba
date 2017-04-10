@@ -5,13 +5,13 @@ from llvmlite.llvmpy.core import (Type, Builder, LINKAGE_INTERNAL,
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
-from numba import typing, types, cgutils
+from numba import typing, types, cgutils, debuginfo
 from numba.utils import cached_property
 from numba.targets.base import BaseContext
 from numba.targets.callconv import MinimalCallConv
 from numba.targets import cmathimpl, operatorimpl
 from numba.typing import cmathdecl, operatordecl
-from numba.funcdesc import transform_arg_name
+from numba import itanium_mangler
 from .cudadrv import nvvm
 from . import codegen, nvvmutils
 
@@ -38,6 +38,7 @@ VALID_CHARS = re.compile(r'[^a-z0-9]', re.I)
 class CUDATargetContext(BaseContext):
     implement_powi_as_math_call = True
     strict_alignment = True
+    DIBuilder = debuginfo.NvvmDIBuilder
 
     # Overrides
     def create_module(self, name):
@@ -66,21 +67,8 @@ class CUDATargetContext(BaseContext):
     def call_conv(self):
         return CUDACallConv(self)
 
-    @classmethod
-    def mangle_name(cls, name):
-        """
-        Mangle the given string
-        """
-        def repl(m):
-            ch = m.group(0)
-            return "_%X_" % ord(ch)
-
-        return VALID_CHARS.sub(repl, name)
-
     def mangler(self, name, argtypes):
-        qualified = name + '.' + '.'.join(transform_arg_name(a)
-                                          for a in argtypes)
-        return self.mangle_name(qualified)
+        return itanium_mangler.mangle(name, argtypes)
 
     def prepare_cuda_kernel(self, codelib, fname, argtypes):
         """
@@ -111,7 +99,8 @@ class CUDATargetContext(BaseContext):
                              [self.call_conv.get_return_type(types.pyobject)] + argtys)
         func = wrapper_module.add_function(fnty, name=fname)
 
-        wrapfn = wrapper_module.add_function(wrapfnty, name="cudaPy_" + func.name)
+        prefixed = itanium_mangler.prepend_namespace(func.name, ns='cudapy')
+        wrapfn = wrapper_module.add_function(wrapfnty, name=prefixed)
         builder = Builder(wrapfn.append_basic_block(''))
 
         # Define error handling variables
@@ -186,7 +175,8 @@ class CUDATargetContext(BaseContext):
         addrspace.
         """
         text = Constant.stringz(string)
-        name = '.'.join(["__conststring__", self.mangle_name(string)])
+        name = '$'.join(["__conststring__",
+                         itanium_mangler.mangle_identifier(string)])
         # Try to reuse existing global
         gv = mod.globals.get(name)
         if gv is None:

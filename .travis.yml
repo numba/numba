@@ -8,9 +8,12 @@ matrix:
         # Longest build first
         # Parametrize the conda env name so multiple builds can
         # work with multiple environments on the same machine in parallel.
+        - os: osx
+          env: PYTHON=3.6 NUMPY=1.12 BUILD_DOC=yes CONDA_ENV=travisci
         - env: PYTHON=3.5 NUMPY=1.11 RUN_COVERAGE=yes CONDA_ENV=travisci
-        - env: PYTHON=3.4 NUMPY=1.9 BUILD_DOC=yes CONDA_ENV=travisci
-        - env: PYTHON=2.7 NUMPY=1.7 CONDA_ENV=travisci
+        - env: PYTHON=3.6 NUMPY=1.12 BUILD_DOC=yes CONDA_ENV=travisci
+        - env: PYTHON=3.4 NUMPY=1.10 CONDA_ENV=travisci
+        - env: PYTHON=2.7 NUMPY=1.9 CONDA_ENV=travisci
 
 branches:
     only:
@@ -28,7 +31,7 @@ script:
     - buildscripts/incremental/test.sh
 
 after_success:
-    - if [ "$RUN_COVERAGE" == "yes" ]; then coverage combine; codecov; fi
+    - buildscripts/incremental/after_success.sh
 
 notifications:
     email: false

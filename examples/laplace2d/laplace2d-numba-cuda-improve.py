@@ -3,22 +3,25 @@
 '''
 Speed on OS X 10.8 650M 1024GB GPU: 186s
 '''
+from __future__ import print_function
+
+import time
 
 import numpy as np
-import time
-from numba import *
+
+from numba import cuda, f8
 
 
 # NOTE: CUDA kernel does not return any value
 
 tpb = 16
 
-@cuda.jit(f8(f8, f8), device=True, inline=True)
+@cuda.jit(device=True, inline=True)
 def get_max(a, b):
     if a > b : return a
     else: return b
 
-@cuda.jit(void(f8[:,:], f8[:,:], f8[:,:]))
+@cuda.jit("(f8[:,:], f8[:,:], f8[:,:])")
 def jacobi_relax_core(A, Anew, error):
     err_sm = cuda.shared.array((tpb, tpb), dtype=f8)
 
@@ -85,28 +88,28 @@ def main():
 
     blockdim = (tpb, tpb)
     griddim = (NN//blockdim[0], NM//blockdim[1])
-        
+
     error_grid = np.zeros(griddim)
-    
+
     stream = cuda.stream()
 
     dA = cuda.to_device(A, stream)          # to device and don't come back
     dAnew = cuda.to_device(Anew, stream)    # to device and don't come back
     derror_grid = cuda.to_device(error_grid, stream)
-    
+
     while error > tol and iter < iter_max:
         assert error_grid.dtype == np.float64
-        
+
         jacobi_relax_core[griddim, blockdim, stream](dA, dAnew, derror_grid)
-        
+
         derror_grid.to_host(stream)
-        
-        
+
+
         # error_grid is available on host
         stream.synchronize()
-        
+
         error = np.abs(error_grid).max()
-        
+
         # swap dA and dAnew
         tmp = dA
         dA = dAnew

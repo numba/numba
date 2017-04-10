@@ -71,6 +71,21 @@ def create_struct_proxy(fe_type, kind='value'):
     return res
 
 
+def copy_struct(dst, src, repl={}):
+    """
+    Copy structure from *src* to *dst* with replacement from *repl*.
+    """
+    repl = repl.copy()
+    # copy data from src or use those in repl
+    for k in src._datamodel._fields:
+        v = repl.pop(k, getattr(src, k))
+        setattr(dst, k, v)
+    # use remaining key-values in repl
+    for k, v in repl.items():
+        setattr(dst, k, v)
+    return dst
+
+
 class _StructProxy(object):
     """
     Creates a `Structure` like interface that is constructed with information
@@ -559,18 +574,31 @@ def for_range_slice_generic(builder, start, stop, step):
 
 
 @contextmanager
-def loop_nest(builder, shape, intp):
+def loop_nest(builder, shape, intp, order='C'):
     """
     Generate a loop nest walking a N-dimensional array.
-    Yields a tuple of N indices for use in the inner loop body.
+    Yields a tuple of N indices for use in the inner loop body,
+    iterating over the *shape* space.
+
+    If *order* is 'C' (the default), indices are incremented inside-out
+    (i.e. (0,0), (0,1), (0,2), (1,0) etc.).
+    If *order* is 'F', they are incremented outside-in
+    (i.e. (0,0), (1,0), (2,0), (0,1) etc.).
+    This has performance implications when walking an array as it impacts
+    the spatial locality of memory accesses.
     """
+    assert order in 'CF'
     if not shape:
         # 0-d array
         yield ()
     else:
-        with _loop_nest(builder, shape, intp) as indices:
+        if order == 'F':
+            _swap = lambda x: x[::-1]
+        else:
+            _swap = lambda x: x
+        with _loop_nest(builder, _swap(shape), intp) as indices:
             assert len(indices) == len(shape)
-            yield indices
+            yield _swap(indices)
 
 
 @contextmanager
@@ -585,8 +613,9 @@ def _loop_nest(builder, shape, intp):
 
 def pack_array(builder, values, ty=None):
     """
-    Pack an array of values.  *ty* should be given if the array may be empty,
-    in which case the type can't be inferred from the values.
+    Pack a sequence of values in a LLVM array.  *ty* should be given
+    if the array may be empty, in which case the type can't be inferred
+    from the values.
     """
     n = len(values)
     if ty is None:

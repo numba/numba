@@ -1,7 +1,22 @@
 from __future__ import print_function, division, absolute_import
+
+import random
 import numpy as np
+
+from numba import config
 from numba import cuda, uint32, uint64, float32, float64
 from numba.cuda.testing import unittest
+
+
+def cc_32_or_above():
+    if not config.ENABLE_CUDASIM:
+        return cuda.current_context().device.compute_capability >= (3, 2)
+    else:
+        return True
+
+
+def skip_unless_cc_32(fn):
+    return unittest.skipUnless(cc_32_or_above(), "require cc >= 3.2")(fn)
 
 
 def atomic_add(ary):
@@ -42,7 +57,7 @@ def atomic_add_float(ary):
     sm = cuda.shared.array(32, float32)
     sm[tid] = 0
     cuda.syncthreads()
-    bin = ary[tid] % 32
+    bin = int(ary[tid] % 32)
     cuda.atomic.add(sm, bin, 1.0)
     cuda.syncthreads()
     ary[tid] = sm[tid]
@@ -121,10 +136,16 @@ def atomic_add_double_3(ary):
     ary[tx, ty] = sm[tx, ty]
 
 
-def atomic_max_double(res, ary):
+def atomic_max(res, ary):
     tx = cuda.threadIdx.x
     bx = cuda.blockIdx.x
     cuda.atomic.max(res, 0, ary[tx, bx])
+
+
+def atomic_min(res, ary):
+    tx = cuda.threadIdx.x
+    bx = cuda.blockIdx.x
+    cuda.atomic.min(res, 0, ary[tx, bx])
 
 
 def atomic_max_double_normalizedindex(res, ary):
@@ -150,6 +171,13 @@ def atomic_max_double_shared(res, ary):
     cuda.syncthreads()
     if tid == 0:
         res[0] = smres[0]
+
+
+def atomic_compare_and_swap(res, old, ary):
+    gid = cuda.grid(1)
+    if gid < res.size:
+        out = cuda.atomic.compare_and_swap(res[gid:], -99, ary[gid])
+        old[gid] = out
 
 
 class TestCudaAtomics(unittest.TestCase):
@@ -182,7 +210,7 @@ class TestCudaAtomics(unittest.TestCase):
 
     def test_atomic_add_float(self):
         ary = np.random.randint(0, 32, size=32).astype(np.float32)
-        orig = ary.copy()
+        orig = ary.copy().astype(np.intp)
         cuda_atomic_add_float = cuda.jit('void(float32[:])')(atomic_add_float)
         cuda_atomic_add_float[1, 32](ary)
 
@@ -261,14 +289,62 @@ class TestCudaAtomics(unittest.TestCase):
 
         np.testing.assert_equal(ary, orig + 1)
 
-    def test_atomic_max_double(self):
-        vals = np.random.randint(0, 65535, size=(32, 32)).astype(np.float64)
-        res = np.zeros(1, np.float64)
-        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(atomic_max_double)
+    def check_atomic_max(self, dtype, lo, hi):
+        vals = np.random.randint(lo, hi, size=(32, 32)).astype(dtype)
+        res = np.zeros(1, dtype=vals.dtype)
+        cuda_func = cuda.jit(atomic_max)
         cuda_func[32, 32](res, vals)
-
         gold = np.max(vals)
         np.testing.assert_equal(res, gold)
+
+    def test_atomic_max_int32(self):
+        self.check_atomic_max(dtype=np.int32, lo=-65535, hi=65535)
+
+    def test_atomic_max_uint32(self):
+        self.check_atomic_max(dtype=np.uint32, lo=0, hi=65535)
+
+    @skip_unless_cc_32
+    def test_atomic_max_int64(self):
+        self.check_atomic_max(dtype=np.int64, lo=-65535, hi=65535)
+
+    @skip_unless_cc_32
+    def test_atomic_max_uint64(self):
+        self.check_atomic_max(dtype=np.uint64, lo=0, hi=65535)
+
+    def test_atomic_max_float32(self):
+        self.check_atomic_max(dtype=np.float32, lo=-65535, hi=65535)
+
+    def test_atomic_max_double(self):
+        self.check_atomic_max(dtype=np.float64, lo=-65535, hi=65535)
+
+    def check_atomic_min(self, dtype, lo, hi):
+        vals = np.random.randint(lo, hi, size=(32, 32)).astype(dtype)
+        res = np.array([65535], dtype=vals.dtype)
+        cuda_func = cuda.jit(atomic_min)
+        cuda_func[32, 32](res, vals)
+
+        gold = np.min(vals)
+        np.testing.assert_equal(res, gold)
+
+    def test_atomic_min_int32(self):
+        self.check_atomic_min(dtype=np.int32, lo=-65535, hi=65535)
+
+    def test_atomic_min_uint32(self):
+        self.check_atomic_min(dtype=np.uint32, lo=0, hi=65535)
+
+    @skip_unless_cc_32
+    def test_atomic_min_int64(self):
+        self.check_atomic_min(dtype=np.int64, lo=-65535, hi=65535)
+
+    @skip_unless_cc_32
+    def test_atomic_min_uint64(self):
+        self.check_atomic_min(dtype=np.uint64, lo=0, hi=65535)
+
+    def test_atomic_min_float(self):
+        self.check_atomic_min(dtype=np.float32, lo=-65535, hi=65535)
+
+    def test_atomic_min_double(self):
+        self.check_atomic_min(dtype=np.float64, lo=-65535, hi=65535)
 
     def test_atomic_max_double_normalizedindex(self):
         vals = np.random.randint(0, 65535, size=(32, 32)).astype(np.float64)
@@ -294,7 +370,7 @@ class TestCudaAtomics(unittest.TestCase):
         vals = np.random.randint(0, 128, size=(1,1)).astype(np.float64)
         gold = vals.copy().reshape(1)
         res = np.zeros(1, np.float64) + np.nan
-        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(atomic_max_double)
+        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(atomic_max)
         cuda_func[1, 1](res, vals)
 
         np.testing.assert_equal(res, gold)
@@ -303,7 +379,7 @@ class TestCudaAtomics(unittest.TestCase):
         res = np.random.randint(0, 128, size=1).astype(np.float64)
         gold = res.copy()
         vals = np.zeros((1, 1), np.float64) + np.nan
-        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(atomic_max_double)
+        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(atomic_max)
         cuda_func[1, 1](res, vals)
 
         np.testing.assert_equal(res, gold)
@@ -316,6 +392,32 @@ class TestCudaAtomics(unittest.TestCase):
 
         gold = np.max(vals)
         np.testing.assert_equal(res, gold)
+
+    def test_atomic_compare_and_swap(self):
+        n = 100
+        res = [-99] * (n // 2) + [-1] * (n // 2)
+        random.shuffle(res)
+        res = np.asarray(res, dtype=np.int32)
+        out = np.zeros_like(res)
+        ary = np.random.randint(1, 10, size=res.size).astype(res.dtype)
+
+        fill_mask = res == -99
+        unfill_mask = res == -1
+
+        expect_res = np.zeros_like(res)
+        expect_res[fill_mask] = ary[fill_mask]
+        expect_res[unfill_mask] = -1
+
+        expect_out = np.zeros_like(out)
+        expect_out[fill_mask] = res[fill_mask]
+        expect_out[unfill_mask] = -1
+
+        cuda_func = cuda.jit(atomic_compare_and_swap)
+        cuda_func[10, 10](res, out, ary)
+
+        np.testing.assert_array_equal(expect_res, res)
+        np.testing.assert_array_equal(expect_out, out)
+
 
 if __name__ == '__main__':
     unittest.main()

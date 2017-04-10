@@ -1698,9 +1698,7 @@ def np_complex_fmin_impl(context, builder, sig, args):
 
 def np_real_isnan_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
-    x, = args
-
-    return builder.fcmp(lc.FCMP_UNO, x, x)
+    return mathimpl.is_nan(builder, args[0])
 
 
 def np_complex_isnan_impl(context, builder, sig, args):
@@ -1709,62 +1707,33 @@ def np_complex_isnan_impl(context, builder, sig, args):
     x, = args
     ty, = sig.args
     complex_val = context.make_complex(builder, ty, value=x)
-
-    return builder.fcmp(lc.FCMP_UNO, complex_val.real, complex_val.imag)
-
-
-def _real_is_not_finite(context, builder, sig, args):
-    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
-    x, = args
-    ty, = sig.args
-    f_ff_sig = typing.signature(*[ty]*3)
-    sub = numbers.real_sub_impl(context, builder, f_ff_sig, [x, x])
-
-    return np_real_isnan_impl(context, builder, sig, [sub])
+    return cmathimpl.is_nan(builder, complex_val)
 
 
 def np_real_isfinite_impl(context, builder, sig, args):
-    # in NumPy, when there is not an appropriate builtin, it falls back to
-    # ! npy_isnan((x) + (-x)). Use this code to avoid having to add a call.
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
-
-    return builder.not_(_real_is_not_finite(context, builder, sig, args))
+    return mathimpl.is_finite(builder, args[0])
 
 
 def np_complex_isfinite_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
     x, = args
     ty, = sig.args
-    fty = ty.underlying_float
-    b_f_sig = typing.signature(types.boolean, fty)
     complex_val = context.make_complex(builder, ty, value=x)
-    real_isfinite = np_real_isfinite_impl(context, builder, b_f_sig,
-                                          [complex_val.real])
-    imag_isfinite = np_real_isfinite_impl(context, builder, b_f_sig,
-                                          [complex_val.imag])
-
-    return builder.and_(real_isfinite, imag_isfinite)
+    return cmathimpl.is_finite(builder, complex_val)
 
 
 def np_real_isinf_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
-    x, = args
-    not_finite = _real_is_not_finite(context, builder, sig, args)
-    not_nan = builder.fcmp(lc.FCMP_ORD, x, x)
-
-    return builder.and_(not_finite, not_nan)
+    return mathimpl.is_inf(builder, args[0])
 
 
 def np_complex_isinf_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    x, = args
     ty, = sig.args
-    fty = ty.underlying_float
-    b_f_sig = typing.signature(types.boolean, fty)
-    x = context.make_complex(builder, ty, value=args[0])
-    real_isinf = np_real_isinf_impl(context, builder, b_f_sig, [x.real])
-    imag_isinf = np_real_isinf_impl(context, builder, b_f_sig, [x.imag])
-
-    return builder.or_(real_isinf, imag_isinf)
+    complex_val = context.make_complex(builder, ty, value=x)
+    return cmathimpl.is_inf(builder, complex_val)
 
 
 def np_real_signbit_impl(context, builder, sig, args):

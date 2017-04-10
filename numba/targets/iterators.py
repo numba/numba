@@ -95,17 +95,26 @@ def iternext_zip(context, builder, sig, args, result):
         result.set_exhausted()
         return
 
-    is_valid = context.get_constant(types.boolean, True)
-    values = []
+    p_ret_tup = cgutils.alloca_once(builder,
+                                    context.get_value_type(zip_type.yield_type))
+    p_is_valid = cgutils.alloca_once_value(builder, value=cgutils.true_bit)
 
-    for iterobj, srcty in zip(zipobj, zip_type.source_types):
-        srcres = call_iternext(context, builder, srcty, iterobj)
-        is_valid = builder.and_(is_valid, srcres.is_valid())
-        values.append(srcres.yielded_value())
+    for i, (iterobj, srcty) in enumerate(zip(zipobj, zip_type.source_types)):
+        is_valid = builder.load(p_is_valid)
+        # Avoid calling the remaining iternext if a iterator has been exhausted
+        with builder.if_then(is_valid):
+            srcres = call_iternext(context, builder, srcty, iterobj)
+            is_valid = builder.and_(is_valid, srcres.is_valid())
+            builder.store(is_valid, p_is_valid)
+            val = srcres.yielded_value()
+            ptr = cgutils.gep_inbounds(builder, p_ret_tup, 0, i)
+            builder.store(val, ptr)
 
+    is_valid = builder.load(p_is_valid)
     result.set_valid(is_valid)
+
     with builder.if_then(is_valid):
-        result.yield_(context.make_tuple(builder, zip_type.yield_type, values))
+        result.yield_(builder.load(p_ret_tup))
 
 
 #-------------------------------------------------------------------------------

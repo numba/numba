@@ -20,8 +20,7 @@ lower = registry.lower
 
 
 def is_nan(builder, z):
-    return builder.or_(mathimpl.is_nan(builder, z.real),
-                       mathimpl.is_nan(builder, z.imag))
+    return builder.fcmp_unordered('uno', z.real, z.imag)
 
 def is_inf(builder, z):
     return builder.or_(mathimpl.is_inf(builder, z.real),

@@ -1,10 +1,11 @@
 from __future__ import print_function, division, absolute_import
+
 import numpy as np
 
-from numba import types
+from numba import types, utils
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from .support import TestCase, tag
+from .support import TestCase, tag, MemoryLeakMixin
 
 
 looplift_flags = Flags()
@@ -52,6 +53,13 @@ def lift4(x):
         d += c
     return c + d
 
+def lift5(x):
+    a = np.arange(4)
+    for i in range(a.shape[0]):
+        # Inner has a break statement
+        if i > 2:
+            break
+    return a
 
 def lift_gen1(x):
     # Outer needs object mode because of np.empty()
@@ -70,13 +78,6 @@ def reject1(x):
         return a
     return a
 
-def reject2(x):
-    a = np.arange(4)
-    for i in range(a.shape[0]):
-        # Inner has a break statement => cannot loop-lift
-        if i > 2:
-            break
-    return a
 
 def reject_gen1(x):
     a = np.arange(4)
@@ -106,7 +107,7 @@ def reject_npm1(x):
     return a
 
 
-class TestLoopLifting(TestCase):
+class TestLoopLifting(MemoryLeakMixin, TestCase):
 
     def try_lift(self, pyfunc, argtypes):
         cres = compile_isolated(pyfunc, argtypes,
@@ -130,7 +131,7 @@ class TestLoopLifting(TestCase):
         got = cres.entry_point(*args)
         self.assert_lifted_native(cres)
         # Check return values
-        self.assertTrue(np.all(expected == got))
+        self.assertPreciseEqual(expected, got)
 
     def check_lift_generator_ok(self, pyfunc, argtypes, args):
         """
@@ -142,7 +143,7 @@ class TestLoopLifting(TestCase):
         got = list(cres.entry_point(*args))
         self.assert_lifted_native(cres)
         # Check return values
-        self.assertEqual(got, expected)
+        self.assertPreciseEqual(expected, got)
 
     def check_no_lift(self, pyfunc, argtypes, args):
         """
@@ -153,7 +154,8 @@ class TestLoopLifting(TestCase):
         self.assertFalse(cres.lifted)
         expected = pyfunc(*args)
         got = cres.entry_point(*args)
-        self.assertTrue(np.all(expected == got))
+        # Check return values
+        self.assertPreciseEqual(expected, got)
 
     def check_no_lift_generator(self, pyfunc, argtypes, args):
         """
@@ -164,7 +166,7 @@ class TestLoopLifting(TestCase):
         self.assertFalse(cres.lifted)
         expected = list(pyfunc(*args))
         got = list(cres.entry_point(*args))
-        self.assertEqual(got, expected)
+        self.assertPreciseEqual(expected, got)
 
     def check_no_lift_nopython(self, pyfunc, argtypes, args):
         """
@@ -181,7 +183,7 @@ class TestLoopLifting(TestCase):
         self.assertTrue(cres.lifted)
         expected = pyfunc(*args)
         got = cres.entry_point(*args)
-        self.assertTrue(np.all(expected == got))
+        self.assertPreciseEqual(expected, got)
 
     def test_lift1(self):
         self.check_lift_ok(lift1, (types.intp,), (123,))
@@ -196,15 +198,15 @@ class TestLoopLifting(TestCase):
     def test_lift4(self):
         self.check_lift_ok(lift4, (types.intp,), (123,))
 
+    def test_lift5(self):
+        self.check_lift_ok(lift5, (types.intp,), (123,))
+
     @tag('important')
     def test_lift_gen1(self):
         self.check_lift_generator_ok(lift_gen1, (types.intp,), (123,))
 
     def test_reject1(self):
         self.check_no_lift(reject1, (types.intp,), (123,))
-
-    def test_reject2(self):
-        self.check_no_lift(reject2, (types.intp,), (123,))
 
     def test_reject_gen1(self):
         self.check_no_lift_generator(reject_gen1, (types.intp,), (123,))
@@ -216,7 +218,81 @@ class TestLoopLifting(TestCase):
         self.check_no_lift_nopython(reject_npm1, (types.intp,), (123,))
 
 
-class TestLoopLiftingInAction(TestCase):
+class TestLoopLiftingAnnotate(TestCase):
+    def test_annotate_1(self):
+        """
+        Verify that annotation works as expected with one lifted loop
+        """
+        from numba import jit
+
+        # dummy function to force objmode
+        def bar():
+            pass
+
+        def foo(x):
+            bar()  # force obj
+            for i in range(x.size):
+                x[i] += 1
+
+            return x
+
+        cfoo = jit(foo)
+
+        x = np.arange(10)
+        xcopy = x.copy()
+        r = cfoo(x)
+        np.testing.assert_equal(r, xcopy + 1)
+
+        buf = utils.StringIO()
+        cfoo.inspect_types(file=buf)
+        annotation = buf.getvalue()
+        buf.close()
+
+        self.assertIn("The function contains lifted loops", annotation)
+        line = foo.__code__.co_firstlineno + 2  # 2 lines down from func head
+        self.assertIn("Loop at line {line}".format(line=line), annotation)
+        self.assertIn("Has 1 overloads", annotation)
+
+    def test_annotate_2(self):
+        """
+        Verify that annotation works as expected with two lifted loops
+        """
+        from numba import jit
+
+        # dummy function to force objmode
+        def bar():
+            pass
+
+        def foo(x):
+            bar()  # force obj
+            # first lifted loop
+            for i in range(x.size):
+                x[i] += 1
+            # second lifted loop
+            for j in range(x.size):
+                x[j] *= 2
+            return x
+
+        cfoo = jit(foo)
+
+        x = np.arange(10)
+        xcopy = x.copy()
+        r = cfoo(x)
+        np.testing.assert_equal(r, (xcopy + 1) * 2)
+
+        buf = utils.StringIO()
+        cfoo.inspect_types(file=buf)
+        annotation = buf.getvalue()
+        buf.close()
+
+        self.assertIn("The function contains lifted loops", annotation)
+        line1 = foo.__code__.co_firstlineno + 3  # 3 lines down from func head
+        line2 = foo.__code__.co_firstlineno + 6  # 6 lines down from func head
+        self.assertIn("Loop at line {line}".format(line=line1), annotation)
+        self.assertIn("Loop at line {line}".format(line=line2), annotation)
+
+
+class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
     def test_issue_734(self):
         from numba import jit, void, int32, double
 
@@ -234,7 +310,7 @@ class TestLoopLiftingInAction(TestCase):
             np_a = np.arange(10, dtype='int32')
             forloop_with_if(u, nb_a)
             forloop_with_if.py_func(u, np_a)
-            self.assertTrue(np.all(nb_a == np_a))
+            self.assertPreciseEqual(nb_a, np_a)
 
     def test_issue_812(self):
         from numba import jit
@@ -329,6 +405,28 @@ class TestLoopLiftingInAction(TestCase):
 
             cfunc = jit(forceobj=True)(pyfunc)
             self.assertEqual(pyfunc(True), cfunc(True))
+
+    def test_variable_scope_bug(self):
+        """
+        https://github.com/numba/numba/issues/2179
+
+        Looplifting transformation is using the wrong verion of variable `h`.
+        """
+        from numba import jit
+
+        def bar(x):
+            return x
+
+        def foo(x):
+            h = 0.
+            for k in range(x):
+                h = h + k
+            h = h - bar(x)
+            return h
+
+        cfoo = jit(foo)
+        self.assertEqual(foo(10), cfoo(10))
+
 
 if __name__ == '__main__':
     unittest.main()

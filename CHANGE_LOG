@@ -1,3 +1,233 @@
+Version 0.32.0
+--------------
+
+In this release, we are upgrading to LLVM 4.0.  A lot of work has been done
+to fix many race-condition issues inside LLVM when the compiler is
+used concurrently, which is likely when Numba is used with Dask.
+
+Improvements:
+
+* PR #2322: Suppress test error due to unknown but consistent error with tgamma
+* PR #2320: Update llvmlite dependency to 0.17
+* PR #2308: Add details to error message on why cuda support is disabled.
+* PR #2302: Add os x to travis
+* PR #2294: Disable remove_module on MCJIT due to memory leak inside LLVM
+* PR #2291: Split parallel tests and recycle workers to tame memory usage
+* PR #2253: Remove the pointer-stuffing hack for storing meminfos in lists
+
+Fixes:
+
+* PR #2331: Fix a bug in the GPU array indexing
+* PR #2326: Fix #2321 docs referring to non-existing function.
+* PR #2316: Fixing more race-condition problems
+* PR #2315: Fix #2314.  Relax strict type check to allow optional type.
+* PR #2310: Fix race condition due to concurrent compilation and cache loading
+* PR #2304: Fix intrinsic 1st arg not a typing.Context as stated by the docs.
+* PR #2287: Fix int64 atomic min-max
+* PR #2286: Fix #2285 `@overload_method` not linking dependent libs
+* PR #2303: Missing import statements to interval-example.rst
+
+
+Version 0.31.0
+--------------
+
+In this release, we added preliminary support for debugging with GDB
+version >= 7.0. The feature is enabled by setting the ``debug=True`` compiler
+option, which causes GDB compatible debug info to be generated.
+The CUDA backend also gained limited debugging support so that source locations
+are showed in memory-checking and profiling tools.
+For details, see :ref:`troubleshooting`.
+
+Also, we added the ``fastmath=True`` compiler option to enable unsafe
+floating-point transformations, which allows LLVM to auto-vectorize more code.
+
+Other important changes include upgrading to LLVM 3.9.1 and adding support for
+Numpy 1.12.
+
+Improvements:
+
+* PR #2281: Update for numpy1.12
+* PR #2278: Add CUDA atomic.{max, min, compare_and_swap}
+* PR #2277: Add about section to conda recipies to identify license and other
+  metadata in Anaconda Cloud
+* PR #2271: Adopt itanium C++-style mangling for CPU and CUDA targets
+* PR #2267: Add fastmath flags
+* PR #2261: Support dtype.type
+* PR #2249: Changes for llvm3.9
+* PR #2234: Bump llvmlite requirement to 0.16 and add install_name_tool_fixer to
+  mviewbuf for OS X
+* PR #2230: Add python3.6 to TravisCi
+* PR #2227: Enable caching for gufunc wrapper
+* PR #2170: Add debugging support
+* PR #2037: inspect_cfg() for easier visualization of the function operation
+
+Fixes:
+
+* PR #2274: Fix nvvm ir patch in mishandling "load"
+* PR #2272: Fix breakage to cuda7.5
+* PR #2269: Fix caching of copy_strides kernel in cuda.reduce
+* PR #2265: Fix #2263: error when linking two modules with dynamic globals
+* PR #2252: Fix path separator in test
+* PR #2246: Fix overuse of memory in some system with fork
+* PR #2241: Fix #2240: __module__ in dynamically created function not a str
+* PR #2239: Fix fingerprint computation failure preventing fallback
+
+
+Version 0.30.1
+--------------
+
+This is a bug-fix release to enable Python 3.6 support.  In addition,
+there is now early Intel TBB support for parallel ufuncs when building from
+source with TBBROOT defined.  The TBB feature is not enabled in our official
+builds.
+
+Fixes:
+
+* PR #2232: Fix name clashes with _Py_hashtable_xxx in Python 3.6.
+
+Improvements:
+
+* PR #2217: Add Intel TBB threadpool implementation for parallel ufunc.
+
+
+Version 0.30.0
+--------------
+
+This release adds preliminary support for Python 3.6, but no official build is
+available yet.  A new system reporting tool (``numba --sysinfo``) is added to
+provide system information to help core developers in replication and debugging.
+See below for other improvements and bug fixes.
+
+Improvements:
+
+* PR #2209: Support Python 3.6.
+* PR #2175: Support ``np.trace()``, ``np.outer()`` and ``np.kron()``.
+* PR #2197: Support ``np.nanprod()``.
+* PR #2190: Support caching for ufunc.
+* PR #2186: Add system reporting tool.
+
+Fixes:
+
+* PR #2214, Issue #2212: Fix memory error with ndenumerate and flat iterators.
+* PR #2206, Issue #2163: Fix ``zip()`` consuming extra elements in early
+  exhaustion.
+* PR #2185, Issue #2159, #2169: Fix rewrite pass affecting objmode fallback.
+* PR #2204, Issue #2178: Fix annotation for liftedloop.
+* PR #2203: Fix Appveyor segfault with Python 3.5.
+* PR #2202, Issue #2198: Fix target context not initialized when loading from
+  ufunc cache.
+* PR #2172, Issue #2171: Fix optional type unpacking.
+* PR #2189, Issue #2188: Disable freezing of big (>1MB) global arrays.
+* PR #2180, Issue #2179: Fix invalid variable version in looplifting.
+* PR #2156, Issue #2155: Fix divmod, floordiv segfault on CUDA.
+
+
+Version 0.29.0
+--------------
+
+This release extends the support of recursive functions to include direct and
+indirect recursion without explicit function type annotations.  See new example
+in `examples/mergesort.py`.  Newly supported numpy features include array
+stacking functions, np.linalg.eig* functions, np.linalg.matrix_power, np.roots
+and array to array broadcasting in assignments.
+
+This release depends on llvmlite 0.14.0 and supports CUDA 8 but it is not
+required.
+
+Improvements:
+
+* PR #2130, #2137: Add type-inferred recursion with docs and examples.
+* PR #2134: Add ``np.linalg.matrix_power``.
+* PR #2125: Add ``np.roots``.
+* PR #2129: Add ``np.linalg.{eigvals,eigh,eigvalsh}``.
+* PR #2126: Add array-to-array broadcasting.
+* PR #2069: Add hstack and related functions.
+* PR #2128: Allow for vectorizing a jitted function. (thanks to @dhirschfeld)
+* PR #2117: Update examples and make them test-able.
+* PR #2127: Refactor interpreter class and its results.
+
+Fixes:
+
+* PR #2149: Workaround MSVC9.0 SP1 fmod bug kb982107.
+* PR #2145, Issue #2009: Fixes kwargs for jitclass ``__init__`` method.
+* PR #2150: Fix slowdown in objmode fallback.
+* PR #2050, Issue #1259: Fix liveness problem with some generator loops.
+* PR #2072, Issue #1995: Right shift of unsigned LHS should be logical.
+* PR #2115, Issue #1466: Fix inspect_types() error due to mangled variable name.
+* PR #2119, Issue #2118: Fix array type created from record-dtype.
+* PR #2122, Issue #1808: Fix returning a generator due to datamodel error.
+
+
+Version 0.28.1
+--------------
+
+This is a bug-fix release to resolve packaging issues with setuptools
+dependency.
+
+
+Version 0.28.0
+--------------
+
+Amongst other improvements, this version improves again the level of
+support for linear algebra -- functions from the :mod:`numpy.linalg`
+module.  Also, our random generator is now guaranteed to be thread-safe
+and fork-safe.
+
+Improvements:
+
+* PR #2019: Add the ``@intrinsic`` decorator to define low-level
+  subroutines callable from JIT functions (this is considered
+  a private API for now).
+* PR #2059: Implement ``np.concatenate`` and ``np.stack``.
+* PR #2048: Make random generation fork-safe and thread-safe, producing
+  independent streams of random numbers for each thread or process.
+* PR #2031: Add documentation of floating-point pitfalls.
+* Issue #2053: Avoid polling in parallel CPU target (fixes severe performance
+  regression on Windows).
+* Issue #2029: Make default arguments fast.
+* PR #2052: Add logging to the CUDA driver.
+* PR #2049: Implement the built-in ``divmod()`` function.
+* PR #2036: Implement the ``argsort()`` method on arrays.
+* PR #2046: Improving CUDA memory management by deferring deallocations
+  until certain thresholds are reached, so as to avoid breaking asynchronous
+  execution.
+* PR #2040: Switch the CUDA driver implementation to use CUDA's
+  "primary context" API.
+* PR #2017: Allow ``min(tuple)`` and ``max(tuple)``.
+* PR #2039: Reduce fork() detection overhead in CUDA.
+* PR #2021: Handle structured dtypes with titles.
+* PR #1996: Rewrite looplifting as a transformation on Numba IR.
+* PR #2014: Implement ``np.linalg.matrix_rank``.
+* PR #2012: Implement ``np.linalg.cond``.
+* PR #1985: Rewrite even trivial array expressions, which opens the door
+  for other optimizations (for example, ``array ** 2`` can be converted
+  into ``array * array``).
+* PR #1950: Have ``typeof()`` always raise ValueError on failure.
+  Previously, it would either raise or return None, depending on the input.
+* PR #1994: Implement ``np.linalg.norm``.
+* PR #1987: Implement ``np.linalg.det`` and ``np.linalg.slogdet``.
+* Issue #1979: Document integer width inference and how to workaround.
+* PR #1938: Numba is now compatible with LLVM 3.8.
+* PR #1967: Restrict ``np.linalg`` functions to homogenous dtypes.  Users
+  wanting to pass mixed-typed inputs have to convert explicitly, which
+  makes the performance implications more obvious.
+
+Fixes:
+
+* PR #2006: ``array(float32) ** int`` should return ``array(float32)``.
+* PR #2044: Allow reshaping empty arrays.
+* Issue #2051: Fix refcounting issue when concatenating tuples.
+* Issue #2000: Make Numpy optional for setup.py, to allow ``pip install``
+  to work without Numpy pre-installed.
+* PR #1989: Fix assertion in ``Dispatcher.disable_compile()``.
+* Issue #2028: Ignore filesystem errors when caching from multiple processes.
+* Issue #2003: Allow unicode variable and function names (on Python 3).
+* Issue #1998: Fix deadlock in parallel ufuncs that reacquire the GIL.
+* PR #1997: Fix random crashes when AOT compiling on certain Windows platforms.
+* Issue #1988: Propagate jitclass docstring.
+* Issue #1933: Ensure array constants are emitted with the right alignment.
+
+
 Version 0.27.0
 --------------
 

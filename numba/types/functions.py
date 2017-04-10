@@ -158,8 +158,9 @@ class Dispatcher(WeakType, Callable, Dummy):
         """
         template, pysig, args, kws = self.dispatcher.get_call_template(args, kws)
         sig = template(context).apply(args, kws)
-        sig.pysig = pysig
-        return sig
+        if sig:
+            sig.pysig = pysig
+            return sig
 
     def get_call_signatures(self):
         sigs = self.dispatcher.nopython_signatures
@@ -315,12 +316,20 @@ class RecursiveCall(Opaque):
     """
     Recursive call to a Dispatcher.
     """
+    _overloads = None
 
     def __init__(self, dispatcher_type):
         assert isinstance(dispatcher_type, Dispatcher)
         self.dispatcher_type = dispatcher_type
         name = "recursive(%s)" % (dispatcher_type,)
         super(RecursiveCall, self).__init__(name)
+        # Initializing for the first time
+        if self._overloads is None:
+            self._overloads = {}
+
+    @property
+    def overloads(self):
+        return self._overloads
 
     @property
     def key(self):

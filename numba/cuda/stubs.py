@@ -298,6 +298,9 @@ class atomic(Stub):
 
         Perform atomic ary[idx] += val. Supported on int32, float32, and
         float64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
         """
 
     class max(Stub):
@@ -308,5 +311,28 @@ class atomic(Stub):
         differs from Python and Numpy behaviour, where max(a, b) is always
         a when either a or b is a NaN.
 
-        Supported on float64 operands only.
+        Supported on int32, int64, uint32, uint64, float32, float64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """
+
+    class min(Stub):
+        """min(ary, idx, val)
+
+        Perform atomic ary[idx] = min(ary[idx], val). NaN is treated as a
+        missing value, so min(NaN, n) == min(n, NaN) == n. Note that this
+        differs from Python and Numpy behaviour, where min(a, b) is always
+        a when either a or b is a NaN.
+
+        Supported on int32, int64, uint32, uint64, float32, float64 operands only.
+        """
+
+    class compare_and_swap(Stub):
+        """compare_and_swap(ary, old, val)
+
+        Conditionally assign ``val`` to the first element of an 1D array ``ary``
+        if the current value matches ``old``.
+
+        Returns the current value as if it is loaded atomically.
         """

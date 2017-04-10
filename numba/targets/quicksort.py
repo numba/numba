@@ -3,6 +3,8 @@ from __future__ import print_function, absolute_import, division
 
 import collections
 
+import numpy as np
+
 from numba import types
 
 
@@ -25,10 +27,31 @@ SMALL_QUICKSORT = 15
 MAX_STACK = 100
 
 
-def make_quicksort_impl(wrap, lt=None):
+def make_quicksort_impl(wrap, lt=None, is_argsort=False):
 
     intp = types.intp
     zero = intp(0)
+
+    # Two subroutines to make the core algorithm generic wrt. argsort
+    # or normal sorting.  Note the genericity may make basic sort()
+    # slightly slower (~5%)
+    if is_argsort:
+        @wrap
+        def make_res(A):
+            return np.arange(A.size)
+
+        @wrap
+        def GET(A, idx_or_val):
+            return A[idx_or_val]
+
+    else:
+        @wrap
+        def make_res(A):
+            return A
+
+        @wrap
+        def GET(A, idx_or_val):
+            return idx_or_val
 
     def default_lt(a, b):
         """
@@ -39,7 +62,7 @@ def make_quicksort_impl(wrap, lt=None):
     LT = wrap(lt if lt is not None else default_lt)
 
     @wrap
-    def insertion_sort(A, low, high):
+    def insertion_sort(A, R, low, high):
         """
         Insertion sort A[low:high + 1]. Note the inclusive bounds.
         """
@@ -48,17 +71,18 @@ def make_quicksort_impl(wrap, lt=None):
             return
 
         for i in range(low + 1, high + 1):
-            v = A[i]
+            k = R[i]
+            v = GET(A, k)
             # Insert v into A[low:i]
             j = i
-            while j > low and LT(v, A[j - 1]):
+            while j > low and LT(v, GET(A, R[j - 1])):
                 # Make place for moving A[i] downwards
-                A[j] = A[j - 1]
+                R[j] = R[j - 1]
                 j -= 1
-            A[j] = v
+            R[j] = k
 
     @wrap
-    def partition(A, low, high):
+    def partition(A, R, low, high):
         """
         Partition A[low:high + 1] around a chosen pivot.  The pivot's index
         is returned.
@@ -73,28 +97,31 @@ def make_quicksort_impl(wrap, lt=None):
         # risk breaking this property.
 
         # median of three {low, middle, high}
-        if LT(A[mid], A[low]):
-            A[low], A[mid] = A[mid], A[low]
-        if LT(A[high], A[mid]):
-            A[high], A[mid] = A[mid], A[high]
-        if LT(A[mid], A[low]):
-            A[low], A[mid] = A[mid], A[low]
-        pivot = A[mid]
+        if LT(GET(A, R[mid]), GET(A, R[low])):
+            R[low], R[mid] = R[mid], R[low]
+        if LT(GET(A, R[high]), GET(A, R[mid])):
+            R[high], R[mid] = R[mid], R[high]
+        if LT(GET(A, R[mid]), GET(A, R[low])):
+            R[low], R[mid] = R[mid], R[low]
+        pivot = GET(A, R[mid])
 
-        A[high], A[mid] = A[mid], A[high]
+        # Temporarily stash the pivot at the end
+        R[high], R[mid] = R[mid], R[high]
         i = low
         j = high - 1
         while True:
-            while i < high and LT(A[i], pivot):
+            while i < high and LT(GET(A, R[i]), pivot):
                 i += 1
-            while j >= low and LT(pivot, A[j]):
+            while j >= low and LT(pivot, GET(A, R[j])):
                 j -= 1
             if i >= j:
                 break
-            A[i], A[j] = A[j], A[i]
+            R[i], R[j] = R[j], R[i]
             i += 1
             j -= 1
-        A[i], A[high] = A[high], A[i]
+        # Put the pivot back in its final place (all items before `i`
+        # are smaller than the pivot, all items at/after `i` are larger)
+        R[i], R[high] = R[high], R[i]
         return i
 
     @wrap
@@ -134,8 +161,10 @@ def make_quicksort_impl(wrap, lt=None):
 
     @wrap
     def run_quicksort(A):
+        R = make_res(A)
+
         if len(A) < 2:
-            return
+            return R
 
         stack = [Partition(zero, zero)] * MAX_STACK
         stack[0] = Partition(zero, len(A) - 1)
@@ -147,7 +176,7 @@ def make_quicksort_impl(wrap, lt=None):
             # Partition until it becomes more efficient to do an insertion sort
             while high - low >= SMALL_QUICKSORT:
                 assert n < MAX_STACK
-                i = partition(A, low, high)
+                i = partition(A, R, low, high)
                 # Push largest partition on the stack
                 if high - i > i - low:
                     # Right is larger
@@ -161,7 +190,9 @@ def make_quicksort_impl(wrap, lt=None):
                         n += 1
                     low = i + 1
 
-            insertion_sort(A, low, high)
+            insertion_sort(A, R, low, high)
+
+        return R
 
     # Unused quicksort implementation based on 3-way partitioning; the
     # partitioning scheme turns out exhibiting bad behaviour on sorted arrays.
@@ -206,6 +237,6 @@ def make_py_quicksort(*args, **kwargs):
     return make_quicksort_impl((lambda f: f), *args, **kwargs)
 
 def make_jit_quicksort(*args, **kwargs):
-    from numba import jit
-    return make_quicksort_impl((lambda f: jit(nopython=True)(f)),
+    from numba.extending import register_jitable
+    return make_quicksort_impl((lambda f: register_jitable(f)),
                                *args, **kwargs)

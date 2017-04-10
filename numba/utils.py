@@ -11,7 +11,7 @@ import timeit
 import math
 import sys
 import traceback
-
+from types import ModuleType
 import numpy as np
 
 from .six import *
@@ -33,6 +33,7 @@ if IS_PY3:
     get_ident = threading.get_ident
     intern = sys.intern
     file_replace = os.replace
+    asbyteint = int
 
     def erase_traceback(exc_value):
         """
@@ -49,6 +50,10 @@ else:
     longint = long
     get_ident = thread.get_ident
     intern = intern
+    def asbyteint(x):
+        # convert 1-char str into int
+        return ord(x)
+
     if sys.platform == 'win32':
         def file_replace(src, dest):
             # Best-effort emulation of os.replace()
@@ -166,7 +171,6 @@ def _at_shutdown():
     global _shutting_down
     _shutting_down = True
 
-atexit.register(_at_shutdown)
 
 def shutting_down(globals=globals):
     """
@@ -256,40 +260,6 @@ class UniqueDict(dict):
         if key in self:
             raise AssertionError("key already in dictionary: %r" % (key,))
         super(UniqueDict, self).__setitem__(key, value)
-
-
-class NonReentrantLock(object):
-    """
-    A lock class which explicitly forbids reentrancy.
-    """
-
-    def __init__(self):
-        self._lock = threading.Lock()
-        self._owner = None
-
-    def acquire(self):
-        me = get_ident()
-        if me == self._owner:
-            raise RuntimeError("cannot re-acquire lock from same thread")
-        self._lock.acquire()
-        self._owner = me
-
-    def release(self):
-        if self._owner != get_ident():
-            raise RuntimeError("cannot release un-acquired lock")
-        self._owner = None
-        self._lock.release()
-
-    def is_owned(self):
-        """
-        Whether the lock is owned by the current thread.
-        """
-        return self._owner == get_ident()
-
-    __enter__ = acquire
-
-    def __exit__(self, t, v, tb):
-        self.release()
 
 
 # Django's cached_property
@@ -522,6 +492,27 @@ def total_ordering(cls):
     return cls
 
 
+def logger_hasHandlers(logger):
+    # Backport from python3.5 logging implementation of `.hasHandlers()`
+    c = logger
+    rv = False
+    while c:
+        if c.handlers:
+            rv = True
+            break
+        if not c.propagate:
+            break
+        else:
+            c = c.parent
+    return rv
+
+
+# A dummy module for dynamically-generated functions
+_dynamic_modname = '<dynamic>'
+_dynamic_module = ModuleType(_dynamic_modname)
+_dynamic_module.__builtins__ = moves.builtins
+
+
 # Backported from Python 3.4: weakref.finalize()
 
 from weakref import ref
@@ -561,6 +552,7 @@ class finalize:
             import atexit
             atexit.register(self._exitfunc)
             finalize._registered_with_atexit = True
+            atexit.register(_at_shutdown)
         info = self._Info()
         info.weakref = ref(obj, self)
         info.func = func
@@ -661,3 +653,8 @@ class finalize:
             finalize._shutdown = True
             if reenable_gc:
                 gc.enable()
+
+
+# dummy invocation to force _at_shutdown() to be registered
+finalize(lambda: None, lambda: None)
+assert finalize._registered_with_atexit
