@@ -725,6 +725,6 @@ def copy_propagate_update_analysis(stmt, var_dict, array_analysis):
     return
 
 
-UNARY_MAP_OP = npydecl.NumpyRulesUnaryArrayOperator._op_map.keys()
+UNARY_MAP_OP = list(npydecl.NumpyRulesUnaryArrayOperator._op_map.keys())+['+']
 BINARY_MAP_OP = npydecl.NumpyRulesArrayOperator._op_map.keys()
 UFUNC_MAP_OP = [f.__name__ for f in npydecl.supported_ufuncs]
