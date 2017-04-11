@@ -1,15 +1,13 @@
 from __future__ import print_function, division, absolute_import
 import types as pytypes # avoid confusion with numba.types
-from numba import ir
-from numba.ir_utils import *
-#from numba.annotations import type_annotations
-from numba import types, config
-from numba.types.npytypes import *
+import numpy
+from numba import ir, analysis, types, config
+from numba.ir_utils import (mk_unique_var, replace_vars_inner, find_topo_order,
+                            dprint_func_ir)
 from numba.typing import npydecl
 import collections
 import copy
 
-import numpy
 MAP_TYPES = [numpy.ufunc]
 
 class ArrayAnalysis(object):
@@ -187,7 +185,7 @@ class ArrayAnalysis(object):
             return copy.copy(self.array_shape_classes[node.name])
         elif isinstance(node, (ir.Global,ir.FreeVar)):
             # XXX: currently, global variables are frozen in Numba (can change)
-            if isinstance(node.value, np.ndarray):
+            if isinstance(node.value, numpy.ndarray):
                 shape = node.value.shape
                 out_eqs = []
                 for c in shape:
@@ -234,21 +232,21 @@ class ArrayAnalysis(object):
                 # numpy recarray, e.g. X.a
                 val = node.value.name
                 val_typ = self.typemap[val]
-                if (isinstance(val_typ.dtype, Record)
+                if (isinstance(val_typ.dtype, types.npytypes.Record)
                         and node.attr in val_typ.dtype.fields):
                     return copy.copy(self.array_shape_classes[val])
                 # matrix transpose
                 if node.attr=='T':
                     return self._analyze_np_call('transpose', [node.value],
                         dict())
-            elif (node.op=='getattr'
-                    and isinstance(self.typemap[node.value.name], Record)):
+            elif (node.op=='getattr' and isinstance(
+                    self.typemap[node.value.name], types.npytypes.Record)):
                 # nested arrays in numpy records
                 val = node.value.name
                 val_typ = self.typemap[val]
                 if (node.attr in val_typ.fields
                         and isinstance(val_typ.fields[node.attr][0],
-                        NestedArray)):
+                        types.npytypes.NestedArray)):
                     shape = val_typ.fields[node.attr][0].shape
                     return self._get_classes_from_const_shape(shape)
             elif node.op=='getitem' or node.op=='static_getitem':
@@ -256,7 +254,8 @@ class ArrayAnalysis(object):
                 # of numpy records, e.g. X['a']
                 val = node.value.name
                 val_typ = self.typemap[val]
-                if (self._isarray(val) and isinstance(val_typ.dtype, Record)
+                if (self._isarray(val) and isinstance(val_typ.dtype,
+                        types.npytypes.Record)
                         and node.index in val_typ.dtype.fields):
                     return copy.copy(self.array_shape_classes[val])
             else:
