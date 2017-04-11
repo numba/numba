@@ -8,6 +8,8 @@ from numba.typing import npydecl
 import collections
 import copy
 
+UNKNOWN_CLASS = -1
+CONST_CLASS = 0
 MAP_TYPES = [numpy.ufunc]
 
 class ArrayAnalysis(object):
@@ -20,15 +22,20 @@ class ArrayAnalysis(object):
         self.typemap = typemap
         self.calltypes = calltypes
         self.next_eq_class = 1
-        # equivalence classes for each dimension of each array are saved
-        # string to tuple of class numbers
-        # example: {'A':[1,2]}
-        #          {1:[n,a],2:[k,m,3]}
+        # array_shape_classes saves dimension size information for all arrays
+        # each array dimension is mapped to a size equivalence class
+        # for example, {'A':[1,2], 'B':[3,2]} means second dimensions of
+        #   A and B have the same size.
+        # format: variable name to list of class numbers
         self.array_shape_classes = collections.OrderedDict()
-        # class zero especial and is size 1 for constants
-        # and added broadcast dimensions
-        # -1 class means unknown
-        self.class_sizes = {0:[1], -1:[]}
+        # class_sizes saves constants or variables that represent the size of
+        #   an equivalence class
+        # For example, {1:[n,a],2:[3]} means variabes n and a contain size for
+        #   class 1, while size for class 2 is constant 3.
+        # class CONST_CLASS is special and represents size 1 for constants
+        #    and added broadcast dimensions
+        # UNKNOWN_CLASS class means size might not be constant
+        self.class_sizes = {CONST_CLASS:[1], UNKNOWN_CLASS:[]}
         # size variable to use for each array dimension
         self.array_size_vars = {}
         # keep a list of numpy Global variables to find numpy calls
@@ -221,7 +228,7 @@ class ArrayAnalysis(object):
                     call_name = self.numpy_calls[node.func.name]
                 elif node.func.name in self.array_attr_calls.keys():
                     call_name, arr = self.array_attr_calls[node.func.name]
-                    args.insert(0,arr)
+                    args.insert(0, arr)
                 if call_name is not 'NULL':
                     return self._analyze_np_call(call_name, args, dict(node.kws))
                 else:
@@ -331,7 +338,7 @@ class ArrayAnalysis(object):
                 out_corrs = []
             # asfortranarray converts 0-d to 1-d automatically
             if out_corrs==[] and call_name=='asfortranarray':
-                out_corrs = [0]
+                out_corrs = [CONST_CLASS]
             return out_corrs
         elif call_name=='reshape':
             #print("reshape args: ", args)
@@ -455,7 +462,7 @@ class ArrayAnalysis(object):
             ndims1 = self._get_ndims(in1)
             ndims2 = self._get_ndims(in2)
             c1 = self.array_shape_classes[in1][ndims1-1]
-            c2 = 0
+            c2 = UNKNOWN_CLASS
 
             if ndims2==1:
                 c2 = self.array_shape_classes[in2][0]
@@ -514,11 +521,11 @@ class ArrayAnalysis(object):
                 self.typemap[dummy_var.name] = self.typemap[arr.name].copy(ndim=3)
                 corrs = self.array_shape_classes[arr.name].copy()
                 if curr_dims==0:
-                    corrs = [0]*3
+                    corrs = [CONST_CLASS]*3
                 elif curr_dims==1: # Numpy adds both prepends and appends a dim
-                    corrs = [0]+corrs+[0]
+                    corrs = [CONST_CLASS]+corrs+[CONST_CLASS]
                 elif curr_dims==2: # append a dim
-                    corrs = corrs+[0]
+                    corrs = corrs+[CONST_CLASS]
                 self.array_shape_classes[dummy_var.name] = corrs
                 new_seq.append(dummy_var)
             else:
@@ -633,19 +640,19 @@ class ArrayAnalysis(object):
             if self._isarray(a):
                 eqs.append(copy.copy(self.array_shape_classes[a]))
             else:
-                eqs.append([0]) # constant variable
+                eqs.append([CONST_CLASS]) # constant variable
         ndims = max([len(e) for e in eqs])
         for e in eqs:
-            # prepend zeros to match shapes (broadcast rules)
+            # prepend size 1 dims to match shapes (broadcast rules)
             while len(e)<ndims:
-                e.insert(0,0)
+                e.insert(0, CONST_CLASS)
         out_eq = [-1 for i in range(ndims)]
 
         for i in range(ndims):
             c = eqs[0][i]
             for e in eqs:
-                if e[i]!=0 and e[i]!=c:
-                    if c==0:
+                if e[i]!=CONST_CLASS and e[i]!=c:
+                    if c==CONST_CLASS:
                         c = e[i]
                     else:
                         c = self._merge_classes(c, e[i])
@@ -668,10 +675,10 @@ class ArrayAnalysis(object):
 
     def _get_next_class_with_size(self, size):
         if isinstance(size, int) and size==1:
-            return 0
+            return CONST_CLASS
         if (isinstance(size, ir.Var) and size.name in self.constant_table
                 and self.constant_table[size.name]==1):
-            return 0
+            return CONST_CLASS
         new_class = self._get_next_class()
         self.class_sizes[new_class] = [size]
         return new_class
