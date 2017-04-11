@@ -162,7 +162,7 @@ class _EnvReloader(object):
         # Force dump of type annotation
         ANNOTATE = _readenv("NUMBA_DUMP_ANNOTATION", int, 0)
 
-        # Force dump of control flow graph
+        # Dump IR in such as way as to aid in "diff"ing.
         DIFF_IR = _readenv("NUMBA_DIFF_IR", int, 0)
 
         # Dump type annotation in html format

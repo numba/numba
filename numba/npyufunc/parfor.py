@@ -28,9 +28,9 @@ def _lower_parfor_parallel(lowerer, parfor):
        in the context of the current function.
     2) The body of the parfor is transformed into a gufunc function.
     3) Code is inserted into the main function that calls do_scheduling
-       to divide the iteration space for each thread, allocatees
+       to divide the iteration space for each thread, allocates
        reduction arrays, calls the gufunc function, and then invokes
-       the reduction function acorss the reduction arrays to produce
+       the reduction function across the reduction arrays to produce
        the final reduction values.
     """
     typingctx = lowerer.context.typing_context

@@ -490,7 +490,6 @@ class ArrayAnalysis(object):
                 c_out.append(self.array_shape_classes[in2][i])
             if ndims2>1:
                 c_out.append(self.array_shape_classes[in2][ndims2-1])
-            #print("dot class ",c_out)
             return c_out
         elif call_name in UFUNC_MAP_OP:
             return self._broadcast_and_match_shapes([a.name for a in args])

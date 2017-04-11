@@ -65,11 +65,11 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
     return out
 
 def get_np_ufunc_typ(func):
-    """get type variable for np.empty() from builtin registry"""
+    """get type of the incoming function from builtin registry"""
     for (k,v) in typing.npydecl.registry.globals:
         if k==func:
             return v
-    raise RuntimeError("empty() type not found")
+    raise RuntimeError("type for func ", func, " not found")
 
 def mk_range_block(typemap, size_var, calltypes, scope, loc):
     """make a block that initializes loop range and iteration variables.
