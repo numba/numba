@@ -268,14 +268,16 @@ class Expr(Inst):
     def __repr__(self):
         if self.op == 'call':
             args = ', '.join(str(a) for a in self.args)
-            kws = ', '.join('%s=%s' % (k, v) for k, v in (self._kws.items() if config.DIFF_IR == 0 else sorted(self._kws.items())))
+            pres_order = self._kws.items() if config.DIFF_IR == 0 else sorted(self._kws.items())
+            kws = ', '.join('%s=%s' % (k, v) for k, v in pres_order)
             vararg = '*%s' % (self.vararg,) if self.vararg is not None else ''
             arglist = ', '.join(filter(None, [args, vararg, kws]))
             return 'call %s(%s)' % (self.func, arglist)
         elif self.op == 'binop':
             return '%s %s %s' % (self.lhs, self.fn, self.rhs)
         else:
-            args = ('%s=%s' % (k, v) for k, v in (self._kws.items() if config.DIFF_IR == 0 else sorted(self._kws.items())))
+            pres_order = self._kws.items() if config.DIFF_IR == 0 else sorted(self._kws.items())
+            args = ('%s=%s' % (k, v) for k, v in pres_order)
             return '%s(%s)' % (self.op, ', '.join(args))
 
     def list_vars(self):
