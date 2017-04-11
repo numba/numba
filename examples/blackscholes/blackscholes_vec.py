@@ -1,6 +1,5 @@
 import numba
 import numpy as np
-# from scipy.special import erf
 import math
 import argparse
 import time
