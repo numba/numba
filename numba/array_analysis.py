@@ -327,8 +327,9 @@ class ArrayAnalysis(object):
             new_class1 = self._get_next_class_with_size(args[0].name)
             return [new_class1, new_class1]
         elif call_name=='diag':
-            # TODO: support optional k arg
-            if len(args)==1:
+            k = self._get_second_arg_or_kw(args, kws, 'k')
+            # TODO: support k other than 0 (other diagonal smaller size than main)
+            if k==0:
                 in_arr = args[0].name
                 in_class = self.array_shape_classes[in_arr][0]
                 # if 1D input v, create 2D output with v on diagonal
@@ -369,7 +370,7 @@ class ArrayAnalysis(object):
                 return [new_class1]
         elif call_name=='concatenate':
             # all dimensions of output are same as inputs, except axis
-            axis = self._get_axis_second_arg(args, kws)
+            axis = self._get_second_arg_or_kw(args, kws, 'axis')
             if axis==-1: # don't know shape if axis is not constant
                 return None
             arr_args = self._get_sequence_arrs(args[0].name)
@@ -393,7 +394,7 @@ class ArrayAnalysis(object):
             return out_eqs
         elif call_name=='stack':
             # all dimensions of output are same as inputs, but extra on axis
-            axis = self._get_axis_second_arg(args, kws)
+            axis = self._get_second_arg_or_kw(args, kws, 'axis')
             if axis==-1: # don't know shape if axis is not constant
                 return None
             arr_args = self._get_sequence_arrs(args[0].name)
@@ -498,17 +499,17 @@ class ArrayAnalysis(object):
             print("unknown numpy call:", call_name," ", args)
         return None
 
-    def _get_axis_second_arg(self, args, kws):
-        axis_var = None
+    def _get_second_arg_or_kw(self, args, kws, kw_name):
+        arg_var = None
         if len(args)>1:
-            axis_var = args[1].name
-        elif 'axis' in kws:
-            axis_var = kws['axis'].name
-        if axis_var is None:
-            return 0 # default axis is 0 if no arg
-        if axis_var in self.constant_table:
-            return self.constant_table[axis_var]
-        return -1 # axis var is not constant
+            arg_var = args[1].name
+        elif kw_name in kws:
+            arg_var = kws[kw_name].name
+        if arg_var is None:
+            return 0 # default value is 0 if no arg
+        if arg_var in self.constant_table:
+            return self.constant_table[arg_var]
+        return -1 # arg var is not constant
 
     def _get_sequence_arrs(self, seq_arg):
         """get array sequence input to concatenate, stack etc."""
