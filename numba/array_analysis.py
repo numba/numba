@@ -52,6 +52,10 @@ class ArrayAnalysis(object):
         self.constant_table = {}
 
     def run(self):
+        """run array shape analysis on the IR and save information in
+        array_shape_classes, class_sizes, and array_size_vars (see __init__
+        comments). May generate some array shape calls if necessary.
+        """
         dprint_func_ir(self.func_ir, "starting array analysis")
         if config.DEBUG_ARRAY_OPT==1:
             print("variable types: ",self.typemap)
@@ -67,6 +71,8 @@ class ArrayAnalysis(object):
             self.dump()
 
     def dump(self):
+        """dump save shape information and internals for debugging purposes.
+        """
         print("array_shape_classes: ", self.array_shape_classes)
         print("class_sizes: ", self.class_sizes)
         print("array_size_vars: ", self.array_size_vars)
