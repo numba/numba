@@ -8,12 +8,12 @@ run_parallel = numba.config.NUMBA_NUM_THREADS > 1
 
 @numba.vectorize(nopython=True)
 def cndf2(inp):
-    out = 0.5 + 0.5 * math.erf(0.707106781 * inp)
+    out = 0.5 + 0.5 * math.erf((math.sqrt(2.0)/2.0) * inp)
     return out
 
 @numba.njit(parallel=run_parallel)
 def blackscholes(sptprice, strike, rate, volatility, timev):
-    logterm = np.log10(sptprice / strike)
+    logterm = np.log(sptprice / strike)
     powterm = 0.5 * volatility * volatility
     den = volatility * np.sqrt(timev)
     d1 = (((rate + powterm) * timev) + logterm) / den
