@@ -239,6 +239,8 @@ class ArrayAnalysis(object):
                     return self._analyze_np_call(call_name, args, dict(node.kws))
                 else:
                     if config.DEBUG_ARRAY_OPT==1:
+                        # no need to raise since this is not a failure and
+                        # analysis can continue (might limit optimization later)
                         print("can't find shape for unknown call:", node)
                     return None
             elif node.op=='getattr' and self._isarray(node.value.name):
@@ -273,8 +275,12 @@ class ArrayAnalysis(object):
                     return copy.copy(self.array_shape_classes[val])
             else:
                 if config.DEBUG_ARRAY_OPT==1:
+                    # no need to raise since this is not a failure and
+                    # analysis can continue (might limit optimization later)
                     print("can't find shape classes for expr",node," of op",node.op)
         if config.DEBUG_ARRAY_OPT==1:
+            # no need to raise since this is not a failure and
+            # analysis can continue (might limit optimization later)
             print("can't find shape classes for node",node," of type ",type(node))
         return None
 
