@@ -459,10 +459,13 @@ def get_block_copies(blocks):
                     for lhs,rhs in gen_set:
                         assign_dict[lhs] = rhs
                     extra_kill[label] |= kill_set
-            if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Var):
+            if isinstance(stmt, ir.Assign):
                 lhs = stmt.target.name
-                rhs = stmt.value.name
-                assign_dict[lhs] = rhs
+                if isinstance(stmt.value, ir.Var):
+                    rhs = stmt.value.name
+                    assign_dict[lhs] = rhs
+                else:
+                    extra_kill[label].add(lhs)
         block_copies[label] = set(assign_dict.items())
     return block_copies, extra_kill
 
