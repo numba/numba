@@ -344,7 +344,7 @@ def remove_dead_block(block, lives, args):
         if isinstance(stmt, ir.Assign):
             lhs = stmt.target
             rhs = stmt.value
-            if lhs.name not in lives and has_no_side_effect(rhs):
+            if lhs.name not in lives and has_no_side_effect(rhs, lives):
                 continue
             if isinstance(rhs, ir.Var) and lhs.name==rhs.name:
                 continue
@@ -361,10 +361,12 @@ def remove_dead_block(block, lives, args):
     block.body = new_body
     return
 
-def has_no_side_effect(rhs):
+def has_no_side_effect(rhs, lives):
     # TODO: find side-effect free calls like Numpy calls
     if isinstance(rhs, ir.Expr) and rhs.op=='call':
         return False
+    if isinstance(rhs, ir.Expr) and rhs.op=='inplace_binop':
+        return rhs.lhs.name not in lives
     if isinstance(rhs, ir.Yield):
         return False
     return True
