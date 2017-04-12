@@ -421,7 +421,7 @@ class ParforPass(object):
             # into two assignment: acc_tmp = ... acc ...; x = acc_tmp
             # in order to avoid an issue in copy propagation.
             acc_tmp_var = ir.Var(scope, mk_unique_var("$acc"), loc)
-            self.typemap[acc_tmp_var.name] = in_typ
+            self.typemap[acc_tmp_var.name] = el_typ
             acc_block.body.append(ir.Assign(acc_call, acc_tmp_var, loc))
             acc_block.body.append(ir.Assign(acc_tmp_var, acc_var, loc))
             loop_body = { next_label() : acc_block }
