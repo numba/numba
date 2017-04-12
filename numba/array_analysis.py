@@ -673,8 +673,10 @@ class ArrayAnalysis(object):
         return out_eq
 
     def _isarray(self, varname):
-        return isinstance(self.typemap[varname],
-                          types.npytypes.Array)
+        # no SmartArrayType support yet (can't generate parfor, allocate, etc)
+        return (isinstance(self.typemap[varname], types.npytypes.Array) and
+                not isinstance(self.typemap[varname],
+                types.npytypes.SmartArrayType))
 
     def _add_array_corr(self, varname):
         assert varname not in self.array_shape_classes
