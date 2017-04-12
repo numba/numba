@@ -223,7 +223,7 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
         _init()
 
         # Build wrapper for ufunc entry point
-        ptr, env = build_gufunc_wrapper(self.py_func, cres, self.sin, self.sout,
+        ptr, env, wrapper_name = build_gufunc_wrapper(self.py_func, cres, self.sin, self.sout,
                                         cache=self.cache)
 
         # Get dtypes
@@ -242,15 +242,15 @@ def build_gufunc_wrapper(py_func, cres, sin, sout, cache):
     library = cres.library
     ctx = cres.target_context
     signature = cres.signature
-    innerfunc, env = ufuncbuilder.build_gufunc_wrapper(py_func, cres, sin, sout,
+    innerfunc, env, wrapper_name = ufuncbuilder.build_gufunc_wrapper(py_func, cres, sin, sout,
                                                        cache=cache)
     sym_in = set(sym for term in sin for sym in term)
     sym_out = set(sym for term in sout for sym in term)
     inner_ndim = len(sym_in | sym_out)
 
-    ptr = build_gufunc_kernel(library, ctx, innerfunc, signature, inner_ndim)
+    ptr, name = build_gufunc_kernel(library, ctx, innerfunc, signature, inner_ndim)
 
-    return ptr, env
+    return ptr, env, name
 
 
 def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
@@ -383,7 +383,7 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
 
     wrapperlib.add_ir_module(mod)
     wrapperlib.add_linking_library(library)
-    return wrapperlib.get_pointer_to_function(lfunc.name)
+    return wrapperlib.get_pointer_to_function(lfunc.name), lfunc.name
 
 
 # ---------------------------------------------------------------------------
