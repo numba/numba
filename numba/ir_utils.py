@@ -369,7 +369,7 @@ def has_no_side_effect(rhs):
         return False
     return True
 
-def copy_propagate(blocks):
+def copy_propagate(blocks, typemap):
     """compute copy propagation information for each block using fixed-point
      iteration on data flow equations:
      in_b = intersect(predec(B))
@@ -380,7 +380,7 @@ def copy_propagate(blocks):
 
     # format: dict of block labels to copies as tuples
     # label -> (l,r)
-    c_data = init_copy_propagate_data(blocks, entry)
+    c_data = init_copy_propagate_data(blocks, entry, typemap)
     (gen_copies, all_copies, kill_copies, in_copies, out_copies) = c_data
 
     old_point = None
@@ -405,12 +405,12 @@ def copy_propagate(blocks):
         print("copy propagate out_copies:", out_copies)
     return in_copies, out_copies
 
-def init_copy_propagate_data(blocks, entry):
+def init_copy_propagate_data(blocks, entry, typemap):
     """get initial condition of copy propagation data flow for each block.
     """
     # gen is all definite copies, extra_kill is additional ones that may hit
     # for example, parfors can have control flow so they may hit extra copies
-    gen_copies, extra_kill = get_block_copies(blocks)
+    gen_copies, extra_kill = get_block_copies(blocks, typemap)
     # set of all program copies
     all_copies = set()
     for l,s in gen_copies.items():
@@ -443,7 +443,7 @@ def init_copy_propagate_data(blocks, entry):
 # format: {type:function}
 copy_propagate_extensions = {}
 
-def get_block_copies(blocks):
+def get_block_copies(blocks, typemap):
     """get copies generated and killed by each block
     """
     block_copies = {}
@@ -455,7 +455,7 @@ def get_block_copies(blocks):
         for stmt in block.body:
             for T,f in copy_propagate_extensions.items():
                 if isinstance(stmt,T):
-                    gen_set, kill_set = f(stmt)
+                    gen_set, kill_set = f(stmt, typemap)
                     for lhs,rhs in gen_set:
                         assign_dict[lhs] = rhs
                     extra_kill[label] |= kill_set
@@ -463,9 +463,11 @@ def get_block_copies(blocks):
                 lhs = stmt.target.name
                 if isinstance(stmt.value, ir.Var):
                     rhs = stmt.value.name
-                    assign_dict[lhs] = rhs
-                else:
-                    extra_kill[label].add(lhs)
+                    # copy is valid only if same type (see TestCFunc.test_locals)
+                    if typemap[lhs]==typemap[rhs]:
+                        assign_dict[lhs] = rhs
+                        continue
+                extra_kill[label].add(lhs)
         block_copies[label] = set(assign_dict.items())
     return block_copies, extra_kill
 
@@ -494,7 +496,7 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, ext_func, ext_data,
             fix_setitem_type(stmt, typemap, calltypes)
             for T,f in copy_propagate_extensions.items():
                 if isinstance(stmt,T):
-                    gen_set, kill_set = f(stmt)
+                    gen_set, kill_set = f(stmt, typemap)
                     for lhs,rhs in gen_set:
                         var_dict[lhs] = name_var_table[rhs]
                     for l,r in var_dict.copy().items():
@@ -505,7 +507,11 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, ext_func, ext_data,
                 rhs = stmt.value.name
                 # rhs could be replaced with lhs from previous copies
                 if lhs!=rhs:
-                    var_dict[lhs] = name_var_table[rhs]
+                    # copy is valid only if same type (see TestCFunc.test_locals)
+                    if typemap[lhs]==typemap[rhs]:
+                        var_dict[lhs] = name_var_table[rhs]
+                    else:
+                        var_dict.pop(lhs, None)
                     # a=b kills previous t=a
                     lhs_kill = []
                     for k,v in var_dict.items():

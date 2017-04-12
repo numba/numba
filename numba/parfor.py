@@ -135,7 +135,7 @@ class ParforPass(object):
         remove_dels(self.func_ir.blocks)
         dprint_func_ir(self.func_ir, "after parfor pass")
         # get copies in to blocks and out from blocks
-        in_cps, out_cps = copy_propagate(self.func_ir.blocks)
+        in_cps, out_cps = copy_propagate(self.func_ir.blocks, self.typemap)
         # table mapping variable names to ir.Var objects to help replacement
         name_var_table = get_name_var_table(self.func_ir.blocks)
         apply_copy_propagate(self.func_ir.blocks, in_cps, name_var_table,
@@ -1140,11 +1140,11 @@ def unwrap_parfor_blocks(parfor):
     parfor.loop_body[last_label].body.pop() # remove dummy return
     return
 
-def get_copies_parfor(parfor):
+def get_copies_parfor(parfor, typemap):
     """find copies generated/killed by parfor"""
     blocks = wrap_parfor_blocks(parfor)
-    in_copies_parfor, out_copies_parfor = copy_propagate(blocks)
-    in_gen_copies, in_extra_kill = get_block_copies(blocks)
+    in_copies_parfor, out_copies_parfor = copy_propagate(blocks, typemap)
+    in_gen_copies, in_extra_kill = get_block_copies(blocks, typemap)
     unwrap_parfor_blocks(parfor)
 
     # parfor's extra kill is all possible gens and kills of it's loop
@@ -1169,7 +1169,7 @@ def apply_copies_parfor(parfor, var_dict, name_var_table, ext_func, ext_data,
         assign_list.append(ir.Assign(rhs, name_var_table[lhs_name],
             ir.Loc("dummy",-1)))
     blocks[0].body = assign_list+blocks[0].body
-    in_copies_parfor, out_copies_parfor = copy_propagate(blocks)
+    in_copies_parfor, out_copies_parfor = copy_propagate(blocks, typemap)
     apply_copy_propagate(blocks, in_copies_parfor, name_var_table, ext_func,
         ext_data, typemap, calltypes)
     unwrap_parfor_blocks(parfor)
