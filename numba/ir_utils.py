@@ -308,6 +308,7 @@ def remove_dead(blocks, args):
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
+    arg_aliases = find_potential_aliases(blocks, args)
 
     for label, block in blocks.items():
         # find live variables at each statement to delete dead assignment
@@ -316,8 +317,8 @@ def remove_dead(blocks, args):
         for out_blk, _data in cfg.successors(label):
             lives |= live_map[out_blk]
         if label in cfg.exit_points():
-            lives |= set(args)
-        remove_dead_block(block, lives, args)
+            lives |= arg_aliases
+        remove_dead_block(block, lives, arg_aliases)
     return
 
 # other packages that define new nodes add calls to remove dead code in them
@@ -370,6 +371,17 @@ def has_no_side_effect(rhs, lives):
     if isinstance(rhs, ir.Yield):
         return False
     return True
+
+def find_potential_aliases(blocks, args):
+    aliases = set(args)
+    for bl in blocks.values():
+        for instr in bl.body:
+            if isinstance(instr, ir.Assign):
+                expr = instr.value
+                lhs = instr.target.name
+                if isinstance(expr, ir.Var) and expr.name in aliases:
+                    aliases.add(lhs)
+    return aliases
 
 def copy_propagate(blocks, typemap):
     """compute copy propagation information for each block using fixed-point
