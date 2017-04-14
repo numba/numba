@@ -583,3 +583,9 @@ def find_topo_order(blocks):
     _dfs_rec(cfg.entry_point())
     post_order.reverse()
     return post_order
+
+def get_stmt_writes(stmt):
+    writes = set()
+    if isinstance(stmt, (ir.Assign, ir.SetItem, ir.StaticSetItem)):
+        writes.add(stmt.target.name)
+    return writes

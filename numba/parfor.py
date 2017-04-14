@@ -900,12 +900,15 @@ def maximize_fusion(blocks):
                 stmt = block.body[i]
                 next_stmt = block.body[i+1]
                 # swap only parfors with non-parfors
-                # if stmt hasn't written to any variable that next_stmt uses,
-                # they can be swapped
+                # only read-read dependencies are OK
+                # make sure there is no write-write, write-read dependencies
                 if isinstance(stmt, Parfor) and not isinstance(next_stmt, Parfor):
+                    stmt_accesses = {v.name for v in stmt.list_vars()}
                     stmt_writes = get_parfor_writes(stmt)
                     next_accesses = {v.name for v in next_stmt.list_vars()}
-                    if stmt_writes & next_accesses == set():
+                    next_writes = get_stmt_writes(next_stmt)
+                    if len((stmt_writes & next_accesses)
+                            | (next_writes & stmt_accesses))==0:
                         block.body[i] = next_stmt
                         block.body[i+1] = stmt
                         order_changed = True
@@ -919,9 +922,8 @@ def get_parfor_writes(parfor):
     blocks[-1] = parfor.init_block
     for block in blocks.values():
         for stmt in block.body:
-            if isinstance(stmt, (ir.Assign, ir.SetItem, ir.StaticSetItem)):
-                writes.add(stmt.target.name)
-            elif isinstance(stmt, Parfor):
+            writes.update(get_stmt_writes(stmt))
+            if isinstance(stmt, Parfor):
                 writes.update(get_parfor_writes(stmt))
     return writes
 
