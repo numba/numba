@@ -8,7 +8,7 @@ from .support import TestCase, override_config, captured_stdout, forbid_codegen
 from numba import unittest_support as unittest
 from numba import jit, jitclass, types
 from numba.compiler import compile_isolated
-
+from numba import compiler
 
 def simple_nopython(somearg):
     retval = somearg + 1
@@ -63,7 +63,8 @@ class DebugTestBase(TestCase):
 
     def _check_dump_llvm(self, out):
         self.assertIn('--LLVM DUMP', out)
-        self.assertIn('%"retval" = alloca', out)
+        if compiler.Flags.OPTIONS['auto_parallel'] == False:
+            self.assertIn('%"retval" = alloca', out)
 
     def _check_dump_func_opt_llvm(self, out):
         self.assertIn('--FUNCTION OPTIMIZED DUMP %s' % self.func_name, out)
