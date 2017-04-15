@@ -10,7 +10,6 @@ from numba.controlflow import CFGraph
 from numba.typing import npydecl
 from numba.types.functions import Function
 import numpy as np
-import numba.parfor
 # circular dependency: import numba.npyufunc.dufunc.DUFunc
 
 _reduction_ops = {

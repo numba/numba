@@ -2,20 +2,13 @@ from __future__ import print_function, division, absolute_import
 
 import ast
 from collections import defaultdict, OrderedDict
-import contextlib
 import sys
 
-import numpy as np
-
-from .. import compiler, ir, types, rewrites, six, cgutils, sigutils
+from .. import compiler, ir, types, six, cgutils, sigutils
 from numba.ir_utils import *
-from ..typing import npydecl, signature
-from ..targets import npyimpl, imputils
-from .dufunc import DUFunc
-from .array_exprs import _is_ufunc, _unaryops, _binops, _cmpops
+from ..typing import signature
 from numba import config
 import llvmlite.llvmpy.core as lc
-from numba.parfor import LoopNest
 import numba
 import copy
 
