@@ -9,6 +9,18 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 #include "workqueue.h"
 #include "../_pymodule.h"
 
+#if TBB_INTERFACE_VERSION >= 9106
+    #define TSI_INIT(count) tbb::task_scheduler_init(count)
+    #define TSI_TERMINATE(tsi) tsi->blocking_terminate(std::nothrow)
+#else
+#if __TBB_SUPPORTS_WORKERS_WAITING_IN_TERMINATE
+    #define TSI_INIT(count) tbb::task_scheduler_init(count, 0, /*blocking termination*/true)
+    #define TSI_TERMINATE(tsi) tsi->terminate()
+#else
+#error This version of TBB does not support blocking terminate
+#endif
+#endif
+
 static tbb::task_group *tg = NULL;
 static tbb::task_scheduler_init *tsi = NULL;
 static int tsi_count = 0;
@@ -31,7 +43,7 @@ static void prepare_fork(void) {
     //puts("Suspending TBB: prepare fork");
     if(tsi) {
         assertion_handler_type orig = tbb::set_assertion_handler(ignore_blocking_terminate_assertion);
-        tsi->terminate();
+        TSI_TERMINATE(tsi);
         tbb::set_assertion_handler(orig);
     }
 }
@@ -48,7 +60,7 @@ static void unload_tbb(void) {
         tg = NULL;
         //puts("Unloading TBB");
         assertion_handler_type orig = tbb::set_assertion_handler(ignore_assertion);
-        tsi->terminate();
+        TSI_TERMINATE(tsi);
         tbb::set_assertion_handler(orig);
         delete tsi;
         tsi = NULL;
@@ -60,11 +72,7 @@ static void launch_threads(int count) {
         return;
     if(count < 1)
         count = tbb::task_scheduler_init::automatic;
-#if __TBB_SUPPORTS_WORKERS_WAITING_IN_TERMINATE
-    tsi = new tbb::task_scheduler_init(tsi_count = count, 0, /*blocking termination*/true);
-#else
-#error This version of TBB does not support blocking terminate or implements it differently
-#endif
+    tsi = new TSI_INIT(tsi_count = count);
     tg = new tbb::task_group;
     tg->run([]{}); // start creating threads asynchronously
 
