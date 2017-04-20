@@ -176,10 +176,8 @@ cos_impl = unary_math_intr(math.cos, lc.INTR_COS)
 
 log1p_impl = unary_math_extern(math.log1p, "log1pf", "log1p")
 expm1_impl = unary_math_extern(math.expm1, "expm1f", "expm1")
-unary_math_extern(math.erf, "numba_erff", "numba_erf")
-unary_math_extern(math.erfc, "numba_erfcf", "numba_erfc")
-unary_math_extern(math.gamma, "numba_gammaf", "numba_gamma")
-unary_math_extern(math.lgamma, "numba_lgammaf", "numba_lgamma")
+erf_impl = unary_math_extern(math.erf, "erff", "erf")
+erfc_impl = unary_math_extern(math.erfc, "erfcf", "erfc")
 
 tan_impl = unary_math_extern(math.tan, "tanf", "tan")
 asin_impl = unary_math_extern(math.asin, "asinf", "asin")
@@ -195,13 +193,17 @@ tanh_impl = unary_math_extern(math.tanh, "tanhf", "tanh")
 
 # math.floor and math.ceil return float on 2.x, int on 3.x
 if utils.PYVERSION > (3, 0):
-    unary_math_extern(math.ceil, "ceilf", "ceil", True)
-    unary_math_extern(math.floor, "floorf", "floor", True)
+    log2_impl = unary_math_extern(math.log2, "log2f", "log2")
+    ceil_impl = unary_math_extern(math.ceil, "ceilf", "ceil", True)
+    floor_impl = unary_math_extern(math.floor, "floorf", "floor", True)
+    gamma_impl = unary_math_extern(math.gamma, "gammaf", "gamma")
 else:
-    unary_math_extern(math.ceil, "ceilf", "ceil")
-    unary_math_extern(math.floor, "floorf", "floor")
+    ceil_impl = unary_math_extern(math.ceil, "ceilf", "ceil")
+    floor_impl = unary_math_extern(math.floor, "floorf", "floor")
+    gamma_impl = unary_math_extern(math.gamma, "numba_gammaf", "numba_gamma") # work-around
 sqrt_impl = unary_math_extern(math.sqrt, "sqrtf", "sqrt")
-unary_math_extern(math.trunc, "truncf", "trunc", True)
+trunc_impl = unary_math_extern(math.trunc, "truncf", "trunc", True)
+lgamma_impl = unary_math_extern(math.lgamma, "lgammaf", "lgamma")
 
 
 @lower(math.isnan, types.Float)
