@@ -2,7 +2,7 @@ from __future__ import print_function, absolute_import, division
 
 import numpy as np
 
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, skip_on_cudasim
 from numba import cuda, jit
 from numba.errors import TypingError
 
@@ -70,6 +70,8 @@ class TestDeviceFunc(unittest.TestCase):
 
         self._check_cpu_dispatcher(add)
 
+    @skip_on_cudasim('not supported in cudasim')
+    def test_cpu_dispatcher_invalid(self):
         # Test invalid usage
         # Explicit signature disables compilation, which also disable
         # compiling on CUDA.
