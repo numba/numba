@@ -17,21 +17,9 @@ not_linux = not sys.platform.startswith('linux')
 has_mp_get_context = hasattr(mp, 'get_context')
 
 
-def core_ipc_handle_test(make_handle, result_queue):
+def core_ipc_handle_test(the_work, result_queue):
     try:
-        handle = make_handle()
-        size = handle.size
-        dptr = handle.open(cuda.current_context())
-        # read the device pointer as an array
-        dtype = np.dtype(np.intp)
-        darr = devicearray.DeviceNDArray(shape=(size // dtype.itemsize,),
-                                         strides=(dtype.itemsize,),
-                                         dtype=dtype,
-                                         gpu_data=dptr)
-        # copy the data to host
-        arr = darr.copy_to_host()
-        del darr, dptr
-        handle.close()
+        arr = the_work()
     except:
         # FAILED. propagate the exception as a string
         succ = False
@@ -43,19 +31,29 @@ def core_ipc_handle_test(make_handle, result_queue):
     result_queue.put((succ, out))
 
 
-def base_ipc_handle_test(handle_array, size, result_queue):
-    def make_handle():
-        # manually recreate the IPC mem handle
-        handle = drvapi.cu_ipc_mem_handle(*handle_array)
-        # use *IpcHandle* to open the IPC memory
-        handle = cuda.driver.IpcHandle(None, handle, size)
-        return handle
+def base_ipc_handle_test(handle, size, result_queue):
+    def the_work():
+        dtype = np.dtype(np.intp)
+        with cuda.open_ipc_array(handle, shape=size // dtype.itemsize,
+                                 dtype=dtype) as darr:
+            # copy the data to host
+            return darr.copy_to_host()
 
-    return core_ipc_handle_test(make_handle, result_queue)
+    core_ipc_handle_test(the_work, result_queue)
 
 
 def serialize_ipc_handle_test(handle, result_queue):
-    return core_ipc_handle_test(lambda: handle, result_queue)
+    def the_work():
+        dtype = np.dtype(np.intp)
+        darr = handle.open_array(cuda.current_context(),
+                                 shape=handle.size // dtype.itemsize,
+                                 dtype=dtype)
+        # copy the data to host
+        arr = darr.copy_to_host()
+        handle.close()
+        return arr
+
+    core_ipc_handle_test(the_work, result_queue)
 
 
 def ipc_array_test(ipcarr, result_queue):
@@ -64,7 +62,7 @@ def ipc_array_test(ipcarr, result_queue):
             arr = darr.copy_to_host()
             try:
                 # should fail to reopen
-                with ipcarr as darr2:
+                with ipcarr:
                     pass
             except ValueError as e:
                 if str(e) != 'IpcHandle is already opened':
@@ -96,14 +94,14 @@ class TestIpcMemory(CUDATestCase):
         ctx = cuda.current_context()
         ipch = ctx.get_ipc_handle(devarr.gpu_data)
 
-        # manually prepare for serialization (as ndarray)
-        handle_array = tuple(ipch.handle)
+        # manually prepare for serialization as bytes
+        handle_bytes = bytes(ipch.handle)
         size = ipch.size
 
         # spawn new process for testing
         ctx = mp.get_context('spawn')
         result_queue = ctx.Queue()
-        args = (handle_array, size, result_queue)
+        args = (handle_bytes, size, result_queue)
         proc = ctx.Process(target=base_ipc_handle_test, args=args)
         proc.start()
         succ, out = result_queue.get()
@@ -162,7 +160,7 @@ class TestIpcMemory(CUDATestCase):
         proc.join(3)
 
 
-@unittest.skipUnless(not_linux, "IPC only supported on Linux")
+@unittest.skipUnless(not_linux, "Only on OS other than Linux")
 @skip_on_cudasim('Ipc not available in CUDASIM')
 class TestIpcNotSupported(CUDATestCase):
     def test_unsupported(self):

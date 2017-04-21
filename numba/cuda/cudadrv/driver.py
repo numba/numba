@@ -933,6 +933,9 @@ class IpcHandle(object):
         self._opened_mem = None
 
     def open(self, context):
+        """
+        Import the IPC memory and returns a raw CUDA memory pointer object
+        """
         if self.base is not None:
             raise ValueError('opening IpcHandle from original process')
 
@@ -941,8 +944,24 @@ class IpcHandle(object):
 
         mem = context.open_ipc_handle(self.handle, self.size)
         # this object owns the opened allocation
+        # note: it is required the memory be freed after the ipc handle is
+        #       closed by the importing context.
         self._opened_mem = mem
         return mem.own()
+
+    def open_array(self, context, shape, dtype, strides=None):
+        """
+        Simliar to `.open()` but returns an device array.
+        """
+        from . import devicearray
+
+        # by default, set strides to itemsize
+        if strides is None:
+            strides = dtype.itemsize
+        dptr = self.open(context)
+        # read the device pointer as an array
+        return devicearray.DeviceNDArray(shape=shape, strides=strides,
+                                         dtype=dtype, gpu_data=dptr)
 
     def close(self):
         if self._opened_mem is None:
