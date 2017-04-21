@@ -5,7 +5,7 @@ Just-in-Time compilation
 JIT functions
 -------------
 
-.. decorator:: numba.jit(signature=None, nopython=False, nogil=False, cache=False, forceobj=False, locals={})
+.. decorator:: numba.jit(signature=None, nopython=False, nogil=False, cache=False, forceobj=False, error_model='python', locals={})
 
    Compile the decorated function on-the-fly to produce efficient machine
    code.  All parameters all optional.
@@ -66,6 +66,10 @@ JIT functions
    allowed to write to it, though, it falls back to a platform-specific
    user-wide cache directory (such as ``$HOME/.cache/numba`` on Unix
    platforms).
+
+   The *error_model* option controls the divide-by-zero behavior.
+   Setting it to 'python' causes divide-by-zero to raise exception like CPython.
+   Setting it to 'numpy' causes divide-by-zero to set the result to NaN.
 
    Not all functions can be cached, since some functionality cannot be
    always persisted to disk.  When a function cannot be cached, a

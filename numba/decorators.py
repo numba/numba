@@ -40,7 +40,7 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
 def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **options):
     """
     This decorator is used to compile a Python function into native code.
-    
+
     Args
     -----
     signature:
@@ -58,7 +58,7 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **opti
         Specifies the target platform to compile for. Valid targets are cpu,
         gpu, npyufunc, and cuda. Defaults to cpu.
 
-    targetoptions:
+    options:
         For a cpu target, valid options are:
             nopython: bool
                 Set to True to disable the use of PyObjects and Python API
@@ -76,6 +76,11 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **opti
                 tight loops in the function can still be compiled in nopython
                 mode. Any arrays that the tight loop uses should be created
                 before the loop is entered. Default value is True.
+
+            error_model: str
+                The error-model affects divide-by-zero behavior.
+                Valid values are 'python' and 'numpy'. The 'python' model
+                raises exception.  The 'numpy' model sets the result to NaN.
 
     Returns
     --------
