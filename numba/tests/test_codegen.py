@@ -4,6 +4,7 @@ Tests for numba.targets.codegen.
 
 from __future__ import print_function
 
+import warnings
 import base64
 import ctypes
 import pickle
@@ -145,6 +146,45 @@ class JITCPUCodegenTestCase(TestCase):
         library.enable_object_caching()
         state = library.serialize_using_object_code()
         self._check_unserialize_other_process(state)
+
+    def test_cache_disabled_inspection(self):
+        """
+        """
+        library = self.compile_module(asm_sum_outer, asm_sum_inner)
+        library.enable_object_caching()
+        state = library.serialize_using_object_code()
+
+        # exercise the valid behavior
+        with warnings.catch_warnings(record=True) as w:
+            old_llvm = library.get_llvm_str()
+            old_asm = library.get_asm_str()
+            library.get_function_cfg('sum')
+        self.assertEqual(len(w), 0)
+
+        # unserialize
+        codegen = JITCPUCodegen('other_codegen')
+        library = codegen.unserialize_library(state)
+
+        # the inspection methods would warn and give incorrect result
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            self.assertNotEqual(old_llvm, library.get_llvm_str())
+        self.assertEqual(len(w), 1)
+        self.assertIn("Inspection disabled", str(w[0].message))
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            self.assertNotEqual(library.get_asm_str(), old_asm)
+        self.assertEqual(len(w), 1)
+        self.assertIn("Inspection disabled", str(w[0].message))
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            with self.assertRaises(NameError) as raises:
+                library.get_function_cfg('sum')
+        self.assertEqual(len(w), 1)
+        self.assertIn("Inspection disabled", str(w[0].message))
+        self.assertIn("sum", str(raises.exception))
 
     # Lifetime tests
 
