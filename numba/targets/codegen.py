@@ -121,6 +121,7 @@ class CodeLibrary(object):
         Internal: optimize this library's final module.
         """
         self._codegen._mpm.run(self._final_module)
+        self._final_module = remove_redundant_nrt_refct(self._final_module)
 
     def _get_module_for_linking(self):
         """
