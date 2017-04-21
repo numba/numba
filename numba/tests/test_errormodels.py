@@ -1,6 +1,7 @@
 """
 Test setting/overriding error models
 """
+from __future__ import division
 
 from numba import jit
 from numba import unittest_support as unittest
@@ -13,7 +14,7 @@ class TestErrorModel(unittest.TestCase):
         def model_python(val):
             return 1 / val
 
-        with self.assertRaises(ZeroDivisionError) as raises:
+        with self.assertRaises(ZeroDivisionError):
             model_python(0)
 
     def test_div_by_zero_numpy(self):
