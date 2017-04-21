@@ -80,7 +80,8 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **opti
             error_model: str
                 The error-model affects divide-by-zero behavior.
                 Valid values are 'python' and 'numpy'. The 'python' model
-                raises exception.  The 'numpy' model sets the result to NaN.
+                raises exception.  The 'numpy' model sets the result to
+                *+/-inf* or *nan*.
 
     Returns
     --------

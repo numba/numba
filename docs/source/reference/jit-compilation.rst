@@ -69,7 +69,8 @@ JIT functions
 
    The *error_model* option controls the divide-by-zero behavior.
    Setting it to 'python' causes divide-by-zero to raise exception like CPython.
-   Setting it to 'numpy' causes divide-by-zero to set the result to NaN.
+   Setting it to 'numpy' causes divide-by-zero to set the result to *+/-inf* or
+   *nan*.
 
    Not all functions can be cached, since some functionality cannot be
    always persisted to disk.  When a function cannot be cached, a
