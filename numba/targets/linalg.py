@@ -551,6 +551,27 @@ def vdot(context, builder, sig, args):
         return dot_2_vv(context, builder, sig, args, conjugate=True)
 
 
+def dot_3_vm_check_args(a, b, out):
+    m, = a.shape
+    _m, n = b.shape
+    if m != _m:
+        raise ValueError("incompatible array sizes for "
+                         "np.dot(a, b) (vector * matrix)")
+    if out.shape != (n,):
+        raise ValueError("incompatible output array size for "
+                         "np.dot(a, b, out) (vector * matrix)")
+
+
+def dot_3_mv_check_args(a, b, out):
+    m, _n = a.shape
+    n, = b.shape
+    if n != _n:
+        raise ValueError("incompatible array sizes for np.dot(a, b) "
+                         "(matrix * vector)")
+    if out.shape != (m,):
+        raise ValueError("incompatible output array size for "
+                         "np.dot(a, b, out) (matrix * vector)")
+
 def dot_3_vm(context, builder, sig, args):
     """
     np.dot(vector, matrix, out)
@@ -573,16 +594,9 @@ def dot_3_vm(context, builder, sig, args):
         m_shapes = y_shapes
         do_trans = yty.layout == 'F'
         m_data, v_data = y.data, x.data
+        check_args = dot_3_vm_check_args
 
-        def check_args(a, b, out):
-            m, = a.shape
-            _m, n = b.shape
-            if m != _m:
-                raise ValueError("incompatible array sizes for "
-                                 "np.dot(a, b) (vector * matrix)")
-            if out.shape != (n,):
-                raise ValueError("incompatible output array size for "
-                                 "np.dot(a, b, out) (vector * matrix)")
+
     else:
         # Matrix * vector
         # We will compute x * y
@@ -590,16 +604,8 @@ def dot_3_vm(context, builder, sig, args):
         m_shapes = x_shapes
         do_trans = xty.layout == 'C'
         m_data, v_data = x.data, y.data
+        check_args = dot_3_mv_check_args
 
-        def check_args(a, b, out):
-            m, _n = a.shape
-            n, = b.shape
-            if n != _n:
-                raise ValueError("incompatible array sizes for np.dot(a, b) "
-                                 "(matrix * vector)")
-            if out.shape != (m,):
-                raise ValueError("incompatible output array size for "
-                                 "np.dot(a, b, out) (matrix * vector)")
 
     context.compile_internal(builder, check_args,
                              signature(types.none, *sig.args), args)

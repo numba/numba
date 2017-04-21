@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import warnings
 import functools
 import locale
 import weakref
@@ -65,6 +66,7 @@ class CodeLibrary(object):
 
     _finalized = False
     _object_caching_enabled = False
+    _disable_inspection = False
 
     def __init__(self, codegen, name):
         self._codegen = codegen
@@ -121,6 +123,7 @@ class CodeLibrary(object):
         Internal: optimize this library's final module.
         """
         self._codegen._mpm.run(self._final_module)
+        self._final_module = remove_redundant_nrt_refct(self._final_module)
 
     def _get_module_for_linking(self):
         """
@@ -270,22 +273,30 @@ class CodeLibrary(object):
     def get_function(self, name):
         return self._final_module.get_function(name)
 
+    def _sentry_cache_disable_inspection(self):
+        if self._disable_inspection:
+            warnings.warn('Inspection disabled for cached code. '
+                          'Invalid result is returned.')
+
     def get_llvm_str(self):
         """
         Get the human-readable form of the LLVM module.
         """
+        self._sentry_cache_disable_inspection()
         return str(self._final_module)
 
     def get_asm_str(self):
         """
         Get the human-readable assembly.
         """
+        self._sentry_cache_disable_inspection()
         return str(self._codegen._tm.emit_assembly(self._final_module))
 
     def get_function_cfg(self, name):
         """
         Get control-flow graph of the LLVM function
         """
+        self._sentry_cache_disable_inspection()
         fn = self.get_function(name)
         dot = ll.get_function_cfg(fn)
         return _CFG(dot)
@@ -312,6 +323,7 @@ class CodeLibrary(object):
         if self._compiled:
             raise ValueError("library already compiled: %s" % (self,))
         self._compiled_object = value
+        self._disable_inspection = True
 
     @classmethod
     def _dump_elf(cls, buf):

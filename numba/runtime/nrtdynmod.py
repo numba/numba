@@ -47,6 +47,8 @@ def _define_nrt_incref(module, atomic_incr):
     """
     fn_incref = module.get_or_insert_function(incref_decref_ty,
                                               name="NRT_incref")
+    # Cannot inline this for refcount pruning to work
+    fn_incref.attributes.add('noinline')
     builder = ir.IRBuilder(fn_incref.append_basic_block())
     [ptr] = fn_incref.args
     is_null = builder.icmp_unsigned("==", ptr, cgutils.get_null_value(ptr.type))
@@ -66,6 +68,8 @@ def _define_nrt_decref(module, atomic_decr):
     """
     fn_decref = module.get_or_insert_function(incref_decref_ty,
                                               name="NRT_decref")
+    # Cannot inline this for refcount pruning to work
+    fn_decref.attributes.add('noinline')
     calldtor = module.add_function(ir.FunctionType(ir.VoidType(), [_pointer_type]),
                                    name="NRT_MemInfo_call_dtor")
 

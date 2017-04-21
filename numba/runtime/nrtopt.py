@@ -9,7 +9,7 @@ import numba.llvmthreadsafe as llvmts
 
 _regex_incref = re.compile(r'\s*call void @NRT_incref\((.*)\)')
 _regex_decref = re.compile(r'\s*call void @NRT_decref\((.*)\)')
-_regex_bb = re.compile(r'([-a-zA-Z$._][-a-zA-Z$._0-9]*:)|^define')
+_regex_bb = re.compile(r'([\'"]?[-a-zA-Z$._][-a-zA-Z$._0-9]*[\'"]?:)|^define')
 
 
 def remove_redundant_nrt_refct(ll_module):
@@ -93,14 +93,20 @@ def remove_redundant_nrt_refct(ll_module):
     def _prune_redundant_refct_ops(bb_lines):
         incref_map = defaultdict(deque)
         decref_map = defaultdict(deque)
+        to_remove = set()
         for num, incref_var, decref_var in _examine_refct_op(bb_lines):
             assert not (incref_var and decref_var)
             if incref_var:
-                incref_map[incref_var].append(num)
+                if incref_var == 'i8* null':
+                    to_remove.add(num)
+                else:
+                    incref_map[incref_var].append(num)
             elif decref_var:
-                decref_map[decref_var].append(num)
+                if decref_var == 'i8* null':
+                    to_remove.add(num)
+                else:
+                    decref_map[decref_var].append(num)
 
-        to_remove = set()
         for var, decops in decref_map.items():
             incops = incref_map[var]
             ct = min(len(incops), len(decops))
