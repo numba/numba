@@ -394,8 +394,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         """
         assert not kws, "kwargs not handled"
         args = [self.typeof_pyval(a) for a in args]
-        msg = ("No matching definition for argument type(s) %s"
-               % ', '.join(map(str, args)))
+        msg = ("No matching definition for argument type(s) %s\ncompiled signatures %s"
+               % (', '.join(map(str, args)), self.signatures))
         raise TypeError(msg)
 
     def _search_new_conversions(self, *args, **kws):
