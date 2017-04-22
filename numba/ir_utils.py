@@ -32,7 +32,8 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
             # tuple_var = build_tuple([size_var...])
             ndims = len(size_var)
             tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
-            typemap[tuple_var.name] = types.containers.UniTuple(types.intp, ndims)
+            if typemap:
+                typemap[tuple_var.name] = types.containers.UniTuple(types.intp, ndims)
             tuple_call = ir.Expr.build_tuple(list(size_var), loc)
             tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
             out.append(tuple_assign)
@@ -40,23 +41,27 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
             size_typ = types.containers.UniTuple(types.intp, ndims)
     # g_np_var = Global(numpy)
     g_np_var = ir.Var(scope, mk_unique_var("$np_g_var"), loc)
-    typemap[g_np_var.name] = types.misc.Module(numpy)
+    if typemap:
+        typemap[g_np_var.name] = types.misc.Module(numpy)
     g_np = ir.Global('np', numpy, loc)
     g_np_assign = ir.Assign(g_np, g_np_var, loc)
     # attr call: empty_attr = getattr(g_np_var, empty)
     empty_attr_call = ir.Expr.getattr(g_np_var, "empty", loc)
     attr_var = ir.Var(scope, mk_unique_var("$empty_attr_attr"), loc)
-    typemap[attr_var.name] = get_np_ufunc_typ(numpy.empty)
+    if typemap:
+        typemap[attr_var.name] = get_np_ufunc_typ(numpy.empty)
     attr_assign = ir.Assign(empty_attr_call, attr_var, loc)
     # alloc call: lhs = empty_attr(size_var, typ_var)
     typ_var = ir.Var(scope, mk_unique_var("$np_typ_var"), loc)
-    typemap[typ_var.name] = types.functions.NumberClass(dtype)
+    if typemap:
+        typemap[typ_var.name] = types.functions.NumberClass(dtype)
     # assuming str(dtype) returns valid np dtype string
     np_typ_getattr = ir.Expr.getattr(g_np_var, str(dtype), loc)
     typ_var_assign = ir.Assign(np_typ_getattr, typ_var, loc)
     alloc_call = ir.Expr.call(attr_var, [size_var, typ_var], (), loc)
-    calltypes[alloc_call] = typemap[attr_var.name].get_call_type(
-        typing.Context(), [size_typ, types.functions.NumberClass(dtype)], {})
+    if calltypes:
+        calltypes[alloc_call] = typemap[attr_var.name].get_call_type(
+            typing.Context(), [size_typ, types.functions.NumberClass(dtype)], {})
     #signature(
     #    types.npytypes.Array(dtype, ndims, 'C'), size_typ,
     #    types.functions.NumberClass(dtype))
