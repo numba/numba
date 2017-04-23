@@ -223,7 +223,14 @@ def init_xoroshiro128p_states_kernel(states, seed, subsequence_start):
 def init_xoroshiro128p_states(states, seed, subsequence_start=0, stream=0):
     '''Initialize RNG states on the GPU for parallel generators.
     
-    This intializes the RNG states 
+    This intializes the RNG states so that each state in the array corresponds
+    subsequences in the separated by 2**64 steps from each other in the main
+    sequence.  Therefore, as long no CUDA thread requests more than 2**64 random
+    numbers, all of the RNG states produced by this function are guaranteed to
+    be independent.
+
+    The subsequence_start parameter can be used to advance the first RNG state
+    by a multiple of 2**64 steps.
 
     Parameters
     ----------
@@ -242,7 +249,14 @@ def init_xoroshiro128p_states(states, seed, subsequence_start=0, stream=0):
 def create_xoroshiro128p_states(n, seed, subsequence_start=0, stream=0):
     '''Returns a new device array initialized for n random number generators.
     
-    This intializes the RNG states 
+    This intializes the RNG states so that each state in the array corresponds
+    subsequences in the separated by 2**64 steps from each other in the main
+    sequence.  Therefore, as long no CUDA thread requests more than 2**64 random
+    numbers, all of the RNG states produced by this function are guaranteed to
+    be independent.
+
+    The subsequence_start parameter can be used to advance the first RNG state
+    by a multiple of 2**64 steps.
 
     Parameters
     ----------
