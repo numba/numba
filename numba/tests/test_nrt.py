@@ -10,6 +10,7 @@ from numba import unittest_support as unittest
 from numba import njit
 from numba.compiler import compile_isolated, Flags, types
 from numba.runtime import rtsys
+from numba.runtime import nrtopt
 from .support import MemoryLeakMixin, TestCase
 
 enable_nrt_flags = Flags()
@@ -327,6 +328,112 @@ class TestNRTIssue(MemoryLeakMixin, TestCase):
         got = udt(a, 1, 6)
 
         self.assertEqual(expect, got)
+
+
+class TestRefCtPruning(unittest.TestCase):
+
+    sample_llvm_ir = '''
+define i32 @"MyFunction"(i8** noalias nocapture %retptr, { i8*, i32 }** noalias nocapture %excinfo, i8* noalias nocapture readnone %env, double %arg.vt.0, double %arg.vt.1, double %arg.vt.2, double %arg.vt.3, double %arg.bounds.0, double %arg.bounds.1, double %arg.bounds.2, double %arg.bounds.3, i8* %arg.xs.0, i8* nocapture readnone %arg.xs.1, i64 %arg.xs.2, i64 %arg.xs.3, double* nocapture readonly %arg.xs.4, i64 %arg.xs.5.0, i64 %arg.xs.6.0, i8* %arg.ys.0, i8* nocapture readnone %arg.ys.1, i64 %arg.ys.2, i64 %arg.ys.3, double* nocapture readonly %arg.ys.4, i64 %arg.ys.5.0, i64 %arg.ys.6.0, i8* %arg.aggs_and_cols.0.0, i8* nocapture readnone %arg.aggs_and_cols.0.1, i64 %arg.aggs_and_cols.0.2, i64 %arg.aggs_and_cols.0.3, i32* nocapture %arg.aggs_and_cols.0.4, i64 %arg.aggs_and_cols.0.5.0, i64 %arg.aggs_and_cols.0.5.1, i64 %arg.aggs_and_cols.0.6.0, i64 %arg.aggs_and_cols.0.6.1) local_unnamed_addr {
+entry:
+tail call void @NRT_incref(i8* %arg.xs.0)
+tail call void @NRT_incref(i8* %arg.ys.0)
+tail call void @NRT_incref(i8* %arg.aggs_and_cols.0.0)
+%.251 = icmp sgt i64 %arg.xs.5.0, 0
+br i1 %.251, label %B42.preheader, label %B160
+
+B42.preheader:                                    ; preds = %entry
+%0 = add i64 %arg.xs.5.0, 1
+br label %B42
+
+B42:                                              ; preds = %B40.backedge, %B42.preheader
+%lsr.iv3 = phi i64 [ %lsr.iv.next, %B40.backedge ], [ %0, %B42.preheader ]
+%lsr.iv1 = phi double* [ %scevgep2, %B40.backedge ], [ %arg.xs.4, %B42.preheader ]
+%lsr.iv = phi double* [ %scevgep, %B40.backedge ], [ %arg.ys.4, %B42.preheader ]
+%.381 = load double, double* %lsr.iv1, align 8
+%.420 = load double, double* %lsr.iv, align 8
+%.458 = fcmp ole double %.381, %arg.bounds.1
+%not..432 = fcmp oge double %.381, %arg.bounds.0
+%"$phi82.1.1" = and i1 %.458, %not..432
+br i1 %"$phi82.1.1", label %B84, label %B40.backedge
+
+B84:                                              ; preds = %B42
+%.513 = fcmp ole double %.420, %arg.bounds.3
+%not..487 = fcmp oge double %.420, %arg.bounds.2
+%"$phi106.1.1" = and i1 %.513, %not..487
+br i1 %"$phi106.1.1", label %B108.endif.endif.endif, label %B40.backedge
+
+B160:                                             ; preds = %B40.backedge, %entry
+tail call void @NRT_decref(i8* %arg.ys.0)
+tail call void @NRT_decref(i8* %arg.xs.0)
+tail call void @NRT_decref(i8* %arg.aggs_and_cols.0.0)
+store i8* null, i8** %retptr, align 8
+ret i32 0
+
+B108.endif.endif.endif:                           ; preds = %B84
+%.575 = fmul double %.381, %arg.vt.0
+%.583 = fadd double %.575, %arg.vt.1
+%.590 = fptosi double %.583 to i64
+%.630 = fmul double %.420, %arg.vt.2
+%.638 = fadd double %.630, %arg.vt.3
+%.645 = fptosi double %.638 to i64
+tail call void @NRT_incref(i8* %arg.aggs_and_cols.0.0)              ; GONE 1
+tail call void @NRT_decref(i8* null)                                ; GONE 2
+tail call void @NRT_incref(i8* %arg.aggs_and_cols.0.0), !noalias !0 ; GONE 3
+%.62.i.i = icmp slt i64 %.645, 0
+%.63.i.i = select i1 %.62.i.i, i64 %arg.aggs_and_cols.0.5.0, i64 0
+%.64.i.i = add i64 %.63.i.i, %.645
+%.65.i.i = icmp slt i64 %.590, 0
+%.66.i.i = select i1 %.65.i.i, i64 %arg.aggs_and_cols.0.5.1, i64 0
+%.67.i.i = add i64 %.66.i.i, %.590
+%.84.i.i = mul i64 %.64.i.i, %arg.aggs_and_cols.0.5.1
+%.87.i.i = add i64 %.67.i.i, %.84.i.i
+%.88.i.i = getelementptr i32, i32* %arg.aggs_and_cols.0.4, i64 %.87.i.i
+%.89.i.i = load i32, i32* %.88.i.i, align 4, !noalias !3
+%.99.i.i = add i32 %.89.i.i, 1
+store i32 %.99.i.i, i32* %.88.i.i, align 4, !noalias !3
+tail call void @NRT_decref(i8* %arg.aggs_and_cols.0.0), !noalias !0 ; GONE 4
+tail call void @NRT_decref(i8* %arg.aggs_and_cols.0.0)              ; GONE 5
+br label %B40.backedge
+
+B40.backedge:                                     ; preds = %B108.endif.endif.endif, %B84, %B42
+%scevgep = getelementptr double, double* %lsr.iv, i64 1
+%scevgep2 = getelementptr double, double* %lsr.iv1, i64 1
+%lsr.iv.next = add i64 %lsr.iv3, -1
+%.294 = icmp sgt i64 %lsr.iv.next, 1
+br i1 %.294, label %B42, label %B160
+}
+    '''
+
+    def test_refct_pruning_op_recognize(self):
+        input_ir = self.sample_llvm_ir
+        input_lines = list(input_ir.splitlines())
+        before_increfs = [ln for ln in input_lines if 'NRT_incref' in ln]
+        before_decrefs = [ln for ln in input_lines if 'NRT_decref' in ln]
+
+        # prune
+        output_ir = nrtopt._remove_redundant_nrt_refct(input_ir)
+        output_lines = list(output_ir.splitlines())
+        after_increfs = [ln for ln in output_lines if 'NRT_incref' in ln]
+        after_decrefs = [ln for ln in output_lines if 'NRT_decref' in ln]
+
+        # check
+        self.assertNotEqual(before_increfs, after_increfs)
+        self.assertNotEqual(before_decrefs, after_decrefs)
+
+        pruned_increfs = set(before_increfs) - set(after_increfs)
+        pruned_decrefs = set(before_decrefs) - set(after_decrefs)
+
+        # the symm difference == or-combined
+        combined = pruned_increfs | pruned_decrefs
+        self.assertEqual(combined, pruned_increfs ^ pruned_decrefs)
+        pruned_lines = '\n'.join(combined)
+
+        # all GONE lines are pruned
+        for i in [1, 2, 3, 4, 5]:
+            gone = '; GONE {}'.format(i)
+            self.assertIn(gone, pruned_lines)
+        # no other lines
+        self.assertEqual(len(list(pruned_lines.splitlines())), len(combined))
 
 
 if __name__ == '__main__':
