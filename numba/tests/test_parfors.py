@@ -1,15 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
-import gc
-
 import numpy as np
 
-from numba import njit, vectorize
+from numba import njit
 from numba import unittest_support as unittest
-from numba import compiler, typing, typeof, ir, utils
-from numba.compiler import Pipeline, _PipelineManager, Flags
-from numba.targets import cpu
-#from .support import MemoryLeakMixin, TestCase
 
 
 class TestParfors(unittest.TestCase):
@@ -26,6 +20,7 @@ class TestParfors(unittest.TestCase):
         output = axy(A,X,Y)
         expected = A*X+Y
         np.testing.assert_array_equal(expected, output)
+        self.assertIn('@do_scheduling', axy.inspect_llvm(axy.signatures[0]))
 
     def test_mvdot(self):
         @njit(parallel=True)
@@ -38,6 +33,7 @@ class TestParfors(unittest.TestCase):
         output = ddot(A,v)
         expected = np.dot(A,v)
         np.testing.assert_array_almost_equal(expected, output, decimal=5)
+        self.assertIn('@do_scheduling', ddot.inspect_llvm(ddot.signatures[0]))
 
 if __name__ == "__main__":
     unittest.main()
