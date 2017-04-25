@@ -14,7 +14,8 @@ import sys
 from numba import ir, ir_utils, types, rewrites, config, analysis
 from numba import array_analysis, postproc
 from numba.ir_utils import *
-from numba.analysis import *
+from numba.analysis import (compute_use_defs, compute_live_map,
+                            compute_dead_maps, compute_cfg_from_blocks)
 from numba.controlflow import CFGraph
 from numba.typing import npydecl
 from numba.types.functions import Function

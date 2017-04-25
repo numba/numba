@@ -1,7 +1,8 @@
 from numba import ir, types, typing, config, analysis
 from numba.typing.templates import signature
 import numpy
-from numba.analysis import *
+from numba.analysis import (compute_live_map, compute_use_defs,
+                            compute_cfg_from_blocks)
 import copy
 
 _unique_var_count = 0
