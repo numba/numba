@@ -863,27 +863,31 @@ def parfor_insert_dels(parfor, curr_dead_set):
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
     dead_map = compute_dead_maps(cfg, blocks, live_map, usedefs.defmap)
+
     # treat loop variables and size variables as live
     loop_vars = {l.range_variable.name for l in parfor.loop_nests}
     loop_vars |= {l.index_variable.name for l in parfor.loop_nests}
     for var_list in parfor.array_analysis.array_size_vars.values():
         loop_vars |= {v.name for v in var_list if isinstance(v, ir.Var)}
+
     dead_set = set()
-    # TODO: handle escaping deads
-    escaping_dead = {}
     for label in blocks.keys():
         # only kill vars that are actually dead at the parfor's block
         dead_map.internal[label] &= curr_dead_set
         dead_map.internal[label] -= loop_vars
         dead_set |= dead_map.internal[label]
-        escaping_dead[label] = set()
+        dead_map.escaping[label] &= curr_dead_set
+        dead_map.escaping[label] -= loop_vars
+        dead_set |= dead_map.escaping[label]
+
     # dummy class to replace func_ir. _patch_var_dels only accesses blocks
     class DummyFuncIR(object):
         def __init__(self, blocks):
             self.blocks = blocks
     post_proc = postproc.PostProcessor(DummyFuncIR(blocks))
-    post_proc._patch_var_dels(dead_map.internal, escaping_dead)
+    post_proc._patch_var_dels(dead_map.internal, dead_map.escaping)
     unwrap_parfor_blocks(parfor)
+
     return dead_set | loop_vars
 
 postproc.ir_extension_insert_dels[Parfor] = parfor_insert_dels
