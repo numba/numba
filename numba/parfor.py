@@ -11,15 +11,22 @@ from __future__ import print_function, division, absolute_import
 import types as pytypes # avoid confusion with numba.types
 import sys
 
-from numba import ir, ir_utils, types, rewrites, config, analysis
+from numba import ir, ir_utils, types, typing, rewrites, config, analysis
 from numba import array_analysis, postproc
-from numba.ir_utils import *
+
+from numba.ir_utils import (mk_unique_var, next_label, mk_alloc,
+    get_np_ufunc_typ, mk_range_block, mk_loop_header, find_op_typ,
+    get_name_var_table, replace_vars, visit_vars, visit_vars_inner, remove_dels,
+    remove_dead, copy_propagate, get_block_copies, apply_copy_propagate,
+    dprint_func_ir, find_topo_order, get_stmt_writes)
+
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
 from numba.controlflow import CFGraph
-from numba.typing import npydecl
+from numba.typing import npydecl, signature
 from numba.types.functions import Function
-import numpy as np
+import copy
+import numpy
 # circular dependency: import numba.npyufunc.dufunc.DUFunc
 
 _reduction_ops = {
@@ -596,7 +603,7 @@ def _gen_np_divide(arg1, arg2, out_ir, typemap):
     # attr call: div_attr = getattr(g_np_var, divide)
     div_attr_call = ir.Expr.getattr(g_np_var, "divide", loc)
     attr_var = ir.Var(scope, mk_unique_var("$div_attr"), loc)
-    func_var_typ = get_np_ufunc_typ(np.divide)
+    func_var_typ = get_np_ufunc_typ(numpy.divide)
     typemap[attr_var.name] = func_var_typ
     attr_assign = ir.Assign(div_attr_call, attr_var, loc)
     # divide call:  div_attr(arg1, arg2)
@@ -1172,7 +1179,7 @@ def get_copies_parfor(parfor, typemap):
             out_copies_parfor[last_label], "kill_set",kill_set)
     return out_copies_parfor[last_label], kill_set
 
-copy_propagate_extensions[Parfor] = get_copies_parfor
+ir_utils.copy_propagate_extensions[Parfor] = get_copies_parfor
 
 def apply_copies_parfor(parfor, var_dict, name_var_table, ext_func, ext_data,
         typemap, calltypes):
@@ -1192,7 +1199,7 @@ def apply_copies_parfor(parfor, var_dict, name_var_table, ext_func, ext_data,
     blocks[0].body = blocks[0].body[len(assign_list):]
     return
 
-apply_copy_propagate_extensions[Parfor] = apply_copies_parfor
+ir_utils.apply_copy_propagate_extensions[Parfor] = apply_copies_parfor
 
 def push_call_vars(blocks, saved_globals, saved_getattrs):
     """push call variables to right before their call site.

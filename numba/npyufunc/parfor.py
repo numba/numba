@@ -5,7 +5,8 @@ from collections import defaultdict, OrderedDict
 import sys
 
 from .. import compiler, ir, types, six, cgutils, sigutils
-from numba.ir_utils import *
+from numba.ir_utils import (add_offset_to_labels, replace_var_names,
+                            remove_dels, legalize_names, mk_unique_var)
 from ..typing import signature
 from numba import config
 import llvmlite.llvmpy.core as lc
