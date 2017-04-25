@@ -1,3 +1,12 @@
+"""
+This module transforms data-parallel operations such as Numpy calls into
+'Parfor' nodes, which are nested loops that can be parallelized.
+It also implements optimizations such as loop fusion, and extends the rest of
+compiler analysis and optimizations to support Parfors.
+This is similar to ParallelAccelerator package in Julia:
+https://github.com/IntelLabs/ParallelAccelerator.jl
+'Parallelizing Julia with a Non-invasive DSL', T. Anderson et al., ECOOP'17.
+"""
 from __future__ import print_function, division, absolute_import
 import types as pytypes # avoid confusion with numba.types
 import sys
