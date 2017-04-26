@@ -1,16 +1,14 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import namedtuple
-import sys
 from functools import partial
 
-from llvmlite.ir import Value
 from llvmlite.llvmpy.core import Constant, Type, Builder
 
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
 from .errors import LoweringError, new_error_context
-from .targets import imputils
+from .targets import removerefctpass
 from .funcdesc import default_mangler
 from . import debuginfo
 
@@ -146,6 +144,12 @@ class BaseLower(object):
             print(("LLVM DUMP %s" % self.fndesc).center(80, '-'))
             print(self.module)
             print('=' * 80)
+
+        # Special optimization to remove NRT on functions that do not need it.
+        if self.context.enable_nrt and self.generator_info is None:
+            removerefctpass.remove_unnecessary_nrt_usage(self.function,
+                                                         context=self.context,
+                                                         fndesc=self.fndesc)
 
         # Run target specific post lowering transformation
         self.context.post_lowering(self.module, self.library)

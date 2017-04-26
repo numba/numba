@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import math
 import os
 import sys
+import re
 
 import numpy as np
 
@@ -434,6 +435,42 @@ br i1 %.294, label %B42, label %B160
             self.assertIn(gone, pruned_lines)
         # no other lines
         self.assertEqual(len(list(pruned_lines.splitlines())), len(combined))
+
+    def test_refct_pruning_with_branches(self):
+        '''testcase from #2350'''
+        @njit
+        def _append_non_na(x, y, agg, field):
+            if not np.isnan(field):
+                agg[y, x] += 1
+
+        @njit
+        def _append(x, y, agg, field):
+            if not np.isnan(field):
+                if np.isnan(agg[y, x]):
+                    agg[y, x] = field
+                else:
+                    agg[y, x] += field
+
+        @njit
+        def append(x, y, agg, field):
+            _append_non_na(x, y, agg, field)
+            _append(x, y, agg, field)
+
+        # Disable python wrapper to avoid detecting necessary
+        # refcount inside it
+        @njit(no_cpython_wrapper=True)
+        def extend(arr, field):
+            for i in range(arr.shape[0]):
+                for j in range(arr.shape[1]):
+                    append(j, i, arr, field)
+
+        # Compile
+        extend.compile("(f4[:,::1], f4)")
+
+        # Test there are no reference count operations
+        llvmir = str(extend.inspect_llvm(extend.signatures[0]))
+        refops = list(re.finditer(r'NRT_incref|NRT_decref\([^\)]+\)', llvmir))
+        self.assertEqual(len(refops), 0)
 
 
 if __name__ == '__main__':
