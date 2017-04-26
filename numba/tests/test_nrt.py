@@ -469,7 +469,7 @@ br i1 %.294, label %B42, label %B160
 
         # Test there are no reference count operations
         llvmir = str(extend.inspect_llvm(extend.signatures[0]))
-        refops = list(re.finditer(r'NRT_incref|NRT_decref\([^\)]+\)', llvmir))
+        refops = list(re.finditer(r'(NRT_incref|NRT_decref)\([^\)]+\)', llvmir))
         self.assertEqual(len(refops), 0)
 
 
