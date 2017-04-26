@@ -176,5 +176,30 @@ class TestArgInfo(unittest.TestCase):
         self._test_as_arguments(fe_args)
 
 
+class TestMemInfo(unittest.TestCase):
+    def setUp(self):
+        self.dmm = datamodel.default_manager
+
+    def test_number(self):
+        ty = types.int32
+        dm = self.dmm[ty]
+        self.assertFalse(dm.contains_nrt_meminfo())
+
+    def test_array(self):
+        ty = types.int32[:]
+        dm = self.dmm[ty]
+        self.assertTrue(dm.contains_nrt_meminfo())
+
+    def test_tuple_of_number(self):
+        ty = types.UniTuple(dtype=types.int32, count=2)
+        dm = self.dmm[ty]
+        self.assertFalse(dm.contains_nrt_meminfo())
+
+    def test_tuple_of_array(self):
+        ty = types.UniTuple(dtype=types.int32[:], count=2)
+        dm = self.dmm[ty]
+        self.assertTrue(dm.contains_nrt_meminfo())
+
+
 if __name__ == '__main__':
     unittest.main()
