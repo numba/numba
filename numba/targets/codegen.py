@@ -721,16 +721,19 @@ class JITCPUCodegen(BaseCPUCodegen):
 
     def _customize_tm_features(self):
         # For JIT target, we will use LLVM to get the feature map
-        features = ll.get_host_cpu_features()
+        try:
+            features = ll.get_host_cpu_features()
+        except RuntimeError:
+            return ''
+        else:
+            if not config.ENABLE_AVX:
+                # Disable all features with name starting with 'avx'
+                for k in features:
+                    if k.startswith('avx'):
+                        features[k] = False
 
-        if not config.ENABLE_AVX:
-            # Disable all features with name starting with 'avx'
-            for k in features:
-                if k.startswith('avx'):
-                    features[k] = False
-
-        # Set feature attributes
-        return features.flatten()
+            # Set feature attributes
+            return features.flatten()
 
     def _add_module(self, module):
         self._engine.add_module(module)
