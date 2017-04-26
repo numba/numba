@@ -1,7 +1,8 @@
 from __future__ import print_function, absolute_import
 import math
 
-from numba import cuda, float32, float64, uint32, int64, uint64, from_dtype, jit
+from numba import cuda, float32, float64, uint32, int64, uint64, from_dtype,\
+                  jit
 
 import numpy as np
 
@@ -17,17 +18,17 @@ import numpy as np
 #  * http://xoroshiro.di.unimi.it/xoroshiro128plus.c
 #  * http://xoroshiro.di.unimi.it/splitmix64.c
 #
-# Splitmix64 is used to generate the initial state of the xoroshiro128+ generator
-# to ensure that small seeds don't result in predictable output.
+# Splitmix64 is used to generate the initial state of the xoroshiro128+
+# generator to ensure that small seeds don't result in predictable output.
 
-# **WARNING**: There is a lot of verbose casting in this file to ensure that NumPy
-# casting conventions (which cast uint64 [op] int32 to float64) don't turn integers
-# into floats when using these functions in the CUDA simulator.
+# **WARNING**: There is a lot of verbose casting in this file to ensure that
+# NumPy casting conventions (which cast uint64 [op] int32 to float64) don't
+# turn integers into floats when using these functions in the CUDA simulator.
 #
 # There are also no function type signatures to ensure that compilation is
 # deferred so that import is quick, and Sphinx autodoc works.  We are also
-# using the CPU @jit decorator everywhere to create functions that work as both
-# CPU and CUDA device functions.
+# using the CPU @jit decorator everywhere to create functions that work as
+# both CPU and CUDA device functions.
 
 xoroshiro128p_dtype = np.dtype([('s0', np.uint64), ('s1', np.uint64)])
 xoroshiro128p_type = from_dtype(xoroshiro128p_dtype)
@@ -38,7 +39,7 @@ def init_xoroshiro128p_state(states, index, seed):
     '''Use SplitMix64 to generate an xoroshiro128p state from 64-bit seed.
 
     This ensures that manually set small seeds don't result in a predictable
-    initial sequence from the random number generator 
+    initial sequence from the random number generator.
 
     :type states: 1D array, dtype=xoroshiro128p_dtype
     :param states: array of RNG states
@@ -64,10 +65,6 @@ def rotl(x, k):
     '''Left rotate x by k bits.'''
     x = uint64(x)
     k = uint32(k)
-
-    #print(type(x << k))
-    #print(type((x >> uint32(64 - k))))
-
     return (x << k) | (x >> uint32(64 - k))
 
 
@@ -85,11 +82,11 @@ def xoroshiro128p_next(states, index):
     s0 = states[index]['s0']
     s1 = states[index]['s1']
     result = s0 + s1
-    
+
     s1 ^= s0
     states[index]['s0'] = uint64(rotl(s0, uint32(55))) ^ s1 ^ (s1 << uint32(14))
     states[index]['s1'] = uint64(rotl(s1, uint32(36)))
-    
+
     return result
 
 
@@ -109,14 +106,14 @@ def xoroshiro128p_jump(states, index):
 
     s0 = uint64(0)
     s1 = uint64(0)
-    
+
     for i in range(2):
         for b in range(64):
             if XOROSHIRO128P_JUMP[i] & (uint64(1) << uint32(b)):
                 s0 ^= states[index]['s0']
                 s1 ^= states[index]['s1']
             xoroshiro128p_next(states, index)
-    
+
     states[index]['s0'] = s0
     states[index]['s1'] = s1
 
@@ -159,12 +156,13 @@ def xoroshiro128p_uniform_float64(states, index):
     :param index: offset in states to update
     :rtype: float64
     '''
-    index = int64(index)    
+    index = int64(index)
     return uint64_to_unit_float64(xoroshiro128p_next(states, index))
 
 
 TWO_PI_FLOAT32 = np.float32(2 * math.pi)
 TWO_PI_FLOAT64 = np.float64(2 * math.pi)
+
 
 @jit
 def xoroshiro128p_normal_float32(states, index):
@@ -234,17 +232,17 @@ def init_xoroshiro128p_states_kernel(states, seed, subsequence_start):
     # populate the rest of the array
     for i in range(1, n):
         states[i] = states[i - 1]  # take state of previous generator
-        xoroshiro128p_jump(states, i) # and jump forward 2**64 steps
+        xoroshiro128p_jump(states, i)  # and jump forward 2**64 steps
 
 
 def init_xoroshiro128p_states(states, seed, subsequence_start=0, stream=0):
     '''Initialize RNG states on the GPU for parallel generators.
-    
+
     This intializes the RNG states so that each state in the array corresponds
     subsequences in the separated by 2**64 steps from each other in the main
-    sequence.  Therefore, as long no CUDA thread requests more than 2**64 random
-    numbers, all of the RNG states produced by this function are guaranteed to
-    be independent.
+    sequence.  Therefore, as long no CUDA thread requests more than 2**64
+    random numbers, all of the RNG states produced by this function are
+    guaranteed to be independent.
 
     The subsequence_start parameter can be used to advance the first RNG state
     by a multiple of 2**64 steps.
@@ -259,12 +257,12 @@ def init_xoroshiro128p_states(states, seed, subsequence_start=0, stream=0):
 
 def create_xoroshiro128p_states(n, seed, subsequence_start=0, stream=0):
     '''Returns a new device array initialized for n random number generators.
-    
+
     This intializes the RNG states so that each state in the array corresponds
     subsequences in the separated by 2**64 steps from each other in the main
-    sequence.  Therefore, as long no CUDA thread requests more than 2**64 random
-    numbers, all of the RNG states produced by this function are guaranteed to
-    be independent.
+    sequence.  Therefore, as long no CUDA thread requests more than 2**64
+    random numbers, all of the RNG states produced by this function are
+    guaranteed to be independent.
 
     The subsequence_start parameter can be used to advance the first RNG state
     by a multiple of 2**64 steps.
@@ -274,12 +272,10 @@ def create_xoroshiro128p_states(n, seed, subsequence_start=0, stream=0):
     :type seed: uint64
     :param seed: starting seed for list of generators
     :type subsequence_start: uint64
-    :param subsequence_start: 
-    :type stream: CUDA stream 
+    :param subsequence_start:
+    :type stream: CUDA stream
     :param stream: stream to run initialization kernel on
     '''
     states = cuda.device_array(n, dtype=xoroshiro128p_dtype, stream=stream)
     init_xoroshiro128p_states(states, seed, subsequence_start, stream)
     return states
-
-
