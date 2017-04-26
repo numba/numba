@@ -32,11 +32,16 @@ def get_sys_info():
         print("__Hardware Information__")
         print(fmt % ("Machine", platform.machine()))
         print(fmt % ("CPU Name", llvmbind.get_host_cpu_name()))
-        features = sorted(
-            [key for key, value in llvmbind.get_host_cpu_features().items() if value])
-        cpu_feat = tw.fill(' '.join(features), 80)
-        print(fmt % ("CPU Features", ""))
-        print(cpu_feat)
+        try:
+            featuremap = llvmbind.get_host_cpu_features()
+        except RuntimeError:
+            print(fmt % ("CPU Features", "NA"))
+        else:
+            features = sorted([key for key, value in featuremap.items()
+                               if value])
+            cpu_feat = tw.fill(' '.join(features), 80)
+            print(fmt % ("CPU Features", ""))
+            print(cpu_feat)
         print("")
 
         print("__OS Information__")
