@@ -726,6 +726,20 @@ class TestCache(BaseCacheTest):
         # Check the code runs ok from another process
         self.run_in_separate_process()
 
+    @tag('important')
+    def test_caching_nrt_pruned(self):
+        self.check_pycache(0)
+        mod = self.import_module()
+        self.check_pycache(0)
+
+        f = mod.add_usecase
+        self.assertPreciseEqual(f(2, 3), 6)
+        self.check_pycache(2)  # 1 index, 1 data
+        # NRT pruning may affect cache
+        self.assertPreciseEqual(f(2, np.arange(3)), 2 + np.arange(3) + 1)
+        self.check_pycache(3)  # 1 index, 2 data
+        self.check_hits(f, 0, 2)
+
     def test_inner_then_outer(self):
         # Caching inner then outer function is ok
         mod = self.import_module()

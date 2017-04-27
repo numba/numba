@@ -75,8 +75,6 @@ class CodeLibrary(object):
         self._final_module = llvmts.parse_assembly(
             str(self._codegen._create_empty_module(self._name)))
         self._final_module.name = cgutils.normalize_ir_text(self._name)
-        # Remember this on the module, for the object cache hooks
-        self._final_module.__library = weakref.proxy(self)
         self._shared_module = None
         # Track names of the dynamic globals
         self._dynamic_globals = []
@@ -240,6 +238,9 @@ class CodeLibrary(object):
         """
         Make the underlying LLVM module ready to use.
         """
+        # Remember this on the module, for the object cache hooks
+        self._final_module.__library = weakref.proxy(self)
+
         # It seems add_module() must be done only here and not before
         # linking in other modules, otherwise get_pointer_to_function()
         # could fail.
