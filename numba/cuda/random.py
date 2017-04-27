@@ -30,7 +30,7 @@ import numpy as np
 # using the CPU @jit decorator everywhere to create functions that work as
 # both CPU and CUDA device functions.
 
-xoroshiro128p_dtype = np.dtype([('s0', np.uint64), ('s1', np.uint64)])
+xoroshiro128p_dtype = np.dtype([('s0', np.uint64), ('s1', np.uint64)], align=True)
 xoroshiro128p_type = from_dtype(xoroshiro128p_dtype)
 
 
