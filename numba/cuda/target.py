@@ -34,10 +34,19 @@ class CUDATypingContext(typing.BaseContext):
     def resolve_value_type(self, val):
         # treat dispatcher object as another device function
         if isinstance(val, dispatcher.Dispatcher):
-            if not val._can_compile:
-                raise ValueError('using cpu function on device '
-                                 'but its compilation is disabled')
-            val = jitdevice(val, debug=val.targetoptions.get('debug'))
+            try:
+                # use cached device function
+                val = val.__cudajitdevice
+            except AttributeError:
+                if not val._can_compile:
+                    raise ValueError('using cpu function on device '
+                                     'but its compilation is disabled')
+                jd = jitdevice(val, debug=val.targetoptions.get('debug'))
+                # cache the device function for future use and to avoid
+                # duplicated copy of the same function.
+                val.__cudajitdevice = jd
+                val = jd
+
         # continue with parent logic
         return super(CUDATypingContext, self).resolve_value_type(val)
 
