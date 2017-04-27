@@ -305,7 +305,7 @@ class FunctionIdentity(object):
             func_qualname = func.__name__
 
         self = cls()
-        self.func = pyfunc
+        self.func = func
         self.func_qualname = func_qualname
         self.func_name = func_qualname.split('.')[-1]
         self.code = code

@@ -450,6 +450,7 @@ class Dispatcher(_DispatcherBase):
     # A {uuid -> instance} mapping, for deserialization
     _memo = weakref.WeakValueDictionary()
     __uuid = None
+    __numba__ = 'py_func'
 
     def __init__(self, py_func, locals={}, targetoptions={}, impl_kind='direct'):
         """
