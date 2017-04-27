@@ -129,6 +129,9 @@ class ParforPass(object):
 
         self.array_analysis.run()
         topo_order = find_topo_order(self.func_ir.blocks)
+        # variables available in the program so far (used for finding map
+        # functions in array_expr lowering)
+        avail_vars = []
         for label in topo_order:
             block = self.func_ir.blocks[label]
             new_body = []
@@ -141,9 +144,10 @@ class ParforPass(object):
                         if self._is_supported_npycall(expr):
                             instr = self._numpy_to_parfor(lhs, expr)
                         elif isinstance(expr, ir.Expr) and expr.op == 'arrayexpr':
-                            instr = self._arrayexpr_to_parfor(lhs, expr)
+                            instr = self._arrayexpr_to_parfor(lhs, expr, avail_vars)
                     elif self._is_supported_npyreduction(expr):
                         instr = self._reduction_to_parfor(lhs, expr)
+                    avail_vars.append(lhs.name)
                 new_body.append(instr)
             block.body = new_body
 
@@ -203,7 +207,7 @@ class ParforPass(object):
         else:
             return index_vars[0], types.int64
 
-    def _arrayexpr_to_parfor(self, lhs, arrayexpr):
+    def _arrayexpr_to_parfor(self, lhs, arrayexpr, avail_vars):
         """generate parfor from arrayexpr node, which is essentially a
         map with recursive tree.
         """
@@ -238,7 +242,8 @@ class ParforPass(object):
         index_var, index_var_typ = self._make_index_var(scope, index_vars, body_block)
 
         body_block.body.extend(_arrayexpr_tree_to_ir(self.typemap, self.calltypes,
-            expr_out_var, expr, index_var, index_vars, self.array_analysis.array_shape_classes))
+            expr_out_var, expr, index_var, index_vars,
+            self.array_analysis.array_shape_classes, avail_vars))
 
         parfor = Parfor(loopnests, init_block, {}, loc, self.array_analysis, index_var)
 
@@ -520,7 +525,7 @@ def _mk_mvdot_body(typemap, calltypes, phi_b_var, index_var, in1, in2, sum_var,
     return body_block
 
 def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr,
-        parfor_index_tuple_var, all_parfor_indices, array_shape_classes):
+        parfor_index_tuple_var, all_parfor_indices, array_shape_classes, avail_vars):
     """generate IR from array_expr's expr tree recursively. Assign output to
     expr_out_var and returns the whole IR as a list of Assign nodes.
     """
@@ -537,7 +542,7 @@ def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr,
             typemap[arg_out_var.name] = el_typ
             out_ir += _arrayexpr_tree_to_ir(typemap, calltypes,
                 arg_out_var, arg, parfor_index_tuple_var, all_parfor_indices,
-                    array_shape_classes)
+                    array_shape_classes, avail_vars)
             arg_vars.append(arg_out_var)
         if op in npydecl.supported_array_operators:
             el_typ1 = typemap[arg_vars[0].name]
@@ -558,7 +563,7 @@ def _arrayexpr_tree_to_ir(typemap, calltypes, expr_out_var, expr,
                 # elif isinstance(op, (np.ufunc, DUFunc)):
                 # function calls are stored in variables which are not removed
                 # op is typing_key to the variables type
-                func_var = ir.Var(scope, _find_func_var(typemap, op), loc)
+                func_var = ir.Var(scope, _find_func_var(typemap, op, avail_vars), loc)
                 ir_expr = ir.Expr.call(func_var, arg_vars, (), loc)
                 call_typ = typemap[func_var.name].get_call_type(
                     typing.Context(), [el_typ]*len(arg_vars), {})
@@ -659,13 +664,14 @@ def _gen_arrayexpr_getitem(var, parfor_index_tuple_var, all_parfor_indices,
         typemap[index_var.name])
     return ir_expr
 
-def _find_func_var(typemap, func):
+def _find_func_var(typemap, func, avail_vars):
     """find variable in typemap which represents the function func.
     """
-    for k,v in typemap.items():
+    for v in avail_vars:
+        t = typemap[v]
         # Function types store actual functions in typing_key.
-        if isinstance(v, Function) and v.typing_key==func:
-            return k
+        if isinstance(t, Function) and t.typing_key==func:
+            return v
     raise RuntimeError("ufunc call variable not found")
 
 def lower_parfor_sequential(func_ir, typemap, calltypes):
