@@ -1,5 +1,8 @@
 from __future__ import print_function, absolute_import, division
 
+
+import types
+
 import numpy as np
 
 from numba.cuda.testing import unittest, skip_on_cudasim
@@ -84,6 +87,25 @@ class TestDeviceFunc(unittest.TestCase):
             self._check_cpu_dispatcher(add)
         msg = "Untyped global name 'add': using cpu function on device"
         self.assertIn(msg, str(raises.exception))
+
+    def test_cpu_dispatcher_other_module(self):
+        @jit
+        def add(a, b):
+            return a + b
+
+        mymod = types.ModuleType(name='mymod')
+        mymod.add = add
+        del add
+
+        @cuda.jit
+        def add_kernel(ary):
+            i = cuda.grid(1)
+            ary[i] = mymod.add(ary[i], 1)
+
+        ary = np.arange(10)
+        expect = ary + 1
+        add_kernel[1, ary.size](ary)
+        np.testing.assert_equal(expect, ary)
 
 
 if __name__ == '__main__':
