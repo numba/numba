@@ -522,7 +522,9 @@ class TestDispatcherMethods(TestCase):
             # simple stringify test
             if wrapper:
                 wrapper = "{}{}".format(len(wrapper), wrapper)
-            prefix = r'^digraph "CFG for \'_ZN{}5numba'.format(wrapper)
+            module_name = __name__.split('.', 1)[0]
+            module_len = len(module_name)
+            prefix = r'^digraph "CFG for \'_ZN{}{}{}'.format(wrapper, module_len, module_name)
             self.assertRegexpMatches(str(cfg), prefix)
             # .display() requires an optional dependency on `graphviz`.
             # just test for the attribute without running it.
