@@ -115,6 +115,32 @@ def mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0,
     return mappedview
 
 
+@contextlib.contextmanager
+@require_context
+def open_ipc_array(handle, shape, dtype, strides=None):
+    """
+    A context manager that opens a IPC *handle* (*CUipcMemHandle*) that is
+    represented as a sequence of bytes (e.g. *bytes*, tuple of int)
+    and represent it as an array of the given *shape*, *strides* and *dtype*.
+    The *strides* can be omitted.  In that case, it is assumed to be a 1D
+    C contiguous array.
+
+    Yields a device array.
+
+    The IPC handle is closed automatically when context manager exits.
+    """
+    dtype = np.dtype(dtype)
+    # compute size
+    size = np.prod(shape) * dtype.itemsize
+    # manually recreate the IPC mem handle
+    handle = driver.drvapi.cu_ipc_mem_handle(*handle)
+    # use *IpcHandle* to open the IPC memory
+    ipchandle = driver.IpcHandle(None, handle, size)
+    yield ipchandle.open_array(current_context(), shape=shape,
+                               strides=strides, dtype=dtype)
+    ipchandle.close()
+
+
 def synchronize():
     "Synchronize the current context."
     return current_context().synchronize()

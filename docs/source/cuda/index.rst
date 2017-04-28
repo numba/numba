@@ -16,4 +16,5 @@ Numba for CUDA GPUs
    simulator.rst
    reduction.rst
    ufunc.rst
+   ipc.rst
    faq.rst

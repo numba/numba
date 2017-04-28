@@ -240,6 +240,17 @@ class DeviceNDArrayBase(object):
         """
         return self.gpu_data
 
+    def get_ipc_handle(self):
+        """
+        Returns a *IpcArrayHandle* object that is safe to serialize and transfer
+        to another process to share the local allocation.
+
+        Note: this feature is only available on Linux.
+        """
+        ipch = devices.get_context().get_ipc_handle(self.gpu_data)
+        desc = dict(shape=self.shape, strides=self.strides, dtype=self.dtype)
+        return IpcArrayHandle(ipc_handle=ipch, array_desc=desc)
+
 
 class DeviceRecord(DeviceNDArrayBase):
     '''
@@ -348,6 +359,50 @@ class DeviceNDArray(DeviceNDArrayBase):
             newdata = self.gpu_data.view(*arr.extent)
             return cls(shape=arr.shape, strides=arr.strides,
                        dtype=self.dtype, gpu_data=newdata, stream=stream)
+
+
+class IpcArrayHandle(object):
+    """
+    An IPC array handle that can be serialized and transfer to another process
+    in the same machine for share a GPU allocation.
+
+    On the destination process, use the *.open()* method to creates a new
+    *DeviceNDArray* object that shares the allocation from the original process.
+    To release the resources, call the *.close()* method.  After that, the
+    destination can no longer use the shared array object.  (Note: the
+    underlying weakref to the resource is now dead.)
+
+    This object implements the context-manager interface that calls the
+    *.open()* and *.close()* method automatically::
+
+        with the_ipc_array_handle as ipc_array:
+            # use ipc_array here as a normal gpu array object
+            some_code(ipc_array)
+        # ipc_array is dead at this point
+    """
+    def __init__(self, ipc_handle, array_desc):
+        self._array_desc = array_desc
+        self._ipc_handle = ipc_handle
+
+    def open(self):
+        """
+        Returns a new *DeviceNDArray* that shares the allocation from the
+        original process.  Must not be used on the original process.
+        """
+        dptr = self._ipc_handle.open(devices.get_context())
+        return DeviceNDArray(gpu_data=dptr, **self._array_desc)
+
+    def close(self):
+        """
+        Closes the IPC handle to the array.
+        """
+        self._ipc_handle.close()
+
+    def __enter__(self):
+        return self.open()
+
+    def __exit__(self, type, value, traceback):
+        self.close()
 
 
 class MappedNDArray(DeviceNDArrayBase, np.ndarray):
