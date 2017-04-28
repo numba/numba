@@ -9,7 +9,7 @@ import numpy as np
 from numba import jit
 
 nthreads = 4
-size = 1e6
+size = 10**6
 
 def func_np(a, b):
     """
