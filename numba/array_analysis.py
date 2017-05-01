@@ -58,7 +58,7 @@ class ArrayAnalysis(object):
         """
         dprint_func_ir(self.func_ir, "starting array analysis")
         if config.DEBUG_ARRAY_OPT==1:
-            print("variable types: ",self.typemap)
+            print("variable types: ",sorted(self.typemap.items()))
             print("call types: ", self.calltypes)
         topo_order = find_topo_order(self.func_ir.blocks)
         for label in topo_order:
@@ -75,9 +75,9 @@ class ArrayAnalysis(object):
         """
         print("array_shape_classes: ", self.array_shape_classes)
         print("class_sizes: ", self.class_sizes)
-        print("array_size_vars: ", self.array_size_vars)
+        print("array_size_vars: ", sorted(self.array_size_vars.items()))
         print("numpy globals ", self.numpy_globals)
-        print("numpy calls ", self.numpy_calls)
+        print("numpy calls ", sorted(self.numpy_calls.items()))
         print("array attr calls ", self.array_attr_calls)
         print("tuple table ", self.tuple_table)
 
