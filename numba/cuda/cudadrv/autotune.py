@@ -129,7 +129,7 @@ LIMITS_CC_20 = {
     'reg_alloc_unit': 64,
     'reg_alloc_gran': 'warp',
     'reg_per_thread': 63,
-    'smem_per_sm': 49152,
+    'smem_per_sm': SMEM48K,
     'smem_alloc_unit': 128,
     'warp_alloc_gran': 2,
     'max_block_size': 1024,
@@ -147,7 +147,7 @@ LIMITS_CC_30 = {
     'reg_alloc_unit': 256,
     'reg_alloc_gran': 'warp',
     'reg_per_thread': 63,
-    'smem_per_sm': 49152,
+    'smem_per_sm': SMEM48K,
     'smem_alloc_unit': 256,
     'warp_alloc_gran': 4,
     'max_block_size': 1024,
@@ -176,8 +176,8 @@ LIMITS_CC_50 = {
     'reg_alloc_unit': 256,
     'reg_alloc_gran': 'warp',
     'reg_per_thread': 255,
-    'smem_per_sm': 65536,
-    'smem_per_block': 49152,
+    'smem_per_sm': SMEM64K,
+    'smem_per_block': SMEM48K,
     'smem_alloc_unit': 256,
     'warp_alloc_gran': 4,
     'max_block_size': 1024,
@@ -186,8 +186,29 @@ LIMITS_CC_50 = {
 
 LIMITS_CC_52 = LIMITS_CC_50.copy()
 LIMITS_CC_52.update({
-    'smem_per_sm': 98304,
+    'smem_per_sm': SMEM96K,
     'default_smem_config': SMEM96K,
+})
+LIMITS_CC_53 = LIMITS_CC_50.copy()
+LIMITS_CC_53.update({
+    'registers': 32768,
+})
+
+LIMITS_CC_60 = LIMITS_CC_50.copy()
+LIMITS_CC_60.update({
+    'warp_alloc_gran': 2,
+})
+LIMITS_CC_61 = LIMITS_CC_60.copy()
+LIMITS_CC_61.update({
+    'smem_per_sm': SMEM96K,
+    'default_smem_config': SMEM96K,
+    'warp_alloc_gran': 4,
+})
+LIMITS_CC_62 = LIMITS_CC_60.copy()
+LIMITS_CC_62.update({
+    'thread_per_sm': 4096,
+    'warp_per_sm': 128,
+    'warp_alloc_gran': 4,
 })
 
 PHYSICAL_LIMITS = {
@@ -197,7 +218,11 @@ PHYSICAL_LIMITS = {
     (3, 5): LIMITS_CC_35,
     (3, 7): LIMITS_CC_35,
     (5, 0): LIMITS_CC_50,
-    (5, 2): LIMITS_CC_52
+    (5, 2): LIMITS_CC_52,
+    (5, 3): LIMITS_CC_53,
+    (6, 0): LIMITS_CC_50,
+    (6, 1): LIMITS_CC_61,
+    (6, 2): LIMITS_CC_62,
 }
 
 
