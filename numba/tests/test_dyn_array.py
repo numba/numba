@@ -7,6 +7,7 @@ import random
 import threading
 
 from numba import unittest_support as unittest
+from numba.errors import TypingError
 from numba import njit
 from numba import utils
 from numba.numpy_support import version as numpy_version
@@ -931,7 +932,6 @@ class TestNdDiag(TestCase):
 
     # check error handling
     def test_error_handling(self):
-        from numba.errors import TypingError
         d = np.array([[[1.]]])
         cfunc = nrtjit(self.py)
 
@@ -1001,7 +1001,6 @@ class TestNpyEmptyKeyword(TestCase):
             self._test_with_shape_and_dtype_kw(dtype)
 
     def test_empty_no_args(self):
-        from numba.errors import TypingError
 
         def pyfunc():
             return np.empty()
@@ -1087,6 +1086,27 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
         cfunc = nrtjit(pyfunc)
         got = cfunc([(1, 2.5), (3, 4.5)])
         self.assertPreciseEqual(got, np.int32([[1, 2], [3, 4]]))
+
+    def test_raises(self):
+        
+        def pyfunc(arg):
+            return np.array(arg)
+        
+        cfunc = nrtjit(pyfunc)
+       
+        @contextlib.contextmanager
+        def check_raises(msg):
+            with self.assertRaises(TypingError) as raises:
+                yield
+            self.assertIn(msg, str(raises.exception))
+       
+        with check_raises(('array(float64, 1d, C) not allowed in a '
+                           'homogenous sequence')):
+            cfunc(np.array([1.]))
+
+        with check_raises(('type (int64, reflected list(int64)) does '
+                          'not have a regular shape')):
+            cfunc((1,[2]))
 
 
 class TestNpConcatenate(MemoryLeakMixin, TestCase):
