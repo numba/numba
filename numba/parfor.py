@@ -178,7 +178,7 @@ class ParforPass(object):
         remove_dead_class_sizes(self.func_ir.blocks, self.array_analysis)
         dprint_func_ir(self.func_ir, "after optimization")
         if config.DEBUG_ARRAY_OPT==1:
-            print("variable types: ",self.typemap)
+            print("variable types: ",sorted(self.typemap.items()))
             print("call types: ", self.calltypes)
         # run post processor again to generate Del nodes
         post_proc = postproc.PostProcessor(self.func_ir)
