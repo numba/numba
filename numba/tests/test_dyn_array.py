@@ -1108,6 +1108,12 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
                           'not have a regular shape')):
             cfunc((1,[2]))
 
+        with check_raises(("cannot convert (int64, Record([('a', '<i4'), "
+                           "('b', '<f4')])) to a homogenous type")):
+            st = np.dtype([('a', 'i4'), ('b', 'f4')])
+            val = np.zeros(1, dtype=st)[0]
+            cfunc(((1, 2), (1, val)))
+
 
 class TestNpConcatenate(MemoryLeakMixin, TestCase):
     """
