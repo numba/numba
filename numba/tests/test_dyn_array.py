@@ -1088,31 +1088,31 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
         self.assertPreciseEqual(got, np.int32([[1, 2], [3, 4]]))
 
     def test_raises(self):
-        
+
         def pyfunc(arg):
             return np.array(arg)
-        
+
         cfunc = nrtjit(pyfunc)
-       
+
         @contextlib.contextmanager
         def check_raises(msg):
             with self.assertRaises(TypingError) as raises:
                 yield
             self.assertIn(msg, str(raises.exception))
-       
+
         with check_raises(('array(float64, 1d, C) not allowed in a '
                            'homogenous sequence')):
             cfunc(np.array([1.]))
 
         with check_raises(('type (int64, reflected list(int64)) does '
                           'not have a regular shape')):
-            cfunc((1,[2]))
+            cfunc((np.int64(1), [np.int64(2)]))
 
         with check_raises(("cannot convert (int64, Record([('a', '<i4'), "
                            "('b', '<f4')])) to a homogenous type")):
             st = np.dtype([('a', 'i4'), ('b', 'f4')])
             val = np.zeros(1, dtype=st)[0]
-            cfunc(((1, 2), (1, val)))
+            cfunc(((1, 2), (np.int64(1), val)))
 
 
 class TestNpConcatenate(MemoryLeakMixin, TestCase):
