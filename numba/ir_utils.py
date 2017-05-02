@@ -242,7 +242,11 @@ def visit_vars_stmt(stmt, callback, cbdata):
     elif isinstance(stmt, ir.Jump):
         stmt.target = visit_vars_inner(stmt.target, callback, cbdata)
     elif isinstance(stmt, ir.Del):
-        stmt.value = visit_vars_inner(stmt.value, callback, cbdata)
+        # Because Del takes only a var name, we make up by
+        # constructing a temporary variable.
+        var = ir.Var(None, stmt.value, stmt.loc)
+        var = visit_vars_inner(var, callback, cbdata)
+        stmt.value = var.name
     elif isinstance(stmt, ir.DelAttr):
         stmt.target = visit_vars_inner(stmt.target, callback, cbdata)
         stmt.attr = visit_vars_inner(stmt.attr, callback, cbdata)
@@ -270,6 +274,8 @@ def visit_vars_inner(node, callback, cbdata):
         return callback(node, cbdata)
     elif isinstance(node, list):
         return [visit_vars_inner(n, callback, cbdata) for n in node]
+    elif isinstance(node, tuple):
+        return tuple([visit_vars_inner(n, callback, cbdata) for n in node])
     elif isinstance(node, ir.Expr):
         # if node.op in ['binop', 'inplace_binop']:
         #     lhs = node.lhs.name
