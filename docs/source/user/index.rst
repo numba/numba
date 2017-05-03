@@ -12,6 +12,7 @@ User Manual
    jitclass.rst
    cfunc.rst
    pycc.rst
+   parallel.rst
    troubleshoot.rst
    faq.rst
    examples.rst
