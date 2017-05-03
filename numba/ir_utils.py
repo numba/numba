@@ -83,7 +83,7 @@ def mk_range_block(typemap, size_var, calltypes, scope, loc):
     """
     # g_range_var = Global(range)
     g_range_var = ir.Var(scope, mk_unique_var("$range_g_var"), loc)
-    typemap[g_range_var.name] = _get_range_func_typ()
+    typemap[g_range_var.name] = get_global_func_typ(range)
     g_range = ir.Global('range', range, loc)
     g_range_assign = ir.Assign(g_range, g_range_var, loc)
     # range_call_var = call g_range_var(size_var)
@@ -112,12 +112,12 @@ def mk_range_block(typemap, size_var, calltypes, scope, loc):
         phi_assign, jump_header]
     return range_block
 
-def _get_range_func_typ():
-    """get type variable for range() from builtin registry"""
+def get_global_func_typ(func):
+    """get type variable for func() from builtin registry"""
     for (k,v) in typing.templates.builtin_registry.globals:
-        if k==range:
+        if k==func:
             return v
-    raise RuntimeError("range type not found")
+    raise RuntimeError("func type not found"+str(func))
 
 def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
     """make a block that is a loop header updating iteration variables.
