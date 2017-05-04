@@ -184,7 +184,7 @@ a file-based cache.  This is done by passing ``cache=True``::
 .. _parallel_jit_option:
 
 ``parallel``
----------
+------------
 
 Enables an experimental feature that automatically parallelizes (and
 performs other optimizations for) those operations in the function known to
