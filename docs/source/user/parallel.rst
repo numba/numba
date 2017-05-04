@@ -30,11 +30,14 @@ parallel semantics and for which we attempt to parallelize.
 
 1. All numba array operations that are supported by :ref:`case-study-array-expressions`, 
    which include common arithmetic functions between Numpy arrays, and between 
-   arrays and scalars. They are often called `point-wise array operations`:
+   arrays and scalars, as well as Numpy ufuncs. They are often called
+   `element-wise` or `point-wise` array operations:
 
     * unary operators: ``+`` ``-`` ``~``
     * binary operators: ``+`` ``-`` ``*`` ``/`` ``/?`` ``%`` ``|`` ``>>`` ``^`` ``<<`` ``&`` ``**`` ``//``
     * compare operators: ``==`` ``!=`` ``<`` ``<=`` ``>`` ``>=``
+    * Numpy ufuncs.
+    * User defined :class:`~numba.DUFunc` through :func:`~numba.vectorize`.
 
 2. Numpy reduction function ``sum`` and ``prod``. Note that they have to be
    written as ``numpy.sum(a)`` instead of ``a.sum()``.
