@@ -1,3 +1,54 @@
+Version 0.33.0
+--------------
+
+This release resolved several performance issues caused by atomic reference
+counting operations inside loop body.  New optimization passes are added to
+reduce the impact of these operations.  We observed speed improvements at
+2x-10x in affected programs due to the removal of unnecessary reference
+counting operations.
+
+There are also several enhancements to the CUDA GPU support:
+
+* A GPU random number generator based on `xoroshiro128+ algorithm <http://xoroshiro.di.unimi.it/>`_ is added.
+  See details and examples in :ref:`documentation <cuda-random>`.
+* ``@cuda.jit`` CUDA kernels can now call ``@jit`` and ``@njit`` CPU functions.
+* CUDA IPC memory API is exposed for sharing memory between proceses.
+  See usage details in :ref:`documentation <cuda-ipc-memory>`.
+
+Reference counting enhancements:
+
+* PR #2346, Issue #2345, #2248: Add extra refcount pruning after inlining
+* PR #2349: Fix refct pruning not removing refct op with tail call.
+* PR #2352, Issue #2350: Add refcount pruning pass for function that does not need refcount
+
+CUDA support enhancements:
+
+* PR #2023: Supports CUDA IPC for device array
+* PR #2343, Issue #2335: Allow CPU jit decorated function to be used as cuda device function
+* PR #2347: Add random number generator support for CUDA device code
+* PR #2361: Update autotune table for CC: 5.3, 6.0, 6.1, 6.2
+
+Misc fixes:
+
+* PR #2362: Avoid test failure due to typing to int32 on 32-bit platforms
+* PR #2359: Fixed nogil example that threw a TypeError when executed.
+* PR #2357, Issue #2356: Fix fragile test that depends on how the script is executed.
+* PR #2355: Fix cpu dispatcher referenced as attribute of another module
+* PR #2354: Fixes an issue with caching when function needs NRT and refcount pruning
+* PR #2342, Issue #2339: Add warnings to inspection when it is used on unserialized cached code
+* PR #2329, Issue #2250: Better handling of missing op codes
+
+Misc enhancements:
+
+* PR #2360: Adds missing values in error mesasge interp.
+* PR #2353: Handle when get_host_cpu_features() raises RuntimeError
+* PR #2351: Enable SVML for erf/erfc/gamma/lgamma/log2
+* PR #2344: Expose error_model setting in jit decorator
+* PR #2337: Align blocking terminate support for fork() with new TBB version
+* PR #2336: Bump llvmlite version to 0.18
+* PR #2330: Core changes in PR #2318
+
+
 Version 0.32.0
 --------------
 
