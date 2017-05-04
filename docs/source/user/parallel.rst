@@ -1,8 +1,8 @@
 .. _parallel:
 
-=========================================
-Automatic parallelization option to @jit.
-=========================================
+=======================================
+Automatic parallelization with ``@jit``
+=======================================
 
 Setting the :ref:`parallel_jit_option` option for :func:`~numba.jit` enables
 an experimental Numba feature that attempts to automatically parallelize and 
