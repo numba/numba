@@ -36,7 +36,7 @@ parallel semantics and for which we attempt to parallelize.
     * unary operators: ``+`` ``-`` ``~``
     * binary operators: ``+`` ``-`` ``*`` ``/`` ``/?`` ``%`` ``|`` ``>>`` ``^`` ``<<`` ``&`` ``**`` ``//``
     * compare operators: ``==`` ``!=`` ``<`` ``<=`` ``>`` ``>=``
-    * Numpy ufuncs.
+    * :ref:`Numpy ufuncs <supported_ufuncs>` that are supported in :term:`nopython mode`.
     * User defined :class:`~numba.DUFunc` through :func:`~numba.vectorize`.
 
 2. Numpy reduction function ``sum`` and ``prod``. Note that they have to be
