@@ -1,17 +1,19 @@
 Version 0.33.0
 --------------
 
-This release resolved several performance issues caused by atomic reference
-counting operations inside loop body.  New optimization passes are added to
-reduce the impact of these operations.  We observed speed improvements at
-2x-10x in affected programs due to the removal of unnecessary reference
-counting operations.
+This release resolved several performance issues caused by atomic
+reference counting operations inside loop bodies.  New optimization
+passes have been added to reduce the impact of these operations.  We
+observe speed improvements between 2x-10x in affected programs due to
+the removal of unnecessary reference counting operations.
 
 There are also several enhancements to the CUDA GPU support:
 
 * A GPU random number generator based on `xoroshiro128+ algorithm <http://xoroshiro.di.unimi.it/>`_ is added.
   See details and examples in :ref:`documentation <cuda-random>`.
-* ``@cuda.jit`` CUDA kernels can now call ``@jit`` and ``@njit`` CPU functions.
+* ``@cuda.jit`` CUDA kernels can now call ``@jit`` and ``@njit`` 
+  CPU functions and they will automatically be compiled as CUDA device
+  functions.
 * CUDA IPC memory API is exposed for sharing memory between proceses.
   See usage details in :ref:`documentation <cuda-ipc-memory>`.
 
