@@ -1,4 +1,6 @@
 
+.. _cuda-random:
+
 Random Number Generation
 ========================
 
@@ -25,7 +27,7 @@ random numbers.
     distributed values is half the speed of uniformly distributed values.
 
 .. automodule:: numba.cuda.random
-    :members: create_xoroshiro128p_states, init_xoroshiro128p_states, xoroshiro128p_uniform_float32, xoroshiro128p_uniform_float64, xoroshiro128p_normal_float32, xoroshiro128p_normal_float64 
+    :members: create_xoroshiro128p_states, init_xoroshiro128p_states, xoroshiro128p_uniform_float32, xoroshiro128p_uniform_float64, xoroshiro128p_normal_float32, xoroshiro128p_normal_float64
     :noindex:
 
 Example
