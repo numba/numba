@@ -14,7 +14,7 @@ an array, are known to have parallel semantics.  A user program may contain
 many such operations and while each operation could be parallelized
 individually, such an approach often has lackluster performance due to poor
 cache behavior.  Instead, with auto-parallelization, Numba attempts to
-identify such operations in a user program, fuse adjacent ones together
+identify such operations in a user program, and fuse adjacent ones together,
 to form one or more kernels that are automatically run in parallel.
 The process is fully automated without modifications to the user program,
 which is in contrast to Numba's :func:`~numba.vectorize` or
@@ -35,16 +35,15 @@ parallel semantics and for which we attempt to parallelize.
 
     * unary operators: ``+`` ``-`` ``~``
     * binary operators: ``+`` ``-`` ``*`` ``/`` ``/?`` ``%`` ``|`` ``>>`` ``^`` ``<<`` ``&`` ``**`` ``//``
-    * compare operators: ``==`` ``!=`` ``<`` ``<=`` ``>`` ``>=``
+    * comparison operators: ``==`` ``!=`` ``<`` ``<=`` ``>`` ``>=``
     * :ref:`Numpy ufuncs <supported_ufuncs>` that are supported in :term:`nopython mode`.
     * User defined :class:`~numba.DUFunc` through :func:`~numba.vectorize`.
 
-2. Numpy reduction function ``sum`` and ``prod``. Note that they have to be
+2. Numpy reduction functions ``sum`` and ``prod``. Note that they have to be
    written as ``numpy.sum(a)`` instead of ``a.sum()``.
 
-3. Numpy ``dot`` function between a matrix and a vector. When both inputs
-   are matrices, instead of parallelizing the matrix multiply, we choose to
-   leave it as a library call to Numpy's native implementation.
+3. Numpy ``dot`` function between a matrix and a vector, or two vectors.
+   In all other cases, Numba's default implementation is used.
 
 4. Multi-dimensional arrays are also supported for the above operations
    when operands have matching dimension and size. The full semantics of
@@ -58,15 +57,15 @@ In this section, we give an example of how this feature helps
 parallelize Logistic Regression::
 
     @numba.jit(nopython=True, parallel=True)
-    def logistic_regression(Y,X,w,iterations):
+    def logistic_regression(Y, X, w, iterations):
         for i in range(iterations):
-            w -= np.dot(((1.0 / (1.0 + np.exp(-Y * np.dot(X,w))) - 1.0) * Y),X)
+            w -= np.dot(((1.0 / (1.0 + np.exp(-Y * np.dot(X, w))) - 1.0) * Y), X)
         return w
 
 We will not discuss details of the algorithm, but instead focus on how
 this program behaves with auto-parallelization:
 
-1. Input ``X`` is an ``N x D`` matrix. Input ``Y`` is a vector of size ``N``,
+1. Input ``Y`` is a vector of size ``N``, ``X`` is an ``N x D`` matrix,
    and ``w`` is a vector of size ``D``.
 
 2. The function body is an iterative loop that updates variable ``w``.
