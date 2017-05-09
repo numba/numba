@@ -1,3 +1,9 @@
+Version 0.34.0.dev
+------------------
+
+In development.
+
+
 Version 0.33.0
 --------------
 
@@ -11,7 +17,7 @@ There are also several enhancements to the CUDA GPU support:
 
 * A GPU random number generator based on `xoroshiro128+ algorithm <http://xoroshiro.di.unimi.it/>`_ is added.
   See details and examples in :ref:`documentation <cuda-random>`.
-* ``@cuda.jit`` CUDA kernels can now call ``@jit`` and ``@njit`` 
+* ``@cuda.jit`` CUDA kernels can now call ``@jit`` and ``@njit``
   CPU functions and they will automatically be compiled as CUDA device
   functions.
 * CUDA IPC memory API is exposed for sharing memory between proceses.
