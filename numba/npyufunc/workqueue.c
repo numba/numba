@@ -25,6 +25,7 @@ race condition.
 #include <stdio.h>
 #include "workqueue.h"
 #include "../_pymodule.h"
+#include "gufunc_scheduler.h"
 
 /* As the thread-pool isn't inherited by children,
    free the task-queue, too. */
@@ -306,6 +307,8 @@ MOD_INIT(workqueue) {
                            PyLong_FromVoidPtr(&ready));
     PyObject_SetAttrString(m, "add_task",
                            PyLong_FromVoidPtr(&add_task));
+    PyObject_SetAttrString(m, "do_scheduling",
+                           PyLong_FromVoidPtr(&do_scheduling));
 
     return MOD_SUCCESS_VAL(m);
 }

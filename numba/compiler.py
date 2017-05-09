@@ -16,6 +16,7 @@ from numba import (bytecode, interpreter, funcdesc, postproc,
                    errors, types, ir, types, rewrites, transforms)
 from numba.targets import cpu, callconv
 from numba.annotations import type_annotations
+from numba.parfor import ParforPass
 
 
 # Lock for the preventing multiple compiler execution
@@ -42,6 +43,7 @@ class Flags(utils.ConfigOptions):
         'boundcheck': False,
         'forceinline': False,
         'no_cpython_wrapper': False,
+        'auto_parallel': False,
         'nrt': False,
         'no_rewrites': False,
         'error_model': 'python',
@@ -480,6 +482,16 @@ class Pipeline(object):
             rewrites.rewrite_registry.apply('after-inference',
                                             self, self.func_ir)
 
+    def stage_parfor_pass(self):
+        """
+        Convert data-parallel computations into Parfor nodes
+        """
+        # Ensure we have an IR and type information.
+        assert self.func_ir
+        parfor_pass = ParforPass(self.func_ir, self.type_annotation.typemap,
+            self.type_annotation.calltypes, self.return_type)
+        parfor_pass.run()
+
     def stage_annotate_type(self):
         """
         Create type annotation after type inference
@@ -630,6 +642,8 @@ class Pipeline(object):
             pm.add_stage(self.stage_annotate_type, "annotate type")
             if not self.flags.no_rewrites:
                 pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
+            if self.flags.auto_parallel:
+                pm.add_stage(self.stage_parfor_pass, "convert to parfors")
             pm.add_stage(self.stage_nopython_backend, "nopython mode backend")
             pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
 
@@ -683,6 +697,8 @@ def _make_subtarget(targetctx, flags):
         subtargetoptions['enable_boundcheck'] = True
     if flags.nrt:
         subtargetoptions['enable_nrt'] = True
+    if flags.auto_parallel:
+        subtargetoptions['auto_parallel'] = True
     if flags.fastmath:
         subtargetoptions['enable_fastmath'] = True
     error_model = callconv.create_error_model(flags.error_model, targetctx)

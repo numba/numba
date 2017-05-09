@@ -99,7 +99,7 @@ def build_ufunc_kernel(library, ctx, innerfunc, sig):
                                              byte_ptr_t])
     wrapperlib = ctx.codegen().create_library('parallelufuncwrapper')
     mod = wrapperlib.create_ir_module('parallel.ufunc.wrapper')
-    lfunc = mod.add_function(fnty, name=".kernel")
+    lfunc = mod.add_function(fnty, name=".kernel." + str(innerfunc))
 
     bb_entry = lfunc.append_basic_block('')
 
@@ -295,7 +295,7 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
                                              byte_ptr_t])
     wrapperlib = ctx.codegen().create_library('parallelufuncwrapper')
     mod = wrapperlib.create_ir_module('parallel.gufunc.wrapper')
-    lfunc = mod.add_function(fnty, name=".kernel")
+    lfunc = mod.add_function(fnty, name=".kernel." + str(innerfunc))
 
     bb_entry = lfunc.append_basic_block('')
 
@@ -413,6 +413,7 @@ def _init():
     ll.add_symbol('numba_add_task', lib.add_task)
     ll.add_symbol('numba_synchronize', lib.synchronize)
     ll.add_symbol('numba_ready', lib.ready)
+    ll.add_symbol('do_scheduling', lib.do_scheduling)
 
     _is_initialized = True
 

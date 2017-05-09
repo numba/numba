@@ -10,7 +10,7 @@ from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
 from .errors import LoweringError, new_error_context
 from .targets import removerefctpass
 from .funcdesc import default_mangler
-from . import debuginfo
+from . import debuginfo, parfor
 
 
 class Environment(_dynfunc.Environment):
@@ -353,6 +353,9 @@ class Lower(BaseLower):
 
         elif isinstance(inst, ir.StaticRaise):
             self.lower_static_raise(inst)
+
+        elif isinstance(inst, parfor.Parfor):
+            parfor.lower_parfor_parallel(self, inst)
 
         else:
             raise NotImplementedError(type(inst))
