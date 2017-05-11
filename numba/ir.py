@@ -265,6 +265,14 @@ class Expr(Inst):
         op = 'cast'
         return cls(op=op, value=value, loc=loc)
 
+    @classmethod
+    def make_function(cls, name, code, closure, loc):
+        """
+        A node for making a function object.
+        """
+        op = 'make_function'
+        return cls(op=op, name=name, code=code, closure=closure, loc=loc)
+
     def __repr__(self):
         if self.op == 'call':
             args = ', '.join(str(a) for a in self.args)
