@@ -488,6 +488,8 @@ class Len(AbstractTemplate):
         (val,) = args
         if isinstance(val, (types.Buffer, types.BaseTuple, types.RangeType)):
             return signature(val.dtype, val)
+        if isinstance(val, types.RangeIteratorType):
+            return signature(val.yield_type, val)
 
 
 @infer
