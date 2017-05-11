@@ -39,14 +39,16 @@ class LoopNest(object):
     the index variable (of a non-negative integer value), and the
     range variable, e.g. range(r) is 0 to r-1 with step size 1.
     '''
-    def __init__(self, index_variable, range_variable, correlation=-1):
+    def __init__(self, index_variable, start, stop, step, correlation=-1):
         self.index_variable = index_variable
-        self.range_variable = range_variable
+        self.start = start
+        self.stop = stop
+        self.step = step
         self.correlation = correlation
 
     def __repr__(self):
         return ("LoopNest(index_variable=%s, " % self.index_variable
-                + "range_variable=%s, " % self.range_variable
+                + "range=%s, " % str(self.start)+","+str(self.stop)+","+str(self.step)
                 + "correlation=%d)" % self.correlation)
 
 
@@ -84,7 +86,12 @@ class Parfor(ir.Expr, ir.Stmt):
 
         for loop in self.loop_nests:
             all_uses.append(loop.index_variable)
-            all_uses.append(loop.range_variable)
+            if isinstance(loop.start, ir.Var):
+                all_uses.append(loop.start)
+            if isinstance(loop.stop, ir.Var):
+                all_uses.append(loop.stop)
+            if isinstance(loop.step, ir.Var):
+                all_uses.append(loop.step)
 
         for stmt in self.init_block.body:
             all_uses += stmt.list_vars()
@@ -233,7 +240,7 @@ class ParforPass(object):
             index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
             index_vars.append(index_var)
             self.typemap[index_var.name] = types.intp
-            loopnests.append( LoopNest(index_var, size_var, corr) )
+            loopnests.append( LoopNest(index_var, 0, size_var, 1, corr) )
 
         # generate init block and body
         init_block = ir.Block(scope, loc)
@@ -326,7 +333,7 @@ class ParforPass(object):
             loc = expr.loc
             index_var = ir.Var(scope, mk_unique_var("parfor_index"), lhs.loc)
             self.typemap[index_var.name] = types.intp
-            loopnests = [ LoopNest(index_var, size_var, corr) ]
+            loopnests = [ LoopNest(index_var, 0, size_var, 1, corr) ]
             init_block = ir.Block(scope, loc)
             parfor = Parfor(loopnests, init_block, {}, loc, self.array_analysis, index_var)
             if self._get_ndims(in1.name)==2:
@@ -358,7 +365,7 @@ class ParforPass(object):
                 self.typemap[sum_var.name] = el_typ
                 sum_assign = ir.Assign(const_var, sum_var, loc)
 
-                range_block = mk_range_block(self.typemap, inner_size_var,
+                range_block = mk_range_block(self.typemap, 0, inner_size_var, 1,
                     self.calltypes, scope, loc)
                 range_block.body = [const_assign, sum_assign] + range_block.body
                 range_block.body[-1].target = header_label # fix jump target
@@ -420,7 +427,7 @@ class ParforPass(object):
                 index_var = ir.Var(scope, mk_unique_var("$parfor_index" + str(i)), loc)
                 self.typemap[index_var.name] = types.intp
                 parfor_index.append(index_var)
-                loopnests.append(LoopNest(index_var, sizes[i], corrs[i]))
+                loopnests.append(LoopNest(index_var, 0, sizes[i], 1, corrs[i]))
 
             acc_var = lhs
 
@@ -706,8 +713,8 @@ def lower_parfor_sequential(func_ir, typemap, calltypes):
                 # create range block for loop
                 range_label = next_label()
                 header_label = next_label()
-                range_block = mk_range_block(typemap, loopnest.range_variable,
-                    calltypes, scope, loc)
+                range_block = mk_range_block(typemap, loopnest.start,
+                    loopnest.stop, loopnest.step, calltypes, scope, loc)
                 range_block.body[-1].target = header_label # fix jump target
                 phi_var = range_block.body[-2].target
                 new_blocks[range_label] = range_block
@@ -809,7 +816,12 @@ def visit_vars_parfor(parfor, callback, cbdata):
         print("cbdata: ", sorted(cbdata.items()))
     for l in parfor.loop_nests:
         l.index_variable = visit_vars_inner(l.index_variable, callback, cbdata)
-        l.range_variable = visit_vars_inner(l.range_variable, callback, cbdata)
+        if isinstance(l.start, ir.Var):
+            l.start = visit_vars_inner(l.start, callback, cbdata)
+        if isinstance(l.stop, ir.Var):
+            l.stop = visit_vars_inner(l.stop, callback, cbdata)
+        if isinstance(l.step, ir.Var):
+            l.step = visit_vars_inner(l.step, callback, cbdata)
     visit_vars({-1:parfor.init_block}, callback, cbdata)
     visit_vars(parfor.loop_body, callback, cbdata)
     return
@@ -856,7 +868,9 @@ def parfor_insert_dels(parfor, curr_dead_set):
     dead_map = compute_dead_maps(cfg, blocks, live_map, usedefs.defmap)
 
     # treat loop variables and size variables as live
-    loop_vars = {l.range_variable.name for l in parfor.loop_nests}
+    loop_vars = {l.start.name for l in parfor.loop_nests if isinstance(l.start, ir.Var)}
+    loop_vars |= {l.stop.name for l in parfor.loop_nests if isinstance(l.stop, ir.Var)}
+    loop_vars |= {l.step.name for l in parfor.loop_nests if isinstance(l.step, ir.Var)}
     loop_vars |= {l.index_variable.name for l in parfor.loop_nests}
     for var_list in parfor.array_analysis.array_size_vars.values():
         loop_vars |= {v.name for v in var_list if isinstance(v, ir.Var)}

@@ -77,7 +77,7 @@ def get_np_ufunc_typ(func):
             return v
     raise RuntimeError("type for func ", func, " not found")
 
-def mk_range_block(typemap, size_var, calltypes, scope, loc):
+def mk_range_block(typemap, start, stop, step, calltypes, scope, loc):
     """make a block that initializes loop range and iteration variables.
     target label in jump needs to be set.
     """
@@ -86,8 +86,9 @@ def mk_range_block(typemap, size_var, calltypes, scope, loc):
     typemap[g_range_var.name] = get_global_func_typ(range)
     g_range = ir.Global('range', range, loc)
     g_range_assign = ir.Assign(g_range, g_range_var, loc)
-    # range_call_var = call g_range_var(size_var)
-    range_call = ir.Expr.call(g_range_var, [size_var], (), loc)
+    arg_nodes, args = _mk_range_args(typemap, start, stop, step, scope, loc)
+    # range_call_var = call g_range_var(start, stop, step)
+    range_call = ir.Expr.call(g_range_var, args, (), loc)
     calltypes[range_call] = typemap[g_range_var.name].get_call_type(
         typing.Context(), [types.intp], {})
     #signature(types.range_state64_type, types.intp)
@@ -108,9 +109,41 @@ def mk_range_block(typemap, size_var, calltypes, scope, loc):
     # jump to header
     jump_header = ir.Jump(-1, loc)
     range_block = ir.Block(scope, loc)
-    range_block.body = [g_range_assign, range_call_assign, iter_call_assign,
-        phi_assign, jump_header]
+    range_block.body = arg_nodes + [g_range_assign, range_call_assign,
+        iter_call_assign, phi_assign, jump_header]
     return range_block
+
+def _mk_range_args(typemap, start, stop, step, scope, loc):
+    nodes = []
+    if isinstance(stop, ir.Var):
+        g_stop_var = stop
+    else:
+        assert isinstance(stop, int)
+        g_stop_var = ir.Var(scope, mk_unique_var("$range_stop"), loc)
+        stop_assign = ir.Assign(ir.Const(stop, loc), g_stop_var)
+        nodes.append(stop_assign)
+    if start==0 and step==1:
+        return nodes, [g_stop_var]
+
+    if isinstance(start, ir.Var):
+        g_start_var = start
+    else:
+        assert isinstance(start, int)
+        g_start_var = ir.Var(scope, mk_unique_var("$range_start"), loc)
+        start_assign = ir.Assign(ir.Const(start, loc), g_start_var)
+        nodes.append(start_assign)
+    if step==1:
+        return nodes, [g_start_var, g_stop_var]
+
+    if isinstance(step, ir.Var):
+        g_step_var = step
+    else:
+        assert isinstance(step, int)
+        g_step_var = ir.Var(scope, mk_unique_var("$range_step"), loc)
+        step_assign = ir.Assign(ir.Const(step, loc), g_step_var)
+        nodes.append(step_assign)
+
+    return nodes, [g_start_var, g_stop_var, g_step_var]
 
 def get_global_func_typ(func):
     """get type variable for func() from builtin registry"""
