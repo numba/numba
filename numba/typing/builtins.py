@@ -486,9 +486,11 @@ class Len(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         (val,) = args
-        if isinstance(val, (types.Buffer, types.BaseTuple, types.RangeType)):
+        if isinstance(val, (types.Buffer, types.BaseTuple)):
+            return signature(types.intp, val)
+        elif isinstance(val, (types.RangeType)):
             return signature(val.dtype, val)
-        if isinstance(val, types.RangeIteratorType):
+        elif isinstance(val, types.RangeIteratorType):
             return signature(val.yield_type, val)
 
 
