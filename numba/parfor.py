@@ -18,7 +18,7 @@ from numba.ir_utils import (mk_unique_var, next_label, mk_alloc,
     get_np_ufunc_typ, mk_range_block, mk_loop_header, find_op_typ,
     get_name_var_table, replace_vars, visit_vars, visit_vars_inner, remove_dels,
     remove_dead, copy_propagate, get_block_copies, apply_copy_propagate,
-    dprint_func_ir, find_topo_order, get_stmt_writes)
+    dprint_func_ir, find_topo_order, get_stmt_writes, rename_labels)
 
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
@@ -736,7 +736,7 @@ def lower_parfor_sequential(func_ir, typemap, calltypes):
     func_ir.blocks = new_blocks
     # rename only if parfor found and replaced (avoid test_flow_control error)
     if parfor_found:
-        func_ir.blocks = _rename_labels(func_ir.blocks)
+        func_ir.blocks = rename_labels(func_ir.blocks)
     dprint_func_ir(func_ir, "after parfor sequential lowering")
     return
 
@@ -745,43 +745,6 @@ def _find_first_parfor(body):
         if isinstance(inst, Parfor):
             return i
     return -1
-
-def _rename_labels(blocks):
-    """rename labels of function body blocks according to topological sort.
-    lowering requires this order.
-    """
-    topo_order = find_topo_order(blocks)
-
-    # make a block with return last if available (just for readability)
-    return_label = -1
-    for l,b in blocks.items():
-        if isinstance(b.body[-1], ir.Return):
-            return_label = l
-    # some cases like generators can have no return blocks
-    if return_label!=-1:
-        topo_order.remove(return_label)
-        topo_order.append(return_label)
-
-    label_map = {}
-    new_label = 0
-    for label in topo_order:
-        label_map[label] = new_label
-        new_label += 1
-    # update target labels in jumps/branches
-    for b in blocks.values():
-        term = b.terminator
-        if isinstance(term, ir.Jump):
-            term.target = label_map[term.target]
-        if isinstance(term, ir.Branch):
-            term.truebr = label_map[term.truebr]
-            term.falsebr = label_map[term.falsebr]
-    # update blocks dictionary keys
-    new_blocks = {}
-    for k, b in blocks.items():
-        new_label = label_map[k]
-        new_blocks[new_label] = b
-
-    return new_blocks
 
 def get_parfor_params(parfor):
     """find variables used in body of parfor from outside.
