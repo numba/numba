@@ -1,4 +1,4 @@
-from numba import ir, compiler, ir_utils
+from numba import ir, ir_utils
 
 from numba.ir_utils import (mk_unique_var, next_label, add_offset_to_labels, 
     replace_vars, remove_dels, remove_dead, rename_labels)
@@ -7,9 +7,10 @@ class InlineClosureCallPass(object):
     """InlineClosureCallPass class looks for direct call to locally defined 
     closures, and inline the body of the closure function to the call site.
     """
-    def __init__(self, config, func_ir):
+    def __init__(self, config, func_ir, run_frontend):
         self.config = config
         self.func_ir = func_ir
+        self.run_frontend = run_frontend
 
     def debug(self, *args):
         if self.config.DEBUG_INLINE_CLOSURE:
@@ -52,7 +53,7 @@ class InlineClosureCallPass(object):
         self.debug("Found closure call: ", instr, " with callee = ", callee)
         func_ir = self.func_ir
         # first, get the IR of the callee
-        from_ir = _get_ir_of_code(func_ir, callee.code)
+        from_ir = self.get_ir_of_code(callee.code)
         from_blocks = from_ir.blocks
         # 1. relabel from_ir by adding an offset
         max_label = max(func_ir.blocks.keys())
@@ -115,20 +116,23 @@ class InlineClosureCallPass(object):
             func_ir.dump()
         return new_blocks
 
-def _get_ir_of_code(func_ir, fcode):
-    glbls = func_ir.func_id.func.__globals__
-    nfree = len(fcode.co_freevars)
-    func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
-    func_clo = ",".join(["c_%d" % i for i in range(nfree)])
-    func_arg = ",".join(["x_%d" % i for i in range(fcode.co_argcount)])
-    func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (func_env, func_arg, func_clo)
-    loc = {}
-    exec(func_text, glbls, loc)
-    f = loc['g']()
-    f.__code__ = fcode
-    f.__name__ = fcode.co_name
-    ir = compiler.run_frontend(f)
-    return ir
+    def get_ir_of_code(self, fcode):
+        """
+        Compile a code object to get its IR.
+        """
+        glbls = self.func_ir.func_id.func.__globals__
+        nfree = len(fcode.co_freevars)
+        func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
+        func_clo = ",".join(["c_%d" % i for i in range(nfree)])
+        func_arg = ",".join(["x_%d" % i for i in range(fcode.co_argcount)])
+        func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (func_env, func_arg, func_clo)
+        loc = {}
+        exec(func_text, glbls, loc)
+        f = loc['g']()
+        f.__code__ = fcode
+        f.__name__ = fcode.co_name
+        ir = self.run_frontend(f)
+        return ir
 
 def _get_all_scopes(blocks):
     """Get all block-local scopes from an IR.
