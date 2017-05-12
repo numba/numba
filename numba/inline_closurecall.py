@@ -14,7 +14,7 @@ class InlineClosureCallPass(object):
 
     def debug(self, *args):
         if self.config.DEBUG_INLINE_CLOSURE:
-            print(*args) 
+            print(args) 
 
     def run(self):
         """Run inline closure call pass.
