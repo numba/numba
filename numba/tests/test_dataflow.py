@@ -5,7 +5,7 @@ import warnings
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba.utils import PYVERSION
-from numba import types
+from numba import types, errors
 from .support import TestCase, CompilationCache
 
 
@@ -197,9 +197,9 @@ class TestDataFlow(TestCase):
 
     def test_unsupported_op_code(self, flags=force_pyobj_flags):
         pyfunc = unsupported_op_code
-        with self.assertRaises(RuntimeError) as raises:
+        with self.assertRaises(errors.LoweringError) as raises:
             cr = compile_isolated(pyfunc, (), flags=flags)
-        msg="Use of unknown opcode MAKE_FUNCTION"
+        msg="make_function"
         self.assertIn(msg, str(raises.exception))
         
 if __name__ == '__main__':
