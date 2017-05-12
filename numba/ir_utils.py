@@ -90,7 +90,7 @@ def mk_range_block(typemap, start, stop, step, calltypes, scope, loc):
     # range_call_var = call g_range_var(start, stop, step)
     range_call = ir.Expr.call(g_range_var, args, (), loc)
     calltypes[range_call] = typemap[g_range_var.name].get_call_type(
-        typing.Context(), [types.intp], {})
+        typing.Context(), [types.intp]*len(args), {})
     #signature(types.range_state64_type, types.intp)
     range_call_var = ir.Var(scope, mk_unique_var("$range_c_var"), loc)
     typemap[range_call_var.name] = types.iterators.RangeType(types.intp)
