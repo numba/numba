@@ -499,7 +499,7 @@ class Pipeline(object):
         """
         # Ensure we have an IR and type information.
         assert self.func_ir
-        inline_pass = InlineClosureCallPass(config, self.func_ir, run_frontend)
+        inline_pass = InlineClosureCallPass(self.func_ir, run_frontend)
         inline_pass.run()
         # Remove all Dels, and re-run postproc
         post_proc = postproc.PostProcessor(self.func_ir)

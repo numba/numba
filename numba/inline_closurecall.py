@@ -1,4 +1,4 @@
-from numba import ir, ir_utils
+from numba import config, ir, ir_utils
 
 from numba.ir_utils import (mk_unique_var, next_label, add_offset_to_labels, 
     replace_vars, remove_dels, remove_dead, rename_labels)
@@ -7,13 +7,12 @@ class InlineClosureCallPass(object):
     """InlineClosureCallPass class looks for direct call to locally defined 
     closures, and inline the body of the closure function to the call site.
     """
-    def __init__(self, config, func_ir, run_frontend):
-        self.config = config
+    def __init__(self, func_ir, run_frontend):
         self.func_ir = func_ir
         self.run_frontend = run_frontend
 
     def debug(self, *args):
-        if self.config.DEBUG_INLINE_CLOSURE:
+        if config.DEBUG_INLINE_CLOSURE:
             print(args) 
 
     def run(self):
@@ -75,12 +74,12 @@ class InlineClosureCallPass(object):
             var_dict[var.name] = scope.make_temp(var.loc)
         self.debug("Before local var rename, var_dict = ", var_dict)
         replace_vars(from_blocks, var_dict)
-        if self.config.DEBUG_INLINE_CLOSURE:
+        if config.DEBUG_INLINE_CLOSURE:
             print("After local var rename: ")
             from_ir.dump()
         # 3. replace formal parameters with actual arguments
         _replace_args_with(from_blocks, call_expr.args)
-        if self.config.DEBUG_INLINE_CLOSURE:
+        if config.DEBUG_INLINE_CLOSURE:
             print("After arguments rename: ")
             from_ir.dump()
         # 4. replace freevar with actual closure var
@@ -90,7 +89,7 @@ class InlineClosureCallPass(object):
             assert(len(callee.code.co_freevars) == len(closure.items))
             self.debug("callee's closure = ", closure)
             _replace_freevars(from_blocks, closure.items)
-            if self.config.DEBUG_INLINE_CLOSURE:
+            if config.DEBUG_INLINE_CLOSURE:
                 print("After closure rename: ")
                 from_ir.dump()
         # 5. split caller blocks into two
@@ -111,7 +110,7 @@ class InlineClosureCallPass(object):
             _add_definition(func_ir, block)
             func_ir.blocks[label] = block
             new_blocks.append((label, block))
-        if self.config.DEBUG_INLINE_CLOSURE:
+        if config.DEBUG_INLINE_CLOSURE:
             print("After merge: ")
             func_ir.dump()
         return new_blocks
