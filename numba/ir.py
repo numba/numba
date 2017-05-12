@@ -869,9 +869,14 @@ class FunctionIR(object):
     def copy(self):
         new_ir = copy.copy(self)
         blocks = {}
-        for label, block in self.blocks:
-            blocks[label] = block.copy()
+        block_entry_vars = {}
+        for label, block in self.blocks.items():
+            new_block = block.copy()
+            blocks[label] = new_block
+            if block in self.block_entry_vars:
+                block_entry_vars[new_block] = self.block_entry_vars[block]
         new_ir.blocks = blocks
+        new_ir.block_entry_vars = block_entry_vars
         return new_ir
 
     def get_block_entry_vars(self, block):
