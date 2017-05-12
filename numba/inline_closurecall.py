@@ -21,27 +21,24 @@ class InlineClosureCallPass(object):
         """
         modified = False
         work_list = list(self.func_ir.blocks.items())
+        self.debug("START InlineClosureCall")
         while work_list:
             label, block = work_list.pop()
-            func_defs = {} # remember all make_function definitions
             for i in range(len(block.body)):
                 instr = block.body[i]
                 if isinstance(instr, ir.Assign):
                     lhs  = instr.target
                     expr = instr.value
-                    if isinstance(expr, ir.Expr):
-                        if expr.op == 'make_function':
-                            func_defs[lhs.name] = expr
-                        elif expr.op == 'call' and isinstance(expr.func, ir.Var):
-                            if expr.func.name in func_defs:
-                                # found call to closure
-                                func_def = func_defs[expr.func.name]
-                                new_blocks = self.inline_closure_call(block, i, func_def)
-                                for block in new_blocks:
-                                    work_list.append(block)
-                                modified = True
-                                # current block is modified, skip the rest
-                                break
+                    if isinstance(expr, ir.Expr) and expr.op == 'call':
+                        func_def = self.func_ir.get_definition(expr.func)
+                        self.debug("found call to ", expr.func, " def = ", func_def)
+                        if isinstance(func_def, ir.Expr) and func_def.op == "make_function":
+                            new_blocks = self.inline_closure_call(block, i, func_def)
+                            for block in new_blocks:
+                                work_list.append(block)
+                            modified = True
+                            # current block is modified, skip the rest
+                            break
         if modified:
             remove_dels(self.func_ir.blocks)
             remove_dead(self.func_ir.blocks, self.func_ir.arg_names)
