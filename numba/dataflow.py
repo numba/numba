@@ -681,25 +681,49 @@ class DataFlowAnalysis(object):
             raise ValueError("Multiple argument raise is not supported.")
         info.append(inst, exc=exc)
 
-    def op_MAKE_FUNCTION(self, info, inst):
+    def op_MAKE_FUNCTION(self, info, inst, MAKE_CLOSURE=False):
         if utils.PYVERSION == (2, 7):
             name = None
         else:
             name = info.pop()
         code = info.pop()
         closure = annotations = kwdefaults = defaults = None
-        if inst.arg & 0x8:
-            closure = info.pop()
-        if inst.arg & 0x4:
-            annotations = info.pop()
-        if inst.arg & 0x2:
-            kwdefaults = info.pop()
-        if inst.arg & 0x1:
-            defaults = info.pop()
+        if utils.PYVERSION >= (3, 0) and utils.PYVERSION < (3, 6):
+            num_posdefaults = inst.arg & 0xff
+            num_kwdefaults = (inst.arg >> 8) & 0xff
+            num_annotations = (inst.arg >> 16) & 0x7fff
+            if MAKE_CLOSURE:
+                closure = info.pop()
+            if num_annotations > 0:
+                annotations = info.pop() 
+            if num_kwdefaults > 0:
+                kwdefaults = []
+                for i in range(num_kwdefaults):
+                    v = info.pop()
+                    k = info.pop()
+                    kwdefaults.append((k,v))
+                kwdefaults = tuple(kwdefaults)
+            if num_posdefaults:
+                defaults = []
+                for i in range(num_posdefaults):
+                    defaults.append(info.pop())
+                defaults = tuple(defaults)
+        else:
+            if inst.arg & 0x8:
+                closure = info.pop()
+            if inst.arg & 0x4:
+                annotations = info.pop()
+            if inst.arg & 0x2:
+                kwdefaults = info.pop()
+            if inst.arg & 0x1:
+                defaults = info.pop()
         res = info.make_temp()
         info.append(inst, name=name, code=code, closure=closure, annotations=annotations, 
                     kwdefaults=kwdefaults, defaults=defaults, res=res)
         info.push(res)
+
+    def op_MAKE_CLOSURE(self, info, inst):
+        self.op_MAKE_FUNCTION(self, info, inst)
 
     def op_LOAD_CLOSURE(self, info, inst):
         res = info.make_temp()
