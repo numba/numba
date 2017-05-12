@@ -953,9 +953,11 @@ class Interpreter(object):
         if defaults != None:
             raise NotImplemented("op_MAKE_FUNCTION with defaults")
         fcode = self.definitions[code][0].value
+        if name:
+            name = self.get(name)
         if closure:
             closure = self.get(closure)
-        expr = ir.Expr.make_function(self.get(name), fcode, closure, self.loc)
+        expr = ir.Expr.make_function(name, fcode, closure, self.loc)
         self.store(expr, res)
 
     def op_LOAD_CLOSURE(self, inst, res):

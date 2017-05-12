@@ -682,7 +682,10 @@ class DataFlowAnalysis(object):
         info.append(inst, exc=exc)
 
     def op_MAKE_FUNCTION(self, info, inst):
-        name = info.pop()
+        if utils.PYVERSION == (2, 7):
+            name = None
+        else:
+            name = info.pop()
         code = info.pop()
         closure = annotations = kwdefaults = defaults = None
         if inst.arg & 0x8:
