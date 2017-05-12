@@ -19,6 +19,7 @@ class InlineClosureCallPass(object):
     def run(self):
         """Run inline closure call pass.
         """
+        modified = False
         work_list = list(self.func_ir.blocks.items())
         while work_list:
             label, block = work_list.pop()
@@ -38,11 +39,13 @@ class InlineClosureCallPass(object):
                                 new_blocks = self.inline_closure_call(block, i, func_def)
                                 for block in new_blocks:
                                     work_list.append(block)
+                                modified = True
                                 # current block is modified, skip the rest
                                 break
-        remove_dels(self.func_ir.blocks)
-        remove_dead(self.func_ir.blocks, self.func_ir.arg_names)
-        self.func_ir.blocks = rename_labels(self.func_ir.blocks)
+        if modified:
+            remove_dels(self.func_ir.blocks)
+            remove_dead(self.func_ir.blocks, self.func_ir.arg_names)
+            self.func_ir.blocks = rename_labels(self.func_ir.blocks)
 
     def inline_closure_call(self, block, i, callee):
         """Inline the body of `callee` at its callsite (`i`-th instruction of `block`)
