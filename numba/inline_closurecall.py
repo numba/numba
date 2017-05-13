@@ -29,7 +29,10 @@ class InlineClosureCallPass(object):
                     lhs  = instr.target
                     expr = instr.value
                     if isinstance(expr, ir.Expr) and expr.op == 'call':
-                        func_def = self.func_ir.get_definition(expr.func)
+                        try:
+                            func_def = self.func_ir.get_definition(expr.func)
+                        except KeyError:
+                            func_def = None
                         self.debug("found call to ", expr.func, " def = ", func_def)
                         if isinstance(func_def, ir.Expr) and func_def.op == "make_function":
                             new_blocks = self.inline_closure_call(block, i, func_def)
