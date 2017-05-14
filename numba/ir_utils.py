@@ -641,13 +641,11 @@ def find_topo_order(blocks):
 # format: {type:function}
 call_table_extensions = {}
 
-def get_call_table(blocks):
+def get_call_table(blocks, call_table={}, reverse_call_table={}):
     """returns a dictionary of call variables and their references.
     """
-    # example: c = np.zeros becomes c:["zeroes", np]
-    call_table = {}
-    # example: c = np.zeros becomes pp:c
-    reverse_call_table = {}
+    # call_table xample: c = np.zeros becomes c:["zeroes", np]
+    # reverse_call_table example: c = np.zeros becomes np_var:c
 
     topo_order = find_topo_order(blocks)
     for label in reversed(topo_order):
@@ -671,7 +669,10 @@ def get_call_table(blocks):
                     if lhs in reverse_call_table:
                         call_var = reverse_call_table[lhs]
                         call_table[call_var].append(rhs.value)
-    return call_table
+            for T,f in call_table_extensions.items():
+                if isinstance(inst,T):
+                    f(inst, call_table, reverse_call_table)
+    return call_table, reverse_call_table
 
 def get_stmt_writes(stmt):
     writes = set()

@@ -18,7 +18,7 @@ from numba.ir_utils import (mk_unique_var, next_label, mk_alloc,
     get_np_ufunc_typ, mk_range_block, mk_loop_header, find_op_typ,
     get_name_var_table, replace_vars, visit_vars, visit_vars_inner, remove_dels,
     remove_dead, copy_propagate, get_block_copies, apply_copy_propagate,
-    dprint_func_ir, find_topo_order, get_stmt_writes, rename_labels)
+    dprint_func_ir, find_topo_order, get_stmt_writes, rename_labels, get_call_table)
 
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
