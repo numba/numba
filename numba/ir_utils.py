@@ -637,6 +637,42 @@ def find_topo_order(blocks):
     post_order.reverse()
     return post_order
 
+# other packages that define new nodes add calls to get call table
+# format: {type:function}
+call_table_extensions = {}
+
+def get_call_table(blocks):
+    """returns a dictionary of call variables and their references.
+    """
+    # example: c = np.zeros becomes c:["zeroes", np]
+    call_table = {}
+    # example: c = np.zeros becomes pp:c
+    reverse_call_table = {}
+
+    topo_order = find_topo_order(blocks)
+    for label in reversed(topo_order):
+        for inst in reversed(blocks[label].body):
+            if isinstance(inst, ir.Assign):
+                lhs = inst.target.name
+                rhs = inst.value
+                if isinstance(rhs, ir.Expr) and rhs.op=='call':
+                    call_table[rhs.func.name] = []
+                if isinstance(rhs, ir.Expr) and rhs.op=='getattr':
+                    if lhs in call_table:
+                        call_table[lhs].append(rhs.attr)
+                        reverse_call_table[rhs.value.name] = lhs
+                    if lhs in reverse_call_table:
+                        call_var = reverse_call_table[lhs]
+                        call_table[call_var].append(rhs.attr)
+                        reverse_call_table[rhs.value.name] = call_var
+                if isinstance(rhs, ir.Global):
+                    if lhs in call_table:
+                        call_table[lhs].append(rhs.value)
+                    if lhs in reverse_call_table:
+                        call_var = reverse_call_table[lhs]
+                        call_table[call_var].append(rhs.value)
+    return call_table
+
 def get_stmt_writes(stmt):
     writes = set()
     if isinstance(stmt, (ir.Assign, ir.SetItem, ir.StaticSetItem)):
