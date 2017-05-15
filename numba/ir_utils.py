@@ -34,7 +34,20 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
             tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
             if typemap:
                 typemap[tuple_var.name] = types.containers.UniTuple(types.intp, ndims)
-            tuple_call = ir.Expr.build_tuple(list(size_var), loc)
+            # constant sizes need to be assigned to vars
+            new_sizes = []
+            for size in size_var:
+                if isinstance(size, ir.Var):
+                    new_size = size
+                else:
+                    assert isinstance(size, int)
+                    new_size = ir.Var(scope, mk_unique_var("$alloc_size"), loc)
+                    if typemap:
+                        typemap[new_size.name] = types.intp
+                    size_assign = ir.Assign(ir.Const(size, loc), new_size, loc)
+                    out.append(size_assign)
+                new_sizes.append(new_size)
+            tuple_call = ir.Expr.build_tuple(new_sizes, loc)
             tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
             out.append(tuple_assign)
             size_var = tuple_var
@@ -120,7 +133,9 @@ def _mk_range_args(typemap, start, stop, step, scope, loc):
     else:
         assert isinstance(stop, int)
         g_stop_var = ir.Var(scope, mk_unique_var("$range_stop"), loc)
-        stop_assign = ir.Assign(ir.Const(stop, loc), g_stop_var)
+        if typemap:
+            typemap[g_stop_var.name] = types.intp
+        stop_assign = ir.Assign(ir.Const(stop, loc), g_stop_var, loc)
         nodes.append(stop_assign)
     if start==0 and step==1:
         return nodes, [g_stop_var]
@@ -130,6 +145,8 @@ def _mk_range_args(typemap, start, stop, step, scope, loc):
     else:
         assert isinstance(start, int)
         g_start_var = ir.Var(scope, mk_unique_var("$range_start"), loc)
+        if typemap:
+            typemap[g_start_var.name] = types.intp
         start_assign = ir.Assign(ir.Const(start, loc), g_start_var)
         nodes.append(start_assign)
     if step==1:
@@ -140,6 +157,8 @@ def _mk_range_args(typemap, start, stop, step, scope, loc):
     else:
         assert isinstance(step, int)
         g_step_var = ir.Var(scope, mk_unique_var("$range_step"), loc)
+        if typemap:
+            typemap[g_step_var.name] = types.intp
         step_assign = ir.Assign(ir.Const(step, loc), g_step_var)
         nodes.append(step_assign)
 
