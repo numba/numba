@@ -1058,7 +1058,6 @@ def remove_dead_parfor(parfor, lives, args):
         if (isinstance(stmt, ir.SetItem) and stmt.index.name==parfor.index_var.name
                 and stmt.target.name not in lives):
             saved_values[stmt.target.name] = stmt.value
-            continue
         if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
             rhs = stmt.value
             if rhs.op=='getitem' and rhs.index.name==parfor.index_var.name:
