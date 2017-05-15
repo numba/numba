@@ -117,7 +117,7 @@ def get_global_func_typ(func):
     for (k,v) in typing.templates.builtin_registry.globals:
         if k==func:
             return v
-    raise RuntimeError("func type not found"+str(func))
+    raise RuntimeError("func type not found {}".format(func))
 
 def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
     """make a block that is a loop header updating iteration variables.

@@ -93,7 +93,7 @@ class Parfor(ir.Expr, ir.Stmt):
 
     def dump(self,  file=None):
         file = file or sys.stdout
-        print(("begin parfor "+str(self.id)).center(20,'-'), file=file)
+        print(("begin parfor {}".format(self.id)).center(20,'-'), file=file)
         for loopnest in self.loop_nests:
             print(loopnest, file=file)
         print("init block:", file=file)
