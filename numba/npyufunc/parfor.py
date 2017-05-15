@@ -265,7 +265,7 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
         print("loop_body dump ", type(loop_body))
         _print_body(loop_body)
 
-    gufunc_param_types = [numba.types.npytypes.Array(numba.int64, 1, "C")] + param_types
+    gufunc_param_types = [numba.types.npytypes.Array(numba.intp, 1, "C")] + param_types
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_param_types = ", type(gufunc_param_types), "\n", gufunc_param_types)
 

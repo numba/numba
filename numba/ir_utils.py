@@ -24,7 +24,7 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
     """
     out = []
     ndims = 1
-    size_typ = types.int64
+    size_typ = types.intp
     if isinstance(size_var, tuple):
         if len(size_var) == 1:
             size_var = size_var[0]
@@ -32,12 +32,12 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
             # tuple_var = build_tuple([size_var...])
             ndims = len(size_var)
             tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
-            typemap[tuple_var.name] = types.containers.UniTuple(types.int64, ndims)
+            typemap[tuple_var.name] = types.containers.UniTuple(types.intp, ndims)
             tuple_call = ir.Expr.build_tuple(list(size_var), loc)
             tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
             out.append(tuple_assign)
             size_var = tuple_var
-            size_typ = types.containers.UniTuple(types.int64, ndims)
+            size_typ = types.containers.UniTuple(types.intp, ndims)
     # g_np_var = Global(numpy)
     g_np_var = ir.Var(scope, mk_unique_var("$np_g_var"), loc)
     typemap[g_np_var.name] = types.misc.Module(numpy)
@@ -84,21 +84,21 @@ def mk_range_block(typemap, size_var, calltypes, scope, loc):
     # range_call_var = call g_range_var(size_var)
     range_call = ir.Expr.call(g_range_var, [size_var], (), loc)
     calltypes[range_call] = typemap[g_range_var.name].get_call_type(
-        typing.Context(), [types.int64], {})
-    #signature(types.range_state64_type, types.int64)
+        typing.Context(), [types.intp], {})
+    #signature(types.range_state64_type, types.intp)
     range_call_var = ir.Var(scope, mk_unique_var("$range_c_var"), loc)
-    typemap[range_call_var.name] = types.iterators.RangeType(types.int64)
+    typemap[range_call_var.name] = types.iterators.RangeType(types.intp)
     range_call_assign = ir.Assign(range_call, range_call_var, loc)
     # iter_var = getiter(range_call_var)
     iter_call = ir.Expr.getiter(range_call_var ,loc)
     calltypes[iter_call] = signature(types.range_iter64_type,
         types.range_state64_type)
     iter_var = ir.Var(scope, mk_unique_var("$iter_var"), loc)
-    typemap[iter_var.name] = types.iterators.RangeIteratorType(types.int64)
+    typemap[iter_var.name] = types.iterators.RangeIteratorType(types.intp)
     iter_call_assign = ir.Assign(iter_call, iter_var, loc)
     # $phi = iter_var
     phi_var = ir.Var(scope, mk_unique_var("$phi"), loc)
-    typemap[phi_var.name] = types.iterators.RangeIteratorType(types.int64)
+    typemap[phi_var.name] = types.iterators.RangeIteratorType(types.intp)
     phi_assign = ir.Assign(iter_var, phi_var, loc)
     # jump to header
     jump_header = ir.Jump(-1, loc)
@@ -120,14 +120,14 @@ def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
     """
     # iternext_var = iternext(phi_var)
     iternext_var = ir.Var(scope, mk_unique_var("$iternext_var"), loc)
-    typemap[iternext_var.name] = types.containers.Pair(types.int64, types.boolean)
+    typemap[iternext_var.name] = types.containers.Pair(types.intp, types.boolean)
     iternext_call = ir.Expr.iternext(phi_var, loc)
     calltypes[iternext_call] = signature(
-        types.containers.Pair(types.int64, types.boolean), types.range_iter64_type)
+        types.containers.Pair(types.intp, types.boolean), types.range_iter64_type)
     iternext_assign = ir.Assign(iternext_call, iternext_var, loc)
     # pair_first_var = pair_first(iternext_var)
     pair_first_var = ir.Var(scope, mk_unique_var("$pair_first_var"), loc)
-    typemap[pair_first_var.name] = types.int64
+    typemap[pair_first_var.name] = types.intp
     pair_first_call = ir.Expr.pair_first(iternext_var, loc)
     pair_first_assign = ir.Assign(pair_first_call, pair_first_var, loc)
     # pair_second_var = pair_second(iternext_var)
@@ -137,7 +137,7 @@ def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
     pair_second_assign = ir.Assign(pair_second_call, pair_second_var, loc)
     # phi_b_var = pair_first_var
     phi_b_var = ir.Var(scope, mk_unique_var("$phi"), loc)
-    typemap[phi_b_var.name] = types.int64
+    typemap[phi_b_var.name] = types.intp
     phi_b_assign = ir.Assign(pair_first_var, phi_b_var, loc)
     # branch pair_second_var body_block out_block
     branch = ir.Branch(pair_second_var, -1, -1, loc)

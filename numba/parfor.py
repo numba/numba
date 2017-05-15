@@ -199,13 +199,13 @@ class ParforPass(object):
         if ndims > 1:
             loc = body_block.loc
             tuple_var = ir.Var(scope, mk_unique_var("$parfor_index_tuple_var"), loc)
-            self.typemap[tuple_var.name] = types.containers.UniTuple(types.int64, ndims)
+            self.typemap[tuple_var.name] = types.containers.UniTuple(types.intp, ndims)
             tuple_call = ir.Expr.build_tuple(list(index_vars), loc)
             tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
             body_block.body.append(tuple_assign)
-            return tuple_var, types.containers.UniTuple(types.int64, ndims)
+            return tuple_var, types.containers.UniTuple(types.intp, ndims)
         else:
-            return index_vars[0], types.int64
+            return index_vars[0], types.intp
 
     def _arrayexpr_to_parfor(self, lhs, arrayexpr, avail_vars):
         """generate parfor from arrayexpr node, which is essentially a
@@ -227,7 +227,7 @@ class ParforPass(object):
             size_vars.append(size_var)
             index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
             index_vars.append(index_var)
-            self.typemap[index_var.name] = types.int64
+            self.typemap[index_var.name] = types.intp
             loopnests.append( LoopNest(index_var, size_var, corr) )
 
         # generate init block and body
@@ -320,7 +320,7 @@ class ParforPass(object):
             scope = lhs.scope
             loc = expr.loc
             index_var = ir.Var(scope, mk_unique_var("parfor_index"), lhs.loc)
-            self.typemap[index_var.name] = types.int64
+            self.typemap[index_var.name] = types.intp
             loopnests = [ LoopNest(index_var, size_var, corr) ]
             init_block = ir.Block(scope, loc)
             parfor = Parfor(loopnests, init_block, {}, loc, self.array_analysis, index_var)
@@ -374,7 +374,7 @@ class ParforPass(object):
                 # lhs[parfor_index] = sum_var
                 setitem_node = ir.SetItem(lhs, index_var, sum_var, loc)
                 self.calltypes[setitem_node] = signature(types.none,
-                    self.typemap[lhs.name], types.int64, el_typ)
+                    self.typemap[lhs.name], types.intp, el_typ)
                 out_block.body = [setitem_node]
                 parfor.loop_body = {range_label:range_block,
                     header_label:header_block, body_label:body_block,
@@ -413,7 +413,7 @@ class ParforPass(object):
             parfor_index = []
             for i in range(ndims):
                 index_var = ir.Var(scope, mk_unique_var("$parfor_index" + str(i)), loc)
-                self.typemap[index_var.name] = types.int64
+                self.typemap[index_var.name] = types.intp
                 parfor_index.append(index_var)
                 loopnests.append(LoopNest(index_var, sizes[i], corrs[i]))
 
@@ -483,11 +483,11 @@ def _mk_mvdot_body(typemap, calltypes, phi_b_var, index_var, in1, in2, sum_var,
     body_block = ir.Block(scope, loc)
     # inner_index = phi_b_var
     inner_index = ir.Var(scope, mk_unique_var("$inner_index"), loc)
-    typemap[inner_index.name] = types.int64
+    typemap[inner_index.name] = types.intp
     inner_index_assign = ir.Assign(phi_b_var, inner_index, loc)
     # tuple_var = build_tuple(index_var, inner_index)
     tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
-    typemap[tuple_var.name] = types.containers.UniTuple(types.int64, 2)
+    typemap[tuple_var.name] = types.containers.UniTuple(types.intp, 2)
     tuple_call = ir.Expr.build_tuple([index_var, inner_index], loc)
     tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
     # X_val = getitem(X, tuple_var)
@@ -501,7 +501,7 @@ def _mk_mvdot_body(typemap, calltypes, phi_b_var, index_var, in1, in2, sum_var,
     v_val = ir.Var(scope, mk_unique_var("$"+in2.name+"_val"), loc)
     typemap[v_val.name] = el_typ
     v_getitem_call = ir.Expr.getitem(in2, inner_index, loc)
-    calltypes[v_getitem_call] = signature(el_typ, typemap[in2.name], types.int64)
+    calltypes[v_getitem_call] = signature(el_typ, typemap[in2.name], types.intp)
     v_getitem_assign = ir.Assign(v_getitem_call, v_val, loc)
     # add_var = X_val * v_val
     add_var = ir.Var(scope, mk_unique_var("$add_var"), loc)
@@ -639,12 +639,12 @@ def _gen_arrayexpr_getitem(var, parfor_index_tuple_var, all_parfor_indices,
             ind_offset = num_indices-ndims
             tuple_var = ir.Var(var.scope,
                 mk_unique_var("$parfor_index_tuple_var_bcast"), loc)
-            typemap[tuple_var.name] = types.containers.UniTuple(types.int64,
+            typemap[tuple_var.name] = types.containers.UniTuple(types.intp,
                 ndims)
             # const var for size 1 dim access index: $const0 = Const(0)
             const_node = ir.Const(0, var.loc)
             const_var = ir.Var(var.scope, mk_unique_var("$const_ind_0"), loc)
-            typemap[const_var.name] = types.int64
+            typemap[const_var.name] = types.intp
             const_assign = ir.Assign(const_node, const_var, loc)
             out_ir.append(const_assign)
             index_vars = []
