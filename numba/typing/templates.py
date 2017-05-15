@@ -156,7 +156,11 @@ class FunctionTemplate(object):
         self.context = context
 
     def _select(self, cases, args, kws):
-        selected = self.context.resolve_overload(self.key, cases, args, kws)
+        options = {
+            'no_unsafe_casting': getattr(self, 'no_unsafe_casting', False),
+        }
+        selected = self.context.resolve_overload(self.key, cases, args, kws,
+                                                 **options)
         return selected
 
     def get_impl_key(self, sig):
