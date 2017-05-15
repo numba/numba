@@ -401,6 +401,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     dim_stops = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, num_dim), name = "dims")
     for i in range(num_dim):
         start, stop, step = loop_ranges[i]
+        stop = builder.sub(stop, one) # substract 1 because do-scheduling takes inclusive ranges
         builder.store(start, builder.gep(dim_starts, [context.get_constant(types.intp, i)]))
         builder.store(stop, builder.gep(dim_stops, [context.get_constant(types.intp, i)]))
     sched_size = get_thread_count() * num_dim * 2
