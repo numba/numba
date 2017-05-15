@@ -66,7 +66,7 @@ def _lower_parfor_parallel(lowerer, parfor):
         print("gu_signature = ", gu_signature)
 
     # call the func in parallel by wrapping it with ParallelGUFuncBuilder
-    loop_ranges = [l.range_variable.name for l in parfor.loop_nests]
+    loop_ranges = [(l.start, l.stop, l.step) for l in parfor.loop_nests]
     if config.DEBUG_ARRAY_OPT:
         print("loop_nests = ", parfor.loop_nests)
         print("loop_ranges = ", loop_ranges)
@@ -358,12 +358,26 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     if config.DEBUG_ARRAY_OPT:
         print("parallel function = ", wrapper_name, cres)
 
-    if config.DEBUG_ARRAY_OPT:
-        cgutils.printf(builder, "loop_ranges = ")
-        for v in loop_ranges:
-            print("call_parallel_gufunc v = ", v, " ", lowerer.loadvar(v))
-            cgutils.printf(builder, "%d ", lowerer.loadvar(v))
-        cgutils.printf(builder, "\n")
+    # loadvars for loop_ranges
+    def load_range(v):
+        if isinstance(v, ir.Var):
+            return lowerer.loadvar(v.name)
+        else:
+            return context.get_constant(types.intp, v)
+
+    num_dim = len(loop_ranges)
+    for i in range(num_dim):
+        start, stop, step = loop_ranges[i]
+        start = load_range(start)
+        stop = load_range(stop)
+        assert(step == 1) # We do not support loop steps other than 1
+        step = load_range(step)
+        # size = builder.sdiv(builder.sub(stop, start), step)
+        loop_ranges[i] = (start, stop, step)
+
+        if config.DEBUG_ARRAY_OPT:
+            print("call_parallel_gufunc loop_ranges[" + str(i) + "] = ", start, stop, step)
+            cgutils.printf(builder, "loop range[" + str(i) + "]: %d %d (%d)\n", start, stop, step)
 
 
     # Commonly used LLVM types and constants
@@ -383,16 +397,18 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     sched_sig = sin.pop(0)
 
     # Call do_scheduling with appropriate arguments
-    num_dim = len(loop_ranges)
-    out_dims = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, num_dim), name = "dims")
+    dim_starts = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, num_dim), name = "dims")
+    dim_stops = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, num_dim), name = "dims")
     for i in range(num_dim):
-        builder.store(lowerer.loadvar(loop_ranges[i]), builder.gep(out_dims, [context.get_constant(types.intp, i)]))
+        start, stop, step = loop_ranges[i]
+        builder.store(start, builder.gep(dim_starts, [context.get_constant(types.intp, i)]))
+        builder.store(stop, builder.gep(dim_stops, [context.get_constant(types.intp, i)]))
     sched_size = get_thread_count() * num_dim * 2
     sched = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, sched_size), name = "sched")
     debug_flag = 1 if config.DEBUG_ARRAY_OPT else 0
-    scheduling_fnty = lc.Type.function(intp_ptr_t, [intp_t, intp_ptr_t, uintp_t, intp_ptr_t, intp_t])
+    scheduling_fnty = lc.Type.function(intp_ptr_t, [intp_t, intp_ptr_t, intp_ptr_t, uintp_t, intp_ptr_t, intp_t])
     do_scheduling = builder.module.get_or_insert_function(scheduling_fnty, name="do_scheduling")
-    builder.call(do_scheduling, [context.get_constant(types.intp, num_dim), out_dims,
+    builder.call(do_scheduling, [context.get_constant(types.intp, num_dim), dim_starts, dim_stops,
                                  context.get_constant(types.uintp, get_thread_count()), sched, context.get_constant(types.intp, debug_flag)])
 
     # init reduction array allocation here.
