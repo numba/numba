@@ -1022,6 +1022,32 @@ class TestOperators(TestCase):
     def test_bitwise_not_npm(self):
         self.test_bitwise_not(flags=Noflags)
 
+    def test_bitwise_float(self):
+        """
+        Make sure that bitwise float operations are not allowed
+        """
+        def assert_reject_compile(pyfunc, argtypes):
+            msg = 'expecting TypingError with compiling {}'.format(pyfunc)
+            with self.assertRaises(errors.TypingError, msg=msg):
+                compile_isolated(pyfunc, argtypes)
+
+        methods = [
+            'bitshift_left_usecase',
+            'bitshift_ileft_usecase',
+            'bitshift_right_usecase',
+            'bitshift_iright_usecase',
+            'bitwise_and_usecase',
+            'bitwise_iand_usecase',
+            'bitwise_or_usecase',
+            'bitwise_ior_usecase',
+            'bitwise_xor_usecase',
+            'bitwise_ixor_usecase',
+            'bitwise_not_usecase_binary',
+        ]
+        for name in methods:
+            pyfunc = getattr(self.op, name)
+            assert_reject_compile(pyfunc, (types.float32, types.float32))
+
     def test_not(self):
         pyfunc = self.op.not_usecase
 
