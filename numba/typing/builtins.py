@@ -490,8 +490,6 @@ class Len(AbstractTemplate):
             return signature(types.intp, val)
         elif isinstance(val, (types.RangeType)):
             return signature(val.dtype, val)
-        elif isinstance(val, types.RangeIteratorType):
-            return signature(val.yield_type, val)
 
 
 @infer

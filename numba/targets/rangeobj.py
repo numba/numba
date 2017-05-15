@@ -75,15 +75,6 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
         res = RangeIter.from_range_state(context, builder, state)
         return impl_ret_untracked(context, builder, int_type, builder.load(res.count))
 
-    @lower_builtin(len, range_iter_type)
-    def range_iter_len(context, builder, sig, args):
-        """
-        len(range_iter)
-        """
-        (value,) = args
-        res = RangeIter(context, builder, value)
-        return impl_ret_untracked(context, builder, int_type, builder.load(res.count))
-
     @lower_builtin('getiter', range_state_type)
     def getiter_range32_impl(context, builder, sig, args):
         """
