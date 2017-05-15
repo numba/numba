@@ -2,7 +2,19 @@
 #define GUFUNC_SCHEDULER
 
 #include <stdint.h>
-#if __SIZEOF_POINTER__ == 8
+
+#ifndef __SIZEOF_POINTER__
+    /* MSVC doesn't define __SIZEOF_POINTER__ */
+    #if   defined(_WIN64)
+        #define intp int64_t
+        #define uintp uint64_t
+    #elif defined(_WIN32)
+        #define intp int
+        #define uintp unsigned
+    #else
+        #error "cannot determine size of intp"
+    #endif
+#elif __SIZEOF_POINTER__ == 8
     #define intp int64_t
     #define uintp uint64_t
 #else
