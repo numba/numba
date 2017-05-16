@@ -1,11 +1,17 @@
 #ifndef GUFUNC_SCHEDULER
 #define GUFUNC_SCHEDULER
 
-#include <stdint.h>
+/* define int64_t and uint64_t for VC9 */
+#ifdef _MSC_VER
+    #define int64_t signed __int64
+    #define uint64_t unsigned __int64
+#else
+    #include <stdint.h>
+#endif
 
 #ifndef __SIZEOF_POINTER__
     /* MSVC doesn't define __SIZEOF_POINTER__ */
-    #if   defined(_WIN64)
+    #if defined(_WIN64)
         #define intp int64_t
         #define uintp uint64_t
     #elif defined(_WIN32)
