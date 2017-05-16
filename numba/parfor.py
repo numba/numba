@@ -1076,7 +1076,7 @@ def fuse_parfors_inner(parfor1, parfor2):
 
     # replace parfor2 indices with parfor1's
     ndims = len(parfor1.loop_nests)
-    index_dict = {}
+    index_dict = {parfor2.index_var.name:parfor1.index_var}
     for i in range(ndims):
         index_dict[parfor2.loop_nests[i].index_variable.name] = parfor1.loop_nests[i].index_variable
     replace_vars(parfor1.loop_body, index_dict)
