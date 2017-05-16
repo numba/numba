@@ -6,7 +6,8 @@ import sys
 
 from .. import compiler, ir, types, six, cgutils, sigutils
 from numba.ir_utils import (add_offset_to_labels, replace_var_names,
-                            remove_dels, legalize_names, mk_unique_var, rename_labels)
+                            remove_dels, legalize_names, mk_unique_var, 
+			    rename_labels, get_name_var_table)
 from ..typing import signature
 from numba import config
 import llvmlite.llvmpy.core as lc
@@ -264,6 +265,16 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
         gufunc_ir.dump()
         print("loop_body dump ", type(loop_body))
         _print_body(loop_body)
+
+    # rename all variables in gufunc_ir afresh
+    var_table = get_name_var_table(gufunc_ir.blocks)
+    new_var_dict = {}
+    for name, var in var_table.items():
+       new_var_dict[name] = mk_unique_var(name)
+    replace_var_names(gufunc_ir.blocks, new_var_dict)
+    if config.DEBUG_ARRAY_OPT:
+        print("gufunc_ir dump after renaming ")
+        gufunc_ir.dump()
 
     gufunc_param_types = [numba.types.npytypes.Array(numba.intp, 1, "C")] + param_types
     if config.DEBUG_ARRAY_OPT:
