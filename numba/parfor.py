@@ -47,9 +47,9 @@ class LoopNest(object):
         self.correlation = correlation
 
     def __repr__(self):
-        return ("LoopNest(index_variable=%s, " % self.index_variable
-                + "range=%s, " % str(self.start)+","+str(self.stop)+","+str(self.step)
-                + "correlation=%d)" % self.correlation)
+        return ("LoopNest(index_variable={}, range={},{},{} correlation={})".
+                format(self.index_variable, self.start, self.stop, self.step,
+                self.correlation))
 
 
 class Parfor(ir.Expr, ir.Stmt):
@@ -101,6 +101,7 @@ class Parfor(ir.Expr, ir.Stmt):
     def dump(self,  file=None):
         file = file or sys.stdout
         print(("begin parfor {}".format(self.id)).center(20,'-'), file=file)
+        print("index_var = ", self.index_var)
         for loopnest in self.loop_nests:
             print(loopnest, file=file)
         print("init block:", file=file)
@@ -108,7 +109,6 @@ class Parfor(ir.Expr, ir.Stmt):
         for offset, block in sorted(self.loop_body.items()):
             print('label %s:' % (offset,), file=file)
             block.dump(file)
-        print("index_var = ", self.index_var)
         print(("end parfor").center(20,'-'), file=file)
 
 
