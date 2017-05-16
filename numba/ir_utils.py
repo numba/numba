@@ -374,6 +374,7 @@ def remove_dead(blocks, args):
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
     arg_aliases = find_potential_aliases(blocks, args)
+    call_table,_ = get_call_table(blocks)
 
     removed = False
     for label, block in blocks.items():
@@ -384,14 +385,14 @@ def remove_dead(blocks, args):
             lives |= live_map[out_blk]
         if label in cfg.exit_points():
             lives |= arg_aliases
-        removed |= remove_dead_block(block, lives, arg_aliases)
+        removed |= remove_dead_block(block, lives, call_table, arg_aliases)
     return removed
 
 # other packages that define new nodes add calls to remove dead code in them
 # format: {type:function}
 remove_dead_extensions = {}
 
-def remove_dead_block(block, lives, args):
+def remove_dead_block(block, lives, call_table, args):
     """remove dead code using liveness info.
     Mutable arguments (e.g. arrays) that are not definitely assigned are live
     after return of function.
@@ -412,7 +413,7 @@ def remove_dead_block(block, lives, args):
         if isinstance(stmt, ir.Assign):
             lhs = stmt.target
             rhs = stmt.value
-            if lhs.name not in lives and has_no_side_effect(rhs, lives):
+            if lhs.name not in lives and has_no_side_effect(rhs, lives, call_table):
                 removed = True
                 continue
             if isinstance(rhs, ir.Var) and lhs.name==rhs.name:
@@ -434,9 +435,15 @@ def remove_dead_block(block, lives, args):
     block.body = new_body
     return removed
 
-def has_no_side_effect(rhs, lives):
+def has_no_side_effect(rhs, lives, call_table):
     # TODO: find side-effect free calls like Numpy calls
     if isinstance(rhs, ir.Expr) and rhs.op=='call':
+        func_name = rhs.func.name
+        if func_name not in call_table:
+            return False
+        call_list = call_table[func_name]
+        if call_list==['empty', numpy] or call_list==[slice]:
+            return True
         return False
     if isinstance(rhs, ir.Expr) and rhs.op=='inplace_binop':
         return rhs.lhs.name not in lives
@@ -735,5 +742,3 @@ def rename_labels(blocks):
         new_blocks[new_label] = b
 
     return new_blocks
-
-
