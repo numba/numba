@@ -1318,3 +1318,12 @@ def fix_generator_types(generator_info, return_type, typemap):
         new_state_types.append(typemap[v])
     return_type.state_types = tuple(new_state_types)
     return
+
+def get_parfor_call_table(parfor, call_table={}, reverse_call_table={}):
+    blocks = wrap_parfor_blocks(parfor)
+    call_table, reverse_call_table = get_call_table(blocks, call_table,
+        reverse_call_table)
+    unwrap_parfor_blocks(parfor)
+    return call_table, reverse_call_table
+
+ir_utils.call_table_extensions[Parfor] = get_parfor_call_table

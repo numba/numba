@@ -700,6 +700,27 @@ def get_call_table(blocks, call_table={}, reverse_call_table={}):
                     f(inst, call_table, reverse_call_table)
     return call_table, reverse_call_table
 
+# other packages that define new nodes add calls to get tuple table
+# format: {type:function}
+tuple_table_extensions = {}
+
+def get_tuple_table(blocks, tuple_table={}):
+    """returns a dictionary of tuple variables and their values.
+    """
+    for block in blocks.values():
+        for inst in block.body:
+            if isinstance(inst, ir.Assign):
+                lhs = inst.target.name
+                rhs = inst.value
+                if isinstance(rhs, ir.Expr) and rhs.op=='build_tuple':
+                    tuple_table[lhs] = rhs.items
+                if isinstance(rhs, ir.Const) and isinstance(rhs.value, tuple):
+                    tuple_table[lhs] = rhs.value
+            for T,f in tuple_table_extensions.items():
+                if isinstance(inst,T):
+                    f(inst, tuple_table)
+    return tuple_table
+
 def get_stmt_writes(stmt):
     writes = set()
     if isinstance(stmt, (ir.Assign, ir.SetItem, ir.StaticSetItem)):
