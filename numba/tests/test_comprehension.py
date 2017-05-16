@@ -29,7 +29,6 @@ def comp_nest_with_array(n):
 
 class TestListComprehension(unittest.TestCase):
 
-    @unittest.skipIf(utils.PYVERSION < (2,7) or (utils.PYVERSION < (3,6) and utils.PYVERSION >= (3,)), "needs Python 2.7+ or Python 3.6+")
     @tag('important')
     def test_comp_list(self):
         pyfunc = comp_list
@@ -39,7 +38,6 @@ class TestListComprehension(unittest.TestCase):
         self.assertEqual(cfunc(0), pyfunc(0))
         self.assertEqual(cfunc(-1), pyfunc(-1))
 
-    @unittest.skipIf(utils.PYVERSION < (2,7) or (utils.PYVERSION < (3,6) and utils.PYVERSION >= (3,)), "needs Python 2.7+ or Python 3.6+")
     @tag('important')
     def test_comp_with_array(self):
         pyfunc = comp_with_array
@@ -47,7 +45,6 @@ class TestListComprehension(unittest.TestCase):
         cfunc = cres.entry_point
         self.assertEqual(cfunc(5), pyfunc(5))
 
-    @unittest.skipIf(utils.PYVERSION < (2,7) or (utils.PYVERSION < (3,6) and utils.PYVERSION >= (3,)), "needs Python 2.7+ or Python 3.6+")
     @tag('important')
     def test_comp_nest_with_array(self):
         pyfunc = comp_nest_with_array

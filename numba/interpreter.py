@@ -960,6 +960,9 @@ class Interpreter(object):
         expr = ir.Expr.make_function(name, fcode, closure, self.loc)
         self.store(expr, res)
 
+    def op_MAKE_CLOSURE(self, inst, name, code, closure, annotations, kwdefaults, defaults, res):
+        self.op_MAKE_FUNCTION(inst, name, code, closure, annotations, kwdefaults, defaults, res)
+    
     def op_LOAD_CLOSURE(self, inst, res):
         n_cellvars = len(self.code_cellvars)
         if inst.arg < n_cellvars:

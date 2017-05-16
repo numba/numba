@@ -723,7 +723,7 @@ class DataFlowAnalysis(object):
         info.push(res)
 
     def op_MAKE_CLOSURE(self, info, inst):
-        self.op_MAKE_FUNCTION(self, info, inst)
+        self.op_MAKE_FUNCTION(info, inst, MAKE_CLOSURE=True)
 
     def op_LOAD_CLOSURE(self, info, inst):
         res = info.make_temp()
