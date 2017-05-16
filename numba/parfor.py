@@ -51,12 +51,17 @@ class LoopNest(object):
 
 
 class Parfor(ir.Expr, ir.Stmt):
+
+    id_counter = 0
+
     def __init__(self, loop_nests, init_block, loop_body, loc, array_analysis, index_var):
         super(Parfor, self).__init__(
             op   = 'parfor',
             loc  = loc
         )
 
+        self.id = type(self).id_counter
+        type(self).id_counter =+ 1
         #self.input_info  = input_info
         #self.output_info = output_info
         self.loop_nests = loop_nests
@@ -88,7 +93,7 @@ class Parfor(ir.Expr, ir.Stmt):
 
     def dump(self,  file=None):
         file = file or sys.stdout
-        print(("begin parfor").center(20,'-'), file=file)
+        print(("begin parfor {}".format(self.id)).center(20,'-'), file=file)
         for loopnest in self.loop_nests:
             print(loopnest, file=file)
         print("init block:", file=file)
