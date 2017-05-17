@@ -269,8 +269,10 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
     # rename all variables in gufunc_ir afresh
     var_table = get_name_var_table(gufunc_ir.blocks)
     new_var_dict = {}
+    reserved_names = ["__sentinel__"] + list(param_dict.values()) + legal_loop_indices
     for name, var in var_table.items():
-       new_var_dict[name] = mk_unique_var(name)
+        if not (name in reserved_names):
+            new_var_dict[name] = mk_unique_var(name)
     replace_var_names(gufunc_ir.blocks, new_var_dict)
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_ir dump after renaming ")
