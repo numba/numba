@@ -18,6 +18,9 @@ def _gpu_reduce_factory(fn, nbtype):
 
     @cuda.jit(device=True)
     def inner_warp_reduction(sm_partials, init):
+        """
+        Compute reduction within a single warp
+        """
         tid = cuda.threadIdx.x
         warpid = tid // _WARPSIZE
         laneid = tid % _WARPSIZE
@@ -36,7 +39,23 @@ def _gpu_reduce_factory(fn, nbtype):
     @cuda.jit(device=True)
     def device_reduce_full_block(arr, partials, sm_partials):
         """
-        A device function that computes reduction in the current block.
+        Partially reduce `arr` into `partials` using `sm_partials` as working
+        space.  The algorithm goes like:
+
+            array chunks of 128:  |   0 | 128 | 256 | 384 | 512 |
+                        block-0:  |   x |     |     |   x |     |
+                        block-1:  |     |   x |     |     |   x |
+                        block-2:  |     |     |   x |     |     |
+
+        The array is divided into chunks of 128 (size of a threadblock).
+        The threadblocks consumes the chunks in roundrobin scheduling.
+        First, a threadblock loads a chunk into temp memory.  Then, all
+        subsequent chunks are combined into the temp memory.
+
+        Once all chunks are processed.  Inner-block reduction is performed
+        on the temp memory.  So that, there will just be one scalar result
+        per block.  The result from each block is stored to `partials` at
+        the dedicated slot.
         """
         tid = cuda.threadIdx.x
         blkid = cuda.blockIdx.x
@@ -50,6 +69,7 @@ def _gpu_reduce_factory(fn, nbtype):
 
         # load first value
         tmp = arr[start]
+        # loop over all values in block-stride
         for i in range(start + step, stop, step):
             tmp = reduce_op(tmp, arr[i])
 
@@ -72,7 +92,11 @@ def _gpu_reduce_factory(fn, nbtype):
 
     @cuda.jit(device=True)
     def device_reduce_partial_block(arr, partials, sm_partials):
-        # MUST only have 1 block and all threads global-load exactly once
+        """
+        This computes reduction on `arr`.
+        This device function must be used by 1 threadblock only.
+        The blocksize must match `arr.size` and must not be greater than 128.
+        """
         tid = cuda.threadIdx.x
         blkid = cuda.blockIdx.x
         blksz = cuda.blockDim.x
@@ -146,7 +170,7 @@ class Reduce(object):
         :param binop: A function to be compiled as a CUDA device function that
                     will be used as the binary operation for reduction on a
                     CUDA device. Internally, it is compiled using
-                    ``cuda.jit(signature, device=True)``.
+                    ``cuda.jit(device=True)``.
         """
         self._functor = functor
 
