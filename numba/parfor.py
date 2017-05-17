@@ -1327,3 +1327,11 @@ def get_parfor_call_table(parfor, call_table={}, reverse_call_table={}):
     return call_table, reverse_call_table
 
 ir_utils.call_table_extensions[Parfor] = get_parfor_call_table
+
+def get_parfor_tuple_table(parfor, tuple_table={}):
+    blocks = wrap_parfor_blocks(parfor)
+    tuple_table = ir_utils.get_tuple_table(blocks, tuple_table)
+    unwrap_parfor_blocks(parfor)
+    return tuple_table
+
+ir_utils.tuple_table_extensions[Parfor] = get_parfor_tuple_table
