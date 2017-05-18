@@ -488,6 +488,8 @@ class Len(AbstractTemplate):
         (val,) = args
         if isinstance(val, (types.Buffer, types.BaseTuple)):
             return signature(types.intp, val)
+        elif isinstance(val, (types.RangeType)):
+            return signature(val.dtype, val)
 
 
 @infer
