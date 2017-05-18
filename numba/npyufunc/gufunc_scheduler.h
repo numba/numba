@@ -1,7 +1,7 @@
 #ifndef GUFUNC_SCHEDULER
 #define GUFUNC_SCHEDULER
 
-/* define int64_t and uint64_t for VC9 */
+/* define int64_t and uint64_t for Visual Studio, where stdint only available > VS2008 */
 #ifdef _MSC_VER
     #define int64_t signed __int64
     #define uint64_t unsigned __int64
