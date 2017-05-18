@@ -19,7 +19,7 @@ def make_range_iterator(typ):
     return cgutils.create_struct_proxy(typ)
 
 
-def make_range_impl(range_state_type, range_iter_type, int_type):
+def make_range_impl(int_type, range_state_type, range_iter_type):
     RangeState = cgutils.create_struct_proxy(range_state_type)
 
     @lower_builtin(range, int_type)
@@ -160,7 +160,7 @@ range_impl_map = {
 }
 
 for int_type, state_types in range_impl_map.items():
-    make_range_impl(*state_types, int_type)
+    make_range_impl(int_type, *state_types)
 
 @lower_cast(types.RangeType, types.RangeType)
 def range_to_range(context, builder, fromty, toty, val):
