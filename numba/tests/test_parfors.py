@@ -107,7 +107,7 @@ class TestParfors(unittest.TestCase):
 
         output = calc_pi(100000)
         expected = 3.14
-        np.testing.assert_almost_equal(expected, output, decimal=2)
+        np.testing.assert_almost_equal(expected, output, decimal=1)
         self.assertIn('@do_scheduling', calc_pi.inspect_llvm(calc_pi.signatures[0]))
 
     def test_test1(self):
