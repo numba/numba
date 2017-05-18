@@ -3,7 +3,6 @@ A library written in CUDA Python for generating reduction kernels
 """
 from __future__ import division
 
-from numba import cuda
 from numba.numpy_support import from_dtype
 
 
@@ -12,6 +11,8 @@ _NUMWARPS = 4
 
 
 def _gpu_reduce_factory(fn, nbtype):
+    from numba import cuda
+
     reduce_op = cuda.jit(device=True)(fn)
     inner_sm_size = _WARPSIZE + 1   # plus one to avoid SM collision
     max_blocksize = _NUMWARPS * _WARPSIZE
@@ -206,6 +207,8 @@ class Reduce(object):
         :return: If ``res`` is specified, ``None`` is returned. Otherwise, the
                 result of the reduction is returned.
         """
+        from numba import cuda
+
         # ensure 1d array
         if arr.ndim != 1:
             raise TypeError("only support 1D array")
