@@ -147,8 +147,10 @@ class ParforPass(object):
     def run(self):
         """run parfor conversion pass: replace Numpy calls
         with Parfors when possible and optimize the IR."""
-
+        # remove Del statements for easier optimization
+        remove_dels(self.func_ir.blocks)
         self.array_analysis.run()
+        self._convert_prange(self.func_ir.blocks)
         topo_order = find_topo_order(self.func_ir.blocks)
         # variables available in the program so far (used for finding map
         # functions in array_expr lowering)
@@ -172,8 +174,6 @@ class ParforPass(object):
                 new_body.append(instr)
             block.body = new_body
 
-        # remove Del statements for easier optimization
-        remove_dels(self.func_ir.blocks)
         dprint_func_ir(self.func_ir, "after parfor pass")
         # get copies in to blocks and out from blocks
         in_cps, out_cps = copy_propagate(self.func_ir.blocks, self.typemap)
@@ -209,6 +209,57 @@ class ParforPass(object):
                 self.typemap)
         #lower_parfor_sequential(self.func_ir, self.typemap, self.calltypes)
         return
+
+    def _convert_prange(self, blocks):
+        call_table,_ = get_call_table(blocks)
+        cfg = compute_cfg_from_blocks(blocks)
+        for loop in cfg.loops().values():
+            if len(loop.entries)!=1 or len(loop.exits)!=1:
+                continue
+            entry = list(loop.entries)[0]
+            for inst in blocks[entry].body:
+                # if prange call
+                if (isinstance(inst, ir.Assign) and isinstance(inst.value, ir.Expr)
+                        and inst.value.op=='call' and inst.value.func.name in call_table
+                        and call_table[inst.value.func.name][0]=='prange'):
+                    body_labels = list(loop.body-{loop.header})
+                    # find loop index variable (phi in header block)
+                    for stmt in blocks[loop.header].body:
+                        if isinstance(stmt, ir.Assign) and stmt.target.name.startswith('$phi'):
+                            loop_ind = stmt.target.name
+                            break
+                    # TODO: support start and step
+                    size_var = inst.value.args[0]
+                    # set l=l for dead remove
+                    inst.value = inst.target
+                    scope = blocks[entry].scope
+                    loc = inst.loc
+                    init_block = ir.Block(scope,loc)
+                    body = {l:blocks[l] for l in body_labels}
+                    index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
+                    self.typemap[index_var.name] = types.intp
+                    replace_vars(body, {loop_ind:index_var})
+                    # TODO: find correlation
+                    parfor_loop = LoopNest(index_var, 0, size_var, 1, -1)
+                    parfor = Parfor([parfor_loop], init_block, body, loc,
+                        self.array_analysis, index_var)
+                    # add parfor to entry block, change jump target to exit
+                    jump = blocks[entry].body.pop()
+                    blocks[entry].body.append(parfor)
+                    jump.target = list(loop.exits)[0]
+                    blocks[entry].body.append(jump)
+                    # remove jumps back to header block
+                    for l in body_labels:
+                        last_inst = body[l].body[-1]
+                        if isinstance(last_inst, ir.Jump) and last_inst.target==loop.header:
+                            body[l].body.pop()
+                    # remove loop blocks from top level dict
+                    blocks.pop(loop.header)
+                    for l in body_labels:
+                        blocks.pop(l)
+                    # run convert again to handle other prange loops
+                    return self._convert_prange(blocks)
+
 
     def _is_C_order(self, arr_name):
         typ = self.typemap[arr_name]
