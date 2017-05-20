@@ -34,6 +34,9 @@ import copy
 import numpy
 # circular dependency: import numba.npyufunc.dufunc.DUFunc
 
+class prange(object):
+    pass
+
 _reduction_ops = {
   'sum'  : ('+=', '+', 0),
   'prod' : ('*=', '*', 1),

@@ -4,7 +4,7 @@ import itertools
 
 import numpy as np
 
-from numba import types
+from numba import types, prange
 
 from numba.utils import PYVERSION, RANGE_ITER_OBJECTS, operator_map
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
@@ -85,6 +85,7 @@ class Range(ConcreteTemplate):
 for func in RANGE_ITER_OBJECTS:
     infer_global(func, typing_key=range)(Range)
 
+infer_global(prange, typing_key=prange)(Range)
 
 @infer
 class GetIter(AbstractTemplate):

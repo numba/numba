@@ -9,7 +9,7 @@ import sys
 from . import config, errors, runtests, types
 
 # Re-export typeof
-from .special import typeof
+from .special import typeof, prange
 
 # Re-export error classes
 from .errors import *
@@ -44,6 +44,7 @@ __all__ = """
     jitclass
     njit
     typeof
+    prange
     vectorize
     """.split() + types.__all__ + errors.__all__
 
