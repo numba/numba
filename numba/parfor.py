@@ -220,8 +220,8 @@ class ParforPass(object):
             for inst in blocks[entry].body:
                 # if prange call
                 if (isinstance(inst, ir.Assign) and isinstance(inst.value, ir.Expr)
-                        and inst.value.op=='call' and inst.value.func.name in call_table
-                        and call_table[inst.value.func.name][0]=='prange'):
+                        and inst.value.op=='call'
+                        and self._is_prange(inst.value.func.name, call_table)):
                     body_labels = list(loop.body-{loop.header})
                     # find loop index variable (phi in header block)
                     for stmt in blocks[loop.header].body:
@@ -260,6 +260,12 @@ class ParforPass(object):
                     # run convert again to handle other prange loops
                     return self._convert_prange(blocks)
 
+    def _is_prange(self, func_var, call_table):
+        # prange can be either getattr (numba.prange) or global (prange)
+        if func_var not in call_table:
+            return False
+        call = call_table[func_var]
+        return call[0]=='prange' or call[0]==prange
 
     def _is_C_order(self, arr_name):
         typ = self.typemap[arr_name]
