@@ -11,7 +11,7 @@ import numpy as np
 
 import numba
 from numba import unittest_support as unittest
-from numba import njit
+from numba import njit, prange
 from numba import compiler, typing
 from numba.targets import cpu
 from numba import types
@@ -104,6 +104,33 @@ class TestParfors(unittest.TestCase):
         expected = 120.0
         np.testing.assert_almost_equal(expected, output)
         self.assertIn('@do_scheduling', test_2d.inspect_llvm(test_2d.signatures[0]))
+
+    def test_prange1(self):
+        @numba.njit(parallel=True)
+        def test_p1(n):
+            A = np.zeros(n)
+            for i in prange(n):
+                A[i] = 2.0*i
+            return A
+
+        output = test_p1(4)
+        expected = np.array([ 0.,  2.,  4.,  6.])
+        np.testing.assert_array_almost_equal(expected, output)
+        self.assertIn('@do_scheduling', test_p1.inspect_llvm(test_p1.signatures[0]))
+
+    def test_prange2(self):
+        @numba.njit(parallel=True)
+        def test_p2(n):
+            A = np.zeros(n-1)
+            for i in numba.prange(1,n):
+                A[i-1] = 2.0*i
+            return A
+
+        output = test_p2(4)
+        expected = np.array([2., 4.,  6.])
+        np.testing.assert_array_almost_equal(expected, output)
+        self.assertIn('@do_scheduling', test_p2.inspect_llvm(test_p2.signatures[0]))
+
 
     def test_pi(self):
         @njit(parallel=True)
