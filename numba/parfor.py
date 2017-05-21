@@ -223,13 +223,22 @@ class ParforPass(object):
                         and inst.value.op=='call'
                         and self._is_prange(inst.value.func.name, call_table)):
                     body_labels = list(loop.body-{loop.header})
+                    args = inst.value.args
                     # find loop index variable (phi in header block)
                     for stmt in blocks[loop.header].body:
                         if isinstance(stmt, ir.Assign) and stmt.target.name.startswith('$phi'):
                             loop_ind = stmt.target.name
                             break
-                    # TODO: support start and step
-                    size_var = inst.value.args[0]
+                    start = 0
+                    step = 1
+                    size_var = args[0]
+                    if len(args)==2:
+                        start = args[0]
+                        size_var = args[1]
+                    if len(args)==3:
+                        start = args[0]
+                        size_var = args[1]
+                        step = args[2]
                     # set l=l for dead remove
                     inst.value = inst.target
                     scope = blocks[entry].scope
@@ -240,7 +249,7 @@ class ParforPass(object):
                     self.typemap[index_var.name] = types.intp
                     replace_vars(body, {loop_ind:index_var})
                     # TODO: find correlation
-                    parfor_loop = LoopNest(index_var, 0, size_var, 1, -1)
+                    parfor_loop = LoopNest(index_var, start, size_var, step, -1)
                     parfor = Parfor([parfor_loop], init_block, body, loc,
                         self.array_analysis, index_var)
                     # add parfor to entry block, change jump target to exit
