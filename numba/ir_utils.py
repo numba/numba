@@ -33,6 +33,7 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
     if isinstance(size_var, tuple):
         if len(size_var) == 1:
             size_var = size_var[0]
+            size_var = convert_size_to_var(size_var, typemap, scope, loc, out)
         else:
             # tuple_var = build_tuple([size_var...])
             ndims = len(size_var)
@@ -40,18 +41,8 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
             if typemap:
                 typemap[tuple_var.name] = types.containers.UniTuple(types.intp, ndims)
             # constant sizes need to be assigned to vars
-            new_sizes = []
-            for size in size_var:
-                if isinstance(size, ir.Var):
-                    new_size = size
-                else:
-                    assert isinstance(size, int)
-                    new_size = ir.Var(scope, mk_unique_var("$alloc_size"), loc)
-                    if typemap:
-                        typemap[new_size.name] = types.intp
-                    size_assign = ir.Assign(ir.Const(size, loc), new_size, loc)
-                    out.append(size_assign)
-                new_sizes.append(new_size)
+            new_sizes = [ convert_size_to_var(s, typemap, scope, loc, out)
+                            for s in size_var]
             tuple_call = ir.Expr.build_tuple(new_sizes, loc)
             tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
             out.append(tuple_assign)
@@ -87,6 +78,17 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
 
     out.extend([g_np_assign, attr_assign, typ_var_assign, alloc_assign])
     return out
+
+def convert_size_to_var(size_var, typemap, scope, loc, nodes):
+    if isinstance(size_var, int):
+        new_size = ir.Var(scope, mk_unique_var("$alloc_size"), loc)
+        if typemap:
+            typemap[new_size.name] = types.intp
+        size_assign = ir.Assign(ir.Const(size_var, loc), new_size, loc)
+        nodes.append(size_assign)
+        return new_size
+    assert isinstance(size_var, ir.Var)
+    return size_var
 
 def get_np_ufunc_typ(func):
     """get type of the incoming function from builtin registry"""
