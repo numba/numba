@@ -151,28 +151,7 @@ class ParforPass(object):
         remove_dels(self.func_ir.blocks)
         self.array_analysis.run()
         self._convert_prange(self.func_ir.blocks)
-        topo_order = find_topo_order(self.func_ir.blocks)
-        # variables available in the program so far (used for finding map
-        # functions in array_expr lowering)
-        avail_vars = []
-        for label in topo_order:
-            block = self.func_ir.blocks[label]
-            new_body = []
-            for instr in block.body:
-                if isinstance(instr, ir.Assign):
-                    expr = instr.value
-                    lhs = instr.target
-                    # only translate C order since we can't allocate F
-                    if self._has_known_shape(lhs) and self._is_C_order(lhs.name):
-                        if self._is_supported_npycall(expr):
-                            instr = self._numpy_to_parfor(lhs, expr)
-                        elif isinstance(expr, ir.Expr) and expr.op == 'arrayexpr':
-                            instr = self._arrayexpr_to_parfor(lhs, expr, avail_vars)
-                    elif self._is_supported_npyreduction(expr):
-                        instr = self._reduction_to_parfor(lhs, expr)
-                    avail_vars.append(lhs.name)
-                new_body.append(instr)
-            block.body = new_body
+        self._convert_numpy(self.func_ir.blocks)
 
         dprint_func_ir(self.func_ir, "after parfor pass")
         # get copies in to blocks and out from blocks
@@ -209,6 +188,30 @@ class ParforPass(object):
                 self.typemap)
         #lower_parfor_sequential(self.func_ir, self.typemap, self.calltypes)
         return
+
+    def _convert_numpy(self, blocks):
+        topo_order = find_topo_order(blocks)
+        # variables available in the program so far (used for finding map
+        # functions in array_expr lowering)
+        avail_vars = []
+        for label in topo_order:
+            block = blocks[label]
+            new_body = []
+            for instr in block.body:
+                if isinstance(instr, ir.Assign):
+                    expr = instr.value
+                    lhs = instr.target
+                    # only translate C order since we can't allocate F
+                    if self._has_known_shape(lhs) and self._is_C_order(lhs.name):
+                        if self._is_supported_npycall(expr):
+                            instr = self._numpy_to_parfor(lhs, expr)
+                        elif isinstance(expr, ir.Expr) and expr.op == 'arrayexpr':
+                            instr = self._arrayexpr_to_parfor(lhs, expr, avail_vars)
+                    elif self._is_supported_npyreduction(expr):
+                        instr = self._reduction_to_parfor(lhs, expr)
+                    avail_vars.append(lhs.name)
+                new_body.append(instr)
+            block.body = new_body
 
     def _convert_prange(self, blocks):
         call_table,_ = get_call_table(blocks)
@@ -266,6 +269,11 @@ class ParforPass(object):
                     blocks.pop(loop.header)
                     for l in body_labels:
                         blocks.pop(l)
+                    # run on parfor body
+                    parfor_blocks = wrap_parfor_blocks(parfor)
+                    self._convert_prange(parfor_blocks)
+                    self._convert_numpy(parfor_blocks)
+                    unwrap_parfor_blocks(parfor)
                     # run convert again to handle other prange loops
                     return self._convert_prange(blocks)
 
