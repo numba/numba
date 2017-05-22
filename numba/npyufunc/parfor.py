@@ -90,7 +90,7 @@ def _create_shape_signature(classes, num_inputs, num_reductions, args, func_sig)
     '''
     num_inouts = len(args) - num_reductions
     # maximum class number for array shapes
-    max_shape_num = max(sum([list(x) for x in classes.values()], []))
+    max_shape_num = max(sum([list(x) for x in classes.values()], [1]))
     if config.DEBUG_ARRAY_OPT:
         print("create_shape_signature = ", max_shape_num)
     gu_sin = []
