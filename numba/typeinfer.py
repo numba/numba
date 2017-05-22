@@ -20,7 +20,7 @@ from pprint import pprint
 import traceback
 from collections import OrderedDict
 
-from numba import ir, types, utils, config, six, typing
+from numba import ir, types, utils, config, six, typing, parfor
 from .errors import TypingError, UntypedAttributeError, new_error_context
 from .funcdesc import qualifying_prefix
 
@@ -643,6 +643,8 @@ def register_dispatcher(disp):
         del _temporary_dispatcher_map[name]
 
 
+typeinfer_extensions = {}
+
 class TypeInferer(object):
     """
     Operates on block that shares the same ir.Scope.
@@ -898,6 +900,10 @@ class TypeInferer(object):
             pass
         elif isinstance(inst, ir.StaticRaise):
             pass
+        elif type(inst) in typeinfer_extensions:
+            # let external calls handle stmt if type matches
+            f = typeinfer_extensions[type(inst)]
+            f(inst, self)
         else:
             raise NotImplementedError(inst)
 
