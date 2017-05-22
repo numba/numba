@@ -246,10 +246,12 @@ class BitwiseShiftOperation(ConcreteTemplate):
     # should always be positive but will generally be considered
     # signed anyway, since it's often a constant integer).
     # (also, see issue #1995 for right-shifts)
-    cases = [signature(max(op, types.intp), op, types.intp)
-             for op in sorted(types.signed_domain)]
-    cases += [signature(max(op, types.uintp), op, types.intp)
-              for op in sorted(types.unsigned_domain)]
+    cases = [signature(max(op, types.intp), op, op2)
+             for op in sorted(types.signed_domain)
+             for op2 in [types.uintp, types.intp]]
+    cases += [signature(max(op, types.uintp), op, op2)
+              for op in sorted(types.unsigned_domain)
+              for op2 in [types.uintp, types.intp]]
     no_unsafe_casting = True
 
 
