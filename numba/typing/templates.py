@@ -152,12 +152,16 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
 
 
 class FunctionTemplate(object):
+    # Set to true to disable unsafe cast.
+    # subclass overide-able
+    no_unsafe_casting = False
+
     def __init__(self, context):
         self.context = context
 
     def _select(self, cases, args, kws):
         options = {
-            'no_unsafe_casting': getattr(self, 'no_unsafe_casting', False),
+            'no_unsafe_casting': self.no_unsafe_casting,
         }
         selected = self.context.resolve_overload(self.key, cases, args, kws,
                                                  **options)
