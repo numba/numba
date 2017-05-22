@@ -197,8 +197,10 @@ class ArrayAnalysis(object):
     # lhs is array so rhs has to return array
     def _analyze_rhs_classes(self, node):
         if isinstance(node, ir.Arg):
-            assert self._isarray(node.name)
-            return self._add_array_corr(node.name)
+            return None
+            # can't assume node.name is valid variable
+            #assert self._isarray(node.name)
+            #return self._add_array_corr(node.name)
         elif isinstance(node, ir.Var):
             return copy.copy(self.array_shape_classes[node.name])
         elif isinstance(node, (ir.Global,ir.FreeVar)):
