@@ -905,6 +905,7 @@ def _lower_parfor_sequential_block(block_label, block, new_blocks, typemap, call
         header_block.body[-1].truebr = body_first_label
         # add parfor body to blocks
         for (l, b) in inst.loop_body.items():
+            l, parfor_found = _lower_parfor_sequential_block(l, b, new_blocks, typemap, calltypes, parfor_found)
             new_blocks[l] = b
         i = _find_first_parfor(block.body)
     return block_label, parfor_found
