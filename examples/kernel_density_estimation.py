@@ -18,8 +18,8 @@ def kde(X):
     return exps
 
 def main():
-    parser = argparse.ArgumentParser(description='Black-Scholes')
-    parser.add_argument('--size', dest='size', type=int, default=10000000)
+    parser = argparse.ArgumentParser(description='Kernel-Density')
+    parser.add_argument('--size', dest='size', type=int, default=1000000)
     args = parser.parse_args()
     size = args.size
 
