@@ -37,7 +37,8 @@ import numpy
 sequential_parfor_lowering = False
 
 class prange(object):
-    pass
+    def __new__(cls, *args):
+        return range(*args)
 
 _reduction_ops = {
   'sum'  : ('+=', '+', 0),
