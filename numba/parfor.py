@@ -1434,10 +1434,19 @@ ir_utils.array_accesses_extensions[Parfor] = get_parfor_array_accesses
 
 def parfor_typeinfer(parfor, typeinferer):
     save_blocks = typeinferer.blocks
-    blocks = parfor.wrap_parfor_blocks(parfor)
+    blocks = wrap_parfor_blocks(parfor)
+    index_vars = [l.index_variable for l in parfor.loop_nests]
+    if len(parfor.loop_nests)>1:
+        index_vars.append(parfor.index_var)
+    first_block = min(blocks.keys())
+    loc = blocks[first_block].loc
+    index_assigns = [ir.Assign(ir.Const(1,loc), v, loc) for v in index_vars]
+    save_first_block_body = blocks[first_block].body
+    blocks[first_block].body = index_assigns+blocks[first_block].body
     typeinferer.blocks = blocks
     typeinferer.build_constraint()
     typeinferer.blocks = save_blocks
-    parfor.unwrap_parfor_blocks(parfor)
+    blocks[first_block].body = save_first_block_body
+    unwrap_parfor_blocks(parfor)
 
 typeinfer.typeinfer_extensions[Parfor] = parfor_typeinfer
