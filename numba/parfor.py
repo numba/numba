@@ -17,7 +17,7 @@ import types as pytypes # avoid confusion with numba.types
 import sys
 
 from numba import ir, ir_utils, types, typing, rewrites, config, analysis
-from numba import array_analysis, postproc
+from numba import array_analysis, postproc, typeinfer
 
 from numba.ir_utils import (mk_unique_var, next_label, mk_alloc,
     get_np_ufunc_typ, mk_range_block, mk_loop_header, find_op_typ,
@@ -33,6 +33,8 @@ from numba.types.functions import Function
 import copy
 import numpy
 # circular dependency: import numba.npyufunc.dufunc.DUFunc
+
+sequential_parfor_lowering = False
 
 class prange(object):
     pass
@@ -186,7 +188,8 @@ class ParforPass(object):
         if self.func_ir.is_generator:
             fix_generator_types(self.func_ir.generator_info, self.return_type,
                 self.typemap)
-        #lower_parfor_sequential(self.func_ir, self.typemap, self.calltypes)
+        if sequential_parfor_lowering:
+            lower_parfor_sequential(self.func_ir, self.typemap, self.calltypes)
         return
 
     def _convert_numpy(self, blocks):
@@ -1419,3 +1422,22 @@ def get_parfor_tuple_table(parfor, tuple_table={}):
     return tuple_table
 
 ir_utils.tuple_table_extensions[Parfor] = get_parfor_tuple_table
+
+def get_parfor_array_accesses(parfor, accesses={}):
+    blocks = wrap_parfor_blocks(parfor)
+    accesses = ir_utils.get_array_accesses(blocks, accesses)
+    unwrap_parfor_blocks(parfor)
+    return accesses
+
+# parfor handler is same as
+ir_utils.array_accesses_extensions[Parfor] = get_parfor_array_accesses
+
+def parfor_typeinfer(parfor, typeinferer):
+    save_blocks = typeinferer.blocks
+    blocks = parfor.wrap_parfor_blocks(parfor)
+    typeinferer.blocks = blocks
+    typeinferer.build_constraint()
+    typeinferer.blocks = save_blocks
+    parfor.unwrap_parfor_blocks(parfor)
+
+typeinfer.typeinfer_extensions[Parfor] = parfor_typeinfer
