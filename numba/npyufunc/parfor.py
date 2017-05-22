@@ -51,7 +51,10 @@ def _lower_parfor_parallel(lowerer, parfor):
     # compile parfor body as a separate function to be used with GUFuncWrapper
     flags = compiler.Flags()
     flags.set('error_model', 'numpy')
+    flags.set('auto_parallel')
+    numba.parfor.sequential_parfor_lowering = True
     func, func_args, func_sig = _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetctx, flags, {})
+    numba.parfor.sequential_parfor_lowering = False
 
     # get the shape signature
     array_shape_classes = parfor.array_analysis.array_shape_classes
