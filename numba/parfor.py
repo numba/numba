@@ -983,33 +983,24 @@ def visit_vars_parfor(parfor, callback, cbdata):
 # add call to visit parfor variable
 ir_utils.visit_vars_extensions[Parfor] = visit_vars_parfor
 
-def parfor_defs(parfor):
+def parfor_defs(parfor, use_set=set(), def_set=set()):
     """list variables written in this parfor by recursively
     calling compute_use_defs() on body and combining block defs.
     """
-    all_defs = set()
-    # index variables are sematically defined here
-    for l in parfor.loop_nests:
-        all_defs.add(l.index_variable.name)
+    blocks = wrap_parfor_blocks(parfor)
+    uses, defs = compute_use_defs(blocks)
+    unwrap_parfor_blocks(parfor)
+    p_uses = set()
+    for s in uses.values():
+        p_uses |= s
+    p_defs = set()
+    for s in defs.values():
+        p_defs |= s
+    def_set.update(p_defs)
+    use_set.update(p_uses)
+    return analysis._use_defs_result(usemap=use_set, defmap=def_set)
 
-    # all defs of body blocks
-    for l,b in parfor.loop_body.items():
-        for stmt in b.body:
-            if isinstance(stmt, ir.Assign):
-                all_defs.add(stmt.target.name)
-            elif isinstance(stmt, Parfor):
-                all_defs.update(parfor_defs(stmt))
-
-    # all defs of init block
-    for stmt in parfor.init_block.body:
-        if isinstance(stmt, ir.Assign):
-            all_defs.add(stmt.target.name)
-        elif isinstance(stmt, Parfor):
-            all_defs.update(parfor_defs(stmt))
-
-    return all_defs
-
-analysis.ir_extension_defs[Parfor] = parfor_defs
+analysis.ir_extension_usedefs[Parfor] = parfor_defs
 
 def parfor_insert_dels(parfor, curr_dead_set):
     """insert dels in parfor. input: dead variable set right after parfor.

@@ -724,9 +724,9 @@ def copy_propagate_update_analysis(stmt, var_dict, array_analysis):
     def_set = set()
     if isinstance(stmt, ir.Assign):
         def_set.add(stmt.target.name)
-    for T, def_func in analysis.ir_extension_defs.items():
+    for T, def_func in analysis.ir_extension_usedefs.items():
         if isinstance(stmt, T):
-            def_set = def_func(stmt)
+            _,def_set = def_func(stmt)
     # update analysis for arrays in defs
     for var in def_set:
         if var in array_shape_classes:
