@@ -2,6 +2,7 @@ from __future__ import print_function, absolute_import, division
 
 import math
 import numbers
+import sys
 
 import numpy as np
 
@@ -13,7 +14,7 @@ from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
                        lower_cast, lower_constant,
                        impl_ret_borrowed, impl_ret_untracked)
 from . import optional
-from .. import typing, types, cgutils, utils
+from .. import config, numpy_support, typing, types, cgutils, utils
 
 
 def _int_arith_flags(rettype):
@@ -587,6 +588,33 @@ def real_divmod(context, builder, x, y):
     quotient = builder.call(fn, (x, y, pmod))
     return quotient, builder.load(pmod)
 
+def _fpreset(context, builder):
+    # XXX
+
+    #errno_t _controlfp_s(
+        #unsigned int *currentControl,
+        #unsigned int newControl,
+        #unsigned int mask
+    #);
+
+    intty = ir.IntType(32)
+
+    fnty = ir.FunctionType(intty, [intty.as_pointer(), intty, intty])
+    fn = builder.module.get_or_insert_function(fnty, "_controlfp_s")
+
+    cur_control = cgutils.alloca_once_value(builder, intty(-1))
+    zero = intty(0)
+    errno_ret = builder.call(fn, (cur_control, zero, zero))
+
+    context.printf(builder, "-- FP control word (errno = %d): 0x%08X\n",
+                   errno_ret, builder.load(cur_control))
+
+    #fnty = ir.FunctionType(ir.VoidType(), [])
+    #fn = builder.module.get_or_insert_function(fnty, "_fpreset")
+    #builder.call(fn, ())
+
+    return
+
 
 def real_divmod_func_body(context, builder, vx, wx):
     # Reference Objects/floatobject.c
@@ -634,6 +662,10 @@ def real_divmod_func_body(context, builder, vx, wx):
     #     }
     #     return Py_BuildValue("(dd)", floordiv, mod);
     # }
+    if (sys.platform == 'win32' and numpy_support.version[:2] == (1, 9)
+        and config.MACHINE_BITS == 64):
+        _fpreset(context, builder)
+
     pmod = cgutils.alloca_once(builder, vx.type)
     pdiv = cgutils.alloca_once(builder, vx.type)
     pfloordiv = cgutils.alloca_once(builder, vx.type)
