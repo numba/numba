@@ -698,6 +698,7 @@ class TestLinalgInv(TestLinalgBase):
     """
 
     @tag('important')
+    @unittest.skip("Problematic")
     @needs_lapack
     def test_linalg_inv(self):
         """
