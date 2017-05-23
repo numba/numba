@@ -568,6 +568,12 @@ def get_block_copies(blocks, typemap):
                     if typemap[lhs]==typemap[rhs]:
                         assign_dict[lhs] = rhs
                         continue
+                if isinstance(stmt.value, ir.Expr) and stmt.value.op=='inplace_binop':
+                    in1_var = stmt.value.lhs.name
+                    in1_typ = typemap[in1_var]
+                    # inplace_binop assigns first operand if mutable
+                    if not (isinstance(in1_typ,types.Number) or in1_typ==types.string):
+                        extra_kill[label].add(in1_var)
                 extra_kill[label].add(lhs)
         block_copies[label] = set(assign_dict.items())
     return block_copies, extra_kill
@@ -584,13 +590,13 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, ext_func, ext_data,
         # assignments as dict to replace with latest value
         for stmt in block.body:
             ext_func(stmt, var_dict, ext_data)
-            for T,f in apply_copy_propagate_extensions.items():
-                if isinstance(stmt,T):
-                    f(stmt, var_dict, name_var_table, ext_func, ext_data,
-                        typemap, calltypes)
+            if type(stmt) in apply_copy_propagate_extensions:
+                f = apply_copy_propagate_extensions[type(stmt)]
+                f(stmt, var_dict, name_var_table, ext_func, ext_data,
+                    typemap, calltypes)
             # only rhs of assignments should be replaced
             # e.g. if x=y is available, x in x=z shouldn't be replaced
-            if isinstance(stmt, ir.Assign):
+            elif isinstance(stmt, ir.Assign):
                 stmt.value = replace_vars_inner(stmt.value, var_dict)
             else:
                 replace_vars_stmt(stmt, var_dict)
