@@ -684,12 +684,16 @@ class Scope(object):
         else:
             return self.localvars.get(name)
 
-    def redefine(self, name, loc):
+    def redefine(self, name, loc, rename=True):
         """
         Redefine if the name is already defined
         """
         if name not in self.localvars:
             return self.define(name, loc)
+        elif not rename:
+            # Must use the same name if the variable is a cellvar, which
+            # means it could be captured in a closure.
+            return self.localvars.get(name)
         else:
             ct = self.redefined[name]
             self.redefined[name] = ct + 1

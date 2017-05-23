@@ -246,7 +246,8 @@ class Interpreter(object):
         (a str object).
         """
         if redefine or self.current_block_offset in self.cfa.backbone:
-            target = self.current_scope.redefine(name, loc=self.loc)
+            rename = not (name in self.code_cellvars)
+            target = self.current_scope.redefine(name, loc=self.loc, rename=rename)
         else:
             target = self.current_scope.get_or_define(name, loc=self.loc)
         if isinstance(value, ir.Var):
