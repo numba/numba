@@ -3,7 +3,7 @@ from __future__ import print_function
 import sys
 
 import numba.unittest_support as unittest
-from numba import jit, testing
+from numba import njit, jit, testing
 from .support import TestCase
 
 
@@ -103,6 +103,90 @@ class TestClosure(TestCase):
 
         cfunc = jit(outer)
         self.assertEqual(cfunc(10)(), outer(10)())
+
+
+class TestInlinedClosure(TestCase):
+    """
+    Tests for (partial) closure support in njit. The support is partial
+    because it only works for closures that can be successfully inlined
+    at compile time.
+    """
+
+    def test_inner_function(self):
+
+        def outer(x):
+
+            def inner(x):
+                return x * x
+
+            return inner(x) + inner(x)
+
+        cfunc = njit(outer)
+        self.assertEqual(cfunc(10), outer(10))
+
+    def test_inner_function_with_closure(self):
+
+        def outer(x):
+            y = x + 1
+
+            def inner(x):
+                return x * x + y
+
+            return inner(x) + inner(x)
+
+        cfunc = njit(outer)
+        self.assertEqual(cfunc(10), outer(10))
+
+    def test_inner_function_with_closure_2(self):
+
+        def outer(x):
+            y = x + 1
+
+            def inner(x):
+                return x * y
+
+            y = inner(x)
+            return y + inner(x)
+
+        cfunc = njit(outer)
+        self.assertEqual(cfunc(10), outer(10))
+
+
+    def test_inner_function_with_closure_3(self):
+
+        def outer(x):
+            y = x + 1
+            z = 0
+
+            def inner(x):
+                nonlocal z
+                z += x * x
+                return z + y
+
+            return inner(x) + inner(x) + z
+
+        cfunc = njit(outer)
+        self.assertEqual(cfunc(10), outer(10))
+
+    def test_inner_function_nested(self):
+
+        def outer(x):
+
+            def inner(y):
+
+                def innermost(z):
+                    return x + y + z
+
+                s = 0
+                for i in range(y):
+                    s += innermost(i)
+                return s
+
+            return inner(x * x)
+
+        cfunc = njit(outer)
+        self.assertEqual(cfunc(10), outer(10))
+
 
 if __name__ == '__main__':
     unittest.main()
