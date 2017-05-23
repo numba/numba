@@ -75,8 +75,11 @@ class InlineClosureCallPass(object):
         from_scope = from_scopes[0]
         var_dict = {}
         for var in from_scope.localvars._con.values():
-            var_dict[var.name] = scope.make_temp(var.loc)
-        self.debug("Before local var rename, var_dict = ", var_dict)
+            if not (var.name in callee.code.co_freevars):
+                var_dict[var.name] = scope.make_temp(var.loc)
+        if config.DEBUG_INLINE_CLOSURE:
+            print("Before local var rename: var_dict = ", var_dict)
+            from_ir.dump()
         replace_vars(from_blocks, var_dict)
         if config.DEBUG_INLINE_CLOSURE:
             print("After local var rename: ")
