@@ -74,7 +74,7 @@ class Parfor(ir.Expr, ir.Stmt):
         )
 
         self.id = type(self).id_counter
-        type(self).id_counter =+ 1
+        type(self).id_counter += 1
         #self.input_info  = input_info
         #self.output_info = output_info
         self.loop_nests = loop_nests
