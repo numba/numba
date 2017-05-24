@@ -138,7 +138,8 @@ class InlineClosureCallPass(object):
         # hack parameter name .0 for Python 3 versions < 3.6
         if utils.PYVERSION >= (3,) and utils.PYVERSION < (3,6):
             co_varnames = list(fcode.co_varnames)
-            co_varnames[0] = "implicit0"
+            if co_varnames[0] == ".0":
+                co_varnames[0] = "implicit0"
             fcode = types.CodeType(fcode.co_argcount, fcode.co_kwonlyargcount, 
                         fcode.co_nlocals, fcode.co_stacksize, fcode.co_flags,
                         fcode.co_code, fcode.co_consts, fcode.co_names, tuple(co_varnames),
