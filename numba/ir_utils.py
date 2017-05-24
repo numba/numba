@@ -681,11 +681,15 @@ def find_topo_order(blocks):
 # format: {type:function}
 call_table_extensions = {}
 
-def get_call_table(blocks, call_table={}, reverse_call_table={}):
+def get_call_table(blocks, call_table=None, reverse_call_table=None):
     """returns a dictionary of call variables and their references.
     """
     # call_table example: c = np.zeros becomes c:["zeroes", np]
     # reverse_call_table example: c = np.zeros becomes np_var:c
+    if call_table is None:
+        call_table = {}
+    if reverse_call_table is None:
+        reverse_call_table = {}
 
     topo_order = find_topo_order(blocks)
     for label in reversed(topo_order):
@@ -718,9 +722,12 @@ def get_call_table(blocks, call_table={}, reverse_call_table={}):
 # format: {type:function}
 tuple_table_extensions = {}
 
-def get_tuple_table(blocks, tuple_table={}):
+def get_tuple_table(blocks, tuple_table=None):
     """returns a dictionary of tuple variables and their values.
     """
+    if tuple_table is None:
+        tuple_table = {}
+
     for block in blocks.values():
         for inst in block.body:
             if isinstance(inst, ir.Assign):
@@ -781,9 +788,12 @@ def rename_labels(blocks):
 # format: {type:function}
 array_accesses_extensions = {}
 
-def get_array_accesses(blocks, accesses={}):
+def get_array_accesses(blocks, accesses=None):
     """returns a dictionary of arrays accessed and their indices.
     """
+    if accesses is None:
+        accesses = {}
+
     for block in blocks.values():
         for inst in block.body:
             if isinstance(inst, ir.SetItem):

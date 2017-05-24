@@ -987,10 +987,14 @@ def visit_vars_parfor(parfor, callback, cbdata):
 # add call to visit parfor variable
 ir_utils.visit_vars_extensions[Parfor] = visit_vars_parfor
 
-def parfor_defs(parfor, use_set=set(), def_set=set()):
+def parfor_defs(parfor, use_set=None, def_set=None):
     """list variables written in this parfor by recursively
     calling compute_use_defs() on body and combining block defs.
     """
+    if use_set is None:
+        use_set = set()
+    if def_set is None:
+        def_set = set()
     blocks = wrap_parfor_blocks(parfor)
     uses, defs = compute_use_defs(blocks)
     unwrap_parfor_blocks(parfor)
@@ -1415,7 +1419,11 @@ def fix_generator_types(generator_info, return_type, typemap):
     return_type.state_types = tuple(new_state_types)
     return
 
-def get_parfor_call_table(parfor, call_table={}, reverse_call_table={}):
+def get_parfor_call_table(parfor, call_table=None, reverse_call_table=None):
+    if call_table is None:
+        call_table = {}
+    if reverse_call_table is None:
+        reverse_call_table = {}
     blocks = wrap_parfor_blocks(parfor)
     call_table, reverse_call_table = get_call_table(blocks, call_table,
         reverse_call_table)
@@ -1424,7 +1432,9 @@ def get_parfor_call_table(parfor, call_table={}, reverse_call_table={}):
 
 ir_utils.call_table_extensions[Parfor] = get_parfor_call_table
 
-def get_parfor_tuple_table(parfor, tuple_table={}):
+def get_parfor_tuple_table(parfor, tuple_table=None):
+    if tuple_table is None:
+        tuple_table = {}
     blocks = wrap_parfor_blocks(parfor)
     tuple_table = ir_utils.get_tuple_table(blocks, tuple_table)
     unwrap_parfor_blocks(parfor)
@@ -1432,7 +1442,9 @@ def get_parfor_tuple_table(parfor, tuple_table={}):
 
 ir_utils.tuple_table_extensions[Parfor] = get_parfor_tuple_table
 
-def get_parfor_array_accesses(parfor, accesses={}):
+def get_parfor_array_accesses(parfor, accesses=None):
+    if accesses is None:
+        accesses = {}
     blocks = wrap_parfor_blocks(parfor)
     accesses = ir_utils.get_array_accesses(blocks, accesses)
     unwrap_parfor_blocks(parfor)
