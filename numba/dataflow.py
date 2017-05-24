@@ -688,7 +688,16 @@ class DataFlowAnalysis(object):
             name = info.pop()
         code = info.pop()
         closure = annotations = kwdefaults = defaults = None
-        if utils.PYVERSION >= (3, 0) and utils.PYVERSION < (3, 6):
+        if utils.PYVERSION < (3, 0):
+            if MAKE_CLOSURE:
+                closure = info.pop()
+            num_posdefaults = inst.arg
+            if num_posdefaults > 0:
+                defaults = []
+                for i in range(num_pposdefaults):
+                    defaults.append(info.pop())
+                defaults = tuple(defaults)
+        elif utils.PYVERSION >= (3, 0) and utils.PYVERSION < (3, 6):
             num_posdefaults = inst.arg & 0xff
             num_kwdefaults = (inst.arg >> 8) & 0xff
             num_annotations = (inst.arg >> 16) & 0x7fff
