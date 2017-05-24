@@ -131,6 +131,18 @@ class TestParfors(unittest.TestCase):
         np.testing.assert_array_almost_equal(expected, output)
         self.assertIn('@do_scheduling', test_p2.inspect_llvm(test_p2.signatures[0]))
 
+    def test_prange3(self):
+        @numba.njit(parallel=True)
+        def test_p3():
+            s = 0
+            for i in prange(10):
+                s += 2
+            return s
+
+        output = test_p3()
+        expected = 20
+        np.testing.assert_almost_equal(expected, output)
+        self.assertIn('@do_scheduling', test_p3.inspect_llvm(test_p3.signatures[0]))
 
     def test_pi(self):
         @njit(parallel=True)
