@@ -1,4 +1,4 @@
-.. _parallel:
+.. _numba-parallel:
 
 =======================================
 Automatic parallelization with ``@jit``
