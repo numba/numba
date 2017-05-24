@@ -3,7 +3,7 @@ from __future__ import print_function
 import sys
 
 import numba.unittest_support as unittest
-from numba import njit, jit, testing
+from numba import njit, jit, testing, utils
 from .support import TestCase
 
 
@@ -152,21 +152,26 @@ class TestInlinedClosure(TestCase):
         self.assertEqual(cfunc(10), outer(10))
 
 
+    @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
     def test_inner_function_with_closure_3(self):
 
-        def outer(x):
-            y = x + 1
-            z = 0
+        code = """
+            def outer(x):
+                y = x + 1
+                z = 0
 
-            def inner(x):
-                nonlocal z
-                z += x * x
-                return z + y
+                def inner(x):
+                    nonlocal z
+                    z += x * x
+                    return z + y
 
-            return inner(x) + inner(x) + z
+                return inner(x) + inner(x) + z
+        """
+        ns = {}
+        exec(code.strip(), ns)
 
-        cfunc = njit(outer)
-        self.assertEqual(cfunc(10), outer(10))
+        cfunc = njit(ns['outer'])
+        self.assertEqual(cfunc(10), ns['outer'](10))
 
     def test_inner_function_nested(self):
 
