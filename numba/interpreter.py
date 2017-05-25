@@ -948,17 +948,15 @@ class Interpreter(object):
         # inst = ir.Yield(value=self.get(value), index=index, loc=self.loc)
         # inst = ir.Yield(value=self.get(value), index=index, loc=self.loc)
         if annotations != None:
-            raise NotImplemented("op_MAKE_FUNCTION with annotations")
+            raise NotImplementedError("op_MAKE_FUNCTION with annotations is not implemented")
         if kwdefaults != None:
-            raise NotImplemented("op_MAKE_FUNCTION with kwdefaults")
-        if defaults != None:
-            raise NotImplemented("op_MAKE_FUNCTION with defaults")
+            raise NotImplementedError("op_MAKE_FUNCTION with kwdefaults is not implemented")
         fcode = self.definitions[code][0].value
         if name:
             name = self.get(name)
         if closure:
             closure = self.get(closure)
-        expr = ir.Expr.make_function(name, fcode, closure, self.loc)
+        expr = ir.Expr.make_function(name, fcode, closure, defaults, self.loc)
         self.store(expr, res)
 
     def op_MAKE_CLOSURE(self, inst, name, code, closure, annotations, kwdefaults, defaults, res):
@@ -972,7 +970,7 @@ class Interpreter(object):
         else:
             idx = inst.arg - n_cellvars
             name = self.code_freevars[idx]
-            value = None
+            value = self.get_closure_value(idx)
             gl = ir.FreeVar(idx, name, value, loc=self.loc)
         self.store(gl, res)
 

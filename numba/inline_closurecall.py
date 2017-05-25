@@ -44,7 +44,9 @@ class InlineClosureCallPass(object):
                             break
         if modified:
             remove_dels(self.func_ir.blocks)
-            remove_dead(self.func_ir.blocks, self.func_ir.arg_names)
+            # repeat dead code elimintation until nothing can be further removed
+            while (remove_dead(self.func_ir.blocks, self.func_ir.arg_names)):
+                pass
             self.func_ir.blocks = rename_labels(self.func_ir.blocks)
 
     def inline_closure_call(self, block, i, callee):
@@ -85,7 +87,13 @@ class InlineClosureCallPass(object):
             print("After local var rename: ")
             from_ir.dump()
         # 3. replace formal parameters with actual arguments
-        _replace_args_with(from_blocks, call_expr.args)
+        args = list(call_expr.args)
+        if callee.defaults:
+            defaults = func_ir.get_definition(callee.defaults)
+            assert(isinstance(defaults, ir.Const)) 
+            loc = defaults.loc
+            args = args + [ ir.Const(value=v, loc=loc) for v in defaults.value ]
+        _replace_args_with(from_blocks, args)
         if config.DEBUG_INLINE_CLOSURE:
             print("After arguments rename: ")
             from_ir.dump()
