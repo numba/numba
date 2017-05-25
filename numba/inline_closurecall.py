@@ -92,7 +92,7 @@ class InlineClosureCallPass(object):
             print("defaults", callee.defaults)
             if isinstance(callee.defaults, tuple): # Python 3.5
                 args = args + list(callee.defaults)
-            elif isinstance(callee.defaults, ir.Var):
+            elif isinstance(callee.defaults, ir.Var) or isinstance(callee.defaults, str):
                 defaults = func_ir.get_definition(callee.defaults)
                 assert(isinstance(defaults, ir.Const))
                 loc = defaults.loc
