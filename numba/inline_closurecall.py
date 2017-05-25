@@ -89,10 +89,16 @@ class InlineClosureCallPass(object):
         # 3. replace formal parameters with actual arguments
         args = list(call_expr.args)
         if callee.defaults:
-            defaults = func_ir.get_definition(callee.defaults)
-            assert(isinstance(defaults, ir.Const)) 
-            loc = defaults.loc
-            args = args + [ ir.Const(value=v, loc=loc) for v in defaults.value ]
+            print("defaults", callee.defaults)
+            if isinstance(callee.defaults, tuple): # Python 3.5
+                args = args + list(callee.defaults)
+            elif isinstance(callee.defaults, ir.Var):
+                defaults = func_ir.get_definition(callee.defaults)
+                assert(isinstance(defaults, ir.Const))
+                loc = defaults.loc
+                args = args + [ ir.Const(value=v, loc=loc) for v in defaults.value ]
+            else:
+                raise NotImplementedError("Unsupported defaults to make_function: {}".format(defaults))
         _replace_args_with(from_blocks, args)
         if config.DEBUG_INLINE_CLOSURE:
             print("After arguments rename: ")

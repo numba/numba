@@ -951,6 +951,8 @@ class Interpreter(object):
             raise NotImplementedError("op_MAKE_FUNCTION with annotations is not implemented")
         if kwdefaults != None:
             raise NotImplementedError("op_MAKE_FUNCTION with kwdefaults is not implemented")
+        if isinstance(defaults, tuple):
+            defaults = tuple([self.get(name) for name in defaults])
         fcode = self.definitions[code][0].value
         if name:
             name = self.get(name)
