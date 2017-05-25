@@ -694,7 +694,7 @@ class DataFlowAnalysis(object):
             num_posdefaults = inst.arg
             if num_posdefaults > 0:
                 defaults = []
-                for i in range(num_pposdefaults):
+                for i in range(num_posdefaults):
                     defaults.append(info.pop())
                 defaults = tuple(defaults)
         elif utils.PYVERSION >= (3, 0) and utils.PYVERSION < (3, 6):
