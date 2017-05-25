@@ -311,12 +311,14 @@ def remove_dels(blocks):
     return
 
 def remove_dead(blocks, args):
-    """dead code elimination using liveness and CFG info"""
+    """dead code elimination using liveness and CFG info.
+    Returns True if something has been removed, or False if nothing is removed."""
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
     arg_aliases = find_potential_aliases(blocks, args)
 
+    removed = False
     for label, block in blocks.items():
         # find live variables at each statement to delete dead assignment
         lives = { v.name for v in block.terminator.list_vars() }
@@ -325,8 +327,8 @@ def remove_dead(blocks, args):
             lives |= live_map[out_blk]
         if label in cfg.exit_points():
             lives |= arg_aliases
-        remove_dead_block(block, lives, arg_aliases)
-    return
+        removed |= remove_dead_block(block, lives, arg_aliases)
+    return removed
 
 # other packages that define new nodes add calls to remove dead code in them
 # format: {type:function}
@@ -339,6 +341,7 @@ def remove_dead_block(block, lives, args):
     """
     # TODO: find mutable args that are not definitely assigned instead of
     # assuming all args are live after return
+    removed = False
 
     # add statements in reverse order
     new_body = [block.terminator]
@@ -353,8 +356,10 @@ def remove_dead_block(block, lives, args):
             lhs = stmt.target
             rhs = stmt.value
             if lhs.name not in lives and has_no_side_effect(rhs, lives):
+                removed = True
                 continue
             if isinstance(rhs, ir.Var) and lhs.name==rhs.name:
+                removed = True
                 continue
             # TODO: remove other nodes like SetItem etc.
 
@@ -367,7 +372,7 @@ def remove_dead_block(block, lives, args):
         new_body.append(stmt)
     new_body.reverse()
     block.body = new_body
-    return
+    return removed
 
 def has_no_side_effect(rhs, lives):
     # TODO: find side-effect free calls like Numpy calls
