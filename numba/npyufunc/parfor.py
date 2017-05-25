@@ -46,8 +46,9 @@ def _lower_parfor_parallel(lowerer, parfor):
 
     # run get_parfor_outputs() and get_parfor_reductions() before gufunc creation
     # since Jumps are modified so CFG of loop_body dict will become invalid
-    parfor_output_arrays = numba.parfor.get_parfor_outputs(parfor)
-    parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(parfor)
+    parfor_params = numba.parfor.get_parfor_params(parfor, lowerer.func_ir)
+    parfor_output_arrays = numba.parfor.get_parfor_outputs(parfor, parfor_params)
+    parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(parfor, parfor_params)
     # compile parfor body as a separate function to be used with GUFuncWrapper
     flags = compiler.Flags()
     flags.set('error_model', 'numpy')
@@ -156,11 +157,11 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
     loop_indices = [l.index_variable.name for l in parfor.loop_nests]
 
     # Get all the parfor params.
-    parfor_params = numba.parfor.get_parfor_params(parfor)
+    parfor_params = numba.parfor.get_parfor_params(parfor, lowerer.func_ir)
     # Get just the outputs of the parfor.
-    parfor_outputs = numba.parfor.get_parfor_outputs(parfor)
+    parfor_outputs = numba.parfor.get_parfor_outputs(parfor, parfor_params)
     # Get all parfor reduction vars, and operators.
-    parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(parfor)
+    parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(parfor, parfor_params)
     # Compute just the parfor inputs as a set difference.
     parfor_inputs = sorted(list(set(parfor_params) - set(parfor_outputs) - set(parfor_redvars)))
 

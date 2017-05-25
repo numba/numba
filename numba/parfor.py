@@ -916,7 +916,7 @@ def _find_first_parfor(body):
             return i
     return -1
 
-def get_parfor_params(parfor):
+def get_parfor_params(parfor, func_ir):
     """find variables used in body of parfor from outside.
     computed as live variables at entry of first block.
     """
@@ -926,15 +926,44 @@ def get_parfor_params(parfor):
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
     unwrap_parfor_blocks(parfor)
     keylist = sorted(live_map.keys())
+    init_block = keylist[0]
     first_non_init_block = keylist[1]
 
-    # remove parfor index variables since they are not input
-    for l in parfor.loop_nests:
-        live_map[first_non_init_block] -= {l.index_variable.name}
+    params = live_map[first_non_init_block]
 
-    return sorted(live_map[first_non_init_block])
+    # since parfor wrap creates a back-edge to first non-init basic block,
+    # live_map[first_non_init_block] contains variables defined in parfor body
+    # that could be undefined before. So we only consider variables that are
+    # actually defined before the parfor body.
+    pre_defs = usedefs.defmap[init_block]
+    _, all_defs = compute_use_defs(func_ir.blocks)
+    topo_order = find_topo_order(func_ir.blocks)
+    parfor_found = False
+    for label in topo_order:
+        block = func_ir.blocks[label]
+        for i, p_id in _find_parfors(block.body):
+            if parfor.id==p_id:
+                # find variable defs before the parfor in the same block
+                dummy_block = ir.Block(block.scope, block.loc)
+                dummy_block.body = block.body[:i]
+                before_defs = compute_use_defs({0:dummy_block}).defmap[0]
+                pre_defs |= before_defs
+                parfor_found = True
+                break
+        if parfor_found:
+            break
+        else:
+            pre_defs |= all_defs[label]
 
-def get_parfor_outputs(parfor):
+    params &= pre_defs
+    return params
+
+def _find_parfors(body):
+    for (i, inst) in enumerate(body):
+        if isinstance(inst, Parfor):
+            yield i, inst.id
+
+def get_parfor_outputs(parfor, parfor_params):
     """get arrays that are written to inside the parfor and need to be passed
     as parameters to gufunc.
     """
@@ -946,19 +975,17 @@ def get_parfor_outputs(parfor):
             if isinstance(stmt, ir.SetItem):
                 if stmt.index.name==parfor.index_var.name:
                     outputs.append(stmt.target.name)
-    parfor_params = get_parfor_params(parfor)
     # make sure these written arrays are in parfor parameters (live coming in)
     outputs = list(set(outputs) & set(parfor_params))
     return sorted(outputs)
 
-def get_parfor_reductions(parfor):
+def get_parfor_reductions(parfor, parfor_params):
     """get variables that are accumulated using inplace_binop inside the parfor
     and need to be passed as reduction parameters to gufunc.
     """
     last_label = max(parfor.loop_body.keys())
     reductions = {}
     names = []
-    parfor_params = get_parfor_params(parfor)
     for blk in parfor.loop_body.values():
         for stmt in blk.body:
             if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr) and stmt.value.op == "inplace_binop":
