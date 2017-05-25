@@ -24,12 +24,13 @@ def main():
     size = args.size
 
     kde(np.random.ranf(10))
-    print("size = ", size)
+    print("size:", size)
     X = np.random.ranf(size)
     t1 = time.time()
-    kde(X)
+    res = kde(X)
     t = time.time()-t1
-    print("SELFTIMED ", t)
+    print("checksum:", res)
+    print("SELFTIMED:", t)
 
 if __name__ == '__main__':
     main()
