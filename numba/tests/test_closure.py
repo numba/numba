@@ -385,7 +385,7 @@ class TestInlinedClosure(TestCase):
                 return f(x) + z2
 
             return inner2(inner, x)
-        
+
         def outer20(x):
             #""" Test calling numpy in closure """
             z = x + 1
@@ -393,7 +393,7 @@ class TestInlinedClosure(TestCase):
             def inner(x):
                 return x + numpy.cos(z)
             return inner(x)
-        
+
         def outer21(x):
             #""" Test calling numpy import as in closure """
             z = x + 1
@@ -401,7 +401,6 @@ class TestInlinedClosure(TestCase):
             def inner(x):
                 return x + np.cos(z)
             return inner(x)
-
 
         # functions to test that are expected to pass
         f = [outer1, outer2, outer5, outer6, outer7, outer8,
@@ -413,22 +412,23 @@ class TestInlinedClosure(TestCase):
             self.assertEqual(cfunc(var), ref(var))
 
         # test functions that are expected to fail
-        with self.assertRaises(NotDefinedError) as raises:
+        with self.assertRaises(NotImplementedError) as raises:
             cfunc = jit(nopython=True)(outer3)
             cfunc(var)
-        msg = "'inner' is not defined in"
+        msg = "Unsupported use of op_LOAD_CLOSURE encountered"
         self.assertIn(msg, str(raises.exception))
 
-        with self.assertRaises(NotDefinedError) as raises:
+        with self.assertRaises(NotImplementedError) as raises:
             cfunc = jit(nopython=True)(outer4)
             cfunc(var)
-        msg = "'inner' is not defined in"
+        msg = "Unsupported use of op_LOAD_CLOSURE encountered"
         self.assertIn(msg, str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
             cfunc = jit(nopython=True)(outer11)
             cfunc(var)
-        msg = "cannot determine Numba type of <class 'code'>"
+        errcls = "type" if utils.PYVERSION < (3, 0) else "class"
+        msg = "cannot determine Numba type of <" + errcls + " 'code'>"
         self.assertIn(msg, str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:

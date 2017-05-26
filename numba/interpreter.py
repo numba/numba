@@ -7,6 +7,7 @@ from copy import copy
 
 from . import config, ir, controlflow, dataflow, utils, errors
 from .utils import builtins, PYVERSION
+from .errors import NotDefinedError
 
 
 class Assigner(object):
@@ -968,7 +969,10 @@ class Interpreter(object):
         n_cellvars = len(self.code_cellvars)
         if inst.arg < n_cellvars:
             name = self.code_cellvars[inst.arg]
-            gl = self.get(name)
+            try:
+                gl = self.get(name)
+            except NotDefinedError as e:
+                raise NotImplementedError("Unsupported use of op_LOAD_CLOSURE encountered")
         else:
             idx = inst.arg - n_cellvars
             name = self.code_freevars[idx]

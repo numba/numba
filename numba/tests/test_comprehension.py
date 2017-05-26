@@ -215,7 +215,10 @@ class TestListComprehension(unittest.TestCase):
              list6, list7, list8, list9, list10,
              list12, list13, list14, list15,
              list16, list17, list18, list19, list20,
-             list21, list22, list23, list24]
+             list21, list23, list24]
+
+        if utils.PYVERSION >= (3, 0):
+            f.append(list22)
 
         var = [1, 2, 3, 4, 5]
         for ref in f:
@@ -240,6 +243,13 @@ class TestListComprehension(unittest.TestCase):
             cfunc(var)
         msg = "unsupported nested memory-managed object"
         self.assertIn(msg, str(raises.exception))
+
+        if utils.PYVERSION < (3, 0):
+            with self.assertRaises(TypingError) as raises:
+                cfunc = jit(nopython=True)(list22)
+                cfunc(var)
+            msg = "Invalid usage of == with parameters"
+            self.assertIn(msg, str(raises.exception))
 
 
 if __name__ == '__main__':
