@@ -682,7 +682,8 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, ext_func, ext_data,
                 if isinstance(stmt, T):
                     gen_set, kill_set = f(stmt, typemap)
                     for lhs, rhs in gen_set:
-                        var_dict[lhs] = name_var_table[rhs]
+                        if rhs in name_var_table:
+                            var_dict[lhs] = name_var_table[rhs]
                     for l, r in var_dict.copy().items():
                         if l in kill_set or r.name in kill_set:
                             var_dict.pop(l)
@@ -693,7 +694,7 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, ext_func, ext_data,
                 if lhs != rhs:
                     # copy is valid only if same type (see
                     # TestCFunc.test_locals)
-                    if typemap[lhs] == typemap[rhs]:
+                    if typemap[lhs] == typemap[rhs] and rhs in name_var_table:
                         var_dict[lhs] = name_var_table[rhs]
                     else:
                         var_dict.pop(lhs, None)
