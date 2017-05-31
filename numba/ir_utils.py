@@ -440,7 +440,8 @@ def remove_dead_block(block, lives, call_table, args):
         for T, def_func in analysis.ir_extension_usedefs.items():
             if isinstance(stmt, T):
                 uses, defs = def_func(stmt)
-                lives -= (defs-uses)
+                lives -= defs
+                lives |= uses
         new_body.append(stmt)
     new_body.reverse()
     block.body = new_body
