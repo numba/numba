@@ -416,8 +416,10 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
     sched_sig = sin.pop(0)
 
     # Call do_scheduling with appropriate arguments
-    dim_starts = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, num_dim), name = "dims")
-    dim_stops = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, num_dim), name = "dims")
+    dim_starts = cgutils.alloca_once(builder, intp_t,
+            size = context.get_constant(types.intp, num_dim), name = "dims")
+    dim_stops = cgutils.alloca_once(builder, intp_t,
+            size = context.get_constant(types.intp, num_dim), name = "dims")
     for i in range(num_dim):
         start, stop, step = loop_ranges[i]
         # substract 1 because do-scheduling takes inclusive ranges
@@ -427,11 +429,13 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
         builder.store(stop, builder.gep(dim_stops,
             [context.get_constant(types.intp, i)]))
     sched_size = get_thread_count() * num_dim * 2
-    sched = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, sched_size), name = "sched")
+    sched = cgutils.alloca_once(builder, intp_t,
+            size = context.get_constant(types.intp, sched_size), name = "sched")
     debug_flag = 1 if config.DEBUG_ARRAY_OPT else 0
     scheduling_fnty = lc.Type.function(intp_ptr_t,
         [intp_t, intp_ptr_t, intp_ptr_t, uintp_t, intp_ptr_t, intp_t])
-    do_scheduling = builder.module.get_or_insert_function(scheduling_fnty, name="do_scheduling")
+    do_scheduling = builder.module.get_or_insert_function(scheduling_fnty,
+                                                        name="do_scheduling")
     builder.call(do_scheduling, [context.get_constant(types.intp, num_dim),
         dim_starts, dim_stops,
         context.get_constant(types.uintp, get_thread_count()), sched,
@@ -447,7 +451,8 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
         # cgutils.printf(builder, "nredvar(" + redvars[i] + ") = %d\n", val)
         typ = context.get_value_type(lowerer.fndesc.typemap[redvars[i]])
         size = get_thread_count()
-        arr = cgutils.alloca_once(builder, typ, size = context.get_constant(types.intp, size))
+        arr = cgutils.alloca_once(builder, typ,
+                                size = context.get_constant(types.intp, size))
         redarrs.append(arr)
         for j in range(size):
             dst = builder.gep(arr, [ context.get_constant(types.intp, j) ])
@@ -465,7 +470,8 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
     all_args = [ lowerer.loadvar(x) for x in expr_args[:ninouts] ] + redarrs
     num_args = len(all_args)
     num_inps = len(sin) + 1
-    args = cgutils.alloca_once(builder, byte_ptr_t, size = context.get_constant(types.intp, 1 + num_args), name = "pargs")
+    args = cgutils.alloca_once(builder, byte_ptr_t,
+        size = context.get_constant(types.intp, 1 + num_args), name = "pargs")
     array_strides = []
     # sched goes first
     builder.store(builder.bitcast(sched, byte_ptr_t), args)
@@ -534,14 +540,17 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
     for dim_sym in occurances:
         if config.DEBUG_ARRAY_OPT:
             cgutils.printf(builder, dim_sym + " = %d\n", sig_dim_dict[dim_sym])
-        builder.store(sig_dim_dict[dim_sym], builder.gep(shapes, [ context.get_constant(types.intp, i) ]))
+        builder.store(sig_dim_dict[dim_sym], builder.gep(shapes,
+                                    [ context.get_constant(types.intp, i) ]))
         i = i + 1
 
     # Prepare steps for each argument. Note that all steps are counted in bytes.
     num_steps = num_args + 1 + len(array_strides)
-    steps = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, num_steps), name = "psteps")
+    steps = cgutils.alloca_once(builder, intp_t,
+            size = context.get_constant(types.intp, num_steps), name = "psteps")
     # First goes the step size for sched, which is 2 * num_dim
-    builder.store(context.get_constant(types.intp, 2 * num_dim * sizeof_intp), steps)
+    builder.store(context.get_constant(types.intp, 2 * num_dim * sizeof_intp),
+                                                                        steps)
     # The steps for all others are 0. (TODO: except reduction results)
     for i in range(num_args):
         if i >= ninouts: # steps for reduction vars are abi_sizeof(typ)
