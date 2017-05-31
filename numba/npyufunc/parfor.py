@@ -331,7 +331,8 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
         print("gufunc_ir last dump")
         gufunc_ir.dump()
 
-    kernel_func = compiler.compile_ir(typingctx, targetctx, gufunc_ir, gufunc_param_types, types.none, flags, locals)
+    kernel_func = compiler.compile_ir(typingctx, targetctx, gufunc_ir,
+                                gufunc_param_types, types.none, flags, locals)
 
     kernel_sig = signature(types.none, *gufunc_param_types)
     if config.DEBUG_ARRAY_OPT:
@@ -340,7 +341,8 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
     return kernel_func, parfor_args, kernel_sig
 
 
-def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop_ranges, array_size_vars, redvars, reddict, init_block):
+def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
+                    loop_ranges, array_size_vars, redvars, reddict, init_block):
     '''
     Adds the call to the gufunc function from the main function.
     '''
@@ -348,12 +350,14 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     builder = lowerer.builder
     library = lowerer.library
 
-    from .parallel import ParallelGUFuncBuilder, build_gufunc_wrapper, get_thread_count, _launch_threads, _init
+    from .parallel import (ParallelGUFuncBuilder, build_gufunc_wrapper,
+                                get_thread_count, _launch_threads, _init)
 
     if config.DEBUG_ARRAY_OPT:
         print("make_parallel_loop")
         print("args = ", expr_args)
-        print("outer_sig = ", outer_sig.args, outer_sig.return_type, outer_sig.recvr, outer_sig.pysig)
+        print("outer_sig = ", outer_sig.args, outer_sig.return_type,
+                                outer_sig.recvr, outer_sig.pysig)
         print("loop_ranges = ", loop_ranges)
 
     # Build the wrapper for GUFunc
@@ -365,7 +369,8 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     _launch_threads()
     _init()
 
-    wrapper_ptr, env, wrapper_name = build_gufunc_wrapper(llvm_func, cres, sin, sout, {})
+    wrapper_ptr, env, wrapper_name = build_gufunc_wrapper(llvm_func, cres, sin,
+                                                            sout, {})
     cres.library._ensure_finalized()
 
     if config.DEBUG_ARRAY_OPT:
@@ -388,8 +393,10 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
         loop_ranges[i] = (start, stop, step)
 
         if config.DEBUG_ARRAY_OPT:
-            print("call_parallel_gufunc loop_ranges[" + str(i) + "] = ", start, stop, step)
-            cgutils.printf(builder, "loop range[" + str(i) + "]: %d %d (%d)\n", start, stop, step)
+            print("call_parallel_gufunc loop_ranges[{}] = ".format(i), start,
+                stop, step)
+            cgutils.printf(builder, "loop range[{}]: %d %d (%d)\n".format(i),
+                start, stop, step)
 
 
     # Commonly used LLVM types and constants
@@ -413,16 +420,22 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     dim_stops = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, num_dim), name = "dims")
     for i in range(num_dim):
         start, stop, step = loop_ranges[i]
-        stop = builder.sub(stop, one) # substract 1 because do-scheduling takes inclusive ranges
-        builder.store(start, builder.gep(dim_starts, [context.get_constant(types.intp, i)]))
-        builder.store(stop, builder.gep(dim_stops, [context.get_constant(types.intp, i)]))
+        # substract 1 because do-scheduling takes inclusive ranges
+        stop = builder.sub(stop, one)
+        builder.store(start, builder.gep(dim_starts,
+            [context.get_constant(types.intp, i)]))
+        builder.store(stop, builder.gep(dim_stops,
+            [context.get_constant(types.intp, i)]))
     sched_size = get_thread_count() * num_dim * 2
     sched = cgutils.alloca_once(builder, intp_t, size = context.get_constant(types.intp, sched_size), name = "sched")
     debug_flag = 1 if config.DEBUG_ARRAY_OPT else 0
-    scheduling_fnty = lc.Type.function(intp_ptr_t, [intp_t, intp_ptr_t, intp_ptr_t, uintp_t, intp_ptr_t, intp_t])
+    scheduling_fnty = lc.Type.function(intp_ptr_t,
+        [intp_t, intp_ptr_t, intp_ptr_t, uintp_t, intp_ptr_t, intp_t])
     do_scheduling = builder.module.get_or_insert_function(scheduling_fnty, name="do_scheduling")
-    builder.call(do_scheduling, [context.get_constant(types.intp, num_dim), dim_starts, dim_stops,
-                                 context.get_constant(types.uintp, get_thread_count()), sched, context.get_constant(types.intp, debug_flag)])
+    builder.call(do_scheduling, [context.get_constant(types.intp, num_dim),
+        dim_starts, dim_stops,
+        context.get_constant(types.uintp, get_thread_count()), sched,
+        context.get_constant(types.intp, debug_flag)])
 
     # init reduction array allocation here.
     nredvars = len(redvars)
@@ -444,7 +457,8 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
       for i in range(get_thread_count()):
         cgutils.printf(builder, "sched[" + str(i) + "] = ")
         for j in range(num_dim * 2):
-            cgutils.printf(builder, "%d ", builder.load(builder.gep(sched, [context.get_constant(types.intp, i * num_dim * 2 + j)])))
+            cgutils.printf(builder, "%d ", builder.load(builder.gep(sched,
+                    [context.get_constant(types.intp, i * num_dim * 2 + j)])))
         cgutils.printf(builder, "\n")
 
     # Prepare arguments: args, shapes, steps, data
@@ -486,7 +500,8 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
     occurances = []
     occurances = [sched_sig[0]]
     sig_dim_dict[sched_sig[0]] = context.get_constant(types.intp, 2 * num_dim)
-    for var, arg, aty, gu_sig in zip(expr_args[:ninouts], all_args[:ninouts], outer_sig.args[1:], sin + sout):
+    for var, arg, aty, gu_sig in zip(expr_args[:ninouts], all_args[:ninouts],
+                                        outer_sig.args[1:], sin + sout):
         if config.DEBUG_ARRAY_OPT:
             print("var = ", var, " gu_sig = ", gu_sig)
         i = 0
