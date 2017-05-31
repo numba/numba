@@ -946,8 +946,6 @@ class Interpreter(object):
         return self.store(inst, res)
 
     def op_MAKE_FUNCTION(self, inst, name, code, closure, annotations, kwdefaults, defaults, res):
-        # inst = ir.Yield(value=self.get(value), index=index, loc=self.loc)
-        # inst = ir.Yield(value=self.get(value), index=index, loc=self.loc)
         if annotations != None:
             raise NotImplementedError("op_MAKE_FUNCTION with annotations is not implemented")
         if kwdefaults != None:

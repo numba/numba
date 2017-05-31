@@ -5,23 +5,19 @@ from numba.ir_utils import (mk_unique_var, next_label, add_offset_to_labels,
     replace_vars, remove_dels, remove_dead, rename_labels)
  
 class InlineClosureCallPass(object):
-    """InlineClosureCallPass class looks for direct call to locally defined 
-    closures, and inline the body of the closure function to the call site.
+    """InlineClosureCallPass class looks for direct calls to locally defined 
+    closures, and inlines the body of the closure function to the call site.
     """
     def __init__(self, func_ir, run_frontend):
         self.func_ir = func_ir
         self.run_frontend = run_frontend
-
-    def debug(self, *args):
-        if config.DEBUG_INLINE_CLOSURE:
-            print(args) 
 
     def run(self):
         """Run inline closure call pass.
         """
         modified = False
         work_list = list(self.func_ir.blocks.items())
-        self.debug("START InlineClosureCall")
+        _debug_print("START InlineClosureCall")
         while work_list:
             label, block = work_list.pop()
             for i in range(len(block.body)):
@@ -34,7 +30,7 @@ class InlineClosureCallPass(object):
                             func_def = self.func_ir.get_definition(expr.func)
                         except KeyError:
                             func_def = None
-                        self.debug("found call to ", expr.func, " def = ", func_def)
+                        _debug_print("found call to ", expr.func, " def = ", func_def)
                         if isinstance(func_def, ir.Expr) and func_def.op == "make_function":
                             new_blocks = self.inline_closure_call(block, i, func_def)
                             for block in new_blocks:
@@ -55,7 +51,7 @@ class InlineClosureCallPass(object):
         scope = block.scope
         instr = block.body[i]
         call_expr = instr.value
-        self.debug("Found closure call: ", instr, " with callee = ", callee)
+        _debug_print("Found closure call: ", instr, " with callee = ", callee)
         func_ir = self.func_ir
         # first, get the IR of the callee
         from_ir = self.get_ir_of_code(callee.code)
@@ -71,7 +67,7 @@ class InlineClosureCallPass(object):
         ir_utils.visit_vars_extensions = {}
         # 2. rename all local variables in from_ir with new locals created in func_ir
         from_scopes = _get_all_scopes(from_blocks)
-        self.debug("obj_IR has scopes: ", from_scopes)
+        _debug_print("obj_IR has scopes: ", from_scopes)
         #    one function should only have one local scope
         assert(len(from_scopes) == 1)
         from_scope = from_scopes[0]
@@ -79,17 +75,15 @@ class InlineClosureCallPass(object):
         for var in from_scope.localvars._con.values():
             if not (var.name in callee.code.co_freevars):
                 var_dict[var.name] = scope.make_temp(var.loc)
-        if config.DEBUG_INLINE_CLOSURE:
-            print("Before local var rename: var_dict = ", var_dict)
-            from_ir.dump()
+        _debug_print("Before local var rename: var_dict = ", var_dict)
+        _debug_dump(from_ir)
         replace_vars(from_blocks, var_dict)
-        if config.DEBUG_INLINE_CLOSURE:
-            print("After local var rename: ")
-            from_ir.dump()
+        _debug_print("After local var rename: ")
+        _debug_dump(from_ir)
         # 3. replace formal parameters with actual arguments
         args = list(call_expr.args)
         if callee.defaults:
-            print("defaults", callee.defaults)
+            _debug_print("defaults", callee.defaults)
             if isinstance(callee.defaults, tuple): # Python 3.5
                 args = args + list(callee.defaults)
             elif isinstance(callee.defaults, ir.Var) or isinstance(callee.defaults, str):
@@ -100,19 +94,17 @@ class InlineClosureCallPass(object):
             else:
                 raise NotImplementedError("Unsupported defaults to make_function: {}".format(defaults))
         _replace_args_with(from_blocks, args)
-        if config.DEBUG_INLINE_CLOSURE:
-            print("After arguments rename: ")
-            from_ir.dump()
+        _debug_print("After arguments rename: ")
+        _debug_dump(from_ir)
         # 4. replace freevar with actual closure var
         if callee.closure:
             closure = func_ir.get_definition(callee.closure)
             assert(isinstance(closure, ir.Expr) and closure.op == 'build_tuple')
             assert(len(callee.code.co_freevars) == len(closure.items))
-            self.debug("callee's closure = ", closure)
+            _debug_print("callee's closure = ", closure)
             _replace_freevars(from_blocks, closure.items)
-            if config.DEBUG_INLINE_CLOSURE:
-                print("After closure rename: ")
-                from_ir.dump()
+            _debug_print("After closure rename: ")
+            _debug_dump(from_ir)
         # 5. split caller blocks into two
         new_blocks = []
         new_block = ir.Block(scope, block.loc)
@@ -131,9 +123,8 @@ class InlineClosureCallPass(object):
             _add_definition(func_ir, block)
             func_ir.blocks[label] = block
             new_blocks.append((label, block))
-        if config.DEBUG_INLINE_CLOSURE:
-            print("After merge: ")
-            func_ir.dump()
+        _debug_print("After merge: ")
+        _debug_dump(func_ir)
         return new_blocks
 
     def get_ir_of_code(self, fcode):
@@ -165,6 +156,14 @@ class InlineClosureCallPass(object):
         f.__name__ = fcode.co_name
         ir = self.run_frontend(f)
         return ir
+
+def _debug_print(*args):
+    if config.DEBUG_INLINE_CLOSURE:
+        print(args)
+
+def _debug_dump(func_ir):
+    if config.DEBUG_INLINE_CLOSURE:
+        func_ir.dump()
 
 def _get_all_scopes(blocks):
     """Get all block-local scopes from an IR.
