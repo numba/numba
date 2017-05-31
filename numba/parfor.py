@@ -1261,7 +1261,7 @@ def remove_dead_parfor_recursive(parfor, lives, args):
     return_label = last_label+1
     if len(blocks[last_label].body) == 0:
         return
-    loc = blocks[last_label].body[-1].loc
+    loc = blocks[last_label].loc
     scope = blocks[last_label].scope
     blocks[return_label] = ir.Block(scope, loc)
 
@@ -1321,7 +1321,7 @@ def wrap_parfor_blocks(parfor):
     first_body_block = min(blocks.keys())
     assert first_body_block > 0 # we are using 0 for init block here
     last_label = max(blocks.keys())
-    loc = blocks[last_label].body[-1].loc
+    loc = blocks[last_label].loc
 
     # add dummy jump in init_block for CFG to work
     blocks[0] = parfor.init_block

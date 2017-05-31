@@ -355,7 +355,10 @@ def add_offset_to_labels(blocks, offset):
     """
     new_blocks = {}
     for l,b in blocks.items():
-        term = b.body[-1]
+        # some parfor last blocks might be empty
+        term = None
+        if b.body:
+            term = b.body[-1]
         if isinstance(term, ir.Jump):
             term.target += offset
         if isinstance(term, ir.Branch):
