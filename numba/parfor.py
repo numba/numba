@@ -1259,6 +1259,19 @@ def remove_dead_parfor(parfor, lives, args):
                 stmt.value = saved_values.get(rhs.value.name, rhs)
         new_body.append(stmt)
     last_block.body = new_body
+
+    # after getitem replacement, remove extra setitems
+    new_body = []
+    in_lives = copy.copy(lives)
+    for stmt in reversed(last_block.body):
+        if (isinstance(stmt, ir.SetItem) and stmt.index.name==parfor.index_var.name
+                and stmt.target.name not in in_lives):
+            continue
+        in_lives |= { v.name for v in stmt.list_vars() }
+        new_body.append(stmt)
+    new_body.reverse()
+    last_block.body = new_body
+
     # process parfor body recursively
     remove_dead_parfor_recursive(parfor, lives, args)
     return
