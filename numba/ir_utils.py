@@ -670,7 +670,7 @@ call_table_extensions = {}
 def get_call_table(blocks, call_table={}, reverse_call_table={}):
     """returns a dictionary of call variables and their references.
     """
-    # call_table xample: c = np.zeros becomes c:["zeroes", np]
+    # call_table example: c = np.zeros becomes c:["zeroes", np]
     # reverse_call_table example: c = np.zeros becomes np_var:c
 
     topo_order = find_topo_order(blocks)

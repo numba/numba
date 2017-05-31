@@ -385,7 +385,6 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, loop
         stop = load_range(stop)
         assert(step == 1) # We do not support loop steps other than 1
         step = load_range(step)
-        # size = builder.sdiv(builder.sub(stop, start), step)
         loop_ranges[i] = (start, stop, step)
 
         if config.DEBUG_ARRAY_OPT:
