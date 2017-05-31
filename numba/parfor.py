@@ -449,7 +449,8 @@ class ParforPass(object):
             self.calltypes[expr] = self.typemap[expr.func.name].get_call_type(typing.Context(), [], {})
             value = expr
         else:
-            NotImplementedError("Numpy map to parfor")
+            NotImplementedError(
+            "Map of numpy.{} to parfor is not implemented".format(call_name))
 
         value_assign = ir.Assign(value, expr_out_var, loc)
         body_block.body.append(value_assign)
