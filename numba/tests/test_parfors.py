@@ -160,6 +160,24 @@ class TestParfors(unittest.TestCase):
         np.testing.assert_almost_equal(expected, output)
         self.assertIn('@do_scheduling', test_p3.inspect_llvm(test_p3.signatures[0]))
 
+    def test_prange4(self):
+        @numba.njit(parallel=True)
+        def test_p4():
+            a = 2
+            b = 3
+            A = np.empty(4)
+            for i in numba.prange(4):
+                if i==a:
+                    A[i] = b
+                else:
+                    A[i] = 0
+            return A
+
+        output = test_p4()
+        expected = np.array([0., 0., 3., 0.])
+        np.testing.assert_array_almost_equal(expected, output)
+        self.assertIn('@do_scheduling', test_p4.inspect_llvm(test_p4.signatures[0]))
+
     def test_pi(self):
         @njit(parallel=True)
         def calc_pi(n):
