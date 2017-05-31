@@ -424,7 +424,7 @@ class ParforPass(object):
             size_vars.append(size_var)
             index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
             index_vars.append(index_var)
-            self.typemap[index_var.name] = types.int64
+            self.typemap[index_var.name] = types.intp
             loopnests.append( LoopNest(index_var, 0, size_var, 1, corr) )
 
         # generate init block and body
