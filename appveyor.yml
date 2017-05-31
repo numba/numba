@@ -39,6 +39,7 @@ before_test:
   - ps: popd
 
 test_script:
+  - numba -s
   # Run a subset of the test suite, as AppVeyor is quite slow.
   # %CMD_IN_ENV% is needed for distutils/setuptools-based tests
   # on certain build configurations.
