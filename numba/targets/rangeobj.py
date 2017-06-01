@@ -5,8 +5,9 @@ Implementation of the range object for fixed-size integers.
 import llvmlite.llvmpy.core as lc
 
 from numba import types, cgutils
-from numba.targets.imputils import (lower_builtin, lower_cast,
-                                    iterator_impl, impl_ret_untracked)
+from .listobj import ListIterInstance
+from .imputils import (lower_builtin, lower_cast,
+                       iterator_impl, impl_ret_untracked)
 from numba.typing import signature
 from numba.extending import intrinsic
 
@@ -183,3 +184,10 @@ def range_iter_len(typingctx, val):
             int_type = state.count.type
             return impl_ret_untracked(context, builder, int_type, builder.load(state.count))
         return signature(val_type, val), codegen
+    elif isinstance(val, types.ListIter):
+        def codegen(context, builder, sig, args):
+            (value,) = args
+            intp_t = context.get_value_type(types.intp)
+            state = ListIterInstance(context, builder, sig.args[0], value)
+            return impl_ret_untracked(context, builder, intp_t, state.size)
+        return signature(types.intp, val), codegen
