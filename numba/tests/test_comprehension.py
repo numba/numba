@@ -235,7 +235,7 @@ class TestListComprehension(unittest.TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc = jit(nopython=True)(list5)
             cfunc(var)
-        msg = "not allowed in a homogenous sequence"
+        msg = "Cannot resolve setitem"
         self.assertIn(msg, str(raises.exception))
 
         with self.assertRaises(LoweringError) as raises:
