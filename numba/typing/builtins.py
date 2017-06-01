@@ -252,7 +252,7 @@ class BitwiseShiftOperation(ConcreteTemplate):
     cases += [signature(max(op, types.uintp), op, op2)
               for op in sorted(types.unsigned_domain)
               for op2 in [types.uintp, types.intp]]
-    no_unsafe_casting = True
+    unsafe_casting = False
 
 
 @infer
@@ -268,7 +268,7 @@ class BitwiseRightShift(BitwiseShiftOperation):
 class BitwiseLogicOperation(BinOp):
     cases = [signature(types.boolean, types.boolean, types.boolean)]
     cases += list(integer_binop_cases)
-    no_unsafe_casting = True
+    unsafe_casting = False
 
 
 @infer
@@ -301,7 +301,7 @@ class BitwiseInvert(ConcreteTemplate):
     cases += [signature(choose_result_int(op), op) for op in types.unsigned_domain]
     cases += [signature(choose_result_int(op), op) for op in types.signed_domain]
 
-    no_unsafe_casting = True
+    unsafe_casting = False
 
 class UnaryOp(ConcreteTemplate):
     cases = [signature(choose_result_int(op), op) for op in types.unsigned_domain]
