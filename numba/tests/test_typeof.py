@@ -521,8 +521,10 @@ class TestFingerprint(TestCase):
         distinct.add(compute_fingerprint([4.5, 6.7]))
         distinct.add(compute_fingerprint([(1,)]))
 
-        with self.assertRaises(ValueError):
-            compute_fingerprint([])
+        # empty lists are equal
+        s = compute_fingerprint([])
+        self.assertEqual(compute_fingerprint([]), s)
+        distinct.add(s)
 
     def test_sets(self):
         distinct = DistinctChecker()
@@ -535,9 +537,12 @@ class TestFingerprint(TestCase):
         distinct.add(compute_fingerprint(set([1j])))
         distinct.add(compute_fingerprint(set([4.5, 6.7])))
         distinct.add(compute_fingerprint(set([(1,)])))
+        
+        # empty sets are equal
+        s = compute_fingerprint(set())
+        self.assertEqual(compute_fingerprint(set()), s)
+        distinct.add(s)
 
-        with self.assertRaises(ValueError):
-            compute_fingerprint(set())
         with self.assertRaises(NotImplementedError):
             compute_fingerprint(frozenset([2, 3]))
 
