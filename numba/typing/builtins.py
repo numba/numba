@@ -246,10 +246,14 @@ class BitwiseShiftOperation(ConcreteTemplate):
     # should always be positive but will generally be considered
     # signed anyway, since it's often a constant integer).
     # (also, see issue #1995 for right-shifts)
-    cases = [signature(max(op, types.intp), op, types.intp)
-             for op in sorted(types.signed_domain)]
-    cases += [signature(max(op, types.uintp), op, types.intp)
-              for op in sorted(types.unsigned_domain)]
+    cases = [signature(max(op, types.intp), op, op2)
+             for op in sorted(types.signed_domain)
+             for op2 in [types.uintp, types.intp]]
+    cases += [signature(max(op, types.uintp), op, op2)
+              for op in sorted(types.unsigned_domain)
+              for op2 in [types.uintp, types.intp]]
+    unsafe_casting = False
+
 
 @infer
 class BitwiseLeftShift(BitwiseShiftOperation):
@@ -264,6 +268,7 @@ class BitwiseRightShift(BitwiseShiftOperation):
 class BitwiseLogicOperation(BinOp):
     cases = [signature(types.boolean, types.boolean, types.boolean)]
     cases += list(integer_binop_cases)
+    unsafe_casting = False
 
 
 @infer
@@ -296,6 +301,7 @@ class BitwiseInvert(ConcreteTemplate):
     cases += [signature(choose_result_int(op), op) for op in types.unsigned_domain]
     cases += [signature(choose_result_int(op), op) for op in types.signed_domain]
 
+    unsafe_casting = False
 
 class UnaryOp(ConcreteTemplate):
     cases = [signature(choose_result_int(op), op) for op in types.unsigned_domain]
