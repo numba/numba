@@ -132,7 +132,8 @@ class ParforPass(object):
         """
         if isinstance(var, ir.Var) and var.name in self.array_analysis.array_shape_classes:
             var_shapes = self.array_analysis.array_shape_classes[var.name]
-            return not (-1 in var_shapes)
+            # 0-dimensional arrays (have [] as shape) shouldn't be parallelized
+            return len(var_shapes)>0 and not (-1 in var_shapes)
         return False
 
     def run(self):
