@@ -1,5 +1,5 @@
 numpy>=1.7
-llvmlite>=0.16
+llvmlite>=0.19
 argparse
 funcsigs ; python_version < '3.4'
 singledispatch ; python_version < '3.4'
