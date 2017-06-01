@@ -21,6 +21,7 @@ class DataFlowAnalysis(object):
         self.bytecode = cfa.bytecode
         # { block offset -> BlockInfo }
         self.infos = {}
+        self.edge_process = {}
 
     def run(self):
         for blk in self.cfa.iterliveblocks():
@@ -28,7 +29,8 @@ class DataFlowAnalysis(object):
 
     def run_on_block(self, blk):
         incoming_blocks = []
-        info = BlockInfo(blk.offset, incoming_blocks)
+        info = BlockInfo(blk, blk.offset, incoming_blocks)
+        edge_callbacks = []
 
         for ib, pops in self.cfa.incoming_blocks(blk):
             # By nature of Python bytecode, there will be no incoming
@@ -38,6 +40,8 @@ class DataFlowAnalysis(object):
                 continue
             ib = self.infos[ib.offset]
             incoming_blocks.append(ib)
+            if (ib.offset, blk.offset) in self.edge_process:
+                edge_callbacks.append(self.edge_process[(ib.offset, blk.offset)])
 
             # Compute stack offset at block entry
             # The stack effect of our predecessors should be known
@@ -65,6 +69,9 @@ class DataFlowAnalysis(object):
             info.stack_offset = 0
             info.syntax_blocks = []
         info.stack_effect = 0
+
+        for callback in edge_callbacks:
+            callback(info)
 
         for offset in blk:
             inst = self.bytecode[offset]
@@ -172,6 +179,18 @@ class DataFlowAnalysis(object):
         info.append(inst, items=items, res=lst)
         info.push(lst)
 
+    def op_LIST_APPEND(self, info, inst):
+        value = info.pop()
+        # Python 2.7+ added an argument to LIST_APPEND.
+        if sys.version_info[:2] == (2, 6):
+            target = info.pop()
+        else:
+            index = inst.arg
+            target = info.peek(index)
+        appendvar = info.make_temp()
+        res = info.make_temp()
+        info.append(inst, target=target, value=value, appendvar=appendvar, res=res)
+
     def op_BUILD_MAP(self, info, inst):
         dct = info.make_temp()
         count = inst.arg
@@ -213,6 +232,10 @@ class DataFlowAnalysis(object):
         value = info.pop()
         dct = info.tos
         info.append(inst, dct=dct, key=key, value=value)
+
+    def op_STORE_DEREF(self, info, inst):
+        value = info.pop()
+        info.append(inst, value=value)
 
     def op_LOAD_FAST(self, info, inst):
         name = self.bytecode.co_varnames[inst.arg]
@@ -272,6 +295,11 @@ class DataFlowAnalysis(object):
         pred = info.make_temp()
         info.append(inst, iterator=iterator, pair=pair, indval=indval, pred=pred)
         info.push(indval)
+        # Setup for stack POP (twice) at loop exit (before processing instruction at jump target)
+        def pop_info(info):
+            info.pop()
+            info.pop()
+        self.edge_process[(info.block.offset, inst.get_jump_target())] = pop_info
 
     if utils.PYVERSION < (3, 6):
 
@@ -653,6 +681,64 @@ class DataFlowAnalysis(object):
             raise ValueError("Multiple argument raise is not supported.")
         info.append(inst, exc=exc)
 
+    def op_MAKE_FUNCTION(self, info, inst, MAKE_CLOSURE=False):
+        if utils.PYVERSION == (2, 7):
+            name = None
+        else:
+            name = info.pop()
+        code = info.pop()
+        closure = annotations = kwdefaults = defaults = None
+        if utils.PYVERSION < (3, 0):
+            if MAKE_CLOSURE:
+                closure = info.pop()
+            num_posdefaults = inst.arg
+            if num_posdefaults > 0:
+                defaults = []
+                for i in range(num_posdefaults):
+                    defaults.append(info.pop())
+                defaults = tuple(defaults)
+        elif utils.PYVERSION >= (3, 0) and utils.PYVERSION < (3, 6):
+            num_posdefaults = inst.arg & 0xff
+            num_kwdefaults = (inst.arg >> 8) & 0xff
+            num_annotations = (inst.arg >> 16) & 0x7fff
+            if MAKE_CLOSURE:
+                closure = info.pop()
+            if num_annotations > 0:
+                annotations = info.pop() 
+            if num_kwdefaults > 0:
+                kwdefaults = []
+                for i in range(num_kwdefaults):
+                    v = info.pop()
+                    k = info.pop()
+                    kwdefaults.append((k,v))
+                kwdefaults = tuple(kwdefaults)
+            if num_posdefaults:
+                defaults = []
+                for i in range(num_posdefaults):
+                    defaults.append(info.pop())
+                defaults = tuple(defaults)
+        else:
+            if inst.arg & 0x8:
+                closure = info.pop()
+            if inst.arg & 0x4:
+                annotations = info.pop()
+            if inst.arg & 0x2:
+                kwdefaults = info.pop()
+            if inst.arg & 0x1:
+                defaults = info.pop()
+        res = info.make_temp()
+        info.append(inst, name=name, code=code, closure=closure, annotations=annotations, 
+                    kwdefaults=kwdefaults, defaults=defaults, res=res)
+        info.push(res)
+
+    def op_MAKE_CLOSURE(self, info, inst):
+        self.op_MAKE_FUNCTION(info, inst, MAKE_CLOSURE=True)
+
+    def op_LOAD_CLOSURE(self, info, inst):
+        res = info.make_temp()
+        info.append(inst, res=res)
+        info.push(res)
+
     def _ignored(self, info, inst):
         pass
 
@@ -665,7 +751,8 @@ class LoopBlock(object):
 
 
 class BlockInfo(object):
-    def __init__(self, offset, incoming_blocks):
+    def __init__(self, block, offset, incoming_blocks):
+        self.block = block
         self.offset = offset
         # The list of incoming BlockInfo objects (obtained by control
         # flow analysis).
@@ -714,6 +801,18 @@ class BlockInfo(object):
         else:
             self.stack_effect -= 1
             return self.stack.pop()
+
+    def peek(self, k):
+        """
+        Return the k'th element back from the top of the stack.
+        peek(1) is the top of the stack.
+        """
+        num_pops = k
+        top_k = [self.pop() for _ in range(num_pops)]
+        r = top_k[-1]
+        for i in range(num_pops - 1, -1, -1):
+            self.push(top_k[i])
+        return r
 
     def make_incoming(self):
         """

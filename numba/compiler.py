@@ -17,6 +17,7 @@ from numba import (bytecode, interpreter, funcdesc, postproc,
 from numba.targets import cpu, callconv
 from numba.annotations import type_annotations
 from numba.parfor import ParforPass
+from numba.inline_closurecall import InlineClosureCallPass
 
 
 # Lock for the preventing multiple compiler execution
@@ -492,6 +493,24 @@ class Pipeline(object):
             self.type_annotation.calltypes, self.return_type)
         parfor_pass.run()
 
+    def stage_inline_pass(self):
+        """
+        Inline calls to locally defined closures.
+        """
+        # Ensure we have an IR and type information.
+        assert self.func_ir
+        inline_pass = InlineClosureCallPass(self.func_ir, run_frontend)
+        inline_pass.run()
+        # Remove all Dels, and re-run postproc
+        post_proc = postproc.PostProcessor(self.func_ir)
+        post_proc.run()
+
+        if config.DEBUG or config.DUMP_IR:
+            name = self.func_ir.func_id.func_qualname
+            print(("IR DUMP: %s" % name).center(80, "-"))
+            self.func_ir.dump()
+
+
     def stage_annotate_type(self):
         """
         Create type annotation after type inference
@@ -638,6 +657,7 @@ class Pipeline(object):
                 if self.status.can_fallback:
                     pm.add_stage(self.stage_preserve_ir, "preserve IR for fallback")
                 pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
+            pm.add_stage(self.stage_inline_pass, "inline calls to locally defined closures")
             pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
             pm.add_stage(self.stage_annotate_type, "annotate type")
             if not self.flags.no_rewrites:

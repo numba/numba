@@ -6,7 +6,7 @@ import sys
 
 from .. import compiler, ir, types, six, cgutils, sigutils
 from numba.ir_utils import (add_offset_to_labels, replace_var_names,
-                            remove_dels, legalize_names, mk_unique_var)
+                            remove_dels, legalize_names, mk_unique_var, rename_labels)
 from ..typing import signature
 from numba import config
 import llvmlite.llvmpy.core as lc
@@ -311,7 +311,7 @@ def _create_gufunc_for_parfor_body(lowerer, parfor, typemap, typingctx, targetct
             continue
         break
 
-    gufunc_ir.blocks = numba.parfor._rename_labels(gufunc_ir.blocks)
+    gufunc_ir.blocks = rename_labels(gufunc_ir.blocks)
     remove_dels(gufunc_ir.blocks)
 
     if config.DEBUG_ARRAY_OPT:

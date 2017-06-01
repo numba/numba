@@ -142,6 +142,9 @@ class _EnvReloader(object):
         # print debug info of analysis and optimization on array operations
         DEBUG_ARRAY_OPT = _readenv("NUMBA_DEBUG_ARRAY_OPT", int, 0)
 
+        # print debug info of inline closure pass
+        DEBUG_INLINE_CLOSURE = _readenv("NUMBA_DEBUG_INLINE_CLOSURE", int, 0)
+
         # Force dump of LLVM IR
         DUMP_LLVM = _readenv("NUMBA_DUMP_LLVM", int, DEBUG)
 

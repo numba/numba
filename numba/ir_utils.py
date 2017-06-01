@@ -316,12 +316,14 @@ def remove_dels(blocks):
     return
 
 def remove_dead(blocks, args):
-    """dead code elimination using liveness and CFG info"""
+    """dead code elimination using liveness and CFG info.
+    Returns True if something has been removed, or False if nothing is removed."""
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
     arg_aliases = find_potential_aliases(blocks, args)
 
+    removed = False
     for label, block in blocks.items():
         # find live variables at each statement to delete dead assignment
         lives = { v.name for v in block.terminator.list_vars() }
@@ -330,8 +332,8 @@ def remove_dead(blocks, args):
             lives |= live_map[out_blk]
         if label in cfg.exit_points():
             lives |= arg_aliases
-        remove_dead_block(block, lives, arg_aliases)
-    return
+        removed |= remove_dead_block(block, lives, arg_aliases)
+    return removed
 
 # other packages that define new nodes add calls to remove dead code in them
 # format: {type:function}
@@ -344,6 +346,7 @@ def remove_dead_block(block, lives, args):
     """
     # TODO: find mutable args that are not definitely assigned instead of
     # assuming all args are live after return
+    removed = False
 
     # add statements in reverse order
     new_body = [block.terminator]
@@ -358,8 +361,10 @@ def remove_dead_block(block, lives, args):
             lhs = stmt.target
             rhs = stmt.value
             if lhs.name not in lives and has_no_side_effect(rhs, lives):
+                removed = True
                 continue
             if isinstance(rhs, ir.Var) and lhs.name==rhs.name:
+                removed = True
                 continue
             # TODO: remove other nodes like SetItem etc.
 
@@ -372,7 +377,7 @@ def remove_dead_block(block, lives, args):
         new_body.append(stmt)
     new_body.reverse()
     block.body = new_body
-    return
+    return removed
 
 def has_no_side_effect(rhs, lives):
     # TODO: find side-effect free calls like Numpy calls
@@ -601,3 +606,42 @@ def get_stmt_writes(stmt):
     if isinstance(stmt, (ir.Assign, ir.SetItem, ir.StaticSetItem)):
         writes.add(stmt.target.name)
     return writes
+
+def rename_labels(blocks):
+    """rename labels of function body blocks according to topological sort.
+    lowering requires this order.
+    """
+    topo_order = find_topo_order(blocks)
+
+    # make a block with return last if available (just for readability)
+    return_label = -1
+    for l,b in blocks.items():
+        if isinstance(b.body[-1], ir.Return):
+            return_label = l
+    # some cases like generators can have no return blocks
+    if return_label!=-1:
+        topo_order.remove(return_label)
+        topo_order.append(return_label)
+
+    label_map = {}
+    new_label = 0
+    for label in topo_order:
+        label_map[label] = new_label
+        new_label += 1
+    # update target labels in jumps/branches
+    for b in blocks.values():
+        term = b.terminator
+        if isinstance(term, ir.Jump):
+            term.target = label_map[term.target]
+        if isinstance(term, ir.Branch):
+            term.truebr = label_map[term.truebr]
+            term.falsebr = label_map[term.falsebr]
+    # update blocks dictionary keys
+    new_blocks = {}
+    for k, b in blocks.items():
+        new_label = label_map[k]
+        new_blocks[new_label] = b
+
+    return new_blocks
+
+
