@@ -401,11 +401,12 @@ class BaseContext(object):
         Insert a unique internal constant named *name*, with LLVM value
         *val*, into module *mod*.
         """
-        gv = mod.get_global(name)
-        if gv is not None:
-            return gv
-        else:
+        try:
+            gv = mod.get_global(name)
+        except KeyError:
             return cgutils.global_constant(mod, name, val)
+        else:
+            return gv
 
     def get_argument_type(self, ty):
         return self.data_model_manager[ty].get_argument_type()
