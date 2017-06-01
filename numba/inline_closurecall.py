@@ -83,7 +83,7 @@ class InlineClosureCallPass(object):
             while (remove_dead(self.func_ir.blocks, self.func_ir.arg_names)):
                 pass
             self.func_ir.blocks = rename_labels(self.func_ir.blocks)
-        self.debug("AFTER InlineClosureCall")
+        _debug_print("AFTER InlineClosureCall")
 
     def inline_closure_call(self, block, i, callee):
         """Inline the body of `callee` at its callsite (`i`-th instruction of `block`)
