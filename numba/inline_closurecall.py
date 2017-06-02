@@ -167,7 +167,6 @@ class InlineClosureCallPass(object):
             block = callee_blocks[label]
             block.scope = scope
             _add_definition(func_ir, block)
-            # _simplify_range_len(func_ir, block)
             func_ir.blocks[label] = block
             new_blocks.append((label, block))
         debug_print("After merge in")
@@ -629,78 +628,6 @@ def _inline_arraycall(caller_ir, caller_block, callee_ir, callee_blocks, i):
     # finally returns the array created
     return stmt.target
 
-def _simplify_range_len(func_ir, block):
-    """simplify range length computation so that we can cutdown variable
-    dependencies on array allocation call. It helps to associate the
-    array size variable used in the allocation with a definition that
-    is outside of the enclosing loop, and to ease the flattening of
-    nested arrays to multi-dimensional ones.
-    """
-    debug_print = _make_debug_print("simplify_range_len")
-    scope = block.scope
-
-    def simplify(stmt):
-        loc = stmt.loc
-        require(isinstance(stmt, ir.Assign) and
-                isinstance(stmt.value, ir.Expr) and
-                stmt.value.op == 'call')
-        expr = stmt.value
-        func_def = func_ir.get_definition(expr.func)
-        require(isinstance(func_def, ir.Global) and func_def.value == range_iter_len)
-        debug_print("found range_iter_len call:", func_def, expr)
-        range_iter_var = expr.args[0]
-        range_iter_def = func_ir.get_definition(range_iter_var)
-        debug_print("found range def: ", range_iter_def)
-        require(isinstance(range_iter_def, ir.Expr) and range_iter_def.op == 'getiter')
-        range_var = range_iter_def.value
-        range_def = func_ir.get_definition(range_var)
-        debug_print("found range def:", range_def)
-        require(isinstance(range_def, ir.Expr) and range_def.op == 'call')
-        range_func = range_def.func
-        range_func_def = func_ir.get_definition(range_func)
-        require(isinstance(range_func_def, ir.Global) and range_func_def.value == range)
-        n_range_args = len(range_def.args)
-        # only support range(n), or range(start, stop) with step 1
-        require(n_range_args == 1 or n_range_args == 2)
-        stmts = []
-        if len(range_def.args) == 1:
-            size_var = func_ir.get_definition(range_def.args[0], lhs_only=True)
-        elif len(range_def.args) == 2:
-            start = func_ir.get_definition(range_def.args[0], lhs_only=True)
-            stop = func_ir.get_definition(range_def.args[1], lhs_only=True)
-            debug_print("found range start, stop: ", start, stop)
-            one = scope.make_temp(loc)
-            size_var_tmp = scope.make_temp(loc)
-            size_var = scope.make_temp(loc)
-            definitions = func_ir._definitions
-            # one = 1
-            value = ir.Const(value=1,loc=loc)
-            stmts.append(ir.Assign(value=value, target=one, loc=loc))
-            definitions[one.name].append(value)
-            # size_var_tmp = start - stop
-            value = ir.Expr.binop(fn='-', lhs=start, rhs=stop, loc=loc)
-            stmts.append(ir.Assign(value=value, target=size_var_tmp, loc=loc))
-            definitions[size_var_tmp.name].append(value)
-            # size_var = size_var_tmp + 1
-            value = ir.Expr.binop(fn='+', lhs=size_var_tmp, rhs=one, loc=loc)
-            stmts.append(ir.Assign(value=value, target=size_var, loc=loc))
-            definitions[size_var.name].append(value)
-            debug_print("size_var = ", size_var)
-        else:
-            return False
-        stmt.value = size_var
-        func_ir._definitions[stmt.target.name] = [size_var]
-        return stmts
-
-    block_len = len(block.body)
-    i = 0
-    while i < block_len:
-        stmts = guard(simplify, block.body[i])
-        if stmts:
-            block.body = block.body[:i-1] + stmts + block.body[i:]
-            block_len = len(block.body)
-            i += 3
-        i += 1
 
 def _fix_nested_array(func_ir):
     """Look for assignment like: a[..] = b, where both a and b are numpy arrays, and
