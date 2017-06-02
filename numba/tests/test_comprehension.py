@@ -22,18 +22,6 @@ def comp_list(n):
     return s
 
 
-def comp_with_array(n):
-    m = n * 2
-    l = np.array([i + m for i in range(n)])
-    return np.sum(l)
-
-
-def comp_nest_with_array(n):
-    l = np.array([np.sum(np.array([i * j for j in range(n)]))
-                  for i in range(n)])
-    return np.sum(l)
-
-
 class TestListComprehension(unittest.TestCase):
 
     @tag('important')
@@ -44,20 +32,6 @@ class TestListComprehension(unittest.TestCase):
         self.assertEqual(cfunc(5), pyfunc(5))
         self.assertEqual(cfunc(0), pyfunc(0))
         self.assertEqual(cfunc(-1), pyfunc(-1))
-
-    @tag('important')
-    def test_comp_with_array(self):
-        pyfunc = comp_with_array
-        cres = compile_isolated(pyfunc, [types.intp])
-        cfunc = cres.entry_point
-        self.assertEqual(cfunc(5), pyfunc(5))
-
-    @tag('important')
-    def test_comp_nest_with_array(self):
-        pyfunc = comp_nest_with_array
-        cres = compile_isolated(pyfunc, [types.intp])
-        cfunc = cres.entry_point
-        self.assertEqual(cfunc(5), pyfunc(5))
 
     @tag('important')
     def test_bulk_use_cases(self):
@@ -235,7 +209,10 @@ class TestListComprehension(unittest.TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc = jit(nopython=True)(list5)
             cfunc(var)
-        msg = "Cannot resolve setitem"
+        if utils.PYVERSION < (3, 0):
+            msg = "not allowed in a homogenous sequence"
+        else:
+            msg = "Cannot resolve setitem"
         self.assertIn(msg, str(raises.exception))
 
         with self.assertRaises(LoweringError) as raises:
@@ -256,6 +233,130 @@ class TestListComprehension(unittest.TestCase):
             msg = "cannot unify reflected list(int%d) and int%d" % (bits, bits)
             self.assertIn(msg, str(raises.exception))
 
+
+class TestArrayComprehension(unittest.TestCase):
+
+    @tag('important')
+    def test_comp_with_array(self):
+        def comp_with_array(n):
+            m = n * 2
+            l = np.array([i + m for i in range(n)])
+            return np.sum(l)
+
+        cfunc = jit(nopython=True)(comp_with_array)
+        self.assertEqual(comp_with_array(5), cfunc(5))
+        self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+
+    @tag('important')
+    def test_comp_with_array_noinline(self):
+        def comp_with_array_noinline(n):
+            m = n * 2
+            l = np.array([i + m for i in range(n)])
+            return np.sum(l)
+        import numba.inline_closurecall as ic
+        ic.enable_inline_arraycall = False
+        cfunc = jit(nopython=True)(comp_with_array_noinline)
+        self.assertEqual(comp_with_array_noinline(5), cfunc(5))
+        self.assertIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+        ic.enable_inline_arraycall = True
+
+    @tag('important')
+    def test_comp_nest_with_array(self):
+        def comp_nest_with_array(n):
+            l = np.array([[i * j for j in range(n)] for i in range(n)])
+            return np.sum(l)
+
+        cfunc = jit(nopython=True)(comp_nest_with_array)
+        self.assertEqual(comp_nest_with_array(5), cfunc(5))
+        self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+
+    @tag('important')
+    def test_comp_with_nest_array3(self):
+        def comp_with_nest_array3(n):
+            l = np.array([[[i * j * k for k in range(n)] for j in range(n)] for i in range(n)])
+            return np.sum(l)
+
+        cfunc = jit(nopython=True)(comp_with_nest_array3)
+        self.assertEqual(comp_with_nest_array3(10), cfunc(10))
+        self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+
+    @tag('important')
+    def test_comp_nest_with_array_noinline(self):
+        def comp_nest_with_array_noinline(n):
+            l = np.array([[i * j for j in range(n)] for i in range(n)])
+            return np.sum(l)
+
+        import numba.inline_closurecall as ic
+        ic.enable_inline_arraycall = False
+        # test is expected to fail
+        with self.assertRaises(LoweringError) as raises:
+            cfunc = jit(nopython=True)(comp_nest_with_array_noinline)
+            cfunc(5)
+        msg = 'unsupported nested memory-managed object'
+        self.assertIn(msg, str(raises.exception))
+        ic.enable_inline_arraycall = True
+
+    @tag('important')
+    def test_comp_with_array_range(self):
+        def comp_with_array_range(m, n):
+            l = np.array([i for i in range(m, n)])
+            return np.sum(l)
+        cfunc = jit(nopython=True)(comp_with_array_range)
+        self.assertEqual(comp_with_array_range(5, 10), cfunc(5, 10))
+        self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+
+    @tag('important')
+    def test_comp_with_array_range_and_step(self):
+        def comp_with_array_range_and_step(m, n):
+            l = np.array([i for i in range(m, n, 2)])
+            return np.sum(l)
+        cfunc = jit(nopython=True)(comp_with_array_range_and_step)
+        self.assertEqual(comp_with_array_range_and_step(5, 10), cfunc(5, 10))
+        self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+
+    @tag('important')
+    def test_comp_with_array_conditional(self):
+        def comp_with_array_conditional(n):
+            l = np.array([i for i in range(n) if i % 2 == 1])
+            return np.sum(l)
+        # arraycall inline would not happen when conditional is present
+        cfunc = jit(nopython=True)(comp_with_array_conditional)
+        self.assertEqual(comp_with_array_conditional(10), cfunc(10))
+        self.assertIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+
+    @tag('important')
+    def test_comp_nest_with_array_conditional(self):
+        def comp_nest_with_array_conditional(n):
+            l = np.array([[i * j for j in range(n)] for i in range(n) if i % 2 == 1])
+            return np.sum(l)
+        # test is expected to fail
+        with self.assertRaises(LoweringError) as raises:
+            cfunc = jit(nopython=True)(comp_nest_with_array_conditional)
+            cfunc(5)
+        msg = 'unsupported nested memory-managed object'
+        self.assertIn(msg, str(raises.exception))
+
+    @tag('important')
+    def test_comp_nest_with_dependency(self):
+        def comp_nest_with_dependency(n):
+            l = np.array([[i * j for j in range(i+1)] for i in range(n)])
+            return np.sum(l)
+        # test is expected to fail
+        with self.assertRaises(LoweringError) as raises:
+            cfunc = jit(nopython=True)(comp_nest_with_dependency)
+            cfunc(5)
+        self.assertIn('Failed', str(raises.exception))
+
+    @tag('important')
+    def test_no_array_comp(self):
+        def no_array_comp(n):
+            l = np.array([1,2,3,n])
+            return np.sum(l)
+
+        # no arraycall inline without comprehension
+        cfunc = jit(nopython=True)(no_array_comp)
+        self.assertEqual(no_array_comp(10), cfunc(10))
+        self.assertIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
 
 if __name__ == '__main__':
     unittest.main()
