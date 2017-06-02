@@ -231,11 +231,20 @@ class ParforPass(object):
                         and self._is_prange(inst.value.func.name, call_table)):
                     body_labels = list(loop.body-{loop.header})
                     args = inst.value.args
-                    # find loop index variable (phi in header block)
+                    # find loop index variable (pair_first in header block)
                     for stmt in blocks[loop.header].body:
-                        if isinstance(stmt, ir.Assign) and stmt.target.name.startswith('$phi'):
-                            loop_ind = stmt.target.name
+                        if (isinstance(stmt, ir.Assign)
+                                and isinstance(stmt.value, ir.Expr)
+                                and stmt.value.op=='pair_first'):
+                            loop_index = stmt.target.name
                             break
+                    # loop_index may be assigned to other vars
+                    # get header copies to find all of them
+                    cps,_ = get_block_copies({0:blocks[loop.header]},
+                                                            self.typemap)
+                    cps = cps[0]
+                    loop_index_vars = set(t for t,v in cps if v==loop_index)
+                    loop_index_vars.add(loop_index)
                     start = 0
                     step = 1
                     size_var = args[0]
@@ -254,7 +263,8 @@ class ParforPass(object):
                     body = {l:blocks[l] for l in body_labels}
                     index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
                     self.typemap[index_var.name] = types.intp
-                    replace_vars(body, {loop_ind:index_var})
+                    index_var_map = {v:index_var for v in loop_index_vars}
+                    replace_vars(body, index_var_map)
                     # TODO: find correlation
                     parfor_loop = LoopNest(index_var, start, size_var, step, -1)
                     parfor = Parfor([parfor_loop], init_block, body, loc,
