@@ -371,6 +371,8 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
 
         # Create global variable in the requested address-space
         gvmem = lmod.add_global_variable(laryty, symbol_name, addrspace)
+        # Specify alignment to avoid misalignment bug
+        gvmem.align = context.get_abi_sizeof(lldtype)
 
         if elemcount <= 0:
             if can_dynsized:    # dynamic shared memory
