@@ -85,6 +85,10 @@ class HSATargetContext(BaseContext):
     def codegen(self):
         return self._internal_codegen
 
+    @property
+    def target_data(self):
+        return self._target_data
+
     def mangler(self, name, argtypes):
         def repl(m):
             ch = m.group(0)
