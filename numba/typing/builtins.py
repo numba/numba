@@ -246,12 +246,16 @@ class BitwiseShiftOperation(ConcreteTemplate):
     # should always be positive but will generally be considered
     # signed anyway, since it's often a constant integer).
     # (also, see issue #1995 for right-shifts)
+
+    # The RHS type is fixed to 64-bit signed/unsigned ints.
+    # The implementation will always cast the operands to the width of the
+    # result type, which is the widest between the LHS type and (u)intp.
     cases = [signature(max(op, types.intp), op, op2)
              for op in sorted(types.signed_domain)
-             for op2 in [types.uintp, types.intp]]
+             for op2 in [types.uint64, types.int64]]
     cases += [signature(max(op, types.uintp), op, op2)
               for op in sorted(types.unsigned_domain)
-              for op2 in [types.uintp, types.intp]]
+              for op2 in [types.uint64, types.int64]]
     unsafe_casting = False
 
 
