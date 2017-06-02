@@ -10,6 +10,7 @@ from . import config, errors, runtests, types
 
 # Re-export typeof
 from .special import typeof, prange
+from .special import set_user_pipeline_func
 
 # Re-export error classes
 from .errors import *
@@ -45,6 +46,7 @@ __all__ = """
     njit
     typeof
     prange
+    set_user_pipeline_func
     vectorize
     """.split() + types.__all__ + errors.__all__
 

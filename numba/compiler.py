@@ -23,6 +23,10 @@ from numba.inline_closurecall import InlineClosureCallPass
 # Lock for the preventing multiple compiler execution
 lock_compiler = threading.RLock()
 
+user_pipeline_func = None
+def set_user_pipeline_func(func):
+    global user_pipeline_func
+    user_pipeline_func = func
 
 class Flags(utils.ConfigOptions):
     # These options are all false by default, but the defaults are
@@ -681,6 +685,9 @@ class Pipeline(object):
             pm.create_pipeline("interp")
             pm.add_stage(self.stage_compile_interp_mode, "compiling with interpreter mode")
             pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
+
+        if user_pipeline_func:
+            user_pipeline_func(pm, self)
 
         pm.finalize()
         res = pm.run(self.status)
