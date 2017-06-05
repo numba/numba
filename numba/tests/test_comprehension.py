@@ -233,7 +233,7 @@ class TestListComprehension(unittest.TestCase):
             msg = "cannot unify reflected list(int%d) and int%d" % (bits, bits)
             self.assertIn(msg, str(raises.exception))
 
-
+@unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
 class TestArrayComprehension(unittest.TestCase):
 
     @tag('important')
