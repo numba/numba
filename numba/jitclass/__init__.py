@@ -1,2 +1,2 @@
-from .decorators import jitclass
+from .decorators import jitclass, jitmethod
 from . import boxing  # Has import-time side effect
