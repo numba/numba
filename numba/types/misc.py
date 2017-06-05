@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from .abstract import *
 from .common import *
 from ..typeconv import Conversion
+from ..classfingerprint import ClassFingerPrint
 
 
 class PyObject(Dummy):
@@ -365,10 +366,15 @@ class ClassType(Callable, Opaque):
         self.struct = struct
         self.methods = dict((k, v.py_func) for k, v in self.jitmethods.items())
         fielddesc = ','.join("{0}:{1}".format(k, v) for k, v in struct.items())
-        name = "{0}.{1}#{2:x}<{3}>".format(self.name_prefix, class_def.__name__,
-                                           id(class_def), fielddesc)
+        fingerprint = ClassFingerPrint(self.class_def).hexdigest()
+        name = "{0}.{1}#{2}<{3}>".format(self.name_prefix, class_def.__name__,
+                                           fingerprint, fielddesc)
         super(ClassType, self).__init__(name)
         self.instance_type = self.instance_type_class(self)
+
+        # bind jitmethods
+        for fn in self.jitmethods.values():
+            fn.bind(self.instance_type)
 
     def get_call_type(self, context, args, kws):
         return self.ctor_template(context).apply(args, kws)

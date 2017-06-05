@@ -29,7 +29,7 @@ from .npyufunc import vectorize, guvectorize
 from .numpy_support import carray, farray, from_dtype
 
 # Re-export jitclass
-from .jitclass import jitclass
+from .jitclass import jitclass, jitmethod
 
 # Keep this for backward compatibility.
 test = runtests.main

@@ -8,8 +8,8 @@ from llvmlite import ir as llvmir
 
 from numba import types
 from numba.targets.registry import cpu_target
-from numba import njit
-from numba.typing import templates
+from numba import njit, jit
+from numba.typing import templates, signature as _create_signature
 from numba.datamodel import default_manager, models
 from numba.targets import imputils
 from numba import cgutils, utils
@@ -138,6 +138,13 @@ def _fix_up_private_attr(clsname, spec):
     return out
 
 
+def _prepare_method(fnobj):
+    if isinstance(fnobj, JitMethod):
+       return fnobj
+
+    return JitMethod(fnobj)
+
+
 def register_class_type(cls, spec, class_ctor, builder):
     """
     Internal function to create a jitclass.
@@ -163,7 +170,8 @@ def register_class_type(cls, spec, class_ctor, builder):
         clsdct.update(basecls.__dict__)
 
     methods = dict((k, v) for k, v in clsdct.items()
-                   if isinstance(v, pytypes.FunctionType))
+                   if isinstance(v, (pytypes.FunctionType,
+                                     JitMethod)))
     props = dict((k, v) for k, v in clsdct.items()
                  if isinstance(v, property))
 
@@ -188,7 +196,7 @@ def register_class_type(cls, spec, class_ctor, builder):
 
     jitmethods = {}
     for k, v in methods.items():
-        jitmethods[k] = njit(v)
+        jitmethods[k] = _prepare_method(v)
 
     jitprops = {}
     for k, v in props.items():
@@ -466,3 +474,73 @@ def ctor_impl(context, builder, sig, args):
     ret = inst_struct._getvalue()
 
     return imputils.impl_ret_new_ref(context, builder, inst_typ, ret)
+
+
+##############################################################################
+# JitMethod
+
+class JitMethod(object):
+    """
+    For passing signatures and compiler options to methods in jitclasses
+    """
+
+    def __init__(self, fn, signatures=(), **kwargs):
+        self._fn = fn
+        self._signatures = signatures
+        self._kwargs = kwargs
+        self._dispatcher = None
+        self._self_type = None
+
+    def bind(self, self_type):
+        """
+        Bind the jitmethod to an instance type.
+        """
+        assert self._self_type is None, "jitmethod already bound"
+        assert self._dispatcher is None, "jitmethod already finalized"
+        self._self_type = self_type
+
+    @property
+    def dispatcher(self):
+        self._finalize()
+        return self._dispatcher
+
+    @property
+    def compiler_options(self):
+        return self._kwargs
+
+    def _finalize(self):
+        """
+        Delayed instantiation of the dispatcher.
+        """
+        if self._dispatcher is not None:
+            return
+
+        decor = jit(self._pad_signatures(), **self._kwargs)
+        self._dispatcher = decor(self._fn)
+
+    def _pad_signatures(self):
+        """
+        Return signatures with the type of self added; or None if no user
+        defined signatures.
+        """
+        sigs = []
+        for argtys, retty in self._signatures:
+            padded_args = [self._self_type] + list(argtys)
+            sig = _create_signature(retty, *padded_args)
+            sigs.append(sig)
+        return sigs if sigs else None
+
+    #
+    # For compatibiliy with Dispatcher objects
+    #
+
+    @property
+    def py_func(self):
+        return self._fn
+
+
+    def get_call_template(self, args, kws):
+        return self.dispatcher.get_call_template(args, kws)
+
+    def get_overload(self, sig):
+        return self.dispatcher.get_overload(sig)

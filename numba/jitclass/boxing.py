@@ -47,20 +47,19 @@ _generate_setter = partial(_generate_property, template=_setter_code_template,
                            fname='mutator')
 
 
-def _generate_method(name, func):
+def _generate_method(name, jitmethod):
     """
     Generate a wrapper for calling a method.  Note the wrapper will only
     accept positional arguments.
     """
-    source = _method_code_template.format(method=name)
-    glbls = {}
-    exec_(source, glbls)
-    method = njit(glbls['method'])
+    disp = jitmethod.dispatcher
 
-    @wraps(func)
+    @wraps(jitmethod.py_func)
     def wrapper(*args, **kwargs):
-        return method(*args, **kwargs)
+        return disp(*args, **kwargs)
 
+    # expose dispatcher for debugging and inspection
+    wrapper.dispatcher = disp
     return wrapper
 
 
@@ -98,9 +97,9 @@ def _specialize_box(typ):
         doc = getattr(imp, '__doc__', None)
         dct[field] = property(getter, setter, doc=doc)
     # Inject methods as class members
-    for name, func in typ.methods.items():
+    for name, jitmethod in typ.jitmethods.items():
         if not (name.startswith('__') and name.endswith('__')):
-            dct[name] = _generate_method(name, func)
+            dct[name] = _generate_method(name, jitmethod)
     # Create subclass
     subcls = type(typ.classname, (_box.Box,), dct)
     # Store to cache
