@@ -6,6 +6,7 @@
 from __future__ import print_function, division, absolute_import
 
 import sys
+import re
 
 import numpy as np
 
@@ -293,5 +294,162 @@ class TestParfors(unittest.TestCase):
         np.testing.assert_almost_equal(expected, output, decimal=1)
         self.assertIn('@do_scheduling', cfunc.inspect_llvm(cfunc.signatures[0]))
 
+    def test_bulk_cases(self):
+
+
+        def case01(v1, v2, m1, m2):
+            return np.ones(())
+            
+        def case02(v1, v2, m1, m2):
+            return np.ones((1,))
+
+        def case03(v1, v2, m1, m2):
+            return np.ones((-1, 2))
+
+        def case04(v1, v2, m1, m2):
+            return np.ones(((1, 2)))
+        
+        def case05(v1, v2, m1, m2):
+            return np.ones(((1, 2), (3,)))
+        
+        def case06(v1, v2, m1, m2):
+            return np.ones(((1., 2.)))
+
+        def case07(v1, v2, m1, m2):
+            return np.ones(1)
+
+        def case08(v1, v2, m1, m2):
+            return np.ones([1])
+
+        def case09(v1, v2, m1, m2):
+            return np.ones(([x for x in range(3)]))
+        
+        def case10(v1, v2, m1, m2):
+            return np.ones((1, 2), dtype=np.complex128)
+
+        def case11(v1, v2, m1, m2):
+            return np.ones((1, 2)) + np.ones((1, 2))
+
+        def case12(v1, v2, m1, m2):
+            return np.ones((1, 2)) + np.ones((1, 2))
+
+        def case13(v1, v2, m1, m2):
+            return np.ones((1, 1))
+
+        def case14(v1, v2, m1, m2):
+            return np.ones((0, 0))
+
+        def case15(v1, v2, m1, m2):
+            return np.ones((10, 10)) + 1.
+
+        def case16(v1, v2, m1, m2):
+            return np.ones((10, 10)) + np.complex128(1.)
+
+        def case17(v1, v2, m1, m2):
+            return np.complex128(1.)
+        
+        def case18(v1, v2, m1, m2):
+            return np.ones((10, 10))[0::20]
+
+        def case19(v1, v2, m1, m2):
+            return v1 + v2
+
+        def case20(v1, v2, m1, m2):
+            return m1 + m2
+
+        def case21(v1, v2, m1, m2):
+            return m1 + v1
+
+        def case22(v1, v2, m1, m2):
+            return m1 + v2
+
+        def case23(v1, v2, m1, m2):
+            return m1 + v2
+
+        def case24(v1, v2, m1, m2):
+            return m1 + np.linalg.svd(m2)[0][:-1, :]
+
+        def case25(v1, v2, m1, m2):
+            return np.dot(m1, v1)
+
+        def case26(v1, v2, m1, m2):
+            return np.dot(m1, v2)
+
+        def case27(v1, v2, m1, m2):
+            return np.dot(m2, v1)
+
+        def case28(v1, v2, m1, m2):
+            return np.dot(m1, m2)
+
+        def case29(v1, v2, m1, m2):
+            return np.dot(v1, v1)
+        
+        def case30(v1, v2, m1, m2):
+            return np.sum(m1 + m2.T)
+        
+        def case31(v1, v2, m1, m2):
+            return np.sum(v1 + v1)
+        
+        def case32(v1, v2, m1, m2):
+            x = 2 * v1
+            y = 2 * v1
+            return 4 * np.sum(x**2 + y**2 < 1) / 10
+
+        m = np.reshape(np.arange(12.), (3, 4))
+        default_kwargs = {'v1':np.arange(3.), 'v2':np.arange(4.), 'm1':m, 'm2':m.T}
+        
+        
+        cm = re.compile('^case[0-9]+$')
+        lv = dict(locals())
+        cases = [lv[x] for x in sorted([x for x in lv if cm.match(x)])]
+      
+        for case in cases:
+            print("\n")
+            should_have_failed = False
+            njit_failed = False
+            parfors_failed = False
+            got = None
+            
+            pyfunc = case
+            try:
+                expected = pyfunc(**default_kwargs)
+            except Exception:
+                should_have_failed = True
+
+
+            try:
+                cfunc = njit(pyfunc)
+                cfunc(**default_kwargs)
+            except Exception as e:
+                njit_failed = True
+  
+            try:
+                pfunc = njit(parallel=True)(pyfunc)
+                got = pfunc(**default_kwargs)
+                if not should_have_failed:
+                    try:
+                        np.testing.assert_almost_equal(got, expected)
+                        try:
+                            assert ('@do_scheduling' in pfunc.inspect_llvm(pfunc.signatures[0]))
+                        except AssertionError as raised:
+                            parfors_failed = True
+                    except Exception as raised:
+                        if not njit_failed:
+                            print("Fail. %s: %s\n" % (case, raised))
+            except Exception as raised:
+                if njit_failed:
+                    print("Pass (with njit fail). %s\n" % case)
+                    continue
+                if should_have_failed:
+                    print("Pass (with py fail). %s\n" % case)
+                    continue
+                print("Fail. %s: %s\n" % (case, raised))
+                continue
+
+            if parfors_failed:
+                print("Pass (with parfors fail). %s\n" % case)
+            else:
+                print("Pass. %s\n" % case)
+                
 if __name__ == "__main__":
     unittest.main()
