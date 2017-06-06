@@ -42,10 +42,7 @@ class InlineClosureCallPass(object):
                     lhs = instr.target
                     expr = instr.value
                     if isinstance(expr, ir.Expr) and expr.op == 'call':
-                        try:
-                            func_def = self.func_ir.get_definition(expr.func)
-                        except KeyError:
-                            func_def = None
+                        func_def = guard(_get_definition, self.func_ir, expr.func)
                         debug_print("found call to ", expr.func, " def = ", func_def)
                         if isinstance(func_def, ir.Expr) and func_def.op == "make_function":
                             new_blocks = self.inline_closure_call(block, i, func_def)
@@ -306,6 +303,17 @@ def guard(func, *args):
     except GuardException:
         return None
 
+def _get_definition(func_ir, name, **kwargs):
+    """
+    Same as func_ir.get_definition(name), but raise GuardException if
+    exception KeyError is caught.
+    """
+    try:
+        return func_ir.get_definition(name, **kwargs)
+    except KeyError:
+        raise GuardException
+
+
 def _find_arraycall(func_ir, block, i):
     """Look for statement like "x = numpy.array(y)" or "x[..] = y"
     immediately after the closure call that creates list y (the i-th
@@ -340,7 +348,7 @@ def _find_arraycall(func_ir, block, i):
               instr.value.name == list_var.name):
             # Found array_var[..] = list_var, the case for nested array
             array_var = instr.target
-            array_def = func_ir.get_definition(array_var)
+            array_def = _get_definition(func_ir, array_var)
             require(guard(_find_numpy_call, func_ir, array_def) == 'empty')
             array_stmt_index = i
         else:
@@ -358,10 +366,10 @@ def _find_numpy_call(func_ir, expr):
     """
     require(isinstance(expr, ir.Expr) and expr.op == 'call')
     callee = expr.func
-    callee_def = func_ir.get_definition(callee)
+    callee_def = _get_definition(func_ir, callee)
     require(isinstance(callee_def, ir.Expr) and callee_def.op == 'getattr')
     module = callee_def.value
-    module_def = func_ir.get_definition(module)
+    module_def = _get_definition(func_ir, module)
     require(isinstance(module_def, ir.Global) and module_def.value == numpy)
     _make_debug_print("find_numpy_call")(callee_def.attr)
     return callee_def.attr
@@ -373,24 +381,24 @@ def _find_iter_range(func_ir, expr):
     debug_print = _make_debug_print("find_iter_range")
     require(isinstance(expr, ir.Expr) and expr.op == 'call' and len(expr.args) == 1)
     arg = expr.args[0]
-    arg_def = func_ir.get_definition(arg)
+    arg_def = _get_definition(func_ir, arg)
     debug_print("arg = ", arg, " def = ", arg_def)
     require(isinstance(arg_def, ir.Expr) and arg_def.op == 'getiter')
     range_var = arg_def.value
-    range_def = func_ir.get_definition(range_var)
+    range_def = _get_definition(func_ir, range_var)
     debug_print("range_var = ", range_var, " range_def = ", range_def)
     require(isinstance(range_def, ir.Expr) and range_def.op == 'call')
     func_var = range_def.func
-    func_def = func_ir.get_definition(func_var)
+    func_def = _get_definition(func_ir, func_var)
     debug_print("func_var = ", func_var, " func_def = ", func_def)
     require(isinstance(func_def, ir.Global) and func_def.value == range)
     nargs = len(range_def.args)
     if nargs == 1:
-        stop = func_ir.get_definition(range_def.args[0], lhs_only=True)
+        stop = _get_definition(func_ir, range_def.args[0], lhs_only=True)
         return (0, range_def.args[0])
     elif nargs == 2:
-        start = func_ir.get_definition(range_def.args[0], lhs_only=True)
-        stop = func_ir.get_definition(range_def.args[1], lhs_only=True)
+        start = _get_definition(func_ir, range_def.args[0], lhs_only=True)
+        stop = _get_definition(func_ir, range_def.args[1], lhs_only=True)
         return (start, stop)
     else:
         raise GuardException
@@ -428,12 +436,12 @@ def _inline_arraycall(caller_ir, caller_block, callee_ir, callee_blocks, i):
     # There should be only one return statement
     require(len(returns) == 1)
     return_var = returns[0].value
-    return_var_def = callee_ir.get_definition(return_var)
+    return_var_def = _get_definition(callee_ir, return_var)
     debug_print("return_var = ", return_var, " def = ", return_var_def)
     # Check if return_var_def is a cast
     require(isinstance(return_var_def, ir.Expr) and return_var_def.op == 'cast')
     cast_var = return_var_def.value
-    cast_def = callee_ir.get_definition(cast_var)
+    cast_def = _get_definition(callee_ir, cast_var)
     debug_print("cast_var = ", cast_var, " def = ", cast_def)
     # Check if the definition is a build_list
     require(isinstance(cast_def, ir.Expr) and cast_def.op ==  'build_list')
@@ -447,10 +455,10 @@ def _inline_arraycall(caller_ir, caller_block, callee_ir, callee_blocks, i):
             lhs = stmt.target
             expr = stmt.value
             if isinstance(expr, ir.Expr) and expr.op == 'call':
-                func_def = callee_ir.get_definition(expr.func)
+                func_def = _get_definition(callee_ir, expr.func)
                 if isinstance(func_def, ir.Expr) and func_def.op == 'getattr' \
                   and func_def.attr == 'append':
-                    list_def = callee_ir.get_definition(func_def.value)
+                    list_def = _get_definition(callee_ir, func_def.value)
                     debug_print("list_def = ", list_def, list_def == cast_def)
                     if list_def == cast_def:
                         # found matching append call
@@ -477,7 +485,7 @@ def _inline_arraycall(caller_ir, caller_block, callee_ir, callee_blocks, i):
         expr = stmt.value
         if isinstance(expr, ir.Expr):
             if expr.op == 'iternext':
-                iter_def = callee_ir.get_definition(expr.value)
+                iter_def = _get_definition(callee_ir, expr.value)
                 debug_print("iter_def = ", iter_def)
                 # Require the iterator to be arg(0)
                 require(isinstance(iter_def, ir.Arg) and iter_def.index == 0)
@@ -671,24 +679,24 @@ def _fix_nested_array(func_ir):
         # Find the source array creation of lhs
         lhs_def = find_array_def(lhs)
         debug_print("found lhs_def: ", lhs_def)
-        rhs_def = func_ir.get_definition(stmt.value)
+        rhs_def = _get_definition(func_ir, stmt.value)
         debug_print("found rhs_def: ", rhs_def)
         require(isinstance(rhs_def, ir.Expr))
         require(_find_numpy_call(func_ir, rhs_def) == 'empty')
         # Find the array dimension of rhs
-        dim_def = func_ir.get_definition(rhs_def.args[0])
+        dim_def = _get_definition(func_ir, rhs_def.args[0])
         require(isinstance(dim_def, ir.Expr) and dim_def.op == 'build_tuple')
         debug_print("dim_def = ", dim_def)
-        extra_dims = [ func_ir.get_definition(x, lhs_only=True) for x in dim_def.items ]
+        extra_dims = [ _get_definition(func_ir, x, lhs_only=True) for x in dim_def.items ]
         debug_print("extra_dims = ", extra_dims)
         # Expand size tuple when creating lhs_def with extra_dims
-        size_tuple_def = func_ir.get_definition(lhs_def.args[0])
+        size_tuple_def = _get_definition(func_ir, lhs_def.args[0])
         require(isinstance(size_tuple_def, ir.Expr) and size_tuple_def.op == 'build_tuple')
         debug_print("size_tuple_def = ", size_tuple_def)
         size_tuple_def.items += extra_dims
         # In-place modify rhs_def to be getitem
         rhs_def.op = 'getitem'
-        rhs_def.value = func_ir.get_definition(lhs, lhs_only=True)
+        rhs_def.value = _get_definition(func_ir, lhs, lhs_only=True)
         rhs_def.index = stmt.index
         del rhs_def._kws['func']
         del rhs_def._kws['args']
