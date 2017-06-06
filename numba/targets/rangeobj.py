@@ -6,6 +6,7 @@ import llvmlite.llvmpy.core as lc
 
 from numba import types, cgutils
 from .listobj import ListIterInstance
+from .arrayobj import make_array
 from .imputils import (lower_builtin, lower_cast,
                        iterator_impl, impl_ret_untracked)
 from numba.typing import signature
@@ -180,14 +181,26 @@ def range_iter_len(typingctx, val):
         def codegen(context, builder, sig, args):
             (value,) = args
             iter_type = range_impl_map[val_type][1]
-            state = cgutils.create_struct_proxy(iter_type)(context, builder, value)
-            int_type = state.count.type
-            return impl_ret_untracked(context, builder, int_type, builder.load(state.count))
+            iterobj = cgutils.create_struct_proxy(iter_type)(context, builder, value)
+            int_type = iterobj.count.type
+            return impl_ret_untracked(context, builder, int_type, builder.load(iterobj.count))
         return signature(val_type, val), codegen
     elif isinstance(val, types.ListIter):
         def codegen(context, builder, sig, args):
             (value,) = args
             intp_t = context.get_value_type(types.intp)
-            state = ListIterInstance(context, builder, sig.args[0], value)
-            return impl_ret_untracked(context, builder, intp_t, state.size)
+            iterobj = ListIterInstance(context, builder, sig.args[0], value)
+            return impl_ret_untracked(context, builder, intp_t, iterobj.size)
+        return signature(types.intp, val), codegen
+    elif isinstance(val, types.ArrayIterator):
+        def  codegen(context, builder, sig, args):
+            (iterty,) = sig.args
+            (value,) = args
+            intp_t = context.get_value_type(types.intp)
+            iterobj = context.make_helper(builder, iterty, value=value)
+            arrayty = iterty.array_type
+            ary = make_array(arrayty)(context, builder, value=iterobj.array)
+            shape = cgutils.unpack_tuple(builder, ary.shape)
+            # array iterates along the outer dimension
+            return impl_ret_untracked(context, builder, intp_t, shape[0])
         return signature(types.intp, val), codegen
