@@ -237,14 +237,24 @@ class TestListComprehension(unittest.TestCase):
 class TestArrayComprehension(unittest.TestCase):
 
     @tag('important')
-    def test_comp_with_array(self):
-        def comp_with_array(n):
+    def test_comp_with_array_1(self):
+        def comp_with_array_1(n):
             m = n * 2
             l = np.array([i + m for i in range(n)])
             return np.sum(l)
 
-        cfunc = jit(nopython=True)(comp_with_array)
-        self.assertEqual(comp_with_array(5), cfunc(5))
+        cfunc = jit(nopython=True)(comp_with_array_1)
+        self.assertEqual(comp_with_array_1(5), cfunc(5))
+        self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+
+    @tag('important')
+    def test_comp_with_array_2(self):
+        def comp_with_array_2(n, threshold):
+            A = np.arange(-n, n)
+            return np.array([ x * x if x < threshold else x * 2 for x in A ])
+
+        cfunc = jit(nopython=True)(comp_with_array_2)
+        np.testing.assert_array_equal(comp_with_array_2(5, 0), cfunc(5, 0))
         self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
 
     @tag('important')
