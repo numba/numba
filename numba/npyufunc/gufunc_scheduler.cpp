@@ -42,6 +42,13 @@ public:
         }
     }
 
+    RangeActual(intp num_dims, intp *starts, intp *ends) {
+        for(intp i = 0; i < num_dims; ++i) {
+            start.push_back(starts[i]);
+            end.push_back(ends[i]);
+        }
+    }
+
     intp ndim() const {
         return start.size();
     }
@@ -232,25 +239,26 @@ void create_schedule(const RangeActual &full_space, uintp num_sched, intp *sched
     
 /*
     num_dim (D) is the number of dimensions of the iteration space.
-    dims is the length of each of those dimensions.
+    starts is the range-start of each of those dimensions, inclusive.
+    ends is the range-end of each of those dimensions, inclusive.
     num_threads is the number (N) of chunks to break the iteration space into
     sched is pre-allocated memory for the schedule to be stored in and is of size NxD.
     debug is non-zero if DEBUG_ARRAY_OPT is turned on.
 */
-extern "C" void do_scheduling(intp num_dim, intp *dims, uintp num_threads, intp *sched, intp debug) {
+extern "C" void do_scheduling(intp num_dim, intp *starts, intp *ends, uintp num_threads, intp *sched, intp debug) {
     if (debug) {
         printf("num_dim = %d\n", (int)num_dim);
-        printf("dims = [");
+        printf("ranges = (");
         for (int i = 0; i < num_dim; i++) {
-            printf("%d ", (int)dims[i]);
+            printf("[%d, %d], ", (int)starts[i], (int)ends[i]);
         }
-        printf("]\n");
+        printf(")\n");
         printf("num_threads = %d\n", (int)num_threads);
     }
 
     if (num_threads == 0) return;
 
-    RangeActual full_space(num_dim, dims);
+    RangeActual full_space(num_dim, starts, ends);
     create_schedule(full_space, num_threads, sched);
 }
 

@@ -42,10 +42,12 @@ parallel semantics and for which we attempt to parallelize.
 2. Numpy reduction functions ``sum`` and ``prod``. Note that they have to be
    written as ``numpy.sum(a)`` instead of ``a.sum()``.
 
-3. Numpy ``dot`` function between a matrix and a vector, or two vectors.
+3. Numpy array creation functions ``zeros``, ``ones``, and ``random.ranf``.
+
+4. Numpy ``dot`` function between a matrix and a vector, or two vectors.
    In all other cases, Numba's default implementation is used.
 
-4. Multi-dimensional arrays are also supported for the above operations
+5. Multi-dimensional arrays are also supported for the above operations
    when operands have matching dimension and size. The full semantics of
    Numpy broadcast between arrays with mixed dimensionality or size is
    not supported, nor is the reduction across a selected dimension.

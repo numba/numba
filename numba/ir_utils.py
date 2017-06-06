@@ -34,7 +34,20 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
             tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
             if typemap:
                 typemap[tuple_var.name] = types.containers.UniTuple(types.intp, ndims)
-            tuple_call = ir.Expr.build_tuple(list(size_var), loc)
+            # constant sizes need to be assigned to vars
+            new_sizes = []
+            for size in size_var:
+                if isinstance(size, ir.Var):
+                    new_size = size
+                else:
+                    assert isinstance(size, int)
+                    new_size = ir.Var(scope, mk_unique_var("$alloc_size"), loc)
+                    if typemap:
+                        typemap[new_size.name] = types.intp
+                    size_assign = ir.Assign(ir.Const(size, loc), new_size, loc)
+                    out.append(size_assign)
+                new_sizes.append(new_size)
+            tuple_call = ir.Expr.build_tuple(new_sizes, loc)
             tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
             out.append(tuple_assign)
             size_var = tuple_var
@@ -77,7 +90,7 @@ def get_np_ufunc_typ(func):
             return v
     raise RuntimeError("type for func ", func, " not found")
 
-def mk_range_block(typemap, size_var, calltypes, scope, loc):
+def mk_range_block(typemap, start, stop, step, calltypes, scope, loc):
     """make a block that initializes loop range and iteration variables.
     target label in jump needs to be set.
     """
@@ -86,10 +99,11 @@ def mk_range_block(typemap, size_var, calltypes, scope, loc):
     typemap[g_range_var.name] = get_global_func_typ(range)
     g_range = ir.Global('range', range, loc)
     g_range_assign = ir.Assign(g_range, g_range_var, loc)
-    # range_call_var = call g_range_var(size_var)
-    range_call = ir.Expr.call(g_range_var, [size_var], (), loc)
+    arg_nodes, args = _mk_range_args(typemap, start, stop, step, scope, loc)
+    # range_call_var = call g_range_var(start, stop, step)
+    range_call = ir.Expr.call(g_range_var, args, (), loc)
     calltypes[range_call] = typemap[g_range_var.name].get_call_type(
-        typing.Context(), [types.intp], {})
+        typing.Context(), [types.intp]*len(args), {})
     #signature(types.range_state64_type, types.intp)
     range_call_var = ir.Var(scope, mk_unique_var("$range_c_var"), loc)
     typemap[range_call_var.name] = types.iterators.RangeType(types.intp)
@@ -108,9 +122,47 @@ def mk_range_block(typemap, size_var, calltypes, scope, loc):
     # jump to header
     jump_header = ir.Jump(-1, loc)
     range_block = ir.Block(scope, loc)
-    range_block.body = [g_range_assign, range_call_assign, iter_call_assign,
-        phi_assign, jump_header]
+    range_block.body = arg_nodes + [g_range_assign, range_call_assign,
+        iter_call_assign, phi_assign, jump_header]
     return range_block
+
+def _mk_range_args(typemap, start, stop, step, scope, loc):
+    nodes = []
+    if isinstance(stop, ir.Var):
+        g_stop_var = stop
+    else:
+        assert isinstance(stop, int)
+        g_stop_var = ir.Var(scope, mk_unique_var("$range_stop"), loc)
+        if typemap:
+            typemap[g_stop_var.name] = types.intp
+        stop_assign = ir.Assign(ir.Const(stop, loc), g_stop_var, loc)
+        nodes.append(stop_assign)
+    if start==0 and step==1:
+        return nodes, [g_stop_var]
+
+    if isinstance(start, ir.Var):
+        g_start_var = start
+    else:
+        assert isinstance(start, int)
+        g_start_var = ir.Var(scope, mk_unique_var("$range_start"), loc)
+        if typemap:
+            typemap[g_start_var.name] = types.intp
+        start_assign = ir.Assign(ir.Const(start, loc), g_start_var)
+        nodes.append(start_assign)
+    if step==1:
+        return nodes, [g_start_var, g_stop_var]
+
+    if isinstance(step, ir.Var):
+        g_step_var = step
+    else:
+        assert isinstance(step, int)
+        g_step_var = ir.Var(scope, mk_unique_var("$range_step"), loc)
+        if typemap:
+            typemap[g_step_var.name] = types.intp
+        step_assign = ir.Assign(ir.Const(step, loc), g_step_var)
+        nodes.append(step_assign)
+
+    return nodes, [g_start_var, g_stop_var, g_step_var]
 
 def get_global_func_typ(func):
     """get type variable for func() from builtin registry"""
@@ -322,6 +374,7 @@ def remove_dead(blocks, args):
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
     arg_aliases = find_potential_aliases(blocks, args)
+    call_table,_ = get_call_table(blocks)
 
     removed = False
     for label, block in blocks.items():
@@ -332,14 +385,14 @@ def remove_dead(blocks, args):
             lives |= live_map[out_blk]
         if label in cfg.exit_points():
             lives |= arg_aliases
-        removed |= remove_dead_block(block, lives, arg_aliases)
+        removed |= remove_dead_block(block, lives, call_table, arg_aliases)
     return removed
 
 # other packages that define new nodes add calls to remove dead code in them
 # format: {type:function}
 remove_dead_extensions = {}
 
-def remove_dead_block(block, lives, args):
+def remove_dead_block(block, lives, call_table, args):
     """remove dead code using liveness info.
     Mutable arguments (e.g. arrays) that are not definitely assigned are live
     after return of function.
@@ -360,13 +413,16 @@ def remove_dead_block(block, lives, args):
         if isinstance(stmt, ir.Assign):
             lhs = stmt.target
             rhs = stmt.value
-            if lhs.name not in lives and has_no_side_effect(rhs, lives):
+            if lhs.name not in lives and has_no_side_effect(rhs, lives, call_table):
                 removed = True
                 continue
             if isinstance(rhs, ir.Var) and lhs.name==rhs.name:
                 removed = True
                 continue
             # TODO: remove other nodes like SetItem etc.
+        if isinstance(stmt, ir.SetItem):
+            if stmt.target.name not in lives:
+                continue
 
         lives |= { v.name for v in stmt.list_vars() }
         if isinstance(stmt, ir.Assign):
@@ -379,9 +435,15 @@ def remove_dead_block(block, lives, args):
     block.body = new_body
     return removed
 
-def has_no_side_effect(rhs, lives):
+def has_no_side_effect(rhs, lives, call_table):
     # TODO: find side-effect free calls like Numpy calls
     if isinstance(rhs, ir.Expr) and rhs.op=='call':
+        func_name = rhs.func.name
+        if func_name not in call_table:
+            return False
+        call_list = call_table[func_name]
+        if call_list==['empty', numpy] or call_list==[slice]:
+            return True
         return False
     if isinstance(rhs, ir.Expr) and rhs.op=='inplace_binop':
         return rhs.lhs.name not in lives
@@ -601,6 +663,64 @@ def find_topo_order(blocks):
     post_order.reverse()
     return post_order
 
+# other packages that define new nodes add calls to get call table
+# format: {type:function}
+call_table_extensions = {}
+
+def get_call_table(blocks, call_table={}, reverse_call_table={}):
+    """returns a dictionary of call variables and their references.
+    """
+    # call_table example: c = np.zeros becomes c:["zeroes", np]
+    # reverse_call_table example: c = np.zeros becomes np_var:c
+
+    topo_order = find_topo_order(blocks)
+    for label in reversed(topo_order):
+        for inst in reversed(blocks[label].body):
+            if isinstance(inst, ir.Assign):
+                lhs = inst.target.name
+                rhs = inst.value
+                if isinstance(rhs, ir.Expr) and rhs.op=='call':
+                    call_table[rhs.func.name] = []
+                if isinstance(rhs, ir.Expr) and rhs.op=='getattr':
+                    if lhs in call_table:
+                        call_table[lhs].append(rhs.attr)
+                        reverse_call_table[rhs.value.name] = lhs
+                    if lhs in reverse_call_table:
+                        call_var = reverse_call_table[lhs]
+                        call_table[call_var].append(rhs.attr)
+                        reverse_call_table[rhs.value.name] = call_var
+                if isinstance(rhs, ir.Global):
+                    if lhs in call_table:
+                        call_table[lhs].append(rhs.value)
+                    if lhs in reverse_call_table:
+                        call_var = reverse_call_table[lhs]
+                        call_table[call_var].append(rhs.value)
+            for T,f in call_table_extensions.items():
+                if isinstance(inst,T):
+                    f(inst, call_table, reverse_call_table)
+    return call_table, reverse_call_table
+
+# other packages that define new nodes add calls to get tuple table
+# format: {type:function}
+tuple_table_extensions = {}
+
+def get_tuple_table(blocks, tuple_table={}):
+    """returns a dictionary of tuple variables and their values.
+    """
+    for block in blocks.values():
+        for inst in block.body:
+            if isinstance(inst, ir.Assign):
+                lhs = inst.target.name
+                rhs = inst.value
+                if isinstance(rhs, ir.Expr) and rhs.op=='build_tuple':
+                    tuple_table[lhs] = rhs.items
+                if isinstance(rhs, ir.Const) and isinstance(rhs.value, tuple):
+                    tuple_table[lhs] = rhs.value
+            for T,f in tuple_table_extensions.items():
+                if isinstance(inst,T):
+                    f(inst, tuple_table)
+    return tuple_table
+
 def get_stmt_writes(stmt):
     writes = set()
     if isinstance(stmt, (ir.Assign, ir.SetItem, ir.StaticSetItem)):
@@ -644,4 +764,26 @@ def rename_labels(blocks):
 
     return new_blocks
 
+# format: {type:function}
+array_accesses_extensions = {}
 
+def get_array_accesses(blocks, accesses={}):
+    """returns a dictionary of arrays accessed and their indices.
+    """
+    for block in blocks.values():
+        for inst in block.body:
+            if isinstance(inst, ir.SetItem):
+                accesses[inst.target.name] = inst.index.name
+            if isinstance(inst, ir.StaticSetItem):
+                accesses[inst.target.name] = inst.index_var.name
+            if isinstance(inst, ir.Assign):
+                lhs = inst.target.name
+                rhs = inst.value
+                if isinstance(rhs, ir.Expr) and rhs.op=='getitem':
+                    accesses[rhs.value.name] = rhs.index.name
+                if isinstance(rhs, ir.Expr) and rhs.op=='static_getitem':
+                    accesses[rhs.value.name] = rhs.index_var.name
+            for T,f in array_accesses_extensions.items():
+                if isinstance(inst,T):
+                    f(inst, accesses)
+    return accesses

@@ -86,6 +86,30 @@ class TestParfors(unittest.TestCase):
         np.testing.assert_array_almost_equal(expected, output, decimal=5)
         self.assertIn('@do_scheduling', ddot.inspect_llvm(ddot.signatures[0]))
 
+    def test_2d_parfor(self):
+        @njit(parallel=True)
+        def test_2d():
+            X = np.ones((10,12))
+            Y = np.zeros((10,12))
+            return np.sum(X+Y)
+
+        output = test_2d()
+        expected = 120.0
+        np.testing.assert_almost_equal(expected, output)
+        self.assertIn('@do_scheduling', test_2d.inspect_llvm(test_2d.signatures[0]))
+
+    def test_pi(self):
+        @njit(parallel=True)
+        def calc_pi(n):
+            x = 2*np.random.ranf(n)-1
+            y = 2*np.random.ranf(n)-1
+            return 4*np.sum(x**2+y**2<1)/n
+
+        output = calc_pi(100000)
+        expected = 3.14
+        np.testing.assert_almost_equal(expected, output, decimal=1)
+        self.assertIn('@do_scheduling', calc_pi.inspect_llvm(calc_pi.signatures[0]))
+
     def test_test1(self):
         typingctx = typing.Context()
         targetctx = cpu.CPUContext(typingctx)
@@ -161,4 +185,3 @@ class TestParfors(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
