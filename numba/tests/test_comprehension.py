@@ -358,5 +358,22 @@ class TestArrayComprehension(unittest.TestCase):
         self.assertEqual(no_array_comp(10), cfunc(10))
         self.assertIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
 
+    @tag('important')
+    def test_array_comp_with_iter(self):
+        def array_comp(a):
+            l = np.array([ x * x for x in a ])
+            return np.sum(l)
+
+        # no arraycall inline without comprehension
+        cfunc = jit(nopython=True)(array_comp)
+        # with list iterator
+        l = [1,2,3,4,5]
+        self.assertEqual(array_comp(l), cfunc(l))
+        # with array iterator
+        self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+        a = np.array(l)
+        self.assertEqual(array_comp(a), cfunc(a))
+        self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[1]))
+
 if __name__ == '__main__':
     unittest.main()
