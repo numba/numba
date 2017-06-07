@@ -179,6 +179,48 @@ class TestParfors(unittest.TestCase):
         np.testing.assert_array_almost_equal(expected, output)
         self.assertIn('@do_scheduling', test_p4.inspect_llvm(test_p4.signatures[0]))
 
+    def prange_test5():
+        @numba.njit(parallel=True)
+        def test_p5(A):
+            s = 0
+            for i in prange(1, n - 1, 1):
+                s += A[i]
+            return s
+        n = 4
+        A = np.ones((n), dtype=np.float64)
+        output = test_p5(A)
+        expected = 2.0
+        np.testing.assert_almost_equal(expected, output)
+        self.assertIn('@do_scheduling', test_p5.inspect_llvm(test_p5.signatures[0]))
+
+    def prange_test6():
+        @numba.njit(parallel=True)
+        def test_p4(A):
+            s = 0
+            for i in prange(1, 1, 1):
+                s += A[i]
+            return s
+        n = 4
+        A = np.ones((n), dtype=np.float64)
+        output = test_p6()
+        expected = 0.0
+        np.testing.assert_almost_equal(expected, output)
+        self.assertIn('@do_scheduling', test_p6.inspect_llvm(test_p6.signatures[0]))
+
+    def prange_test7():
+        @numba.njit(parallel=True)
+        def test_p7(A):
+            s = 0
+            for i in prange(n, 1):
+                s += A[i]
+            return s
+        n = 4
+        A = np.ones((n), dtype=np.float64)
+        output = test_p7()
+        expected = 0.0
+        np.testing.assert_almost_equal(expected, output)
+        self.assertIn('@do_scheduling', test_p7.inspect_llvm(test_p7.signatures[0]))
+
     def test_pi(self):
         @njit(parallel=True)
         def calc_pi(n):
@@ -299,7 +341,7 @@ class TestParfors(unittest.TestCase):
 
         def case01(v1, v2, m1, m2):
             return np.ones(())
-            
+
         def case02(v1, v2, m1, m2):
             return np.ones((1,))
 
@@ -308,10 +350,10 @@ class TestParfors(unittest.TestCase):
 
         def case04(v1, v2, m1, m2):
             return np.ones(((1, 2)))
-        
+
         def case05(v1, v2, m1, m2):
             return np.ones(((1, 2), (3,)))
-        
+
         def case06(v1, v2, m1, m2):
             return np.ones(((1., 2.)))
 
@@ -323,7 +365,7 @@ class TestParfors(unittest.TestCase):
 
         def case09(v1, v2, m1, m2):
             return np.ones(([x for x in range(3)]))
-        
+
         def case10(v1, v2, m1, m2):
             return np.ones((1, 2), dtype=np.complex128)
 
@@ -347,7 +389,7 @@ class TestParfors(unittest.TestCase):
 
         def case17(v1, v2, m1, m2):
             return np.complex128(1.)
-        
+
         def case18(v1, v2, m1, m2):
             return np.ones((10, 10))[0::20]
 
@@ -383,13 +425,13 @@ class TestParfors(unittest.TestCase):
 
         def case29(v1, v2, m1, m2):
             return np.dot(v1, v1)
-        
+
         def case30(v1, v2, m1, m2):
             return np.sum(m1 + m2.T)
-        
+
         def case31(v1, v2, m1, m2):
             return np.sum(v1 + v1)
-        
+
         def case32(v1, v2, m1, m2):
             x = 2 * v1
             y = 2 * v1
@@ -397,19 +439,19 @@ class TestParfors(unittest.TestCase):
 
         m = np.reshape(np.arange(12.), (3, 4))
         default_kwargs = {'v1':np.arange(3.), 'v2':np.arange(4.), 'm1':m, 'm2':m.T}
-        
-        
+
+
         cm = re.compile('^case[0-9]+$')
         lv = dict(locals())
         cases = [lv[x] for x in sorted([x for x in lv if cm.match(x)])]
-      
+
         for case in cases:
             print("\n")
             should_have_failed = False
             njit_failed = False
             parfors_failed = False
             got = None
-            
+
             pyfunc = case
             try:
                 expected = pyfunc(**default_kwargs)
@@ -422,7 +464,7 @@ class TestParfors(unittest.TestCase):
                 cfunc(**default_kwargs)
             except Exception as e:
                 njit_failed = True
-  
+
             try:
                 pfunc = njit(parallel=True)(pyfunc)
                 got = pfunc(**default_kwargs)
@@ -450,6 +492,6 @@ class TestParfors(unittest.TestCase):
                 print("Pass (with parfors fail). %s\n" % case)
             else:
                 print("Pass. %s\n" % case)
-                
+
 if __name__ == "__main__":
     unittest.main()
