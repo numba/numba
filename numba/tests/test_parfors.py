@@ -179,7 +179,7 @@ class TestParfors(unittest.TestCase):
         np.testing.assert_array_almost_equal(expected, output)
         self.assertIn('@do_scheduling', test_p4.inspect_llvm(test_p4.signatures[0]))
 
-    def prange_test5():
+    def prange_test5(self):
         @numba.njit(parallel=True)
         def test_p5(A):
             s = 0
@@ -193,21 +193,21 @@ class TestParfors(unittest.TestCase):
         np.testing.assert_almost_equal(expected, output)
         self.assertIn('@do_scheduling', test_p5.inspect_llvm(test_p5.signatures[0]))
 
-    def prange_test6():
+    def prange_test6(self):
         @numba.njit(parallel=True)
-        def test_p4(A):
+        def test_p6(A):
             s = 0
             for i in prange(1, 1, 1):
                 s += A[i]
             return s
         n = 4
         A = np.ones((n), dtype=np.float64)
-        output = test_p6()
+        output = test_p6(A)
         expected = 0.0
         np.testing.assert_almost_equal(expected, output)
         self.assertIn('@do_scheduling', test_p6.inspect_llvm(test_p6.signatures[0]))
 
-    def prange_test7():
+    def prange_test7(self):
         @numba.njit(parallel=True)
         def test_p7(A):
             s = 0
@@ -216,7 +216,7 @@ class TestParfors(unittest.TestCase):
             return s
         n = 4
         A = np.ones((n), dtype=np.float64)
-        output = test_p7()
+        output = test_p7(A)
         expected = 0.0
         np.testing.assert_almost_equal(expected, output)
         self.assertIn('@do_scheduling', test_p7.inspect_llvm(test_p7.signatures[0]))
