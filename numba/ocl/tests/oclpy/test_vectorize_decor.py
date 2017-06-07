@@ -5,7 +5,6 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import vectorize, ocl
 from numba.tests.npyufunc import test_vectorize_decor
-from numba.ocl.testing import skip_on_oclsim
 
 
 class TestVectorizeDecor(test_vectorize_decor.BaseVectorizeDecor):

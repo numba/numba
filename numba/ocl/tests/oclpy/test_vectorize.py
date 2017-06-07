@@ -5,7 +5,6 @@ import numpy as np
 from numba import vectorize
 from numba import ocl, int32, float32, float64
 from numba import unittest_support as unittest
-from numba.ocl.testing import skip_on_oclsim
 from numba.ocl.testing import OCLTestCase
 from numba import config
 

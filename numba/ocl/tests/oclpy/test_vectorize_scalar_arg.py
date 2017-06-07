@@ -3,7 +3,6 @@ import numpy as np
 from numba import vectorize
 from numba import ocl, float64
 from numba import unittest_support as unittest
-from numba.ocl.testing import skip_on_oclsim
 from numba import config
 
 sig = [float64(float64, float64)]

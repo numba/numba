@@ -4,10 +4,9 @@ from numba.ocl.ocldrv.devicearray import (DeviceRecord, from_record_like,
                                             auto_device)
 from numba import ocl, numpy_support
 from numba.ocl.testing import unittest
-from numba.ocl.testing import skip_on_oclsim
 import numpy as np
 
-@skip_on_oclsim('Device Record API unsupported in the simulator')
+
 class TestOclDeviceRecord(unittest.TestCase):
     """
     Tests the DeviceRecord class with np.void host types.

@@ -1,139 +1,147 @@
 """
-Expose each GPU devices directly
+Expose each GPU devices directly, OpenCL version
 """
+
 from __future__ import print_function, absolute_import, division
 import functools
-from numba import servicelib
-from .driver import ocl as driver
+import weakref
+from ... import servicelib
+from .driver import driver
 
+platform = None
+_ocl_context = None
+_gpustack = None
+gpus = []
 
-class _DeviceList(object):
-    """A thread local list of GPU instances
+def _init_gpus():
     """
+    Populates global "gpus" as a list of GPU objects
+    This can be seen as a lazy constructor for the module
+    """
+    global platform, gpus, _ocl_context, _gpustack
 
-    def __init__(self):
-        self._lst = None
+    if gpus:
+        assert len(gpus)
+        return
 
-    @property
-    def _gpus(self):
-        if not self._lst:
-            self._lst = self._init_gpus()
-        return self._lst
+    if platform is None:
+        platform = driver.default_platform
 
-    def _init_gpus(self):
-        gpus = []
-        for com in driver.components:
-            gpus.append(CU(com))
-        return gpus
+    _gpustack = servicelib.TLStack()
+    all_devs = platform.all_devices
+    _ocl_context = driver.create_context(platform, all_devs)
 
-    def __getitem__(self, item):
-        return self._gpus[item]
+    for idx, dev in enumerate(all_devs):
+        gpu = GPU(dev)
+        gpus.append(gpu)
+        globals()['gpu{0}'.format(idx)] = gpu
 
-    def append(self, item):
-        return self._gpus.append(item)
-
-    def __len__(self):
-        return len(self._gpus)
-
-    def __nonzero__(self):
-        return bool(self._gpus)
-
-    def __iter__(self):
-        return iter(self._gpus)
-
-    __bool__ = __nonzero__
-
-    def reset(self):
-        for gpu in self:
-            gpu.reset()
-
-    @property
-    def current(self):
-        """Get the current GPU object associated with the thread
-        """
-        return _custack.top
+def _cleanup_gpus():
+    """
+    Destructor for the module
+    """
+    global gpus, platform, _ocl_context, _gpustack
+    for idx in range(len(gpus)):
+        del globals()['gpu{0}'.format(idx)]
+    gpus = None
+    _ocl_context = None
+    _gpustack = None
+    platform = None
 
 
-cus = _DeviceList()
-del _DeviceList
-
-
-class CU(object):
-    def __init__(self, cu):
-        self._cu = cu
+class GPU(object):
+    """
+    Proxy for an OpenCL compute device
+    """
+    def __init__(self, device):
+        self._gpu = device
         self._context = None
 
+    def __del__(self):
+        del self._gpu
+        del self._context
+
     def __getattr__(self, key):
-        """Redirect to self._gpu
+        """
+        redirect to self._gpu, filtering private attributes
         """
         if key.startswith('_'):
             raise AttributeError(key)
-        return getattr(self._cu, key)
+        return getattr(self._gpu, key)
 
     def __repr__(self):
-        return repr(self._cu)
+        return repr(self._gpu)
 
-    def associate_context(self):
-        """Associate the context of this GPU to the running thread
+    @property
+    def context(self):
         """
-        # No context was created for this GPU
+        In OpenCL this context is actually a queue associated to this
+        device
+        """
         if self._context is None:
-            self._context = self._cu.create_context()
+            try:
+                self._context = _ocl_context.create_command_queue(self._gpu)
+            except AttributeError as e:
+                print (e)
 
         return self._context
 
+    def push(self):
+        self._context.push()
+
+    def pop(self):
+        self._context.pop()
+
     def __enter__(self):
-        self.associate_context()
-        _custack.push(self)
+        if get_context() is not self:
+            self._context.push()
+            _gpustack.push(self)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        assert _get_device() is self
+        assert get_context() is self
         self._context.pop()
-        _custack.pop()
+        _gpustack.pop()
 
     def reset(self):
-        if self._context:
-            self._context.reset()
-            self._context = None
+        self._context = None
 
+def get_ocl_context():
+    _init_gpus()
+    return _ocl_context
 
 def get_gpu(i):
-    return cus[i]
+    _init_gpus()
+    return gpus[i]
 
-
-_custack = servicelib.TLStack()
-
-
-def _get_device(devnum=0):
-    """Get the current device or use a device by device number.
-    """
-    if not _custack:
-        _custack.push(get_gpu(devnum))
-    return _custack.top
 
 
 def get_context(devnum=0):
-    """Get the current device or use a device by device number, and
-    return the OpenCL context.
-    """
-    return _get_device(devnum=devnum).associate_context()
+    _init_gpus()
+    if not _gpustack:
+        _gpustack.push(get_gpu(devnum).context)
 
+    return _gpustack.top
 
 def require_context(fn):
-    """
-    A decorator to ensure a context for the OpenCL subsystem
-    """
-
     @functools.wraps(fn)
-    def _require_cu_context(*args, **kws):
+    def _require_ocl_context(*args, **kws):
         get_context()
         return fn(*args, **kws)
 
-    return _require_cu_context
-
+    return _require_ocl_context
 
 def reset():
-    cus.reset()
-    _custack.clear()
+    for gpu in gpus:
+        gpu.reset()
+
+    _gpustack.clear()
 
 
+# this cleanup function is needed to remove the list device objects. Otherwise
+# the interpreter may fail cleanup of the list as the OpenCL driver could be
+# deleted prior to the objects retained by this list.
+#
+# this seems a lighter weight to using weakproxies.
+import atexit
+
+atexit.register(_cleanup_gpus) #register destructor

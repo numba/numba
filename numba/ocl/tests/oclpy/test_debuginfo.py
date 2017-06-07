@@ -1,7 +1,6 @@
 from __future__ import print_function, absolute_import
 
 from numba.tests.support import override_config, TestCase
-from numba.ocl.testing import skip_on_oclsim
 from numba import unittest_support as unittest
 from numba import ocl, types
 

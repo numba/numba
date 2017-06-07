@@ -5,7 +5,7 @@ import types
 
 import numpy as np
 
-from numba.ocl.testing import unittest, skip_on_oclsim
+from numba.ocl.testing import unittest
 from numba import ocl, jit
 from numba.errors import TypingError
 

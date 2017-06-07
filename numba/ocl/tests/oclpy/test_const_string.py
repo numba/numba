@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 import re
-from numba.ocl.testing import unittest, skip_on_oclsim
+from numba.ocl.testing import unittest
 from llvmlite import ir
 
 

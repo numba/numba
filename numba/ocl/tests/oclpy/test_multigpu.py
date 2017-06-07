@@ -1,7 +1,6 @@
 from numba import ocl
 import numpy as np
 from numba import unittest_support as unittest
-from numba.ocl.testing import skip_on_oclsim
 import threading
 
 

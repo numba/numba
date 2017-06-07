@@ -4,7 +4,7 @@ import numpy as np
 
 from numba import ocl
 import numba.unittest_support as unittest
-from numba.ocl.testing import skip_on_oclsim
+
 
 class TestForAll(unittest.TestCase):
     def test_forall_1(self):

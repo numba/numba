@@ -4,7 +4,6 @@ from collections import namedtuple
 
 from numba.typing.templates import ConcreteTemplate
 from numba import types, compiler
-from .hlc import hlc
 from .ocldrv import devices, driver
 from numba.typing.templates import AbstractTemplate
 from numba import ctypes_support as ctypes
@@ -203,33 +202,26 @@ class _CachedProgram(object):
         self._cache = {}
 
     def get(self):
+        from .ocldrv import devices
+        from .ocldrv.driver import driver
+
         ctx = devices.get_context()
         result = self._cache.get(ctx)
         # The program has not been finalized for this device
         if result is None:
-            # Finalize
-            symbol = '&{0}'.format(self._entry_name)
-            agent = ctx.agent
+            # Finalize the building
+            device = driver.default_platform.default_device
+            context = driver.create_context(device.platform, [device])
+            #self._binary = ""
+            program = context.create_program_from_il(self._binary)
+            #program = context.create_program_from_binary(self._binary)
+            program.build(options=b"-x spir -spir-std=2.0")
+            kernel = program.create_kernel(self.entry_name.encode('utf8'))
 
-            brig_module = driver.BrigModule(self._binary)
-            prog = driver.Program()
-            prog.add_module(brig_module)
-            code = prog.finalize(agent.isa)
-            del prog
+            # Cache the just built cl_program, its cl_device and a cl_kernel
+            self._cache[context] = (device,progra,kernel)
 
-            ex = driver.Executable()
-            ex.load(agent, code)
-            ex.freeze()
-            symobj = ex.get_symbol(agent, symbol)
-            kernarg_region = [r for r in agent.regions.globals
-                              if r.supports_kernargs][0]
-
-            # Cache the finalized program
-            result = _CacheEntry(symbol=symobj, executable=ex,
-                                 kernarg_region=kernarg_region)
-            self._cache[ctx] = result
-
-        return ctx, result
+        return device, program, kernel
 
 
 class OCLKernel(OCLKernelBase):
@@ -239,7 +231,7 @@ class OCLKernel(OCLKernelBase):
     def __init__(self, llvm_module, name, argtypes):
         super(OCLKernel, self).__init__()
         self._llvm_module = llvm_module
-        self.assembly, self.binary = self._finalize()
+        self.assembly = self.binary = llvm_module.__str__()
         self.entry_name = name
         self.argument_types = tuple(argtypes)
         self._argloc = []
@@ -247,25 +239,15 @@ class OCLKernel(OCLKernelBase):
         self._cacheprog = _CachedProgram(entry_name=self.entry_name,
                                          binary=self.binary)
 
-    def _finalize(self):
-        hlcmod = hlc.Module()
-        hlcmod.load_llvm(str(self._llvm_module))
-        return hlcmod.finalize()
-
     def bind(self):
         """
         Bind kernel to device
         """
-        ctx, entry = self._cacheprog.get()
-        if entry.symbol.kernarg_segment_size > 0:
-            kernarg_type = (ctypes.c_byte * entry.symbol.kernarg_segment_size)
-            kernargs = entry.kernarg_region.allocate(kernarg_type)
-        else:
-            kernargs = None
-        return ctx, entry.symbol, kernargs, entry.kernarg_region
+        return self._cacheprog.get()
+
 
     def __call__(self, *args):
-        ctx, symbol, kernargs, kernarg_region = self.bind()
+        context, device, program, kernel = self.bind()
 
         # Unpack pyobject values into ctypes scalar values
         expanded_values = []
@@ -287,19 +269,18 @@ class OCLKernel(OCLKernelBase):
             # Increment offset
             base += align
 
-        assert (kernargs is None or
-                base <= ctypes.sizeof(kernargs)), "Kernel argument size is invalid"
+        # Invoke kernel
+        do_sync = False
+        queue = self.stream
+        if queue is None:
+            do_sync = True
+            queue = program.context.create_command_queue(device)
 
-        # Actual Kernel launch
-        qq = ctx.default_queue
+        queue.enqueue_nd_range_kernel(self.kernel, len(self.global_size),
+                                      self.global_size, self.local_size)
 
-        # Dispatch
-        qq.dispatch(symbol, kernargs, workgroup_size=self.local_size,
-                    grid_size=self.global_size)
-
-        # Free kernel region
-        if kernargs is not None:
-            kernarg_region.free(kernargs)
+        if do_sync:
+            queue.finish()
 
 
 def _unpack_argument(ty, val, kernelargs):

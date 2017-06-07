@@ -2,7 +2,6 @@ from __future__ import print_function, absolute_import
 
 import numpy as np
 
-from numba.ocl.testing import skip_on_oclsim
 from numba.tests.support import override_config, captured_stderr, captured_stdout
 from numba import unittest_support as unittest
 from numba import ocl, float64

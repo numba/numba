@@ -2,7 +2,6 @@ from __future__ import print_function, absolute_import, division
 import numpy as np
 from numba import ocl
 from numba.ocl.testing import unittest
-from numba.ocl.testing import skip_on_oclsim
 
 
 class TestOclAutoJit(unittest.TestCase):

@@ -236,6 +236,17 @@ CL_PROGRAM_BINARIES                           = 0x1166
 CL_PROGRAM_NUM_KERNELS                        = 0x1167
 CL_PROGRAM_KERNEL_NAMES                       = 0x1168
 
+# cl_program_build_info
+CL_PROGRAM_BUILD_STATUS                       = 0x1181
+CL_PROGRAM_BUILD_OPTIONS                      = 0x1182
+CL_PROGRAM_BUILD_LOG                          = 0x1183
+
+# cl_build_status
+CL_BUILD_SUCCESS                              =  0
+CL_BUILD_NONE                                 = -1
+CL_BUILD_ERROR                                = -2
+CL_BUILD_IN_PROGRESS                          = -3
+
 # cl_kernel_info
 CL_KERNEL_FUNCTION_NAME                       = 0x1190
 CL_KERNEL_NUM_ARGS                            = 0x1191

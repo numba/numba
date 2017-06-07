@@ -7,7 +7,6 @@ from numba import void, float32, float64
 from numba import guvectorize
 from numba import ocl
 from numba import unittest_support as unittest
-from numba.ocl.testing import skip_on_oclsim
 
 
 class TestOCLGufunc(unittest.TestCase):

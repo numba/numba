@@ -3,7 +3,6 @@ import multiprocessing
 import numpy as np
 from numba import ocl
 from numba import unittest_support as unittest
-from numba.ocl.testing import skip_on_oclsim
 
 try:
     from concurrent.futures import ThreadPoolExecutor

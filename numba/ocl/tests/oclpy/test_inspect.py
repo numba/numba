@@ -1,7 +1,6 @@
 from __future__ import print_function, division, absolute_import
 from numba import ocl, float64, intp
 from numba.ocl.testing import unittest
-from numba.ocl.testing import skip_on_oclsim
 from numba.utils import StringIO
 
 

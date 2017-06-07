@@ -2,7 +2,6 @@ from __future__ import absolute_import, print_function, division
 import numpy as np
 from numba import vectorize
 from numba import unittest_support as unittest
-from numba.ocl.testing import skip_on_oclsim
 
 
 class TestVectorizeComplex(unittest.TestCase):

@@ -36,10 +36,9 @@ def _ctypes_func_wraps(model):
 
 
 def _find_driver():
-    envpath = os.environ.get('NUMBA_OPENCL_LIBRARY', None)
+    envpath = os.environ.get('NUMBA_OPENCL_DRIVER', None)
     if envpath == '0':
         _raise_driver_not_found()
-
 
     if envpath is not None:
         try:
@@ -49,7 +48,6 @@ def _find_driver():
 
         if not os.path.isfile(envpath):
             _raise_bad_env_path(envpath)
-
 
     if sys.platform == 'win32':
         dll_loader = ctypes.WinDLL
@@ -72,7 +70,6 @@ def _find_driver():
         _raise_driver_error()
 
     return dll
-
 
 
 def _event_list_to_ctypes(event_list):
@@ -103,6 +100,10 @@ class Driver(object):
         pass
 
     @property
+    def is_available(self):
+        return self.lib is not None
+
+    @property
     def platforms(self):
         count = cl_uint()
         self.clGetPlatformIDs(0, None, ctypes.byref(count))
@@ -112,7 +113,7 @@ class Driver(object):
 
     @property
     def default_platform(self):
-        return self.platforms[0]
+        return self.platforms[0] # @@
 
     def __getattr__(self, fname):
         # this implements lazy binding of functions
@@ -187,7 +188,7 @@ class Driver(object):
             self.clWaitForEvents(*_event_list_to_ctypes(events))
 
 # The Driver ###################################################################
-cl = Driver()
+driver = Driver()
 
 
 # OpenCLWrapper ################################################################
@@ -257,7 +258,7 @@ class OpenCLWrapper(object):
         """
         define cl properties for this class.
         """
-        func = getattr(cl, cls._cl_info_function)
+        func = getattr(driver, cls._cl_info_function)
         for p in cls._cl_properties.items():
             getter = cls._getter_by_type[p[1][-1]]
             getter = partial(getter, func, p[1][0])
@@ -292,14 +293,14 @@ class Platform(OpenCLWrapper):
     def get_devices(self, type_=enums.CL_DEVICE_TYPE_ALL):
         device_count = cl_uint()
         try:
-            cl.clGetDeviceIDs(self.id, type_, 0, None, ctypes.byref(device_count))
+            driver.clGetDeviceIDs(self.id, type_, 0, None, ctypes.byref(device_count))
         except OpenCLAPIError as e:
             if e.code == enums.CL_DEVICE_NOT_FOUND:
                 return []
             else:
                 raise
         devices = (cl_device_id * device_count.value)()
-        cl.clGetDeviceIDs(self.id, type_, device_count, devices, None)
+        driver.clGetDeviceIDs(self.id, type_, device_count, devices, None)
         return [Device(x) for x in devices]
 
     @property
@@ -389,6 +390,13 @@ class Device(OpenCLWrapper):
     }
 
     @property
+    def opencl_version(self):
+        ver = self.version # CL_DEVICE_VERSION looks like "OpenCL X.Y ..."
+        opencl, x, y = ver[0:6], int(ver[7]), int(ver[9])
+        assert(opencl=='OpenCL' and x in {1,2} and y in {0,1,2})
+        return (x,y)
+
+    @property
     def platform(self):
         return Platform(self._platform_id)
 
@@ -407,10 +415,10 @@ class Device(OpenCLWrapper):
         return ' + '.join(types)
 
     def _retain(self):
-        cl.clRetainDevice(self.id)
+        driver.clRetainDevice(self.id)
 
     def _release(self):
-        cl.clReleaseDevice(self.id)
+        driver.clReleaseDevice(self.id)
 
     def __repr__(self):
         return "<OpenCL device id:{3} name:{0} type:{1} profile:{2}>".format(self.name, self.type_str, self.profile, hex(self.id))
@@ -448,23 +456,23 @@ class Context(OpenCLWrapper):
         return None
 
     def _retain(self):
-        cl.clRetainContext(self.id)
+        driver.clRetainContext(self.id)
 
     def _release(self):
-        cl.clReleaseContext(self.id)
+        driver.clReleaseContext(self.id)
 
     def create_buffer(self, size_in_bytes, host_ptr=None, flags=enums.CL_MEM_READ_WRITE):
-        return MemObject(cl.clCreateBuffer(self.id, flags, size_in_bytes, host_ptr),
+        return MemObject(driver.clCreateBuffer(self.id, flags, size_in_bytes, host_ptr),
                          False)
 
     def create_buffer_and_copy(self, size_in_bytes, host_ptr, flags=enums.CL_MEM_READ_WRITE):
-        return MemObject(cl.clCreateBuffer(self.id, flags | enums.CL_MEM_COPY_HOST_PTR,
+        return MemObject(driver.clCreateBuffer(self.id, flags | enums.CL_MEM_COPY_HOST_PTR,
                                            size_in_bytes, host_ptr), False)
 
     def create_program_from_source(self, source):
         source = ctypes.create_string_buffer(source)
         ptr = ctypes.c_char_p(ctypes.addressof(source))
-        program = cl.clCreateProgramWithSource(self.id, 1, ctypes.byref(ptr), None)
+        program = driver.clCreateProgramWithSource(self.id, 1, ctypes.byref(ptr), None)
         return Program(program, False)
 
     def create_program_from_binary(self, binary):
@@ -476,8 +484,14 @@ class Context(OpenCLWrapper):
         binaries = (ctypes.c_void_p * numdevs)(*binary_ptrs)
         device_list = (cl_device_id * numdevs)(*devs)
         lengths = (ctypes.c_size_t * numdevs)(*bin_lens)
-        program = cl.clCreateProgramWithBinary(self.id, numdevs, device_list,
-                                               lengths, binaries, None)
+        program = driver.clCreateProgramWithBinary(self.id, numdevs, device_list,lengths, binaries, None)
+        return Program(program)
+
+    def create_program_from_il(self, binary):
+        bin_len = ctypes.c_size_t(len(binary))
+        binary = ctypes.create_string_buffer(binary, len(binary))
+        binary = ctypes.c_void_p(ctypes.addressof(binary))
+        program = driver.clCreateProgramWithIL(self.id, binary, bin_len)
         return Program(program)
 
     def create_command_queue(self, device, out_of_order=False, profiling=False):
@@ -487,7 +501,7 @@ class Context(OpenCLWrapper):
         if profiling:
             flags |= enums.CL_QUEUE_PROFILING_ENABLE
 
-        return CommandQueue(cl.clCreateCommandQueue(self.id, device.id, flags), False)
+        return CommandQueue(driver.clCreateCommandQueue(self.id, device.id, flags), False)
 
 
 Context._define_cl_properties()
@@ -531,15 +545,15 @@ class MemObject(OpenCLWrapper):
         regions.
         """
         params = (ctypes.c_size_t * 2)(offset, size)
-        return MemObject(cl.clCreateSubBuffer(self.id, 0,
+        return MemObject(driver.clCreateSubBuffer(self.id, 0,
                                               enums.CL_BUFFER_CREATE_TYPE_REGION, params),
                          False)
 
     def _retain(self):
-        cl.clRetainMemObject(self.id)
+        driver.clRetainMemObject(self.id)
 
     def _release(self):
-        cl.clReleaseMemObject(self.id)
+        driver.clReleaseMemObject(self.id)
 
 
 MemObject._define_cl_properties()
@@ -570,16 +584,16 @@ class CommandQueue(OpenCLWrapper):
         return Device(self._device_id)
 
     def _retain(self):
-        cl.clRetainCommandQueue(self.id)
+        driver.clRetainCommandQueue(self.id)
 
     def _release(self):
-        cl.clReleaseCommandQueue(self.id)
+        driver.clReleaseCommandQueue(self.id)
 
     def flush(self):
-        cl.clFlush(self.id)
+        driver.clFlush(self.id)
 
     def finish(self):
-        cl.clFinish(self.id)
+        driver.clFinish(self.id)
 
     def enqueue_task(self, kernel, wait_list=None, wants_event=False):
         """
@@ -597,7 +611,7 @@ class CommandQueue(OpenCLWrapper):
 
         event = (cl_event * 1)() if wants_event else None
 
-        cl.clEnqueueTask(self.id, kernel.id, num_events_in_wait_list, event_wait_list, event)
+        driver.clEnqueueTask(self.id, kernel.id, num_events_in_wait_list, event_wait_list, event)
         if wants_event:
             return Event(event[0], False)
 
@@ -622,7 +636,7 @@ class CommandQueue(OpenCLWrapper):
         local_ws = ((ctypes.c_size_t*nd)(*local_work_size)
                     if local_work_size is not None else local_work_size)
         event = (cl_event*1)() if wants_event else None
-        cl.clEnqueueNDRangeKernel(self.id, kernel.id, nd, None, global_ws, local_ws,
+        driver.clEnqueueNDRangeKernel(self.id, kernel.id, nd, None, global_ws, local_ws,
                                       num_events_in_wait_list, event_wait_list, event)
 
         if wants_event:
@@ -640,7 +654,7 @@ class CommandQueue(OpenCLWrapper):
 
         event = (cl_event * 1)() if wants_event else None
 
-        cl.clEnqueueReadBuffer(self.id, buff.id, blocking, offset, bc, dst_ptr,
+        driver.clEnqueueReadBuffer(self.id, buff.id, blocking, offset, bc, dst_ptr,
                                    num_events_in_wait_list, event_wait_list, event)
 
         if wants_event:
@@ -657,7 +671,7 @@ class CommandQueue(OpenCLWrapper):
             event_wait_list = None
 
         event = (cl_event * 1)() if wants_event else None
-        cl.clEnqueueWriteBuffer(self.id, buff.id, blocking, offset, bc, src_ptr,
+        driver.clEnqueueWriteBuffer(self.id, buff.id, blocking, offset, bc, src_ptr,
                                 num_events_in_wait_list, event_wait_list, event)
 
         if wants_event:
@@ -673,7 +687,7 @@ class CommandQueue(OpenCLWrapper):
             event_wait_list = None
 
         event = (cl_event * 1)() if wants_event else None
-        cl.clEnqueueCopyBuffer(self.id, src_buff.id, dst_buff.id, src_offset, dst_offset, bc,
+        driver.clEnqueueCopyBuffer(self.id, src_buff.id, dst_buff.id, src_offset, dst_offset, bc,
                                num_events_in_wait_list, event_wait_list, event)
 
         if wants_event:
@@ -717,14 +731,14 @@ class Program(OpenCLWrapper):
         sizes = self._binary_sizes
         results = [(ctypes.c_byte*sz)() for sz in sizes]
         arg = (ctypes.POINTER(ctypes.c_byte)*len(results))(*results)
-        cl.clGetProgramInfo(self.id, enums.CL_PROGRAM_BINARIES, ctypes.sizeof(arg), arg, None)
+        driver.clGetProgramInfo(self.id, enums.CL_PROGRAM_BINARIES, ctypes.sizeof(arg), arg, None)
         return results
 
     def _retain(self):
-        cl.clRetainProgram(self.id)
+        driver.clRetainProgram(self.id)
 
     def _release(self):
-        cl.clReleaseProgram(self.id)
+        driver.clReleaseProgram(self.id)
 
     def build(self, devices=None, options=None):
         if options is not None:
@@ -735,11 +749,27 @@ class Program(OpenCLWrapper):
             devices = (cl_device_id * num_devices)(*[dev.id for dev in devices])
         else:
             num_devices = 0
-        cl.clBuildProgram(self.id, num_devices, devices, options, None, None)
+        try:
+            driver.clBuildProgram(self.id, num_devices, devices, options, None, None)
+        except OpenCLAPIError as e:
+            self.build_info(devices)
+
+    def build_info(self, devices=None):
+        if devices is None:
+            devices = self.devices
+        for dev in devices:
+            status = cl_build_status()
+            driver.clGetProgramBuildInfo(self.id, dev.id, enums.CL_PROGRAM_BUILD_STATUS, ctypes.sizeof(cl_build_status), ctypes.byref(status), None)
+            log_size = ctypes.c_size_t()
+            driver.clGetProgramBuildInfo(self.id, dev.id, enums.CL_PROGRAM_BUILD_LOG, 0, None, ctypes.byref(log_size))
+            log = ctypes.create_string_buffer(log_size.value)
+            driver.clGetProgramBuildInfo(self.id, dev.id, enums.CL_PROGRAM_BUILD_LOG, log_size, log, None)
+            err_str = opencl_strerror(status.value) + ": " + log.value
+            _raise_opencl_driver_error(err_str)
 
     def create_kernel(self, name, args=None):
         name = ctypes.create_string_buffer(name)
-        kern = Kernel(cl.clCreateKernel(self.id, name), False)
+        kern = Kernel(driver.clCreateKernel(self.id, name), False)
         if args is not None:
             kern.set_args(args)
         return kern
@@ -770,13 +800,13 @@ class Kernel(OpenCLWrapper):
         return Program(self._program_id)
 
     def _retain(self):
-        cl.clRetainKernel(self.id)
+        driver.clRetainKernel(self.id)
 
     def _release(self):
-        cl.clReleaseKernel(self.id)
+        driver.clReleaseKernel(self.id)
 
     def set_arg_raw(self, arg_number, ptr, size_in_bytes):
-        cl.clSetKernelArg(self.id, arg_number, size_in_bytes, ptr)
+        driver.clSetKernelArg(self.id, arg_number, size_in_bytes, ptr)
 
     def set_arg(self, arg_number, value):
         if isinstance(value, (MemObject,)):
@@ -801,7 +831,7 @@ class Kernel(OpenCLWrapper):
 
     def get_work_group_size_for_device(self, device):
         sz = (ctypes.c_size_t * 1)()
-        cl.clGetKernelWorkGroupInfo(self.id, device.id, enums.CL_KERNEL_WORK_GROUP_SIZE, ctypes.sizeof(sz), sz, None)
+        driver.clGetKernelWorkGroupInfo(self.id, device.id, enums.CL_KERNEL_WORK_GROUP_SIZE, ctypes.sizeof(sz), sz, None)
         return sz[0]
 
 Kernel._define_cl_properties()
@@ -826,13 +856,13 @@ class Event(OpenCLWrapper):
         return CommandQueue(self._command_queue_id)
 
     def _retain(self):
-        cl.clRetainEvent(self.id)
+        driver.clRetainEvent(self.id)
 
     def _release(self):
-        cl.clReleaseEvent(self.id)
+        driver.clReleaseEvent(self.id)
 
     def wait(self):
-        cl.wait_for_events(self)
+        driver.wait_for_events(self)
 
 Event._define_cl_properties()
 
@@ -882,7 +912,7 @@ def _raise_bad_env_path(path, extra=None):
 
 def _raise_opencl_driver_error(msg, *args):
     e = OpenCLDriverError(msg.format(*args))
-    e.fname = function
+    #e.fname = function
     raise e
 
 def _raise_opencl_error(fname, errcode):

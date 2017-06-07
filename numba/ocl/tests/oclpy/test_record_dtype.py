@@ -5,7 +5,6 @@ import sys
 import numpy as np
 from numba import ocl, numpy_support, types
 from numba import unittest_support as unittest
-from numba.ocl.testing import skip_on_oclsim
 
 
 def set_a(ary, i, v):

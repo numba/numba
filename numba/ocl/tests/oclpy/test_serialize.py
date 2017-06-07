@@ -3,7 +3,6 @@ import pickle
 import numpy as np
 from numba import ocl, vectorize
 from numba import unittest_support as unittest
-from numba.ocl.testing import skip_on_oclsim
 
 
 class TestPickle(unittest.TestCase):

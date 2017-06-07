@@ -5,9 +5,17 @@ from numba.targets.codegen import BaseCPUCodegen, CodeLibrary
 from numba import utils
 
 
-
-OCL_TRIPLE = {32: 'spir-unknown-unknown',
+SPIR_TRIPLE = {32: 'spir-unknown-unknown',
                64: 'spir64-unknown-unknown'}
+
+SPIR_DATA_LAYOUT = {
+    32 : ('e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-'
+         'f64:64:64-v16:16:16-v24:32:32-v32:32:32-v48:64:64-v64:64:64-v96:128:128-'
+         'v128:128:128-v192:256:256-v256:256:256-v512:512:512-v1024:1024:1024'),
+    64 : ('e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-'
+         'f64:64:64-v16:16:16-v24:32:32-v32:32:32-v48:64:64-v64:64:64-v96:128:128-'
+         'v128:128:128-v192:256:256-v256:256:256-v512:512:512-v1024:1024:1024')
+}
 
 
 class OCLCodeLibrary(CodeLibrary):
@@ -48,12 +56,12 @@ class JITOCLCodegen(BaseCPUCodegen):
 
     def _init(self, llvm_module):
         assert list(llvm_module.global_variables) == [], "Module isn't empty"
-        self._data_layout = nvvm.default_data_layout
+        self._data_layout = SPIR_DATA_LAYOUT[utils.MACHINE_BITS]
         self._target_data = ll.create_target_data(self._data_layout)
 
     def _create_empty_module(self, name):
         ir_module = lc.Module(name)
-        ir_module.triple = OCL_TRIPLE[utils.MACHINE_BITS]
+        ir_module.triple = SPIR_TRIPLE[utils.MACHINE_BITS]
         if self._data_layout:
             ir_module.data_layout = self._data_layout
         return ir_module

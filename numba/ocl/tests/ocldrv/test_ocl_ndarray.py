@@ -2,7 +2,6 @@ import numpy as np
 from numba.ocl.ocldrv import devicearray
 from numba import ocl
 from numba.ocl.testing import unittest
-from numba.ocl.testing import skip_on_oclsim
 
 
 class TestOclNDArray(unittest.TestCase):

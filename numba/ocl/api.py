@@ -235,7 +235,7 @@ def event(timing=True):
     evt = current_context().create_event(timing=timing)
     return evt
 
-event_elapsed_time = driver.event_elapsed_time
+#event_elapsed_time = driver.event_elapsed_time
 
 # Device selection
 
@@ -258,6 +258,7 @@ def get_current_device():
 
 def list_devices():
     "Return a list of all detected devices"
+    devices._init_gpus()
     return devices.gpus
 
 
@@ -323,6 +324,6 @@ def defer_cleanup():
         yield
 
 
-profiling = require_context(driver.profiling)
-profile_start = require_context(driver.profile_start)
-profile_stop = require_context(driver.profile_stop)
+#profiling = require_context(driver.profiling)
+#profile_start = require_context(driver.profile_start)
+#profile_stop = require_context(driver.profile_stop)

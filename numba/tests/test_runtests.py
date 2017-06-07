@@ -36,6 +36,7 @@ class TestCase(unittest.TestCase):
         lines = self.check_testsuite_size(ids, 5000, 8000)
         # CUDA should be included by default
         self.assertTrue(any('numba.cuda.tests.' in line for line in lines))
+        self.assertTrue(any('numba.ocl.tests.' in line for line in lines))
         # As well as subpackage
         self.assertTrue(any('numba.tests.npyufunc.test_' in line for line in lines))
 

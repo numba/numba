@@ -10,7 +10,7 @@ from numba.extending import typeof_impl
 from numba.ocl.kernels.transpose import transpose
 from numba.tracing import event
 from numba import SmartArray
-from numba.ocl.testing import skip_on_oclsim
+
 
 class TestJIT(unittest.TestCase):
     """Test handling of numba.SmartArray"""

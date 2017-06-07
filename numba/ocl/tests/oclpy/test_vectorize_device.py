@@ -3,7 +3,6 @@ from numba import vectorize
 from numba import ocl, float32
 import numpy as np
 from numba import unittest_support as unittest
-from numba.ocl.testing import skip_on_oclsim
 
 
 class TestOclVectorizeDeviceCall(unittest.TestCase):

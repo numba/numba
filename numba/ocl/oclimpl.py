@@ -13,7 +13,6 @@ from numba import types
 from numba.itanium_mangler import mangle_c, mangle, mangle_type
 from . import target
 from . import stubs
-from . import hlc
 from . import enums
 
 registry = Registry()

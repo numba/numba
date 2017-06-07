@@ -3,7 +3,7 @@ from numba import ocl
 from numba.ocl.kernels.transpose import transpose
 from numba.ocl.testing import unittest
 from numba.testing.ddt import ddt, data, unpack
-from numba.ocl.testing import skip_on_oclsim
+
 
 @ddt
 class Test(unittest.TestCase):

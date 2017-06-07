@@ -133,16 +133,3 @@ def _legalize_shape(shape):
     else:
         raise TypeError("invalid type for shape; got {0}".format(type(shape)))
 
-#-------------------------------------------------------------------------------
-# atomic
-
-class atomic(Stub):
-    """atomic namespace
-    """
-    _description_ = '<atomic>'
-
-    class add(Stub):
-        """add(ary, idx, val)
-
-        Perform atomic ary[idx] += val
-        """

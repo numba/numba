@@ -12,7 +12,6 @@ from numba import datamodel
 from numba.targets.base import BaseContext
 from numba.targets.callconv import MinimalCallConv
 from . import codegen
-from .hlc import DATALAYOUT
 
 CC_SPIR_KERNEL = "spir_kernel"
 CC_SPIR_FUNC = "spir_func"
@@ -68,8 +67,8 @@ class OCLTargetContext(BaseContext):
 
     def init(self):
         self._internal_codegen = codegen.JITOCLCodegen("numba.ocl.jit")
-        self._target_data = DATALAYOUT[utils.MACHINE_BITS]
-        # Override data model manager
+        self._target_data = ll.create_target_data(codegen.SPIR_DATA_LAYOUT[utils.MACHINE_BITS])
+        # Override data model manager to SPIR model
         self.data_model_manager = ocl_data_model_manager
 
     def load_additional_registries(self):
@@ -102,7 +101,7 @@ class OCLTargetContext(BaseContext):
         module = func.module
         func.linkage = 'linkonce_odr'
 
-        module.data_layout = DATALAYOUT[self.address_size]
+        module.data_layout = codegen.SPIR_DATA_LAYOUT[self.address_size]
         wrapper = self.generate_kernel_wrapper(func, argtypes)
 
         return wrapper

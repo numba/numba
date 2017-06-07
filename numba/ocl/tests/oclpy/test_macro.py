@@ -3,7 +3,6 @@ import numpy as np
 from numba import ocl, float32
 from numba.ocl.testing import unittest
 from numba.errors import MacroError
-from numba.ocl.testing import skip_on_oclsim
 
 GLOBAL_CONSTANT = 5
 GLOBAL_CONSTANT_2 = 6

@@ -15,13 +15,13 @@ from .stubs import (
     sub_group_barrier,
 )
 from .ocldrv.error import OclSupportError
-#from .ocldrv import nvvm
 from . import initialize
 from .errors import KernelRuntimeError
 
-from .decorators import jit, autojit, declare_device
+from .decorators import jit, autojit #, declare_device
 from .api import *
 from .api import _auto_device
+from .ocldrv.driver import driver
 
 
 def is_available():
@@ -29,7 +29,7 @@ def is_available():
 
     This will initialize the driver if it hasn't been initialized.
     """
-    return driver.driver.is_available and nvvm.is_available()
+    return driver.is_available
 
 
 def ocl_error():
