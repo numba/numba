@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 
 import warnings
 import inspect
+from contextlib import contextmanager
 
 import numpy as np
 
@@ -83,28 +84,38 @@ class UFuncDispatcher(object):
         """
         typingctx = self.targetdescr.typing_context
         targetctx = self.targetdescr.target_context
-        # Use cache and compiler in a critical section
-        with compiler.lock_compiler:           
-            args, return_type = sigutils.normalize_signature(sig)
-            
-            # attempt look up of existing
-            cres = self.cache.load_overload(sig, targetctx)
-            if cres is not None:
-                return cres
-            
-            # Compile
-            cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
-                                        args=args, return_type=return_type,
-                                        flags=flags, locals=locals)
-           
-            exists = self.overloads.get(cres.signature)
-            if exists is None:
-                self.overloads[cres.signature] = cres
-                
-            # cache lookup failed before so safe to save
-            self.cache.save_overload(sig, cres)
 
-            return cres
+        @contextmanager
+        def store_overloads_on_success():
+            # use to ensure overloads are stored on success
+            try:
+                yield
+            except:
+                raise
+            else:
+                exists = self.overloads.get(cres.signature)
+                if exists is None:
+                    self.overloads[cres.signature] = cres
+
+        # Use cache and compiler in a critical section
+        with compiler.lock_compiler:
+            with store_overloads_on_success():
+                # attempt look up of existing
+                cres = self.cache.load_overload(sig, targetctx)
+                if cres is not None:
+                    return cres
+
+                # Compile
+                args, return_type = sigutils.normalize_signature(sig)
+                cres = compiler.compile_extra(typingctx, targetctx,
+                                              self.py_func, args=args,
+                                              return_type=return_type,
+                                              flags=flags, locals=locals)
+
+                # cache lookup failed before so safe to save
+                self.cache.save_overload(sig, cres)
+
+                return cres
 
 
 dispatcher_registry['npyufunc'] = UFuncDispatcher
