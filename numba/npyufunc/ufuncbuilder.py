@@ -74,9 +74,7 @@ class UFuncDispatcher(object):
         # The feature requires a real python function
         flags.unset("enable_looplift")
 
-        cres = self._compile_core(sig, flags, locals)
-        self.overloads[cres.signature] = cres
-        return cres
+        return self._compile_core(sig, flags, locals)
 
     def _compile_core(self, sig, flags, locals):
         """
@@ -86,17 +84,26 @@ class UFuncDispatcher(object):
         typingctx = self.targetdescr.typing_context
         targetctx = self.targetdescr.target_context
         # Use cache and compiler in a critical section
-        with compiler.lock_compiler:
+        with compiler.lock_compiler:           
+            args, return_type = sigutils.normalize_signature(sig)
+            
+            # attempt look up of existing
             cres = self.cache.load_overload(sig, targetctx)
             if cres is not None:
-                # Use cached version
                 return cres
+            
             # Compile
-            args, return_type = sigutils.normalize_signature(sig)
             cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
                                         args=args, return_type=return_type,
                                         flags=flags, locals=locals)
+           
+            exists = self.overloads.get(cres.signature)
+            if exists is None:
+                self.overloads[cres.signature] = cres
+                
+            # cache lookup failed before so safe to save
             self.cache.save_overload(sig, cres)
+
             return cres
 
 
