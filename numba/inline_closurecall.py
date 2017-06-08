@@ -1,11 +1,11 @@
 from numba import config, ir, ir_utils, utils
 import types
 
-from numba.ir_utils import (mk_unique_var, next_label, add_offset_to_labels, 
+from numba.ir_utils import (mk_unique_var, next_label, add_offset_to_labels,
     replace_vars, remove_dels, remove_dead, rename_labels)
- 
+
 class InlineClosureCallPass(object):
-    """InlineClosureCallPass class looks for direct calls to locally defined 
+    """InlineClosureCallPass class looks for direct calls to locally defined
     closures, and inlines the body of the closure function to the call site.
     """
     def __init__(self, func_ir, run_frontend):
@@ -63,8 +63,7 @@ class InlineClosureCallPass(object):
         min_label = min(from_blocks.keys())
         max_label = max(from_blocks.keys())
         #    reset globals in ir_utils before we use it
-        ir_utils._max_label = max_label 
-        ir_utils.visit_vars_extensions = {}
+        ir_utils._max_label = max_label
         # 2. rename all local variables in from_ir with new locals created in func_ir
         from_scopes = _get_all_scopes(from_blocks)
         _debug_print("obj_IR has scopes: ", from_scopes)
@@ -145,7 +144,7 @@ class InlineClosureCallPass(object):
             co_varnames = list(fcode.co_varnames)
             if co_varnames[0] == ".0":
                 co_varnames[0] = "implicit0"
-            fcode = types.CodeType(fcode.co_argcount, fcode.co_kwonlyargcount, 
+            fcode = types.CodeType(fcode.co_argcount, fcode.co_kwonlyargcount,
                         fcode.co_nlocals, fcode.co_stacksize, fcode.co_flags,
                         fcode.co_code, fcode.co_consts, fcode.co_names, tuple(co_varnames),
                         fcode.co_filename, fcode.co_name, fcode.co_firstlineno, fcode.co_lnotab,
@@ -218,4 +217,3 @@ def _add_definition(func_ir, block):
     assigns = block.find_insts(ir.Assign)
     for stmt in assigns:
         definitions[stmt.target.name].append(stmt.value)
-
