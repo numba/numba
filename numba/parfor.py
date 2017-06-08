@@ -254,7 +254,16 @@ class ParforPass(object):
                     if len(args)==3:
                         start = args[0]
                         size_var = args[1]
-                        step = args[2]
+                        try:
+                            step = self.func_ir.get_definition(args[2])
+                        except KeyError:
+                            raise NotImplementedError("Only known step size is supported for prange")
+                        if not isinstance(step, ir.Const):
+                            raise NotImplementedError("Only constant step size is supported for prange")
+                        step = step.value
+                        if step != 1:
+                            raise NotImplementedError("Only constant step size of 1 is supported for prange")
+
                     # set l=l for dead remove
                     inst.value = inst.target
                     scope = blocks[entry].scope
