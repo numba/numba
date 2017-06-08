@@ -221,6 +221,96 @@ class TestParfors(unittest.TestCase):
         np.testing.assert_almost_equal(expected, output)
         self.assertIn('@do_scheduling', test_p7.inspect_llvm(test_p7.signatures[0]))
 
+
+    def prange_test8(self):
+        # fails with `undefined variable <some const>`
+        # this is expected but could it perhaps be handled more cleanly?
+        @numba.njit(parallel=True)
+        def test_p8(A):
+            acc = 0
+            for i in prange(len(A)):
+                for j in prange(len(A)):
+                    acc+=A[i]
+            return acc
+        n=4
+        A = np.ones((n))
+        test_p8(A)
+
+
+    def prange_test9(self):
+        # does this count as cross iteration dependency?
+        # the inner parallel loop should reduce on acc
+        # for each outer loop?
+        @numba.njit(parallel=True)
+        def test_p9(n):
+            acc = 0
+            for i in range(n):
+                for j in prange(n):
+                    acc+=1
+            return acc
+        n=4
+        output = test_p9(n)
+        expected = 16
+        np.testing.assert_almost_equal(output, expected)
+
+
+    def prange_test10(self):
+        @numba.njit(parallel=True)
+        def test_p10(NOT_USED):
+            acc2 = 0
+            for j in prange(n):
+                acc1 = 0
+                for i in range(n):
+                    acc1 += 1
+                acc2 += acc1
+            return acc2
+
+        n=4
+        output = test_p10(n)
+        expected = 16.
+        np.testing.assert_almost_equal(output, expected)
+        self.assertIn('@do_scheduling', test_p10.inspect_llvm(test_p10.signatures[0]))
+
+
+    def prange_test11(self):
+        ## List comprehension with a `prange` fails with
+        ## `No definition for lowering <class 'numba.parfor.prange'>(int64,) -> range_state_int64`.
+        @numba.njit(parallel=True)
+        def test_p11(n):
+            return [np.sin(j) for j in prange(n)]
+        
+        n=4
+        output = test_p11(n)
+        
+
+    def prange_test12(self):
+        # segfaults/hangs
+        @numba.njit(parallel=True)
+        def test_p12(X):
+            acc = 0
+            for i in prange(-len(X)):
+                acc+=X[i]
+            return acc
+       
+        n=4
+        output = test_p12(np.ones(n))
+        expected = 0
+        np.testing.assert_almost_equal(output, expected)
+        self.assertIn('@do_scheduling', test_p12.inspect_llvm(test_p12.signatures[0]))
+
+
+    def prange_test13(self):
+        # fails, Operands must be the same type, got (i32, i64)
+        @numba.njit(parallel=True)
+        def test_p13(n):
+            acc = 0
+            for i in prange(n):
+                acc+=1
+            return acc
+        n=4
+        output = test_p13(np.int32(n))
+
+
     def test_pi(self):
         @njit(parallel=True)
         def calc_pi(n):
