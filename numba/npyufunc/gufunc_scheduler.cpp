@@ -61,7 +61,7 @@ public:
     std::vector<intp> iters_per_dim() const {
         std::vector<intp> ret;
         for(uintp i = 0; i < start.size(); ++i) {
-            ret.push_back(end[i] - start[i] + 1);
+            ret.push_back(end[i] < start[i] ? 0 : end[i] - start[i] + 1);
         } 
         return ret;
     }
