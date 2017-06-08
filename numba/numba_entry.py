@@ -32,11 +32,16 @@ def get_sys_info():
         print("__Hardware Information__")
         print(fmt % ("Machine", platform.machine()))
         print(fmt % ("CPU Name", llvmbind.get_host_cpu_name()))
-        features = sorted(
-            [key for key, value in llvmbind.get_host_cpu_features().items() if value])
-        cpu_feat = tw.fill(' '.join(features), 80)
-        print(fmt % ("CPU Features", ""))
-        print(cpu_feat)
+        try:
+            featuremap = llvmbind.get_host_cpu_features()
+        except RuntimeError:
+            print(fmt % ("CPU Features", "NA"))
+        else:
+            features = sorted([key for key, value in featuremap.items()
+                               if value])
+            cpu_feat = tw.fill(' '.join(features), 80)
+            print(fmt % ("CPU Features", ""))
+            print(cpu_feat)
         print("")
 
         print("__OS Information__")
@@ -91,7 +96,7 @@ def get_sys_info():
             cu.list_devices()[0]  # will a device initialise?
         except BaseException as e:
             msg_not_found = "CUDA driver library cannot be found"
-            msg_disabled_by_user = "CUDA disabled by user"
+            msg_disabled_by_user = "CUDA is disabled"
             msg_end = " or no CUDA enabled devices are present."
             msg_generic_problem = "Error: CUDA device intialisation problem."
             msg = getattr(e, 'msg', None)

@@ -94,6 +94,12 @@ class DataModel(object):
         """
         return []
 
+    def traverse_models(self):
+        """
+        Recursively list all models involved in this model.
+        """
+        return [self._dmm[t] for t in self.traverse_types()]
+
     def traverse_types(self):
         """
         Recursively list all frontend types involved in this model.
@@ -115,6 +121,12 @@ class DataModel(object):
 
     def has_nrt_meminfo(self):
         return False
+
+    def contains_nrt_meminfo(self):
+        """
+        Recursively check all contained types for need for NRT meminfo.
+        """
+        return any(model.has_nrt_meminfo() for model in self.traverse_models())
 
     def _compared_fields(self):
         return (type(self), self._fe_type)

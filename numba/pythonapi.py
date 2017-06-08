@@ -5,13 +5,12 @@ import contextlib
 import pickle
 
 from llvmlite import ir
-import llvmlite.binding as ll
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.llvmpy.core as lc
 
 from numba.config import PYVERSION
 import numba.ctypes_support as ctypes
-from numba import numpy_support
+from numba import numpy_support, config
 from numba import types, utils, cgutils, lowering, _helperlib
 
 
@@ -751,21 +750,6 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyList_SetSlice")
         return self.builder.call(fn, (lst, start, stop, obj))
 
-    def list_get_private_data(self, lst):
-        fnty = Type.function(self.voidptr, [self.pyobj])
-        fn = self._get_function(fnty, name="numba_get_list_private_data")
-        return self.builder.call(fn, (lst,))
-
-    def list_set_private_data(self, lst, ptr):
-        fnty = Type.function(Type.void(), [self.pyobj, self.voidptr])
-        fn = self._get_function(fnty, name="numba_set_list_private_data")
-        return self.builder.call(fn, (lst, ptr))
-
-    def list_reset_private_data(self, lst):
-        fnty = Type.function(Type.void(), [self.pyobj])
-        fn = self._get_function(fnty, name="numba_reset_list_private_data")
-        return self.builder.call(fn, (lst,))
-
 
     #
     # Concrete tuple API
@@ -1298,7 +1282,7 @@ class PythonAPI(object):
         # First make the array constant
         data = pickle.dumps(obj, protocol=-1)
         assert len(data) < 2**31
-        name = ".const.pickledata.%s" % (id(obj))
+        name = ".const.pickledata.%s" % (id(obj) if config.DIFF_IR == 0 else "DIFF_IR")
         bdata = cgutils.make_bytearray(data)
         arr = self.context.insert_unique_const(self.module, name, bdata)
         # Then populate the structure constant
@@ -1318,7 +1302,7 @@ class PythonAPI(object):
             gv = self.module.__serialized[obj]
         except KeyError:
             struct = self.serialize_uncached(obj)
-            name = ".const.picklebuf.%s" % (id(obj))
+            name = ".const.picklebuf.%s" % (id(obj) if config.DIFF_IR == 0 else "DIFF_IR")
             gv = self.context.insert_unique_const(self.module, name, struct)
             # Make the id() (and hence the name) unique while populating the module.
             self.module.__serialized[obj] = gv

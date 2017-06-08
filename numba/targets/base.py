@@ -13,6 +13,7 @@ import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
+from numba import llvmthreadsafe as llvmts
 from numba import types, utils, cgutils, typing, funcdesc, debuginfo
 from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
@@ -200,6 +201,9 @@ class BaseContext(object):
 
     # NRT
     enable_nrt = False
+
+    # Auto parallelization
+    auto_parallel = False
 
     # PYCC
     aot_mode = False
@@ -397,11 +401,12 @@ class BaseContext(object):
         Insert a unique internal constant named *name*, with LLVM value
         *val*, into module *mod*.
         """
-        gv = mod.get_global(name)
-        if gv is not None:
-            return gv
-        else:
+        try:
+            gv = mod.get_global(name)
+        except KeyError:
             return cgutils.global_constant(mod, name, val)
+        else:
+            return gv
 
     def get_argument_type(self, ty):
         return self.data_model_manager[ty].get_argument_type()
@@ -990,6 +995,7 @@ class BaseContext(object):
         gv.initializer = addr
         return builder.load(gv)
 
+    @llvmts.lock_llvm
     def get_abi_sizeof(self, ty):
         """
         Get the ABI size of LLVM type *ty*.

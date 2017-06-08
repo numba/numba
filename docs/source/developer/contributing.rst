@@ -20,7 +20,7 @@ on this mailing-list.  You can subscribe and read the archives on
 and there is also a `Gmane mirror <http://news.gmane.org/gmane.comp.python.numba.user>`_
 allowing NNTP access.
 
-.. _report-bugs:
+.. _report-numba-bugs:
 
 Bug tracker
 ''''''''''''
@@ -259,4 +259,3 @@ and check out ``_build/html/index.html``.  To push updates to the Web site::
 then verify the repository under the ``gh-pages`` directory.  Make sure the
 ``CNAME`` file is present and contains a single line for ``numba.pydata.org``.
 Finally, use ``git push`` to update the website.
-

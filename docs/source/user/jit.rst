@@ -140,7 +140,7 @@ Numba from falling back, and instead raise an error, pass ``nopython=True``.
    def f(x, y):
        return x + y
 
-.. seealso:: :ref:`troubleshooting`
+.. seealso:: :ref:`numba-troubleshooting`
 
 .. _jit-nogil:
 
@@ -180,3 +180,20 @@ a file-based cache.  This is done by passing ``cache=True``::
    @jit(cache=True)
    def f(x, y):
        return x + y
+
+.. _parallel_jit_option:
+
+``parallel``
+------------
+
+Enables an experimental feature that automatically parallelizes (and
+performs other optimizations for) those operations in the function known to
+have parallel semantics.  For a list of supported operations, see
+:ref:`numba-parallel`.  This feature is enabled by passing ``parallel=True`` and
+must be used in conjunction with ``nopython=True``::
+
+   @jit(nopython=True, parallel=True)
+   def f(x, y):
+       return x + y
+
+.. seealso:: :ref:`numba-parallel`

@@ -116,6 +116,10 @@ class _EnvReloader(object):
         # Enable logging of cache operation
         DEBUG_CACHE = _readenv("NUMBA_DEBUG_CACHE", int, DEBUG)
 
+        # Redirect cache directory
+        # Contains path to the directory
+        CACHE_DIR = _readenv("NUMBA_CACHE_DIR", str, "")
+
         # Enable tracing support
         TRACE = _readenv("NUMBA_TRACE", int, 0)
 
@@ -134,6 +138,12 @@ class _EnvReloader(object):
         # Force dump of Numba IR
         DUMP_IR = _readenv("NUMBA_DUMP_IR", int,
                            DEBUG_FRONTEND or DEBUG_TYPEINFER)
+
+        # print debug info of analysis and optimization on array operations
+        DEBUG_ARRAY_OPT = _readenv("NUMBA_DEBUG_ARRAY_OPT", int, 0)
+
+        # print debug info of inline closure pass
+        DEBUG_INLINE_CLOSURE = _readenv("NUMBA_DEBUG_INLINE_CLOSURE", int, 0)
 
         # Force dump of LLVM IR
         DUMP_LLVM = _readenv("NUMBA_DUMP_LLVM", int, DEBUG)
@@ -154,6 +164,9 @@ class _EnvReloader(object):
 
         # Force dump of type annotation
         ANNOTATE = _readenv("NUMBA_DUMP_ANNOTATION", int, 0)
+
+        # Dump IR in such as way as to aid in "diff"ing.
+        DIFF_IR = _readenv("NUMBA_DIFF_IR", int, 0)
 
         # Dump type annotation in html format
         def fmt_html_path(path):

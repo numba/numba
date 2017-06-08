@@ -83,9 +83,6 @@ build_c_helpers_dict(void)
     declmethod(convert_exception_to_warning);
     declmethod(unpickle);
     declmethod(attempt_nocopy_reshape);
-    declmethod(get_list_private_data);
-    declmethod(set_list_private_data);
-    declmethod(reset_list_private_data);
     declmethod(get_pyobject_private_data);
     declmethod(set_pyobject_private_data);
     declmethod(reset_pyobject_private_data);

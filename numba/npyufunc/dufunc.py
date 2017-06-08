@@ -7,7 +7,7 @@ from ..typing import npydecl
 from ..typing.templates import AbstractTemplate, signature
 from . import _internal, ufuncbuilder
 from ..dispatcher import Dispatcher
-
+from .. import array_analysis
 
 def make_dufunc_kernel(_dufunc):
     from ..targets import npyimpl
@@ -280,3 +280,5 @@ class DUFunc(_internal._DUFunc):
         sig1 = (_any,) * self.ufunc.nin
         targetctx.insert_func_defn(
             [(self._lower_me, self, sig) for sig in (sig0, sig1)])
+
+array_analysis.MAP_TYPES.append(DUFunc)

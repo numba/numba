@@ -9,6 +9,7 @@ import sys
 from . import utils
 from .errors import (NotDefinedError, RedefinedError, VerificationError,
                      ConstantInferenceError)
+from numba import config
 
 
 class Loc(object):
@@ -264,17 +265,27 @@ class Expr(Inst):
         op = 'cast'
         return cls(op=op, value=value, loc=loc)
 
+    @classmethod
+    def make_function(cls, name, code, closure, defaults, loc):
+        """
+        A node for making a function object.
+        """
+        op = 'make_function'
+        return cls(op=op, name=name, code=code, closure=closure, defaults=defaults, loc=loc)
+
     def __repr__(self):
         if self.op == 'call':
             args = ', '.join(str(a) for a in self.args)
-            kws = ', '.join('%s=%s' % (k, v) for k, v in self.kws)
+            pres_order = self._kws.items() if config.DIFF_IR == 0 else sorted(self._kws.items())
+            kws = ', '.join('%s=%s' % (k, v) for k, v in pres_order)
             vararg = '*%s' % (self.vararg,) if self.vararg is not None else ''
             arglist = ', '.join(filter(None, [args, vararg, kws]))
             return 'call %s(%s)' % (self.func, arglist)
         elif self.op == 'binop':
             return '%s %s %s' % (self.lhs, self.fn, self.rhs)
         else:
-            args = ('%s=%s' % (k, v) for k, v in self._kws.items())
+            pres_order = self._kws.items() if config.DIFF_IR == 0 else sorted(self._kws.items())
+            args = ('%s=%s' % (k, v) for k, v in pres_order)
             return '%s(%s)' % (self.op, ', '.join(args))
 
     def list_vars(self):
@@ -673,12 +684,16 @@ class Scope(object):
         else:
             return self.localvars.get(name)
 
-    def redefine(self, name, loc):
+    def redefine(self, name, loc, rename=True):
         """
         Redefine if the name is already defined
         """
         if name not in self.localvars:
             return self.define(name, loc)
+        elif not rename:
+            # Must use the same name if the variable is a cellvar, which
+            # means it could be captured in a closure.
+            return self.localvars.get(name)
         else:
             ct = self.redefined[name]
             self.redefined[name] = ct + 1
@@ -754,8 +769,11 @@ class Block(object):
         # Avoid early bind of sys.stdout as default value
         file = file or sys.stdout
         for inst in self.body:
-            inst_vars = sorted(str(v) for v in inst.list_vars())
-            print('    %-40s %s' % (inst, inst_vars), file=file)
+            if hasattr(inst, 'dump'):
+                inst.dump(file)
+            else:
+                inst_vars = sorted(str(v) for v in inst.list_vars())
+                print('    %-40s %s' % (inst, inst_vars), file=file)
 
     @property
     def terminator(self):
@@ -854,7 +872,15 @@ class FunctionIR(object):
 
     def copy(self):
         new_ir = copy.copy(self)
-        new_ir.blocks = self.blocks.copy()
+        blocks = {}
+        block_entry_vars = {}
+        for label, block in self.blocks.items():
+            new_block = block.copy()
+            blocks[label] = new_block
+            if block in self.block_entry_vars:
+                block_entry_vars[new_block] = self.block_entry_vars[block]
+        new_ir.blocks = blocks
+        new_ir.block_entry_vars = block_entry_vars
         return new_ir
 
     def get_block_entry_vars(self, block):

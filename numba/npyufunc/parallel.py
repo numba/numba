@@ -102,7 +102,7 @@ def build_ufunc_kernel(library, ctx, innerfunc, sig):
                                              byte_ptr_t])
     wrapperlib = ctx.codegen().create_library('parallelufuncwrapper')
     mod = wrapperlib.create_ir_module('parallel.ufunc.wrapper')
-    lfunc = mod.add_function(fnty, name=".kernel")
+    lfunc = mod.add_function(fnty, name=".kernel." + str(innerfunc))
 
     bb_entry = lfunc.append_basic_block('')
 
@@ -243,7 +243,7 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
         _init()
 
         # Build wrapper for ufunc entry point
-        ptr, env = build_gufunc_wrapper(self.py_func, cres, self.sin, self.sout,
+        ptr, env, wrapper_name = build_gufunc_wrapper(self.py_func, cres, self.sin, self.sout,
                                         cache=self.cache)
 
         # Get dtypes
@@ -262,16 +262,16 @@ def build_gufunc_wrapper(py_func, cres, sin, sout, cache):
     library = cres.library
     ctx = cres.target_context
     signature = cres.signature
-    innerfunc, env = ufuncbuilder.build_gufunc_wrapper(py_func, cres, sin, sout,
-                                                       cache=cache,
-                                                       warn_exception=True)
+    innerfunc, env, wrapper_name = ufuncbuilder.build_gufunc_wrapper(
+        py_func, cres, sin, sout, cache=cache, warn_exception=True)
+
     sym_in = set(sym for term in sin for sym in term)
     sym_out = set(sym for term in sout for sym in term)
     inner_ndim = len(sym_in | sym_out)
 
-    ptr = build_gufunc_kernel(library, ctx, innerfunc, signature, inner_ndim)
+    ptr, name = build_gufunc_kernel(library, ctx, innerfunc, signature, inner_ndim)
 
-    return ptr, env
+    return ptr, env, name
 
 
 def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
@@ -316,7 +316,7 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
                                              byte_ptr_t])
     wrapperlib = ctx.codegen().create_library('parallelufuncwrapper')
     mod = wrapperlib.create_ir_module('parallel.gufunc.wrapper')
-    lfunc = mod.add_function(fnty, name=".kernel")
+    lfunc = mod.add_function(fnty, name=".kernel." + str(innerfunc))
 
     bb_entry = lfunc.append_basic_block('')
 
@@ -411,6 +411,7 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
     builder.call(ready, ())
     # Wait for workers
     builder.call(synchronize, ())
+
     # Sum up all error counter
     initial = lc.Constant.int(lc.Type.int(), 0)
     total_errct = reduce(builder.add, map(builder.load, err_ctrs), initial)
@@ -432,7 +433,7 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
 
     wrapperlib.add_ir_module(mod)
     wrapperlib.add_linking_library(library)
-    return wrapperlib.get_pointer_to_function(lfunc.name)
+    return wrapperlib.get_pointer_to_function(lfunc.name), lfunc.name
 
 
 # ---------------------------------------------------------------------------
@@ -462,6 +463,7 @@ def _init():
     ll.add_symbol('numba_add_task', lib.add_task)
     ll.add_symbol('numba_synchronize', lib.synchronize)
     ll.add_symbol('numba_ready', lib.ready)
+    ll.add_symbol('do_scheduling', lib.do_scheduling)
 
     _is_initialized = True
 

@@ -10,9 +10,11 @@ Numba for CUDA GPUs
    device-functions.rst
    cudapysupported.rst
    intrinsics.rst
+   random.rst
    device-management.rst
    examples.rst
    simulator.rst
    reduction.rst
    ufunc.rst
+   ipc.rst
    faq.rst

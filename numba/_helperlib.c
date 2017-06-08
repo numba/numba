@@ -666,49 +666,6 @@ numba_py_type(PyObject *obj) {
     return (PyObject *) Py_TYPE(obj);
 }
 
-/* Pointer-stuffing functions for tagging a Python list object with an
- * arbitrary pointer.
- * Note a similar hack is used by Python itself, since
- * "list.sort() temporarily sets allocated to -1 to detect mutations".
- */
-
-NUMBA_EXPORT_FUNC(void)
-numba_set_list_private_data(PyListObject *listobj, void *ptr)
-{
-    /* Since ptr is dynamically allocated, it is at least
-     * 4- or 8-byte-aligned, meaning we can shift it by a couple bits
-     * to the right without losing information.
-     */
-    if ((size_t) ptr & 1) {
-        /* Should never happen */
-        Py_FatalError("Numba_set_list_private_data got an unaligned pointer");
-    }
-    /* Make the pointer distinguishable by forcing it into a negative
-     * number (obj->allocated is normally positive, except when sorting
-     * where it's changed to -1).
-     */
-    listobj->allocated = - (Py_ssize_t) ((size_t) ptr >> 1);
-}
-
-NUMBA_EXPORT_FUNC(void *)
-numba_get_list_private_data(PyListObject *listobj)
-{
-    if (listobj->allocated < -1) {
-        /* A Numba pointer is stuffed in the list, return it */
-        return (void *) ((size_t) -listobj->allocated << 1);
-    }
-    return NULL;
-}
-
-NUMBA_EXPORT_FUNC(void)
-numba_reset_list_private_data(PyListObject *listobj)
-{
-    /* Pretend there is no over-allocation; this should be always correct,
-     * if not optimal.
-     */
-    if (listobj->allocated < -1)
-        listobj->allocated = PyList_GET_SIZE(listobj);
-}
 
 /*
  * Functions for tagging an arbitrary Python object with an arbitrary pointer.

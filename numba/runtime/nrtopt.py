@@ -4,25 +4,15 @@ NRT specific optimizations
 import re
 from collections import defaultdict, deque
 
-from llvmlite import binding as llvm
+import numba.llvmthreadsafe as llvmts
 
 
-_regex_incref = re.compile(r'\s*call void @NRT_incref\((.*)\)')
-_regex_decref = re.compile(r'\s*call void @NRT_decref\((.*)\)')
-_regex_bb = re.compile(r'([-a-zA-Z$._][-a-zA-Z$._0-9]*:)|^define')
+_regex_incref = re.compile(r'\s*(?:tail)?\s*call void @NRT_incref\((.*)\)')
+_regex_decref = re.compile(r'\s*(?:tail)?\s*call void @NRT_decref\((.*)\)')
+_regex_bb = re.compile(r'([\'"]?[-a-zA-Z$._][-a-zA-Z$._0-9]*[\'"]?:)|^define')
 
 
-def remove_redundant_nrt_refct(ll_module):
-    """
-    Remove redundant reference count operations from the
-    `llvmlite.binding.ModuleRef`. This parses the ll_module as a string and
-    line by line to remove the unnecessary nrt refct pairs within each block.
-    Decref calls are moved after the last incref call in the block to avoid
-    temporarily decref'ing to zero (which can happen due to hidden decref from
-    alias).
-
-    Note: non-threadsafe due to usage of global LLVMcontext
-    """
+def _remove_redundant_nrt_refct(llvmir):
     # Note: As soon as we have better utility in analyzing materialized LLVM
     #       module in llvmlite, we can redo this without so much string
     #       processing.
@@ -93,14 +83,20 @@ def remove_redundant_nrt_refct(ll_module):
     def _prune_redundant_refct_ops(bb_lines):
         incref_map = defaultdict(deque)
         decref_map = defaultdict(deque)
+        to_remove = set()
         for num, incref_var, decref_var in _examine_refct_op(bb_lines):
             assert not (incref_var and decref_var)
             if incref_var:
-                incref_map[incref_var].append(num)
+                if incref_var == 'i8* null':
+                    to_remove.add(num)
+                else:
+                    incref_map[incref_var].append(num)
             elif decref_var:
-                decref_map[decref_var].append(num)
+                if decref_var == 'i8* null':
+                    to_remove.add(num)
+                else:
+                    decref_map[decref_var].append(num)
 
-        to_remove = set()
         for var, decops in decref_map.items():
             incops = incref_map[var]
             ct = min(len(incops), len(decops))
@@ -138,19 +134,34 @@ def remove_redundant_nrt_refct(ll_module):
         # insert decrefs at last_pos
         return head + decrefs + bb_lines[last_pos:]
 
+    # Driver
+    processed = []
+
+    for is_func, lines in _extract_functions(llvmir):
+        if is_func:
+            lines = _process_function(lines)
+
+        processed += lines
+
+    return '\n'.join(processed)
+
+
+def remove_redundant_nrt_refct(ll_module):
+    """
+    Remove redundant reference count operations from the
+    `llvmlite.binding.ModuleRef`. This parses the ll_module as a string and
+    line by line to remove the unnecessary nrt refct pairs within each block.
+    Decref calls are moved after the last incref call in the block to avoid
+    temporarily decref'ing to zero (which can happen due to hidden decref from
+    alias).
+
+    Note: non-threadsafe due to usage of global LLVMcontext
+    """
     # Early escape if NRT_incref is not used
     try:
         ll_module.get_function('NRT_incref')
     except NameError:
         return ll_module
 
-    processed = []
-
-    for is_func, lines in _extract_functions(ll_module):
-        if is_func:
-            lines = _process_function(lines)
-
-        processed += lines
-
-    newll = '\n'.join(processed)
-    return llvm.parse_assembly(newll)
+    newll = _remove_redundant_nrt_refct(str(ll_module))
+    return llvmts.parse_assembly(newll)

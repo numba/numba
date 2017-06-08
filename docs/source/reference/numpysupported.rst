@@ -373,7 +373,7 @@ Distributions
 * :func:`numpy.random.logistic`
 * :func:`numpy.random.lognormal`
 * :func:`numpy.random.logseries`
-* :func:`numpy.random.multibinomial`
+* :func:`numpy.random.multinomial`
 * :func:`numpy.random.negative_binomial`
 * :func:`numpy.random.normal`
 * :func:`numpy.random.pareto`
@@ -416,6 +416,7 @@ is supported:
 * :func:`~numpy.lib.stride_tricks.as_strided` (the *strides* argument
   is mandatory, the *subok* argument is not supported)
 
+.. _supported_ufuncs:
 
 Standard ufuncs
 ===============

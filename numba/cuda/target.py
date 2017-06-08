@@ -5,15 +5,17 @@ from llvmlite.llvmpy.core import (Type, Builder, LINKAGE_INTERNAL,
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
-from numba import typing, types, cgutils, debuginfo
+from numba import typing, types, cgutils, debuginfo, dispatcher
 from numba.utils import cached_property
 from numba.targets.base import BaseContext
 from numba.targets.callconv import MinimalCallConv
 from numba.targets import cmathimpl, operatorimpl
 from numba.typing import cmathdecl, operatordecl
+
 from numba import itanium_mangler
 from .cudadrv import nvvm
 from . import codegen, nvvmutils
+from .decorators import jitdevice
 
 
 # -----------------------------------------------------------------------------
@@ -28,6 +30,25 @@ class CUDATypingContext(typing.BaseContext):
         self.install_registry(cudamath.registry)
         self.install_registry(cmathdecl.registry)
         self.install_registry(operatordecl.registry)
+
+    def resolve_value_type(self, val):
+        # treat dispatcher object as another device function
+        if isinstance(val, dispatcher.Dispatcher):
+            try:
+                # use cached device function
+                val = val.__cudajitdevice
+            except AttributeError:
+                if not val._can_compile:
+                    raise ValueError('using cpu function on device '
+                                     'but its compilation is disabled')
+                jd = jitdevice(val, debug=val.targetoptions.get('debug'))
+                # cache the device function for future use and to avoid
+                # duplicated copy of the same function.
+                val.__cudajitdevice = jd
+                val = jd
+
+        # continue with parent logic
+        return super(CUDATypingContext, self).resolve_value_type(val)
 
 # -----------------------------------------------------------------------------
 # Implementation

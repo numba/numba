@@ -7,6 +7,7 @@ from copy import copy
 
 from . import config, ir, controlflow, dataflow, utils, errors
 from .utils import builtins, PYVERSION
+from .errors import NotDefinedError
 
 
 class Assigner(object):
@@ -171,6 +172,7 @@ class Interpreter(object):
                                                       loc=self.loc)
             stmt = ir.Assign(value=self.get(varname), target=target,
                              loc=self.loc)
+            self.definitions[target.name].append(stmt.value)
             if not self.current_block.is_terminated:
                 self.current_block.append(stmt)
             else:
@@ -214,6 +216,10 @@ class Interpreter(object):
         return self.bytecode.co_names
 
     @property
+    def code_cellvars(self):
+        return self.bytecode.co_cellvars 
+
+    @property
     def code_freevars(self):
         return self.bytecode.co_freevars
 
@@ -241,7 +247,8 @@ class Interpreter(object):
         (a str object).
         """
         if redefine or self.current_block_offset in self.cfa.backbone:
-            target = self.current_scope.redefine(name, loc=self.loc)
+            rename = not (name in self.code_cellvars)
+            target = self.current_scope.redefine(name, loc=self.loc, rename=rename)
         else:
             target = self.current_scope.get_or_define(name, loc=self.loc)
         if isinstance(value, ir.Var):
@@ -254,6 +261,11 @@ class Interpreter(object):
         """
         Get the variable (a Var instance) with the given *name*.
         """
+        # Implicit argument for comprehension starts with '.'
+        # See Parameter class in inspect.py (from Python source)
+        if name[0] == '.' and name[1:].isdigit():
+            name = 'implicit{}'.format(name[1:])
+ 
         # Try to simplify the variable lookup by returning an earlier
         # variable assigned to *name*.
         var = self.assigner.get_assignment_source(name)
@@ -568,10 +580,25 @@ class Interpreter(object):
         self.store(gl, res)
 
     def op_LOAD_DEREF(self, inst, res):
-        name = self.code_freevars[inst.arg]
-        value = self.get_closure_value(inst.arg)
-        gl = ir.FreeVar(inst.arg, name, value, loc=self.loc)
+        n_cellvars = len(self.code_cellvars)
+        if inst.arg < n_cellvars:
+            name = self.code_cellvars[inst.arg]
+            gl = self.get(name)
+        else:
+            idx = inst.arg - n_cellvars
+            name = self.code_freevars[idx]
+            value = self.get_closure_value(idx)
+            gl = ir.FreeVar(idx, name, value, loc=self.loc)
         self.store(gl, res)
+
+    def op_STORE_DEREF(self, inst, value):
+        n_cellvars = len(self.code_cellvars)
+        if inst.arg < n_cellvars:
+            dstname = self.code_cellvars[inst.arg]
+        else:
+            dstname = self.code_freevars[inst.arg - n_cellvars]
+        value = self.get(value)
+        self.store(value=value, name=dstname)
 
     def op_SETUP_LOOP(self, inst):
         assert self.blocks[inst.offset] is self.current_block
@@ -917,3 +944,44 @@ class Interpreter(object):
         index = None
         inst = ir.Yield(value=self.get(value), index=index, loc=self.loc)
         return self.store(inst, res)
+
+    def op_MAKE_FUNCTION(self, inst, name, code, closure, annotations, kwdefaults, defaults, res):
+        if annotations != None:
+            raise NotImplementedError("op_MAKE_FUNCTION with annotations is not implemented")
+        if kwdefaults != None:
+            raise NotImplementedError("op_MAKE_FUNCTION with kwdefaults is not implemented")
+        if isinstance(defaults, tuple):
+            defaults = tuple([self.get(name) for name in defaults])
+        fcode = self.definitions[code][0].value
+        if name:
+            name = self.get(name)
+        if closure:
+            closure = self.get(closure)
+        expr = ir.Expr.make_function(name, fcode, closure, defaults, self.loc)
+        self.store(expr, res)
+
+    def op_MAKE_CLOSURE(self, inst, name, code, closure, annotations, kwdefaults, defaults, res):
+        self.op_MAKE_FUNCTION(inst, name, code, closure, annotations, kwdefaults, defaults, res)
+    
+    def op_LOAD_CLOSURE(self, inst, res):
+        n_cellvars = len(self.code_cellvars)
+        if inst.arg < n_cellvars:
+            name = self.code_cellvars[inst.arg]
+            try:
+                gl = self.get(name)
+            except NotDefinedError as e:
+                raise NotImplementedError("Unsupported use of op_LOAD_CLOSURE encountered")
+        else:
+            idx = inst.arg - n_cellvars
+            name = self.code_freevars[idx]
+            value = self.get_closure_value(idx)
+            gl = ir.FreeVar(idx, name, value, loc=self.loc)
+        self.store(gl, res)
+
+    def op_LIST_APPEND(self, inst, target, value, appendvar, res):
+        target = self.get(target)
+        value = self.get(value)
+        appendattr = ir.Expr.getattr(target, 'append', loc=self.loc)
+        self.store(value=appendattr, name=appendvar)
+        appendinst = ir.Expr.call(self.get(appendvar), (value,), (), loc=self.loc)
+        self.store(value=appendinst, name=res)

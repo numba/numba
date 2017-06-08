@@ -184,6 +184,29 @@ class _SourceFileBackedLocatorMixin(object):
         return self
 
 
+class _UserProvidedCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
+    """
+    A locator that always point to the user provided directory in
+    `numba.config.CACHE_DIR`
+    """
+    def __init__(self, py_func, py_file):
+        self._py_file = py_file
+        self._lineno = py_func.__code__.co_firstlineno
+        drive, path = os.path.splitdrive(os.path.abspath(self._py_file))
+        subpath = os.path.dirname(path).lstrip(os.path.sep)
+        self._cache_path = os.path.join(config.CACHE_DIR, subpath)
+
+    def get_cache_path(self):
+        return self._cache_path
+
+    @classmethod
+    def from_function(cls, py_func, py_file):
+        if not config.CACHE_DIR:
+            return
+        parent = super(_UserProvidedCacheLocator, cls)
+        return parent.from_function(py_func, py_file)
+
+
 class _InTreeCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
     """
     A locator for functions backed by a regular Python module with a
@@ -283,7 +306,9 @@ class _CacheImpl(object):
     - control the filename of the cache.
     - provide the cache locator
     """
-    _locator_classes = [_InTreeCacheLocator, _UserWideCacheLocator,
+    _locator_classes = [_UserProvidedCacheLocator,
+                        _InTreeCacheLocator,
+                        _UserWideCacheLocator,
                         _IPythonCacheLocator]
 
     def __init__(self, py_func):

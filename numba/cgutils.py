@@ -989,8 +989,9 @@ def printf(builder, format, *args):
     global_fmt = global_constant(mod, "printf_format", fmt_bytes)
     fnty = ir.FunctionType(int32_t, [cstring], var_arg=True)
     # Insert printf()
-    fn = mod.get_global('printf')
-    if fn is None:
+    try:
+        fn = mod.get_global('printf')
+    except KeyError:
         fn = ir.Function(mod, fnty, name="printf")
     # Call
     ptr_fmt = builder.bitcast(global_fmt, cstring)

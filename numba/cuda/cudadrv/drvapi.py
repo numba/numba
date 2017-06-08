@@ -1,6 +1,8 @@
 from __future__ import print_function, absolute_import, division
 from ctypes import *
 
+from . import _extras
+
 cu_device = c_int
 cu_device_attribute = c_int     # enum
 cu_context = c_void_p           # an opaque handle
@@ -14,6 +16,7 @@ cu_stream = c_void_p            # an opaque handle
 cu_event = c_void_p
 cu_link_state = c_void_p
 cu_function_attribute = c_int
+cu_ipc_mem_handle = (c_byte * _extras.CUDA_IPC_HANDLE_SIZE)   # 64 bytes wide
 
 cu_occupancy_b2d_size = CFUNCTYPE(c_size_t, c_int)
 
@@ -319,4 +322,17 @@ API_PROTOTYPES = {
 'cuOccupancyMaxPotentialBlockSizeWithFlags': (c_int,
                                               POINTER(c_int), POINTER(c_int), cu_function, cu_occupancy_b2d_size, c_size_t, c_int, c_uint),
 
+# CUresult cuIpcGetMemHandle ( CUipcMemHandle* pHandle, CUdeviceptr dptr )
+'cuIpcGetMemHandle': (c_int,
+                      POINTER(cu_ipc_mem_handle), cu_device_ptr),
+
+# CUresult cuIpcOpenMemHandle ( CUdeviceptr* pdptr, CUipcMemHandle handle, unsigned int  Flags )
+
+'cuIpcOpenMemHandle': (c_int,
+                       POINTER(cu_device_ptr), cu_ipc_mem_handle, c_uint),
+
+# CUresult cuIpcCloseMemHandle ( CUdeviceptr dptr )
+
+'cuIpcCloseMemHandle': (c_int,
+                        cu_device_ptr),
 }

@@ -522,7 +522,9 @@ class TestDispatcherMethods(TestCase):
             # simple stringify test
             if wrapper:
                 wrapper = "{}{}".format(len(wrapper), wrapper)
-            prefix = r'^digraph "CFG for \'_ZN{}5numba'.format(wrapper)
+            module_name = __name__.split('.', 1)[0]
+            module_len = len(module_name)
+            prefix = r'^digraph "CFG for \'_ZN{}{}{}'.format(wrapper, module_len, module_name)
             self.assertRegexpMatches(str(cfg), prefix)
             # .display() requires an optional dependency on `graphviz`.
             # just test for the attribute without running it.
@@ -725,6 +727,20 @@ class TestCache(BaseCacheTest):
 
         # Check the code runs ok from another process
         self.run_in_separate_process()
+
+    @tag('important')
+    def test_caching_nrt_pruned(self):
+        self.check_pycache(0)
+        mod = self.import_module()
+        self.check_pycache(0)
+
+        f = mod.add_usecase
+        self.assertPreciseEqual(f(2, 3), 6)
+        self.check_pycache(2)  # 1 index, 1 data
+        # NRT pruning may affect cache
+        self.assertPreciseEqual(f(2, np.arange(3)), 2 + np.arange(3) + 1)
+        self.check_pycache(3)  # 1 index, 2 data
+        self.check_hits(f, 0, 2)
 
     def test_inner_then_outer(self):
         # Caching inner then outer function is ok

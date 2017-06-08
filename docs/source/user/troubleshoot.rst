@@ -1,5 +1,5 @@
 
-.. _troubleshooting:
+.. _numba-troubleshooting:
 
 ========================
 Troubleshooting and tips
@@ -31,7 +31,8 @@ There can be various reasons why Numba cannot compile your code, and raises
 an error instead.  One common reason is that your code relies on an
 unsupported Python feature, especially in :term:`nopython mode`.
 Please see the list of :ref:`pysupported`.  If you find something that
-is listed there and still fails compiling, please :ref:`report a bug <report-bugs>`.
+is listed there and still fails compiling, please
+:ref:`report a bug <report-numba-bugs>`.
 
 The other reason is that you asked for :term:`nopython mode`, and type
 inference has failed on some piece of your code.  For example, let's

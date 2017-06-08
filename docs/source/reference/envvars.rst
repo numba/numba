@@ -93,7 +93,7 @@ These variables influence what is printed out during compilation of
    Dump the native assembler code of compiled functions.
 
 .. seealso::
-   :ref:`troubleshooting` and :ref:`architecture`.
+   :ref:`numba-troubleshooting` and :ref:`architecture`.
 
 
 Compilation options
@@ -161,4 +161,3 @@ Threading Control
 
    *Default value:* The number of CPU cores on the system as determined at run
    time, this can be accessed via ``numba.config.NUMBA_DEFAULT_NUM_THREADS``.
-

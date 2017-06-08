@@ -152,11 +152,19 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
 
 
 class FunctionTemplate(object):
+    # Set to true to disable unsafe cast.
+    # subclass overide-able
+    unsafe_casting = True
+
     def __init__(self, context):
         self.context = context
 
     def _select(self, cases, args, kws):
-        selected = self.context.resolve_overload(self.key, cases, args, kws)
+        options = {
+            'unsafe_casting': self.unsafe_casting,
+        }
+        selected = self.context.resolve_overload(self.key, cases, args, kws,
+                                                 **options)
         return selected
 
     def get_impl_key(self, sig):
@@ -504,6 +512,10 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
             disp_type = types.Dispatcher(disp)
             sig = disp_type.get_call_type(typing_context, sig.args, {})
             call = context.get_function(disp_type, sig)
+            # Link dependent library
+            cg = context.codegen()
+            for lib in getattr(call, 'libs', ()):
+                cg.add_linking_library(lib)
             return call(builder, args)
 
     def _resolve(self, typ, attr):

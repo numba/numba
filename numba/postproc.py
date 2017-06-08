@@ -55,6 +55,9 @@ class VariableLifetime(object):
         return analysis.compute_dead_maps(self.cfg, self._blocks, self.livemap,
                                           self.usedefs.defmap)
 
+# other packages that define new nodes add calls for inserting dels
+# format: {type:function}
+ir_extension_insert_dels = {}
 
 class PostProcessor(object):
     """
@@ -180,6 +183,11 @@ class PostProcessor(object):
                 # internal vars that are used here
                 live_set = set(v.name for v in stmt.list_vars())
                 dead_set = live_set & internal_dead_set
+                for T, def_func in ir_extension_insert_dels.items():
+                    if isinstance(stmt, T):
+                        done_dels = def_func(stmt, dead_set)
+                        dead_set -= done_dels
+                        internal_dead_set -= done_dels
                 # used here but not afterwards
                 delete_pts.append((stmt, dead_set))
                 internal_dead_set -= dead_set

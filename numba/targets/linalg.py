@@ -551,6 +551,27 @@ def vdot(context, builder, sig, args):
         return dot_2_vv(context, builder, sig, args, conjugate=True)
 
 
+def dot_3_vm_check_args(a, b, out):
+    m, = a.shape
+    _m, n = b.shape
+    if m != _m:
+        raise ValueError("incompatible array sizes for "
+                         "np.dot(a, b) (vector * matrix)")
+    if out.shape != (n,):
+        raise ValueError("incompatible output array size for "
+                         "np.dot(a, b, out) (vector * matrix)")
+
+
+def dot_3_mv_check_args(a, b, out):
+    m, _n = a.shape
+    n, = b.shape
+    if n != _n:
+        raise ValueError("incompatible array sizes for np.dot(a, b) "
+                         "(matrix * vector)")
+    if out.shape != (m,):
+        raise ValueError("incompatible output array size for "
+                         "np.dot(a, b, out) (matrix * vector)")
+
 def dot_3_vm(context, builder, sig, args):
     """
     np.dot(vector, matrix, out)
@@ -573,16 +594,9 @@ def dot_3_vm(context, builder, sig, args):
         m_shapes = y_shapes
         do_trans = yty.layout == 'F'
         m_data, v_data = y.data, x.data
+        check_args = dot_3_vm_check_args
 
-        def check_args(a, b, out):
-            m, = a.shape
-            _m, n = b.shape
-            if m != _m:
-                raise ValueError("incompatible array sizes for "
-                                 "np.dot(a, b) (vector * matrix)")
-            if out.shape != (n,):
-                raise ValueError("incompatible output array size for "
-                                 "np.dot(a, b, out) (vector * matrix)")
+
     else:
         # Matrix * vector
         # We will compute x * y
@@ -590,16 +604,8 @@ def dot_3_vm(context, builder, sig, args):
         m_shapes = x_shapes
         do_trans = xty.layout == 'C'
         m_data, v_data = x.data, y.data
+        check_args = dot_3_mv_check_args
 
-        def check_args(a, b, out):
-            m, _n = a.shape
-            n, = b.shape
-            if n != _n:
-                raise ValueError("incompatible array sizes for np.dot(a, b) "
-                                 "(matrix * vector)")
-            if out.shape != (m,):
-                raise ValueError("incompatible output array size for "
-                                 "np.dot(a, b, out) (matrix * vector)")
 
     context.compile_internal(builder, check_args,
                              signature(types.none, *sig.args), args)
@@ -725,6 +731,9 @@ def _check_linalg_matrix(a, func_name, la_prefix=True):
     # module
     prefix = "np.linalg" if la_prefix else "np"
     interp = (prefix, func_name)
+    # Unpack optional type
+    if isinstance(a, types.Optional):
+        a = a.type
     if not isinstance(a, types.Array):
         msg = "%s.%s() only supported for array types" % interp
         raise TypingError(msg)
@@ -754,6 +763,11 @@ def _inv_err_handler(r):
         if r > 0:
             raise np.linalg.LinAlgError(
                 "Matrix is singular to machine precision.")
+
+@register_jitable
+def _dummy_liveness_func(a):
+    """pass a list of variables to be preseved through dead code elimination"""
+    return a[0]
 
 
 @overload(np.linalg.inv)
@@ -792,8 +806,9 @@ def inv_impl(a):
         _inv_err_handler(r)
 
         # help liveness analysis
-        acpy.size
-        ipiv.size
+        #acpy.size
+        #ipiv.size
+        _dummy_liveness_func([acpy.size, ipiv.size])
         return acpy
 
     return inv_impl
@@ -937,11 +952,12 @@ if numpy_version >= (1, 8):
 
             # put these in to help with liveness analysis,
             # `.ctypes` doesn't keep the vars alive
-            acpy.size
-            vl.size
-            vr.size
-            wr.size
-            wi.size
+            #acpy.size
+            #vl.size
+            #vr.size
+            #wr.size
+            #wi.size
+            _dummy_liveness_func([acpy.size, vl.size, vr.size, wr.size, wi.size])
             return (wr, vr.T)
 
         def cmplx_eig_impl(a):
@@ -981,10 +997,11 @@ if numpy_version >= (1, 8):
 
             # put these in to help with liveness analysis,
             # `.ctypes` doesn't keep the vars alive
-            acpy.size
-            vl.size
-            vr.size
-            w.size
+            #acpy.size
+            #vl.size
+            #vr.size
+            #w.size
+            _dummy_liveness_func([acpy.size, vl.size, vr.size, w.size])
             return (w, vr.T)
 
         if isinstance(a.dtype, types.scalars.Complex):
@@ -1063,11 +1080,12 @@ if numpy_version >= (1, 8):
 
             # put these in to help with liveness analysis,
             # `.ctypes` doesn't keep the vars alive
-            acpy.size
-            vl.size
-            vr.size
-            wr.size
-            wi.size
+            #acpy.size
+            #vl.size
+            #vr.size
+            #wr.size
+            #wi.size
+            _dummy_liveness_func([acpy.size, vl.size, vr.size, wr.size, wi.size])
             return wr
 
         def cmplx_eigvals_impl(a):
@@ -1107,10 +1125,11 @@ if numpy_version >= (1, 8):
 
             # put these in to help with liveness analysis,
             # `.ctypes` doesn't keep the vars alive
-            acpy.size
-            vl.size
-            vr.size
-            w.size
+            #acpy.size
+            #vl.size
+            #vr.size
+            #w.size
+            _dummy_liveness_func([acpy.size, vl.size, vr.size, w.size])
             return w
 
         if isinstance(a.dtype, types.scalars.Complex):
@@ -1164,9 +1183,9 @@ if numpy_version >= (1, 8):
             _handle_err_maybe_convergence_problem(r)
 
             # help liveness analysis
-            acpy.size
-            w.size
-
+            #acpy.size
+            #w.size
+            _dummy_liveness_func([acpy.size, w.size])
             return (w, acpy)
 
         return eigh_impl
@@ -1217,9 +1236,9 @@ if numpy_version >= (1, 8):
             _handle_err_maybe_convergence_problem(r)
 
             # help liveness analysis
-            acpy.size
-            w.size
-
+            #acpy.size
+            #w.size
+            _dummy_liveness_func([acpy.size, w.size])
             return w
 
         return eigvalsh_impl
@@ -1286,11 +1305,11 @@ if numpy_version >= (1, 8):
             _handle_err_maybe_convergence_problem(r)
 
             # help liveness analysis
-            acpy.size
-            vt.size
-            u.size
-            s.size
-
+            #acpy.size
+            #vt.size
+            #u.size
+            #s.size
+            _dummy_liveness_func([acpy.size, vt.size, u.size, s.size])
             return (u.T, s, vt.T)
 
         return svd_impl
@@ -1369,9 +1388,9 @@ def qr_impl(a):
         _handle_err_maybe_convergence_problem(ret)
 
         # help liveness analysis
-        tau.size
-        q.size
-
+        #tau.size
+        #q.size
+        _dummy_liveness_func([tau.size, q.size])
         return (q[:, :minmn], r)
 
     return qr_impl
@@ -1603,11 +1622,11 @@ def lstsq_impl(a, b, rcond=-1.0):
         x = _lstsq_solution(b, bcpy, n)
 
         # help liveness analysis
-        acpy.size
-        bcpy.size
-        s.size
-        rank_ptr.size
-
+        #acpy.size
+        #bcpy.size
+        #s.size
+        #rank_ptr.size
+        _dummy_liveness_func([acpy.size, bcpy.size, s.size, rank_ptr.size])
         return (x, res, rank, s[:minmn])
 
     return lstsq_impl
@@ -1691,10 +1710,10 @@ def solve_impl(a, b):
         _inv_err_handler(r)
 
         # help liveness analysis
-        acpy.size
-        bcpy.size
-        ipiv.size
-
+        #acpy.size
+        #bcpy.size
+        #ipiv.size
+        _dummy_liveness_func([acpy.size, bcpy.size, ipiv.size])
         return _solve_compute_return(b, bcpy)
 
     return solve_impl
@@ -1853,13 +1872,14 @@ def pinv_impl(a, rcond=1.e-15):
         )
 
         # help liveness analysis
-        acpy.size
-        vt.size
-        u.size
-        s.size
-        one.size
-        zero.size
-
+        #acpy.size
+        #vt.size
+        #u.size
+        #s.size
+        #one.size
+        #zero.size
+        _dummy_liveness_func([acpy.size, vt.size, u.size, s.size, one.size,
+            zero.size])
         return acpy.T.ravel().reshape(a.shape).T
 
     return pinv_impl
@@ -1953,7 +1973,8 @@ def slogdet_impl(a):
             sgn = -1
 
         # help liveness analysis
-        ipiv.size
+        #ipiv.size
+        _dummy_liveness_func([ipiv.size])
         return diag_walker(n, acpy, sgn)
 
     return slogdet_impl
@@ -2049,11 +2070,11 @@ def _compute_singular_values_impl(a):
         _handle_err_maybe_convergence_problem(r)
 
         # help liveness analysis
-        acpy.size
-        vt.size
-        u.size
-        s.size
-
+        #acpy.size
+        #vt.size
+        #u.size
+        #s.size
+        _dummy_liveness_func([acpy.size, vt.size, u.size, s.size])
         return s
 
     return sv_function
@@ -2094,9 +2115,9 @@ def _oneD_norm_2_impl(a):
             assert 0   # unreachable
 
         # help liveness analysis
-        ret.size
-        a.size
-
+        #ret.size
+        #a.size
+        _dummy_liveness_func([ret.size, a.size])
         return ret[0]
 
     return impl

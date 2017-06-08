@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import warnings
 import functools
 import locale
 import weakref
@@ -13,9 +14,11 @@ import llvmlite.ir as llvmir
 
 from numba import config, utils, cgutils
 from numba.runtime.nrtopt import remove_redundant_nrt_refct
+from numba import llvmthreadsafe as llvmts
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
                       'i886', 'i986'])
+
 
 def _is_x86(triple):
     arch = triple.split('-')[0]
@@ -63,16 +66,15 @@ class CodeLibrary(object):
 
     _finalized = False
     _object_caching_enabled = False
+    _disable_inspection = False
 
     def __init__(self, codegen, name):
         self._codegen = codegen
         self._name = name
         self._linking_libraries = set()
-        self._final_module = ll.parse_assembly(
+        self._final_module = llvmts.parse_assembly(
             str(self._codegen._create_empty_module(self._name)))
         self._final_module.name = cgutils.normalize_ir_text(self._name)
-        # Remember this on the module, for the object cache hooks
-        self._final_module.__library = weakref.proxy(self)
         self._shared_module = None
         # Track names of the dynamic globals
         self._dynamic_globals = []
@@ -119,6 +121,7 @@ class CodeLibrary(object):
         Internal: optimize this library's final module.
         """
         self._codegen._mpm.run(self._final_module)
+        self._final_module = remove_redundant_nrt_refct(self._final_module)
 
     def _get_module_for_linking(self):
         """
@@ -178,9 +181,10 @@ class CodeLibrary(object):
         self._raise_if_finalized()
         assert isinstance(ir_module, llvmir.Module)
         ir = cgutils.normalize_ir_text(str(ir_module))
-        ll_module = ll.parse_assembly(ir)
-        ll_module.name = ir_module.name
-        ll_module.verify()
+        with llvmts.lock_llvm:
+            ll_module = llvmts.parse_assembly(ir)
+            ll_module.name = ir_module.name
+            ll_module.verify()
         self.add_llvm_module(ll_module)
 
     def _scan_dynamic_globals(self, ll_module):
@@ -191,6 +195,7 @@ class CodeLibrary(object):
             if gv.name.startswith("numba.dynamic.globals"):
                 self._dynamic_globals.append(gv.name)
 
+    @llvmts.lock_llvm
     def add_llvm_module(self, ll_module):
         self._scan_dynamic_globals(ll_module)
         self._optimize_functions(ll_module)
@@ -198,6 +203,7 @@ class CodeLibrary(object):
         ll_module = remove_redundant_nrt_refct(ll_module)
         self._final_module.link_in(ll_module)
 
+    @llvmts.lock_llvm
     def finalize(self):
         """
         Finalize the library.  After this call, nothing can be added anymore.
@@ -227,10 +233,14 @@ class CodeLibrary(object):
         self._final_module.verify()
         self._finalize_final_module()
 
+    @llvmts.lock_llvm
     def _finalize_final_module(self):
         """
         Make the underlying LLVM module ready to use.
         """
+        # Remember this on the module, for the object cache hooks
+        self._final_module.__library = weakref.proxy(self)
+
         # It seems add_module() must be done only here and not before
         # linking in other modules, otherwise get_pointer_to_function()
         # could fail.
@@ -264,22 +274,30 @@ class CodeLibrary(object):
     def get_function(self, name):
         return self._final_module.get_function(name)
 
+    def _sentry_cache_disable_inspection(self):
+        if self._disable_inspection:
+            warnings.warn('Inspection disabled for cached code. '
+                          'Invalid result is returned.')
+
     def get_llvm_str(self):
         """
         Get the human-readable form of the LLVM module.
         """
+        self._sentry_cache_disable_inspection()
         return str(self._final_module)
 
     def get_asm_str(self):
         """
         Get the human-readable assembly.
         """
+        self._sentry_cache_disable_inspection()
         return str(self._codegen._tm.emit_assembly(self._final_module))
 
     def get_function_cfg(self, name):
         """
         Get control-flow graph of the LLVM function
         """
+        self._sentry_cache_disable_inspection()
         fn = self.get_function(name)
         dot = ll.get_function_cfg(fn)
         return _CFG(dot)
@@ -306,6 +324,7 @@ class CodeLibrary(object):
         if self._compiled:
             raise ValueError("library already compiled: %s" % (self,))
         self._compiled_object = value
+        self._disable_inspection = True
 
     @classmethod
     def _dump_elf(cls, buf):
@@ -361,6 +380,7 @@ class CodeLibrary(object):
             self._compiled_object = None
             return buf
 
+    @llvmts.lock_llvm
     def serialize_using_bitcode(self):
         """
         Serialize this library using its bitcode as the cached representation.
@@ -368,6 +388,7 @@ class CodeLibrary(object):
         self._ensure_finalized()
         return (self._name, 'bitcode', self._final_module.as_bitcode())
 
+    @llvmts.lock_llvm
     def serialize_using_object_code(self):
         """
         Serialize this library using its object code as the cached
@@ -380,20 +401,21 @@ class CodeLibrary(object):
         return (self._name, 'object', data)
 
     @classmethod
+    @llvmts.lock_llvm
     def _unserialize(cls, codegen, state):
         name, kind, data = state
         self = codegen.create_library(name)
         assert isinstance(self, cls)
         if kind == 'bitcode':
             # No need to re-run optimizations, just make the module ready
-            self._final_module = ll.parse_bitcode(data)
+            self._final_module = llvmts.parse_bitcode(data)
             self._finalize_final_module()
             return self
         elif kind == 'object':
             object_code, shared_bitcode = data
             self.enable_object_caching()
             self._set_compiled_object(object_code)
-            self._shared_module = ll.parse_bitcode(shared_bitcode)
+            self._shared_module = llvmts.parse_bitcode(shared_bitcode)
             self._finalize_final_module()
             return self
         else:
@@ -427,6 +449,7 @@ class AOTCodeLibrary(CodeLibrary):
 
 class JITCodeLibrary(CodeLibrary):
 
+    @llvmts.lock_llvm
     def get_pointer_to_function(self, name):
         """
         Generate native code for function named *name* and return a pointer
@@ -437,6 +460,7 @@ class JITCodeLibrary(CodeLibrary):
         self._ensure_finalized()
         return self._codegen._engine.get_function_address(name)
 
+    @llvmts.lock_llvm
     def _finalize_specific(self):
         self._codegen._scan_and_fix_unresolved_refs(self._final_module)
         self._codegen._engine.finalize_object()
@@ -499,14 +523,13 @@ class RuntimeLinker(object):
 
 
 class BaseCPUCodegen(object):
-    _llvm_initialized = False
 
     def __init__(self, module_name):
         initialize_llvm()
 
         self._libraries = set()
         self._data_layout = None
-        self._llvm_module = ll.parse_assembly(
+        self._llvm_module = llvmts.parse_assembly(
             str(self._create_empty_module(module_name)))
         self._llvm_module.name = "global_codegen_module"
         self._rtlinker = RuntimeLinker()
@@ -520,7 +543,7 @@ class BaseCPUCodegen(object):
         self._tm_features = self._customize_tm_features()
         self._customize_tm_options(tm_options)
         tm = target.create_target_machine(**tm_options)
-        engine = ll.create_mcjit_compiler(llvm_module, tm)
+        engine = llvmts.create_mcjit_compiler(llvm_module, tm)
 
         self._tm = tm
         self._engine = engine
@@ -564,14 +587,14 @@ class BaseCPUCodegen(object):
         return self._library_class._unserialize(self, serialized)
 
     def _module_pass_manager(self):
-        pm = ll.create_module_pass_manager()
+        pm = llvmts.create_module_pass_manager()
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder() as pmb:
             pmb.populate(pm)
         return pm
 
     def _function_pass_manager(self, llvm_module):
-        pm = ll.create_function_pass_manager(llvm_module)
+        pm = llvmts.create_function_pass_manager(llvm_module)
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder() as pmb:
             pmb.populate(pm)
@@ -605,7 +628,7 @@ class BaseCPUCodegen(object):
                 ret double 1.23e+01
             }
             """
-        mod = ll.parse_assembly(ir)
+        mod = llvmts.parse_assembly(ir)
         ir_out = str(mod)
         if "12.3" in ir_out or "1.23" in ir_out:
             # Everything ok
@@ -636,9 +659,10 @@ class BaseCPUCodegen(object):
         voidptr = llvmir.IntType(8).as_pointer()
         ptrname = self._rtlinker.PREFIX + name
         llvm_mod = builder.module
-        fnptr = llvm_mod.get_global(ptrname)
-        # Not defined?
-        if fnptr is None:
+        try:
+            fnptr = llvm_mod.get_global(ptrname)
+        except KeyError:
+            # Not defined?
             fnptr = llvmir.GlobalVariable(llvm_mod, voidptr, name=ptrname)
             fnptr.linkage = 'external'
         return builder.bitcast(builder.load(fnptr), fnty.as_pointer())
@@ -699,16 +723,19 @@ class JITCPUCodegen(BaseCPUCodegen):
 
     def _customize_tm_features(self):
         # For JIT target, we will use LLVM to get the feature map
-        features = ll.get_host_cpu_features()
+        try:
+            features = ll.get_host_cpu_features()
+        except RuntimeError:
+            return ''
+        else:
+            if not config.ENABLE_AVX:
+                # Disable all features with name starting with 'avx'
+                for k in features:
+                    if k.startswith('avx'):
+                        features[k] = False
 
-        if not config.ENABLE_AVX:
-            # Disable all features with name starting with 'avx'
-            for k in features:
-                if k.startswith('avx'):
-                    features[k] = False
-
-        # Set feature attributes
-        return features.flatten()
+            # Set feature attributes
+            return features.flatten()
 
     def _add_module(self, module):
         self._engine.add_module(module)
@@ -719,12 +746,10 @@ class JITCPUCodegen(BaseCPUCodegen):
         # return functools.partial(self._engine.remove_module, module)
 
 
-_llvm_initialized = False
-
+@llvmts.lock_llvm
 def initialize_llvm():
-    global _llvm_initialized
-    if not _llvm_initialized:
-        ll.initialize()
-        ll.initialize_native_target()
-        ll.initialize_native_asmprinter()
-        _llvm_initialized = True
+    """Safe to use multiple times.
+    """
+    ll.initialize()
+    ll.initialize_native_target()
+    ll.initialize_native_asmprinter()
