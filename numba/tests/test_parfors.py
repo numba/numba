@@ -5,8 +5,10 @@
 
 from __future__ import print_function, division, absolute_import
 
-import sys
+import math
 import re
+import sys
+import types as pytypes
 
 import numpy as np
 
@@ -21,8 +23,76 @@ from numba import config
 from numba.annotations import type_annotations
 from numba.ir_utils import copy_propagate, apply_copy_propagate, get_name_var_table, remove_dels, remove_dead
 from numba import ir
+from numba.compiler import compile_isolated, Flags
+from numba.bytecode import ByteCodeIter
 
-import math
+
+class TestParforsBase(unittest.TestCase):
+    """
+    Base class for testing parfors.
+    Provides functions for compilation and three way comparison between
+    python functions, njit'd functions and parfor njit'd functions.
+    """
+
+    def __init__(self, *args):
+        # flags for njit()
+        self.cflags = Flags()
+        self.cflags.set('nrt')
+
+        # flags for njit(parallel=True)
+        self.pflags = Flags()
+        self.pflags.set('auto_parallel')
+        self.pflags.set('nrt')
+        super(TestParforsBase, self).__init__(*args)
+
+    def _compile_this(self, func, sig, flags):
+        return compile_isolated(func, sig, flags=flags)
+
+    def compile_parallel(self, func, sig):
+        return self._compile_this(func, sig, flags=self.pflags)
+
+    def compile_njit(self, func, sig):
+        return self._compile_this(func, sig, flags=self.cflags)
+
+    def compile_all(self, pyfunc, *args, **kwargs):
+        sig = tuple([numba.typeof(x) for x in args])
+
+        # compile the prange injected function
+        cpfunc = self.compile_parallel(pyfunc, sig)
+
+        # compile a standard njit of the original function
+        cfunc = self.compile_njit(pyfunc, sig)
+
+        return cfunc, cpfunc
+
+    def check_prange_vs_others(self, pyfunc, cfunc, cpfunc, *args, **kwargs):
+        """
+        Checks python, njit and parfor impls produce the same result.
+
+        Arguments:
+            pyfunc - the python function to test
+            cfunc - CompilerResult from njit of pyfunc
+            cpfunc - CompilerResult from njit(parallel=True) of pyfunc
+            args - arguments for the function being tested
+            kwargs - to pass to np.testing.assert_almost_equal
+                     'decimal' is supported.
+        """
+
+        # python result
+        py_expected = pyfunc(*args)
+
+        # njit result
+        njit_output = cfunc.entry_point(*args)
+
+        # parfor result
+        parfor_output = cpfunc.entry_point(*args)
+
+        np.testing.assert_almost_equal(njit_output, py_expected, **kwargs)
+        np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
+
+        # make sure parfor set up scheduling
+        self.assertIn('@do_scheduling', cpfunc.library.get_llvm_str())
+
 
 def test1(sptprice, strike, rate, volatility, timev):
     # blackscholes example
@@ -36,28 +106,16 @@ def test1(sptprice, strike, rate, volatility, timev):
     futureValue = strike * np.exp(- rate * timev)
     c1 = futureValue * NofXd2
     call = sptprice * NofXd1 - c1
-    put  = call - futureValue + sptprice
+    put = call - futureValue + sptprice
     return put
 
-def test2(Y,X,w,iterations):
+
+def test2(Y, X, w, iterations):
     # logistic regression example
     for i in range(iterations):
-        w -= np.dot(((1.0 / (1.0 + np.exp(-Y * np.dot(X,w))) - 1.0) * Y),X)
+        w -= np.dot(((1.0 / (1.0 + np.exp(-Y * np.dot(X, w))) - 1.0) * Y), X)
     return w
 
-def kde_example(X):
-    # KDE example
-    b = 0.5
-    points = np.array([-1.0, 2.0, 5.0])
-    N = points.shape[0]
-    n = X.shape[0]
-    exps = 0
-    for i in prange(n):
-        p = X[i]
-        d = (-(p-points)**2)/(2*b**2)
-        m = np.min(d)
-        exps += m-np.log(b*N)+np.log(np.sum(np.exp(d-m)))
-    return exps
 
 def countParfors(func_ir):
     ret_count = 0
@@ -81,279 +139,68 @@ class TestPipeline(object):
         self.return_type = None
         self.calltypes = None
 
-class TestParfors(unittest.TestCase):
+
+class TestParfors(TestParforsBase):
+
+    def __init__(self, *args):
+        TestParforsBase.__init__(self, *args)
+        # these are used in the mass of simple tests
+        m = np.reshape(np.arange(12.), (3, 4))
+        self.simple_args = [np.arange(3.), np.arange(4.), m, m.T]
+
+    def check(self, pyfunc, *args, **kwargs):
+        cfunc, cpfunc = self.compile_all(pyfunc, *args)
+        self.check_prange_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
 
     def test_arraymap(self):
-        @njit(parallel=True)
-        def axy(a, x, y):
+        def test_impl(a, x, y):
             return a * x + y
 
-        A = np.linspace(0,1,10)
-        X = np.linspace(2,1,10)
-        Y = np.linspace(1,2,10)
+        A = np.linspace(0, 1, 10)
+        X = np.linspace(2, 1, 10)
+        Y = np.linspace(1, 2, 10)
 
-        output = axy(A,X,Y)
-        expected = A*X+Y
-        np.testing.assert_array_equal(expected, output)
-        self.assertIn('@do_scheduling', axy.inspect_llvm(axy.signatures[0]))
+        self.check(test_impl, A, X, Y)
 
     def test_mvdot(self):
-        @njit(parallel=True)
-        def ddot(a, v):
-            return np.dot(a,v)
+        def test_impl(a, v):
+            return np.dot(a, v)
 
-        A = np.linspace(0,1,20).reshape(2,10)
-        v = np.linspace(2,1,10)
+        A = np.linspace(0, 1, 20).reshape(2, 10)
+        v = np.linspace(2, 1, 10)
 
-        output = ddot(A,v)
-        expected = np.dot(A,v)
-        np.testing.assert_array_almost_equal(expected, output, decimal=5)
-        self.assertIn('@do_scheduling', ddot.inspect_llvm(ddot.signatures[0]))
+        self.check(test_impl, A, v)
 
     def test_2d_parfor(self):
-        @njit(parallel=True)
-        def test_2d():
-            X = np.ones((10,12))
-            Y = np.zeros((10,12))
-            return np.sum(X+Y)
-
-        output = test_2d()
-        expected = 120.0
-        np.testing.assert_almost_equal(expected, output)
-        self.assertIn('@do_scheduling', test_2d.inspect_llvm(test_2d.signatures[0]))
-
-    def test_prange1(self):
-        @numba.njit(parallel=True)
-        def test_p1(n):
-            A = np.zeros(n)
-            for i in prange(n):
-                A[i] = 2.0*i
-            return A
-
-        output = test_p1(4)
-        expected = np.array([ 0.,  2.,  4.,  6.])
-        np.testing.assert_array_almost_equal(expected, output)
-        self.assertIn('@do_scheduling', test_p1.inspect_llvm(test_p1.signatures[0]))
-
-    def test_prange2(self):
-        @numba.njit(parallel=True)
-        def test_p2(n):
-            A = np.zeros(n-1)
-            for i in numba.prange(1,n):
-                A[i-1] = 2.0*i
-            return A
-
-        output = test_p2(4)
-        expected = np.array([2., 4.,  6.])
-        np.testing.assert_array_almost_equal(expected, output)
-        self.assertIn('@do_scheduling', test_p2.inspect_llvm(test_p2.signatures[0]))
-
-    def test_prange3(self):
-        @numba.njit(parallel=True)
-        def test_p3():
-            s = 0
-            for i in prange(10):
-                s += 2
-            return s
-
-        output = test_p3()
-        expected = 20
-        np.testing.assert_almost_equal(expected, output)
-        self.assertIn('@do_scheduling', test_p3.inspect_llvm(test_p3.signatures[0]))
-
-    def test_prange4(self):
-        @numba.njit(parallel=True)
-        def test_p4():
-            a = 2
-            b = 3
-            A = np.empty(4)
-            for i in numba.prange(4):
-                if i==a:
-                    A[i] = b
-                else:
-                    A[i] = 0
-            return A
-
-        output = test_p4()
-        expected = np.array([0., 0., 3., 0.])
-        np.testing.assert_array_almost_equal(expected, output)
-        self.assertIn('@do_scheduling', test_p4.inspect_llvm(test_p4.signatures[0]))
-
-    def test_prange5(self):
-        @numba.njit(parallel=True)
-        def test_p5(A):
-            s = 0
-            for i in prange(1, n - 1, 1):
-                s += A[i]
-            return s
-        n = 4
-        A = np.ones((n), dtype=np.float64)
-        output = test_p5(A)
-        expected = 2.0
-        np.testing.assert_almost_equal(expected, output)
-        self.assertIn('@do_scheduling', test_p5.inspect_llvm(test_p5.signatures[0]))
-
-    def test_prange6(self):
-        @numba.njit(parallel=True)
-        def test_p6(A):
-            s = 0
-            for i in prange(1, 1, 1):
-                s += A[i]
-            return s
-        n = 4
-        A = np.ones((n), dtype=np.float64)
-        output = test_p6(A)
-        expected = 0.0
-        np.testing.assert_almost_equal(expected, output)
-        self.assertIn('@do_scheduling', test_p6.inspect_llvm(test_p6.signatures[0]))
-
-    def test_prange7(self):
-        @numba.njit(parallel=True)
-        def test_p7(A):
-            s = 0
-            for i in prange(n, 1):
-                s += A[i]
-            return s
-        n = 4
-        A = np.ones((n), dtype=np.float64)
-        output = test_p7(A)
-        expected = 0.0
-        np.testing.assert_almost_equal(expected, output)
-        self.assertIn('@do_scheduling', test_p7.inspect_llvm(test_p7.signatures[0]))
-
-    def test_prange8(self):
-        @numba.njit(parallel=True)
-        def test_p8(A):
-            acc = 0
-            for i in prange(len(A)):
-                for j in prange(len(A)):
-                    acc+=A[i]
-            return acc
-        n=4
-        A = np.ones((n))
-        output = test_p8(A)
-        expected = 16.0
-        np.testing.assert_almost_equal(output, expected)
-        self.assertIn('@do_scheduling', test_p8.inspect_llvm(test_p8.signatures[0]))
-
-    def test_prange8_1(self):
-        @numba.njit(parallel=True)
-        def test_p8(A):
-            acc = 0
-            for i in prange(4):
-                for j in prange(4):
-                    acc+=A[i]
-            return acc
-        n=4
-        A = np.ones((n))
-        output = test_p8(A)
-        expected = 16.0
-        np.testing.assert_almost_equal(output, expected)
-        self.assertIn('@do_scheduling', test_p8.inspect_llvm(test_p8.signatures[0]))
-
-    def test_prange9(self):
-        # does this count as cross iteration dependency?
-        # the inner parallel loop should reduce on acc
-        # for each outer loop?
-        @numba.njit(parallel=True)
-        def test_p9(n):
-            acc = 0
-            for i in range(n):
-                for j in prange(n):
-                    acc+=1
-            return acc
-        n=4
-        output = test_p9(n)
-        expected = 16
-        np.testing.assert_almost_equal(output, expected)
-
-
-    def test_prange10(self):
-        @numba.njit(parallel=True)
-        def test_p10(NOT_USED):
-            acc2 = 0
-            for j in prange(n):
-                acc1 = 0
-                for i in range(n):
-                    acc1 += 1
-                acc2 += acc1
-            return acc2
-
-        n=4
-        output = test_p10(n)
-        expected = 16.
-        np.testing.assert_almost_equal(output, expected)
-        self.assertIn('@do_scheduling', test_p10.inspect_llvm(test_p10.signatures[0]))
-
-
-    def test_prange11(self):
-        ## List comprehension with a `prange` fails with
-        ## `No definition for lowering <class 'numba.parfor.prange'>(int64,) -> range_state_int64`.
-        @numba.njit(parallel=True)
-        def test_p11(n):
-            return [np.sin(j) for j in prange(n)]
-
-        n=4
-        output = test_p11(n)
-
-
-    def test_prange12(self):
-        # segfaults/hangs
-        @numba.njit(parallel=True)
-        def test_p12(X):
-            acc = 0
-            for i in prange(-len(X)):
-                acc+=X[i]
-            return acc
-
-        n=4
-        output = test_p12(np.ones(n))
-        expected = 0
-        np.testing.assert_almost_equal(output, expected)
-        self.assertIn('@do_scheduling', test_p12.inspect_llvm(test_p12.signatures[0]))
-
-
-    def test_prange13(self):
-        # fails, Operands must be the same type, got (i32, i64)
-        @numba.njit(parallel=True)
-        def test_p13(n):
-            acc = 0
-            for i in prange(n):
-                acc+=1
-            return acc
-        n=4
-        output = test_p13(np.int32(n))
-
+        def test_impl():
+            X = np.ones((10, 12))
+            Y = np.zeros((10, 12))
+            return np.sum(X + Y)
+        self.check(test_impl)
 
     def test_pi(self):
-        @njit(parallel=True)
-        def calc_pi(n):
-            x = 2*np.random.ranf(n)-1
-            y = 2*np.random.ranf(n)-1
-            return 4*np.sum(x**2+y**2<1)/n
+        def test_impl(n):
+            x = 2 * np.random.ranf(n) - 1
+            y = 2 * np.random.ranf(n) - 1
+            return 4 * np.sum(x**2 + y**2 < 1) / n
 
-        output = calc_pi(100000)
-        expected = 3.14
-        np.testing.assert_almost_equal(expected, output, decimal=1)
-        self.assertIn('@do_scheduling', calc_pi.inspect_llvm(calc_pi.signatures[0]))
+        self.check(test_impl, 100000, decimal=1)
 
     def test_test1(self):
         typingctx = typing.Context()
         targetctx = cpu.CPUContext(typingctx)
         test_ir = compiler.run_frontend(test1)
-        #print("Num blocks = ", len(test_ir.blocks))
-        #print(test_ir.dump())
         with cpu_target.nested_context(typingctx, targetctx):
-            one_arg = numba.types.npytypes.Array(numba.types.scalars.Float(name="float64"), 1, 'C')
+            one_arg = numba.types.npytypes.Array(
+                numba.types.scalars.Float(name="float64"), 1, 'C')
             args = (one_arg, one_arg, one_arg, one_arg, one_arg)
-            #print("args = ", args)
             tp = TestPipeline(typingctx, targetctx, args, test_ir)
 
-            numba.rewrites.rewrite_registry.apply('before-inference', tp, tp.func_ir)
+            numba.rewrites.rewrite_registry.apply(
+                'before-inference', tp, tp.func_ir)
 
-            tp.typemap, tp.return_type, tp.calltypes = compiler.type_inference_stage(tp.typingctx, tp.func_ir, tp.args, None)
-            #print("typemap = ", tp.typemap)
-            #print("return_type = ", tp.return_type)
+            tp.typemap, tp.return_type, tp.calltypes = compiler.type_inference_stage(
+                tp.typingctx, tp.func_ir, tp.args, None)
 
             type_annotation = type_annotations.TypeAnnotation(
                 func_ir=tp.func_ir,
@@ -365,32 +212,31 @@ class TestParfors(unittest.TestCase):
                 return_type=tp.return_type,
                 html_output=config.HTML)
 
-            numba.rewrites.rewrite_registry.apply('after-inference', tp, tp.func_ir)
+            numba.rewrites.rewrite_registry.apply(
+                'after-inference', tp, tp.func_ir)
 
-            parfor_pass = numba.parfor.ParforPass(tp.func_ir, tp.typemap, tp.calltypes, tp.return_type)
+            parfor_pass = numba.parfor.ParforPass(
+                tp.func_ir, tp.typemap, tp.calltypes, tp.return_type)
             parfor_pass.run()
-            #print(tp.func_ir.dump())
-            #print(countParfors(tp.func_ir) == 1)
             self.assertTrue(countParfors(test_ir) == 1)
 
     def test_test2(self):
         typingctx = typing.Context()
         targetctx = cpu.CPUContext(typingctx)
         test_ir = compiler.run_frontend(test2)
-        #print("Num blocks = ", len(test_ir.blocks))
-        #print(test_ir.dump())
         with cpu_target.nested_context(typingctx, targetctx):
-            oneD_arg = numba.types.npytypes.Array(numba.types.scalars.Float(name="float64"), 1, 'C')
-            twoD_arg = numba.types.npytypes.Array(numba.types.scalars.Float(name="float64"), 2, 'C')
+            oneD_arg = numba.types.npytypes.Array(
+                numba.types.scalars.Float(name="float64"), 1, 'C')
+            twoD_arg = numba.types.npytypes.Array(
+                numba.types.scalars.Float(name="float64"), 2, 'C')
             args = (oneD_arg, twoD_arg, oneD_arg, types.int64)
-            #print("args = ", args)
             tp = TestPipeline(typingctx, targetctx, args, test_ir)
 
-            numba.rewrites.rewrite_registry.apply('before-inference', tp, tp.func_ir)
+            numba.rewrites.rewrite_registry.apply(
+                'before-inference', tp, tp.func_ir)
 
-            tp.typemap, tp.return_type, tp.calltypes = compiler.type_inference_stage(tp.typingctx, tp.func_ir, tp.args, None)
-            #print("typemap = ", tp.typemap)
-            #print("return_type = ", tp.return_type)
+            tp.typemap, tp.return_type, tp.calltypes = compiler.type_inference_stage(
+                tp.typingctx, tp.func_ir, tp.args, None)
 
             type_annotation = type_annotations.TypeAnnotation(
                 func_ir=tp.func_ir,
@@ -402,12 +248,12 @@ class TestParfors(unittest.TestCase):
                 return_type=tp.return_type,
                 html_output=config.HTML)
 
-            numba.rewrites.rewrite_registry.apply('after-inference', tp, tp.func_ir)
+            numba.rewrites.rewrite_registry.apply(
+                'after-inference', tp, tp.func_ir)
 
-            parfor_pass = numba.parfor.ParforPass(tp.func_ir, tp.typemap, tp.calltypes, tp.return_type)
+            parfor_pass = numba.parfor.ParforPass(
+                tp.func_ir, tp.typemap, tp.calltypes, tp.return_type)
             parfor_pass.run()
-            #print(tp.func_ir.dump())
-            #print(countParfors(tp.func_ir) == 1)
             self.assertTrue(countParfors(test_ir) == 1)
 
     @unittest.skipIf(not (sys.platform.startswith('win32')
@@ -431,171 +277,425 @@ class TestParfors(unittest.TestCase):
             "Windows operating systems when using Python 2.7.")
         self.assertIn(msg, str(raised.exception))
 
-    def test_kde(self):
-        n = 128
-        X = np.random.ranf(n)
-        cfunc = njit(parallel=True)(kde_example)
-        expected = kde_example(X)
-        output = cfunc(X)
-        np.testing.assert_almost_equal(expected, output, decimal=1)
-        self.assertIn('@do_scheduling', cfunc.inspect_llvm(cfunc.signatures[0]))
-
-    def test_bulk_cases(self):
-
-
-        def case01(v1, v2, m1, m2):
+    def test_simple01(self):
+        def test_impl():
             return np.ones(())
+        with self.assertRaises(AssertionError) as raises:
+            self.check(test_impl)
+        self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
 
-        def case02(v1, v2, m1, m2):
+    def test_simple02(self):
+        def test_impl():
             return np.ones((1,))
+        self.check(test_impl)
 
-        def case03(v1, v2, m1, m2):
-            return np.ones((-1, 2))
+    def test_simple03(self):
+        def test_impl():
+            return np.ones((1, 2))
+        self.check(test_impl)
 
-        def case04(v1, v2, m1, m2):
-            return np.ones(((1, 2)))
-
-        def case05(v1, v2, m1, m2):
-            return np.ones(((1, 2), (3,)))
-
-        def case06(v1, v2, m1, m2):
-            return np.ones(((1., 2.)))
-
-        def case07(v1, v2, m1, m2):
+    def test_simple04(self):
+        def test_impl():
             return np.ones(1)
+        self.check(test_impl)
 
-        def case08(v1, v2, m1, m2):
+    # TODO: Fails. List ctor needed or bug?
+    def test_simple05(self):
+        def test_impl():
             return np.ones([1])
+        self.check(test_impl)
 
-        def case09(v1, v2, m1, m2):
-            return np.ones(([x for x in range(3)]))
+    # TODO: Fails. list comp + ctor patch needed?
+    def test_simple06(self):
+        def test_impl():
+            return np.ones([x for x in range(3)])
+        self.check(test_impl)
 
-        def case10(v1, v2, m1, m2):
+    def test_simple07(self):
+        def test_impl():
             return np.ones((1, 2), dtype=np.complex128)
+        self.check(test_impl)
 
-        def case11(v1, v2, m1, m2):
+    def test_simple08(self):
+        def test_impl():
             return np.ones((1, 2)) + np.ones((1, 2))
+        self.check(test_impl)
 
-        def case12(v1, v2, m1, m2):
-            return np.ones((1, 2)) + np.ones((1, 2))
-
-        def case13(v1, v2, m1, m2):
+    def test_simple09(self):
+        def test_impl():
             return np.ones((1, 1))
+        self.check(test_impl)
 
-        def case14(v1, v2, m1, m2):
+    def test_simple10(self):
+        def test_impl():
             return np.ones((0, 0))
+        self.check(test_impl)
 
-        def case15(v1, v2, m1, m2):
+    def test_simple11(self):
+        def test_impl():
             return np.ones((10, 10)) + 1.
+        self.check(test_impl)
 
-        def case16(v1, v2, m1, m2):
+    def test_simple12(self):
+        def test_impl():
             return np.ones((10, 10)) + np.complex128(1.)
+        self.check(test_impl)
 
-        def case17(v1, v2, m1, m2):
+    def test_simple13(self):
+        def test_impl():
             return np.complex128(1.)
+        with self.assertRaises(AssertionError) as raises:
+            self.check(test_impl)
+        self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
 
-        def case18(v1, v2, m1, m2):
+    def test_simple14(self):
+        def test_impl():
             return np.ones((10, 10))[0::20]
+        self.check(test_impl)
 
-        def case19(v1, v2, m1, m2):
-            return v1 + v2
+    def test_simple15(self):
+        def test_impl(v1, v2, m1, m2):
+            return v1 + v1
+        self.check(test_impl, *self.simple_args)
 
-        def case20(v1, v2, m1, m2):
-            return m1 + m2
+    def test_simple16(self):
+        def test_impl(v1, v2, m1, m2):
+            return m1 + m1
+        self.check(test_impl, *self.simple_args)
 
-        def case21(v1, v2, m1, m2):
-            return m1 + v1
+    def test_simple17(self):
+        def test_impl(v1, v2, m1, m2):
+            return m2 + v1
+        self.check(test_impl, *self.simple_args)
 
-        def case22(v1, v2, m1, m2):
-            return m1 + v2
-
-        def case23(v1, v2, m1, m2):
-            return m1 + v2
-
-        def case24(v1, v2, m1, m2):
+    def test_simple18(self):
+        def test_impl(v1, v2, m1, m2):
             return m1 + np.linalg.svd(m2)[0][:-1, :]
+        self.check(test_impl, *self.simple_args)
 
-        def case25(v1, v2, m1, m2):
-            return np.dot(m1, v1)
-
-        def case26(v1, v2, m1, m2):
+    def test_simple19(self):
+        def test_impl(v1, v2, m1, m2):
             return np.dot(m1, v2)
+        self.check(test_impl, *self.simple_args)
 
-        def case27(v1, v2, m1, m2):
-            return np.dot(m2, v1)
-
-        def case28(v1, v2, m1, m2):
+    def test_simple20(self):
+        def test_impl(v1, v2, m1, m2):
             return np.dot(m1, m2)
+        # gemm is left to BLAS
+        with self.assertRaises(AssertionError) as raises:
+            self.check(test_impl, *self.simple_args)
+        self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
 
-        def case29(v1, v2, m1, m2):
+    # TODO: Fails, dot() for a `v**T * v` doesn't go via parallel scheduler
+    def test_simple21(self):
+        def test_impl(v1, v2, m1, m2):
             return np.dot(v1, v1)
+        self.check(test_impl, *self.simple_args)
 
-        def case30(v1, v2, m1, m2):
-            return np.sum(m1 + m2.T)
-
-        def case31(v1, v2, m1, m2):
+    def test_simple22(self):
+        def test_impl(v1, v2, m1, m2):
             return np.sum(v1 + v1)
+        self.check(test_impl, *self.simple_args)
 
-        def case32(v1, v2, m1, m2):
+    def test_simple23(self):
+        def test_impl(v1, v2, m1, m2):
             x = 2 * v1
             y = 2 * v1
             return 4 * np.sum(x**2 + y**2 < 1) / 10
-
-        m = np.reshape(np.arange(12.), (3, 4))
-        default_kwargs = {'v1':np.arange(3.), 'v2':np.arange(4.), 'm1':m, 'm2':m.T}
+        self.check(test_impl, *self.simple_args)
 
 
-        cm = re.compile('^case[0-9]+$')
-        lv = dict(locals())
-        cases = [lv[x] for x in sorted([x for x in lv if cm.match(x)])]
+class TestPrange(TestParforsBase):
 
-        for case in cases:
-            print("\n")
-            should_have_failed = False
-            njit_failed = False
-            parfors_failed = False
-            got = None
+    def prange_tester(self, pyfunc, *args, **kwargs):
+        """
+        The `prange` tester
+        This is a hack. It basically switches out range calls for prange.
+        It does this by copying the live code object of a function
+        containing 'range' then copying the .co_names and mutating it so
+        that 'range' is replaced with 'prange'. It then creates a new code
+        object containing the mutation and instantiates a function to contain
+        it. At this point three results are created:
+        1. The result of calling the original python function.
+        2. The result of calling a njit compiled version of the original
+            python function.
+        3. The result of calling a njit(parallel=True) version of the mutated
+           function containing `prange`.
+        The three results are then compared and the `prange` based function's
+        llvm_ir is inspected to ensure the scheduler code is present.
 
-            pyfunc = case
-            try:
-                expected = pyfunc(**default_kwargs)
-            except Exception:
-                should_have_failed = True
+        Arguments:
+         pyfunc - the python function to test
+         args - data arguments to pass to the pyfunc under test
+
+        Keyword Arguments:
+         patch_instance - iterable containing which instances of `range` to
+                          replace. If not present all instance of `range` are
+                          replaced.
+         Remaining kwargs are passed to np.testing.assert_almost_equal
 
 
-            try:
-                cfunc = njit(pyfunc)
-                cfunc(**default_kwargs)
-            except Exception as e:
-                njit_failed = True
+        Example:
+            def foo():
+                acc = 0
+                for x in range(5):
+                    for y in range(10):
+                        acc +=1
+                return acc
 
-            try:
-                pfunc = njit(parallel=True)(pyfunc)
-                got = pfunc(**default_kwargs)
-                if not should_have_failed:
-                    try:
-                        np.testing.assert_almost_equal(got, expected)
-                        try:
-                            assert ('@do_scheduling' in pfunc.inspect_llvm(pfunc.signatures[0]))
-                        except AssertionError as raised:
-                            parfors_failed = True
-                    except Exception as raised:
-                        if not njit_failed:
-                            print("Fail. %s: %s\n" % (case, raised))
-            except Exception as raised:
-                if njit_failed:
-                    print("Pass (with njit fail). %s\n" % case)
-                    continue
-                if should_have_failed:
-                    print("Pass (with py fail). %s\n" % case)
-                    continue
-                print("Fail. %s: %s\n" % (case, raised))
-                continue
+            # calling as
+            prange_tester(foo)
+            # will test code equivalent to
+            # def foo():
+            #     acc = 0
+            #     for x in prange(5): # <- changed
+            #         for y in prange(10): # <- changed
+            #             acc +=1
+            #     return acc
 
-            if parfors_failed:
-                print("Pass (with parfors fail). %s\n" % case)
-            else:
-                print("Pass. %s\n" % case)
+            # calling as
+            prange_tester(foo, patch_instance=[1])
+            # will test code equivalent to
+            # def foo():
+            #     acc = 0
+            #     for x in range(5): # <- outer loop (0) unchanged
+            #         for y in prange(10): # <- inner loop (1) changed
+            #             acc +=1
+            #     return acc
+
+        """
+
+        pyfunc_code = pyfunc.__code__
+
+        prange_names = list(pyfunc_code.co_names)
+
+        patch_instance = kwargs.pop('patch_instance', None)
+        if not patch_instance:
+            # patch all instances, cheat by just switching
+            # range for prange
+            assert 'range' in pyfunc_code.co_names
+            prange_names = tuple([x if x != 'range' else 'prange'
+                                  for x in pyfunc_code.co_names])
+            new_code = bytes(pyfunc_code.co_code)
+        else:
+            # patch specified instances...
+            # find where 'range' is in co_names
+            range_idx = pyfunc_code.co_names.index('range')
+            range_locations = []
+            # look for LOAD_GLOBALs that point to 'range'
+            for _, instr in ByteCodeIter(pyfunc_code):
+                if instr.opname == 'LOAD_GLOBAL':
+                    if instr.arg == range_idx:
+                        range_locations.append(instr.offset + 1)
+            # add in 'prange' ref
+            prange_names.append('prange')
+            prange_names = tuple(prange_names)
+            prange_idx = len(prange_names) - 1
+            new_code = bytearray(pyfunc_code.co_code)
+            assert len(patch_instance) <= len(range_locations)
+            # patch up the new byte code
+            for i in patch_instance:
+                idx = range_locations[i]
+                new_code[idx] = prange_idx
+            new_code = bytes(new_code)
+
+        # create new code parts
+        co_args = [pyfunc_code.co_argcount]
+        if sys.version_info > (3, 0):
+            co_args.append(pyfunc_code.co_kwonlyargcount)
+        co_args.extend([pyfunc_code.co_nlocals,
+                        pyfunc_code.co_stacksize,
+                        pyfunc_code.co_flags,
+                        new_code,
+                        pyfunc_code.co_consts,
+                        prange_names,
+                        pyfunc_code.co_varnames,
+                        pyfunc_code.co_filename,
+                        pyfunc_code.co_name,
+                        pyfunc_code.co_firstlineno,
+                        pyfunc_code.co_lnotab,
+                        pyfunc_code.co_freevars,
+                        pyfunc_code.co_cellvars
+                        ])
+
+        # create code object with prange mutation
+        prange_code = pytypes.CodeType(*co_args)
+
+        # get function
+        pfunc = pytypes.FunctionType(prange_code, globals())
+
+        # Compile functions
+        # compile a standard njit of the original function
+        sig = tuple([numba.typeof(x) for x in args])
+        cfunc = self.compile_njit(pyfunc, sig)
+
+        # compile the prange injected function
+        cpfunc = self.compile_parallel(pfunc, sig)
+
+        # compare
+        self.check_prange_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
+
+    def test_prange01(self):
+        def test_impl():
+            n = 4
+            A = np.zeros(n)
+            for i in range(n):
+                A[i] = 2.0 * i
+            return A
+        self.prange_tester(test_impl)
+
+    def test_prange02(self):
+        def test_impl():
+            n = 4
+            A = np.zeros(n - 1)
+            for i in range(1, n):
+                A[i - 1] = 2.0 * i
+            return A
+        self.prange_tester(test_impl)
+
+    def test_prange03(self):
+        def test_impl():
+            s = 0
+            for i in range(10):
+                s += 2
+            return s
+        self.prange_tester(test_impl)
+
+    def test_prange04(self):
+        def test_impl():
+            a = 2
+            b = 3
+            A = np.empty(4)
+            for i in range(4):
+                if i == a:
+                    A[i] = b
+                else:
+                    A[i] = 0
+            return A
+        self.prange_tester(test_impl)
+
+    def test_prange05(self):
+        def test_impl():
+            n = 4
+            A = np.ones((n), dtype=np.float64)
+            s = 0
+            for i in range(1, n - 1, 1):
+                s += A[i]
+            return s
+        self.prange_tester(test_impl)
+
+    def test_prange06(self):
+        def test_impl():
+            n = 4
+            A = np.ones((n), dtype=np.float64)
+            s = 0
+            for i in range(1, 1, 1):
+                s += A[i]
+            return s
+        self.prange_tester(test_impl)
+
+    def test_prange07(self):
+        def test_impl():
+            n = 4
+            A = np.ones((n), dtype=np.float64)
+            s = 0
+            for i in range(n, 1):
+                s += A[i]
+            return s
+        self.prange_tester(test_impl)
+
+    def test_prange08(self):
+        def test_impl():
+            n = 4
+            A = np.ones((n))
+            acc = 0
+            for i in range(len(A)):
+                for j in range(len(A)):
+                    acc += A[i]
+            return acc
+
+        test_impl()
+
+    def test_prange08_1(self):
+        def test_impl():
+            n = 4
+            A = np.ones((n))
+            acc = 0
+            for i in range(4):
+                for j in range(4):
+                    acc += A[i]
+            return acc
+        self.prange_tester(test_impl)
+
+    def test_prange09(self):
+        def test_impl():
+            n = 4
+            acc = 0
+            for i in range(n):
+                for j in range(n):
+                    acc += 1
+            return acc
+        # patch inner loop to 'prange'
+        self.prange_tester(test_impl, patch_instance=[1])
+
+    def test_prange10(self):
+        def test_impl():
+            n = 4
+            acc2 = 0
+            for j in range(n):
+                acc1 = 0
+                for i in range(n):
+                    acc1 += 1
+                acc2 += acc1
+            return acc2
+        # patch outer loop to 'prange'
+        self.prange_tester(test_impl, patch_instance=[0])
+
+    # TODO: Junk result (Arrays not equal) or corruption/double free.
+    def test_prange11(self):
+        def test_impl():
+            n = 4
+            return [np.sin(j) for j in range(n)]
+        self.prange_tester(test_impl)
+
+    def test_prange12(self):
+        def test_impl():
+            acc = 0
+            n = 4
+            X = np.ones(n)
+            for i in range(-len(X)):
+                acc += X[i]
+            return acc
+        self.prange_tester(test_impl)
+
+    # TODO: Fails, Operands must be the same type, got (i32, i64)
+    def test_prange13(self):
+        def test_impl(n):
+            acc = 0
+            for i in range(n):
+                acc += 1
+            return acc
+        self.prange_tester(test_impl, np.int32(4))
+
+    def test_kde_example(self):
+        def test_impl(X):
+            # KDE example
+            b = 0.5
+            points = np.array([-1.0, 2.0, 5.0])
+            N = points.shape[0]
+            n = X.shape[0]
+            exps = 0
+            for i in range(n):
+                p = X[i]
+                d = (-(p - points)**2) / (2 * b**2)
+                m = np.min(d)
+                exps += m - np.log(b * N) + np.log(np.sum(np.exp(d - m)))
+            return exps
+
+        n = 128
+        X = np.random.ranf(n)
+        self.prange_tester(test_impl, X)
+
 
 if __name__ == "__main__":
     unittest.main()
