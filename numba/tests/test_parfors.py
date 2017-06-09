@@ -179,7 +179,7 @@ class TestParfors(unittest.TestCase):
         np.testing.assert_array_almost_equal(expected, output)
         self.assertIn('@do_scheduling', test_p4.inspect_llvm(test_p4.signatures[0]))
 
-    def prange_test5(self):
+    def test_prange5(self):
         @numba.njit(parallel=True)
         def test_p5(A):
             s = 0
@@ -193,7 +193,7 @@ class TestParfors(unittest.TestCase):
         np.testing.assert_almost_equal(expected, output)
         self.assertIn('@do_scheduling', test_p5.inspect_llvm(test_p5.signatures[0]))
 
-    def prange_test6(self):
+    def test_prange6(self):
         @numba.njit(parallel=True)
         def test_p6(A):
             s = 0
@@ -207,7 +207,7 @@ class TestParfors(unittest.TestCase):
         np.testing.assert_almost_equal(expected, output)
         self.assertIn('@do_scheduling', test_p6.inspect_llvm(test_p6.signatures[0]))
 
-    def prange_test7(self):
+    def test_prange7(self):
         @numba.njit(parallel=True)
         def test_p7(A):
             s = 0
@@ -222,9 +222,7 @@ class TestParfors(unittest.TestCase):
         self.assertIn('@do_scheduling', test_p7.inspect_llvm(test_p7.signatures[0]))
 
 
-    def prange_test8(self):
-        # fails with `undefined variable <some const>`
-        # this is expected but could it perhaps be handled more cleanly?
+    def test_prange8(self):
         @numba.njit(parallel=True)
         def test_p8(A):
             acc = 0
@@ -234,10 +232,13 @@ class TestParfors(unittest.TestCase):
             return acc
         n=4
         A = np.ones((n))
-        test_p8(A)
+        output = test_p8(A)
+        expected = 16.0
+        np.testing.assert_almost_equal(output, expected)
+        self.assertIn('@do_scheduling', test_p8.inspect_llvm(test_p8.signatures[0]))
 
 
-    def prange_test9(self):
+    def test_prange9(self):
         # does this count as cross iteration dependency?
         # the inner parallel loop should reduce on acc
         # for each outer loop?
@@ -254,7 +255,7 @@ class TestParfors(unittest.TestCase):
         np.testing.assert_almost_equal(output, expected)
 
 
-    def prange_test10(self):
+    def test_prange10(self):
         @numba.njit(parallel=True)
         def test_p10(NOT_USED):
             acc2 = 0
@@ -272,18 +273,18 @@ class TestParfors(unittest.TestCase):
         self.assertIn('@do_scheduling', test_p10.inspect_llvm(test_p10.signatures[0]))
 
 
-    def prange_test11(self):
+    def test_prange11(self):
         ## List comprehension with a `prange` fails with
         ## `No definition for lowering <class 'numba.parfor.prange'>(int64,) -> range_state_int64`.
         @numba.njit(parallel=True)
         def test_p11(n):
             return [np.sin(j) for j in prange(n)]
-        
+
         n=4
         output = test_p11(n)
-        
 
-    def prange_test12(self):
+
+    def test_prange12(self):
         # segfaults/hangs
         @numba.njit(parallel=True)
         def test_p12(X):
@@ -291,7 +292,7 @@ class TestParfors(unittest.TestCase):
             for i in prange(-len(X)):
                 acc+=X[i]
             return acc
-       
+
         n=4
         output = test_p12(np.ones(n))
         expected = 0
@@ -299,7 +300,7 @@ class TestParfors(unittest.TestCase):
         self.assertIn('@do_scheduling', test_p12.inspect_llvm(test_p12.signatures[0]))
 
 
-    def prange_test13(self):
+    def test_prange13(self):
         # fails, Operands must be the same type, got (i32, i64)
         @numba.njit(parallel=True)
         def test_p13(n):
