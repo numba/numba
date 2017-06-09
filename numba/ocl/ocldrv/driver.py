@@ -113,7 +113,7 @@ class Driver(object):
 
     @property
     def default_platform(self):
-        return self.platforms[0] # @@
+        return self.platforms[1] # @@
 
     def __getattr__(self, fname):
         # this implements lazy binding of functions
@@ -752,7 +752,8 @@ class Program(OpenCLWrapper):
         try:
             driver.clBuildProgram(self.id, num_devices, devices, options, None, None)
         except OpenCLAPIError as e:
-            self.build_info(devices)
+            pass
+        self.build_info(devices)
 
     def build_info(self, devices=None):
         if devices is None:

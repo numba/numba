@@ -6,7 +6,7 @@ from .compiler import (compile_kernel, compile_device, AutoJitOCLKernel,
 
 def jit(signature=None, device=False):
     """JIT compile a python function conforming to
-    the HSA-Python
+    the OCL-Python
     """
     if signature is None:
         return autojit(device=device)
