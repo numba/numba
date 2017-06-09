@@ -306,6 +306,10 @@ class _GufuncWrapper(object):
     def env(self):
         return self.cres.environment
 
+    @property
+    def envptr(self):
+        return self.env.as_pointer(self.context)
+
     def _build_wrapper(self, library, name):
         """
         The LLVM IRBuilder code to create the gufunc wrapper.
@@ -425,9 +429,7 @@ class _GufuncWrapper(object):
         return status.code, status.is_error
 
     def gen_prologue(self, builder, pyapi):
-        ll_intp = self.context.get_value_type(types.intp)
-        ll_pyobj = self.context.get_value_type(types.pyobject)
-        self.envptr = Constant.int(ll_intp, id(self.env)).inttoptr(ll_pyobj)
+        pass
 
     def gen_epilogue(self, builder, pyapi):
         pass        # Do nothing
@@ -442,11 +444,6 @@ class _GufuncObjectWrapper(_GufuncWrapper):
         return innercall, error
 
     def gen_prologue(self, builder, pyapi):
-        #  Get an environment object for the function
-        ll_intp = self.context.get_value_type(types.intp)
-        ll_pyobj = self.context.get_value_type(types.pyobject)
-        self.envptr = Constant.int(ll_intp, id(self.env)).inttoptr(ll_pyobj)
-
         # Acquire the GIL
         self.gil = pyapi.gil_ensure()
 

@@ -41,9 +41,7 @@ def make_dufunc_kernel(_dufunc):
                 func_type, name=self.cres.fndesc.llvm_func_name)
             entry_point.attributes.add("alwaysinline")
 
-            ll_intp = self.cres.target_context.get_value_type(types.intp)
-            ll_pyobj = self.cres.target_context.get_value_type(types.pyobject)
-            envptr = ll_intp(id(self.cres.environment)).inttoptr(ll_pyobj)
+            envptr = self.cres.environment.as_pointer(self.cres.target_context)
 
             _, res = self.context.call_conv.call_function(
                 self.builder, entry_point, isig.return_type, isig.args, cast_args,

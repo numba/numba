@@ -47,10 +47,7 @@ class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
         fname = cres.fndesc.llvm_func_name
 
         env = cres.environment
-        assert env is not None
-        ll_intp = cres.target_context.get_value_type(types.intp)
-        ll_pyobj = cres.target_context.get_value_type(types.pyobject)
-        envptr = ll_intp(id(env)).inttoptr(ll_pyobj)
+        envptr = env.as_pointer(ctx)
 
         ptr = build_ufunc_wrapper(library, ctx, fname, signature, env=env,
                                   envptr=envptr)
