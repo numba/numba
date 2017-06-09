@@ -1309,8 +1309,7 @@ def remove_dead_parfor_recursive(parfor, lives, args):
     assert first_body_block > 0 # we are using 0 for init block here
     last_label = max(blocks.keys())
     return_label = last_label+1
-    if len(blocks[last_label].body) == 0:
-        return
+
     loc = blocks[last_label].loc
     scope = blocks[last_label].scope
     blocks[return_label] = ir.Block(scope, loc)
