@@ -160,7 +160,7 @@ class PyCallWrapper(object):
 
         status, retval = self.context.call_conv.call_function(
             builder, self.func, self.fndesc.restype, self.fndesc.argtypes,
-            innerargs, envptr)
+            innerargs, env=envptr)
         # Do clean up
         self.debug_print(builder, "# callwrapper: emit_cleanup")
         cleanup_manager.emit_cleanup()

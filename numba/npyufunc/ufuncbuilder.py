@@ -153,16 +153,16 @@ def _build_element_wise_ufunc_wrapper(cres, signature):
     library = cres.library
     fname = cres.fndesc.llvm_func_name
 
-    env = None
-    if cres.objectmode:
-        # Get env
-        env = cres.environment
-        assert env is not None
-        ll_intp = cres.target_context.get_value_type(types.intp)
-        ll_pyobj = cres.target_context.get_value_type(types.pyobject)
-        envptr = lc.Constant.int(ll_intp, id(env)).inttoptr(ll_pyobj)
-    else:
-        envptr = None
+    # env = None
+    # if cres.objectmode:
+    # Get env
+    env = cres.environment
+    assert env is not None
+    ll_intp = cres.target_context.get_value_type(types.intp)
+    ll_pyobj = cres.target_context.get_value_type(types.pyobject)
+    envptr = lc.Constant.int(ll_intp, id(env)).inttoptr(ll_pyobj)
+    # else:
+    #     envptr = None
 
     ptr = build_ufunc_wrapper(library, ctx, fname, signature,
                               cres.objectmode, envptr, env)
