@@ -82,6 +82,7 @@ class Parfor(ir.Expr, ir.Stmt):
         self.loop_body = loop_body
         self.array_analysis = array_analysis
         self.index_var = index_var
+        self.params = None # filled right before parallel lowering
 
     def __repr__(self):
         return repr(self.loop_nests) + repr(self.loop_body) + repr(self.index_var)
@@ -191,6 +192,11 @@ class ParforPass(object):
                 self.typemap)
         if sequential_parfor_lowering:
             lower_parfor_sequential(self.func_ir, self.typemap, self.calltypes)
+        else:
+            # prepare for parallel lowering
+            # add parfor params to parfors here since lowering is destructive
+            # changing the IR after this is not allowed
+            get_parfor_params(self.func_ir.blocks)
         return
 
     def _convert_numpy(self, blocks):
@@ -935,52 +941,50 @@ def _find_first_parfor(body):
             return i
     return -1
 
-def get_parfor_params(parfor, func_ir):
-    """find variables used in body of parfor from outside.
+def get_parfor_params(blocks):
+    """find variables used in body of parfors from outside and save them.
     computed as live variables at entry of first block.
     """
-    blocks = wrap_parfor_blocks(parfor)
-    cfg = compute_cfg_from_blocks(blocks)
-    usedefs = compute_use_defs(blocks)
-    live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
-    unwrap_parfor_blocks(parfor)
-    keylist = sorted(live_map.keys())
-    init_block = keylist[0]
-    first_non_init_block = keylist[1]
-
-    params = live_map[first_non_init_block]
 
     # since parfor wrap creates a back-edge to first non-init basic block,
     # live_map[first_non_init_block] contains variables defined in parfor body
     # that could be undefined before. So we only consider variables that are
-    # actually defined before the parfor body.
-    pre_defs = usedefs.defmap[init_block]
-    _, all_defs = compute_use_defs(func_ir.blocks)
-    topo_order = find_topo_order(func_ir.blocks)
-    parfor_found = False
+    # actually defined before the parfor body in the program.
+    pre_defs = set()
+    _, all_defs = compute_use_defs(blocks)
+    topo_order = find_topo_order(blocks)
     for label in topo_order:
-        block = func_ir.blocks[label]
-        for i, p_id in _find_parfors(block.body):
-            if parfor.id==p_id:
-                # find variable defs before the parfor in the same block
-                dummy_block = ir.Block(block.scope, block.loc)
-                dummy_block.body = block.body[:i]
-                before_defs = compute_use_defs({0:dummy_block}).defmap[0]
-                pre_defs |= before_defs
-                parfor_found = True
-                break
-        if parfor_found:
-            break
-        else:
-            pre_defs |= all_defs[label]
+        block = blocks[label]
+        for i, parfor in _find_parfors(block.body):
+            # find variable defs before the parfor in the same block
+            dummy_block = ir.Block(block.scope, block.loc)
+            dummy_block.body = block.body[:i]
+            before_defs = compute_use_defs({0:dummy_block}).defmap[0]
+            pre_defs |= before_defs
+            parfor.params = get_parfor_params_inner(parfor, pre_defs)
 
-    params &= pre_defs
-    return params
+        pre_defs |= all_defs[label]
+    return
+
+def get_parfor_params_inner(parfor, pre_defs):
+
+     blocks = wrap_parfor_blocks(parfor)
+     cfg = compute_cfg_from_blocks(blocks)
+     usedefs = compute_use_defs(blocks)
+     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
+     unwrap_parfor_blocks(parfor)
+     keylist = sorted(live_map.keys())
+     init_block = keylist[0]
+     first_non_init_block = keylist[1]
+
+     before_defs = usedefs.defmap[init_block] | pre_defs
+     params = live_map[first_non_init_block] & before_defs
+     return params
 
 def _find_parfors(body):
-    for (i, inst) in enumerate(body):
+    for i, inst in enumerate(body):
         if isinstance(inst, Parfor):
-            yield i, inst.id
+            yield i, inst
 
 def get_parfor_outputs(parfor, parfor_params):
     """get arrays that are written to inside the parfor and need to be passed
