@@ -1177,7 +1177,7 @@ def try_fuse(parfor1, parfor2):
     dprint("try_fuse trying to fuse \n",parfor1,"\n",parfor2)
 
     # fusion of parfors with different dimensions not supported yet
-    if len(parfor1.loop_nests)!=len(parfor1.loop_nests):
+    if len(parfor1.loop_nests)!=len(parfor2.loop_nests):
         dprint("try_fuse parfors number of dimensions mismatch")
         return None
 
