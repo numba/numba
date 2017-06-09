@@ -50,7 +50,7 @@ class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
         assert env is not None
         ll_intp = cres.target_context.get_value_type(types.intp)
         ll_pyobj = cres.target_context.get_value_type(types.pyobject)
-        envptr = lc.Constant.int(ll_intp, id(env)).inttoptr(ll_pyobj)
+        envptr = ll_intp(id(env)).inttoptr(ll_pyobj)
 
         ptr = build_ufunc_wrapper(library, ctx, fname, signature, env=env,
                                   envptr=envptr)
@@ -61,7 +61,7 @@ class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
         return dtypenums, ptr, keepalive
 
 
-def build_ufunc_wrapper(library, ctx, fname, signature, *, env, envptr):
+def build_ufunc_wrapper(library, ctx, fname, signature, env, envptr):
     innerfunc = ufuncbuilder.build_ufunc_wrapper(library, ctx, fname, signature,
                                                  objmode=False, env=env,
                                                  envptr=envptr)

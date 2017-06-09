@@ -8,7 +8,7 @@ from ..caching import make_library_cache, NullCache
 
 
 def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
-                           offsets, store_offset, signature, pyapi, *, env):
+                           offsets, store_offset, signature, pyapi, env):
     elems = load()
 
     # Compute
@@ -68,7 +68,7 @@ def _build_ufunc_loop_body_objmode(load, store, context, func, builder,
 
 
 def build_slow_loop_body(context, func, builder, arrays, out, offsets,
-                         store_offset, signature, pyapi, *, env):
+                         store_offset, signature, pyapi, env):
     def load():
         elems = [ary.load_direct(builder.load(off))
                  for off, ary in zip(offsets, arrays)]
@@ -115,7 +115,7 @@ def build_obj_loop_body(context, func, builder, arrays, out, offsets,
 
 
 def build_fast_loop_body(context, func, builder, arrays, out, offsets,
-                         store_offset, signature, ind, pyapi, *, env):
+                         store_offset, signature, ind, pyapi, env):
     def load():
         elems = [ary.load_aligned(ind)
                  for ary in arrays]
