@@ -1002,21 +1002,28 @@ def get_parfor_outputs(parfor, parfor_params):
     outputs = list(set(outputs) & set(parfor_params))
     return sorted(outputs)
 
-def get_parfor_reductions(parfor, parfor_params):
+def get_parfor_reductions(parfor, parfor_params, reductions=None, names=None):
     """get variables that are accumulated using inplace_binop inside the parfor
     and need to be passed as reduction parameters to gufunc.
     """
+    if reductions is None:
+        reductions = {}
+    if names is None:
+        names = []
     last_label = max(parfor.loop_body.keys())
-    reductions = {}
-    names = []
+
     for blk in parfor.loop_body.values():
         for stmt in blk.body:
-            if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr) and stmt.value.op == "inplace_binop":
+            if (isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr)
+                    and stmt.value.op == "inplace_binop"):
                 name = stmt.value.lhs.name
                 if name in parfor_params:
                     names.append(name)
                     reductions[name] = (stmt.value.fn, stmt.value.immutable_fn)
-    return sorted(names), reductions
+            if isinstance(stmt, Parfor):
+                # recursive parfors can have reductions like test_prange8
+                get_parfor_reductions(stmt, parfor_params, reductions, names)
+    return names, reductions
 
 def visit_vars_parfor(parfor, callback, cbdata):
     if config.DEBUG_ARRAY_OPT==1:
