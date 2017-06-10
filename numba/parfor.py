@@ -23,7 +23,8 @@ from numba.ir_utils import (mk_unique_var, next_label, mk_alloc,
     get_np_ufunc_typ, mk_range_block, mk_loop_header, find_op_typ,
     get_name_var_table, replace_vars, visit_vars, visit_vars_inner, remove_dels,
     remove_dead, copy_propagate, get_block_copies, apply_copy_propagate,
-    dprint_func_ir, find_topo_order, get_stmt_writes, rename_labels, get_call_table)
+    dprint_func_ir, find_topo_order, get_stmt_writes, rename_labels,
+    get_call_table, simplify_CFG)
 
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
@@ -154,6 +155,7 @@ class ParforPass(object):
         # remove Del statements for easier optimization
         remove_dels(self.func_ir.blocks)
         self.array_analysis.run()
+        simplify_CFG(self.func_ir.blocks)
         self._convert_prange(self.func_ir.blocks)
         self._convert_numpy(self.func_ir.blocks)
 

@@ -795,6 +795,29 @@ def rename_labels(blocks):
 
     return new_blocks
 
+def simplify_CFG(blocks):
+    """transform chains of blocks that have no loop into a single block"""
+    cfg = compute_cfg_from_blocks(blocks)
+    label_map = {}
+    for node in cfg.nodes():
+        # find nodes with one successors, that has one predecessor
+        successors = [n for n,_ in cfg.successors(node)]
+        if len(successors)==1:
+            next_node = successors[0]
+            next_preds = list(cfg.predecessors(successors[0]))
+            if len(next_preds)==1:
+                # nodes could have been replaced with previous nodes
+                node = label_map.get(node, node)
+                next_node = label_map.get(next_node, next_node)
+                assert isinstance(blocks[node].body[-1], ir.Jump)
+                assert blocks[node].body[-1].target==next_node
+                # remove next_node and append it's body to node
+                blocks[node].body.pop()
+                blocks[node].body.extend(blocks[next_node].body)
+                blocks.pop(next_node)
+                label_map[next_node] = node
+    return
+
 # format: {type:function}
 array_accesses_extensions = {}
 
