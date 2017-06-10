@@ -221,7 +221,6 @@ class TestParfors(unittest.TestCase):
         np.testing.assert_almost_equal(expected, output)
         self.assertIn('@do_scheduling', test_p7.inspect_llvm(test_p7.signatures[0]))
 
-
     def test_prange8(self):
         @numba.njit(parallel=True)
         def test_p8(A):
@@ -237,6 +236,20 @@ class TestParfors(unittest.TestCase):
         np.testing.assert_almost_equal(output, expected)
         self.assertIn('@do_scheduling', test_p8.inspect_llvm(test_p8.signatures[0]))
 
+    def test_prange8_1(self):
+        @numba.njit(parallel=True)
+        def test_p8(A):
+            acc = 0
+            for i in prange(4):
+                for j in prange(4):
+                    acc+=A[i]
+            return acc
+        n=4
+        A = np.ones((n))
+        output = test_p8(A)
+        expected = 16.0
+        np.testing.assert_almost_equal(output, expected)
+        self.assertIn('@do_scheduling', test_p8.inspect_llvm(test_p8.signatures[0]))
 
     def test_prange9(self):
         # does this count as cross iteration dependency?
