@@ -1021,7 +1021,14 @@ def get_parfor_reductions(parfor, parfor_params, reductions=None, names=None):
                 name = stmt.value.lhs.name
                 if name in parfor_params:
                     names.append(name)
-                    reductions[name] = (stmt.value.fn, stmt.value.immutable_fn)
+                    red_info = None
+                    for (acc_op, imm_op, init_val) in _reduction_ops.values():
+                        if imm_op == stmt.value.immutable_fn:
+                            red_info = (stmt.value.fn, stmt.value.immutable_fn, init_val)
+                            break
+                    if red_info == None:
+                        raise NotImplementedError("Reduction is not support for inplace operator %s" % stmt.value.fn)
+                    reductions[name] = red_info
             if isinstance(stmt, Parfor):
                 # recursive parfors can have reductions like test_prange8
                 get_parfor_reductions(stmt, parfor_params, reductions, names)

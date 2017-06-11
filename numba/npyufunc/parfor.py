@@ -448,10 +448,11 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
     ninouts = len(expr_args) - nredvars
     redarrs = []
     for i in range(nredvars):
-        # arr = expr_args[-(nredvars - i)]
-        val = lowerer.loadvar(redvars[i])
-        # cgutils.printf(builder, "nredvar(" + redvars[i] + ") = %d\n", val)
-        typ = context.get_value_type(lowerer.fndesc.typemap[redvars[i]])
+        redvar_typ = lowerer.fndesc.typemap[redvars[i]]
+        # we need to use the default initial value instead of existing value in redvar
+        op, imop, init_val = reddict[redvars[i]]
+        val = context.get_constant(redvar_typ, init_val)
+        typ = context.get_value_type(redvar_typ)
         size = get_thread_count()
         arr = cgutils.alloca_once(builder, typ,
                                 size = context.get_constant(types.intp, size))
@@ -582,7 +583,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
     for i in range(get_thread_count()):
         for name, arr in zip(redvars, redarrs):
             tmpname = mk_unique_var(name)
-            op, imop = reddict[name]
+            op, imop, init_val = reddict[name]
             src = builder.gep(arr, [context.get_constant(types.intp, i)])
             val = builder.load(src)
             vty = lowerer.fndesc.typemap[name]
