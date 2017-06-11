@@ -1068,6 +1068,9 @@ def parfor_defs(parfor, use_set=None, def_set=None):
     topo_order = cfg.topo_order()
     # blocks that dominate last block are definitely executed
     definitely_executed = cfg.dominators()[last_label]
+    # except loop bodies that might not execute
+    for loop in cfg.loops().values():
+        definitely_executed -= loop.body
     for label in topo_order:
         if label in definitely_executed:
             # see compute_use_defs() in analysis.py
