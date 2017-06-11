@@ -585,7 +585,10 @@ def get_block_copies(blocks, typemap):
                     if not (isinstance(in1_typ,types.Number) or in1_typ==types.string):
                         extra_kill[label].add(in1_var)
                 extra_kill[label].add(lhs)
-        block_copies[label] = set(assign_dict.items())
+        block_cps = set((lhs,rhs) for (lhs,rhs) in assign_dict.items()
+                            if lhs not in extra_kill[label]
+                            and rhs not in extra_kill[label])
+        block_copies[label] = block_cps
     return block_copies, extra_kill
 
 # other packages that define new nodes add calls to apply copy propagate in them
