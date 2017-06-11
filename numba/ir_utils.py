@@ -434,14 +434,16 @@ def remove_dead_block(block, lives, call_table, args):
             if stmt.target.name not in lives:
                 continue
 
-        lives |= { v.name for v in stmt.list_vars() }
-        if isinstance(stmt, ir.Assign):
-            lives.remove(lhs.name)
-        for T, def_func in analysis.ir_extension_usedefs.items():
-            if isinstance(stmt, T):
-                uses, defs = def_func(stmt)
-                lives -= defs
-                lives |= uses
+        if type(stmt) in analysis.ir_extension_usedefs:
+            def_func = analysis.ir_extension_usedefs[type(stmt)]
+            uses, defs = def_func(stmt)
+            lives -= defs
+            lives |= uses
+        else:
+            lives |= { v.name for v in stmt.list_vars() }
+            if isinstance(stmt, ir.Assign):
+                lives.remove(lhs.name)
+
         new_body.append(stmt)
     new_body.reverse()
     block.body = new_body

@@ -1082,6 +1082,12 @@ def parfor_defs(parfor, use_set=None, def_set=None):
         else:
             use_set.update(uses[label]-def_set)
 
+    # treat loop variables and size variables as use
+    loop_vars = {l.start.name for l in parfor.loop_nests if isinstance(l.start, ir.Var)}
+    loop_vars |= {l.stop.name for l in parfor.loop_nests if isinstance(l.stop, ir.Var)}
+    loop_vars |= {l.step.name for l in parfor.loop_nests if isinstance(l.step, ir.Var)}
+    use_set.update(loop_vars)
+
     return analysis._use_defs_result(usemap=use_set, defmap=def_set)
 
 analysis.ir_extension_usedefs[Parfor] = parfor_defs
