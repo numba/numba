@@ -569,6 +569,14 @@ def get_block_copies(blocks, typemap):
                     gen_set, kill_set = f(stmt, typemap)
                     for lhs,rhs in gen_set:
                         assign_dict[lhs] = rhs
+                    # if a=b is in dict and b is killed, a is also killed
+                    new_assign_dict = {}
+                    for l,r in assign_dict.items():
+                        if not l in kill_set and not r in kill_set:
+                            new_assign_dict[l] = r
+                        if r in kill_set:
+                            extra_kill[label].add(l)
+                    assign_dict = new_assign_dict
                     extra_kill[label] |= kill_set
             if isinstance(stmt, ir.Assign):
                 lhs = stmt.target.name
@@ -584,10 +592,16 @@ def get_block_copies(blocks, typemap):
                     # inplace_binop assigns first operand if mutable
                     if not (isinstance(in1_typ,types.Number) or in1_typ==types.string):
                         extra_kill[label].add(in1_var)
+                        # if a=b is in dict and b is killed, a is also killed
+                        new_assign_dict = {}
+                        for l,r in assign_dict.items():
+                            if l!=in1_var and r!=in1_var:
+                                new_assign_dict[l] = r
+                            if r==in1_var:
+                                extra_kill[label].add(l)
+                        assign_dict = new_assign_dict
                 extra_kill[label].add(lhs)
-        block_cps = set((lhs,rhs) for (lhs,rhs) in assign_dict.items()
-                            if lhs not in extra_kill[label]
-                            and rhs not in extra_kill[label])
+        block_cps = set(assign_dict.items())
         block_copies[label] = block_cps
     return block_copies, extra_kill
 
