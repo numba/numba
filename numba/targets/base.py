@@ -217,6 +217,9 @@ class BaseContext(object):
     # Fast math flags
     enable_fastmath = False
 
+    # python exceution environment
+    environment = None
+
     def __init__(self, typing_context):
         _load_global_helpers()
 

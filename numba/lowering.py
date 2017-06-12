@@ -41,7 +41,6 @@ class BaseLower(object):
     Lower IR to LLVM
     """
     def __init__(self, context, library, fndesc, func_ir):
-        self.context = context
         self.library = library
         self.fndesc = fndesc
         self.blocks = utils.SortedMap(utils.iteritems(func_ir.blocks))
@@ -61,6 +60,11 @@ class BaseLower(object):
         self.varmap = {}
         self.firstblk = min(self.blocks.keys())
         self.loc = -1
+
+        # Specializes the target context as seen inside the Lowerer
+        # This adds:
+        #  - environment: the python exceution environment
+        self.context = context.subtarget(environment=self.env)
 
         # Debuginfo
         dibuildercls = (self.context.DIBuilder
@@ -86,20 +90,9 @@ class BaseLower(object):
         self.pyapi = self.context.get_python_api(self.builder)
 
         # Store environment argument for later use
-        self.envarg = self.call_conv.get_env_argument(self.function)
-        # Sanity check
-        with cgutils.if_unlikely(self.builder,
-                                 cgutils.is_null(self.builder, self.envarg)):
-            self.pyapi.err_set_string(
-                "PyExc_SystemError",
-                "Numba internal error: object mode function called "
-                "without an environment")
-            self.call_conv.return_exc(self.builder)
-
-        self.env_body = self.context.get_env_body(self.builder, self.envarg)
-        self.pyapi.emit_environment_sentry(self.envarg)
-        self.env_manager = self.pyapi.get_env_manager(self.env, self.env_body,
-                                                      self.envarg)
+        self.env_manager = self.context.get_env_manager(self.builder)
+        self.env_body = self.env_manager.env_body
+        self.envarg = self.env_manager.env_ptr
 
     def pre_lower(self):
         """

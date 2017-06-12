@@ -99,6 +99,13 @@ class CPUContext(BaseContext):
             builder, envptr, _dynfunc._impl_info['offsetof_env_body'])
         return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
 
+    def get_env_manager(self, builder, envarg=None):
+        envarg = envarg or self.call_conv.get_env_argument(builder.function)
+        pyapi = self.get_python_api(builder)
+        pyapi.emit_environment_sentry(envarg)
+        env_body = self.get_env_body(builder, envarg)
+        return pyapi.get_env_manager(self.environment, env_body, envarg)
+
     def get_generator_state(self, builder, genptr, return_type):
         """
         From the given *genptr* (a pointer to a _dynfunc.Generator object),
