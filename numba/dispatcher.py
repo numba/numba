@@ -517,12 +517,12 @@ class Dispatcher(_DispatcherBase):
         return (serialize._rebuild_reduction,
                 (self.__class__, str(self._uuid),
                  serialize._reduce_function(self.py_func, globs),
-                 self.locals, self.targetoptions, self._impl_kind,
-                 self._can_compile, sigs))
+                 self.locals, self.user_pipeline_funcs, self.targetoptions,
+                 self._impl_kind, self._can_compile, sigs))
 
     @classmethod
-    def _rebuild(cls, uuid, func_reduced, locals, targetoptions, impl_kind,
-                 can_compile, sigs):
+    def _rebuild(cls, uuid, func_reduced, locals, user_pipeline_funcs,
+                 targetoptions, impl_kind, can_compile, sigs):
         """
         Rebuild an Dispatcher instance after it was __reduce__'d.
         """
@@ -531,7 +531,7 @@ class Dispatcher(_DispatcherBase):
         except KeyError:
             pass
         py_func = serialize._rebuild_function(*func_reduced)
-        self = cls(py_func, locals, targetoptions, impl_kind)
+        self = cls(py_func, locals, user_pipeline_funcs, targetoptions, impl_kind)
         # Make sure this deserialization will be merged with subsequent ones
         self._set_uuid(uuid)
         for sig in sigs:
