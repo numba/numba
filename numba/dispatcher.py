@@ -39,11 +39,13 @@ class OmittedArg(object):
 
 class _FunctionCompiler(object):
 
-    def __init__(self, py_func, targetdescr, targetoptions, locals):
+    def __init__(self, py_func, targetdescr, targetoptions, locals,
+                                                        user_pipeline_funcs):
         self.py_func = py_func
         self.targetdescr = targetdescr
         self.targetoptions = targetoptions
         self.locals = locals
+        self.user_pipeline_funcs = user_pipeline_funcs
         self.pysig = utils.pysignature(self.py_func)
 
     def fold_argument_types(self, args, kws):
@@ -77,7 +79,8 @@ class _FunctionCompiler(object):
                                       self.targetdescr.target_context,
                                       impl,
                                       args=args, return_type=return_type,
-                                      flags=flags, locals=self.locals)
+                                      flags=flags, locals=self.locals,
+                                      user_pipeline_funcs=self.user_pipeline_funcs)
         # Check typing error if object mode is used
         if cres.typing_error is not None and not flags.enable_pyobject:
             raise cres.typing_error
@@ -452,7 +455,8 @@ class Dispatcher(_DispatcherBase):
     __uuid = None
     __numba__ = 'py_func'
 
-    def __init__(self, py_func, locals={}, targetoptions={}, impl_kind='direct'):
+    def __init__(self, py_func, locals={}, user_pipeline_funcs=[],
+                                        targetoptions={}, impl_kind='direct'):
         """
         Parameters
         ----------
@@ -475,11 +479,13 @@ class Dispatcher(_DispatcherBase):
 
         self.targetoptions = targetoptions
         self.locals = locals
+        self.user_pipeline_funcs = user_pipeline_funcs
         self._cache = NullCache()
         compiler_class = self._impl_kinds[impl_kind]
         self._impl_kind = impl_kind
         self._compiler = compiler_class(py_func, self.targetdescr,
-                                        targetoptions, locals)
+                                        targetoptions, locals,
+                                        user_pipeline_funcs)
         self._cache_hits = collections.Counter()
         self._cache_misses = collections.Counter()
 
