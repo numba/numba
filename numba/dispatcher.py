@@ -40,7 +40,7 @@ class OmittedArg(object):
 class _FunctionCompiler(object):
 
     def __init__(self, py_func, targetdescr, targetoptions, locals,
-                                                        user_pipeline_funcs):
+                                                        user_pipeline_funcs=[]):
         self.py_func = py_func
         self.targetdescr = targetdescr
         self.targetoptions = targetoptions
@@ -98,9 +98,10 @@ class _FunctionCompiler(object):
 
 class _GeneratedFunctionCompiler(_FunctionCompiler):
 
-    def __init__(self, py_func, targetdescr, targetoptions, locals):
+    def __init__(self, py_func, targetdescr, targetoptions, locals,
+                                                        user_pipeline_funcs=[]):
         super(_GeneratedFunctionCompiler, self).__init__(
-            py_func, targetdescr, targetoptions, locals)
+            py_func, targetdescr, targetoptions, locals, user_pipeline_funcs)
         self.impls = set()
 
     def get_globals_for_reduction(self):
