@@ -24,6 +24,15 @@ class Environment(_dynfunc.Environment):
     def __reduce__(self):
         return _rebuild_env, (self.globals['__name__'], self.consts)
 
+    def as_pointer(self, targetctx, ptrty=types.pyobject):
+        """
+        Return a constant pointer for the environment object.
+        """
+        ll_addr = targetctx.get_value_type(types.intp)
+        ll_ptr = targetctx.get_value_type(ptrty)
+        envptr = ll_addr(id(self)).inttoptr(ll_ptr)
+        return envptr
+
 
 def _rebuild_env(modname, consts):
     from . import serialize

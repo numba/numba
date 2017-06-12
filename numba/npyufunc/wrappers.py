@@ -8,13 +8,14 @@ from ..caching import make_library_cache, NullCache
 
 
 def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
-                           offsets, store_offset, signature, pyapi):
+                           offsets, store_offset, signature, pyapi, env):
     elems = load()
 
     # Compute
     status, retval = context.call_conv.call_function(builder, func,
                                                      signature.return_type,
-                                                     signature.args, elems)
+                                                     signature.args, elems,
+                                                     env=env)
 
     # Store
     with builder.if_else(status.is_ok, likely=True) as (if_ok, if_error):
@@ -67,7 +68,7 @@ def _build_ufunc_loop_body_objmode(load, store, context, func, builder,
 
 
 def build_slow_loop_body(context, func, builder, arrays, out, offsets,
-                         store_offset, signature, pyapi):
+                         store_offset, signature, pyapi, env):
     def load():
         elems = [ary.load_direct(builder.load(off))
                  for off, ary in zip(offsets, arrays)]
@@ -77,7 +78,8 @@ def build_slow_loop_body(context, func, builder, arrays, out, offsets,
         out.store_direct(retval, builder.load(store_offset))
 
     return _build_ufunc_loop_body(load, store, context, func, builder, arrays,
-                                  out, offsets, store_offset, signature, pyapi)
+                                  out, offsets, store_offset, signature, pyapi,
+                                  env=env)
 
 
 def build_obj_loop_body(context, func, builder, arrays, out, offsets,
@@ -113,7 +115,7 @@ def build_obj_loop_body(context, func, builder, arrays, out, offsets,
 
 
 def build_fast_loop_body(context, func, builder, arrays, out, offsets,
-                         store_offset, signature, ind, pyapi):
+                         store_offset, signature, ind, pyapi, env):
     def load():
         elems = [ary.load_aligned(ind)
                  for ary in arrays]
@@ -123,7 +125,8 @@ def build_fast_loop_body(context, func, builder, arrays, out, offsets,
         out.store_aligned(retval, ind)
 
     return _build_ufunc_loop_body(load, store, context, func, builder, arrays,
-                                  out, offsets, store_offset, signature, pyapi)
+                                  out, offsets, store_offset, signature, pyapi,
+                                  env=env)
 
 
 def build_ufunc_wrapper(library, context, fname, signature, objmode, envptr, env):
@@ -206,7 +209,8 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, envptr, env
                     fastloop = build_fast_loop_body(context, func, builder,
                                                     arrays, out, offsets,
                                                     store_offset, signature,
-                                                    loop.index, pyapi)
+                                                    loop.index, pyapi,
+                                                    env=envptr)
 
             with is_strided:
                 # General loop
@@ -214,7 +218,7 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, envptr, env
                     slowloop = build_slow_loop_body(context, func, builder,
                                                     arrays, out, offsets,
                                                     store_offset, signature,
-                                                    pyapi)
+                                                    pyapi, env=envptr)
 
         builder.ret_void()
     del builder
@@ -301,6 +305,10 @@ class _GufuncWrapper(object):
     @property
     def env(self):
         return self.cres.environment
+
+    @property
+    def envptr(self):
+        return self.env.as_pointer(self.context)
 
     def _build_wrapper(self, library, name):
         """
@@ -410,7 +418,8 @@ class _GufuncWrapper(object):
     def gen_loop_body(self, builder, pyapi, func, args):
         status, retval = self.call_conv.call_function(builder, func,
                                                       self.signature.return_type,
-                                                      self.signature.args, args)
+                                                      self.signature.args, args,
+                                                      env=self.envptr)
 
         with builder.if_then(status.is_error, likely=False):
             gil = pyapi.gil_ensure()
@@ -435,11 +444,6 @@ class _GufuncObjectWrapper(_GufuncWrapper):
         return innercall, error
 
     def gen_prologue(self, builder, pyapi):
-        #  Get an environment object for the function
-        ll_intp = self.context.get_value_type(types.intp)
-        ll_pyobj = self.context.get_value_type(types.pyobject)
-        self.envptr = Constant.int(ll_intp, id(self.env)).inttoptr(ll_pyobj)
-
         # Acquire the GIL
         self.gil = pyapi.gil_ensure()
 
