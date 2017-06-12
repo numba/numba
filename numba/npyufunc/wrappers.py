@@ -429,7 +429,7 @@ class _GufuncWrapper(object):
         return status.code, status.is_error
 
     def gen_prologue(self, builder, pyapi):
-        pass
+        pass        # Do nothing
 
     def gen_epilogue(self, builder, pyapi):
         pass        # Do nothing
