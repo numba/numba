@@ -410,6 +410,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
     intp_ptr_t = lc.Type.pointer(intp_t)
     zero = context.get_constant(types.intp, 0)
     one = context.get_constant(types.intp, 1)
+    one_type = one.type
     sizeof_intp = context.get_abi_sizeof(intp_t)
 
     # Prepare sched, first pop it out of expr_args, outer_sig, and gu_signature
@@ -424,6 +425,12 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
             size = context.get_constant(types.intp, num_dim), name = "dims")
     for i in range(num_dim):
         start, stop, step = loop_ranges[i]
+        if start.type != one_type:
+            start = builder.sext(start, one_type)
+        if stop.type != one_type:
+            stop = builder.sext(stop, one_type)
+        if step.type != one_type:
+            step = builder.sext(step, one_type)
         # substract 1 because do-scheduling takes inclusive ranges
         stop = builder.sub(stop, one)
         builder.store(start, builder.gep(dim_starts,
