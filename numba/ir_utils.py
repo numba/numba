@@ -983,3 +983,30 @@ def get_array_accesses(blocks, accesses=None):
                 if isinstance(inst, T):
                     f(inst, accesses)
     return accesses
+
+def merge_adjacent_blocks(func_ir):
+    cfg = compute_cfg_from_blocks(func_ir.blocks)
+    # merge adjacent blocks
+    removed = []
+    for label in list(func_ir.blocks.keys()):
+        if label in removed:
+            continue
+        succs = list(cfg.successors(label))
+        if len(succs) != 1:
+            continue
+        next_label = succs[0][0]
+        preds = list(cfg.predecessors(next_label))
+        if len(preds) != 1 or preds[0][0] != label:
+            continue
+        block = func_ir.blocks[label]
+        next_block = func_ir.blocks[next_label]
+        if block.scope != next_block.scope:
+            continue
+        # merge
+        removed.append(next_label)
+        block.body = block.body[:(len(block.body) - 1)]
+        for stmts in next_block.body:
+            block.body.append(stmts)
+        del func_ir.blocks[next_label]
+
+
