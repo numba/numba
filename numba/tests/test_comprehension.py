@@ -206,14 +206,11 @@ class TestListComprehension(unittest.TestCase):
                     raise
 
         # test functions that are expected to fail
-        with self.assertRaises(TypingError) as raises:
+        with self.assertRaises(LoweringError) as raises:
             cfunc = jit(nopython=True)(list5)
             cfunc(var)
-        if utils.PYVERSION < (3, 0):
-            msg = "not allowed in a homogenous sequence"
-        else:
-            msg = "Cannot resolve setitem"
-        self.assertIn(msg, str(raises.exception))
+        # TODO: we can't really assert the error message for the above 
+        # Also, test_nested_array is a similar case (but without list) that works.
 
         with self.assertRaises(LoweringError) as raises:
             cfunc = jit(nopython=True)(list11)
@@ -233,7 +230,6 @@ class TestListComprehension(unittest.TestCase):
             msg = "cannot unify reflected list(int%d) and int%d" % (bits, bits)
             self.assertIn(msg, str(raises.exception))
 
-@unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
 class TestArrayComprehension(unittest.TestCase):
 
     @tag('important')
@@ -299,10 +295,10 @@ class TestArrayComprehension(unittest.TestCase):
         import numba.inline_closurecall as ic
         ic.enable_inline_arraycall = False
         # test is expected to fail
+        msg = 'unsupported nested memory-managed object'
         with self.assertRaises(LoweringError) as raises:
             cfunc = jit(nopython=True)(comp_nest_with_array_noinline)
             cfunc(5)
-        msg = 'unsupported nested memory-managed object'
         self.assertIn(msg, str(raises.exception))
         ic.enable_inline_arraycall = True
 
@@ -367,6 +363,16 @@ class TestArrayComprehension(unittest.TestCase):
         cfunc = jit(nopython=True)(no_array_comp)
         self.assertEqual(no_array_comp(10), cfunc(10))
         self.assertIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+
+    @tag('important')
+    def test_nested_array(self):
+        def nested_array(n):
+            l = np.array([ np.array([x for x in range(n)]) for y in range(n)])
+            return np.sum(l)
+
+        cfunc = jit(nopython=True)(nested_array)
+        self.assertEqual(nested_array(10), cfunc(10))
+        self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
 
     @tag('important')
     def test_array_comp_with_iter(self):
