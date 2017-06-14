@@ -68,9 +68,10 @@ class InlineClosureCallPass(object):
             # We go over all loops, bigger loops first (outer first)
             for k, s in sorted(sized_loops, key=lambda tup: tup[1], reverse=True):
                 visited.append(k)
-                guard(_inline_arraycall, self.func_ir, cfg, visited, loops[k])
-            _fix_nested_array(self.func_ir)
-            modified = True
+                if guard(_inline_arraycall, self.func_ir, cfg, visited, loops[k]):
+                    modified = True
+            if modified:
+                _fix_nested_array(self.func_ir)
 
         if modified:
             remove_dels(self.func_ir.blocks)
@@ -102,7 +103,6 @@ class InlineClosureCallPass(object):
         max_label = max(callee_blocks.keys())
         #    reset globals in ir_utils before we use it
         ir_utils._max_label = max_label
-        ir_utils.visit_vars_extensions = {}
         debug_print("After relabel")
         _debug_dump(callee_ir)
 
@@ -619,8 +619,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop):
         stmt.value = array_var
         func_ir._definitions[stmt.target.name] = [stmt.value]
 
-    # finally returns the array created
-    return stmt.target
+    return True
 
 
 def _fix_nested_array(func_ir):
