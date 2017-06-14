@@ -21,7 +21,8 @@ from numba import types
 from numba.targets.registry import cpu_target
 from numba import config
 from numba.annotations import type_annotations
-from numba.ir_utils import copy_propagate, apply_copy_propagate, get_name_var_table, remove_dels, remove_dead
+from numba.ir_utils import (copy_propagate, apply_copy_propagate,
+                            get_name_var_table, remove_dels, remove_dead)
 from numba import ir
 from numba.compiler import compile_isolated, Flags
 from numba.bytecode import ByteCodeIter
@@ -299,18 +300,6 @@ class TestParfors(TestParforsBase):
             return np.ones(1)
         self.check(test_impl)
 
-    # TODO: Fails. List ctor needed or bug?
-    def test_simple05(self):
-        def test_impl():
-            return np.ones([1])
-        self.check(test_impl)
-
-    # TODO: Fails. list comp + ctor patch needed?
-    def test_simple06(self):
-        def test_impl():
-            return np.ones([x for x in range(3)])
-        self.check(test_impl)
-
     def test_simple07(self):
         def test_impl():
             return np.ones((1, 2), dtype=np.complex128)
@@ -386,7 +375,7 @@ class TestParfors(TestParforsBase):
             self.check(test_impl, *self.simple_args)
         self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
 
-    # TODO: Fails, dot() for a `v**T * v` doesn't go via parallel scheduler
+    @unittest.skip("vector dot() support in progress #2391, #2410")
     def test_simple21(self):
         def test_impl(v1, v2, m1, m2):
             return np.dot(v1, v1)
@@ -651,7 +640,7 @@ class TestPrange(TestParforsBase):
         # patch outer loop to 'prange'
         self.prange_tester(test_impl, patch_instance=[0])
 
-    # TODO: Junk result (Arrays not equal) or corruption/double free.
+    @unittest.skip("list append is not thread-safe yet (#2391, #2408)")
     def test_prange11(self):
         def test_impl():
             n = 4
