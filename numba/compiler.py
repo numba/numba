@@ -855,14 +855,12 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
         inline=flags.forceinline)
 
     lower = lowering.Lower(targetctx, library, fndesc, interp)
-    targetctx.lowerer = lower
     lower.lower()
     if not flags.no_cpython_wrapper:
         lower.create_cpython_wrapper(flags.release_gil)
     env = lower.env
     call_helper = lower.call_helper
     has_dynamic_globals = lower.has_dynamic_globals
-    del targetctx.lowerer
     del lower
 
     if flags.no_compile:
