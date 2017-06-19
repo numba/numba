@@ -76,8 +76,11 @@ The :class:`Rewrite` Base Class
 
    .. method:: match(self, block, typemap, callmap)
 
-      The :func:`~Rewrite.match` method takes three arguments other
+      The :func:`~Rewrite.match` method takes four arguments other
       than *self*:
+
+      * *func_ir*: This is an instance of :class:`numba.ir.FunctionIR` for the
+        function being rewritten.
 
       * *block*: This is an instance of :class:`numba.ir.Block`.  The
         matching method should iterate over the instructions contained
