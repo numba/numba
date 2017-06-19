@@ -4,21 +4,26 @@ Tests for enum support.
 
 from __future__ import print_function
 
-import enum
-
 import numba.unittest_support as unittest
 from numba import jit
 
-from .support import TestCase, tag
-from .enum_usecases import *
+from .support import TestCase
+from .enum_usecases import Color, Shape, Shake, Planet, RequestError
 
 
 def compare_usecase(a, b):
     return a == b, a != b, a is b, a is not b
 
-def global_usecase(a):
+
+def getattr_usecase(a):
     # Lookup of a enum member on its class
     return a is Color.red
+
+
+def getitem_usecase(a):
+    """Lookup enum member by string name"""
+    return a is Color['red']
+
 
 def identity_usecase(a, b, c):
     return (a is Shake.mint,
@@ -26,13 +31,16 @@ def identity_usecase(a, b, c):
             c is RequestError.internal_error,
             )
 
+
 def make_constant_usecase(const):
     def constant_usecase(a):
         return a is const
     return constant_usecase
 
+
 def return_usecase(a, b, pred):
     return a if pred else b
+
 
 def int_coerce_usecase(x):
     # Implicit coercion of intenums to ints
@@ -70,7 +78,8 @@ class BaseEnumTest(object):
             self.assertPreciseEqual(pyfunc(arg), cfunc(arg))
 
     def test_constant(self):
-        self.check_constant_usecase(global_usecase)
+        self.check_constant_usecase(getattr_usecase)
+        self.check_constant_usecase(getitem_usecase)
         self.check_constant_usecase(make_constant_usecase(self.values[0]))
 
 
