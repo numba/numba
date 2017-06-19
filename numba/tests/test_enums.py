@@ -4,8 +4,9 @@ Tests for enum support.
 
 from __future__ import print_function
 
+import numpy as np
 import numba.unittest_support as unittest
-from numba import jit
+from numba import jit, vectorize
 
 from .support import TestCase
 from .enum_usecases import Color, Shape, Shake, Planet, RequestError
@@ -48,6 +49,12 @@ def int_coerce_usecase(x):
         return x - RequestError.not_found
     else:
         return x + Shape.circle
+
+
+def vectorize_usecase(x):
+    if x != RequestError.not_found:
+        return RequestError.internal_error
+    return x
 
 
 class BaseEnumTest(object):
@@ -126,6 +133,12 @@ class TestIntEnum(BaseEnumTest, TestCase):
 
         for arg in [300, 450, 550]:
             self.assertPreciseEqual(pyfunc(arg), cfunc(arg))
+
+    def test_vectorize(self):
+        cfunc = vectorize(nopython=True)(vectorize_usecase)
+        arg = np.array([2, 404, 500, 404])
+        sol = np.array([vectorize_usecase(i) for i in arg], dtype=arg.dtype)
+        self.assertPreciseEqual(sol, cfunc(arg))
 
 
 if __name__ == '__main__':
