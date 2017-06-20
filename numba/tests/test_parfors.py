@@ -381,7 +381,6 @@ class TestParfors(TestParforsBase):
             self.check(test_impl, *self.simple_args)
         self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
 
-    @unittest.skip("vector dot() support in progress #2391, #2410")
     def test_simple21(self):
         def test_impl(v1, v2, m1, m2):
             return np.dot(v1, v1)
