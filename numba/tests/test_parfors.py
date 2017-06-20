@@ -13,6 +13,7 @@ from numba import config
 from numba.annotations import type_annotations
 from numba.ir_utils import copy_propagate, apply_copy_propagate, get_name_var_table, remove_dels, remove_dead
 from numba import ir
+from .support import tag
 
 import math
 
@@ -59,6 +60,7 @@ class TestPipeline(object):
 
 class TestParfors(unittest.TestCase):
 
+    @tag('important')
     def test_arraymap(self):
         @njit(parallel=True)
         def axy(a, x, y):
@@ -73,6 +75,7 @@ class TestParfors(unittest.TestCase):
         np.testing.assert_array_equal(expected, output)
         self.assertIn('@do_scheduling', axy.inspect_llvm(axy.signatures[0]))
 
+    @tag('important')
     def test_mvdot(self):
         @njit(parallel=True)
         def ddot(a, v):
@@ -86,6 +89,7 @@ class TestParfors(unittest.TestCase):
         np.testing.assert_array_almost_equal(expected, output, decimal=5)
         self.assertIn('@do_scheduling', ddot.inspect_llvm(ddot.signatures[0]))
 
+    @tag('important')
     def test_2d_parfor(self):
         @njit(parallel=True)
         def test_2d():
@@ -98,6 +102,7 @@ class TestParfors(unittest.TestCase):
         np.testing.assert_almost_equal(expected, output)
         self.assertIn('@do_scheduling', test_2d.inspect_llvm(test_2d.signatures[0]))
 
+    @tag('important')
     def test_pi(self):
         @njit(parallel=True)
         def calc_pi(n):
@@ -110,6 +115,7 @@ class TestParfors(unittest.TestCase):
         np.testing.assert_almost_equal(expected, output, decimal=1)
         self.assertIn('@do_scheduling', calc_pi.inspect_llvm(calc_pi.signatures[0]))
 
+    @tag('important')
     def test_test1(self):
         typingctx = typing.Context()
         targetctx = cpu.CPUContext(typingctx)
@@ -146,6 +152,7 @@ class TestParfors(unittest.TestCase):
             #print(countParfors(tp.func_ir) == 1)
             self.assertTrue(countParfors(test_ir) == 1)
 
+    @tag('important')
     def test_test2(self):
         typingctx = typing.Context()
         targetctx = cpu.CPUContext(typingctx)
