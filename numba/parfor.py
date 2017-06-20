@@ -62,6 +62,7 @@ class prange(object):
 
 _reduction_ops = {
     'sum': ('+=', '+', 0),
+    'dot': ('+=', '+', 0),
     'prod': ('*=', '*', 1),
 }
 
@@ -675,7 +676,7 @@ class ParforPass(object):
         kws = dict(expr.kws)
         if call_name in _reduction_ops:
             acc_op, im_op, init_val = _reduction_ops[call_name]
-            assert len(args) == 1
+            assert len(args) in [1, 2]  # vector dot has 2 args
             in1 = args[0]
             arr_typ = self.typemap[in1.name]
             in_typ = arr_typ.dtype
@@ -718,6 +719,23 @@ class ParforPass(object):
             self.calltypes[getitem_call] = signature(
                 in_typ, arr_typ, index_var_type)
             acc_block.body.append(ir.Assign(getitem_call, tmp_var, loc))
+
+            if call_name is 'dot':
+                # dot has two inputs
+                tmp_var1 = tmp_var
+                in2 = args[1]
+                tmp_var2 = ir.Var(scope, mk_unique_var("$val"), loc)
+                self.typemap[tmp_var2.name] = in_typ
+                getitem_call2 = ir.Expr.getitem(in2, index_var, loc)
+                self.calltypes[getitem_call2] = signature(
+                    in_typ, arr_typ, index_var_type)
+                acc_block.body.append(ir.Assign(getitem_call2, tmp_var2, loc))
+                mult_call = ir.Expr.binop('*', tmp_var1, tmp_var2, loc)
+                mult_func_typ = find_op_typ('*', [in_typ, in_typ])
+                self.calltypes[mult_call] = mult_func_typ
+                tmp_var = ir.Var(scope, mk_unique_var("$val"), loc)
+                acc_block.body.append(ir.Assign(mult_call, tmp_var, loc))
+
             acc_call = ir.Expr.inplace_binop(
                 acc_op, im_op, acc_var, tmp_var, loc)
             # for some reason, type template of += returns None,
