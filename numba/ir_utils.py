@@ -617,7 +617,7 @@ def get_block_copies(blocks, typemap):
                     # if a=b is in dict and b is killed, a is also killed
                     new_assign_dict = {}
                     for l, r in assign_dict.items():
-                        if l in kill_set and not r not in kill_set:
+                        if l not in kill_set and r not in kill_set:
                             new_assign_dict[l] = r
                         if r in kill_set:
                             extra_kill[label].add(l)
