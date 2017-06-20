@@ -1,3 +1,8 @@
+#
+# Copyright © 2017 Intel Corporation
+# SPDX-License-Identifier: BSD-2-Clause
+#
+
 from __future__ import print_function, division, absolute_import
 
 import numpy as np

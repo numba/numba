@@ -1,3 +1,8 @@
+#
+# Copyright © 2017 Intel Corporation
+# SPDX-License-Identifier: BSD-2-Clause
+#
+
 from numba import ir, types, typing, config, analysis
 from numba.typing.templates import signature
 import numpy
