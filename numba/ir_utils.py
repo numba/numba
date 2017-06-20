@@ -29,7 +29,7 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
     """
     out = []
     ndims = 1
-    size_typ = types.int64
+    size_typ = types.intp
     if isinstance(size_var, tuple):
         if len(size_var) == 1:
             size_var = size_var[0]
@@ -37,31 +37,49 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
             # tuple_var = build_tuple([size_var...])
             ndims = len(size_var)
             tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
-            typemap[tuple_var.name] = types.containers.UniTuple(types.int64, ndims)
-            tuple_call = ir.Expr.build_tuple(list(size_var), loc)
+            if typemap:
+                typemap[tuple_var.name] = types.containers.UniTuple(types.intp, ndims)
+            # constant sizes need to be assigned to vars
+            new_sizes = []
+            for size in size_var:
+                if isinstance(size, ir.Var):
+                    new_size = size
+                else:
+                    assert isinstance(size, int)
+                    new_size = ir.Var(scope, mk_unique_var("$alloc_size"), loc)
+                    if typemap:
+                        typemap[new_size.name] = types.intp
+                    size_assign = ir.Assign(ir.Const(size, loc), new_size, loc)
+                    out.append(size_assign)
+                new_sizes.append(new_size)
+            tuple_call = ir.Expr.build_tuple(new_sizes, loc)
             tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
             out.append(tuple_assign)
             size_var = tuple_var
-            size_typ = types.containers.UniTuple(types.int64, ndims)
+            size_typ = types.containers.UniTuple(types.intp, ndims)
     # g_np_var = Global(numpy)
     g_np_var = ir.Var(scope, mk_unique_var("$np_g_var"), loc)
-    typemap[g_np_var.name] = types.misc.Module(numpy)
+    if typemap:
+        typemap[g_np_var.name] = types.misc.Module(numpy)
     g_np = ir.Global('np', numpy, loc)
     g_np_assign = ir.Assign(g_np, g_np_var, loc)
     # attr call: empty_attr = getattr(g_np_var, empty)
     empty_attr_call = ir.Expr.getattr(g_np_var, "empty", loc)
     attr_var = ir.Var(scope, mk_unique_var("$empty_attr_attr"), loc)
-    typemap[attr_var.name] = get_np_ufunc_typ(numpy.empty)
+    if typemap:
+        typemap[attr_var.name] = get_np_ufunc_typ(numpy.empty)
     attr_assign = ir.Assign(empty_attr_call, attr_var, loc)
     # alloc call: lhs = empty_attr(size_var, typ_var)
     typ_var = ir.Var(scope, mk_unique_var("$np_typ_var"), loc)
-    typemap[typ_var.name] = types.functions.NumberClass(dtype)
+    if typemap:
+        typemap[typ_var.name] = types.functions.NumberClass(dtype)
     # assuming str(dtype) returns valid np dtype string
     np_typ_getattr = ir.Expr.getattr(g_np_var, str(dtype), loc)
     typ_var_assign = ir.Assign(np_typ_getattr, typ_var, loc)
     alloc_call = ir.Expr.call(attr_var, [size_var, typ_var], (), loc)
-    calltypes[alloc_call] = typemap[attr_var.name].get_call_type(
-        typing.Context(), [size_typ, types.functions.NumberClass(dtype)], {})
+    if calltypes:
+        calltypes[alloc_call] = typemap[attr_var.name].get_call_type(
+            typing.Context(), [size_typ, types.functions.NumberClass(dtype)], {})
     #signature(
     #    types.npytypes.Array(dtype, ndims, 'C'), size_typ,
     #    types.functions.NumberClass(dtype))
@@ -77,47 +95,86 @@ def get_np_ufunc_typ(func):
             return v
     raise RuntimeError("type for func ", func, " not found")
 
-def mk_range_block(typemap, size_var, calltypes, scope, loc):
+def mk_range_block(typemap, start, stop, step, calltypes, scope, loc):
     """make a block that initializes loop range and iteration variables.
     target label in jump needs to be set.
     """
     # g_range_var = Global(range)
     g_range_var = ir.Var(scope, mk_unique_var("$range_g_var"), loc)
-    typemap[g_range_var.name] = _get_range_func_typ()
+    typemap[g_range_var.name] = get_global_func_typ(range)
     g_range = ir.Global('range', range, loc)
     g_range_assign = ir.Assign(g_range, g_range_var, loc)
-    # range_call_var = call g_range_var(size_var)
-    range_call = ir.Expr.call(g_range_var, [size_var], (), loc)
+    arg_nodes, args = _mk_range_args(typemap, start, stop, step, scope, loc)
+    # range_call_var = call g_range_var(start, stop, step)
+    range_call = ir.Expr.call(g_range_var, args, (), loc)
     calltypes[range_call] = typemap[g_range_var.name].get_call_type(
-        typing.Context(), [types.int64], {})
-    #signature(types.range_state64_type, types.int64)
+        typing.Context(), [types.intp]*len(args), {})
+    #signature(types.range_state64_type, types.intp)
     range_call_var = ir.Var(scope, mk_unique_var("$range_c_var"), loc)
-    typemap[range_call_var.name] = types.iterators.RangeType(types.int64)
+    typemap[range_call_var.name] = types.iterators.RangeType(types.intp)
     range_call_assign = ir.Assign(range_call, range_call_var, loc)
     # iter_var = getiter(range_call_var)
     iter_call = ir.Expr.getiter(range_call_var ,loc)
     calltypes[iter_call] = signature(types.range_iter64_type,
         types.range_state64_type)
     iter_var = ir.Var(scope, mk_unique_var("$iter_var"), loc)
-    typemap[iter_var.name] = types.iterators.RangeIteratorType(types.int64)
+    typemap[iter_var.name] = types.iterators.RangeIteratorType(types.intp)
     iter_call_assign = ir.Assign(iter_call, iter_var, loc)
     # $phi = iter_var
     phi_var = ir.Var(scope, mk_unique_var("$phi"), loc)
-    typemap[phi_var.name] = types.iterators.RangeIteratorType(types.int64)
+    typemap[phi_var.name] = types.iterators.RangeIteratorType(types.intp)
     phi_assign = ir.Assign(iter_var, phi_var, loc)
     # jump to header
     jump_header = ir.Jump(-1, loc)
     range_block = ir.Block(scope, loc)
-    range_block.body = [g_range_assign, range_call_assign, iter_call_assign,
-        phi_assign, jump_header]
+    range_block.body = arg_nodes + [g_range_assign, range_call_assign,
+        iter_call_assign, phi_assign, jump_header]
     return range_block
 
-def _get_range_func_typ():
-    """get type variable for range() from builtin registry"""
+def _mk_range_args(typemap, start, stop, step, scope, loc):
+    nodes = []
+    if isinstance(stop, ir.Var):
+        g_stop_var = stop
+    else:
+        assert isinstance(stop, int)
+        g_stop_var = ir.Var(scope, mk_unique_var("$range_stop"), loc)
+        if typemap:
+            typemap[g_stop_var.name] = types.intp
+        stop_assign = ir.Assign(ir.Const(stop, loc), g_stop_var, loc)
+        nodes.append(stop_assign)
+    if start==0 and step==1:
+        return nodes, [g_stop_var]
+
+    if isinstance(start, ir.Var):
+        g_start_var = start
+    else:
+        assert isinstance(start, int)
+        g_start_var = ir.Var(scope, mk_unique_var("$range_start"), loc)
+        if typemap:
+            typemap[g_start_var.name] = types.intp
+        start_assign = ir.Assign(ir.Const(start, loc), g_start_var)
+        nodes.append(start_assign)
+    if step==1:
+        return nodes, [g_start_var, g_stop_var]
+
+    if isinstance(step, ir.Var):
+        g_step_var = step
+    else:
+        assert isinstance(step, int)
+        g_step_var = ir.Var(scope, mk_unique_var("$range_step"), loc)
+        if typemap:
+            typemap[g_step_var.name] = types.intp
+        step_assign = ir.Assign(ir.Const(step, loc), g_step_var)
+        nodes.append(step_assign)
+
+    return nodes, [g_start_var, g_stop_var, g_step_var]
+
+def get_global_func_typ(func):
+    """get type variable for func() from builtin registry"""
     for (k,v) in typing.templates.builtin_registry.globals:
-        if k==range:
+        if k==func:
             return v
-    raise RuntimeError("range type not found")
+    raise RuntimeError("func type not found {}".format(func))
 
 def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
     """make a block that is a loop header updating iteration variables.
@@ -125,14 +182,14 @@ def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
     """
     # iternext_var = iternext(phi_var)
     iternext_var = ir.Var(scope, mk_unique_var("$iternext_var"), loc)
-    typemap[iternext_var.name] = types.containers.Pair(types.int64, types.boolean)
+    typemap[iternext_var.name] = types.containers.Pair(types.intp, types.boolean)
     iternext_call = ir.Expr.iternext(phi_var, loc)
     calltypes[iternext_call] = signature(
-        types.containers.Pair(types.int64, types.boolean), types.range_iter64_type)
+        types.containers.Pair(types.intp, types.boolean), types.range_iter64_type)
     iternext_assign = ir.Assign(iternext_call, iternext_var, loc)
     # pair_first_var = pair_first(iternext_var)
     pair_first_var = ir.Var(scope, mk_unique_var("$pair_first_var"), loc)
-    typemap[pair_first_var.name] = types.int64
+    typemap[pair_first_var.name] = types.intp
     pair_first_call = ir.Expr.pair_first(iternext_var, loc)
     pair_first_assign = ir.Assign(pair_first_call, pair_first_var, loc)
     # pair_second_var = pair_second(iternext_var)
@@ -142,7 +199,7 @@ def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
     pair_second_assign = ir.Assign(pair_second_call, pair_second_var, loc)
     # phi_b_var = pair_first_var
     phi_b_var = ir.Var(scope, mk_unique_var("$phi"), loc)
-    typemap[phi_b_var.name] = types.int64
+    typemap[phi_b_var.name] = types.intp
     phi_b_assign = ir.Assign(pair_first_var, phi_b_var, loc)
     # branch pair_second_var body_block out_block
     branch = ir.Branch(pair_second_var, -1, -1, loc)
@@ -316,12 +373,15 @@ def remove_dels(blocks):
     return
 
 def remove_dead(blocks, args):
-    """dead code elimination using liveness and CFG info"""
+    """dead code elimination using liveness and CFG info.
+    Returns True if something has been removed, or False if nothing is removed."""
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
     arg_aliases = find_potential_aliases(blocks, args)
+    call_table,_ = get_call_table(blocks)
 
+    removed = False
     for label, block in blocks.items():
         # find live variables at each statement to delete dead assignment
         lives = { v.name for v in block.terminator.list_vars() }
@@ -330,20 +390,21 @@ def remove_dead(blocks, args):
             lives |= live_map[out_blk]
         if label in cfg.exit_points():
             lives |= arg_aliases
-        remove_dead_block(block, lives, arg_aliases)
-    return
+        removed |= remove_dead_block(block, lives, call_table, arg_aliases)
+    return removed
 
 # other packages that define new nodes add calls to remove dead code in them
 # format: {type:function}
 remove_dead_extensions = {}
 
-def remove_dead_block(block, lives, args):
+def remove_dead_block(block, lives, call_table, args):
     """remove dead code using liveness info.
     Mutable arguments (e.g. arrays) that are not definitely assigned are live
     after return of function.
     """
     # TODO: find mutable args that are not definitely assigned instead of
     # assuming all args are live after return
+    removed = False
 
     # add statements in reverse order
     new_body = [block.terminator]
@@ -357,11 +418,16 @@ def remove_dead_block(block, lives, args):
         if isinstance(stmt, ir.Assign):
             lhs = stmt.target
             rhs = stmt.value
-            if lhs.name not in lives and has_no_side_effect(rhs, lives):
+            if lhs.name not in lives and has_no_side_effect(rhs, lives, call_table):
+                removed = True
                 continue
             if isinstance(rhs, ir.Var) and lhs.name==rhs.name:
+                removed = True
                 continue
             # TODO: remove other nodes like SetItem etc.
+        if isinstance(stmt, ir.SetItem):
+            if stmt.target.name not in lives:
+                continue
 
         lives |= { v.name for v in stmt.list_vars() }
         if isinstance(stmt, ir.Assign):
@@ -372,11 +438,17 @@ def remove_dead_block(block, lives, args):
         new_body.append(stmt)
     new_body.reverse()
     block.body = new_body
-    return
+    return removed
 
-def has_no_side_effect(rhs, lives):
+def has_no_side_effect(rhs, lives, call_table):
     # TODO: find side-effect free calls like Numpy calls
     if isinstance(rhs, ir.Expr) and rhs.op=='call':
+        func_name = rhs.func.name
+        if func_name not in call_table:
+            return False
+        call_list = call_table[func_name]
+        if call_list==['empty', numpy] or call_list==[slice]:
+            return True
         return False
     if isinstance(rhs, ir.Expr) and rhs.op=='inplace_binop':
         return rhs.lhs.name not in lives
@@ -596,8 +668,127 @@ def find_topo_order(blocks):
     post_order.reverse()
     return post_order
 
+# other packages that define new nodes add calls to get call table
+# format: {type:function}
+call_table_extensions = {}
+
+def get_call_table(blocks, call_table={}, reverse_call_table={}):
+    """returns a dictionary of call variables and their references.
+    """
+    # call_table example: c = np.zeros becomes c:["zeroes", np]
+    # reverse_call_table example: c = np.zeros becomes np_var:c
+
+    topo_order = find_topo_order(blocks)
+    for label in reversed(topo_order):
+        for inst in reversed(blocks[label].body):
+            if isinstance(inst, ir.Assign):
+                lhs = inst.target.name
+                rhs = inst.value
+                if isinstance(rhs, ir.Expr) and rhs.op=='call':
+                    call_table[rhs.func.name] = []
+                if isinstance(rhs, ir.Expr) and rhs.op=='getattr':
+                    if lhs in call_table:
+                        call_table[lhs].append(rhs.attr)
+                        reverse_call_table[rhs.value.name] = lhs
+                    if lhs in reverse_call_table:
+                        call_var = reverse_call_table[lhs]
+                        call_table[call_var].append(rhs.attr)
+                        reverse_call_table[rhs.value.name] = call_var
+                if isinstance(rhs, ir.Global):
+                    if lhs in call_table:
+                        call_table[lhs].append(rhs.value)
+                    if lhs in reverse_call_table:
+                        call_var = reverse_call_table[lhs]
+                        call_table[call_var].append(rhs.value)
+            for T,f in call_table_extensions.items():
+                if isinstance(inst,T):
+                    f(inst, call_table, reverse_call_table)
+    return call_table, reverse_call_table
+
+# other packages that define new nodes add calls to get tuple table
+# format: {type:function}
+tuple_table_extensions = {}
+
+def get_tuple_table(blocks, tuple_table={}):
+    """returns a dictionary of tuple variables and their values.
+    """
+    for block in blocks.values():
+        for inst in block.body:
+            if isinstance(inst, ir.Assign):
+                lhs = inst.target.name
+                rhs = inst.value
+                if isinstance(rhs, ir.Expr) and rhs.op=='build_tuple':
+                    tuple_table[lhs] = rhs.items
+                if isinstance(rhs, ir.Const) and isinstance(rhs.value, tuple):
+                    tuple_table[lhs] = rhs.value
+            for T,f in tuple_table_extensions.items():
+                if isinstance(inst,T):
+                    f(inst, tuple_table)
+    return tuple_table
+
 def get_stmt_writes(stmt):
     writes = set()
     if isinstance(stmt, (ir.Assign, ir.SetItem, ir.StaticSetItem)):
         writes.add(stmt.target.name)
     return writes
+
+def rename_labels(blocks):
+    """rename labels of function body blocks according to topological sort.
+    lowering requires this order.
+    """
+    topo_order = find_topo_order(blocks)
+
+    # make a block with return last if available (just for readability)
+    return_label = -1
+    for l,b in blocks.items():
+        if isinstance(b.body[-1], ir.Return):
+            return_label = l
+    # some cases like generators can have no return blocks
+    if return_label!=-1:
+        topo_order.remove(return_label)
+        topo_order.append(return_label)
+
+    label_map = {}
+    new_label = 0
+    for label in topo_order:
+        label_map[label] = new_label
+        new_label += 1
+    # update target labels in jumps/branches
+    for b in blocks.values():
+        term = b.terminator
+        if isinstance(term, ir.Jump):
+            term.target = label_map[term.target]
+        if isinstance(term, ir.Branch):
+            term.truebr = label_map[term.truebr]
+            term.falsebr = label_map[term.falsebr]
+    # update blocks dictionary keys
+    new_blocks = {}
+    for k, b in blocks.items():
+        new_label = label_map[k]
+        new_blocks[new_label] = b
+
+    return new_blocks
+
+# format: {type:function}
+array_accesses_extensions = {}
+
+def get_array_accesses(blocks, accesses={}):
+    """returns a dictionary of arrays accessed and their indices.
+    """
+    for block in blocks.values():
+        for inst in block.body:
+            if isinstance(inst, ir.SetItem):
+                accesses[inst.target.name] = inst.index.name
+            if isinstance(inst, ir.StaticSetItem):
+                accesses[inst.target.name] = inst.index_var.name
+            if isinstance(inst, ir.Assign):
+                lhs = inst.target.name
+                rhs = inst.value
+                if isinstance(rhs, ir.Expr) and rhs.op=='getitem':
+                    accesses[rhs.value.name] = rhs.index.name
+                if isinstance(rhs, ir.Expr) and rhs.op=='static_getitem':
+                    accesses[rhs.value.name] = rhs.index_var.name
+            for T,f in array_accesses_extensions.items():
+                if isinstance(inst,T):
+                    f(inst, accesses)
+    return accesses

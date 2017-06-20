@@ -13,8 +13,6 @@
 
 /*
  * EnvironmentObject hosts data needed for execution of compiled functions.
- * For now, it is only used in object mode (though it still gets passed
- * to nopython functions).
  */
 typedef struct {
     PyObject_HEAD

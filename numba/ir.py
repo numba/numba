@@ -265,6 +265,14 @@ class Expr(Inst):
         op = 'cast'
         return cls(op=op, value=value, loc=loc)
 
+    @classmethod
+    def make_function(cls, name, code, closure, defaults, loc):
+        """
+        A node for making a function object.
+        """
+        op = 'make_function'
+        return cls(op=op, name=name, code=code, closure=closure, defaults=defaults, loc=loc)
+
     def __repr__(self):
         if self.op == 'call':
             args = ', '.join(str(a) for a in self.args)
@@ -676,12 +684,16 @@ class Scope(object):
         else:
             return self.localvars.get(name)
 
-    def redefine(self, name, loc):
+    def redefine(self, name, loc, rename=True):
         """
         Redefine if the name is already defined
         """
         if name not in self.localvars:
             return self.define(name, loc)
+        elif not rename:
+            # Must use the same name if the variable is a cellvar, which
+            # means it could be captured in a closure.
+            return self.localvars.get(name)
         else:
             ct = self.redefined[name]
             self.redefined[name] = ct + 1
@@ -860,7 +872,15 @@ class FunctionIR(object):
 
     def copy(self):
         new_ir = copy.copy(self)
-        new_ir.blocks = self.blocks.copy()
+        blocks = {}
+        block_entry_vars = {}
+        for label, block in self.blocks.items():
+            new_block = block.copy()
+            blocks[label] = new_block
+            if block in self.block_entry_vars:
+                block_entry_vars[new_block] = self.block_entry_vars[block]
+        new_ir.blocks = blocks
+        new_ir.block_entry_vars = block_entry_vars
         return new_ir
 
     def get_block_entry_vars(self, block):

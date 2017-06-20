@@ -19,11 +19,10 @@ Constructs
 Numba strives to support as much of the Python language as possible, but
 some language features are not available inside Numba-compiled functions. The following Python language features are not currently supported:
 
-* Function definition
 * Class definition
 * Exception handling (``try .. except``, ``try .. finally``)
 * Context management (the ``with`` statement)
-* Comprehensions (either list, dict, set or generator comprehensions)
+* Some comprehensions (list comprehension is supported, but not dict, set or generator comprehensions)
 * Generator delegation (``yield from``)
 
 The ``raise`` statement is supported in several forms:
@@ -36,6 +35,14 @@ The ``raise`` statement is supported in several forms:
 Similarly, the ``assert`` statement is supported with or without an error
 message.
 
+Inner function and closure
+--------------------------
+
+Numba now supports inner functions as long as they are non-recursive
+and only called locally, but not passed as argument or returned as
+result. The use of closure variables (variables defined in outer scopes)
+within an inner function is also supported.
+
 Function calls
 --------------
 
@@ -43,6 +50,9 @@ Numba supports function calls using positional and named arguments, as well
 as arguments with default values and ``*args`` (note the argument for
 ``*args`` can only be a tuple, not a list).  Explicit ``**kwargs`` are
 not supported.
+
+Function calls to locally defined inner functions are supported as long as
+they can be fully inlined.
 
 Recursive calls
 '''''''''''''''
@@ -122,6 +132,12 @@ contains a :class:`int` and a :class:`float`).
 .. warning::
    List sorting currently uses a quicksort algorithm, which has different
    performance characterics than the algorithm used by Python.
+
+List comprehension
+''''''''''''''''''
+
+Numba supports list comprehension, but not the creation of nested list.
+
 
 set
 ---

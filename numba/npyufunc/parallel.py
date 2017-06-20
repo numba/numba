@@ -45,7 +45,12 @@ class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
         signature = cres.signature
         library = cres.library
         fname = cres.fndesc.llvm_func_name
-        ptr = build_ufunc_wrapper(library, ctx, fname, signature)
+
+        env = cres.environment
+        envptr = env.as_pointer(ctx)
+
+        ptr = build_ufunc_wrapper(library, ctx, fname, signature, env=env,
+                                  envptr=envptr)
         # Get dtypes
         dtypenums = [np.dtype(a.name).num for a in signature.args]
         dtypenums.append(np.dtype(signature.return_type.name).num)
@@ -53,10 +58,10 @@ class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
         return dtypenums, ptr, keepalive
 
 
-def build_ufunc_wrapper(library, ctx, fname, signature):
+def build_ufunc_wrapper(library, ctx, fname, signature, env, envptr):
     innerfunc = ufuncbuilder.build_ufunc_wrapper(library, ctx, fname, signature,
-                                                 objmode=False, env=None,
-                                                 envptr=None)
+                                                 objmode=False, env=env,
+                                                 envptr=envptr)
     return build_ufunc_kernel(library, ctx, innerfunc, signature)
 
 
@@ -304,6 +309,13 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
 
     args, dimensions, steps, data = lfunc.args
 
+    # Release the GIL (and ensure we have the GIL)
+    # Note: numpy ufunc may not always release the GIL; thus,
+    #       we need to ensure we have the GIL.
+    pyapi = ctx.get_python_api(builder)
+    gil_state = pyapi.gil_ensure()
+    thread_state = pyapi.save_thread()
+
     # Distribute work
     total = builder.load(dimensions)
     ncpu = lc.Constant.int(total.type, NUM_THREADS)
@@ -378,6 +390,9 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
     builder.call(ready, ())
     # Wait for workers
     builder.call(synchronize, ())
+    # Release the GIL
+    pyapi.restore_thread(thread_state)
+    pyapi.gil_release(gil_state)
 
     builder.ret_void()
 

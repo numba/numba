@@ -5,6 +5,7 @@ import itertools
 import re
 import sys
 import warnings
+import threading
 
 import numpy as np
 
@@ -1805,6 +1806,34 @@ class TestUFuncBadArgsNoPython(TestCase):
             np.add(x, x, y)
         self.assertRaises(TypingError, compile_isolated, func, [types.float64],
                           return_type=types.float64, flags=self._compile_flags)
+
+class TestUFuncCompilationThreadSafety(TestCase):
+
+    def test_lock(self):
+        """
+        Test that (lazy) compiling from several threads at once doesn't
+        produce errors (see issue #2403).
+        """
+        errors = []
+
+        @vectorize
+        def foo(x):
+            return x + 1
+
+        def wrapper():
+            try:
+                a = np.ones((10,), dtype = np.float64)
+                expected = np.ones((10,), dtype = np.float64) + 1.
+                np.testing.assert_array_equal(foo(a), expected)
+            except BaseException as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=wrapper) for i in range(16)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertFalse(errors)
 
 
 if __name__ == '__main__':

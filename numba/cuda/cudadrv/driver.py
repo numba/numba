@@ -610,8 +610,7 @@ class Context(object):
     def get_max_potential_block_size(self, func, b2d_func, memsize, blocksizelimit, flags=None):
         """Suggest a launch configuration with reasonable occupancy.
         :param func: kernel for which occupancy is calculated
-        :param b2d_func: function that calculates how much per-block dynamic shared memory 'func'
-          uses based on the block size.
+        :param b2d_func: function that calculates how much per-block dynamic shared memory 'func' uses based on the block size.
         :param memsize: per-block dynamic shared memory usage intended, in bytes
         :param blocksizelimit: maximum block size the kernel is designed to handle"""
 

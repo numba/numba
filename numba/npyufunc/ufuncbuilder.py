@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 
 import warnings
 import inspect
+from contextlib import contextmanager
 
 import numpy as np
 
@@ -74,9 +75,7 @@ class UFuncDispatcher(object):
         # The feature requires a real python function
         flags.unset("enable_looplift")
 
-        cres = self._compile_core(sig, flags, locals)
-        self.overloads[cres.signature] = cres
-        return cres
+        return self._compile_core(sig, flags, locals)
 
     def _compile_core(self, sig, flags, locals):
         """
@@ -85,19 +84,38 @@ class UFuncDispatcher(object):
         """
         typingctx = self.targetdescr.typing_context
         targetctx = self.targetdescr.target_context
+
+        @contextmanager
+        def store_overloads_on_success():
+            # use to ensure overloads are stored on success
+            try:
+                yield
+            except:
+                raise
+            else:
+                exists = self.overloads.get(cres.signature)
+                if exists is None:
+                    self.overloads[cres.signature] = cres
+
         # Use cache and compiler in a critical section
         with compiler.lock_compiler:
-            cres = self.cache.load_overload(sig, targetctx)
-            if cres is not None:
-                # Use cached version
+            with store_overloads_on_success():
+                # attempt look up of existing
+                cres = self.cache.load_overload(sig, targetctx)
+                if cres is not None:
+                    return cres
+
+                # Compile
+                args, return_type = sigutils.normalize_signature(sig)
+                cres = compiler.compile_extra(typingctx, targetctx,
+                                              self.py_func, args=args,
+                                              return_type=return_type,
+                                              flags=flags, locals=locals)
+
+                # cache lookup failed before so safe to save
+                self.cache.save_overload(sig, cres)
+
                 return cres
-            # Compile
-            args, return_type = sigutils.normalize_signature(sig)
-            cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
-                                        args=args, return_type=return_type,
-                                        flags=flags, locals=locals)
-            self.cache.save_overload(sig, cres)
-            return cres
 
 
 dispatcher_registry['npyufunc'] = UFuncDispatcher
@@ -135,16 +153,8 @@ def _build_element_wise_ufunc_wrapper(cres, signature):
     library = cres.library
     fname = cres.fndesc.llvm_func_name
 
-    env = None
-    if cres.objectmode:
-        # Get env
-        env = cres.environment
-        assert env is not None
-        ll_intp = cres.target_context.get_value_type(types.intp)
-        ll_pyobj = cres.target_context.get_value_type(types.pyobject)
-        envptr = lc.Constant.int(ll_intp, id(env)).inttoptr(ll_pyobj)
-    else:
-        envptr = None
+    env = cres.environment
+    envptr = env.as_pointer(ctx)
 
     ptr = build_ufunc_wrapper(library, ctx, fname, signature,
                               cres.objectmode, envptr, env)

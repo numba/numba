@@ -444,7 +444,7 @@ class BaseContext(object):
             else:
                 return min(forward, backward)
 
-    def _rate_arguments(self, actualargs, formalargs):
+    def _rate_arguments(self, actualargs, formalargs, unsafe_casting=True):
         """
         Rate the actual arguments for compatibility against the formal
         arguments.  A Rating instance is returned, or None if incompatible.
@@ -455,6 +455,8 @@ class BaseContext(object):
         for actual, formal in zip(actualargs, formalargs):
             conv = self.can_convert(actual, formal)
             if conv is None:
+                return None
+            elif not unsafe_casting and conv >= Conversion.unsafe:
                 return None
 
             if conv == Conversion.promote:
@@ -490,20 +492,24 @@ class BaseContext(object):
         return True
 
     def resolve_overload(self, key, cases, args, kws,
-                         allow_ambiguous=True):
+                         allow_ambiguous=True, unsafe_casting=True):
         """
         Given actual *args* and *kws*, find the best matching
         signature in *cases*, or None if none matches.
         *key* is used for error reporting purposes.
         If *allow_ambiguous* is False, a tie in the best matches
         will raise an error.
+        If *unsafe_casting* is False, unsafe casting is forbidden.
         """
         assert not kws, "Keyword arguments are not supported, yet"
+        options = {
+            'unsafe_casting': unsafe_casting,
+        }
         # Rate each case
         candidates = []
         for case in cases:
             if len(args) == len(case.args):
-                rating = self._rate_arguments(args, case.args)
+                rating = self._rate_arguments(args, case.args, **options)
                 if rating is not None:
                     candidates.append((rating.astuple(), case))
 
