@@ -36,14 +36,14 @@ public:
     RangeActual(const std::vector<intp> &lens) {
         for(uintp i = 0; i < lens.size(); ++i) {
             start.push_back(0);
-            end.push_back(lens[i] - 1); 
+            end.push_back(lens[i] - 1);
         }
     }
 
     RangeActual(intp num_dims, intp *lens) {
         for(intp i = 0; i < num_dims; ++i) {
             start.push_back(0);
-            end.push_back(lens[i] - 1); 
+            end.push_back(lens[i] - 1);
         }
     }
 
@@ -61,8 +61,11 @@ public:
     std::vector<intp> iters_per_dim() const {
         std::vector<intp> ret;
         for(uintp i = 0; i < start.size(); ++i) {
-            ret.push_back(end[i] < start[i] ? 0 : end[i] - start[i] + 1);
-        } 
+			intp ret_val = end[i] - start[i] + 1;
+			if(end[i] < start[i])
+				ret_val = 0;
+            ret.push_back(ret_val);
+        }
         return ret;
     }
 };
@@ -126,20 +129,20 @@ RangeActual isfRangeToActual(const std::vector<isf_range> &build) {
     }
     return RangeActual(lower_bounds, upper_bounds);
 }
-    
-void divide_work(const RangeActual &full_iteration_space, 
-                 std::vector<RangeActual> &assignments, 
-                 std::vector<isf_range> &build, 
-                 uintp start_thread, 
-                 uintp end_thread, 
-                 const std::vector<dimlength> &dims, 
+
+void divide_work(const RangeActual &full_iteration_space,
+                 std::vector<RangeActual> &assignments,
+                 std::vector<isf_range> &build,
+                 uintp start_thread,
+                 uintp end_thread,
+                 const std::vector<dimlength> &dims,
                  uintp index) {
     uintp num_threads = (end_thread - start_thread) + 1;
 
     assert(num_threads >= 1);
     if(num_threads == 1) {
         assert(build.size() <= dims.size());
-            
+
         if(build.size() == dims.size()) {
             assignments[start_thread] = isfRangeToActual(build);
         } else {
@@ -153,7 +156,7 @@ void divide_work(const RangeActual &full_iteration_space,
         for(uintp i = index; i < dims.size(); ++i) total_len += dims[i].length;
         uintp divisions_for_this_dim;
         if(total_len == 0) {
-            divisions_for_this_dim = num_threads; 
+            divisions_for_this_dim = num_threads;
         } else {
             std::vector<float> percent_dims;
             float dim_prod = 1;
@@ -164,20 +167,20 @@ void divide_work(const RangeActual &full_iteration_space,
             }
             divisions_for_this_dim = intp(guround(std::pow((double)(num_threads / dim_prod), (double)(1.0 / percent_dims.size())) * percent_dims[0]));
         }
-              
+
         uintp chunkstart = full_iteration_space.start[dims[index].dim];
         uintp chunkend   = full_iteration_space.end[dims[index].dim];
-                                                                                                  
+
         uintp threadstart = start_thread;
         uintp threadend   = end_thread;
-              
+
         for(uintp i = 0; i < divisions_for_this_dim; ++i) {
             chunk_info chunk_index = chunk(chunkstart,  chunkend,  divisions_for_this_dim - i);
             chunk_info chunk_thread = chunk(threadstart, threadend, divisions_for_this_dim - i);
             chunkstart = chunk_index.m_c;
             threadstart = chunk_thread.m_c;
             std::vector<isf_range> new_build(&build[0], &build[index]);
-            new_build.push_back(isf_range(dims[index].dim, chunk_index.m_a, chunk_index.m_b)); 
+            new_build.push_back(isf_range(dims[index].dim, chunk_index.m_a, chunk_index.m_b));
             divide_work(full_iteration_space, assignments, new_build, chunk_thread.m_a, chunk_thread.m_b, dims, index+1);
         }
     }
@@ -185,7 +188,7 @@ void divide_work(const RangeActual &full_iteration_space,
 
 void flatten_schedule(const std::vector<RangeActual> &sched, intp *out_sched) {
     uintp outer = sched.size();
-    uintp inner = sched[0].start.size(); 
+    uintp inner = sched[0].start.size();
     for(uintp i = 0; i < outer; ++i) {
         for(uintp j = 0; j < inner; ++j) {
             out_sched[(i*inner*2) + j] = sched[i].start[j];
@@ -212,7 +215,7 @@ void create_schedule(const RangeActual &full_space, uintp num_sched, intp *sched
             flatten_schedule(ret, sched);
             return;
         } else {
-            uintp ilen = ra_len / num_sched; 
+            uintp ilen = ra_len / num_sched;
             //uintp imod = ra_len % num_sched;
 
             std::vector<RangeActual> ret;
@@ -232,7 +235,7 @@ void create_schedule(const RangeActual &full_space, uintp num_sched, intp *sched
     } else {
         std::vector<dimlength> dims;
         for(uintp i = 0; i < ipd.size(); ++i) dims.push_back(dimlength(i, ipd[i]));
-       
+
         std::sort(dims.begin(), dims.end(), dimlength_by_length_reverse());
         std::vector<RangeActual> assignments(num_sched, RangeActual(-1,-2));
         std::vector<isf_range> build;
@@ -241,7 +244,7 @@ void create_schedule(const RangeActual &full_space, uintp num_sched, intp *sched
         return;
     }
 }
-    
+
 /*
     num_dim (D) is the number of dimensions of the iteration space.
     starts is the range-start of each of those dimensions, inclusive.
@@ -266,4 +269,3 @@ extern "C" void do_scheduling(intp num_dim, intp *starts, intp *ends, uintp num_
     RangeActual full_space(num_dim, starts, ends);
     create_schedule(full_space, num_threads, sched);
 }
-
