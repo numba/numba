@@ -169,8 +169,9 @@ class ArrayAnalysis(object):
                     # reuse a size variable from this correlation
                     # TODO: consider CFG?
                     self.array_size_vars[lhs][i] = self.class_sizes[corr][0]
+        else:
+            self._analyze_rhs_classes_no_lhs_array(rhs)
 
-        # print(self.array_shape_classes)
         return size_calls
 
     def _gen_size_call(self, var, i):
@@ -216,8 +217,29 @@ class ArrayAnalysis(object):
         out.append(getitem_assign)
         return out
 
-    # lhs is array so rhs has to return array
+    def _analyze_rhs_classes_no_lhs_array(self, rhs):
+        """analysis of rhs when lhs is not array"""
+        if isinstance(rhs, ir.Expr) and rhs.op=='call':
+            call_name = 'NULL'
+            if rhs.func.name in self.numpy_calls.keys():
+                call_name = self.numpy_calls[rhs.func.name]
+                if call_name=='dot':
+                    assert len(rhs.args)==2 or len(rhs.args)==3
+                    in1 = rhs.args[0].name
+                    in2 = rhs.args[1].name
+                    # vector dot scalar doesn't give dimension size info
+                    if not self._isarray(in1) or not self._isarray(in2):
+                        return
+                    # vector dot vector only at this point
+                    assert self._get_ndims(in1)==1
+                    assert self._get_ndims(in2)==1
+                    c1 = self.array_shape_classes[in1][0]
+                    c2 = self.array_shape_classes[in2][0]
+                    self._merge_classes(c1, c2)
+        return
+
     def _analyze_rhs_classes(self, node):
+        """analysis of rhs when lhs is array so rhs has to return array"""
         if isinstance(node, ir.Arg):
             return None
             # can't assume node.name is valid variable
