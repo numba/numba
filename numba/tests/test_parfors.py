@@ -26,7 +26,7 @@ from numba.ir_utils import (copy_propagate, apply_copy_propagate,
 from numba import ir
 from numba.compiler import compile_isolated, Flags
 from numba.bytecode import ByteCodeIter
-
+from .support import tag
 
 class TestParforsBase(unittest.TestCase):
     """
@@ -153,6 +153,7 @@ class TestParfors(TestParforsBase):
         cfunc, cpfunc = self.compile_all(pyfunc, *args)
         self.check_prange_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
 
+    @tag('important')
     def test_arraymap(self):
         def test_impl(a, x, y):
             return a * x + y
@@ -163,6 +164,7 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, A, X, Y)
 
+    @tag('important')
     def test_mvdot(self):
         def test_impl(a, v):
             return np.dot(a, v)
@@ -172,6 +174,7 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, A, v)
 
+    @tag('important')
     def test_2d_parfor(self):
         def test_impl():
             X = np.ones((10, 12))
@@ -179,6 +182,7 @@ class TestParfors(TestParforsBase):
             return np.sum(X + Y)
         self.check(test_impl)
 
+    @tag('important')
     def test_pi(self):
         def test_impl(n):
             x = 2 * np.random.ranf(n) - 1
@@ -187,6 +191,7 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, 100000, decimal=1)
 
+    @tag('important')
     def test_test1(self):
         typingctx = typing.Context()
         targetctx = cpu.CPUContext(typingctx)
@@ -221,6 +226,7 @@ class TestParfors(TestParforsBase):
             parfor_pass.run()
             self.assertTrue(countParfors(test_ir) == 1)
 
+    @tag('important')
     def test_test2(self):
         typingctx = typing.Context()
         targetctx = cpu.CPUContext(typingctx)
