@@ -53,8 +53,9 @@ def int_coerce_usecase(x):
 
 def vectorize_usecase(x):
     if x != RequestError.not_found:
-        return RequestError.internal_error
-    return x
+        return RequestError['internal_error']
+    else:
+        return RequestError.dummy
 
 
 class BaseEnumTest(object):
