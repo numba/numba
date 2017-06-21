@@ -2,11 +2,10 @@
 Implementation of enums.
 """
 
-from llvmlite import ir
 
 from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
                        lower_cast, lower_constant, impl_ret_untracked)
-from .. import typing, types, cgutils
+from .. import types
 
 
 @lower_builtin('==', types.EnumMember, types.EnumMember)
@@ -16,6 +15,7 @@ def enum_eq(context, builder, sig, args):
     res = context.generic_compare(builder, "==",
                                   (tu.dtype, tv.dtype), (u, v))
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @lower_builtin('is', types.EnumMember, types.EnumMember)
 def enum_is(context, builder, sig, args):
@@ -30,7 +30,7 @@ def enum_is(context, builder, sig, args):
 
 
 @lower_builtin('!=', types.EnumMember, types.EnumMember)
-def enum_eq(context, builder, sig, args):
+def enum_ne(context, builder, sig, args):
     tu, tv = sig.args
     u, v = args
     res = context.generic_compare(builder, "!=",
@@ -42,12 +42,14 @@ def enum_eq(context, builder, sig, args):
 def enum_value(context, builder, ty, val):
     return val
 
+
 @lower_cast(types.IntEnumMember, types.Integer)
 def int_enum_to_int(context, builder, fromty, toty, val):
     """
     Convert an IntEnum member to its raw integer value.
     """
     return context.cast(builder, val, fromty.dtype, toty)
+
 
 @lower_constant(types.EnumMember)
 def enum_constant(context, builder, ty, pyval):
@@ -56,10 +58,22 @@ def enum_constant(context, builder, ty, pyval):
     """
     return context.get_constant_generic(builder, ty.dtype, pyval.value)
 
+
 @lower_getattr_generic(types.EnumClass)
-def enum_class_lookup(context, builder, ty, val, attr):
+def enum_class_getattr(context, builder, ty, val, attr):
     """
-    Return an enum member by name.
+    Return an enum member by attribute name.
     """
     member = getattr(ty.instance_class, attr)
     return context.get_constant_generic(builder, ty.dtype, member.value)
+
+
+@lower_builtin('static_getitem', types.EnumClass, types.Const)
+def enum_class_getitem(context, builder, sig, args):
+    """
+    Return an enum member by index name.
+    """
+    enum_cls_typ, idx = sig.args
+    member = enum_cls_typ.instance_class[idx.value]
+    return context.get_constant_generic(builder, enum_cls_typ.dtype,
+                                        member.value)
