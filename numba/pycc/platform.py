@@ -152,7 +152,7 @@ def _exec_command(command, use_shell=None, use_tee = None, **env):
     if os.name == 'posix' and use_shell:
         # On POSIX, subprocess always uses /bin/sh, override
         sh = os.environ.get('SHELL', '/bin/sh')
-        if is_sequence(command):
+        if _is_sequence(command):
             command = [sh, '-c', ' '.join(command)]
         else:
             command = [sh, '-c', command]
