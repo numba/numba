@@ -130,6 +130,8 @@ def as_dtype(nbtype):
         return np.dtype('%s%d' % (letter, nbtype.count))
     if isinstance(nbtype, types.Record):
         return nbtype.dtype
+    if isinstance(nbtype, types.EnumMember):
+        return as_dtype(nbtype.dtype)
     raise NotImplementedError("%r cannot be represented as a Numpy dtype"
                               % (nbtype,))
 
