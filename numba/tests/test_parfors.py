@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
+import sys
+
 import numpy as np
 
 import numba
@@ -182,6 +184,28 @@ class TestParfors(unittest.TestCase):
             #print(tp.func_ir.dump())
             #print(countParfors(tp.func_ir) == 1)
             self.assertTrue(countParfors(test_ir) == 1)
+
+    @unittest.skipIf(not (sys.platform.startswith('win32')
+                          and sys.version_info[:2] == (2, 7)),
+                    "Only impacts Windows with Python 2.7")
+    def test_windows_py27_combination_raises(self):
+        """
+        This test is in place until issues with the 'parallel'
+        target on Windows with Python 2.7 are fixed.
+        """
+        
+        @njit(parallel=True)
+        def ddot(a, v):
+            return np.dot(a, v)
+
+        A = np.linspace(0, 1, 20).reshape(2, 10)
+        v = np.linspace(2, 1, 10)
+        with self.assertRaises(RuntimeError) as raised:
+            ddot(A, v)
+        msg = ("The 'parallel' target is not currently supported on "
+            "Windows operating systems when using Python 2.7.")
+        self.assertIn(msg, str(raised.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
