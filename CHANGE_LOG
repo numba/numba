@@ -1,7 +1,90 @@
-Version 0.34.0.dev
-------------------
+Version 0.34.0
+--------------
 
-In development.
+This release adds a significant set of new features arising from combined work
+with Intel on ParallelAccelerator technology. It also adds list comprehension
+and closure support, support for Numpy 1.13 and a new, faster, CUDA reduction
+algorithm. For Linux users this release is the first to be built on Centos 6,
+which will be the new base platform for future releases. Finally a number of
+thread-safety, type inference and other smaller enhancements and bugs have been
+fixed.
+
+
+ParallelAccelerator features:
+
+NOTE: The ParallelAccelerator technology is under active development and should
+      be considered experimental.
+
+The ParallelAccelerator technology is accessed via a new no Python mode option
+"parallel". The ParallelAccelerator technology attempts to identify operations
+which have parallel semantics (for instance adding a scalar to a vector), fuse
+together adjacent such operations, and then parallelize their execution across
+a number of CPU cores. This is essentially auto-parallelization.
+
+In addition to the auto-parallelization feature, explicit loop based
+parallelism is made available through the use of `prange` in place of `range`
+as a loop iterator.
+
+More information and examples on both auto-parallelization and `prange` are
+available in the documentation and examples directory respectively.
+
+As part of the necessary work for ParallelAccelerator, support for closures
+and list comprehensions is added:
+
+* PR #2318: Transfer ParallelAccelerator technology to Numba
+* PR #2379: ParallelAccelerator Core Improvements
+* PR #2367: Add support for len(range(...))
+* PR #2369: List comprehension
+* PR #2391: Explicit Parallel Loop Support (prange)
+
+The ParallelAccelerator features are available on all supported platforms and
+Python versions with the exceptions of (with view of supporting in a future
+release):
+
+* The combination of Windows operating systems with Python 2.7.
+* Systems running 32 bit Python.
+
+
+CUDA support enhancements:
+
+* PR #2377: New GPU reduction algorithm 
+
+
+CUDA support fixes:
+
+* PR #2397: Fix #2393, always set alignment of cuda static memory regions 
+
+
+Misc Fixes:
+
+* PR #2373, Issue #2372: 32-bit compatibility fix for parfor related code
+* PR #2376: Fix #2375 missing stdint.h for py2.7 vc9
+* PR #2378: Fix deadlock in parallel gufunc when kernel acquires the GIL. 
+* PR #2382: Forbid unsafe casting in bitwise operation 
+* PR #2385: docs: fix Sphinx errors 
+* PR #2396: Use 64-bit RHS operand for shift 
+* PR #2404: Fix threadsafety logic issue in ufunc compilation cache.  
+* PR #2424: Ensure consistent iteration order of blocks for type inference.
+* PR #2425: Guard code to prevent the use of 'parallel' on win32 + py27
+* PR #2426: Basic test for Enum member type recovery.
+* PR #2433: Fix up the parfors tests with respect to windows py2.7
+
+
+Misc Enhancements:
+
+* PR #2366: Improvements to IR utils
+* PR #2388: Update README.rst to indicate the proper version of LLVM 
+* PR #2394: Upgrade to llvmlite 0.19.* 
+* PR #2395: Update llvmlite version to 0.19
+* PR #2406: Expose environment object to ufuncs 
+* PR #2407: Expose environment object to target-context inside lowerer 
+* PR #2413: Add flags to pass through to conda build for buildbot  
+* PR #2414: Add cross compile flags to local recipe
+* PR #2415: A few cleanups for rewrites
+* PR #2418: Add getitem support for Enum classes
+* PR #2419: Add support for returning enums in vectorize 
+* PR #2421: Add copyright notice for Intel contributed files.
+* PR #2422: Patch code base to work with np 1.13 release
 
 
 Version 0.33.0
