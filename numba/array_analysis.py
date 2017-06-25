@@ -17,6 +17,7 @@ UNKNOWN_CLASS = -1
 CONST_CLASS = 0
 MAP_TYPES = [numpy.ufunc]
 
+array_analysis_extensions = {}
 
 class ArrayAnalysis(object):
     """Analyzes Numpy array computations for properties such as shapes
@@ -102,6 +103,10 @@ class ArrayAnalysis(object):
     def _analyze_inst(self, inst):
         if isinstance(inst, ir.Assign):
             return self._analyze_assign(inst)
+        elif type(inst) in array_analysis_extensions:
+            # let external calls handle stmt if type matches
+            f = array_analysis_extensions[type(inst)]
+            return f(inst, self)
         return []
 
     def _analyze_assign(self, assign):
