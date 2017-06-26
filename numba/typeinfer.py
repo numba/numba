@@ -18,6 +18,7 @@ import contextlib
 import itertools
 from pprint import pprint
 import traceback
+from collections import OrderedDict
 
 from numba import ir, types, utils, config, six, typing
 from .errors import TypingError, UntypedAttributeError, new_error_context
@@ -649,7 +650,10 @@ class TypeInferer(object):
 
     def __init__(self, context, func_ir, warnings):
         self.context = context
-        self.blocks = func_ir.blocks
+        # sort based on label, ensure iteration order!
+        self.blocks = OrderedDict()
+        for k in sorted(func_ir.blocks.keys()):
+            self.blocks[k] = func_ir.blocks[k]
         self.generator_info = func_ir.generator_info
         self.func_id = func_ir.func_id
         self.func_ir = func_ir
