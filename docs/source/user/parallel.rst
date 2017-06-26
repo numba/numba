@@ -1,3 +1,6 @@
+.. Copyright (c) 2017 Intel Corporation
+   SPDX-License-Identifier: BSD-2-Clause
+
 .. _numba-parallel:
 
 =======================================

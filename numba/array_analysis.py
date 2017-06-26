@@ -1,3 +1,8 @@
+#
+# Copyright (c) 2017 Intel Corporation
+# SPDX-License-Identifier: BSD-2-Clause
+#
+
 from __future__ import print_function, division, absolute_import
 import types as pytypes # avoid confusion with numba.types
 import numpy

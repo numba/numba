@@ -1,3 +1,8 @@
+#
+# Copyright (c) 2017 Intel Corporation
+# SPDX-License-Identifier: BSD-2-Clause
+#
+
 from numba import compiler, typing
 from numba.targets import cpu
 from numba import types

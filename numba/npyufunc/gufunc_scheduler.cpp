@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2017 Intel Corporation
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 #include <vector>
 #include <assert.h>
 #include <algorithm>

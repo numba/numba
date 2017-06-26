@@ -1,3 +1,8 @@
+#
+# Copyright (c) 2017 Intel Corporation
+# SPDX-License-Identifier: BSD-2-Clause
+#
+
 """
 This module transforms data-parallel operations such as Numpy calls into
 'Parfor' nodes, which are nested loops that can be parallelized.

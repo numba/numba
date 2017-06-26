@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2017 Intel Corporation
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 #ifndef GUFUNC_SCHEDULER
 #define GUFUNC_SCHEDULER
 
