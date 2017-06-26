@@ -4,6 +4,7 @@ Define @jit and related decorators.
 
 from __future__ import print_function, division, absolute_import
 
+import sys
 import warnings
 
 from . import config, sigutils
@@ -132,6 +133,12 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **opti
         raise DeprecationError(_msg_deprecated_signature_arg.format('argtypes'))
     if 'restype' in options:
         raise DeprecationError(_msg_deprecated_signature_arg.format('restype'))
+
+    if options.get('parallel'):
+        if sys.platform.startswith('win32') and sys.version_info[:2] == (2, 7):
+            msg = ("The 'parallel' target is not currently supported on "
+                "Windows operating systems when using Python 2.7.")
+            raise RuntimeError(msg)
 
     # Handle signature
     if signature_or_function is None:
