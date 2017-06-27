@@ -244,11 +244,16 @@ class TestListComprehension(unittest.TestCase):
         msg = "unsupported nested memory-managed object"
         self.assertIn(msg, str(raises.exception))
 
+        if sys.maxsize > 2 ** 32:
+            bits = 64
+        else:
+            bits = 32
+        
         if utils.PYVERSION < (3, 0):
             with self.assertRaises(TypingError) as raises:
                 cfunc = jit(nopython=True)(list22)
                 cfunc(var)
-            msg = "cannot unify reflected list(int64) and int64"
+            msg = "cannot unify reflected list(int%d) and int%d" % (bits, bits)
             self.assertIn(msg, str(raises.exception))
 
 

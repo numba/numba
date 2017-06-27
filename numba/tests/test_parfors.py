@@ -28,6 +28,13 @@ from numba.compiler import compile_isolated, Flags
 from numba.bytecode import ByteCodeIter
 from .support import tag
 
+# for decorating tests, marking that Windows with Python 2.7 is not supported
+_windows_py27 = (sys.platform.startswith('win32') and
+                 sys.version_info[:2] == (2, 7))
+_reason = '"parallel" target not supported on Windows with Python 2.7.'
+skip_windows_py27 = unittest.skipIf(_windows_py27, _reason)
+
+
 class TestParforsBase(unittest.TestCase):
     """
     Base class for testing parfors.
@@ -153,6 +160,7 @@ class TestParfors(TestParforsBase):
         cfunc, cpfunc = self.compile_all(pyfunc, *args)
         self.check_prange_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
 
+    @skip_windows_py27
     @tag('important')
     def test_arraymap(self):
         def test_impl(a, x, y):
@@ -164,6 +172,7 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, A, X, Y)
 
+    @skip_windows_py27
     @tag('important')
     def test_mvdot(self):
         def test_impl(a, v):
@@ -174,6 +183,7 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, A, v)
 
+    @skip_windows_py27
     @tag('important')
     def test_2d_parfor(self):
         def test_impl():
@@ -182,6 +192,7 @@ class TestParfors(TestParforsBase):
             return np.sum(X + Y)
         self.check(test_impl)
 
+    @skip_windows_py27
     @tag('important')
     def test_pi(self):
         def test_impl(n):
@@ -263,23 +274,22 @@ class TestParfors(TestParforsBase):
             parfor_pass.run()
             self.assertTrue(countParfors(test_ir) == 1)
 
-    @unittest.skipIf(not (sys.platform.startswith('win32')
-                          and sys.version_info[:2] == (2, 7)),
-                    "Only impacts Windows with Python 2.7")
+    @unittest.skipIf(not _windows_py27, "Only impacts Windows with Python 2.7")
     def test_windows_py27_combination_raises(self):
         """
         This test is in place until issues with the 'parallel'
         target on Windows with Python 2.7 are fixed.
         """
         
-        @njit(parallel=True)
-        def ddot(a, v):
-            return np.dot(a, v)
-
-        A = np.linspace(0, 1, 20).reshape(2, 10)
-        v = np.linspace(2, 1, 10)
         with self.assertRaises(RuntimeError) as raised:
+            @njit(parallel=True)
+            def ddot(a, v):
+                return np.dot(a, v)
+
+            A = np.linspace(0, 1, 20).reshape(2, 10)
+            v = np.linspace(2, 1, 10)
             ddot(A, v)
+
         msg = ("The 'parallel' target is not currently supported on "
             "Windows operating systems when using Python 2.7.")
         self.assertIn(msg, str(raised.exception))
@@ -662,7 +672,6 @@ class TestPrange(TestParforsBase):
             return acc
         self.prange_tester(test_impl)
 
-    # TODO: Fails, Operands must be the same type, got (i32, i64)
     def test_prange13(self):
         def test_impl(n):
             acc = 0
