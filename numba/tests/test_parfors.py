@@ -294,6 +294,7 @@ class TestParfors(TestParforsBase):
             "Windows operating systems when using Python 2.7.")
         self.assertIn(msg, str(raised.exception))
 
+    @skip_windows_py27
     def test_simple01(self):
         def test_impl():
             return np.ones(())
@@ -301,51 +302,61 @@ class TestParfors(TestParforsBase):
             self.check(test_impl)
         self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
 
+    @skip_windows_py27
     def test_simple02(self):
         def test_impl():
             return np.ones((1,))
         self.check(test_impl)
 
+    @skip_windows_py27
     def test_simple03(self):
         def test_impl():
             return np.ones((1, 2))
         self.check(test_impl)
 
+    @skip_windows_py27
     def test_simple04(self):
         def test_impl():
             return np.ones(1)
         self.check(test_impl)
 
+    @skip_windows_py27
     def test_simple07(self):
         def test_impl():
             return np.ones((1, 2), dtype=np.complex128)
         self.check(test_impl)
 
+    @skip_windows_py27
     def test_simple08(self):
         def test_impl():
             return np.ones((1, 2)) + np.ones((1, 2))
         self.check(test_impl)
 
+    @skip_windows_py27
     def test_simple09(self):
         def test_impl():
             return np.ones((1, 1))
         self.check(test_impl)
 
+    @skip_windows_py27
     def test_simple10(self):
         def test_impl():
             return np.ones((0, 0))
         self.check(test_impl)
 
+    @skip_windows_py27
     def test_simple11(self):
         def test_impl():
             return np.ones((10, 10)) + 1.
         self.check(test_impl)
 
+    @skip_windows_py27
     def test_simple12(self):
         def test_impl():
             return np.ones((10, 10)) + np.complex128(1.)
         self.check(test_impl)
 
+    @skip_windows_py27
     def test_simple13(self):
         def test_impl():
             return np.complex128(1.)
@@ -353,36 +364,43 @@ class TestParfors(TestParforsBase):
             self.check(test_impl)
         self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
 
+    @skip_windows_py27
     def test_simple14(self):
         def test_impl():
             return np.ones((10, 10))[0::20]
         self.check(test_impl)
 
+    @skip_windows_py27
     def test_simple15(self):
         def test_impl(v1, v2, m1, m2):
             return v1 + v1
         self.check(test_impl, *self.simple_args)
 
+    @skip_windows_py27
     def test_simple16(self):
         def test_impl(v1, v2, m1, m2):
             return m1 + m1
         self.check(test_impl, *self.simple_args)
 
+    @skip_windows_py27
     def test_simple17(self):
         def test_impl(v1, v2, m1, m2):
             return m2 + v1
         self.check(test_impl, *self.simple_args)
 
+    @skip_windows_py27
     def test_simple18(self):
         def test_impl(v1, v2, m1, m2):
             return m1 + np.linalg.svd(m2)[0][:-1, :]
         self.check(test_impl, *self.simple_args)
 
+    @skip_windows_py27
     def test_simple19(self):
         def test_impl(v1, v2, m1, m2):
             return np.dot(m1, v2)
         self.check(test_impl, *self.simple_args)
 
+    @skip_windows_py27
     def test_simple20(self):
         def test_impl(v1, v2, m1, m2):
             return np.dot(m1, m2)
@@ -391,16 +409,19 @@ class TestParfors(TestParforsBase):
             self.check(test_impl, *self.simple_args)
         self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
 
+    @skip_windows_py27
     def test_simple21(self):
         def test_impl(v1, v2, m1, m2):
             return np.dot(v1, v1)
         self.check(test_impl, *self.simple_args)
 
+    @skip_windows_py27
     def test_simple22(self):
         def test_impl(v1, v2, m1, m2):
             return np.sum(v1 + v1)
         self.check(test_impl, *self.simple_args)
 
+    @skip_windows_py27
     def test_simple23(self):
         def test_impl(v1, v2, m1, m2):
             x = 2 * v1
