@@ -10,13 +10,15 @@ from numba.ir_utils import (
     remove_dead,
     rename_labels, 
     find_topo_order, 
-    merge_adjacent_blocks))
+    merge_adjacent_blocks)
 
-from numba.analysis import compute_cfg_from_blocks, find_top_level_loops
-from numba.transforms import _extract_loop_lifting_candidates, _loop_lift_get_candidate_infos
+from numba.analysis import compute_cfg_from_blocks
 from numba.targets.rangeobj import range_iter_len
-import numpy
+import numpy as np
 
+"""
+Variable enable_inline_arraycall is only used for testing purpose.
+"""
 enable_inline_arraycall = True
 
 
@@ -387,7 +389,7 @@ def _find_numpy_call(func_ir, expr):
     require(isinstance(callee_def, ir.Expr) and callee_def.op == 'getattr')
     module = callee_def.value
     module_def = _get_definition(func_ir, module)
-    require(isinstance(module_def, ir.Global) and module_def.value == numpy)
+    require(isinstance(module_def, ir.Global) and module_def.value == np)
     _make_debug_print("find_numpy_call")(callee_def.attr)
     return callee_def.attr
 
@@ -530,7 +532,6 @@ def _inline_arraycall(func_ir, cfg, visited, loop):
     # define a new counter.
     range_def = guard(_find_iter_range, func_ir, iter_var)
     index_var = scope.make_temp(loc)
-    index_offset_var = None
     if range_def and range_def[0] == 0:
         # iterator starts with 0, index_var can just be iter_first_var
         index_var = iter_first_var
@@ -542,25 +543,19 @@ def _inline_arraycall(func_ir, cfg, visited, loop):
     size_var = scope.make_temp(loc)
     if range_def:
         start, stop = range_def
-        # simple range with start and stop, which are defined only in caller,
-        # So we'll have to pass them as parameters
         if start == 0:
-            # size_val = stop
             size_val = stop
         else:
-            # size_val = stop - start
             size_val = ir.Expr.binop(fn='-', lhs=stop, rhs=start, loc=loc)
     else:
         len_func_var = scope.make_temp(loc)
         stmts.append(_new_definition(func_ir, len_func_var,
                      ir.Global('range_iter_len', range_iter_len, loc=loc), loc))
-        # size_var = len_func(iter_var)
         size_val = ir.Expr.call(len_func_var, (iter_var,), (), loc=loc)
 
     stmts.append(_new_definition(func_ir, size_var, size_val, loc))
 
     size_tuple_var = scope.make_temp(loc)
-    # size_tuple_var = build_tuple(size_var)
     stmts.append(_new_definition(func_ir, size_tuple_var,
                  ir.Expr.build_tuple(items=[size_var], loc=loc), loc))
 
@@ -571,7 +566,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop):
     empty_func = scope.make_temp(loc)
     # numpy_var = numpy
     stmts.append(_new_definition(func_ir, numpy_var,
-                 ir.Global('numpy', numpy, loc=loc), loc))
+                 ir.Global('numpy', np, loc=loc), loc))
     # empty_func = numpy_var.empty
     stmts.append(_new_definition(func_ir, empty_func,
                  ir.Expr.getattr(value=numpy_var, attr='empty', loc=loc), loc))
@@ -638,7 +633,7 @@ def _fix_nested_array(func_ir):
 
     def find_array_def(arr):
         """Find numpy array definition such as arr = numpy.empty(...).  If it is
-        arr = b[...], find array defintion of b recursively.
+        arr = b[...], find array definition of b recursively.
         """
         arr_def = func_ir.get_definition(arr)
         _make_debug_print("find_array_def")(arr, arr_def)
