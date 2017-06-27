@@ -560,6 +560,7 @@ class TestPrange(TestParforsBase):
         # compare
         self.check_prange_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
 
+    @skip_windows_py27
     def test_prange01(self):
         def test_impl():
             n = 4
@@ -569,6 +570,7 @@ class TestPrange(TestParforsBase):
             return A
         self.prange_tester(test_impl)
 
+    @skip_windows_py27
     def test_prange02(self):
         def test_impl():
             n = 4
@@ -578,6 +580,7 @@ class TestPrange(TestParforsBase):
             return A
         self.prange_tester(test_impl)
 
+    @skip_windows_py27
     def test_prange03(self):
         def test_impl():
             s = 0
@@ -586,6 +589,7 @@ class TestPrange(TestParforsBase):
             return s
         self.prange_tester(test_impl)
 
+    @skip_windows_py27
     def test_prange04(self):
         def test_impl():
             a = 2
@@ -599,6 +603,7 @@ class TestPrange(TestParforsBase):
             return A
         self.prange_tester(test_impl)
 
+    @skip_windows_py27
     def test_prange05(self):
         def test_impl():
             n = 4
@@ -609,6 +614,7 @@ class TestPrange(TestParforsBase):
             return s
         self.prange_tester(test_impl)
 
+    @skip_windows_py27
     def test_prange06(self):
         def test_impl():
             n = 4
@@ -619,6 +625,7 @@ class TestPrange(TestParforsBase):
             return s
         self.prange_tester(test_impl)
 
+    @skip_windows_py27
     def test_prange07(self):
         def test_impl():
             n = 4
@@ -629,6 +636,7 @@ class TestPrange(TestParforsBase):
             return s
         self.prange_tester(test_impl)
 
+    @skip_windows_py27
     def test_prange08(self):
         def test_impl():
             n = 4
@@ -641,6 +649,7 @@ class TestPrange(TestParforsBase):
 
         test_impl()
 
+    @skip_windows_py27
     def test_prange08_1(self):
         def test_impl():
             n = 4
@@ -652,6 +661,7 @@ class TestPrange(TestParforsBase):
             return acc
         self.prange_tester(test_impl)
 
+    @skip_windows_py27
     def test_prange09(self):
         def test_impl():
             n = 4
@@ -663,6 +673,7 @@ class TestPrange(TestParforsBase):
         # patch inner loop to 'prange'
         self.prange_tester(test_impl, patch_instance=[1])
 
+    @skip_windows_py27
     def test_prange10(self):
         def test_impl():
             n = 4
@@ -676,6 +687,7 @@ class TestPrange(TestParforsBase):
         # patch outer loop to 'prange'
         self.prange_tester(test_impl, patch_instance=[0])
 
+    @skip_windows_py27
     @unittest.skip("list append is not thread-safe yet (#2391, #2408)")
     def test_prange11(self):
         def test_impl():
@@ -683,6 +695,7 @@ class TestPrange(TestParforsBase):
             return [np.sin(j) for j in range(n)]
         self.prange_tester(test_impl)
 
+    @skip_windows_py27
     def test_prange12(self):
         def test_impl():
             acc = 0
@@ -693,6 +706,7 @@ class TestPrange(TestParforsBase):
             return acc
         self.prange_tester(test_impl)
 
+    @skip_windows_py27
     def test_prange13(self):
         def test_impl(n):
             acc = 0
@@ -701,6 +715,7 @@ class TestPrange(TestParforsBase):
             return acc
         self.prange_tester(test_impl, np.int32(4))
 
+    @skip_windows_py27
     def test_kde_example(self):
         def test_impl(X):
             # KDE example
