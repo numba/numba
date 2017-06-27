@@ -1027,7 +1027,8 @@ class MemoryPointer(object):
             size = self.size - start
         else:
             size = stop - start
-        assert size > 0, "zero or negative memory size"
+        if size < 0:
+            raise RuntimeError('size cannot be negative')
         pointer = drvapi.cu_device_ptr(base)
         view = MemoryPointer(self.context, pointer, size, owner=self.owner)
         return OwnedPointer(weakref.proxy(self.owner), view)
