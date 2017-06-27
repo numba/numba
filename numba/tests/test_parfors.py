@@ -31,8 +31,9 @@ from .support import tag
 # for decorating tests, marking that Windows with Python 2.7 is not supported
 _windows_py27 = (sys.platform.startswith('win32') and
                  sys.version_info[:2] == (2, 7))
-_reason = '"parallel" target not supported on Windows with Python 2.7.'
-skip_windows_py27 = unittest.skipIf(_windows_py27, _reason)
+_32bit = sys.maxsize <= 2 ** 32
+_reason = 'parfors not supported'
+skip_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
 
 
 class TestParforsBase(unittest.TestCase):
@@ -160,7 +161,7 @@ class TestParfors(TestParforsBase):
         cfunc, cpfunc = self.compile_all(pyfunc, *args)
         self.check_prange_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
 
-    @skip_windows_py27
+    @skip_unsupported
     @tag('important')
     def test_arraymap(self):
         def test_impl(a, x, y):
@@ -172,7 +173,7 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, A, X, Y)
 
-    @skip_windows_py27
+    @skip_unsupported
     @tag('important')
     def test_mvdot(self):
         def test_impl(a, v):
@@ -183,7 +184,7 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, A, v)
 
-    @skip_windows_py27
+    @skip_unsupported
     @tag('important')
     def test_2d_parfor(self):
         def test_impl():
@@ -192,7 +193,7 @@ class TestParfors(TestParforsBase):
             return np.sum(X + Y)
         self.check(test_impl)
 
-    @skip_windows_py27
+    @skip_unsupported
     @tag('important')
     def test_pi(self):
         def test_impl(n):
@@ -202,6 +203,7 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, 100000, decimal=1)
 
+    @skip_unsupported
     @tag('important')
     def test_test1(self):
         typingctx = typing.Context()
@@ -237,6 +239,7 @@ class TestParfors(TestParforsBase):
             parfor_pass.run()
             self.assertTrue(countParfors(test_ir) == 1)
 
+    @skip_unsupported
     @tag('important')
     def test_test2(self):
         typingctx = typing.Context()
@@ -274,11 +277,12 @@ class TestParfors(TestParforsBase):
             parfor_pass.run()
             self.assertTrue(countParfors(test_ir) == 1)
 
-    @unittest.skipIf(not _windows_py27, "Only impacts Windows with Python 2.7")
-    def test_windows_py27_combination_raises(self):
+    @unittest.skipIf(not (_windows_py27 or _32bit),
+                     "Only impacts Windows with Python 2.7 / 32 bit hardware")
+    def test_unsupported_combination_raises(self):
         """
         This test is in place until issues with the 'parallel'
-        target on Windows with Python 2.7 are fixed.
+        target on Windows with Python 2.7 / 32 bit hardware are fixed.
         """
         
         with self.assertRaises(RuntimeError) as raised:
@@ -291,10 +295,11 @@ class TestParfors(TestParforsBase):
             ddot(A, v)
 
         msg = ("The 'parallel' target is not currently supported on "
-            "Windows operating systems when using Python 2.7.")
+               "Windows operating systems when using Python 2.7, "
+               "or on 32 bit hardware")
         self.assertIn(msg, str(raised.exception))
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_simple01(self):
         def test_impl():
             return np.ones(())
@@ -302,61 +307,61 @@ class TestParfors(TestParforsBase):
             self.check(test_impl)
         self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_simple02(self):
         def test_impl():
             return np.ones((1,))
         self.check(test_impl)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_simple03(self):
         def test_impl():
             return np.ones((1, 2))
         self.check(test_impl)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_simple04(self):
         def test_impl():
             return np.ones(1)
         self.check(test_impl)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_simple07(self):
         def test_impl():
             return np.ones((1, 2), dtype=np.complex128)
         self.check(test_impl)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_simple08(self):
         def test_impl():
             return np.ones((1, 2)) + np.ones((1, 2))
         self.check(test_impl)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_simple09(self):
         def test_impl():
             return np.ones((1, 1))
         self.check(test_impl)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_simple10(self):
         def test_impl():
             return np.ones((0, 0))
         self.check(test_impl)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_simple11(self):
         def test_impl():
             return np.ones((10, 10)) + 1.
         self.check(test_impl)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_simple12(self):
         def test_impl():
             return np.ones((10, 10)) + np.complex128(1.)
         self.check(test_impl)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_simple13(self):
         def test_impl():
             return np.complex128(1.)
@@ -364,43 +369,43 @@ class TestParfors(TestParforsBase):
             self.check(test_impl)
         self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_simple14(self):
         def test_impl():
             return np.ones((10, 10))[0::20]
         self.check(test_impl)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_simple15(self):
         def test_impl(v1, v2, m1, m2):
             return v1 + v1
         self.check(test_impl, *self.simple_args)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_simple16(self):
         def test_impl(v1, v2, m1, m2):
             return m1 + m1
         self.check(test_impl, *self.simple_args)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_simple17(self):
         def test_impl(v1, v2, m1, m2):
             return m2 + v1
         self.check(test_impl, *self.simple_args)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_simple18(self):
         def test_impl(v1, v2, m1, m2):
             return m1 + np.linalg.svd(m2)[0][:-1, :]
         self.check(test_impl, *self.simple_args)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_simple19(self):
         def test_impl(v1, v2, m1, m2):
             return np.dot(m1, v2)
         self.check(test_impl, *self.simple_args)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_simple20(self):
         def test_impl(v1, v2, m1, m2):
             return np.dot(m1, m2)
@@ -409,19 +414,19 @@ class TestParfors(TestParforsBase):
             self.check(test_impl, *self.simple_args)
         self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_simple21(self):
         def test_impl(v1, v2, m1, m2):
             return np.dot(v1, v1)
         self.check(test_impl, *self.simple_args)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_simple22(self):
         def test_impl(v1, v2, m1, m2):
             return np.sum(v1 + v1)
         self.check(test_impl, *self.simple_args)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_simple23(self):
         def test_impl(v1, v2, m1, m2):
             x = 2 * v1
@@ -560,7 +565,7 @@ class TestPrange(TestParforsBase):
         # compare
         self.check_prange_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_prange01(self):
         def test_impl():
             n = 4
@@ -570,7 +575,7 @@ class TestPrange(TestParforsBase):
             return A
         self.prange_tester(test_impl)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_prange02(self):
         def test_impl():
             n = 4
@@ -580,7 +585,7 @@ class TestPrange(TestParforsBase):
             return A
         self.prange_tester(test_impl)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_prange03(self):
         def test_impl():
             s = 0
@@ -589,7 +594,7 @@ class TestPrange(TestParforsBase):
             return s
         self.prange_tester(test_impl)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_prange04(self):
         def test_impl():
             a = 2
@@ -603,7 +608,7 @@ class TestPrange(TestParforsBase):
             return A
         self.prange_tester(test_impl)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_prange05(self):
         def test_impl():
             n = 4
@@ -614,7 +619,7 @@ class TestPrange(TestParforsBase):
             return s
         self.prange_tester(test_impl)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_prange06(self):
         def test_impl():
             n = 4
@@ -625,7 +630,7 @@ class TestPrange(TestParforsBase):
             return s
         self.prange_tester(test_impl)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_prange07(self):
         def test_impl():
             n = 4
@@ -636,7 +641,7 @@ class TestPrange(TestParforsBase):
             return s
         self.prange_tester(test_impl)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_prange08(self):
         def test_impl():
             n = 4
@@ -649,7 +654,7 @@ class TestPrange(TestParforsBase):
 
         test_impl()
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_prange08_1(self):
         def test_impl():
             n = 4
@@ -661,7 +666,7 @@ class TestPrange(TestParforsBase):
             return acc
         self.prange_tester(test_impl)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_prange09(self):
         def test_impl():
             n = 4
@@ -673,7 +678,7 @@ class TestPrange(TestParforsBase):
         # patch inner loop to 'prange'
         self.prange_tester(test_impl, patch_instance=[1])
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_prange10(self):
         def test_impl():
             n = 4
@@ -687,7 +692,7 @@ class TestPrange(TestParforsBase):
         # patch outer loop to 'prange'
         self.prange_tester(test_impl, patch_instance=[0])
 
-    @skip_windows_py27
+    @skip_unsupported
     @unittest.skip("list append is not thread-safe yet (#2391, #2408)")
     def test_prange11(self):
         def test_impl():
@@ -695,7 +700,7 @@ class TestPrange(TestParforsBase):
             return [np.sin(j) for j in range(n)]
         self.prange_tester(test_impl)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_prange12(self):
         def test_impl():
             acc = 0
@@ -706,7 +711,7 @@ class TestPrange(TestParforsBase):
             return acc
         self.prange_tester(test_impl)
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_prange13(self):
         def test_impl(n):
             acc = 0
@@ -715,7 +720,7 @@ class TestPrange(TestParforsBase):
             return acc
         self.prange_tester(test_impl, np.int32(4))
 
-    @skip_windows_py27
+    @skip_unsupported
     def test_kde_example(self):
         def test_impl(X):
             # KDE example
