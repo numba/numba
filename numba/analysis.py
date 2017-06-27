@@ -16,7 +16,7 @@ _use_defs_result = namedtuple('use_defs_result', 'usemap,defmap')
 
 # other packages that define new nodes add calls for finding defs
 # format: {type:function}
-ir_extension_defs = {}
+ir_extension_usedefs = {}
 
 def compute_use_defs(blocks):
     """
@@ -29,9 +29,10 @@ def compute_use_defs(blocks):
         var_use_map[offset] = use_set = set()
         var_def_map[offset] = def_set = set()
         for stmt in ir_block.body:
-            for T, def_func in ir_extension_defs.items():
+            for T, func in ir_extension_usedefs.items():
                 if isinstance(stmt, T):
-                    def_set.update(def_func(stmt))
+                    func(stmt, use_set, def_set)
+                continue
             if isinstance(stmt, ir.Assign):
                 if isinstance(stmt.value, ir.Inst):
                     rhs_set = set(var.name for var in stmt.value.list_vars())

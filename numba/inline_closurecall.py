@@ -1,13 +1,21 @@
 from numba import config, ir, ir_utils, utils
 import types
 
-from numba.ir_utils import (mk_unique_var, next_label, add_offset_to_labels, 
-    replace_vars, remove_dels, remove_dead, rename_labels)
- 
+from numba.ir_utils import (
+    mk_unique_var,
+    next_label,
+    add_offset_to_labels,
+    replace_vars,
+    remove_dels,
+    remove_dead,
+    rename_labels)
+
+
 class InlineClosureCallPass(object):
-    """InlineClosureCallPass class looks for direct calls to locally defined 
+    """InlineClosureCallPass class looks for direct calls to locally defined
     closures, and inlines the body of the closure function to the call site.
     """
+
     def __init__(self, func_ir, run_frontend):
         self.func_ir = func_ir
         self.run_frontend = run_frontend
@@ -23,16 +31,19 @@ class InlineClosureCallPass(object):
             for i in range(len(block.body)):
                 instr = block.body[i]
                 if isinstance(instr, ir.Assign):
-                    lhs  = instr.target
+                    lhs = instr.target
                     expr = instr.value
                     if isinstance(expr, ir.Expr) and expr.op == 'call':
                         try:
                             func_def = self.func_ir.get_definition(expr.func)
                         except KeyError:
                             func_def = None
-                        _debug_print("found call to ", expr.func, " def = ", func_def)
-                        if isinstance(func_def, ir.Expr) and func_def.op == "make_function":
-                            new_blocks = self.inline_closure_call(block, i, func_def)
+                        _debug_print(
+                            "found call to ", expr.func, " def = ", func_def)
+                        if isinstance(
+                                func_def, ir.Expr) and func_def.op == "make_function":
+                            new_blocks = self.inline_closure_call(
+                                block, i, func_def)
                             for block in new_blocks:
                                 work_list.append(block)
                             modified = True
@@ -40,7 +51,8 @@ class InlineClosureCallPass(object):
                             break
         if modified:
             remove_dels(self.func_ir.blocks)
-            # repeat dead code elimintation until nothing can be further removed
+            # repeat dead code elimintation until nothing can be further
+            # removed
             while (remove_dead(self.func_ir.blocks, self.func_ir.arg_names)):
                 pass
             self.func_ir.blocks = rename_labels(self.func_ir.blocks)
@@ -63,9 +75,9 @@ class InlineClosureCallPass(object):
         min_label = min(from_blocks.keys())
         max_label = max(from_blocks.keys())
         #    reset globals in ir_utils before we use it
-        ir_utils._max_label = max_label 
-        ir_utils.visit_vars_extensions = {}
-        # 2. rename all local variables in from_ir with new locals created in func_ir
+        ir_utils._max_label = max_label
+        # 2. rename all local variables in from_ir with new locals created in
+        # func_ir
         from_scopes = _get_all_scopes(from_blocks)
         _debug_print("obj_IR has scopes: ", from_scopes)
         #    one function should only have one local scope
@@ -84,22 +96,25 @@ class InlineClosureCallPass(object):
         args = list(call_expr.args)
         if callee.defaults:
             _debug_print("defaults", callee.defaults)
-            if isinstance(callee.defaults, tuple): # Python 3.5
+            if isinstance(callee.defaults, tuple):  # Python 3.5
                 args = args + list(callee.defaults)
             elif isinstance(callee.defaults, ir.Var) or isinstance(callee.defaults, str):
                 defaults = func_ir.get_definition(callee.defaults)
                 assert(isinstance(defaults, ir.Const))
                 loc = defaults.loc
-                args = args + [ ir.Const(value=v, loc=loc) for v in defaults.value ]
+                args = args + [ir.Const(value=v, loc=loc)
+                               for v in defaults.value]
             else:
-                raise NotImplementedError("Unsupported defaults to make_function: {}".format(defaults))
+                raise NotImplementedError(
+                    "Unsupported defaults to make_function: {}".format(defaults))
         _replace_args_with(from_blocks, args)
         _debug_print("After arguments rename: ")
         _debug_dump(from_ir)
         # 4. replace freevar with actual closure var
         if callee.closure:
             closure = func_ir.get_definition(callee.closure)
-            assert(isinstance(closure, ir.Expr) and closure.op == 'build_tuple')
+            assert(isinstance(closure, ir.Expr)
+                   and closure.op == 'build_tuple')
             assert(len(callee.code.co_freevars) == len(closure.items))
             _debug_print("callee's closure = ", closure)
             _replace_freevars(from_blocks, closure.items)
@@ -108,7 +123,7 @@ class InlineClosureCallPass(object):
         # 5. split caller blocks into two
         new_blocks = []
         new_block = ir.Block(scope, block.loc)
-        new_block.body = block.body[i+1:]
+        new_block.body = block.body[i + 1:]
         new_label = next_label()
         func_ir.blocks[new_label] = new_block
         new_blocks.append((new_label, new_block))
@@ -136,20 +151,32 @@ class InlineClosureCallPass(object):
         func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
         func_clo = ",".join(["c_%d" % i for i in range(nfree)])
         func_arg = ",".join(["x_%d" % i for i in range(fcode.co_argcount)])
-        func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (func_env, func_arg, func_clo)
+        func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (
+            func_env, func_arg, func_clo)
         loc = {}
         exec(func_text, glbls, loc)
 
         # hack parameter name .0 for Python 3 versions < 3.6
-        if utils.PYVERSION >= (3,) and utils.PYVERSION < (3,6):
+        if utils.PYVERSION >= (3,) and utils.PYVERSION < (3, 6):
             co_varnames = list(fcode.co_varnames)
             if co_varnames[0] == ".0":
                 co_varnames[0] = "implicit0"
-            fcode = types.CodeType(fcode.co_argcount, fcode.co_kwonlyargcount, 
-                        fcode.co_nlocals, fcode.co_stacksize, fcode.co_flags,
-                        fcode.co_code, fcode.co_consts, fcode.co_names, tuple(co_varnames),
-                        fcode.co_filename, fcode.co_name, fcode.co_firstlineno, fcode.co_lnotab,
-                        fcode.co_freevars, fcode.co_cellvars)
+            fcode = types.CodeType(
+                fcode.co_argcount,
+                fcode.co_kwonlyargcount,
+                fcode.co_nlocals,
+                fcode.co_stacksize,
+                fcode.co_flags,
+                fcode.co_code,
+                fcode.co_consts,
+                fcode.co_names,
+                tuple(co_varnames),
+                fcode.co_filename,
+                fcode.co_name,
+                fcode.co_firstlineno,
+                fcode.co_lnotab,
+                fcode.co_freevars,
+                fcode.co_cellvars)
 
         f = loc['g']()
         f.__code__ = fcode
@@ -157,13 +184,16 @@ class InlineClosureCallPass(object):
         ir = self.run_frontend(f)
         return ir
 
+
 def _debug_print(*args):
     if config.DEBUG_INLINE_CLOSURE:
         print(args)
 
+
 def _debug_dump(func_ir):
     if config.DEBUG_INLINE_CLOSURE:
         func_ir.dump()
+
 
 def _get_all_scopes(blocks):
     """Get all block-local scopes from an IR.
@@ -173,6 +203,7 @@ def _get_all_scopes(blocks):
         if not (block.scope in all_scopes):
             all_scopes.append(block.scope)
     return all_scopes
+
 
 def _replace_args_with(blocks, args):
     """
@@ -186,6 +217,7 @@ def _replace_args_with(blocks, args):
                 assert(idx < len(args))
                 stmt.value = args[idx]
 
+
 def _replace_freevars(blocks, args):
     """
     Replace ir.FreeVar(...) with real variables from parent function
@@ -197,6 +229,7 @@ def _replace_freevars(blocks, args):
                 idx = stmt.value.index
                 assert(idx < len(args))
                 stmt.value = args[idx]
+
 
 def _replace_returns(blocks, target, return_label):
     """
@@ -210,6 +243,7 @@ def _replace_returns(blocks, target, return_label):
                 block.body[i] = ir.Assign(stmt.value, target, stmt.loc)
                 block.body.append(ir.Jump(return_label, stmt.loc))
 
+
 def _add_definition(func_ir, block):
     """
     Add variable definitions to parent func_ir
@@ -218,4 +252,3 @@ def _add_definition(func_ir, block):
     assigns = block.find_insts(ir.Assign)
     for stmt in assigns:
         definitions[stmt.target.name].append(stmt.value)
-

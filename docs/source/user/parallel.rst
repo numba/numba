@@ -55,6 +55,25 @@ parallel semantics and for which we attempt to parallelize.
    Numpy broadcast between arrays with mixed dimensionality or size is
    not supported, nor is the reduction across a selected dimension.
 
+Explicit Parallel Loops
+========================
+
+Another experimental feature of this module is support for explicit parallel
+loops. One can use Numba's ``prange`` instead of ``range`` to specify that a
+loop can be parallelized. The user is required to make sure that the loop does
+not have cross iteration dependencies except the supported reductions.
+Currently, reductions on scalar values are supported and are inferred from
+in-place operations. The example below demonstrates a parallel loop with a
+reduction (``A`` is a one-dimensional Numpy array)::
+
+    from numba import njit, prange
+    @njit(parallel=True)
+    def prange_test(A):
+        s = 0
+        for i in prange(A.shape[0]):
+            s += A[i]
+        return s
+
 Examples
 ========
 
