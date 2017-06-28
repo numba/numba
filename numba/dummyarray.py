@@ -47,32 +47,38 @@ class Dim(object):
             stop = start + 1
             step = None
 
+        # Default values
+        #   Start value is default to zero
         if start is None:
             start = 0
+        #   Stop value is default to self.size
         if stop is None:
             stop = self.size
+        #   Step is default to 1
         if step is None:
             step = 1
 
         stride = step * self.stride
 
+        # Compute start in bytes
         if start >= 0:
             start = self.start + start * self.stride
         else:
             start = self.stop + start * self.stride
+        start = max(start, self.start)
 
+        # Compute stop in bytes
         if stop >= 0:
             stop = self.start + stop * self.stride
         else:
             stop = self.stop + stop * self.stride
+        stop = min(stop, self.stop)
+
+        # Clip stop
+        if (stop - start) > self.size * self.stride:
+            stop = start + self.size * stride
 
         size = (stop - start + (stride - 1)) // stride
-
-        if self.start >= start > self.stop:
-            raise IndexError("start index out-of-bound")
-
-        if self.start > stop >= self.stop:
-            raise IndexError("stop index out-of-bound")
 
         if stop < start:
             start = stop
@@ -196,6 +202,7 @@ class Array(object):
         lastidx = [s - 1 for s in self.shape]
         start = compute_index(firstidx, self.dims)
         stop = compute_index(lastidx, self.dims) + self.itemsize
+        stop = max(stop, start)   # ensure postive extent
         return Extent(start, stop)
 
     def __repr__(self):
