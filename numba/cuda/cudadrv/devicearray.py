@@ -97,7 +97,9 @@ class DeviceNDArrayBase(object):
             else:
                 self.alloc_size = _driver.device_memory_size(gpu_data)
         else:
-            gpu_data = None
+            # Make NULL pointer for empty allocation
+            gpu_data = _driver.MemoryPointer(context=devices.get_context(),
+                                             pointer=c_void_p(0), size=0)
             self.alloc_size = 0
 
         self.gpu_data = gpu_data

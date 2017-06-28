@@ -68,10 +68,10 @@ class Dim(object):
 
         size = (stop - start + (stride - 1)) // stride
 
-        if self.start >= start >= self.stop:
+        if self.start >= start > self.stop:
             raise IndexError("start index out-of-bound")
 
-        if self.start >= stop >= self.stop:
+        if self.start > stop >= self.stop:
             raise IndexError("stop index out-of-bound")
 
         if stop < start:

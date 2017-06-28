@@ -102,13 +102,16 @@ class CudaArraySlicing(unittest.TestCase):
         darr = cuda.to_device(arr)
         for i in range(darr.shape[0]):
             np.testing.assert_array_equal(darr[i:i].copy_to_host(), arr[i:i])
+        # empty slice of empty slice
+        self.assertFalse(darr[:0][:0].copy_to_host())
 
     def test_empty_slice_2d(self):
         arr = np.arange(5 * 5).reshape(5, 5)
         darr = cuda.to_device(arr)
         np.testing.assert_array_equal(darr[:0].copy_to_host(), arr[:0])
         np.testing.assert_array_equal(darr[3, :0].copy_to_host(), arr[3, :0])
-
+        # empty slice of empty slice
+        self.assertFalse(darr[:0][:0].copy_to_host())
 
 if __name__ == '__main__':
     unittest.main()
