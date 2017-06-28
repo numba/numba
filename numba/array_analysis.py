@@ -356,8 +356,8 @@ class ArrayAnalysis(object):
             out_eqs = copy.copy(self.array_shape_classes[args[0].name])
             out_eqs.reverse()
             return out_eqs
-        elif call_name in ['empty', 'zeros', 'ones', 'full', 'random.ranf',
-                           'random.random_sample', 'random.sample']:
+        elif call_name in ['empty', 'zeros', 'ones', 'full']:
+            # these calls have only a "shape" argument
             shape_arg = None
             if len(args) > 0:
                 shape_arg = args[0]
@@ -366,9 +366,65 @@ class ArrayAnalysis(object):
             else:
                 return None
             return self._get_classes_from_shape(shape_arg)
+        elif call_name in ['random.ranf', 'random.random_sample',
+                            'random.sample','random.random',
+                            'random.standard_normal']:
+            # these calls have only a "size" argument
+            size_arg = None
+            if len(args) > 0:
+                size_arg = args[0]
+            elif 'size' in kws:
+                size_arg = kws['size']
+            else:
+                return None
+            return self._get_classes_from_shape(size_arg)
         elif call_name in ['random.rand', 'random.randn']:
-            # arguments are integers, not a tuple
+            # arguments are integers (not a tuple as in previous calls)
             return self._get_classes_from_dim_args(args)
+        elif call_name in ['random.normal', 'random.uniform', 'random.beta',
+                            'random.binomial', 'random.f', 'random.gamma',
+                            'random.lognormal','random.laplace']:
+            # normal, uniform, ... have 3 args, last one is size
+            size_arg = None
+            if len(args) == 3:
+                size_arg = args[2]
+            elif 'size' in kws:
+                size_arg = kws['size']
+            else:
+                return None
+            return self._get_classes_from_shape(size_arg)
+        elif call_name in ['random.chisquare', 'random.weibull', 'random.power',
+                            'random.geometric', 'random.exponential',
+                            'random.poisson', 'random.rayleigh']:
+            # have 2 args, last one is size
+            size_arg = None
+            if len(args) == 2:
+                size_arg = args[1]
+            elif 'size' in kws:
+                size_arg = kws['size']
+            else:
+                return None
+            return self._get_classes_from_shape(size_arg)
+        elif call_name == 'random.randint':
+            # has 4 args, 3rd one is size
+            size_arg = None
+            if len(args) >= 3:
+                size_arg = args[2]
+            elif 'size' in kws:
+                size_arg = kws['size']
+            else:
+                return None
+            return self._get_classes_from_shape(size_arg)
+        elif call_name == 'random.triangular':
+            # has 4 args, last one is size
+            size_arg = None
+            if len(args) == 4:
+                size_arg = args[3]
+            elif 'size' in kws:
+                size_arg = kws['size']
+            else:
+                return None
+            return self._get_classes_from_shape(size_arg)
         elif call_name == 'eye':
             # if one input n, output is n*n
             # two inputs n,m, output is n*m
