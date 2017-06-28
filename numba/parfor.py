@@ -771,8 +771,6 @@ class ParforPass(object):
 
 def _remove_size_arg(call_name, expr):
     "remove size argument from args or kws"
-    print(expr.args)
-
     # remove size kwarg
     kws = dict(expr.kws)
     kws.pop('size', '')
