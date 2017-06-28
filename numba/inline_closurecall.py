@@ -1,4 +1,4 @@
-from numba import config, ir, ir_utils, utils
+from numba import config, ir, ir_utils, utils, prange
 import types
 
 from numba.ir_utils import (
@@ -8,8 +8,8 @@ from numba.ir_utils import (
     replace_vars,
     remove_dels,
     remove_dead,
-    rename_labels, 
-    find_topo_order, 
+    rename_labels,
+    find_topo_order,
     merge_adjacent_blocks)
 
 from numba.analysis import compute_cfg_from_blocks
@@ -27,8 +27,9 @@ class InlineClosureCallPass(object):
     closures, and inlines the body of the closure function to the call site.
     """
 
-    def __init__(self, func_ir, run_frontend):
+    def __init__(self, func_ir, flags, run_frontend):
         self.func_ir = func_ir
+        self.flags = flags
         self.run_frontend = run_frontend
 
     def run(self):
@@ -70,7 +71,8 @@ class InlineClosureCallPass(object):
             # We go over all loops, bigger loops first (outer first)
             for k, s in sorted(sized_loops, key=lambda tup: tup[1], reverse=True):
                 visited.append(k)
-                if guard(_inline_arraycall, self.func_ir, cfg, visited, loops[k]):
+                if guard(_inline_arraycall, self.func_ir, cfg, visited, loops[k],
+                        self.flags.auto_parallel):
                     modified = True
             if modified:
                 _fix_nested_array(self.func_ir)
@@ -412,15 +414,15 @@ def _find_iter_range(func_ir, range_iter_var):
     nargs = len(range_def.args)
     if nargs == 1:
         stop = _get_definition(func_ir, range_def.args[0], lhs_only=True)
-        return (0, range_def.args[0])
+        return (0, range_def.args[0], func_def)
     elif nargs == 2:
         start = _get_definition(func_ir, range_def.args[0], lhs_only=True)
         stop = _get_definition(func_ir, range_def.args[1], lhs_only=True)
-        return (start, stop)
+        return (start, stop, func_def)
     else:
         raise GuardException
 
-def _inline_arraycall(func_ir, cfg, visited, loop):
+def _inline_arraycall(func_ir, cfg, visited, loop, enable_prange=False):
     """Look for array(list) call in the exit block of a given loop, and turn list operations into
     array operations in the loop if the following conditions are met:
       1. The exit block contains an array call on the list;
@@ -542,11 +544,17 @@ def _inline_arraycall(func_ir, cfg, visited, loop):
     # Insert statement to get the size of the loop iterator
     size_var = scope.make_temp(loc)
     if range_def:
-        start, stop = range_def
+        start, stop, range_func_def = range_def
         if start == 0:
             size_val = stop
         else:
             size_val = ir.Expr.binop(fn='-', lhs=stop, rhs=start, loc=loc)
+        # we can parallelize this loop if enable_prange = True, by changing
+        # range function from range, to prange.
+        if enable_prange and isinstance(range_func_def, ir.Global):
+            range_func_def.name = 'prange'
+            range_func_def.value = prange
+
     else:
         len_func_var = scope.make_temp(loc)
         stmts.append(_new_definition(func_ir, len_func_var,
@@ -583,8 +591,23 @@ def _inline_arraycall(func_ir, cfg, visited, loop):
     # Modify loop_entry
     loop_entry.body = stmts
 
-    if not (range_def and range_def[0] == 0):
+    if range_def:
+        if range_def[0] != 0:
+            # when range doesn't start from 0, index_var becomes loop index
+            # (iter_first_var) minus an offset (range_def[0])
+            terminator = loop_header.terminator
+            assert(isinstance(terminator, ir.Branch))
+            # find the block in the loop body that header jumps to
+            block_id = terminator.truebr
+            blk = func_ir.blocks[block_id]
+            loc = blk.loc
+            blk.body.insert(0, _new_definition(func_ir, index_var,
+                ir.Expr.binop(fn='-', lhs=iter_first_var,
+                                      rhs=range_def[0], loc=loc),
+                loc))
+    else:
         # Insert index_var increment to the end of loop header
+        loc = loop_header.loc
         terminator = loop_header.terminator
         stmts = loop_header.body[0:-1]
         next_index_var = scope.make_temp(loc)
