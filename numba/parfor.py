@@ -456,7 +456,17 @@ class ParforPass(object):
         if expr.func.name not in self.array_analysis.numpy_calls.keys():
             return False
         call_name = self.array_analysis.numpy_calls[expr.func.name]
-        if call_name in ['zeros', 'ones', 'random.ranf']:
+        if call_name in ['zeros', 'ones', 'random.ranf', 'random.random_sample',
+                            'random.sample','random.random',
+                            'random.standard_normal', 'random.rand',
+                            'random.randn', 'random.normal', 'random.uniform',
+                            'random.beta', 'random.binomial', 'random.f',
+                            'random.gamma', 'random.lognormal',
+                            'random.laplace', 'random.chisquare',
+                            'random.weibull', 'random.power',
+                            'random.geometric', 'random.exponential',
+                            'random.poisson', 'random.rayleigh',
+                            'random.randint', 'random.triangular']:
             return True
         # TODO: add more calls
         if call_name == 'dot':
@@ -493,7 +503,7 @@ class ParforPass(object):
         call_name = self.array_analysis.numpy_calls[expr.func.name]
         args = expr.args
         kws = dict(expr.kws)
-        if call_name in ['zeros', 'ones', 'random.ranf']:
+        if call_name in ['zeros', 'ones'] or call_name.startswith('random.'):
             return self._numpy_map_to_parfor(call_name, lhs, args, kws, expr)
         if call_name == 'dot':
             assert len(args) == 2 or len(args) == 3
@@ -637,12 +647,14 @@ class ParforPass(object):
             value = ir.Const(0, loc)
         elif call_name == 'ones':
             value = ir.Const(1, loc)
-        elif call_name == 'random.ranf':
-            # reuse the call expr for single value
-            expr.args = []
+        elif call_name.startswith('random.'):
+            # remove size arg to reuse the call expr for single value
+            _remove_size_arg(call_name, expr)
+            # update expr type
+            new_arg_typs, new_kw_types = _get_call_arg_types(expr, self.typemap)
             self.calltypes.pop(expr)
             self.calltypes[expr] = self.typemap[expr.func.name].get_call_type(
-                typing.Context(), [], {})
+                typing.Context(), new_arg_typs, new_kw_types)
             value = expr
         else:
             NotImplementedError(
@@ -757,6 +769,64 @@ class ParforPass(object):
         # return error if we couldn't handle it (avoid rewrite infinite loop)
         raise NotImplementedError("parfor translation failed for ", expr)
 
+def _remove_size_arg(call_name, expr):
+    "remove size argument from args or kws"
+    print(expr.args)
+
+    # remove size kwarg
+    kws = dict(expr.kws)
+    kws.pop('size', '')
+    expr.kws = tuple(kws.items())
+
+    # remove size arg if available
+    if call_name in ['random.ranf', 'random.random_sample',
+                        'random.sample','random.random',
+                        'random.standard_normal',
+                        'random.rand', 'random.randn']:
+        # these calls have only a "size" argument or list of ints
+        # so remove all args
+        expr.args = []
+
+    if call_name in ['random.normal', 'random.uniform', 'random.beta',
+                        'random.binomial', 'random.f', 'random.gamma',
+                        'random.lognormal','random.laplace']:
+        # normal, uniform, ... have 3 args, last one is size
+        if len(expr.args) == 3:
+            expr.args.pop()
+
+    if call_name in ['random.chisquare', 'random.weibull', 'random.power',
+                        'random.geometric', 'random.exponential',
+                        'random.poisson', 'random.rayleigh']:
+        # have 2 args, last one is size
+        if len(expr.args) == 2:
+            expr.args.pop()
+
+    if call_name == 'random.randint':
+        # has 4 args, 3rd one is size
+        if len(expr.args) == 3:
+            expr.args.pop()
+        if len(expr.args) == 4:
+            dt_arg = expr.args.pop()
+            expr.args.pop()  # remove size
+            expr.args.append(dt_arg)
+
+    if call_name == 'random.triangular':
+        # has 4 args, last one is size
+        if len(expr.args) == 4:
+            expr.args.pop()
+
+    return
+
+def _get_call_arg_types(expr, typemap):
+    new_arg_typs = []
+    for arg in expr.args:
+        new_arg_typs.append(typemap[arg.name])
+
+    new_kw_types = {}
+    for name, arg in expr.kws:
+        new_kw_types[name] = typemap[arg.name]
+
+    return tuple(new_arg_typs), new_kw_types
 
 def _gen_dotmv_check(typemap, calltypes, in1, in2, out, scope, loc):
     """compile dot() check from linalg module and insert a call to it"""
