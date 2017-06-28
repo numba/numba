@@ -15,7 +15,7 @@ ParallelAccelerator features:
 NOTE: The ParallelAccelerator technology is under active development and should
       be considered experimental.
 
-The ParallelAccelerator technology is accessed via a new no Python mode option
+The ParallelAccelerator technology is accessed via a new "nopython" mode option
 "parallel". The ParallelAccelerator technology attempts to identify operations
 which have parallel semantics (for instance adding a scalar to a vector), fuse
 together adjacent such operations, and then parallelize their execution across
