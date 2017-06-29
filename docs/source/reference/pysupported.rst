@@ -138,6 +138,24 @@ List comprehension
 
 Numba supports list comprehension, but not the creation of nested list.
 
+Numba also supports "array comprehension" that is a list comprehension
+followed immediately by a call to :func:`numpy.array`. The following 
+is an example that produces a 2D Numpy array::
+
+    from numba import jit
+    import numpy as np
+    
+    @jit(nopython=True)
+    def f(n):
+      return np.array([ [ x * y for x in range(n) ] for y in range(n) ])
+
+In this case, Numba is able to optimize the program to allocate and 
+initialize the result array directly without allocating intermediate 
+list objects.  Therefore, the nesting of list comprehension here is 
+not a problem since no nested list is being created.
+
+Additionally, Numba supports parallel array comphension when combined 
+with the :ref:`parallel_jit_option` option on CPUs.
 
 set
 ---
