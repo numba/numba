@@ -411,13 +411,18 @@ def remove_dels(blocks):
     return
 
 
-def remove_dead(blocks, args):
+def remove_dead(blocks, args, typemap):
     """dead code elimination using liveness and CFG info.
-    Returns True if something has been removed, or False if nothing is removed."""
+    Returns True if something has been removed, or False if nothing is removed.
+    """
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
-    arg_aliases = find_potential_aliases(blocks, args)
+    alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap)
+    if config.DEBUG_ARRAY_OPT == 1:
+        print("alias map:", alias_map)
+    # keep set for easier search
+    alias_set = set(alias_map.keys())
     call_table, _ = get_call_table(blocks)
 
     removed = False
@@ -429,7 +434,7 @@ def remove_dead(blocks, args):
             lives |= live_map[out_blk]
         if label in cfg.exit_points():
             lives |= arg_aliases
-        removed |= remove_dead_block(block, lives, call_table, arg_aliases)
+        removed |= remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_set, typemap)
     return removed
 
 
@@ -438,7 +443,7 @@ def remove_dead(blocks, args):
 remove_dead_extensions = {}
 
 
-def remove_dead_block(block, lives, call_table, args):
+def remove_dead_block(block, lives, call_table, args, alias_map, alias_set, typemap):
     """remove dead code using liveness info.
     Mutable arguments (e.g. arrays) that are not definitely assigned are live
     after return of function.
@@ -454,7 +459,7 @@ def remove_dead_block(block, lives, call_table, args):
         # let external calls handle stmt if type matches
         for t, f in remove_dead_extensions.items():
             if isinstance(stmt, t):
-                f(stmt, lives, args)
+                f(stmt, lives, args, typemap)
         # ignore assignments that their lhs is not live or lhs==rhs
         if isinstance(stmt, ir.Assign):
             lhs = stmt.target
@@ -510,17 +515,62 @@ def has_no_side_effect(rhs, lives, call_table):
     return True
 
 
-def find_potential_aliases(blocks, args):
-    aliases = set(args)
+def find_potential_aliases(blocks, args, typemap):
+    "find all array aliases and argument aliases to avoid remove as dead"
+    alias_map = {}
+    arg_aliases = set(a for a in args if not is_immutable_type(a, typemap))
+
     for bl in blocks.values():
         for instr in bl.body:
             if isinstance(instr, ir.Assign):
                 expr = instr.value
                 lhs = instr.target.name
-                if isinstance(expr, ir.Var) and expr.name in aliases:
-                    aliases.add(lhs)
-    return aliases
+                # only mutable types can alias
+                if is_immutable_type(lhs, typemap):
+                    continue
+                if isinstance(expr, ir.Var) and lhs!=expr.name:
+                    _add_alias(lhs, expr.name, alias_map, arg_aliases)
+                # subarrays like A = B[0] for 2D B
+                if (isinstance(expr, ir.Expr)
+                        and expr.op in ['getitem', 'static_getitem']):
+                    _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
 
+    # copy to avoid changing size during iteration
+    old_alias_map = copy.deepcopy(alias_map)
+    # combine all aliases transitively
+    for v in old_alias_map:
+        for w in old_alias_map[v]:
+            alias_map[v] |= alias_map[w]
+        for w in old_alias_map[v]:
+            alias_map[w] = alias_map[v]
+
+    return alias_map, arg_aliases
+
+def _add_alias(lhs, rhs, alias_map, arg_aliases):
+    if rhs in arg_aliases:
+        arg_aliases.add(lhs)
+    else:
+        if rhs not in alias_map:
+            alias_map[rhs] = set()
+        if lhs not in alias_map:
+            alias_map[lhs] = set()
+        alias_map[rhs].add(lhs)
+        alias_map[lhs].add(rhs)
+    return
+
+def is_immutable_type(var, typemap):
+    if var not in typemap:
+        return False
+    typ = typemap[var]
+    # TODO: add more immutable types
+    if isinstance(typ, (types.Number, types.scalars._NPDatetimeBase,
+                        types.containers.BaseTuple,
+                        types.iterators.RangeType)):
+        return True
+    if typ==types.string:
+        return True
+    # consevatively, assume mutable
+    return False
 
 def copy_propagate(blocks, typemap):
     """compute copy propagation information for each block using fixed-point
@@ -1008,5 +1058,3 @@ def merge_adjacent_blocks(func_ir):
         for stmts in next_block.body:
             block.body.append(stmts)
         del func_ir.blocks[next_label]
-
-

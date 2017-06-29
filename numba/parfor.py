@@ -215,18 +215,18 @@ class ParforPass(object):
             self.typemap,
             self.calltypes)
         # remove dead code to enable fusion
-        remove_dead(self.func_ir.blocks, self.func_ir.arg_names)
+        remove_dead(self.func_ir.blocks, self.func_ir.arg_names, self.typemap)
         #dprint_func_ir(self.func_ir, "after remove_dead")
         # reorder statements to maximize fusion
         maximize_fusion(self.func_ir.blocks)
         fuse_parfors(self.func_ir.blocks)
         # remove dead code after fusion to remove extra arrays and variables
-        remove_dead(self.func_ir.blocks, self.func_ir.arg_names)
+        remove_dead(self.func_ir.blocks, self.func_ir.arg_names, self.typemap)
         #dprint_func_ir(self.func_ir, "after second remove_dead")
         # push function call variables inside parfors so gufunc function
         # wouldn't need function variables as argument
         push_call_vars(self.func_ir.blocks, {}, {})
-        remove_dead(self.func_ir.blocks, self.func_ir.arg_names)
+        remove_dead(self.func_ir.blocks, self.func_ir.arg_names, self.typemap)
         # after optimization, some size variables are not available anymore
         remove_dead_class_sizes(self.func_ir.blocks, self.array_analysis)
         dprint_func_ir(self.func_ir, "after optimization")
@@ -1562,7 +1562,7 @@ def dprint(*s):
         print(*s)
 
 
-def remove_dead_parfor(parfor, lives, args):
+def remove_dead_parfor(parfor, lives, args, typemap):
     # remove dead get/sets in last block
     # FIXME: I think that "in the last block" is not sufficient in general.  We might need to
     # remove from any block.
@@ -1597,14 +1597,14 @@ def remove_dead_parfor(parfor, lives, args):
     last_block.body = new_body
 
     # process parfor body recursively
-    remove_dead_parfor_recursive(parfor, lives, args)
+    remove_dead_parfor_recursive(parfor, lives, args, typemap)
     return
 
 
 ir_utils.remove_dead_extensions[Parfor] = remove_dead_parfor
 
 
-def remove_dead_parfor_recursive(parfor, lives, args):
+def remove_dead_parfor_recursive(parfor, lives, args, typemap):
     """create a dummy function from parfor and call remove dead recursively
     """
     blocks = parfor.loop_body.copy()  # shallow copy is enough
@@ -1623,6 +1623,9 @@ def remove_dead_parfor_recursive(parfor, lives, args):
 
     # add lives in a dummpy return to last block to avoid their removal
     tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
+    # dummy type for tuple_var
+    typemap[tuple_var.name] = types.containers.UniTuple(
+        types.intp, 2)
     live_vars = [ir.Var(scope, v, loc) for v in lives]
     tuple_call = ir.Expr.build_tuple(live_vars, loc)
     blocks[return_label].body.append(ir.Assign(tuple_call, tuple_var, loc))
@@ -1631,7 +1634,8 @@ def remove_dead_parfor_recursive(parfor, lives, args):
     branch = ir.Branch(0, first_body_block, return_label, loc)
     blocks[last_label].body.append(branch)
 
-    remove_dead(blocks, args)
+    remove_dead(blocks, args, typemap)
+    typemap.pop(tuple_var.name)  # remove dummy tuple type
     blocks[0].body.pop()  # remove dummy jump
     blocks[last_label].body.pop()  # remove branch
     return
