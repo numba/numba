@@ -520,14 +520,20 @@ def has_no_side_effect(rhs, lives, call_table):
         return False
     return True
 
+alias_analysis_extensions = {}
 
-def find_potential_aliases(blocks, args, typemap):
+def find_potential_aliases(blocks, args, typemap, alias_map=None, arg_aliases=None):
     "find all array aliases and argument aliases to avoid remove as dead"
-    alias_map = {}
-    arg_aliases = set(a for a in args if not is_immutable_type(a, typemap))
+    if alias_map is None:
+        alias_map = {}
+    if arg_aliases is None:
+        arg_aliases = set(a for a in args if not is_immutable_type(a, typemap))
 
     for bl in blocks.values():
         for instr in bl.body:
+            if type(instr) in alias_analysis_extensions:
+                f = alias_analysis_extensions[type(instr)]
+                f(instr, args, typemap, alias_map, arg_aliases)
             if isinstance(instr, ir.Assign):
                 expr = instr.value
                 lhs = instr.target.name

@@ -1680,6 +1680,13 @@ def remove_dead_class_sizes(blocks, array_analysis):
                 dim_sizes[i] = None
     return
 
+def find_potential_aliases_parfor(parfor, args, typemap, alias_map, arg_aliases):
+    blocks = wrap_parfor_blocks(parfor)
+    ir_utils.find_potential_aliases(blocks, args, typemap, alias_map, arg_aliases)
+    unwrap_parfor_blocks(parfor)
+    return
+
+ir_utils.alias_analysis_extensions[Parfor] = find_potential_aliases_parfor
 
 def wrap_parfor_blocks(parfor):
     """wrap parfor blocks for analysis/optimization like CFG"""
