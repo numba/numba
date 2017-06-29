@@ -411,14 +411,15 @@ def remove_dels(blocks):
     return
 
 
-def remove_dead(blocks, args, typemap):
+def remove_dead(blocks, args, typemap=None, alias_map=None, arg_aliases=None):
     """dead code elimination using liveness and CFG info.
     Returns True if something has been removed, or False if nothing is removed.
     """
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
-    alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap)
+    if alias_map is None or arg_aliases is None:
+        alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap)
     if config.DEBUG_ARRAY_OPT == 1:
         print("alias map:", alias_map)
     # keep set for easier search
@@ -443,7 +444,7 @@ def remove_dead(blocks, args, typemap):
 remove_dead_extensions = {}
 
 
-def remove_dead_block(block, lives, call_table, args, alias_map, alias_set, typemap):
+def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_set, typemap):
     """remove dead code using liveness info.
     Mutable arguments (e.g. arrays) that are not definitely assigned are live
     after return of function.
@@ -456,10 +457,15 @@ def remove_dead_block(block, lives, call_table, args, alias_map, alias_set, type
     new_body = [block.terminator]
     # for each statement in reverse order, excluding terminator
     for stmt in reversed(block.body[:-1]):
+        # aliases of lives are also live
+        alias_lives = set()
+        init_alias_lives = lives & alias_set
+        for v in init_alias_lives:
+            alias_lives |= alias_map[v]
         # let external calls handle stmt if type matches
         for t, f in remove_dead_extensions.items():
             if isinstance(stmt, t):
-                f(stmt, lives, args, typemap)
+                f(stmt, lives, arg_aliases, alias_map, typemap)
         # ignore assignments that their lhs is not live or lhs==rhs
         if isinstance(stmt, ir.Assign):
             lhs = stmt.target
@@ -473,7 +479,7 @@ def remove_dead_block(block, lives, call_table, args, alias_map, alias_set, type
                 continue
             # TODO: remove other nodes like SetItem etc.
         if isinstance(stmt, ir.SetItem):
-            if stmt.target.name not in lives:
+            if stmt.target.name not in lives and stmt.target.name not in alias_lives:
                 continue
 
         if type(stmt) in analysis.ir_extension_usedefs:
@@ -559,7 +565,8 @@ def _add_alias(lhs, rhs, alias_map, arg_aliases):
     return
 
 def is_immutable_type(var, typemap):
-    if var not in typemap:
+    # Conservatively, assume mutable if type not available
+    if typemap is None or var not in typemap:
         return False
     typ = typemap[var]
     # TODO: add more immutable types

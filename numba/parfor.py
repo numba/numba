@@ -1562,7 +1562,7 @@ def dprint(*s):
         print(*s)
 
 
-def remove_dead_parfor(parfor, lives, args, typemap):
+def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, typemap):
     # remove dead get/sets in last block
     # FIXME: I think that "in the last block" is not sufficient in general.  We might need to
     # remove from any block.
@@ -1584,10 +1584,15 @@ def remove_dead_parfor(parfor, lives, args, typemap):
         new_body.append(stmt)
     last_block.body = new_body
 
+    alias_set = set(alias_map.keys())
     # after getitem replacement, remove extra setitems
     new_body = []
     in_lives = copy.copy(lives)
     for stmt in reversed(last_block.body):
+        # aliases of lives are also live for setitems
+        alias_lives = in_lives & alias_set
+        for v in alias_lives:
+            in_lives |= alias_map[v]
         if (isinstance(stmt, ir.SetItem) and stmt.index.name ==
                 parfor.index_var.name and stmt.target.name not in in_lives):
             continue
@@ -1597,14 +1602,14 @@ def remove_dead_parfor(parfor, lives, args, typemap):
     last_block.body = new_body
 
     # process parfor body recursively
-    remove_dead_parfor_recursive(parfor, lives, args, typemap)
+    remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map, typemap)
     return
 
 
 ir_utils.remove_dead_extensions[Parfor] = remove_dead_parfor
 
 
-def remove_dead_parfor_recursive(parfor, lives, args, typemap):
+def remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map, typemap):
     """create a dummy function from parfor and call remove dead recursively
     """
     blocks = parfor.loop_body.copy()  # shallow copy is enough
@@ -1634,7 +1639,8 @@ def remove_dead_parfor_recursive(parfor, lives, args, typemap):
     branch = ir.Branch(0, first_body_block, return_label, loc)
     blocks[last_label].body.append(branch)
 
-    remove_dead(blocks, args, typemap)
+    # args var including aliases is ok
+    remove_dead(blocks, arg_aliases, typemap, alias_map, arg_aliases)
     typemap.pop(tuple_var.name)  # remove dummy tuple type
     blocks[0].body.pop()  # remove dummy jump
     blocks[last_label].body.pop()  # remove branch
