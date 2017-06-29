@@ -433,8 +433,7 @@ def remove_dead(blocks, args, typemap=None, alias_map=None, arg_aliases=None):
         # find live variables at the end of block
         for out_blk, _data in cfg.successors(label):
             lives |= live_map[out_blk]
-        if label in cfg.exit_points():
-            lives |= arg_aliases
+        lives |= arg_aliases
         removed |= remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_set, typemap)
     return removed
 
