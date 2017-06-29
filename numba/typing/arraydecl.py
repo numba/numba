@@ -204,7 +204,8 @@ class SetItemBuffer(AbstractTemplate):
                 else:
                     # Incompatible scalar type
                     return
-        elif not isinstance(val, types.Array):
+        elif (not isinstance(val, types.Array) and
+              self.context.can_convert(val, res)):
             # Single item assignment
             res = val
         else:
