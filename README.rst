@@ -1,32 +1,39 @@
-*****
-Python to SPIR-V 
-*****
+****************
+Python to SPIR-V
+****************
+
+**NB!** This project is on pause until September 2017!
 
 An OpenCL / SPIR-V backend for Numba
-###################################################
+####################################
 
-This repository is a Proof of Concept on how to translate Numpy Python to SPIR-V code.
+This repository is a Proof of Concept on how to translate numpy-based Python to SPIR-V code.
 It uses Numba to translate Python to LLVM and SPIRV-LLVM to generate the final SPIR-V.
-Although most Numba tests are working, this is a prototype, not meant for real-world usage.
+Although most Numba tests are working, this is a prototype, only meant for experimentation.
 
-Executing SPIR-V bitcode requires a recent Intel CPU (e.g haswell) and the Intel OpenCL 2.1 driver,
-which is the only OpenCL implementation supporting SPIR-V at the moment 
+**TODO** / requirements for future development:
+ - An official LLVM backend to target SPIR is critical requirement of this project
+ - A clean-up / refactorization of the Numba .cuda, .hsa and .ocl backends is needed
 
-Originally forked from **Numba 0.33** and tested with **llvmlite 0.18**, which depends on **LLVM 4.0**
+This repository was originally forked from **Numba 0.33** and tested with **llvmlite 0.18**. The llvmlite lib is an augmented Python wrapper for **LLVM 4.0** that Numba uses internally to handle the LLVM IR code.
 
-Requires:
- - SPIRV-LLVM on LLVM 4.0. Currently using https://github.com/thewilsonator/llvm-target-spirv
- - LLVM 4.0 with which to build the SPIR-V backend. Using https://github.com/thewilsonator/llvm
- - (more info on http://lists.llvm.org/pipermail/llvm-dev/2017-May/112538.html)
- - SPIRV-Tools https://github.com/KhronosGroup/SPIRV-Tools , i.e. spirv-as/dis/opt/val
+**Dependencies** / installation requirements:
+ - llvmlite 0.18. Install with conda, pip or build manually (requires LLVM 4.0)
+ - Intel OpenCL 2.1 and a recent Intel CPU supporting it (e.g. Haswell, Skylake)
+ - LLVM 4.0 to SPIRV translator. Use https://github.com/thewilsonator/llvm-target-spirv
+ - LLVM 4.0 with which to build the translator. Use https://github.com/thewilsonator/llvm
+ - SPIRV-Tools https://github.com/KhronosGroup/SPIRV-Tools, i.e. spirv-as/dis/opt/val
 
-Place the **spirv-as/dis/opt/val** binaries (built from SPIRV-Tools) and **llc** (built from *thewilsonator* *llvm-target-spirv* + *llvm 4*) in a folder pointed by the env variable $SPIRVDIR, for example /opt/spirv/
+First of all clone this repository and install Numba following http://numba.pydata.org/numba-doc/dev/user/installing.html#installing-from-source and http://numba.pydata.org/numba-doc/dev/developer/contributing.html#building-numba. Next install llvmlite. If building manually, follow http://llvmlite.pydata.org/en/latest/install/index.html#building-manually. Finally run the tests for both llvmlite and Numba to verify you have a working Numba installation.
 
-Some examples are available in /numba/examples/ocljit.
+Now the details for the OpenCL / SPIR-V backend. First install OpenCL 2.1 from the Intel website. A new OpenCL platform should appear by the name *“Experimental OpenCL 2.1 CPU Only Platform”*. Clone *thewilsonator/* *llvm-target-spirv* and *llvm*, place the files in llvm-target-spirv/* into llvm/lib/Target/SPIRV/, and build llvm with cmake to obtain the *llc* binary. Build the SPIRV-Tools binaries too (i.e. **spirv-as/dis/opt/val**). Finally place these binaries in a folder pointed by the environtment variable $SPIRVDIR, which defaults to /opt/spirv/
+
+Verify the installation by running the examples available in /numba/examples/ocljit/.
 Do not hesitate to contact jesus@streamcomputing.eu for more information or help.
 
 An effort by **StreamHPC** www.streamhpc.eu (formerly StreamComputing)
-###################################################
+
+-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·-·
 
 *****
 Numba
