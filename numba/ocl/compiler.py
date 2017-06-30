@@ -7,8 +7,6 @@ from numba import types, compiler
 from .ocldrv import devices, driver
 from numba.typing.templates import AbstractTemplate
 from numba import ctypes_support as ctypes
-from subprocess import Popen, PIPE, STDOUT
-
 
 def compile_ocl(pyfunc, return_type, args, debug):
     # First compilation will trigger the initialization of the OpenCL backend.
@@ -214,17 +212,11 @@ class _CachedProgram(object):
             # Finalize the building
             device = driver.default_platform.default_device
             context = driver.create_context(device.platform, [device])
+            #self._binary = ""
+            program = context.create_program_from_il(self._binary)
             #program = context.create_program_from_binary(self._binary)
-            #program.build(options=b"-x spir -spir-std=2.0")
-
-            llc_arg = "/home/jcaraban/jesus/code/spirv/bin/llc -march=spirv64 -o -".split()
-            llc_pro = Popen(llc_arg, stdin=PIPE, stdout=PIPE)
-            llc_out = llc_pro.communicate(input=self._binary)[0]
-            spirv = llc_out#.decode()
-            program = context.create_program_from_il(spirv)
-            program.build()
-
-            kernel = program.create_kernel(self._entry_name)
+            program.build(options=b"-x spir -spir-std=2.0")
+            kernel = program.create_kernel(self.entry_name.encode('utf8'))
 
             # Cache the just built cl_program, its cl_device and a cl_kernel
             self._cache[context] = (device,progra,kernel)

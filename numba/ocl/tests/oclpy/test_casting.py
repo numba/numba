@@ -1,6 +1,6 @@
 from numba import unittest_support as unittest
 import numpy as np
-from numba import ocl, types
+from numba import cuda, types
 import struct
 
 
@@ -22,17 +22,17 @@ def float_to_complex(x):
 
 class TestCasting(unittest.TestCase):
     def _create_wrapped(self, pyfunc, intype, outtype):
-        wrapped_func = ocl.jit(device=True)(pyfunc)
+        wrapped_func = cuda.jit(device=True)(pyfunc)
 
-        @ocl.jit
-        def ocl_wrapper_fn(arg, res):
+        @cuda.jit
+        def cuda_wrapper_fn(arg, res):
             res[0] = wrapped_func(arg[0])
 
         def wrapper_fn(arg):
             argarray = np.zeros(1, dtype=intype)
             argarray[0] = arg
             resarray = np.zeros(1, dtype=outtype)
-            ocl_wrapper_fn(argarray, resarray)
+            cuda_wrapper_fn(argarray, resarray)
             return resarray[0]
 
         return wrapper_fn

@@ -36,7 +36,6 @@ cl_program = ctypes.c_void_p
 cl_kernel = ctypes.c_void_p
 cl_event = ctypes.c_void_p
 cl_sampler = ctypes.c_void_p
-cl_mem = ctypes.c_void_p
 
 # The ones below may need to be tweaked per platform (looked up on header files)
 cl_bitfield = cl_ulong

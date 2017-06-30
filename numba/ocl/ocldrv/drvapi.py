@@ -62,9 +62,12 @@ API_PROTOTYPES = {
     'clReleaseMemObject': (cl_int, cl_mem, 0),
     'clGetMemObjectInfo': (cl_int, cl_mem, cl_mem_info, c_size_t, c_void_p, ptr(c_size_t), 0),
 
+    'clSVMAlloc': (c_void_p, cl_context, cl_mem_flags, c_size_t, c_void_p, ptr(cl_int), -1),
+    'clSVMFree': (None, cl_context, c_void_p, ptr(cl_int), -1),
+
     'clCreateProgramWithSource': (cl_program, cl_context, cl_uint, ptr(c_char_p), ptr(c_size_t), -1),
     'clCreateProgramWithBinary': (cl_program, cl_context, cl_uint, ptr(cl_device_id), ptr(c_size_t), ptr(c_void_p), ptr(cl_int), -1),
-    'clCreateProgramWithIL': (cl_program, cl_context, ptr(c_void_p), c_size_t, -1),
+    'clCreateProgramWithIL': (cl_program, cl_context, c_void_p, c_size_t, -1),
 
     'clBuildProgram': (cl_int, cl_program, cl_uint, ptr(cl_device_id), c_char_p, c_void_p, c_void_p, 0),
     'clRetainProgram': (cl_int, cl_program, 0),
@@ -76,6 +79,7 @@ API_PROTOTYPES = {
     'clRetainKernel': (cl_int, cl_kernel, 0),
     'clReleaseKernel': (cl_int, cl_kernel, 0),
     'clSetKernelArg': (cl_int, cl_kernel, cl_uint, c_size_t, c_void_p, 0),
+    'clSetKernelArgSVMPointer': (cl_int, cl_kernel, cl_uint, c_void_p, 0),
     'clGetKernelWorkGroupInfo': (cl_int, cl_kernel, cl_device_id, cl_kernel_work_group_info, c_size_t, c_void_p, ptr(c_size_t), 0),
     'clGetKernelInfo': (cl_int, cl_kernel, cl_kernel_info, c_size_t, c_void_p, ptr(c_size_t), 0),
 

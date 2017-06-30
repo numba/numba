@@ -203,6 +203,8 @@ CL_MEM_REFERENCE_COUNT                        = 0x1105
 CL_MEM_CONTEXT                                = 0x1106
 CL_MEM_ASSOCIATED_MEMOBJECT                   = 0x1107
 CL_MEM_OFFSET                                 = 0x1108
+CL_MEM_USES_SVM_POINTER                       = 0x1109
+
 
 # cl_mem_object_type
 CL_MEM_OBJECT_BUFFER                          = 0x10F0

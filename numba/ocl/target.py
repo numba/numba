@@ -119,9 +119,8 @@ class OCLTargetContext(BaseContext):
 
         def sub_gen_with_global(lty):
             if isinstance(lty, llvmir.PointerType):
-                if  lty.addrspace == SPIR_GENERIC_ADDRSPACE: # jcaraban
-                    return (lty.pointee.as_pointer(SPIR_GLOBAL_ADDRSPACE),
-                            lty.addrspace)
+                return (lty.pointee.as_pointer(SPIR_GLOBAL_ADDRSPACE),
+                        lty.addrspace)
             return lty, None
 
         if len(arginfo.argument_types) > 0:

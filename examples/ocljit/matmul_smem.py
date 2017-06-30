@@ -5,7 +5,7 @@ from timeit import default_timer as time
 
 import numpy as np
 
-from numba import cuda
+from numba import cuda, float32
 
 
 bpg = 50
@@ -15,6 +15,9 @@ n = bpg * tpb
 
 @cuda.jit('(float32[:,:], float32[:,:], float32[:,:])')
 def cu_square_matrix_mul(A, B, C):
+    sA = cuda.shared.array(shape=(tpb, tpb), dtype=float32)
+    sB = cuda.shared.array(shape=(tpb, tpb), dtype=float32)
+
     tx = cuda.threadIdx.x
     ty = cuda.threadIdx.y
     bx = cuda.blockIdx.x
@@ -25,13 +28,22 @@ def cu_square_matrix_mul(A, B, C):
     x = tx + bx * bw
     y = ty + by * bh
 
-    if x >= n or y >= n:
-        return
+    acc = 0.
+    for i in range(bpg):
+        if x < n and y < n:
+            sA[ty, tx] = A[y, tx + i * tpb]
+            sB[ty, tx] = B[ty + i * tpb, x]
 
-    C[y, x] = 0
-    for i in range(n):
-        C[y, x] += A[y, i] * B[i, x]
+        cuda.syncthreads()
 
+        if x < n and y < n:
+            for j in range(tpb):
+                acc += sA[ty, j] * sB[j, tx]
+
+        cuda.syncthreads()
+
+    if x < n and y < n:
+        C[y, x] = acc
 
 A = np.array(np.random.random((n, n)), dtype=np.float32)
 B = np.array(np.random.random((n, n)), dtype=np.float32)
@@ -60,6 +72,10 @@ Cans = Amat * Bmat
 e = time()
 tcpu = e - s
 
+print('cpu:  %f' % tcpu)
+print('cuda: %f' % tcuda)
+print('cuda speedup: %.2fx' % (tcpu / tcuda))
+
 # Check result
 assert np.allclose(C, Cans)
 #relerr = lambda got, gold: abs(got - gold)/gold
@@ -67,8 +83,4 @@ assert np.allclose(C, Cans)
 #    for x in range(n):
 #        err = relerr(C[y, x], Cans[y, x])
 #        assert err < 1e-5, (x, y, err)
-
-print('cpu:  %f' % tcpu)
-print('cuda: %f' % tcuda)
-print('cuda speedup: %.2fx' % (tcpu / tcuda))
 

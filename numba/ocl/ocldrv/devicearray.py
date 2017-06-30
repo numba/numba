@@ -93,7 +93,8 @@ class DeviceNDArrayBase(object):
                 self.alloc_size = _driver.memory_size_from_info(self.shape,
                                                                 self.strides,
                                                                 self.dtype.itemsize)
-                gpu_data = devices.get_context().memalloc(self.alloc_size)
+                gpu_data = devices.get_context().create_pointer(self.alloc_size,
+                                                                self.dtype.itemsize)
             else:
                 self.alloc_size = _driver.device_memory_size(gpu_data)
         else:
@@ -103,7 +104,7 @@ class DeviceNDArrayBase(object):
         self.gpu_data = gpu_data
 
         self.__writeback = writeback    # should deprecate the use of this
-        self.stream = 0
+        self.stream = devices.get_queue() # @
 
     def bind(self, stream=0):
         """Bind a OpenCL stream to this object so that all subsequent operation
@@ -337,7 +338,9 @@ class DeviceNDArray(DeviceNDArrayBase):
             if not arr.is_array:
                 # Element indexing
                 hostary = np.empty(1, dtype=self.dtype)
-                _driver.device_to_host(dst=hostary, src=newdata,
+                devary = DeviceNDArray(hostary.shape, hostary.strides, dtype=self.dtype,
+                                       stream=stream, gpu_data=newdata)
+                _driver.device_to_host(dst=hostary, src=devary,
                                        size=self._dummy.itemsize,
                                        stream=stream)
                 return hostary[0]

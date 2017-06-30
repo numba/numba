@@ -18,5 +18,5 @@ def ndarray_device_allocate_data(ary):
     """
     datasize = driver.host_memory_size(ary)
     # allocate
-    gpu_data = devices.get_context().memalloc(datasize)
+    gpu_data = devices.get_queuet().memalloc(datasize)
     return gpu_data
