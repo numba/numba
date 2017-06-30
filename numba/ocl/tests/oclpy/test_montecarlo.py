@@ -12,7 +12,7 @@ class TestOclMonteCarlo(unittest.TestCase):
         @ocl.jit(
             'void(double[:], double[:], double, double, double, double[:])')
         def step(last, paths, dt, c0, c1, normdist):
-            i = ocl.grid(1)
+            i = ocl.get_global_id(0)
             if i >= paths.shape[0]:
                 return
             noise = normdist[i]

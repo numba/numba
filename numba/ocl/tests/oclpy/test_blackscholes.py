@@ -69,7 +69,7 @@ class TestBlackScholes(unittest.TestCase):
 
 
 
-        @ocl.jit(argtypes=(double,), restype=double, device=True, inline=True)
+        @ocl.jit
         def cnd_ocl(d):
             K = 1.0 / (1.0 + 0.2316419 * math.fabs(d))
             ret_val = (RSQRT2PI * math.exp(-0.5 * d * d) *
@@ -79,17 +79,26 @@ class TestBlackScholes(unittest.TestCase):
             return ret_val
 
 
-        @ocl.jit(argtypes=(double[:], double[:], double[:], double[:], double[:],
-                            double, double))
+        @ocl.jit
         def black_scholes_ocl(callResult, putResult, S, X, T, R, V):
-            i = ocl.threadIdx.x + ocl.blockIdx.x * ocl.blockDim.x
+            i = ocl.get_global_id(0)
             if i >= S.shape[0]:
                 return
             sqrtT = math.sqrt(T[i])
             d1 = (math.log(S[i] / X[i]) + (R + 0.5 * V * V) * T[i]) / (V * sqrtT)
             d2 = d1 - V * sqrtT
-            cndd1 = cnd_ocl(d1)
-            cndd2 = cnd_ocl(d2)
+
+            K = 1.0 / (1.0 + 0.2316419 * math.fabs(d1))
+            cndd1 = (RSQRT2PI * math.exp(-0.5 * d1 * d1) *
+                    (K * (A1 + K * (A2 + K * (A3 + K * (A4 + K * A5))))))
+            if d1 > 0:
+                cndd1 = 1.0 - cndd1
+
+            K = 1.0 / (1.0 + 0.2316419 * math.fabs(d2))
+            cndd2 = (RSQRT2PI * math.exp(-0.5 * d2 * d2) *
+                    (K * (A1 + K * (A2 + K * (A3 + K * (A4 + K * A5))))))
+            if d2 > 0:
+                cndd2 = 1.0 - cndd2
 
             expRT = math.exp((-1. * R) * T[i])
             callResult[i] = (S[i] * cndd1 - X[i] * expRT * cndd2)
@@ -112,7 +121,7 @@ class TestBlackScholes(unittest.TestCase):
                 d_optionYears, RISKFREE, VOLATILITY)
         d_callResult.copy_to_host(callResultNumbapro, stream)
         d_putResult.copy_to_host(putResultNumbapro, stream)
-        stream.synchronize()
+        stream.finish()
 
         dt = (time1 - time0)
 

@@ -10,9 +10,12 @@ from numba.tests.support import captured_stdout
 
 
 class OCLTestCase(unittest.TestCase):
+    def setUp(self):
+        from numba.ocl.ocldrv.devices import init
+        init()
+
     def tearDown(self):
         from numba.ocl.ocldrv.devices import reset
-
         reset()
 
 

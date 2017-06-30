@@ -108,10 +108,11 @@ class OCLUFuncDispatcher(object):
                 mem = arg
             else:
                 mem = ocl.to_device(arg, stream)
-                # do reduction
+            # reduce by recursively spliting and operating
             out = self.__reduce(mem, gpu_mems, stream)
-            # use a small buffer to store the result element
-            buf = np.array((1,), dtype=arg.dtype)
+            # store the resultong scalar in a [1,] buffer
+            buf = np.empty([out.size,], dtype=out.dtype)
+            # copy the result back to host
             out.copy_to_host(buf, stream=stream)
 
         return buf[0]
@@ -162,7 +163,7 @@ class _OCLGUFuncCallSteps(GUFuncCallSteps):
         self._stream = self.kwargs.get('stream', 0)
 
     def launch_kernel(self, kernel, nelem, args):
-        kernel.forall(nelem, stream=self._stream)(*args)
+        kernel.forall(nelem, queue=self._stream)(*args)
 
 
 class OCLGenerializedUFunc(GenerializedUFunc):
@@ -194,7 +195,7 @@ class OCLUFuncMechanism(UFuncMechanism):
     ARRAY_ORDER = 'A'
 
     def launch(self, func, count, stream, args):
-        func.forall(count, stream=stream)(*args)
+        func.forall(count, queue=stream)(*args)
 
     def is_device_array(self, obj):
         return devicearray.is_ocl_ndarray(obj)

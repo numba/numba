@@ -4,9 +4,12 @@ from collections import namedtuple
 
 from numba.typing.templates import ConcreteTemplate
 from numba import types, compiler
-from .ocldrv import devices, driver
+from .ocldrv import devices, devicearray, driver
 from numba.typing.templates import AbstractTemplate
 from numba import ctypes_support as ctypes
+from numba.ocl.ocldrv import spirv
+from numba.ocl.ocldrv import spir2
+
 
 def compile_ocl(pyfunc, return_type, args, debug):
     # First compilation will trigger the initialization of the OpenCL backend.
@@ -143,12 +146,12 @@ class OCLKernelBase(object):
     def __init__(self):
         self.global_size = (1,)
         self.local_size = (1,)
-        self.stream = None
+        self.queue = None
 
     def copy(self):
         return copy.copy(self)
 
-    def configure(self, global_size, local_size=None, stream=None):
+    def configure(self, global_size, local_size=None, queue=None):
         """Configure the OpenCL kernel
         local_size can be None
         """
@@ -163,19 +166,19 @@ class OCLKernelBase(object):
         clone = self.copy()
         clone.global_size = tuple(global_size)
         clone.local_size = tuple(local_size) if local_size else None
-        clone.stream = stream
+        clone.queue = queue
 
         return clone
 
-    def forall(self, nelem, local_size=64, stream=None):
+    def forall(self, nelem, local_size=64, queue=None):
         """Simplified configuration for 1D kernel launch
         """
-        return self.configure(nelem, min(nelem, local_size), stream=stream)
+        return self.configure(nelem, min(nelem, local_size), queue=queue)
 
     def __getitem__(self, args):
         """Mimick CUDA python's square-bracket notation for configuration.
         This assumes a the argument to be:
-            `griddim, blockdim, stream`
+            `griddim, blockdim, queue`
         The blockdim maps directly to local_size.
         The actual global_size is computed by multiplying the local_size to
         griddim.
@@ -203,25 +206,30 @@ class _CachedProgram(object):
 
     def get(self):
         from .ocldrv import devices
-        from .ocldrv.driver import driver
 
-        ctx = devices.get_context()
-        result = self._cache.get(ctx)
-        # The program has not been finalized for this device
-        if result is None:
-            # Finalize the building
-            device = driver.default_platform.default_device
-            context = driver.create_context(device.platform, [device])
-            #self._binary = ""
-            program = context.create_program_from_il(self._binary)
-            #program = context.create_program_from_binary(self._binary)
-            program.build(options=b"-x spir -spir-std=2.0")
-            kernel = program.create_kernel(self.entry_name.encode('utf8'))
+        device = devices.get_device()
+        context = devices.get_context()
+
+        result = self._cache.get(context)
+        if result is not None:
+            program = result[1]
+            kernel = result[2]
+        else: # The program has not been finalized for this device
+            # Build according to the OpenCL version, 2.0 or 2.1
+            if device.opencl_version == (2,0):
+                spir2_bc = spir2.llvm_to_spir2(self._binary)
+                program = context.create_program_from_binary(spir2_bc)
+            elif device.opencl_version == (2,1):
+                spirv_bc = spirv.llvm_to_spirv(self._binary)
+                program = context.create_program_from_il(spirv_bc)
+
+            program.build()
+            kernel = program.create_kernel(self._entry_name)
 
             # Cache the just built cl_program, its cl_device and a cl_kernel
-            self._cache[context] = (device,progra,kernel)
+            self._cache[context] = (device,program,kernel)
 
-        return device, program, kernel
+        return context, device, program, kernel
 
 
 class OCLKernel(OCLKernelBase):
@@ -248,99 +256,86 @@ class OCLKernel(OCLKernelBase):
 
     def __call__(self, *args):
         context, device, program, kernel = self.bind()
+        queue = devices.get_queue()
 
         # Unpack pyobject values into ctypes scalar values
-        expanded_values = []
+        retr = []  # hold functors for writeback
+        kernelargs = []
         for ty, val in zip(self.argument_types, args):
-            _unpack_argument(ty, val, expanded_values)
+            self._unpack_argument(ty, val, queue, retr, kernelargs)
 
         # Insert kernel arguments
-        base = 0
-        for av in expanded_values:
-            # Adjust for alignemnt
-            align = ctypes.sizeof(av)
-            pad = _calc_padding_for_alignment(align, base)
-            base += pad
-            # Move to offset
-            offseted = ctypes.addressof(kernargs) + base
-            asptr = ctypes.cast(offseted, ctypes.POINTER(type(av)))
-            # Assign value
-            asptr[0] = av
-            # Increment offset
-            base += align
+        kernel.set_args(kernelargs)
 
         # Invoke kernel
-        do_sync = False
-        queue = self.stream
-        if queue is None:
-            do_sync = True
-            queue = program.context.create_command_queue(device)
-
-        queue.enqueue_nd_range_kernel(self.kernel, len(self.global_size),
+        queue.enqueue_nd_range_kernel(kernel, len(self.global_size),
                                       self.global_size, self.local_size)
+        queue.finish()
 
-        if do_sync:
-            queue.finish()
-
-
-def _unpack_argument(ty, val, kernelargs):
-    """
-    Convert arguments to ctypes and append to kernelargs
-    """
-    if isinstance(ty, types.Array):
-        c_intp = ctypes.c_ssize_t
-
-        meminfo = parent = ctypes.c_void_p(0)
-        nitems = c_intp(val.size)
-        itemsize = c_intp(val.dtype.itemsize)
-        data = ctypes.c_void_p(val.ctypes.data)
-        kernelargs.append(meminfo)
-        kernelargs.append(parent)
-        kernelargs.append(nitems)
-        kernelargs.append(itemsize)
-        kernelargs.append(data)
-        for ax in range(val.ndim):
-            kernelargs.append(c_intp(val.shape[ax]))
-        for ax in range(val.ndim):
-            kernelargs.append(c_intp(val.strides[ax]))
-
-    elif isinstance(ty, types.Integer):
-        cval = getattr(ctypes, "c_%s" % ty)(val)
-        kernelargs.append(cval)
-
-    elif ty == types.float64:
-        cval = ctypes.c_double(val)
-        kernelargs.append(cval)
-
-    elif ty == types.float32:
-        cval = ctypes.c_float(val)
-        kernelargs.append(cval)
-
-    elif ty == types.boolean:
-        cval = ctypes.c_uint8(int(val))
-        kernelargs.append(cval)
-
-    elif ty == types.complex64:
-        kernelargs.append(ctypes.c_float(val.real))
-        kernelargs.append(ctypes.c_float(val.imag))
-
-    elif ty == types.complex128:
-        kernelargs.append(ctypes.c_double(val.real))
-        kernelargs.append(ctypes.c_double(val.imag))
-
-    else:
-        raise NotImplementedError(ty, val)
+        # retrieve auto converted arrays
+        for wb in retr:
+            wb()
 
 
-def _calc_padding_for_alignment(align, base):
-    """
-    Returns byte padding required to move the base pointer into proper alignment
-    """
-    rmdr = int(base) % align
-    if rmdr == 0:
-        return 0
-    else:
-        return align - rmdr
+    def _unpack_argument(self, ty, val, queue, retr, kernelargs):
+        """
+        Convert arguments to ctypes and append to kernelargs
+        """
+        if isinstance(ty, types.Array):
+            if isinstance(ty, types.SmartArrayType):
+                devary = val.get('gpu')
+                retr.append(lambda: val.mark_changed('gpu'))
+                outer_parent = ctypes.c_void_p(0)
+                kernelargs.append(outer_parent)
+            else:
+                devary, conv = devicearray.auto_device(val, stream=queue)
+                if conv:
+                    retr.append(lambda: devary.copy_to_host(val, stream=queue))
+
+            c_intp = ctypes.c_ssize_t
+
+            meminfo = ctypes.c_void_p(0)
+            parent = ctypes.c_void_p(0)
+            nitems = c_intp(devary.size)
+            itemsize = c_intp(devary.dtype.itemsize)
+            data = driver.device_pointer(devary) # @@
+            kernelargs.append(meminfo)
+            kernelargs.append(parent)
+            kernelargs.append(nitems)
+            kernelargs.append(itemsize)
+            kernelargs.append(data)
+            for ax in range(devary.ndim):
+                kernelargs.append(c_intp(devary.shape[ax]))
+            for ax in range(devary.ndim):
+                kernelargs.append(c_intp(devary.strides[ax]))
+
+        elif isinstance(ty, types.Integer):
+            cval = getattr(ctypes, "c_%s" % ty)(val)
+            kernelargs.append(cval)
+
+        elif ty == types.float64:
+            cval = ctypes.c_double(val)
+            kernelargs.append(cval)
+
+        elif ty == types.float32:
+            cval = ctypes.c_float(val)
+            kernelargs.append(cval)
+
+        elif ty == types.boolean:
+            cval = ctypes.c_uint8(int(val))
+            kernelargs.append(cval)
+
+        elif ty == types.complex64:
+            kernelargs.append(ctypes.c_float(val.real))
+            kernelargs.append(ctypes.c_float(val.imag))
+
+        elif ty == types.complex128:
+            kernelargs.append(ctypes.c_double(val.real))
+            kernelargs.append(ctypes.c_double(val.imag))
+
+        else:
+            raise NotImplementedError(ty, val)
+
 
 
 class AutoJitOCLKernel(OCLKernelBase):
@@ -355,7 +350,7 @@ class AutoJitOCLKernel(OCLKernelBase):
 
     def __call__(self, *args):
         kernel = self.specialize(*args)
-        cfg = kernel.configure(self.global_size, self.local_size, self.stream)
+        cfg = kernel.configure(self.global_size, self.local_size, self.queue)
         cfg(*args)
 
     def specialize(self, *args):

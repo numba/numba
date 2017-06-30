@@ -4,14 +4,15 @@ import numpy as np
 
 from numba import ocl
 import numba.unittest_support as unittest
+from numba.ocl.testing import OCLTestCase
 
 
-class TestForAll(unittest.TestCase):
+class TestForAll(OCLTestCase):
     def test_forall_1(self):
 
         @ocl.jit
         def foo(x):
-            i = ocl.grid(1)
+            i = ocl.get_global_id(0)
             if i < x.size:
                 x[i] += 1
 
@@ -24,7 +25,7 @@ class TestForAll(unittest.TestCase):
 
         @ocl.jit("void(float32, float32[:], float32[:])")
         def bar(a, x, y):
-            i = ocl.grid(1)
+            i = ocl.get_global_id(0)
             if i < x.size:
                 y[i] = a * x[i] + y[i]
 

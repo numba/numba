@@ -16,11 +16,12 @@ class TestOclNonDet(unittest.TestCase):
         precondition.
         """
 
-        @ocl.jit(argtypes=[float32[:, :], float32[:, :], float32[:]])
+        @ocl.jit('(float32[:, :], float32[:, :], float32[:])')
         def diagproduct(c, a, b):
-            startX, startY = ocl.grid(2)
-            gridX = ocl.gridDim.x * ocl.blockDim.x
-            gridY = ocl.gridDim.y * ocl.blockDim.y
+            startX = ocl.get_global_id(0)
+            startY = ocl.get_global_id(1)
+            gridX = ocl.get_global_size(0)
+            gridY = ocl.get_global_size(1)
             height = c.shape[0]
             width = c.shape[1]
 

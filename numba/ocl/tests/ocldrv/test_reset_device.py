@@ -1,8 +1,8 @@
 from __future__ import print_function, absolute_import, division
 import threading
-from numba import cuda
-from numba.cuda.cudadrv.driver import driver
-from numba.cuda.testing import unittest, CUDATestCase
+from numba import ocl
+from numba.ocl.ocldrv.driver import driver
+from numba.ocl.testing import unittest, OCLTestCase
 
 try:
     from Queue import Queue  # Python 2
@@ -10,16 +10,17 @@ except:
     from queue import Queue  # Python 3
 
 
-class TestResetDevice(CUDATestCase):
+class TestResetDevice(OCLTestCase):
     def test_reset_device(self):
 
         def newthread(exception_queue):
             try:
-                devices = range(driver.get_device_count())
+                plat = ocl.get_current_platform()
+                devices = range(plat.get_device_count())
                 for _ in range(2):
                     for d in devices:
-                        cuda.select_device(d)
-                        cuda.close()
+                        ocl.select_device(d)
+                        ocl.close()
             except Exception as e:
                 exception_queue.put(e)
 

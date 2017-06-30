@@ -4,6 +4,7 @@ from numba import vectorize
 from numba import ocl, float64
 from numba import unittest_support as unittest
 from numba import config
+from numba.ocl.testing import OCLTestCase
 
 sig = [float64(float64, float64)]
 
@@ -11,7 +12,7 @@ sig = [float64(float64, float64)]
 target='ocl'
 
 
-class TestOCLVectorizeScalarArg(unittest.TestCase):
+class TestOCLVectorizeScalarArg(OCLTestCase):
 
     def test_vectorize_scalar_arg(self):
         @vectorize(sig, target=target)

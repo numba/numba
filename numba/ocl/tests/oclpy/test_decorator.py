@@ -3,14 +3,14 @@ from __future__ import print_function, absolute_import
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import hsa
+from numba import ocl
 
 
 class TestDecorators(unittest.TestCase):
     def test_kernel_jit(self):
-        @hsa.jit("(float32[:], float32[:])")
+        @ocl.jit("(float32[:], float32[:])")
         def copy_vector(dst, src):
-            tid = hsa.get_global_id(0)
+            tid = ocl.get_global_id(0)
             if tid < dst.size:
                 dst[tid] = src[tid]
 
@@ -20,13 +20,13 @@ class TestDecorators(unittest.TestCase):
         np.testing.assert_equal(dst, src)
 
     def test_device_jit(self):
-        @hsa.jit("float32(float32[:], intp)", device=True)
+        @ocl.jit("float32(float32[:], intp)", device=True)
         def inner(src, idx):
             return src[idx]
 
-        @hsa.jit("(float32[:], float32[:])")
+        @ocl.jit("(float32[:], float32[:])")
         def outer(dst, src):
-            tid = hsa.get_global_id(0)
+            tid = ocl.get_global_id(0)
             if tid < dst.size:
                 dst[tid] = inner(src, tid)
 
@@ -36,9 +36,9 @@ class TestDecorators(unittest.TestCase):
         np.testing.assert_equal(dst, src)
 
     def test_autojit_kernel(self):
-        @hsa.jit
+        @ocl.jit
         def copy_vector(dst, src):
-            tid = hsa.get_global_id(0)
+            tid = ocl.get_global_id(0)
             if tid < dst.size:
                 dst[tid] = src[tid]
 

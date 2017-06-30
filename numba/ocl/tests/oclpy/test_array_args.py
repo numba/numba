@@ -2,21 +2,22 @@ from __future__ import print_function, division, absolute_import
 
 import numpy as np
 
-from numba import cuda
-from numba.cuda.testing import unittest
+from numba import ocl
+from numba.ocl.testing import unittest
+from numba.ocl.testing import OCLTestCase
 
 
-class TestCudaArrayArg(unittest.TestCase):
+class TestCudaArrayArg(OCLTestCase):
     def test_array_ary(self):
 
-        @cuda.jit('double(double[:],int64)', device=True, inline=True)
+        @ocl.jit('double(double[:],int64)', device=True)
         def device_function(a, c):
             return a[c]
 
 
-        @cuda.jit('void(double[:],double[:])')
+        @ocl.jit('void(double[:],double[:])')
         def kernel(x, y):
-            i = cuda.grid(1)
+            i = ocl.get_global_id(0)
             y[i] = device_function(x, i)
 
         x = np.arange(10, dtype=np.double)

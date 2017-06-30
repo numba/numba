@@ -12,26 +12,20 @@ SM_SIZE = tpb, tpb
 class TestOclLaplace(unittest.TestCase):
     def test_laplace_small(self):
 
-        @ocl.jit(float64(float64, float64), device=True, inline=True)
-        def get_max(a, b):
-            if a > b:
-                return a
-            else:
-                return b
-
         @ocl.jit(void(float64[:, :], float64[:, :], float64[:, :]))
         def jocabi_relax_core(A, Anew, error):
             err_sm = ocl.shared.array(SM_SIZE, dtype=float64)
 
-            ty = ocl.threadIdx.x
-            tx = ocl.threadIdx.y
-            bx = ocl.blockIdx.x
-            by = ocl.blockIdx.y
+            ty = ocl.get_local_id(0)
+            tx = ocl.get_local_id(1)
+            bx = ocl.get_local_size(0)
+            by = ocl.get_local_size(1)
 
             n = A.shape[0]
             m = A.shape[1]
 
-            i, j = ocl.grid(2)
+            i = ocl.get_global_id(0)
+            j = ocl.get_global_id(1)
 
             err_sm[ty, tx] = 0
             if j >= 1 and j < n - 1 and i >= 1 and i < m - 1:
@@ -39,23 +33,23 @@ class TestOclLaplace(unittest.TestCase):
                                       + A[j - 1, i] + A[j + 1, i])
                 err_sm[ty, tx] = Anew[j, i] - A[j, i]
 
-            ocl.syncthreads()
+            ocl.barrier()
 
             # max-reduce err_sm vertically
             t = tpb // 2
             while t > 0:
                 if ty < t:
-                    err_sm[ty, tx] = get_max(err_sm[ty, tx], err_sm[ty + t, tx])
+                    err_sm[ty, tx] = max(err_sm[ty, tx], err_sm[ty + t, tx])
                 t //= 2
-                ocl.syncthreads()
+                ocl.barrier()
 
             # max-reduce err_sm horizontally
             t = tpb // 2
             while t > 0:
                 if tx < t and ty == 0:
-                    err_sm[ty, tx] = get_max(err_sm[ty, tx], err_sm[ty, tx + t])
+                    err_sm[ty, tx] = max(err_sm[ty, tx], err_sm[ty, tx + t])
                 t //= 2
-                ocl.syncthreads()
+                ocl.barrier()
 
             if tx == 0 and ty == 0:
                 error[by, bx] = err_sm[0, 0]
@@ -101,7 +95,7 @@ class TestOclLaplace(unittest.TestCase):
 
 
             # error_grid is available on host
-            stream.synchronize()
+            stream.finish()
 
             error = np.abs(error_grid).max()
 

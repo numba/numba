@@ -6,34 +6,35 @@ from timeit import default_timer as time
 
 import numpy as np
 
-from numba import vectorize, cuda
+from numba import vectorize, ocl
 
 import polynomial as poly
 
 
 def main():
-    cu_discriminant = vectorize(['f4(f4, f4, f4)', 'f8(f8, f8, f8)'],
-                                target='cuda')(poly.discriminant)
+    cl_discriminant = vectorize(['f4(f4, f4, f4)', 'f8(f8, f8, f8)'],
+                                target='ocl')(poly.discriminant)
 
     N = 1e+8 // 2
+    N = int(N)
 
     print('Data size', N)
 
     A, B, C = poly.generate_input(N, dtype=np.float32)
     D = np.empty(A.shape, dtype=A.dtype)
 
-    stream = cuda.stream()
+    stream = ocl.stream()
 
     print('== One')
 
     ts = time()
 
     with stream.auto_synchronize():
-        dA = cuda.to_device(A, stream)
-        dB = cuda.to_device(B, stream)
-        dC = cuda.to_device(C, stream)
-        dD = cuda.to_device(D, stream, copy=False)
-        cu_discriminant(dA, dB, dC, out=dD, stream=stream)
+        dA = ocl.to_device(A, stream)
+        dB = ocl.to_device(B, stream)
+        dC = ocl.to_device(C, stream)
+        dD = ocl.to_device(D, stream, copy=False)
+        cl_discriminant(dA, dB, dC, out=dD, stream=stream)
         dD.to_host(stream)
 
     te = time()
@@ -62,11 +63,11 @@ def main():
 
     with stream.auto_synchronize():
         for a, b, c, d in zip(sA, sB, sC, sD):
-            dA = cuda.to_device(a, stream)
-            dB = cuda.to_device(b, stream)
-            dC = cuda.to_device(c, stream)
-            dD = cuda.to_device(d, stream, copy=False)
-            cu_discriminant(dA, dB, dC, out=dD, stream=stream)
+            dA = ocl.to_device(a, stream)
+            dB = ocl.to_device(b, stream)
+            dC = ocl.to_device(c, stream)
+            dD = ocl.to_device(d, stream, copy=False)
+            cl_discriminant(dA, dB, dC, out=dD, stream=stream)
             dD.to_host(stream)
             device_ptrs.extend([dA, dB, dC, dD])
 

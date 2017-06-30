@@ -1,11 +1,9 @@
 #! /usr/bin/env python
 from __future__ import print_function
-
 from timeit import default_timer as time
 
 import numpy as np
-
-from numba import cuda, float32
+from numba import ocl, float32
 
 
 bpg = 50
@@ -13,20 +11,16 @@ tpb = 32
 n = bpg * tpb
 
 
-@cuda.jit('(float32[:,:], float32[:,:], float32[:,:])')
-def cu_square_matrix_mul(A, B, C):
-    sA = cuda.shared.array(shape=(tpb, tpb), dtype=float32)
-    sB = cuda.shared.array(shape=(tpb, tpb), dtype=float32)
+@ocl.jit('(float32[:,:], float32[:,:], float32[:,:])')
+def cl_square_matrix_mul(A, B, C):
+    sA = ocl.shared.array(shape=(tpb, tpb), dtype=float32)
+    sB = ocl.shared.array(shape=(tpb, tpb), dtype=float32)
 
-    tx = cuda.threadIdx.x
-    ty = cuda.threadIdx.y
-    bx = cuda.blockIdx.x
-    by = cuda.blockIdx.y
-    bw = cuda.blockDim.x
-    bh = cuda.blockDim.y
+    tx = ocl.get_local_id(0)
+    ty = ocl.get_local_id(1)
 
-    x = tx + bx * bw
-    y = ty + by * bh
+    x = ocl.get_global_id(0)
+    y = ocl.get_global_id(1)
 
     acc = 0.
     for i in range(bpg):
@@ -34,13 +28,13 @@ def cu_square_matrix_mul(A, B, C):
             sA[ty, tx] = A[y, tx + i * tpb]
             sB[ty, tx] = B[ty + i * tpb, x]
 
-        cuda.syncthreads()
+        ocl.barrier()
 
         if x < n and y < n:
             for j in range(tpb):
                 acc += sA[ty, j] * sB[j, tx]
 
-        cuda.syncthreads()
+        ocl.barrier()
 
     if x < n and y < n:
         C[y, x] = acc
@@ -52,16 +46,14 @@ C = np.empty_like(A)
 print("N = %d x %d" % (n, n))
 
 s = time()
-stream = cuda.stream()
-with stream.auto_synchronize():
-    dA = cuda.to_device(A, stream)
-    dB = cuda.to_device(B, stream)
-    dC = cuda.to_device(C, stream)
-    cu_square_matrix_mul[(bpg, bpg), (tpb, tpb), stream](dA, dB, dC)
-    dC.to_host(stream)
+#dA = ocl.to_device(A)
+#dB = ocl.to_device(B)
+#dC = ocl.device_array_like(C)
+cl_square_matrix_mul[(bpg, bpg), (tpb, tpb)](A, B, C)
+#dC.copy_to_host(C)
 
 e = time()
-tcuda = e - s
+tocl = e - s
 
 # Host compute
 Amat = np.matrix(A)
@@ -73,14 +65,8 @@ e = time()
 tcpu = e - s
 
 print('cpu:  %f' % tcpu)
-print('cuda: %f' % tcuda)
-print('cuda speedup: %.2fx' % (tcpu / tcuda))
+print('ocl: %f' % tocl)
+print('ocl speedup: %.2fx' % (tcpu / tocl))
 
 # Check result
 assert np.allclose(C, Cans)
-#relerr = lambda got, gold: abs(got - gold)/gold
-#for y in range(n):
-#    for x in range(n):
-#        err = relerr(C[y, x], Cans[y, x])
-#        assert err < 1e-5, (x, y, err)
-

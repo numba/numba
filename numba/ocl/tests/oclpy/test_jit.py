@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import
 from numba import unittest_support as unittest
+from numba.ocl.testing import OCLTestCase
 from numba import ocl
 import numpy as np
 
@@ -9,7 +10,7 @@ def ocl_add(a, b):
     return a + b
 
 
-class TestJIT(unittest.TestCase):
+class TestJIT(OCLTestCase):
     def test_array_kernel(self):
         @ocl.jit("void(int32[::1])")
         def oclkernel(x):

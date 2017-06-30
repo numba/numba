@@ -5,8 +5,10 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import vectorize, ocl
 from numba.tests.npyufunc import test_vectorize_decor
+from numba.ocl.testing import OCLTestCase
 
 
+@unittest.skip
 class TestVectorizeDecor(test_vectorize_decor.BaseVectorizeDecor):
     def test_gpu_1(self):
         self._test_template_1('ocl')
@@ -18,7 +20,7 @@ class TestVectorizeDecor(test_vectorize_decor.BaseVectorizeDecor):
         self._test_template_3('ocl')
 
 
-class TestGPUVectorizeBroadcast(unittest.TestCase):
+class TestGPUVectorizeBroadcast(OCLTestCase):
     def test_broadcast_bug_90(self):
         """
         https://github.com/ContinuumIO/numbapro/issues/90

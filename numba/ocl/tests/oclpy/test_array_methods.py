@@ -1,8 +1,9 @@
 from __future__ import print_function, absolute_import, division
 
 from numba import unittest_support as unittest
+from numba.ocl.testing import OCLTestCase
 import numpy as np
-from numba import cuda
+from numba import ocl
 
 
 def reinterpret_array_type(byte_arr, start, stop, output):
@@ -11,13 +12,13 @@ def reinterpret_array_type(byte_arr, start, stop, output):
     output[0] = val
 
 
-class TestCudaArrayMethods(unittest.TestCase):
+class TestCudaArrayMethods(OCLTestCase):
     def test_reinterpret_array_type(self):
         """
         Reinterpret byte array as int32 in the GPU.
         """
         pyfunc = reinterpret_array_type
-        kernel = cuda.jit(pyfunc)
+        kernel = ocl.jit(pyfunc)
 
         byte_arr = np.arange(256, dtype=np.uint8)
         itemsize = np.dtype(np.int32).itemsize

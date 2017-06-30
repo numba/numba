@@ -1,15 +1,16 @@
 from numba import ocl
 import numpy as np
 from numba import unittest_support as unittest
+from numba.ocl.testing import OCLTestCase
 import threading
 
 
-class TestMultiGPUContext(unittest.TestCase):
+class TestMultiGPUContext(OCLTestCase):
     @unittest.skipIf(len(ocl.gpus) < 2, "need more than 1 gpus")
     def test_multigpu_context(self):
         @ocl.jit("void(float64[:], float64[:])")
         def copy_plus_1(inp, out):
-            i = ocl.grid(1)
+            i = ocl.get_global_id(0)
             if i < out.size:
                 out[i] = inp[i] + 1
 
@@ -85,7 +86,7 @@ class TestMultiGPUContext(unittest.TestCase):
 
         @ocl.jit
         def vector_add_scalar(arr, val):
-            i = ocl.grid(1)
+            i = ocl.get_global_id(0)
             if i < arr.size:
                 arr[i] += val
 

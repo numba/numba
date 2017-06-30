@@ -8,7 +8,7 @@ import numpy as np
 
 from numba import ocl
 
-from ..blackscholes.blackscholes_numba import black_scholes, black_scholes_numba
+from blackscholes_numba import black_scholes, black_scholes_numba
 
 
 RISKFREE = 0.02
@@ -39,7 +39,7 @@ def black_scholes_ocl(callResult, putResult, S, X,
     #    T = optionYears
     #    R = Riskfree
     #    V = Volatility
-    i = get_global_id(0)
+    i = ocl.get_global_id(0)
     if i >= S.shape[0]:
         return
     sqrtT = math.sqrt(T[i])
@@ -70,8 +70,8 @@ def main (*args):
     optionYears = randfloat(np.random.random(OPT_N), 0.25, 10.0)
     callResultNumba = np.zeros(OPT_N)
     putResultNumba = -np.ones(OPT_N)
-    callResultCuda = np.zeros(OPT_N)
-    putResultCuda = -np.ones(OPT_N)
+    callResultOcl = np.zeros(OPT_N)
+    putResultOcl = -np.ones(OPT_N)
 
     time0 = time.time()
     for i in range(iterations):
@@ -93,8 +93,8 @@ def main (*args):
     blockdim = 1024, 1
     griddim = int(math.ceil(float(OPT_N)/blockdim[0])), 1
     stream = ocl.stream()
-    d_callResult = ocl.to_device(callResultCuda, stream)
-    d_putResult = ocl.to_device(putResultCuda, stream)
+    d_callResult = ocl.to_device(callResultOcl, stream)
+    d_putResult = ocl.to_device(putResultOcl, stream)
     d_stockPrice = ocl.to_device(stockPrice, stream)
     d_optionStrike = ocl.to_device(optionStrike, stream)
     d_optionYears = ocl.to_device(optionYears, stream)
@@ -105,20 +105,20 @@ def main (*args):
             d_optionYears, RISKFREE, VOLATILITY)
         d_callResult.to_host(stream)
         d_putResult.to_host(stream)
-        stream.synchronize()
+        stream.finish()
     time2 = time.time()
     dt = (time1 - time0) * 10 + (time2 - time1)
-    print("Numba / CUDA time: %f msec" % ((1000 * dt) / iterations))
+    print("Numba / OpenCL time: %f msec" % ((1000 * dt) / iterations))
 
-    delta = np.abs(callResultNumpy - callResultCuda)
+    delta = np.abs(callResultNumpy - callResultOcl)
     L1norm = delta.sum() / np.abs(callResultNumpy).sum()
     print("L1 norm: %E" % L1norm)
     print("Max absolute error: %E" % delta.max())
 
-    delta = np.abs(callResultNumpy - callResultCuda)
+    delta = np.abs(callResultNumpy - callResultOcl)
     L1norm = delta.sum() / np.abs(callResultNumpy).sum()
-    print("L1 norm (Numba / CUDA): %E" % L1norm)
-    print("Max absolute error (Numba / CUDA): %E" % delta.max())
+    print("L1 norm (Numba / OpenCL): %E" % L1norm)
+    print("Max absolute error (Numba / OpenCL): %E" % delta.max())
 
 if __name__ == "__main__":
     import sys

@@ -24,3 +24,21 @@ def _init():
 
 _init()
 del _init
+
+#jcaraban
+
+def _init_ocl():
+
+    def init_vectorize():
+        from numba.ocl.vectorizers import OCLVectorize
+        return OCLVectorize
+
+    def init_guvectorize():
+        from numba.ocl.vectorizers import OCLGUFuncVectorize
+        return OCLGUFuncVectorize
+
+    Vectorize.target_registry.ondemand['ocl'] = init_vectorize
+    GUVectorize.target_registry.ondemand['ocl'] = init_guvectorize
+
+_init_ocl()
+del _init_ocl

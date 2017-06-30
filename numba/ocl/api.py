@@ -43,38 +43,33 @@ except NameError:
 
 require_context = devices.require_context
 current_context = devices.get_context
+current_device = devices.get_device
+current_queue = devices.get_queue
 gpus = devices.gpus
 
 
 @require_context
 def to_device(obj, stream=0, copy=True, to=None):
     """to_device(obj, stream=0, copy=True, to=None)
-
     Allocate and transfer a numpy ndarray or structured scalar to the device.
 
     To copy host->device a numpy array::
-
         ary = np.arange(10)
         d_ary = ocl.to_device(ary)
 
     To enqueue the transfer to a stream::
-
         stream = ocl.stream()
         d_ary = ocl.to_device(ary, stream=stream)
-
     The resulting ``d_ary`` is a ``DeviceNDArray``.
 
     To copy device->host::
-
         hary = d_ary.copy_to_host()
 
     To copy device->host to an existing array::
-
         ary = np.empty(shape=d_ary.shape, dtype=d_ary.dtype)
         d_ary.copy_to_host(ary)
 
     To enqueue the transfer to a stream::
-
         hary = d_ary.copy_to_host(stream=stream)
     """
     if to is None:
@@ -185,7 +180,7 @@ def stream():
 
     Create a OpenCL stream that represents a command queue for the device.
     """
-    return current_context().create_stream()
+    return current_queue()
 
 # Page lock
 @require_context
@@ -237,29 +232,26 @@ def event(timing=True):
 
 #event_elapsed_time = driver.event_elapsed_time
 
-# Device selection
+# Platform / Device selection
 
-def select_device(device_id):
-    """
-    Make the context associated with device *device_id* the current context.
+def select_platform(id_or_name):
+    return devices.select_platform(id_or_name)
 
-    Returns a Device instance.
+def get_current_platform():
+    return devices.get_platform()
 
-    Raises exception on error.
-    """
-    context = devices.get_context(device_id)
-    return context.device
+def list_platforms():
+    return devices.platforms()
 
+
+def select_device(id_or_name):
+    return devices.select_device(id_or_name)
 
 def get_current_device():
-    "Get current device associated with the current thread"
-    return current_context().device
-
+    return devices.get_device()
 
 def list_devices():
-    "Return a list of all detected devices"
-    devices._init_gpus()
-    return devices.gpus
+    return devices.devices()
 
 
 def close():
@@ -285,12 +277,12 @@ def detect():
     supported_count = 0
     for dev in devlist:
         attrs = []
-        cc = dev.compute_capability
-        attrs += [('compute capability', '%d.%d' % cc)]
-        attrs += [('pci device id', dev.PCI_DEVICE_ID)]
-        attrs += [('pci bus id', dev.PCI_BUS_ID)]
+        cc = dev.opencl_version
+        attrs += [('OpenCL version', '%d.%d' % cc)]
+        #attrs += [('pci device id', dev.PCI_DEVICE_ID)]
+        #attrs += [('pci bus id', dev.PCI_BUS_ID)]
         if cc < (2, 0):
-            support = '[NOT SUPPORTED: CC < 2.0]'
+            support = '[NOT SUPPORTED: CLv < 2.0]'
         else:
             support = '[SUPPORTED]'
             supported_count += 1

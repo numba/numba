@@ -9,31 +9,32 @@ import time
 
 import numpy as np
 
-from numba import cuda, f8
+from numba import ocl, f8
 
 
-# NOTE: CUDA kernel does not return any value
+# NOTE: OpenCL kernel does not return any value
 
 tpb = 16
 
-@cuda.jit(device=True, inline=True)
+@ocl.jit(device=True)
 def get_max(a, b):
     if a > b : return a
     else: return b
 
-@cuda.jit("(f8[:,:], f8[:,:], f8[:,:])")
+@ocl.jit("(f8[:,:], f8[:,:], f8[:,:])")
 def jacobi_relax_core(A, Anew, error):
-    err_sm = cuda.shared.array((tpb, tpb), dtype=f8)
+    err_sm = ocl.shared.array((tpb, tpb), dtype=f8)
 
-    ty = cuda.threadIdx.x
-    tx = cuda.threadIdx.y
-    bx = cuda.blockIdx.x
-    by = cuda.blockIdx.y
+    ty = ocl.get_local_id(0)
+    tx = ocl.get_local_id(1)
+    bx = ocl.get_local_size(0)
+    by = ocl.get_local_size(1)
 
     n = A.shape[0]
     m = A.shape[1]
 
-    i, j = cuda.grid(2)
+    i = ocl.get_global_id(0)
+    j = ocl.get_global_id(1)
 
     err_sm[ty, tx] = 0
     if j >= 1 and j < n - 1 and i >= 1 and i < m - 1:
@@ -41,7 +42,7 @@ def jacobi_relax_core(A, Anew, error):
                             + A[j - 1, i] + A[j + 1, i])
         err_sm[ty, tx] = Anew[j, i] - A[j, i]
 
-    cuda.syncthreads()
+    ocl.barrier()
 
     # max-reduce err_sm vertically
     t = tpb // 2
@@ -49,7 +50,7 @@ def jacobi_relax_core(A, Anew, error):
         if ty < t:
             err_sm[ty, tx] = get_max(err_sm[ty, tx], err_sm[ty + t, tx])
         t //= 2
-        cuda.syncthreads()
+        ocl.barrier()
 
     # max-reduce err_sm horizontally
     t = tpb // 2
@@ -57,7 +58,7 @@ def jacobi_relax_core(A, Anew, error):
         if tx < t and ty == 0:
             err_sm[ty, tx] = get_max(err_sm[ty, tx], err_sm[ty, tx + t])
         t //= 2
-        cuda.syncthreads()
+        ocl.barrier()
 
 
     if tx == 0 and ty == 0:
@@ -91,11 +92,11 @@ def main():
 
     error_grid = np.zeros(griddim)
 
-    stream = cuda.stream()
+    stream = ocl.stream()
 
-    dA = cuda.to_device(A, stream)          # to device and don't come back
-    dAnew = cuda.to_device(Anew, stream)    # to device and don't come back
-    derror_grid = cuda.to_device(error_grid, stream)
+    dA = ocl.to_device(A, stream)          # to device and don't come back
+    dAnew = ocl.to_device(Anew, stream)    # to device and don't come back
+    derror_grid = ocl.to_device(error_grid, stream)
 
     while error > tol and iter < iter_max:
         assert error_grid.dtype == np.float64
@@ -106,7 +107,7 @@ def main():
 
 
         # error_grid is available on host
-        stream.synchronize()
+        stream.finish()
 
         error = np.abs(error_grid).max()
 

@@ -10,7 +10,7 @@ def foo(inp, out):
 
 
 def copy(inp, out):
-    i = ocl.grid(1)
+    i = ocl.get_global_id(0)
     cufoo(inp[i, :], out[i, :])
 
 

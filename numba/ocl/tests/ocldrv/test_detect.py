@@ -10,7 +10,7 @@ class TestOclDetect(unittest.TestCase):
             ocl.detect()
         output = out.getvalue()
         self.assertIn('Found', output)
-        self.assertIn('OCL devices', output)
+        self.assertIn('OpenCL devices', output)
 
 
 if __name__ == '__main__':

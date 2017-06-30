@@ -6,9 +6,9 @@ import numpy as np
 
 class TestOclAutojit(unittest.TestCase):
     def test_device_array(self):
-        @ocl.autojit
+        @ocl.jit
         def foo(x, y):
-            i = ocl.grid(1)
+            i = ocl.get_global_id(0)
             y[i] = x[i]
 
         x = np.arange(10)
@@ -37,7 +37,7 @@ class TestOclAutojit(unittest.TestCase):
 
         @ocl.jit
         def driver(A, B):
-            i = ocl.grid(1)
+            i = ocl.get_global_id(0)
             if i < B.size:
                 args = A[i], A[i] + B[i], B[i]
                 B[i] = reducer(mapper(args), 1)

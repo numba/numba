@@ -2,16 +2,18 @@ import numpy as np
 import numba.unittest_support as unittest
 
 from numba.ocl.ocldrv.driver import MemObject
-from numba.ocl.ocldrv import driver as cl
+from numba.ocl.ocldrv.driver import driver as cl
 
 class TestOpenCLMemory(unittest.TestCase):
     def setUp(self):
-        self.device = cl.default_platform.default_device
-        self.context = cl.create_context(self.device.platform, [self.device])
+        self.platform = cl.default_platform
+        self.device = cl.default_device
+        self.context = self.platform.create_context([self.device])
 
     def tearDown(self):
         del self.context
         del self.device
+        del self.platform
 
     def test_simple_buffer_creation(self):
         size = 4096

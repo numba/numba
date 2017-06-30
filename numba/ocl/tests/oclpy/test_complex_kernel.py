@@ -2,13 +2,14 @@ from __future__ import print_function, absolute_import
 import numpy as np
 from numba import ocl
 from numba.ocl.testing import unittest
+from numba.ocl.testing import OCLTestCase
 
 
-class TestOclComplex(unittest.TestCase):
+class TestOclComplex(OCLTestCase):
     def test_ocl_complex_arg(self):
-        @ocl.jit('void(complex128[:], complex128)')
+        @ocl.jit
         def foo(a, b):
-            i = ocl.grid(1)
+            i = ocl.get_global_id(0)
             a[i] += b
 
 

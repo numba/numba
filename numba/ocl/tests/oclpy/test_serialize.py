@@ -4,7 +4,7 @@ import numpy as np
 from numba import ocl, vectorize
 from numba import unittest_support as unittest
 
-
+@unittest.skip
 class TestPickle(unittest.TestCase):
 
     def check_call(self, callee):

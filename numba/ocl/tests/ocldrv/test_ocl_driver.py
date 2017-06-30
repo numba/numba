@@ -1,7 +1,7 @@
 from __future__ import print_function, absolute_import, division
 
-import numba.ocl.ocldrv as ocldrv
-from numba.ocl.ocldrv import driver as cl
+from numba.ocl.ocldrv import enums
+from numba.ocl.ocldrv.driver import driver as cl
 import numba.unittest_support as unittest
 
 import numpy as np
@@ -10,7 +10,7 @@ import numpy as np
 class TestDeviceProperties(unittest.TestCase):
     def test_device_querying(self):
         all_devices = cl.default_platform.all_devices
-        self.assertIn(cl.default_platform.default_device, all_devices)
+        self.assertIn(cl.default_device, all_devices)
         for d in cl.default_platform.gpu_devices:
             self.assertIn(d, all_devices)
             d.type_str == 'GPU'
@@ -20,12 +20,13 @@ class TestDeviceProperties(unittest.TestCase):
         for d in cl.default_platform.accelerator_devices:
             self.assertIn(d, all_devices)
             d.type_str == 'ACCELERATOR'
-        self.assertIn(cl.default_platform.default_device, all_devices)
+        self.assertIn(cl.default_device, all_devices)
 
 class TestContextProperties(unittest.TestCase):
     def test_default_properties(self):
-        device = cl.default_platform.default_device
-        context = cl.create_context(device.platform, [device])
+        platform = cl.default_platform
+        device = cl.default_device
+        context = platform.create_context([device])
         self.assertEqual(context.devices, [device])
         self.assertEqual(context.platform, device.platform)
         self.assertNotEqual(context.reference_count, 0)
@@ -34,27 +35,30 @@ class TestContextProperties(unittest.TestCase):
 class TestQueueProperties(unittest.TestCase):
     def setUp(self):
         self.assertTrue(len(cl.default_platform.all_devices) > 0)
-        self.device = cl.default_platform.default_device
-        self.context = cl.create_context(self.device.platform, [self.device])
+        self.platform = cl.default_platform
+        self.device = cl.default_device
+        self.context = self.platform.create_context([self.device])
 
     def tearDown(self):
         del self.context
         del self.device
+        del self.platform
 
     def test_default_properties(self):
         q = self.context.create_command_queue(self.device)
         self.assertEqual(q.context, self.context)
         self.assertEqual(q.device, self.device)
         self.assertNotEqual(q.reference_count, 0)
-        self.assertEqual(q.properties & ocldrv.CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, 0)
-        self.assertEqual(q.properties & ocldrv.CL_QUEUE_PROFILING_ENABLE, 0)
+        self.assertEqual(q.properties & enums.CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, 0)
+        self.assertEqual(q.properties & enums.CL_QUEUE_PROFILING_ENABLE, 0)
 
 
 class TestProgramProperties(unittest.TestCase):
     def setUp(self):
         self.assertTrue(len(cl.default_platform.all_devices) > 0)
-        self.device = cl.default_platform.default_device
-        self.context = cl.create_context(self.device.platform, [self.device])
+        self.platform = cl.default_platform
+        self.device = cl.default_device
+        self.context = self.platform.create_context([self.device])
 
         self.opencl_source = b"""
 __kernel void square(__global float* input, __global float* output, const unsigned int count)
@@ -68,6 +72,7 @@ __kernel void square(__global float* input, __global float* output, const unsign
         del self.opencl_source
         del self.context
         del self.device
+        del self.platform
 
     def test_simple_program(self):
         program = self.context.create_program_from_source(self.opencl_source)
@@ -89,9 +94,9 @@ __kernel void square(__global float* input, __global float* output, const unsign
 class TestOpenCLDriver(unittest.TestCase):
     def setUp(self):
         self.assertTrue(len(cl.default_platform.all_devices) > 0)
-        self.device = cl.default_platform.cpu_devices[0]
-        self.context = cl.create_context(self.device.platform,
-                                         [self.device])
+        self.platform = cl.default_platform
+        self.device = self.platform.cpu_devices[0]
+        self.context = self.platform.create_context([self.device])
 
         self.opencl_source = b"""
 __kernel void square(__global float* input, __global float* output, const unsigned int count)

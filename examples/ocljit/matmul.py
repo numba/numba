@@ -1,74 +1,55 @@
 #! /usr/bin/env python
-from __future__ import print_function
-
 from timeit import default_timer as time
-
 import numpy as np
-
-from numba import cuda
-
-
-bpg = 50
-tpb = 32
-n = bpg * tpb
+from numba import ocl
 
 
-@cuda.jit('(float32[:,:], float32[:,:], float32[:,:])')
-def cu_square_matrix_mul(A, B, C):
-    tx = cuda.threadIdx.x
-    ty = cuda.threadIdx.y
-    bx = cuda.blockIdx.x
-    by = cuda.blockIdx.y
-    bw = cuda.blockDim.x
-    bh = cuda.blockDim.y
-
-    x = tx + bx * bw
-    y = ty + by * bh
-
-    if x >= n or y >= n:
+@ocl.jit
+def matmult(A, B, C):
+    x = ocl.get_global_id(1)
+    y = ocl.get_global_id(0)
+    if x >= C.shape[0] or y >= C.shape[1]:
         return
-
     C[y, x] = 0
-    for i in range(n):
+    for i in range(C.shape[0]):
         C[y, x] += A[y, i] * B[i, x]
 
 
-A = np.array(np.random.random((n, n)), dtype=np.float32)
-B = np.array(np.random.random((n, n)), dtype=np.float32)
-C = np.empty_like(A)
+blocksize = 64
+gridsize = 16
+N = gridsize * blocksize
 
-print("N = %d x %d" % (n, n))
+A = np.array(np.random.random((N, N)), dtype=np.float32)
+B = np.array(np.random.random((N, N)), dtype=np.float32)
+C = np.zeros_like(A)
 
-s = time()
-stream = cuda.stream()
-with stream.auto_synchronize():
-    dA = cuda.to_device(A, stream)
-    dB = cuda.to_device(B, stream)
-    dC = cuda.to_device(C, stream)
-    cu_square_matrix_mul[(bpg, bpg), (tpb, tpb), stream](dA, dB, dC)
-    dC.to_host(stream)
+griddim = N, N
+blockdim = blocksize, blocksize
 
-e = time()
-tcuda = e - s
+ts = time()
+
+dA = ocl.to_device(A)
+dB = ocl.to_device(B)
+dC = ocl.device_array_like(C)
+matmult[griddim, blockdim](dA, dB, dC)#(A,B,C)
+dC.copy_to_host(C)
+
+te = time()
+tocl = te - ts
 
 # Host compute
 Amat = np.matrix(A)
 Bmat = np.matrix(B)
 
-s = time()
+ts = time()
 Cans = Amat * Bmat
-e = time()
-tcpu = e - s
+te = time()
+tcpu = te - ts
 
 # Check result
 assert np.allclose(C, Cans)
-#relerr = lambda got, gold: abs(got - gold)/gold
-#for y in range(n):
-#    for x in range(n):
-#        err = relerr(C[y, x], Cans[y, x])
-#        assert err < 1e-5, (x, y, err)
 
 print('cpu:  %f' % tcpu)
-print('cuda: %f' % tcuda)
-print('cuda speedup: %.2fx' % (tcpu / tcuda))
+print('ocl: %f' % tocl)
+print('ocl speedup: %.2fx' % (tcpu / tocl))
 

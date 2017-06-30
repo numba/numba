@@ -3,9 +3,10 @@ from numba import vectorize
 from numba import ocl, float32
 import numpy as np
 from numba import unittest_support as unittest
+from numba.ocl.testing import OCLTestCase
 
 
-class TestOclVectorizeDeviceCall(unittest.TestCase):
+class TestOclVectorizeDeviceCall(OCLTestCase):
     def test_ocl_vectorize_device_call(self):
 
         @ocl.jit(float32(float32, float32, float32), device=True)

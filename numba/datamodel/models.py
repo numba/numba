@@ -845,7 +845,6 @@ class ArrayModel(StructModel):
             ('data', types.CPointer(fe_type.dtype)),
             ('shape', types.UniTuple(types.intp, ndim)),
             ('strides', types.UniTuple(types.intp, ndim)),
-
         ]
         super(ArrayModel, self).__init__(dmm, fe_type, members)
 

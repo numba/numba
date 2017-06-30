@@ -1,12 +1,13 @@
 from __future__ import print_function, absolute_import
 from numba import unittest_support as unittest
+from numba.ocl.testing import OCLTestCase
 from numba.ocl import compiler
 from numba import ocl
 from numba import types
 import numpy as np
 
 
-class TestCompiler(unittest.TestCase):
+class TestCompiler(OCLTestCase):
     def test_single_element_assign(self):
         def pyfunc(x):
             x[0] = 1234
@@ -49,7 +50,7 @@ class TestCompiler(unittest.TestCase):
         data = np.zeros(10, dtype='int32')
 
         dev_data = ocl.to_device(data)
-        kern[1, 32](dev_data)
+        kern[1, data.size](dev_data)
         dev_data.copy_to_host(data)
 
         self.assertTrue(np.all(data == 1 + np.arange(data.size)))
@@ -67,8 +68,7 @@ class TestCompiler(unittest.TestCase):
         data = np.zeros(32, dtype='int32')
 
         dev_data = ocl.to_device(data)
-        kern.configure(data.size)(dev_data)
-        # kern[1, data.size](dev_data)
+        kern[1, data.size](dev_data)
         dev_data.copy_to_host(data)
 
         self.assertTrue(np.all(data == data.size ** 2))

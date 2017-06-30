@@ -2,17 +2,18 @@ from __future__ import absolute_import, print_function, division
 import numpy as np
 from numba import ocl, int32, float32
 from numba.ocl.testing import unittest
+from numba.ocl.testing import OCLTestCase
 
 N = 100
 
 
 def simple_smem(ary):
     sm = ocl.shared.array(N, int32)
-    i = ocl.grid(1)
+    i = ocl.get_global_id(0)
     if i == 0:
         for j in range(N):
             sm[j] = j
-    ocl.syncthreads()
+    ocl.barrier()
     ary[i] = sm[i]
 
 
@@ -24,11 +25,11 @@ def coop_smem2d(ary):
     i, j = ocl.grid(2)
     sm = ocl.shared.array((S0, S1), float32)
     sm[i, j] = (i + 1) / (j + 1)
-    ocl.syncthreads()
+    ocl.barrier()
     ary[i, j] = sm[i, j]
 
 
-class TestOclTestGlobal(unittest.TestCase):
+class TestOclTestGlobal(OCLTestCase):
     def test_global_int_const(self):
         """Test simple_smem
         """

@@ -39,7 +39,7 @@ def transpose(a, b=None):
 
         if by+ty < input.shape[0] and bx+tx < input.shape[1]:
             tile[ty, tx] = input[by+ty, bx+tx]
-        ocl.syncthreads()
+        ocl.barrier()
         if y < output.shape[0] and x < output.shape[1]:
             output[y, x] = tile[tx, ty]
 

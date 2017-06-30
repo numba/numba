@@ -3,10 +3,11 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 
 from numba.ocl.testing import unittest
+from numba.ocl.testing import OCLTestCase
 from numba import ocl
 
 
-class TestOclArray(unittest.TestCase):
+class TestOclArray(OCLTestCase):
     def test_gpu_array_zero_length(self):
         x = np.arange(0)
         dx = ocl.to_device(x)
@@ -20,7 +21,7 @@ class TestOclArray(unittest.TestCase):
 
         @ocl.jit('void(double[:])')
         def kernel(x):
-            i = ocl.grid(1)
+            i = ocl.get_global_id(0)
             if i < x.shape[0]:
                 x[i] = i
 
@@ -34,7 +35,7 @@ class TestOclArray(unittest.TestCase):
 
         @ocl.jit('void(double[:], double[:])')
         def copykernel(x, y):
-            i = ocl.grid(1)
+            i = ocl.get_global_id(0)
             if i < x.shape[0]:
                 x[i] = i
                 y[i] = i

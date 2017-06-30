@@ -6,9 +6,9 @@ from numba.ocl.testing import unittest
 
 class TestOclPy2Div(unittest.TestCase):
     def test_py2_div_issue(self):
-        @ocl.jit(argtypes=[float32[:], float32[:], float32[:], int32])
+        @ocl.jit('(float32[:], float32[:], float32[:], int32)')
         def preCalc(y, yA, yB, numDataPoints):
-            i = ocl.grid(1)
+            i = ocl.get_global_id(0)
             k = i % numDataPoints
 
             ans = float32(1.001 * float32(i))

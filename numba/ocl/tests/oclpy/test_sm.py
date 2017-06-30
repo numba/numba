@@ -1,10 +1,9 @@
 from numba import ocl, int32
-
 from numba.ocl.testing import unittest
-
+from numba.ocl.testing import OCLTestCase
 import numpy as np
 
-class TestSharedMemoryIssue(unittest.TestCase):
+class TestSharedMemoryIssue(OCLTestCase):
     def test_issue_953_sm_linkage_conflict(self):
         @ocl.jit(device=True)
         def inner():

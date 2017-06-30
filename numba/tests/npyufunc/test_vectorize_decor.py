@@ -60,7 +60,7 @@ class BaseVectorizeDecor(object):
         func = self.funcs['func1']
         A = np.arange(100, dtype=np.float64)
         self._run_and_compare(func, sig, A)
-    
+
     @tag('important')
     def test_3(self):
         sig = ['float64(float64, uint32)']

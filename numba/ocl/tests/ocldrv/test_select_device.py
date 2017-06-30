@@ -9,25 +9,26 @@ except:
     from queue import Queue  # Python 3
 
 import numpy as np
-from numba import cuda
-from numba.cuda.testing import unittest, CUDATestCase
+from numba import ocl
+from numba.ocl.testing import unittest, OCLTestCase
 
 
 def newthread(exception_queue):
     try:
-        cuda.select_device(0)
-        stream = cuda.stream()
+        ocl.select_platform(0)
+        ocl.select_device(0)
+        stream = ocl.stream()
         A = np.arange(100)
-        dA = cuda.to_device(A, stream=stream)
-        stream.synchronize()
+        dA = ocl.to_device(A, stream=stream)
+        stream.finish()
         del dA
         del stream
-        cuda.close()
+        ocl.close()
     except Exception as e:
         exception_queue.put(e)
 
 
-class TestSelectDevice(CUDATestCase):
+class TestSelectDevice(OCLTestCase):
     def test_select_device(self):
         exception_queue = Queue()
         for i in range(10):

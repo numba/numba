@@ -75,7 +75,7 @@ def reduction_template(binop, typ, blocksize):
 
         # The following reduction steps rely on all values being loaded into
         # sdata; we need to synchronize in order to meet this condition
-        ocl.syncthreads()
+        ocl.barrier()
 
         # The following lines implement an unrolled loop that repeatedly reduces
         # the number of values by two (by performing the reduction operation)
@@ -84,17 +84,17 @@ def reduction_template(binop, typ, blocksize):
         if blocksize >= 512:
             if tid < 256:
                 sdata[tid] = binop(sdata[tid], sdata[tid + 256])
-                ocl.syncthreads()
+                ocl.barrier()
 
         if blocksize >= 256:
             if tid < 128:
                 sdata[tid] = binop(sdata[tid], sdata[tid + 128])
-                ocl.syncthreads()
+                ocl.barrier()
 
         if blocksize >= 128:
             if tid < 64:
                 sdata[tid] = binop(sdata[tid], sdata[tid + 64])
-                ocl.syncthreads()
+                ocl.barrier()
 
         # At this point only the first warp has any work to do - we perform a
         # check on the thread ID here so that we can avoid calling syncthreads
@@ -150,7 +150,7 @@ def _get_copy_strides_kernel():
                 if idx < n:
                     val = arr[idx * stride]
 
-                ocl.syncthreads()
+                ocl.barrier()
 
                 if base + i < n:
                     arr[sm[0] + i] = val

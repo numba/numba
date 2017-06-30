@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 from numba import types
+from numba.typing.npydecl import register_number_classes
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, MacroTemplate,
                                     signature, Registry)
@@ -10,6 +11,7 @@ intrinsic = registry.register
 intrinsic_attr = registry.register_attr
 intrinsic_global = registry.register_global
 
+register_number_classes(intrinsic_global)
 
 @intrinsic
 class Ocl_get_global_id(ConcreteTemplate):

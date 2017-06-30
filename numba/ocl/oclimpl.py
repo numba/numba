@@ -14,6 +14,7 @@ from numba.itanium_mangler import mangle_c, mangle, mangle_type
 from . import target
 from . import stubs
 from . import enums
+from .codegen import SPIR_DATA_LAYOUT
 
 registry = Registry()
 lower = registry.lower
@@ -158,3 +159,75 @@ def sub_group_barrier_impl(context, builder, sig, args):
     flags = context.get_constant(types.uint32, enums.CLK_LOCAL_MEM_FENCE)
     builder.call(barrier, [flags])
     return _void_value
+
+
+# ocl.shared submodule -------------------------------------------------------
+
+@lower('ocl.smem.alloc', types.UniTuple, types.Any)
+def hsail_smem_alloc_array(context, builder, sig, args):
+    shape, dtype = args
+    return _generic_array(context, builder, shape=shape, dtype=dtype,
+                          symbol_name='_oclpy_smem',
+                          addrspace=target.SPIR_LOCAL_ADDRSPACE)
+
+
+def _generic_array(context, builder, shape, dtype, symbol_name, addrspace):
+    elemcount = reduce(operator.mul, shape)
+    lldtype = context.get_data_type(dtype)
+    laryty = Type.array(lldtype, elemcount)
+
+    if addrspace == target.SPIR_LOCAL_ADDRSPACE:
+        lmod = builder.module
+
+        # Create global variable in the requested address-space
+        gvmem = lmod.add_global_variable(laryty, symbol_name, addrspace)
+
+        if elemcount <= 0:
+            raise ValueError("array length <= 0")
+        else:
+            gvmem.linkage = lc.LINKAGE_INTERNAL
+            gvmem.initializer = lc.Constant.null(laryty)
+
+        if dtype not in types.number_domain:
+            raise TypeError("unsupported type: %s" % dtype)
+
+        # Convert to generic address-space
+        dataptr = context.addrspacecast(builder, gvmem,
+                                        target.SPIR_GENERIC_ADDRSPACE)
+
+    else:
+        raise NotImplementedError("addrspace {addrspace}".format(**locals()))
+
+    return _make_array(context, builder, dataptr, dtype, shape)
+
+
+def _make_array(context, builder, dataptr, dtype, shape, layout='C'):
+    ndim = len(shape)
+    # Create array object
+    aryty = types.Array(dtype=dtype, ndim=ndim, layout='C')
+    ary = context.make_array(aryty)(context, builder)
+
+    targetdata = _get_target_data(context)
+    lldtype = context.get_data_type(dtype)
+    itemsize = lldtype.get_abi_size(targetdata)
+    # Compute strides
+    rstrides = [itemsize]
+    for i, lastsize in enumerate(reversed(shape[1:])):
+        rstrides.append(lastsize * rstrides[-1])
+    strides = [s for s in reversed(rstrides)]
+
+    kshape = [context.get_constant(types.intp, s) for s in shape]
+    kstrides = [context.get_constant(types.intp, s) for s in strides]
+
+    context.populate_array(ary,
+                           data=builder.bitcast(dataptr, ary.data.type),
+                           shape=cgutils.pack_array(builder, kshape),
+                           strides=cgutils.pack_array(builder, kstrides),
+                           itemsize=context.get_constant(types.intp, itemsize),
+                           meminfo=None)
+
+    return ary._getvalue()
+
+
+def _get_target_data(context):
+    return ll.create_target_data(SPIR_DATA_LAYOUT[context.address_size])

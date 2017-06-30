@@ -75,7 +75,7 @@ class TestOCLVectorize(OCLTestCase):
             device_data = ocl.to_device(data, stream)
             dresult = ocl_ufunc(device_data, device_data, stream=stream)
             result = dresult.copy_to_host()
-            stream.synchronize()
+            stream.finish()
 
             gold = np_ufunc(data, data)
 
@@ -111,12 +111,12 @@ class TestOCLVectorize(OCLTestCase):
                     test(dtype, order, nd)
 
     def test_ufunc_attrib(self):
-        self.reduce_test(8)
-        self.reduce_test(100)
-        self.reduce_test(2 ** 10 + 1)
-        self.reduce_test2(8)
-        self.reduce_test2(100)
-        self.reduce_test2(2 ** 10 + 1)
+        self.reduce_func(8)
+        self.reduce_func(100)
+        self.reduce_func(2 ** 10 + 1)
+        self.reduce_func2(8)
+        self.reduce_func2(100)
+        self.reduce_func2(2 ** 10 + 1)
 
     def test_output_arg(self):
         @vectorize(sig, target=target)
@@ -129,7 +129,7 @@ class TestOCLVectorize(OCLTestCase):
         vector_add(A, B, out=C)
         self.assertTrue(np.allclose(A + B, C))
 
-    def reduce_test(self, n):
+    def reduce_func(self, n):
         @vectorize(sig, target=target)
         def vector_add(a, b):
             return a + b
@@ -140,7 +140,7 @@ class TestOCLVectorize(OCLTestCase):
         result = ocl_ufunc.reduce(x)
         self.assertEqual(result, gold)
 
-    def reduce_test2(self, n):
+    def reduce_func2(self, n):
 
         @vectorize(sig, target=target)
         def vector_add(a, b):

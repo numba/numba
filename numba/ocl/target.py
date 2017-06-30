@@ -24,9 +24,12 @@ CC_SPIR_FUNC = "spir_func"
 class OCLTypingContext(typing.BaseContext):
     def load_additional_registries(self):
         from . import ocldecl, mathdecl
+        from numba.typing import cmathdecl, operatordecl
 
         self.install_registry(ocldecl.registry)
         self.install_registry(mathdecl.registry)
+        self.install_registry(cmathdecl.registry)
+        self.install_registry(operatordecl.registry)
 
 
 # -----------------------------------------------------------------------------
@@ -119,8 +122,9 @@ class OCLTargetContext(BaseContext):
 
         def sub_gen_with_global(lty):
             if isinstance(lty, llvmir.PointerType):
-                return (lty.pointee.as_pointer(SPIR_GLOBAL_ADDRSPACE),
-                        lty.addrspace)
+                if  lty.addrspace == SPIR_GENERIC_ADDRSPACE: # jcaraban
+                    return (lty.pointee.as_pointer(SPIR_GLOBAL_ADDRSPACE),
+                            lty.addrspace)
             return lty, None
 
         if len(arginfo.argument_types) > 0:

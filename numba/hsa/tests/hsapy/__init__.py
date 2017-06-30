@@ -1,4 +1,4 @@
-from numba.tests import SerialSuite
+from numba.testing import SerialSuite
 
 
 def load_tests(loader, tests, pattern):

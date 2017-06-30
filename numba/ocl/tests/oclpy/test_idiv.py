@@ -7,7 +7,7 @@ from numba.ocl.testing import unittest
 class TestOclIDiv(unittest.TestCase):
     def test_inplace_div(self):
 
-        @ocl.jit(argtypes=[float32[:, :], int32, int32])
+        @ocl.jit('(float32[:,:], int32, int32)')
         def div(grid, l_x, l_y):
             for x in range(l_x):
                 for y in range(l_y):
@@ -22,7 +22,7 @@ class TestOclIDiv(unittest.TestCase):
 
     def test_inplace_div_double(self):
 
-        @ocl.jit(argtypes=[float64[:, :], int32, int32])
+        @ocl.jit('(float64[:, :], int32, int32)')
         def div_double(grid, l_x, l_y):
             for x in range(l_x):
                 for y in range(l_y):

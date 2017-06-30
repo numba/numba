@@ -5,7 +5,7 @@ from numba.ocl.testing import unittest
 from numba import ocl
 import operator
 
-
+@unittest.skip
 class TestOperatorModule(unittest.TestCase):
     """
     Test if operator module is supported by the OpenCL target.

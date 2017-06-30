@@ -6,9 +6,7 @@ from numba.ocl.testing import unittest
 
 class TestOclAutoContext(unittest.TestCase):
     def test_auto_context(self):
-        """A problem was revealed by a customer that the use ocl.to_device
-        does not create a OpenCL context.
-        This tests the problem
+        """
         """
         A = np.arange(10, dtype=np.float32)
         newA = np.empty_like(A)

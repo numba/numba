@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
 
-
 from timeit import default_timer as timer
 
 from matplotlib.pylab import imshow, jet, show, ion
@@ -10,9 +9,10 @@ from matplotlib.pylab import imshow, jet, show, ion
 from numba import vectorize
 import numpy as np
 
+
 sig = 'uint8(uint32, f4, f4, f4, f4, uint32, uint32, uint32)'
 
-@vectorize([sig], target='cuda')
+@vectorize([sig], target='ocl')
 def mandel(tid, min_x, max_x, min_y, max_y, width, height, iters):
     pixel_size_x = (max_x - min_x) / width
     pixel_size_y = (max_y - min_y) / height
