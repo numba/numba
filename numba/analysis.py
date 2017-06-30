@@ -29,9 +29,9 @@ def compute_use_defs(blocks):
         var_use_map[offset] = use_set = set()
         var_def_map[offset] = def_set = set()
         for stmt in ir_block.body:
-            for T, func in ir_extension_usedefs.items():
-                if isinstance(stmt, T):
-                    func(stmt, use_set, def_set)
+            if type(stmt) in ir_extension_usedefs:
+                func = ir_extension_usedefs[type(stmt)]
+                func(stmt, use_set, def_set)
                 continue
             if isinstance(stmt, ir.Assign):
                 if isinstance(stmt.value, ir.Inst):
