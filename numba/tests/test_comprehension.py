@@ -237,11 +237,18 @@ class TestArrayComprehension(unittest.TestCase):
         def comp_with_array_1(n):
             m = n * 2
             l = np.array([i + m for i in range(n)])
-            return np.sum(l)
+            return l
 
         cfunc = jit(nopython=True)(comp_with_array_1)
-        self.assertEqual(comp_with_array_1(5), cfunc(5))
+        np.testing.assert_array_equal(comp_with_array_1(5), cfunc(5))
         self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+
+        # test parallel array comprehension
+        cfunc = jit(nopython=True, parallel=True)(comp_with_array_1)
+        np.testing.assert_array_equal(comp_with_array_1(5), cfunc(5))
+        self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+        self.assertIn('@do_scheduling', cfunc.inspect_llvm(cfunc.signatures[0]))
+
 
     @tag('important')
     def test_comp_with_array_2(self):
@@ -270,21 +277,34 @@ class TestArrayComprehension(unittest.TestCase):
     def test_comp_nest_with_array(self):
         def comp_nest_with_array(n):
             l = np.array([[i * j for j in range(n)] for i in range(n)])
-            return np.sum(l)
+            return l
 
         cfunc = jit(nopython=True)(comp_nest_with_array)
-        self.assertEqual(comp_nest_with_array(5), cfunc(5))
+        np.testing.assert_array_equal(comp_nest_with_array(5), cfunc(5))
         self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+
+        # test parallel array comprehension
+        cfunc = jit(nopython=True, parallel=True)(comp_nest_with_array)
+        np.testing.assert_array_equal(comp_nest_with_array(5), cfunc(5))
+        self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+        self.assertIn('@do_scheduling', cfunc.inspect_llvm(cfunc.signatures[0]))
+
 
     @tag('important')
-    def test_comp_with_nest_array3(self):
-        def comp_with_nest_array3(n):
+    def test_comp_nest_with_array_3(self):
+        def comp_nest_with_array_3(n):
             l = np.array([[[i * j * k for k in range(n)] for j in range(n)] for i in range(n)])
-            return np.sum(l)
+            return l
 
-        cfunc = jit(nopython=True)(comp_with_nest_array3)
-        self.assertEqual(comp_with_nest_array3(10), cfunc(10))
+        cfunc = jit(nopython=True)(comp_nest_with_array_3)
+        self.assertEqual(np.sum(comp_nest_with_array_3(5)), np.sum(cfunc(5)))
         self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+
+        # test parallel array comprehension
+        cfunc = jit(nopython=True, parallel=True)(comp_nest_with_array_3)
+        np.testing.assert_array_equal(comp_nest_with_array_3(5), cfunc(5))
+        self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+        self.assertIn('@do_scheduling', cfunc.inspect_llvm(cfunc.signatures[0]))
 
     @tag('important')
     def test_comp_nest_with_array_noinline(self):
