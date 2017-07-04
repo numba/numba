@@ -41,7 +41,8 @@ from numba.ir_utils import (
     get_stmt_writes,
     rename_labels,
     get_call_table,
-    simplify_CFG)
+    simplify_CFG,
+    has_no_side_effect)
 
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
@@ -1406,6 +1407,7 @@ postproc.ir_extension_insert_dels[Parfor] = parfor_insert_dels
 
 
 def maximize_fusion(blocks):
+    call_table, _ = get_call_table(blocks)
     for block in blocks.values():
         order_changed = True
         while order_changed:
@@ -1415,11 +1417,15 @@ def maximize_fusion(blocks):
                 stmt = block.body[i]
                 next_stmt = block.body[i + 1]
                 # swap only parfors with non-parfors
+                # don't reorder calls with side effects (e.g. file close)
                 # only read-read dependencies are OK
                 # make sure there is no write-write, write-read dependencies
-                if isinstance(
+                if (isinstance(
                         stmt, Parfor) and not isinstance(
-                        next_stmt, Parfor):
+                        next_stmt, Parfor)
+                        and (not isinstance(next_stmt, ir.Assign)
+                        or has_no_side_effect(
+                            next_stmt.value, set(), call_table))):
                     stmt_accesses = {v.name for v in stmt.list_vars()}
                     stmt_writes = get_parfor_writes(stmt)
                     next_accesses = {v.name for v in next_stmt.list_vars()}
