@@ -9,6 +9,7 @@ import math
 import re
 import sys
 import types as pytypes
+import warnings
 
 import numpy as np
 
@@ -135,6 +136,7 @@ def countParfors(func_ir):
                 ret_count += 1
 
     return ret_count
+
 
 class TestPipeline(object):
     def __init__(self, typingctx, targetctx, args, test_ir):
@@ -284,7 +286,7 @@ class TestParfors(TestParforsBase):
         This test is in place until issues with the 'parallel'
         target on Windows with Python 2.7 / 32 bit hardware are fixed.
         """
-        
+
         with self.assertRaises(RuntimeError) as raised:
             @njit(parallel=True)
             def ddot(a, v):
@@ -739,6 +741,37 @@ class TestPrange(TestParforsBase):
         n = 128
         X = np.random.ranf(n)
         self.prange_tester(test_impl, X)
+
+
+class TestParforsMisc(unittest.TestCase):
+    """
+    Tests miscellaneous parts of ParallelAccelerator use.
+    """
+
+    @skip_unsupported
+    def test_warn_if_cache_set(self):
+
+        def pyfunc():
+            return
+
+        with warnings.catch_warnings(record=True) as raised_warnings:
+            warnings.simplefilter('always')
+            cfunc = njit(parallel=True, cache=True)(pyfunc)
+            cfunc()
+
+        self.assertEqual(len(raised_warnings), 1)
+
+        warning_obj = raised_warnings[0]
+
+        expected_msg = ("Caching is not available when the 'parallel' target "
+                        "is in use. Caching is now being disabled to allow "
+                        "execution to continue.")
+
+        # check warning message appeared
+        self.assertIn(expected_msg, str(warning_obj.message))
+
+        # make sure the cache is set to false, cf. NullCache
+        self.assertTrue(isinstance(cfunc._cache, numba.caching.NullCache))
 
 
 if __name__ == "__main__":
