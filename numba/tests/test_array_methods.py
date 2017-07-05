@@ -135,8 +135,14 @@ def array_itemset(a, v):
 def array_sum(a, *args):
     return a.sum(*args)
 
+def array_sum_kws(a, axis):
+    return a.sum(axis=axis)
+
 def array_cumsum(a, *args):
     return a.cumsum(*args)
+
+def array_cumsum_kws(a, axis):
+    return a.cumsum(axis=axis)
 
 
 class TestArrayMethods(MemoryLeakMixin, TestCase):
@@ -618,6 +624,11 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # BAD: with axis
         with self.assertRaises(TypingError):
             cfunc(a, 1)
+        # BAD: with kw axis
+        pyfunc = array_sum_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        with self.assertRaises(TypingError):
+            cfunc(a, axis=1)
 
     def test_cumsum(self):
         pyfunc = array_cumsum
@@ -628,6 +639,11 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # BAD: with axis
         with self.assertRaises(TypingError):
             cfunc(a, 1)
+        # BAD: with kw axis
+        pyfunc = array_cumsum_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        with self.assertRaises(TypingError):
+            cfunc(a, axis=1)
 
 
 class TestArrayComparisons(TestCase):
