@@ -692,7 +692,7 @@ class TypeInferer(object):
         self.context = context
         # sort based on label, ensure iteration order!
         self.blocks = OrderedDict()
-        for k in func_ir.blocks.keys():
+        for k in sorted(func_ir.blocks.keys()):
             self.blocks[k] = func_ir.blocks[k]
         self.generator_info = func_ir.generator_info
         self.func_id = func_ir.func_id
