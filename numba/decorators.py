@@ -142,6 +142,13 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **opti
                    "Windows operating systems when using Python 2.7, or "
                    "on 32 bit hardware.")
             raise RuntimeError(msg)
+        if cache:
+            msg = ("Caching is not available when the 'parallel' target is in "
+                   "use. Caching is now being disabled to allow execution to "
+                   "continue.")
+            warnings.warn(msg, RuntimeWarning)
+            cache = False
+
 
     # Handle signature
     if signature_or_function is None:
