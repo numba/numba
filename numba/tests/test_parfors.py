@@ -27,6 +27,8 @@ from numba import ir
 from numba.compiler import compile_isolated, Flags
 from numba.bytecode import ByteCodeIter
 from .support import tag
+from .matmul_usecase import needs_blas
+from .test_linalg import needs_lapack
 
 # for decorating tests, marking that Windows with Python 2.7 is not supported
 _windows_py27 = (sys.platform.startswith('win32') and
@@ -174,6 +176,7 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, A, X, Y)
 
     @skip_unsupported
+    @needs_blas
     @tag('important')
     def test_mvdot(self):
         def test_impl(a, v):
@@ -240,6 +243,7 @@ class TestParfors(TestParforsBase):
             self.assertTrue(countParfors(test_ir) == 1)
 
     @skip_unsupported
+    @needs_blas
     @tag('important')
     def test_test2(self):
         typingctx = typing.Context()
@@ -279,6 +283,7 @@ class TestParfors(TestParforsBase):
 
     @unittest.skipIf(not (_windows_py27 or _32bit),
                      "Only impacts Windows with Python 2.7 / 32 bit hardware")
+    @needs_blas
     def test_unsupported_combination_raises(self):
         """
         This test is in place until issues with the 'parallel'
@@ -394,18 +399,21 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, *self.simple_args)
 
     @skip_unsupported
+    @needs_lapack
     def test_simple18(self):
         def test_impl(v1, v2, m1, m2):
             return m1 + np.linalg.svd(m2)[0][:-1, :]
         self.check(test_impl, *self.simple_args)
 
     @skip_unsupported
+    @needs_blas
     def test_simple19(self):
         def test_impl(v1, v2, m1, m2):
             return np.dot(m1, v2)
         self.check(test_impl, *self.simple_args)
 
     @skip_unsupported
+    @needs_blas
     def test_simple20(self):
         def test_impl(v1, v2, m1, m2):
             return np.dot(m1, m2)
@@ -415,6 +423,7 @@ class TestParfors(TestParforsBase):
         self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
 
     @skip_unsupported
+    @needs_blas
     def test_simple21(self):
         def test_impl(v1, v2, m1, m2):
             return np.dot(v1, v1)
