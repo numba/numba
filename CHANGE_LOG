@@ -68,6 +68,10 @@ Misc Fixes:
 * PR #2425: Guard code to prevent the use of 'parallel' on win32 + py27
 * PR #2426: Basic test for Enum member type recovery.
 * PR #2433: Fix up the parfors tests with respect to windows py2.7
+* PR #2442: Skip tests that need BLAS/LAPACK if scipy is not available.
+* PR #2444: Add test for invalid array setitem
+* PR #2449: Make the runtime initialiser threadsafe
+* PR #2452: Skip CFG test on 64bit windows
 
 
 Misc Enhancements:
@@ -85,6 +89,9 @@ Misc Enhancements:
 * PR #2419: Add support for returning enums in vectorize 
 * PR #2421: Add copyright notice for Intel contributed files.
 * PR #2422: Patch code base to work with np 1.13 release
+* PR #2448: Adds in warning message when using 'parallel' if cache=True
+* PR #2450: Add test for keyword arg on .sum-like and .cumsum-like array
+            methods
 
 
 Version 0.33.0
