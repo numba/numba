@@ -207,6 +207,11 @@ class SetItemBuffer(AbstractTemplate):
         elif (not isinstance(val, types.Array) and
               self.context.can_convert(val, res)):
             # Single item assignment
+            if not self.context.can_convert(val, res):
+                if res == types.undefined:
+                    newary = ary.copy(dtype=val)
+                    return signature(types.none, newary, idx, res)
+                raise TypeError('cannot convert {} to {}'.format(val, res))
             res = val
         else:
             return

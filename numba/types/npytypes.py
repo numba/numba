@@ -314,8 +314,9 @@ class Array(Buffer):
         """
         Unify this with the *other* Array.
         """
+        from numba import types
         if (isinstance(other, Array) and other.ndim == self.ndim
-            and other.dtype == self.dtype):
+            and (other.dtype == self.dtype or isinstance(other.dtype, types.Undefined))):
             if self.layout == other.layout:
                 layout = self.layout
             else:
@@ -335,6 +336,9 @@ class Array(Buffer):
                 and (self.mutable or not other.mutable)
                 and (self.aligned or not other.aligned)):
                 return Conversion.safe
+
+    def is_precise(self):
+        return self.dtype.is_precise()
 
 
 class SmartArrayType(Array):

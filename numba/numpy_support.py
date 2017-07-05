@@ -132,6 +132,8 @@ def as_dtype(nbtype):
         return nbtype.dtype
     if isinstance(nbtype, types.EnumMember):
         return as_dtype(nbtype.dtype)
+    if nbtype == types.undefined:
+        return nbtype
     raise NotImplementedError("%r cannot be represented as a Numpy dtype"
                               % (nbtype,))
 

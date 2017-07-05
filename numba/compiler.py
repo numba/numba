@@ -795,7 +795,8 @@ def legalize_return_type(return_type, interp, targetctx):
 
     elif (isinstance(return_type, types.Function) or
             isinstance(return_type, types.Phantom)):
-        raise TypeError("Can't return function object in nopython mode")
+        msg = "Can't return function object ({}) in nopython mode"
+        raise TypeError(msg.format(return_type))
 
 
 def translate_stage(func_id, bytecode):

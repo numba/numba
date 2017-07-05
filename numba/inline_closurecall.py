@@ -14,6 +14,7 @@ from numba.ir_utils import (
 
 from numba.analysis import compute_cfg_from_blocks
 from numba.targets.rangeobj import range_iter_len
+import numba.types as nbtypes
 import numpy as np
 
 """
@@ -572,6 +573,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, enable_prange=False):
     array_var = scope.make_temp(loc)
     numpy_var = scope.make_temp(loc)
     empty_func = scope.make_temp(loc)
+    dtype_var = scope.make_temp(loc)
     # numpy_var = numpy
     stmts.append(_new_definition(func_ir, numpy_var,
                  ir.Global('numpy', np, loc=loc), loc))
@@ -579,8 +581,10 @@ def _inline_arraycall(func_ir, cfg, visited, loop, enable_prange=False):
     stmts.append(_new_definition(func_ir, empty_func,
                  ir.Expr.getattr(value=numpy_var, attr='empty', loc=loc), loc))
     # array_var = empty_func(size_tuple_var)
+    stmts.append(_new_definition(func_ir, dtype_var,
+                                 ir.Const(None, loc=loc), loc))
     stmts.append(_new_definition(func_ir, array_var,
-                 ir.Expr.call(empty_func, (size_tuple_var,), (), loc=loc), loc))
+                 ir.Expr.call(empty_func, (size_tuple_var, dtype_var), (), loc=loc), loc))
 
     # Add back removed just in case they are used by something else
     for var in removed:

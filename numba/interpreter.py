@@ -109,7 +109,12 @@ class Interpreter(object):
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
 
-        return ir.FunctionIR(self.blocks, self.is_generator, self.func_id,
+        from collections import OrderedDict
+        odict = OrderedDict()
+        for node in self.cfa.graph.topo_order():
+            odict[node] = self.blocks[node]
+
+        return ir.FunctionIR(odict, self.is_generator, self.func_id,
                              self.first_loc, self.definitions,
                              self.arg_count, self.arg_names)
 
@@ -217,7 +222,7 @@ class Interpreter(object):
 
     @property
     def code_cellvars(self):
-        return self.bytecode.co_cellvars 
+        return self.bytecode.co_cellvars
 
     @property
     def code_freevars(self):
@@ -265,7 +270,7 @@ class Interpreter(object):
         # See Parameter class in inspect.py (from Python source)
         if name[0] == '.' and name[1:].isdigit():
             name = 'implicit{}'.format(name[1:])
- 
+
         # Try to simplify the variable lookup by returning an earlier
         # variable assigned to *name*.
         var = self.assigner.get_assignment_source(name)
@@ -962,7 +967,7 @@ class Interpreter(object):
 
     def op_MAKE_CLOSURE(self, inst, name, code, closure, annotations, kwdefaults, defaults, res):
         self.op_MAKE_FUNCTION(inst, name, code, closure, annotations, kwdefaults, defaults, res)
-    
+
     def op_LOAD_CLOSURE(self, inst, res):
         n_cellvars = len(self.code_cellvars)
         if inst.arg < n_cellvars:
