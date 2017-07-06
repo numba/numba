@@ -13,7 +13,7 @@ fixed.
 ParallelAccelerator features:
 
 NOTE: The ParallelAccelerator technology is under active development and should
-      be considered experimental.
+be considered experimental.
 
 The ParallelAccelerator technology is accessed via a new "nopython" mode option
 "parallel". The ParallelAccelerator technology attempts to identify operations
@@ -91,7 +91,7 @@ Misc Enhancements:
 * PR #2422: Patch code base to work with np 1.13 release
 * PR #2448: Adds in warning message when using 'parallel' if cache=True
 * PR #2450: Add test for keyword arg on .sum-like and .cumsum-like array
-            methods
+  methods
 
 
 Version 0.33.0
