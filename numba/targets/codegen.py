@@ -293,6 +293,7 @@ class CodeLibrary(object):
         self._sentry_cache_disable_inspection()
         return str(self._codegen._tm.emit_assembly(self._final_module))
 
+    @llvmts.lock_llvm
     def get_function_cfg(self, name):
         """
         Get control-flow graph of the LLVM function
