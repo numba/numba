@@ -42,7 +42,8 @@ from numba.ir_utils import (
     rename_labels,
     get_call_table,
     simplify_CFG,
-    has_no_side_effect)
+    has_no_side_effect,
+    canonicalize_array_math)
 
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
@@ -163,10 +164,11 @@ class ParforPass(object):
     stage.
     """
 
-    def __init__(self, func_ir, typemap, calltypes, return_type):
+    def __init__(self, func_ir, typemap, calltypes, return_type, typingctx):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
+        self.typingctx = typingctx
         self.return_type = return_type
         self.array_analysis = array_analysis.ArrayAnalysis(func_ir, typemap,
                                                            calltypes)
@@ -186,10 +188,13 @@ class ParforPass(object):
     def run(self):
         """run parfor conversion pass: replace Numpy calls
         with Parfors when possible and optimize the IR."""
+        simplify_CFG(self.func_ir.blocks)
         # remove Del statements for easier optimization
         remove_dels(self.func_ir.blocks)
+        # e.g. convert A.sum() to np.sum(A) for easier match and optimization
+        canonicalize_array_math(self.func_ir.blocks, self.typemap,
+                                                self.calltypes, self.typingctx)
         self.array_analysis.run()
-        simplify_CFG(self.func_ir.blocks)
         self._convert_prange(self.func_ir.blocks)
         self._convert_numpy(self.func_ir.blocks)
 

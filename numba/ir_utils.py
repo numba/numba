@@ -902,6 +902,54 @@ def simplify_CFG(blocks):
                 label_map[next_node] = node
     return
 
+arr_math = ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
+             'cumsum', 'cumprod', 'argmin', 'argmax', 'argsort',
+             'nonzero', 'ravel']
+
+def canonicalize_array_math(blocks, typemap, calltypes, typingctx):
+    # save array arg to call
+    # call_varname -> array
+    saved_arr_arg = {}
+    topo_order = find_topo_order(blocks)
+    for label in topo_order:
+        block = blocks[label]
+        new_body = []
+        for stmt in block.body:
+            if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
+                lhs = stmt.target.name
+                rhs = stmt.value
+                if (rhs.op=='getattr' and rhs.attr in arr_math
+                    and isinstance(
+                    typemap[rhs.value.name], types.npytypes.Array)):
+                    rhs = stmt.value
+                    arr = rhs.value
+                    saved_arr_arg[lhs] = arr
+                    scope = arr.scope
+                    loc = arr.loc
+                    # g_np_var = Global(numpy)
+                    g_np_var = ir.Var(scope, mk_unique_var("$np_g_var"), loc)
+                    typemap[g_np_var.name] = types.misc.Module(numpy)
+                    g_np = ir.Global('np', numpy, loc)
+                    g_np_assign = ir.Assign(g_np, g_np_var, loc)
+                    rhs.value = g_np_var
+                    new_body.append(g_np_assign)
+                    # update func var type
+                    func = getattr(numpy, rhs.attr)
+                    func_typ = get_np_ufunc_typ(func)
+                    typemap.pop(lhs)
+                    typemap[lhs] = func_typ
+                if rhs.op=='call' and rhs.func.name in saved_arr_arg:
+                    # add array as first arg
+                    arr = saved_arr_arg[rhs.func.name]
+                    rhs.args = [arr] + rhs.args
+                    # update call type signature to include array arg
+                    calltypes.pop(rhs)
+                    calltypes[rhs] = typemap[rhs.func.name].get_call_type(
+                        typingctx, [typemap[arr.name]], {})
+
+            new_body.append(stmt)
+        block.body = new_body
+    return
 
 # format: {type:function}
 array_accesses_extensions = {}
