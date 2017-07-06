@@ -943,9 +943,9 @@ def canonicalize_array_math(blocks, typemap, calltypes, typingctx):
                     arr = saved_arr_arg[rhs.func.name]
                     rhs.args = [arr] + rhs.args
                     # update call type signature to include array arg
-                    calltypes.pop(rhs)
+                    old_sig = calltypes.pop(rhs)
                     calltypes[rhs] = typemap[rhs.func.name].get_call_type(
-                        typingctx, [typemap[arr.name]], {})
+                        typingctx, [typemap[arr.name]]+list(old_sig.args), {})
 
             new_body.append(stmt)
         block.body = new_body
