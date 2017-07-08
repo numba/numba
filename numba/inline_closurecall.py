@@ -1,3 +1,5 @@
+import types as pytypes  # avoid confusion with numba.types
+import numba
 from numba import config, ir, ir_utils, utils, prange
 from numba.ir_utils import (
     mk_unique_var,
@@ -41,6 +43,9 @@ class InlineClosureCallPass(object):
         self.func_ir = func_ir
         self.flags = flags
         self.run_frontend = run_frontend
+        # save data to identify stencils
+        self.numba_globals = set()
+        self.stencil_calls = set()
 
     def run(self):
         """Run inline closure call pass.
@@ -91,6 +96,41 @@ class InlineClosureCallPass(object):
                             modified = True
                             # current block is modified, skip the rest
                             break
+                    if isinstance(expr, ir.Global):
+                        if (isinstance(expr.value, pytypes.ModuleType)
+                                and expr.value == numba):
+                            self.numba_globals.add(lhs.name)
+                        if (isinstance(expr.value, pytypes.FunctionType)
+                                and expr.value == numba.stencil):
+                            self.stencil_calls.add(lhs.name)
+                    if (isinstance(expr, ir.Expr) and expr.op == 'getattr'
+                            and expr.attr=='stencil'
+                            and expr.value.name in self.numba_globals):
+                        self.stencil_calls.add(lhs.name)
+                    if (isinstance(expr, ir.Expr) and expr.op == 'call'
+                            and expr.func.name in self.stencil_calls):
+                        # only three args for now
+                        assert len(expr.args)==3
+                        stencil_def = expr.args[2]
+                        in_arr = expr.args[0]
+                        func_def = guard(get_definition, self.func_ir, stencil_def)
+                        debug_print("found stencil call = ", expr.func, " def = ", func_def)
+                        assert isinstance(func_def, ir.Expr) and func_def.op == "make_function"
+                        # replace stencil arg with output of dummy call to def
+                        def_out = ir.Var(lhs.scope, mk_unique_var("stencil_out"), lhs.loc)
+                        def_call = ir.Expr.call(stencil_def, [in_arr], (), lhs.loc)
+                        def_assign = ir.Assign(def_call, def_out, lhs.loc)
+                        expr.args[2] = def_out
+                        block.body.insert(i, def_assign)
+                        # don't process this stencil call again
+                        self.stencil_calls.remove(expr.func.name)
+                        new_blocks = inline_closure_call(self.func_ir,
+                                        self.func_ir.func_id.func.__globals__, block, i, func_def)
+                        for block in new_blocks:
+                            work_list.append(block)
+                        modified = True
+                        # current block is modified, skip the rest
+                        break
 
         if enable_inline_arraycall:
             # Identify loop structure
