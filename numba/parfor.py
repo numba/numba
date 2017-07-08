@@ -22,6 +22,8 @@ import numba
 from numba import ir, ir_utils, types, typing, rewrites, config, analysis
 from numba import array_analysis, postproc, typeinfer
 from numba.typing.templates import infer_global, AbstractTemplate
+from numba import stencilparfor
+from numba.stencilparfor import StencilPass
 
 from numba.ir_utils import (
     mk_unique_var,
@@ -241,6 +243,9 @@ class ParforPass(object):
                                 self.calltypes, self.typingctx)
         self._replace_parallel_functions(self.func_ir.blocks)
         self.array_analysis.run()
+        stencil_pass = StencilPass(self.func_ir, self.typemap, self.calltypes,
+                                                        self.array_analysis)
+        stencil_pass.run()
         self._convert_prange(self.func_ir.blocks)
         self._convert_numpy(self.func_ir.blocks)
         self._convert_reduce(self.func_ir.blocks)
