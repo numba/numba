@@ -51,8 +51,7 @@ class InlineClosureCallPass(object):
         debug_print("START")
         while work_list:
             label, block = work_list.pop()
-            for i in range(len(block.body)):
-                instr = block.body[i]
+            for i, instr in enumerate(block.body):
                 if isinstance(instr, ir.Assign):
                     lhs = instr.target
                     expr = instr.value
