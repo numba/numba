@@ -244,7 +244,7 @@ class ParforPass(object):
         self._replace_parallel_functions(self.func_ir.blocks)
         self.array_analysis.run()
         stencil_pass = StencilPass(self.func_ir, self.typemap, self.calltypes,
-                                                        self.array_analysis)
+                                            self.array_analysis, self.typingctx)
         stencil_pass.run()
         self._convert_prange(self.func_ir.blocks)
         self._convert_numpy(self.func_ir.blocks)

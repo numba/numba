@@ -112,25 +112,14 @@ class InlineClosureCallPass(object):
                         # only three args for now
                         assert len(expr.args)==3
                         stencil_def = expr.args[2]
-                        in_arr = expr.args[0]
                         func_def = guard(get_definition, self.func_ir, stencil_def)
                         debug_print("found stencil call = ", expr.func, " def = ", func_def)
                         assert isinstance(func_def, ir.Expr) and func_def.op == "make_function"
-                        # replace stencil arg with output of dummy call to def
-                        def_out = ir.Var(lhs.scope, mk_unique_var("stencil_out"), lhs.loc)
-                        def_call = ir.Expr.call(stencil_def, [in_arr], (), lhs.loc)
-                        def_assign = ir.Assign(def_call, def_out, lhs.loc)
-                        expr.args[2] = def_out
-                        block.body.insert(i, def_assign)
-                        # don't process this stencil call again
-                        self.stencil_calls.remove(expr.func.name)
-                        new_blocks = inline_closure_call(self.func_ir,
-                                        self.func_ir.func_id.func.__globals__, block, i, func_def)
-                        for block in new_blocks:
-                            work_list.append(block)
+                        # keep stencil inner code in call node for later stages
+                        expr.stencil_def = func_def
+                        expr.args.pop()
                         modified = True
-                        # current block is modified, skip the rest
-                        break
+
 
         if enable_inline_arraycall:
             # Identify loop structure
