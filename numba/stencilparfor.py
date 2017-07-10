@@ -2,7 +2,7 @@ import numba
 from numba import types
 from numba.typing.templates import infer_global, AbstractTemplate
 from numba.typing import signature
-from numba import ir_utils, ir, utils
+from numba import ir_utils, ir, utils, array_analysis
 from numba.ir_utils import get_call_table, find_topo_order, mk_unique_var
 
 def stencil():
@@ -33,7 +33,7 @@ class StencilPass(object):
         topo_order = find_topo_order(self.func_ir.blocks)
         for label in reversed(topo_order):
             block = self.func_ir.blocks[label]
-            for stmt in reversed(block.body):
+            for i, stmt in enumerate(reversed(block.body)):
                 # first find a stencil call
                 if (isinstance(stmt, ir.Assign)
                         and isinstance(stmt.value, ir.Expr)
@@ -44,13 +44,68 @@ class StencilPass(object):
                     # XXX is this correct?
                     fcode = fix_func_code(stmt.value.stencil_def.code,
                                         self.func_ir.func_id.func.__globals__)
-                    stencil_ir = get_stencil_ir(fcode, self.typingctx,
+                    stencil_blocks = get_stencil_blocks(fcode, self.typingctx,
                                 (self.typemap[in_arr.name],), block.scope, block.loc, in_arr,
                                 self.typemap, self.calltypes)
-                    break
+                    block.body[i] = self._mk_stencil_parfor(in_arr, stencil_blocks)
         return
 
-def get_stencil_ir(fcode, typingctx, args, scope, loc, in_arr, typemap, calltypes):
+    def _mk_stencil_parfor(self, in_arr, stencil_blocks):
+        # run copy propagate to replace in_arr copies
+        in_cps, out_cps = ir_utils.copy_propagate(stencil_blocks, self.typemap)
+        name_var_table = ir_utils.get_name_var_table(stencil_blocks)
+        ir_utils.apply_copy_propagate(
+            stencil_blocks,
+            in_cps,
+            name_var_table,
+            array_analysis.copy_propagate_update_analysis,
+            self.array_analysis,
+            self.typemap,
+            self.calltypes)
+        ir_utils.remove_dead(stencil_blocks, self.func_ir.arg_names, self.typemap)
+
+        # create parfor vars
+        ndims = self.typemap[in_arr.name].ndim
+        scope = in_arr.scope
+        loc = in_arr.loc
+        parfor_vars = []
+        for i in range(ndims):
+            parfor_var = ir.Var(scope, mk_unique_var(
+                "$parfor_index_var"), loc)
+            self.typemap[parfor_var.name] = types.intp
+            parfor_vars.append(parfor_var)
+
+        # replace access indices, find access lengths in each dimension
+        start_lengths = ndims*[0]
+        end_lengths = ndims*[0]
+        for lable, block in stencil_blocks.items():
+            for stmt in block.body:
+                if (isinstance(stmt, ir.Assign)
+                        and isinstance(stmt.value, ir.Expr)
+                        and stmt.value.op == 'static_getitem'
+                        and stmt.value.value.name == in_arr.name):
+                    index = stmt.value.index
+                    # update min and max indices
+                    start_lengths = list(map(min, start_lengths, index))
+                    end_lengths = list(map(max, end_lengths, index))
+                    # update access indices
+                    tuple_var = ir.Var(scope, mk_unique_var(
+                        "$parfor_index_tuple_var"), loc)
+                    self.typemap[tuple_var.name] = types.containers.UniTuple(
+                        types.intp, ndims)
+                    index_vars = []
+                    for i in range(ndims):
+                        index_var = ir.Var(scope, mk_unique_var("stencil_index_var"), loc)
+                        self.typemap[index_var.name] = types.intp
+                        index_const = ir.Var(scope, mk_unique_var("stencil_const_var"), loc)
+                        self.typemap[index_const.name] = types.intp
+                        const_assign = ir.Assign(ir.Const(), index_const, loc)
+                        index_call = ir.Expr.binop('+', parfor_vars[i], index_const, loc)
+                    tuple_call = ir.Expr.build_tuple(list(index_vars), loc)
+                    tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
+        return
+
+def get_stencil_blocks(fcode, typingctx, args, scope, loc, in_arr, typemap, calltypes):
     from numba.targets.cpu import CPUContext
     from numba.targets.registry import cpu_target
     from numba.annotations import type_annotations
