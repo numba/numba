@@ -477,9 +477,6 @@ class NdConstructor(CallableTemplate):
         def typer(shape, dtype=None):
             if dtype is None:
                 nb_dtype = types.double
-            elif dtype == types.none:
-                # For inferred dtype
-                nb_dtype = types.undefined
             else:
                 nb_dtype = _parse_dtype(dtype)
 

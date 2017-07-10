@@ -1,6 +1,5 @@
 from numba import config, ir, ir_utils, utils, prange
 import types
-
 from numba.ir_utils import (
     mk_unique_var,
     next_label,
@@ -14,6 +13,7 @@ from numba.ir_utils import (
 
 from numba.analysis import compute_cfg_from_blocks
 from numba.targets.rangeobj import range_iter_len
+from numba.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
 import numba.types as nbtypes
 import numpy as np
 
@@ -371,7 +371,7 @@ def _find_arraycall(func_ir, block):
             # Found array_var[..] = list_var, the case for nested array
             array_var = instr.target
             array_def = _get_definition(func_ir, array_var)
-            require(guard(_find_numpy_call, func_ir, array_def) == 'empty')
+            require(guard(_find_unsafe_empty_inferred, func_ir, array_def))
             array_stmt_index = i
         else:
             # Bail out otherwise
@@ -571,20 +571,17 @@ def _inline_arraycall(func_ir, cfg, visited, loop, enable_prange=False):
     array_var = scope.make_temp(loc)
     # Insert array allocation
     array_var = scope.make_temp(loc)
-    numpy_var = scope.make_temp(loc)
     empty_func = scope.make_temp(loc)
     dtype_var = scope.make_temp(loc)
-    # numpy_var = numpy
-    stmts.append(_new_definition(func_ir, numpy_var,
-                 ir.Global('numpy', np, loc=loc), loc))
-    # empty_func = numpy_var.empty
+    # empty_func = numba.unsafe.empty_inferred
     stmts.append(_new_definition(func_ir, empty_func,
-                 ir.Expr.getattr(value=numpy_var, attr='empty', loc=loc), loc))
+                                 ir.Global('unsafe_empty_inferred',
+                                           unsafe_empty_inferred, loc=loc), loc))
     # array_var = empty_func(size_tuple_var)
     stmts.append(_new_definition(func_ir, dtype_var,
                                  ir.Const(None, loc=loc), loc))
     stmts.append(_new_definition(func_ir, array_var,
-                 ir.Expr.call(empty_func, (size_tuple_var, dtype_var), (), loc=loc), loc))
+                 ir.Expr.call(empty_func, (size_tuple_var,), (), loc=loc), loc))
 
     # Add back removed just in case they are used by something else
     for var in removed:
@@ -644,6 +641,16 @@ def _inline_arraycall(func_ir, cfg, visited, loop, enable_prange=False):
     return True
 
 
+def _find_unsafe_empty_inferred(func_ir, expr):
+    unsafe_empty_inferred
+    require(isinstance(expr, ir.Expr) and expr.op == 'call')
+    callee = expr.func
+    callee_def = _get_definition(func_ir, callee)
+    require(isinstance(callee_def, ir.Global))
+    _make_debug_print("_find_unsafe_empty_inferred")(callee_def.value)
+    return callee_def.value == unsafe_empty_inferred
+
+
 def _fix_nested_array(func_ir):
     """Look for assignment like: a[..] = b, where both a and b are numpy arrays, and
     try to eliminate array b by expanding a with an extra dimension.
@@ -659,13 +666,14 @@ def _fix_nested_array(func_ir):
     """
 
     def find_array_def(arr):
-        """Find numpy array definition such as arr = numpy.empty(...).  If it is
-        arr = b[...], find array definition of b recursively.
+        """Find numpy array definition such as
+            arr = numba.unsafe.ndarray.empty_inferred(...).
+        If it is arr = b[...], find array definition of b recursively.
         """
         arr_def = func_ir.get_definition(arr)
         _make_debug_print("find_array_def")(arr, arr_def)
         if isinstance(arr_def, ir.Expr):
-            if guard(_find_numpy_call, func_ir, arr_def) == 'empty':
+            if guard(_find_unsafe_empty_inferred, func_ir, arr_def):
                 return arr_def
             elif arr_def.op == 'getitem':
                 return find_array_def(arr_def.value)
@@ -674,9 +682,9 @@ def _fix_nested_array(func_ir):
     def fix_array_assign(stmt):
         """For assignment like lhs[idx] = rhs, where both a and b are arrays, do the
         following:
-        1. find the definition of rhs, which has to be a call to numpy.empty
+        1. find the definition of rhs, which has to be a call to numba.unsafe.ndarray.empty_inferred
         2. find the source array creation for lhs, insert an extra dimension of size of b.
-        3. replace the definition of rhs = numpy.empty(...) with rhs = lhs[idx]
+        3. replace the definition of rhs = numba.unsafe.ndarray.empty_inferred(...) with rhs = lhs[idx]
         """
         require(isinstance(stmt, ir.SetItem))
         require(isinstance(stmt.value, ir.Var))
@@ -692,7 +700,7 @@ def _fix_nested_array(func_ir):
         if rhs_def.op == 'cast':
             rhs_def = _get_definition(func_ir, rhs_def.value)
             require(isinstance(rhs_def, ir.Expr))
-        require(_find_numpy_call(func_ir, rhs_def) == 'empty')
+        require(_find_unsafe_empty_inferred(func_ir, rhs_def))
         # Find the array dimension of rhs
         dim_def = _get_definition(func_ir, rhs_def.args[0])
         require(isinstance(dim_def, ir.Expr) and dim_def.op == 'build_tuple')
