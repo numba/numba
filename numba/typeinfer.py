@@ -366,6 +366,12 @@ def fold_arg_vars(typevars, args, vararg, kws):
     return pos_args, kw_args
 
 
+def _is_array_not_precise(arrty):
+    """Check type is array and it is not precise
+    """
+    return isinstance(arrty, types.Array) and not arrty.is_precise()
+
+
 class CallConstraint(object):
     """Constraint for calling functions.
     Perform case analysis foreach combinations of argument types.
@@ -397,10 +403,14 @@ class CallConstraint(object):
             return
         pos_args, kw_args = r
 
-        for a in pos_args:
+        # Check argument to be precise
+        for a in itertools.chain(pos_args, kw_args.values()):
             if not a.is_precise():
+                # Getitem on non-precise array is allowed to
+                # support array-comprehension
                 if fnty == 'getitem' and isinstance(pos_args[0], types.Array):
                     pass
+                # Otherwise, don't compute type yet
                 else:
                     return
 
@@ -448,18 +458,15 @@ class CallConstraint(object):
             typeinfer.refine_map[self.target] = self
 
     def refine(self, typeinfer, updated_type):
-        try:
-            self.signature.return_type = updated_type
-
-            if self.func == 'getitem':
-                aryty = typeinfer.typevars[self.args[0].name].getone()
-                if isinstance(aryty.dtype, types.Undefined):
-                    newtype = aryty.copy(dtype=updated_type.dtype)
-                    assert newtype.is_precise()
-                    typeinfer.add_type(self.args[0].name, newtype, loc=self.loc)
-                    self.signature.args = tuple([newtype]) + tuple(self.signature.args[1:])
-        except Exception as e:
-            raise BaseException(e)
+        # Is getitem?
+        if self.func == 'getitem':
+            aryty = typeinfer.typevars[self.args[0].name].getone()
+            # is array not precise?
+            if _is_array_not_precise(aryty):
+                # allow refinement of dtype
+                assert updated_type.is_precise()
+                newtype = aryty.copy(dtype=updated_type.dtype)
+                typeinfer.add_type(self.args[0].name, newtype, loc=self.loc)
 
     def get_call_signature(self):
         return self.signature
@@ -528,8 +535,11 @@ class SetItemConstraint(object):
                 raise TypingError("Cannot resolve setitem: %s[%s] = %s" %
                                   (targetty, idxty, valty), loc=self.loc)
 
-            assert sig.args[0].is_precise()
-            typeinfer.add_type(self.target.name, sig.args[0], loc=self.loc)
+            # For array setitem, refine imprecise array dtype
+            if _is_array_not_precise(targetty):
+                assert sig.args[0].is_precise()
+                typeinfer.add_type(self.target.name, sig.args[0], loc=self.loc)
+
             self.signature = sig
 
     def get_call_signature(self):

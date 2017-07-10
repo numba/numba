@@ -208,7 +208,9 @@ class SetItemBuffer(AbstractTemplate):
               self.context.can_convert(val, res)):
             # Single item assignment
             if not self.context.can_convert(val, res):
-                if res == types.undefined:
+                # if the array dtype is not yet defined
+                if not res.is_precise():
+                    # set the array type to use the dtype of value (RHS)
                     newary = ary.copy(dtype=val)
                     return signature(types.none, newary, idx, res)
                 raise TypeError('cannot convert {} to {}'.format(val, res))
