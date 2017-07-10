@@ -209,7 +209,7 @@ class TestListComprehension(unittest.TestCase):
         with self.assertRaises(LoweringError) as raises:
             cfunc = jit(nopython=True)(list5)
             cfunc(var)
-        # TODO: we can't really assert the error message for the above 
+        # TODO: we can't really assert the error message for the above
         # Also, test_nested_array is a similar case (but without list) that works.
 
         with self.assertRaises(LoweringError) as raises:
@@ -222,7 +222,7 @@ class TestListComprehension(unittest.TestCase):
             bits = 64
         else:
             bits = 32
-        
+
         if utils.PYVERSION < (3, 0):
             with self.assertRaises(TypingError) as raises:
                 cfunc = jit(nopython=True)(list22)
@@ -410,6 +410,55 @@ class TestArrayComprehension(unittest.TestCase):
         a = np.array(l)
         self.assertEqual(array_comp(a), cfunc(a))
         self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[1]))
+
+    def test_array_comp_inferred_dtype(self):
+        def array_comp(n):
+            l = np.array([i * 1j for i in range(n)])
+            return l
+
+        n = 10
+        cfunc = jit(nopython=True)(array_comp)
+        np.testing.assert_array_equal(array_comp(n), cfunc(n))
+        self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+
+    def test_array_comp_inferred_dtype_nested(self):
+        def array_comp(n):
+            l = np.array([[i * j for j in range(n)] for i in range(n)])
+            return l
+
+        n = 10
+        cfunc = jit(nopython=True)(array_comp)
+        np.testing.assert_array_equal(array_comp(n), cfunc(n))
+        self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+
+    def test_array_comp_inferred_dtype_nested_sum(self):
+        def array_comp(n):
+            l = np.array([[i * j for j in range(n)] for i in range(n)])
+            # checks that operations on the inferred array
+            return np.sum(l)
+
+        n = 10
+        cfunc = jit(nopython=True)(array_comp)
+        self.assertEqual(array_comp(n), cfunc(n))
+        self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+
+    def test_array_comp_inferred_dtype_outside_setitem(self):
+        def array_comp(n, v):
+            arr = np.array([i for i in range(n)])
+            # the following should not change the dtype
+            arr[0] = v
+            return arr
+        n = 10
+        cfunc = jit(nopython=True)(array_comp)
+        v = 1.2   # float
+        np.testing.assert_array_equal(array_comp(n, v), cfunc(n, v))
+        self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+        # complex->int cast invalid
+        with self.assertRaises(TypingError) as raises:
+            cfunc(n, v=2.3j)
+        self.assertIn("cannot convert complex128 to int", str(raises.exception))
+
+
 
 if __name__ == '__main__':
     unittest.main()
