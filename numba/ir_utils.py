@@ -382,6 +382,9 @@ def visit_vars_inner(node, callback, cbdata):
     return node
 
 
+add_offset_to_labels_extensions = {}
+
+
 def add_offset_to_labels(blocks, offset):
     """add an offset to all block labels and jump/branch targets
     """
@@ -391,6 +394,10 @@ def add_offset_to_labels(blocks, offset):
         term = None
         if b.body:
             term = b.body[-1]
+            for inst in b.body:
+                for T, f in add_offset_to_labels_extensions.items():
+                    if isinstance(inst, T):
+                        f_max = f(inst, offset)
         if isinstance(term, ir.Jump):
             term.target += offset
         if isinstance(term, ir.Branch):
@@ -398,6 +405,26 @@ def add_offset_to_labels(blocks, offset):
             term.falsebr += offset
         new_blocks[l + offset] = b
     return new_blocks
+
+
+find_max_label_extensions = {}
+
+
+def find_max_label(blocks):
+    max_label = 0
+    for l, b in blocks.items():
+        term = None
+        if b.body:
+            term = b.body[-1]
+            for inst in b.body:
+                for T, f in find_max_label_extensions.items():
+                    if isinstance(inst, T):
+                        f_max = f(inst)
+                        if f_max > max_label:
+                            max_label = f_max
+        if l > max_label:
+            max_label = l
+    return max_label
 
 
 def remove_dels(blocks):
