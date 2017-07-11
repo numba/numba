@@ -107,23 +107,26 @@ class StencilPass(object):
             loopnests.append(numba.parfor.LoopNest(parfor_vars[i],
                                 abs(start_lengths[i]), last_ind, 1, corrs[i]))
 
-        # create parfor index tuple
-        parfor_tuple_ind = ir.Var(scope, mk_unique_var(
-            "$parfor_index_tuple_var"), loc)
-        self.typemap[parfor_tuple_ind.name] = types.containers.UniTuple(
-            types.intp, ndims)
-        tuple_call = ir.Expr.build_tuple(parfor_vars, loc)
-        tuple_assign = ir.Assign(tuple_call, parfor_tuple_ind, loc)
+        # create parfor index var
+        if ndims == 1:
+            parfor_ind_var = parfor_vars[0]
+        else:
+            parfor_ind_var = ir.Var(scope, mk_unique_var(
+                "$parfor_index_tuple_var"), loc)
+            self.typemap[parfor_ind_var.name] = types.containers.UniTuple(
+                types.intp, ndims)
+            tuple_call = ir.Expr.build_tuple(parfor_vars, loc)
+            tuple_assign = ir.Assign(tuple_call, parfor_ind_var, loc)
+            stencil_blocks[max(stencil_blocks.keys())].body.append(tuple_assign)
 
         # replace return value to setitem to output array
         last_node = stencil_blocks[max(stencil_blocks.keys())].body.pop()
         assert isinstance(last_node, ir.Return)
         return_val = last_node.value
-        stencil_blocks[max(stencil_blocks.keys())].body.append(tuple_assign)
-        setitem_call = ir.SetItem(out_arr, parfor_tuple_ind, return_val, loc)
+        setitem_call = ir.SetItem(out_arr, parfor_ind_var, return_val, loc)
         self.calltypes[setitem_call] = signature(
                                         types.none, self.typemap[out_arr.name],
-                                        self.typemap[parfor_tuple_ind.name],
+                                        self.typemap[parfor_ind_var.name],
                                         self.typemap[out_arr.name].dtype
                                         )
         stencil_blocks[max(stencil_blocks.keys())].body.append(setitem_call)
@@ -131,7 +134,7 @@ class StencilPass(object):
         # empty init block
         init_block = ir.Block(scope, loc)
         parfor = numba.parfor.Parfor(loopnests, init_block, stencil_blocks, loc,
-                        self.array_analysis, parfor_tuple_ind)
+                        self.array_analysis, parfor_ind_var)
 
         gen_nodes.append(parfor)
         return gen_nodes
@@ -151,15 +154,16 @@ class StencilPass(object):
                         and stmt.value.op == 'static_getitem'
                         and stmt.value.value.name == in_arr.name):
                     index_list = stmt.value.index
+                    # handle 1D case
+                    if ndims == 1:
+                        assert isinstance(index_list, int)
+                        index_list = [index_list]
+
                     # update min and max indices
                     start_lengths = list(map(min, start_lengths, index_list))
                     end_lengths = list(map(max, end_lengths, index_list))
+
                     # update access indices
-                    # new access index tuple
-                    tuple_var = ir.Var(scope, mk_unique_var(
-                        "$parfor_index_tuple_var"), loc)
-                    self.typemap[tuple_var.name] = types.containers.UniTuple(
-                        types.intp, ndims)
                     index_vars = []
                     for i in range(ndims):
                         # stencil_index = parfor_index + stencil_const
@@ -179,15 +183,24 @@ class StencilPass(object):
                         new_body.extend([const_assign, index_assign])
                         index_vars.append(index_var)
 
-                    tuple_call = ir.Expr.build_tuple(index_vars, loc)
-                    tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
-                    new_body.append(tuple_assign)
-                    # new getitem with the new index tuple
-                    getitem_call = ir.Expr.getitem(in_arr, tuple_var, loc)
+                    # new access index tuple
+                    if ndims == 1:
+                        ind_var = index_vars[0]
+                    else:
+                        ind_var = ir.Var(scope, mk_unique_var(
+                            "$parfor_index_ind_var"), loc)
+                        self.typemap[ind_var.name] = types.containers.UniTuple(
+                            types.intp, ndims)
+                        tuple_call = ir.Expr.build_tuple(index_vars, loc)
+                        tuple_assign = ir.Assign(tuple_call, ind_var, loc)
+                        new_body.append(tuple_assign)
+
+                    # new getitem with the new index var
+                    getitem_call = ir.Expr.getitem(in_arr, ind_var, loc)
                     self.calltypes[getitem_call] = signature(
                         self.typemap[in_arr.name].dtype,
                         self.typemap[in_arr.name],
-                        self.typemap[tuple_var.name])
+                        self.typemap[ind_var.name])
                     stmt.value = getitem_call
 
                 new_body.append(stmt)
