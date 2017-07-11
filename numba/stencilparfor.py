@@ -26,7 +26,7 @@ class StencilPass(object):
         call_table, _ = get_call_table(self.func_ir.blocks)
         stencil_calls = []
         for call_varname, call_list in call_table.items():
-            if call_list == ['stencil', numba]:
+            if call_list == ['stencil', numba] or call_list == [stencil]:
                 stencil_calls.append(call_varname)
         if not stencil_calls:
             return  # return early if no stencil calls found
