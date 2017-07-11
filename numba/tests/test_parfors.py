@@ -250,6 +250,31 @@ class TestParfors(TestParforsBase):
 
     @skip_unsupported
     @tag('important')
+    def test_stencil2(self):
+        def test_impl(n):
+            A = np.arange(n)
+            B = np.zeros(n)
+            numba.stencil(A, B, lambda a: 0.3 * (a[-1] + a[0] + a[1]))
+            return B
+
+        def test_impl_seq(n):
+            A = np.arange(n)
+            B = np.zeros(n)
+            for i in range(1, n-1):
+                B[i] = 0.3 * (A[i-1] + A[i] + A[i+1])
+            return B
+
+        sig = (types.intp,)
+        cpfunc = self.compile_parallel(test_impl, sig)
+        n = 100
+        py_output = test_impl_seq(n)
+        par_output = cpfunc.entry_point(n)
+        np.testing.assert_almost_equal(par_output, py_output, decimal=1)
+
+        self.assertIn('@do_scheduling', cpfunc.library.get_llvm_str())
+
+    @skip_unsupported
+    @tag('important')
     def test_test1(self):
         typingctx = typing.Context()
         targetctx = cpu.CPUContext(typingctx)
