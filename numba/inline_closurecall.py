@@ -364,6 +364,7 @@ def _find_arraycall(func_ir, block):
                 list_var = expr.args[0]
                 array_var = lhs
                 array_stmt_index = i
+                array_kws = dict(expr.kws)
         elif (isinstance(instr, ir.SetItem) and
               isinstance(instr.value, ir.Var) and
               not list_var):
@@ -373,6 +374,7 @@ def _find_arraycall(func_ir, block):
             array_def = _get_definition(func_ir, array_var)
             require(guard(_find_unsafe_empty_inferred, func_ir, array_def))
             array_stmt_index = i
+            array_kws = {}
         else:
             # Bail out otherwise
             break
@@ -380,7 +382,7 @@ def _find_arraycall(func_ir, block):
     # require array_var is found, and list_var is dead after array_call.
     require(array_var and list_var_dead_after_array_call)
     _make_debug_print("find_array_call")(block.body[array_stmt_index])
-    return list_var, array_stmt_index
+    return list_var, array_stmt_index, array_kws
 
 def _find_numpy_call(func_ir, expr):
     """Check if a call expression is calling a numpy function, and
@@ -439,7 +441,18 @@ def _inline_arraycall(func_ir, cfg, visited, loop, enable_prange=False):
     # There should only be one loop exit
     require(len(loop.exits) == 1)
     exit_block = next(iter(loop.exits))
-    list_var, array_call_index = _find_arraycall(func_ir, func_ir.blocks[exit_block])
+    list_var, array_call_index, array_kws = _find_arraycall(func_ir, func_ir.blocks[exit_block])
+
+    # check if dtype is present in array call
+    dtype_def = None
+    dtype_mod_def = None
+    if 'dtype' in array_kws:
+        require(isinstance(array_kws['dtype'], ir.Var))
+        # We require that dtype argument to be a constant of getattr Expr, and we'll
+        # remember its definition for later use.
+        dtype_def = _get_definition(func_ir, array_kws['dtype'])
+        require(isinstance(dtype_def, ir.Expr) and dtype_def.op == 'getattr')
+        dtype_mod_def = _get_definition(func_ir, dtype_def.value)
 
     list_var_def = _get_definition(func_ir, list_var)
     debug_print("list_var = ", list_var, " def = ", list_var_def)
@@ -572,13 +585,25 @@ def _inline_arraycall(func_ir, cfg, visited, loop, enable_prange=False):
     # Insert array allocation
     array_var = scope.make_temp(loc)
     empty_func = scope.make_temp(loc)
-    # empty_func = numba.unsafe.empty_inferred
-    stmts.append(_new_definition(func_ir, empty_func,
-                                 ir.Global('unsafe_empty_inferred',
-                                           unsafe_empty_inferred, loc=loc), loc))
+    if dtype_def and dtype_mod_def:
+        # when dtype is present, we'll call emtpy with dtype
+        dtype_mod_var = scope.make_temp(loc)
+        dtype_var = scope.make_temp(loc)
+        stmts.append(_new_definition(func_ir, dtype_mod_var, dtype_mod_def, loc))
+        stmts.append(_new_definition(func_ir, dtype_var,
+                         ir.Expr.getattr(dtype_mod_var, dtype_def.attr, loc), loc))
+        stmts.append(_new_definition(func_ir, empty_func,
+                         ir.Global('empty', np.empty, loc=loc), loc))
+        array_kws = [('dtype', dtype_var)]
+    else:
+        # otherwise we'll call unsafe_empty_inferred
+        stmts.append(_new_definition(func_ir, empty_func,
+                         ir.Global('unsafe_empty_inferred',
+                             unsafe_empty_inferred, loc=loc), loc))
+        array_kws = []
     # array_var = empty_func(size_tuple_var)
     stmts.append(_new_definition(func_ir, array_var,
-                 ir.Expr.call(empty_func, (size_tuple_var,), (), loc=loc), loc))
+                 ir.Expr.call(empty_func, (size_tuple_var,), list(array_kws), loc=loc), loc))
 
     # Add back removed just in case they are used by something else
     for var in removed:

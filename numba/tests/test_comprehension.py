@@ -411,6 +411,17 @@ class TestArrayComprehension(unittest.TestCase):
         self.assertEqual(array_comp(a), cfunc(a))
         self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[1]))
 
+    def test_array_comp_with_dtype(self):
+        def array_comp(n):
+            l = np.array([i for i in range(n)], dtype=np.complex64)
+            return l
+
+        n = 10
+        cfunc = jit(nopython=True)(array_comp)
+        np.testing.assert_array_equal(array_comp(n), cfunc(n))
+        self.assertEqual(cfunc(n)[1].dtype, np.complex64)
+        self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+
     def test_array_comp_inferred_dtype(self):
         def array_comp(n):
             l = np.array([i * 1j for i in range(n)])
