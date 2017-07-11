@@ -1889,24 +1889,22 @@ ir_utils.array_accesses_extensions[Parfor] = get_parfor_array_accesses
 
 
 def parfor_add_offset_to_labels(parfor, offset):
-    print("parfor_add_offset_to_labels")
-    parfor.dump()
+    #print("parfor_add_offset_to_labels")
+    #parfor.dump()
     blocks = wrap_parfor_blocks(parfor)
-    print("Pre work dump")
-    for offset, block in sorted(blocks.items()):
-        print("offset = ", offset)
-        block.dump()
-    #blocks, max_label = ir_utils.add_offset_to_labels(blocks, offset)
+    #print("Pre work dump")
+    #for offset, block in sorted(blocks.items()):
+    #    print("offset = ", offset)
+    #    block.dump()
     blocks = ir_utils.add_offset_to_labels(blocks, offset)
     blocks[0] = blocks[offset]
     blocks.pop(offset)
-    print("Post work dump")
-    for offset, block in sorted(blocks.items()):
-        print("offset = ", offset)
-        block.dump()
+    #print("Post work dump")
+    #for offset, block in sorted(blocks.items()):
+    #    print("offset = ", offset)
+    #    block.dump()
     unwrap_parfor_blocks(parfor, blocks)
     return
-    #return max_label
 
 
 ir_utils.add_offset_to_labels_extensions[Parfor] = parfor_add_offset_to_labels
