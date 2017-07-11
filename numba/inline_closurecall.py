@@ -572,14 +572,11 @@ def _inline_arraycall(func_ir, cfg, visited, loop, enable_prange=False):
     # Insert array allocation
     array_var = scope.make_temp(loc)
     empty_func = scope.make_temp(loc)
-    dtype_var = scope.make_temp(loc)
     # empty_func = numba.unsafe.empty_inferred
     stmts.append(_new_definition(func_ir, empty_func,
                                  ir.Global('unsafe_empty_inferred',
                                            unsafe_empty_inferred, loc=loc), loc))
     # array_var = empty_func(size_tuple_var)
-    stmts.append(_new_definition(func_ir, dtype_var,
-                                 ir.Const(None, loc=loc), loc))
     stmts.append(_new_definition(func_ir, array_var,
                  ir.Expr.call(empty_func, (size_tuple_var,), (), loc=loc), loc))
 
