@@ -41,6 +41,7 @@ from numba.ir_utils import (
     get_stmt_writes,
     rename_labels,
     get_call_table,
+    simplify,
     simplify_CFG,
     has_no_side_effect,
     canonicalize_array_math)
@@ -202,20 +203,9 @@ class ParforPass(object):
         self._convert_numpy(self.func_ir.blocks)
 
         dprint_func_ir(self.func_ir, "after parfor pass")
-        # get copies in to blocks and out from blocks
-        in_cps, out_cps = copy_propagate(self.func_ir.blocks, self.typemap)
-        # table mapping variable names to ir.Var objects to help replacement
-        name_var_table = get_name_var_table(self.func_ir.blocks)
-        apply_copy_propagate(
-            self.func_ir.blocks,
-            in_cps,
-            name_var_table,
-            array_analysis.copy_propagate_update_analysis,
-            self.array_analysis,
-            self.typemap,
-            self.calltypes)
-        # remove dead code to enable fusion
-        remove_dead(self.func_ir.blocks, self.func_ir.arg_names, self.typemap)
+        simplify(self.func_ir, self.typemap, self.array_analysis,
+                 self.calltypes, array_analysis.copy_propagate_update_analysis)
+
         #dprint_func_ir(self.func_ir, "after remove_dead")
         # reorder statements to maximize fusion
         maximize_fusion(self.func_ir.blocks)
@@ -1085,6 +1075,8 @@ def _find_func_var(typemap, func, avail_vars):
 
 
 def lower_parfor_sequential(func_ir, typemap, calltypes):
+    ir_utils._max_label = ir_utils.find_max_label(func_ir.blocks) + 1
+
     parfor_found = False
     new_blocks = {}
     for (block_label, block) in func_ir.blocks.items():
@@ -1093,10 +1085,16 @@ def lower_parfor_sequential(func_ir, typemap, calltypes):
         # old block stays either way
         new_blocks[block_label] = block
     func_ir.blocks = new_blocks
+    dprint_func_ir(func_ir, "before rename")
     # rename only if parfor found and replaced (avoid test_flow_control error)
     if parfor_found:
         func_ir.blocks = rename_labels(func_ir.blocks)
     dprint_func_ir(func_ir, "after parfor sequential lowering")
+    local_array_analysis = array_analysis.ArrayAnalysis(func_ir, typemap, calltypes)
+    simplify(func_ir, typemap, local_array_analysis,
+             calltypes, array_analysis.copy_propagate_update_analysis)
+    dprint_func_ir(func_ir, "after parfor sequential simplify")
+
     return
 
 
@@ -1888,6 +1886,39 @@ def get_parfor_array_accesses(parfor, accesses=None):
 
 # parfor handler is same as
 ir_utils.array_accesses_extensions[Parfor] = get_parfor_array_accesses
+
+
+def parfor_add_offset_to_labels(parfor, offset):
+    print("parfor_add_offset_to_labels")
+    parfor.dump()
+    blocks = wrap_parfor_blocks(parfor)
+    print("Pre work dump")
+    for offset, block in sorted(blocks.items()):
+        print("offset = ", offset)
+        block.dump()
+    #blocks, max_label = ir_utils.add_offset_to_labels(blocks, offset)
+    blocks = ir_utils.add_offset_to_labels(blocks, offset)
+    blocks[0] = blocks[offset]
+    blocks.pop(offset)
+    print("Post work dump")
+    for offset, block in sorted(blocks.items()):
+        print("offset = ", offset)
+        block.dump()
+    unwrap_parfor_blocks(parfor, blocks)
+    return
+    #return max_label
+
+
+ir_utils.add_offset_to_labels_extensions[Parfor] = parfor_add_offset_to_labels
+
+
+def parfor_find_max_label(parfor):
+    blocks = wrap_parfor_blocks(parfor)
+    max_label = ir_utils.find_max_label(blocks)
+    unwrap_parfor_blocks(parfor)
+    return max_label
+
+ir_utils.find_max_label_extensions[Parfor] = parfor_find_max_label
 
 
 def parfor_typeinfer(parfor, typeinferer):
