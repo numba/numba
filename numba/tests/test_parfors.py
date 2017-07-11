@@ -16,7 +16,7 @@ import numpy as np
 import numba
 from numba import unittest_support as unittest
 from .support import TestCase
-from numba import njit, prange
+from numba import njit, prange, stencil
 from numba import compiler, typing
 from numba.targets import cpu
 from numba import types
@@ -212,11 +212,19 @@ class TestParfors(TestParforsBase):
     @skip_unsupported
     @tag('important')
     def test_stencil1(self):
-        def test_impl(n):
+        def test_impl1(n):
             A = np.arange(n**2).reshape((n, n))
             B = np.zeros(n**2).reshape((n, n))
             numba.stencil(A, B, lambda a: 0.25 * (a[0,1] + a[1,0] + a[0,-1]
                                                                     + a[-1,0]))
+            return B
+
+        def test_impl2(n):
+            A = np.arange(n**2).reshape((n, n))
+            B = np.zeros(n**2).reshape((n, n))
+            def sf(a):
+                return 0.25 * (a[0,1] + a[1,0] + a[0,-1] + a[-1,0])
+            stencil(A, B, sf)
             return B
 
         def test_impl_seq(n):
@@ -228,13 +236,17 @@ class TestParfors(TestParforsBase):
             return B
 
         sig = (types.intp,)
-        cpfunc = self.compile_parallel(test_impl, sig)
+        cpfunc1 = self.compile_parallel(test_impl1, sig)
+        cpfunc2 = self.compile_parallel(test_impl2, sig)
         n = 100
         py_output = test_impl_seq(n)
-        par_output = cpfunc.entry_point(n)
-        np.testing.assert_almost_equal(par_output, py_output, decimal=1)
+        par_output1 = cpfunc1.entry_point(n)
+        par_output2 = cpfunc2.entry_point(n)
+        np.testing.assert_almost_equal(par_output1, py_output, decimal=1)
+        np.testing.assert_almost_equal(par_output2, py_output, decimal=1)
 
-        self.assertIn('@do_scheduling', cpfunc.library.get_llvm_str())
+        self.assertIn('@do_scheduling', cpfunc1.library.get_llvm_str())
+        self.assertIn('@do_scheduling', cpfunc2.library.get_llvm_str())
 
     @skip_unsupported
     @tag('important')
