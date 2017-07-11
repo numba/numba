@@ -382,6 +382,7 @@ def _create_gufunc_for_parfor_body(
                 block.body = block.body[i + 1:]
                 # But the current block gets a new label.
                 body_first_label = min(loop_body.keys())
+
                 # The previous block jumps to the minimum labelled block of the
                 # parfor body.
                 prev_block.append(ir.Jump(body_first_label, loc))
@@ -400,6 +401,10 @@ def _create_gufunc_for_parfor_body(
         else:
             continue
         break
+
+    if config.DEBUG_ARRAY_OPT:
+        print("gufunc_ir last dump before renaming")
+        gufunc_ir.dump()
 
     gufunc_ir.blocks = rename_labels(gufunc_ir.blocks)
     remove_dels(gufunc_ir.blocks)
