@@ -168,7 +168,7 @@ def _mk_range_args(typemap, start, stop, step, scope, loc):
         g_start_var = ir.Var(scope, mk_unique_var("$range_start"), loc)
         if typemap:
             typemap[g_start_var.name] = types.intp
-        start_assign = ir.Assign(ir.Const(start, loc), g_start_var)
+        start_assign = ir.Assign(ir.Const(start, loc), g_start_var, loc)
         nodes.append(start_assign)
     if step == 1:
         return nodes, [g_start_var, g_stop_var]
@@ -180,7 +180,7 @@ def _mk_range_args(typemap, start, stop, step, scope, loc):
         g_step_var = ir.Var(scope, mk_unique_var("$range_step"), loc)
         if typemap:
             typemap[g_step_var.name] = types.intp
-        step_assign = ir.Assign(ir.Const(step, loc), g_step_var)
+        step_assign = ir.Assign(ir.Const(step, loc), g_step_var, loc)
         nodes.append(step_assign)
 
     return nodes, [g_start_var, g_stop_var, g_step_var]
