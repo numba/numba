@@ -17,15 +17,14 @@ from . import _internal
 from .sigparse import parse_signature
 from .wrappers import build_ufunc_wrapper, build_gufunc_wrapper
 from numba.caching import FunctionCache, NullCache
+from ..typing.templates import AbstractTemplate, signature
 
-
-import llvmlite.llvmpy.core as lc
 
 class UFuncTargetOptions(TargetOptions):
     OPTIONS = {
-        "nopython" : bool,
-        "forceobj" : bool,
-        "fastmath" : bool,
+        "nopython": bool,
+        "forceobj": bool,
+        "fastmath": bool,
     }
 
 
@@ -39,6 +38,7 @@ class UFuncTarget(TargetDescriptor):
     @property
     def target_context(self):
         return cpu_target.target_context
+
 
 ufunc_target = UFuncTarget()
 
@@ -90,7 +90,7 @@ class UFuncDispatcher(object):
             # use to ensure overloads are stored on success
             try:
                 yield
-            except:
+            except BaseException:
                 raise
             else:
                 exists = self.overloads.get(cres.signature)
@@ -117,6 +117,9 @@ class UFuncDispatcher(object):
 
                 return cres
 
+    def __repr__(self):
+        return "%s(%s)" % (type(self).__name__, self.py_func)
+
 
 dispatcher_registry['npyufunc'] = UFuncDispatcher
 
@@ -129,6 +132,7 @@ def _compile_element_wise_function(nb_func, targetoptions, sig):
     cres = nb_func.compile(sig, **targetoptions)
     args, return_type = sigutils.normalize_signature(sig)
     return cres, args, return_type
+
 
 def _finalize_ufunc_signature(cres, args, return_type):
     '''Given a compilation result, argument types, and a return type,
@@ -144,6 +148,7 @@ def _finalize_ufunc_signature(cres, args, return_type):
 
     assert return_type != types.pyobject
     return return_type(*args)
+
 
 def _build_element_wise_ufunc_wrapper(cres, signature):
     '''Build a wrapper for the ufunc loop entry point given by the
@@ -170,7 +175,8 @@ _identities = {
     1: _internal.PyUFunc_One,
     None: _internal.PyUFunc_None,
     "reorderable": _internal.PyUFunc_ReorderableNone,
-    }
+}
+
 
 def parse_identity(identity):
     """
@@ -279,6 +285,9 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         self.cache = cache
         self._sigs = []
         self._cres = {}
+        self._dispatcher = dispatcher_registry['npyufunc']
+        self.typingctx = self._dispatcher.targetdescr.typing_context
+        self.targetctx = self._dispatcher.targetdescr.target_context
 
     def _finalize_signature(self, cres, args, return_type):
         if not cres.objectmode and cres.signature.return_type != types.void:
@@ -295,6 +304,9 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         if not self.nb_func:
             raise TypeError("No definition")
 
+        # holds the signature:cres map for use in the dispatcher
+        impl_cache = {}
+
         # Get signature in the order they are added
         keepalive = []
         for sig in self._sigs:
@@ -303,6 +315,12 @@ class GUFuncBuilder(_BaseUFuncBuilder):
             dtypelist.append(dtypenums)
             ptrlist.append(utils.longint(ptr))
             keepalive.append((cres.library, env))
+            impl_cache[sig] = cres
+
+            # insert the compiled functions into the target context, this
+            # allows the dispatcher to find them later.
+            self.targetctx.insert_user_function(cres.entry_point,
+                                                cres.fndesc, [cres.library])
 
         datlist = [None] * len(ptrlist)
 
@@ -313,6 +331,14 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         ufunc = _internal.fromfunc(self.py_func.__name__, self.py_func.__doc__,
                                    ptrlist, dtypelist, inct, outct, datlist,
                                    keepalive, self.identity, self.signature)
+
+        # create, setup, and register a dispatch mechanism so that gufuncs can
+        # be called from njit and vectorize (context permitting)
+        gufunc_dispatcher = GUFuncDispatcher(ufunc, self._sigs, impl_cache,
+                                             self.typingctx, self.targetctx)
+        gufunc_dispatcher.install_typing()
+        gufunc_dispatcher.register_functions()
+
         return ufunc
 
     def build(self, cres):
@@ -321,8 +347,8 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         """
         # Buider wrapper for ufunc entry point
         signature = cres.signature
-        ptr, env, wrapper_name = build_gufunc_wrapper(self.py_func, cres, self.sin, self.sout,
-                                        cache=self.cache)
+        ptr, env, wrapper_name = build_gufunc_wrapper(
+            self.py_func, cres, self.sin, self.sout, cache=self.cache)
 
         # Get dtypes
         dtypenums = []
@@ -333,3 +359,82 @@ class GUFuncBuilder(_BaseUFuncBuilder):
                 ty = a
             dtypenums.append(as_dtype(ty).num)
         return dtypenums, ptr, env
+
+
+class GUFuncDispatcher(object):
+    """Holds the dispatch mechanics for gufuncs
+    """
+
+    def __init__(self, ufunc, sigs, impl_cache, typingctx, targetctx):
+        """ Initialiser for the GUFuncDispatcher
+        Arguments:
+         - ufunc the ufunc on which dispatch will take place
+         - sigs the signatures registered for dispatch
+         - impl_cache a map of signature to compile results
+         - typingctx the typing context
+         - targetctx the target context
+        """
+        self.ufunc = ufunc
+        self.sigs = sigs
+        self.impl_cache = impl_cache
+        self.typingctx = typingctx
+        self.targetctx = targetctx
+
+    def __call__(self, context, builder, sig, args):
+        """The lowering phase calls this to find an implementation, a suitable
+        function is found by matching the signature (sig) in `self.impl_cache`.
+        This is then staged and lowered.
+        """
+        cres = self.impl_cache[sig]
+        func_type = context.call_conv.get_function_type(sig.return_type,
+                                                        sig.args)
+        module = builder.module
+        entry_point = module.get_or_insert_function(
+            func_type, name=cres.fndesc.llvm_func_name)
+        entry_point.attributes.add("alwaysinline")
+
+        envptr = cres.environment.as_pointer(cres.target_context)
+
+        _, res = context.call_conv.call_function(
+            builder, entry_point, sig.return_type, sig.args, args,
+            env=envptr)
+        return res
+
+    def install_typing(self):
+        """Constructs and installs a typing class for the gufunc in the
+        typing context.
+        """
+        _ty_cls = type('GUFuncTyping_' + self.ufunc.__name__,
+                       (AbstractTemplate,),
+                       dict(key=self, generic=self._type_me))
+        self.typingctx.insert_user_function(self.ufunc, _ty_cls)
+
+    def _type_me(self, argtys, kwtys):
+        """Undertakes the typing of the gufunc against the signatures
+        for which it was compiled.
+        """
+        assert not kwtys
+        ufunc = self.ufunc
+        # create to-match sig of argtys ignoring data order
+        match_me = []
+        for argty in argtys:
+            if isinstance(argty, types.npytypes.Array):
+                match_me.append(argty.copy(layout='A'))
+            else:
+                match_me.append(argty)
+
+        sigmatcher = signature(types.void, *match_me)
+
+        if sigmatcher in self.sigs:
+            return sigmatcher
+        else:
+            raise ValueError("No suitable signature can be found")
+
+    def register_functions(self):
+        """Registers the current GUFuncDispatcher mechanism as the
+        implementation, self.__call__ handles the lowering.
+        """
+        for sig in self.sigs:
+            # tuple of (impl, func, sig)
+            regtup = [(self, self, sig.args)]
+            self.targetctx.insert_func_defn(regtup)
