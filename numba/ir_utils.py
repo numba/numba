@@ -918,9 +918,10 @@ def canonicalize_array_math(blocks, typemap, calltypes, typingctx):
             if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
                 lhs = stmt.target.name
                 rhs = stmt.value
+                # replace A.func with np.func, and save A in saved_arr_arg
                 if (rhs.op=='getattr' and rhs.attr in arr_math
-                    and isinstance(
-                    typemap[rhs.value.name], types.npytypes.Array)):
+                        and isinstance(
+                            typemap[rhs.value.name], types.npytypes.Array)):
                     rhs = stmt.value
                     arr = rhs.value
                     saved_arr_arg[lhs] = arr
