@@ -111,6 +111,11 @@ class StencilPass(object):
             loopnests.append(numba.parfor.LoopNest(parfor_vars[i],
                                 abs(start_lengths[i]), last_ind, 1, corrs[i]))
 
+        # replace return value to setitem to output array
+        last_node = stencil_blocks[max(stencil_blocks.keys())].body.pop()
+        assert isinstance(last_node, ir.Return)
+        return_val = last_node.value
+
         # create parfor index var
         if ndims == 1:
             parfor_ind_var = parfor_vars[0]
@@ -123,10 +128,6 @@ class StencilPass(object):
             tuple_assign = ir.Assign(tuple_call, parfor_ind_var, loc)
             stencil_blocks[max(stencil_blocks.keys())].body.append(tuple_assign)
 
-        # replace return value to setitem to output array
-        last_node = stencil_blocks[max(stencil_blocks.keys())].body.pop()
-        assert isinstance(last_node, ir.Return)
-        return_val = last_node.value
         setitem_call = ir.SetItem(out_arr, parfor_ind_var, return_val, loc)
         self.calltypes[setitem_call] = signature(
                                         types.none, self.typemap[out_arr.name],
