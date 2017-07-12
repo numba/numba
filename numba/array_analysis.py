@@ -19,6 +19,23 @@ MAP_TYPES = [numpy.ufunc]
 
 array_analysis_extensions = {}
 
+# declaring call classes
+array_creation = ['empty', 'zeros', 'ones', 'full']
+
+random_int_args = ['random.rand', 'random.randn']
+
+random_1arg_size = ['random.ranf', 'random.random_sample', 'random.sample',
+                    'random.random', 'random.standard_normal']
+
+random_2arg_sizelast = ['random.chisquare', 'random.weibull', 'random.power',
+                        'random.geometric', 'random.exponential',
+                        'random.poisson', 'random.rayleigh']
+
+random_3arg_sizelast = ['random.normal', 'random.uniform', 'random.beta',
+                        'random.binomial', 'random.f', 'random.gamma',
+                        'random.lognormal', 'random.laplace']
+
+
 class ArrayAnalysis(object):
     """Analyzes Numpy array computations for properties such as shapes
     and equivalence classes.
@@ -356,8 +373,8 @@ class ArrayAnalysis(object):
             out_eqs = copy.copy(self.array_shape_classes[args[0].name])
             out_eqs.reverse()
             return out_eqs
-        elif call_name in ['empty', 'zeros', 'ones', 'full']:
-            # these calls have only a "shape" argument
+        elif call_name in array_creation:
+            # these calls (e.g. empty) have only a "shape" argument
             shape_arg = None
             if len(args) > 0:
                 shape_arg = args[0]
@@ -366,9 +383,7 @@ class ArrayAnalysis(object):
             else:
                 return None
             return self._get_classes_from_shape(shape_arg)
-        elif call_name in ['random.ranf', 'random.random_sample',
-                            'random.sample','random.random',
-                            'random.standard_normal']:
+        elif call_name in random_1arg_size:
             # these calls have only a "size" argument
             size_arg = None
             if len(args) > 0:
@@ -378,12 +393,11 @@ class ArrayAnalysis(object):
             else:
                 return None
             return self._get_classes_from_shape(size_arg)
-        elif call_name in ['random.rand', 'random.randn']:
+        elif call_name in random_int_args:
+            # e.g. random.rand
             # arguments are integers (not a tuple as in previous calls)
             return self._get_classes_from_dim_args(args)
-        elif call_name in ['random.normal', 'random.uniform', 'random.beta',
-                            'random.binomial', 'random.f', 'random.gamma',
-                            'random.lognormal','random.laplace']:
+        elif call_name in random_3arg_sizelast:
             # normal, uniform, ... have 3 args, last one is size
             size_arg = None
             if len(args) == 3:
@@ -393,9 +407,7 @@ class ArrayAnalysis(object):
             else:
                 return None
             return self._get_classes_from_shape(size_arg)
-        elif call_name in ['random.chisquare', 'random.weibull', 'random.power',
-                            'random.geometric', 'random.exponential',
-                            'random.poisson', 'random.rayleigh']:
+        elif call_name in random_2arg_sizelast:
             # have 2 args, last one is size
             size_arg = None
             if len(args) == 2:
