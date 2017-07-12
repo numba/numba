@@ -90,19 +90,23 @@ class StencilPass(object):
         sizes = self.array_analysis.array_size_vars[in_arr.name]
         assert ndims == len(sizes) and ndims == len(corrs)
         for i in range(ndims):
-            # set last index to size minus stencil size to avoid invalid access
-            index_const = ir.Var(scope, mk_unique_var("stencil_const_var"), loc)
-            self.typemap[index_const.name] = types.intp
-            const_assign = ir.Assign(ir.Const(end_lengths[i], loc), index_const,
+            last_ind = sizes[i]
+            if end_lengths[i] != 0:
+                # set last index to size minus stencil size to avoid invalid
+                # memory access
+                index_const = ir.Var(scope, mk_unique_var("stencil_const_var"),
                                                                             loc)
-            gen_nodes.append(const_assign)
-            last_ind = ir.Var(scope, mk_unique_var("last_ind"), loc)
-            self.typemap[last_ind.name] = types.intp
-            index_call = ir.Expr.binop('-', sizes[i], index_const, loc)
-            self.calltypes[index_call] = ir_utils.find_op_typ('+',
+                self.typemap[index_const.name] = types.intp
+                const_assign = ir.Assign(ir.Const(end_lengths[i], loc),
+                                                            index_const, loc)
+                gen_nodes.append(const_assign)
+                last_ind = ir.Var(scope, mk_unique_var("last_ind"), loc)
+                self.typemap[last_ind.name] = types.intp
+                index_call = ir.Expr.binop('-', sizes[i], index_const, loc)
+                self.calltypes[index_call] = ir_utils.find_op_typ('+',
                                                     [types.intp, types.intp])
-            index_assign = ir.Assign(index_call, last_ind, loc)
-            gen_nodes.append(index_assign)
+                index_assign = ir.Assign(index_call, last_ind, loc)
+                gen_nodes.append(index_assign)
             # start from stencil size to avoid invalid array access
             loopnests.append(numba.parfor.LoopNest(parfor_vars[i],
                                 abs(start_lengths[i]), last_ind, 1, corrs[i]))
