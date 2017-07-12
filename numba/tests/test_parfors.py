@@ -459,10 +459,11 @@ class TestParfors(TestParforsBase):
             return np.sum(A+B+C+D+E+F)
 
         n = 128
-        # only run parallel version and don't compare results since random
-        # numbers generated in parallel are different
         cpfunc = self.compile_parallel(test_impl, (numba.typeof(n),))
         parfor_output = cpfunc.entry_point(n)
+        py_output = test_impl(n)
+        # check results within 5% since random numbers generated in parallel
+        np.testing.assert_allclose(parfor_output, py_output, rtol=0.05)
         self.assertIn('@do_scheduling', cpfunc.library.get_llvm_str())
 
 class TestPrange(TestParforsBase):
