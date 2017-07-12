@@ -491,7 +491,7 @@ def has_no_side_effect(rhs, lives, call_table):
     # TODO: find side-effect free calls like Numpy calls
     if isinstance(rhs, ir.Expr) and rhs.op == 'call':
         func_name = rhs.func.name
-        if func_name not in call_table or call_table[func_name]==[]:
+        if func_name not in call_table or call_table[func_name] == []:
             return False
         call_list = call_table[func_name]
         if call_list == ['empty', numpy] or call_list == [slice]:
@@ -902,9 +902,11 @@ def simplify_CFG(blocks):
                 label_map[next_node] = node
     return
 
+
 arr_math = ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
-             'cumsum', 'cumprod', 'argmin', 'argmax', 'argsort',
-             'nonzero', 'ravel']
+            'cumsum', 'cumprod', 'argmin', 'argmax', 'argsort',
+            'nonzero', 'ravel']
+
 
 def canonicalize_array_math(blocks, typemap, calltypes, typingctx):
     # save array arg to call
@@ -919,7 +921,7 @@ def canonicalize_array_math(blocks, typemap, calltypes, typingctx):
                 lhs = stmt.target.name
                 rhs = stmt.value
                 # replace A.func with np.func, and save A in saved_arr_arg
-                if (rhs.op=='getattr' and rhs.attr in arr_math
+                if (rhs.op == 'getattr' and rhs.attr in arr_math
                         and isinstance(
                             typemap[rhs.value.name], types.npytypes.Array)):
                     rhs = stmt.value
@@ -939,18 +941,19 @@ def canonicalize_array_math(blocks, typemap, calltypes, typingctx):
                     func_typ = get_np_ufunc_typ(func)
                     typemap.pop(lhs)
                     typemap[lhs] = func_typ
-                if rhs.op=='call' and rhs.func.name in saved_arr_arg:
+                if rhs.op == 'call' and rhs.func.name in saved_arr_arg:
                     # add array as first arg
                     arr = saved_arr_arg[rhs.func.name]
                     rhs.args = [arr] + rhs.args
                     # update call type signature to include array arg
                     old_sig = calltypes.pop(rhs)
                     calltypes[rhs] = typemap[rhs.func.name].get_call_type(
-                        typingctx, [typemap[arr.name]]+list(old_sig.args), {})
+                        typingctx, [typemap[arr.name]] + list(old_sig.args), {})
 
             new_body.append(stmt)
         block.body = new_body
     return
+
 
 # format: {type:function}
 array_accesses_extensions = {}
