@@ -50,6 +50,9 @@ from numba.analysis import (compute_use_defs, compute_live_map,
 from numba.controlflow import CFGraph
 from numba.typing import npydecl, signature
 from numba.types.functions import Function
+from numba.array_analysis import (random_int_args, random_1arg_size,
+                                random_2arg_sizelast, random_3arg_sizelast,
+                                random_calls)
 import copy
 import numpy
 # circular dependency: import numba.npyufunc.dufunc.DUFunc
@@ -462,17 +465,8 @@ class ParforPass(object):
         if expr.func.name not in self.array_analysis.numpy_calls.keys():
             return False
         call_name = self.array_analysis.numpy_calls[expr.func.name]
-        if call_name in ['zeros', 'ones', 'random.ranf', 'random.random_sample',
-                            'random.sample','random.random',
-                            'random.standard_normal', 'random.rand',
-                            'random.randn', 'random.normal', 'random.uniform',
-                            'random.beta', 'random.binomial', 'random.f',
-                            'random.gamma', 'random.lognormal',
-                            'random.laplace', 'random.chisquare',
-                            'random.weibull', 'random.power',
-                            'random.geometric', 'random.exponential',
-                            'random.poisson', 'random.rayleigh',
-                            'random.randint', 'random.triangular']:
+        supported_calls =  ['zeros', 'ones'] + random_calls
+        if call_name in supported_calls:
             return True
         # TODO: add more calls
         if call_name == 'dot':
@@ -783,24 +777,17 @@ def _remove_size_arg(call_name, expr):
     expr.kws = tuple(kws.items())
 
     # remove size arg if available
-    if call_name in ['random.ranf', 'random.random_sample',
-                        'random.sample','random.random',
-                        'random.standard_normal',
-                        'random.rand', 'random.randn']:
+    if call_name in random_1arg_size + random_int_args:
         # these calls have only a "size" argument or list of ints
         # so remove all args
         expr.args = []
 
-    if call_name in ['random.normal', 'random.uniform', 'random.beta',
-                        'random.binomial', 'random.f', 'random.gamma',
-                        'random.lognormal','random.laplace']:
+    if call_name in random_3arg_sizelast:
         # normal, uniform, ... have 3 args, last one is size
         if len(expr.args) == 3:
             expr.args.pop()
 
-    if call_name in ['random.chisquare', 'random.weibull', 'random.power',
-                        'random.geometric', 'random.exponential',
-                        'random.poisson', 'random.rayleigh']:
+    if call_name in random_2arg_sizelast:
         # have 2 args, last one is size
         if len(expr.args) == 2:
             expr.args.pop()

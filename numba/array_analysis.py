@@ -35,6 +35,8 @@ random_3arg_sizelast = ['random.normal', 'random.uniform', 'random.beta',
                         'random.binomial', 'random.f', 'random.gamma',
                         'random.lognormal', 'random.laplace']
 
+random_calls = (random_int_args + random_1arg_size + random_2arg_sizelast
+            + random_3arg_sizelast + ['random.randint', 'random.triangular'])
 
 class ArrayAnalysis(object):
     """Analyzes Numpy array computations for properties such as shapes
