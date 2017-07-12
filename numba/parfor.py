@@ -51,8 +51,8 @@ from numba.controlflow import CFGraph
 from numba.typing import npydecl, signature
 from numba.types.functions import Function
 from numba.array_analysis import (random_int_args, random_1arg_size,
-                                random_2arg_sizelast, random_3arg_sizelast,
-                                random_calls)
+                                  random_2arg_sizelast, random_3arg_sizelast,
+                                  random_calls)
 import copy
 import numpy
 # circular dependency: import numba.npyufunc.dufunc.DUFunc
@@ -196,7 +196,7 @@ class ParforPass(object):
         remove_dels(self.func_ir.blocks)
         # e.g. convert A.sum() to np.sum(A) for easier match and optimization
         canonicalize_array_math(self.func_ir.blocks, self.typemap,
-                                                self.calltypes, self.typingctx)
+                                self.calltypes, self.typingctx)
         self.array_analysis.run()
         self._convert_prange(self.func_ir.blocks)
         self._convert_numpy(self.func_ir.blocks)
@@ -465,7 +465,7 @@ class ParforPass(object):
         if expr.func.name not in self.array_analysis.numpy_calls.keys():
             return False
         call_name = self.array_analysis.numpy_calls[expr.func.name]
-        supported_calls =  ['zeros', 'ones'] + random_calls
+        supported_calls = ['zeros', 'ones'] + random_calls
         if call_name in supported_calls:
             return True
         # TODO: add more calls
@@ -651,7 +651,8 @@ class ParforPass(object):
             # remove size arg to reuse the call expr for single value
             _remove_size_arg(call_name, expr)
             # update expr type
-            new_arg_typs, new_kw_types = _get_call_arg_types(expr, self.typemap)
+            new_arg_typs, new_kw_types = _get_call_arg_types(
+                expr, self.typemap)
             self.calltypes.pop(expr)
             self.calltypes[expr] = self.typemap[expr.func.name].get_call_type(
                 typing.Context(), new_arg_typs, new_kw_types)
@@ -769,6 +770,7 @@ class ParforPass(object):
         # return error if we couldn't handle it (avoid rewrite infinite loop)
         raise NotImplementedError("parfor translation failed for ", expr)
 
+
 def _remove_size_arg(call_name, expr):
     "remove size argument from args or kws"
     # remove size kwarg
@@ -808,6 +810,7 @@ def _remove_size_arg(call_name, expr):
 
     return
 
+
 def _get_call_arg_types(expr, typemap):
     new_arg_typs = []
     for arg in expr.args:
@@ -818,6 +821,7 @@ def _get_call_arg_types(expr, typemap):
         new_kw_types[name] = typemap[arg.name]
 
     return tuple(new_arg_typs), new_kw_types
+
 
 def _gen_dotmv_check(typemap, calltypes, in1, in2, out, scope, loc):
     """compile dot() check from linalg module and insert a call to it"""
@@ -1416,7 +1420,7 @@ def maximize_fusion(blocks):
                         stmt, Parfor) and not isinstance(
                         next_stmt, Parfor)
                         and (not isinstance(next_stmt, ir.Assign)
-                        or has_no_side_effect(
+                             or has_no_side_effect(
                             next_stmt.value, set(), call_table))):
                     stmt_accesses = {v.name for v in stmt.list_vars()}
                     stmt_writes = get_parfor_writes(stmt)
