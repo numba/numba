@@ -35,8 +35,12 @@ random_3arg_sizelast = ['random.normal', 'random.uniform', 'random.beta',
                         'random.binomial', 'random.f', 'random.gamma',
                         'random.lognormal', 'random.laplace']
 
-random_calls = (random_int_args + random_1arg_size + random_2arg_sizelast
-            + random_3arg_sizelast + ['random.randint', 'random.triangular'])
+random_calls = (random_int_args +
+                random_1arg_size +
+                random_2arg_sizelast +
+                random_3arg_sizelast +
+                ['random.randint', 'random.triangular'])
+
 
 class ArrayAnalysis(object):
     """Analyzes Numpy array computations for properties such as shapes
@@ -243,20 +247,20 @@ class ArrayAnalysis(object):
 
     def _analyze_rhs_classes_no_lhs_array(self, rhs):
         """analysis of rhs when lhs is not array"""
-        if isinstance(rhs, ir.Expr) and rhs.op=='call':
+        if isinstance(rhs, ir.Expr) and rhs.op == 'call':
             call_name = 'NULL'
             if rhs.func.name in self.numpy_calls.keys():
                 call_name = self.numpy_calls[rhs.func.name]
-                if call_name=='dot':
-                    assert len(rhs.args)==2 or len(rhs.args)==3
+                if call_name == 'dot':
+                    assert len(rhs.args) == 2 or len(rhs.args) == 3
                     in1 = rhs.args[0].name
                     in2 = rhs.args[1].name
                     # vector dot scalar doesn't give dimension size info
                     if not self._isarray(in1) or not self._isarray(in2):
                         return
                     # vector dot vector only at this point
-                    assert self._get_ndims(in1)==1
-                    assert self._get_ndims(in2)==1
+                    assert self._get_ndims(in1) == 1
+                    assert self._get_ndims(in2) == 1
                     c1 = self.array_shape_classes[in1][0]
                     c2 = self.array_shape_classes[in2][0]
                     self._merge_classes(c1, c2)
