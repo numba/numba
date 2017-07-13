@@ -9,7 +9,7 @@ import numpy as np
 import numpy
 
 from numba.compiler import compile_isolated
-from numba import types, utils, jit
+from numba import types, utils, jit, types
 from numba.errors import TypingError, LoweringError
 from .support import tag
 
@@ -467,7 +467,8 @@ class TestArrayComprehension(unittest.TestCase):
         # complex->int cast invalid
         with self.assertRaises(TypingError) as raises:
             cfunc(n, v=2.3j)
-        self.assertIn("cannot convert complex128 to int", str(raises.exception))
+        self.assertIn("setitem: array({}, 1d, C)[0] = complex128".format(types.intp),
+                      str(raises.exception))
 
 
 
