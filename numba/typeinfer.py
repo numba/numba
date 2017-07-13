@@ -449,7 +449,7 @@ class CallConstraint(object):
             if target.defined:
                 targetty = target.getone()
                 if context.unify_pairs(targetty, sig.return_type) == targetty:
-                    sig.return_type = targetty
+                    sig = sig.replace(return_type=targetty)
 
         self.signature = sig
 
