@@ -105,7 +105,6 @@ class CudaArraySlicing(unittest.TestCase):
         arr = np.arange(10)
         darr = cuda.to_device(arr)
         for i, j in product(range(-10, 10), repeat=2):
-            print("arr[{}:{}]".format(i, j))
             np.testing.assert_array_equal(arr[i:j],
                                           darr[i:j].copy_to_host())
 
@@ -113,7 +112,6 @@ class CudaArraySlicing(unittest.TestCase):
         arr = np.arange(9).reshape(3, 3)
         darr = cuda.to_device(arr)
         for x, y, w, s in product(range(-4, 4), repeat=4):
-            print("arr[{}:{}, {}:{}]".format(x, y, w, s))
             np.testing.assert_array_equal(arr[x:y, w:s],
                                           darr[x:y, w:s].copy_to_host())
 
