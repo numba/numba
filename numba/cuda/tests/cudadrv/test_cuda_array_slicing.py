@@ -1,5 +1,9 @@
 from __future__ import print_function
+
+from itertools import product
+
 import numpy as np
+
 from numba import cuda
 from numba.cuda.testing import unittest
 
@@ -96,6 +100,42 @@ class CudaArraySlicing(unittest.TestCase):
 
         darr = cuda.to_device(arr)
         self.assertTrue(np.all(darr[:1, 1].copy_to_host() == arr[:1, 1]))
+
+    def test_negative_slicing_1d(self):
+        arr = np.arange(10)
+        darr = cuda.to_device(arr)
+        for i, j in product(range(-10, 10), repeat=2):
+            np.testing.assert_array_equal(arr[i:j],
+                                          darr[i:j].copy_to_host())
+
+    def test_negative_slicing_2d(self):
+        arr = np.arange(9).reshape(3, 3)
+        darr = cuda.to_device(arr)
+        for x, y, w, s in product(range(-4, 4), repeat=4):
+            np.testing.assert_array_equal(arr[x:y, w:s],
+                                          darr[x:y, w:s].copy_to_host())
+
+    def test_empty_slice_1d(self):
+        arr = np.arange(5)
+        darr = cuda.to_device(arr)
+        for i in range(darr.shape[0]):
+            np.testing.assert_array_equal(darr[i:i].copy_to_host(), arr[i:i])
+        # empty slice of empty slice
+        self.assertFalse(darr[:0][:0].copy_to_host())
+        # out-of-bound slice just produces empty slices
+        np.testing.assert_array_equal(darr[:0][:1].copy_to_host(), arr[:0][:1])
+        np.testing.assert_array_equal(darr[:0][-1:].copy_to_host(), arr[:0][-1:])
+
+    def test_empty_slice_2d(self):
+        arr = np.arange(5 * 5).reshape(5, 5)
+        darr = cuda.to_device(arr)
+        np.testing.assert_array_equal(darr[:0].copy_to_host(), arr[:0])
+        np.testing.assert_array_equal(darr[3, :0].copy_to_host(), arr[3, :0])
+        # empty slice of empty slice
+        self.assertFalse(darr[:0][:0].copy_to_host())
+        # out-of-bound slice just produces empty slices
+        np.testing.assert_array_equal(darr[:0][:1].copy_to_host(), arr[:0][:1])
+        np.testing.assert_array_equal(darr[:0][-1:].copy_to_host(), arr[:0][-1:])
 
 
 if __name__ == '__main__':
