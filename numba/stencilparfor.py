@@ -112,9 +112,13 @@ class StencilPass(object):
                                 abs(start_lengths[i]), last_ind, 1, corrs[i]))
 
         # replace return value to setitem to output array
+        return_node = stencil_blocks[max(stencil_blocks.keys())].body.pop()
+        assert isinstance(return_node, ir.Return)
         last_node = stencil_blocks[max(stencil_blocks.keys())].body.pop()
-        assert isinstance(last_node, ir.Return)
-        return_val = last_node.value
+        assert isinstance(last_node, ir.Assign)
+        assert isinstance(last_node.value, ir.Expr)
+        assert last_node.value.op == 'cast'
+        return_val = last_node.value.value
 
         # create parfor index var
         if ndims == 1:
