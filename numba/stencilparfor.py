@@ -4,6 +4,7 @@ from numba.typing.templates import infer_global, AbstractTemplate
 from numba.typing import signature
 from numba import ir_utils, ir, utils, array_analysis
 from numba.ir_utils import get_call_table, find_topo_order, mk_unique_var
+from operator import add
 
 def stencil():
     pass
@@ -47,13 +48,16 @@ class StencilPass(object):
                     stencil_blocks = get_stencil_blocks(fcode, self.typingctx,
                             (self.typemap[in_arr.name],), block.scope,
                             block.loc, in_arr, self.typemap, self.calltypes)
+                    index_offsets = None
+                    if 'index_offsets' in stmt.value._kws:
+                        index_offsets = stmt.value.index_offsets
                     gen_nodes = self._mk_stencil_parfor(in_arr, out_arr,
-                                                                stencil_blocks)
+                                                stencil_blocks, index_offsets)
                     block.body = block.body[:i] + gen_nodes + block.body[i+1:]
                     return self.run()
         return
 
-    def _mk_stencil_parfor(self, in_arr, out_arr, stencil_blocks):
+    def _mk_stencil_parfor(self, in_arr, out_arr, stencil_blocks, index_offsets):
         gen_nodes = []
 
         # run copy propagate to replace in_arr copies (e.g. a = A)
@@ -82,7 +86,7 @@ class StencilPass(object):
             parfor_vars.append(parfor_var)
 
         start_lengths, end_lengths = self._replace_stencil_accesses(
-                                            stencil_blocks, parfor_vars, in_arr)
+                            stencil_blocks, parfor_vars, in_arr, index_offsets)
 
         # create parfor loop nests
         loopnests = []
@@ -148,7 +152,7 @@ class StencilPass(object):
         gen_nodes.append(parfor)
         return gen_nodes
 
-    def _replace_stencil_accesses(self, stencil_blocks, parfor_vars, in_arr):
+    def _replace_stencil_accesses(self, stencil_blocks, parfor_vars, in_arr, index_offsets):
         ndims = self.typemap[in_arr.name].ndim
         scope = in_arr.scope
         loc = in_arr.loc
@@ -167,6 +171,9 @@ class StencilPass(object):
                     if ndims == 1:
                         assert isinstance(index_list, int)
                         index_list = [index_list]
+                    if index_offsets:
+                        # add offsets in all dimensions
+                        index_list = list(map(add, index_list, index_offsets))
 
                     # update min and max indices
                     start_lengths = list(map(min, start_lengths, index_list))
