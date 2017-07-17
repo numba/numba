@@ -1,3 +1,4 @@
+import types as pytypes
 import numba
 from numba import types
 from numba.typing.templates import infer_global, AbstractTemplate
