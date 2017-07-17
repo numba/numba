@@ -19,6 +19,29 @@ MAP_TYPES = [numpy.ufunc]
 
 array_analysis_extensions = {}
 
+# declaring call classes
+array_creation = ['empty', 'zeros', 'ones', 'full']
+
+random_int_args = ['random.rand', 'random.randn']
+
+random_1arg_size = ['random.ranf', 'random.random_sample', 'random.sample',
+                    'random.random', 'random.standard_normal']
+
+random_2arg_sizelast = ['random.chisquare', 'random.weibull', 'random.power',
+                        'random.geometric', 'random.exponential',
+                        'random.poisson', 'random.rayleigh']
+
+random_3arg_sizelast = ['random.normal', 'random.uniform', 'random.beta',
+                        'random.binomial', 'random.f', 'random.gamma',
+                        'random.lognormal', 'random.laplace']
+
+random_calls = (random_int_args +
+                random_1arg_size +
+                random_2arg_sizelast +
+                random_3arg_sizelast +
+                ['random.randint', 'random.triangular'])
+
+
 class ArrayAnalysis(object):
     """Analyzes Numpy array computations for properties such as shapes
     and equivalence classes.
@@ -224,20 +247,20 @@ class ArrayAnalysis(object):
 
     def _analyze_rhs_classes_no_lhs_array(self, rhs):
         """analysis of rhs when lhs is not array"""
-        if isinstance(rhs, ir.Expr) and rhs.op=='call':
+        if isinstance(rhs, ir.Expr) and rhs.op == 'call':
             call_name = 'NULL'
             if rhs.func.name in self.numpy_calls.keys():
                 call_name = self.numpy_calls[rhs.func.name]
-                if call_name=='dot':
-                    assert len(rhs.args)==2 or len(rhs.args)==3
+                if call_name == 'dot':
+                    assert len(rhs.args) == 2 or len(rhs.args) == 3
                     in1 = rhs.args[0].name
                     in2 = rhs.args[1].name
                     # vector dot scalar doesn't give dimension size info
                     if not self._isarray(in1) or not self._isarray(in2):
                         return
                     # vector dot vector only at this point
-                    assert self._get_ndims(in1)==1
-                    assert self._get_ndims(in2)==1
+                    assert self._get_ndims(in1) == 1
+                    assert self._get_ndims(in2) == 1
                     c1 = self.array_shape_classes[in1][0]
                     c2 = self.array_shape_classes[in2][0]
                     self._merge_classes(c1, c2)
@@ -356,8 +379,8 @@ class ArrayAnalysis(object):
             out_eqs = copy.copy(self.array_shape_classes[args[0].name])
             out_eqs.reverse()
             return out_eqs
-        elif call_name in ['empty', 'zeros', 'ones', 'full', 'random.ranf',
-                           'random.random_sample', 'random.sample']:
+        elif call_name in array_creation:
+            # these calls (e.g. empty) have only a "shape" argument
             shape_arg = None
             if len(args) > 0:
                 shape_arg = args[0]
@@ -366,9 +389,60 @@ class ArrayAnalysis(object):
             else:
                 return None
             return self._get_classes_from_shape(shape_arg)
-        elif call_name in ['random.rand', 'random.randn']:
-            # arguments are integers, not a tuple
+        elif call_name in random_1arg_size:
+            # these calls have only a "size" argument
+            size_arg = None
+            if len(args) > 0:
+                size_arg = args[0]
+            elif 'size' in kws:
+                size_arg = kws['size']
+            else:
+                return None
+            return self._get_classes_from_shape(size_arg)
+        elif call_name in random_int_args:
+            # e.g. random.rand
+            # arguments are integers (not a tuple as in previous calls)
             return self._get_classes_from_dim_args(args)
+        elif call_name in random_3arg_sizelast:
+            # normal, uniform, ... have 3 args, last one is size
+            size_arg = None
+            if len(args) == 3:
+                size_arg = args[2]
+            elif 'size' in kws:
+                size_arg = kws['size']
+            else:
+                return None
+            return self._get_classes_from_shape(size_arg)
+        elif call_name in random_2arg_sizelast:
+            # have 2 args, last one is size
+            size_arg = None
+            if len(args) == 2:
+                size_arg = args[1]
+            elif 'size' in kws:
+                size_arg = kws['size']
+            else:
+                return None
+            return self._get_classes_from_shape(size_arg)
+        elif call_name == 'random.randint':
+            # has 4 args, 3rd one is size
+            size_arg = None
+            if len(args) >= 3:
+                size_arg = args[2]
+            elif 'size' in kws:
+                size_arg = kws['size']
+            else:
+                return None
+            return self._get_classes_from_shape(size_arg)
+        elif call_name == 'random.triangular':
+            # has 4 args, last one is size
+            size_arg = None
+            if len(args) == 4:
+                size_arg = args[3]
+            elif 'size' in kws:
+                size_arg = kws['size']
+            else:
+                return None
+            return self._get_classes_from_shape(size_arg)
         elif call_name == 'eye':
             # if one input n, output is n*n
             # two inputs n,m, output is n*m

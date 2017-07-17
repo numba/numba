@@ -240,7 +240,8 @@ class TestParfors(TestParforsBase):
                 'after-inference', tp, tp.func_ir)
 
             parfor_pass = numba.parfor.ParforPass(
-                tp.func_ir, tp.typemap, tp.calltypes, tp.return_type)
+                tp.func_ir, tp.typemap, tp.calltypes, tp.return_type,
+                tp.typingctx)
             parfor_pass.run()
             self.assertTrue(countParfors(test_ir) == 1)
 
@@ -279,7 +280,8 @@ class TestParfors(TestParforsBase):
                 'after-inference', tp, tp.func_ir)
 
             parfor_pass = numba.parfor.ParforPass(
-                tp.func_ir, tp.typemap, tp.calltypes, tp.return_type)
+                tp.func_ir, tp.typemap, tp.calltypes, tp.return_type,
+                tp.typingctx)
             parfor_pass.run()
             self.assertTrue(countParfors(test_ir) == 1)
 
@@ -445,6 +447,24 @@ class TestParfors(TestParforsBase):
             return 4 * np.sum(x**2 + y**2 < 1) / 10
         self.check(test_impl, *self.simple_args)
 
+    @skip_unsupported
+    def test_randoms(self):
+        def test_impl(n):
+            A = np.random.standard_normal(size=(n, n))
+            B = np.random.randn(n, n)
+            C = np.random.normal(0.0, 1.0, (n, n))
+            D = np.random.chisquare(1.0, (n, n))
+            E = np.random.randint(1, high=3, size=(n, n))
+            F = np.random.triangular(1, 2, 3, (n, n))
+            return np.sum(A+B+C+D+E+F)
+
+        n = 128
+        cpfunc = self.compile_parallel(test_impl, (numba.typeof(n),))
+        parfor_output = cpfunc.entry_point(n)
+        py_output = test_impl(n)
+        # check results within 5% since random numbers generated in parallel
+        np.testing.assert_allclose(parfor_output, py_output, rtol=0.05)
+        self.assertIn('@do_scheduling', cpfunc.library.get_llvm_str())
 
 class TestPrange(TestParforsBase):
 
