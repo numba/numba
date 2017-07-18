@@ -156,8 +156,9 @@ def _build_element_wise_ufunc_wrapper(cres, signature):
     env = cres.environment
     envptr = env.as_pointer(ctx)
 
-    ptr = build_ufunc_wrapper(library, ctx, fname, signature,
-                              cres.objectmode, envptr, env)
+    with compiler.lock_compiler:
+        ptr = build_ufunc_wrapper(library, ctx, fname, signature,
+                                cres.objectmode, envptr, env)
 
     # Get dtypes
     dtypenums = [as_dtype(a).num for a in signature.args]
@@ -321,8 +322,10 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         """
         # Buider wrapper for ufunc entry point
         signature = cres.signature
-        ptr, env, wrapper_name = build_gufunc_wrapper(self.py_func, cres, self.sin, self.sout,
-                                        cache=self.cache)
+        with compiler.lock_compiler:
+            ptr, env, wrapper_name = build_gufunc_wrapper(self.py_func, cres,
+                                                          self.sin, self.sout,
+                                                          cache=self.cache)
 
         # Get dtypes
         dtypenums = []
