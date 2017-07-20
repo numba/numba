@@ -745,15 +745,11 @@ def _fix_nested_array(func_ir):
         # success
         return True
 
-    for label, block in func_ir.blocks.items():
-        block_len = len(block.body)
-        i = 0
-        while i < block_len:
-            stmt = block.body[i]
+    for label in find_topo_order(func_ir.blocks):
+        block = func_ir.blocks[label]
+        for stmt in block.body:
             if guard(fix_array_assign, stmt):
-                block.body = block.body[:i] + block.body[i+1:]
-                block_len -= 1
-            i += 1
+                block.body.remove(stmt)
 
 def _new_definition(func_ir, var, value, loc):
     func_ir._definitions[var.name] = [value]
