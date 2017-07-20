@@ -1,5 +1,5 @@
 """
-This file provide internal compiler utilities that support certain special
+This file provides internal compiler utilities that support certain special
 operations with numpy.
 """
 import numpy as np
@@ -17,7 +17,7 @@ def empty_inferred(typingctx, shape):
 
     Expects `shape` to be a int-tuple.
 
-    There are special logic in the type-inferencer to handle the "refine"-ing
+    There is special logic in the type-inferencer to handle the "refine"-ing
     of undefined dtype.
     """
     from numba.targets.arrayobj import _empty_nd_impl
