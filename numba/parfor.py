@@ -41,13 +41,18 @@ from numba.ir_utils import (
     get_stmt_writes,
     rename_labels,
     get_call_table,
-    simplify_CFG)
+    simplify_CFG,
+    has_no_side_effect,
+    canonicalize_array_math)
 
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
 from numba.controlflow import CFGraph
 from numba.typing import npydecl, signature
 from numba.types.functions import Function
+from numba.array_analysis import (random_int_args, random_1arg_size,
+                                  random_2arg_sizelast, random_3arg_sizelast,
+                                  random_calls)
 import copy
 import numpy
 # circular dependency: import numba.npyufunc.dufunc.DUFunc
@@ -162,10 +167,11 @@ class ParforPass(object):
     stage.
     """
 
-    def __init__(self, func_ir, typemap, calltypes, return_type):
+    def __init__(self, func_ir, typemap, calltypes, return_type, typingctx):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
+        self.typingctx = typingctx
         self.return_type = return_type
         self.array_analysis = array_analysis.ArrayAnalysis(func_ir, typemap,
                                                            calltypes)
@@ -185,10 +191,13 @@ class ParforPass(object):
     def run(self):
         """run parfor conversion pass: replace Numpy calls
         with Parfors when possible and optimize the IR."""
+        simplify_CFG(self.func_ir.blocks)
         # remove Del statements for easier optimization
         remove_dels(self.func_ir.blocks)
+        # e.g. convert A.sum() to np.sum(A) for easier match and optimization
+        canonicalize_array_math(self.func_ir.blocks, self.typemap,
+                                self.calltypes, self.typingctx)
         self.array_analysis.run()
-        simplify_CFG(self.func_ir.blocks)
         self._convert_prange(self.func_ir.blocks)
         self._convert_numpy(self.func_ir.blocks)
 
@@ -456,7 +465,8 @@ class ParforPass(object):
         if expr.func.name not in self.array_analysis.numpy_calls.keys():
             return False
         call_name = self.array_analysis.numpy_calls[expr.func.name]
-        if call_name in ['zeros', 'ones', 'random.ranf']:
+        supported_calls = ['zeros', 'ones'] + random_calls
+        if call_name in supported_calls:
             return True
         # TODO: add more calls
         if call_name == 'dot':
@@ -493,7 +503,7 @@ class ParforPass(object):
         call_name = self.array_analysis.numpy_calls[expr.func.name]
         args = expr.args
         kws = dict(expr.kws)
-        if call_name in ['zeros', 'ones', 'random.ranf']:
+        if call_name in ['zeros', 'ones'] or call_name.startswith('random.'):
             return self._numpy_map_to_parfor(call_name, lhs, args, kws, expr)
         if call_name == 'dot':
             assert len(args) == 2 or len(args) == 3
@@ -637,12 +647,15 @@ class ParforPass(object):
             value = ir.Const(0, loc)
         elif call_name == 'ones':
             value = ir.Const(1, loc)
-        elif call_name == 'random.ranf':
-            # reuse the call expr for single value
-            expr.args = []
+        elif call_name.startswith('random.'):
+            # remove size arg to reuse the call expr for single value
+            _remove_size_arg(call_name, expr)
+            # update expr type
+            new_arg_typs, new_kw_types = _get_call_arg_types(
+                expr, self.typemap)
             self.calltypes.pop(expr)
             self.calltypes[expr] = self.typemap[expr.func.name].get_call_type(
-                typing.Context(), [], {})
+                typing.Context(), new_arg_typs, new_kw_types)
             value = expr
         else:
             NotImplementedError(
@@ -756,6 +769,58 @@ class ParforPass(object):
             return parfor
         # return error if we couldn't handle it (avoid rewrite infinite loop)
         raise NotImplementedError("parfor translation failed for ", expr)
+
+
+def _remove_size_arg(call_name, expr):
+    "remove size argument from args or kws"
+    # remove size kwarg
+    kws = dict(expr.kws)
+    kws.pop('size', '')
+    expr.kws = tuple(kws.items())
+
+    # remove size arg if available
+    if call_name in random_1arg_size + random_int_args:
+        # these calls have only a "size" argument or list of ints
+        # so remove all args
+        expr.args = []
+
+    if call_name in random_3arg_sizelast:
+        # normal, uniform, ... have 3 args, last one is size
+        if len(expr.args) == 3:
+            expr.args.pop()
+
+    if call_name in random_2arg_sizelast:
+        # have 2 args, last one is size
+        if len(expr.args) == 2:
+            expr.args.pop()
+
+    if call_name == 'random.randint':
+        # has 4 args, 3rd one is size
+        if len(expr.args) == 3:
+            expr.args.pop()
+        if len(expr.args) == 4:
+            dt_arg = expr.args.pop()
+            expr.args.pop()  # remove size
+            expr.args.append(dt_arg)
+
+    if call_name == 'random.triangular':
+        # has 4 args, last one is size
+        if len(expr.args) == 4:
+            expr.args.pop()
+
+    return
+
+
+def _get_call_arg_types(expr, typemap):
+    new_arg_typs = []
+    for arg in expr.args:
+        new_arg_typs.append(typemap[arg.name])
+
+    new_kw_types = {}
+    for name, arg in expr.kws:
+        new_kw_types[name] = typemap[arg.name]
+
+    return tuple(new_arg_typs), new_kw_types
 
 
 def _gen_dotmv_check(typemap, calltypes, in1, in2, out, scope, loc):
@@ -1338,6 +1403,7 @@ postproc.ir_extension_insert_dels[Parfor] = parfor_insert_dels
 
 
 def maximize_fusion(blocks):
+    call_table, _ = get_call_table(blocks)
     for block in blocks.values():
         order_changed = True
         while order_changed:
@@ -1347,11 +1413,15 @@ def maximize_fusion(blocks):
                 stmt = block.body[i]
                 next_stmt = block.body[i + 1]
                 # swap only parfors with non-parfors
+                # don't reorder calls with side effects (e.g. file close)
                 # only read-read dependencies are OK
                 # make sure there is no write-write, write-read dependencies
-                if isinstance(
+                if (isinstance(
                         stmt, Parfor) and not isinstance(
-                        next_stmt, Parfor):
+                        next_stmt, Parfor)
+                        and (not isinstance(next_stmt, ir.Assign)
+                             or has_no_side_effect(
+                            next_stmt.value, set(), call_table))):
                     stmt_accesses = {v.name for v in stmt.list_vars()}
                     stmt_writes = get_parfor_writes(stmt)
                     next_accesses = {v.name for v in next_stmt.list_vars()}
