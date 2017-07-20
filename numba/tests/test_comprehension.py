@@ -232,14 +232,16 @@ class TestListComprehension(unittest.TestCase):
 
 class TestArrayComprehension(unittest.TestCase):
 
-    def check(self, pyfunc, *args, run_parallel=False, assert_allocate_list=False,
-              assert_function=np.testing.assert_array_equal, assert_dtype=None):
+    def check(self, pyfunc, *args, **kwargs):
         """A generic check function that run both pyfunc, and jitted pyfunc,
         and compare results."""
+        run_parallel = kwargs['run_parallel'] if 'run_parallel' in kwargs else False
+        assert_allocate_list = kwargs['assert_allocate_list'] if 'assert_allocate_list' in kwargs else False
+        assert_dtype = kwargs['assert_dtype'] if 'assert_dtype' in kwargs else None
         cfunc = jit(nopython=True,parallel=run_parallel)(pyfunc)
         pyres = pyfunc(*args)
         cres = cfunc(*args)
-        assert_function(pyres, cres)
+        np.testing.assert_array_equal(pyres, cres)
         if assert_dtype:
             self.assertEqual(cres[1].dtype, assert_dtype)
         if assert_allocate_list:
