@@ -28,17 +28,9 @@ class Print(AbstractTemplate):
 class PrintItem(AbstractTemplate):
     key = "print_item"
 
-    def is_accepted_type(self, ty):
-        if isinstance(ty, (types.Array, types.Record)):
-            # These types require an environment to serialize back to a
-            # Python object.
-            return False
-        return True
-
     def generic(self, args, kws):
         arg, = args
-        if self.is_accepted_type(arg):
-            return signature(types.none, *args)
+        return signature(types.none, *args)
 
 
 @infer_global(abs)
