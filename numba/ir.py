@@ -898,18 +898,22 @@ class FunctionIR(object):
             name = name.name
         return self._consts.infer_constant(name)
 
-    def get_definition(self, value):
+    def get_definition(self, value, lhs_only=False):
         """
         Get the definition site for the given variable name or instance.
-        A Expr instance is returned.
+        A Expr instance is returned by default, but if lhs_only is set
+        to True, the left-hand-side variable is returned instead.
         """
+        lhs = value
         while True:
             if isinstance(value, Var):
+                lhs = value
                 name = value.name
             elif isinstance(value, str):
+                lhs = value
                 name = value
             else:
-                return value
+                return lhs if lhs_only else value
             defs = self._definitions[name]
             if len(defs) == 0:
                 raise KeyError("no definition for %r"

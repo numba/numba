@@ -771,6 +771,39 @@ class TestPrange(TestParforsBase):
         X = np.random.ranf(n)
         self.prange_tester(test_impl, X)
 
+    @skip_unsupported
+    def test_parfor_alias1(self):
+        def test_impl(n):
+            b = np.zeros((n, n))
+            a = b[0]
+            for j in range(n):
+                a[j] = j + 1
+            return b.sum()
+        self.prange_tester(test_impl, 4)
+
+    @skip_unsupported
+    def test_parfor_alias2(self):
+        def test_impl(n):
+            b = np.zeros((n, n))
+            for i in range(n):
+              a = b[i]
+              for j in range(n):
+                a[j] = i + j
+            return b.sum()
+        self.prange_tester(test_impl, 4)
+
+    @skip_unsupported
+    def test_parfor_alias3(self):
+        def test_impl(n):
+            b = np.zeros((n, n, n))
+            for i in range(n):
+              a = b[i]
+              for j in range(n):
+                c = a[j]
+                for k in range(n):
+                  c[k] = i + j + k
+            return b.sum()
+        self.prange_tester(test_impl, 4)
 
 class TestParforsMisc(unittest.TestCase):
     """
@@ -801,7 +834,6 @@ class TestParforsMisc(unittest.TestCase):
 
         # make sure the cache is set to false, cf. NullCache
         self.assertTrue(isinstance(cfunc._cache, numba.caching.NullCache))
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -41,6 +41,7 @@ from numba.ir_utils import (
     get_stmt_writes,
     rename_labels,
     get_call_table,
+    simplify,
     simplify_CFG,
     has_no_side_effect,
     canonicalize_array_math)
@@ -202,31 +203,20 @@ class ParforPass(object):
         self._convert_numpy(self.func_ir.blocks)
 
         dprint_func_ir(self.func_ir, "after parfor pass")
-        # get copies in to blocks and out from blocks
-        in_cps, out_cps = copy_propagate(self.func_ir.blocks, self.typemap)
-        # table mapping variable names to ir.Var objects to help replacement
-        name_var_table = get_name_var_table(self.func_ir.blocks)
-        apply_copy_propagate(
-            self.func_ir.blocks,
-            in_cps,
-            name_var_table,
-            array_analysis.copy_propagate_update_analysis,
-            self.array_analysis,
-            self.typemap,
-            self.calltypes)
-        # remove dead code to enable fusion
-        remove_dead(self.func_ir.blocks, self.func_ir.arg_names)
+        simplify(self.func_ir, self.typemap, self.array_analysis,
+                 self.calltypes, array_analysis.copy_propagate_update_analysis)
+
         #dprint_func_ir(self.func_ir, "after remove_dead")
         # reorder statements to maximize fusion
         maximize_fusion(self.func_ir.blocks)
         fuse_parfors(self.func_ir.blocks)
         # remove dead code after fusion to remove extra arrays and variables
-        remove_dead(self.func_ir.blocks, self.func_ir.arg_names)
+        remove_dead(self.func_ir.blocks, self.func_ir.arg_names, self.typemap)
         #dprint_func_ir(self.func_ir, "after second remove_dead")
         # push function call variables inside parfors so gufunc function
         # wouldn't need function variables as argument
         push_call_vars(self.func_ir.blocks, {}, {})
-        remove_dead(self.func_ir.blocks, self.func_ir.arg_names)
+        remove_dead(self.func_ir.blocks, self.func_ir.arg_names, self.typemap)
         # after optimization, some size variables are not available anymore
         remove_dead_class_sizes(self.func_ir.blocks, self.array_analysis)
         dprint_func_ir(self.func_ir, "after optimization")
@@ -1085,6 +1075,8 @@ def _find_func_var(typemap, func, avail_vars):
 
 
 def lower_parfor_sequential(func_ir, typemap, calltypes):
+    ir_utils._max_label = ir_utils.find_max_label(func_ir.blocks) + 1
+
     parfor_found = False
     new_blocks = {}
     for (block_label, block) in func_ir.blocks.items():
@@ -1093,10 +1085,16 @@ def lower_parfor_sequential(func_ir, typemap, calltypes):
         # old block stays either way
         new_blocks[block_label] = block
     func_ir.blocks = new_blocks
+    dprint_func_ir(func_ir, "before rename")
     # rename only if parfor found and replaced (avoid test_flow_control error)
     if parfor_found:
         func_ir.blocks = rename_labels(func_ir.blocks)
     dprint_func_ir(func_ir, "after parfor sequential lowering")
+    local_array_analysis = array_analysis.ArrayAnalysis(func_ir, typemap, calltypes)
+    simplify(func_ir, typemap, local_array_analysis,
+             calltypes, array_analysis.copy_propagate_update_analysis)
+    dprint_func_ir(func_ir, "after parfor sequential simplify")
+
     return
 
 
@@ -1562,7 +1560,7 @@ def dprint(*s):
         print(*s)
 
 
-def remove_dead_parfor(parfor, lives, args):
+def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, typemap):
     # remove dead get/sets in last block
     # FIXME: I think that "in the last block" is not sufficient in general.  We might need to
     # remove from any block.
@@ -1584,10 +1582,15 @@ def remove_dead_parfor(parfor, lives, args):
         new_body.append(stmt)
     last_block.body = new_body
 
+    alias_set = set(alias_map.keys())
     # after getitem replacement, remove extra setitems
     new_body = []
     in_lives = copy.copy(lives)
     for stmt in reversed(last_block.body):
+        # aliases of lives are also live for setitems
+        alias_lives = in_lives & alias_set
+        for v in alias_lives:
+            in_lives |= alias_map[v]
         if (isinstance(stmt, ir.SetItem) and stmt.index.name ==
                 parfor.index_var.name and stmt.target.name not in in_lives):
             continue
@@ -1597,14 +1600,14 @@ def remove_dead_parfor(parfor, lives, args):
     last_block.body = new_body
 
     # process parfor body recursively
-    remove_dead_parfor_recursive(parfor, lives, args)
+    remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map, typemap)
     return
 
 
 ir_utils.remove_dead_extensions[Parfor] = remove_dead_parfor
 
 
-def remove_dead_parfor_recursive(parfor, lives, args):
+def remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map, typemap):
     """create a dummy function from parfor and call remove dead recursively
     """
     blocks = parfor.loop_body.copy()  # shallow copy is enough
@@ -1623,6 +1626,9 @@ def remove_dead_parfor_recursive(parfor, lives, args):
 
     # add lives in a dummpy return to last block to avoid their removal
     tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
+    # dummy type for tuple_var
+    typemap[tuple_var.name] = types.containers.UniTuple(
+        types.intp, 2)
     live_vars = [ir.Var(scope, v, loc) for v in lives]
     tuple_call = ir.Expr.build_tuple(live_vars, loc)
     blocks[return_label].body.append(ir.Assign(tuple_call, tuple_var, loc))
@@ -1631,7 +1637,9 @@ def remove_dead_parfor_recursive(parfor, lives, args):
     branch = ir.Branch(0, first_body_block, return_label, loc)
     blocks[last_label].body.append(branch)
 
-    remove_dead(blocks, args)
+    # args var including aliases is ok
+    remove_dead(blocks, arg_aliases, typemap, alias_map, arg_aliases)
+    typemap.pop(tuple_var.name)  # remove dummy tuple type
     blocks[0].body.pop()  # remove dummy jump
     blocks[last_label].body.pop()  # remove branch
     return
@@ -1670,6 +1678,13 @@ def remove_dead_class_sizes(blocks, array_analysis):
                 dim_sizes[i] = None
     return
 
+def find_potential_aliases_parfor(parfor, args, typemap, alias_map, arg_aliases):
+    blocks = wrap_parfor_blocks(parfor)
+    ir_utils.find_potential_aliases(blocks, args, typemap, alias_map, arg_aliases)
+    unwrap_parfor_blocks(parfor)
+    return
+
+ir_utils.alias_analysis_extensions[Parfor] = find_potential_aliases_parfor
 
 def wrap_parfor_blocks(parfor):
     """wrap parfor blocks for analysis/optimization like CFG"""
@@ -1871,6 +1886,27 @@ def get_parfor_array_accesses(parfor, accesses=None):
 
 # parfor handler is same as
 ir_utils.array_accesses_extensions[Parfor] = get_parfor_array_accesses
+
+
+def parfor_add_offset_to_labels(parfor, offset):
+    blocks = wrap_parfor_blocks(parfor)
+    blocks = ir_utils.add_offset_to_labels(blocks, offset)
+    blocks[0] = blocks[offset]
+    blocks.pop(offset)
+    unwrap_parfor_blocks(parfor, blocks)
+    return
+
+
+ir_utils.add_offset_to_labels_extensions[Parfor] = parfor_add_offset_to_labels
+
+
+def parfor_find_max_label(parfor):
+    blocks = wrap_parfor_blocks(parfor)
+    max_label = ir_utils.find_max_label(blocks)
+    unwrap_parfor_blocks(parfor)
+    return max_label
+
+ir_utils.find_max_label_extensions[Parfor] = parfor_find_max_label
 
 
 def parfor_typeinfer(parfor, typeinferer):

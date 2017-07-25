@@ -499,7 +499,7 @@ class Pipeline(object):
         """
         # Ensure we have an IR and type information.
         assert self.func_ir
-        inline_pass = InlineClosureCallPass(self.func_ir, run_frontend)
+        inline_pass = InlineClosureCallPass(self.func_ir, self.flags, run_frontend)
         inline_pass.run()
         # Remove all Dels, and re-run postproc
         post_proc = postproc.PostProcessor(self.func_ir)
@@ -795,7 +795,8 @@ def legalize_return_type(return_type, interp, targetctx):
 
     elif (isinstance(return_type, types.Function) or
             isinstance(return_type, types.Phantom)):
-        raise TypeError("Can't return function object in nopython mode")
+        msg = "Can't return function object ({}) in nopython mode"
+        raise TypeError(msg.format(return_type))
 
 
 def translate_stage(func_id, bytecode):

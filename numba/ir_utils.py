@@ -382,6 +382,9 @@ def visit_vars_inner(node, callback, cbdata):
     return node
 
 
+add_offset_to_labels_extensions = {}
+
+
 def add_offset_to_labels(blocks, offset):
     """add an offset to all block labels and jump/branch targets
     """
@@ -391,6 +394,10 @@ def add_offset_to_labels(blocks, offset):
         term = None
         if b.body:
             term = b.body[-1]
+            for inst in b.body:
+                for T, f in add_offset_to_labels_extensions.items():
+                    if isinstance(inst, T):
+                        f_max = f(inst, offset)
         if isinstance(term, ir.Jump):
             term.target += offset
         if isinstance(term, ir.Branch):
@@ -398,6 +405,26 @@ def add_offset_to_labels(blocks, offset):
             term.falsebr += offset
         new_blocks[l + offset] = b
     return new_blocks
+
+
+find_max_label_extensions = {}
+
+
+def find_max_label(blocks):
+    max_label = 0
+    for l, b in blocks.items():
+        term = None
+        if b.body:
+            term = b.body[-1]
+            for inst in b.body:
+                for T, f in find_max_label_extensions.items():
+                    if isinstance(inst, T):
+                        f_max = f(inst)
+                        if f_max > max_label:
+                            max_label = f_max
+        if l > max_label:
+            max_label = l
+    return max_label
 
 
 def remove_dels(blocks):
@@ -411,13 +438,19 @@ def remove_dels(blocks):
     return
 
 
-def remove_dead(blocks, args):
+def remove_dead(blocks, args, typemap=None, alias_map=None, arg_aliases=None):
     """dead code elimination using liveness and CFG info.
-    Returns True if something has been removed, or False if nothing is removed."""
+    Returns True if something has been removed, or False if nothing is removed.
+    """
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
-    arg_aliases = find_potential_aliases(blocks, args)
+    if alias_map is None or arg_aliases is None:
+        alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap)
+    if config.DEBUG_ARRAY_OPT == 1:
+        print("alias map:", alias_map)
+    # keep set for easier search
+    alias_set = set(alias_map.keys())
     call_table, _ = get_call_table(blocks)
 
     removed = False
@@ -427,9 +460,8 @@ def remove_dead(blocks, args):
         # find live variables at the end of block
         for out_blk, _data in cfg.successors(label):
             lives |= live_map[out_blk]
-        if label in cfg.exit_points():
-            lives |= arg_aliases
-        removed |= remove_dead_block(block, lives, call_table, arg_aliases)
+        lives |= arg_aliases
+        removed |= remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_set, typemap)
     return removed
 
 
@@ -438,7 +470,7 @@ def remove_dead(blocks, args):
 remove_dead_extensions = {}
 
 
-def remove_dead_block(block, lives, call_table, args):
+def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_set, typemap):
     """remove dead code using liveness info.
     Mutable arguments (e.g. arrays) that are not definitely assigned are live
     after return of function.
@@ -451,10 +483,15 @@ def remove_dead_block(block, lives, call_table, args):
     new_body = [block.terminator]
     # for each statement in reverse order, excluding terminator
     for stmt in reversed(block.body[:-1]):
+        # aliases of lives are also live
+        alias_lives = set()
+        init_alias_lives = lives & alias_set
+        for v in init_alias_lives:
+            alias_lives |= alias_map[v]
         # let external calls handle stmt if type matches
         for t, f in remove_dead_extensions.items():
             if isinstance(stmt, t):
-                f(stmt, lives, args)
+                f(stmt, lives, arg_aliases, alias_map, typemap)
         # ignore assignments that their lhs is not live or lhs==rhs
         if isinstance(stmt, ir.Assign):
             lhs = stmt.target
@@ -468,7 +505,7 @@ def remove_dead_block(block, lives, call_table, args):
                 continue
             # TODO: remove other nodes like SetItem etc.
         if isinstance(stmt, ir.SetItem):
-            if stmt.target.name not in lives:
+            if stmt.target.name not in lives and stmt.target.name not in alias_lives:
                 continue
 
         if type(stmt) in analysis.ir_extension_usedefs:
@@ -509,18 +546,70 @@ def has_no_side_effect(rhs, lives, call_table):
         return False
     return True
 
+alias_analysis_extensions = {}
 
-def find_potential_aliases(blocks, args):
-    aliases = set(args)
+def find_potential_aliases(blocks, args, typemap, alias_map=None, arg_aliases=None):
+    "find all array aliases and argument aliases to avoid remove as dead"
+    if alias_map is None:
+        alias_map = {}
+    if arg_aliases is None:
+        arg_aliases = set(a for a in args if not is_immutable_type(a, typemap))
+
     for bl in blocks.values():
         for instr in bl.body:
+            if type(instr) in alias_analysis_extensions:
+                f = alias_analysis_extensions[type(instr)]
+                f(instr, args, typemap, alias_map, arg_aliases)
             if isinstance(instr, ir.Assign):
                 expr = instr.value
                 lhs = instr.target.name
-                if isinstance(expr, ir.Var) and expr.name in aliases:
-                    aliases.add(lhs)
-    return aliases
+                # only mutable types can alias
+                if is_immutable_type(lhs, typemap):
+                    continue
+                if isinstance(expr, ir.Var) and lhs!=expr.name:
+                    _add_alias(lhs, expr.name, alias_map, arg_aliases)
+                # subarrays like A = B[0] for 2D B
+                if (isinstance(expr, ir.Expr)
+                        and expr.op in ['getitem', 'static_getitem']):
+                    _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
 
+    # copy to avoid changing size during iteration
+    old_alias_map = copy.deepcopy(alias_map)
+    # combine all aliases transitively
+    for v in old_alias_map:
+        for w in old_alias_map[v]:
+            alias_map[v] |= alias_map[w]
+        for w in old_alias_map[v]:
+            alias_map[w] = alias_map[v]
+
+    return alias_map, arg_aliases
+
+def _add_alias(lhs, rhs, alias_map, arg_aliases):
+    if rhs in arg_aliases:
+        arg_aliases.add(lhs)
+    else:
+        if rhs not in alias_map:
+            alias_map[rhs] = set()
+        if lhs not in alias_map:
+            alias_map[lhs] = set()
+        alias_map[rhs].add(lhs)
+        alias_map[lhs].add(rhs)
+    return
+
+def is_immutable_type(var, typemap):
+    # Conservatively, assume mutable if type not available
+    if typemap is None or var not in typemap:
+        return False
+    typ = typemap[var]
+    # TODO: add more immutable types
+    if isinstance(typ, (types.Number, types.scalars._NPDatetimeBase,
+                        types.containers.BaseTuple,
+                        types.iterators.RangeType)):
+        return True
+    if typ==types.string:
+        return True
+    # consevatively, assume mutable
+    return False
 
 def copy_propagate(blocks, typemap):
     """compute copy propagation information for each block using fixed-point
@@ -682,7 +771,8 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, ext_func, ext_data,
                 if isinstance(stmt, T):
                     gen_set, kill_set = f(stmt, typemap)
                     for lhs, rhs in gen_set:
-                        var_dict[lhs] = name_var_table[rhs]
+                        if rhs in name_var_table:
+                            var_dict[lhs] = name_var_table[rhs]
                     for l, r in var_dict.copy().items():
                         if l in kill_set or r.name in kill_set:
                             var_dict.pop(l)
@@ -693,7 +783,7 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, ext_func, ext_data,
                 if lhs != rhs:
                     # copy is valid only if same type (see
                     # TestCFunc.test_locals)
-                    if typemap[lhs] == typemap[rhs]:
+                    if typemap[lhs] == typemap[rhs] and rhs in name_var_table:
                         var_dict[lhs] = name_var_table[rhs]
                     else:
                         var_dict.pop(lhs, None)
@@ -982,3 +1072,47 @@ def get_array_accesses(blocks, accesses=None):
                 if isinstance(inst, T):
                     f(inst, accesses)
     return accesses
+
+def merge_adjacent_blocks(func_ir):
+    cfg = compute_cfg_from_blocks(func_ir.blocks)
+    # merge adjacent blocks
+    removed = []
+    for label in list(func_ir.blocks.keys()):
+        if label in removed:
+            continue
+        succs = list(cfg.successors(label))
+        if len(succs) != 1:
+            continue
+        next_label = succs[0][0]
+        preds = list(cfg.predecessors(next_label))
+        if len(preds) != 1 or preds[0][0] != label:
+            continue
+        block = func_ir.blocks[label]
+        next_block = func_ir.blocks[next_label]
+        if block.scope != next_block.scope:
+            continue
+        # merge
+        removed.append(next_label)
+        block.body = block.body[:(len(block.body) - 1)]
+        for stmts in next_block.body:
+            block.body.append(stmts)
+        del func_ir.blocks[next_label]
+
+def simplify(func_ir, typemap, array_analysis, calltypes, update_analysis):
+    remove_dels(func_ir.blocks)
+    # get copies in to blocks and out from blocks
+    in_cps, out_cps = copy_propagate(func_ir.blocks, typemap)
+    # table mapping variable names to ir.Var objects to help replacement
+    name_var_table = get_name_var_table(func_ir.blocks)
+    apply_copy_propagate(
+        func_ir.blocks,
+        in_cps,
+        name_var_table,
+        update_analysis,
+        array_analysis,
+        typemap,
+        calltypes)
+    # remove dead code to enable fusion
+    remove_dead(func_ir.blocks, func_ir.arg_names, typemap)
+    if config.DEBUG_ARRAY_OPT == 1:
+        dprint_func_ir(func_ir, "after simplify")

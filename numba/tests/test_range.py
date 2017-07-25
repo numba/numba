@@ -51,6 +51,9 @@ from numba.targets.rangeobj import range_iter_len
 def range_iter_len1(a):
     return range_iter_len(iter(range(a)))
 
+def range_iter_len2(a):
+    return range_iter_len(iter(a))
+
 class TestRange(unittest.TestCase):
 
     @tag('important')
@@ -140,6 +143,14 @@ class TestRange(unittest.TestCase):
             cfunc = cres.entry_point
             for arg in arglist:
                 self.assertEqual(cfunc(typ(arg)), range_func(typ(arg)))
+
+    @tag('important')
+    def test_range_iter_list(self):
+        range_iter_func = range_iter_len2
+        cres = compile_isolated(range_iter_func, [types.List(types.intp)])
+        cfunc = cres.entry_point
+        arglist = [1, 2, 3, 4, 5]
+        self.assertEqual(cfunc(arglist), len(arglist))
 
 if __name__ == '__main__':
     unittest.main()
