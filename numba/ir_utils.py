@@ -990,7 +990,8 @@ def simplify_CFG(blocks):
                 blocks[node].body.extend(blocks[next_node].body)
                 blocks.pop(next_node)
                 label_map[next_node] = node
-    return
+
+    return rename_labels(blocks)
 
 
 arr_math = ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
