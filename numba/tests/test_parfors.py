@@ -466,6 +466,24 @@ class TestParfors(TestParforsBase):
         np.testing.assert_allclose(parfor_output, py_output, rtol=0.05)
         self.assertIn('@do_scheduling', cpfunc.library.get_llvm_str())
 
+    @skip_unsupported
+    def test_cfg(self):
+        # from issue #2477
+        def test_impl(x, is_positive, N):
+            for i in numba.prange(2):
+                for j in range( i*N//2, (i+1)*N//2 ):
+                    is_positive[j] = 0
+                    if x[j] > 0:
+                        is_positive[j] = 1
+
+            return is_positive
+
+        N = 100
+        x = np.random.rand(N)
+        is_positive = np.zeros(N)
+        self.check(test_impl, x, is_positive, N)
+
+
 class TestPrange(TestParforsBase):
 
     def prange_tester(self, pyfunc, *args, **kwargs):
