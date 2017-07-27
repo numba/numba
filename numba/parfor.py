@@ -1928,16 +1928,3 @@ def parfor_typeinfer(parfor, typeinferer):
 
 
 typeinfer.typeinfer_extensions[Parfor] = parfor_typeinfer
-
-# add lowering functions for prange same as range
-# enables prange to work in nopython mode without parallel flag
-def lower_prange_seq():
-    import numba.targets.rangeobj  # import to install range lowerers
-    from numba.targets.imputils import builtin_registry
-    prange_lowerers = []
-    for imp, func, args in builtin_registry.functions:
-        if func == range:
-            prange_lowerers.append((imp, prange, args))
-    builtin_registry.functions.extend(prange_lowerers)
-
-lower_prange_seq()

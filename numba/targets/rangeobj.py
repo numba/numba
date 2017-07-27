@@ -4,7 +4,7 @@ Implementation of the range object for fixed-size integers.
 
 import llvmlite.llvmpy.core as lc
 
-from numba import types, cgutils
+from numba import types, cgutils, prange
 from .listobj import ListIterInstance
 from .arrayobj import make_array
 from .imputils import (lower_builtin, lower_cast,
@@ -25,6 +25,7 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
     RangeState = cgutils.create_struct_proxy(range_state_type)
 
     @lower_builtin(range, int_type)
+    @lower_builtin(prange, int_type)
     def range1_impl(context, builder, sig, args):
         """
         range(stop: int) -> range object
@@ -40,6 +41,7 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
                                   state._getvalue())
 
     @lower_builtin(range, int_type, int_type)
+    @lower_builtin(prange, int_type, int_type)
     def range2_impl(context, builder, sig, args):
         """
         range(start: int, stop: int) -> range object
@@ -55,6 +57,7 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
                                   state._getvalue())
 
     @lower_builtin(range, int_type, int_type, int_type)
+    @lower_builtin(prange, int_type, int_type, int_type)
     def range3_impl(context, builder, sig, args):
         """
         range(start: int, stop: int, step: int) -> range object
