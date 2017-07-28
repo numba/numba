@@ -221,6 +221,12 @@ class InternalError(NumbaError):
         self.old_exception = exception
 
 
+class RequireConstValue(TypingError):
+    """For signaling a function typing require constant value for some of
+    its argument
+    """
+
+
 def _format_msg(fmt, args, kwargs):
     return fmt.format(*args, **kwargs)
 
