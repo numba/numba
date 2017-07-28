@@ -25,6 +25,9 @@ from .errors import TypingError, UntypedAttributeError, new_error_context
 from .funcdesc import qualifying_prefix
 
 
+class NOTSET: pass
+
+
 class TypeVar(object):
     def __init__(self, context, var):
         self.context = context
@@ -33,6 +36,8 @@ class TypeVar(object):
         self.locked = False
         # Stores source location of first definition
         self.define_loc = None
+        # Qualifiers
+        self.literal_value = NOTSET
 
     def add_type(self, tp, loc):
         assert isinstance(tp, types.Type), type(tp)
@@ -62,7 +67,7 @@ class TypeVar(object):
 
         return self.type
 
-    def lock(self, tp, loc):
+    def lock(self, tp, loc, literal_value=NOTSET):
         assert isinstance(tp, types.Type), type(tp)
         assert not self.locked
 
@@ -77,6 +82,7 @@ class TypeVar(object):
         self.locked = True
         if self.define_loc is None:
             self.define_loc = loc
+        self.literal_value = literal_value
 
     def union(self, other, loc):
         if other.type is not None:
@@ -94,8 +100,10 @@ class TypeVar(object):
     def get(self):
         return (self.type,) if self.type is not None else ()
 
-    def getone(self):
+    def getone(self, get_literals=False):
         assert self.type is not None
+        if self.literal_value is not NOTSET and get_literals:
+            return types.Const(self.literal_value)
         return self.type
 
     def __len__(self):
@@ -337,7 +345,7 @@ class StaticGetItemConstraint(object):
         return self.fallback and self.fallback.get_call_signature()
 
 
-def fold_arg_vars(typevars, args, vararg, kws):
+def fold_arg_vars(typevars, args, vararg, kws, get_literals=False):
     """
     Fold and resolve the argument variables of a function call.
     """
@@ -352,7 +360,8 @@ def fold_arg_vars(typevars, args, vararg, kws):
     if not all(a.defined for a in argtypes):
         return
 
-    args = tuple(a.getone() for a in argtypes)
+    args = tuple(a.getone(get_literals=get_literals) for a in argtypes)
+
     pos_args = args[:n_pos_args]
     if vararg is not None:
         if not isinstance(args[-1], types.BaseTuple):
@@ -414,8 +423,10 @@ class CallConstraint(object):
                 else:
                     return
 
+        literals = fold_arg_vars(typevars, self.args, self.vararg, self.kws,
+                                  get_literals=True)
         # Resolve call type
-        sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
+        sig = typeinfer.resolve_call(fnty, pos_args, kw_args, literals=literals)
         if sig is None:
             # Arguments are invalid => explain why
             headtemp = "Invalid usage of {0} with parameters ({1})"
@@ -838,9 +849,9 @@ class TypeInferer(object):
     def copy_type(self, src_var, dest_var, loc):
         unified = self.typevars[dest_var].union(self.typevars[src_var], loc=loc)
 
-    def lock_type(self, var, tp, loc):
+    def lock_type(self, var, tp, loc, literal_value=NOTSET):
         tv = self.typevars[var]
-        tv.lock(tp, loc=loc)
+        tv.lock(tp, loc=loc, literal_value=literal_value)
 
     def propagate_refined_type(self, updated_var, updated_type):
         source_constraint = self.refine_map.get(updated_var)
@@ -1027,7 +1038,8 @@ class TypeInferer(object):
         # Special case string constant as Const type
         if ty == types.string:
             ty = types.Const(value=const)
-        self.lock_type(target.name, ty, loc=inst.loc)
+        self.lock_type(target.name, ty, loc=inst.loc,
+                       literal_value=const)
 
     def typeof_yield(self, inst, target, yield_):
         # Sending values into generators isn't supported.
@@ -1051,7 +1063,7 @@ class TypeInferer(object):
             raise TypingError("Modified builtin '%s'" % gvar.name,
                               loc=inst.loc)
 
-    def resolve_call(self, fnty, pos_args, kw_args):
+    def resolve_call(self, fnty, pos_args, kw_args, literals=None):
         """
         Resolve a call to a given function type.  A signature is returned.
         """
@@ -1085,7 +1097,8 @@ class TypeInferer(object):
             return sig
         else:
             # Normal non-recursive call
-            return self.context.resolve_function_type(fnty, pos_args, kw_args)
+            return self.context.resolve_function_type(fnty, pos_args, kw_args,
+                                                      literals=literals)
 
     def typeof_global(self, inst, target, gvar):
         try:
