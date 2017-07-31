@@ -21,6 +21,88 @@ from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
 from numba.typing import signature
 from .arrayobj import make_array, load_item, store_item, _empty_nd_impl
 
+import traceback
+
+from numba.extending import intrinsic
+from numba.errors import RequireConstValue
+
+@intrinsic
+def tuple_cstr(tyctx, shape_array, shape_tuple):
+    nd = len(shape_tuple) - 1
+    tupty = types.UniTuple(types.intp, nd)    # the tuple
+    funtion_sig = tupty(shape_array, shape_tuple)  # the function signature for this intrinsic
+
+    def codegen(cgctx, builder, signature, args):
+        lltupty = cgctx.get_value_type(tupty)
+        tup = cgutils.get_null_value(lltupty)
+
+        [in_shape, _] = args
+
+        def array_indexer(a, i):
+            return a[i]
+
+        # loop to fill the tuple
+        for i in range(nd):
+            dataidx = cgctx.get_constant(types.intp, i)
+            # compile and call array_indexer
+            data = cgctx.compile_internal(builder, array_indexer,
+                                          #shape_array.dtype(shape_array, types.intp),
+                                          types.intp(shape_array, types.intp),
+                                          [in_shape, dataidx])
+            tup = builder.insert_value(tup, data, i)
+        return tup
+
+    return funtion_sig, codegen
+
+@intrinsic
+def gen_index_tuple(tyctx, tup_alloc, value, axis):
+    if not isinstance(axis, types.Const):
+        raise RequireConstValue('axis must be a const')
+
+    axis_value = axis.value
+
+    nd = len(tup_alloc)
+    before = axis_value
+    after  = nd - before - 1
+    types_list = ([types.slice2_type] * before) +  \
+                  [types.intp] +                   \
+                 ([types.slice2_type] * after)
+    
+    tupty = types.Tuple(types_list)    # the tuple
+    #funtion_sig = tupty(tup_alloc, value, tyctx.resolve_value_type(axis_value)) 
+    funtion_sig = tupty(tup_alloc, value, axis_value)
+
+    def codegen(cgctx, builder, signature, args):
+        lltupty = cgctx.get_value_type(tupty)
+        tup = cgutils.get_null_value(lltupty)
+
+        [_, value_arg, _] = args
+
+        def create_full_slice():
+            return slice(None,None)
+
+        # loop to fill the tuple
+        for i in range(0, axis_value):
+            dataidx = cgctx.get_constant(types.intp, i)
+            # compile and call array_indexer
+            data = cgctx.compile_internal(builder, create_full_slice,
+                                          types.slice2_type(),
+                                          [])
+            tup = builder.insert_value(tup, data, i)
+
+        dataidx = cgctx.get_constant(types.intp, axis_value)
+        tup = builder.insert_value(tup, value_arg, axis_value)
+
+        for i in range(axis_value + 1, nd):
+            dataidx = cgctx.get_constant(types.intp, i)
+            # compile and call array_indexer
+            data = cgctx.compile_internal(builder, create_full_slice,
+                                          types.slice2_type(),
+                                          [])
+            tup = builder.insert_value(tup, data, i)
+        return tup
+
+    return funtion_sig, codegen
 
 #----------------------------------------------------------------------------
 # Basic stats and aggregates
@@ -30,6 +112,7 @@ from .arrayobj import make_array, load_item, store_item, _empty_nd_impl
 def array_sum(context, builder, sig, args):
     zero = sig.return_type(0)
 
+    traceback.print_stack()
     def array_sum_impl(arr):
         c = zero
         for v in np.nditer(arr):
@@ -38,6 +121,45 @@ def array_sum(context, builder, sig, args):
 
     res = context.compile_internal(builder, array_sum_impl, sig, args,
                                     locals=dict(c=sig.return_type))
+    return impl_ret_borrowed(context, builder, sig.return_type, res)
+
+@lower_builtin(np.sum, types.Array, types.int64)
+@lower_builtin("array.sum", types.Array, types.int64)
+def array_sum_axis(context, builder, sig, args):
+    zero = sig.return_type.dtype(0)
+    #traceback.print_stack()
+    ndim = sig.args[0].ndim - 1
+    def array_sum_impl_axis(arr, axis):
+        ashape = list(arr.shape)
+        axis_len = ashape[axis]
+        ashape.pop(axis)
+        ashape_without_axis = tuple_cstr(ashape, arr.shape)
+        result = np.full(ashape_without_axis, zero, type(zero))
+        before = axis - 1
+        after  = len(ashape) - before - 1
+
+        for axis_index in range(axis_len):
+            if axis == 0:
+                index_tuple = gen_index_tuple(arr.shape, axis_index, 0)
+                result += arr[index_tuple]
+            elif axis == 1:
+                index_tuple = gen_index_tuple(arr.shape, axis_index, 1)
+                result += arr[index_tuple]
+            elif axis == 2:
+                index_tuple = gen_index_tuple(arr.shape, axis_index, 2)
+                result += arr[index_tuple]
+            elif axis == 3:
+                index_tuple = gen_index_tuple(arr.shape, axis_index, 3)
+                result += arr[index_tuple]
+            else:
+                index_tuple = gen_index_tuple(ashape_without_axis, axis, axis_index)
+            result += arr[index_tuple]
+
+        return result
+
+    res = context.compile_internal(builder, array_sum_impl_axis, sig, args,
+            locals=dict(result=sig.return_type, 
+                        ashape_without_axis=types.UniTuple(types.intp, ndim)))
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 @lower_builtin(np.prod, types.Array)
