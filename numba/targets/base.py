@@ -23,6 +23,7 @@ from .imputils import (user_function, user_generator,
                        RegistryLoader)
 from numba import datamodel
 
+import traceback
 
 GENERIC_POINTER = Type.pointer(Type.int(8))
 PYOBJECT = GENERIC_POINTER

@@ -11,6 +11,8 @@ from numba.typing.templates import (AttributeTemplate, AbstractTemplate,
 from numba.typing import collections
 from numba.errors import TypingError
 
+import pdb
+
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
 
 
@@ -540,6 +542,16 @@ def generic_expand(self, args, kws):
     assert not kws
     return signature(_expand_integer(self.this.dtype), recvr=self.this)
 
+def sum_expand(self, args, kws):
+    args_len = len(args)
+    assert args_len <= 1
+    if args_len == 0:
+        return signature(_expand_integer(self.this.dtype), *args, recvr=self.this)
+    else:
+        return_type = types.Array(dtype=_expand_integer(self.this.dtype),
+                              ndim=self.this.ndim-1, layout='C')
+        return signature(return_type, *args, recvr=self.this)
+
 def generic_expand_cumulative(self, args, kws):
     assert not args
     assert not kws
@@ -574,8 +586,11 @@ for fname in ["min", "max"]:
     install_array_method(fname, generic_homog)
 
 # Functions that return a machine-width type, to avoid overflows
-for fname in ["sum", "prod"]:
-    install_array_method(fname, generic_expand)
+#for fname in ["sum", "prod"]:
+#    install_array_method(fname, generic_expand)
+
+install_array_method("prod", generic_expand)
+install_array_method("sum", sum_expand)
 
 # Functions that return a machine-width type, to avoid overflows
 for fname in ["cumsum", "cumprod"]:

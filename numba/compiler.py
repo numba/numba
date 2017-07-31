@@ -377,6 +377,7 @@ class Pipeline(object):
     def _set_and_check_ir(self, func_ir):
         self.func_ir = func_ir
         self.nargs = self.func_ir.arg_count
+        print("_set_and_check_ir", self.func_id.func_name, self.func_ir, self.nargs, self.args)
         if not self.args and self.flags.force_pyobject:
             # Allow an empty argument types specification when object mode
             # is explicitly requested.
@@ -550,6 +551,8 @@ class Pipeline(object):
                                      self.flags)
 
     def backend_nopython_mode(self):
+        print("backend_nopython_mode")
+        self.func_ir.dump()
         """Native mode compilation"""
         with self.fallback_context("Function %s failed at nopython "
                                    "mode lowering" % (self.func_id.func_name,)):
