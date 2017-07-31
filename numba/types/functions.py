@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from .abstract import *
 from .common import *
 
+import pdb
 
 class BaseFunction(Callable):
     """
@@ -46,6 +47,8 @@ class BaseFunction(Callable):
     def get_call_type(self, context, args, kws):
         for temp_cls in self.templates:
             temp = temp_cls(context)
+            print("get_call_type", temp, type(temp))
+            #pdb.set_trace()
             sig = temp.apply(args, kws)
             if sig is not None:
                 self._impl_keys[sig.args] = temp.get_impl_key(sig)

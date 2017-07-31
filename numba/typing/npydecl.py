@@ -350,7 +350,8 @@ class Numpy_method_redirection(AbstractTemplate):
 
     def generic(self, args, kws):
         assert not kws
-        [arr] = args
+        #[arr] = args
+        arr = args[0]
         # This will return a BoundFunction
         meth_ty = self.context.resolve_getattr(arr, self.method_name)
         # Resolve arguments on the bound function
