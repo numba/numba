@@ -105,7 +105,7 @@ def gen_index_tuple(tyctx, shape_tuple, value, axis):
     # Creates the output type of the function.
     tupty = types.Tuple(types_list)
     # Defines the signature of the intrinsic.
-    funtion_sig = tupty(shape_tuple, value, axis_value)
+    funtion_sig = tupty(shape_tuple, value, axis)
 
     def codegen(cgctx, builder, signature, args):
         lltupty = cgctx.get_value_type(tupty)
