@@ -640,7 +640,7 @@ class BaseContext(object):
         This implements implicit conversions as can happen due to the
         granularity of the Numba type system, or lax Python semantics.
         """
-        if fromty == toty or toty == types.Any:
+        if fromty == toty or toty == types.Any or type(toty) == int:
             return val
         try:
             impl = self._casts.find((fromty, toty))
