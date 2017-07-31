@@ -1242,6 +1242,12 @@ def hash_complex(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # Implicit casts between numerics
 
+@lower_cast(types.Integer, types.Const)
+def integer_to_constant(context, builder, fromty, toty, val):
+    # XXX should do a runtime check
+    return cgutils.get_null_value(context.get_value_type(toty))
+
+
 @lower_cast(types.Integer, types.Integer)
 def integer_to_integer(context, builder, fromty, toty, val):
     if toty.bitwidth == fromty.bitwidth:
