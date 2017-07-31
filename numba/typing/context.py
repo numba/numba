@@ -204,7 +204,6 @@ class BaseContext(object):
             except errors.RequireConstValue:
                 if literals is None:
                     raise
-                print('LITERALS', literals)
                 return func.get_call_type(self, *literals)
 
     def _get_attribute_templates(self, typ):
