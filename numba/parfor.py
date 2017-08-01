@@ -192,7 +192,7 @@ class ParforPass(object):
     def run(self):
         """run parfor conversion pass: replace Numpy calls
         with Parfors when possible and optimize the IR."""
-        simplify_CFG(self.func_ir.blocks)
+        self.func_ir.blocks = simplify_CFG(self.func_ir.blocks)
         # remove Del statements for easier optimization
         remove_dels(self.func_ir.blocks)
         # e.g. convert A.sum() to np.sum(A) for easier match and optimization
