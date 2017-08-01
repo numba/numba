@@ -434,7 +434,7 @@ class TestArrayComprehension(unittest.TestCase):
 
         # float to int cast is valid
         v = 1.2
-        self.check(array_comp, 10, v, assert_dtype=np.int64)
+        self.check(array_comp, 10, v, assert_dtype=np.intp)
         # complex to int cast is invalid
         with self.assertRaises(TypingError) as raises:
             cfunc = jit(nopython=True)(array_comp)
