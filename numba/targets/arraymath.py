@@ -154,7 +154,6 @@ def gen_index_tuple(tyctx, shape_tuple, value, axis):
 def array_sum(context, builder, sig, args):
     zero = sig.return_type(0)
 
-    traceback.print_stack()
     def array_sum_impl(arr):
         c = zero
         for v in np.nditer(arr):
