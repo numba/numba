@@ -13,6 +13,9 @@ from numba import types, utils, jit, types
 from numba.errors import TypingError, LoweringError
 from .support import tag
 
+from .test_parfors import _windows_py27, _32bit
+
+PARALLEL_SUPPORTED = not (_windows_py27 or _32bit)
 
 def comp_list(n):
     l = [i for i in range(n)]
@@ -259,7 +262,8 @@ class TestArrayComprehension(unittest.TestCase):
             return l
 
         self.check(comp_with_array_1, 5)
-        self.check(comp_with_array_1, 5, run_parallel=True)
+        if PARALLEL_SUPPORTED:
+            self.check(comp_with_array_1, 5, run_parallel=True)
 
     @tag('important')
     def test_comp_with_array_2(self):
@@ -290,7 +294,8 @@ class TestArrayComprehension(unittest.TestCase):
             return l
 
         self.check(comp_nest_with_array, 5)
-        self.check(comp_nest_with_array, 5, run_parallel=True)
+        if PARALLEL_SUPPORTED:
+            self.check(comp_nest_with_array, 5, run_parallel=True)
 
     @tag('important')
     def test_comp_nest_with_array_3(self):
@@ -299,7 +304,8 @@ class TestArrayComprehension(unittest.TestCase):
             return l
 
         self.check(comp_nest_with_array_3, 5)
-        self.check(comp_nest_with_array_3, 5, run_parallel=True)
+        if PARALLEL_SUPPORTED:
+            self.check(comp_nest_with_array_3, 5, run_parallel=True)
 
     @tag('important')
     def test_comp_nest_with_array_noinline(self):
