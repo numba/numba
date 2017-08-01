@@ -621,9 +621,8 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # OK
         a = np.ones((2, 3))
         self.assertPreciseEqual(pyfunc(a), cfunc(a))
-        # BAD: with axis
-        with self.assertRaises(TypingError):
-            cfunc(a, 1)
+        # OK
+        self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
         # BAD: with kw axis
         pyfunc = array_sum_kws
         cfunc = jit(nopython=True)(pyfunc)
