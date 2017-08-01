@@ -11,7 +11,7 @@ class DetectStaticBinops(Rewrite):
     # Those operators can benefit from a constant-inferred argument
     rhs_operators = {'**'}
 
-    def match(self, interp, block, typemap, calltypes):
+    def match(self, func_ir, block, typemap, calltypes):
         self.static_lhs = {}
         self.static_rhs = {}
         self.block = block
@@ -20,7 +20,7 @@ class DetectStaticBinops(Rewrite):
             try:
                 if (expr.fn in self.rhs_operators
                     and expr.static_rhs is ir.UNDEFINED):
-                    self.static_rhs[expr] = interp.infer_constant(expr.rhs)
+                    self.static_rhs[expr] = func_ir.infer_constant(expr.rhs)
             except errors.ConstantInferenceError:
                 continue
 

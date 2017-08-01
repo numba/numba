@@ -44,6 +44,11 @@ def unknown_module():
 def nop(x, y, z):
     pass
 
+def array_setitem_invalid_cast():
+    arr = np.empty(1, dtype=np.float64)
+    arr[0] = 1j  # invalid cast from complex to float
+    return arr
+
 
 class Foo(object):
     def __repr__(self):
@@ -122,6 +127,12 @@ class TestTypingError(unittest.TestCase):
         self.assertIn("Can't infer type of variable 'l': list(undefined)",
                       errmsg)
 
+    def test_array_setitem_invalid_cast(self):
+        with self.assertRaises(TypingError) as raises:
+            compile_isolated(array_setitem_invalid_cast, ())
+
+        errmsg = str(raises.exception)
+        self.assertIn("setitem: array(float64, 1d, C)[0] = complex128", errmsg)
 
 class TestArgumentTypingError(unittest.TestCase):
     """

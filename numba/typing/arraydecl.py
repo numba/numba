@@ -206,6 +206,14 @@ class SetItemBuffer(AbstractTemplate):
                     return
         elif not isinstance(val, types.Array):
             # Single item assignment
+            if not self.context.can_convert(val, res):
+                # if the array dtype is not yet defined
+                if not res.is_precise():
+                    # set the array type to use the dtype of value (RHS)
+                    newary = ary.copy(dtype=val)
+                    return signature(types.none, newary, idx, res)
+                else:
+                    return
             res = val
         else:
             return
@@ -528,9 +536,13 @@ def generic_homog(self, args, kws):
     return signature(self.this.dtype, recvr=self.this)
 
 def generic_expand(self, args, kws):
+    assert not args
+    assert not kws
     return signature(_expand_integer(self.this.dtype), recvr=self.this)
 
 def generic_expand_cumulative(self, args, kws):
+    assert not args
+    assert not kws
     assert isinstance(self.this, types.Array)
     return_type = types.Array(dtype=_expand_integer(self.this.dtype),
                               ndim=1, layout='C')

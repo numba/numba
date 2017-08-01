@@ -1,7 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
-import sys
 
 from numba import config
 
@@ -15,7 +14,7 @@ class Rewrite(object):
         '''
         self.pipeline = pipeline
 
-    def match(self, block, typemap, calltypes):
+    def match(self, func_ir, block, typemap, calltypes):
         '''Overload this method to check an IR block for matching terms in the
         rewrite.
         '''
@@ -44,7 +43,7 @@ class RewriteRegistry(object):
         Decorator adding a subclass of Rewrite to the registry for
         the given *kind*.
         """
-        if not kind in self._kinds:
+        if kind not in self._kinds:
             raise KeyError("invalid kind %r" % (kind,))
         def do_register(rewrite_cls):
             if not issubclass(rewrite_cls, Rewrite):
@@ -54,12 +53,12 @@ class RewriteRegistry(object):
             return rewrite_cls
         return do_register
 
-    def apply(self, kind, pipeline, interp):
+    def apply(self, kind, pipeline, func_ir):
         '''Given a pipeline and a dictionary of basic blocks, exhaustively
         attempt to apply all registered rewrites to all basic blocks.
         '''
         assert kind in self._kinds
-        blocks = interp.blocks
+        blocks = func_ir.blocks
         old_blocks = blocks.copy()
         for rewrite_cls in self.rewrites[kind]:
             # Exhaustively apply a rewrite until it stops matching.
@@ -67,7 +66,7 @@ class RewriteRegistry(object):
             work_list = list(blocks.items())
             while work_list:
                 key, block = work_list.pop()
-                matches = rewrite.match(interp, block, pipeline.typemap,
+                matches = rewrite.match(func_ir, block, pipeline.typemap,
                                         pipeline.calltypes)
                 if matches:
                     if config.DEBUG or config.DUMP_IR:

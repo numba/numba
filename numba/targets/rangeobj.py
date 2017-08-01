@@ -4,9 +4,11 @@ Implementation of the range object for fixed-size integers.
 
 import llvmlite.llvmpy.core as lc
 
-from numba import types, cgutils
-from numba.targets.imputils import (lower_builtin, lower_cast,
-                                    iterator_impl, impl_ret_untracked)
+from numba import types, cgutils, prange
+from .listobj import ListIterInstance
+from .arrayobj import make_array
+from .imputils import (lower_builtin, lower_cast,
+                       iterator_impl, impl_ret_untracked)
 from numba.typing import signature
 from numba.extending import intrinsic
 
@@ -23,6 +25,7 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
     RangeState = cgutils.create_struct_proxy(range_state_type)
 
     @lower_builtin(range, int_type)
+    @lower_builtin(prange, int_type)
     def range1_impl(context, builder, sig, args):
         """
         range(stop: int) -> range object
@@ -38,6 +41,7 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
                                   state._getvalue())
 
     @lower_builtin(range, int_type, int_type)
+    @lower_builtin(prange, int_type, int_type)
     def range2_impl(context, builder, sig, args):
         """
         range(start: int, stop: int) -> range object
@@ -53,6 +57,7 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
                                   state._getvalue())
 
     @lower_builtin(range, int_type, int_type, int_type)
+    @lower_builtin(prange, int_type, int_type, int_type)
     def range3_impl(context, builder, sig, args):
         """
         range(start: int, stop: int, step: int) -> range object
@@ -179,7 +184,26 @@ def range_iter_len(typingctx, val):
         def codegen(context, builder, sig, args):
             (value,) = args
             iter_type = range_impl_map[val_type][1]
-            state = cgutils.create_struct_proxy(iter_type)(context, builder, value)
-            int_type = state.count.type
-            return impl_ret_untracked(context, builder, int_type, builder.load(state.count))
+            iterobj = cgutils.create_struct_proxy(iter_type)(context, builder, value)
+            int_type = iterobj.count.type
+            return impl_ret_untracked(context, builder, int_type, builder.load(iterobj.count))
         return signature(val_type, val), codegen
+    elif isinstance(val, types.ListIter):
+        def codegen(context, builder, sig, args):
+            (value,) = args
+            intp_t = context.get_value_type(types.intp)
+            iterobj = ListIterInstance(context, builder, sig.args[0], value)
+            return impl_ret_untracked(context, builder, intp_t, iterobj.size)
+        return signature(types.intp, val), codegen
+    elif isinstance(val, types.ArrayIterator):
+        def  codegen(context, builder, sig, args):
+            (iterty,) = sig.args
+            (value,) = args
+            intp_t = context.get_value_type(types.intp)
+            iterobj = context.make_helper(builder, iterty, value=value)
+            arrayty = iterty.array_type
+            ary = make_array(arrayty)(context, builder, value=iterobj.array)
+            shape = cgutils.unpack_tuple(builder, ary.shape)
+            # array iterates along the outer dimension
+            return impl_ret_untracked(context, builder, intp_t, shape[0])
+        return signature(types.intp, val), codegen

@@ -9,10 +9,13 @@ import numpy as np
 import numpy
 
 from numba.compiler import compile_isolated
-from numba import types, utils, jit
+from numba import types, utils, jit, types
 from numba.errors import TypingError, LoweringError
 from .support import tag
 
+from .test_parfors import _windows_py27, _32bit
+
+PARALLEL_SUPPORTED = not (_windows_py27 or _32bit)
 
 def comp_list(n):
     l = [i for i in range(n)]
@@ -20,18 +23,6 @@ def comp_list(n):
     for i in l:
         s += i
     return s
-
-
-def comp_with_array(n):
-    m = n * 2
-    l = np.array([i + m for i in range(n)])
-    return np.sum(l)
-
-
-def comp_nest_with_array(n):
-    l = np.array([np.sum(np.array([i * j for j in range(n)]))
-                  for i in range(n)])
-    return np.sum(l)
 
 
 class TestListComprehension(unittest.TestCase):
@@ -44,20 +35,6 @@ class TestListComprehension(unittest.TestCase):
         self.assertEqual(cfunc(5), pyfunc(5))
         self.assertEqual(cfunc(0), pyfunc(0))
         self.assertEqual(cfunc(-1), pyfunc(-1))
-
-    @tag('important')
-    def test_comp_with_array(self):
-        pyfunc = comp_with_array
-        cres = compile_isolated(pyfunc, [types.intp])
-        cfunc = cres.entry_point
-        self.assertEqual(cfunc(5), pyfunc(5))
-
-    @tag('important')
-    def test_comp_nest_with_array(self):
-        pyfunc = comp_nest_with_array
-        cres = compile_isolated(pyfunc, [types.intp])
-        cfunc = cres.entry_point
-        self.assertEqual(cfunc(5), pyfunc(5))
 
     @tag('important')
     def test_bulk_use_cases(self):
@@ -232,11 +209,11 @@ class TestListComprehension(unittest.TestCase):
                     raise
 
         # test functions that are expected to fail
-        with self.assertRaises(TypingError) as raises:
+        with self.assertRaises(LoweringError) as raises:
             cfunc = jit(nopython=True)(list5)
             cfunc(var)
-        msg = "not allowed in a homogenous sequence"
-        self.assertIn(msg, str(raises.exception))
+        # TODO: we can't really assert the error message for the above
+        # Also, test_nested_array is a similar case (but without list) that works.
 
         with self.assertRaises(LoweringError) as raises:
             cfunc = jit(nopython=True)(list11)
@@ -244,12 +221,227 @@ class TestListComprehension(unittest.TestCase):
         msg = "unsupported nested memory-managed object"
         self.assertIn(msg, str(raises.exception))
 
+        if sys.maxsize > 2 ** 32:
+            bits = 64
+        else:
+            bits = 32
+
         if utils.PYVERSION < (3, 0):
             with self.assertRaises(TypingError) as raises:
                 cfunc = jit(nopython=True)(list22)
                 cfunc(var)
-            msg = "Invalid usage of == with parameters"
+            msg = "cannot unify reflected list(int%d) and int%d" % (bits, bits)
             self.assertIn(msg, str(raises.exception))
+
+class TestArrayComprehension(unittest.TestCase):
+
+    def check(self, pyfunc, *args, **kwargs):
+        """A generic check function that run both pyfunc, and jitted pyfunc,
+        and compare results."""
+        run_parallel = kwargs['run_parallel'] if 'run_parallel' in kwargs else False
+        assert_allocate_list = kwargs['assert_allocate_list'] if 'assert_allocate_list' in kwargs else False
+        assert_dtype = kwargs['assert_dtype'] if 'assert_dtype' in kwargs else None
+        cfunc = jit(nopython=True,parallel=run_parallel)(pyfunc)
+        pyres = pyfunc(*args)
+        cres = cfunc(*args)
+        np.testing.assert_array_equal(pyres, cres)
+        if assert_dtype:
+            self.assertEqual(cres[1].dtype, assert_dtype)
+        if assert_allocate_list:
+            self.assertIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+        else:
+            self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+        if run_parallel:
+            self.assertIn('@do_scheduling', cfunc.inspect_llvm(cfunc.signatures[0]))
+
+    @tag('important')
+    def test_comp_with_array_1(self):
+        def comp_with_array_1(n):
+            m = n * 2
+            l = np.array([i + m for i in range(n)])
+            return l
+
+        self.check(comp_with_array_1, 5)
+        if PARALLEL_SUPPORTED:
+            self.check(comp_with_array_1, 5, run_parallel=True)
+
+    @tag('important')
+    def test_comp_with_array_2(self):
+        def comp_with_array_2(n, threshold):
+            A = np.arange(-n, n)
+            return np.array([ x * x if x < threshold else x * 2 for x in A ])
+
+        self.check(comp_with_array_2, 5, 0)
+
+    @tag('important')
+    def test_comp_with_array_noinline(self):
+        def comp_with_array_noinline(n):
+            m = n * 2
+            l = np.array([i + m for i in range(n)])
+            return l
+
+        import numba.inline_closurecall as ic
+        try:
+            ic.enable_inline_arraycall = False
+            self.check(comp_with_array_noinline, 5, assert_allocate_list=True)
+        finally:
+            ic.enable_inline_arraycall = True
+
+    @tag('important')
+    def test_comp_nest_with_array(self):
+        def comp_nest_with_array(n):
+            l = np.array([[i * j for j in range(n)] for i in range(n)])
+            return l
+
+        self.check(comp_nest_with_array, 5)
+        if PARALLEL_SUPPORTED:
+            self.check(comp_nest_with_array, 5, run_parallel=True)
+
+    @tag('important')
+    def test_comp_nest_with_array_3(self):
+        def comp_nest_with_array_3(n):
+            l = np.array([[[i * j * k for k in range(n)] for j in range(n)] for i in range(n)])
+            return l
+
+        self.check(comp_nest_with_array_3, 5)
+        if PARALLEL_SUPPORTED:
+            self.check(comp_nest_with_array_3, 5, run_parallel=True)
+
+    @tag('important')
+    def test_comp_nest_with_array_noinline(self):
+        def comp_nest_with_array_noinline(n):
+            l = np.array([[i * j for j in range(n)] for i in range(n)])
+            return l
+
+        import numba.inline_closurecall as ic
+        try:
+            ic.enable_inline_arraycall = False
+            # test is expected to fail
+            msg = 'unsupported nested memory-managed object'
+            with self.assertRaises(LoweringError) as raises:
+                self.check(comp_nest_with_array_noinline, 5)
+            self.assertIn(msg, str(raises.exception))
+        finally:
+            ic.enable_inline_arraycall = True
+
+    @tag('important')
+    def test_comp_with_array_range(self):
+        def comp_with_array_range(m, n):
+            l = np.array([i for i in range(m, n)])
+            return l
+
+        self.check(comp_with_array_range, 5, 10)
+
+    @tag('important')
+    def test_comp_with_array_range_and_step(self):
+        def comp_with_array_range_and_step(m, n):
+            l = np.array([i for i in range(m, n, 2)])
+            return l
+
+        self.check(comp_with_array_range_and_step, 5, 10)
+
+    @tag('important')
+    def test_comp_with_array_conditional(self):
+        def comp_with_array_conditional(n):
+            l = np.array([i for i in range(n) if i % 2 == 1])
+            return l
+        # arraycall inline would not happen when conditional is present
+        self.check(comp_with_array_conditional, 10, assert_allocate_list=True)
+
+    @tag('important')
+    def test_comp_nest_with_array_conditional(self):
+        def comp_nest_with_array_conditional(n):
+            l = np.array([[i * j for j in range(n)] for i in range(n) if i % 2 == 1])
+            return l
+        # test is expected to fail
+        with self.assertRaises(LoweringError) as raises:
+            self.check(comp_nest_with_array_conditional, 5)
+        msg = 'unsupported nested memory-managed object'
+        self.assertIn(msg, str(raises.exception))
+
+    @tag('important')
+    def test_comp_nest_with_dependency(self):
+        def comp_nest_with_dependency(n):
+            l = np.array([[i * j for j in range(i+1)] for i in range(n)])
+            return l
+        # test is expected to fail
+        with self.assertRaises(LoweringError) as raises:
+            self.check(comp_nest_with_dependency, 5)
+        self.assertIn('Failed', str(raises.exception))
+
+    @tag('important')
+    def test_no_array_comp(self):
+        def no_array_comp(n):
+            l = np.array([1,2,3,n])
+            return l
+        # no arraycall inline without comprehension
+        self.check(no_array_comp, 10, assert_allocate_list=True)
+
+    @tag('important')
+    def test_nested_array(self):
+        def nested_array(n):
+            l = np.array([ np.array([x for x in range(n)]) for y in range(n)])
+            return l
+
+        self.check(nested_array, 10)
+
+    @tag('important')
+    def test_array_comp_with_iter(self):
+        def array_comp(a):
+            l = np.array([ x * x for x in a ])
+            return l
+        # with list iterator
+        l = [1,2,3,4,5]
+        self.check(array_comp, l)
+        # with array iterator
+        self.check(array_comp, np.array(l))
+
+    def test_array_comp_with_dtype(self):
+        def array_comp(n):
+            l = np.array([i for i in range(n)], dtype=np.complex64)
+            return l
+
+        self.check(array_comp, 10, assert_dtype=np.complex64)
+
+    def test_array_comp_inferred_dtype(self):
+        def array_comp(n):
+            l = np.array([i * 1j for i in range(n)])
+            return l
+
+        self.check(array_comp, 10)
+
+    def test_array_comp_inferred_dtype_nested(self):
+        def array_comp(n):
+            l = np.array([[i * j for j in range(n)] for i in range(n)])
+            return l
+
+        self.check(array_comp, 10)
+
+    def test_array_comp_inferred_dtype_nested_sum(self):
+        def array_comp(n):
+            l = np.array([[i * j for j in range(n)] for i in range(n)])
+            # checks that operations on the inferred array
+            return l
+
+        self.check(array_comp, 10)
+
+    def test_array_comp_inferred_dtype_outside_setitem(self):
+        def array_comp(n, v):
+            arr = np.array([i for i in range(n)])
+            # the following should not change the dtype
+            arr[0] = v
+            return arr
+
+        # float to int cast is valid
+        v = 1.2
+        self.check(array_comp, 10, v, assert_dtype=np.int)
+        # complex to int cast is invalid
+        with self.assertRaises(TypingError) as raises:
+            cfunc = jit(nopython=True)(array_comp)
+            cfunc(10, 2.3j)
+        self.assertIn("setitem: array({}, 1d, C)[0] = complex128".format(types.intp),
+                      str(raises.exception))
+
 
 
 if __name__ == '__main__':

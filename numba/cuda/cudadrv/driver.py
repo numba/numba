@@ -1022,14 +1022,23 @@ class MemoryPointer(object):
             driver.cuMemsetD8(self.device_pointer, byte, count)
 
     def view(self, start, stop=None):
-        base = self.device_pointer.value + start
         if stop is None:
             size = self.size - start
         else:
             size = stop - start
-        assert size > 0, "zero or negative memory size"
-        pointer = drvapi.cu_device_ptr(base)
-        view = MemoryPointer(self.context, pointer, size, owner=self.owner)
+
+        # Handle NULL/empty memory buffer
+        if self.device_pointer.value is None:
+            if size != 0:
+                raise RuntimeError("non-empty slice into empty slice")
+            view = self      # new view is just a reference to self
+        # Handle normal case
+        else:
+            base = self.device_pointer.value + start
+            if size < 0:
+                raise RuntimeError('size cannot be negative')
+            pointer = drvapi.cu_device_ptr(base)
+            view = MemoryPointer(self.context, pointer, size, owner=self.owner)
         return OwnedPointer(weakref.proxy(self.owner), view)
 
     @property

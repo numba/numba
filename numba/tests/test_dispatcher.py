@@ -13,6 +13,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import utils, jit, generated_jit, types, typeof
+from numba import config
 from numba import _dispatcher
 from numba.errors import NumbaWarning
 from .support import TestCase, tag, temp_directory, import_dynamic
@@ -492,6 +493,7 @@ class TestDispatcherMethods(TestCase):
             # Look for the function name
             self.assertTrue("foo" in asm)
 
+    @unittest.skipIf(config.IS_WIN32 and not config.IS_32BITS, "access violation on 64-bit windows")
     def test_inspect_cfg(self):
         # Exercise the .inspect_cfg().  These are minimal tests and does not
         # fully checks the correctness of the function.

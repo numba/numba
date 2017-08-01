@@ -9,7 +9,7 @@ Automatic parallelization with ``@jit``
 
 Setting the :ref:`parallel_jit_option` option for :func:`~numba.jit` enables
 an experimental Numba feature that attempts to automatically parallelize and
-perform other optimizations on (part) of a function. At the moment, this
+perform other optimizations on (part of) a function. At the moment, this
 feature only works on CPUs.
 
 Some operations inside a user defined function, e.g., adding a scalar value to
@@ -42,10 +42,13 @@ parallel semantics and for which we attempt to parallelize.
     * :ref:`Numpy ufuncs <supported_ufuncs>` that are supported in :term:`nopython mode`.
     * User defined :class:`~numba.DUFunc` through :func:`~numba.vectorize`.
 
-2. Numpy reduction functions ``sum`` and ``prod``. Note that they have to be
-   written as ``numpy.sum(a)`` instead of ``a.sum()``.
+2. Numpy reduction functions ``sum`` and ``prod``.
 
-3. Numpy array creation functions ``zeros``, ``ones``, and ``random.ranf``.
+3. Numpy array creation functions ``zeros``, ``ones``, and several
+   random functions (rand, randn, ranf, random_sample, sample, random,
+   standard_normal, chisquare, weibull, power, geometric, exponential,
+   poisson, rayleigh, normal, uniform, beta, binomial, f, gamma, lognormal,
+   laplace, randint, triangular).
 
 4. Numpy ``dot`` function between a matrix and a vector, or two vectors.
    In all other cases, Numba's default implementation is used.
@@ -54,6 +57,25 @@ parallel semantics and for which we attempt to parallelize.
    when operands have matching dimension and size. The full semantics of
    Numpy broadcast between arrays with mixed dimensionality or size is
    not supported, nor is the reduction across a selected dimension.
+
+Explicit Parallel Loops
+========================
+
+Another experimental feature of this module is support for explicit parallel
+loops. One can use Numba's ``prange`` instead of ``range`` to specify that a
+loop can be parallelized. The user is required to make sure that the loop does
+not have cross iteration dependencies except the supported reductions.
+Currently, reductions on scalar values are supported and are inferred from
+in-place operations. The example below demonstrates a parallel loop with a
+reduction (``A`` is a one-dimensional Numpy array)::
+
+    from numba import njit, prange
+    @njit(parallel=True)
+    def prange_test(A):
+        s = 0
+        for i in prange(A.shape[0]):
+            s += A[i]
+        return s
 
 Examples
 ========

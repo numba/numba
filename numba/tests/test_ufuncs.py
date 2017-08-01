@@ -1531,10 +1531,24 @@ class TestLoopTypesIntNoPython(_LoopTypesTester):
     _ufuncs.remove(np.reciprocal)
     _ufuncs.remove(np.left_shift) # has its own test class
     _ufuncs.remove(np.right_shift) # has its own test class
+    # special test for bool subtract/negative, np1.13 deprecated/not supported
+    _ufuncs.remove(np.subtract)
+    _ufuncs.remove(np.negative)
     _required_types = '?bBhHiIlLqQ'
     _skip_types = 'fdFDmMO' + _LoopTypesTester._skip_types
 
 TestLoopTypesIntNoPython.autogenerate()
+
+
+class TestLoopTypesSubtractAndNegativeNoPython(_LoopTypesTester):
+    _compile_flags = no_pyobj_flags
+    _ufuncs = [np.subtract, np.negative]
+    _required_types = '?bBhHiIlLqQfdFD'
+    _skip_types = 'mMO' + _LoopTypesTester._skip_types
+    if after_numpy_112: # np1.13 deprecated/not supported
+        _skip_types += '?'
+
+TestLoopTypesSubtractAndNegativeNoPython.autogenerate()
 
 
 class TestLoopTypesReciprocalNoPython(_LoopTypesTester):

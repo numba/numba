@@ -4,7 +4,7 @@ import itertools
 
 import numpy as np
 
-from numba import types
+from numba import types, prange
 
 from numba.utils import PYVERSION, RANGE_ITER_OBJECTS, operator_map
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
@@ -28,17 +28,9 @@ class Print(AbstractTemplate):
 class PrintItem(AbstractTemplate):
     key = "print_item"
 
-    def is_accepted_type(self, ty):
-        if isinstance(ty, (types.Array, types.Record)):
-            # These types require an environment to serialize back to a
-            # Python object.
-            return False
-        return True
-
     def generic(self, args, kws):
         arg, = args
-        if self.is_accepted_type(arg):
-            return signature(types.none, *args)
+        return signature(types.none, *args)
 
 
 @infer_global(abs)
@@ -85,6 +77,7 @@ class Range(ConcreteTemplate):
 for func in RANGE_ITER_OBJECTS:
     infer_global(func, typing_key=range)(Range)
 
+infer_global(prange, typing_key=prange)(Range)
 
 @infer
 class GetIter(AbstractTemplate):
