@@ -8,7 +8,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import jit, typeof, types
 from numba.compiler import compile_isolated
-from numba.errors import TypingError
+from numba.errors import TypingError, LoweringError
 from numba.numpy_support import (as_dtype, strict_ufunc_typing,
                                  version as numpy_version)
 from .support import TestCase, CompilationCache, MemoryLeak, MemoryLeakMixin, tag
@@ -626,7 +626,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # BAD: with kw axis
         pyfunc = array_sum_kws
         cfunc = jit(nopython=True)(pyfunc)
-        with self.assertRaises(TypingError):
+        with self.assertRaises(LoweringError):
             cfunc(a, axis=1)
 
     def test_cumsum(self):
