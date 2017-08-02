@@ -28,7 +28,7 @@ from numba.errors import RequireConstValue
 
 
 @intrinsic
-def tuple_cstr(tyctx, shape_list, shape_tuple):
+def _create_tuple_result_shape(tyctx, shape_list, shape_tuple):
     """
     This routine converts shape list where the axis dimension has already
     been popped to a tuple for indexing of the same size.  The original shape 
@@ -69,7 +69,7 @@ def tuple_cstr(tyctx, shape_list, shape_tuple):
     return funtion_sig, codegen
 
 @intrinsic
-def gen_index_tuple(tyctx, shape_tuple, value, axis):
+def _gen_index_tuple(tyctx, shape_tuple, value, axis):
     """
     Generates a tuple that can be used to index a specific slice from an
     array for sum with axis.  shape_tuple is the size of the dimensions of
@@ -194,7 +194,7 @@ def array_sum_axis(context, builder, sig, args):
         # Remove the axis dimension from the list of dimensional lengths.
         ashape.pop(axis)
         # Convert this shape list back to a tuple using above intrinsic.
-        ashape_without_axis = tuple_cstr(ashape, arr.shape)
+        ashape_without_axis = _create_tuple_result_shape(ashape, arr.shape)
         # Tuple needed here to create output array with correct size.
         result = np.full(ashape_without_axis, zero, type(zero))
 
@@ -204,26 +204,26 @@ def array_sum_axis(context, builder, sig, args):
             # The tuple is ":" in all dimensions except the axis
             # dimension where it is "axis_index".
             if axis == 0:
-                index_tuple1 = gen_index_tuple(arr.shape, axis_index, 0)
+                index_tuple1 = _gen_index_tuple(arr.shape, axis_index, 0)
                 result += arr[index_tuple1]
             elif axis == 1:
-                index_tuple2 = gen_index_tuple(arr.shape, axis_index, 1)
+                index_tuple2 = _gen_index_tuple(arr.shape, axis_index, 1)
                 result += arr[index_tuple2]
             elif axis == 2:
-                index_tuple3 = gen_index_tuple(arr.shape, axis_index, 2)
+                index_tuple3 = _gen_index_tuple(arr.shape, axis_index, 2)
                 result += arr[index_tuple3]
             elif axis == 3:
-                index_tuple4 = gen_index_tuple(arr.shape, axis_index, 3)
+                index_tuple4 = _gen_index_tuple(arr.shape, axis_index, 3)
                 result += arr[index_tuple4]
             else:
-                raise ValueError("Numba does not support sum with axis parameter for arrays larger than 4 dimensions.")
+                raise ValueError("Numba does not support sum with axis \
+                         parameter for arrays larger than 4 dimensions.")
 
         return result
 
     res = context.compile_internal(builder, array_sum_impl_axis, sig, args,
-            locals=dict(result=sig.return_type, 
-                        ashape_without_axis=types.UniTuple(types.intp, ndim)))
-    return impl_ret_borrowed(context, builder, sig.return_type, res)
+            locals=dict(result=sig.return_type))
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @lower_builtin(np.prod, types.Array)
 @lower_builtin("array.prod", types.Array)
