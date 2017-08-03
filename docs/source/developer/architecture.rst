@@ -365,7 +365,7 @@ types, language features, or functions are used in the function body.
 
 .. _`rewrite-typed-ir`:
 
-Stage 6: Rewrite typed IR
+Stage 6a: Rewrite typed IR
 -------------------------
 
 This pass's purpose is to perform any high-level optimizations that still
@@ -430,6 +430,51 @@ Following this rewrite, Numba lowers the array expression into a new
 ufunc-like function that is inlined into a single loop that only
 allocates a single result array.
 
+
+.. _`parallel-accelerator`:
+
+Stage 6b: Perform Automatic Parallelization
+-------------------------------------------
+
+This pass is only performed if the parallel option in the :func:`~numba.jit`
+decorator is set to True.  This pass find parallelism implicit in the 
+semantics of operations in the Numba IR and replaces those operations
+with explicitly parallel representations of those operations using a
+special `parfor` operator.  Then, optimizations are performed to maximize
+the number of parfors that are adjacent to each other such that they can
+then be fused together into one parfor that takes only one pass over the
+data and will thus typically have better cache performance.  Finally,
+during lowering, these parfor operators are converted to a form similar
+to guvectorize to implement the actual parallelism.  All these processes
+are described in more detail in the following paragraphs.
+
+The automatic parallelization pass has a number of sub-passes.
+1) CFG simplification - Sometimes Numba IR will contain chains of blocks
+containing no loops which are merged in this sub-pass into single blocks.
+This sub-pass simplifies subsequent analysis of the IR.
+2) Numpy canonicalization - Some Numpy operations can be written as
+operations on Numpy objects (e.g., arr.sum()), or as calls to Numpy
+taking those objects (e.g., numpy.sum(arr)).  This sub-pass converts all
+such operations to the latter form for cleaner subsequent analysis.
+3) Array analysis - A critical requirement for later parfor fusion is that 
+parfors have identical iteration spaces and these iteration spaces
+typically correspond to the sizes of the dimensions of Numpy arrays.
+In this sub-pass, the IR is analyzed to determine equivalence classes for
+the dimensions of Numpy arrays.  Consider the example, a = b + 1, where `a`
+and `b` are both Numpy arrays.  Here, we know that each dimension of `a` 
+must have the same equivalence class as the corresponding dimension of `b`.
+Typically, routines rich in Numpy operations will enable equivalence classes
+to be fully known for all arrays created within a function.
+4) prange to parfor - The use of prange in a for loop is an explicit
+indication from the programmer that all iterations of the for loop can
+execute in parallel.  In this sub-pass, we convert loops in the IR
+controlled by prange to the explicit `parfor` operator.  Each explicit
+parfor operator consists of a) loop nest information that describes the 
+iteration space of the parfor, b) an init block which contains instructions
+to be executed one time before the parfor begins executing, c) the loop
+body, i.e., the instructions to execute to compute one point in the
+iteration space, and d) the index variables used for each dimension of the
+iteration space.
 
 Stage 7a: Generate nopython LLVM IR
 -----------------------------------
