@@ -88,6 +88,11 @@ These variables influence what is printed out during compilation of
    its CPython-compatible wrapper (whose name begins with ``wrapper.``).
    Note that the function is often inlined inside the wrapper, as well.
 
+.. envvar:: NUMBA_DEBUG_ARRAY_OPT
+
+   Dump debugging information related to the processing associated with
+   the parallel=True jit decorator option.
+
 .. envvar:: NUMBA_DUMP_ASSEMBLY
 
    Dump the native assembler code of compiled functions.
