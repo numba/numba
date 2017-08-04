@@ -692,14 +692,17 @@ dedicated to a given dimension of the full iteration space is roughly
 proportional to the ratio of the size of the given dimension to the sum
 of the sizes of all the dimensions of the iteration space.
 
-Parallel reductions are not natively provided by GUFuncs but our parfor
+Parallel reductions are not natively provided by GUFuncs but the parfor
 lowering strategy allows us to use GUFuncs in a way that reductions can
 be performed in parallel.  To accomplish this, for each reduction variable
 computed by a parfor, the parallel GUFunc and the code that calls it is
 modified to make the scalar reduction variable into an array of reduction
-variable whose length is equal to the number of Numba threads.  In this
-way, each Numba thread makes modifications to its own copy of the 
-reduction variable in the parfor body.  Code is inserted into the main
+variable whose length is equal to the number of Numba threads.  In addition,
+the GUFunc still contains a scalar version of the reduction variable that
+is updated by the parfor body during each iteration.  One time at the 
+end of the GUFunc this local reduction variable is copied into the 
+reduction array.  In this way, false sharing of the reduction array is 
+prevented.  Code is also inserted into the main
 function after the parallel GUFunc has returned that does a reduction
 across this smaller reduction array and this final reduction value is
 then stored into the original scalar reduction variable.
