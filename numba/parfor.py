@@ -1673,14 +1673,22 @@ def fuse_parfors(array_analysis, blocks):
                     if fused_node is not None:
                         fusion_happened = True
                         new_body.append(fused_node)
+                        fuse_recursive_parfor(fused_node)
                         i += 2
                         continue
                 new_body.append(stmt)
+                if isinstance(stmt, Parfor):
+                    fuse_recursive_parfor(stmt)
                 i += 1
             new_body.append(block.body[-1])
             block.body = new_body
     return
 
+def fuse_recursive_parfor(parfor):
+    blocks = wrap_parfor_blocks(parfor)
+    maximize_fusion(blocks)
+    fuse_parfors(blocks)
+    unwrap_parfor_blocks(parfor)
 
 def try_fuse(equiv_set, parfor1, parfor2):
     """try to fuse parfors and return a fused parfor, otherwise return None
