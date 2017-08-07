@@ -3347,6 +3347,64 @@ def numpy_diag_kwarg(context, builder, sig, args):
 
     res = context.compile_internal(builder, diag_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
+ 
+@lower_builtin(np.take, types.Array, types.Integer)
+@lower_builtin('array.take', types.Array, types.Integer)
+def numpy_take_1(context, builder, sig, args):
+
+    def take_impl(a, indices):
+        if indices > (a.size - 1) or indices < -a.size:
+            raise IndexError("Index out of bounds")
+        return a.ravel()[np.int(indices)]
+
+    res = context.compile_internal(builder, take_impl, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+@lower_builtin('array.take', types.Array, types.Array)
+@lower_builtin(np.take, types.Array, types.Array)
+def numpy_take_2(context, builder, sig, args):
+
+    F_order = sig.args[1].layout == 'F'
+
+    def take_impl(a, indices):
+        ret = np.empty(indices.size, dtype=a.dtype)
+        if F_order:
+            walker = indices.copy() # get C order
+        else:
+            walker = indices
+        it = np.nditer(walker)
+        i = 0
+        flat = a.ravel()
+        for x in it:
+            if x > (a.size - 1) or x < -a.size:
+                raise IndexError("Index out of bounds")
+            ret[i] = flat[x]
+            i = i + 1
+        return ret.reshape(indices.shape)
+
+    res = context.compile_internal(builder, take_impl, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+@lower_builtin('array.take', types.Array, types.List)
+@lower_builtin(np.take, types.Array, types.List)
+def numpy_take_3(context, builder, sig, args):
+
+    def take_impl(a, indices):
+        convert = np.array(indices)
+        ret = np.empty(convert.size, dtype=a.dtype)
+        it = np.nditer(convert)
+        i = 0
+        flat = a.ravel()
+        for x in it:
+            if x > (a.size - 1) or x < -a.size:
+                raise IndexError("Index out of bounds")
+            ret[i] = flat[x]
+            i = i + 1
+        return ret.reshape(convert.shape)
+    
+    res = context.compile_internal(builder, take_impl, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
+
 
 @lower_builtin(np.arange, types.Number)
 def numpy_arange_1(context, builder, sig, args):
