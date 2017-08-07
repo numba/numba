@@ -6,6 +6,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba import types, jit, typeof
+from numba.errors import TypingError
 from .support import MemoryLeakMixin, TestCase, tag
 
 
@@ -15,6 +16,11 @@ def getitem_usecase(a, b):
 def setitem_usecase(a, idx, b):
     a[idx] = b
 
+def np_take(A, indices):
+    return np.take(A, indices)
+
+def np_take_kws(A, indices, axis):
+    return np.take(A, indices, axis=axis)
 
 class TestFancyIndexing(MemoryLeakMixin, TestCase):
 
@@ -161,6 +167,61 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         arr = np.arange(N ** ndim).reshape((N,) * ndim).astype(np.int32) + 10
         indices = self.generate_advanced_indices(N)
         self.check_setitem_indices(arr, indices)
+
+
+    def test_np_take(self):
+        # shorter version of array.take test in test_array_methods
+        pyfunc = np_take
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(arr, ind):
+            expected = pyfunc(arr, ind)
+            got = cfunc(arr, ind)
+            self.assertPreciseEqual(expected, got)
+            if hasattr(expected, 'order'):
+                self.assertEqual(expected.order == got.order)
+
+        # need to check:
+        # 1. scalar index
+        # 2. 1d array index
+        # 3. nd array index
+        # 4. reflected list
+        
+        test_indices = []
+        test_indices.append(1)
+        test_indices.append(np.array([1, 5, 1, 11, 3]))
+        test_indices.append(np.array([[[1], [5]], [[1], [11]]]))
+        test_indices.append([1, 5, 1, 11, 3])
+    
+        for dt in [np.int64, np.complex128]:
+            A = np.arange(12, dtype=dt).reshape((4, 3))
+            for ind in test_indices:
+                check(A, ind)
+
+        #check illegal access raises
+        szA = A.size
+        illegal_indices = [szA, -szA - 1, np.array(szA), np.array(-szA - 1),
+                           [szA], [-szA - 1]]
+        for x in illegal_indices:
+            with self.assertRaises(IndexError):
+                cfunc(A, x) # oob raises
+
+        # check float indexing raises
+        with self.assertRaises(TypingError):
+            cfunc(A, [1.7])
+       
+        # check unsupported arg raises
+        with self.assertRaises(TypingError):
+            take_kws = jit(nopython=True)(np_take_kws)
+            take_kws(A, 1, 1)
+
+        # check kwarg unsupported raises
+        with self.assertRaises(TypingError):
+            take_kws = jit(nopython=True)(np_take_kws)
+            take_kws(A, 1, axis=1)
+
+        #exceptions leak refs
+        self.disable_leak_check()
 
 
 if __name__ == '__main__':

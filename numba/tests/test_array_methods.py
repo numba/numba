@@ -1,6 +1,6 @@
 from __future__ import division
 
-from itertools import product
+from itertools import product, cycle
 import sys
 
 import numpy as np
@@ -75,6 +75,13 @@ def np_asfortranarray(arr):
 
 def array_view(arr, newtype):
     return arr.view(newtype)
+
+def array_take(arr, indices):
+    return arr.take(indices)
+
+def array_take_kws(arr, indices, axis):
+    return arr.take(indices, axis=axis)
+
 
 # XXX Can't pass a dtype as a Dispatcher argument for now
 def make_array_view(newtype):
@@ -644,6 +651,68 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         with self.assertRaises(TypingError):
             cfunc(a, axis=1)
+
+
+    def test_take(self):
+        pyfunc = array_take
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(arr, ind):
+            expected = pyfunc(arr, ind)
+            got = cfunc(arr, ind)
+            self.assertPreciseEqual(expected, got)
+            if hasattr(expected, 'order'):
+                self.assertEqual(expected.order == got.order)
+
+        # need to check:
+        # 1. scalar index
+        # 2. 1d array index
+        # 3. nd array index, >2d and F order
+        # 4. reflected list
+        
+        test_indices = []
+        test_indices.append(1)
+        test_indices.append(5)
+        test_indices.append(11)
+        test_indices.append(-2)
+        test_indices.append(np.array([1, 5, 1, 11, 3]))
+        test_indices.append(np.array([[1, 5, 1], [11, 3, 0]], order='F'))
+        test_indices.append(np.array([[[1, 5, 1], [11, 3, 0]]]))
+        test_indices.append(np.array([[[[1, 5]], [[11, 0]],[[1, 2]]]]))
+        test_indices.append([1, 5, 1, 11, 3])
+    
+        layouts = cycle(['C', 'F', 'A'])
+
+        for dt in [np.float64, np.int64, np.complex128]:
+            A = np.arange(12, dtype=dt).reshape((4, 3), order=next(layouts))
+            for ind in test_indices:
+                check(A, ind)
+
+        #check illegal access raises
+        A = np.arange(12, dtype=dt).reshape((4, 3), order=next(layouts))
+        szA = A.size
+        illegal_indices = [szA, -szA - 1, np.array(szA), np.array(-szA - 1),
+                           [szA], [-szA - 1]]
+        for x in illegal_indices:
+            with self.assertRaises(IndexError):
+                cfunc(A, x) # oob raises
+
+        # check float indexing raises
+        with self.assertRaises(TypingError):
+            cfunc(A, [1.7])
+       
+        # check unsupported arg raises
+        with self.assertRaises(TypingError):
+            take_kws = jit(nopython=True)(array_take_kws)
+            take_kws(A, 1, 1)
+
+        # check kwarg unsupported raises
+        with self.assertRaises(TypingError):
+            take_kws = jit(nopython=True)(array_take_kws)
+            take_kws(A, 1, axis=1)
+
+        #exceptions leak refs
+        self.disable_leak_check()
 
 
 class TestArrayComparisons(TestCase):

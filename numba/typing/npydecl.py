@@ -1173,6 +1173,22 @@ class DiagCtor(CallableTemplate):
         return typer
 
 
+@infer_global(np.take)
+class Take(AbstractTemplate):
+
+    def generic(self, args, kws):
+        assert not kws
+        assert len(args) == 2
+        arr, ind = args
+        if isinstance(ind, types.Number):
+            retty = arr.dtype
+        elif isinstance(ind, types.Array):
+            retty = types.Array(ndim=ind.ndim, dtype=arr.dtype, layout='C')
+        elif isinstance(ind, types.List):
+            retty = types.Array(ndim=1, dtype=arr.dtype, layout='C')
+
+        return signature(retty, *args)
+
 # -----------------------------------------------------------------------------
 # Numba helpers
 
