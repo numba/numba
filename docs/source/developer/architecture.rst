@@ -366,7 +366,7 @@ types, language features, or functions are used in the function body.
 .. _`rewrite-typed-ir`:
 
 Stage 6a: Rewrite typed IR
--------------------------
+--------------------------
 
 This pass's purpose is to perform any high-level optimizations that still
 require, or could at least benefit from, Numba IR type information.
