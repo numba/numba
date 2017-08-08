@@ -755,7 +755,7 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, ext_func, ext_data,
         var_dict = {l: name_var_table[r] for l, r in in_copies[label]}
         # assignments as dict to replace with latest value
         for stmt in block.body:
-            ext_func(stmt, var_dict, ext_data)
+            ext_func(label, stmt, var_dict, ext_data)
             if type(stmt) in apply_copy_propagate_extensions:
                 f = apply_copy_propagate_extensions[type(stmt)]
                 f(stmt, var_dict, name_var_table, ext_func, ext_data,
@@ -830,11 +830,12 @@ def dprint_func_ir(func_ir, title):
         print("-" * 40)
 
 
-def find_topo_order(blocks):
+def find_topo_order(blocks, cfg = None):
     """find topological order of blocks such that true branches are visited
     first (e.g. for_break test in test_dataflow).
     """
-    cfg = compute_cfg_from_blocks(blocks)
+    if cfg == None:
+        cfg = compute_cfg_from_blocks(blocks)
     post_order = []
     seen = set()
 
@@ -1117,3 +1118,86 @@ def simplify(func_ir, typemap, array_analysis, calltypes, update_analysis):
     remove_dead(func_ir.blocks, func_ir.arg_names, typemap)
     if config.DEBUG_ARRAY_OPT == 1:
         dprint_func_ir(func_ir, "after simplify")
+
+class GuardException(Exception):
+    pass
+
+def require(cond):
+    """
+    Raise GuardException if the given condition is False.
+    """
+    if not cond:
+       raise GuardException
+
+def guard(func, *args):
+    """
+    Run a function with given set of arguments, and guard against
+    any GuardException raised by the function by returning None,
+    or the expected return results if no such exception was raised.
+    """
+    try:
+        return func(*args)
+    except GuardException:
+        return None
+
+def get_definition(func_ir, name, **kwargs):
+    """
+    Same as func_ir.get_definition(name), but raise GuardException if
+    exception KeyError is caught.
+    """
+    try:
+        return func_ir.get_definition(name, **kwargs)
+    except KeyError:
+        raise GuardException
+
+def find_numpy_call(func_ir, expr, typemap=None):
+    """Check if a call expression is calling a numpy function, and
+    return the callee's function name and module name (both are strings),
+    or raise GuardException. For array attribute calls such as 'a.f(x)'
+    when 'a' is a numpy array, the array variable 'a' is returned
+    in place of the module name.
+    """
+    require(isinstance(expr, ir.Expr) and expr.op == 'call')
+    callee = expr.func
+    callee_def = get_definition(func_ir, callee)
+    attrs = []
+    while True:
+        if isinstance(callee_def, ir.Global):
+            require(callee_def.value == numpy)
+            attrs.append('numpy')
+            break
+        elif isinstance(callee_def, ir.Expr) and callee_def.op == 'getattr':
+            obj = callee_def.value
+            attrs.append(callee_def.attr)
+            if typemap and obj.name in typemap:
+                typ = typemap[obj.name]
+                if isinstance(typ, types.npytypes.Array):
+                    return attrs[0], obj
+            callee_def = get_definition(func_ir, obj)
+        else:
+            raise GuardException
+    return attrs[0], '.'.join(reversed(attrs[1:]))
+
+def find_build_sequence(func_ir, var):
+    """Check if a variable is constructed via build_tuple or
+    build_list or build_set, and return the sequence and the
+    operator, or raise GuardException otherwise.
+    Note: only build_tuple is immutable, so use with care.
+    """
+    require(isinstance(var, ir.Var))
+    var_def = get_definition(func_ir, var)
+    require(isinstance(var_def, ir.Expr))
+    build_ops = ['build_tuple', 'build_list', 'build_set']
+    require(var_def.op in build_ops)
+    return var_def.items, var_def.op
+
+def find_const(func_ir, var):
+    """Check if a variable is defined as constant, and return
+    the constant value, or raise GuardException otherwise.
+    """
+    require(isinstance(var, ir.Var))
+    var_def = get_definition(func_ir, var)
+    require(isinstance(var_def, ir.Const))
+    return var_def.value
+
+
