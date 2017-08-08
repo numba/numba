@@ -10,6 +10,8 @@ from llvmlite import ir as ir
 from numba import cgutils, types
 from .base import PYOBJECT, GENERIC_POINTER
 
+from .. import errors
+
 
 Status = namedtuple("Status",
                     ("code",
@@ -193,6 +195,15 @@ class MinimalCallConv(BaseCallConv):
         if exc_args is not None and not isinstance(exc_args, tuple):
             raise TypeError("exc_args should be None or tuple, got %r"
                             % (exc_args,))
+
+        loc = errors.loc_info.get('loc', None)
+        if loc is not None:
+            loc_line = 'File "%s", line %d, ' % (loc.filename, loc.line)
+            if exc_args is None or len(exc_args) < 1:
+                exc_args = (loc_line,)
+            else:
+                exc_args = ('%s\n%s' % (exc_args[0], loc_line),) + exc_args[1:]
+
         call_helper = self._get_call_helper(builder)
         exc_id = call_helper._add_exception(exc, exc_args)
         self._return_errcode_raw(builder, _const_int(exc_id))
@@ -337,6 +348,15 @@ class CPUCallConv(BaseCallConv):
         if exc_args is not None and not isinstance(exc_args, tuple):
             raise TypeError("exc_args should be None or tuple, got %r"
                             % (exc_args,))
+
+        loc = errors.loc_info.get('loc', None)
+        if loc is not None:
+            loc_line = 'File "%s", line %d, ' % (loc.filename, loc.line)
+            if exc_args is None or len(exc_args) < 1:
+                exc_args = (loc_line,)
+            else:
+                exc_args = ('%s\n%s' % (exc_args[0], loc_line),) + exc_args[1:]
+
         pyapi = self.context.get_python_api(builder)
         # Build excinfo struct
         if exc_args is not None:
