@@ -20,8 +20,6 @@ from ..config import PYVERSION
 from ..numpy_support import ufunc_find_matching_loop, select_array_wrapper
 from ..typing import npydecl
 
-from .. import errors
-
 registry = Registry()
 lower = registry.lower
 
@@ -254,11 +252,6 @@ def _build_array(context, builder, array_ty, input_types, inputs):
                                  builder.icmp(lc.ICMP_SLT, arg_result, ONE)):
             msg = "unable to broadcast argument %d to output array" % (
                 arg_number,)
-
-            loc = errors.loc_info.get('loc', None)
-            if loc is not None:
-                msg += '\nFile "%s", line %d, ' % (loc.filename, loc.line)
-
             context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
     real_array_ty = array_ty.as_array
