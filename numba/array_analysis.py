@@ -6,18 +6,29 @@
 from __future__ import print_function, division, absolute_import
 import types as pytypes  # avoid confusion with numba.types
 import numpy
-from numba import ir, analysis, types, config
-from numba.ir_utils import (mk_unique_var, replace_vars_inner, find_topo_order,
-                            dprint_func_ir)
-from numba.typing import npydecl
+from numba import ir, analysis, types, config, cgutils, typing
+from numba.ir_utils import (
+    mk_unique_var,
+    replace_vars_inner,
+    find_topo_order,
+    dprint_func_ir,
+    get_global_func_typ,
+    guard,
+    require,
+    get_definition,
+    find_numpy_call,
+    find_build_sequence,
+    find_const)
+from numba.analysis import (compute_cfg_from_blocks)
+from numba.typing import npydecl, signature
 import collections
 import copy
+from numba.extending import intrinsic
+import llvmlite.llvmpy.core as lc
 
 UNKNOWN_CLASS = -1
 CONST_CLASS = 0
 MAP_TYPES = [numpy.ufunc]
-
-array_analysis_extensions = {}
 
 # declaring call classes
 array_creation = ['empty', 'zeros', 'ones', 'full']
@@ -41,785 +52,954 @@ random_calls = (random_int_args +
                 random_3arg_sizelast +
                 ['random.randint', 'random.triangular'])
 
+@intrinsic
+def assert_equiv(typingctx, *val):
+    """
+    A function that asserts the inputs are of equivalent size,
+    and throws runtime error when they are not. The input is a vararg
+    of either array, tuple or integer.
+    """
+    # Arguments must be either array, tuple, or integer
+    assert all(map(lambda a: (isinstance(a, types.ArrayCompatible) or
+                             isinstance(a, types.BaseTuple) or
+                             isinstance(a, types.Integer)), val))
+
+    def codegen(context, builder, sig, args):
+        def unpack_shapes(a, aty):
+            if isinstance(aty, types.ArrayCompatible):
+                ary = context.make_array(aty)(context, builder, a)
+                return cgutils.unpack_tuple(builder, ary.shape)
+            elif isinstance(aty, types.BaseTuple):
+                return cgutils.unpack_tuple(builder, a)
+            else: # otherwise it is a single integer
+                return [a]
+
+        def pairwise(a, aty, b, bty):
+            ashapes = unpack_shapes(a, aty)
+            bshapes = unpack_shapes(b, bty)
+            assert len(ashapes) == len(bshapes)
+            for (m, n) in zip(ashapes, bshapes):
+                m_eq_n = builder.icmp(lc.ICMP_EQ, m, n)
+                with builder.if_else(m_eq_n) as (then, orelse):
+                    with then:
+                        pass
+                    with orelse:
+                        context.call_conv.return_user_exc(
+                            builder, AssertionError, None)
+
+        assert(len(args) == 1) # it is a vararg tuple
+        tup = cgutils.unpack_tuple(builder, args[0])
+        tup_type = sig.args[0]
+        for i in range(len(tup_type) - 1):
+            pairwise(tup[i], tup_type[i], tup[i+1], tup_type[i+1])
+        r = context.get_constant_generic(builder, types.NoneType, None)
+        return r
+    return signature(types.none, *val), codegen
+
+
+class EquivSet(object):
+    """EquivSet keeps track of equivalence relations between
+    a set of objects.
+    """
+    def __init__(self, obj_to_ind = None, ind_to_obj = None, next_ind = 0):
+        if obj_to_ind == None:
+            obj_to_ind = {}
+        if ind_to_obj == None:
+            ind_to_obj = {}
+        self.obj_to_ind = obj_to_ind # object to index mapping
+        self.ind_to_obj = ind_to_obj # index to objects mapping
+        self.next_ind = 0
+
+    def empty(self):
+        return EquivSet()
+
+    def clone(self):
+        """Return a new copy.
+        """
+        return EquivSet(obj_to_ind = copy.deepcopy(self.obj_to_ind),
+                        ind_to_obj = copy.deepcopy(self.ind_to_obj),
+                        next_id = self.next_ind)
+
+    def __repr__(self):
+        return "EquivSet({}, {})".format(self.ind_to_obj, self.obj_to_ind)
+
+    def is_empty(self):
+        """Return true if the set is empty, or false otherwise.
+        """
+        return len(self.obj_to_ind) == 0
+
+    def _get_ind(self, x):
+        """Return the internal index (greater or equal to 0) of the given
+        object, or -1 if not found.
+        """
+        if x in self.obj_to_ind:
+            return self.obj_to_ind[x]
+        return -1
+
+    def _get_or_add_ind(self, x):
+        """Return the internal index (greater or equal to 0) of the given
+        object, or create a new one if not found.
+        """
+        if x in self.obj_to_ind:
+            i = self.obj_to_ind[x]
+        else:
+            i = self.next_ind
+            self.next_ind += 1
+        return i
+
+    def _insert(self, objs):
+        """Base method that inserts a set of equivalent objects by modifying
+        self.
+        """
+        assert len(objs) > 1, "insert_equiv needs more than one argument"
+
+        inds = tuple(self._get_or_add_ind(x) for x in objs)
+        ind = min(inds)
+
+        if not (ind in self.ind_to_obj):
+            self.ind_to_obj[ind] = []
+
+        for i, obj in zip(inds, objs):
+            if i == ind:
+                if not (obj in self.ind_to_obj[ind]):
+                    self.ind_to_obj[ind].append(obj)
+                    self.obj_to_ind[obj] = ind
+            else:
+                if i in self.ind_to_obj:
+                    # those already existed are reassigned
+                    for x in self.ind_to_obj[i]:
+                        self.obj_to_ind[x] = ind
+                        self.ind_to_obj[ind].append(x)
+                    del self.ind_to_obj[i]
+                else:
+                    # those that are new are assigned.
+                    self.obj_to_ind[obj] = ind
+                    self.ind_to_obj[ind].append(obj)
+
+    def is_equiv(self, *objs):
+        """Try to derive if given objects are equivalence, return true
+        if so, or false otherwise.
+        """
+        inds = [self._get_ind(x) for x in objs]
+        ind = max(inds)
+        return ind != -1 and all(i == ind for i in inds)
+
+    def get_equiv_const(self, obj):
+        """Check if obj is equivalent to some int constant, and return
+        the constant if found, or None otherwise.
+        """
+        ind = self._get_ind(obj)
+        if ind >= 0:
+            objs = self.ind_to_obj[ind]
+            for x in objs:
+                if isinstance(x, int):
+                    return x
+        return None
+
+    def insert_equiv(self, *objs):
+        """Insert a set of equivalent objects by modifying self. This
+        method can be overloaded to transform object type before insertion.
+        """
+        self._insert(objs)
+
+    def intersect(self, equiv_set):
+        """ Return the intersection of self and the given equiv_set,
+        without modifying either of them.
+        """
+        new_set = self.empty()
+
+        for objs in equiv_set.ind_to_obj.values():
+            inds = tuple(self._get_ind(x) for x in objs)
+            ind_to_obj = {}
+
+            for i, x in zip(inds, objs):
+                if i in ind_to_obj:
+                    ind_to_obj[i].append(x)
+                elif i >= 0:
+                    ind_to_obj[i] = [x]
+
+            for k, v in ind_to_obj.items():
+                if len(v) > 1:
+                    new_set._insert(v)
+
+        return new_set
+
+
+class ShapeEquivSet(EquivSet):
+    """Just like EquivSet, except that it accepts only numba IR variables
+    and constants as objects, guided by their types. Arrays are considered
+    equivalence as long as their shapes are equivalent. Tuples or scalars
+    are considered equivalent only when they are equal in value.
+    """
+    def __init__(self, typemap, shapedef, obj_to_ind = None,
+                 ind_to_obj = None, next_id = 0):
+        self.typemap = typemap
+        self.shapedef = shapedef
+        super(ShapeEquivSet, self).__init__(obj_to_ind, ind_to_obj, next_id)
+
+    def empty(self):
+        return ShapeEquivSet(self.typemap, {})
+
+    def clone(self):
+        """Return a new copy.
+        """
+        return ShapeEquivSet(
+                   self.typemap, copy.copy(self.shapedef),
+                   obj_to_ind = copy.deepcopy(self.obj_to_ind),
+                   ind_to_obj = copy.deepcopy(self.ind_to_obj),
+                   next_id = self.next_ind)
+
+    def __repr__(self):
+        return "EquivSet({}, shapedef={})".format(self.ind_to_obj, self.obj_to_ind,
+                                                  self.shapedef)
+
+    def _get_names(self, obj):
+        """Returns a set of names for the given obj, where array and tuples
+        are broken down to their individual shapes or elements. This is
+        safe because both Numba array shapes and Python tuples are immutable.
+        """
+        if isinstance(obj, ir.Var) or isinstance(obj, str):
+            name = obj if isinstance(obj, str) else obj.name
+            typ = self.typemap[name]
+            if isinstance(typ, types.ArrayCompatible):
+                return tuple("{}#{}".format(name, i) for i in range(typ.ndim))
+            elif isinstance(typ, types.BaseTuple):
+                return tuple("{}#{}".format(name, i) for i in range(len(typ)))
+            else:
+                return (name,)
+        elif isinstance(obj, ir.Const):
+            if isinstance(obj.value, tuple):
+                return obj.value
+            else:
+                return (obj.value,)
+        elif isinstance(obj, tuple):
+            return tuple(self._get_names(x)[0] for x in obj)
+        elif isinstance(obj, int):
+            return (obj,)
+        else:
+            raise NotImplementedError(
+                      "ShapeEquivSet does not support {}".format(obj))
+
+    def is_equiv(self, *objs):
+        """Overload EquivSet.is_equiv to handle Numba IR variables and
+        constants.
+        """
+        assert(len(objs) > 1)
+        obj_names = [self._get_names(x) for x in objs]
+        ndims = [len(names) for names in obj_names]
+        ndim = ndims[0]
+        assert all(ndim == x for x in ndims), (
+               "Dimension mismatch for {}".format(objs))
+        for i in range(ndim):
+            names = [ obj_name[i] for obj_name in obj_names ]
+            if not super(ShapeEquivSet, self).is_equiv(*names):
+                return False
+        return True
+
+    def get_equiv_const(self, obj):
+        names = self._get_names(obj)
+        if len(names) > 1:
+            return None
+        return super(ShapeEquivSet, self).get_equiv_const(names[0])
+
+    def insert_equiv(self, *objs):
+        """Overload EquivSet.insert_equiv to handle Numba IR variables and
+        constants.
+        """
+        assert(len(objs) > 1)
+        obj_names = [self._get_names(x) for x in objs]
+        ndims = [len(names) for names in obj_names]
+        ndim = ndims[0]
+        assert all(ndim == x for x in ndims), (
+               "Dimension mismatch for {}".format(objs))
+        for i in range(ndim):
+            names = [ obj_name[i] for obj_name in obj_names ]
+            super(ShapeEquivSet, self).insert_equiv(*names)
+
+    def set_shape(self, name, shape):
+        """Remember the shape for the given var. A shape is either a tuple
+        of scalar constants or variables, or a variable of either Array or
+        Tuple type.
+        """
+        if isinstance(name, ir.Var):
+            name = name.name
+        assert (not (name in self.shapedef))
+        while isinstance(shape, ir.Var) and shape.name in self.shapedef:
+           shape = self.shapedef[shape.name]
+        self.shapedef[name] = shape
+
+    def has_shape(self, name):
+        """Return true if the shape of the given variable is available.
+        """
+        if isinstance(name, ir.Var):
+            name = name.name
+        return name in self.shapedef
+
+    def get_shape(self, name):
+        """Return a tuple of variables that corresponds to the shape
+        of the given array.
+        """
+        if isinstance(name, ir.Var):
+            name = name.name
+        return self.shapedef[name]
+
+    def get_shape_classes(self, name):
+        """Instead of the shape tuple, return tuple of int, where
+        each int is the corresponding class index of the size object.
+        """
+        if isinstance(name, ir.Var):
+            name = name.name
+        next_ind = self.next_ind
+        if name in self.shapedef:
+            ndim = len(self.shapedef[name])
+            shape_names = ("{}#{}".format(name, i) for i in range(ndim))
+            classes = []
+            for shape_name in shape_names:
+                if shape_name in self.obj_to_ind:
+                    classes.append(self.obj_to_ind[shape_name])
+                else:
+                    classes.append(next_ind)
+                    next_ind += 1
+            return tuple(classes)
+        else:
+            return None
+
+    def intersect(self, equiv_set):
+        """Override the intersect method to handle shape definitions
+        during an intersection computation.
+        """
+        newset = super(ShapeEquivSet, self).intersect(equiv_set)
+        # prune shapedef
+        shapedef = copy.copy(self.shapedef)
+        for name in list(shapedef.keys()):
+            if (name in equiv_set.shapedef and
+                equiv_set.shapedef[name] == shapedef[name]):
+                continue
+            del shapedef[name]
+        newset.shapedef = shapedef
+        return newset
 
 class ArrayAnalysis(object):
-    """Analyzes Numpy array computations for properties such as shapes
-    and equivalence classes.
+    """Analyzes Numpy array computations for properties such as
+    shape/size equivalence, and keep track of them on a per-block
+    basis. The analysis should only be run once because it modifies
+    the incoming IR by inserting assertion statements that safeguard
+    parfor optimizations.
     """
 
-    def __init__(self, func_ir, typemap, calltypes):
+    def __init__(self, context, func_ir, typemap, calltypes):
+        self.context = context
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
-        self.next_eq_class = 1
-        # array_shape_classes saves dimension size information for all arrays
-        # each array dimension is mapped to a size equivalence class
-        # for example, {'A':[1,2], 'B':[3,2]} means second dimensions of
-        #   A and B have the same size.
-        # format: variable name to list of class numbers
-        self.array_shape_classes = collections.OrderedDict()
-        # class_sizes saves constants or variables that represent the size of
-        #   an equivalence class
-        # For example, {1:[n,a],2:[3]} means variabes n and a contain size for
-        #   class 1, while size for class 2 is constant 3.
-        # class CONST_CLASS is special and represents size 1 for constants
-        #    and added broadcast dimensions
-        # UNKNOWN_CLASS class means size might not be constant
-        self.class_sizes = {CONST_CLASS: [1], UNKNOWN_CLASS: []}
-        # size variable to use for each array dimension
-        self.array_size_vars = {}
-        # keep a list of numpy Global variables to find numpy calls
-        self.numpy_globals = []
-        # calls that are essentially maps like DUFunc
-        self.map_calls = []
-        # keep numpy call variables with their call names
-        self.numpy_calls = {}
+
+        # EquivSet of variables, indexed by block number
+        self.equiv_sets = {}
         # keep attr calls to arrays like t=A.sum() as {t:('sum',A)}
         self.array_attr_calls = {}
-        # keep tuple builds like {'t':[a,b],}
-        self.tuple_table = {}
-        self.list_table = {}
-        self.constant_table = {}
+
+    def is_equiv(self, block_label, var1, var2):
+        equiv_set = self.equiv_sets[block_label]
+        equiv_set.is_equiv(var1, var2)
+
+    def get_shape_definition(self, block_label, var):
+        equiv_set = self.equiv_sets[block_label]
+        return equiv_set.get_shape(var)
+
+    def get_shape_classes(self, block_label, var):
+        equiv_set = self.equiv_sets[block_label]
+        return equiv_set.get_shape_classes(var)
 
     def run(self):
-        """run array shape analysis on the IR and save information in
-        array_shape_classes, class_sizes, and array_size_vars (see __init__
-        comments). May generate some array shape calls if necessary.
+        """run array shape analysis on the IR, resulting in modified IR
+        and finalized EquivSet for each block.
         """
-        dprint_func_ir(self.func_ir, "starting array analysis")
+        dprint_func_ir(self.func_ir, "before array analysis")
         if config.DEBUG_ARRAY_OPT == 1:
             print("variable types: ", sorted(self.typemap.items()))
             print("call types: ", self.calltypes)
-        topo_order = find_topo_order(self.func_ir.blocks)
-        for label in topo_order:
-            self._analyze_block(self.func_ir.blocks[label])
 
-        self._merge_equivalent_classes()
-        self._cleanup_analysis_data()
+        blocks = self.func_ir.blocks
+        cfg = compute_cfg_from_blocks(blocks)
+        topo_order = find_topo_order(blocks, cfg=cfg)
+        # Traverse blocks in topological order
+        for label in topo_order:
+            block = blocks[label]
+            scope = block.scope
+            new_body = []
+            equiv_set = None
+            # equiv_set is the intersection of predecessors
+            preds = cfg.predecessors(label)
+            for (p, q) in preds:
+                if p in self.equiv_sets:
+                    if equiv_set == None:
+                        equiv_set = self.equiv_sets[p].clone()
+                    else:
+                        equiv_set = equiv_set.intersect(self.equiv_sets[p])
+            # Use a new equiv_set when there is no predecessor
+            if equiv_set == None:
+                equiv_set = ShapeEquivSet(self.typemap, {})
+            self.equiv_sets[label] = equiv_set
+            # Go through instructions in a block, and insert pre/post
+            # instructions as we analyze them.
+            for inst in block.body:
+                pre, post = self._analyze_inst(scope, equiv_set, inst)
+                for instr in pre:
+                    new_body.append(instr)
+                new_body.append(inst)
+                for instr in post:
+                    new_body.append(instr)
+            block.body = new_body
 
         if config.DEBUG_ARRAY_OPT == 1:
             self.dump()
+        dprint_func_ir(self.func_ir, "after array analysis")
 
     def dump(self):
-        """dump save shape information and internals for debugging purposes.
+        """dump per-block equivalence sets for debugging purposes.
         """
-        print("array_shape_classes: ", self.array_shape_classes)
-        print("class_sizes: ", self.class_sizes)
-        print("array_size_vars: ", sorted(self.array_size_vars.items()))
-        print("numpy globals ", self.numpy_globals)
-        print("numpy calls ", sorted(self.numpy_calls.items()))
-        print("array attr calls ", self.array_attr_calls)
-        print("tuple table ", self.tuple_table)
+        print("Array Analysis: ", self.equiv_sets)
 
-    def _analyze_block(self, block):
-        out_body = []
-        for inst in block.body:
-            # instructions can generate extra size calls to be appended.
-            # if an array doesn't have a size variable for a dimension,
-            # a size variable should be generated when the array is created
-            generated_size_calls = self._analyze_inst(inst)
-            out_body.append(inst)
-            for node in generated_size_calls:
-                out_body.append(node)
-        block.body = out_body
-
-    def _analyze_inst(self, inst):
+    def _analyze_inst(self, scope, equiv_set, inst):
+        pre = []
+        post = []
         if isinstance(inst, ir.Assign):
-            return self._analyze_assign(inst)
-        elif type(inst) in array_analysis_extensions:
-            # let external calls handle stmt if type matches
-            f = array_analysis_extensions[type(inst)]
-            return f(inst, self)
-        return []
+            shape = None
+            if isinstance(inst.value, ir.Expr):
+                result = self._analyze_expr(scope, equiv_set, inst.value)
+                if result:
+                    (shape, pre, post) = result
+            elif (isinstance(inst.value, ir.Var) or
+                  isinstance(inst.value, ir.Const)):
+                shape = inst.value
 
-    def _analyze_assign(self, assign):
-        lhs = assign.target.name
-        rhs = assign.value
-        if isinstance(rhs, ir.Global):
-            for T in MAP_TYPES:
-                if isinstance(rhs.value, T):
-                    self.map_calls.append(lhs)
-            if isinstance(
-                    rhs.value,
-                    pytypes.ModuleType) and rhs.value == numpy:
-                self.numpy_globals.append(lhs)
-        if isinstance(rhs, ir.Expr) and rhs.op == 'getattr':
-            if rhs.value.name in self.numpy_globals:
-                self.numpy_calls[lhs] = rhs.attr
-            elif rhs.value.name in self.numpy_calls:
-                # numpy submodule call like np.random.ranf
-                # we keep random.ranf as call name
-                self.numpy_calls[lhs] = (self.numpy_calls[rhs.value.name]
-                                         + '.' + rhs.attr)
-            elif self._isarray(rhs.value.name):
-                self.array_attr_calls[lhs] = (rhs.attr, rhs.value)
-        if isinstance(rhs, ir.Expr) and rhs.op == 'build_tuple':
-            self.tuple_table[lhs] = rhs.items
-        if isinstance(rhs, ir.Expr) and rhs.op == 'build_list':
-            self.list_table[lhs] = rhs.items
-        if isinstance(rhs, ir.Const) and isinstance(rhs.value, tuple):
-            self.tuple_table[lhs] = rhs.value
-        if isinstance(rhs, ir.Const):  # and np.isscalar(rhs.value):
-            self.constant_table[lhs] = rhs.value
+            if isinstance(shape, ir.Const):
+                if isinstance(shape.value, tuple):
+                    loc = shape.loc
+                    shape = tuple(ir.Const(x, loc) for x in shape.value)
+                elif isinstance(shape.value, int):
+                    shape = (shape, )
+            elif (isinstance(shape, ir.Var) and
+                  isinstance(self.typemap[shape.name], types.Integer)):
+                shape = (shape,)
 
-        #rhs_class_out = self._analyze_rhs_classes(rhs)
-        size_calls = []
-        if self._isarray(lhs):
-            analyze_out = self._analyze_rhs_classes(rhs)
-            if analyze_out is None:
-                rhs_corr = self._add_array_corr(lhs)
-            else:
-                rhs_corr = copy.copy(analyze_out)
-            if lhs in self.array_shape_classes:
-                # if shape already inferred in another basic block,
-                # make sure this new inference is compatible
-                if self.array_shape_classes[lhs] != rhs_corr:
-                    self.array_shape_classes[lhs] = [-1] * self._get_ndims(lhs)
-                    self.array_size_vars.pop(lhs, None)
-                    if config.DEBUG_ARRAY_OPT == 1:
-                        print("incompatible array shapes in control flow")
-                    return []
-            self.array_shape_classes[lhs] = rhs_corr
-            self.array_size_vars[lhs] = [-1] * self._get_ndims(lhs)
-            # make sure output lhs array has size variables for each dimension
-            for (i, corr) in enumerate(rhs_corr):
-                # if corr unknown or new
-                if corr == -1 or corr not in self.class_sizes.keys():
-                    # generate size call nodes for this dimension
-                    nodes = self._gen_size_call(assign.target, i)
-                    size_calls += nodes
-                    assert isinstance(nodes[-1], ir.Assign)
-                    size_var = nodes[-1].target
-                    if corr != -1:
-                        self.class_sizes[corr] = [size_var]
-                    self.array_size_vars[lhs][i] = size_var
-                else:
-                    # reuse a size variable from this correlation
-                    # TODO: consider CFG?
-                    self.array_size_vars[lhs][i] = self.class_sizes[corr][0]
+            lhs = inst.target
+            typ = self.typemap[lhs.name]
+
+            if isinstance(typ, types.ArrayCompatible):
+                if (shape == None or isinstance(shape, tuple) or
+                    (isinstance(shape, ir.Var) and
+                     not equiv_set.has_shape(shape))):
+                    (shape, post) = self._gen_shape_call(equiv_set, lhs, typ.ndim, shape)
+                equiv_set.set_shape(lhs, shape)
+            elif isinstance(typ, types.UniTuple):
+                if shape and isinstance(typ.dtype, types.Integer):
+                    (shape, post) = self._gen_shape_call(equiv_set, lhs, len(typ), shape)
+                    equiv_set.set_shape(lhs, shape)
+
+            if shape:
+                equiv_set.insert_equiv(lhs, shape)
+
+        return pre, post
+
+    def _analyze_expr(self, scope, equiv_set, expr):
+        fname = "_analyze_op_{}".format(expr.op)
+        try:
+            fn = getattr(self, fname)
+            return guard(fn, scope, equiv_set, expr)
+        except AttributeError:
+            return None
+
+    def _analyze_op_getattr(self, scope, equiv_set, expr):
+        # TODO: getattr of npytypes.Record
+        if expr.attr == 'T':
+            return self._analyze_op_call_numpy_transpose(scope, equiv_set, [expr.value], {})
+        return None
+
+    def _analyze_op_cast(self, scope, equiv_set, expr):
+        return (expr.value, [], [])
+
+    def _analyze_op_unary(self, scope, equiv_set, expr):
+        require(expr.fn in UNARY_MAP_OP)
+        return (expr.value, [], [])
+
+    def _analyze_op_binop(self, scope, equiv_set, expr):
+        require(expr.fn in BINARY_MAP_OP)
+        return self._analyze_broadcast(scope, equiv_set, expr.loc, [expr.lhs, expr.rhs])
+
+    def _analyze_op_inplace_binop(self, scope, equiv_set, expr):
+        require(expr.immutable_fn in BINARY_MAP_OP)
+        return self._analyze_broadcast(scope, equiv_set, expr.loc, [expr.lhs, expr.rhs])
+
+    def _analyze_op_arrayexpr(self, scope, equiv_set, expr):
+        return self._analyze_broadcast(scope, equiv_set, expr.loc, expr.list_vars())
+
+    def _analyze_op_build_tuple(self, scope, equiv_set, expr):
+        return (tuple(expr.items), [], [])
+
+    def _analyze_op_call(self, scope, equiv_set, expr):
+        #TODO: map call (ufunc)
+
+        fname, mod_name = find_numpy_call(self.func_ir, expr, typemap=self.typemap)
+        if isinstance(mod_name, ir.Var):
+            args = [mod_name] + expr.args
+            mod_name = 'numpy'
         else:
-            self._analyze_rhs_classes_no_lhs_array(rhs)
+            args = expr.args
+        fname = "_analyze_op_call_{}_{}".format(mod_name, fname).replace('.', '_')
+        if fname in UFUNC_MAP_OP: # known numpy ufuncs
+            return self._analyze_broadcast(scope, equiv_set, expr.loc, args)
+        else:
+            try:
+                fn = getattr(self, fname)
+                return guard(fn, scope, equiv_set, args, dict(expr.kws))
+            except AttributeError:
+                return None
 
-        return size_calls
+    def _analyze_numpy_create_array(self, scope, equiv_set, args, kws):
+        shape_var = None
+        if len(args) > 0:
+            shape_var = args[0]
+        elif 'shape' in kws:
+            shape_var = kws['shape']
+        if shape_var:
+            return shape_var, [], []
+        raise NotImplementedError("Must specify a shape for array creation")
 
-    def _gen_size_call(self, var, i):
-        out = []
-        ndims = self._get_ndims(var.name)
-        # attr call: A_sh_attr = getattr(A, shape)
-        shape_attr_call = ir.Expr.getattr(var, "shape", var.loc)
-        attr_var = ir.Var(
-            var.scope,
-            mk_unique_var(
-                var.name +
-                "_sh_attr" +
-                str(i)),
-            var.loc)
-        self.typemap[attr_var.name] = types.containers.UniTuple(
-            types.intp, ndims)
-        attr_assign = ir.Assign(shape_attr_call, attr_var, var.loc)
-        out.append(attr_assign)
-        # const var for dim: $constA0 = Const(0)
-        const_node = ir.Const(i, var.loc)
-        const_var = ir.Var(
-            var.scope,
-            mk_unique_var(
-                "$const" +
-                var.name +
-                str(i)),
-            var.loc)
-        self.typemap[const_var.name] = types.intp
-        const_assign = ir.Assign(const_node, const_var, var.loc)
-        out.append(const_assign)
-        # get size: Asize0 = A_sh_attr[0]
-        size_var = ir.Var(
-            var.scope,
-            mk_unique_var(
-                var.name +
-                "size" +
-                str(i)),
-            var.loc)
-        self.typemap[size_var.name] = types.intp
-        getitem_node = ir.Expr.static_getitem(attr_var, i, const_var, var.loc)
-        self.calltypes[getitem_node] = None
-        getitem_assign = ir.Assign(getitem_node, size_var, var.loc)
-        out.append(getitem_assign)
-        return out
+    def _analyze_op_call_numpy_empty(self, scope, equiv_set, args, kws):
+        return self._analyze_numpy_create_array(scope, equiv_set, args, kws)
 
-    def _analyze_rhs_classes_no_lhs_array(self, rhs):
-        """analysis of rhs when lhs is not array"""
-        if isinstance(rhs, ir.Expr) and rhs.op == 'call':
-            call_name = 'NULL'
-            if rhs.func.name in self.numpy_calls.keys():
-                call_name = self.numpy_calls[rhs.func.name]
-                if call_name == 'dot':
-                    assert len(rhs.args) == 2 or len(rhs.args) == 3
-                    in1 = rhs.args[0].name
-                    in2 = rhs.args[1].name
-                    # vector dot scalar doesn't give dimension size info
-                    if not self._isarray(in1) or not self._isarray(in2):
-                        return
-                    # vector dot vector only at this point
-                    assert self._get_ndims(in1) == 1
-                    assert self._get_ndims(in2) == 1
-                    c1 = self.array_shape_classes[in1][0]
-                    c2 = self.array_shape_classes[in2][0]
-                    self._merge_classes(c1, c2)
-        return
+    def _analyze_op_call_numpy_zeros(self, scope, equiv_set, args, kws):
+        return self._analyze_numpy_create_array(scope, equiv_set, args, kws)
 
-    def _analyze_rhs_classes(self, node):
-        """analysis of rhs when lhs is array so rhs has to return array"""
-        if isinstance(node, ir.Arg):
-            return None
-            # can't assume node.name is valid variable
-            #assert self._isarray(node.name)
-            # return self._add_array_corr(node.name)
-        elif isinstance(node, ir.Var):
-            return copy.copy(self.array_shape_classes[node.name])
-        elif isinstance(node, (ir.Global, ir.FreeVar)):
-            # XXX: currently, global variables are frozen in Numba (can change)
-            if isinstance(node.value, numpy.ndarray):
-                shape = node.value.shape
-                out_eqs = []
-                for c in shape:
-                    new_class = self._get_next_class_with_size(c)
-                    out_eqs.append(new_class)
-                return out_eqs
-        elif isinstance(node, ir.Expr):
-            if node.op == 'unary' and node.fn in UNARY_MAP_OP:
-                assert isinstance(node.value, ir.Var)
-                in_var = node.value.name
-                assert self._isarray(in_var)
-                return copy.copy(self.array_shape_classes[in_var])
-            elif node.op == 'binop' and node.fn in BINARY_MAP_OP:
-                arg1 = node.lhs.name
-                arg2 = node.rhs.name
-                return self._broadcast_and_match_shapes([arg1, arg2])
-            elif node.op == 'inplace_binop' and node.immutable_fn in BINARY_MAP_OP:
-                arg1 = node.lhs.name
-                arg2 = node.rhs.name
-                return self._broadcast_and_match_shapes([arg1, arg2])
-            elif node.op == 'arrayexpr':
-                # set to remove duplicates
-                args = {v.name for v in node.list_vars()}
-                return self._broadcast_and_match_shapes(list(args))
-            elif node.op == 'cast':
-                return copy.copy(self.array_shape_classes[node.value.name])
-            elif node.op == 'call':
-                call_name = 'NULL'
-                args = copy.copy(node.args)
-                if node.func.name in self.map_calls:
-                    return copy.copy(self.array_shape_classes[args[0].name])
-                if node.func.name in self.numpy_calls.keys():
-                    call_name = self.numpy_calls[node.func.name]
-                elif node.func.name in self.array_attr_calls.keys():
-                    call_name, arr = self.array_attr_calls[node.func.name]
-                    args.insert(0, arr)
-                if call_name is not 'NULL':
-                    return self._analyze_np_call(
-                        call_name, args, dict(node.kws))
-                else:
-                    if config.DEBUG_ARRAY_OPT == 1:
-                        # no need to raise since this is not a failure and
-                        # analysis can continue (might limit optimization
-                        # later)
-                        print("can't find shape for unknown call:", node)
-                    return None
-            elif node.op == 'getattr' and self._isarray(node.value.name):
-                # numpy recarray, e.g. X.a
-                val = node.value.name
-                val_typ = self.typemap[val]
-                if (isinstance(val_typ.dtype, types.npytypes.Record)
-                        and node.attr in val_typ.dtype.fields):
-                    return copy.copy(self.array_shape_classes[val])
-                # matrix transpose
-                if node.attr == 'T':
-                    return self._analyze_np_call('transpose', [node.value],
-                                                 dict())
-            elif (node.op == 'getattr' and isinstance(
-                    self.typemap[node.value.name], types.npytypes.Record)):
-                # nested arrays in numpy records
-                val = node.value.name
-                val_typ = self.typemap[val]
-                if (node.attr in val_typ.fields
-                        and isinstance(val_typ.fields[node.attr][0],
-                                       types.npytypes.NestedArray)):
-                    shape = val_typ.fields[node.attr][0].shape
-                    return self._get_classes_from_const_shape(shape)
-            elif node.op == 'getitem' or node.op == 'static_getitem':
-                # getitem where output is array is possibly accessing elements
-                # of numpy records, e.g. X['a']
-                val = node.value.name
-                val_typ = self.typemap[val]
-                if (self._isarray(val) and isinstance(val_typ.dtype,
-                                                      types.npytypes.Record)
-                        and node.index in val_typ.dtype.fields):
-                    return copy.copy(self.array_shape_classes[val])
-            else:
-                if config.DEBUG_ARRAY_OPT == 1:
-                    # no need to raise since this is not a failure and
-                    # analysis can continue (might limit optimization later)
-                    print(
-                        "can't find shape classes for expr",
-                        node,
-                        " of op",
-                        node.op)
-        if config.DEBUG_ARRAY_OPT == 1:
-            # no need to raise since this is not a failure and
-            # analysis can continue (might limit optimization later)
-            print(
-                "can't find shape classes for node",
-                node,
-                " of type ",
-                type(node))
+    def _analyze_op_call_numpy_ones(self, scope, equiv_set, args, kws):
+        return self._analyze_numpy_create_array(scope, equiv_set, args, kws)
+
+    def _analyze_op_call_numpy_eye(self, scope, equiv_set, args, kws):
+        if len(args) > 0:
+            N = args[0]
+        elif 'N' in kws:
+            N = kws['N']
+        else:
+            raise NotImplementedError("Expect one argument (or 'N') to eye function")
+        if 'M' in kws:
+            M = kws['M']
+        else:
+            M = N
+        return (N, M), [], []
+
+    def _analyze_op_call_numpy_identity(self, scope, equiv_set, args, kws):
+        assert len(args) > 0
+        N = args[0]
+        return (N, N), [], []
+
+    def _analyze_op_call_numpy_diag(self, scope, equiv_set, args, kws):
+        # We can only reason able the output shape when the input is 1D or
+        # square 2D.
+        assert len(args) > 0
+        a = args[0]
+        assert(isinstance(a, ir.Var))
+        atyp = self.typemap[a.name]
+        if isinstance(atyp, types.ArrayCompatible):
+            if atyp.ndim == 2 and equiv_set.has_shape(a):
+                if 'k' in kws: # will proceed only when k = 0 or absent
+                    k = kws['k']
+                    if not equiv_set.is_equiv(k, 0):
+                        return None
+                (m, n) = equiv_set.get_shape(a)
+                if equiv_set.is_equiv(m, n):
+                    return (m,), [], []
+            elif atyp.ndim == 1 and equiv_set.has_shape(a):
+                (m,) = equiv_set.get_shape(a)
+                return (m,m), [], []
         return None
 
-    def _analyze_np_call(self, call_name, args, kws):
-        #print("numpy call ",call_name,args)
-        if call_name == 'transpose':
-            out_eqs = copy.copy(self.array_shape_classes[args[0].name])
-            out_eqs.reverse()
-            return out_eqs
-        elif call_name in array_creation:
-            # these calls (e.g. empty) have only a "shape" argument
-            shape_arg = None
-            if len(args) > 0:
-                shape_arg = args[0]
-            elif 'shape' in kws:
-                shape_arg = kws['shape']
-            else:
-                return None
-            return self._get_classes_from_shape(shape_arg)
-        elif call_name in random_1arg_size:
-            # these calls have only a "size" argument
-            size_arg = None
-            if len(args) > 0:
-                size_arg = args[0]
-            elif 'size' in kws:
-                size_arg = kws['size']
-            else:
-                return None
-            return self._get_classes_from_shape(size_arg)
-        elif call_name in random_int_args:
-            # e.g. random.rand
-            # arguments are integers (not a tuple as in previous calls)
-            return self._get_classes_from_dim_args(args)
-        elif call_name in random_3arg_sizelast:
-            # normal, uniform, ... have 3 args, last one is size
-            size_arg = None
-            if len(args) == 3:
-                size_arg = args[2]
-            elif 'size' in kws:
-                size_arg = kws['size']
-            else:
-                return None
-            return self._get_classes_from_shape(size_arg)
-        elif call_name in random_2arg_sizelast:
-            # have 2 args, last one is size
-            size_arg = None
-            if len(args) == 2:
-                size_arg = args[1]
-            elif 'size' in kws:
-                size_arg = kws['size']
-            else:
-                return None
-            return self._get_classes_from_shape(size_arg)
-        elif call_name == 'random.randint':
-            # has 4 args, 3rd one is size
-            size_arg = None
-            if len(args) >= 3:
-                size_arg = args[2]
-            elif 'size' in kws:
-                size_arg = kws['size']
-            else:
-                return None
-            return self._get_classes_from_shape(size_arg)
-        elif call_name == 'random.triangular':
-            # has 4 args, last one is size
-            size_arg = None
-            if len(args) == 4:
-                size_arg = args[3]
-            elif 'size' in kws:
-                size_arg = kws['size']
-            else:
-                return None
-            return self._get_classes_from_shape(size_arg)
-        elif call_name == 'eye':
-            # if one input n, output is n*n
-            # two inputs n,m, output is n*m
-            # N is either positional or kw arg
-            if 'N' in kws:
-                assert len(args) == 0
-                args.append(kws['N'])
-            if 'M' in kws:
-                assert len(args) == 1
-                args.append(kws['M'])
+    def _analyze_numpy_array_like(self, scope, equiv_set, args, kws):
+        assert(len(args) > 0)
+        var = args[0]
+        typ = self.typemap[var.name]
+        if isinstance(typ, types.Integer):
+            return (1,), [], []
+        elif (isinstance(typ, types.ArrayCompatible) and
+              equiv_set.has_shape(var)):
+            return var, [], []
+        return None
 
-            new_class1 = self._get_next_class_with_size(args[0].name)
-            out_eqs = [new_class1]
-            if len(args) > 1:
-                new_class2 = self._get_next_class_with_size(args[1].name)
-                out_eqs.append(new_class2)
+    def _analyze_op_call_numpy_copy(self, *args):
+        return self._analyze_numpy_array_like(*args)
+
+    def _analyze_op_call_numpy_empty_like(self, *args):
+        return self._analyze_numpy_array_like(*args)
+
+    def _analyze_op_call_numpy_zeros_like(self, *args):
+        return self._analyze_numpy_array_like(*args)
+
+    def _analyze_op_call_numpy_ones_like(self, *args):
+        return self._analyze_numpy_array_like(*args)
+
+    def _analyze_op_call_numpy_full_like(self, *args):
+        return self._analyze_numpy_array_like(*args)
+
+    def _analyze_op_call_numpy_asfortranarray(self, *args):
+        return self._analyze_numpy_array_like(*args)
+
+    def _analyze_op_call_numpy_reshape(self, scope, equiv_set, args, kws):
+        n = len(args)
+        assert(n > 1)
+        if n == 2:
+            return args[1], [], []
+        else:
+            return tuple(args[2:]), [], []
+
+    def _analyze_op_call_numpy_transpose(self, scope, equiv_set, args, kws):
+        assert(len(args) == 1)
+        arg = args[0]
+        typ = self.typemap[arg.name]
+        if (isinstance(typ, types.ArrayCompatible) and typ.ndim == 2 and
+            equiv_set.has_shape(arg)):
+            (m, n) = equiv_set.get_shape(arg)
+            return (n, m), [], []
+        return None
+
+    def _analyze_op_call_numpy_random_rand(self, scope, equiv_set, args, kws):
+        if len(args) > 0:
+            return tuple(args), [], []
+        return None
+
+    def _analyze_op_call_numpy_random_randn(self, *args):
+        return self._analyze_op_call_numpy_random_rand(*args)
+
+    def _analyze_op_numpy_random_with_size(self, pos, scope, equiv_set, args, kws):
+        if 'size' in kws:
+            return kws['size'], [], []
+        if len(args) > pos:
+            return args[pos], [], []
+        return None
+
+    def _analyze_op_call_numpy_random_ranf(self, *args):
+        return self._analyze_op_numpy_random_with_size(0, *args)
+
+    def _analyze_op_call_numpy_random_random_sample(self, *args):
+        return self._analyze_op_numpy_random_with_size(0, *args)
+
+    def _analyze_op_call_numpy_random_sample(self, *args):
+        return self._analyze_op_numpy_random_with_size(0, *args)
+
+    def _analyze_op_call_numpy_random_random(self, *args):
+        return self._analyze_op_numpy_random_with_size(0, *args)
+
+    def _analyze_op_call_numpy_random_standard_normal(self, *args):
+        return self._analyze_op_numpy_random_with_size(0, *args)
+
+    def _analyze_op_call_numpy_random_chisquare(self, *args):
+        return self._analyze_op_numpy_random_with_size(1, *args)
+
+    def _analyze_op_call_numpy_random_weibull(self, *args):
+        return self._analyze_op_numpy_random_with_size(1, *args)
+
+    def _analyze_op_call_numpy_random_power(self, *args):
+        return self._analyze_op_numpy_random_with_size(1, *args)
+
+    def _analyze_op_call_numpy_random_geometric(self, *args):
+        return self._analyze_op_numpy_random_with_size(1, *args)
+
+    def _analyze_op_call_numpy_random_exponential(self, *args):
+        return self._analyze_op_numpy_random_with_size(1, *args)
+
+    def _analyze_op_call_numpy_random_poisson(self, *args):
+        return self._analyze_op_numpy_random_with_size(1, *args)
+
+    def _analyze_op_call_numpy_random_rayleigh(self, *args):
+        return self._analyze_op_numpy_random_with_size(1, *args)
+
+    def _analyze_op_call_numpy_random_normal(self, *args):
+        return self._analyze_op_numpy_random_with_size(2, *args)
+
+    def _analyze_op_call_numpy_random_uniform(self, *args):
+        return self._analyze_op_numpy_random_with_size(2, *args)
+
+    def _analyze_op_call_numpy_random_beta(self, *args):
+        return self._analyze_op_numpy_random_with_size(2, *args)
+
+    def _analyze_op_call_numpy_random_binomial(self, *args):
+        return self._analyze_op_numpy_random_with_size(2, *args)
+
+    def _analyze_op_call_numpy_random_f(self, *args):
+        return self._analyze_op_numpy_random_with_size(2, *args)
+
+    def _analyze_op_call_numpy_random_gamma(self, *args):
+        return self._analyze_op_numpy_random_with_size(2, *args)
+
+    def _analyze_op_call_numpy_random_lognormal(self, *args):
+        return self._analyze_op_numpy_random_with_size(2, *args)
+
+    def _analyze_op_call_numpy_random_laplace(self, *args):
+        return self._analyze_op_numpy_random_with_size(2, *args)
+
+    def _analyze_op_call_numpy_random_randint(self, *args):
+        return self._analyze_op_numpy_random_with_size(2, *args)
+
+    def _analyze_op_call_numpy_random_triangular(self, *args):
+        return self._analyze_op_numpy_random_with_size(3, *args)
+
+    def _analyze_op_call_numpy_concatenate(self, scope, equiv_set, args, kws):
+        assert(len(args) > 0)
+        loc = args[0].loc
+        seq, op = find_build_sequence(self.func_ir, args[0])
+        n = len(seq)
+        require(n > 0)
+        axis = 0
+        if 'axis' in kws:
+            if isinstance(kws['axis'], int): # internal use only
+                axis = kws['axis']
             else:
-                out_eqs.append(new_class1)
-            return out_eqs
-        elif call_name == 'identity':
-            # input n, output is n*n
-            new_class1 = self._get_next_class_with_size(args[0].name)
-            return [new_class1, new_class1]
-        elif call_name == 'diag':
-            k = self._get_second_arg_or_kw(args, kws, 'k')
-            # TODO: support k other than 0 (other diagonal smaller size than
-            # main)
-            if k == 0:
-                in_arr = args[0].name
-                in_class = self.array_shape_classes[in_arr][0]
-                # if 1D input v, create 2D output with v on diagonal
-                # if 2D input v, return v's diagonal
-                if self._get_ndims(in_arr) == 1:
-                    return [in_class, in_class]
-                else:
-                    self._get_ndims(in_arr) == 2
-                    return [in_class]
-        elif call_name in ['empty_like', 'zeros_like', 'ones_like', 'full_like',
-                           'copy', 'asfortranarray']:
-            # shape same as input
-            if args[0].name in self.array_shape_classes:
-                out_corrs = copy.copy(self.array_shape_classes[args[0].name])
-            else:
-                # array scalars: constant input results in 0-dim array
-                assert not self._isarray(args[0].name)
-                # TODO: make sure arg is scalar
-                out_corrs = []
-            # asfortranarray converts 0-d to 1-d automatically
-            if out_corrs == [] and call_name == 'asfortranarray':
-                out_corrs = [CONST_CLASS]
-            return out_corrs
-        elif call_name == 'reshape':
-            #print("reshape args: ", args)
-            # TODO: infer shape from length of args[0] in case of -1 input
-            if len(args) == 2:
-                # shape is either Int or tuple of Int
-                return self._get_classes_from_shape(args[1])
-            else:
-                # a list integers for shape
-                return self._get_classes_from_shape_list(args[1:])
-        elif call_name == 'array':
-            # only 1D list is supported, and not ndmin arg
-            if args[0].name in self.list_table:
-                l = self.list_table[args[0].name]
-                new_class1 = self._get_next_class_with_size(len(l))
-                return [new_class1]
-        elif call_name == 'concatenate':
-            # all dimensions of output are same as inputs, except axis
-            axis = self._get_second_arg_or_kw(args, kws, 'axis')
-            if axis == -1:  # don't know shape if axis is not constant
-                return None
-            arr_args = self._get_sequence_arrs(args[0].name)
-            if len(arr_args) == 0:
-                return None
-            ndims = self._get_ndims(arr_args[0].name)
-            if ndims <= axis:
-                return None
-            out_eqs = [-1] * ndims
-            new_class1 = self._get_next_class()
-            # TODO: set size to sum of input array's size along axis
-            out_eqs[axis] = new_class1
-            for i in range(ndims):
+                axis = find_const(self.func_ir, kws['axis'])
+        elif len(args) > 1:
+            axis = find_const(self.func_ir, args[1])
+        require(isinstance(axis, int))
+        require(op == 'build_tuple')
+        require(all(equiv_set.has_shape(x) for x in seq))
+        shapes = [equiv_set.get_shape(x) for x in seq]
+        if axis < 0:
+            axis = len(shapes[0]) + axis
+        require(0 <= axis < len(shapes[0]))
+        asserts = []
+        new_shape = []
+        if n == 1: # from one array N-dimension to (N-1)-dimension
+            shape = shapes[0]
+            # first size is the count, pop it out of shapes
+            n = equiv_set.get_equiv_const(shapes[0])
+            shape.pop(0)
+            for i in range(len(shape)):
                 if i == axis:
-                    continue
-                c = self.array_shape_classes[arr_args[0].name][i]
-                for v in arr_args:
-                    # all input arrays have equal dimensions, except on axis
-                    c = self._merge_classes(
-                        c, self.array_shape_classes[v.name][i])
-                out_eqs[i] = c
-            return out_eqs
-        elif call_name == 'stack':
-            # all dimensions of output are same as inputs, but extra on axis
-            axis = self._get_second_arg_or_kw(args, kws, 'axis')
-            if axis == -1:  # don't know shape if axis is not constant
-                return None
-            arr_args = self._get_sequence_arrs(args[0].name)
-            if len(arr_args) == 0:
-                return None
-            ndims = self._get_ndims(arr_args[0].name)
-            out_eqs = [-1] * ndims
-            # all input arrays have equal dimensions
-            for i in range(ndims):
-                c = self.array_shape_classes[arr_args[0].name][i]
-                for v in arr_args:
-                    c = self._merge_classes(
-                        c, self.array_shape_classes[v.name][i])
-                out_eqs[i] = c
-            # output has one extra dimension
-            new_class1 = self._get_next_class_with_size(len(arr_args))
-            out_eqs.insert(axis, new_class1)
-            # TODO: set size to sum of input array's size along axis
-            return out_eqs
-        elif call_name == 'hstack':
-            # hstack is same as concatenate with axis=1 for ndim>=2
-            dummy_one_var = ir.Var(args[0].scope, "__dummy_1", args[0].loc)
-            self.constant_table["__dummy_1"] = 1
-            args.append(dummy_one_var)
-            return self._analyze_np_call('concatenate', args, kws)
-        elif call_name == 'dstack':
-            # dstack is same as concatenate with axis=2, atleast_3d args
-            args[0] = self.convert_seq_to_atleast_3d(args[0])
-            dummy_two_var = ir.Var(args[0].scope, "__dummy_2", args[0].loc)
-            self.constant_table["__dummy_2"] = 2
-            args.append(dummy_two_var)
-            return self._analyze_np_call('concatenate', args, kws)
-        elif call_name == 'vstack':
-            # vstack is same as concatenate with axis=0 if 2D input dims or more
-            # TODO: set size to sum of input array's size for 1D
-            arr_args = self._get_sequence_arrs(args[0].name)
-            if len(arr_args) == 0:
-                return None
-            ndims = self._get_ndims(arr_args[0].name)
-            if ndims >= 2:
-                dummy_zero_var = ir.Var(
-                    args[0].scope, "__dummy_0", args[0].loc)
-                self.constant_table["__dummy_0"] = 0
-                args.append(dummy_zero_var)
-                return self._analyze_np_call('concatenate', args, kws)
-        elif call_name == 'column_stack':
-            # 1D arrays turn into columns of 2D array
-            arr_args = self._get_sequence_arrs(args[0].name)
-            if len(arr_args) == 0:
-                return None
-            c = self.array_shape_classes[arr_args[0].name][0]
-            for v in arr_args:
-                c = self._merge_classes(c, self.array_shape_classes[v.name][0])
-            new_class = self._get_next_class_with_size(len(arr_args))
-            return [c, new_class]
-        elif call_name in ['cumsum', 'cumprod']:
-            in_arr = args[0].name
-            in_ndims = self._get_ndims(in_arr)
-            # for 1D, output has same size
-            # TODO: return flattened size for multi-dimensional input
-            if in_ndims == 1:
-                return copy.copy(self.array_shape_classes[in_arr])
-        elif call_name == 'linspace':
-            # default is 50, arg3 is size
-            LINSPACE_DEFAULT_SIZE = 50
-            size = LINSPACE_DEFAULT_SIZE
-            if len(args) >= 3:
-                size = args[2].name
-            new_class = self._get_next_class_with_size(size)
-            return [new_class]
-        elif call_name == 'dot':
-            # https://docs.scipy.org/doc/numpy/reference/generated/numpy.dot.html
-            # for multi-dimensional arrays, last dimension of arg1 and second
-            # to last dimension of arg2 should be equal since used in dot product.
-            # if arg2 is 1D, its only dimension is used for dot product and
-            # should be equal to second to last of arg1.
-            assert len(args) == 2 or len(args) == 3
-            in1 = args[0].name
-            in2 = args[1].name
-            ndims1 = self._get_ndims(in1)
-            ndims2 = self._get_ndims(in2)
-            c1 = self.array_shape_classes[in1][ndims1 - 1]
-            c2 = UNKNOWN_CLASS
+                    m = equiv_set.get_equiv_const(shape[i])
+                    size = m * n if (m and n) else None
+                else:
+                    size = self._sum_size(equiv_set, shapes[0])
+            new_shape.append(size)
+        else: # from n arrays N-dimension to N-dimension
+            for i in range(len(shapes[0])):
+                if i == axis:
+                    size = self._sum_size(equiv_set, [shape[i] for shape in shapes])
+                else:
+                    sizes = [ shape[i] for shape in shapes ]
+                    asserts.append(self._call_assert_equiv(scope, loc, equiv_set, sizes))
+                    size = sizes[0]
+                new_shape.append(size)
+        return tuple(new_shape), sum(asserts, []), []
 
-            if ndims2 == 1:
-                c2 = self.array_shape_classes[in2][0]
+    def _analyze_op_call_numpy_stack(self, scope, equiv_set, args, kws):
+        assert(len(args) > 0)
+        loc = args[0].loc
+        seq, op = find_build_sequence(self.func_ir, args[0])
+        n = len(seq)
+        require(n > 0)
+        axis = 0
+        if 'axis' in kws:
+            if isinstance(kws['axis'], int): # internal use only
+                axis = kws['axis']
             else:
-                c2 = self.array_shape_classes[in2][ndims2 - 2]
+                axis = find_const(self.func_ir, kws['axis'])
+        elif len(args) > 1:
+            axis = find_const(self.func_ir, args[1])
+        require(isinstance(axis, int))
+        # only build_tuple can give reliable count
+        require(op == 'build_tuple')
+        require(all(equiv_set.has_shape(x) for x in seq))
+        shapes = [equiv_set.get_shape(x) for x in seq]
+        asserts = self._call_assert_equiv(scope, loc, equiv_set, seq)
+        shape = shapes[0]
+        if axis < 0:
+            axis = len(shape) + axis + 1
+        require(0 <= axis <= len(shape))
+        new_shape = list(shape[0:axis]) + [n] + list(shape[axis:])
+        return tuple(new_shape), asserts, []
 
-            c_inner = self._merge_classes(c1, c2)
+    def _analyze_op_call_numpy_vstack(self, scope, equiv_set, args, kws):
+        assert(len(args) == 1)
+        seq, op = find_build_sequence(self.func_ir, args[0])
+        n = len(seq)
+        require(n > 0)
+        typ = self.typemap[seq[0].name]
+        require(isinstance(typ, types.ArrayCompatible))
+        if typ.ndim < 2:
+            return self._analyze_op_call_numpy_stack(scope, equiv_set, args, kws)
+        else:
+            kws['axis'] = 0
+            return self._analyze_op_call_numpy_concatenate(scope, equiv_set, args, kws)
 
-            c_out = []
-            for i in range(ndims1 - 1):
-                c_out.append(self.array_shape_classes[in1][i])
-            for i in range(ndims2 - 2):
-                c_out.append(self.array_shape_classes[in2][i])
-            if ndims2 > 1:
-                c_out.append(self.array_shape_classes[in2][ndims2 - 1])
-            return c_out
-        elif call_name in UFUNC_MAP_OP:
-            return self._broadcast_and_match_shapes([a.name for a in args])
+    def _analyze_op_call_numpy_hstack(self, scope, equiv_set, args, kws):
+        assert(len(args) == 1)
+        seq, op = find_build_sequence(self.func_ir, args[0])
+        n = len(seq)
+        require(n > 0)
+        typ = self.typemap[seq[0].name]
+        require(isinstance(typ, types.ArrayCompatible))
+        if typ.ndim < 2:
+            kws['axis'] = 0
+        else:
+            kws['axis'] = 1
+        return self._analyze_op_call_numpy_concatenate(scope, equiv_set, args, kws)
 
-        if config.DEBUG_ARRAY_OPT == 1:
-            print("unknown numpy call:", call_name, " ", args)
+    def _analyze_op_call_numpy_dstack(self, scope, equiv_set, args, kws):
+        assert(len(args) == 1)
+        seq, op = find_build_sequence(self.func_ir, args[0])
+        n = len(seq)
+        require(n > 0)
+        typ = self.typemap[seq[0].name]
+        require(isinstance(typ, types.ArrayCompatible))
+        if typ.ndim == 1:
+            kws['axis'] = 1
+            shape, pre, post = self._analyze_op_call_numpy_stack(scope, equiv_set, args, kws)
+            shape = tuple([1, *shape])
+            return shape, pre, post
+        elif typ.ndim == 2:
+            kws['axis'] = 2
+            return self._analyze_op_call_numpy_stack(scope, equiv_set, args, kws)
+        else:
+            kws['axis'] = 2
+            return self._analyze_op_call_numpy_concatenate(scope, equiv_set, args, kws)
+
+    def _analyze_op_call_numpy_cumsum(self, scope, equiv_set, args, kws):
+        # TODO
         return None
 
-    def _get_second_arg_or_kw(self, args, kws, kw_name):
-        arg_var = None
-        if len(args) > 1:
-            arg_var = args[1].name
-        elif kw_name in kws:
-            arg_var = kws[kw_name].name
-        if arg_var is None:
-            return 0  # default value is 0 if no arg
-        if arg_var in self.constant_table:
-            return self.constant_table[arg_var]
-        return -1  # arg var is not constant
+    def _analyze_op_call_numpy_cumprod(self, scope, equiv_set, args, kws):
+        # TODO
+        return None
 
-    def _get_sequence_arrs(self, seq_arg):
-        """get array sequence input to concatenate, stack etc."""
-        arr_args = []
-        # arrays sequence argument can be tuple or list
-        if seq_arg in self.list_table:
-            arr_args = self.list_table[seq_arg]
-        if seq_arg in self.tuple_table:
-            arr_args = self.tuple_table[seq_arg]
-        return arr_args
+    def _analyze_op_call_numpy_linspace(self, scope, equiv_set, args, kws):
+        n = len(args)
+        num = 50
+        if n > 2:
+            num = args[2]
+        elif 'num' in kws:
+            num = kws['num']
+        return (num,), [], []
 
-    def convert_seq_to_atleast_3d(self, seq_arg_var):
-        """convert array sequence to a sequence of arrays with at least 3d dims
-        """
-        arr_args = self._get_sequence_arrs(seq_arg_var.name)
-        new_seq = []
-        for arr in arr_args:
-            curr_dims = self._get_ndims(arr.name)
-            if curr_dims < 3:
-                dummy_var = ir.Var(
-                    arr.scope, mk_unique_var("__dummy_nd"), arr.loc)
-                self.typemap[dummy_var.name] = self.typemap[arr.name].copy(
-                    ndim=3)
-                corrs = self.array_shape_classes[arr.name].copy()
-                if curr_dims == 0:
-                    corrs = [CONST_CLASS] * 3
-                elif curr_dims == 1:  # Numpy adds both prepends and appends a dim
-                    corrs = [CONST_CLASS] + corrs + [CONST_CLASS]
-                elif curr_dims == 2:  # append a dim
-                    corrs = corrs + [CONST_CLASS]
-                self.array_shape_classes[dummy_var.name] = corrs
-                new_seq.append(dummy_var)
-            else:
-                new_seq.append(arr)
-        tup_name = mk_unique_var("__dummy_tup")
-        self.tuple_table[tup_name] = new_seq
-        return ir.Var(arr_args[0].scope, tup_name, arr_args[0].loc)
+    def _analyze_op_call_numpy_dot(self, scope, equiv_set, args, kws):
+        n = len(args)
+        assert(n >= 2)
+        loc = args[0].loc
+        require(all([self._isarray(x.name) for x in args]))
+        typs = [self.typemap[x.name] for x in args]
+        dims = [ ty.ndim for ty in typs ]
+        require(all(x > 0 for x in dims))
+        if dims[0] == 1 and dims[1] == 1:
+            return None, [], [] # scalar output
+        require(all([equiv_set.has_shape(x) for x in args]))
+        shapes = [equiv_set.get_shape(x) for x in args]
+        if dims[0] == 1:
+            asserts = self._call_assert_equiv(scope, loc, equiv_set, [shapes[0][0], shapes[1][-2]])
+            return tuple(shapes[1][0:-2]+shapes[1][-1:]), asserts, []
+        if dims[1] == 1:
+            asserts = self._call_assert_equiv(scope, loc, equiv_set, [shapes[0][-1], shapes[1][0]])
+            return tuple(shapes[0][0:-1]), asserts, []
+        if dims[0] == 2 and dims[1] == 2:
+            asserts = self._call_assert_equiv(scope, loc, equiv_set, [shapes[0][1], shapes[1][0]])
+            return (shapes[0][0], shapes[1][1]), asserts, []
+        if dims[0] > 2: # TODO: handle higher dimension cases
+            pass
+        return None, [], []
 
-    def _get_classes_from_shape(self, shape_arg):
-        # shape is either Int or tuple of Int
-        arg_typ = self.typemap[shape_arg.name]
-        if isinstance(arg_typ, types.scalars.Integer):
-            new_class = self._get_next_class_with_size(shape_arg)
-            return [new_class]
-        # TODO: handle A.reshape(c.shape)
-        if (not isinstance(arg_typ, types.containers.UniTuple) or
-                shape_arg.name not in self.tuple_table):
-            return None
-        out_eqs = []
-        for i in range(arg_typ.count):
-            new_class = self._get_next_class_with_size(
-                self.tuple_table[shape_arg.name][i])
-            out_eqs.append(new_class)
-        return out_eqs
-
-    def _get_classes_from_shape_list(self, shape_list):
-        assert isinstance(shape_list, list)
-        out_eqs = []
-        for shape_arg in shape_list:
-            arg_typ = self.typemap[shape_arg.name]
-            assert isinstance(arg_typ, types.scalars.Integer)
-            new_class = self._get_next_class_with_size(shape_arg)
-            out_eqs.append(new_class)
-        return out_eqs
-
-    def _get_classes_from_const_shape(self, shape):
-        # shape is either int or tuple/list of ints
-        if isinstance(shape, int):
-            new_class = self._get_next_class_with_size(shape)
-            return [new_class]
-        assert isinstance(shape, (tuple, list))
-        out_eqs = []
-        for dim in shape:
-            new_class = self._get_next_class_with_size(dim)
-            out_eqs.append(new_class)
-        return out_eqs
-
-    def _get_classes_from_dim_args(self, args):
-        out = []
-        for arg in args:
-            new_class = self._get_next_class_with_size(arg)
-            out.append(new_class)
-        return out
-
-    def _merge_equivalent_classes(self):
-        changed = True
-        while changed:
-            curr_sizes = self.class_sizes.copy()
-            changed = False
-            for c1, sizes1 in curr_sizes.items():
-                for c2, sizes2 in curr_sizes.items():
-                    if c1 != c2 and set(sizes1) & set(sizes2) != set():
-                        changed = True
-                        self._merge_classes(c1, c2)
-        return
-
-    def _merge_classes(self, c1, c2):
-        # no need to merge if equal classes already
-        if c1 == c2:
-            return c1
-
-        new_class = self._get_next_class()
-        for l in self.array_shape_classes.values():
-            for i in range(len(l)):
-                if l[i] == c1 or l[i] == c2:
-                    l[i] = new_class
-        # merge lists of size vars and remove previous classes
-        self.class_sizes[new_class] = (self.class_sizes.pop(c1, [])
-                                       + self.class_sizes.pop(c2, []))
-        return new_class
-
-    def _cleanup_analysis_data(self):
-        # delete unused classes
-        all_used_class = set()
-        for shape_corrs in self.array_shape_classes.values():
-            all_used_class |= set(shape_corrs)
-        curr_class_sizes = self.class_sizes.copy()
-        for c in curr_class_sizes.keys():
-            if c not in all_used_class:
-                self.class_sizes.pop(c)
-
-        # delete repeated size variables
-        new_class_sizes = {}
-        for c, var_list in self.class_sizes.items():
-            const_sizes = [v for v in var_list if not isinstance(v, ir.Var)]
-            name_var_table = {
-                v.name: v for v in var_list if isinstance(
-                    v, ir.Var)}
-            v_set = {v.name for v in var_list if isinstance(v, ir.Var)}
-            new_class_sizes[c] = [name_var_table[vname]
-                                  for vname in v_set] + const_sizes
-        self.class_sizes = new_class_sizes
-        return
-
-    def _broadcast_and_match_shapes(self, args):
+    def _analyze_broadcast(self, scope, equiv_set, loc, args):
         """Infer shape equivalence of arguments based on Numpy broadcast rules
         and return shape of output
         https://docs.scipy.org/doc/numpy/user/basics.broadcasting.html
         """
-        # at least one input has to be array, rest are constants
-        assert any([self._isarray(a) for a in args])
-        # list of array equivalences
-        eqs = []
-        for a in args:
-            if self._isarray(a):
-                eqs.append(copy.copy(self.array_shape_classes[a]))
-            else:
-                eqs.append([CONST_CLASS])  # constant variable
-        ndims = max([len(e) for e in eqs])
-        for e in eqs:
-            # prepend size 1 dims to match shapes (broadcast rules)
-            while len(e) < ndims:
-                e.insert(0, CONST_CLASS)
-        out_eq = [-1 for i in range(ndims)]
+        # TODO: 1. handle dimension matchup.
+        #       2. handle size 1 among dimensions.
+        arrs = list(filter(lambda a: self._isarray(a.name), args))
+        result = arrs[0] if len(arrs) > 0 else None
+        return (result, self._call_assert_equiv(scope, loc, equiv_set, arrs), [])
 
+    def _call_assert_equiv(self, scope, loc, equiv_set, _args):
+        # filter out those that are already equivalent
+        args = []
+        for x in _args:
+            seen = False
+            for y in args:
+                if x == y or equiv_set.is_equiv(x, y):
+                    seen = True
+                    break
+            if not seen:
+                args.append(x)
+
+        # no assertion necessary if there are less than two
+        if len(args) < 2:
+            return []
+        equiv_set.insert_equiv(*args)
+        argtyps = tuple(self.typemap[a.name] for a in args)
+
+        # assert_equiv takes vararg, which requires a tuple as argument type
+        tup_typ = types.BaseTuple.from_types(argtyps)
+
+        # prepare function variable whose type may vary since it takes vararg
+        assert_var = scope.make_temp(loc)
+        assert_def = ir.Global('assert_equiv', assert_equiv, loc=loc)
+        self.func_ir._definitions[assert_var.name] = [assert_def]
+        fnty = get_global_func_typ(assert_equiv)
+        sig = self.context.resolve_function_type(fnty, (tup_typ,), {})
+        self.typemap[assert_var.name] = fnty
+
+        # The return value from assert_equiv is always of none type.
+        var = scope.make_temp(loc)
+        self.typemap[var.name] = types.none
+        value = ir.Expr.call(assert_var, args, {}, loc=loc)
+        self.func_ir._definitions[var.name] = [value]
+        self.calltypes[value] = sig
+
+        return [ ir.Assign(value=assert_def, target=assert_var, loc=loc),
+                 ir.Assign(value=value, target=var, loc=loc),
+               ]
+
+    def _gen_shape_call(self, equiv_set, var, ndims, shape):
+        out = []
+        # attr call: A_sh_attr = getattr(A, shape)
+        if isinstance(shape, ir.Var): # already a tuple variable that contains size
+            attr_var = shape
+            shape_attr_call = None
+            shape = None
+        else:
+            shape_attr_call = ir.Expr.getattr(var, "shape", var.loc)
+            attr_var = ir.Var(var.scope, mk_unique_var(
+                              "{}_shape".format(var.name)), var.loc)
+            self.typemap[attr_var.name] = types.containers.UniTuple(
+                                              types.intp, ndims)
+        size_vars = []
+        use_attr_var = False
         for i in range(ndims):
-            c = eqs[0][i]
-            for e in eqs:
-                if e[i] != CONST_CLASS and e[i] != c:
-                    if c == CONST_CLASS:
-                        c = e[i]
+            if shape and shape[i]:
+                if isinstance(shape[i], ir.Var):
+                    size_var = shape[i]
+                else:
+                    if isinstance(shape[i], int):
+                        size_val = ir.Const(shape[i], var.loc)
                     else:
-                        c = self._merge_classes(c, e[i])
-            out_eq[i] = c
-
-        return out_eq
+                        size_val = shape[i]
+                    assert(isinstance(size_val, ir.Const))
+                    size_var = ir.Var(var.scope, mk_unique_var(
+                                  "{}_size{}".format(var.name, i)), var.loc)
+                    self.typemap[size_var.name] = types.intp
+                    equiv_set.insert_equiv(size_var, size_val)
+                    out.append(ir.Assign(size_val, size_var, var.loc))
+                    self.func_ir._definitions[size_var.name] = [size_val]
+            else:
+                # get size: Asize0 = A_sh_attr[0]
+                size_var = ir.Var(var.scope, mk_unique_var(
+                                  "{}_size{}".format(var.name, i)), var.loc)
+                self.typemap[size_var.name] = types.intp
+                getitem = ir.Expr.static_getitem(attr_var, i, None, var.loc)
+                use_attr_var = True
+                self.calltypes[getitem] = None
+                out.append(ir.Assign(getitem, size_var, var.loc))
+                self.func_ir._definitions[size_var.name] = [getitem]
+            size_vars.append(size_var)
+        if use_attr_var and shape_attr_call:
+            # only insert shape call if there is any getitem call
+            out.insert(0, ir.Assign(shape_attr_call, attr_var, var.loc))
+            self.func_ir._definitions[attr_var.name] = [shape_attr_call]
+        return tuple(size_vars), out
 
     def _isarray(self, varname):
         # no SmartArrayType support yet (can't generate parfor, allocate, etc)
@@ -827,42 +1007,24 @@ class ArrayAnalysis(object):
                 not isinstance(self.typemap[varname],
                                types.npytypes.SmartArrayType))
 
-    def _add_array_corr(self, varname):
-        assert varname not in self.array_shape_classes
-        self.array_shape_classes[varname] = []
-        arr_typ = self.typemap[varname]
-        for i in range(arr_typ.ndim):
-            new_class = self._get_next_class()
-            self.array_shape_classes[varname].append(new_class)
-        return self.array_shape_classes[varname]
+    def _sum_size(self, equiv_set, sizes):
+        """Return the sum of the given list of sizes if they are all equivalent
+        to some constant, or None otherwise.
+        """
+        s = 0
+        for size in sizes:
+            n = equiv_set.get_equiv_const(size)
+            if n == None:
+                return None
+            else:
+                s += n
+        return s
 
-    def _get_next_class_with_size(self, size):
-        if isinstance(size, int) and size == 1:
-            return CONST_CLASS
-        if (isinstance(size, ir.Var) and size.name in self.constant_table
-                and self.constant_table[size.name] == 1):
-            return CONST_CLASS
-        new_class = self._get_next_class()
-        self.class_sizes[new_class] = [size]
-        return new_class
-
-    def _get_next_class(self):
-        m = self.next_eq_class
-        self.next_eq_class += 1
-        return m
-
-    def _get_ndims(self, arr):
-        # return len(self.array_analysis.array_shape_classes[arr])
-        return self.typemap[arr].ndim
-
-
-def copy_propagate_update_analysis(stmt, var_dict, array_analysis):
+def copy_propagate_update_analysis(label, stmt, var_dict, array_analysis):
     """update array analysis data during copy propagation.
     If an array is in defs of a statement, we update its size variables.
     """
-    array_shape_classes = array_analysis.array_shape_classes
-    class_sizes = array_analysis.class_sizes
-    array_size_vars = array_analysis.array_size_vars
+    """ TODO: looks like dead code?
     # find defs of stmt
     def_set = set()
     if isinstance(stmt, ir.Assign):
@@ -870,17 +1032,17 @@ def copy_propagate_update_analysis(stmt, var_dict, array_analysis):
     for T, def_func in analysis.ir_extension_usedefs.items():
         if isinstance(stmt, T):
             _, def_set = def_func(stmt)
-    # update analysis for arrays in defs
-    for var in def_set:
-        if var in array_shape_classes:
-            if var in array_size_vars:
-                array_size_vars[var] = replace_vars_inner(array_size_vars[var],
-                                                          var_dict)
-            shape_corrs = array_shape_classes[var]
-            for c in shape_corrs:
-                if c != -1:
-                    class_sizes[c] = replace_vars_inner(
-                        class_sizes[c], var_dict)
+
+    if label in array_analysis.equiv_sets:
+        equiv_set = array_analysis.equiv_sets[label]
+        # update analysis for arrays in defs
+        for var in def_set:
+            for key, val in equiv_set.shapedef.items():
+                if var in val:
+                   equiv_set.shapedef[key] = replace_vars_inner(val, var_dict)
+    else:
+        print("block has no equiv_sets: ", label)
+    """
     return
 
 
