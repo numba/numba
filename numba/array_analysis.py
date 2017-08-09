@@ -1037,15 +1037,18 @@ class ArrayAnalysis(object):
         new_shape = []
         for i in range(max_dim):
             sizes = []
+            const_size_one = None
             for shape in shapes:
                 if i < len(shape):
                     size = shape[len(shape) - 1 - i]
                     const_size = equiv_set.get_equiv_const(size)
-                    if const_size != 1:
-                        sizes.insert(0, size) # non-1 size to front
+                    if const_size == 1:
+                        const_size_one = size
                     else:
-                        sizes.append(size) # size 1 to back
-            assert(len(sizes) > 0)
+                        sizes.append(size) # non-1 size to front
+            if len(sizes) == 0:
+                assert(const_size_one != None)
+                sizes.append(const_size_one)
             asserts.append(self._call_assert_equiv(scope, loc, equiv_set, sizes))
             new_shape.append(sizes[0])
         return tuple(reversed(new_shape)), sum(asserts, [])
