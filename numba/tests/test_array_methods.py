@@ -626,10 +626,16 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         pyfunc = array_sum
         cfunc = jit(nopython=True)(pyfunc)
         # OK
-        a = np.ones((2, 3))
+        a = np.ones((1,1,1,1,1))
         self.assertPreciseEqual(pyfunc(a), cfunc(a))
         # OK
         self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
+        # BAD: negative axis
+        with self.assertRaises(ValueError):
+            cfunc(a, -1)
+        # BAD: axis greater than 3
+        with self.assertRaises(ValueError):
+            cfunc(a, 4)
         # BAD: with kw axis
         pyfunc = array_sum_kws
         cfunc = jit(nopython=True)(pyfunc)
