@@ -10,6 +10,7 @@ from .support import TestCase, tag
 from numba.array_analysis import EquivSet, ArrayAnalysis
 from numba.compiler import Pipeline, Flags, _PipelineManager
 from numba.targets import cpu
+from numba.numpy_support import version as numpy_version
 
 class TestEquivSet(TestCase):
     """
@@ -508,17 +509,7 @@ class TestArrayAnalysis(TestCase):
                                            self.without_shapecall('k'),
                                            self.with_shapecall('p') ])
 
-        def test_stack(m, n):
-            a = np.ones(m)
-            b = np.ones(n)
-            c = np.stack((a, b))
-            d = np.ones((m, n))
-            e = np.ones((m, n))
-            f = np.stack((d, e))
-            g = np.stack((d, e), axis=0)
-            h = np.stack((d, e), axis=1)
-            i = np.stack((d, e), axis=2)
-            j = np.stack((d, e), axis=-1)
+        def test_vsd_stack():
             k = np.ones((2,))
             l = np.ones((2,3))
             o = np.ones((2,3,4))
@@ -530,13 +521,8 @@ class TestArrayAnalysis(TestCase):
             u = np.dstack((l, l))
             v = np.dstack((o, o))
 
-        self._compile_and_test(test_stack, (types.intp, types.intp),
-                               equivs = [ self.with_equiv('m', 'n'),
-                                          self.with_equiv('c', (2, 'm')),
-                                          self.with_equiv('f', 'g', (2, 'm', 'n')),
-                                          self.with_equiv('h', ('m', 2, 'n')),
-                                          self.with_equiv('i', 'j', ('m', 'n', 2)),
-                                          self.with_equiv('p', (2, 2)),
+        self._compile_and_test(test_vsd_stack, (),
+                               equivs = [ self.with_equiv('p', (2, 2)),
                                           self.with_equiv('q', (4, 3)),
                                           self.with_equiv('r', (4,)),
                                           self.with_equiv('s', (2, 6)),
@@ -544,6 +530,27 @@ class TestArrayAnalysis(TestCase):
                                           self.with_equiv('u', (2, 3, 2)),
                                           self.with_equiv('v', (2, 3, 8)),
                                         ])
+
+        if numpy_version >= (1, 10):
+            def test_stack(m, n):
+                a = np.ones(m)
+                b = np.ones(n)
+                c = np.stack((a, b))
+                d = np.ones((m, n))
+                e = np.ones((m, n))
+                f = np.stack((d, e))
+                g = np.stack((d, e), axis=0)
+                h = np.stack((d, e), axis=1)
+                i = np.stack((d, e), axis=2)
+                j = np.stack((d, e), axis=-1)
+
+            self._compile_and_test(test_stack, (types.intp, types.intp),
+                                   equivs = [ self.with_equiv('m', 'n'),
+                                              self.with_equiv('c', (2, 'm')),
+                                              self.with_equiv('f', 'g', (2, 'm', 'n')),
+                                              self.with_equiv('h', ('m', 2, 'n')),
+                                              self.with_equiv('i', 'j', ('m', 'n', 2)),
+                                            ])
 
         def test_linspace(m,n):
             a = np.linspace(m,n)
