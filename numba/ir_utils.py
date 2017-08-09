@@ -972,6 +972,24 @@ def rename_labels(blocks):
 
 def simplify_CFG(blocks):
     """transform chains of blocks that have no loop into a single block"""
+    # first, inline single-branch-block to its predecessors
+    cfg = compute_cfg_from_blocks(blocks)
+    def find_single_branch(label):
+        block = blocks[label]
+        return len(block.body) == 1 and isinstance(block.body[0], ir.Branch)
+    single_branch_blocks = list(filter(find_single_branch, blocks.keys()))
+    for label in single_branch_blocks:
+        inst = blocks[label].body[0]
+        predecessors = cfg.predecessors(label)
+        delete_block = True
+        for (p, q) in predecessors:
+            block = blocks[p]
+            if isinstance(block.body[-1], ir.Jump):
+                block.body[-1] = copy.copy(inst)
+            else:
+                delete_block = False
+        if delete_block:
+            del blocks[label]
     cfg = compute_cfg_from_blocks(blocks)
     label_map = {}
     for node in cfg.nodes():
