@@ -32,7 +32,7 @@ def test_wont_propagate(b, z, w):
     a = 2 * x
     return a < b
 
-def null_func(a,b,c):
+def null_func(a,b,c,d):
     False
 
 def inListVar(list_var, var):
