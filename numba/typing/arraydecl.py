@@ -11,8 +11,6 @@ from numba.typing.templates import (AttributeTemplate, AbstractTemplate,
 from numba.typing import collections
 from numba.errors import TypingError
 
-import pdb
-
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
 
 
@@ -555,11 +553,18 @@ def generic_expand(self, args, kws):
     return signature(_expand_integer(self.this.dtype), recvr=self.this)
 
 def sum_expand(self, args, kws):
+    """
+    sum can be called with or without an axis parameter.
+    """
     args_len = len(args)
     assert args_len <= 1
     if args_len == 0:
+        # No axis parameter so the return type of the summation is a scalar 
+        # of the type of the array.
         return signature(_expand_integer(self.this.dtype), *args, recvr=self.this)
     else:
+        # There is an axis paramter so the return type of this summation is
+        # an array of dimension one less than the input array.
         return_type = types.Array(dtype=_expand_integer(self.this.dtype),
                               ndim=self.this.ndim-1, layout='C')
         return signature(return_type, *args, recvr=self.this)
@@ -598,9 +603,6 @@ for fname in ["min", "max"]:
     install_array_method(fname, generic_homog)
 
 # Functions that return a machine-width type, to avoid overflows
-#for fname in ["sum", "prod"]:
-#    install_array_method(fname, generic_expand)
-
 install_array_method("prod", generic_expand)
 install_array_method("sum", sum_expand)
 
