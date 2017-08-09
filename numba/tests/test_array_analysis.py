@@ -27,7 +27,7 @@ class TestEquivSet(TestCase):
         s1.insert_equiv('a', 'c')
         self.assertTrue(s1.is_equiv('a', 'b', 'c', 'd'))
         self.assertFalse(s1.is_equiv('a', 'e'))
-            
+
     @tag('important')
     def test__intersect(self):
         s1 = EquivSet()
@@ -97,8 +97,8 @@ class ArrayAnalysisTester(Pipeline):
         if not self.flags.no_rewrites:
             pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
         def stage_array_analysis():
-            self.array_analysis = ArrayAnalysis(self.typingctx, self.func_ir, 
-                                                self.type_annotation.typemap, 
+            self.array_analysis = ArrayAnalysis(self.typingctx, self.func_ir,
+                                                self.type_annotation.typemap,
                                                 self.type_annotation.calltypes)
             self.array_analysis.run()
         pm.add_stage(stage_array_analysis, "analyze array equivalences")
@@ -192,7 +192,7 @@ class TestArrayAnalysis(TestCase):
             n = 1
             c = np.zeros((m,n))
             return
-        self._compile_and_test(test_0, (), 
+        self._compile_and_test(test_0, (),
                                equivs = [ self.with_equiv('a',(0,)),
                                           self.with_equiv('b',(1,)),
                                           self.with_equiv('c',(0, 1)) ])
@@ -236,7 +236,7 @@ class TestArrayAnalysis(TestCase):
             e = a - b
             return d + e
         self._compile_and_test(test_6, (types.intp, types.intp),
-                               asserts = [ self.with_assert('a', 'b'), 
+                               asserts = [ self.with_assert('a', 'b'),
                                            self.without_assert('d', 'e') ])
 
         def test_7(m, n):
@@ -259,9 +259,44 @@ class TestArrayAnalysis(TestCase):
             else:
                 d = a + a
             return b + d
-        self._compile_and_test(test_8, (types.intp, types.intp), 
+        self._compile_and_test(test_8, (types.intp, types.intp),
                                asserts = [ self.with_assert('a', 'b'),
                                            self.with_assert('b', 'd') ])
+
+        def test_shape(A):
+            (m,n) = A.shape
+            B = np.ones((m,n))
+            return A + B
+        self._compile_and_test(test_shape, (types.Array(types.intp, 2, 'C'),),
+                               asserts = None)
+
+        def test_cond(l, m, n):
+            A = np.ones(l)
+            B = np.ones(m)
+            C = np.ones(n)
+            if l == m:
+               r = np.sum(A + B)
+            else:
+               r = 0
+            if m != n:
+               s = 0
+            else:
+               s = np.sum(B + C)
+            t = 0
+            if l == m:
+                if m == n:
+                    t = np.sum(A + B + C)
+            return r + s + t
+        self._compile_and_test(test_cond, (types.intp, types.intp, types.intp),
+                               asserts = None)
+
+        def test_assert(m, n):
+            assert(m == n)
+            A = np.ones(m)
+            B = np.ones(n)
+            return np.sum(A + B)
+        self._compile_and_test(test_assert, (types.intp, types.intp),
+                               asserts = None)
 
     def test_numpy_calls(self):
         def test_zeros(n):
@@ -423,8 +458,8 @@ class TestArrayAnalysis(TestCase):
 
         last=ord('x')+1
         vars1d = [('n',)] + [chr(x)+'0' for x in range(ord('a'),last)]
-        vars2d = [('n', 'n')] + [chr(x)+'1' for x in range(ord('a'),last)] 
-        vars2d += [chr(x)+'1' for x in range(ord('c'),last)] 
+        vars2d = [('n', 'n')] + [chr(x)+'1' for x in range(ord('a'),last)]
+        vars2d += [chr(x)+'1' for x in range(ord('c'),last)]
         self._compile_and_test(test_random, (types.intp,),
                                equivs = [ self.with_equiv(*vars1d),
                                           self.with_equiv(*vars2d) ])
@@ -435,7 +470,7 @@ class TestArrayAnalysis(TestCase):
             c = np.concatenate((a,b))
             d = np.ones((2,n))
             e = np.ones((3,n))
-            f = np.concatenate((d, e)) 
+            f = np.concatenate((d, e))
             # Numba njit cannot compile concatenate with single array!
             # g = np.ones((3,4,5))
             # h = np.concatenate(g)
@@ -477,7 +512,7 @@ class TestArrayAnalysis(TestCase):
             t = np.dstack((k, k))
             u = np.dstack((l, l))
             v = np.dstack((o, o))
-            
+
         self._compile_and_test(test_stack, (types.intp, types.intp),
                                equivs = [ self.with_equiv('m', 'n'),
                                           self.with_equiv('c', (2, 'm')),
@@ -527,7 +562,17 @@ class TestArrayAnalysis(TestCase):
                                           self.with_equiv('j', ('m','m')),
                                         ],
                                asserts = [ self.with_assert('m', 'l') ])
-                                         
+
+        def test_broadcast(m,n):
+            a = np.ones((m,n))
+            b = np.ones(n)
+            c = a + b
+            d = np.ones((1,n))
+            e = a + c - d
+        self._compile_and_test(test_broadcast, (types.intp, types.intp),
+                               equivs = [ self.with_equiv('a', 'c', 'e') ],
+                               asserts = None)
+
 
 if __name__ == '__main__':
     unittest.main()
