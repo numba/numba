@@ -91,7 +91,7 @@ These variables influence what is printed out during compilation of
 .. envvar:: NUMBA_DEBUG_ARRAY_OPT
 
    Dump debugging information related to the processing associated with
-   the parallel=True jit decorator option.
+   the ``parallel=True`` jit decorator option.
 
 .. envvar:: NUMBA_DUMP_ASSEMBLY
 
