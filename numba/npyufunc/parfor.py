@@ -4,7 +4,7 @@ import ast
 from collections import defaultdict, OrderedDict
 import sys
 
-from .. import compiler, ir, types, six, cgutils, sigutils
+from .. import compiler, ir, types, six, cgutils, sigutils, lowering, parfor
 from numba.ir_utils import (add_offset_to_labels, replace_var_names,
                             remove_dels, legalize_names, mk_unique_var,
                             rename_labels, get_name_var_table)
@@ -99,7 +99,7 @@ def _lower_parfor_parallel(lowerer, parfor):
 
 
 # A work-around to prevent circular imports
-numba.parfor.lower_parfor_parallel = _lower_parfor_parallel
+lowering.lower_extensions[parfor.Parfor] = _lower_parfor_parallel
 
 
 def _create_shape_signature(
