@@ -115,7 +115,7 @@ Stage 1: Analyze bytecode
 At the start of compilation, the function bytecode is passed to an instance of
 the Numba interpreter (``numba.interpreter``).  The interpreter object
 analyzes the bytecode to find the control flow graph (``numba.controlflow``).
-The control flow graph describes the ways that execution can move from one
+The control flow graph (CFG) describes the ways that execution can move from one
 block to the next inside the function as a result of loops and branches.
 
 The data flow analysis (``numba.dataflow``) takes the control flow graph and
@@ -447,53 +447,60 @@ data and will thus typically have better cache performance.  Finally,
 during lowering, these parfor operators are converted to a form similar
 to guvectorize to implement the actual parallelism.  All these processes
 are described in more detail in the following paragraphs.
-
 The automatic parallelization pass has a number of sub-passes.
 
-1. CFG simplification - Sometimes Numba IR will contain chains of blocks
+CFG Simplification
+~~~~~~~~~~~~~~~~~~
+
+Sometimes Numba IR will contain chains of blocks
 containing no loops which are merged in this sub-pass into single blocks.
 This sub-pass simplifies subsequent analysis of the IR.
 
-2. Numpy canonicalization - Some Numpy operations can be written as
-operations on Numpy objects (e.g., arr.sum()), or as calls to Numpy
-taking those objects (e.g., numpy.sum(arr)).  This sub-pass converts all
+Numpy canonicalization
+~~~~~~~~~~~~~~~~~~~~~~
+
+Some Numpy operations can be written as
+operations on Numpy objects (e.g. ``arr.sum()``), or as calls to Numpy
+taking those objects (e.g. ``numpy.sum(arr)``).  This sub-pass converts all
 such operations to the latter form for cleaner subsequent analysis.
 
-3. Array analysis - A critical requirement for later parfor fusion is that 
+Array analysis
+~~~~~~~~~~~~~~
+
+A critical requirement for later parfor fusion is that 
 parfors have identical iteration spaces and these iteration spaces
 typically correspond to the sizes of the dimensions of Numpy arrays.
 In this sub-pass, the IR is analyzed to determine equivalence classes for
-the dimensions of Numpy arrays.  Consider the example, a = b + 1, where `a`
+the dimensions of Numpy arrays.  Consider the example, ``a = b + 1``, where `a`
 and `b` are both Numpy arrays.  Here, we know that each dimension of `a` 
 must have the same equivalence class as the corresponding dimension of `b`.
 Typically, routines rich in Numpy operations will enable equivalence classes
 to be fully known for all arrays created within a function.
 
-4. prange to parfor - The use of prange in a for loop is an explicit
+``prange()`` to parfor
+~~~~~~~~~~~~~~~~~~~~~~
+
+The use of prange (:ref:`numba-prange`) in a for loop is an explicit
 indication from the programmer that all iterations of the for loop can
 execute in parallel.  In this sub-pass, we analyze the CFG to locate loops
 and to convert those loops controlled by a prange object to the explicit 
 `parfor` operator.  Each explicit parfor operator consists of:
 
-a. A list of loop nest information that describes the iteration space of the parfor.
-Each entry in the loop nest list contains an indexing variable, the start of
-the range, the end of the range, and the step value for each iteration.
+#. A list of loop nest information that describes the iteration space of the parfor.  Each entry in the loop nest list contains an indexing variable, the start of the range, the end of the range, and the step value for each iteration.
+#. An initialization (init) block which contains instructions to be executed one time before the parfor begins executing.
+#. A loop body comprising a set of basic blocks that correspond to the body of the loop and compute one point in the iteration space.
+#. The index variables used for each dimension of the iteration space.
 
-b. An init block which contains instructions to be executed one time before 
-the parfor begins executing.
-
-c. The loop body is a set of basic blocks that correspond to the body of the
-loop and compute one point in the iteration space.
-
-d. The index variables used for each dimension of the iteration space.
-
-For parfor pranges, the loop nest is a single entry where the start, stop, and
-step fields come from the specified prange.  The init block is empty for 
-prange parfors and the loop body is the set of blocks in the loop minus the
+For parfor ``pranges``, the loop nest is a single entry where the start, stop, and
+step fields come from the specified ``prange``.  The init block is empty for 
+``prange`` parfors and the loop body is the set of blocks in the loop minus the
 loop header.
 
-5. Numpy to parfor - In this sub-pass, Numpy functions such as `ones`, 
-`zeros`, `dot`, most of the random number generating functions, arrayexprs (from 
+Numpy to parfor
+~~~~~~~~~~~~~~~
+
+In this sub-pass, Numpy functions such as ``ones``, 
+``zeros``, ``dot``, most of the random number generating functions, arrayexprs (from 
 Section :ref:`rewrite-typed-ir`), and Numpy reductions are converted to parfors.
 Generally, this conversion creates the loop nest list, whose length is equal to 
 the number of dimensions of the left-hand side of the assignment instruction in
@@ -504,12 +511,13 @@ new parfor's init block.  A basic block is created for the loop body and an
 instruction is generated and added to the end of that block to store the result
 of the computation into the array at the current point in the iteration space.
 The result stored into the array depends on the operation that is being 
-converted.  For example, for `ones`, the value stored is a constant 1.  For
-calls to generate random array, the value comes from a call to the same
+converted.  For example, for ``ones``, the value stored is a constant 1.  For
+calls to generate a random array, the value comes from a call to the same
 random number function but with the size parameter dropped and therefore
 returning a scalar.  For arrayexpr operators, the arrayexpr tree is converted
 to Numba IR and the value at the root of that expression tree is used to
 write into the output array.
+
 For reductions, the loop nest list is similarly created using the array
 analysis information for the array being reduced.  In the init block, the
 initial value is assigned to the reduction variable.  The loop body consists
@@ -517,10 +525,15 @@ of a single block in which the next value in the iteration space is fetched
 and the reduction operation is applied to that value and the current 
 reduction value and the result stored back into the reduction value.
 
-6. Simplification - Performs a copy propagation and dead code elimination
-pass.
+Simplification
+~~~~~~~~~~~~~~
 
-7. Fusion - This sub-pass first processes each basic block and does a
+Performs a copy propagation and dead code elimination pass.
+
+Fusion
+~~~~~~
+
+This sub-pass first processes each basic block and does a
 reordering of the instructions within the block with the goal of pushing
 parfors lower in the block and lifting non-parfors towards the start of
 the block.  In practice, this approach does a good job of getting parfors
@@ -537,10 +550,13 @@ loop bodies together and replacing the instances of the second parfor's
 loop index variables in the second parfor's body with the loop index
 variables for the first parfor.
 
-8. Push call objects and compute parfor parameters - 
+Push call objects and compute parfor parameters
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 In the lowering phase described in Section
 :ref:`lowering`, each parfor becomes a separate function executed in
-parallel in the guvectorize style.  Since parfors may use variables
+parallel in ``guvectorize`` (:ref:`guvectorize`) style.  Since parfors may 
+use variables
 defined previously in a function, when those parfors become separate
 functions, those variables must be passed to the parfor function as
 parameters.  In this sub-pass, a use-def scan is made over each parfor
@@ -675,16 +691,17 @@ to the GUFunc and iteration code that takes the current schedule entry
 and loops through the specified portion of the iteration space.  In the
 body of that loop, a special sentinel is inserted for subsequent easy
 location.  This code that handles the processing of the iteration space
-is then eval'ed into existence and the Numba compiler's run_frontend
+is then ``eval``'ed into existence and the Numba compiler's run_frontend
 function is called to generate IR.  That IR is scanned to locate the
 sentinel and the sentinel is replaced with the loop body of the parfor.
 Then, the process of creating the parallel GUFunc is completed by
-compiling this merged IR with the Numba compiler's compile_ir function.
+compiling this merged IR with the Numba compiler's ``compile_ir`` function.
 
 To call the parallel GUFunc, the static schedule must be created.
-Code is inserted to call a function named `do_scheduling.`  This function
+Code is inserted to call a function named ``do_scheduling.``  This function
 is called with the size of each of the parfor's dimensions and the number
-`N` of configured Numba threads.  The do_scheduling function will divide
+`N` of configured Numba threads (:envvar:`NUMBA_NUM_THREADS`).  
+The ``do_scheduling`` function will divide
 the iteration space into N approximately equal sized regions (linear for 
 1D, rectangular for 2D, or hyperrectangles for 3+D) and the resulting
 schedule is passed to the parallel GUFunc.  The number of threads 
@@ -695,9 +712,9 @@ of the sizes of all the dimensions of the iteration space.
 Parallel reductions are not natively provided by GUFuncs but the parfor
 lowering strategy allows us to use GUFuncs in a way that reductions can
 be performed in parallel.  To accomplish this, for each reduction variable
-computed by a parfor, the parallel GUFunc and the code that calls it is
+computed by a parfor, the parallel GUFunc and the code that calls it are
 modified to make the scalar reduction variable into an array of reduction
-variable whose length is equal to the number of Numba threads.  In addition,
+variables whose length is equal to the number of Numba threads.  In addition,
 the GUFunc still contains a scalar version of the reduction variable that
 is updated by the parfor body during each iteration.  One time at the 
 end of the GUFunc this local reduction variable is copied into the 
