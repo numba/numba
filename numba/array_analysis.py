@@ -419,17 +419,8 @@ class ArrayAnalysis(object):
         # keep track of pruned precessors when branch degenerates to jump
         self.pruned_predecessors = {}
 
-    def is_equiv(self, block_label, var1, var2):
-        equiv_set = self.equiv_sets[block_label]
-        return equiv_set.is_equiv(var1, var2)
-
-    def get_shape_definition(self, block_label, var):
-        equiv_set = self.equiv_sets[block_label]
-        return equiv_set.get_shape(var)
-
-    def get_shape_classes(self, block_label, var):
-        equiv_set = self.equiv_sets[block_label]
-        return equiv_set.get_shape_classes(var)
+    def get_equiv_set(self, block_label):
+        return self.equiv_sets[block_label]
 
     def run(self):
         """run array shape analysis on the IR, resulting in modified IR
