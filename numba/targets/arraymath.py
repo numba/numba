@@ -21,8 +21,6 @@ from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
 from numba.typing import signature
 from .arrayobj import make_array, load_item, store_item, _empty_nd_impl
 
-import traceback
-
 from numba.extending import intrinsic
 from numba.errors import RequireConstValue
 
@@ -42,7 +40,7 @@ def _create_tuple_result_shape(tyctx, shape_list, shape_tuple):
     # The return type of this intrinsic is an int tuple of length nd.
     tupty = types.UniTuple(types.intp, nd)
     # The function signature for this intrinsic.
-    funtion_sig = tupty(shape_list, shape_tuple)
+    function_sig = tupty(shape_list, shape_tuple)
 
     def codegen(cgctx, builder, signature, args):
         lltupty = cgctx.get_value_type(tupty)
@@ -60,13 +58,12 @@ def _create_tuple_result_shape(tyctx, shape_list, shape_tuple):
             dataidx = cgctx.get_constant(types.intp, i)
             # compile and call array_indexer
             data = cgctx.compile_internal(builder, array_indexer,
-                                          #shape_list.dtype(shape_list, types.intp),
                                           types.intp(shape_list, types.intp),
                                           [in_shape, dataidx])
             tup = builder.insert_value(tup, data, i)
         return tup
 
-    return funtion_sig, codegen
+    return function_sig, codegen
 
 @intrinsic
 def _gen_index_tuple(tyctx, shape_tuple, value, axis):
@@ -105,7 +102,7 @@ def _gen_index_tuple(tyctx, shape_tuple, value, axis):
     # Creates the output type of the function.
     tupty = types.Tuple(types_list)
     # Defines the signature of the intrinsic.
-    funtion_sig = tupty(shape_tuple, value, axis)
+    function_sig = tupty(shape_tuple, value, axis)
 
     def codegen(cgctx, builder, signature, args):
         lltupty = cgctx.get_value_type(tupty)
@@ -122,21 +119,18 @@ def _gen_index_tuple(tyctx, shape_tuple, value, axis):
         # loop to fill the tuple with slice(None,None) before
         # the axis dimension.
         for i in range(0, axis_value):
-            dataidx = cgctx.get_constant(types.intp, i)
-            # compile and call array_indexer
+            # compile and call create_full_slice
             data = cgctx.compile_internal(builder, create_full_slice,
                                           types.slice2_type(),
                                           [])
             tup = builder.insert_value(tup, data, i)
 
         # Add the axis dimension 'value'.
-        dataidx = cgctx.get_constant(types.intp, axis_value)
         tup = builder.insert_value(tup, value_arg, axis_value)
 
         # loop to fill the tuple with slice(None,None) after
         # the axis dimension.
         for i in range(axis_value + 1, nd):
-            dataidx = cgctx.get_constant(types.intp, i)
             # compile and call array_indexer
             data = cgctx.compile_internal(builder, create_full_slice,
                                           types.slice2_type(),
@@ -144,7 +138,7 @@ def _gen_index_tuple(tyctx, shape_tuple, value, axis):
             tup = builder.insert_value(tup, data, i)
         return tup
 
-    return funtion_sig, codegen
+    return function_sig, codegen
 
 #----------------------------------------------------------------------------
 # Basic stats and aggregates
@@ -171,11 +165,11 @@ def array_sum_axis(context, builder, sig, args):
     The third parameter to gen_index_tuple that generates the indexing
     tuples has to be a const so we can't just pass "axis" through since
     that isn't const.  We can check for specific values and have 
-    different instances that do take consts.  Supporting only four
-    dimensional arrays for now.
+    different instances that do take consts.  Supporting axis summation
+    only up to the fourth dimension for now.
     """
 
-    # sum_extend defines the return type for sum with axis.  
+    # typing/arraydecl.py:sum_expand defines the return type for sum with axis. 
     # It is one dimension less than the input array.
     zero = sig.return_type.dtype(0)
     # Again, the result array is one less than the input array dimensions.
@@ -195,6 +189,9 @@ def array_sum_axis(context, builder, sig, args):
         ashape.pop(axis)
         # Convert this shape list back to a tuple using above intrinsic.
         ashape_without_axis = _create_tuple_result_shape(ashape, arr.shape)
+        if axis < 0 or axis > 3:
+            raise ValueError("Numba does not support sum with axis"
+                     "parameter outside the range 0 to 3.")
         # Tuple needed here to create output array with correct size.
         result = np.full(ashape_without_axis, zero, type(zero))
 
@@ -215,9 +212,6 @@ def array_sum_axis(context, builder, sig, args):
             elif axis == 3:
                 index_tuple4 = _gen_index_tuple(arr.shape, axis_index, 3)
                 result += arr[index_tuple4]
-            else:
-                raise ValueError("Numba does not support sum with axis \
-                         parameter for arrays larger than 4 dimensions.")
 
         return result
 
