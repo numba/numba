@@ -5,7 +5,7 @@ import itertools
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import jit, typeof, types, typing, typeof, ir, utils, bytecode
+from numba import njit, typeof, types, typing, typeof, ir, utils, bytecode
 from .support import TestCase, tag
 from numba.array_analysis import EquivSet, ArrayAnalysis
 from numba.compiler import Pipeline, Flags, _PipelineManager
@@ -107,6 +107,11 @@ class ArrayAnalysisTester(Pipeline):
         return self.array_analysis
 
 class TestArrayAnalysis(TestCase):
+
+    def run_and_compare(self, fn, args):
+        a = fn(*args)
+        b = njit(parallel=True)(fn)(*args)
+        self.assertEqual(a, b)
 
     def _compile_and_test(self, fn, arg_tys, asserts=[], equivs=[]):
         """
@@ -262,6 +267,18 @@ class TestArrayAnalysis(TestCase):
         self._compile_and_test(test_8, (types.intp, types.intp),
                                asserts = [ self.with_assert('a', 'b'),
                                            self.with_assert('b', 'd') ])
+
+        def test_9(m, n):
+            A = np.ones(m)
+            B = np.ones(n)
+            return np.sum(A + B)
+
+        self.run_and_compare(test_9, (10,10))
+        with self.assertRaises(AssertionError) as raises:
+            cfunc = njit(parallel=True)(test_9)
+            cfunc(10, 9)
+        msg = "Size of A, B do not match"
+        self.assertIn(msg, str(raises.exception))
 
         def test_shape(A):
             (m,n) = A.shape
