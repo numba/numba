@@ -56,8 +56,9 @@ random_calls = (random_int_args +
 def assert_equiv(typingctx, *val):
     """
     A function that asserts the inputs are of equivalent size,
-    and throws runtime error when they are not. The input is a vararg
-    of either array, tuple or integer.
+    and throws runtime error when they are not. The input is
+    a vararg that contains an error message, followed by a set
+    of objects of either array, tuple or integer.
     """
     # Arguments must be either array, tuple, or integer
     assert all(map(lambda a: (isinstance(a, types.ArrayCompatible) or
@@ -65,6 +66,11 @@ def assert_equiv(typingctx, *val):
                              isinstance(a, types.Integer)), val))
 
     def codegen(context, builder, sig, args):
+        assert(len(args) == 1) # it is a vararg tuple
+        tup = cgutils.unpack_tuple(builder, args[0])
+        tup_type = sig.args[0]
+        msg = sig.args[0][0].value
+
         def unpack_shapes(a, aty):
             if isinstance(aty, types.ArrayCompatible):
                 ary = context.make_array(aty)(context, builder, a)
@@ -85,12 +91,9 @@ def assert_equiv(typingctx, *val):
                         pass
                     with orelse:
                         context.call_conv.return_user_exc(
-                            builder, AssertionError, None)
+                            builder, AssertionError, (msg,))
 
-        assert(len(args) == 1) # it is a vararg tuple
-        tup = cgutils.unpack_tuple(builder, args[0])
-        tup_type = sig.args[0]
-        for i in range(len(tup_type) - 1):
+        for i in range(1, len(tup_type) - 1):
             pairwise(tup[i], tup_type[i], tup[i+1], tup_type[i+1])
         r = context.get_constant_generic(builder, types.NoneType, None)
         return r
@@ -657,7 +660,7 @@ class ArrayAnalysis(object):
         return None
 
     def _analyze_op_call__Intrinsic_assert_equiv(self, scope, equiv_set, args, kws):
-        equiv_set.insert_equiv(*args)
+        equiv_set.insert_equiv(*args[1:])
         return None
 
     def _analyze_numpy_create_array(self, scope, equiv_set, args, kws):
@@ -1066,7 +1069,13 @@ class ArrayAnalysis(object):
         if len(args) < 2:
             return []
 
-        argtyps = tuple(self.typemap[a.name] for a in args)
+        names = [a.name for a in args]
+        msg = "Size of {} do not match".format(', '.join(names))
+        msg_val = ir.Const(msg, loc)
+        msg_typ = types.Const(msg)
+        msg_var = scope.make_temp(loc)
+        self.typemap[msg_var.name] = msg_typ
+        argtyps = tuple([msg_typ] + [self.typemap[x] for x in names])
 
         # assert_equiv takes vararg, which requires a tuple as argument type
         tup_typ = types.BaseTuple.from_types(argtyps)
@@ -1082,11 +1091,12 @@ class ArrayAnalysis(object):
         # The return value from assert_equiv is always of none type.
         var = scope.make_temp(loc)
         self.typemap[var.name] = types.none
-        value = ir.Expr.call(assert_var, args, {}, loc=loc)
+        value = ir.Expr.call(assert_var, [msg_var] + args, {}, loc=loc)
         self.func_ir._definitions[var.name] = [value]
         self.calltypes[value] = sig
 
-        return [ ir.Assign(value=assert_def, target=assert_var, loc=loc),
+        return [ ir.Assign(value=msg_val, target=msg_var, loc=loc),
+                 ir.Assign(value=assert_def, target=assert_var, loc=loc),
                  ir.Assign(value=value, target=var, loc=loc),
                ]
 
