@@ -223,7 +223,7 @@ class InternalError(NumbaError):
 
 class RequireConstValue(TypingError):
     """For signaling a function typing require constant value for some of
-    its argument
+    its arguments.
     """
 
 
