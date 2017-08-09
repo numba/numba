@@ -966,7 +966,7 @@ class ArrayAnalysis(object):
             result = self._analyze_op_call_numpy_stack(scope, equiv_set, args, kws)
             require(result)
             (shape, pre) = result
-            shape = tuple([1, *shape])
+            shape = tuple([1] + list(shape))
             return shape, pre
         elif typ.ndim == 2:
             kws['axis'] = 2
