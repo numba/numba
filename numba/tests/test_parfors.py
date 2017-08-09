@@ -108,6 +108,7 @@ class TestParforsBase(unittest.TestCase):
 
 def test1(sptprice, strike, rate, volatility, timev):
     # blackscholes example
+    assert(len(sptprice)==len(strike)==len(rate)==len(volatility)==len(timev))
     logterm = np.log(sptprice / strike)
     powterm = 0.5 * volatility * volatility
     den = volatility * np.sqrt(timev)
@@ -124,6 +125,7 @@ def test1(sptprice, strike, rate, volatility, timev):
 
 def test2(Y, X, w, iterations):
     # logistic regression example
+    assert(X.shape == (len(Y),len(w)))
     for i in range(iterations):
         w -= np.dot(((1.0 / (1.0 + np.exp(-Y * np.dot(X, w))) - 1.0) * Y), X)
     return w
