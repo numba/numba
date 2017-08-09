@@ -16,7 +16,7 @@ from numba.ir_utils import (
     guard,
     require,
     get_definition,
-    find_numpy_call,
+    find_callname,
     find_build_sequence,
     find_const)
 from numba.analysis import (compute_cfg_from_blocks)
@@ -108,7 +108,7 @@ class EquivSet(object):
             ind_to_obj = {}
         self.obj_to_ind = obj_to_ind # object to index mapping
         self.ind_to_obj = ind_to_obj # index to objects mapping
-        self.next_ind = 0
+        self.next_ind = next_ind
 
     def empty(self):
         return EquivSet()
@@ -121,7 +121,7 @@ class EquivSet(object):
                         next_id = self.next_ind)
 
     def __repr__(self):
-        return "EquivSet({}, {})".format(self.ind_to_obj, self.obj_to_ind)
+        return "EquivSet({})".format(self.ind_to_obj)
 
     def is_empty(self):
         """Return true if the set is empty, or false otherwise.
@@ -196,6 +196,14 @@ class EquivSet(object):
                     return x
         return None
 
+    def get_equiv_set(self, obj):
+        """Return the set of equivalent objects.
+        """
+        ind = self._get_ind(obj)
+        if ind >= 0:
+            return set(self.ind_to_obj[ind])
+        return set()
+
     def insert_equiv(self, *objs):
         """Insert a set of equivalent objects by modifying self. This
         method can be overloaded to transform object type before insertion.
@@ -250,8 +258,7 @@ class ShapeEquivSet(EquivSet):
                    next_id = self.next_ind)
 
     def __repr__(self):
-        return "EquivSet({}, shapedef={})".format(self.ind_to_obj, self.obj_to_ind,
-                                                  self.shapedef)
+        return "EquivSet({}, {}, shapedef={})".format(self.ind_to_obj, self.obj_to_ind, self.shapedef)
 
     def _get_names(self, obj):
         """Returns a set of names for the given obj, where array and tuples
@@ -261,10 +268,12 @@ class ShapeEquivSet(EquivSet):
         if isinstance(obj, ir.Var) or isinstance(obj, str):
             name = obj if isinstance(obj, str) else obj.name
             typ = self.typemap[name]
-            if isinstance(typ, types.ArrayCompatible):
-                return tuple("{}#{}".format(name, i) for i in range(typ.ndim))
-            elif isinstance(typ, types.BaseTuple):
-                return tuple("{}#{}".format(name, i) for i in range(len(typ)))
+            if isinstance(typ, types.BaseTuple) or isinstance(typ, types.ArrayCompatible):
+                if self.has_shape(obj):
+                    return tuple(self._get_names(x) for x in self.get_shape(obj))
+                else:
+                    ndim = typ.ndim if isinstance(typ, types.ArrayCompatible) else len(typ)
+                    return tuple("{}#{}".format(name, i) for i in range(ndim))
             else:
                 return (name,)
         elif isinstance(obj, ir.Const):
@@ -302,6 +311,12 @@ class ShapeEquivSet(EquivSet):
             return None
         return super(ShapeEquivSet, self).get_equiv_const(names[0])
 
+    def get_equiv_set(self, obj):
+        names = self._get_names(obj)
+        if len(names) > 1:
+            return None
+        return super(ShapeEquivSet, self).get_equiv_set(names[0])
+
     def insert_equiv(self, *objs):
         """Overload EquivSet.insert_equiv to handle Numba IR variables and
         constants.
@@ -323,7 +338,9 @@ class ShapeEquivSet(EquivSet):
         """
         if isinstance(name, ir.Var):
             name = name.name
-        assert (not (name in self.shapedef))
+        if name in self.shapedef:
+            assert(self.is_equiv(self.shapedef[name], shape))
+            return
         while isinstance(shape, ir.Var) and shape.name in self.shapedef:
            shape = self.shapedef[shape.name]
         self.shapedef[name] = shape
@@ -397,10 +414,14 @@ class ArrayAnalysis(object):
         self.equiv_sets = {}
         # keep attr calls to arrays like t=A.sum() as {t:('sum',A)}
         self.array_attr_calls = {}
+        # keep prepended instructions from conditional branch
+        self.prepends = {}
+        # keep track of pruned precessors when branch degenerates to jump
+        self.pruned_predecessors = {}
 
     def is_equiv(self, block_label, var1, var2):
         equiv_set = self.equiv_sets[block_label]
-        equiv_set.is_equiv(var1, var2)
+        return equiv_set.is_equiv(var1, var2)
 
     def get_shape_definition(self, block_label, var):
         equiv_set = self.equiv_sets[block_label]
@@ -430,12 +451,23 @@ class ArrayAnalysis(object):
             equiv_set = None
             # equiv_set is the intersection of predecessors
             preds = cfg.predecessors(label)
+            if label in self.pruned_predecessors:
+                pruned = self.pruned_predecessors[label]
+            else:
+                pruned = []
             for (p, q) in preds:
+                if p in pruned:
+                    continue
                 if p in self.equiv_sets:
+                    from_set = self.equiv_sets[p].clone()
+                    if (p, label) in self.prepends:
+                        instrs = self.prepends[(p, label)]
+                        for inst in instrs:
+                            self._analyze_inst(label, scope, from_set, inst)
                     if equiv_set == None:
-                        equiv_set = self.equiv_sets[p].clone()
+                        equiv_set = from_set
                     else:
-                        equiv_set = equiv_set.intersect(self.equiv_sets[p])
+                        equiv_set = equiv_set.intersect(from_set)
             # Use a new equiv_set when there is no predecessor
             if equiv_set == None:
                 equiv_set = ShapeEquivSet(self.typemap, {})
@@ -443,7 +475,7 @@ class ArrayAnalysis(object):
             # Go through instructions in a block, and insert pre/post
             # instructions as we analyze them.
             for inst in block.body:
-                pre, post = self._analyze_inst(scope, equiv_set, inst)
+                pre, post = self._analyze_inst(label, scope, equiv_set, inst)
                 for instr in pre:
                     new_body.append(instr)
                 new_body.append(inst)
@@ -460,7 +492,7 @@ class ArrayAnalysis(object):
         """
         print("Array Analysis: ", self.equiv_sets)
 
-    def _analyze_inst(self, scope, equiv_set, inst):
+    def _analyze_inst(self, label, scope, equiv_set, inst):
         pre = []
         post = []
         if isinstance(inst, ir.Assign):
@@ -468,7 +500,7 @@ class ArrayAnalysis(object):
             if isinstance(inst.value, ir.Expr):
                 result = self._analyze_expr(scope, equiv_set, inst.value)
                 if result:
-                    (shape, pre, post) = result
+                    (shape, pre) = result
             elif (isinstance(inst.value, ir.Var) or
                   isinstance(inst.value, ir.Const)):
                 shape = inst.value
@@ -499,6 +531,52 @@ class ArrayAnalysis(object):
 
             if shape:
                 equiv_set.insert_equiv(lhs, shape)
+        elif isinstance(inst, ir.Branch):
+            cond_var = inst.cond
+            cond_def = guard(get_definition, self.func_ir, cond_var)
+            if not cond_def: # phi variable has no single definition
+                # We'll use equiv_set to try to find a cond_def instead
+                equivs = equiv_set.get_equiv_set(cond_var)
+                defs = []
+                for name in equivs:
+                    if isinstance(name, str) and name in self.typemap:
+                        var_def = guard(get_definition, self.func_ir, name, lhs_only=True)
+                        if isinstance(var_def, ir.Var):
+                            var_def = var_def.name
+                        if var_def:
+                            defs.append(var_def)
+                    else:
+                        defs.append(name)
+                defvars = set(filter(lambda x:isinstance(x, str), defs))
+                defconsts = set(defs).difference(defvars)
+                if len(defconsts) == 1:
+                    cond_def = list(defconsts)[0]
+                elif len(defvars) == 1:
+                    cond_def = guard(get_definition, self.func_ir, list(defvars)[0])
+            if isinstance(cond_def, ir.Expr) and cond_def.op == 'binop':
+                br = None
+                if cond_def.fn == '==':
+                    br = inst.truebr
+                    otherbr = inst.falsebr
+                    cond_val = 1
+                elif cond_def.fn == '!=':
+                    br = inst.falsebr
+                    otherbr = inst.truebr
+                    cond_val = 0
+                if br != None:
+                    loc = inst.loc
+                    args = (cond_def.lhs, cond_def.rhs)
+                    asserts = self._make_assert_equiv(scope, loc, equiv_set, args)
+                    asserts.append(ir.Assign(ir.Const(cond_val, loc), cond_var, loc))
+                    self.prepends[(label, br)] = asserts
+                    self.prepends[(label, otherbr)] = [ir.Assign(ir.Const(1-cond_val, loc), cond_var, loc)]
+            elif cond_def != None:
+                # condition is always true/false, prune the outgoing edge
+                pruned_br = inst.falsebr if cond_def else inst.truebr
+                if pruned_br in self.pruned_predecessors:
+                   self.pruned_predecessors[pruned_br].append(label)
+                else:
+                   self.pruned_predecessors[pruned_br] = [label]
 
         return pre, post
 
@@ -506,22 +584,42 @@ class ArrayAnalysis(object):
         fname = "_analyze_op_{}".format(expr.op)
         try:
             fn = getattr(self, fname)
-            return guard(fn, scope, equiv_set, expr)
         except AttributeError:
             return None
+        return guard(fn, scope, equiv_set, expr)
 
     def _analyze_op_getattr(self, scope, equiv_set, expr):
         # TODO: getattr of npytypes.Record
         if expr.attr == 'T':
             return self._analyze_op_call_numpy_transpose(scope, equiv_set, [expr.value], {})
+        elif expr.attr == 'shape' and equiv_set.has_shape(expr.value):
+            shape = equiv_set.get_shape(expr.value)
+            return shape, []
         return None
 
     def _analyze_op_cast(self, scope, equiv_set, expr):
-        return (expr.value, [], [])
+        return expr.value, []
+
+    def _analyze_op_exhaust_iter(self, scope, equiv_set, expr):
+        var = expr.value
+        typ = self.typemap[var.name]
+        if isinstance(typ, types.BaseTuple):
+            require(len(typ) == expr.count)
+            return var, []
+        return None
+
+    def _analyze_op_static_getitem(self, scope, equiv_set, expr):
+        var = expr.value
+        typ = self.typemap[var.name]
+        require(isinstance(typ, types.BaseTuple))
+        require(equiv_set.has_shape(var))
+        shape = equiv_set.get_shape(var)
+        require(expr.index < len(shape))
+        return shape[expr.index], []
 
     def _analyze_op_unary(self, scope, equiv_set, expr):
         require(expr.fn in UNARY_MAP_OP)
-        return (expr.value, [], [])
+        return expr.value, []
 
     def _analyze_op_binop(self, scope, equiv_set, expr):
         require(expr.fn in BINARY_MAP_OP)
@@ -535,13 +633,13 @@ class ArrayAnalysis(object):
         return self._analyze_broadcast(scope, equiv_set, expr.loc, expr.list_vars())
 
     def _analyze_op_build_tuple(self, scope, equiv_set, expr):
-        return (tuple(expr.items), [], [])
+        return tuple(expr.items), []
 
     def _analyze_op_call(self, scope, equiv_set, expr):
         #TODO: map call (ufunc)
 
-        fname, mod_name = find_numpy_call(self.func_ir, expr, typemap=self.typemap)
-        if isinstance(mod_name, ir.Var):
+        fname, mod_name = find_callname(self.func_ir, expr, typemap=self.typemap)
+        if isinstance(mod_name, ir.Var): # call via attribute
             args = [mod_name] + expr.args
             mod_name = 'numpy'
         else:
@@ -552,9 +650,24 @@ class ArrayAnalysis(object):
         else:
             try:
                 fn = getattr(self, fname)
-                return guard(fn, scope, equiv_set, args, dict(expr.kws))
             except AttributeError:
                 return None
+            return guard(fn, scope, equiv_set, args, dict(expr.kws))
+
+    def _analyze_op_call_builtin_len(self, scope, equiv_set, args, kws):
+        require(len(args) == 1)
+        var = args[0]
+        typ = self.typemap[var.name]
+        require(isinstance(typ, types.ArrayCompatible))
+        if typ.ndim == 1:
+            require(equiv_set.has_shape(var))
+            shape = equiv_set.get_shape(var)
+            return shape[0], []
+        return None
+
+    def _analyze_op_call__Intrinsic_assert_equiv(self, scope, equiv_set, args, kws):
+        equiv_set.insert_equiv(*args)
+        return None
 
     def _analyze_numpy_create_array(self, scope, equiv_set, args, kws):
         shape_var = None
@@ -563,7 +676,7 @@ class ArrayAnalysis(object):
         elif 'shape' in kws:
             shape_var = kws['shape']
         if shape_var:
-            return shape_var, [], []
+            return shape_var, []
         raise NotImplementedError("Must specify a shape for array creation")
 
     def _analyze_op_call_numpy_empty(self, scope, equiv_set, args, kws):
@@ -586,12 +699,12 @@ class ArrayAnalysis(object):
             M = kws['M']
         else:
             M = N
-        return (N, M), [], []
+        return (N, M), []
 
     def _analyze_op_call_numpy_identity(self, scope, equiv_set, args, kws):
         assert len(args) > 0
         N = args[0]
-        return (N, N), [], []
+        return (N, N), []
 
     def _analyze_op_call_numpy_diag(self, scope, equiv_set, args, kws):
         # We can only reason able the output shape when the input is 1D or
@@ -608,10 +721,10 @@ class ArrayAnalysis(object):
                         return None
                 (m, n) = equiv_set.get_shape(a)
                 if equiv_set.is_equiv(m, n):
-                    return (m,), [], []
+                    return (m,), []
             elif atyp.ndim == 1 and equiv_set.has_shape(a):
                 (m,) = equiv_set.get_shape(a)
-                return (m,m), [], []
+                return (m,m), []
         return None
 
     def _analyze_numpy_array_like(self, scope, equiv_set, args, kws):
@@ -619,10 +732,10 @@ class ArrayAnalysis(object):
         var = args[0]
         typ = self.typemap[var.name]
         if isinstance(typ, types.Integer):
-            return (1,), [], []
+            return (1,), []
         elif (isinstance(typ, types.ArrayCompatible) and
               equiv_set.has_shape(var)):
-            return var, [], []
+            return var, []
         return None
 
     def _analyze_op_call_numpy_copy(self, *args):
@@ -647,9 +760,9 @@ class ArrayAnalysis(object):
         n = len(args)
         assert(n > 1)
         if n == 2:
-            return args[1], [], []
+            return args[1], []
         else:
-            return tuple(args[2:]), [], []
+            return tuple(args[2:]), []
 
     def _analyze_op_call_numpy_transpose(self, scope, equiv_set, args, kws):
         assert(len(args) == 1)
@@ -658,12 +771,12 @@ class ArrayAnalysis(object):
         if (isinstance(typ, types.ArrayCompatible) and typ.ndim == 2 and
             equiv_set.has_shape(arg)):
             (m, n) = equiv_set.get_shape(arg)
-            return (n, m), [], []
+            return (n, m), []
         return None
 
     def _analyze_op_call_numpy_random_rand(self, scope, equiv_set, args, kws):
         if len(args) > 0:
-            return tuple(args), [], []
+            return tuple(args), []
         return None
 
     def _analyze_op_call_numpy_random_randn(self, *args):
@@ -671,9 +784,9 @@ class ArrayAnalysis(object):
 
     def _analyze_op_numpy_random_with_size(self, pos, scope, equiv_set, args, kws):
         if 'size' in kws:
-            return kws['size'], [], []
+            return kws['size'], []
         if len(args) > pos:
-            return args[pos], [], []
+            return args[pos], []
         return None
 
     def _analyze_op_call_numpy_random_ranf(self, *args):
@@ -786,7 +899,7 @@ class ArrayAnalysis(object):
                     asserts.append(self._call_assert_equiv(scope, loc, equiv_set, sizes))
                     size = sizes[0]
                 new_shape.append(size)
-        return tuple(new_shape), sum(asserts, []), []
+        return tuple(new_shape), sum(asserts, [])
 
     def _analyze_op_call_numpy_stack(self, scope, equiv_set, args, kws):
         assert(len(args) > 0)
@@ -813,7 +926,7 @@ class ArrayAnalysis(object):
             axis = len(shape) + axis + 1
         require(0 <= axis <= len(shape))
         new_shape = list(shape[0:axis]) + [n] + list(shape[axis:])
-        return tuple(new_shape), asserts, []
+        return tuple(new_shape), asserts
 
     def _analyze_op_call_numpy_vstack(self, scope, equiv_set, args, kws):
         assert(len(args) == 1)
@@ -850,9 +963,11 @@ class ArrayAnalysis(object):
         require(isinstance(typ, types.ArrayCompatible))
         if typ.ndim == 1:
             kws['axis'] = 1
-            shape, pre, post = self._analyze_op_call_numpy_stack(scope, equiv_set, args, kws)
+            result = self._analyze_op_call_numpy_stack(scope, equiv_set, args, kws)
+            require(result)
+            (shape, pre) = result
             shape = tuple([1, *shape])
-            return shape, pre, post
+            return shape, pre
         elif typ.ndim == 2:
             kws['axis'] = 2
             return self._analyze_op_call_numpy_stack(scope, equiv_set, args, kws)
@@ -875,7 +990,7 @@ class ArrayAnalysis(object):
             num = args[2]
         elif 'num' in kws:
             num = kws['num']
-        return (num,), [], []
+        return (num,), []
 
     def _analyze_op_call_numpy_dot(self, scope, equiv_set, args, kws):
         n = len(args)
@@ -886,34 +1001,62 @@ class ArrayAnalysis(object):
         dims = [ ty.ndim for ty in typs ]
         require(all(x > 0 for x in dims))
         if dims[0] == 1 and dims[1] == 1:
-            return None, [], [] # scalar output
+            return None
         require(all([equiv_set.has_shape(x) for x in args]))
         shapes = [equiv_set.get_shape(x) for x in args]
         if dims[0] == 1:
             asserts = self._call_assert_equiv(scope, loc, equiv_set, [shapes[0][0], shapes[1][-2]])
-            return tuple(shapes[1][0:-2]+shapes[1][-1:]), asserts, []
+            return tuple(shapes[1][0:-2]+shapes[1][-1:]), asserts
         if dims[1] == 1:
             asserts = self._call_assert_equiv(scope, loc, equiv_set, [shapes[0][-1], shapes[1][0]])
-            return tuple(shapes[0][0:-1]), asserts, []
+            return tuple(shapes[0][0:-1]), asserts
         if dims[0] == 2 and dims[1] == 2:
             asserts = self._call_assert_equiv(scope, loc, equiv_set, [shapes[0][1], shapes[1][0]])
-            return (shapes[0][0], shapes[1][1]), asserts, []
+            return (shapes[0][0], shapes[1][1]), asserts
         if dims[0] > 2: # TODO: handle higher dimension cases
             pass
-        return None, [], []
+        return None
 
     def _analyze_broadcast(self, scope, equiv_set, loc, args):
         """Infer shape equivalence of arguments based on Numpy broadcast rules
         and return shape of output
         https://docs.scipy.org/doc/numpy/user/basics.broadcasting.html
         """
-        # TODO: 1. handle dimension matchup.
-        #       2. handle size 1 among dimensions.
         arrs = list(filter(lambda a: self._isarray(a.name), args))
-        result = arrs[0] if len(arrs) > 0 else None
-        return (result, self._call_assert_equiv(scope, loc, equiv_set, arrs), [])
+        require(len(arrs) > 0)
+        dims = [ self.typemap[x.name].ndim for x in arrs ]
+        max_dim = max(dims)
+        all_has_shapes = all([ equiv_set.has_shape(x) for x in arrs ])
+        if not all_has_shapes:
+            return arrs[0], self._call_assert_equiv(scope, loc, equiv_set, arrs)
+        shapes = [ equiv_set.get_shape(x) for x in arrs ]
+        has_const_one = any(sum([[ 1==equiv_set.get_equiv_const(size) for size in shape] for shape in shapes], []))
+        if not has_const_one and all([d == max_dim for d in dims]):
+            return arrs[0], self._call_assert_equiv(scope, loc, equiv_set, arrs)
+        asserts = []
+        new_shape = []
+        for i in range(max_dim):
+            sizes = []
+            for shape in shapes:
+                if i < len(shape):
+                    size = shape[len(shape) - 1 - i]
+                    const_size = equiv_set.get_equiv_const(size)
+                    if const_size != 1:
+                        sizes.insert(0, size) # non-1 size to front
+                    else:
+                        sizes.append(size) # size 1 to back
+            assert(len(sizes) > 0)
+            asserts.append(self._call_assert_equiv(scope, loc, equiv_set, sizes))
+            new_shape.append(sizes[0])
+        return tuple(reversed(new_shape)), sum(asserts, [])
 
-    def _call_assert_equiv(self, scope, loc, equiv_set, _args):
+    def _call_assert_equiv(self, scope, loc, equiv_set, args):
+        insts = self._make_assert_equiv(scope, loc, equiv_set, args)
+        if len(args) > 1:
+            equiv_set.insert_equiv(*args)
+        return insts
+
+    def _make_assert_equiv(self, scope, loc, equiv_set, _args):
         # filter out those that are already equivalent
         args = []
         for x in _args:
@@ -928,7 +1071,7 @@ class ArrayAnalysis(object):
         # no assertion necessary if there are less than two
         if len(args) < 2:
             return []
-        equiv_set.insert_equiv(*args)
+
         argtyps = tuple(self.typemap[a.name] for a in args)
 
         # assert_equiv takes vararg, which requires a tuple as argument type
@@ -956,6 +1099,8 @@ class ArrayAnalysis(object):
     def _gen_shape_call(self, equiv_set, var, ndims, shape):
         out = []
         # attr call: A_sh_attr = getattr(A, shape)
+        if isinstance(shape, ir.Var) and equiv_set.has_shape(shape):
+            shape = equiv_set.get_shape(shape)
         if isinstance(shape, ir.Var): # already a tuple variable that contains size
             attr_var = shape
             shape_attr_call = None

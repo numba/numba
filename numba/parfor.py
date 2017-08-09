@@ -45,7 +45,7 @@ from numba.ir_utils import (
     simplify_CFG,
     has_no_side_effect,
     canonicalize_array_math,
-    find_numpy_call,
+    find_callname,
     guard,
     require)
 
@@ -206,6 +206,7 @@ class ParforPass(object):
         # reorder statements to maximize fusion
         maximize_fusion(self.func_ir.blocks)
         fuse_parfors(self.array_analysis, self.func_ir.blocks)
+        dprint_func_ir(self.func_ir, "after fusion")
         # remove dead code after fusion to remove extra arrays and variables
         remove_dead(self.func_ir.blocks, self.func_ir.arg_names, self.typemap)
         #dprint_func_ir(self.func_ir, "after second remove_dead")
@@ -438,7 +439,7 @@ class ParforPass(object):
         """check if we support parfor translation for
         this Numpy call.
         """
-        call_name, mod_name = find_numpy_call(self.func_ir, expr)
+        call_name, mod_name = find_callname(self.func_ir, expr)
         supported_calls = ['zeros', 'ones'] + random_calls
         if call_name in supported_calls:
             return True
@@ -455,7 +456,7 @@ class ParforPass(object):
         """check if we support parfor translation for
         this Numpy reduce call.
         """
-        func_name, mod_name = find_numpy_call(self.func_ir, expr)
+        func_name, mod_name = find_callname(self.func_ir, expr)
         return (func_name in _reduction_ops)
 
     def _get_ndims(self, arr):
@@ -463,7 +464,7 @@ class ParforPass(object):
         return self.typemap[arr].ndim
 
     def _numpy_to_parfor(self, label, lhs, expr):
-        call_name, mod_name = find_numpy_call(self.func_ir, expr)
+        call_name, mod_name = find_callname(self.func_ir, expr)
         args = expr.args
         kws = dict(expr.kws)
         if call_name in ['zeros', 'ones'] or call_name.startswith('random.'):
@@ -634,7 +635,7 @@ class ParforPass(object):
         return parfor
 
     def _reduction_to_parfor(self, label, lhs, expr):
-        call_name, mod_name = find_numpy_call(self.func_ir, expr)
+        call_name, mod_name = find_callname(self.func_ir, expr)
         args = expr.args
         kws = dict(expr.kws)
         if call_name in _reduction_ops:
@@ -1009,7 +1010,7 @@ def _gen_arrayexpr_getitem(
         for i in reversed(range(ndims)):
             size_var = size_vars[i]
             size_def = func_ir.get_definition(size_var.name)
-            if isinstance(size_def, ir.Const):
+            if isinstance(size_def, ir.Const) and size_def.value == 1:
                 index_vars.append(const_var)
             else:
                 index_vars.append(all_parfor_indices[ind_offset + i])
@@ -1443,10 +1444,15 @@ def try_fuse(array_analysis, label, parfor1, parfor2):
 
     ndims = len(parfor1.loop_nests)
     # all loops should be equal length
+    def is_equiv(x, y):
+        return x == y or array_analysis.is_equiv(label, x, y)
+
     for i in range(ndims):
-        var1 = parfor1.loop_nests[i].index_variable
-        var2 = parfor2.loop_nests[i].index_variable
-        if not array_analysis.is_equiv(label, var1, var2):
+        nest1 = parfor1.loop_nests[i]
+        nest2 = parfor2.loop_nests[i]
+        if not (is_equiv(nest1.start, nest2.start) and
+                is_equiv(nest1.stop, nest2.stop) and
+                is_equiv(nest1.step, nest2.step)):
             dprint("try_fuse parfor dimension correlation mismatch", i)
             return None
 
@@ -1490,9 +1496,46 @@ def fuse_parfors_inner(parfor1, parfor2):
     for i in range(ndims):
         index_dict[parfor2.loop_nests[i].index_variable.name] = parfor1.loop_nests[i].index_variable
     replace_vars(parfor1.loop_body, index_dict)
+    nameset = set(x.name for x in index_dict.values())
+    remove_duplicate_definitions(parfor1.loop_body, nameset)
+    remove_empty_block(parfor1.loop_body)
 
     return parfor1
 
+
+def remove_duplicate_definitions(blocks, nameset):
+    """Remove duplicated definition for variables in the given nameset, which
+    is often a result of parfor fusion.
+    """
+    for label, block in blocks.items():
+        body = block.body
+        new_body = []
+        defined = set()
+        for inst in body:
+            if isinstance(inst, ir.Assign):
+                name = inst.target.name
+                if name in nameset:
+                    if name in defined:
+                        continue
+                    defined.add(name)
+            new_body.append(inst)
+        block.body = new_body
+    return
+
+def remove_empty_block(blocks):
+    """Remove empty blocks and any jumps to them, which can be a result
+    from prange conversion and/or fusion.
+    """
+    emptyset = set()
+    for label, block in blocks.items():
+        if len(block.body) == 0:
+            emptyset.add(label)
+    for label in emptyset:
+        blocks.pop(label)
+    for label, block in blocks.items():
+        inst = block.body[-1]
+        if isinstance(inst, ir.Jump) and inst.target in emptyset:
+            block.body.pop()
 
 def has_cross_iter_dep(parfor):
     # we consevatively assume there is cross iteration dependency when
