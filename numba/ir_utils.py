@@ -1129,14 +1129,14 @@ def require(cond):
     if not cond:
        raise GuardException
 
-def guard(func, *args):
+def guard(func, *args, **kwargs):
     """
     Run a function with given set of arguments, and guard against
     any GuardException raised by the function by returning None,
     or the expected return results if no such exception was raised.
     """
     try:
-        return func(*args)
+        return func(*args, **kwargs)
     except GuardException:
         return None
 
@@ -1150,7 +1150,7 @@ def get_definition(func_ir, name, **kwargs):
     except KeyError:
         raise GuardException
 
-def find_numpy_call(func_ir, expr, typemap=None):
+def find_callname(func_ir, expr, typemap=None):
     """Check if a call expression is calling a numpy function, and
     return the callee's function name and module name (both are strings),
     or raise GuardException. For array attribute calls such as 'a.f(x)'
@@ -1163,8 +1163,21 @@ def find_numpy_call(func_ir, expr, typemap=None):
     attrs = []
     while True:
         if isinstance(callee_def, ir.Global):
-            require(callee_def.value == numpy)
-            attrs.append('numpy')
+            # require(callee_def.value == numpy)
+            keys = ['name', '_name', '__name__']
+            value = None
+            for key in keys:
+                if hasattr(callee_def.value, key):
+                    value = getattr(callee_def.value, key)
+                    break
+            if not value:
+                raise GuardException
+            attrs.append(value)
+            class_name = callee_def.value.__class__.__name__
+            if class_name == 'builtin_function_or_method':
+                class_name = 'builtin'
+            if class_name != 'module':
+                attrs.append(class_name)
             break
         elif isinstance(callee_def, ir.Expr) and callee_def.op == 'getattr':
             obj = callee_def.value
