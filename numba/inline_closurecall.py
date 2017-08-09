@@ -14,7 +14,7 @@ from numba.ir_utils import (
     require,
     guard,
     get_definition,
-    find_numpy_call
+    find_callname
     )
 
 from numba.analysis import compute_cfg_from_blocks
@@ -334,7 +334,7 @@ def _find_arraycall(func_ir, block):
             # Found array_var = array(list_var)
             lhs  = instr.target
             expr = instr.value
-            if (guard(find_numpy_call, func_ir, expr) == ('array', 'numpy') and
+            if (guard(find_callname, func_ir, expr) == ('array', 'numpy') and
                 isinstance(expr.args[0], ir.Var)):
                 list_var = expr.args[0]
                 array_var = lhs
