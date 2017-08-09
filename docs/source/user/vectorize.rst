@@ -130,6 +130,7 @@ high compute intensity algorithms.  Transfering memory to and from the GPU adds
 significant overhead.
 
 
+.. _guvectorize:
 
 The ``@guvectorize`` decorator
 ==============================
