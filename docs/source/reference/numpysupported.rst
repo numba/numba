@@ -145,10 +145,9 @@ The following methods of Numpy arrays are supported in their basic form
 * :meth:`~numpy.ndarray.nonzero`
 * :meth:`~numpy.ndarray.prod`
 * :meth:`~numpy.ndarray.std`
-* :meth:`~numpy.ndarray.sum`
 * :meth:`~numpy.ndarray.var`
 
-The corresponding top-level Numpy functions (such as :func:`numpy.sum`)
+The corresponding top-level Numpy functions (such as :func:`numpy.prod`)
 are similarly supported.
 
 Other methods
@@ -165,6 +164,7 @@ The following methods of Numpy arrays are supported:
 * :meth:`~numpy.ndarray.ravel` (no order argument; 'C' order only)
 * :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
 * :meth:`~numpy.ndarray.sort` (without arguments)
+* :meth:`~numpy.ndarray.sum` (without arguments or with a constant, non-keyword axis argument in the range 0 to 3)
 * :meth:`~numpy.ndarray.transpose` (without arguments, and without copying)
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
 
