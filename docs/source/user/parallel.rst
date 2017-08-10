@@ -58,6 +58,8 @@ parallel semantics and for which we attempt to parallelize.
    Numpy broadcast between arrays with mixed dimensionality or size is
    not supported, nor is the reduction across a selected dimension.
 
+.. _numba-prange:
+
 Explicit Parallel Loops
 ========================
 
