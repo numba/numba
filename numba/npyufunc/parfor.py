@@ -46,7 +46,7 @@ def _lower_parfor_parallel(lowerer, parfor):
 
     # run get_parfor_outputs() and get_parfor_reductions() before gufunc creation
     # since Jumps are modified so CFG of loop_body dict will become invalid
-    assert parfor.params
+    assert parfor.params != None
 
     parfor_output_arrays = numba.parfor.get_parfor_outputs(
         parfor, parfor.params)
