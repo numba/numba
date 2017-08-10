@@ -437,7 +437,7 @@ Stage 6b: Perform Automatic Parallelization
 -------------------------------------------
 
 This pass is only performed if the parallel option in the :func:`~numba.jit`
-decorator is set to True.  This pass find parallelism implicit in the 
+decorator is set to True.  This pass find parallelism implicit in the
 semantics of operations in the Numba IR and replaces those operations
 with explicitly parallel representations of those operations using a
 special `parfor` operator.  Then, optimizations are performed to maximize
@@ -449,166 +449,158 @@ to guvectorize to implement the actual parallelism.  All these processes
 are described in more detail in the following paragraphs.
 The automatic parallelization pass has a number of sub-passes.
 
-CFG Simplification
-~~~~~~~~~~~~~~~~~~
+#. CFG Simplification
+    Sometimes Numba IR will contain chains of blocks containing no loops which
+    are merged in this sub-pass into single blocks.  This sub-pass simplifies
+    subsequent analysis of the IR.
 
-Sometimes Numba IR will contain chains of blocks
-containing no loops which are merged in this sub-pass into single blocks.
-This sub-pass simplifies subsequent analysis of the IR.
+#. Numpy canonicalization
+    Some Numpy operations can be written as operations on Numpy objects (e.g.
+    ``arr.sum()``), or as calls to Numpy taking those objects (e.g.
+    ``numpy.sum(arr)``).  This sub-pass converts all such operations to the
+    latter form for cleaner subsequent analysis.
 
-Numpy canonicalization
-~~~~~~~~~~~~~~~~~~~~~~
+#. Array analysis
+    A critical requirement for later parfor fusion is that parfors have
+    identical iteration spaces and these iteration spaces typically correspond
+    to the sizes of the dimensions of Numpy arrays.  In this sub-pass, the IR is
+    analyzed to determine equivalence classes for the dimensions of Numpy
+    arrays.  Consider the example, ``a = b + 1``, where `a` and `b` are both
+    Numpy arrays.  Here, we know that each dimension of `a` must have the same
+    equivalence class as the corresponding dimension of `b`.  Typically,
+    routines rich in Numpy operations will enable equivalence classes to be
+    fully known for all arrays created within a function.
 
-Some Numpy operations can be written as
-operations on Numpy objects (e.g. ``arr.sum()``), or as calls to Numpy
-taking those objects (e.g. ``numpy.sum(arr)``).  This sub-pass converts all
-such operations to the latter form for cleaner subsequent analysis.
+#. ``prange()`` to parfor
+    The use of prange (:ref:`numba-prange`) in a for loop is an explicit
+    indication from the programmer that all iterations of the for loop can
+    execute in parallel.  In this sub-pass, we analyze the CFG to locate loops
+    and to convert those loops controlled by a prange object to the explici
+    `parfor` operator.  Each explicit parfor operator consists of:
 
-Array analysis
-~~~~~~~~~~~~~~
+    a. A list of loop nest information that describes the iteration space of the
+       parfor.  Each entry in the loop nest list contains an indexing variable,
+       the start of the range, the end of the range, and the step value for each
+       iteration.
+    #. An initialization (init) block which contains instructions to be executed
+       one time before the parfor begins executing.
+    #. A loop body comprising a set of basic blocks that correspond to the body
+       of the loop and compute one point in the iteration space.
+    #. The index variables used for each dimension of the iteration space.
 
-A critical requirement for later parfor fusion is that 
-parfors have identical iteration spaces and these iteration spaces
-typically correspond to the sizes of the dimensions of Numpy arrays.
-In this sub-pass, the IR is analyzed to determine equivalence classes for
-the dimensions of Numpy arrays.  Consider the example, ``a = b + 1``, where `a`
-and `b` are both Numpy arrays.  Here, we know that each dimension of `a` 
-must have the same equivalence class as the corresponding dimension of `b`.
-Typically, routines rich in Numpy operations will enable equivalence classes
-to be fully known for all arrays created within a function.
 
-``prange()`` to parfor
-~~~~~~~~~~~~~~~~~~~~~~
 
-The use of prange (:ref:`numba-prange`) in a for loop is an explicit
-indication from the programmer that all iterations of the for loop can
-execute in parallel.  In this sub-pass, we analyze the CFG to locate loops
-and to convert those loops controlled by a prange object to the explicit 
-`parfor` operator.  Each explicit parfor operator consists of:
+    For parfor ``pranges``, the loop nest is a single entry where the start,
+    stop, and step fields come from the specified ``prange``.  The init block is
+    empty for ``prange`` parfors and the loop body is the set of blocks in the
+    loop minus the loop header.
 
-#. A list of loop nest information that describes the iteration space of the parfor.  Each entry in the loop nest list contains an indexing variable, the start of the range, the end of the range, and the step value for each iteration.
-#. An initialization (init) block which contains instructions to be executed one time before the parfor begins executing.
-#. A loop body comprising a set of basic blocks that correspond to the body of the loop and compute one point in the iteration space.
-#. The index variables used for each dimension of the iteration space.
+#. Numpy to parfor
+    In this sub-pass, Numpy functions such as ``ones``, ``zeros``, ``dot``, most
+    of the random number generating functions, arrayexprs (from Section
+    :ref:`rewrite-typed-ir`), and Numpy reductions are converted to parfors.
+    Generally, this conversion creates the loop nest list, whose length is equal
+    to the number of dimensions of the left-hand side of the assignment
+    instruction in the IR.  The number and size of the dimensions of the
+    left-hand-side array is taken from the array analysis information generated
+    in sub-pass 3 above.  An instruction to create the result Numpy array is
+    generated and stored in the new parfor's init block.  A basic block is
+    created for the loop body and an instruction is generated and added to the
+    end of that block to store the result of the computation into the array at
+    the current point in the iteration space.  The result stored into the array
+    depends on the operation that is being converted.  For example, for ``ones``,
+    the value stored is a constant 1.  For calls to generate a random array, the
+    value comes from a call to the same random number function but with the size
+    parameter dropped and therefore returning a scalar.  For arrayexpr operators,
+    the arrayexpr tree is converted to Numba IR and the value at the root of that
+    expression tree is used to write into the output array.
 
-For parfor ``pranges``, the loop nest is a single entry where the start, stop, and
-step fields come from the specified ``prange``.  The init block is empty for 
-``prange`` parfors and the loop body is the set of blocks in the loop minus the
-loop header.
+    For reductions, the loop nest list is similarly created using the array
+    analysis information for the array being reduced.  In the init block, the
+    initial value is assigned to the reduction variable.  The loop body consists
+    of a single block in which the next value in the iteration space is fetched
+    and the reduction operation is applied to that value and the current
+    reduction value and the result stored back into the reduction value.
 
-Numpy to parfor
-~~~~~~~~~~~~~~~
+#. Simplification
+    Performs a copy propagation and dead code elimination pass.
 
-In this sub-pass, Numpy functions such as ``ones``, 
-``zeros``, ``dot``, most of the random number generating functions, arrayexprs (from 
-Section :ref:`rewrite-typed-ir`), and Numpy reductions are converted to parfors.
-Generally, this conversion creates the loop nest list, whose length is equal to 
-the number of dimensions of the left-hand side of the assignment instruction in
-the IR.  The number and size of the dimensions of the left-hand-side array is
-taken from the array analysis information generated in sub-pass 3 above.
-An instruction to create the result Numpy array is generated and stored in the
-new parfor's init block.  A basic block is created for the loop body and an
-instruction is generated and added to the end of that block to store the result
-of the computation into the array at the current point in the iteration space.
-The result stored into the array depends on the operation that is being 
-converted.  For example, for ``ones``, the value stored is a constant 1.  For
-calls to generate a random array, the value comes from a call to the same
-random number function but with the size parameter dropped and therefore
-returning a scalar.  For arrayexpr operators, the arrayexpr tree is converted
-to Numba IR and the value at the root of that expression tree is used to
-write into the output array.
+#. Fusion
+    This sub-pass first processes each basic block and does a reordering of the
+    instructions within the block with the goal of pushing parfors lower in the
+    block and lifting non-parfors towards the start of the block.  In practice,
+    this approach does a good job of getting parfors adjacent to each other in
+    the IR, which enables more parfors to then be fused.  During parfor fusion,
+    each basic block is repeatedly scanned until no further fusion is possible.
+    During this scan, each set of adjacent instructions are considered.
+    Adjacent instructions are fused together if:
 
-For reductions, the loop nest list is similarly created using the array
-analysis information for the array being reduced.  In the init block, the
-initial value is assigned to the reduction variable.  The loop body consists
-of a single block in which the next value in the iteration space is fetched
-and the reduction operation is applied to that value and the current 
-reduction value and the result stored back into the reduction value.
+    a. they are both parfors
+    #. the parfors' loop nests are the same size and the array equivalence
+       classes for each dimension of the loop nests are the same, and
+    #. the first parfor does not create a reduction variable used by the
+       second parfor.
 
-Simplification
-~~~~~~~~~~~~~~
+    The two parfors are fused together by adding the second parfor's init block
+    to the first's, merging the two parfors' loop bodies together and replacing
+    the instances of the second parfor's loop index variables in the second
+    parfor's body with the loop index variables for the first parfor.
 
-Performs a copy propagation and dead code elimination pass.
+#. Push call objects and compute parfor parameters
+    In the lowering phase described in Section :ref:`lowering`, each parfor
+    becomes a separate function executed in parallel in ``guvectorize``
+    (:ref:`guvectorize`) style.  Since parfors may use variables defined
+    previously in a function, when those parfors become separate functions,
+    those variables must be passed to the parfor function as parameters.  In
+    this sub-pass, a use-def scan is made over each parfor body and liveness
+    information is used to determine which variables are used but not defined by
+    the parfor.  That list of variables is stored here in the parfor for use
+    during lowering.  Function variables are a special case in this process
+    since function variables cannot be passed to functions compiled in nopython
+    mode.  Instead, for function variables, this sub-pass pushes the assignment
+    instruction to the function variable into the parfor body so that those do
+    not need to be passed as parameters.
 
-Fusion
-~~~~~~
+    To see the intermediate IR between the above sub-passes and other debugging
+    information, set the :envvar:`NUMBA_DEBUG_ARRAY_OPT` environment variable to
+    1. For the example in Section :ref:`rewrite-typed-ir`, the following IR with
+    a parfor is generated during this stage::
 
-This sub-pass first processes each basic block and does a
-reordering of the instructions within the block with the goal of pushing
-parfors lower in the block and lifting non-parfors towards the start of
-the block.  In practice, this approach does a good job of getting parfors
-adjacent to each other in the IR, which enables more parfors to then be
-fused.  During parfor fusion, each basic block is repeatedly scanned until
-no further fusion is possible.  During this scan, each set of adjacent
-instructions are considered.  Adjacent instructions are fused together if
-a) they are both parfors, b) the parfors' loop nests are the same size and 
-the array equivalence classes for each dimension of the loop nests are the 
-same, and c) the first parfor does not create a reduction variable used by 
-the second parfor.  The two parfors are fused together by adding the 
-second parfor's init block to the first's, merging the two parfors'
-loop bodies together and replacing the instances of the second parfor's
-loop index variables in the second parfor's body with the loop index
-variables for the first parfor.
+     ______________________________________________________________________
+     label 0:
+         a0 = arg(0, name=a0)                     ['a0']
+         a0_sh_attr0.0 = getattr(attr=shape, value=a0) ['a0', 'a0_sh_attr0.0']
+         $consta00.1 = const(int, 0)              ['$consta00.1']
+         a0size0.2 = static_getitem(value=a0_sh_attr0.0, index_var=$consta00.1, index=0) ['$consta00.1', 'a0_sh_attr0.0', 'a0size0.2']
+         a1 = arg(1, name=a1)                     ['a1']
+         a1_sh_attr0.3 = getattr(attr=shape, value=a1) ['a1', 'a1_sh_attr0.3']
+         $consta10.4 = const(int, 0)              ['$consta10.4']
+         a1size0.5 = static_getitem(value=a1_sh_attr0.3, index_var=$consta10.4, index=0) ['$consta10.4', 'a1_sh_attr0.3', 'a1size0.5']
+         a2 = arg(2, name=a2)                     ['a2']
+         a2_sh_attr0.6 = getattr(attr=shape, value=a2) ['a2', 'a2_sh_attr0.6']
+         $consta20.7 = const(int, 0)              ['$consta20.7']
+         a2size0.8 = static_getitem(value=a2_sh_attr0.6, index_var=$consta20.7, index=0) ['$consta20.7', 'a2_sh_attr0.6', 'a2size0.8']
+     ---begin parfor 0---
+     index_var =  parfor_index.9
+     LoopNest(index_variable=parfor_index.9, range=0,a0size0.2,1 correlation=5)
+     init block:
+         $np_g_var.10 = global(np: <module 'numpy' from '/usr/local/lib/python3.5/dist-packages/numpy/__init__.py'>) ['$np_g_var.10']
+         $empty_attr_attr.11 = getattr(attr=empty, value=$np_g_var.10) ['$empty_attr_attr.11', '$np_g_var.10']
+         $np_typ_var.12 = getattr(attr=float64, value=$np_g_var.10) ['$np_g_var.10', '$np_typ_var.12']
+         $0.5 = call $empty_attr_attr.11(a0size0.2, $np_typ_var.12, kws=(), func=$empty_attr_attr.11, vararg=None, args=[Var(a0size0.2, test2.py (7)), Var($np_typ_var.12, test2.py (7))]) ['$0.5', '$empty_attr_attr.11', '$np_typ_var.12', 'a0size0.2']
+     label 1:
+         $arg_out_var.15 = getitem(value=a0, index=parfor_index.9) ['$arg_out_var.15', 'a0', 'parfor_index.9']
+         $arg_out_var.16 = getitem(value=a1, index=parfor_index.9) ['$arg_out_var.16', 'a1', 'parfor_index.9']
+         $arg_out_var.14 = $arg_out_var.15 * $arg_out_var.16 ['$arg_out_var.14', '$arg_out_var.15', '$arg_out_var.16']
+         $arg_out_var.17 = getitem(value=a2, index=parfor_index.9) ['$arg_out_var.17', 'a2', 'parfor_index.9']
+         $expr_out_var.13 = $arg_out_var.14 + $arg_out_var.17 ['$arg_out_var.14', '$arg_out_var.17', '$expr_out_var.13']
+         $0.5[parfor_index.9] = $expr_out_var.13  ['$0.5', '$expr_out_var.13', 'parfor_index.9']
+     ----end parfor 0----
+         $0.6 = cast(value=$0.5)                  ['$0.5', '$0.6']
+         return $0.6                              ['$0.6']
+     ______________________________________________________________________
 
-Push call objects and compute parfor parameters
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-In the lowering phase described in Section
-:ref:`lowering`, each parfor becomes a separate function executed in
-parallel in ``guvectorize`` (:ref:`guvectorize`) style.  Since parfors may 
-use variables
-defined previously in a function, when those parfors become separate
-functions, those variables must be passed to the parfor function as
-parameters.  In this sub-pass, a use-def scan is made over each parfor
-body and liveness information is used to determine which variables are
-used but not defined by the parfor.  That list of variables is stored
-here in the parfor for use during lowering.  Function variables 
-are a special case in this process since function variables
-cannot be passed to functions compiled in nopython mode.  Instead, for
-function variables, this sub-pass pushes the assignment instruction to the 
-function variable into the parfor body so that those do not need to be
-passed as parameters.
-
-To see the intermediate IR between the above sub-passes and other debugging
-information, set the :envvar:`NUMBA_DEBUG_ARRAY_OPT` environment variable
-to 1.  For the example in Section :ref:`rewrite-typed-ir`, the following
-IR with a parfor is generated during this stage::
-
-  ______________________________________________________________________
-  label 0:
-      a0 = arg(0, name=a0)                     ['a0']
-      a0_sh_attr0.0 = getattr(attr=shape, value=a0) ['a0', 'a0_sh_attr0.0']
-      $consta00.1 = const(int, 0)              ['$consta00.1']
-      a0size0.2 = static_getitem(value=a0_sh_attr0.0, index_var=$consta00.1, index=0) ['$consta00.1', 'a0_sh_attr0.0', 'a0size0.2']
-      a1 = arg(1, name=a1)                     ['a1']
-      a1_sh_attr0.3 = getattr(attr=shape, value=a1) ['a1', 'a1_sh_attr0.3']
-      $consta10.4 = const(int, 0)              ['$consta10.4']
-      a1size0.5 = static_getitem(value=a1_sh_attr0.3, index_var=$consta10.4, index=0) ['$consta10.4', 'a1_sh_attr0.3', 'a1size0.5']
-      a2 = arg(2, name=a2)                     ['a2']
-      a2_sh_attr0.6 = getattr(attr=shape, value=a2) ['a2', 'a2_sh_attr0.6']
-      $consta20.7 = const(int, 0)              ['$consta20.7']
-      a2size0.8 = static_getitem(value=a2_sh_attr0.6, index_var=$consta20.7, index=0) ['$consta20.7', 'a2_sh_attr0.6', 'a2size0.8']
-  ---begin parfor 0---
-  index_var =  parfor_index.9
-  LoopNest(index_variable=parfor_index.9, range=0,a0size0.2,1 correlation=5)
-  init block:
-      $np_g_var.10 = global(np: <module 'numpy' from '/usr/local/lib/python3.5/dist-packages/numpy/__init__.py'>) ['$np_g_var.10']
-      $empty_attr_attr.11 = getattr(attr=empty, value=$np_g_var.10) ['$empty_attr_attr.11', '$np_g_var.10']
-      $np_typ_var.12 = getattr(attr=float64, value=$np_g_var.10) ['$np_g_var.10', '$np_typ_var.12']
-      $0.5 = call $empty_attr_attr.11(a0size0.2, $np_typ_var.12, kws=(), func=$empty_attr_attr.11, vararg=None, args=[Var(a0size0.2, test2.py (7)), Var($np_typ_var.12, test2.py (7))]) ['$0.5', '$empty_attr_attr.11', '$np_typ_var.12', 'a0size0.2']
-  label 1:
-      $arg_out_var.15 = getitem(value=a0, index=parfor_index.9) ['$arg_out_var.15', 'a0', 'parfor_index.9']
-      $arg_out_var.16 = getitem(value=a1, index=parfor_index.9) ['$arg_out_var.16', 'a1', 'parfor_index.9']
-      $arg_out_var.14 = $arg_out_var.15 * $arg_out_var.16 ['$arg_out_var.14', '$arg_out_var.15', '$arg_out_var.16']
-      $arg_out_var.17 = getitem(value=a2, index=parfor_index.9) ['$arg_out_var.17', 'a2', 'parfor_index.9']
-      $expr_out_var.13 = $arg_out_var.14 + $arg_out_var.17 ['$arg_out_var.14', '$arg_out_var.17', '$expr_out_var.13']
-      $0.5[parfor_index.9] = $expr_out_var.13  ['$0.5', '$expr_out_var.13', 'parfor_index.9']
-  ----end parfor 0----
-      $0.6 = cast(value=$0.5)                  ['$0.5', '$0.6']
-      return $0.6                              ['$0.6']
-  ______________________________________________________________________
-
-.. _`lowering`:
+  .. _`lowering`:
 
 Stage 7a: Generate nopython LLVM IR
 -----------------------------------
@@ -675,7 +667,7 @@ generated above quite significantly:
 If created during Stage :ref:`parallel-accelerator`, parfor operations are
 lowered in the following manner.  First, instructions in the parfor's init
 block are lowered into the existing function using the normal lowering code.
-Second, the loop body of the parfor is turned into a separate GUFunc.  
+Second, the loop body of the parfor is turned into a separate GUFunc.
 Third, code is emitted for the current function to call the parallel GUFunc.
 
 To create a GUFunc from the parfor body, the signature of the GUFunc is
@@ -700,11 +692,11 @@ compiling this merged IR with the Numba compiler's ``compile_ir`` function.
 To call the parallel GUFunc, the static schedule must be created.
 Code is inserted to call a function named ``do_scheduling.``  This function
 is called with the size of each of the parfor's dimensions and the number
-`N` of configured Numba threads (:envvar:`NUMBA_NUM_THREADS`).  
+`N` of configured Numba threads (:envvar:`NUMBA_NUM_THREADS`).
 The ``do_scheduling`` function will divide
-the iteration space into N approximately equal sized regions (linear for 
+the iteration space into N approximately equal sized regions (linear for
 1D, rectangular for 2D, or hyperrectangles for 3+D) and the resulting
-schedule is passed to the parallel GUFunc.  The number of threads 
+schedule is passed to the parallel GUFunc.  The number of threads
 dedicated to a given dimension of the full iteration space is roughly
 proportional to the ratio of the size of the given dimension to the sum
 of the sizes of all the dimensions of the iteration space.
@@ -716,9 +708,9 @@ computed by a parfor, the parallel GUFunc and the code that calls it are
 modified to make the scalar reduction variable into an array of reduction
 variables whose length is equal to the number of Numba threads.  In addition,
 the GUFunc still contains a scalar version of the reduction variable that
-is updated by the parfor body during each iteration.  One time at the 
-end of the GUFunc this local reduction variable is copied into the 
-reduction array.  In this way, false sharing of the reduction array is 
+is updated by the parfor body during each iteration.  One time at the
+end of the GUFunc this local reduction variable is copied into the
+reduction array.  In this way, false sharing of the reduction array is
 prevented.  Code is also inserted into the main
 function after the parallel GUFunc has returned that does a reduction
 across this smaller reduction array and this final reduction value is
