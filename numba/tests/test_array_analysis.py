@@ -128,15 +128,31 @@ class TestArrayAnalysis(TestCase):
             self.assertTrue(self._has_no_assertcall(analysis.func_ir))
         else:
             for func in asserts:
-                func(analysis.func_ir)
+                func(analysis.func_ir, analysis.equiv_sets)
 
-    def _has_assertcall(self, func_ir, args):
+    def _match_argname(self, equiv_set, name, args):
+        print("match argname ", name, args)
+        shape = equiv_set.get_shape(name) if equiv_set.has_shape(name) else None
+        for arg in args:
+            if arg == name or arg.startswith():
+                return True
+        return False
+
+    def _has_assertcall(self, func_ir, equiv_sets, args):
         for label, block in func_ir.blocks.items():
+            equiv_set = equiv_sets[label]
+            shapes = None
+            if all([equiv_set.has_shape(x) for x in args]):
+                # NOTE: we only check first dimension of shapes
+                shapes = [equiv_set.get_shape(x)[0].name for x in args]
+                if len(set(shapes)) <= 1: # all equivalent, no assertion
+                    continue
             for expr in block.find_exprs(op='call'):
                 fn = func_ir.get_definition(expr.func.name)
                 if isinstance(fn, ir.Global) and fn.name == 'assert_equiv':
                     args_names = tuple(x.name for x in expr.args)
-                    if all([x in args_names for x in args]):
+                    if (all([x in args_names for x in args]) or
+                        (shapes and all([x in args_names for x in shapes]))):
                         return True
         return False
 
@@ -161,10 +177,12 @@ class TestArrayAnalysis(TestCase):
         return True
 
     def with_assert(self, *args):
-        return lambda func_ir: self.assertTrue(self._has_assertcall(func_ir, args))
+        return lambda func_ir, equiv_set: self.assertTrue(
+                        self._has_assertcall(func_ir, equiv_set, args))
 
     def without_assert(self, *args):
-        return lambda func_ir: self.assertFalse(self._has_assertcall(func_ir, args))
+        return lambda func_ir, equiv_set: self.assertFalse(
+                        self._has_assertcall(func_ir, equiv_set, args))
 
     def with_equiv(self, *args):
         def check(equiv_set):
@@ -185,10 +203,10 @@ class TestArrayAnalysis(TestCase):
         return lambda equiv_set: self.assertTrue(check(equiv_set))
 
     def with_shapecall(self, x):
-        return lambda func_ir: self.assertTrue(self._has_shapecall(func_ir, x))
+        return lambda func_ir, s: self.assertTrue(self._has_shapecall(func_ir, x))
 
     def without_shapecall(self, x):
-        return lambda func_ir: self.assertFalse(self._has_shapecall(func_ir, x))
+        return lambda func_ir, s: self.assertFalse(self._has_shapecall(func_ir, x))
 
     def test_base_cases(self):
         def test_0():
@@ -278,7 +296,7 @@ class TestArrayAnalysis(TestCase):
         with self.assertRaises(AssertionError) as raises:
             cfunc = njit(parallel=True)(test_9)
             cfunc(10, 9)
-        msg = "Size of A, B do not match"
+        msg = "Sizes of A, B do not match"
         self.assertIn(msg, str(raises.exception))
 
         def test_shape(A):

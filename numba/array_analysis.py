@@ -1037,21 +1037,30 @@ class ArrayAnalysis(object):
         """
         arrs = list(filter(lambda a: self._isarray(a.name), args))
         require(len(arrs) > 0)
+        names = [ x.name for x in arrs ]
         dims = [ self.typemap[x.name].ndim for x in arrs ]
         max_dim = max(dims)
         all_has_shapes = all([ equiv_set.has_shape(x) for x in arrs ])
         if not all_has_shapes:
             return arrs[0], self._call_assert_equiv(scope, loc, equiv_set, arrs)
         shapes = [ equiv_set.get_shape(x) for x in arrs ]
-        has_const_one = any(sum([[ 1==equiv_set.get_equiv_const(size) for size in shape] for shape in shapes], []))
+        # NOTE: although the following is a simpler case, it may result in
+        # assert_equiv calls immediately depending on the result of the previous
+        # statement, which is bad for fusion.
+        """
+        has_const_one = any(sum([ [ 1==equiv_set.get_equiv_const(size)
+                                    for size in shape]
+                                  for shape in shapes], []))
         if not has_const_one and all([d == max_dim for d in dims]):
             return arrs[0], self._call_assert_equiv(scope, loc, equiv_set, arrs)
+        """
         asserts = []
         new_shape = []
         for i in range(max_dim):
             sizes = []
+            size_names = []
             const_size_one = None
-            for shape in shapes:
+            for name, shape in zip(names, shapes):
                 if i < len(shape):
                     size = shape[len(shape) - 1 - i]
                     const_size = equiv_set.get_equiv_const(size)
@@ -1059,23 +1068,29 @@ class ArrayAnalysis(object):
                         const_size_one = size
                     else:
                         sizes.append(size) # non-1 size to front
+                        size_names.append(name)
             if len(sizes) == 0:
                 assert(const_size_one != None)
                 sizes.append(const_size_one)
-            asserts.append(self._call_assert_equiv(scope, loc, equiv_set, sizes))
+                size_names.append("1")
+            asserts.append(self._call_assert_equiv(scope, loc, equiv_set,
+                                                   sizes, names=size_names))
             new_shape.append(sizes[0])
         return tuple(reversed(new_shape)), sum(asserts, [])
 
-    def _call_assert_equiv(self, scope, loc, equiv_set, args):
-        insts = self._make_assert_equiv(scope, loc, equiv_set, args)
+    def _call_assert_equiv(self, scope, loc, equiv_set, args, names = None):
+        insts = self._make_assert_equiv(scope, loc, equiv_set, args, names = names)
         if len(args) > 1:
             equiv_set.insert_equiv(*args)
         return insts
 
-    def _make_assert_equiv(self, scope, loc, equiv_set, _args):
+    def _make_assert_equiv(self, scope, loc, equiv_set, _args, names = None):
         # filter out those that are already equivalent
+        if names == None:
+            names = [x.name for x in _args]
         args = []
-        for x in _args:
+        arg_names = []
+        for name, x in zip(names, _args):
             seen = False
             for y in args:
                 if x == y or equiv_set.is_equiv(x, y):
@@ -1083,18 +1098,18 @@ class ArrayAnalysis(object):
                     break
             if not seen:
                 args.append(x)
+                arg_names.append(name)
 
         # no assertion necessary if there are less than two
         if len(args) < 2:
             return []
 
-        names = [a.name for a in args]
-        msg = "Size of {} do not match".format(', '.join(names))
+        msg = "Sizes of {} do not match".format(', '.join(arg_names))
         msg_val = ir.Const(msg, loc)
         msg_typ = types.Const(msg)
         msg_var = scope.make_temp(loc)
         self.typemap[msg_var.name] = msg_typ
-        argtyps = tuple([msg_typ] + [self.typemap[x] for x in names])
+        argtyps = tuple([msg_typ] + [self.typemap[x.name] for x in args])
 
         # assert_equiv takes vararg, which requires a tuple as argument type
         tup_typ = types.BaseTuple.from_types(argtyps)
