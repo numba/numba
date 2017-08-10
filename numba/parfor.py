@@ -201,7 +201,8 @@ class ParforPass(object):
 
         #dprint_func_ir(self.func_ir, "after remove_dead")
         # reorder statements to maximize fusion
-        maximize_fusion(self.func_ir.blocks)
+        maximize_fusion(self.func_ir)
+        dprint_func_ir(self.func_ir, "after maximize fusion")
         fuse_parfors(self.array_analysis, self.func_ir.blocks)
         dprint_func_ir(self.func_ir, "after fusion")
         # remove dead code after fusion to remove extra arrays and variables
@@ -1358,7 +1359,8 @@ postproc.ir_extension_insert_dels[Parfor] = parfor_insert_dels
 # reorder statements to maximize fusion
 
 
-def maximize_fusion(blocks):
+def maximize_fusion(func_ir):
+    blocks = func_ir.blocks
     call_table, _ = get_call_table(blocks)
     for block in blocks.values():
         order_changed = True
@@ -1377,7 +1379,8 @@ def maximize_fusion(blocks):
                         next_stmt, Parfor)
                         and (not isinstance(next_stmt, ir.Assign)
                              or has_no_side_effect(
-                            next_stmt.value, set(), call_table))):
+                                next_stmt.value, set(), call_table)
+                             or guard(is_assert_equiv, func_ir, next_stmt.value))):
                     stmt_accesses = {v.name for v in stmt.list_vars()}
                     stmt_writes = get_parfor_writes(stmt)
                     next_accesses = {v.name for v in next_stmt.list_vars()}
@@ -1390,6 +1393,9 @@ def maximize_fusion(blocks):
                 i += 1
     return
 
+def is_assert_equiv(func_ir, expr):
+    func_name, mod_name = find_callname(func_ir, expr)
+    return func_name == 'assert_equiv'
 
 def get_parfor_writes(parfor):
     assert isinstance(parfor, Parfor)
