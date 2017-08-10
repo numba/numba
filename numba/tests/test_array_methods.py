@@ -623,6 +623,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(pyfunc(a), cfunc(a))
         # OK
         self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
+        b = np.ones((1,1))
+        # BAD: axis > dimensions
+        with self.assertRaises(ValueError):
+            cfunc(b, 2)
         # BAD: negative axis
         with self.assertRaises(ValueError):
             cfunc(a, -1)
