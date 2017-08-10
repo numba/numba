@@ -176,6 +176,12 @@ def array_sum_axis(context, builder, sig, args):
     ndim = sig.args[0].ndim - 1
     def array_sum_impl_axis(arr, axis):
         ndim = arr.ndim
+
+        # Catch where axis is negative or greater than 3.
+        if axis < 0 or axis > 3:
+            raise ValueError("Numba does not support sum with axis"
+                     "parameter outside the range 0 to 3.")
+
         # Catch the case where the user misspecifies the axis to be
         # more than the number of the array's dimensions.
         if axis >= ndim:
@@ -189,9 +195,6 @@ def array_sum_axis(context, builder, sig, args):
         ashape.pop(axis)
         # Convert this shape list back to a tuple using above intrinsic.
         ashape_without_axis = _create_tuple_result_shape(ashape, arr.shape)
-        if axis < 0 or axis > 3:
-            raise ValueError("Numba does not support sum with axis"
-                     "parameter outside the range 0 to 3.")
         # Tuple needed here to create output array with correct size.
         result = np.full(ashape_without_axis, zero, type(zero))
 
@@ -215,8 +218,7 @@ def array_sum_axis(context, builder, sig, args):
 
         return result
 
-    res = context.compile_internal(builder, array_sum_impl_axis, sig, args,
-            locals=dict(result=sig.return_type))
+    res = context.compile_internal(builder, array_sum_impl_axis, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @lower_builtin(np.prod, types.Array)
