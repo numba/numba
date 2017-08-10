@@ -3,12 +3,16 @@ from __future__ import print_function, absolute_import
 import os
 import platform
 import textwrap
+import warnings
+
+import numpy as np
 
 from .support import TestCase, override_config, captured_stdout, forbid_codegen
 from numba import unittest_support as unittest
 from numba import jit, jitclass, types
-from numba.compiler import compile_isolated
+from numba.compiler import compile_isolated, Flags
 from numba import compiler
+from .test_parfors import skip_unsupported
 
 def simple_nopython(somearg):
     retval = somearg + 1
@@ -28,6 +32,12 @@ simple_class_spec = [('h', types.int32)]
 def simple_class_user(obj):
     return obj.h
 
+def unsupported_parfor(a, b):
+    return np.dot(a, b) # dot as gemm unsupported
+
+force_parallel_flags = Flags()
+force_parallel_flags.set("auto_parallel")
+force_parallel_flags.set('nrt')
 
 class DebugTestBase(TestCase):
 
@@ -198,6 +208,36 @@ class TestEnvironmentOverride(FunctionDebugTestBase):
             del os.environ['NUMBA_DEBUG']
         out = self.compile_simple_nopython()
         self.assertFalse(out)
+
+class TestParforWarnings(TestCase):
+    """
+    Test that using parallel=True on a function that does not have parallel
+    semantics warns if NUMBA_WARNINGS is set.
+    """
+
+    def check_parfors_warning(self, warn_list):
+        msg = ("parallel=True was specified but no transformation for parallel"
+               " execution was possible.")
+        warning_found = False
+        for w in warn_list:
+            if msg in str(w.message):
+                warning_found = True
+                break
+        self.assertTrue(warning_found, "Warning message should be found.")
+
+    @skip_unsupported
+    def test_warns(self):
+        try:
+            arr_ty = types.Array(types.float64, 2, "C")
+            os.environ['NUMBA_WARNINGS'] = '1'
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                cres = compile_isolated(unsupported_parfor, (arr_ty, arr_ty),
+                                        flags=force_parallel_flags)
+
+            self.check_parfors_warning(w)
+        finally:
+            del os.environ['NUMBA_WARNINGS']
 
 
 if __name__ == '__main__':
