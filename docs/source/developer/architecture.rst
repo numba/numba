@@ -664,7 +664,7 @@ generated above quite significantly:
         ret i32 0
    }
 
-If created during Stage :ref:`parallel-accelerator`, parfor operations are
+If created during :ref:`parallel-accelerator`, parfor operations are
 lowered in the following manner.  First, instructions in the parfor's init
 block are lowered into the existing function using the normal lowering code.
 Second, the loop body of the parfor is turned into a separate GUFunc.
