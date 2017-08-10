@@ -74,6 +74,13 @@ variables.  On a 32-bit machine, you may sometimes need the magnitude of
 ``np.int64`` (for example ``np.int64(0)`` instead of ``0``).  It will
 propagate to all computations involving those variables.
 
+How can I tell if ``parallel=True`` worked?
+-------------------------------------------
+
+Set the :ref:`environment variable <numba-envvars>` ``NUMBA_WARNINGS`` to
+non-zero and if the ``parallel=True`` transformations failed for a function
+decorated as such, a warning will be displayed.
+
 
 Performance
 ===========
