@@ -214,11 +214,9 @@ This documentation is under the ``docs`` directory of the `Numba repository`_.
 It is built with `Sphinx <http://sphinx-doc.org/>`_, which is available
 using conda or pip.
 
-To build the documentation, you need the basicstrap theme and
-its dependencies::
+To build the documentation, you need the bootstrap theme::
 
-   $ pip install sphinxjp.themes.basicstrap
-   $ pip install sphinxjp.themecore
+   $ pip install sphinx_bootstrap_theme
 
 You can edit the source files under ``docs/source/``, after which you can
 build and check the documentation::
