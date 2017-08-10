@@ -619,11 +619,19 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         pyfunc = array_sum
         cfunc = jit(nopython=True)(pyfunc)
         # OK
-        a = np.ones((1,1,1,1,1))
+        a = np.ones((7, 6, 5, 4, 3))
         self.assertPreciseEqual(pyfunc(a), cfunc(a))
         # OK
         self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
-        b = np.ones((1,1))
+        
+    def test_sum_exceptions(self):
+        # Exceptions leak references
+        self.disable_leak_check()
+        pyfunc = array_sum
+        cfunc = jit(nopython=True)(pyfunc)
+        
+        a = np.ones((7, 6, 5, 4, 3))
+        b = np.ones((4, 3))
         # BAD: axis > dimensions
         with self.assertRaises(ValueError):
             cfunc(b, 2)
