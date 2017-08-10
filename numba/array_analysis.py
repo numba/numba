@@ -114,6 +114,8 @@ class EquivSet(object):
         self.next_ind = next_ind
 
     def empty(self):
+        """Return an empty EquivSet object.
+        """
         return EquivSet()
 
     def clone(self):
@@ -239,8 +241,9 @@ class EquivSet(object):
 class ShapeEquivSet(EquivSet):
     """Just like EquivSet, except that it accepts only numba IR variables
     and constants as objects, guided by their types. Arrays are considered
-    equivalence as long as their shapes are equivalent. Tuples or scalars
-    are considered equivalent only when they are equal in value.
+    equivalence as long as their shapes are equivalent. Scalars are
+    equivalent only when they are equal in value. Tuples are equivalent
+    when they are of the same size, and their elements are equivalent.
     """
     def __init__(self, typemap, shapedef, obj_to_ind = None,
                  ind_to_obj = None, next_id = 0):
@@ -249,6 +252,8 @@ class ShapeEquivSet(EquivSet):
         super(ShapeEquivSet, self).__init__(obj_to_ind, ind_to_obj, next_id)
 
     def empty(self):
+        """Return an empty ShapeEquivSet.
+        """
         return ShapeEquivSet(self.typemap, {})
 
     def clone(self):
@@ -261,21 +266,24 @@ class ShapeEquivSet(EquivSet):
                    next_id = self.next_ind)
 
     def __repr__(self):
-        return "EquivSet({}, {}, shapedef={})".format(self.ind_to_obj, self.obj_to_ind, self.shapedef)
+        return "EquivSet({}, {}, shapedef={})".format(self.ind_to_obj,
+                    self.obj_to_ind, self.shapedef)
 
     def _get_names(self, obj):
-        """Returns a set of names for the given obj, where array and tuples
+        """Return a set of names for the given obj, where array and tuples
         are broken down to their individual shapes or elements. This is
         safe because both Numba array shapes and Python tuples are immutable.
         """
         if isinstance(obj, ir.Var) or isinstance(obj, str):
             name = obj if isinstance(obj, str) else obj.name
             typ = self.typemap[name]
-            if isinstance(typ, types.BaseTuple) or isinstance(typ, types.ArrayCompatible):
+            if (isinstance(typ, types.BaseTuple) or
+                isinstance(typ, types.ArrayCompatible)):
                 if self.has_shape(obj):
                     return tuple(self._get_names(x) for x in self.get_shape(obj))
                 else:
-                    ndim = typ.ndim if isinstance(typ, types.ArrayCompatible) else len(typ)
+                    ndim = (typ.ndim if isinstance(typ, types.ArrayCompatible)
+                                     else len(typ))
                     return tuple("{}#{}".format(name, i) for i in range(ndim))
             else:
                 return (name,)
@@ -309,12 +317,17 @@ class ShapeEquivSet(EquivSet):
         return True
 
     def get_equiv_const(self, obj):
+        """If the given object is equivalent to a constant scalar,
+        return the scalar value, or None otherwise.
+        """
         names = self._get_names(obj)
         if len(names) > 1:
             return None
         return super(ShapeEquivSet, self).get_equiv_const(names[0])
 
     def get_equiv_set(self, obj):
+        """Return the set of equivalent objects.
+        """
         names = self._get_names(obj)
         if len(names) > 1:
             return None
@@ -423,6 +436,8 @@ class ArrayAnalysis(object):
         self.pruned_predecessors = {}
 
     def get_equiv_set(self, block_label):
+        """Return the equiv_set object of an block given its label.
+        """
         return self.equiv_sets[block_label]
 
     def run(self):
@@ -445,10 +460,14 @@ class ArrayAnalysis(object):
             equiv_set = None
             # equiv_set is the intersection of predecessors
             preds = cfg.predecessors(label)
+            # some incoming edge may be pruned due to prior analysis
             if label in self.pruned_predecessors:
                 pruned = self.pruned_predecessors[label]
             else:
                 pruned = []
+            # Go through each incoming edge, process prepended instructions and
+            # calculate beginning equiv_set of current block as an intersection
+            # of incoming ones.
             for (p, q) in preds:
                 if p in pruned:
                     continue
@@ -462,7 +481,7 @@ class ArrayAnalysis(object):
                         equiv_set = from_set
                     else:
                         equiv_set = equiv_set.intersect(from_set)
-            # Use a new equiv_set when there is no predecessor
+            # Start with a new equiv_set if none is computed
             if equiv_set == None:
                 equiv_set = ShapeEquivSet(self.typemap, {})
             self.equiv_sets[label] = equiv_set
