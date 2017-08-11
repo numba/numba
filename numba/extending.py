@@ -217,9 +217,10 @@ class _Intrinsic(object):
     _memo = weakref.WeakValueDictionary()
     __uuid = None
 
-    def __init__(self, name, defn):
+    def __init__(self, name, defn, support_literals=False):
         self._name = name
         self._defn = defn
+        self._support_literals = support_literals
 
     @property
     def _uuid(self):
@@ -244,6 +245,7 @@ class _Intrinsic(object):
         from .typing.templates import make_intrinsic_template, infer_global
 
         template = make_intrinsic_template(self, self._defn, self._name)
+        template.support_literals = self._support_literals
         infer(template)
         infer_global(self, types.Function(template))
 
@@ -283,7 +285,7 @@ class _Intrinsic(object):
             return llc
 
 
-def intrinsic(func):
+def intrinsic(*args, **kwargs):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode using the llvmlite IRBuilder API.  This is an escape
@@ -318,8 +320,32 @@ def intrinsic(func):
                     llrtype = context.get_value_type(rtype)
                     return builder.inttoptr(src, llrtype)
                 return sig, codegen
+
+    Optionally, keyword arguments can be provided to configure the intrinsic; e.g.
+
+        @intrinsic(support_literals=True)
+        def example(typingctx, ...):
+            ...
+
+    Support keyword arguments are:
+
+    - support_literals : bool
+        Indicates to the type inferencer that the typing logic accepts and can specialize to
+        `Const` type.
     """
-    name = getattr(func, '__name__', str(func))
-    llc = _Intrinsic(name, func)
-    llc._register()
-    return llc
+    # Make inner function for the actual work
+    def _intrinsic(func):
+        name = getattr(func, '__name__', str(func))
+        llc = _Intrinsic(name, func, **kwargs)
+        llc._register()
+        return llc
+
+    if not kwargs:
+        # No option is given
+        return _intrinsic(*args)
+    else:
+        # options are given, create a new callable to recv the
+        # definition function
+        def wrapper(func):
+            return _intrinsic(func)
+        return wrapper

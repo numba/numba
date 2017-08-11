@@ -50,6 +50,17 @@ class BaseFunction(Callable):
                 self._impl_keys[sig.args] = temp.get_impl_key(sig)
                 return sig
 
+    def get_call_type_with_literals(self, context, args, kws, literals):
+        for temp_cls in self.templates:
+            temp = temp_cls(context)
+            if literals is not None and temp.support_literals:
+                sig = temp.apply(*literals)
+            else:
+                sig = temp.apply(args, kws)
+            if sig is not None:
+                self._impl_keys[sig.args] = temp.get_impl_key(sig)
+                return sig
+
     def get_call_signatures(self):
         sigs = []
         is_param = False
