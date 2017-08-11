@@ -29,12 +29,12 @@ from numba.errors import RequireConstValue
 def _create_tuple_result_shape(tyctx, shape_list, shape_tuple):
     """
     This routine converts shape list where the axis dimension has already
-    been popped to a tuple for indexing of the same size.  The original shape 
-    tuple is also required because it contains a length field at compile time 
+    been popped to a tuple for indexing of the same size.  The original shape
+    tuple is also required because it contains a length field at compile time
     whereas the shape list does not.
     """
 
-    # The new tuple's size is one less than the original tuple since axis 
+    # The new tuple's size is one less than the original tuple since axis
     # dimension removed.
     nd = len(shape_tuple) - 1
     # The return type of this intrinsic is an int tuple of length nd.
@@ -65,7 +65,7 @@ def _create_tuple_result_shape(tyctx, shape_list, shape_tuple):
 
     return function_sig, codegen
 
-@intrinsic
+@intrinsic(support_literals=True)
 def _gen_index_tuple(tyctx, shape_tuple, value, axis):
     """
     Generates a tuple that can be used to index a specific slice from an
@@ -74,10 +74,6 @@ def _gen_index_tuple(tyctx, shape_tuple, value, axis):
     in the axis dimension and 'axis' is that dimension.  For this to work,
     axis has to be a const.
     """
-
-    if not isinstance(axis, types.Const):
-        raise RequireConstValue('axis must be a const')
-
     # Get the value of the axis constant.
     axis_value = axis.value
     # The length of the indexing tuple to be output.
@@ -98,7 +94,7 @@ def _gen_index_tuple(tyctx, shape_tuple, value, axis):
     types_list = ([types.slice2_type] * before) +  \
                   [types.intp] +                   \
                  ([types.slice2_type] * after)
-    
+
     # Creates the output type of the function.
     tupty = types.Tuple(types_list)
     # Defines the signature of the intrinsic.
@@ -140,6 +136,7 @@ def _gen_index_tuple(tyctx, shape_tuple, value, axis):
 
     return function_sig, codegen
 
+
 #----------------------------------------------------------------------------
 # Basic stats and aggregates
 
@@ -164,12 +161,12 @@ def array_sum_axis(context, builder, sig, args):
     """
     The third parameter to gen_index_tuple that generates the indexing
     tuples has to be a const so we can't just pass "axis" through since
-    that isn't const.  We can check for specific values and have 
+    that isn't const.  We can check for specific values and have
     different instances that do take consts.  Supporting axis summation
     only up to the fourth dimension for now.
     """
 
-    # typing/arraydecl.py:sum_expand defines the return type for sum with axis. 
+    # typing/arraydecl.py:sum_expand defines the return type for sum with axis.
     # It is one dimension less than the input array.
     zero = sig.return_type.dtype(0)
     def array_sum_impl_axis(arr, axis):
