@@ -365,7 +365,7 @@ class ShapeEquivSet(EquivSet):
         assert(len(objs) > 1)
         obj_names = [self._get_names(x) for x in objs]
         names = sum([list(x) for x in obj_names], [])
-        ndims = [len(names) for names in obj_names]
+        ndims = [len(x) for x in obj_names]
         ndim = ndims[0]
         assert all(ndim == x for x in ndims), (
                "Dimension mismatch for {}".format(objs))
