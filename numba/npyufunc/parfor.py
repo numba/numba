@@ -112,14 +112,14 @@ def _create_shape_signature(
     '''
     num_inouts = len(args) - num_reductions
     # maximum class number for array shapes
-    classes = [get_shape_classes(var) for var in args]
+    classes = [get_shape_classes(var) for var in args[1:]]
     class_set = set()
     for cls in classes:
         if cls:
             for i in cls:
                 class_set.add(i)
     max_class = max(class_set) + 1 if class_set else 0
-    classes[0] = (max_class,) # force set the class of 'sched' argument
+    classes.insert(0, (max_class,)) # force set the class of 'sched' argument
     class_set.add(max_class)
     class_map = {}
     alphabet = ord('a')
