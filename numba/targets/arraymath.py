@@ -172,8 +172,6 @@ def array_sum_axis(context, builder, sig, args):
     # typing/arraydecl.py:sum_expand defines the return type for sum with axis. 
     # It is one dimension less than the input array.
     zero = sig.return_type.dtype(0)
-    # Again, the result array is one less than the input array dimensions.
-    ndim = sig.args[0].ndim - 1
     def array_sum_impl_axis(arr, axis):
         ndim = arr.ndim
 
