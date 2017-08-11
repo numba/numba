@@ -128,31 +128,16 @@ class TestArrayAnalysis(TestCase):
             self.assertTrue(self._has_no_assertcall(analysis.func_ir))
         else:
             for func in asserts:
-                func(analysis.func_ir, analysis.equiv_sets)
+                func(analysis.func_ir, analysis.typemap)
 
-    def _match_argname(self, equiv_set, name, args):
-        print("match argname ", name, args)
-        shape = equiv_set.get_shape(name) if equiv_set.has_shape(name) else None
-        for arg in args:
-            if arg == name or arg.startswith():
-                return True
-        return False
-
-    def _has_assertcall(self, func_ir, equiv_sets, args):
+    def _has_assertcall(self, func_ir, typemap, args):
+        msg = "Sizes of {} do not match".format(', '.join(args))
         for label, block in func_ir.blocks.items():
-            equiv_set = equiv_sets[label]
-            shapes = None
-            if all([equiv_set.has_shape(x) for x in args]):
-                # NOTE: we only check first dimension of shapes
-                shapes = [equiv_set.get_shape(x)[0].name for x in args]
-                if len(set(shapes)) <= 1: # all equivalent, no assertion
-                    continue
             for expr in block.find_exprs(op='call'):
                 fn = func_ir.get_definition(expr.func.name)
                 if isinstance(fn, ir.Global) and fn.name == 'assert_equiv':
-                    args_names = tuple(x.name for x in expr.args)
-                    if (all([x in args_names for x in args]) or
-                        (shapes and all([x in args_names for x in shapes]))):
+                    typ = typemap[expr.args[0].name]
+                    if msg == typ.value:
                         return True
         return False
 
@@ -177,12 +162,12 @@ class TestArrayAnalysis(TestCase):
         return True
 
     def with_assert(self, *args):
-        return lambda func_ir, equiv_set: self.assertTrue(
-                        self._has_assertcall(func_ir, equiv_set, args))
+        return lambda func_ir, typemap: self.assertTrue(
+                        self._has_assertcall(func_ir, typemap, args))
 
     def without_assert(self, *args):
-        return lambda func_ir, equiv_set: self.assertFalse(
-                        self._has_assertcall(func_ir, equiv_set, args))
+        return lambda func_ir, typemap: self.assertFalse(
+                        self._has_assertcall(func_ir, typemap, args))
 
     def with_equiv(self, *args):
         def check(equiv_set):
@@ -284,7 +269,7 @@ class TestArrayAnalysis(TestCase):
                 d = a + a
             return b + d
         self._compile_and_test(test_8, (types.intp, types.intp),
-                               asserts = [ self.with_assert('a', 'b'),
+                               asserts = [ self.with_assert('b', 'a'),
                                            self.with_assert('b', 'd') ])
 
         def test_9(m, n):
@@ -298,6 +283,17 @@ class TestArrayAnalysis(TestCase):
             cfunc(10, 9)
         msg = "Sizes of A, B do not match"
         self.assertIn(msg, str(raises.exception))
+
+        def test_10(m):
+            A = np.ones(m)
+            s = 0
+            while m < 2:
+              m += 1
+              B = np.ones(m)
+              s += np.sum(A + B)
+            return s
+        self._compile_and_test(test_10, (types.intp,),
+                               asserts = [ self.with_assert('A', 'B') ])
 
         def test_shape(A):
             (m,n) = A.shape
@@ -579,7 +575,7 @@ class TestArrayAnalysis(TestCase):
                                equivs = [ self.with_equiv('a', (50,)),
                                           self.with_equiv('b', (10,)) ])
 
-        def test_dot(m,n):
+        def test_dot(l,m,n):
             a = np.dot(np.ones(1),np.ones(1))
             b = np.dot(np.ones(2),np.ones((2,3)))
             # Numba njit does not support higher dimensional inputs
@@ -590,12 +586,11 @@ class TestArrayAnalysis(TestCase):
             #g = np.dot(np.ones((1,2,3,4)),np.ones(4,))
             h = np.dot(np.ones((2,3)),np.ones((3,4)))
             i = np.dot(np.ones((m,n)),np.ones((n,m)))
-            l = m + n - n
             j = np.dot(np.ones((m,m)),np.ones((l,l)))
 
             # Numba njit does not support num keyword to linspace call!
             # c = np.linspace(m,n,num=10)
-        self._compile_and_test(test_dot, (types.intp,types.intp),
+        self._compile_and_test(test_dot, (types.intp,types.intp,types.intp),
                                equivs = [ self.without_equiv('a', (1,)), # not array
                                           self.with_equiv('b', (3,)),
                                           self.with_equiv('e', (1,)),
