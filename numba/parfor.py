@@ -1651,40 +1651,6 @@ def remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map, typemap)
     blocks[last_label].body.pop()  # remove branch
     return
 
-
-def remove_dead_class_sizes(blocks, array_analysis):
-    usedefs = compute_use_defs(blocks)
-    all_defs = set()
-    # all available variables after dead code elimination
-    for defs in usedefs.defmap.values():
-        all_defs.update(defs)
-
-    # TODO: no longer needed? remove dead size variables in class sizes
-    #for varlist in array_analysis.class_sizes.values():
-    #    vars_to_remove = []
-    #    for v in varlist:
-    #        # don't remove constants
-    #        if isinstance(v, ir.Var) and v.name not in all_defs:
-    #            vars_to_remove.append(v)
-    #    for v in vars_to_remove:
-    #        varlist.remove(v)
-
-    # replace array size variables with their class size variable if available
-    #for var, dim_sizes in array_analysis.array_size_vars.items():
-    #    ndims = len(dim_sizes)
-    #    shape_classes = array_analysis.array_shape_classes[var]
-    #    for i in range(ndims):
-    #        corr = shape_classes[i]
-    #        if corr != -1 and len(array_analysis.class_sizes[corr]) > 0:
-    #            class_size = array_analysis.class_sizes[corr][0]
-    #            dim_sizes[i] = class_size
-    #        # delete dead size vars
-    #        if isinstance(
-    #                dim_sizes[i],
-    #                ir.Var) and dim_sizes[i].name not in all_defs:
-    #            dim_sizes[i] = None
-    return
-
 def find_potential_aliases_parfor(parfor, args, typemap, alias_map, arg_aliases):
     blocks = wrap_parfor_blocks(parfor)
     ir_utils.find_potential_aliases(blocks, args, typemap, alias_map, arg_aliases)
