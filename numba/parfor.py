@@ -212,8 +212,6 @@ class ParforPass(object):
         # wouldn't need function variables as argument
         push_call_vars(self.func_ir.blocks, {}, {})
         remove_dead(self.func_ir.blocks, self.func_ir.arg_names, self.typemap)
-        # TODO: not needed? after optimization, some size variables are not available anymore
-        # remove_dead_class_sizes(self.func_ir.blocks, self.array_analysis)
         dprint_func_ir(self.func_ir, "after optimization")
         if config.DEBUG_ARRAY_OPT == 1:
             print("variable types: ", sorted(self.typemap.items()))
@@ -373,7 +371,7 @@ class ParforPass(object):
             return tuple_var, types.containers.UniTuple(types.intp, ndims)
         elif ndims == 1:
             return index_vars[0], types.intp
-        else: 
+        else:
             raise NotImplementedError("Parfor does not handle arrays of dimension 0")
 
     def _arrayexpr_to_parfor(self, equiv_set, lhs, arrayexpr, avail_vars):
@@ -489,7 +487,7 @@ class ParforPass(object):
             self.typemap[index_var.name] = types.intp
             loopnests = [LoopNest(index_var, 0, size_var, 1)]
             init_block = ir.Block(scope, loc)
-            parfor = Parfor(loopnests, init_block, {}, loc, index_var, 
+            parfor = Parfor(loopnests, init_block, {}, loc, index_var,
                             equiv_set)
 
             if self._get_ndims(in1.name) == 2:
@@ -619,7 +617,7 @@ class ParforPass(object):
 
 
         parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set)
-                        
+
 
         setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
         self.calltypes[setitem_node] = signature(
