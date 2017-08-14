@@ -858,9 +858,10 @@ class ArrayAnalysis(object):
         n = len(args)
         assert(n > 1)
         if n == 2:
-            return args[1], []
-        else:
-            return tuple(args[2:]), []
+            typ = self.typemap[args[1].name]
+            if isinstance(typ, types.BaseTuple):
+                return args[1], []
+        return tuple(args[1:]), []
 
     def _analyze_op_call_numpy_transpose(self, scope, equiv_set, args, kws):
         assert(len(args) == 1)
