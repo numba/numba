@@ -288,7 +288,10 @@ class ShapeEquivSet(EquivSet):
                 isinstance(typ, types.ArrayCompatible)):
                 ndim = (typ.ndim if isinstance(typ, types.ArrayCompatible)
                                  else len(typ))
-                return tuple("{}#{}".format(name, i) for i in range(ndim))
+                if ndim == 0:
+                    return name
+                else:
+                    return tuple("{}#{}".format(name, i) for i in range(ndim))
             else:
                 return (name,)
         elif isinstance(obj, ir.Const):
