@@ -351,7 +351,7 @@ class ParforPass(object):
         if func_var not in call_table:
             return False
         call = call_table[func_var]
-        return call[0] == 'prange' or call[0] == prange
+        return len(call) > 0 and (call[0] == 'prange' or call[0] == prange)
 
     def _is_C_order(self, arr_name):
         typ = self.typemap[arr_name]
@@ -904,12 +904,14 @@ def _arrayexpr_tree_to_ir(
                 func_var = ir.Var(
                     scope, _find_func_var(
                         typemap, op, avail_vars), loc)
+                func_var_def = func_ir.get_definition(func_var.name)
                 ir_expr = ir.Expr.call(func_var, arg_vars, (), loc)
                 call_typ = typemap[func_var.name].get_call_type(
                     typing.Context(), [el_typ] * len(arg_vars), {})
                 calltypes[ir_expr] = call_typ
                 el_typ = call_typ.return_type
                 #signature(el_typ, el_typ)
+                out_ir.append(ir.Assign(func_var_def, func_var, loc))
                 out_ir.append(ir.Assign(ir_expr, expr_out_var, loc))
     elif isinstance(expr, ir.Var):
         var_typ = typemap[expr.name]
