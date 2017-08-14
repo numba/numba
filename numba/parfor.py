@@ -918,9 +918,8 @@ def _arrayexpr_tree_to_ir(
         if isinstance(var_typ, types.Array):
             el_typ = var_typ.dtype
             ir_expr = _gen_arrayexpr_getitem(
-                func_ir,
+                equiv_set,
                 expr,
-                equiv_set.get_shape(expr),
                 parfor_index_tuple_var,
                 all_parfor_indices,
                 el_typ,
@@ -970,9 +969,8 @@ def _gen_np_divide(arg1, arg2, out_ir, typemap):
 
 
 def _gen_arrayexpr_getitem(
-        func_ir,
+        equiv_set,
         var,
-        size_vars,
         parfor_index_tuple_var,
         all_parfor_indices,
         el_typ,
@@ -988,10 +986,12 @@ def _gen_arrayexpr_getitem(
     index_var = parfor_index_tuple_var
     ndims = typemap[var.name].ndim
     num_indices = len(all_parfor_indices)
+    size_vars = equiv_set.get_shape(var)
+    size_consts = [ equiv_set.get_equiv_const(x) for x in size_vars ]
     if ndims == 1:
         # Use last index for 1D arrays
         index_var = all_parfor_indices[-1]
-    else:
+    elif any([ x != None for x in size_consts ]):
         # Need a tuple as index
         ind_offset = num_indices - ndims
         tuple_var = ir.Var(var.scope, mk_unique_var(
@@ -1006,8 +1006,8 @@ def _gen_arrayexpr_getitem(
         index_vars = []
         for i in reversed(range(ndims)):
             size_var = size_vars[i]
-            size_def = func_ir.get_definition(size_var.name)
-            if isinstance(size_def, ir.Const) and size_def.value == 1:
+            size_const = size_consts[i]
+            if size_const == 1:
                 index_vars.append(const_var)
             else:
                 index_vars.append(all_parfor_indices[ind_offset + i])
