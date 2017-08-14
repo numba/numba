@@ -74,6 +74,8 @@ variables.  On a 32-bit machine, you may sometimes need the magnitude of
 ``np.int64`` (for example ``np.int64(0)`` instead of ``0``).  It will
 propagate to all computations involving those variables.
 
+.. _parallel_faqs:
+
 How can I tell if ``parallel=True`` worked?
 -------------------------------------------
 

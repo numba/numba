@@ -120,4 +120,4 @@ it would require a pervasive change that rewrites the code to extract kernel
 computation that can be parallelized, which was both tedious and challenging.
 
 
-.. seealso:: :ref:`parallel_jit_option`
+.. seealso:: :ref:`parallel_jit_option`, :ref:`Parallel FAQs <parallel_FAQs>`
