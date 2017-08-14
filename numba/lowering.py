@@ -603,6 +603,7 @@ class Lower(BaseLower):
 
     def lower_call(self, resty, expr):
         signature = self.fndesc.calltypes[expr]
+        self.debug_print("# lower_call: expr = {0}".format(expr))
         if isinstance(signature.return_type, types.Phantom):
             return self.context.get_dummy_value()
 
@@ -684,6 +685,7 @@ class Lower(BaseLower):
         else:
             # Normal function resolution
             self.debug_print("# calling normal function: {0}".format(fnty))
+            self.debug_print("# signature: {0}".format(signature))
             impl = self.context.get_function(fnty, signature)
             if signature.recvr:
                 # The "self" object is passed as the function object

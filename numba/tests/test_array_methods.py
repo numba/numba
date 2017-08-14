@@ -8,7 +8,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import jit, typeof, types
 from numba.compiler import compile_isolated
-from numba.errors import TypingError
+from numba.errors import TypingError, LoweringError
 from numba.numpy_support import (as_dtype, strict_ufunc_typing,
                                  version as numpy_version)
 from .support import TestCase, CompilationCache, MemoryLeak, MemoryLeakMixin, tag
@@ -626,15 +626,32 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         pyfunc = array_sum
         cfunc = jit(nopython=True)(pyfunc)
         # OK
-        a = np.ones((2, 3))
+        a = np.ones((7, 6, 5, 4, 3))
         self.assertPreciseEqual(pyfunc(a), cfunc(a))
-        # BAD: with axis
-        with self.assertRaises(TypingError):
-            cfunc(a, 1)
+        # OK
+        self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
+        
+    def test_sum_exceptions(self):
+        # Exceptions leak references
+        self.disable_leak_check()
+        pyfunc = array_sum
+        cfunc = jit(nopython=True)(pyfunc)
+        
+        a = np.ones((7, 6, 5, 4, 3))
+        b = np.ones((4, 3))
+        # BAD: axis > dimensions
+        with self.assertRaises(ValueError):
+            cfunc(b, 2)
+        # BAD: negative axis
+        with self.assertRaises(ValueError):
+            cfunc(a, -1)
+        # BAD: axis greater than 3
+        with self.assertRaises(ValueError):
+            cfunc(a, 4)
         # BAD: with kw axis
         pyfunc = array_sum_kws
         cfunc = jit(nopython=True)(pyfunc)
-        with self.assertRaises(TypingError):
+        with self.assertRaises(LoweringError):
             cfunc(a, axis=1)
 
     def test_cumsum(self):

@@ -3,7 +3,6 @@ from __future__ import print_function, division, absolute_import
 from .abstract import *
 from .common import *
 
-
 class BaseFunction(Callable):
     """
     Base type class for some function types.
