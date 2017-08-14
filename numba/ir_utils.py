@@ -1182,6 +1182,8 @@ def find_callname(func_ir, expr, typemap=None):
     while True:
         if isinstance(callee_def, ir.Global):
             # require(callee_def.value == numpy)
+            # these checks support modules like numpy, numpy.random as well as
+            # calls like len() and intrinsitcs like assertEquiv
             keys = ['name', '_name', '__name__']
             value = None
             for key in keys:
@@ -1230,5 +1232,3 @@ def find_const(func_ir, var):
     var_def = get_definition(func_ir, var)
     require(isinstance(var_def, ir.Const))
     return var_def.value
-
-
