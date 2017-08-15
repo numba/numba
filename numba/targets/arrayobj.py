@@ -1975,6 +1975,10 @@ def dtype_type(context, builder, dtypety, dtypeval):
     # Just return a dummy opaque value
     return context.get_dummy_value()
 
+@lower_getattr(types.DType, 'kind')
+def dtype_type(context, builder, dtypety, dtypeval):
+    # Just return a dummy opaque value
+    return context.get_dummy_value()
 
 #-------------------------------------------------------------------------------
 # Structured / record lookup
@@ -3347,7 +3351,7 @@ def numpy_diag_kwarg(context, builder, sig, args):
 
     res = context.compile_internal(builder, diag_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
- 
+
 @lower_builtin(np.take, types.Array, types.Integer)
 @lower_builtin('array.take', types.Array, types.Integer)
 def numpy_take_1(context, builder, sig, args):
@@ -3403,7 +3407,7 @@ def numpy_take_3(context, builder, sig, args):
             ret[i] = flat[x]
             i = i + 1
         return ret.reshape(convert.shape)
-    
+
     res = context.compile_internal(builder, take_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
