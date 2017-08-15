@@ -11,6 +11,7 @@ from .support import TestCase, override_config, captured_stdout, forbid_codegen
 from numba import unittest_support as unittest
 from numba import jit, jitclass, types
 from numba.compiler import compile_isolated, Flags
+from numba.errors import NumbaWarning
 from numba import compiler
 from .test_parfors import skip_unsupported
 
@@ -192,6 +193,9 @@ class TestEnvironmentOverride(FunctionDebugTestBase):
     """
     Test that environment variables are reloaded by Numba when modified.
     """
+    
+    # mutates env with os.environ so must be run serially
+    _numba_parallel_test_ = False
 
     def test_debug(self):
         out = self.compile_simple_nopython()
@@ -215,6 +219,9 @@ class TestParforWarnings(TestCase):
     semantics warns if NUMBA_WARNINGS is set.
     """
 
+    # mutates env with os.environ so must be run serially
+    _numba_parallel_test_ = False
+
     def check_parfors_warning(self, warn_list):
         msg = ("parallel=True was specified but no transformation for parallel"
                " execution was possible.")
@@ -231,7 +238,7 @@ class TestParforWarnings(TestCase):
             arr_ty = types.Array(types.float64, 2, "C")
             os.environ['NUMBA_WARNINGS'] = '1'
             with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter("always")
+                warnings.simplefilter("always", NumbaWarning)
                 cres = compile_isolated(unsupported_parfor, (arr_ty, arr_ty),
                                         flags=force_parallel_flags)
 
