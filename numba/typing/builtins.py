@@ -360,6 +360,19 @@ class CmpOpEq(UnorderedCmpOp):
     key = '=='
 
 @infer
+class ConstOpEq(AbstractTemplate):
+    key = '=='
+    def generic(self, args, kws):
+        assert not kws
+        (arg1, arg2) = args
+        if isinstance(arg1, types.Const) and isinstance(arg2, types.Const):
+            return signature(types.boolean, arg1, arg2)
+
+@infer
+class ConstOpNotEq(ConstOpEq):
+    key = '!='
+
+@infer
 class CmpOpNe(UnorderedCmpOp):
     key = '!='
 
