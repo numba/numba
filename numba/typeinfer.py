@@ -1207,6 +1207,8 @@ class TypeInferer(object):
             self.constraints.append(Propagate(dst=target.name,
                                               src=expr.value.name,
                                               loc=inst.loc))
+        elif expr.op == 'make_function':
+            self.lock_type(target.name, types.pyfunc_type, loc=inst.loc)
         else:
             raise NotImplementedError(type(expr), expr)
 

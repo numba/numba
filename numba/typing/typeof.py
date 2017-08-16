@@ -125,6 +125,10 @@ def _typeof_numpy_scalar(val, c):
 def _typeof_str(val, c):
     return types.string
 
+@typeof_impl.register(type((lambda a: a).__code__))
+def _typeof_code(val, c):
+    return types.code_type
+
 @typeof_impl.register(type(None))
 def _typeof_none(val, c):
     return types.none
@@ -201,4 +205,3 @@ def _typeof_ndarray(val, c):
 def typeof_array(val, c):
     arrty = typeof_impl(val.get('host'), c)
     return types.SmartArrayType(arrty.dtype, arrty.ndim, arrty.layout, type(val))
-
