@@ -1985,6 +1985,34 @@ def finfo_lower(context, builder, sig, args):
     # Just return a dummy opaque value
     return context.get_dummy_value()
 
+@lower_getattr(types.FInfo, 'max')
+def dtype_type(context, builder, finfoty, finfoval):
+    bw = finfoty.dtype.dtype.bitwidth
+    npty = getattr(np, 'float{}'.format(bw))
+
+    if bw == 32:
+        lty = ir.FloatType()
+    elif bw == 64:
+        lty = ir.DoubleType()
+    else:
+        raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
+    res = ir.Constant(lty, np.finfo(npty).max)
+    return impl_ret_untracked(context, builder, lty, res)
+
+@lower_getattr(types.FInfo, 'min')
+def dtype_type(context, builder, finfoty, finfoval):
+    bw = finfoty.dtype.dtype.bitwidth
+    npty = getattr(np, 'float{}'.format(bw))
+
+    if bw == 32:
+        lty = ir.FloatType()
+    elif bw == 64:
+        lty = ir.DoubleType()
+    else:
+        raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
+    res = ir.Constant(lty, np.finfo(npty).min)
+    return impl_ret_untracked(context, builder, lty, res)
+
 #-------------------------------------------------------------------------------
 # Structured / record lookup
 
