@@ -49,7 +49,11 @@ from numba.ir_utils import (
     canonicalize_array_math,
     find_callname,
     guard,
-    require)
+    require,
+    compile_to_numba_ir,
+    get_definition,
+    replace_arg_nodes,
+    replace_returns)
 
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
@@ -199,6 +203,7 @@ class ParforPass(object):
         self.array_analysis.run()
         self._convert_prange(self.func_ir.blocks)
         self._convert_numpy(self.func_ir.blocks)
+        self._convert_reduce(self.func_ir.blocks)
 
         dprint_func_ir(self.func_ir, "after parfor pass")
         simplify(self.func_ir, self.typemap, self.calltypes)
@@ -261,6 +266,23 @@ class ParforPass(object):
                     avail_vars.append(lhs.name)
                 new_body.append(instr)
             block.body = new_body
+
+    def _convert_reduce(self, blocks):
+        topo_order = find_topo_order(blocks)
+        for label in topo_order:
+            block = blocks[label]
+            new_body = []
+            equiv_set = self.array_analysis.get_equiv_set(label)
+            for instr in block.body:
+                if guard(self._is_reduce_assign, instr):
+                    expr = instr.value
+                    lhs = instr.target
+                    parfor = guard(self._reduce_to_parfor, equiv_set, lhs, expr)
+                    if parfor:
+                        instr = parfor
+                new_body.append(instr)
+            block.body = new_body
+        return
 
     def _convert_prange(self, blocks):
         call_table, _ = get_call_table(blocks)
@@ -358,6 +380,15 @@ class ParforPass(object):
         call = call_table[func_var]
         return len(call) > 0 and (call[0] == 'prange' or call[0] == prange)
 
+    def _is_reduce_assign(self, inst):
+        require(isinstance(inst, ir.Assign))
+        rhs = inst.value
+        require(isinstance(rhs, ir.Expr))
+        require(rhs.op == 'call')
+        callname = find_callname(self.func_ir, rhs)
+        return (callname == ('reduce', 'builtin')
+                or callname == ('reduce', 'functools'))
+
     def _is_C_order(self, arr_name):
         typ = self.typemap[arr_name]
         return isinstance(typ, types.npytypes.Array) and typ.layout == 'C' and typ.ndim > 0
@@ -380,6 +411,16 @@ class ParforPass(object):
             raise NotImplementedError(
                 "Parfor does not handle arrays of dimension 0")
 
+    def _mk_parfor_loops(self, size_vars, scope, loc):
+        loopnests = []
+        index_vars = []
+        for size_var in size_vars:
+            index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
+            index_vars.append(index_var)
+            self.typemap[index_var.name] = types.intp
+            loopnests.append(LoopNest(index_var, 0, size_var, 1))
+        return index_vars, loopnests
+
     def _arrayexpr_to_parfor(self, equiv_set, lhs, arrayexpr, avail_vars):
         """generate parfor from arrayexpr node, which is essentially a
         map with recursive tree.
@@ -391,14 +432,8 @@ class ParforPass(object):
         el_typ = arr_typ.dtype
 
         # generate loopnests and size variables from lhs correlations
-        loopnests = []
-        index_vars = []
         size_vars = equiv_set.get_shape(lhs)
-        for size_var in size_vars:
-            index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
-            index_vars.append(index_var)
-            self.typemap[index_var.name] = types.intp
-            loopnests.append(LoopNest(index_var, 0, size_var, 1))
+        index_vars, loopnests = self._mk_parfor_loops(size_vars, scope, loc)
 
         # generate init block and body
         init_block = ir.Block(scope, loc)
@@ -579,14 +614,8 @@ class ParforPass(object):
         el_typ = arr_typ.dtype
 
         # generate loopnests and size variables from lhs correlations
-        loopnests = []
-        index_vars = []
         size_vars = equiv_set.get_shape(lhs)
-        for size_var in size_vars:
-            index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
-            index_vars.append(index_var)
-            self.typemap[index_var.name] = types.intp
-            loopnests.append(LoopNest(index_var, 0, size_var, 1))
+        index_vars, loopnests = self._mk_parfor_loops(size_vars, scope, loc)
 
         # generate init block and body
         init_block = ir.Block(scope, loc)
@@ -648,26 +677,15 @@ class ParforPass(object):
             ndims = arr_typ.ndim
 
             # For full reduction, loop range correlation is same as 1st input
-            sizes = equiv_set.get_shape(in1)
-            assert ndims == len(sizes)
+            size_vars = equiv_set.get_shape(in1)
+            assert ndims == len(size_vars)
             scope = lhs.scope
             loc = expr.loc
-            loopnests = []
-            parfor_index = []
-            for i in range(ndims):
-                index_var = ir.Var(
-                    scope, mk_unique_var(
-                        "$parfor_index" + str(i)), loc)
-                self.typemap[index_var.name] = types.intp
-                parfor_index.append(index_var)
-                loopnests.append(LoopNest(index_var, 0, sizes[i], 1))
-
+            index_vars, loopnests = self._mk_parfor_loops(size_vars, scope, loc)
             acc_var = lhs
 
-            # init value
-            init_const = ir.Const(el_typ(init_val), loc)
-
             # init block has to init the reduction variable
+            init_const = ir.Const(el_typ(init_val), loc)
             init_block = ir.Block(scope, loc)
             init_block.body.append(ir.Assign(init_const, acc_var, loc))
 
@@ -676,7 +694,7 @@ class ParforPass(object):
             tmp_var = ir.Var(scope, mk_unique_var("$val"), loc)
             self.typemap[tmp_var.name] = in_typ
             index_var, index_var_type = self._make_index_var(
-                scope, parfor_index, acc_block)
+                scope, index_vars, acc_block)
             getitem_call = ir.Expr.getitem(in1, index_var, loc)
             self.calltypes[getitem_call] = signature(
                 in_typ, arr_typ, index_var_type)
@@ -719,6 +737,53 @@ class ParforPass(object):
         # return error if we couldn't handle it (avoid rewrite infinite loop)
         raise NotImplementedError("parfor translation failed for ", expr)
 
+    def _reduce_to_parfor(self, equiv_set, lhs, expr):
+        #return ir.Assign(expr.args[2], lhs, lhs.loc)
+        args = expr.args
+        scope = lhs.scope
+        loc = expr.loc
+        reduce_func = get_definition(self.func_ir, args[0])
+        in_arr = args[1]
+        init_val = args[2]
+        arr_typ = self.typemap[in_arr.name]
+        in_typ = arr_typ.dtype
+        size_vars = equiv_set.get_shape(in_arr)
+        index_vars, loopnests = self._mk_parfor_loops(size_vars, scope, loc)
+
+        acc_var = lhs
+
+        # init block has to init the reduction variable
+        init_block = ir.Block(scope, loc)
+        init_block.body.append(ir.Assign(init_val, acc_var, loc))
+
+        # loop body accumulates acc_var
+        acc_block = ir.Block(scope, loc)
+        # make getitem
+        tmp_var = ir.Var(scope, mk_unique_var("$val"), loc)
+        self.typemap[tmp_var.name] = in_typ
+        index_var, index_var_type = self._make_index_var(
+            scope, index_vars, acc_block)
+        getitem_call = ir.Expr.getitem(in_arr, index_var, loc)
+        self.calltypes[getitem_call] = signature(
+            in_typ, arr_typ, index_var_type)
+
+        reduce_f_ir = compile_to_numba_ir(reduce_func,
+                                        self.func_ir.func_id.func.__globals__,
+                                        self.typingctx,
+                                        (in_typ, in_typ),
+                                        self.typemap,
+                                        self.calltypes)
+        loop_body = reduce_f_ir.blocks
+        acc_label = next_label()
+        loop_body[acc_label] = acc_block
+        first_reduce_block = reduce_f_ir.blocks[min(reduce_f_ir.blocks.keys())]
+        first_reduce_block.body.insert(0, ir.Assign(getitem_call, tmp_var, loc))
+        replace_arg_nodes(first_reduce_block, [acc_var, tmp_var])
+        replace_returns(loop_body, acc_var, acc_label)
+
+        parfor = Parfor(loopnests, init_block, loop_body, loc, index_var,
+                        equiv_set)
+        return parfor
 
 def _remove_size_arg(call_name, expr):
     "remove size argument from args or kws"
