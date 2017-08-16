@@ -560,5 +560,23 @@ class TestDType(TestCase):
         self.assertEqual(tkind(np.ones(3, dtype=np.intp)),
                             jit_tkind(np.ones(3, dtype=np.intp)))
 
+class TestFInfo(TestCase):
+
+    def test_max(self):
+        def finfo_max(A):
+            return np.finfo(A.dtype).max
+        jit_finfo_max = jit(nopython=True)(finfo_max)
+        self.assertEqual(finfo_max(np.ones(3)), jit_finfo_max(np.ones(3)))
+        self.assertEqual(finfo_max(np.ones(3, dtype=np.float32)),
+                            jit_finfo_max(np.ones(3, dtype=np.float32)))
+
+    def test_min(self):
+        def finfo_min(A):
+            return np.finfo(A.dtype).min
+        jit_finfo_min = jit(nopython=True)(finfo_min)
+        self.assertEqual(finfo_min(np.ones(3)), jit_finfo_min(np.ones(3)))
+        self.assertEqual(finfo_min(np.ones(3, dtype=np.float32)),
+                            jit_finfo_min(np.ones(3, dtype=np.float32)))
+
 if __name__ == '__main__':
     unittest.main()
