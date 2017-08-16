@@ -2013,6 +2013,28 @@ def dtype_type(context, builder, finfoty, finfoval):
     res = ir.Constant(lty, np.finfo(npty).min)
     return impl_ret_untracked(context, builder, lty, res)
 
+
+@lower_builtin(np.iinfo, types.DType)
+def finfo_lower(context, builder, sig, args):
+    # Just return a dummy opaque value
+    return context.get_dummy_value()
+
+@lower_getattr(types.IInfo, 'max')
+def dtype_type(context, builder, iinfoty, iinfoval):
+    bw = iinfoty.dtype.dtype.bitwidth
+    val = iinfoty.dtype.dtype.maxval
+    lty = ir.IntType(bw)
+    res = ir.Constant(lty, val)
+    return impl_ret_untracked(context, builder, lty, res)
+
+@lower_getattr(types.IInfo, 'min')
+def dtype_type(context, builder, iinfoty, iinfoval):
+    bw = iinfoty.dtype.dtype.bitwidth
+    val = iinfoty.dtype.dtype.minval
+    lty = ir.IntType(bw)
+    res = ir.Constant(lty, val)
+    return impl_ret_untracked(context, builder, lty, res)
+
 #-------------------------------------------------------------------------------
 # Structured / record lookup
 

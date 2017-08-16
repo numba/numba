@@ -479,6 +479,15 @@ class FInfoAttr(AttributeTemplate):
     def resolve_min(self, ary):
         return ary.dtype.dtype
 
+@infer_getattr
+class IInfoAttr(AttributeTemplate):
+    key = types.IInfo
+
+    def resolve_max(self, ary):
+        return ary.dtype.dtype
+
+    def resolve_min(self, ary):
+        return ary.dtype.dtype
 
 @infer
 class StaticGetItemArray(AbstractTemplate):
