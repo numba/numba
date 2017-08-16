@@ -1988,6 +1988,8 @@ def finfo_lower(context, builder, sig, args):
 @lower_getattr(types.FInfo, 'max')
 def dtype_type(context, builder, finfoty, finfoval):
     bw = finfoty.dtype.dtype.bitwidth
+    if isinstance(finfoty.dtype.dtype, types.Integer):
+        return ir.Constant(ir.IntType(bw), 0)
     npty = getattr(np, 'float{}'.format(bw))
 
     if bw == 32:
@@ -2002,6 +2004,8 @@ def dtype_type(context, builder, finfoty, finfoval):
 @lower_getattr(types.FInfo, 'min')
 def dtype_type(context, builder, finfoty, finfoval):
     bw = finfoty.dtype.dtype.bitwidth
+    if isinstance(finfoty.dtype.dtype, types.Integer):
+        return ir.Constant(ir.IntType(bw), 0)
     npty = getattr(np, 'float{}'.format(bw))
 
     if bw == 32:
@@ -2022,6 +2026,17 @@ def finfo_lower(context, builder, sig, args):
 @lower_getattr(types.IInfo, 'max')
 def dtype_type(context, builder, iinfoty, iinfoval):
     bw = iinfoty.dtype.dtype.bitwidth
+    # sometimes iinfo is called on float types in untaken target of a branch:
+    # np.finfo(A.dtype).max if A.dtype.kind=='f' else np.iinfo(A.dtype).max
+    # we just return a dummy float value
+    if isinstance(iinfoty.dtype.dtype, types.Float):
+        if bw == 32:
+            lty = ir.FloatType()
+        elif bw == 64:
+            lty = ir.DoubleType()
+        else:
+            raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
+        return ir.Constant(lty, 0)
     val = iinfoty.dtype.dtype.maxval
     lty = ir.IntType(bw)
     res = ir.Constant(lty, val)
@@ -2030,6 +2045,14 @@ def dtype_type(context, builder, iinfoty, iinfoval):
 @lower_getattr(types.IInfo, 'min')
 def dtype_type(context, builder, iinfoty, iinfoval):
     bw = iinfoty.dtype.dtype.bitwidth
+    if isinstance(iinfoty.dtype.dtype, types.Float):
+        if bw == 32:
+            lty = ir.FloatType()
+        elif bw == 64:
+            lty = ir.DoubleType()
+        else:
+            raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
+        return ir.Constant(lty, 0)
     val = iinfoty.dtype.dtype.minval
     lty = ir.IntType(bw)
     res = ir.Constant(lty, val)
