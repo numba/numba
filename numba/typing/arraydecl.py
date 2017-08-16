@@ -468,6 +468,14 @@ class DTypeAttr(AttributeTemplate):
             return None  # other types not supported yet
         return types.Const(val)
 
+
+#@infer_getattr
+#class FInfoAttr(AttributeTemplate):
+#    key = types.FInfo
+#
+#    def resolve_max(self, ary):
+
+
 @infer
 class StaticGetItemArray(AbstractTemplate):
     key = "static_getitem"

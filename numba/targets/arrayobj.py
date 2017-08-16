@@ -1980,6 +1980,11 @@ def dtype_type(context, builder, dtypety, dtypeval):
     # Just return a dummy opaque value
     return context.get_dummy_value()
 
+@lower_builtin(np.finfo, types.DType)
+def finfo_lower(context, builder, sig, args):
+    # Just return a dummy opaque value
+    return context.get_dummy_value()
+
 #-------------------------------------------------------------------------------
 # Structured / record lookup
 

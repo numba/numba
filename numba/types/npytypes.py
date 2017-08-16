@@ -108,6 +108,12 @@ class DType(DTypeSpec, Opaque):
         res = super(DType, self).__getitem__(arg)
         return res.copy(dtype=self.dtype)
 
+class FInfo(Opaque):
+    def __init__(self, dtype):
+        assert isinstance(dtype, Type)
+        self.dtype = dtype
+        name = "FInfo(%s)" % (dtype,)
+        super(Opaque, self).__init__(name)
 
 class NumpyFlatType(SimpleIteratorType, MutableSequence):
     """
