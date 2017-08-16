@@ -469,11 +469,15 @@ class DTypeAttr(AttributeTemplate):
         return types.Const(val)
 
 
-#@infer_getattr
-#class FInfoAttr(AttributeTemplate):
-#    key = types.FInfo
-#
-#    def resolve_max(self, ary):
+@infer_getattr
+class FInfoAttr(AttributeTemplate):
+    key = types.FInfo
+
+    def resolve_max(self, ary):
+        return ary.dtype.dtype
+
+    def resolve_min(self, ary):
+        return ary.dtype.dtype
 
 
 @infer
