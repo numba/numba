@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
-from numba import ir, types, typing, config, analysis
+from numba import ir, types, typing, config, analysis, utils
 from numba.typing.templates import signature
 import numpy
 from numba.analysis import (compute_live_map, compute_use_defs,
@@ -1234,3 +1234,105 @@ def find_const(func_ir, var):
     var_def = get_definition(func_ir, var)
     require(isinstance(var_def, ir.Const))
     return var_def.value
+
+def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
+                        typemap=None, calltypes=None):
+    from numba import compiler
+    f_ir = get_ir_of_code(glbls, mk_func.code)
+    remove_dels(f_ir.blocks)
+
+    # relabel by adding an offset
+    global _max_label
+    f_ir.blocks = add_offset_to_labels(f_ir.blocks, _max_label + 1)
+    max_label = max(f_ir.blocks.keys())
+    _max_label = max_label
+
+    # rename all variables to avoid conflict
+    var_table = get_name_var_table(f_ir.blocks)
+    new_var_dict = {}
+    for name, var in var_table.items():
+        new_var_dict[name] = mk_unique_var(name)
+    replace_var_names(f_ir.blocks, new_var_dict)
+
+    if typingctx:
+        f_typemap, f_return_type, f_calltypes = compiler.type_inference_stage(
+                typingctx, f_ir, arg_typs, None)
+        # remove argument entries like arg.a from typemap
+        arg_names = [vname for vname in f_typemap if vname.startswith("arg.")]
+        for a in arg_names:
+            f_typemap.pop(a)
+        typemap.update(f_typemap)
+        calltypes.update(f_calltypes)
+    return f_ir
+
+def get_ir_of_code(glbls, fcode):
+    """
+    Compile a code object to get its IR.
+    """
+    #glbls = self.func_ir.func_id.func.__globals__
+    nfree = len(fcode.co_freevars)
+    func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
+    func_clo = ",".join(["c_%d" % i for i in range(nfree)])
+    func_arg = ",".join(["x_%d" % i for i in range(fcode.co_argcount)])
+    func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (
+        func_env, func_arg, func_clo)
+    loc = {}
+    exec(func_text, glbls, loc)
+
+    # hack parameter name .0 for Python 3 versions < 3.6
+    if utils.PYVERSION >= (3,) and utils.PYVERSION < (3, 6):
+        co_varnames = list(fcode.co_varnames)
+        if co_varnames[0] == ".0":
+            co_varnames[0] = "implicit0"
+        fcode = types.CodeType(
+            fcode.co_argcount,
+            fcode.co_kwonlyargcount,
+            fcode.co_nlocals,
+            fcode.co_stacksize,
+            fcode.co_flags,
+            fcode.co_code,
+            fcode.co_consts,
+            fcode.co_names,
+            tuple(co_varnames),
+            fcode.co_filename,
+            fcode.co_name,
+            fcode.co_firstlineno,
+            fcode.co_lnotab,
+            fcode.co_freevars,
+            fcode.co_cellvars)
+
+    f = loc['g']()
+    f.__code__ = fcode
+    f.__name__ = fcode.co_name
+    from numba import compiler
+    ir = compiler.run_frontend(f)
+    return ir
+
+def replace_arg_nodes(block, args):
+    """
+    Replace ir.Arg(...) with variables
+    """
+    for stmt in block.body:
+        if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Arg):
+            idx = stmt.value.index
+            assert(idx < len(args))
+            stmt.value = args[idx]
+    return
+
+def replace_returns(blocks, target, return_label):
+    """
+    Return return statement by assigning directly to target, and a jump.
+    """
+    for block in blocks.values():
+        casts = []
+        for i, stmt in enumerate(block.body):
+            if isinstance(stmt, ir.Return):
+                assert(i + 1 == len(block.body))
+                block.body[i] = ir.Assign(stmt.value, target, stmt.loc)
+                block.body.append(ir.Jump(return_label, stmt.loc))
+                # remove cast of the returned value
+                for cast in casts:
+                    if cast.target.name == stmt.value.name:
+                        cast.value = cast.value.value
+            elif isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr) and stmt.value.op == 'cast':
+                casts.append(stmt)
