@@ -15,9 +15,11 @@ https://github.com/IntelLabs/ParallelAccelerator.jl
 from __future__ import print_function, division, absolute_import
 import types as pytypes  # avoid confusion with numba.types
 import sys
+from functools import reduce
 
 from numba import ir, ir_utils, types, typing, rewrites, config, analysis
 from numba import array_analysis, postproc, typeinfer
+from numba.typing.templates import infer_global, AbstractTemplate
 
 from numba.ir_utils import (
     mk_unique_var,
@@ -1915,3 +1917,11 @@ def parfor_typeinfer(parfor, typeinferer):
 
 
 typeinfer.typeinfer_extensions[Parfor] = parfor_typeinfer
+
+@infer_global(reduce)
+class ReduceInfer(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        assert len(args) == 3
+        assert isinstance(args[1], types.Array)
+        return signature(args[1].dtype, *args)
