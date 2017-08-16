@@ -8,15 +8,18 @@ from numba import cuda, uint32, uint64, float32, float64
 from numba.cuda.testing import unittest
 
 
-def cc_32_or_above():
+def cc_X_or_above(major, minor):
     if not config.ENABLE_CUDASIM:
-        return cuda.current_context().device.compute_capability >= (3, 2)
+        return cuda.current_context().device.compute_capability >= (major, minor)
     else:
         return True
 
 
 def skip_unless_cc_32(fn):
-    return unittest.skipUnless(cc_32_or_above(), "require cc >= 3.2")(fn)
+    return unittest.skipUnless(cc_X_or_above(3, 2), "require cc >= 3.2")(fn)
+
+def skip_unless_cc_50(fn):
+    return unittest.skipUnless(cc_X_or_above(5, 0), "require cc >= 5.0")(fn)
 
 
 def atomic_add(ary):
@@ -235,6 +238,7 @@ class TestCudaAtomics(unittest.TestCase):
 
         self.assertTrue(np.all(ary == orig + 1))
 
+    @skip_unless_cc_50
     def test_atomic_add_double(self):
         idx = np.random.randint(0, 32, size=32)
         ary = np.zeros(32, np.float64)
@@ -262,6 +266,7 @@ class TestCudaAtomics(unittest.TestCase):
 
         np.testing.assert_equal(ary, orig + 1)
 
+    @skip_unless_cc_50
     def test_atomic_add_double_global(self):
         idx = np.random.randint(0, 32, size=32)
         ary = np.zeros(32, np.float64)
