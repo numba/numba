@@ -20,7 +20,7 @@ from .types import *
 from .smartarray import SmartArray
 
 # Re-export decorators
-from .decorators import autojit, cfunc, generated_jit, jit, njit
+from .decorators import autojit, cfunc, generated_jit, jit, njit, stencil
 
 # Re-export vectorize decorators
 from .npyufunc import vectorize, guvectorize
@@ -43,6 +43,7 @@ __all__ = """
     jit
     jitclass
     njit
+    stencil
     typeof
     prange
     stencil
