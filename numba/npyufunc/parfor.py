@@ -359,7 +359,7 @@ def _create_gufunc_for_parfor_body(
             "\n",
             gufunc_param_types)
 
-    gufunc_stub_last_label = max(gufunc_ir.blocks.keys())
+    gufunc_stub_last_label = max(gufunc_ir.blocks.keys()) + 1
 
     # Add gufunc stub last label to each parfor.loop_body label to prevent
     # label conflicts.
