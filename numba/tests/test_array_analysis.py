@@ -108,11 +108,6 @@ class ArrayAnalysisTester(Pipeline):
 
 class TestArrayAnalysis(TestCase):
 
-    def run_and_compare(self, fn, args):
-        a = fn(*args)
-        b = njit(parallel=True)(fn)(*args)
-        self.assertEqual(a, b)
-
     def _compile_and_test(self, fn, arg_tys, asserts=[], equivs=[]):
         """
         Compile the given function and get its IR.
@@ -271,19 +266,7 @@ class TestArrayAnalysis(TestCase):
                                asserts = [ self.with_assert('b', 'a'),
                                            self.with_assert('b', 'd') ])
 
-        def test_9(m, n):
-            A = np.ones(m)
-            B = np.ones(n)
-            return np.sum(A + B)
-
-        self.run_and_compare(test_9, (10,10))
-        with self.assertRaises(AssertionError) as raises:
-            cfunc = njit(parallel=True)(test_9)
-            cfunc(10, 9)
-        msg = "Sizes of A, B do not match"
-        self.assertIn(msg, str(raises.exception))
-
-        def test_10(m):
+        def test_9(m):
             A = np.ones(m)
             s = 0
             while m < 2:
@@ -291,7 +274,7 @@ class TestArrayAnalysis(TestCase):
               B = np.ones(m)
               s += np.sum(A + B)
             return s
-        self._compile_and_test(test_10, (types.intp,),
+        self._compile_and_test(test_9, (types.intp,),
                                asserts = [ self.with_assert('A', 'B') ])
 
         def test_shape(A):
