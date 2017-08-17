@@ -25,11 +25,16 @@ class StencilPass(object):
         self.typingctx = typingctx
 
     def run(self):
+        from numba.stencil import StencilFunc
+        from numba import compiler
+
         call_table, _ = get_call_table(self.func_ir.blocks)
         stencil_calls = []
+        stencil_dict = {}
         for call_varname, call_list in call_table.items():
-            if call_list == ['stencil', numba] or call_list == [stencil]:
+            if isinstance(call_list[0], StencilFunc):
                 stencil_calls.append(call_varname)
+                stencil_dict[call_varname] = call_list[0]
         if not stencil_calls:
             return  # return early if no stencil calls found
 
@@ -40,12 +45,20 @@ class StencilPass(object):
                         and isinstance(stmt.value, ir.Expr)
                         and stmt.value.op == 'call'
                         and stmt.value.func.name in stencil_calls):
-                    assert len(stmt.value.args) == 2
+                    kws = dict(stmt.value.kws)
+                    assert len(stmt.value.args) == 1
                     in_arr = stmt.value.args[0]
-                    out_arr = stmt.value.args[1]
+                    if 'out' in kws:
+                        out_arr = kws['out']
+                    else:
+                        out_arr = None
+
+                    sf = stencil_dict[stmt.value.func.name]
+                    fcode = sf.func
+
                     # XXX is this correct?
-                    fcode = fix_func_code(stmt.value.stencil_def.code,
-                                        self.func_ir.func_id.func.__globals__)
+                    #fcode = fix_func_code(stmt.value.stencil_def.code,
+                    #                    self.func_ir.func_id.func.__globals__)
                     stencil_blocks = get_stencil_blocks(fcode, self.typingctx,
                             (self.typemap[in_arr.name],), block.scope,
                             block.loc, in_arr, self.typemap, self.calltypes)
@@ -53,12 +66,13 @@ class StencilPass(object):
                     if 'index_offsets' in stmt.value._kws:
                         index_offsets = stmt.value.index_offsets
                     gen_nodes = self._mk_stencil_parfor(in_arr, out_arr,
-                                                stencil_blocks, index_offsets)
+                                   stencil_blocks, index_offsets, stmt.target)
                     block.body = block.body[:i] + gen_nodes + block.body[i+1:]
                     return self.run()
         return
 
-    def _mk_stencil_parfor(self, in_arr, out_arr, stencil_blocks, index_offsets):
+    def _mk_stencil_parfor(self, in_arr, out_arr, stencil_blocks, 
+                           index_offsets, target):
         gen_nodes = []
 
         # run copy propagate to replace in_arr copies (e.g. a = A)
@@ -137,6 +151,19 @@ class StencilPass(object):
             tuple_assign = ir.Assign(tuple_call, parfor_ind_var, loc)
             stencil_blocks[max(stencil_blocks.keys())].body.append(tuple_assign)
 
+        # empty init block
+        init_block = ir.Block(scope, loc)
+        if out_arr == None:
+            so_name = ir_utils.mk_unique_var("stencil_output")
+            out_arr = ir.Var(scope, so_name, loc)
+            stmts = ir_utils.gen_np_call("zeros_like",
+                                       np.zeros_like,
+                                       out_arr,
+                                       [in_arr],
+                                       self.typemap,
+                                       self.calltypes)
+            init_block.body.extend(stmts)
+
         setitem_call = ir.SetItem(out_arr, parfor_ind_var, return_val, loc)
         self.calltypes[setitem_call] = signature(
                                         types.none, self.typemap[out_arr.name],
@@ -145,12 +172,11 @@ class StencilPass(object):
                                         )
         stencil_blocks[max(stencil_blocks.keys())].body.append(setitem_call)
 
-        # empty init block
-        init_block = ir.Block(scope, loc)
         parfor = numba.parfor.Parfor(loopnests, init_block, stencil_blocks, loc,
                         self.array_analysis, parfor_ind_var)
 
         gen_nodes.append(parfor)
+        gen_nodes.append(ir.Assign(out_arr, target, loc))
         return gen_nodes
 
     def _replace_stencil_accesses(self, stencil_blocks, parfor_vars, in_arr, index_offsets):
