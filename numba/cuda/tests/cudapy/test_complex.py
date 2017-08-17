@@ -70,7 +70,7 @@ class BaseComplexTest(object):
                  float('inf'), float('-inf')]
         return [complex(x, y) for x, y in itertools.product(reals, reals)]
 
-    def run_func(self, pyfunc, sigs, values, ulps=1):
+    def run_func(self, pyfunc, sigs, values, ulps=1, ignore_sign_on_zero=False):
         for sig in sigs:
             if isinstance(sig, types.Type):
                 sig = sig,
@@ -96,7 +96,9 @@ class BaseComplexTest(object):
             for got, expected, args in zip(got_list, expected_list, ok_values):
                 msg = 'for input %r with prec %r' % (args, prec)
                 self.assertPreciseEqual(got, expected, prec=prec,
-                                        ulps=ulps, msg=msg)
+                                        ulps=ulps,
+                                        ignore_sign_on_zero=ignore_sign_on_zero,
+                                        msg=msg)
 
     run_unary = run_func
     run_binary = run_func
@@ -136,7 +138,7 @@ class TestCMath(BaseComplexTest, TestCase):
                        self.basic_values())
 
     def check_unary_func(self, pyfunc, ulps=1, values=None,
-                         returns_float=False):
+                         returns_float=False, ignore_sign_on_zero=False):
         if returns_float:
             def sig(tp):
                 return tp.underlying_float(tp)
@@ -144,10 +146,12 @@ class TestCMath(BaseComplexTest, TestCase):
             def sig(tp):
                 return tp(tp)
         self.run_unary(pyfunc, [sig(types.complex128)],
-                       values or self.more_values(), ulps=ulps)
+                       values or self.more_values(), ulps=ulps,
+                       ignore_sign_on_zero=ignore_sign_on_zero)
         # Avoid discontinuities around pi when in single precision.
         self.run_unary(pyfunc, [sig(types.complex64)],
-                       values or self.basic_values(), ulps=ulps)
+                       values or self.basic_values(), ulps=ulps,
+                       ignore_sign_on_zero=ignore_sign_on_zero)
 
     # Conversions
 
@@ -218,10 +222,11 @@ class TestCMath(BaseComplexTest, TestCase):
 
     def test_sin(self):
         # See test_sinh.
-        self.check_unary_func(sin_usecase)
+        self.check_unary_func(sin_usecase, ulps=2)
 
     def test_tan(self):
-        self.check_unary_func(tan_usecase, ulps=2)
+        self.check_unary_func(tan_usecase, ulps=2,
+                              ignore_sign_on_zero=True)
 
     # Hyperbolic functions
 
@@ -232,16 +237,18 @@ class TestCMath(BaseComplexTest, TestCase):
         self.check_unary_func(asinh_usecase, ulps=2)
 
     def test_atanh(self):
-        self.check_unary_func(atanh_usecase, ulps=2)
+        self.check_unary_func(atanh_usecase, ulps=2,
+                              ignore_sign_on_zero=True)
 
     def test_cosh(self):
         self.check_unary_func(cosh_usecase, ulps=2)
 
     def test_sinh(self):
-        self.check_unary_func(sinh_usecase)
+        self.check_unary_func(sinh_usecase, ulps=2)
 
     def test_tanh(self):
-        self.check_unary_func(tanh_usecase, ulps=2)
+        self.check_unary_func(tanh_usecase, ulps=2,
+                              ignore_sign_on_zero=True)
 
 
 if __name__ == '__main__':
