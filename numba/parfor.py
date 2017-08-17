@@ -1269,7 +1269,8 @@ def get_parfor_outputs(parfor, parfor_params):
     outputs = list(set(outputs) & set(parfor_params))
     return sorted(outputs)
 
-def get_parfor_reductions(parfor, parfor_params, calltypes, reductions=None, names=None):
+def get_parfor_reductions(parfor, parfor_params, calltypes, reductions=None,
+        names=None, param_uses=None, param_nodes=None, var_to_param=None):
     """find variables that are updated using their previous values and an array
     item accessed with parfor index, e.g. s = s+A[i]
     """
@@ -1278,16 +1279,20 @@ def get_parfor_reductions(parfor, parfor_params, calltypes, reductions=None, nam
     if names is None:
         names = []
 
+    # for each param variable, find what other variables are used to update it
+    # also, keep the related nodes
+    if param_uses is None:
+        param_uses = defaultdict(list)
+    if param_nodes is None:
+        param_nodes = defaultdict(list)
+    if var_to_param is None:
+        var_to_param = {}
+
     blocks = wrap_parfor_blocks(parfor)
     topo_order = find_topo_order(blocks)
     topo_order = topo_order[1:]  # ignore init block
     unwrap_parfor_blocks(parfor)
 
-    # for each param variable, find what other variables are used to update it
-    # also, keep the related nodes
-    param_uses = defaultdict(list)
-    param_nodes = defaultdict(list)
-    var_to_param = {}
     for label in reversed(topo_order):
         for stmt in reversed(parfor.loop_body[label].body):
             if (isinstance(stmt, ir.Assign)
@@ -1309,9 +1314,14 @@ def get_parfor_reductions(parfor, parfor_params, calltypes, reductions=None, nam
                 if stmt.value in calltypes:
                     calltypes[stmt_cp.value] = calltypes[stmt.value]
                 param_nodes[cur_param].append(stmt_cp)
+            if isinstance(stmt, Parfor):
+                # recursive parfors can have reductions like test_prange8
+                get_parfor_reductions(stmt, parfor_params, calltypes,
+                    reductions, names, param_uses, param_nodes, var_to_param)
     for param, used_vars in param_uses.items():
         # a parameter is a reduction variable if its value is used to update it
-        if param in used_vars:
+        # check names since recursive parfors might have processed param already
+        if param in used_vars and param not in names:
             names.append(param)
             param_nodes[param].reverse()
             reduce_nodes = get_reduce_nodes(param, param_nodes[param])
