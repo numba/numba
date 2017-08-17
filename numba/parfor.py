@@ -32,6 +32,7 @@ from numba.ir_utils import (
     find_op_typ,
     get_name_var_table,
     replace_vars,
+    replace_vars_inner,
     visit_vars,
     visit_vars_inner,
     remove_dels,
@@ -1268,7 +1269,7 @@ def get_parfor_outputs(parfor, parfor_params):
     outputs = list(set(outputs) & set(parfor_params))
     return sorted(outputs)
 
-def get_parfor_reductions(parfor, parfor_params, reductions=None, names=None):
+def get_parfor_reductions(parfor, parfor_params, calltypes, reductions=None, names=None):
     """find variables that are updated using their previous values and an array
     item accessed with parfor index, e.g. s = s+A[i]
     """
@@ -1283,7 +1284,9 @@ def get_parfor_reductions(parfor, parfor_params, reductions=None, names=None):
     unwrap_parfor_blocks(parfor)
 
     # for each param variable, find what other variables are used to update it
+    # also, keep the related nodes
     param_uses = defaultdict(list)
+    param_nodes = defaultdict(list)
     var_to_param = {}
     for label in reversed(topo_order):
         for stmt in reversed(parfor.loop_body[label].body):
@@ -1301,11 +1304,43 @@ def get_parfor_reductions(parfor, parfor_params, reductions=None, names=None):
                 param_uses[cur_param].extend(used_vars)
                 for v in used_vars:
                     var_to_param[v] = cur_param
+                # save copy of dependent stmt
+                stmt_cp = copy.deepcopy(stmt)
+                if stmt.value in calltypes:
+                    calltypes[stmt_cp.value] = calltypes[stmt.value]
+                param_nodes[cur_param].append(stmt_cp)
     for param, used_vars in param_uses.items():
         if param in used_vars and parfor.index_var.name in used_vars:
             names.append(param)
-            # print("reduce var:", param)
+            param_nodes[param].reverse()
+            reduce_nodes = None
+            for i, stmt in enumerate(param_nodes[param]):
+                rhs = stmt.value
+                if isinstance(stmt.value, ir.Expr):
+                    in_vars = [v.name for v in stmt.value.list_vars()]
+                    if param in in_vars:
+                        in_vars.remove(param)
+                        assert len(in_vars) == 1
+                        replace_vars_inner(stmt.value, {in_vars[0]: ir.Var(stmt.target.scope, param+"#init", stmt.target.loc)})
+                        reduce_nodes = param_nodes[param][i:]
+                        break;
+            assert reduce_nodes, "Invalid reduction format"
+            init_val = guard(get_reduction_init, param_nodes[param])
+            reductions[param] = (init_val, reduce_nodes)
+    #print("reduce vars:", names, reductions)
     return names, reductions
+
+def get_reduction_init(nodes):
+    require(len(nodes) >=2)
+    require(isinstance(nodes[-1].value, ir.Var))
+    require(nodes[-2].target.name == nodes[-1].value.name)
+    acc_expr = nodes[-2].value
+    require(isinstance(acc_expr, ir.Expr) and acc_expr.op=='inplace_binop')
+    if acc_expr.fn == '+=':
+        return 0
+    if acc_expr.fn == '*=':
+        return 1
+    return None
 
 def visit_vars_parfor(parfor, callback, cbdata):
     if config.DEBUG_ARRAY_OPT == 1:
