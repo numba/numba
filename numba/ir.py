@@ -543,12 +543,19 @@ class Global(object):
         self.name = name
         self.value = value
         self.loc = loc
+        self.__deepcopy__ = self.global_deepcopy
 
     def __str__(self):
         return 'global(%s: %s)' % (self.name, self.value)
 
     def infer_constant(self):
         return self.value
+
+    def global_deepcopy(self, memo):
+        # don't copy value since it can fail (e.g. modules)
+        # value is readonly and doesn't need copying
+        return Global(self.name, self.value, copy.deepcopy(self.loc))
+
 
 
 class FreeVar(object):
