@@ -1151,16 +1151,9 @@ class ArrayAnalysis(object):
         if not all_has_shapes:
             return arrs[0], self._call_assert_equiv(scope, loc, equiv_set, arrs)
         shapes = [ equiv_set.get_shape(x) for x in arrs ]
-        # NOTE: although the following is a simpler case, it may result in
-        # assert_equiv calls immediately depending on the result of the previous
-        # statement, which is bad for fusion.
-        """
-        has_const_one = any(sum([ [ 1==equiv_set.get_equiv_const(size)
-                                    for size in shape]
-                                  for shape in shapes], []))
-        if not has_const_one and all([d == max_dim for d in dims]):
-            return arrs[0], self._call_assert_equiv(scope, loc, equiv_set, arrs)
-        """
+
+        # Produce assert_equiv for sizes in each dimension, taking into account
+        # of dimension coercion and constant size of 1.
         asserts = []
         new_shape = []
         for i in range(max_dim):
@@ -1309,32 +1302,6 @@ class ArrayAnalysis(object):
             else:
                 s += n
         return s
-
-def copy_propagate_update_analysis(label, stmt, var_dict, array_analysis):
-    """update array analysis data during copy propagation.
-    If an array is in defs of a statement, we update its size variables.
-    """
-    """ TODO: looks like dead code?
-    # find defs of stmt
-    def_set = set()
-    if isinstance(stmt, ir.Assign):
-        def_set.add(stmt.target.name)
-    for T, def_func in analysis.ir_extension_usedefs.items():
-        if isinstance(stmt, T):
-            _, def_set = def_func(stmt)
-
-    if label in array_analysis.equiv_sets:
-        equiv_set = array_analysis.equiv_sets[label]
-        # update analysis for arrays in defs
-        for var in def_set:
-            for key, val in equiv_set.shapedef.items():
-                if var in val:
-                   equiv_set.shapedef[key] = replace_vars_inner(val, var_dict)
-    else:
-        print("block has no equiv_sets: ", label)
-    """
-    return
-
 
 UNARY_MAP_OP = list(
     npydecl.NumpyRulesUnaryArrayOperator._op_map.keys()) + ['+']

@@ -1118,7 +1118,7 @@ def merge_adjacent_blocks(func_ir):
             block.body.append(stmts)
         del func_ir.blocks[next_label]
 
-def simplify(func_ir, typemap, array_analysis, calltypes, update_analysis):
+def simplify(func_ir, typemap, calltypes):
     remove_dels(func_ir.blocks)
     # get copies in to blocks and out from blocks
     in_cps, out_cps = copy_propagate(func_ir.blocks, typemap)
@@ -1128,8 +1128,8 @@ def simplify(func_ir, typemap, array_analysis, calltypes, update_analysis):
         func_ir.blocks,
         in_cps,
         name_var_table,
-        update_analysis,
-        array_analysis,
+        lambda a, b, c, d:None, # a null func
+        None,                   # no extra data
         typemap,
         calltypes)
     # remove dead code to enable fusion
