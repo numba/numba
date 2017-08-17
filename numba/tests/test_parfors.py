@@ -448,6 +448,20 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, *self.simple_args)
 
     @skip_unsupported
+    def test_size_assertion(self):
+        def test_impl(m, n):
+            A = np.ones(m)
+            B = np.ones(n)
+            return np.sum(A + B)
+
+        self.check(test_impl, 10, 10)
+        with self.assertRaises(AssertionError) as raises:
+            cfunc = njit(parallel=True)(test_impl)
+            cfunc(10, 9)
+        msg = "Sizes of A, B do not match"
+        self.assertIn(msg, str(raises.exception))
+
+    @skip_unsupported
     def test_randoms(self):
         def test_impl(n):
             A = np.random.standard_normal(size=(n, n))
