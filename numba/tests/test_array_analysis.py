@@ -11,6 +11,7 @@ from numba.array_analysis import EquivSet, ArrayAnalysis
 from numba.compiler import Pipeline, Flags, _PipelineManager
 from numba.targets import cpu
 from numba.numpy_support import version as numpy_version
+from numba.ir_utils import remove_dead
 
 class TestEquivSet(TestCase):
     """
@@ -66,7 +67,7 @@ class ArrayAnalysisTester(Pipeline):
         return cls(typing_context, target_context, library, args, return_type,
                    flags, locals)
 
-    def compile_to_ir(self, func):
+    def compile_to_ir(self, func, test_idempotence=None):
         """
         Populate and run compiler pipeline
         """
@@ -96,24 +97,42 @@ class ArrayAnalysisTester(Pipeline):
         pm.add_stage(self.stage_annotate_type, "annotate type")
         if not self.flags.no_rewrites:
             pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
+        func_ir_copies = []
         def stage_array_analysis():
             self.array_analysis = ArrayAnalysis(self.typingctx, self.func_ir,
                                                 self.type_annotation.typemap,
                                                 self.type_annotation.calltypes)
             self.array_analysis.run()
+            func_ir_copies.append(self.func_ir.copy())
+            if test_idempotence and len(func_ir_copies) > 1:
+                test_idempotence(func_ir_copies)
+
         pm.add_stage(stage_array_analysis, "analyze array equivalences")
+        if test_idempotence:
+            # Do another pass of array analysis to test idempontence
+            pm.add_stage(stage_array_analysis, "analyze array equivalences")
+
         pm.finalize()
         res = pm.run(self.status)
         return self.array_analysis
 
 class TestArrayAnalysis(TestCase):
 
+    def compare_ir(self, ir_list):
+        outputs = []
+        for func_ir in ir_list:
+            remove_dead(func_ir.blocks, func_ir.arg_names)
+            output = utils.StringIO()
+            func_ir.dump(file=output)
+            outputs.append(output.getvalue())
+        self.assertTrue(len(set(outputs)) == 1) # assert all outputs are equal
+
     def _compile_and_test(self, fn, arg_tys, asserts=[], equivs=[]):
         """
         Compile the given function and get its IR.
         """
         test_pipeline = ArrayAnalysisTester.mk_pipeline(arg_tys)
-        analysis = test_pipeline.compile_to_ir(fn)
+        analysis = test_pipeline.compile_to_ir(fn, test_idempotence=self.compare_ir)
         if equivs:
             for func in equivs:
                 # only test the equiv_set of the first block
