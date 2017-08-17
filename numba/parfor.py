@@ -16,6 +16,7 @@ from __future__ import print_function, division, absolute_import
 import types as pytypes  # avoid confusion with numba.types
 import sys
 from functools import reduce
+from collections import defaultdict
 
 from numba import ir, ir_utils, types, typing, rewrites, config, analysis
 from numba import array_analysis, postproc, typeinfer
@@ -1267,40 +1268,44 @@ def get_parfor_outputs(parfor, parfor_params):
     outputs = list(set(outputs) & set(parfor_params))
     return sorted(outputs)
 
-
 def get_parfor_reductions(parfor, parfor_params, reductions=None, names=None):
-    """get variables that are accumulated using inplace_binop inside the parfor
-    and need to be passed as reduction parameters to gufunc.
+    """find variables that are updated using their previous values and an array
+    item accessed with parfor index, e.g. s = s+A[i]
     """
     if reductions is None:
         reductions = {}
     if names is None:
         names = []
-    last_label = max(parfor.loop_body.keys())
 
-    for blk in parfor.loop_body.values():
-        for stmt in blk.body:
-            if (isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr)
-                    and stmt.value.op == "inplace_binop"):
-                name = stmt.value.lhs.name
-                if name in parfor_params:
-                    names.append(name)
-                    red_info = None
-                    for (acc_op, imm_op, init_val) in _reduction_ops.values():
-                        if imm_op == stmt.value.immutable_fn:
-                            red_info = (
-                                stmt.value.fn, stmt.value.immutable_fn, init_val)
-                            break
-                    if red_info is None:
-                        raise NotImplementedError(
-                            "Reduction is not support for inplace operator %s" %
-                            stmt.value.fn)
-                    reductions[name] = red_info
-            if isinstance(stmt, Parfor):
-                # recursive parfors can have reductions like test_prange8
-                get_parfor_reductions(stmt, parfor_params, reductions, names)
+    blocks = wrap_parfor_blocks(parfor)
+    topo_order = find_topo_order(blocks)
+    topo_order = topo_order[1:]  # ignore init block
+    unwrap_parfor_blocks(parfor)
+
+    # for each param variable, find what other variables are used to update it
+    param_uses = defaultdict(list)
+    var_to_param = {}
+    for label in reversed(topo_order):
+        for stmt in reversed(parfor.loop_body[label].body):
+            if (isinstance(stmt, ir.Assign)
+                    and (stmt.target.name in parfor_params
+                        or stmt.target.name in var_to_param)):
+                lhs = stmt.target.name
+                rhs = stmt.value
+                cur_param = lhs if lhs in parfor_params else var_to_param[lhs]
+                used_vars = []
+                if isinstance(rhs, ir.Var):
+                    used_vars = [rhs.name]
+                elif isinstance(rhs, ir.Expr):
+                    used_vars = [v.name for v in stmt.value.list_vars()]
+                param_uses[cur_param].extend(used_vars)
+                for v in used_vars:
+                    var_to_param[v] = cur_param
+    for param, used_vars in param_uses.items():
+        if param in used_vars and parfor.index_var.name in used_vars:
+            names.append(param)
+            # print("reduce var:", param)
     return names, reductions
-
 
 def visit_vars_parfor(parfor, callback, cbdata):
     if config.DEBUG_ARRAY_OPT == 1:
