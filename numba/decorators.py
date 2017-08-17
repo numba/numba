@@ -10,6 +10,7 @@ import warnings
 from . import config, sigutils
 from .errors import DeprecationError
 from .targets import registry
+from .stencil import stencil
 
 
 
