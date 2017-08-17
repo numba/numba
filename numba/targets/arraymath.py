@@ -155,8 +155,8 @@ def array_sum(context, builder, sig, args):
                                     locals=dict(c=sig.return_type))
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
-@lower_builtin(np.sum, types.Array, types.int64)
-@lower_builtin("array.sum", types.Array, types.int64)
+@lower_builtin(np.sum, types.Array, types.intp)
+@lower_builtin("array.sum", types.Array, types.intp)
 def array_sum_axis(context, builder, sig, args):
     """
     The third parameter to gen_index_tuple that generates the indexing
@@ -169,8 +169,6 @@ def array_sum_axis(context, builder, sig, args):
     # typing/arraydecl.py:sum_expand defines the return type for sum with axis.
     # It is one dimension less than the input array.
     zero = sig.return_type.dtype(0)
-    # Again, the result array is one less than the input array dimensions.
-    ndim = sig.args[0].ndim - 1
     def array_sum_impl_axis(arr, axis):
         ndim = arr.ndim
 

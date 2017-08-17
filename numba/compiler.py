@@ -16,7 +16,7 @@ from numba import (bytecode, interpreter, funcdesc, postproc,
                    errors, types, ir, types, rewrites, transforms)
 from numba.targets import cpu, callconv
 from numba.annotations import type_annotations
-from numba.parfor import ParforPass
+from numba.parfor import ParforPass, Parfor
 from numba.inline_closurecall import InlineClosureCallPass
 
 
@@ -492,6 +492,29 @@ class Pipeline(object):
         parfor_pass = ParforPass(self.func_ir, self.type_annotation.typemap,
             self.type_annotation.calltypes, self.return_type, self.typingctx)
         parfor_pass.run()
+
+        if config.WARNINGS:
+            # check the parfor pass worked and warn if it didn't
+            has_parfor = False
+            for blk in self.func_ir.blocks.values():
+                for stmnt in blk.body:
+                    if isinstance(stmnt, Parfor):
+                        has_parfor = True
+                        break
+                else:
+                    continue
+                break
+
+            if not has_parfor:
+                # parfor calls the compiler chain again with a string
+                if not self.func_ir.loc.filename == '<string>':
+                    msg = ("parallel=True was specified but no transformation"
+                           " for parallel execution was possible.")
+                    warnings.warn_explicit(msg,
+                                errors.NumbaWarning,
+                                self.func_id.filename,
+                                self.func_id.firstlineno)
+
 
     def stage_inline_pass(self):
         """
