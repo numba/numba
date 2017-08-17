@@ -30,7 +30,7 @@ class TestEquivSet(TestCase):
         self.assertFalse(s1.is_equiv('a', 'e'))
 
     @tag('important')
-    def test__intersect(self):
+    def test_intersect(self):
         s1 = EquivSet()
         s2 = EquivSet()
         r = s1.intersect(s2)
@@ -75,7 +75,6 @@ class ArrayAnalysisTester(Pipeline):
         try:
             bc = self.extract_bytecode(self.func_id)
         except BaseException as e:
-            print("compile_to_ir got error ", e)
             raise e
 
         self.bc = bc
@@ -588,8 +587,6 @@ class TestArrayAnalysis(TestCase):
             i = np.dot(np.ones((m,n)),np.ones((n,m)))
             j = np.dot(np.ones((m,m)),np.ones((l,l)))
 
-            # Numba njit does not support num keyword to linspace call!
-            # c = np.linspace(m,n,num=10)
         self._compile_and_test(test_dot, (types.intp,types.intp,types.intp),
                                equivs = [ self.without_equiv('a', (1,)), # not array
                                           self.with_equiv('b', (3,)),

@@ -105,12 +105,17 @@ class EquivSet(object):
     a set of objects.
     """
     def __init__(self, obj_to_ind = None, ind_to_obj = None, next_ind = 0):
-        if obj_to_ind == None:
-            obj_to_ind = {}
-        if ind_to_obj == None:
-            ind_to_obj = {}
-        self.obj_to_ind = obj_to_ind # object to index mapping
-        self.ind_to_obj = ind_to_obj # index to objects mapping
+        """Create a new EquivSet object. Optional keyword arguments are for
+        internal use only.
+        """
+        # obj_to_ind maps object to equivalence index (sometimes also called
+        # equivalence class) is a non-nagative number that uniquely identifies
+        # a set of objects that are equivalent.
+        self.obj_to_ind = obj_to_ind if obj_to_ind else {}
+        # ind_to_obj maps equivalence index to a list of objects.
+        self.ind_to_obj = ind_to_obj if ind_to_obj else {}
+        # next index number that is incremented each time a new equivalence
+        # relation is created.
         self.next_ind = next_ind
 
     def empty(self):
@@ -131,15 +136,13 @@ class EquivSet(object):
     def is_empty(self):
         """Return true if the set is empty, or false otherwise.
         """
-        return len(self.obj_to_ind) == 0
+        return self.obj_to_ind == {}
 
     def _get_ind(self, x):
         """Return the internal index (greater or equal to 0) of the given
         object, or -1 if not found.
         """
-        if x in self.obj_to_ind:
-            return self.obj_to_ind[x]
-        return -1
+        return self.obj_to_ind.get(x, -1)
 
     def _get_or_add_ind(self, x):
         """Return the internal index (greater or equal to 0) of the given
@@ -156,7 +159,7 @@ class EquivSet(object):
         """Base method that inserts a set of equivalent objects by modifying
         self.
         """
-        assert len(objs) > 1, "insert_equiv needs more than one argument"
+        assert len(objs) > 1
 
         inds = tuple(self._get_or_add_ind(x) for x in objs)
         ind = min(inds)
@@ -171,7 +174,7 @@ class EquivSet(object):
                     self.obj_to_ind[obj] = ind
             else:
                 if i in self.ind_to_obj:
-                    # those already existed are reassigned
+                    # those already existing are reassigned
                     for x in self.ind_to_obj[i]:
                         self.obj_to_ind[x] = ind
                         self.ind_to_obj[ind].append(x)
@@ -182,7 +185,7 @@ class EquivSet(object):
                     self.ind_to_obj[ind].append(obj)
 
     def is_equiv(self, *objs):
-        """Try to derive if given objects are equivalence, return true
+        """Try to derive if given objects are equivalent, return true
         if so, or false otherwise.
         """
         inds = [self._get_ind(x) for x in objs]
@@ -236,7 +239,7 @@ class EquivSet(object):
                 elif i >= 0:
                     ind_to_obj[i] = [x]
 
-            for k, v in ind_to_obj.items():
+            for v in ind_to_obj.values():
                 if len(v) > 1:
                     new_set._insert(v)
 
@@ -246,15 +249,26 @@ class EquivSet(object):
 class ShapeEquivSet(EquivSet):
     """Just like EquivSet, except that it accepts only numba IR variables
     and constants as objects, guided by their types. Arrays are considered
-    equivalence as long as their shapes are equivalent. Scalars are
+    equivalent as long as their shapes are equivalent. Scalars are
     equivalent only when they are equal in value. Tuples are equivalent
     when they are of the same size, and their elements are equivalent.
     """
-    def __init__(self, typemap, defs, ind_to_var = None, obj_to_ind = None,
-                 ind_to_obj = None, next_id = 0):
+    def __init__(self, typemap, defs = None, ind_to_var = None,
+                 obj_to_ind = None, ind_to_obj = None, next_id = 0):
+        """Create a new ShapeEquivSet object, where typemap is a dictionary
+        that maps variable names to their types, and it will not be modified.
+        Optional keyword arguments are for internal use only.
+        """
         self.typemap = typemap
-        self.defs = defs
+        # defs maps variable name to an int, where
+        # 1 means the variable is defined only once, and numbers greater
+        # than 1 means defined more than onces.
+        self.defs = defs if defs else {}
+        # ind_to_var maps index number to a list of variables (of ir.Var type).
+        # It is used to retrieve defined shape variables given an equivalence
+        # index.
         self.ind_to_var = ind_to_var if ind_to_var else {}
+
         super(ShapeEquivSet, self).__init__(obj_to_ind, ind_to_obj, next_id)
 
     def empty(self):
@@ -266,15 +280,16 @@ class ShapeEquivSet(EquivSet):
         """Return a new copy.
         """
         return ShapeEquivSet(
-                   self.typemap, copy.copy(self.defs),
+                   self.typemap,
+                   defs = copy.copy(self.defs),
                    ind_to_var = copy.copy(self.ind_to_var),
                    obj_to_ind = copy.deepcopy(self.obj_to_ind),
                    ind_to_obj = copy.deepcopy(self.ind_to_obj),
                    next_id = self.next_ind)
 
     def __repr__(self):
-        return "ShapeEquivSet({}, {}, ind_to_var={})".format(
-                    self.ind_to_obj, self.obj_to_ind, self.ind_to_var)
+        return "ShapeEquivSet({}, ind_to_var={})".format(
+                    self.ind_to_obj, self.ind_to_var)
 
     def _get_names(self, obj):
         """Return a set of names for the given obj, where array and tuples
@@ -457,9 +472,14 @@ class ShapeEquivSet(EquivSet):
         newset.ind_to_var = ind_to_var
         return newset
 
-    def define(self, var):
-        assert(isinstance(var, ir.Var))
-        name = var.name
+    def define(self, name):
+        """Increment the internal count of how many times a variable is being
+        defined. Most variables in Numba IR are SSA, i.e., defined only once,
+        but not all of them. When a variable is being re-defined, it must
+        be removed from the equivalence relation.
+        """
+        if isinstance(name, ir.Var):
+            name = name.name
         if name in self.defs:
             self.defs[name] += 1
             # NOTE: variable being redefined, must invalidate previous equivalences.
@@ -468,14 +488,14 @@ class ShapeEquivSet(EquivSet):
                 i = self.obj_to_ind[name]
                 del self.obj_to_ind[name]
                 self.ind_to_obj[i].remove(name)
-                if len(self.ind_to_obj[i]) == 0:
+                if self.ind_to_obj[i] == []:
                     del self.ind_to_obj[i]
                 assert(i in self.ind_to_var)
                 names = [x.name for x in self.ind_to_var[i]]
                 if name in names:
                     j = names.index(name)
                     del self.ind_to_var[i][j]
-                    if len(self.ind_to_var[i]) == 0:
+                    if self.ind_to_var[i] == []:
                         del self.ind_to_var[i]
                         # no more size variables, need to remove equivalence too
                         if i in self.ind_to_obj:
@@ -486,15 +506,18 @@ class ShapeEquivSet(EquivSet):
             self.defs[name] = 1
 
     def union_defs(self, defs):
+        """Union with the given defs dictionary. This is meant to handle
+        branch join-point, where a variable may have been defined in more
+        than one branches.
+        """
         for k, v in defs.items():
-            if k in self.defs:
-                self.defs[k] = max(self.defs[k], v)
-            else:
-                self.defs[k] = v
+            if v > 0:
+                self.define(k)
+
 
 class ArrayAnalysis(object):
     """Analyzes Numpy array computations for properties such as
-    shape/size equivalence, and keep track of them on a per-block
+    shape/size equivalence, and keeps track of them on a per-block
     basis. The analysis should only be run once because it modifies
     the incoming IR by inserting assertion statements that safeguard
     parfor optimizations.
@@ -566,7 +589,7 @@ class ArrayAnalysis(object):
 
             # Start with a new equiv_set if none is computed
             if equiv_set == None:
-                equiv_set = ShapeEquivSet(self.typemap, {}, {})
+                equiv_set = ShapeEquivSet(self.typemap)
             self.equiv_sets[label] = equiv_set
             # Go through instructions in a block, and insert pre/post
             # instructions as we analyze them.
@@ -734,8 +757,6 @@ class ArrayAnalysis(object):
         return tuple(expr.items), []
 
     def _analyze_op_call(self, scope, equiv_set, expr):
-        #TODO: map call (ufunc)
-
         fname, mod_name = find_callname(self.func_ir, expr, typemap=self.typemap)
         if isinstance(mod_name, ir.Var): # call via attribute
             args = [mod_name] + expr.args
@@ -805,7 +826,7 @@ class ArrayAnalysis(object):
         return (N, N), []
 
     def _analyze_op_call_numpy_diag(self, scope, equiv_set, args, kws):
-        # We can only reason able the output shape when the input is 1D or
+        # We can only reason about the output shape when the input is 1D or
         # square 2D.
         assert len(args) > 0
         a = args[0]
@@ -1155,7 +1176,7 @@ class ArrayAnalysis(object):
                     else:
                         sizes.append(size) # non-1 size to front
                         size_names.append(name)
-            if len(sizes) == 0:
+            if sizes == []:
                 assert(const_size_one != None)
                 sizes.append(const_size_one)
                 size_names.append("1")
