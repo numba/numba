@@ -13,7 +13,9 @@ from numba.targets import cpu
 from numba.numpy_support import version as numpy_version
 from numba.ir_utils import remove_dead
 
+
 class TestEquivSet(TestCase):
+
     """
     Test array_analysis.EquivSet.
     """
@@ -54,6 +56,7 @@ class TestEquivSet(TestCase):
 
 
 class ArrayAnalysisTester(Pipeline):
+
     @classmethod
     def mk_pipeline(cls, args, return_type=None, flags=None, locals={},
                     library=None, typing_context=None, target_context=None):
@@ -90,14 +93,17 @@ class ArrayAnalysisTester(Pipeline):
         pm.add_stage(self.stage_process_ir, "processing IR")
         if not self.flags.no_rewrites:
             if self.status.can_fallback:
-                pm.add_stage(self.stage_preserve_ir, "preserve IR for fallback")
+                pm.add_stage(
+                    self.stage_preserve_ir, "preserve IR for fallback")
             pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
-        pm.add_stage(self.stage_inline_pass, "inline calls to locally defined closures")
+        pm.add_stage(
+            self.stage_inline_pass, "inline calls to locally defined closures")
         pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
         pm.add_stage(self.stage_annotate_type, "annotate type")
         if not self.flags.no_rewrites:
             pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
         func_ir_copies = []
+
         def stage_array_analysis():
             self.array_analysis = ArrayAnalysis(self.typingctx, self.func_ir,
                                                 self.type_annotation.typemap,
@@ -116,6 +122,7 @@ class ArrayAnalysisTester(Pipeline):
         res = pm.run(self.status)
         return self.array_analysis
 
+
 class TestArrayAnalysis(TestCase):
 
     def compare_ir(self, ir_list):
@@ -125,14 +132,15 @@ class TestArrayAnalysis(TestCase):
             output = utils.StringIO()
             func_ir.dump(file=output)
             outputs.append(output.getvalue())
-        self.assertTrue(len(set(outputs)) == 1) # assert all outputs are equal
+        self.assertTrue(len(set(outputs)) == 1)  # assert all outputs are equal
 
     def _compile_and_test(self, fn, arg_tys, asserts=[], equivs=[]):
         """
         Compile the given function and get its IR.
         """
         test_pipeline = ArrayAnalysisTester.mk_pipeline(arg_tys)
-        analysis = test_pipeline.compile_to_ir(fn, test_idempotence=self.compare_ir)
+        analysis = test_pipeline.compile_to_ir(
+            fn, test_idempotence=self.compare_ir)
         if equivs:
             for func in equivs:
                 # only test the equiv_set of the first block
@@ -176,17 +184,17 @@ class TestArrayAnalysis(TestCase):
 
     def with_assert(self, *args):
         return lambda func_ir, typemap: self.assertTrue(
-                        self._has_assertcall(func_ir, typemap, args))
+            self._has_assertcall(func_ir, typemap, args))
 
     def without_assert(self, *args):
         return lambda func_ir, typemap: self.assertFalse(
-                        self._has_assertcall(func_ir, typemap, args))
+            self._has_assertcall(func_ir, typemap, args))
 
     def with_equiv(self, *args):
         def check(equiv_set):
             n = len(args)
-            for i in range(n-1):
-                if not equiv_set.is_equiv(args[i], args[n-1]):
+            for i in range(n - 1):
+                if not equiv_set.is_equiv(args[i], args[n - 1]):
                     return False
             return True
         return lambda equiv_set: self.assertTrue(check(equiv_set))
@@ -194,8 +202,8 @@ class TestArrayAnalysis(TestCase):
     def without_equiv(self, *args):
         def check(equiv_set):
             n = len(args)
-            for i in range(n-1):
-                if equiv_set.is_equiv(args[i], args[n-1]):
+            for i in range(n - 1):
+                if equiv_set.is_equiv(args[i], args[n - 1]):
                     return False
             return True
         return lambda equiv_set: self.assertTrue(check(equiv_set))
@@ -212,44 +220,44 @@ class TestArrayAnalysis(TestCase):
             b = np.zeros(1)
             m = 0
             n = 1
-            c = np.zeros((m,n))
+            c = np.zeros((m, n))
             return
         self._compile_and_test(test_0, (),
-                               equivs = [ self.with_equiv('a',(0,)),
-                                          self.with_equiv('b',(1,)),
-                                          self.with_equiv('c',(0, 1)) ])
+                               equivs=[self.with_equiv('a', (0,)),
+                                       self.with_equiv('b', (1,)),
+                                       self.with_equiv('c', (0, 1))])
 
         def test_1(n):
             a = np.zeros(n)
             b = np.zeros(n)
             return a + b
-        self._compile_and_test(test_1, (types.intp,), asserts = None)
+        self._compile_and_test(test_1, (types.intp,), asserts=None)
 
         def test_2(m, n):
             a = np.zeros(n)
             b = np.zeros(m)
             return a + b
         self._compile_and_test(test_2, (types.intp, types.intp),
-                               asserts = [ self.with_assert('a', 'b') ])
+                               asserts=[self.with_assert('a', 'b')])
 
         def test_3(n):
             a = np.zeros(n)
             return a + n
-        self._compile_and_test(test_3, (types.intp,), asserts = None)
+        self._compile_and_test(test_3, (types.intp,), asserts=None)
 
         def test_4(n):
             a = np.zeros(n)
             b = a + 1
             c = a + 2
             return a + c
-        self._compile_and_test(test_4, (types.intp,), asserts = None)
+        self._compile_and_test(test_4, (types.intp,), asserts=None)
 
         def test_5(n):
-            a = np.zeros((n,n))
+            a = np.zeros((n, n))
             m = n
-            b = np.zeros((m,n))
+            b = np.zeros((m, n))
             return a + b
-        self._compile_and_test(test_5, (types.intp,), asserts = None)
+        self._compile_and_test(test_5, (types.intp,), asserts=None)
 
         def test_6(m, n):
             a = np.zeros(n)
@@ -258,8 +266,8 @@ class TestArrayAnalysis(TestCase):
             e = a - b
             return d + e
         self._compile_and_test(test_6, (types.intp, types.intp),
-                               asserts = [ self.with_assert('a', 'b'),
-                                           self.without_assert('d', 'e') ])
+                               asserts=[self.with_assert('a', 'b'),
+                                        self.without_assert('d', 'e')])
 
         def test_7(m, n):
             a = np.zeros(n)
@@ -270,8 +278,8 @@ class TestArrayAnalysis(TestCase):
                 d = a - b
             return d + a
         self._compile_and_test(test_7, (types.intp, types.intp),
-                               asserts = [ self.with_assert('a', 'b'),
-                                           self.without_assert('d', 'a') ])
+                               asserts=[self.with_assert('a', 'b'),
+                                        self.without_assert('d', 'a')])
 
         def test_8(m, n):
             a = np.zeros(n)
@@ -282,46 +290,46 @@ class TestArrayAnalysis(TestCase):
                 d = a + a
             return b + d
         self._compile_and_test(test_8, (types.intp, types.intp),
-                               asserts = [ self.with_assert('b', 'a'),
-                                           self.with_assert('b', 'd') ])
+                               asserts=[self.with_assert('b', 'a'),
+                                        self.with_assert('b', 'd')])
 
         def test_9(m):
             A = np.ones(m)
             s = 0
             while m < 2:
-              m += 1
-              B = np.ones(m)
-              s += np.sum(A + B)
+                m += 1
+                B = np.ones(m)
+                s += np.sum(A + B)
             return s
         self._compile_and_test(test_9, (types.intp,),
-                               asserts = [ self.with_assert('A', 'B') ])
+                               asserts=[self.with_assert('A', 'B')])
 
         def test_shape(A):
-            (m,n) = A.shape
-            B = np.ones((m,n))
+            (m, n) = A.shape
+            B = np.ones((m, n))
             return A + B
         self._compile_and_test(test_shape, (types.Array(types.intp, 2, 'C'),),
-                               asserts = None)
+                               asserts=None)
 
         def test_cond(l, m, n):
             A = np.ones(l)
             B = np.ones(m)
             C = np.ones(n)
             if l == m:
-               r = np.sum(A + B)
+                r = np.sum(A + B)
             else:
-               r = 0
+                r = 0
             if m != n:
-               s = 0
+                s = 0
             else:
-               s = np.sum(B + C)
+                s = np.sum(B + C)
             t = 0
             if l == m:
                 if m == n:
                     t = np.sum(A + B + C)
             return r + s + t
         self._compile_and_test(test_cond, (types.intp, types.intp, types.intp),
-                               asserts = None)
+                               asserts=None)
 
         def test_assert(m, n):
             assert(m == n)
@@ -329,7 +337,7 @@ class TestArrayAnalysis(TestCase):
             B = np.ones(n)
             return np.sum(A + B)
         self._compile_and_test(test_assert, (types.intp, types.intp),
-                               asserts = None)
+                               asserts=None)
 
     def test_numpy_calls(self):
         def test_zeros(n):
@@ -337,44 +345,43 @@ class TestArrayAnalysis(TestCase):
             b = np.zeros((n, n))
             c = np.zeros(shape=(n, n))
         self._compile_and_test(test_zeros, (types.intp,),
-                               equivs = [ self.with_equiv('a', 'n'),
-                                          self.with_equiv('b', ('n', 'n')),
-                                          self.with_equiv('b', 'c') ])
+                               equivs=[self.with_equiv('a', 'n'),
+                                       self.with_equiv('b', ('n', 'n')),
+                                       self.with_equiv('b', 'c')])
 
         def test_ones(n):
             a = np.ones(n)
             b = np.ones((n, n))
             c = np.ones(shape=(n, n))
         self._compile_and_test(test_ones, (types.intp,),
-                               equivs = [ self.with_equiv('a', 'n'),
-                                          self.with_equiv('b', ('n', 'n')),
-                                          self.with_equiv('b', 'c') ])
+                               equivs=[self.with_equiv('a', 'n'),
+                                       self.with_equiv('b', ('n', 'n')),
+                                       self.with_equiv('b', 'c')])
 
         def test_empty(n):
             a = np.empty(n)
             b = np.empty((n, n))
             c = np.empty(shape=(n, n))
         self._compile_and_test(test_empty, (types.intp,),
-                               equivs = [ self.with_equiv('a', 'n'),
-                                          self.with_equiv('b', ('n', 'n')),
-                                          self.with_equiv('b', 'c') ])
+                               equivs=[self.with_equiv('a', 'n'),
+                                       self.with_equiv('b', ('n', 'n')),
+                                       self.with_equiv('b', 'c')])
 
         def test_eye(n):
             a = np.eye(n)
             b = np.eye(N=n)
             c = np.eye(N=n, M=n)
-            d = np.eye(N=n, M=n+1)
+            d = np.eye(N=n, M=n + 1)
         self._compile_and_test(test_eye, (types.intp,),
-                               equivs = [ self.with_equiv('a', ('n', 'n')),
-                                          self.with_equiv('b', ('n', 'n')),
-                                          self.with_equiv('b', 'c'),
-                                          self.without_equiv('b', 'd') ])
+                               equivs=[self.with_equiv('a', ('n', 'n')),
+                                       self.with_equiv('b', ('n', 'n')),
+                                       self.with_equiv('b', 'c'),
+                                       self.without_equiv('b', 'd')])
 
         def test_identity(n):
             a = np.identity(n)
         self._compile_and_test(test_identity, (types.intp,),
-                               equivs = [ self.with_equiv('a', ('n', 'n')) ])
-
+                               equivs=[self.with_equiv('a', ('n', 'n'))])
 
         def test_diag(n):
             a = np.identity(n)
@@ -382,10 +389,10 @@ class TestArrayAnalysis(TestCase):
             c = np.diag(b)
             d = np.diag(a, k=1)
         self._compile_and_test(test_diag, (types.intp,),
-                               equivs = [ self.with_equiv('b', ('n',)),
-                                          self.with_equiv('c', ('n', 'n')) ],
-                               asserts = [ self.with_shapecall('d'),
-                                           self.without_shapecall('c') ])
+                               equivs=[self.with_equiv('b', ('n',)),
+                                       self.with_equiv('c', ('n', 'n'))],
+                               asserts=[self.with_shapecall('d'),
+                                        self.without_shapecall('c')])
 
         def test_array_like(a):
             b = np.empty_like(a)
@@ -395,17 +402,18 @@ class TestArrayAnalysis(TestCase):
             f = np.asfortranarray(a)
 
         self._compile_and_test(test_array_like, (types.Array(types.intp, 2, 'C'),),
-                               equivs = [ self.with_equiv('a', 'b', 'd', 'e', 'f') ],
-                               asserts = [ self.with_shapecall('a'),
-                                           self.without_shapecall('b') ])
+                               equivs=[
+                                   self.with_equiv('a', 'b', 'd', 'e', 'f')],
+                               asserts=[self.with_shapecall('a'),
+                                        self.without_shapecall('b')])
 
         def test_reshape(n):
             a = np.ones(n * n)
             b = a.reshape((n, n))
             return a.sum() + b.sum()
         self._compile_and_test(test_reshape, (types.intp,),
-                               equivs = [ self.with_equiv('b', ('n', 'n')) ],
-                               asserts = [ self.without_shapecall('b') ])
+                               equivs=[self.with_equiv('b', ('n', 'n'))],
+                               asserts=[self.without_shapecall('b')])
 
         def test_transpose(m, n):
             a = np.ones((m, n))
@@ -413,8 +421,8 @@ class TestArrayAnalysis(TestCase):
             # Numba njit cannot compile explicit transpose call!
             # c = np.transpose(b)
         self._compile_and_test(test_transpose, (types.intp, types.intp),
-                               equivs = [ self.with_equiv('a', ('m','n')),
-                                          self.with_equiv('b', ('n','m')) ])
+                               equivs=[self.with_equiv('a', ('m', 'n')),
+                                       self.with_equiv('b', ('n', 'm'))])
 
         def test_random(n):
             a0 = np.random.rand(n)
@@ -436,73 +444,72 @@ class TestArrayAnalysis(TestCase):
             g0 = np.random.standard_normal(n)
             g1 = np.random.standard_normal((n, n))
             g2 = np.random.standard_normal(size=(n, n))
-            h0 = np.random.chisquare(10,n)
-            h1 = np.random.chisquare(10,(n,n))
-            h2 = np.random.chisquare(10,size=(n,n))
-            i0 = np.random.weibull(10,n)
-            i1 = np.random.weibull(10,(n,n))
-            i2 = np.random.weibull(10,size=(n,n))
-            j0 = np.random.power(10,n)
-            j1 = np.random.power(10,(n,n))
-            j2 = np.random.power(10,size=(n,n))
-            k0 = np.random.geometric(0.1,n)
-            k1 = np.random.geometric(0.1,(n,n))
-            k2 = np.random.geometric(0.1,size=(n,n))
-            l0 = np.random.exponential(10,n)
-            l1 = np.random.exponential(10,(n,n))
-            l2 = np.random.exponential(10,size=(n,n))
-            m0 = np.random.poisson(10,n)
-            m1 = np.random.poisson(10,(n,n))
-            m2 = np.random.poisson(10,size=(n,n))
-            n0 = np.random.rayleigh(10,n)
-            n1 = np.random.rayleigh(10,(n,n))
-            n2 = np.random.rayleigh(10,size=(n,n))
-            o0 = np.random.normal(0,1,n)
-            o1 = np.random.normal(0,1,(n,n))
-            o2 = np.random.normal(0,1,size=(n,n))
-            p0 = np.random.uniform(0,1,n)
-            p1 = np.random.uniform(0,1,(n,n))
-            p2 = np.random.uniform(0,1,size=(n,n))
-            q0 = np.random.beta(0.1,1,n)
-            q1 = np.random.beta(0.1,1,(n,n))
-            q2 = np.random.beta(0.1,1,size=(n,n))
-            r0 = np.random.binomial(0,1,n)
-            r1 = np.random.binomial(0,1,(n,n))
-            r2 = np.random.binomial(0,1,size=(n,n))
-            s0 = np.random.f(0.1,1,n)
-            s1 = np.random.f(0.1,1,(n,n))
-            s2 = np.random.f(0.1,1,size=(n,n))
-            t0 = np.random.gamma(0.1,1,n)
-            t1 = np.random.gamma(0.1,1,(n,n))
-            t2 = np.random.gamma(0.1,1,size=(n,n))
-            u0 = np.random.lognormal(0,1,n)
-            u1 = np.random.lognormal(0,1,(n,n))
-            u2 = np.random.lognormal(0,1,size=(n,n))
-            v0 = np.random.laplace(0,1,n)
-            v1 = np.random.laplace(0,1,(n,n))
-            v2 = np.random.laplace(0,1,size=(n,n))
-            w0 = np.random.randint(0,10,n)
-            w1 = np.random.randint(0,10,(n,n))
-            w2 = np.random.randint(0,10,size=(n,n))
-            x0 = np.random.triangular(-3,0,10,n)
-            x1 = np.random.triangular(-3,0,10,(n,n))
-            x2 = np.random.triangular(-3,0,10,size=(n,n))
+            h0 = np.random.chisquare(10, n)
+            h1 = np.random.chisquare(10, (n, n))
+            h2 = np.random.chisquare(10, size=(n, n))
+            i0 = np.random.weibull(10, n)
+            i1 = np.random.weibull(10, (n, n))
+            i2 = np.random.weibull(10, size=(n, n))
+            j0 = np.random.power(10, n)
+            j1 = np.random.power(10, (n, n))
+            j2 = np.random.power(10, size=(n, n))
+            k0 = np.random.geometric(0.1, n)
+            k1 = np.random.geometric(0.1, (n, n))
+            k2 = np.random.geometric(0.1, size=(n, n))
+            l0 = np.random.exponential(10, n)
+            l1 = np.random.exponential(10, (n, n))
+            l2 = np.random.exponential(10, size=(n, n))
+            m0 = np.random.poisson(10, n)
+            m1 = np.random.poisson(10, (n, n))
+            m2 = np.random.poisson(10, size=(n, n))
+            n0 = np.random.rayleigh(10, n)
+            n1 = np.random.rayleigh(10, (n, n))
+            n2 = np.random.rayleigh(10, size=(n, n))
+            o0 = np.random.normal(0, 1, n)
+            o1 = np.random.normal(0, 1, (n, n))
+            o2 = np.random.normal(0, 1, size=(n, n))
+            p0 = np.random.uniform(0, 1, n)
+            p1 = np.random.uniform(0, 1, (n, n))
+            p2 = np.random.uniform(0, 1, size=(n, n))
+            q0 = np.random.beta(0.1, 1, n)
+            q1 = np.random.beta(0.1, 1, (n, n))
+            q2 = np.random.beta(0.1, 1, size=(n, n))
+            r0 = np.random.binomial(0, 1, n)
+            r1 = np.random.binomial(0, 1, (n, n))
+            r2 = np.random.binomial(0, 1, size=(n, n))
+            s0 = np.random.f(0.1, 1, n)
+            s1 = np.random.f(0.1, 1, (n, n))
+            s2 = np.random.f(0.1, 1, size=(n, n))
+            t0 = np.random.gamma(0.1, 1, n)
+            t1 = np.random.gamma(0.1, 1, (n, n))
+            t2 = np.random.gamma(0.1, 1, size=(n, n))
+            u0 = np.random.lognormal(0, 1, n)
+            u1 = np.random.lognormal(0, 1, (n, n))
+            u2 = np.random.lognormal(0, 1, size=(n, n))
+            v0 = np.random.laplace(0, 1, n)
+            v1 = np.random.laplace(0, 1, (n, n))
+            v2 = np.random.laplace(0, 1, size=(n, n))
+            w0 = np.random.randint(0, 10, n)
+            w1 = np.random.randint(0, 10, (n, n))
+            w2 = np.random.randint(0, 10, size=(n, n))
+            x0 = np.random.triangular(-3, 0, 10, n)
+            x1 = np.random.triangular(-3, 0, 10, (n, n))
+            x2 = np.random.triangular(-3, 0, 10, size=(n, n))
 
-
-        last=ord('x')+1
-        vars1d = [('n',)] + [chr(x)+'0' for x in range(ord('a'),last)]
-        vars2d = [('n', 'n')] + [chr(x)+'1' for x in range(ord('a'),last)]
-        vars2d += [chr(x)+'1' for x in range(ord('c'),last)]
+        last = ord('x') + 1
+        vars1d = [('n',)] + [chr(x) + '0' for x in range(ord('a'), last)]
+        vars2d = [('n', 'n')] + [chr(x) + '1' for x in range(ord('a'), last)]
+        vars2d += [chr(x) + '1' for x in range(ord('c'), last)]
         self._compile_and_test(test_random, (types.intp,),
-                               equivs = [ self.with_equiv(*vars1d),
-                                          self.with_equiv(*vars2d) ])
+                               equivs=[self.with_equiv(*vars1d),
+                                       self.with_equiv(*vars2d)])
 
         def test_concatenate(m, n):
             a = np.ones(m)
             b = np.ones(n)
-            c = np.concatenate((a,b))
-            d = np.ones((2,n))
-            e = np.ones((3,n))
+            c = np.concatenate((a, b))
+            d = np.ones((2, n))
+            e = np.ones((3, n))
             f = np.concatenate((d, e))
             # Numba njit cannot compile concatenate with single array!
             # g = np.ones((3,4,5))
@@ -516,18 +523,18 @@ class TestArrayAnalysis(TestCase):
             # Numba njit cannot support list argument!
             # q = np.concatenate([d, e])
         self._compile_and_test(test_concatenate, (types.intp, types.intp),
-                               equivs = [ self.with_equiv('f', (5, 'n')),
-                                          #self.with_equiv('h', (3 + 4 + 5, )),
-                                          self.with_equiv('k', ('m', 5)) ],
-                               asserts = [ self.with_shapecall('c'),
-                                           self.without_shapecall('f'),
-                                           self.without_shapecall('k'),
-                                           self.with_shapecall('p') ])
+                               equivs=[self.with_equiv('f', (5, 'n')),
+                                       #self.with_equiv('h', (3 + 4 + 5, )),
+                                       self.with_equiv('k', ('m', 5))],
+                               asserts=[self.with_shapecall('c'),
+                                        self.without_shapecall('f'),
+                                        self.without_shapecall('k'),
+                                        self.with_shapecall('p')])
 
         def test_vsd_stack():
             k = np.ones((2,))
-            l = np.ones((2,3))
-            o = np.ones((2,3,4))
+            l = np.ones((2, 3))
+            o = np.ones((2, 3, 4))
             p = np.vstack((k, k))
             q = np.vstack((l, l))
             r = np.hstack((k, k))
@@ -537,14 +544,14 @@ class TestArrayAnalysis(TestCase):
             v = np.dstack((o, o))
 
         self._compile_and_test(test_vsd_stack, (),
-                               equivs = [ self.with_equiv('p', (2, 2)),
-                                          self.with_equiv('q', (4, 3)),
-                                          self.with_equiv('r', (4,)),
-                                          self.with_equiv('s', (2, 6)),
-                                          self.with_equiv('t', (1, 2, 2)),
-                                          self.with_equiv('u', (2, 3, 2)),
-                                          self.with_equiv('v', (2, 3, 8)),
-                                        ])
+                               equivs=[self.with_equiv('p', (2, 2)),
+                                       self.with_equiv('q', (4, 3)),
+                                       self.with_equiv('r', (4,)),
+                                       self.with_equiv('s', (2, 6)),
+                                       self.with_equiv('t', (1, 2, 2)),
+                                       self.with_equiv('u', (2, 3, 2)),
+                                       self.with_equiv('v', (2, 3, 8)),
+                                       ])
 
         if numpy_version >= (1, 10):
             def test_stack(m, n):
@@ -560,54 +567,57 @@ class TestArrayAnalysis(TestCase):
                 j = np.stack((d, e), axis=-1)
 
             self._compile_and_test(test_stack, (types.intp, types.intp),
-                                   equivs = [ self.with_equiv('m', 'n'),
-                                              self.with_equiv('c', (2, 'm')),
-                                              self.with_equiv('f', 'g', (2, 'm', 'n')),
-                                              self.with_equiv('h', ('m', 2, 'n')),
-                                              self.with_equiv('i', 'j', ('m', 'n', 2)),
-                                            ])
+                                   equivs=[self.with_equiv('m', 'n'),
+                                           self.with_equiv('c', (2, 'm')),
+                                           self.with_equiv(
+                                       'f', 'g', (2, 'm', 'n')),
+                self.with_equiv(
+                                       'h', ('m', 2, 'n')),
+                self.with_equiv(
+                                       'i', 'j', ('m', 'n', 2)),
+            ])
 
-        def test_linspace(m,n):
-            a = np.linspace(m,n)
-            b = np.linspace(m,n,10)
+        def test_linspace(m, n):
+            a = np.linspace(m, n)
+            b = np.linspace(m, n, 10)
             # Numba njit does not support num keyword to linspace call!
             # c = np.linspace(m,n,num=10)
-        self._compile_and_test(test_linspace, (types.float64,types.float64),
-                               equivs = [ self.with_equiv('a', (50,)),
-                                          self.with_equiv('b', (10,)) ])
+        self._compile_and_test(test_linspace, (types.float64, types.float64),
+                               equivs=[self.with_equiv('a', (50,)),
+                                       self.with_equiv('b', (10,))])
 
-        def test_dot(l,m,n):
-            a = np.dot(np.ones(1),np.ones(1))
-            b = np.dot(np.ones(2),np.ones((2,3)))
+        def test_dot(l, m, n):
+            a = np.dot(np.ones(1), np.ones(1))
+            b = np.dot(np.ones(2), np.ones((2, 3)))
             # Numba njit does not support higher dimensional inputs
             #c = np.dot(np.ones(2),np.ones((3,2,4)))
             #d = np.dot(np.ones(2),np.ones((3,5,2,4)))
-            e = np.dot(np.ones((1,2)),np.ones(2,))
+            e = np.dot(np.ones((1, 2)), np.ones(2,))
             #f = np.dot(np.ones((1,2,3)),np.ones(3,))
             #g = np.dot(np.ones((1,2,3,4)),np.ones(4,))
-            h = np.dot(np.ones((2,3)),np.ones((3,4)))
-            i = np.dot(np.ones((m,n)),np.ones((n,m)))
-            j = np.dot(np.ones((m,m)),np.ones((l,l)))
+            h = np.dot(np.ones((2, 3)), np.ones((3, 4)))
+            i = np.dot(np.ones((m, n)), np.ones((n, m)))
+            j = np.dot(np.ones((m, m)), np.ones((l, l)))
 
-        self._compile_and_test(test_dot, (types.intp,types.intp,types.intp),
-                               equivs = [ self.without_equiv('a', (1,)), # not array
-                                          self.with_equiv('b', (3,)),
-                                          self.with_equiv('e', (1,)),
-                                          self.with_equiv('h', (2,4)),
-                                          self.with_equiv('i', ('m','m')),
-                                          self.with_equiv('j', ('m','m')),
-                                        ],
-                               asserts = [ self.with_assert('m', 'l') ])
+        self._compile_and_test(test_dot, (types.intp, types.intp, types.intp),
+                               equivs=[self.without_equiv('a', (1,)),  # not array
+                                       self.with_equiv('b', (3,)),
+                                       self.with_equiv('e', (1,)),
+                                       self.with_equiv('h', (2, 4)),
+                                       self.with_equiv('i', ('m', 'm')),
+                                       self.with_equiv('j', ('m', 'm')),
+                                       ],
+                               asserts=[self.with_assert('m', 'l')])
 
-        def test_broadcast(m,n):
-            a = np.ones((m,n))
+        def test_broadcast(m, n):
+            a = np.ones((m, n))
             b = np.ones(n)
             c = a + b
-            d = np.ones((1,n))
+            d = np.ones((1, n))
             e = a + c - d
         self._compile_and_test(test_broadcast, (types.intp, types.intp),
-                               equivs = [ self.with_equiv('a', 'c', 'e') ],
-                               asserts = None)
+                               equivs=[self.with_equiv('a', 'c', 'e')],
+                               asserts=None)
 
 
 if __name__ == '__main__':

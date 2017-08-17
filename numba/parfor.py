@@ -65,6 +65,7 @@ sequential_parfor_lowering = False
 
 
 class prange(object):
+
     def __new__(cls, *args):
         return range(*args)
 
@@ -77,6 +78,7 @@ _reduction_ops = {
 
 
 class LoopNest(object):
+
     '''The LoopNest class holds information of a single loop including
     the index variable (of a non-negative integer value), and the
     range variable, e.g. range(r) is 0 to r-1 with step size 1.
@@ -166,6 +168,7 @@ class Parfor(ir.Expr, ir.Stmt):
 
 
 class ParforPass(object):
+
     """ParforPass class is responsible for converting Numpy
     calls in Numba intermediate representation to Parfors, which
     will lower into either sequential or parallel loops during lowering
@@ -222,7 +225,8 @@ class ParforPass(object):
             fix_generator_types(self.func_ir.generator_info, self.return_type,
                                 self.typemap)
         if sequential_parfor_lowering:
-            lower_parfor_sequential(self.typingctx, self.func_ir, self.typemap, self.calltypes)
+            lower_parfor_sequential(
+                self.typingctx, self.func_ir, self.typemap, self.calltypes)
         else:
             # prepare for parallel lowering
             # add parfor params to parfors here since lowering is destructive
@@ -371,7 +375,8 @@ class ParforPass(object):
         elif ndims == 1:
             return index_vars[0], types.intp
         else:
-            raise NotImplementedError("Parfor does not handle arrays of dimension 0")
+            raise NotImplementedError(
+                "Parfor does not handle arrays of dimension 0")
 
     def _arrayexpr_to_parfor(self, equiv_set, lhs, arrayexpr, avail_vars):
         """generate parfor from arrayexpr node, which is essentially a
@@ -614,9 +619,7 @@ class ParforPass(object):
         value_assign = ir.Assign(value, expr_out_var, loc)
         body_block.body.append(value_assign)
 
-
         parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set)
-
 
         setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
         self.calltypes[setitem_node] = signature(
@@ -986,17 +989,18 @@ def _gen_arrayexpr_getitem(
     ndims = typemap[var.name].ndim
     num_indices = len(all_parfor_indices)
     size_vars = equiv_set.get_shape(var)
-    size_consts = [ equiv_set.get_equiv_const(x) for x in size_vars ]
+    size_consts = [equiv_set.get_equiv_const(x) for x in size_vars]
     if ndims == 1:
         # Use last index for 1D arrays
         index_var = all_parfor_indices[-1]
-    elif any([ x != None for x in size_consts ]):
+    elif any([x != None for x in size_consts]):
         # Need a tuple as index
         ind_offset = num_indices - ndims
         tuple_var = ir.Var(var.scope, mk_unique_var(
-                          "$parfor_index_tuple_var_bcast"), loc)
+            "$parfor_index_tuple_var_bcast"), loc)
         typemap[tuple_var.name] = types.containers.UniTuple(types.intp, ndims)
-        # Just in case, const var for size 1 dim access index: $const0 = Const(0)
+        # Just in case, const var for size 1 dim access index: $const0 =
+        # Const(0)
         const_node = ir.Const(0, var.loc)
         const_var = ir.Var(var.scope, mk_unique_var("$const_ind_0"), loc)
         typemap[const_var.name] = types.intp
@@ -1342,6 +1346,7 @@ def parfor_insert_dels(parfor, curr_dead_set):
 
     # dummy class to replace func_ir. _patch_var_dels only accesses blocks
     class DummyFuncIR(object):
+
         def __init__(self, blocks):
             self.blocks = blocks
     post_proc = postproc.PostProcessor(DummyFuncIR(blocks))
@@ -1376,8 +1381,8 @@ def maximize_fusion(func_ir):
                         next_stmt, Parfor)
                         and (not isinstance(next_stmt, ir.Assign)
                              or has_no_side_effect(
-                                next_stmt.value, set(), call_table)
-                             or guard(is_assert_equiv, func_ir, next_stmt.value))):
+                            next_stmt.value, set(), call_table)
+                        or guard(is_assert_equiv, func_ir, next_stmt.value))):
                     stmt_accesses = {v.name for v in stmt.list_vars()}
                     stmt_writes = get_parfor_writes(stmt)
                     next_accesses = {v.name for v in next_stmt.list_vars()}
@@ -1390,9 +1395,11 @@ def maximize_fusion(func_ir):
                 i += 1
     return
 
+
 def is_assert_equiv(func_ir, expr):
     func_name, mod_name = find_callname(func_ir, expr)
     return func_name == 'assert_equiv'
+
 
 def get_parfor_writes(parfor):
     assert isinstance(parfor, Parfor)
@@ -1444,6 +1451,7 @@ def try_fuse(equiv_set, parfor1, parfor2):
 
     ndims = len(parfor1.loop_nests)
     # all loops should be equal length
+
     def is_equiv(x, y):
         return x == y or equiv_set.is_equiv(x, y)
 
@@ -1494,7 +1502,8 @@ def fuse_parfors_inner(parfor1, parfor2):
     ndims = len(parfor1.loop_nests)
     index_dict = {parfor2.index_var.name: parfor1.index_var}
     for i in range(ndims):
-        index_dict[parfor2.loop_nests[i].index_variable.name] = parfor1.loop_nests[i].index_variable
+        index_dict[parfor2.loop_nests[i].index_variable.name] = parfor1.loop_nests[
+            i].index_variable
     replace_vars(parfor1.loop_body, index_dict)
     nameset = set(x.name for x in index_dict.values())
     remove_duplicate_definitions(parfor1.loop_body, nameset)
@@ -1522,6 +1531,7 @@ def remove_duplicate_definitions(blocks, nameset):
         block.body = new_body
     return
 
+
 def remove_empty_block(blocks):
     """Remove empty blocks and any jumps to them, which can be a result
     from prange conversion and/or fusion.
@@ -1536,6 +1546,7 @@ def remove_empty_block(blocks):
         inst = block.body[-1]
         if isinstance(inst, ir.Jump) and inst.target in emptyset:
             block.body.pop()
+
 
 def has_cross_iter_dep(parfor):
     # we consevatively assume there is cross iteration dependency when
@@ -1606,7 +1617,8 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, typemap):
     last_block.body = new_body
 
     # process parfor body recursively
-    remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map, typemap)
+    remove_dead_parfor_recursive(
+        parfor, lives, arg_aliases, alias_map, typemap)
     return
 
 
@@ -1650,13 +1662,16 @@ def remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map, typemap)
     blocks[last_label].body.pop()  # remove branch
     return
 
+
 def find_potential_aliases_parfor(parfor, args, typemap, alias_map, arg_aliases):
     blocks = wrap_parfor_blocks(parfor)
-    ir_utils.find_potential_aliases(blocks, args, typemap, alias_map, arg_aliases)
+    ir_utils.find_potential_aliases(
+        blocks, args, typemap, alias_map, arg_aliases)
     unwrap_parfor_blocks(parfor)
     return
 
 ir_utils.alias_analysis_extensions[Parfor] = find_potential_aliases_parfor
+
 
 def wrap_parfor_blocks(parfor):
     """wrap parfor blocks for analysis/optimization like CFG"""
