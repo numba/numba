@@ -51,7 +51,7 @@ def _lower_parfor_parallel(lowerer, parfor):
     parfor_output_arrays = numba.parfor.get_parfor_outputs(
         parfor, parfor.params)
     parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(
-        parfor, parfor.params)
+        parfor, parfor.params, lowerer.fndesc.calltypes)
     # compile parfor body as a separate function to be used with GUFuncWrapper
     flags = compiler.Flags()
     flags.set('error_model', 'numpy')
@@ -197,7 +197,7 @@ def _create_gufunc_for_parfor_body(
     parfor_outputs = numba.parfor.get_parfor_outputs(parfor, parfor_params)
     # Get all parfor reduction vars, and operators.
     parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(
-        parfor, parfor_params)
+        parfor, parfor_params, lowerer.fndesc.calltypes)
     # Compute just the parfor inputs as a set difference.
     parfor_inputs = sorted(
         list(
@@ -555,9 +555,12 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
     for i in range(nredvars):
         redvar_typ = lowerer.fndesc.typemap[redvars[i]]
         # we need to use the default initial value instead of existing value in
-        # redvar
-        op, imop, init_val = reddict[redvars[i]]
-        val = context.get_constant(redvar_typ, init_val)
+        # redvar if available
+        init_val = reddict[redvars[i]][0]
+        if init_val != None:
+            val = context.get_constant(redvar_typ, init_val)
+        else:
+            val = lowerer.loadvar(redvars[i])
         typ = context.get_value_type(redvar_typ)
         size = get_thread_count()
         arr = cgutils.alloca_once(builder, typ,
@@ -709,18 +712,19 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
     for i in range(get_thread_count()):
         for name, arr in zip(redvars, redarrs):
             tmpname = mk_unique_var(name)
-            op, imop, init_val = reddict[name]
             src = builder.gep(arr, [context.get_constant(types.intp, i)])
             val = builder.load(src)
             vty = lowerer.fndesc.typemap[name]
             lowerer.fndesc.typemap[tmpname] = vty
             lowerer.storevar(val, tmpname)
-            accvar = ir.Var(scope, name, loc)
             tmpvar = ir.Var(scope, tmpname, loc)
-            acc_call = ir.Expr.inplace_binop(op, imop, accvar, tmpvar, loc)
-            calltypes[acc_call] = signature(vty, vty, vty)
-            inst = ir.Assign(acc_call, accvar, loc)
-            lowerer.lower_inst(inst)
+            tmp_assign = ir.Assign(tmpvar, ir.Var(scope, name+"#init", loc), loc)
+            if name+"#init" not in lowerer.fndesc.typemap:
+                lowerer.fndesc.typemap[name+"#init"] = vty
+            lowerer.lower_inst(tmp_assign)
+            # generate code for combining reduction variable with thread output
+            for inst in reddict[name][1]:
+                lowerer.lower_inst(inst)
 
     # TODO: scalar output must be assigned back to corresponding output
     # variables
