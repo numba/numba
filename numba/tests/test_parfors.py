@@ -784,6 +784,18 @@ class TestPrange(TestParforsBase):
         self.prange_tester(test_impl, np.int32(4))
 
     @skip_unsupported
+    def test_prange14(self):
+        def test_impl(A):
+            s = 3
+            for i in range(len(A)):
+                s += A[i]*2
+            return s
+        # this tests reduction detection well since accumulated variable is
+        # initialized before the parfor and value accessed from array is updated
+        # before accumulation
+        self.prange_tester(test_impl, np.random.ranf(4))
+
+    @skip_unsupported
     def test_kde_example(self):
         def test_impl(X):
             # KDE example
