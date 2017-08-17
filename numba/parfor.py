@@ -1310,13 +1310,11 @@ def get_parfor_reductions(parfor, parfor_params, calltypes, reductions=None, nam
                     calltypes[stmt_cp.value] = calltypes[stmt.value]
                 param_nodes[cur_param].append(stmt_cp)
     for param, used_vars in param_uses.items():
-        # a parameter is a reduction variable if its value and loop index are
-        # used to update it
-        if param in used_vars and parfor.index_var.name in used_vars:
+        # a parameter is a reduction variable if its value is used to update it
+        if param in used_vars:
             names.append(param)
             param_nodes[param].reverse()
-            reduce_nodes = get_reduce_nodes(param, param_nodes[param],
-                                                        parfor.index_var.name)
+            reduce_nodes = get_reduce_nodes(param, param_nodes[param])
             init_val = guard(get_reduction_init, reduce_nodes)
             reductions[param] = (init_val, reduce_nodes)
     #print("reduce vars:", names, reductions)
@@ -1334,28 +1332,30 @@ def get_reduction_init(nodes):
         return 1
     return None
 
-def get_reduce_nodes(name, nodes, index_var):
+def get_reduce_nodes(name, nodes):
     reduce_nodes = None
-    # variables that depend on index variable
-    index_var_deps = set([index_var])
     for i, stmt in enumerate(nodes):
         lhs = stmt.target.name
         rhs = stmt.value
         if isinstance(stmt.value, ir.Expr):
             in_vars = set(v.name for v in stmt.value.list_vars())
-            # output depends on index variable if inputs do
-            if in_vars | index_var_deps:
-                index_var_deps.add(lhs)
             if name in in_vars:
-                # replace the variable that depends on index with sentinel
-                dep_vars = (in_vars & index_var_deps)
-                assert len(dep_vars) == 1
-                replace_vars_inner(stmt.value, {dep_vars.pop():
+                args = get_expr_args(stmt.value)
+                args.remove(name)
+                assert len(args) == 1
+                replace_vars_inner(stmt.value, {args[0]:
                     ir.Var(stmt.target.scope, name+"#init", stmt.target.loc)})
                 reduce_nodes = nodes[i:]
                 break;
     assert reduce_nodes, "Invalid reduction format"
     return reduce_nodes
+
+def get_expr_args(expr):
+    if expr.op in ['binop', 'inplace_binop']:
+        return [expr.lhs.name, expr.rhs.name]
+    if expr.op == 'call':
+        return [v.name for v in expr.args]
+    raise NotImplementedError("expr args")
 
 def visit_vars_parfor(parfor, callback, cbdata):
     if config.DEBUG_ARRAY_OPT == 1:
