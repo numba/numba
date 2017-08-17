@@ -196,8 +196,7 @@ class ParforPass(object):
         self._convert_numpy(self.func_ir.blocks)
 
         dprint_func_ir(self.func_ir, "after parfor pass")
-        simplify(self.func_ir, self.typemap, self.array_analysis,
-                 self.calltypes, array_analysis.copy_propagate_update_analysis)
+        simplify(self.func_ir, self.typemap, self.calltypes)
 
         #dprint_func_ir(self.func_ir, "after remove_dead")
         # reorder statements to maximize fusion
@@ -1049,9 +1048,7 @@ def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes):
     if parfor_found:
         func_ir.blocks = rename_labels(func_ir.blocks)
     dprint_func_ir(func_ir, "after parfor sequential lowering")
-    local_array_analysis = array_analysis.ArrayAnalysis(typingctx, func_ir, typemap, calltypes)
-    simplify(func_ir, typemap, local_array_analysis,
-             calltypes, array_analysis.copy_propagate_update_analysis)
+    simplify(func_ir, typemap, calltypes)
     dprint_func_ir(func_ir, "after parfor sequential simplify")
 
     return
