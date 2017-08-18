@@ -911,6 +911,12 @@ def get_call_table(blocks, call_table=None, reverse_call_table=None):
                     if lhs in reverse_call_table:
                         call_var = reverse_call_table[lhs]
                         call_table[call_var].append(rhs.value)
+                if isinstance(rhs, ir.FreeVar):
+                    if lhs in call_table:
+                        call_table[lhs].append(rhs.value)
+                    if lhs in reverse_call_table:
+                        call_var = reverse_call_table[lhs]
+                        call_table[call_var].append(rhs.value)
             for T, f in call_table_extensions.items():
                 if isinstance(inst, T):
                     f(inst, call_table, reverse_call_table)
@@ -1378,7 +1384,7 @@ def gen_np_call(func_as_str, func, lhs, args, typemap, calltypes):
     # g_np_var = Global(numpy)
     g_np_var = ir.Var(scope, mk_unique_var("$np_g_var"), loc)
     typemap[g_np_var.name] = types.misc.Module(numpy)
-    g_np = ir.Global('np', np, loc)
+    g_np = ir.Global('np', numpy, loc)
     g_np_assign = ir.Assign(g_np, g_np_var, loc)
     # attr call: <something>_attr = getattr(g_np_var, func_as_str)
     np_attr_call = ir.Expr.getattr(g_np_var, func_as_str, loc)
