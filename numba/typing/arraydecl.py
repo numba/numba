@@ -559,7 +559,7 @@ def sum_expand(self, args, kws):
     args_len = len(args)
     assert args_len <= 1
     if args_len == 0:
-        # No axis parameter so the return type of the summation is a scalar 
+        # No axis parameter so the return type of the summation is a scalar
         # of the type of the array.
         return signature(_expand_integer(self.this.dtype), *args, recvr=self.this)
     else:
@@ -589,10 +589,11 @@ def generic_index(self, args, kws):
     assert not kws
     return signature(types.intp, recvr=self.this)
 
-def install_array_method(name, generic):
+def install_array_method(name, generic, support_literals=False):
     my_attr = {"key": "array." + name, "generic": generic}
     temp_class = type("Array_" + name, (AbstractTemplate,), my_attr)
-
+    if support_literals:
+        temp_class.support_literals = support_literals
     def array_attribute_attachment(self, ary):
         return types.BoundFunction(temp_class, ary)
 
@@ -604,7 +605,7 @@ for fname in ["min", "max"]:
 
 # Functions that return a machine-width type, to avoid overflows
 install_array_method("prod", generic_expand)
-install_array_method("sum", sum_expand)
+install_array_method("sum", sum_expand, support_literals=True)
 
 # Functions that return a machine-width type, to avoid overflows
 for fname in ["cumsum", "cumprod"]:

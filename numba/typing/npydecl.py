@@ -365,6 +365,9 @@ def _numpy_redirect(fname):
     cls = type("Numpy_redirect_{0}".format(fname), (Numpy_method_redirection,),
                dict(key=numpy_function, method_name=fname))
     infer_global(numpy_function, types.Function(cls))
+    # special case literal support for 'sum'
+    if fname == 'sum':
+        cls.support_literals = True
 
 for func in ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
              'cumsum', 'cumprod', 'argmin', 'argmax', 'argsort',

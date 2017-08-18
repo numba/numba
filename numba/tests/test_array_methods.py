@@ -630,13 +630,32 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(pyfunc(a), cfunc(a))
         # OK
         self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
-        
+
+    def test_sum_const(self):
+        def pyfunc(arr, axis):
+            # use np.sum with different constant args multiple times to check
+            # for internal compile cache to see if constant-specialization is
+            # applied properly.
+            a = np.sum(arr, 4)
+            b = np.sum(arr, 3)
+            # the last invocation uses runtime-variable
+            c = np.sum(arr, axis)
+            return a, b, c
+
+        cfunc = jit(nopython=True)(pyfunc)
+
+        arr = np.ones((3, 4, 5, 6, 7))
+        axis = 1
+        self.assertPreciseEqual(pyfunc(arr, axis), cfunc(arr, axis))
+        axis = 2
+        self.assertPreciseEqual(pyfunc(arr, axis), cfunc(arr, axis))
+
     def test_sum_exceptions(self):
         # Exceptions leak references
         self.disable_leak_check()
         pyfunc = array_sum
         cfunc = jit(nopython=True)(pyfunc)
-        
+
         a = np.ones((7, 6, 5, 4, 3))
         b = np.ones((4, 3))
         # BAD: axis > dimensions
@@ -686,7 +705,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # 2. 1d array index
         # 3. nd array index, >2d and F order
         # 4. reflected list
-        
+
         test_indices = []
         test_indices.append(1)
         test_indices.append(5)
@@ -697,7 +716,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         test_indices.append(np.array([[[1, 5, 1], [11, 3, 0]]]))
         test_indices.append(np.array([[[[1, 5]], [[11, 0]],[[1, 2]]]]))
         test_indices.append([1, 5, 1, 11, 3])
-    
+
         layouts = cycle(['C', 'F', 'A'])
 
         for dt in [np.float64, np.int64, np.complex128]:
@@ -717,7 +736,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # check float indexing raises
         with self.assertRaises(TypingError):
             cfunc(A, [1.7])
-       
+
         # check unsupported arg raises
         with self.assertRaises(TypingError):
             take_kws = jit(nopython=True)(array_take_kws)
