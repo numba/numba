@@ -1235,6 +1235,18 @@ def find_const(func_ir, var):
     require(isinstance(var_def, ir.Const))
     return var_def.value
 
+def get_type_max_value(typ):
+    if isinstance(typ, types.Float):
+        bw = typ.bitwidth
+        if bw == 32:
+            return numpy.finfo(numpy.float32).max
+        if bw == 64:
+            return numpy.finfo(numpy.float64).max
+        raise NotImplementedError("Unsupported floating point type")
+    if isinstance(typ, types.Integer):
+        return typ.maxval
+    raise NotImplementedError("Unsupported type")
+
 def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
                         typemap=None, calltypes=None):
     from numba import compiler

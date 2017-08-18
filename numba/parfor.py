@@ -49,6 +49,7 @@ from numba.ir_utils import (
     simplify_CFG,
     has_no_side_effect,
     canonicalize_array_math,
+    get_type_max_value,
     find_callname,
     guard,
     require,
@@ -494,7 +495,7 @@ class ParforPass(object):
         this Numpy reduce call.
         """
         func_name, mod_name = find_callname(self.func_ir, expr)
-        return (func_name in _reduction_ops)
+        return (func_name in _reduction_ops) or func_name == 'min'
 
     def _get_ndims(self, arr):
         # return len(self.array_analysis.array_shape_classes[arr])
@@ -668,6 +669,12 @@ class ParforPass(object):
         call_name, mod_name = find_callname(self.func_ir, expr)
         args = expr.args
         kws = dict(expr.kws)
+        if call_name is 'min':
+            arr = expr.args[0]
+            init_val = get_type_max_value(self.typemap[arr.name].dtype)
+            expr.args.insert(0, lambda a,b: min(a, b))
+            expr.args.append(ir.Const(init_val, arr.loc))
+            return self._reduce_to_parfor(equiv_set, lhs, expr)
         if call_name in _reduction_ops:
             acc_op, im_op, init_val = _reduction_ops[call_name]
             assert len(args) in [1, 2]  # vector dot has 2 args
