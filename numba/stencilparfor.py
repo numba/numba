@@ -6,6 +6,7 @@ from numba.typing import signature
 from numba import ir_utils, ir, utils, array_analysis
 from numba.ir_utils import get_call_table, find_topo_order, mk_unique_var
 from operator import add
+import numpy as np
 
 def stencil():
     pass
@@ -156,6 +157,7 @@ class StencilPass(object):
         if out_arr == None:
             so_name = ir_utils.mk_unique_var("stencil_output")
             out_arr = ir.Var(scope, so_name, loc)
+            self.typemap[out_arr.name] = self.typemap[in_arr.name]
             stmts = ir_utils.gen_np_call("zeros_like",
                                        np.zeros_like,
                                        out_arr,
