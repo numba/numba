@@ -521,6 +521,15 @@ class TestParfors(TestParforsBase):
         A = np.random.randint(10, size=4, dtype=np.int32)
         self.check(test_impl, A)
 
+    @skip_unsupported
+    def test_max(self):
+        def test_impl(A):
+            return A.max()
+
+        A = np.random.ranf(4)
+        self.check(test_impl, A)
+        A = np.random.randint(10, size=4, dtype=np.int32)
+        self.check(test_impl, A)
 
 class TestPrange(TestParforsBase):
 

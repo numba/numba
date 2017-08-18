@@ -1247,6 +1247,18 @@ def get_type_max_value(typ):
         return typ.maxval
     raise NotImplementedError("Unsupported type")
 
+def get_type_min_value(typ):
+    if isinstance(typ, types.Float):
+        bw = typ.bitwidth
+        if bw == 32:
+            return numpy.finfo(numpy.float32).min
+        if bw == 64:
+            return numpy.finfo(numpy.float64).min
+        raise NotImplementedError("Unsupported floating point type")
+    if isinstance(typ, types.Integer):
+        return typ.minval
+    raise NotImplementedError("Unsupported type")
+
 def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
                         typemap=None, calltypes=None):
     from numba import compiler
