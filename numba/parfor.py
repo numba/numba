@@ -50,6 +50,7 @@ from numba.ir_utils import (
     has_no_side_effect,
     canonicalize_array_math,
     get_type_max_value,
+    get_type_min_value,
     find_callname,
     guard,
     require,
@@ -85,6 +86,7 @@ _reduction_ops = {
     'prod': ('*=', '*', 1),
 }
 
+_np_reduce_calls = ['min', 'max']
 
 class LoopNest(object):
 
@@ -495,7 +497,8 @@ class ParforPass(object):
         this Numpy reduce call.
         """
         func_name, mod_name = find_callname(self.func_ir, expr)
-        return (func_name in _reduction_ops) or func_name == 'min'
+        return mod_name == 'numpy' and (func_name in _reduction_ops
+                    or func_name in _np_reduce_calls)
 
     def _get_ndims(self, arr):
         # return len(self.array_analysis.array_shape_classes[arr])
@@ -673,6 +676,12 @@ class ParforPass(object):
             arr = expr.args[0]
             init_val = get_type_max_value(self.typemap[arr.name].dtype)
             expr.args.insert(0, lambda a,b: min(a, b))
+            expr.args.append(ir.Const(init_val, arr.loc))
+            return self._reduce_to_parfor(equiv_set, lhs, expr)
+        if call_name is 'max':
+            arr = expr.args[0]
+            init_val = get_type_min_value(self.typemap[arr.name].dtype)
+            expr.args.insert(0, lambda a,b: max(a, b))
             expr.args.append(ir.Const(init_val, arr.loc))
             return self._reduce_to_parfor(equiv_set, lhs, expr)
         if call_name in _reduction_ops:
