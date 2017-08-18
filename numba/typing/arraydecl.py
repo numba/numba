@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from collections import namedtuple
 
-from numba import types
+from numba import types, utils
 from numba.typing.templates import (AttributeTemplate, AbstractTemplate,
                                     infer, infer_getattr, signature,
                                     bound_function)
@@ -556,18 +556,28 @@ def sum_expand(self, args, kws):
     """
     sum can be called with or without an axis parameter.
     """
+    pysig = None
+    if kws:
+        def sum_stub(axis):
+            pass
+        pysig = utils.pysignature(sum_stub)
+        # rewrite args
+        args = list(args) + [kws['axis']]
+        kws = None
     args_len = len(args)
     assert args_len <= 1
     if args_len == 0:
         # No axis parameter so the return type of the summation is a scalar
         # of the type of the array.
-        return signature(_expand_integer(self.this.dtype), *args, recvr=self.this)
+        out = signature(_expand_integer(self.this.dtype), *args,
+                        recvr=self.this)
     else:
         # There is an axis paramter so the return type of this summation is
         # an array of dimension one less than the input array.
         return_type = types.Array(dtype=_expand_integer(self.this.dtype),
-                              ndim=self.this.ndim-1, layout='C')
-        return signature(return_type, *args, recvr=self.this)
+                                  ndim=self.this.ndim-1, layout='C')
+        out = signature(return_type, *args, recvr=self.this)
+    return out.replace(pysig=pysig)
 
 def generic_expand_cumulative(self, args, kws):
     assert not args

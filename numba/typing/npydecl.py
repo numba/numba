@@ -349,14 +349,23 @@ class Numpy_method_redirection(AbstractTemplate):
     """
 
     def generic(self, args, kws):
-        assert not kws
+        pysig = None
+        if kws:
+            if self.method_name == 'sum':
+                def sum_stub(arr, axis):
+                    pass
+                pysig = utils.pysignature(sum_stub)
+            else:
+                fmt = "numba doesn't support kwarg for {}"
+                raise TypingError(fmt.format(self.method_name))
+
         arr = args[0]
         # This will return a BoundFunction
         meth_ty = self.context.resolve_getattr(arr, self.method_name)
         # Resolve arguments on the bound function
         meth_sig = self.context.resolve_function_type(meth_ty, args[1:], kws)
         if meth_sig is not None:
-            return meth_sig.as_function()
+            return meth_sig.as_function().replace(pysig=pysig)
 
 
 # Function to glue attributes onto the numpy-esque object
