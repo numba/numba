@@ -1129,7 +1129,10 @@ class TypeInferer(object):
             typ = typ.copy(readonly=True)
 
         self.sentry_modified_builtin(inst, gvar)
-        self.lock_type(target.name, typ, loc=inst.loc)
+        # Setting literal_value for globals because they are handled
+        # like const value in numba
+        self.lock_type(target.name, typ, loc=inst.loc,
+                       literal_value=gvar.value)
         self.assumed_immutables.add(inst)
 
     def typeof_expr(self, inst, target, expr):
