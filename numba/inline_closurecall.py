@@ -14,7 +14,8 @@ from numba.ir_utils import (
     require,
     guard,
     get_definition,
-    find_callname
+    find_callname,
+    get_ir_of_code
     )
 
 from numba.analysis import compute_cfg_from_blocks
@@ -103,7 +104,8 @@ class InlineClosureCallPass(object):
         debug_print("Found closure call: ", instr, " with callee = ", callee)
         func_ir = self.func_ir
         # first, get the IR of the callee
-        callee_ir = self.get_ir_of_code(callee.code)
+        callee_ir = get_ir_of_code(self.func_ir.func_id.func.__globals__,
+                                        callee.code)
         callee_blocks = callee_ir.blocks
 
         # 1. relabel callee_ir by adding an offset
@@ -192,48 +194,6 @@ class InlineClosureCallPass(object):
         _debug_dump(func_ir)
 
         return new_blocks
-
-    def get_ir_of_code(self, fcode):
-        """
-        Compile a code object to get its IR.
-        """
-        glbls = self.func_ir.func_id.func.__globals__
-        nfree = len(fcode.co_freevars)
-        func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
-        func_clo = ",".join(["c_%d" % i for i in range(nfree)])
-        func_arg = ",".join(["x_%d" % i for i in range(fcode.co_argcount)])
-        func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (
-            func_env, func_arg, func_clo)
-        loc = {}
-        exec(func_text, glbls, loc)
-
-        # hack parameter name .0 for Python 3 versions < 3.6
-        if utils.PYVERSION >= (3,) and utils.PYVERSION < (3, 6):
-            co_varnames = list(fcode.co_varnames)
-            if co_varnames[0] == ".0":
-                co_varnames[0] = "implicit0"
-            fcode = types.CodeType(
-                fcode.co_argcount,
-                fcode.co_kwonlyargcount,
-                fcode.co_nlocals,
-                fcode.co_stacksize,
-                fcode.co_flags,
-                fcode.co_code,
-                fcode.co_consts,
-                fcode.co_names,
-                tuple(co_varnames),
-                fcode.co_filename,
-                fcode.co_name,
-                fcode.co_firstlineno,
-                fcode.co_lnotab,
-                fcode.co_freevars,
-                fcode.co_cellvars)
-
-        f = loc['g']()
-        f.__code__ = fcode
-        f.__name__ = fcode.co_name
-        ir = self.run_frontend(f)
-        return ir
 
 def _make_debug_print(prefix):
     def debug_print(*args):
@@ -716,4 +676,3 @@ def _fix_nested_array(func_ir):
 def _new_definition(func_ir, var, value, loc):
     func_ir._definitions[var.name] = [value]
     return ir.Assign(value=value, target=var, loc=loc)
-
