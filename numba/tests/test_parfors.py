@@ -511,6 +511,16 @@ class TestParfors(TestParforsBase):
         cpfunc = self.compile_parallel(test_impl, (numba.typeof(A),))
         self.assertEqual(cpfunc.entry_point(A), test_impl(A))
 
+    @skip_unsupported
+    def test_min(self):
+        def test_impl(A):
+            return A.min()
+
+        A = np.random.ranf(4)
+        self.check(test_impl, A)
+        A = np.random.randint(10, size=4, dtype=np.int32)
+        self.check(test_impl, A)
+
 
 class TestPrange(TestParforsBase):
 
