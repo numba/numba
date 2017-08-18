@@ -1250,7 +1250,14 @@ def get_type_max_value(typ):
 def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
                         typemap=None, calltypes=None):
     from numba import compiler
-    f_ir = get_ir_of_code(glbls, mk_func.code)
+    # mk_func can be actual function or make_function node
+    if hasattr(mk_func, 'code'):
+        code = mk_func.code
+    elif hasattr(mk_func, '__code__'):
+        code = mk_func.__code__
+    else:
+        raise NotImplementedError("function type not recognized {}".format(mk_func))
+    f_ir = get_ir_of_code(glbls, code)
     remove_dels(f_ir.blocks)
 
     # relabel by adding an offset
