@@ -10,7 +10,7 @@ import re
 import sys
 import types as pytypes
 import warnings
-
+from functools import reduce
 import numpy as np
 
 import numba
@@ -496,6 +496,18 @@ class TestParfors(TestParforsBase):
         x = np.random.rand(N)
         is_positive = np.zeros(N)
         self.check(test_impl, x, is_positive, N)
+
+    @skip_unsupported
+    def test_reduce(self):
+        def test_impl(A):
+            init_val = (np.finfo(A.dtype).max if A.dtype.kind=='f'
+                                                    else np.iinfo(A.dtype).max)
+            return reduce(lambda a,b: min(a, b), A, init_val)
+
+        A = np.random.ranf(4)
+        cpfunc = self.compile_parallel(test_impl, (numba.typeof(A),))
+        #self.assertEqual(cpfunc.entry_point(A), test_impl(A))
+        #self.check(test_impl, np.random.randint(10, size=4))
 
 
 class TestPrange(TestParforsBase):
