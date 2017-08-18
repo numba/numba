@@ -82,8 +82,7 @@ def add_indices_to_kernel(kernel, ndim):
                     acc_call = ir.Expr.binop('+', stmt.value.index, 
                                              index_var, loc)
                     new_body.append(ir.Assign(acc_call, tmpvar, loc))
-                    stmt.value.index = tmpvar
-                    new_body.append(stmt)
+                    new_body.append(ir.Assign(ir.Expr.getitem(stmt.value.value,tmpvar,loc),stmt.target,loc))
                 else:
                     index_vars = []
                     sum_results = []
@@ -122,8 +121,7 @@ def add_indices_to_kernel(kernel, ndim):
 
                     tuple_call = ir.Expr.build_tuple(ind_stencils, loc)
                     new_body.append(ir.Assign(tuple_call, s_index_var, loc))
-                    stmt.value.index = s_index_var
-                    new_body.append(stmt)
+                    new_body.append(ir.Assign(ir.Expr.getitem(stmt.value.value,s_index_var,loc),stmt.target,loc))
             else:
                 new_body.append(stmt)
         block.body = new_body
@@ -186,6 +184,10 @@ class StencilFunc(object):
         return signature(*outtys)
 
     def _stencil_wrapper(self, *args, **kwargs):
+        # Copy the kernel so that our changes for this callsite
+        # won't effect other callsites.
+        kernel_copy = self.kernel_ir.copy()
+
         the_array = args[0]
         if 'out' in kwargs:
             result = kwargs['out']
@@ -201,13 +203,13 @@ class StencilFunc(object):
             index_var_name = "index" + str(i)
             index_vars += [index_var_name]
 
-        kernel_size = add_indices_to_kernel(self.kernel_ir, the_array.ndim)
-        replace_return_with_setitem(self.kernel_ir.blocks, index_vars)
+        kernel_size = add_indices_to_kernel(kernel_copy, the_array.ndim)
+        replace_return_with_setitem(kernel_copy.blocks, index_vars)
 
         stencil_func_text = "def " + stencil_func_name + "("
-        stencil_func_text += ",".join(self.kernel_ir.arg_names) + ", result):\n"
+        stencil_func_text += ",".join(kernel_copy.arg_names) + ", result):\n"
         stencil_func_text += "    full_shape = "
-        stencil_func_text += self.kernel_ir.arg_names[0] + ".shape\n"
+        stencil_func_text += kernel_copy.arg_names[0] + ".shape\n"
 
         offset = 1
         for i in range(the_array.ndim):
@@ -233,7 +235,7 @@ class StencilFunc(object):
         var_table = ir_utils.get_name_var_table(stencil_ir.blocks)
         new_var_dict = {}
         reserved_names = (["__sentinel__", "result"] + 
-                          self.kernel_ir.arg_names + index_vars)
+                          kernel_copy.arg_names + index_vars)
         #  + list(param_dict.values()) + legal_loop_indices
         for name, var in var_table.items():
             if not (name in reserved_names):
@@ -242,9 +244,9 @@ class StencilFunc(object):
 
         stencil_stub_last_label = max(stencil_ir.blocks.keys()) + 1
 
-        self.kernel_ir.blocks = ir_utils.add_offset_to_labels(
-                                self.kernel_ir.blocks, stencil_stub_last_label)
-        new_label = max(self.kernel_ir.blocks.keys()) + 1
+        kernel_copy.blocks = ir_utils.add_offset_to_labels(
+                                kernel_copy.blocks, stencil_stub_last_label)
+        new_label = max(kernel_copy.blocks.keys()) + 1
 
         # Search all the block in the stencil outline for the sentinel.
         for label, block in stencil_ir.blocks.items():
@@ -264,16 +266,16 @@ class StencilFunc(object):
                     # The current block is used for statements after sentinel.
                     block.body = block.body[i + 1:]
                     # But the current block gets a new label.
-                    body_first_label = min(self.kernel_ir.blocks.keys())
+                    body_first_label = min(kernel_copy.blocks.keys())
 
                     # The previous block jumps to the minimum labelled block of
                     # the parfor body.
                     prev_block.append(ir.Jump(body_first_label, loc))
                     # Add all the parfor loop body blocks to the gufunc 
                     # function's # IR.
-                    for (l, b) in self.kernel_ir.blocks.items():
+                    for (l, b) in kernel_copy.blocks.items():
                         stencil_ir.blocks[l] = b
-                    body_last_label = max(self.kernel_ir.blocks.keys())
+                    body_last_label = max(kernel_copy.blocks.keys())
                     stencil_ir.blocks[new_label] = block
                     stencil_ir.blocks[label] = prev_block
                     # Add a jump from the last parfor body block to the block
