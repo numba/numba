@@ -11,6 +11,7 @@ from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags, utils
 from numba import jit, typeof, types
 from numba.numpy_support import version as np_version
+from numba.errors import UntypedAttributeError
 from .support import TestCase, CompilationCache
 
 no_pyobj_flags = Flags()
@@ -46,6 +47,18 @@ def digitize(*args):
 
 def histogram(*args):
     return np.histogram(*args)
+
+def machar(*args):
+    return np.MachAr()
+
+def iinfo(*args):
+    return np.iinfo(*args)
+
+def finfo(*args):
+    return np.finfo(*args)
+
+def finfo_machar(*args):
+    return np.finfo(*args).machar
 
 
 class TestNPFunctions(TestCase):
@@ -410,3 +423,76 @@ class TestNPFunctions(TestCase):
         self.rnd.shuffle(values)
 
         check_values(values)
+
+class TestNPMachineParameters(TestCase):
+    # tests np.finfo, np.iinfo, np.MachAr
+
+    template = '''
+def foo():
+    ty = np.%s
+    return np.%s(ty)
+'''
+
+    def check(self, func, attrs, *args):
+        pyfunc = func
+        cfunc = jit(nopython=True)(pyfunc)
+
+        expected = pyfunc(*args)
+        got = cfunc(*args)
+
+        # check result
+        for attr in attrs:
+            self.assertPreciseEqual(getattr(expected, attr),
+                                    getattr(got, attr))
+
+    def create_harcoded_variant(self, basefunc, ty):
+        #create an instance of using the function with a hardcoded type
+        #and eval it into existence, return the function for use
+        tystr = ty.__name__
+        basestr = basefunc.__name__
+        funcstr = self.template % (tystr, basestr)
+        eval(compile(funcstr, '<string>', 'exec'))
+        return locals()['foo']
+
+    def test_MachAr(self):
+        attrs = ('ibeta', 'it', 'machep', 'eps', 'negep', 'epsneg', 'iexp',
+                 'minexp', 'xmin', 'maxexp', 'xmax', 'irnd', 'ngrd',
+                 'epsilon', 'tiny', 'huge', 'precision', 'resolution',)
+        self.check(machar, attrs)
+
+    def test_finfo(self):
+        types = [np.float32, np.float64, np.complex64, np.complex128]
+        attrs = ('bits', 'eps', 'epsneg', 'iexp', 'machep', 'max',
+                 'maxexp', 'negep', 'nexp', 'nmant', 'precision',
+                 'resolution', 'tiny',)
+        for ty in types:
+            self.check(finfo, attrs, ty(1))
+            hc_func = self.create_harcoded_variant(np.finfo, ty)
+            self.check(hc_func, attrs)
+
+        # check unsupported attr raises
+        with self.assertRaises(UntypedAttributeError) as raises:
+            cfunc = jit(nopython=True)(finfo_machar)
+            cfunc(7.)
+        msg = "Unknown attribute 'machar' of type finfo"
+        self.assertIn(msg, str(raises.exception))
+
+        # check invalid type raises
+        with self.assertTypingError():
+            cfunc = jit(nopython=True)(finfo)
+            cfunc(np.int32(7))
+
+    def test_iinfo(self):
+        # check types and instances of types
+        types = [np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16,
+                 np.uint32, np.uint64]
+        attrs = ('min', 'max', 'bits')
+        for ty in types:
+            self.check(iinfo, attrs, ty(1))
+            hc_func = self.create_harcoded_variant(np.iinfo, ty)
+            self.check(hc_func, attrs)
+
+        # check invalid type raises
+        with self.assertTypingError():
+            cfunc = jit(nopython=True)(iinfo)
+            cfunc(np.float64(7))
