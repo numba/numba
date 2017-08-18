@@ -145,6 +145,18 @@ def array_sum(a, *args):
 def array_sum_kws(a, axis):
     return a.sum(axis=axis)
 
+def array_sum_const_multi(arr, axis):
+    # use np.sum with different constant args multiple times to check
+    # for internal compile cache to see if constant-specialization is
+    # applied properly.
+    a = np.sum(arr, axis=4)
+    b = np.sum(arr, 3)
+    # the last invocation uses runtime-variable
+    c = np.sum(arr, axis)
+    # as method
+    d = arr.sum(axis=5)
+    return a, b, c, d
+
 def array_cumsum(a, *args):
     return a.cumsum(*args)
 
@@ -631,20 +643,20 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # OK
         self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
 
-    def test_sum_const(self):
-        def pyfunc(arr, axis):
-            # use np.sum with different constant args multiple times to check
-            # for internal compile cache to see if constant-specialization is
-            # applied properly.
-            a = np.sum(arr, 4)
-            b = np.sum(arr, 3)
-            # the last invocation uses runtime-variable
-            c = np.sum(arr, axis)
-            return a, b, c
+    def test_sum_kws(self):
+        pyfunc = array_sum_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        # OK
+        a = np.ones((7, 6, 5, 4, 3))
+        self.assertPreciseEqual(pyfunc(a, axis=1), cfunc(a, axis=1))
+        # OK
+        self.assertPreciseEqual(pyfunc(a, axis=2), cfunc(a, axis=2))
 
+    def test_sum_const(self):
+        pyfunc = array_sum_const_multi
         cfunc = jit(nopython=True)(pyfunc)
 
-        arr = np.ones((3, 4, 5, 6, 7))
+        arr = np.ones((3, 4, 5, 6, 7, 8))
         axis = 1
         self.assertPreciseEqual(pyfunc(arr, axis), cfunc(arr, axis))
         axis = 2
@@ -667,11 +679,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # BAD: axis greater than 3
         with self.assertRaises(ValueError):
             cfunc(a, 4)
-        # BAD: with kw axis
-        pyfunc = array_sum_kws
-        cfunc = jit(nopython=True)(pyfunc)
-        with self.assertRaises(LoweringError):
-            cfunc(a, axis=1)
 
     def test_cumsum(self):
         pyfunc = array_cumsum

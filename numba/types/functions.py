@@ -117,6 +117,12 @@ class BoundFunction(Callable, Opaque):
     def get_call_type(self, context, args, kws):
         return self.template(context).apply(args, kws)
 
+    def get_call_type_with_literals(self, context, args, kws, literals):
+        if literals is not None and self.template.support_literals:
+            return self.template(context).apply(*literals)
+        else:
+            return self.get_call_type(context, args, kws)
+
     def get_call_signatures(self):
         sigs = getattr(self.template, 'cases', [])
         is_param = hasattr(self.template, 'generic')
