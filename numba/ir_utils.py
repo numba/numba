@@ -1018,9 +1018,10 @@ arr_math = ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
             'nonzero', 'ravel']
 
 
-def canonicalize_array_math(blocks, typemap, calltypes, typingctx):
+def canonicalize_array_math(func_ir, typemap, calltypes, typingctx):
     # save array arg to call
     # call_varname -> array
+    blocks = func_ir.blocks
     saved_arr_arg = {}
     topo_order = find_topo_order(blocks)
     for label in topo_order:
@@ -1046,6 +1047,7 @@ def canonicalize_array_math(blocks, typemap, calltypes, typingctx):
                     g_np_assign = ir.Assign(g_np, g_np_var, loc)
                     rhs.value = g_np_var
                     new_body.append(g_np_assign)
+                    func_ir._definitions[g_np_var.name] = [g_np]
                     # update func var type
                     func = getattr(numpy, rhs.attr)
                     func_typ = get_np_ufunc_typ(func)
