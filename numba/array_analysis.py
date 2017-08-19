@@ -705,13 +705,16 @@ class ArrayAnalysis(object):
                     self.prepends[(label, br)] = asserts
                     self.prepends[(label, otherbr)] = [
                         ir.Assign(ir.Const(1 - cond_val, loc), cond_var, loc)]
-            elif cond_def != None:
-                # condition is always true/false, prune the outgoing edge
-                pruned_br = inst.falsebr if cond_def else inst.truebr
-                if pruned_br in self.pruned_predecessors:
-                    self.pruned_predecessors[pruned_br].append(label)
-                else:
-                    self.pruned_predecessors[pruned_br] = [label]
+            else:
+                if isinstance(cond_def, ir.Const):
+                    cond_def = cond_def.value
+                if isinstance(cond_def, int) or isinstance(cond_def, bool):
+                    # condition is always true/false, prune the outgoing edge
+                    pruned_br = inst.falsebr if cond_def else inst.truebr
+                    if pruned_br in self.pruned_predecessors:
+                        self.pruned_predecessors[pruned_br].append(label)
+                    else:
+                        self.pruned_predecessors[pruned_br] = [label]
 
         return pre, post
 

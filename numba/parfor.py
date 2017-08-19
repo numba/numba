@@ -192,7 +192,7 @@ class ParforPass(object):
         # remove Del statements for easier optimization
         remove_dels(self.func_ir.blocks)
         # e.g. convert A.sum() to np.sum(A) for easier match and optimization
-        canonicalize_array_math(self.func_ir.blocks, self.typemap,
+        canonicalize_array_math(self.func_ir, self.typemap,
                                 self.calltypes, self.typingctx)
         self.array_analysis.run()
         self._convert_prange(self.func_ir.blocks)
