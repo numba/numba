@@ -541,6 +541,16 @@ class TestParfors(TestParforsBase):
         A = np.random.randint(10, size=4, dtype=np.int32)
         self.check(test_impl, A)
 
+    @skip_unsupported
+    def test_argmax(self):
+        def test_impl(A):
+            return A.argmax()
+
+        A = np.random.ranf(4)
+        self.check(test_impl, A)
+        A = np.random.randint(10, size=4, dtype=np.int32)
+        self.check(test_impl, A)
+
 class TestPrange(TestParforsBase):
 
     def prange_tester(self, pyfunc, *args, **kwargs):
