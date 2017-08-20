@@ -51,6 +51,7 @@ from numba.ir_utils import (
     canonicalize_array_math,
     get_type_max_value,
     get_type_min_value,
+    IndexValue,
     find_callname,
     guard,
     require,
@@ -205,6 +206,7 @@ class ParforPass(object):
         # e.g. convert A.sum() to np.sum(A) for easier match and optimization
         canonicalize_array_math(self.func_ir, self.typemap,
                                 self.calltypes, self.typingctx)
+        self._replace_parallel_functions(self.func_ir.blocks)
         self.array_analysis.run()
         self._convert_prange(self.func_ir.blocks)
         self._convert_numpy(self.func_ir.blocks)
@@ -245,6 +247,39 @@ class ParforPass(object):
             # changing the IR after this is not allowed
             get_parfor_params(self.func_ir.blocks)
         return
+
+    def _replace_parallel_functions(self, blocks):
+        from numba.inline_closurecall import inline_closure_call
+        modified = False
+        work_list = list(blocks.items())
+        while work_list:
+            label, block = work_list.pop()
+            for i, instr in enumerate(block.body):
+                if isinstance(instr, ir.Assign):
+                    lhs = instr.target
+                    expr = instr.value
+                    if isinstance(expr, ir.Expr) and expr.op == 'call':
+                        func_def = guard(get_definition, self.func_ir, expr.func)
+                        callname = guard(find_callname, self.func_ir, expr)
+                        if callname == ('argmin', 'numpy'):
+                            def new_func(A):
+                                init_val = (np.finfo(A.dtype).max if A.dtype.kind=='f'
+                                                        else np.iinfo(A.dtype).max)
+                                ival = numba.ir_utils.IndexValue(-1, init_val)
+                                for i in numba.prange(len(A)):
+                                    curr_ival = numba.ir_utils.IndexValue(i, A[i])
+                                    ival = min(ival, curr_ival)
+                                return ival.index
+                            new_blocks = inline_closure_call(self.func_ir,
+                                        self.func_ir.func_id.func.__globals__,
+                                        block, i, new_func, self.typingctx,
+                                        (self.typemap[expr.args[0].name],),
+                                        self.typemap, self.calltypes)
+                            for block in new_blocks:
+                                work_list.append(block)
+                            modified = True
+                            # current block is modified, skip the rest
+                            break
 
     def _convert_numpy(self, blocks):
         topo_order = find_topo_order(blocks)
