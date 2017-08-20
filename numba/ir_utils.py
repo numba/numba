@@ -1434,7 +1434,7 @@ def indval_min(m1, m2):
 def indval_max(m1, m2):
     if isinstance(m1, IndexValueType) and isinstance(m2, IndexValueType):
         def max_impl(indval1, indval2):
-            if indval1.value > indval2.value:
+            if indval2.value > indval1.value:
                 return indval2
             return indval1
         return max_impl
