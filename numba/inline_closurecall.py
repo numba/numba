@@ -96,7 +96,8 @@ class InlineClosureCallPass(object):
             self.func_ir.blocks = rename_labels(self.func_ir.blocks)
         debug_print("END")
 
-def inline_closure_call(func_ir, glbls, block, i, callee):
+def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
+                        arg_typs=None, typemap=None, calltypes=None):
     """Inline the body of `callee` at its callsite (`i`-th instruction of `block`)
     """
     scope = block.scope
@@ -154,7 +155,6 @@ def inline_closure_call(func_ir, glbls, block, i, callee):
         else:
             raise NotImplementedError(
                 "Unsupported defaults to make_function: {}".format(defaults))
-    _replace_args_with(callee_blocks, args)
     debug_print("After arguments rename: ")
     _debug_dump(callee_ir)
 
@@ -169,6 +169,18 @@ def inline_closure_call(func_ir, glbls, block, i, callee):
         debug_print("After closure rename")
         _debug_dump(callee_ir)
 
+    if typingctx:
+        from numba import compiler
+        f_typemap, f_return_type, f_calltypes = compiler.type_inference_stage(
+                typingctx, callee_ir, arg_typs, None)
+        # remove argument entries like arg.a from typemap
+        arg_names = [vname for vname in f_typemap if vname.startswith("arg.")]
+        for a in arg_names:
+            f_typemap.pop(a)
+        typemap.update(f_typemap)
+        calltypes.update(f_calltypes)
+
+    _replace_args_with(callee_blocks, args)
     # 5. split caller blocks into two
     new_blocks = []
     new_block = ir.Block(scope, block.loc)
