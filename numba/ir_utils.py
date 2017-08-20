@@ -1385,7 +1385,8 @@ class IndexValue(object):
 class IndexValueType(types.Type):
     def __init__(self, val_typ):
         self.val_typ = val_typ
-        super(IndexValueType, self).__init__(name='IndexValue')
+        super(IndexValueType, self).__init__(
+                                    name='IndexValueType({})'.format(val_typ))
 
 @typeof_impl.register(IndexValue)
 def typeof_index(val, c):
