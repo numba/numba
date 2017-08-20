@@ -104,8 +104,12 @@ def inline_closure_call(func_ir, glbls, block, i, callee):
     call_expr = instr.value
     debug_print = _make_debug_print("inline_closure_call")
     debug_print("Found closure call: ", instr, " with callee = ", callee)
+    # support both function object and make_function Expr
+    callee_code = callee.code if hasattr(callee, 'code') else callee.__code__
+    callee_defaults = callee.defaults if hasattr(callee, 'defaults') else callee.__defaults__
+    callee_closure = callee.closure if hasattr(callee, 'closure') else callee.__closure__
     # first, get the IR of the callee
-    callee_ir = get_ir_of_code(glbls, callee.code)
+    callee_ir = get_ir_of_code(glbls, callee_code)
     callee_blocks = callee_ir.blocks
 
     # 1. relabel callee_ir by adding an offset
@@ -127,7 +131,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee):
     callee_scope = callee_scopes[0]
     var_dict = {}
     for var in callee_scope.localvars._con.values():
-        if not (var.name in callee.code.co_freevars):
+        if not (var.name in callee_code.co_freevars):
             new_var = scope.define(mk_unique_var(var.name), loc=var.loc)
             var_dict[var.name] = new_var
     debug_print("var_dict = ", var_dict)
@@ -137,12 +141,12 @@ def inline_closure_call(func_ir, glbls, block, i, callee):
 
     # 3. replace formal parameters with actual arguments
     args = list(call_expr.args)
-    if callee.defaults:
-        debug_print("defaults = ", callee.defaults)
-        if isinstance(callee.defaults, tuple): # Python 3.5
-            args = args + list(callee.defaults)
-        elif isinstance(callee.defaults, ir.Var) or isinstance(callee.defaults, str):
-            defaults = func_ir.get_definition(callee.defaults)
+    if callee_defaults:
+        debug_print("defaults = ", callee_defaults)
+        if isinstance(callee_defaults, tuple): # Python 3.5
+            args = args + list(callee_defaults)
+        elif isinstance(callee_defaults, ir.Var) or isinstance(callee_defaults, str):
+            defaults = func_ir.get_definition(callee_defaults)
             assert(isinstance(defaults, ir.Const))
             loc = defaults.loc
             args = args + [ir.Const(value=v, loc=loc)
@@ -155,11 +159,11 @@ def inline_closure_call(func_ir, glbls, block, i, callee):
     _debug_dump(callee_ir)
 
     # 4. replace freevar with actual closure var
-    if callee.closure:
-        closure = func_ir.get_definition(callee.closure)
+    if callee_closure:
+        closure = func_ir.get_definition(callee_closure)
         assert(isinstance(closure, ir.Expr)
                and closure.op == 'build_tuple')
-        assert(len(callee.code.co_freevars) == len(closure.items))
+        assert(len(callee_code.co_freevars) == len(closure.items))
         debug_print("callee's closure = ", closure)
         _replace_freevars(callee_blocks, closure.items)
         debug_print("After closure rename")
