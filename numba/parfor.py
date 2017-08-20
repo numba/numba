@@ -89,6 +89,27 @@ _reduction_ops = {
 
 _np_reduce_calls = ['min', 'max']
 
+def argmin_parallel_impl(A):
+    init_val = (np.finfo(A.dtype).max if A.dtype.kind=='f'
+                            else np.iinfo(A.dtype).max)
+    ival = numba.ir_utils.IndexValue(-1, init_val)
+    for i in numba.prange(len(A)):
+        curr_ival = numba.ir_utils.IndexValue(i, A[i])
+        ival = min(ival, curr_ival)
+    return ival.index
+
+def argmax_parallel_impl(A):
+    init_val = (np.finfo(A.dtype).min if A.dtype.kind=='f'
+                            else np.iinfo(A.dtype).min)
+    ival = numba.ir_utils.IndexValue(-1, init_val)
+    for i in numba.prange(len(A)):
+        curr_ival = numba.ir_utils.IndexValue(i, A[i])
+        ival = max(ival, curr_ival)
+    return ival.index
+
+replace_functions_map = {('argmin', 'numpy'): argmin_parallel_impl,
+                        ('argmax', 'numpy'): argmax_parallel_impl}
+
 class LoopNest(object):
 
     '''The LoopNest class holds information of a single loop including
@@ -261,15 +282,8 @@ class ParforPass(object):
                     if isinstance(expr, ir.Expr) and expr.op == 'call':
                         func_def = guard(get_definition, self.func_ir, expr.func)
                         callname = guard(find_callname, self.func_ir, expr)
-                        if callname == ('argmin', 'numpy'):
-                            def new_func(A):
-                                init_val = (np.finfo(A.dtype).max if A.dtype.kind=='f'
-                                                        else np.iinfo(A.dtype).max)
-                                ival = numba.ir_utils.IndexValue(-1, init_val)
-                                for i in numba.prange(len(A)):
-                                    curr_ival = numba.ir_utils.IndexValue(i, A[i])
-                                    ival = min(ival, curr_ival)
-                                return ival.index
+                        if callname in replace_functions_map:
+                            new_func = replace_functions_map[callname]
                             new_blocks = inline_closure_call(self.func_ir,
                                         self.func_ir.func_id.func.__globals__,
                                         block, i, new_func, self.typingctx,
