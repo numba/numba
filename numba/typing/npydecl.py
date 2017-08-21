@@ -477,14 +477,6 @@ class NpArray(CallableTemplate):
         return typer
 
 
-@infer_global(np.finfo)
-class FinfoInfer(AbstractTemplate):
-    def generic(self, args, kws):
-        assert not kws
-        assert len(args) == 1
-        arg = args[0]
-        return signature(types.FInfo(arg), arg)
-
 @infer_global(np.empty)
 @infer_global(np.zeros)
 @infer_global(np.ones)
