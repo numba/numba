@@ -755,7 +755,7 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, ext_func, ext_data,
         var_dict = {l: name_var_table[r] for l, r in in_copies[label]}
         # assignments as dict to replace with latest value
         for stmt in block.body:
-            ext_func(stmt, var_dict, ext_data)
+            ext_func(label, stmt, var_dict, ext_data)
             if type(stmt) in apply_copy_propagate_extensions:
                 f = apply_copy_propagate_extensions[type(stmt)]
                 f(stmt, var_dict, name_var_table, ext_func, ext_data,
@@ -830,11 +830,12 @@ def dprint_func_ir(func_ir, title):
         print("-" * 40)
 
 
-def find_topo_order(blocks):
+def find_topo_order(blocks, cfg = None):
     """find topological order of blocks such that true branches are visited
     first (e.g. for_break test in test_dataflow).
     """
-    cfg = compute_cfg_from_blocks(blocks)
+    if cfg == None:
+        cfg = compute_cfg_from_blocks(blocks)
     post_order = []
     seen = set()
 
@@ -971,6 +972,24 @@ def rename_labels(blocks):
 
 def simplify_CFG(blocks):
     """transform chains of blocks that have no loop into a single block"""
+    # first, inline single-branch-block to its predecessors
+    cfg = compute_cfg_from_blocks(blocks)
+    def find_single_branch(label):
+        block = blocks[label]
+        return len(block.body) == 1 and isinstance(block.body[0], ir.Branch)
+    single_branch_blocks = list(filter(find_single_branch, blocks.keys()))
+    for label in single_branch_blocks:
+        inst = blocks[label].body[0]
+        predecessors = cfg.predecessors(label)
+        delete_block = True
+        for (p, q) in predecessors:
+            block = blocks[p]
+            if isinstance(block.body[-1], ir.Jump):
+                block.body[-1] = copy.copy(inst)
+            else:
+                delete_block = False
+        if delete_block:
+            del blocks[label]
     cfg = compute_cfg_from_blocks(blocks)
     label_map = {}
     for node in cfg.nodes():
@@ -999,9 +1018,10 @@ arr_math = ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
             'nonzero', 'ravel']
 
 
-def canonicalize_array_math(blocks, typemap, calltypes, typingctx):
+def canonicalize_array_math(func_ir, typemap, calltypes, typingctx):
     # save array arg to call
     # call_varname -> array
+    blocks = func_ir.blocks
     saved_arr_arg = {}
     topo_order = find_topo_order(blocks)
     for label in topo_order:
@@ -1027,6 +1047,7 @@ def canonicalize_array_math(blocks, typemap, calltypes, typingctx):
                     g_np_assign = ir.Assign(g_np, g_np_var, loc)
                     rhs.value = g_np_var
                     new_body.append(g_np_assign)
+                    func_ir._definitions[g_np_var.name] = [g_np]
                     # update func var type
                     func = getattr(numpy, rhs.attr)
                     func_typ = get_np_ufunc_typ(func)
@@ -1099,7 +1120,7 @@ def merge_adjacent_blocks(func_ir):
             block.body.append(stmts)
         del func_ir.blocks[next_label]
 
-def simplify(func_ir, typemap, array_analysis, calltypes, update_analysis):
+def simplify(func_ir, typemap, calltypes):
     remove_dels(func_ir.blocks)
     # get copies in to blocks and out from blocks
     in_cps, out_cps = copy_propagate(func_ir.blocks, typemap)
@@ -1109,11 +1130,107 @@ def simplify(func_ir, typemap, array_analysis, calltypes, update_analysis):
         func_ir.blocks,
         in_cps,
         name_var_table,
-        update_analysis,
-        array_analysis,
+        lambda a, b, c, d:None, # a null func
+        None,                   # no extra data
         typemap,
         calltypes)
     # remove dead code to enable fusion
     remove_dead(func_ir.blocks, func_ir.arg_names, typemap)
     if config.DEBUG_ARRAY_OPT == 1:
         dprint_func_ir(func_ir, "after simplify")
+
+class GuardException(Exception):
+    pass
+
+def require(cond):
+    """
+    Raise GuardException if the given condition is False.
+    """
+    if not cond:
+       raise GuardException
+
+def guard(func, *args, **kwargs):
+    """
+    Run a function with given set of arguments, and guard against
+    any GuardException raised by the function by returning None,
+    or the expected return results if no such exception was raised.
+    """
+    try:
+        return func(*args, **kwargs)
+    except GuardException:
+        return None
+
+def get_definition(func_ir, name, **kwargs):
+    """
+    Same as func_ir.get_definition(name), but raise GuardException if
+    exception KeyError is caught.
+    """
+    try:
+        return func_ir.get_definition(name, **kwargs)
+    except KeyError:
+        raise GuardException
+
+def find_callname(func_ir, expr, typemap=None):
+    """Check if a call expression is calling a numpy function, and
+    return the callee's function name and module name (both are strings),
+    or raise GuardException. For array attribute calls such as 'a.f(x)'
+    when 'a' is a numpy array, the array variable 'a' is returned
+    in place of the module name.
+    """
+    require(isinstance(expr, ir.Expr) and expr.op == 'call')
+    callee = expr.func
+    callee_def = get_definition(func_ir, callee)
+    attrs = []
+    while True:
+        if isinstance(callee_def, ir.Global):
+            # require(callee_def.value == numpy)
+            # these checks support modules like numpy, numpy.random as well as
+            # calls like len() and intrinsitcs like assertEquiv
+            keys = ['name', '_name', '__name__']
+            value = None
+            for key in keys:
+                if hasattr(callee_def.value, key):
+                    value = getattr(callee_def.value, key)
+                    break
+            if not value:
+                raise GuardException
+            attrs.append(value)
+            class_name = callee_def.value.__class__.__name__
+            if class_name == 'builtin_function_or_method':
+                class_name = 'builtin'
+            if class_name != 'module':
+                attrs.append(class_name)
+            break
+        elif isinstance(callee_def, ir.Expr) and callee_def.op == 'getattr':
+            obj = callee_def.value
+            attrs.append(callee_def.attr)
+            if typemap and obj.name in typemap:
+                typ = typemap[obj.name]
+                if isinstance(typ, types.npytypes.Array):
+                    return attrs[0], obj
+            callee_def = get_definition(func_ir, obj)
+        else:
+            raise GuardException
+    return attrs[0], '.'.join(reversed(attrs[1:]))
+
+def find_build_sequence(func_ir, var):
+    """Check if a variable is constructed via build_tuple or
+    build_list or build_set, and return the sequence and the
+    operator, or raise GuardException otherwise.
+    Note: only build_tuple is immutable, so use with care.
+    """
+    require(isinstance(var, ir.Var))
+    var_def = get_definition(func_ir, var)
+    require(isinstance(var_def, ir.Expr))
+    build_ops = ['build_tuple', 'build_list', 'build_set']
+    require(var_def.op in build_ops)
+    return var_def.items, var_def.op
+
+def find_const(func_ir, var):
+    """Check if a variable is defined as constant, and return
+    the constant value, or raise GuardException otherwise.
+    """
+    require(isinstance(var, ir.Var))
+    var_def = get_definition(func_ir, var)
+    require(isinstance(var_def, ir.Const))
+    return var_def.value
