@@ -578,25 +578,5 @@ class TestFInfo(TestCase):
         self.assertEqual(finfo_min(np.ones(3, dtype=np.float32)),
                             jit_finfo_min(np.ones(3, dtype=np.float32)))
 
-class TestIInfo(TestCase):
-
-    def test_max(self):
-        def iinfo_max(A):
-            return np.iinfo(A.dtype).max
-        jit_iinfo_max = jit(nopython=True)(iinfo_max)
-        self.assertEqual(iinfo_max(np.ones(3, dtype=np.int64)),
-                            jit_iinfo_max(np.ones(3, dtype=np.int64)))
-        self.assertEqual(iinfo_max(np.ones(3, dtype=np.int32)),
-                            jit_iinfo_max(np.ones(3, dtype=np.int32)))
-
-    def test_min(self):
-        def iinfo_min(A):
-            return np.iinfo(A.dtype).min
-        jit_iinfo_min = jit(nopython=True)(iinfo_min)
-        self.assertEqual(iinfo_min(np.ones(3, dtype=np.int64)),
-                            jit_iinfo_min(np.ones(3, dtype=np.int64)))
-        self.assertEqual(iinfo_min(np.ones(3, dtype=np.int32)),
-                            jit_iinfo_min(np.ones(3, dtype=np.int32)))
-
 if __name__ == '__main__':
     unittest.main()
