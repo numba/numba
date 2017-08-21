@@ -300,7 +300,6 @@ class EnumModel(ProxyModel):
 @register_default(types.NumberClass)
 @register_default(types.NamedTupleClass)
 @register_default(types.DType)
-@register_default(types.FInfo)
 @register_default(types.ArrayFlags)
 @register_default(types.RecursiveCall)
 class OpaqueModel(PrimitiveModel):
