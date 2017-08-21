@@ -1404,13 +1404,19 @@ MachAr = namedtuple('MachAr', _mach_ar_supported)
 
 # Do not support MachAr field
 # finfo
-_finfo_supported = ('bits', 'eps', 'epsneg', 'iexp', 'machep', 'max',
-                    'maxexp', 'min', 'minexp', 'negep', 'nexp', 'nmant',
-                    'precision', 'resolution', 'tiny',)
+_finfo_supported = ('eps', 'epsneg', 'iexp', 'machep', 'max', 'maxexp', 'min',
+                    'minexp', 'negep', 'nexp', 'nmant', 'precision',
+                    'resolution', 'tiny',)
+if numpy_version >= (1, 12):
+    _finfo_supported = ('bits',) + _finfo_supported
+
 finfo = namedtuple('finfo', _finfo_supported)
 
 # iinfo
-_iinfo_supported = ('min', 'max', 'bits',)
+_iinfo_supported = ('min', 'max')
+if numpy_version >= (1, 12):
+    _iinfo_supported = _iinfo_supported + ('bits',)
+
 iinfo = namedtuple('iinfo', _iinfo_supported)
 
 @overload(np.MachAr)

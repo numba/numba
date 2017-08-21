@@ -433,6 +433,8 @@ def foo():
     return np.%s(ty)
 '''
 
+    bits = ('bits',) if np_version >= (1, 12)  else ()
+
     def check(self, func, attrs, *args):
         pyfunc = func
         cfunc = jit(nopython=True)(pyfunc)
@@ -462,9 +464,9 @@ def foo():
 
     def test_finfo(self):
         types = [np.float32, np.float64, np.complex64, np.complex128]
-        attrs = ('bits', 'eps', 'epsneg', 'iexp', 'machep', 'max',
-                 'maxexp', 'negep', 'nexp', 'nmant', 'precision',
-                 'resolution', 'tiny',)
+        attrs = self.bits + ('eps', 'epsneg', 'iexp', 'machep', 'max',
+                'maxexp', 'negep', 'nexp', 'nmant', 'precision',
+                'resolution', 'tiny',)
         for ty in types:
             self.check(finfo, attrs, ty(1))
             hc_func = self.create_harcoded_variant(np.finfo, ty)
@@ -486,7 +488,7 @@ def foo():
         # check types and instances of types
         types = [np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16,
                  np.uint32, np.uint64]
-        attrs = ('min', 'max', 'bits')
+        attrs = ('min', 'max') + self.bits
         for ty in types:
             self.check(iinfo, attrs, ty(1))
             hc_func = self.create_harcoded_variant(np.iinfo, ty)
