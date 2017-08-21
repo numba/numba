@@ -1405,8 +1405,8 @@ MachAr = namedtuple('MachAr', _mach_ar_supported)
 # Do not support MachAr field
 # finfo
 _finfo_supported = ('bits', 'eps', 'epsneg', 'iexp', 'machep', 'max',
-                    'maxexp', 'negep', 'nexp', 'nmant', 'precision',
-                    'resolution', 'tiny',)
+                    'maxexp', 'min', 'minexp', 'negep', 'nexp', 'nmant',
+                    'precision', 'resolution', 'tiny',)
 finfo = namedtuple('finfo', _finfo_supported)
 
 # iinfo
