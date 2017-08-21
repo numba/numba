@@ -5,6 +5,7 @@ Implementation of math operations on Array objects.
 from __future__ import print_function, absolute_import, division
 
 import math
+from collections import namedtuple
 
 import numpy as np
 
@@ -1372,3 +1373,50 @@ def np_histogram(a, bins=10, range=None):
             return hist, bins
 
     return histogram_impl
+
+
+# Create np.finfo, np.iinfo and np.MachAr
+# machar
+_mach_ar_supported = ('ibeta', 'it', 'machep', 'eps', 'negep', 'epsneg',
+                      'iexp', 'minexp', 'xmin', 'maxexp', 'xmax', 'irnd',
+                      'ngrd', 'epsilon', 'tiny', 'huge', 'precision',
+                      'resolution',)
+MachAr = namedtuple('MachAr', _mach_ar_supported)
+
+# Do not support MachAr field
+# finfo
+_finfo_supported = ('eps', 'epsneg', 'iexp', 'machep', 'max', 'maxexp', 'min',
+                    'minexp', 'negep', 'nexp', 'nmant', 'precision',
+                    'resolution', 'tiny',)
+if numpy_version >= (1, 12):
+    _finfo_supported = ('bits',) + _finfo_supported
+
+finfo = namedtuple('finfo', _finfo_supported)
+
+# iinfo
+_iinfo_supported = ('min', 'max')
+if numpy_version >= (1, 12):
+    _iinfo_supported = _iinfo_supported + ('bits',)
+
+iinfo = namedtuple('iinfo', _iinfo_supported)
+
+@overload(np.MachAr)
+def MachAr_impl():
+    f = np.MachAr()
+    _mach_ar_data = tuple([getattr(f, x) for x in _mach_ar_supported])
+    def impl():
+        return MachAr(*_mach_ar_data)
+    return impl
+
+def generate_xinfo(np_func, container, attr):
+    @overload(np_func)
+    def xinfo_impl(arg):
+        nbty = getattr(arg, 'dtype', arg)
+        f = np_func(as_dtype(nbty))
+        data = tuple([getattr(f, x) for x in attr])
+        def impl(arg):
+            return container(*data)
+        return impl
+
+generate_xinfo(np.finfo, finfo, _finfo_supported)
+generate_xinfo(np.iinfo, iinfo, _iinfo_supported)

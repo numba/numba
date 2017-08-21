@@ -302,6 +302,14 @@ construct a scalar) or a sequence (to construct an array):
 * :class:`numpy.uintc`
 * :class:`numpy.uintp`
 
+The following machine parameter classes are supported, with all purely numerical
+attributes:
+
+* :class:`numpy.iinfo`
+* :class:`numpy.finfo` (``machar`` attribute not supported)
+* :class:`numpy.MachAr` (with no arguments to the constructor)
+
+
 Literal arrays
 --------------
 
