@@ -18,6 +18,7 @@ from numba import _dispatcher
 from numba.errors import NumbaWarning
 from .support import TestCase, tag, temp_directory, import_dynamic
 
+import llvmlite.binding as ll
 
 def dummy(x):
     return x
@@ -1020,6 +1021,73 @@ class TestCache(BaseCacheTest):
         # Run a second time and check caching
         err = execute_with_input()
         self.assertEqual(err.strip(), "cache hits = 1")
+
+    def test_user_set_cpu_name(self):
+        self.check_pycache(0)
+        mod = self.import_module()
+        mod.self_test()
+        cache_size = len(self.cache_contents())
+
+        mtimes = self.get_cache_mtimes()
+        # Change CPU name to generic
+        try:
+            os.environ['NUMBA_CPU_NAME'] = 'generic'
+            self.run_in_separate_process()
+        finally:
+            del os.environ['NUMBA_CPU_NAME']
+        self.assertNotEqual(self.get_cache_mtimes(), mtimes)
+        self.assertNotEqual(len(self.cache_contents()), cache_size)
+        # Check cache index
+        cache = mod.add_usecase._cache
+        cache_file = cache._cache_file
+        cache_index = cache_file._load_index()
+        self.assertEqual(len(cache_index), 2)
+        [key_a, key_b] = cache_index.keys()
+        if key_a[1][1] == ll.get_host_cpu_name():
+            key_host, key_generic = key_a, key_b
+        else:
+            key_host, key_generic = key_b, key_a
+        self.assertEqual(key_host[1][1], ll.get_host_cpu_name())
+        self.assertEqual(key_host[1][2], ll.get_host_cpu_features().flatten())
+        self.assertEqual(key_generic[1][1], 'generic')
+        self.assertEqual(key_generic[1][2], '')
+
+    def test_user_set_cpu_features(self):
+        self.check_pycache(0)
+        mod = self.import_module()
+        mod.self_test()
+        cache_size = len(self.cache_contents())
+
+        mtimes = self.get_cache_mtimes()
+        # Change CPU feature
+        my_cpu_features = '-sse;-avx'
+
+        system_features = ll.get_host_cpu_features().flatten()
+
+        self.assertNotEqual(system_features, my_cpu_features)
+        try:
+            os.environ['NUMBA_CPU_FEATURES'] = my_cpu_features
+            self.run_in_separate_process()
+        finally:
+            del os.environ['NUMBA_CPU_FEATURES']
+        self.assertNotEqual(self.get_cache_mtimes(), mtimes)
+        self.assertNotEqual(len(self.cache_contents()), cache_size)
+        # Check cache index
+        cache = mod.add_usecase._cache
+        cache_file = cache._cache_file
+        cache_index = cache_file._load_index()
+        self.assertEqual(len(cache_index), 2)
+        [key_a, key_b] = cache_index.keys()
+
+        if key_a[1][2] == system_features:
+            key_host, key_generic = key_a, key_b
+        else:
+            key_host, key_generic = key_b, key_a
+
+        self.assertEqual(key_host[1][1], ll.get_host_cpu_name())
+        self.assertEqual(key_host[1][2], system_features)
+        self.assertEqual(key_generic[1][1], ll.get_host_cpu_name())
+        self.assertEqual(key_generic[1][2], my_cpu_features)
 
 
 class TestMultiprocessCache(BaseCacheTest):
