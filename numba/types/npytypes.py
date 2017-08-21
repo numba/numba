@@ -115,13 +115,6 @@ class FInfo(Opaque):
         name = "FInfo(%s)" % (dtype,)
         super(Opaque, self).__init__(name)
 
-class IInfo(Opaque):
-    def __init__(self, dtype):
-        assert isinstance(dtype, Type)
-        self.dtype = dtype
-        name = "IInfo(%s)" % (dtype,)
-        super(Opaque, self).__init__(name)
-
 class NumpyFlatType(SimpleIteratorType, MutableSequence):
     """
     Type class for `ndarray.flat()` objects.
