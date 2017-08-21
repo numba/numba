@@ -485,14 +485,6 @@ class FinfoInfer(AbstractTemplate):
         arg = args[0]
         return signature(types.FInfo(arg), arg)
 
-@infer_global(np.iinfo)
-class IinfoInfer(AbstractTemplate):
-    def generic(self, args, kws):
-        assert not kws
-        assert len(args) == 1
-        arg = args[0]
-        return signature(types.IInfo(arg), arg)
-
 @infer_global(np.empty)
 @infer_global(np.zeros)
 @infer_global(np.ones)
