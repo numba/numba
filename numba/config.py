@@ -97,6 +97,9 @@ class _EnvReloader(object):
                               (name, value), RuntimeWarning)
                 return default
 
+        def optional_str(x):
+            return str(x) if x is not None else None
+
         # Print warnings to screen about function compilation
         #   0 = Numba warnings suppressed (default)
         #   1 = All Numba warnings shown
@@ -126,6 +129,13 @@ class _EnvReloader(object):
         # Enable debugging of type inference
         DEBUG_TYPEINFER = _readenv("NUMBA_DEBUG_TYPEINFER", int, 0)
 
+        # Configure compilation target to use the specified CPU name
+        # and CPU feature as the host information.
+        # Note: this override "host" option for AOT compilation.
+        CPU_NAME = _readenv("NUMBA_CPU_NAME", optional_str, None)
+        CPU_FEATURES = _readenv("NUMBA_CPU_FEATURES", optional_str,
+                                ("" if str(CPU_NAME).lower() == 'generic'
+                                 else None))
         # Optimization level
         OPT = _readenv("NUMBA_OPT", int, 3)
 
