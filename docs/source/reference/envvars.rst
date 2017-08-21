@@ -137,6 +137,27 @@ Compilation options
    calls the original Python function instead of a compiled version.  This
    can be useful if you want to run the Python debugger over your code.
 
+.. envvar:: NUMBA_CPU_NAME and NUMBA_CPU_FEATURES
+
+    Override CPU and CPU features detection.
+    By setting ``NUMBA_CPU_NAME=generic``, A generic CPU model is picked
+    for the CPU architecture and the features (NUMBA_CPU_FEATURES) is
+    defaulted to empty.  CPU features must be listed with the format
+    ``+feature1,-feature2`` where ``+`` indicates enable and ``-`` indicates
+    disable. For example, ``+sse,+sse2,-avx,-avx2`` enables SSE and SSE2, and
+    disables AVX and AVX2.
+
+    These settings are passed to LLVM for configuring the compilation target.
+    To get a list of available option, use the ``llc`` commandline tool
+    from LLVM, like::
+
+        llc -march=x86 -mattr=help
+
+
+    .. tip:: To force all caching functions (``@jit(cache=True)``) to emit
+        portable code (portable within the same architecture and OS),
+        simply set ``NUMBA_CPU_NAME=generic``.
+
 
 GPU support
 -----------
@@ -160,7 +181,7 @@ Threading Control
 
 .. envvar:: NUMBA_NUM_THREADS
 
-   If set, the number of threads in the thread pool for the parallel CPU target 
+   If set, the number of threads in the thread pool for the parallel CPU target
    will take this value. Must be greater than zero. This value is independent
    of ``OMP_NUM_THREADS`` and ``MKL_NUM_THREADS``.
 
