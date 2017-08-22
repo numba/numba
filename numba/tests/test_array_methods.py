@@ -698,12 +698,13 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(foo(a), foo.py_func(a))
         # ndim == 2, axis == -3, BAD
         a = np.ones((1, 2))
-        with self.assertRaises(TypingError) as raises:
+        with self.assertRaises(LoweringError) as raises:
             foo(a)
-        self.assertIn("'axis' entry is out of bounds", str(raises.exception), )
+        errmsg = "'axis' entry is out of bounds"
+        self.assertIn(errmsg, str(raises.exception))
         with self.assertRaises(ValueError) as raises:
             foo.py_func(a)
-        self.assertEqual(str(raises.exception), "'axis' entry is out of bounds")
+        self.assertEqual(str(raises.exception), errmsg)
 
     def test_cumsum(self):
         pyfunc = array_cumsum
