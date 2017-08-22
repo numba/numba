@@ -155,7 +155,9 @@ def array_sum_const_multi(arr, axis):
     c = np.sum(arr, axis)
     # as method
     d = arr.sum(axis=5)
-    return a, b, c, d
+    # negative const axis
+    e = np.sum(arr, axis=-1)
+    return a, b, c, d, e
 
 def array_cumsum(a, *args):
     return a.cumsum(*args)
@@ -679,6 +681,29 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # BAD: axis greater than 3
         with self.assertRaises(ValueError):
             cfunc(a, 4)
+
+    def test_sum_const_negative(self):
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        @jit(nopython=True)
+        def foo(arr):
+            return arr.sum(axis=-3)
+
+        # ndim == 4, axis == -3, OK
+        a = np.ones((1, 2, 3, 4))
+        self.assertPreciseEqual(foo(a), foo.py_func(a))
+        # ndim == 3, axis == -3, OK
+        a = np.ones((1, 2, 3))
+        self.assertPreciseEqual(foo(a), foo.py_func(a))
+        # ndim == 2, axis == -3, BAD
+        a = np.ones((1, 2))
+        with self.assertRaises(TypingError) as raises:
+            foo(a)
+        self.assertIn("'axis' entry is out of bounds", str(raises.exception), )
+        with self.assertRaises(ValueError) as raises:
+            foo.py_func(a)
+        self.assertEqual(str(raises.exception), "'axis' entry is out of bounds")
 
     def test_cumsum(self):
         pyfunc = array_cumsum

@@ -22,7 +22,7 @@ from numba.typing import signature
 from .arrayobj import make_array, load_item, store_item, _empty_nd_impl
 
 from numba.extending import intrinsic
-from numba.errors import RequireConstValue
+from numba.errors import RequireConstValue, TypingError
 
 
 @intrinsic
@@ -176,6 +176,12 @@ def array_sum_axis(context, builder, sig, args):
     if isinstance(ty_axis, types.Const):
         # this special-cases for constant axis
         const_axis_val = ty_axis.value
+        # fix negative axis
+        if const_axis_val < 0:
+            const_axis_val = ty_array.ndim + const_axis_val
+        if const_axis_val < 0 or const_axis_val > ty_array.ndim:
+            raise TypingError("'axis' entry is out of bounds")
+
         ty_axis = context.typing_context.resolve_value_type(const_axis_val)
         axis_val = context.get_constant(ty_axis, const_axis_val)
         # rewrite arguments
