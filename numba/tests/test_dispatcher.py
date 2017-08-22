@@ -648,8 +648,7 @@ class BaseCacheTest(TestCase):
         pass
 
 
-class TestCache(BaseCacheTest):
-
+class BaseCacheUsecasesTest(BaseCacheTest):
     here = os.path.dirname(__file__)
     usecases_file = os.path.join(here, "cache_usecases.py")
     modname = "dispatcher_caching_test_fodder"
@@ -695,6 +694,9 @@ class TestCache(BaseCacheTest):
         if misses is not None:
             self.assertEqual(sum(st.cache_misses.values()), misses,
                              st.cache_misses)
+
+
+class TestCache(BaseCacheUsecasesTest):
 
     @tag('important')
     def test_caching(self):
@@ -1021,6 +1023,11 @@ class TestCache(BaseCacheTest):
         # Run a second time and check caching
         err = execute_with_input()
         self.assertEqual(err.strip(), "cache hits = 1")
+
+
+class TestCacheWithCpuSetting(BaseCacheUsecasesTest):
+    # Disable parallel testing due to envvars modification
+    _numba_parallel_test_ = False
 
     def test_user_set_cpu_name(self):
         self.check_pycache(0)
