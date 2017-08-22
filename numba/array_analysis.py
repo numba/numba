@@ -557,7 +557,7 @@ class ArrayAnalysis(object):
         """
         return self.equiv_sets[block_label]
 
-    def run(self):
+    def run(self, blocks):
         """run array shape analysis on the IR, resulting in modified IR
         and finalized EquivSet for each block.
         """
@@ -566,7 +566,6 @@ class ArrayAnalysis(object):
             print("variable types: ", sorted(self.typemap.items()))
             print("call types: ", self.calltypes)
 
-        blocks = self.func_ir.blocks
         cfg = compute_cfg_from_blocks(blocks)
         topo_order = find_topo_order(blocks, cfg=cfg)
         # Traverse blocks in topological order
