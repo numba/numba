@@ -500,8 +500,7 @@ class TestParfors(TestParforsBase):
     @skip_unsupported
     def test_reduce(self):
         def test_impl(A):
-            init_val = (np.finfo(A.dtype).max if A.dtype.kind=='f'
-                                                    else np.iinfo(A.dtype).max)
+            init_val = -1
             return reduce(lambda a,b: min(a, b), A, init_val)
 
         A = np.random.ranf(4)
