@@ -192,7 +192,8 @@ class StencilFunc(object):
         if 'out' in kwargs:
             result = kwargs['out']
         else:
-            result = np.zeros_like(the_array)
+            #result = np.zeros_like(the_array)
+            result = None
 
         stencil_func_name = "__numba_stencil_%s_%s" % (
                                         hex(id(the_array)).replace("-", "_"), 
@@ -207,9 +208,14 @@ class StencilFunc(object):
         replace_return_with_setitem(kernel_copy.blocks, index_vars)
 
         stencil_func_text = "def " + stencil_func_name + "("
-        stencil_func_text += ",".join(kernel_copy.arg_names) + ", result):\n"
+        if isinstance(result, type(None)):
+            stencil_func_text += ",".join(kernel_copy.arg_names) + "):\n"
+        else:
+            stencil_func_text += ",".join(kernel_copy.arg_names) + ", result):\n"
         stencil_func_text += "    full_shape = "
         stencil_func_text += kernel_copy.arg_names[0] + ".shape\n"
+        if isinstance(result, type(None)):
+            stencil_func_text += "    result = np.zeros(full_shape)\n"
 
         offset = 1
         for i in range(the_array.ndim):
@@ -292,7 +298,10 @@ class StencilFunc(object):
 
         array_npytype = typing.typeof.typeof(the_array)
 
-        new_stencil_param_types = [array_npytype, array_npytype]
+        if isinstance(result, type(None)):
+            new_stencil_param_types = [array_npytype]
+        else:
+            new_stencil_param_types = [array_npytype, array_npytype]
 
         from .targets.registry import cpu_target
         typingctx = typing.Context()
@@ -303,11 +312,15 @@ class StencilFunc(object):
                 targetctx,
                 stencil_ir,
                 new_stencil_param_types,
-                array_npytype,
+                None,
+                #array_npytype,
                 compiler.DEFAULT_FLAGS,
                 {})
             stencil_func = eval(stencil_func_name)
-            return new_stencil_func.entry_point(*args, result)
+            if isinstance(result, type(None)):
+                return new_stencil_func.entry_point(*args)
+            else:
+                return new_stencil_func.entry_point(*args, result)
 
     def __call__(self, *args, **kwargs):
         return self._stencil_wrapper(*args, **kwargs)
