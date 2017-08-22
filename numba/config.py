@@ -131,7 +131,7 @@ class _EnvReloader(object):
 
         # Configure compilation target to use the specified CPU name
         # and CPU feature as the host information.
-        # Note: this override "host" option for AOT compilation.
+        # Note: this overrides "host" option for AOT compilation.
         CPU_NAME = _readenv("NUMBA_CPU_NAME", optional_str, None)
         CPU_FEATURES = _readenv("NUMBA_CPU_FEATURES", optional_str,
                                 ("" if str(CPU_NAME).lower() == 'generic'
