@@ -327,7 +327,7 @@ def intrinsic(*args, **kwargs):
         def example(typingctx, ...):
             ...
 
-    Support keyword arguments are:
+    Supported keyword arguments are:
 
     - support_literals : bool
         Indicates to the type inferencer that the typing logic accepts and can specialize to
