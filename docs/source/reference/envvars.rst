@@ -140,16 +140,16 @@ Compilation options
 .. envvar:: NUMBA_CPU_NAME and NUMBA_CPU_FEATURES
 
     Override CPU and CPU features detection.
-    By setting ``NUMBA_CPU_NAME=generic``, A generic CPU model is picked
-    for the CPU architecture and the features (NUMBA_CPU_FEATURES) is
-    defaulted to empty.  CPU features must be listed with the format
+    By setting ``NUMBA_CPU_NAME=generic``, a generic CPU model is picked
+    for the CPU architecture and the feature list (``NUMBA_CPU_FEATURES``)
+    defaults to empty.  CPU features must be listed with the format
     ``+feature1,-feature2`` where ``+`` indicates enable and ``-`` indicates
     disable. For example, ``+sse,+sse2,-avx,-avx2`` enables SSE and SSE2, and
     disables AVX and AVX2.
 
     These settings are passed to LLVM for configuring the compilation target.
-    To get a list of available option, use the ``llc`` commandline tool
-    from LLVM, like::
+    To get a list of available options, use the ``llc`` commandline tool
+    from LLVM, for example::
 
         llc -march=x86 -mattr=help
 
