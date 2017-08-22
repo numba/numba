@@ -1261,6 +1261,28 @@ def get_type_min_value(typ):
         return typ.minval
     raise NotImplementedError("Unsupported type")
 
+@overload(get_type_min_value)
+def get_type_min_value_overload(d):
+    if isinstance(d.dtype, types.Float):
+        def min_impl(d):
+            return numpy.finfo(d).min
+        return min_impl
+    if isinstance(d.dtype, types.Integer):
+        def min_impl(d):
+            return numpy.iinfo(d).min
+        return min_impl
+
+@overload(get_type_max_value)
+def get_type_max_value_overload(d):
+    if isinstance(d.dtype, types.Float):
+        def max_impl(d):
+            return numpy.finfo(d).max
+        return max_impl
+    if isinstance(d.dtype, types.Integer):
+        def max_impl(d):
+            return numpy.iinfo(d).max
+        return max_impl
+
 def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
                         typemap=None, calltypes=None):
     from numba import compiler
