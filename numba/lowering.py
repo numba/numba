@@ -10,7 +10,7 @@ from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
 from .errors import LoweringError, new_error_context
 from .targets import removerefctpass
 from .funcdesc import default_mangler
-from . import debuginfo, parfor
+from . import debuginfo
 
 
 class Environment(_dynfunc.Environment):
@@ -250,6 +250,9 @@ class BaseLower(object):
         return self.library.has_dynamic_globals
 
 
+# Dictionary mapping instruction class to its lowering function.
+lower_extensions = {}
+
 class Lower(BaseLower):
     GeneratorLower = generators.GeneratorLower
 
@@ -356,10 +359,11 @@ class Lower(BaseLower):
         elif isinstance(inst, ir.StaticRaise):
             self.lower_static_raise(inst)
 
-        elif isinstance(inst, parfor.Parfor):
-            parfor.lower_parfor_parallel(self, inst)
-
         else:
+            for _class, func in lower_extensions.items():
+                if isinstance(inst, _class):
+                    func(self, inst)
+                    return
             raise NotImplementedError(type(inst))
 
     def lower_setitem(self, target_var, index_var, value_var, signature):

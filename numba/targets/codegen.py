@@ -648,7 +648,7 @@ class BaseCPUCodegen(object):
         """
         Return a tuple unambiguously describing the codegen behaviour.
         """
-        return (self._llvm_module.triple, ll.get_host_cpu_name(),
+        return (self._llvm_module.triple, self._get_host_cpu_name(),
                 self._tm_features)
 
     def _scan_and_fix_unresolved_refs(self, module):
@@ -668,6 +668,27 @@ class BaseCPUCodegen(object):
             fnptr.linkage = 'external'
         return builder.bitcast(builder.load(fnptr), fnty.as_pointer())
 
+    def _get_host_cpu_name(self):
+        return (ll.get_host_cpu_name()
+                if config.CPU_NAME is None
+                else config.CPU_NAME)
+
+    def _get_host_cpu_features(self):
+        if config.CPU_FEATURES is not None:
+            return config.CPU_FEATURES
+        try:
+            features = ll.get_host_cpu_features()
+        except RuntimeError:
+            return ''
+        else:
+            if not config.ENABLE_AVX:
+                # Disable all features with name starting with 'avx'
+                for k in features:
+                    if k.startswith('avx'):
+                        features[k] = False
+
+            # Set feature attributes
+            return features.flatten()
 
 class AOTCPUCodegen(BaseCPUCodegen):
     """
@@ -685,7 +706,7 @@ class AOTCPUCodegen(BaseCPUCodegen):
     def _customize_tm_options(self, options):
         cpu_name = self._cpu_name
         if cpu_name == 'host':
-            cpu_name = ll.get_host_cpu_name()
+            cpu_name = self._get_host_cpu_name()
         options['cpu'] = cpu_name
         options['reloc'] = 'pic'
         options['codemodel'] = 'default'
@@ -710,8 +731,7 @@ class JITCPUCodegen(BaseCPUCodegen):
     def _customize_tm_options(self, options):
         # As long as we don't want to ship the code to another machine,
         # we can specialize for this CPU.
-        options['cpu'] = ll.get_host_cpu_name()
-
+        options['cpu'] = self._get_host_cpu_name()
         options['reloc'] = 'default'
         options['codemodel'] = 'jitdefault'
 
@@ -724,19 +744,7 @@ class JITCPUCodegen(BaseCPUCodegen):
 
     def _customize_tm_features(self):
         # For JIT target, we will use LLVM to get the feature map
-        try:
-            features = ll.get_host_cpu_features()
-        except RuntimeError:
-            return ''
-        else:
-            if not config.ENABLE_AVX:
-                # Disable all features with name starting with 'avx'
-                for k in features:
-                    if k.startswith('avx'):
-                        features[k] = False
-
-            # Set feature attributes
-            return features.flatten()
+        return self._get_host_cpu_features()
 
     def _add_module(self, module):
         self._engine.add_module(module)
