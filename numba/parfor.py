@@ -242,7 +242,7 @@ class ParforPass(object):
         canonicalize_array_math(self.func_ir, self.typemap,
                                 self.calltypes, self.typingctx)
         self._replace_parallel_functions(self.func_ir.blocks)
-        self.array_analysis.run()
+        self.array_analysis.run(self.func_ir.blocks)
         stencil_pass = StencilPass(self.func_ir, self.typemap, self.calltypes,
                                             self.array_analysis, self.typingctx)
         stencil_pass.run()
@@ -255,9 +255,9 @@ class ParforPass(object):
 
         #dprint_func_ir(self.func_ir, "after remove_dead")
         # reorder statements to maximize fusion
-        maximize_fusion(self.func_ir)
+        maximize_fusion(self.func_ir, self.func_ir.blocks)
         dprint_func_ir(self.func_ir, "after maximize fusion")
-        fuse_parfors(self.array_analysis, self.func_ir.blocks)
+        self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
         dprint_func_ir(self.func_ir, "after fusion")
         # remove dead code after fusion to remove extra arrays and variables
         remove_dead(self.func_ir.blocks, self.func_ir.arg_names, self.typemap)
@@ -883,6 +883,43 @@ class ParforPass(object):
         parfor = Parfor(loopnests, init_block, loop_body, loc, index_var,
                         equiv_set)
         return parfor
+
+
+    def fuse_parfors(self, array_analysis, blocks):
+        for label, block in blocks.items():
+            equiv_set = array_analysis.get_equiv_set(label)
+            fusion_happened = True
+            while fusion_happened:
+                fusion_happened = False
+                new_body = []
+                i = 0
+                while i < len(block.body) - 1:
+                    stmt = block.body[i]
+                    next_stmt = block.body[i + 1]
+                    if isinstance(stmt, Parfor) and isinstance(next_stmt, Parfor):
+                        fused_node = try_fuse(equiv_set, stmt, next_stmt)
+                        if fused_node is not None:
+                            fusion_happened = True
+                            new_body.append(fused_node)
+                            self.fuse_recursive_parfor(fused_node)
+                            i += 2
+                            continue
+                    new_body.append(stmt)
+                    if isinstance(stmt, Parfor):
+                        self.fuse_recursive_parfor(stmt)
+                    i += 1
+                new_body.append(block.body[-1])
+                block.body = new_body
+        return
+
+    def fuse_recursive_parfor(self, parfor):
+        blocks = wrap_parfor_blocks(parfor)
+        maximize_fusion(self.func_ir, blocks)
+        arr_analysis = array_analysis.ArrayAnalysis(self.typingctx, self.func_ir,
+                                                self.typemap, self.calltypes)
+        arr_analysis.run(blocks)
+        self.fuse_parfors(arr_analysis, blocks)
+        unwrap_parfor_blocks(parfor)
 
 def _remove_size_arg(call_name, expr):
     "remove size argument from args or kws"
@@ -1604,8 +1641,7 @@ postproc.ir_extension_insert_dels[Parfor] = parfor_insert_dels
 # reorder statements to maximize fusion
 
 
-def maximize_fusion(func_ir):
-    blocks = func_ir.blocks
+def maximize_fusion(func_ir, blocks):
     call_table, _ = get_call_table(blocks)
     for block in blocks.values():
         order_changed = True
@@ -1655,40 +1691,6 @@ def get_parfor_writes(parfor):
             if isinstance(stmt, Parfor):
                 writes.update(get_parfor_writes(stmt))
     return writes
-
-
-def fuse_parfors(array_analysis, blocks):
-    for label, block in blocks.items():
-        equiv_set = array_analysis.get_equiv_set(label)
-        fusion_happened = True
-        while fusion_happened:
-            fusion_happened = False
-            new_body = []
-            i = 0
-            while i < len(block.body) - 1:
-                stmt = block.body[i]
-                next_stmt = block.body[i + 1]
-                if isinstance(stmt, Parfor) and isinstance(next_stmt, Parfor):
-                    fused_node = try_fuse(equiv_set, stmt, next_stmt)
-                    if fused_node is not None:
-                        fusion_happened = True
-                        new_body.append(fused_node)
-                        fuse_recursive_parfor(fused_node)
-                        i += 2
-                        continue
-                new_body.append(stmt)
-                if isinstance(stmt, Parfor):
-                    fuse_recursive_parfor(stmt)
-                i += 1
-            new_body.append(block.body[-1])
-            block.body = new_body
-    return
-
-def fuse_recursive_parfor(parfor):
-    blocks = wrap_parfor_blocks(parfor)
-    maximize_fusion(blocks)
-    fuse_parfors(blocks)
-    unwrap_parfor_blocks(parfor)
 
 def try_fuse(equiv_set, parfor1, parfor2):
     """try to fuse parfors and return a fused parfor, otherwise return None
