@@ -1029,6 +1029,15 @@ class TestCacheWithCpuSetting(BaseCacheUsecasesTest):
     # Disable parallel testing due to envvars modification
     _numba_parallel_test_ = False
 
+    def check_later_mtimes(self, mtimes_old):
+        match_count = 0
+        for k, v in self.get_cache_mtimes().items():
+            if k in mtimes_old:
+                self.assertGreaterEqual(v, mtimes_old[k])
+                match_count += 1
+        self.assertGreater(match_count, 0,
+                           msg='nothing to compare')
+
     def test_user_set_cpu_name(self):
         self.check_pycache(0)
         mod = self.import_module()
@@ -1042,8 +1051,8 @@ class TestCacheWithCpuSetting(BaseCacheUsecasesTest):
             self.run_in_separate_process()
         finally:
             del os.environ['NUMBA_CPU_NAME']
-        self.assertNotEqual(self.get_cache_mtimes(), mtimes)
-        self.assertNotEqual(len(self.cache_contents()), cache_size)
+        self.check_later_mtimes(mtimes)
+        self.assertGreater(len(self.cache_contents()), cache_size)
         # Check cache index
         cache = mod.add_usecase._cache
         cache_file = cache._cache_file
@@ -1077,8 +1086,8 @@ class TestCacheWithCpuSetting(BaseCacheUsecasesTest):
             self.run_in_separate_process()
         finally:
             del os.environ['NUMBA_CPU_FEATURES']
-        self.assertNotEqual(self.get_cache_mtimes(), mtimes)
-        self.assertNotEqual(len(self.cache_contents()), cache_size)
+        self.check_later_mtimes(mtimes)
+        self.assertGreater(len(self.cache_contents()), cache_size)
         # Check cache index
         cache = mod.add_usecase._cache
         cache_file = cache._cache_file
