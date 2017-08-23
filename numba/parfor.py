@@ -1846,9 +1846,10 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, typemap):
             saved_values[stmt.target.name] = stmt.value
         if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
             rhs = stmt.value
-            if rhs.op == 'getitem' and rhs.index.name == parfor.index_var.name:
-                # replace getitem if value saved
-                stmt.value = saved_values.get(rhs.value.name, rhs)
+            if rhs.op == 'getitem' and isinstance(rhs.index, ir.Var):
+                if rhs.index.name == parfor.index_var.name:
+                    # replace getitem if value saved
+                    stmt.value = saved_values.get(rhs.value.name, rhs)
         new_body.append(stmt)
     last_block.body = new_body
 
