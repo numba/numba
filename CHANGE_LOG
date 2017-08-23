@@ -1,3 +1,76 @@
+Version 0.35.0
+--------------
+
+This release includes some exciting new features as part of the work
+performed in partnership with Intel on ParallelAccelerator technology.
+There are also some additions made to Numpy support and small but
+significant fixes made as a result of considerable effort spent chasing bugs
+and implementing stability improvements.
+
+
+ParallelAccelerator:
+
+NOTE: The ParallelAccelerator technology is under active development and should
+be considered experimental.
+
+New features relating to ParallelAccelerator, from work undertaken with Intel,
+include support for a larger range of `np.random` functions in `parallel`
+mode, printing Numpy arrays in no Python mode, the capacity to initialize Numpy
+arrays directly from list comprehensions, and the axis argument to `.sum()`.
+Documentation on the ParallelAccelerator technology implementation has also
+been added. Further, a large amount of work on equivalence relations was
+undertaken to enable runtime checks of broadcasting behaviours in parallel mode.
+
+ParallelAccelerator features:
+
+* PR #2400: Array comprehension
+* PR #2405: Support printing Numpy arrays
+* PR #2438: from Support more np.random functions in ParallelAccelerator
+* PR #2482: Support for sum with axis in nopython mode.
+* PR #2487: Adding developer documentation for ParallelAccelerator technology.
+* PR #2492: Core PA refactor adds assertions for broadcast semantics
+
+ParallelAccelerator fixes:
+
+* PR #2478: Rename cfg before parfor translation (#2477)
+* PR #2479: Fix broken array comprehension tests on unsupported platforms
+* PR #2484: Fix array comprehension test on win64
+* PR #2506: Fix for 32-bit machines.
+
+
+Additional features of note:
+
+Support for `np.take`, `np.finfo`, `np.iinfo` and `np.MachAr` in no Python
+mode is added. Further, three new environment variables are added, two for
+overriding CPU target/features and another to warn if `parallel=True` was set
+no such transform was possible.
+
+* PR #2490: Implement np.take and ndarray.take
+* PR #2493: Display a warning if parallel=True is set but not possible.
+* PR #2513: Add np.MachAr, np.finfo, np.iinfo
+* PR #2515: Allow environ overriding of cpu target and cpu features.
+
+
+Due to expansion of the test farm and a focus on fixing bugs, the following
+fixes were also made.
+
+Misc fixes/enhancements:
+
+* PR #2455: add contextual information to runtime errors
+* PR #2470: Fixes #2458, poor performance in np.median 
+* PR #2471: Ensure LLVM threadsafety in {g,}ufunc building.
+* PR #2494: Update doc theme
+* PR #2503: Remove hacky code added in 2482 and feature enhancement
+* PR #2505: Serialise env mutation tests during multithreaded testing.
+* PR #2520: Fix failing cpu-target override tests
+
+CUDA support fixes:
+
+* PR #2504: Enable CUDA toolkit version testing
+* PR #2509: Disable tests generating code unavailable in lower CC versions.
+* PR #2511: Fix Windows 64 bit CUDA tests.
+
+
 Version 0.34.0
 --------------
 
