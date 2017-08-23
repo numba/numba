@@ -41,7 +41,7 @@ def replace_return_with_setitem(blocks, index_vars):
                 new_body.append(stmt)
         block.body = new_body
 
-def add_indices_to_kernel(kernel, ndim):
+def add_indices_to_kernel(kernel, ndim, neighborhood):
     """
     Transforms the stencil kernel as specified by the user into one
     that includes each dimension's index variable as part of the getitem
@@ -49,6 +49,8 @@ def add_indices_to_kernel(kernel, ndim):
     """
     const_dict = {}
     kernel_consts = []
+
+    #print("add_indices_to_kernel", kernel.arg_names)
 
     for block in kernel.blocks.values():
         scope = block.scope
@@ -71,7 +73,7 @@ def add_indices_to_kernel(kernel, ndim):
                 else:
                     raise ValueError("Non-constant specified for stencil kernel index.")
 
-                if ndim == 0:
+                if ndim == 1:
                     # Single dimension always has index variable 'index0'.
                     # tmpvar will hold the real index and is computed by
                     # adding the relative offset in stmt.value.index to
@@ -126,23 +128,30 @@ def add_indices_to_kernel(kernel, ndim):
                 new_body.append(stmt)
         block.body = new_body
 
-    # Find the size of the kernel by finding the maximum absolute value
-    # index used in the kernel specification.
-    max_const = 0
-    for index in kernel_consts:
-        if isinstance(index, tuple):
-            for te in index:
-                max_const = max(max_const, abs(te))    
-            index_len = len(index)
-        elif isinstance(index, int):
-            max_const = max(max_const, abs(index))    
-            index_len = 1
-        else:
-            raise ValueError("Non-tuple or non-integer used as stencil index.")
-        if index_len != ndim:
-            raise ValueError("Stencil index does not match array dimensionality.")
+    if isinstance(neighborhood, type(None)):
+        # Find the size of the kernel by finding the maximum absolute value
+        # index used in the kernel specification.
+        neighborhood = [[0,0] for _ in range(ndim)]
+        #max_const = 0
+        for index in kernel_consts:
+            if isinstance(index, tuple):
+                for i in range(len(index)):
+                    te = index[i]
+                    #max_const = max(max_const, abs(te))    
+                    neighborhood[i][0] = min(neighborhood[i][0], te)
+                    neighborhood[i][1] = max(neighborhood[i][1], te)
+                index_len = len(index)
+            elif isinstance(index, int):
+                #max_const = max(max_const, abs(index))    
+                index_len = 1
+                neighborhood[0][0] = min(neighborhood[0][0], index)
+                neighborhood[0][1] = max(neighborhood[0][1], index)
+            else:
+                raise ValueError("Non-tuple or non-integer used as stencil index.")
+            if index_len != ndim:
+                raise ValueError("Stencil index does not match array dimensionality.")
 
-    return max_const
+    return neighborhood
 
 class StencilFunc(object):
     """
@@ -187,6 +196,8 @@ class StencilFunc(object):
         # Copy the kernel so that our changes for this callsite
         # won't effect other callsites.
         kernel_copy = self.kernel_ir.copy()
+        #print("kernel_copy")
+        #kernel_copy.dump()
 
         the_array = args[0]
         if 'out' in kwargs:
@@ -204,8 +215,16 @@ class StencilFunc(object):
             index_var_name = "index" + str(i)
             index_vars += [index_var_name]
 
-        kernel_size = add_indices_to_kernel(kernel_copy, the_array.ndim)
+        if "neighborhood" in self.options:
+            neighborhood = self.options["neighborhood"]
+            #print("Found neighborhood options", neighborhood)
+        else:
+            neighborhood = None
+        kernel_size = add_indices_to_kernel(kernel_copy, the_array.ndim,
+                                            neighborhood)
         replace_return_with_setitem(kernel_copy.blocks, index_vars)
+        #print("kernel_copy after indices and setitem", kernel_size)
+        #kernel_copy.dump()
 
         stencil_func_text = "def " + stencil_func_name + "("
         if isinstance(result, type(None)):
@@ -223,8 +242,8 @@ class StencilFunc(object):
             for j in range(offset):
                 stencil_func_text += "    "
             stencil_func_text += "for " + index_vars[i] + " in range("
-            stencil_func_text += str(kernel_size) + ", full_shape[" + stri
-            stencil_func_text += "] - " + str(kernel_size) + "):\n"
+            stencil_func_text += str(abs(kernel_size[i][0])) + ", full_shape[" 
+            stencil_func_text += stri + "] - " + str(kernel_size[i][1]) + "):\n"
             offset += 1
 
         for j in range(offset):
@@ -302,6 +321,9 @@ class StencilFunc(object):
             new_stencil_param_types = [array_npytype]
         else:
             new_stencil_param_types = [array_npytype, array_npytype]
+
+        #print("stencil_ir")
+        #stencil_ir.dump()
 
         from .targets.registry import cpu_target
         typingctx = typing.Context()
