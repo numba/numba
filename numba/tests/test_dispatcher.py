@@ -17,6 +17,7 @@ from numba import config
 from numba import _dispatcher
 from numba.errors import NumbaWarning
 from .support import TestCase, tag, temp_directory, import_dynamic
+from numba.targets import codegen
 
 import llvmlite.binding as ll
 
@@ -1064,7 +1065,7 @@ class TestCacheWithCpuSetting(BaseCacheUsecasesTest):
         else:
             key_host, key_generic = key_b, key_a
         self.assertEqual(key_host[1][1], ll.get_host_cpu_name())
-        self.assertEqual(key_host[1][2], ll.get_host_cpu_features().flatten())
+        self.assertEqual(key_host[1][2], codegen.get_host_cpu_features())
         self.assertEqual(key_generic[1][1], 'generic')
         self.assertEqual(key_generic[1][2], '')
 
@@ -1078,7 +1079,7 @@ class TestCacheWithCpuSetting(BaseCacheUsecasesTest):
         # Change CPU feature
         my_cpu_features = '-sse;-avx'
 
-        system_features = ll.get_host_cpu_features().flatten()
+        system_features = codegen.get_host_cpu_features()
 
         self.assertNotEqual(system_features, my_cpu_features)
         try:
