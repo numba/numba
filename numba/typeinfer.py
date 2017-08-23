@@ -364,12 +364,24 @@ def fold_arg_vars(typevars, args, vararg, kws, get_literals=False):
 
     pos_args = args[:n_pos_args]
     if vararg is not None:
-        if not isinstance(args[-1], types.BaseTuple):
+        errmsg = "*args in function call should be a tuple, got %s"
+        # Handle constant literal used for `*args`
+        if isinstance(args[-1], types.Const):
+            const_val = args[-1].value
+            # Is the constant value a tuple?
+            if not isinstance(const_val, tuple):
+                raise TypeError(errmsg % (args[-1],))
+            # Append the elements in the const tuple to the positional args
+            pos_args += args[-1].value
+        # Handle non-constant
+        elif not isinstance(args[-1], types.BaseTuple):
             # Unsuitable for *args
             # (Python is more lenient and accepts all iterables)
-            raise TypeError("*args in function call should be a tuple, got %s"
-                            % (args[-1],))
-        pos_args += args[-1].types
+            raise TypeError(errmsg % (args[-1],))
+        else:
+            # Append the elements in the tuple to the positional args
+            pos_args += args[-1].types
+        # Drop the last arg
         args = args[:-1]
     kw_args = dict(zip(kwds, args[n_pos_args:]))
     return pos_args, kw_args
@@ -424,7 +436,7 @@ class CallConstraint(object):
                     return
 
         literals = fold_arg_vars(typevars, self.args, self.vararg, self.kws,
-                                  get_literals=True)
+                                 get_literals=True)
         # Resolve call type
         sig = typeinfer.resolve_call(fnty, pos_args, kw_args, literals=literals)
         if sig is None:
@@ -1129,7 +1141,10 @@ class TypeInferer(object):
             typ = typ.copy(readonly=True)
 
         self.sentry_modified_builtin(inst, gvar)
-        self.lock_type(target.name, typ, loc=inst.loc)
+        # Setting literal_value for globals because they are handled
+        # like const value in numba
+        self.lock_type(target.name, typ, loc=inst.loc,
+                       literal_value=gvar.value)
         self.assumed_immutables.add(inst)
 
     def typeof_expr(self, inst, target, expr):

@@ -50,6 +50,17 @@ class BaseFunction(Callable):
                 self._impl_keys[sig.args] = temp.get_impl_key(sig)
                 return sig
 
+    def get_call_type_with_literals(self, context, args, kws, literals):
+        for temp_cls in self.templates:
+            temp = temp_cls(context)
+            if literals is not None and temp.support_literals:
+                sig = temp.apply(*literals)
+            else:
+                sig = temp.apply(args, kws)
+            if sig is not None:
+                self._impl_keys[sig.args] = temp.get_impl_key(sig)
+                return sig
+
     def get_call_signatures(self):
         sigs = []
         is_param = False
@@ -105,6 +116,12 @@ class BoundFunction(Callable, Opaque):
 
     def get_call_type(self, context, args, kws):
         return self.template(context).apply(args, kws)
+
+    def get_call_type_with_literals(self, context, args, kws, literals):
+        if literals is not None and self.template.support_literals:
+            return self.template(context).apply(*literals)
+        else:
+            return self.get_call_type(context, args, kws)
 
     def get_call_signatures(self):
         sigs = getattr(self.template, 'cases', [])

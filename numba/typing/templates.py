@@ -167,6 +167,9 @@ class FunctionTemplate(object):
     # subclass overide-able
     unsafe_casting = True
 
+    # Whether the typing support literals
+    support_literals = False
+
     def __init__(self, context):
         self.context = context
 

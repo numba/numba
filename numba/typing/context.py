@@ -199,12 +199,7 @@ class BaseContext(object):
 
         if isinstance(func, types.Callable):
             # XXX fold this into the __call__ attribute logic?
-            try:
-                return func.get_call_type(self, args, kws)
-            except errors.RequireConstValue:
-                if literals is None:
-                    raise
-                return func.get_call_type(self, *literals)
+            return func.get_call_type_with_literals(self, args, kws, literals)
 
     def _get_attribute_templates(self, typ):
         """

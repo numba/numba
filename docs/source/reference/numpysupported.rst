@@ -165,7 +165,13 @@ The following methods of Numpy arrays are supported:
 * :meth:`~numpy.ndarray.ravel` (no order argument; 'C' order only)
 * :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
 * :meth:`~numpy.ndarray.sort` (without arguments)
-* :meth:`~numpy.ndarray.sum` (without arguments or with a constant, non-keyword axis argument in the range 0 to 3)
+* :meth:`~numpy.ndarray.sum` (with or without the ``axis`` argument)
+
+  * If the ``axis`` argument is a compile-time constant, all valid values are supported.
+    An out-of-range value will result in a ``LoweringError`` at compile-time.
+  * If the ``axis`` argument is not a compile-time constant, only values from 0 to 3 are supported.
+    An out-of-range value will result in a runtime exception.
+
 * :meth:`~numpy.ndarray.transpose` (without arguments, and without copying)
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
 
@@ -197,7 +203,7 @@ floating-point and complex numbers:
   change is supported e.g. real input -> real
   output, complex input -> complex output).
 * :func:`numpy.linalg.eigh` (only the first argument).
-* :func:`numpy.linalg.eigvals` (only running with data that does not cause a 
+* :func:`numpy.linalg.eigvals` (only running with data that does not cause a
   domain change is supported e.g. real input -> real output,
   complex input -> complex output).
 * :func:`numpy.linalg.eigvalsh` (only the first argument).
