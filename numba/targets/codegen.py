@@ -676,19 +676,7 @@ class BaseCPUCodegen(object):
     def _get_host_cpu_features(self):
         if config.CPU_FEATURES is not None:
             return config.CPU_FEATURES
-        try:
-            features = ll.get_host_cpu_features()
-        except RuntimeError:
-            return ''
-        else:
-            if not config.ENABLE_AVX:
-                # Disable all features with name starting with 'avx'
-                for k in features:
-                    if k.startswith('avx'):
-                        features[k] = False
-
-            # Set feature attributes
-            return features.flatten()
+        return get_host_cpu_features()
 
 class AOTCPUCodegen(BaseCPUCodegen):
     """
@@ -762,3 +750,24 @@ def initialize_llvm():
     ll.initialize()
     ll.initialize_native_target()
     ll.initialize_native_asmprinter()
+
+
+def get_host_cpu_features():
+    """Get host CPU features using LLVM and
+
+    The features may be modified due to user setting.
+    See numba.config.ENABLE_AVX.
+    """
+    try:
+        features = ll.get_host_cpu_features()
+    except RuntimeError:
+        return ''
+    else:
+        if not config.ENABLE_AVX:
+            # Disable all features with name starting with 'avx'
+            for k in features:
+                if k.startswith('avx'):
+                    features[k] = False
+
+        # Set feature attributes
+        return features.flatten()
