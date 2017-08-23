@@ -753,7 +753,7 @@ def initialize_llvm():
 
 
 def get_host_cpu_features():
-    """Get host CPU features using LLVM and
+    """Get host CPU features using LLVM.
 
     The features may be modified due to user setting.
     See numba.config.ENABLE_AVX.
