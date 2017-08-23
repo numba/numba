@@ -704,7 +704,9 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertIn(errmsg, str(raises.exception))
         with self.assertRaises(ValueError) as raises:
             foo.py_func(a)
-        self.assertEqual(str(raises.exception), errmsg)
+        # Numpy 1.13 has a different error message than prior numpy
+        # Just check for the "out of bounds" phrase in it.
+        self.assertIn("out of bounds", str(raises.exception))
 
     def test_cumsum(self):
         pyfunc = array_cumsum
