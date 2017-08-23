@@ -61,10 +61,17 @@ def assert_equiv(typingctx, *val):
     a vararg that contains an error message, followed by a set
     of objects of either array, tuple or integer.
     """
+    if len(val) > 1:
+        # Make sure argument is a single tuple type. Note that this only
+        # happens when IR containing assert_equiv call is being compiled
+        # (and going through type inference) again.
+        val = (types.Tuple(val),)
+
+    assert(len(val[0]) > 1)
     # Arguments must be either array, tuple, or integer
     assert all(map(lambda a: (isinstance(a, types.ArrayCompatible) or
                               isinstance(a, types.BaseTuple) or
-                              isinstance(a, types.Integer)), val))
+                              isinstance(a, types.Integer)), val[0][1:]))
 
     def codegen(context, builder, sig, args):
         assert(len(args) == 1)  # it is a vararg tuple
