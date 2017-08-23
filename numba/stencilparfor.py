@@ -66,13 +66,13 @@ class StencilPass(object):
                     index_offsets = None
                     if 'index_offsets' in stmt.value._kws:
                         index_offsets = stmt.value.index_offsets
-                    gen_nodes = self._mk_stencil_parfor(in_arr, out_arr,
+                    gen_nodes = self._mk_stencil_parfor(label, in_arr, out_arr,
                                    stencil_blocks, index_offsets, stmt.target)
                     block.body = block.body[:i] + gen_nodes + block.body[i+1:]
                     return self.run()
         return
 
-    def _mk_stencil_parfor(self, in_arr, out_arr, stencil_blocks, 
+    def _mk_stencil_parfor(self, label, in_arr, out_arr, stencil_blocks, 
                            index_offsets, target):
         gen_nodes = []
 
@@ -83,8 +83,10 @@ class StencilPass(object):
             stencil_blocks,
             in_cps,
             name_var_table,
-            array_analysis.copy_propagate_update_analysis,
-            self.array_analysis,
+            lambda a, b, c, d:None, # a null func
+            None,                   # no extra data
+            #array_analysis.copy_propagate_update_analysis,
+            #self.array_analysis,
             self.typemap,
             self.calltypes)
         ir_utils.remove_dead(stencil_blocks, self.func_ir.arg_names,
@@ -106,9 +108,12 @@ class StencilPass(object):
 
         # create parfor loop nests
         loopnests = []
-        corrs = self.array_analysis.array_shape_classes[in_arr.name]
-        sizes = self.array_analysis.array_size_vars[in_arr.name]
-        assert ndims == len(sizes) and ndims == len(corrs)
+        equiv_set = self.array_analysis.get_equiv_set(label)
+        sizes = equiv_set.get_shape(in_arr.name)
+
+        #corrs = self.array_analysis.array_shape_classes[in_arr.name]
+        #sizes = self.array_analysis.array_size_vars[in_arr.name]
+        assert ndims == len(sizes)
         for i in range(ndims):
             last_ind = sizes[i]
             if end_lengths[i] != 0:
@@ -129,7 +134,7 @@ class StencilPass(object):
                 gen_nodes.append(index_assign)
             # start from stencil size to avoid invalid array access
             loopnests.append(numba.parfor.LoopNest(parfor_vars[i],
-                                abs(start_lengths[i]), last_ind, 1, corrs[i]))
+                                abs(start_lengths[i]), last_ind, 1))
 
         # replace return value to setitem to output array
         return_node = stencil_blocks[max(stencil_blocks.keys())].body.pop()
@@ -174,8 +179,8 @@ class StencilPass(object):
                                         )
         stencil_blocks[max(stencil_blocks.keys())].body.append(setitem_call)
 
-        parfor = numba.parfor.Parfor(loopnests, init_block, stencil_blocks, loc,
-                        self.array_analysis, parfor_ind_var)
+        parfor = numba.parfor.Parfor(loopnests, init_block, stencil_blocks,
+                                     loc, parfor_ind_var, equiv_set)
 
         gen_nodes.append(parfor)
         gen_nodes.append(ir.Assign(out_arr, target, loc))
