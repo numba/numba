@@ -136,6 +136,7 @@ class DeviceNDArrayBase(object):
         else:
             return self.gpu_data.device_ctypes_pointer
 
+    @devices.require_context
     def copy_to_device(self, ary, stream=0):
         """Copy `ary` to `self`.
 
@@ -153,6 +154,7 @@ class DeviceNDArrayBase(object):
             sz = min(_driver.host_memory_size(ary), self.alloc_size)
             _driver.host_to_device(self, ary, sz, stream=stream)
 
+    @devices.require_context
     def copy_to_host(self, ary=None, stream=0):
         """Copy ``self`` to ``ary`` or create a new Numpy ndarray
         if ``ary`` is ``None``.
