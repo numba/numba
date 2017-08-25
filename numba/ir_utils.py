@@ -6,7 +6,9 @@
 from numba import ir, types, typing, config, analysis, utils, cgutils
 from numba.extending import (typeof_impl, type_callable, models, register_model,
                                 make_attribute_wrapper, lower_builtin, overload)
-from numba.typing.templates import signature
+from numba.typing.templates import signature, infer_global, AbstractTemplate
+from llvmlite import ir as lir
+from numba.targets.imputils import impl_ret_untracked
 import numpy
 from numba.analysis import (compute_live_map, compute_use_defs,
                             compute_cfg_from_blocks)
@@ -1261,27 +1263,54 @@ def get_type_min_value(typ):
         return typ.minval
     raise NotImplementedError("Unsupported type")
 
-@overload(get_type_min_value)
-def get_type_min_value_overload(d):
-    if isinstance(d.dtype, types.Float):
-        def min_impl(d):
-            return numpy.finfo(d).min
-        return min_impl
-    if isinstance(d.dtype, types.Integer):
-        def min_impl(d):
-            return numpy.iinfo(d).min
-        return min_impl
+@infer_global(get_type_min_value)
+@infer_global(get_type_max_value)
+class MinValInfer(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        assert len(args) == 1
+        assert isinstance(args[0], types.DType)
+        return signature(args[0].dtype, *args)
 
-@overload(get_type_max_value)
-def get_type_max_value_overload(d):
-    if isinstance(d.dtype, types.Float):
-        def max_impl(d):
-            return numpy.finfo(d).max
-        return max_impl
-    if isinstance(d.dtype, types.Integer):
-        def max_impl(d):
-            return numpy.iinfo(d).max
-        return max_impl
+@lower_builtin(get_type_min_value, types.DType)
+def lower_get_type_min_value(context, builder, sig, args):
+    typ = sig.args[0].dtype
+    bw = typ.bitwidth
+
+    if isinstance(typ, types.Integer):
+        lty = lir.IntType(bw)
+        val = typ.minval
+        res = lir.Constant(lty, val)
+    elif isinstance(typ, types.Float):
+        if bw == 32:
+            lty = lir.FloatType()
+        elif bw == 64:
+            lty = lir.DoubleType()
+        else:
+            raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
+        npty = getattr(numpy, 'float{}'.format(bw))
+        res = lir.Constant(lty, numpy.finfo(npty).min)
+    return impl_ret_untracked(context, builder, lty, res)
+
+@lower_builtin(get_type_max_value, types.DType)
+def lower_get_type_min_value(context, builder, sig, args):
+    typ = sig.args[0].dtype
+    bw = typ.bitwidth
+
+    if isinstance(typ, types.Integer):
+        lty = lir.IntType(bw)
+        val = typ.maxval
+        res = lir.Constant(lty, val)
+    elif isinstance(typ, types.Float):
+        if bw == 32:
+            lty = lir.FloatType()
+        elif bw == 64:
+            lty = lir.DoubleType()
+        else:
+            raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
+        npty = getattr(numpy, 'float{}'.format(bw))
+        res = lir.Constant(lty, numpy.finfo(npty).max)
+    return impl_ret_untracked(context, builder, lty, res)
 
 def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
                         typemap=None, calltypes=None):
