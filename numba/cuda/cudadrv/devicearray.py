@@ -332,6 +332,7 @@ class DeviceNDArray(DeviceNDArrayBase):
         else:
             raise NotImplementedError("operation requires copying")
 
+    @devices.require_context
     def __getitem__(self, item):
         return self._do_getitem(item)
 
