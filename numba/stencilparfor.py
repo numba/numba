@@ -55,28 +55,29 @@ class StencilPass(object):
                         out_arr = None
 
                     sf = stencil_dict[stmt.value.func.name]
-                    fcode = sf.func
 
                     # XXX is this correct?
                     #fcode = fix_func_code(stmt.value.stencil_def.code,
                     #                    self.func_ir.func_id.func.__globals__)
-                    stencil_blocks = get_stencil_blocks(fcode, self.typingctx,
-                            (self.typemap[in_arr.name],), block.scope,
-                            block.loc, in_arr, self.typemap, self.calltypes)
+                    stencil_blocks, rt = get_stencil_blocks(sf,
+                            self.typingctx, (self.typemap[in_arr.name],), 
+                            block.scope, block.loc, in_arr, 
+                            self.typemap, self.calltypes)
                     index_offsets = None
                     if 'index_offsets' in stmt.value._kws:
                         index_offsets = stmt.value.index_offsets
                     gen_nodes = self._mk_stencil_parfor(label, in_arr, out_arr,
-                                   stencil_blocks, index_offsets, stmt.target)
+                                stencil_blocks, index_offsets, stmt.target, rt)
                     block.body = block.body[:i] + gen_nodes + block.body[i+1:]
                     return self.run()
         return
 
     def _mk_stencil_parfor(self, label, in_arr, out_arr, stencil_blocks, 
-                           index_offsets, target):
+                           index_offsets, target, return_type):
         gen_nodes = []
 
         # run copy propagate to replace in_arr copies (e.g. a = A)
+        in_arr_typ = self.typemap[in_arr.name]
         in_cps, out_cps = ir_utils.copy_propagate(stencil_blocks, self.typemap)
         name_var_table = ir_utils.get_name_var_table(stencil_blocks)
         ir_utils.apply_copy_propagate(
@@ -160,13 +161,32 @@ class StencilPass(object):
         # empty init block
         init_block = ir.Block(scope, loc)
         if out_arr == None:
+            in_arr_typ = self.typemap[in_arr.name]
+
+            shape_name = ir_utils.mk_unique_var("in_arr_shape")
+            shape_var = ir.Var(scope, shape_name, loc)
+            shape_getattr = ir.Expr.getattr(in_arr, "shape", loc)
+            self.typemap[shape_name] = types.containers.UniTuple(types.intp, 
+                                                               in_arr_typ.ndim)
+            init_block.body.extend([ir.Assign(shape_getattr, shape_var,loc)])
+
+            zero_name = ir_utils.mk_unique_var("zero_val")
+            zero_var = ir.Var(scope, zero_name, loc)
+            temp2 = return_type.dtype(0)
+            full_const = ir.Const(temp2, loc)
+            self.typemap[zero_name] = return_type.dtype
+            init_block.body.extend([ir.Assign(full_const, zero_var,loc)])
+
             so_name = ir_utils.mk_unique_var("stencil_output")
             out_arr = ir.Var(scope, so_name, loc)
-            self.typemap[out_arr.name] = self.typemap[in_arr.name]
-            stmts = ir_utils.gen_np_call("zeros_like",
-                                       np.zeros_like,
+            self.typemap[out_arr.name] = numba.types.npytypes.Array(
+                                                           return_type.dtype, 
+                                                           in_arr_typ.ndim,
+                                                           in_arr_typ.layout)
+            stmts = ir_utils.gen_np_call("full",
+                                       np.full,
                                        out_arr,
-                                       [in_arr],
+                                       [shape_var, zero_var],
                                        self.typemap,
                                        self.calltypes)
             init_block.body.extend(stmts)
@@ -258,13 +278,15 @@ class StencilPass(object):
 
         return start_lengths, end_lengths
 
-def get_stencil_blocks(fcode, typingctx, args, scope, loc, in_arr, typemap,
+def get_stencil_blocks(sf, typingctx, args, scope, loc, in_arr, typemap,
                                                                     calltypes):
     """get typed IR from stencil bytecode
     """
     from numba.targets.cpu import CPUContext
     from numba.targets.registry import cpu_target
     from numba.annotations import type_annotations
+
+    fcode = sf.func
 
     # get untyped IR
     stencil_func_ir = numba.compiler.run_frontend(fcode)
@@ -320,7 +342,7 @@ def get_stencil_blocks(fcode, typingctx, args, scope, loc, in_arr, typemap,
                 stmt.value = in_arr
                 break
     ir_utils.remove_dels(stencil_blocks)
-    return stencil_blocks
+    return stencil_blocks, sf.get_return_type(args)
 
 class DummyPipeline(object):
     def __init__(self, typingctx, targetctx, args, f_ir):

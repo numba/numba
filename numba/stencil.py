@@ -1,5 +1,5 @@
 import numpy as np
-from numba import compiler, types, ir_utils, ir, typing
+from numba import compiler, types, ir_utils, ir, typing, numpy_support
 from numba.typing.templates import AbstractTemplate, signature
 from numba.targets import cpu
 
@@ -49,8 +49,6 @@ def add_indices_to_kernel(kernel, ndim, neighborhood):
     """
     const_dict = {}
     kernel_consts = []
-
-    #print("add_indices_to_kernel", kernel.arg_names)
 
     for block in kernel.blocks.values():
         scope = block.scope
@@ -169,6 +167,17 @@ class StencilFunc(object):
         self._typingctx = self._dispatcher.targetdescr.typing_context
         self._install_type(self._typingctx)
 
+    def get_return_type(self, argtys):
+        kernel_ir = compiler.run_frontend(self.func)
+        _, return_type, _ = compiler.type_inference_stage(
+                self._typingctx,
+                kernel_ir,
+                argtys,
+                None,
+                {})
+        real_ret = types.npytypes.Array(return_type, argtys[0].ndim, argtys[0].layout)
+        return real_ret
+
     def _install_type(self, typingctx):
         """Constructs and installs a typing class for a StencilFunc object in 
         the input typing context.  If no typing context is given, then
@@ -188,7 +197,9 @@ class StencilFunc(object):
         built by StencilFunc._install_type().
         Return the call-site signature.
         """
-        outtys = [argtys[0]]
+        real_ret = self.get_return_type(argtys)
+
+        outtys = [real_ret]
         outtys.extend(argtys)
         return signature(*outtys)
 
@@ -196,14 +207,11 @@ class StencilFunc(object):
         # Copy the kernel so that our changes for this callsite
         # won't effect other callsites.
         kernel_copy = self.kernel_ir.copy()
-        #print("kernel_copy")
-        #kernel_copy.dump()
 
         the_array = args[0]
         if 'out' in kwargs:
             result = kwargs['out']
         else:
-            #result = np.zeros_like(the_array)
             result = None
 
         stencil_func_name = "__numba_stencil_%s_%s" % (
@@ -217,14 +225,12 @@ class StencilFunc(object):
 
         if "neighborhood" in self.options:
             neighborhood = self.options["neighborhood"]
-            #print("Found neighborhood options", neighborhood)
         else:
             neighborhood = None
+
         kernel_size = add_indices_to_kernel(kernel_copy, the_array.ndim,
                                             neighborhood)
         replace_return_with_setitem(kernel_copy.blocks, index_vars)
-        #print("kernel_copy after indices and setitem", kernel_size)
-        #kernel_copy.dump()
 
         stencil_func_text = "def " + stencil_func_name + "("
         if isinstance(result, type(None)):
@@ -320,10 +326,11 @@ class StencilFunc(object):
         if isinstance(result, type(None)):
             new_stencil_param_types = [array_npytype]
         else:
-            new_stencil_param_types = [array_npytype, array_npytype]
-
-        #print("stencil_ir")
-        #stencil_ir.dump()
+            rdtype = result.dtype
+            # Is 'C' correct here?
+            rttype = numpy_support.from_dtype(rdtype)
+            result_type = types.npytypes.Array(rttype, result.ndim, 'C')
+            new_stencil_param_types = [array_npytype, result_type]
 
         from .targets.registry import cpu_target
         typingctx = typing.Context()
@@ -335,7 +342,6 @@ class StencilFunc(object):
                 stencil_ir,
                 new_stencil_param_types,
                 None,
-                #array_npytype,
                 compiler.DEFAULT_FLAGS,
                 {})
             stencil_func = eval(stencil_func_name)
