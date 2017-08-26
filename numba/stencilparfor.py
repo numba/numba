@@ -7,6 +7,7 @@ from numba import ir_utils, ir, utils, array_analysis
 from numba.ir_utils import get_call_table, find_topo_order, mk_unique_var
 from operator import add
 import numpy as np
+import numbers
 
 def stencil():
     pass
@@ -67,13 +68,13 @@ class StencilPass(object):
                     if 'index_offsets' in stmt.value._kws:
                         index_offsets = stmt.value.index_offsets
                     gen_nodes = self._mk_stencil_parfor(label, in_arr, out_arr,
-                                stencil_blocks, index_offsets, stmt.target, rt)
+                            stencil_blocks, index_offsets, stmt.target, rt, sf)
                     block.body = block.body[:i] + gen_nodes + block.body[i+1:]
                     return self.run()
         return
 
     def _mk_stencil_parfor(self, label, in_arr, out_arr, stencil_blocks, 
-                           index_offsets, target, return_type):
+                           index_offsets, target, return_type, stencil_func):
         gen_nodes = []
 
         # run copy propagate to replace in_arr copies (e.g. a = A)
@@ -86,8 +87,6 @@ class StencilPass(object):
             name_var_table,
             lambda a, b, c, d:None, # a null func
             None,                   # no extra data
-            #array_analysis.copy_propagate_update_analysis,
-            #self.array_analysis,
             self.typemap,
             self.calltypes)
         ir_utils.remove_dead(stencil_blocks, self.func_ir.arg_names,
@@ -105,15 +104,13 @@ class StencilPass(object):
             parfor_vars.append(parfor_var)
 
         start_lengths, end_lengths = self._replace_stencil_accesses(
-                            stencil_blocks, parfor_vars, in_arr, index_offsets)
+             stencil_blocks, parfor_vars, in_arr, index_offsets, stencil_func)
 
         # create parfor loop nests
         loopnests = []
         equiv_set = self.array_analysis.get_equiv_set(label)
         sizes = equiv_set.get_shape(in_arr.name)
 
-        #corrs = self.array_analysis.array_shape_classes[in_arr.name]
-        #sizes = self.array_analysis.array_size_vars[in_arr.name]
         assert ndims == len(sizes)
         for i in range(ndims):
             last_ind = sizes[i]
@@ -123,8 +120,12 @@ class StencilPass(object):
                 index_const = ir.Var(scope, mk_unique_var("stencil_const_var"),
                                                                             loc)
                 self.typemap[index_const.name] = types.intp
-                const_assign = ir.Assign(ir.Const(end_lengths[i], loc),
+                if isinstance(end_lengths[i], numbers.Number):
+                    const_assign = ir.Assign(ir.Const(end_lengths[i], loc),
                                                             index_const, loc)
+                else:
+                    const_assign = ir.Assign(end_lengths[i], index_const, loc)
+
                 gen_nodes.append(const_assign)
                 last_ind = ir.Var(scope, mk_unique_var("last_ind"), loc)
                 self.typemap[last_ind.name] = types.intp
@@ -206,32 +207,44 @@ class StencilPass(object):
         gen_nodes.append(ir.Assign(out_arr, target, loc))
         return gen_nodes
 
-    def _replace_stencil_accesses(self, stencil_blocks, parfor_vars, in_arr, index_offsets):
+    def _replace_stencil_accesses(self, stencil_blocks, parfor_vars, in_arr, 
+                                  index_offsets, stencil_func):
         ndims = self.typemap[in_arr.name].ndim
         scope = in_arr.scope
         loc = in_arr.loc
         # replace access indices, find access lengths in each dimension
-        start_lengths = ndims*[0]
-        end_lengths = ndims*[0]
-        for lable, block in stencil_blocks.items():
+        need_to_calc_kernel = False
+        if isinstance(stencil_func.neighborhood, type(None)):
+            need_to_calc_kernel = True
+
+        if need_to_calc_kernel:
+            start_lengths = ndims*[0]
+            end_lengths = ndims*[0]
+        else:
+            start_lengths = [x[0] for x in stencil_func.neighborhood]
+            end_lengths   = [x[1] for x in stencil_func.neighborhood]
+
+        for label, block in stencil_blocks.items():
             new_body = []
             for stmt in block.body:
                 if (isinstance(stmt, ir.Assign)
                         and isinstance(stmt.value, ir.Expr)
-                        and stmt.value.op == 'static_getitem'
+                        and (stmt.value.op == 'static_getitem' or
+                             stmt.value.op == 'getitem')
                         and stmt.value.value.name == in_arr.name):
                     index_list = stmt.value.index
                     # handle 1D case
                     if ndims == 1:
-                        assert isinstance(index_list, int)
+                        #assert isinstance(index_list, int)
                         index_list = [index_list]
                     if index_offsets:
                         # add offsets in all dimensions
                         index_list = list(map(add, index_list, index_offsets))
 
                     # update min and max indices
-                    start_lengths = list(map(min, start_lengths, index_list))
-                    end_lengths = list(map(max, end_lengths, index_list))
+                    if need_to_calc_kernel:
+                        start_lengths = list(map(min, start_lengths, index_list))
+                        end_lengths = list(map(max, end_lengths, index_list))
 
                     # update access indices
                     index_vars = []
@@ -240,8 +253,13 @@ class StencilPass(object):
                         index_const = ir.Var(scope,
                                         mk_unique_var("stencil_const_var"), loc)
                         self.typemap[index_const.name] = types.intp
-                        const_assign = ir.Assign(ir.Const(index_list[i], loc),
+                        if isinstance(index_list[i], numbers.Number):
+                            const_assign = ir.Assign(ir.Const(index_list[i], loc),
                                                             index_const, loc)
+                        else:
+                            const_assign = ir.Assign(index_list[i],
+                                                            index_const, loc)
+
                         index_var = ir.Var(scope,
                                         mk_unique_var("stencil_index_var"), loc)
                         self.typemap[index_var.name] = types.intp
