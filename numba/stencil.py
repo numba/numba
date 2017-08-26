@@ -50,6 +50,10 @@ def add_indices_to_kernel(kernel, ndim, neighborhood):
     const_dict = {}
     kernel_consts = []
 
+    need_to_calc_kernel = False
+    if isinstance(neighborhood, type(None)):
+        need_to_calc_kernel = True
+
     for block in kernel.blocks.values():
         scope = block.scope
         loc = block.loc
@@ -66,10 +70,11 @@ def add_indices_to_kernel(kernel, ndim, neighborhood):
                 rhs = stmt.value
                 # Store the index used after looking up the variable in
                 # the const dictionary.
-                if rhs.index.name in const_dict:
-                    kernel_consts += [const_dict[rhs.index.name]]
-                else:
-                    raise ValueError("Non-constant specified for stencil kernel index.")
+                if need_to_calc_kernel:
+                    if rhs.index.name in const_dict:
+                        kernel_consts += [const_dict[rhs.index.name]]
+                    else:
+                        raise ValueError("Non-constant specified for stencil kernel index.")
 
                 if ndim == 1:
                     # Single dimension always has index variable 'index0'.
@@ -126,7 +131,7 @@ def add_indices_to_kernel(kernel, ndim, neighborhood):
                 new_body.append(stmt)
         block.body = new_body
 
-    if isinstance(neighborhood, type(None)):
+    if need_to_calc_kernel:
         # Find the size of the kernel by finding the maximum absolute value
         # index used in the kernel specification.
         neighborhood = [[0,0] for _ in range(ndim)]
@@ -166,6 +171,10 @@ class StencilFunc(object):
         self._dispatcher = jit()(nfunc)
         self._typingctx = self._dispatcher.targetdescr.typing_context
         self._install_type(self._typingctx)
+        if "neighborhood" in self.options:
+            self.neighborhood = self.options["neighborhood"]
+        else:
+            self.neighborhood = None
 
     def get_return_type(self, argtys):
         kernel_ir = compiler.run_frontend(self.func)
@@ -223,13 +232,8 @@ class StencilFunc(object):
             index_var_name = "index" + str(i)
             index_vars += [index_var_name]
 
-        if "neighborhood" in self.options:
-            neighborhood = self.options["neighborhood"]
-        else:
-            neighborhood = None
-
         kernel_size = add_indices_to_kernel(kernel_copy, the_array.ndim,
-                                            neighborhood)
+                                            self.neighborhood)
         replace_return_with_setitem(kernel_copy.blocks, index_vars)
 
         stencil_func_text = "def " + stencil_func_name + "("
