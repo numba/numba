@@ -506,7 +506,7 @@ class TestParfors(TestParforsBase):
         A = np.random.ranf(4)
         cpfunc = self.compile_parallel(test_impl, (numba.typeof(A),))
         self.assertEqual(cpfunc.entry_point(A), test_impl(A))
-        A = np.random.randint(10, size=4, dtype=np.int32)
+        A = np.random.randint(10, size=4).astype(np.int32)
         cpfunc = self.compile_parallel(test_impl, (numba.typeof(A),))
         self.assertEqual(cpfunc.entry_point(A), test_impl(A))
 
@@ -517,7 +517,7 @@ class TestParfors(TestParforsBase):
 
         A = np.random.ranf(4)
         self.check(test_impl, A)
-        A = np.random.randint(10, size=4, dtype=np.int32)
+        A = np.random.randint(10, size=4).astype(np.int32)
         self.check(test_impl, A)
 
     @skip_unsupported
@@ -527,7 +527,7 @@ class TestParfors(TestParforsBase):
 
         A = np.random.ranf(4)
         self.check(test_impl, A)
-        A = np.random.randint(10, size=4, dtype=np.int32)
+        A = np.random.randint(10, size=4).astype(np.int32)
         self.check(test_impl, A)
 
     @skip_unsupported
@@ -537,7 +537,7 @@ class TestParfors(TestParforsBase):
 
         A = np.random.ranf(4)
         self.check(test_impl, A)
-        A = np.random.randint(10, size=4, dtype=np.int32)
+        A = np.random.randint(10, size=4).astype(np.int32)
         self.check(test_impl, A)
 
     @skip_unsupported
@@ -547,7 +547,7 @@ class TestParfors(TestParforsBase):
 
         A = np.random.ranf(4)
         self.check(test_impl, A)
-        A = np.random.randint(10, size=4, dtype=np.int32)
+        A = np.random.randint(10, size=4).astype(np.int32)
         self.check(test_impl, A)
 
 class TestPrange(TestParforsBase):
