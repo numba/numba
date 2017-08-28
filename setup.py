@@ -238,7 +238,7 @@ metadata = dict(
         "numba.runtime": ["*.c", "*.h"],
     },
     scripts=["numba/pycc/pycc", "bin/numba"],
-    author="Continuum Analytics, Inc.",
+    author="Anaconda, Inc.",
     author_email="numba-users@continuum.io",
     url="http://numba.github.com",
     packages=packages,

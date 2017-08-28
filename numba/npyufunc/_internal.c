@@ -1,8 +1,3 @@
-/*
- * Copyright (c) 2012-2015 Continuum Analytics, Inc.
- * All Rights reserved.
- */
-
 #include "_internal.h"
 #include "Python.h"
 
