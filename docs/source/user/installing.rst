@@ -22,7 +22,7 @@ Installing using Conda
 The easiest way to install numba and get updates is by using Conda,
 a cross-platform package manager and software distribution maintained
 by Anaconda, Inc.  You can either use `Anaconda
-<https://www.anaconda.com/download/>`_ to get the full stack in one download,
+<https://www.anaconda.com/download>`_ to get the full stack in one download,
 or `Miniconda <https://conda.io/miniconda.html>`_ which will install
 the minimum packages needed to get started.
 

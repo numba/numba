@@ -191,7 +191,7 @@ You can expect this to take less than 20 minutes.
 
 Some platforms (such as Windows) cannot be hosted by Travis-CI, and the
 Numba team has therefore access to a separate platform provided by
-`Anaconda, Inc. <https://anaconda.com/>`_, our sponsor. We hope parts of that
+`Anaconda, Inc. <https://anaconda.com>`_, our sponsor. We hope parts of that
 infrastructure can be made public in the future.
 
 
