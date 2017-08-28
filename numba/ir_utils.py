@@ -402,10 +402,10 @@ def add_offset_to_labels(blocks, offset):
                     if isinstance(inst, T):
                         f_max = f(inst, offset)
         if isinstance(term, ir.Jump):
-            term.target += offset
+            b.body[-1] = ir.Jump(term.target + offset, term.loc)
         if isinstance(term, ir.Branch):
-            term.truebr += offset
-            term.falsebr += offset
+            b.body[-1] = ir.Branch(term.cond, term.truebr + offset, 
+                                   term.falsebr + offset, term.loc)
         new_blocks[l + offset] = b
     return new_blocks
 
