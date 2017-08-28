@@ -1,5 +1,4 @@
 from numba import config, ir, ir_utils, utils, prange
-import types
 from numba.ir_utils import (
     mk_unique_var,
     next_label,
@@ -21,7 +20,6 @@ from numba.ir_utils import (
 from numba.analysis import compute_cfg_from_blocks
 from numba.targets.rangeobj import range_iter_len
 from numba.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
-import numba.types as nbtypes
 import numpy as np
 
 """

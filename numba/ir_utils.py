@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
+import types as pytypes
 from numba import ir, types, typing, config, analysis, utils, cgutils
 from numba.extending import (typeof_impl, type_callable, models, register_model,
                                 make_attribute_wrapper, lower_builtin, overload)
@@ -1368,7 +1369,7 @@ def get_ir_of_code(glbls, fcode):
         co_varnames = list(fcode.co_varnames)
         if co_varnames[0] == ".0":
             co_varnames[0] = "implicit0"
-        fcode = types.CodeType(
+        fcode = pytypes.CodeType(
             fcode.co_argcount,
             fcode.co_kwonlyargcount,
             fcode.co_nlocals,
