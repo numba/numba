@@ -13,7 +13,7 @@ Compiling python classes with @jitclass
 Numba supports code generation for classes via the :func:`numba.jitclass`
 decorator.  A class can be marked for optimization using this decorator along
 with a specification of the types of each field.  We call the resulting class
-object a jitclass.  All methods of a jitclass is compiled into nopython
+object a jitclass.  All methods of a jitclass are compiled into nopython
 functions.  The data of a jitclass instance is allocated on the heap as a
 C-compatible structure so that any compiled functions can have direct access
 to the underlying data, bypassing the interpreter.
