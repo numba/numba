@@ -187,3 +187,13 @@ value, for example::
 
    import locale
    locale.setlocale(locale.LC_NUMERIC, 'C')
+
+
+Miscellaneous
+=============
+
+How do I reference/cite/acknowledge Numba in other work?
+--------------------------------------------------------
+For academic use, the best option is to cite our ACM Proceedings:
+`Numba: a LLVM-based Python JIT compiler.
+<http://dl.acm.org/citation.cfm?id=2833162&dl=ACM&coll=DL>`_
