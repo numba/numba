@@ -183,3 +183,13 @@ value, for example::
 
 
 .. _NumbaPro: http://docs.continuum.io/numbapro/
+
+
+Miscellaneous
+=============
+
+How do I reference/cite/acknowledge Numba in other work?
+--------------------------------------------------------
+For academic use, the best option is to cite our ACM Proceedings:
+`Numba: a LLVM-based Python JIT compiler.
+<http://dl.acm.org/citation.cfm?id=2833162&dl=ACM&coll=DL>`_
