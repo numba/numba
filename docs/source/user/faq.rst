@@ -187,6 +187,3 @@ value, for example::
 
    import locale
    locale.setlocale(locale.LC_NUMERIC, 'C')
-
-
-.. _NumbaPro: http://docs.continuum.io/numbapro/
