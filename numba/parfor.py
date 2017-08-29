@@ -122,7 +122,7 @@ class LoopNest(object):
         self.step = step
 
     def __repr__(self):
-        return ("LoopNest(index_variable={}, range={},{},{})".
+        return ("LoopNest(index_variable = {}, range = ({}, {}, {}))".
                 format(self.index_variable, self.start, self.stop, self.step))
 
 
