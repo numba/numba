@@ -128,7 +128,7 @@ Some old archives are at: http://librelist.com/browser/numba/
 Website
 =======
 
-See if our sponsor can help you (which can help this project): http://www.continuum.io
+See if our sponsor can help you (which can help this project): https://www.anaconda.com
 
 http://numba.pydata.org
 
