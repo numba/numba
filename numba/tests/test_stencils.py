@@ -57,6 +57,13 @@ class TestStencils(unittest.TestCase):
             B = stencil1_kernel(A, out=B)
             return B
 
+        @njit()
+        def test_with_out_njit(n):
+            A = np.arange(n**2).reshape((n, n))
+            B = np.full(A.shape, 0.0)
+            B = stencil1_kernel(A, out=B)
+            return B
+
         @njit(parallel=True)
         def test_with_out_par(n):
             A = np.arange(n**2).reshape((n, n))
@@ -69,6 +76,12 @@ class TestStencils(unittest.TestCase):
             B = stencil1_kernel(A)
             return B
 
+        @njit()
+        def test_without_out_njit(n):
+            A = np.arange(n**2).reshape((n, n))
+            B = stencil1_kernel(A)
+            return B
+
         @njit(parallel=True)
         def test_without_out_par(n):
             A = np.arange(n**2).reshape((n, n))
@@ -77,7 +90,7 @@ class TestStencils(unittest.TestCase):
 
         def test_impl_seq(n):
             A = np.arange(n**2).reshape((n, n))
-            B = np.zeros(n**2).reshape((n, n))
+            B = np.full(A.shape, 0.0)
             for i in range(1, n-1):
                 for j in range(1, n-1):
                     B[i,j] = 0.25 * (A[i,j+1] + A[i+1,j] + A[i,j-1] + A[i-1,j])
@@ -85,14 +98,18 @@ class TestStencils(unittest.TestCase):
 
         n = 100
         out_seq = test_with_out(n)
+        out_njit = test_with_out_njit(n)
         out_par = test_with_out_par(n)
         with_seq = test_without_out(n)
+        with_njit = test_without_out_njit(n)
         with_par = test_without_out_par(n)
         py_output = test_impl_seq(n)
 
         np.testing.assert_almost_equal(out_seq, py_output, decimal=1)
+        np.testing.assert_almost_equal(out_njit, py_output, decimal=1)
         np.testing.assert_almost_equal(out_par, py_output, decimal=1)
         np.testing.assert_almost_equal(with_seq, py_output, decimal=1)
+        np.testing.assert_almost_equal(with_njit, py_output, decimal=1)
         np.testing.assert_almost_equal(with_par, py_output, decimal=1)
 
     @skip_unsupported
@@ -106,6 +123,12 @@ class TestStencils(unittest.TestCase):
             return 0.3 * cum
 
         def test_seq(n):
+            A = np.arange(n)
+            B = stencil2_kernel(A)
+            return B
+
+        @njit()
+        def test_njit(n):
             A = np.arange(n)
             B = stencil2_kernel(A)
             return B
@@ -125,10 +148,12 @@ class TestStencils(unittest.TestCase):
 
         n = 100
         seq_res = test_seq(n)
+        njit_res = test_njit(n)
         par_res = test_par(n)
         py_output = test_impl_seq(n)
 
         np.testing.assert_almost_equal(seq_res, py_output, decimal=1)
+        np.testing.assert_almost_equal(njit_res, py_output, decimal=1)
         np.testing.assert_almost_equal(par_res, py_output, decimal=1)
 
 if __name__ == "__main__":
