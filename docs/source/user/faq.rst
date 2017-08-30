@@ -99,14 +99,21 @@ Does Numba vectorize array computations (SIMD)?
 Numba doesn't implement such optimizations by itself, but it lets LLVM
 apply them.
 
-Does Numba parallelize code?
-----------------------------
+Does Numba automatically parallelize code?
+------------------------------------------
 
-No, it doesn't.  If you want to run computations concurrently on multiple
-threads (by :ref:`releasing the GIL <jit-nogil>`) or processes, you'll
-have to handle the pooling and synchronisation yourself.
+It can, in some cases:
 
-Or, you can take a look at NumbaPro_.
+* Ufuncs and gufuncs with the ``target="parallel"`` option will run on multiple threads.
+* The experimental ``parallel=True`` option to ``@jit`` will attempt to optimize
+  array operations and run them in parallel.  It also adds support for ``prange()`` to
+  explicitly parallelize a loop.
+
+You can also manually run computations on multiple threads yourself and use
+the ``nogil=True`` option (see :ref:`releasing the GIL <jit-nogil>`).  Numba
+can also target parallel execution on GPU architectures using its CUDA and HSA
+backends.
+
 
 Can Numba speed up short-running functions?
 -------------------------------------------
@@ -180,9 +187,6 @@ value, for example::
 
    import locale
    locale.setlocale(locale.LC_NUMERIC, 'C')
-
-
-.. _NumbaPro: http://docs.continuum.io/numbapro/
 
 
 Miscellaneous

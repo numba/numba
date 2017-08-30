@@ -6,7 +6,7 @@ A compiler for Python array and numerical functions
 ###################################################
 
 Numba is an Open Source NumPy-aware optimizing compiler for Python
-sponsored by Continuum Analytics, Inc.  It uses the
+sponsored by Anaconda, Inc.  It uses the
 remarkable LLVM compiler infrastructure to compile Python syntax to
 machine code.
 
@@ -35,7 +35,7 @@ Installing
 ==========
 
 The easiest way to install numba and get updates is by using the Anaconda
-Distribution: https://www.continuum.io/downloads
+Distribution: https://www.anaconda.com/download
 
 ::
 
@@ -128,7 +128,7 @@ Some old archives are at: http://librelist.com/browser/numba/
 Website
 =======
 
-See if our sponsor can help you (which can help this project): http://www.continuum.io
+See if our sponsor can help you (which can help this project): https://www.anaconda.com
 
 http://numba.pydata.org
 
