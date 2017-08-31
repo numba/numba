@@ -1,3 +1,8 @@
+#
+# Copyright (c) 2017 Intel Corporation
+# SPDX-License-Identifier: BSD-2-Clause
+#
+
 import numpy as np
 from numba import compiler, types, ir_utils, ir, typing, numpy_support, utils
 from numba.typing.templates import AbstractTemplate, signature

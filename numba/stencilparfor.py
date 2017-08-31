@@ -1,3 +1,8 @@
+#
+# Copyright (c) 2017 Intel Corporation
+# SPDX-License-Identifier: BSD-2-Clause
+#
+
 import types as pytypes
 import numba
 from numba import types
