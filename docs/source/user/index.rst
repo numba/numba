@@ -13,6 +13,7 @@ User Manual
    cfunc.rst
    pycc.rst
    parallel.rst
+   stencil.rst
    troubleshoot.rst
    faq.rst
    examples.rst
