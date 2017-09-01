@@ -15,3 +15,4 @@ Developer Manual
    rewrites.rst
    live_variable_analysis.rst
    listings.rst
+   stencil.rst
