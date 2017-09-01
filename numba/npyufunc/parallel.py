@@ -19,6 +19,7 @@ import numpy as np
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
+import numba.llvmthreadsafe as llvmts
 from numba.npyufunc import ufuncbuilder
 from numba.numpy_support import as_dtype
 from numba import types, utils, cgutils, config
@@ -417,6 +418,7 @@ def _launch_threads():
 
 _is_initialized = False
 
+@llvmts.lock_llvm
 def _init():
     from . import workqueue as lib
     from ctypes import CFUNCTYPE, c_void_p

@@ -15,6 +15,7 @@ import llvmlite.ir as llvmir
 from numba import config, utils, cgutils
 from numba.runtime.nrtopt import remove_redundant_nrt_refct
 from numba import llvmthreadsafe as llvmts
+from numba import llvmthreadsafeapi as llvmtsapi
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
                       'i886', 'i986'])
@@ -68,11 +69,12 @@ class CodeLibrary(object):
     _object_caching_enabled = False
     _disable_inspection = False
 
+    @llvmts.lock_llvm
     def __init__(self, codegen, name):
         self._codegen = codegen
         self._name = name
         self._linking_libraries = set()
-        self._final_module = llvmts.parse_assembly(
+        self._final_module = llvmtsapi.parse_assembly(
             str(self._codegen._create_empty_module(self._name)))
         self._final_module.name = cgutils.normalize_ir_text(self._name)
         self._shared_module = None
@@ -174,6 +176,7 @@ class CodeLibrary(object):
         library._ensure_finalized()
         self._linking_libraries.add(library)
 
+    @llvmts.lock_llvm
     def add_ir_module(self, ir_module):
         """
         Add a LLVM IR module's contents to this library.
@@ -181,10 +184,9 @@ class CodeLibrary(object):
         self._raise_if_finalized()
         assert isinstance(ir_module, llvmir.Module)
         ir = cgutils.normalize_ir_text(str(ir_module))
-        with llvmts.lock_llvm:
-            ll_module = llvmts.parse_assembly(ir)
-            ll_module.name = ir_module.name
-            ll_module.verify()
+        ll_module = llvmtsapi.parse_assembly(ir)
+        ll_module.name = ir_module.name
+        ll_module.verify()
         self.add_llvm_module(ll_module)
 
     def _scan_dynamic_globals(self, ll_module):
@@ -279,6 +281,7 @@ class CodeLibrary(object):
             warnings.warn('Inspection disabled for cached code. '
                           'Invalid result is returned.')
 
+    @llvmts.lock_llvm
     def get_llvm_str(self):
         """
         Get the human-readable form of the LLVM module.
@@ -286,6 +289,7 @@ class CodeLibrary(object):
         self._sentry_cache_disable_inspection()
         return str(self._final_module)
 
+    @llvmts.lock_llvm
     def get_asm_str(self):
         """
         Get the human-readable assembly.
@@ -409,14 +413,14 @@ class CodeLibrary(object):
         assert isinstance(self, cls)
         if kind == 'bitcode':
             # No need to re-run optimizations, just make the module ready
-            self._final_module = llvmts.parse_bitcode(data)
+            self._final_module = llvmtsapi.parse_bitcode(data)
             self._finalize_final_module()
             return self
         elif kind == 'object':
             object_code, shared_bitcode = data
             self.enable_object_caching()
             self._set_compiled_object(object_code)
-            self._shared_module = llvmts.parse_bitcode(shared_bitcode)
+            self._shared_module = llvmtsapi.parse_bitcode(shared_bitcode)
             self._finalize_final_module()
             return self
         else:
@@ -525,17 +529,19 @@ class RuntimeLinker(object):
 
 class BaseCPUCodegen(object):
 
+    @llvmts.lock_llvm
     def __init__(self, module_name):
         initialize_llvm()
 
         self._libraries = set()
         self._data_layout = None
-        self._llvm_module = llvmts.parse_assembly(
+        self._llvm_module = llvmtsapi.parse_assembly(
             str(self._create_empty_module(module_name)))
         self._llvm_module.name = "global_codegen_module"
         self._rtlinker = RuntimeLinker()
         self._init(self._llvm_module)
 
+    @llvmts.lock_llvm
     def _init(self, llvm_module):
         assert list(llvm_module.global_variables) == [], "Module isn't empty"
 
@@ -544,7 +550,7 @@ class BaseCPUCodegen(object):
         self._tm_features = self._customize_tm_features()
         self._customize_tm_options(tm_options)
         tm = target.create_target_machine(**tm_options)
-        engine = llvmts.create_mcjit_compiler(llvm_module, tm)
+        engine = llvmtsapi.create_mcjit_compiler(llvm_module, tm)
 
         self._tm = tm
         self._engine = engine
@@ -555,6 +561,7 @@ class BaseCPUCodegen(object):
         self._engine.set_object_cache(self._library_class._object_compiled_hook,
                                       self._library_class._object_getbuffer_hook)
 
+    @llvmts.lock_llvm
     def _create_empty_module(self, name):
         ir_module = lc.Module(cgutils.normalize_ir_text(name))
         ir_module.triple = ll.get_process_triple()
@@ -588,14 +595,14 @@ class BaseCPUCodegen(object):
         return self._library_class._unserialize(self, serialized)
 
     def _module_pass_manager(self):
-        pm = llvmts.create_module_pass_manager()
+        pm = llvmtsapi.create_module_pass_manager()
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder() as pmb:
             pmb.populate(pm)
         return pm
 
     def _function_pass_manager(self, llvm_module):
-        pm = llvmts.create_function_pass_manager(llvm_module)
+        pm = llvmtsapi.create_function_pass_manager(llvm_module)
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder() as pmb:
             pmb.populate(pm)
@@ -629,7 +636,7 @@ class BaseCPUCodegen(object):
                 ret double 1.23e+01
             }
             """
-        mod = llvmts.parse_assembly(ir)
+        mod = llvmtsapi.parse_assembly(ir)
         ir_out = str(mod)
         if "12.3" in ir_out or "1.23" in ir_out:
             # Everything ok
@@ -644,6 +651,7 @@ class BaseCPUCodegen(object):
                 % (loc,))
         raise AssertionError("Unexpected IR:\n%s\n" % (ir_out,))
 
+    @llvmts.lock_llvm    
     def magic_tuple(self):
         """
         Return a tuple unambiguously describing the codegen behaviour.
