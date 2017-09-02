@@ -13,11 +13,11 @@ from PIL import Image
 
 @stencil()
 def gaussian_blur(a):
-    return int((a[-2,-2] * 0.003  + a[-1,-2] * 0.0133 + a[0,-2] * 0.0219 + a[1,-2] * 0.0133 + a[2,-2] * 0.0030 +
-                a[-2,-1] * 0.0133 + a[-1,-1] * 0.0596 + a[0,-1] * 0.0983 + a[1,-1] * 0.0596 + a[2,-1] * 0.0133 +
-                a[-2, 0] * 0.0219 + a[-1, 0] * 0.0983 + a[0, 0] * 0.1621 + a[1, 0] * 0.0983 + a[2, 0] * 0.0219 +
-                a[-2, 1] * 0.0133 + a[-1, 1] * 0.0596 + a[0, 1] * 0.0983 + a[1, 1] * 0.0596 + a[2, 1] * 0.0133 +
-                a[-2, 2] * 0.003  + a[-1, 2] * 0.0133 + a[0, 2] * 0.0219 + a[1, 2] * 0.0133 + a[2, 2] * 0.0030))
+    return (a[-2,-2] * 0.003  + a[-1,-2] * 0.0133 + a[0,-2] * 0.0219 + a[1,-2] * 0.0133 + a[2,-2] * 0.0030 +
+            a[-2,-1] * 0.0133 + a[-1,-1] * 0.0596 + a[0,-1] * 0.0983 + a[1,-1] * 0.0596 + a[2,-1] * 0.0133 +
+            a[-2, 0] * 0.0219 + a[-1, 0] * 0.0983 + a[0, 0] * 0.1621 + a[1, 0] * 0.0983 + a[2, 0] * 0.0219 +
+            a[-2, 1] * 0.0133 + a[-1, 1] * 0.0596 + a[0, 1] * 0.0983 + a[1, 1] * 0.0596 + a[2, 1] * 0.0133 +
+            a[-2, 2] * 0.003  + a[-1, 2] * 0.0133 + a[0, 2] * 0.0219 + a[1, 2] * 0.0133 + a[2, 2] * 0.0030)
 
 def main (*args):
     iterations = 1
@@ -34,13 +34,13 @@ def main (*args):
 
     input_img = Image.open(input_file)
     input_arr = np.array(input_img)
-    output_arr = np.zeros_like(input_arr)
+    #output_arr = np.zeros_like(input_arr)
 
     for i in range(iterations):
-        gaussian_blur(input_arr, out=output_arr)
+        output_arr = gaussian_blur(input_arr)
         input_arr, output_arr = output_arr, input_arr
 
-    output_arr = input_arr
+    output_arr = input_arr.astype(np.uint8)
 
     new_img = Image.fromarray(output_arr, mode=input_img.mode)
     new_img.format = input_img.format
