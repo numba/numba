@@ -67,9 +67,9 @@ def add_indices_to_kernel(kernel, ndim, neighborhood):
             if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Const):
                 # Remember consts for use later.
                 const_dict[stmt.target.name] = stmt.value.value
-            if (isinstance(stmt, ir.Assign) and 
-                isinstance(stmt.value, ir.Expr) and 
-                stmt.value.op == 'getitem' and 
+            if (isinstance(stmt, ir.Assign) and
+                isinstance(stmt.value, ir.Expr) and
+                stmt.value.op == 'getitem' and
                 stmt.value.value.name in kernel.arg_names):
                 # We found a getitem from the input array.
                 rhs = stmt.value
@@ -89,7 +89,7 @@ def add_indices_to_kernel(kernel, ndim, neighborhood):
                     index_var = ir.Var(scope, "index0", loc)
                     tmpname = ir_utils.mk_unique_var("stencil_index")
                     tmpvar  = ir.Var(scope, tmpname, loc)
-                    acc_call = ir.Expr.binop('+', stmt.value.index, 
+                    acc_call = ir.Expr.binop('+', stmt.value.index,
                                              index_var, loc)
                     new_body.append(ir.Assign(acc_call, tmpvar, loc))
                     new_body.append(ir.Assign(ir.Expr.getitem(stmt.value.value,tmpvar,loc),stmt.target,loc))
@@ -108,7 +108,7 @@ def add_indices_to_kernel(kernel, ndim, neighborhood):
                     for dim in range(ndim):
                         tmpname = ir_utils.mk_unique_var("const_index")
                         tmpvar  = ir.Var(scope, tmpname, loc)
-                        new_body.append(ir.Assign(ir.Const(dim, loc), 
+                        new_body.append(ir.Assign(ir.Const(dim, loc),
                                                   tmpvar, loc))
                         const_index_vars += [tmpvar]
                         index_var = ir.Var(scope, "index" + str(dim), loc)
@@ -122,10 +122,10 @@ def add_indices_to_kernel(kernel, ndim, neighborhood):
                         ind_stencils += [tmpvar]
                         getitemname = ir_utils.mk_unique_var("getitem")
                         getitemvar  = ir.Var(scope, getitemname, loc)
-                        getitemcall = ir.Expr.getitem(stmt.value.index, 
+                        getitemcall = ir.Expr.getitem(stmt.value.index,
                                                    const_index_vars[dim], loc)
                         new_body.append(ir.Assign(getitemcall, getitemvar, loc))
-                        acc_call = ir.Expr.binop('+', getitemvar, 
+                        acc_call = ir.Expr.binop('+', getitemvar,
                                                  index_vars[dim], loc)
                         new_body.append(ir.Assign(acc_call, tmpvar, loc))
 
@@ -145,12 +145,12 @@ def add_indices_to_kernel(kernel, ndim, neighborhood):
             if isinstance(index, tuple):
                 for i in range(len(index)):
                     te = index[i]
-                    #max_const = max(max_const, abs(te))    
+                    #max_const = max(max_const, abs(te))
                     neighborhood[i][0] = min(neighborhood[i][0], te)
                     neighborhood[i][1] = max(neighborhood[i][1], te)
                 index_len = len(index)
             elif isinstance(index, int):
-                #max_const = max(max_const, abs(index))    
+                #max_const = max(max_const, abs(index))
                 index_len = 1
                 neighborhood[0][0] = min(neighborhood[0][0], index)
                 neighborhood[0][1] = max(neighborhood[0][1], index)
@@ -211,13 +211,13 @@ class StencilFunc(object):
         return real_ret
 
     def _install_type(self, typingctx):
-        """Constructs and installs a typing class for a StencilFunc object in 
+        """Constructs and installs a typing class for a StencilFunc object in
         the input typing context.  If no typing context is given, then
         _install_type() installs into the typing context of the
         dispatcher object (should be same default context used by
         jit() and njit()).
         """
-        _ty_cls = type('StencilFuncTyping_' + 
+        _ty_cls = type('StencilFuncTyping_' +
                        str(hex(id(self.func)).replace("-", "_")),
                        (AbstractTemplate,),
                        dict(key=self, generic=self._type_me))
@@ -274,9 +274,9 @@ class StencilFunc(object):
         the_array = args[0]
 
         stencil_func_name = "__numba_stencil_%s_%s" % (
-                                        hex(id(the_array)).replace("-", "_"), 
+                                        hex(id(the_array)).replace("-", "_"),
                                         hex(id(self.func)).replace("-", "_"))
-        
+
         index_vars = []
         for i in range(the_array.ndim):
             index_var_name = "index" + str(i)
@@ -302,7 +302,7 @@ class StencilFunc(object):
             for j in range(offset):
                 stencil_func_text += "    "
             stencil_func_text += "for " + index_vars[i] + " in range("
-            stencil_func_text += str(abs(kernel_size[i][0])) + ", full_shape[" 
+            stencil_func_text += str(abs(kernel_size[i][0])) + ", full_shape["
             stencil_func_text += stri + "] - " + str(kernel_size[i][1]) + "):\n"
             offset += 1
 
@@ -347,7 +347,7 @@ class StencilFunc(object):
                     scope = block.scope
                     # split block across __sentinel__
                     # A new block is allocated for the statements prior to the
-                    # sentinel but the new block maintains the current block 
+                    # sentinel but the new block maintains the current block
                     # label.
                     prev_block = ir.Block(scope, loc)
                     prev_block.body = block.body[:i]
@@ -359,7 +359,7 @@ class StencilFunc(object):
                     # The previous block jumps to the minimum labelled block of
                     # the parfor body.
                     prev_block.append(ir.Jump(body_first_label, loc))
-                    # Add all the parfor loop body blocks to the gufunc 
+                    # Add all the parfor loop body blocks to the gufunc
                     # function's # IR.
                     for (l, b) in kernel_copy.blocks.items():
                         stencil_ir.blocks[l] = b
@@ -424,13 +424,28 @@ class StencilFunc(object):
         else:
             return new_stencil_func.entry_point(*args, result)
 
-def stencil(boundary='skip', **options):
+def stencil(func_or_boundary='skip', **options):
+    # called on function without specifying boundary style
+    if not isinstance(func_or_boundary, str):
+        boundary = 'skip'  # default style
+        func = func_or_boundary
+    else:
+        assert isinstance(func_or_boundary, str), """stencil boundary should be
+                                                        a string"""
+        boundary = func_or_boundary
+        func = None
+    wrapper = _stencil(boundary, options)
+    if func is not None:
+        return wrapper(func)
+    return wrapper
+
+def _stencil(boundary, options):
     if boundary != 'skip':
         raise ValueError("Unsupported boundary style " + boundary)
 
     def decorated(func):
         kernel_ir = compiler.run_frontend(func)
-        ir_utils.remove_args(kernel_ir.blocks) 
+        ir_utils.remove_args(kernel_ir.blocks)
         return StencilFunc(func, kernel_ir, options)
 
     return decorated
