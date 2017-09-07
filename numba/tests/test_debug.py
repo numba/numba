@@ -14,6 +14,7 @@ from numba.compiler import compile_isolated, Flags
 from numba.errors import NumbaWarning
 from numba import compiler
 from .test_parfors import skip_unsupported
+from .matmul_usecase import needs_blas
 
 def simple_nopython(somearg):
     retval = somearg + 1
@@ -232,6 +233,7 @@ class TestParforWarnings(TestCase):
                 break
         self.assertTrue(warning_found, "Warning message should be found.")
 
+    @needs_blas
     @skip_unsupported
     def test_warns(self):
         try:
