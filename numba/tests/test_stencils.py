@@ -5,31 +5,13 @@
 
 from __future__ import print_function, division, absolute_import
 
-import math
-import re
 import sys
-import types as pytypes
-import warnings
-
 import numpy as np
 
 import numba
 from numba import unittest_support as unittest
-from numba import njit, prange, stencil
-from numba import compiler, typing
-from numba.targets import cpu
-from numba import types
-from numba.targets.registry import cpu_target
-from numba import config
-from numba.annotations import type_annotations
-from numba.ir_utils import (copy_propagate, apply_copy_propagate,
-                            get_name_var_table, remove_dels, remove_dead)
-from numba import ir
-from numba.compiler import compile_isolated, Flags
-from numba.bytecode import ByteCodeIter
+from numba import njit, stencil
 from .support import tag
-from .matmul_usecase import needs_blas
-from .test_linalg import needs_lapack
 
 # for decorating tests, marking that Windows with Python 2.7 is not supported
 _windows_py27 = (sys.platform.startswith('win32') and
@@ -53,44 +35,25 @@ class TestStencils(unittest.TestCase):
 
         def test_with_out(n):
             A = np.arange(n**2).reshape((n, n))
-            B = np.full(A.shape, 0.0)
-            B = stencil1_kernel(A, out=B)
-            return B
-
-        @njit()
-        def test_with_out_njit(n):
-            A = np.arange(n**2).reshape((n, n))
-            B = np.full(A.shape, 0.0)
-            B = stencil1_kernel(A, out=B)
-            return B
-
-        @njit(parallel=True)
-        def test_with_out_par(n):
-            A = np.arange(n**2).reshape((n, n))
             B = np.zeros(n**2).reshape((n, n))
             B = stencil1_kernel(A, out=B)
             return B
+
+        test_with_out_njit = njit(test_with_out)
+        test_with_out_par = njit(test_with_out, parallel=True)
+
 
         def test_without_out(n):
             A = np.arange(n**2).reshape((n, n))
             B = stencil1_kernel(A)
             return B
 
-        @njit()
-        def test_without_out_njit(n):
-            A = np.arange(n**2).reshape((n, n))
-            B = stencil1_kernel(A)
-            return B
-
-        @njit(parallel=True)
-        def test_without_out_par(n):
-            A = np.arange(n**2).reshape((n, n))
-            B = stencil1_kernel(A)
-            return B
+        test_without_out_njit = njit(test_without_out)
+        test_without_out_par = njit(test_without_out, parallel=True)
 
         def test_impl_seq(n):
             A = np.arange(n**2).reshape((n, n))
-            B = np.full(A.shape, 0.0)
+            B = np.zeros(n**2).reshape((n, n))
             for i in range(1, n-1):
                 for j in range(1, n-1):
                     B[i,j] = 0.25 * (A[i,j+1] + A[i+1,j] + A[i,j-1] + A[i-1,j])
@@ -127,17 +90,8 @@ class TestStencils(unittest.TestCase):
             B = stencil2_kernel(A)
             return B
 
-        @njit()
-        def test_njit(n):
-            A = np.arange(n)
-            B = stencil2_kernel(A)
-            return B
-
-        @njit(parallel=True)
-        def test_par(n):
-            A = np.arange(n)
-            B = stencil2_kernel(A)
-            return B
+        test_njit = njit(test_seq)
+        test_par = njit(test_seq, parallel=True)
 
         def test_impl_seq(n):
             A = np.arange(n)
