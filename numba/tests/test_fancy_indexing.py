@@ -186,12 +186,15 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         # 2. 1d array index
         # 3. nd array index
         # 4. reflected list
+        # 5. tuples
         
         test_indices = []
         test_indices.append(1)
         test_indices.append(np.array([1, 5, 1, 11, 3]))
         test_indices.append(np.array([[[1], [5]], [[1], [11]]]))
         test_indices.append([1, 5, 1, 11, 3])
+        test_indices.append((1, 5, 1))
+        test_indices.append(((1, 5, 1), (11, 3, 2)))
     
         for dt in [np.int64, np.complex128]:
             A = np.arange(12, dtype=dt).reshape((4, 3))

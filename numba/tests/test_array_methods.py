@@ -740,6 +740,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # 2. 1d array index
         # 3. nd array index, >2d and F order
         # 4. reflected list
+        # 5. tuples
 
         test_indices = []
         test_indices.append(1)
@@ -751,6 +752,9 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         test_indices.append(np.array([[[1, 5, 1], [11, 3, 0]]]))
         test_indices.append(np.array([[[[1, 5]], [[11, 0]],[[1, 2]]]]))
         test_indices.append([1, 5, 1, 11, 3])
+        test_indices.append((1, 5, 1))
+        test_indices.append(((1, 5, 1), (11, 3, 2)))
+        test_indices.append((((1,), (5,), (1,)), ((11,), (3,), (2,))))
 
         layouts = cycle(['C', 'F', 'A'])
 

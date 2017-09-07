@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
+import numpy as np
+
 from collections import namedtuple
 
 from numba import types, utils
@@ -434,8 +436,12 @@ class ArrayAttribute(AttributeTemplate):
             sig = signature(ary.dtype, *args)
         elif isinstance(argty, types.Array):
             sig = signature(argty.copy(layout='C', dtype=ary.dtype), *args)
-        elif isinstance(argty, types.List):
+        elif isinstance(argty, types.List): # 1d lists only
             sig = signature(types.Array(ary.dtype, 1, 'C'), *args)
+        elif isinstance(argty, types.BaseTuple):
+            sig = signature(types.Array(ary.dtype, np.ndim(argty), 'C'), *args)
+        else:
+            raise TypeError("take(%s) not supported for %s" % argty)
         return sig
 
     def generic_resolve(self, ary, attr):
