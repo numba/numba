@@ -512,43 +512,67 @@ class TestParfors(TestParforsBase):
 
     @skip_unsupported
     def test_min(self):
-        def test_impl(A):
+        def test_impl1(A):
             return A.min()
 
-        A = np.random.ranf(4)
-        self.check(test_impl, A)
-        A = np.random.randint(10, size=4).astype(np.int32)
-        self.check(test_impl, A)
+        def test_impl2(A):
+            return np.min(A)
+
+        n = 211
+        A = np.random.ranf(n)
+        B = np.random.randint(10, size=n).astype(np.int32)
+        self.check(test_impl1, A)
+        self.check(test_impl1, B)
+        self.check(test_impl2, A)
+        self.check(test_impl2, B)
 
     @skip_unsupported
     def test_max(self):
-        def test_impl(A):
+        def test_impl1(A):
             return A.max()
 
-        A = np.random.ranf(4)
-        self.check(test_impl, A)
-        A = np.random.randint(10, size=4).astype(np.int32)
-        self.check(test_impl, A)
+        def test_impl2(A):
+            return np.max(A)
+
+        n = 211
+        A = np.random.ranf(n)
+        B = np.random.randint(10, size=n).astype(np.int32)
+        self.check(test_impl1, A)
+        self.check(test_impl1, B)
+        self.check(test_impl2, A)
+        self.check(test_impl2, B)
 
     @skip_unsupported
     def test_argmin(self):
-        def test_impl(A):
+        def test_impl1(A):
             return A.argmin()
 
-        A = np.random.ranf(4)
-        self.check(test_impl, A)
-        A = np.random.randint(10, size=4).astype(np.int32)
-        self.check(test_impl, A)
+        def test_impl2(A):
+            return np.argmin(A)
+
+        n = 211
+        A = np.random.ranf(n)
+        B = np.random.randint(10, size=n).astype(np.int32)
+        self.check(test_impl1, A)
+        self.check(test_impl1, B)
+        self.check(test_impl2, A)
+        self.check(test_impl2, B)
 
     @skip_unsupported
     def test_argmax(self):
-        def test_impl(A):
+        def test_impl1(A):
             return A.argmax()
 
-        A = np.random.ranf(4)
-        self.check(test_impl, A)
-        A = np.random.randint(10, size=4).astype(np.int32)
-        self.check(test_impl, A)
+        def test_impl2(A):
+            return np.argmax(A)
+
+        n = 211
+        A = np.random.ranf(n)
+        B = np.random.randint(10, size=n).astype(np.int32)
+        self.check(test_impl1, A)
+        self.check(test_impl1, B)
+        self.check(test_impl2, A)
+        self.check(test_impl2, B)
 
 class TestPrange(TestParforsBase):
 
