@@ -18,6 +18,7 @@ import sys
 from functools import reduce
 from collections import defaultdict
 
+import numba
 from numba import ir, ir_utils, types, typing, rewrites, config, analysis
 from numba import array_analysis, postproc, typeinfer
 from numba.typing.templates import infer_global, AbstractTemplate
@@ -287,9 +288,10 @@ class ParforPass(object):
                         callname = guard(find_callname, self.func_ir, expr)
                         if callname in replace_functions_map:
                             new_func = replace_functions_map[callname]
+                            g = copy.copy(self.func_ir.func_id.func.__globals__)
+                            g['numba'] = numba
                             # inline the parallel implementation
-                            new_blocks = inline_closure_call(self.func_ir,
-                                        self.func_ir.func_id.func.__globals__,
+                            new_blocks = inline_closure_call(self.func_ir, g,
                                         block, i, new_func, self.typingctx,
                                         (self.typemap[expr.args[0].name],),
                                         self.typemap, self.calltypes)
