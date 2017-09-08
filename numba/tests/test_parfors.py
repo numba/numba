@@ -551,7 +551,7 @@ class TestParfors(TestParforsBase):
             return np.argmin(A)
 
         n = 211
-        A = np.random.ranf(n)
+        A = np.array([1., 0., 2., 0., 3.])
         B = np.random.randint(10, size=n).astype(np.int32)
         self.check(test_impl1, A)
         self.check(test_impl1, B)
@@ -567,7 +567,7 @@ class TestParfors(TestParforsBase):
             return np.argmax(A)
 
         n = 211
-        A = np.random.ranf(n)
+        A = np.array([1., 0., 3., 2., 3.])
         B = np.random.randint(10, size=n).astype(np.int32)
         self.check(test_impl1, A)
         self.check(test_impl1, B)
