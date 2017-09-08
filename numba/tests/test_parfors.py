@@ -866,9 +866,9 @@ class TestPrange(TestParforsBase):
             for i in range(len(A)):
                 s += A[i]*2
             return s
-        # this tests reduction detection well since accumulated variable is
-        # initialized before the parfor and value accessed from array is updated
-        # before accumulation
+        # this tests reduction detection well since the accumulated variable
+        # is initialized before the parfor and the value accessed from the array
+        # is updated before accumulation
         self.prange_tester(test_impl, np.random.ranf(4))
 
     @skip_unsupported
