@@ -404,7 +404,7 @@ def add_offset_to_labels(blocks, offset):
         if isinstance(term, ir.Jump):
             b.body[-1] = ir.Jump(term.target + offset, term.loc)
         if isinstance(term, ir.Branch):
-            b.body[-1] = ir.Branch(term.cond, term.truebr + offset, 
+            b.body[-1] = ir.Branch(term.cond, term.truebr + offset,
                                    term.falsebr + offset, term.loc)
         new_blocks[l + offset] = b
     return new_blocks
@@ -546,7 +546,7 @@ def has_no_side_effect(rhs, lives, call_table):
         if func_name not in call_table or call_table[func_name] == []:
             return False
         call_list = call_table[func_name]
-        if call_list == ['empty', numpy] or call_list == [slice]:
+        if call_list == ['empty', numpy] or call_list == [slice] or call_list == ['stencil', numba]:
             return True
         from numba.targets.registry import CPUDispatcher
         from numba.targets.linalg import dot_3_mv_check_args

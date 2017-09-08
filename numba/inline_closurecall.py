@@ -26,6 +26,7 @@ from numba.analysis import (
 
 from numba.targets.rangeobj import range_iter_len
 from numba.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
+from numba.stencil import StencilFunc
 import numpy as np
 
 """
@@ -39,13 +40,9 @@ class InlineClosureCallPass(object):
     closures, and inlines the body of the closure function to the call site.
     """
 
-    def __init__(self, func_ir, flags, run_frontend):
+    def __init__(self, func_ir, flags):
         self.func_ir = func_ir
         self.flags = flags
-        self.run_frontend = run_frontend
-        # save data to identify stencils
-        self.numba_globals = set()
-        self.stencil_calls = set()
 
     def run(self):
         """Run inline closure call pass.
@@ -96,30 +93,19 @@ class InlineClosureCallPass(object):
                             modified = True
                             # current block is modified, skip the rest
                             break
-                    if isinstance(expr, ir.Global):
-                        if (isinstance(expr.value, pytypes.ModuleType)
-                                and expr.value == numba):
-                            self.numba_globals.add(lhs.name)
-                        if (isinstance(expr.value, pytypes.FunctionType)
-                                and expr.value == numba.stencil):
-                            self.stencil_calls.add(lhs.name)
-                    if (isinstance(expr, ir.Expr) and expr.op == 'getattr'
-                            and expr.attr=='stencil'
-                            and expr.value.name in self.numba_globals):
-                        self.stencil_calls.add(lhs.name)
-                    if (isinstance(expr, ir.Expr) and expr.op == 'call'
-                            and expr.func.name in self.stencil_calls):
-                        # only three args for now
-                        assert len(expr.args)==3
-                        stencil_def = expr.args[2]
-                        func_def = guard(get_definition, self.func_ir, stencil_def)
-                        debug_print("found stencil call = ", expr.func, " def = ", func_def)
-                        assert isinstance(func_def, ir.Expr) and func_def.op == "make_function"
-                        # keep stencil inner code in call node for later stages
-                        expr.stencil_def = func_def
-                        expr.args.pop()
-                        modified = True
-
+                        # check for stencil call
+                        if guard(find_callname, self.func_ir, expr) == ('stencil', 'numba'):
+                            assert len(expr.args) == 1, """stencil call with one
+                                                            arg expected"""
+                            stencil_def = guard(get_definition, self.func_ir,expr.args[0])
+                            assert isinstance(stencil_def, ir.Expr) and stencil_def.op == "make_function"
+                            kernel_ir = get_ir_of_code(
+                                self.func_ir.func_id.func.__globals__,
+                                stencil_def.code)
+                            options = dict(expr.kws)
+                            sf = StencilFunc(None, kernel_ir, options)
+                            instr.value = ir.Global('stencil', sf, expr.loc)
+                            modified = True
 
         if enable_inline_arraycall:
             # Identify loop structure
