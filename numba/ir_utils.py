@@ -1315,6 +1315,14 @@ def lower_get_type_min_value(context, builder, sig, args):
 
 def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
                         typemap=None, calltypes=None):
+    """
+    Compile a function or a make_function node to Numba IR.
+
+    Rename variables and
+    labels to avoid conflict if inlined somewhere else. Perform type inference
+    if typingctx and other typing inputs are available and update typemap and
+    calltypes.
+    """
     from numba import compiler
     # mk_func can be actual function or make_function node
     if hasattr(mk_func, 'code'):
@@ -1339,6 +1347,8 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
         new_var_dict[name] = mk_unique_var(name)
     replace_var_names(f_ir.blocks, new_var_dict)
 
+    # perform type inference if typingctx is available and update type
+    # data structures typemap and calltypes
     if typingctx:
         f_typemap, f_return_type, f_calltypes = compiler.type_inference_stage(
                 typingctx, f_ir, arg_typs, None)
@@ -1354,7 +1364,6 @@ def get_ir_of_code(glbls, fcode):
     """
     Compile a code object to get its IR.
     """
-    #glbls = self.func_ir.func_id.func.__globals__
     nfree = len(fcode.co_freevars)
     func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
     func_clo = ",".join(["c_%d" % i for i in range(nfree)])
