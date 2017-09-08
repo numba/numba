@@ -581,6 +581,7 @@ def has_no_side_effect(rhs, lives, call_table):
         call_list = call_table[func_name]
         if (call_list == ['empty', numpy] or
             call_list == [slice] or
+            call_list == ['stencil', numba] or
             call_list == ['log', numpy]):
             return True
         from numba.targets.registry import CPUDispatcher
