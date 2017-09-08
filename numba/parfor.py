@@ -268,6 +268,11 @@ class ParforPass(object):
         return
 
     def _replace_parallel_functions(self, blocks):
+        """
+        Replace functions with their parallel implemntation in
+        replace_functions_map if available.
+        The implementation code is inlined to enable more optimization.
+        """
         from numba.inline_closurecall import inline_closure_call
         modified = False
         work_list = list(blocks.items())
@@ -282,6 +287,7 @@ class ParforPass(object):
                         callname = guard(find_callname, self.func_ir, expr)
                         if callname in replace_functions_map:
                             new_func = replace_functions_map[callname]
+                            # inline the parallel implementation
                             new_blocks = inline_closure_call(self.func_ir,
                                         self.func_ir.func_id.func.__globals__,
                                         block, i, new_func, self.typingctx,
@@ -294,6 +300,10 @@ class ParforPass(object):
                             break
 
     def _convert_numpy(self, blocks):
+        """
+        Convert supported Numpy functions, as well as arrayexpr nodes, to
+        parfor nodes.
+        """
         topo_order = find_topo_order(blocks)
         # variables available in the program so far (used for finding map
         # functions in array_expr lowering)
@@ -320,6 +330,9 @@ class ParforPass(object):
             block.body = new_body
 
     def _convert_reduce(self, blocks):
+        """
+        Find reduce() calls and convert them to parfors.
+        """
         topo_order = find_topo_order(blocks)
         for label in topo_order:
             block = blocks[label]
@@ -433,6 +446,9 @@ class ParforPass(object):
         return len(call) > 0 and (call[0] == 'prange' or call[0] == prange)
 
     def _is_reduce_assign(self, inst):
+        """
+        See if inst is an assignment with a reduce() call as value.
+        """
         require(isinstance(inst, ir.Assign))
         rhs = inst.value
         require(isinstance(rhs, ir.Expr))
@@ -464,6 +480,9 @@ class ParforPass(object):
                 "Parfor does not handle arrays of dimension 0")
 
     def _mk_parfor_loops(self, size_vars, scope, loc):
+        """
+        Create loop index variables and build LoopNest objects for a parfor.
+        """
         loopnests = []
         index_vars = []
         for size_var in size_vars:
@@ -719,13 +738,13 @@ class ParforPass(object):
         call_name, mod_name = find_callname(self.func_ir, expr)
         args = expr.args
         kws = dict(expr.kws)
-        if call_name is 'min':
+        if call_name == 'min':
             arr = expr.args[0]
             init_val = get_type_max_value(self.typemap[arr.name].dtype)
             expr.args.insert(0, lambda a,b: min(a, b))
             expr.args.append(ir.Const(init_val, arr.loc))
             return self._reduce_to_parfor(equiv_set, lhs, expr)
-        if call_name is 'max':
+        if call_name == 'max':
             arr = expr.args[0]
             init_val = get_type_min_value(self.typemap[arr.name].dtype)
             expr.args.insert(0, lambda a,b: max(a, b))
@@ -803,7 +822,10 @@ class ParforPass(object):
         raise NotImplementedError("parfor translation failed for ", expr)
 
     def _reduce_to_parfor(self, equiv_set, lhs, expr):
-        #return ir.Assign(expr.args[2], lhs, lhs.loc)
+        """
+        Convert a reduce() call to a parfor.
+        The call arguments should be (func, array, init_value).
+        """
         args = expr.args
         scope = lhs.scope
         loc = expr.loc
@@ -1333,14 +1355,15 @@ def get_parfor_outputs(parfor, parfor_params):
     return sorted(outputs)
 
 def get_parfor_reductions(parfor, parfor_params, calltypes, reductions=None,
-        names=None, param_uses=None, param_nodes=None, var_to_param=None):
+        reduce_varnames=None, param_uses=None, param_nodes=None,
+        var_to_param=None):
     """find variables that are updated using their previous values and an array
     item accessed with parfor index, e.g. s = s+A[i]
     """
     if reductions is None:
         reductions = {}
-    if names is None:
-        names = []
+    if reduce_varnames is None:
+        reduce_varnames = []
 
     # for each param variable, find what other variables are used to update it
     # also, keep the related nodes
@@ -1380,20 +1403,25 @@ def get_parfor_reductions(parfor, parfor_params, calltypes, reductions=None,
             if isinstance(stmt, Parfor):
                 # recursive parfors can have reductions like test_prange8
                 get_parfor_reductions(stmt, parfor_params, calltypes,
-                    reductions, names, param_uses, param_nodes, var_to_param)
+                    reductions, reduce_varnames, param_uses, param_nodes, var_to_param)
     for param, used_vars in param_uses.items():
         # a parameter is a reduction variable if its value is used to update it
-        # check names since recursive parfors might have processed param already
-        if param in used_vars and param not in names:
-            names.append(param)
+        # check reduce_varnames since recursive parfors might have processed
+        # param already
+        if param in used_vars and param not in reduce_varnames:
+            reduce_varnames.append(param)
             param_nodes[param].reverse()
             reduce_nodes = get_reduce_nodes(param, param_nodes[param])
             init_val = guard(get_reduction_init, reduce_nodes)
             reductions[param] = (init_val, reduce_nodes)
-    #print("reduce vars:", names, reductions)
-    return names, reductions
+    return reduce_varnames, reductions
 
 def get_reduction_init(nodes):
+    """
+    Get initial value for known reductions.
+    Currently, only += and *= are supported. We assume the inplace_binop node
+    is followed by an assignment.
+    """
     require(len(nodes) >=2)
     require(isinstance(nodes[-1].value, ir.Var))
     require(nodes[-2].target.name == nodes[-1].value.name)
@@ -1406,6 +1434,11 @@ def get_reduction_init(nodes):
     return None
 
 def get_reduce_nodes(name, nodes):
+    """
+    Get nodes that combine the reduction variable with a sentinel variable.
+    Recognizes the first node that combines the reduction variable with another
+    variable.
+    """
     reduce_nodes = None
     for i, stmt in enumerate(nodes):
         lhs = stmt.target.name
@@ -1424,11 +1457,14 @@ def get_reduce_nodes(name, nodes):
     return reduce_nodes
 
 def get_expr_args(expr):
+    """
+    Get arguments of an expression node
+    """
     if expr.op in ['binop', 'inplace_binop']:
         return [expr.lhs.name, expr.rhs.name]
     if expr.op == 'call':
         return [v.name for v in expr.args]
-    raise NotImplementedError("expr args")
+    raise NotImplementedError("get arguments for expression {}".format(expr))
 
 def visit_vars_parfor(parfor, callback, cbdata):
     if config.DEBUG_ARRAY_OPT == 1:
