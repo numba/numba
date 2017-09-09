@@ -907,3 +907,16 @@ class DeferredAttribute(AttributeTemplate):
 
     def generic_resolve(self, deferred, attr):
         return self.context.resolve_getattr(deferred.get(), attr)
+
+#------------------------------------------------------------------------------
+
+from numba.targets.builtins import get_type_min_value, get_type_max_value
+
+@infer_global(get_type_min_value)
+@infer_global(get_type_max_value)
+class MinValInfer(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        assert len(args) == 1
+        assert isinstance(args[0], types.DType)
+        return signature(args[0].dtype, *args)

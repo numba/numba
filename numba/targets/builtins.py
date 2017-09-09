@@ -328,3 +328,70 @@ def sized_bool(context, builder, sig, args):
         return cgutils.true_bit
     else:
         return cgutils.false_bit
+
+# -----------------------------------------------------------------------------
+
+
+def get_type_max_value(typ):
+    if isinstance(typ, types.Float):
+        bw = typ.bitwidth
+        if bw == 32:
+            return np.finfo(np.float32).max
+        if bw == 64:
+            return np.finfo(np.float64).max
+        raise NotImplementedError("Unsupported floating point type")
+    if isinstance(typ, types.Integer):
+        return typ.maxval
+    raise NotImplementedError("Unsupported type")
+
+def get_type_min_value(typ):
+    if isinstance(typ, types.Float):
+        bw = typ.bitwidth
+        if bw == 32:
+            return np.finfo(np.float32).min
+        if bw == 64:
+            return np.finfo(np.float64).min
+        raise NotImplementedError("Unsupported floating point type")
+    if isinstance(typ, types.Integer):
+        return typ.minval
+    raise NotImplementedError("Unsupported type")
+
+@lower_builtin(get_type_min_value, types.DType)
+def lower_get_type_min_value(context, builder, sig, args):
+    typ = sig.args[0].dtype
+    bw = typ.bitwidth
+
+    if isinstance(typ, types.Integer):
+        lty = ir.IntType(bw)
+        val = typ.minval
+        res = ir.Constant(lty, val)
+    elif isinstance(typ, types.Float):
+        if bw == 32:
+            lty = ir.FloatType()
+        elif bw == 64:
+            lty = ir.DoubleType()
+        else:
+            raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
+        npty = getattr(np, 'float{}'.format(bw))
+        res = ir.Constant(lty, np.finfo(npty).min)
+    return impl_ret_untracked(context, builder, lty, res)
+
+@lower_builtin(get_type_max_value, types.DType)
+def lower_get_type_min_value(context, builder, sig, args):
+    typ = sig.args[0].dtype
+    bw = typ.bitwidth
+
+    if isinstance(typ, types.Integer):
+        lty = ir.IntType(bw)
+        val = typ.maxval
+        res = ir.Constant(lty, val)
+    elif isinstance(typ, types.Float):
+        if bw == 32:
+            lty = ir.FloatType()
+        elif bw == 64:
+            lty = ir.DoubleType()
+        else:
+            raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
+        npty = getattr(np, 'float{}'.format(bw))
+        res = ir.Constant(lty, np.finfo(npty).max)
+    return impl_ret_untracked(context, builder, lty, res)
