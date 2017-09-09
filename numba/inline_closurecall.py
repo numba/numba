@@ -97,6 +97,14 @@ class InlineClosureCallPass(object):
 def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
                         arg_typs=None, typemap=None, calltypes=None):
     """Inline the body of `callee` at its callsite (`i`-th instruction of `block`)
+
+    `func_ir` is the func_ir object of the caller function and `glbls` is its
+    global variable environment (func_ir.func_id.func.__globals__).
+    `block` is the IR block of the callsite and `i` is the index of the
+    callsite's node. `callee` is either the called function or a
+    make_function node. `typingctx`, `typemap` and `calltypes` are typing
+    data structures of the caller, available if we are in a typed pass.
+    `arg_typs` includes the types of the arguments at the callsite.
     """
     scope = block.scope
     instr = block.body[i]
