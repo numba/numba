@@ -50,8 +50,6 @@ from numba.ir_utils import (
     simplify_CFG,
     has_no_side_effect,
     canonicalize_array_math,
-    get_type_max_value,
-    get_type_min_value,
     IndexValue,
     find_callname,
     guard,
@@ -64,6 +62,7 @@ from numba.ir_utils import (
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
 from numba.controlflow import CFGraph
+from numba.targets.builtins import get_type_max_value, get_type_min_value
 from numba.typing import npydecl, signature
 from numba.types.functions import Function
 from numba.array_analysis import (random_int_args, random_1arg_size,
@@ -91,7 +90,7 @@ _reduction_ops = {
 _np_reduce_calls = ['min', 'max']
 
 def argmin_parallel_impl(A):
-    init_val = numba.ir_utils.get_type_max_value(A.dtype)
+    init_val = numba.targets.builtins.get_type_max_value(A.dtype)
     ival = numba.ir_utils.IndexValue(0, init_val)
     for i in numba.prange(len(A)):
         curr_ival = numba.ir_utils.IndexValue(i, A[i])
@@ -99,7 +98,7 @@ def argmin_parallel_impl(A):
     return ival.index
 
 def argmax_parallel_impl(A):
-    init_val = numba.ir_utils.get_type_min_value(A.dtype)
+    init_val = numba.targets.builtins.get_type_min_value(A.dtype)
     ival = numba.ir_utils.IndexValue(0, init_val)
     for i in numba.prange(len(A)):
         curr_ival = numba.ir_utils.IndexValue(i, A[i])
