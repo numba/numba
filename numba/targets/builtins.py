@@ -331,7 +331,6 @@ def sized_bool(context, builder, sig, args):
 
 # -----------------------------------------------------------------------------
 
-
 def get_type_max_value(typ):
     if isinstance(typ, types.Float):
         bw = typ.bitwidth
@@ -395,3 +394,37 @@ def lower_get_type_min_value(context, builder, sig, args):
         npty = getattr(np, 'float{}'.format(bw))
         res = ir.Constant(lty, np.finfo(npty).max)
     return impl_ret_untracked(context, builder, lty, res)
+
+# -----------------------------------------------------------------------------
+
+from numba.typing.builtins import IndexValue, IndexValueType
+from numba.extending import overload
+
+@lower_builtin(IndexValue, types.intp, types.Type)
+def impl_index_value(context, builder, sig, args):
+    typ = sig.return_type
+    index, value = args
+    index_value = cgutils.create_struct_proxy(typ)(context, builder)
+    index_value.index = index
+    index_value.value = value
+    return index_value._getvalue()
+
+@overload(min)
+def indval_min(*args):
+    if len(args) == 2 and (isinstance(args[0], IndexValueType)
+                        and isinstance(args[1], IndexValueType)):
+        def min_impl(indval1, indval2):
+            if indval1.value > indval2.value:
+                return indval2
+            return indval1
+        return min_impl
+
+@overload(max)
+def indval_max(*args):
+    if len(args) == 2 and (isinstance(args[0], IndexValueType)
+                        and isinstance(args[1], IndexValueType)):
+        def max_impl(indval1, indval2):
+            if indval2.value > indval1.value:
+                return indval2
+            return indval1
+        return max_impl

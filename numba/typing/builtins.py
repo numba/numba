@@ -920,3 +920,49 @@ class MinValInfer(AbstractTemplate):
         assert len(args) == 1
         assert isinstance(args[0], types.DType)
         return signature(args[0].dtype, *args)
+
+#------------------------------------------------------------------------------
+
+from numba.extending import (typeof_impl, type_callable, models, register_model,
+                                make_attribute_wrapper)
+
+class IndexValue(object):
+    """
+    Index and value
+    """
+    def __init__(self, ind, val):
+        self.index = ind
+        self.value = val
+
+    def __repr__(self):
+        return 'IndexValue(%f, %f)' % (self.index, self.value)
+
+class IndexValueType(types.Type):
+    def __init__(self, val_typ):
+        self.val_typ = val_typ
+        super(IndexValueType, self).__init__(
+                                    name='IndexValueType({})'.format(val_typ))
+
+@typeof_impl.register(IndexValue)
+def typeof_index(val, c):
+    val_typ = typeof_impl(val.value, c)
+    return IndexValueType(val_typ)
+
+@type_callable(IndexValue)
+def type_index_value(context):
+    def typer(ind, mval):
+        if ind == types.intp:
+            return IndexValueType(mval)
+    return typer
+
+@register_model(IndexValueType)
+class IndexValueModel(models.StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [
+            ('index', types.intp),
+            ('value', fe_type.val_typ),
+            ]
+        models.StructModel.__init__(self, dmm, fe_type, members)
+
+make_attribute_wrapper(IndexValueType, 'index', 'index')
+make_attribute_wrapper(IndexValueType, 'value', 'value')
