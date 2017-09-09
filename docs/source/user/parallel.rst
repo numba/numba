@@ -42,7 +42,8 @@ parallel semantics and for which we attempt to parallelize.
     * :ref:`Numpy ufuncs <supported_ufuncs>` that are supported in :term:`nopython mode`.
     * User defined :class:`~numba.DUFunc` through :func:`~numba.vectorize`.
 
-2. Numpy reduction functions ``sum`` and ``prod``.
+2. Numpy reduction functions ``sum``, ``prod``, ``min``, ``max``, ``argmin``,
+   and ``argmax``.
 
 3. Numpy array creation functions ``zeros``, ``ones``, and several
    random functions (rand, randn, ranf, random_sample, sample, random,
@@ -58,6 +59,9 @@ parallel semantics and for which we attempt to parallelize.
    Numpy broadcast between arrays with mixed dimensionality or size is
    not supported, nor is the reduction across a selected dimension.
 
+6. The ``reduce`` operator of ``functools`` is supported for specifying parallel
+   reductions on Numpy arrays but the initial value argument is mandatory.
+
 .. _numba-prange:
 
 Explicit Parallel Loops
@@ -67,8 +71,14 @@ Another experimental feature of this module is support for explicit parallel
 loops. One can use Numba's ``prange`` instead of ``range`` to specify that a
 loop can be parallelized. The user is required to make sure that the loop does
 not have cross iteration dependencies except the supported reductions.
-Currently, reductions on scalar values are supported and are inferred from
-in-place operations. The example below demonstrates a parallel loop with a
+
+A reductions is inferred automatically if a variable is updated by a binary
+function/operator using its previous value in the loop body. The initial value
+of the reduction is inferred automatically for ``+=`` and ``*=`` operators.
+For other functions/operators, the reduction variable should hold the initial
+value right before entering the ``prange`` loop.
+
+The example below demonstrates a parallel loop with a
 reduction (``A`` is a one-dimensional Numpy array)::
 
     from numba import njit, prange
