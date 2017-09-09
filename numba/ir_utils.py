@@ -5,8 +5,6 @@
 
 import types as pytypes
 from numba import ir, types, typing, config, analysis, utils, cgutils
-from numba.extending import (typeof_impl, type_callable, models, register_model,
-                                make_attribute_wrapper, lower_builtin, overload)
 from numba.typing.templates import signature, infer_global, AbstractTemplate
 from llvmlite import ir as lir
 from numba.targets.imputils import impl_ret_untracked
@@ -1357,74 +1355,3 @@ def replace_returns(blocks, target, return_label):
                         cast.value = cast.value.value
             elif isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr) and stmt.value.op == 'cast':
                 casts.append(stmt)
-
-
-class IndexValue(object):
-    """
-    Index and value
-    """
-    def __init__(self, ind, val):
-        self.index = ind
-        self.value = val
-
-    def __repr__(self):
-        return 'IndexValue(%f, %f)' % (self.index, self.value)
-
-class IndexValueType(types.Type):
-    def __init__(self, val_typ):
-        self.val_typ = val_typ
-        super(IndexValueType, self).__init__(
-                                    name='IndexValueType({})'.format(val_typ))
-
-@typeof_impl.register(IndexValue)
-def typeof_index(val, c):
-    val_typ = typeof_impl(val.value, c)
-    return IndexValueType(val_typ)
-
-@type_callable(IndexValue)
-def type_index_value(context):
-    def typer(ind, mval):
-        if ind == types.intp:
-            return IndexValueType(mval)
-    return typer
-
-@register_model(IndexValueType)
-class IndexValueModel(models.StructModel):
-    def __init__(self, dmm, fe_type):
-        members = [
-            ('index', types.intp),
-            ('value', fe_type.val_typ),
-            ]
-        models.StructModel.__init__(self, dmm, fe_type, members)
-
-make_attribute_wrapper(IndexValueType, 'index', 'index')
-make_attribute_wrapper(IndexValueType, 'value', 'value')
-
-@lower_builtin(IndexValue, types.intp, types.Type)
-def impl_index_value(context, builder, sig, args):
-    typ = sig.return_type
-    index, value = args
-    index_value = cgutils.create_struct_proxy(typ)(context, builder)
-    index_value.index = index
-    index_value.value = value
-    return index_value._getvalue()
-
-@overload(min)
-def indval_min(*args):
-    if len(args) == 2 and (isinstance(args[0], IndexValueType)
-                        and isinstance(args[1], IndexValueType)):
-        def min_impl(indval1, indval2):
-            if indval1.value > indval2.value:
-                return indval2
-            return indval1
-        return min_impl
-
-@overload(max)
-def indval_max(*args):
-    if len(args) == 2 and (isinstance(args[0], IndexValueType)
-                        and isinstance(args[1], IndexValueType)):
-        def max_impl(indval1, indval2):
-            if indval2.value > indval1.value:
-                return indval2
-            return indval1
-        return max_impl
