@@ -53,6 +53,28 @@ class InlineClosureCallPass(object):
                     lhs = instr.target
                     expr = instr.value
                     if isinstance(expr, ir.Expr) and expr.op == 'call':
+                        # inline reduce() when parallel is off
+                        if not self.flags.auto_parallel:
+                            call_name = guard(find_callname, self.func_ir, expr)
+                            if (call_name == ('reduce', 'builtin')
+                                    or call_name == ('reduce', 'functools')):
+                                assert len(expr.args) == 3, """invalid reduce
+                                    call, three arguments including initial
+                                    value required"""
+                                def reduce_func(f, A, v):
+                                    s = v
+                                    it = iter(A)
+                                    for a in it:
+                                        s = f(s, a)
+                                    return s
+                                new_blocks = inline_closure_call(self.func_ir,
+                                        self.func_ir.func_id.func.__globals__,
+                                        block, i, reduce_func)
+                                for block in new_blocks:
+                                    work_list.append(block)
+                                modified = True
+                                # current block is modified, skip the rest
+                                break
                         func_def = guard(get_definition, self.func_ir, expr.func)
                         debug_print("found call to ", expr.func, " def = ", func_def)
                         if isinstance(func_def, ir.Expr) and func_def.op == "make_function":
