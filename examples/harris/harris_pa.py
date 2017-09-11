@@ -1,4 +1,10 @@
 #! /usr/bin/env python
+
+#
+# Copyright (c) 2017 Intel Corporation
+# SPDX-License-Identifier: BSD-2-Clause
+#
+
 from __future__ import print_function
 
 import sys
@@ -52,6 +58,11 @@ def main (*args):
     #output_arr = np.zeros_like(input_arr)
 
     output_arr = harris(input_arr).astype(np.uint8)
+
+    tstart = time.time()
+    output_arr = harris(input_arr).astype(np.uint8)
+    htime = time.time() - tstart
+    print("SELFTIMED ", htime)
 
     new_img = Image.fromarray(output_arr, mode=input_img.mode)
     new_img.format = input_img.format
