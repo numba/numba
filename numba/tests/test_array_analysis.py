@@ -619,6 +619,22 @@ class TestArrayAnalysis(TestCase):
                                equivs=[self.with_equiv('a', 'c', 'e')],
                                asserts=None)
 
+    def test_misc(self):
+
+        @njit
+        def swap(x, y):
+            return(y, x)
+
+        def test_bug2537(m):
+            a = np.ones(m)
+            b = np.ones(m)
+            for i in range(m):
+                a[i], b[i] = swap(a[i], b[i])
+
+        try:
+            njit(test_bug2537, parallel=True)(10)
+        except IndexError:
+            self.fail("test_bug2537 raised IndexError!")
 
 if __name__ == '__main__':
     unittest.main()
