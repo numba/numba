@@ -521,10 +521,13 @@ class TestParfors(TestParforsBase):
         n = 211
         A = np.random.ranf(n)
         B = np.random.randint(10, size=n).astype(np.int32)
+        C = np.random.ranf((n, n))  # test mutil-dimensional array
         self.check(test_impl1, A)
         self.check(test_impl1, B)
+        self.check(test_impl1, C)
         self.check(test_impl2, A)
         self.check(test_impl2, B)
+        self.check(test_impl2, C)
 
     @skip_unsupported
     def test_max(self):
@@ -537,10 +540,13 @@ class TestParfors(TestParforsBase):
         n = 211
         A = np.random.ranf(n)
         B = np.random.randint(10, size=n).astype(np.int32)
+        C = np.random.ranf((n, n))  # test mutil-dimensional array
         self.check(test_impl1, A)
         self.check(test_impl1, B)
+        self.check(test_impl1, C)
         self.check(test_impl2, A)
         self.check(test_impl2, B)
+        self.check(test_impl2, C)
 
     @skip_unsupported
     def test_argmin(self):
