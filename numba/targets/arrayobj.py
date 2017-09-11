@@ -3387,6 +3387,8 @@ def numpy_take_2(context, builder, sig, args):
 
 @lower_builtin('array.take', types.Array, types.List)
 @lower_builtin(np.take, types.Array, types.List)
+@lower_builtin('array.take', types.Array, types.BaseTuple)
+@lower_builtin(np.take, types.Array, types.BaseTuple)
 def numpy_take_3(context, builder, sig, args):
 
     def take_impl(a, indices):

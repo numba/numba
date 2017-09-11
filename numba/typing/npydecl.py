@@ -1198,6 +1198,10 @@ class Take(AbstractTemplate):
             retty = types.Array(ndim=ind.ndim, dtype=arr.dtype, layout='C')
         elif isinstance(ind, types.List):
             retty = types.Array(ndim=1, dtype=arr.dtype, layout='C')
+        elif isinstance(ind, types.BaseTuple):
+            retty = types.Array(ndim=np.ndim(ind), dtype=arr.dtype, layout='C')
+        else:
+            return None
 
         return signature(retty, *args)
 
