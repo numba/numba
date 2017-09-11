@@ -87,7 +87,8 @@ _reduction_ops = {
 
 _np_reduce_calls = ['min', 'max']
 
-def argmin_parallel_impl(A):
+def argmin_parallel_impl(in_arr):
+    A = in_arr.ravel()
     init_val = numba.targets.builtins.get_type_max_value(A.dtype)
     ival = numba.typing.builtins.IndexValue(0, init_val)
     for i in numba.prange(len(A)):
@@ -95,7 +96,8 @@ def argmin_parallel_impl(A):
         ival = min(ival, curr_ival)
     return ival.index
 
-def argmax_parallel_impl(A):
+def argmax_parallel_impl(in_arr):
+    A = in_arr.ravel()
     init_val = numba.targets.builtins.get_type_min_value(A.dtype)
     ival = numba.typing.builtins.IndexValue(0, init_val)
     for i in numba.prange(len(A)):
