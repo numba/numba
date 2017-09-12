@@ -386,18 +386,15 @@ class StencilFunc(object):
             array_types = [typing.typeof.typeof(x) for x in args]
 
         if result is None:
-            #new_stencil_param_types = [array_npytype]
             new_stencil_param_types = array_types
         else:
             if isinstance(result, types.Type):
-                #new_stencil_param_types = [array_npytype, result]
-                new_stencil_param_types = array_types + [result]
+                new_stencil_param_types = list(array_types)
             else:
                 rdtype = result.dtype
                 # Is 'C' correct here?
                 rttype = numpy_support.from_dtype(rdtype)
                 result_type = types.npytypes.Array(rttype, result.ndim, 'C')
-                #new_stencil_param_types = [array_npytype, result_type]
                 new_stencil_param_types = array_types + [result_type]
 
         from .targets.registry import cpu_target
