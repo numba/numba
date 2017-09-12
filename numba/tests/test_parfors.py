@@ -500,15 +500,14 @@ class TestParfors(TestParforsBase):
     @skip_unsupported
     def test_reduce(self):
         def test_impl(A):
-            init_val = -1
+            init_val = 10
             return reduce(lambda a,b: min(a, b), A, init_val)
 
-        A = np.random.ranf(4)
-        cpfunc = self.compile_parallel(test_impl, (numba.typeof(A),))
-        self.assertEqual(cpfunc.entry_point(A), test_impl(A))
-        A = np.random.randint(10, size=4).astype(np.int32)
-        cpfunc = self.compile_parallel(test_impl, (numba.typeof(A),))
-        self.assertEqual(cpfunc.entry_point(A), test_impl(A))
+        n = 211
+        A = np.random.ranf(n)
+        self.check(test_impl, A)
+        A = np.random.randint(10, size=n).astype(np.int32)
+        self.check(test_impl, A)
 
     @skip_unsupported
     def test_min(self):

@@ -838,7 +838,9 @@ class ParforPass(object):
         arr_typ = self.typemap[in_arr.name]
         in_typ = arr_typ.dtype
         size_vars = equiv_set.get_shape(in_arr)
-        index_vars, loopnests = self._mk_parfor_loops(size_vars, scope, loc)
+        assert len(size_vars) == 1, """only parallel reduce() on 1D arrays is
+                                        supported"""
+        index_vars, loopnests = self._mk_parfor_loops([size_vars[0]], scope, loc)
 
         acc_var = lhs
 
@@ -851,8 +853,8 @@ class ParforPass(object):
         # make getitem
         tmp_var = ir.Var(scope, mk_unique_var("$val"), loc)
         self.typemap[tmp_var.name] = in_typ
-        index_var, index_var_type = self._make_index_var(
-            scope, index_vars, acc_block)
+        index_var = index_vars[0]
+        index_var_type = types.intp
         getitem_call = ir.Expr.getitem(in_arr, index_var, loc)
         self.calltypes[getitem_call] = signature(
             in_typ, arr_typ, index_var_type)

@@ -60,7 +60,7 @@ parallel semantics and for which we attempt to parallelize.
    not supported, nor is the reduction across a selected dimension.
 
 6. The ``reduce`` operator of ``functools`` is supported for specifying parallel
-   reductions on Numpy arrays but the initial value argument is mandatory.
+   reductions on 1D Numpy arrays but the initial value argument is mandatory.
 
 .. _numba-prange:
 
