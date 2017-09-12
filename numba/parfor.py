@@ -85,7 +85,19 @@ _reduction_ops = {
     'prod': ('*=', '*', 1),
 }
 
-_np_reduce_calls = ['min', 'max']
+def min_parallel_impl(in_arr):
+    A = in_arr.ravel()
+    val = numba.targets.builtins.get_type_max_value(A.dtype)
+    for i in numba.prange(len(A)):
+        val = min(val, A[i])
+    return val
+
+def max_parallel_impl(in_arr):
+    A = in_arr.ravel()
+    val = numba.targets.builtins.get_type_min_value(A.dtype)
+    for i in numba.prange(len(A)):
+        val = max(val, A[i])
+    return val
 
 def argmin_parallel_impl(in_arr):
     A = in_arr.ravel()
@@ -106,7 +118,9 @@ def argmax_parallel_impl(in_arr):
     return ival.index
 
 replace_functions_map = {('argmin', 'numpy'): argmin_parallel_impl,
-                        ('argmax', 'numpy'): argmax_parallel_impl}
+                        ('argmax', 'numpy'): argmax_parallel_impl,
+                        ('min', 'numpy'): min_parallel_impl,
+                        ('max', 'numpy'): max_parallel_impl,}
 
 class LoopNest(object):
 
@@ -564,8 +578,7 @@ class ParforPass(object):
         this Numpy reduce call.
         """
         func_name, mod_name = find_callname(self.func_ir, expr)
-        return mod_name == 'numpy' and (func_name in _reduction_ops
-                    or func_name in _np_reduce_calls)
+        return mod_name == 'numpy' and (func_name in _reduction_ops)
 
     def _get_ndims(self, arr):
         # return len(self.array_analysis.array_shape_classes[arr])
@@ -739,19 +752,7 @@ class ParforPass(object):
         from numba.targets.builtins import get_type_max_value, get_type_min_value
         call_name, mod_name = find_callname(self.func_ir, expr)
         args = expr.args
-        kws = dict(expr.kws)
-        if call_name == 'min':
-            arr = expr.args[0]
-            init_val = get_type_max_value(self.typemap[arr.name].dtype)
-            expr.args.insert(0, lambda a,b: min(a, b))
-            expr.args.append(ir.Const(init_val, arr.loc))
-            return self._reduce_to_parfor(equiv_set, lhs, expr)
-        if call_name == 'max':
-            arr = expr.args[0]
-            init_val = get_type_min_value(self.typemap[arr.name].dtype)
-            expr.args.insert(0, lambda a,b: max(a, b))
-            expr.args.append(ir.Const(init_val, arr.loc))
-            return self._reduce_to_parfor(equiv_set, lhs, expr)
+
         if call_name in _reduction_ops:
             acc_op, im_op, init_val = _reduction_ops[call_name]
             assert len(args) in [1, 2]  # vector dot has 2 args
