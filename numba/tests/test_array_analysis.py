@@ -3,6 +3,7 @@ from __future__ import division
 import itertools
 
 import numpy as np
+import sys
 
 from numba import unittest_support as unittest
 from numba import njit, typeof, types, typing, typeof, ir, utils, bytecode
@@ -13,6 +14,12 @@ from numba.targets import cpu
 from numba.numpy_support import version as numpy_version
 from numba.ir_utils import remove_dead
 
+# for parallel tests, marking that Windows with Python 2.7 is not supported
+_windows_py27 = (sys.platform.startswith('win32') and
+                 sys.version_info[:2] == (2, 7))
+_32bit = sys.maxsize <= 2 ** 32
+_reason = 'parfors not supported'
+skip_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
 
 class TestEquivSet(TestCase):
 
@@ -619,6 +626,7 @@ class TestArrayAnalysis(TestCase):
                                equivs=[self.with_equiv('a', 'c', 'e')],
                                asserts=None)
 
+    @skip_unsupported
     def test_misc(self):
 
         @njit
