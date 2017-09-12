@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
+import numba
 import types as pytypes
 from numba import ir, types, typing, config, analysis, utils, cgutils
 from numba.typing.templates import signature, infer_global, AbstractTemplate
