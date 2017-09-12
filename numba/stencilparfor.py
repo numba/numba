@@ -8,7 +8,7 @@ import numba
 from numba import types
 from numba.typing.templates import infer_global, AbstractTemplate
 from numba.typing import signature
-from numba import ir_utils, ir, utils, array_analysis
+from numba import ir_utils, ir, utils, array_analysis, config
 from numba.ir_utils import get_call_table, find_topo_order, mk_unique_var
 from operator import add
 import numpy as np
@@ -22,6 +22,11 @@ class Stencil(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         return signature(types.none, *args)
+
+def dump_blocks(blocks):
+    for label, block in blocks.items():
+        for stmt in block.body:
+            print(stmt)
 
 class StencilPass(object):
     def __init__(self, func_ir, typemap, calltypes, array_analysis, typingctx):
@@ -53,8 +58,9 @@ class StencilPass(object):
                         and stmt.value.op == 'call'
                         and stmt.value.func.name in stencil_calls):
                     kws = dict(stmt.value.kws)
-                    assert len(stmt.value.args) == 1
+                    input_dict = {n.name: n for n in stmt.value.args}
                     in_arr = stmt.value.args[0]
+                    arg_typemap = tuple(self.typemap[i.name] for i in stmt.value.args)
                     if 'out' in kws:
                         out_arr = kws['out']
                     else:
@@ -66,8 +72,8 @@ class StencilPass(object):
                     #fcode = fix_func_code(stmt.value.stencil_def.code,
                     #                    self.func_ir.func_id.func.__globals__)
                     stencil_blocks, rt = get_stencil_blocks(sf,
-                            self.typingctx, (self.typemap[in_arr.name],), 
-                            block.scope, block.loc, in_arr, 
+                            self.typingctx, arg_typemap, 
+                            block.scope, block.loc, input_dict, 
                             self.typemap, self.calltypes)
                     index_offsets = None
                     if 'index_offsets' in stmt.value._kws:
@@ -82,6 +88,11 @@ class StencilPass(object):
                            index_offsets, target, return_type, stencil_func):
         gen_nodes = []
 
+        if config.DEBUG_ARRAY_OPT == 1:
+            print("_mk_stencil_parfor", label, in_arr, out_arr, index_offsets,
+                   return_type, stencil_func, stencil_blocks)
+            dump_blocks(stencil_blocks)
+
         # run copy propagate to replace in_arr copies (e.g. a = A)
         in_arr_typ = self.typemap[in_arr.name]
         in_cps, out_cps = ir_utils.copy_propagate(stencil_blocks, self.typemap)
@@ -94,8 +105,12 @@ class StencilPass(object):
             None,                   # no extra data
             self.typemap,
             self.calltypes)
+        if config.DEBUG_ARRAY_OPT == 1:
+            dump_blocks(stencil_blocks)
         ir_utils.remove_dead(stencil_blocks, self.func_ir.arg_names,
                                                                 self.typemap)
+        if config.DEBUG_ARRAY_OPT == 1:
+            dump_blocks(stencil_blocks)
 
         # create parfor vars
         ndims = self.typemap[in_arr.name].ndim
@@ -301,7 +316,7 @@ class StencilPass(object):
 
         return start_lengths, end_lengths
 
-def get_stencil_blocks(sf, typingctx, args, scope, loc, in_arr, typemap,
+def get_stencil_blocks(sf, typingctx, args, scope, loc, input_dict, typemap,
                                                                     calltypes):
     """get typed IR from stencil bytecode
     """
@@ -345,6 +360,10 @@ def get_stencil_blocks(sf, typingctx, args, scope, loc, in_arr, typemap,
     max_label = max(stencil_blocks.keys())
     ir_utils._max_label = max_label
 
+    if config.DEBUG_ARRAY_OPT == 1:
+        print("Initial stencil_blocks")
+        dump_blocks(stencil_blocks)
+
     # rename variables,
     var_dict = {}
     for v, typ in tp.typemap.items():
@@ -352,6 +371,10 @@ def get_stencil_blocks(sf, typingctx, args, scope, loc, in_arr, typemap,
         var_dict[v] = new_var
         typemap[new_var.name] = typ  # add new var type for overall function
     ir_utils.replace_vars(stencil_blocks, var_dict)
+
+    if config.DEBUG_ARRAY_OPT == 1:
+        print("After replace_vars")
+        dump_blocks(stencil_blocks)
 
     # add call types to overall function
     for call, call_typ in tp.calltypes.items():
@@ -362,8 +385,12 @@ def get_stencil_blocks(sf, typingctx, args, scope, loc, in_arr, typemap,
     for block in stencil_blocks.values():
         for stmt in block.body:
             if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Arg):
-                stmt.value = in_arr
-                break
+                stmt.value = input_dict[stmt.value.name]
+
+    if config.DEBUG_ARRAY_OPT == 1:
+        print("After replace arg with arr")
+        dump_blocks(stencil_blocks)
+
     ir_utils.remove_dels(stencil_blocks)
     return stencil_blocks, sf.get_return_type(args)
 
