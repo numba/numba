@@ -15,6 +15,7 @@ import numpy as np
 
 import numba
 from numba import unittest_support as unittest
+from .support import TestCase
 from numba import njit, prange
 from numba import compiler, typing
 from numba.targets import cpu
@@ -39,7 +40,7 @@ _reason = 'parfors not supported'
 skip_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
 
 
-class TestParforsBase(unittest.TestCase):
+class TestParforsBase(TestCase):
     """
     Base class for testing parfors.
     Provides functions for compilation and three way comparison between
@@ -508,6 +509,12 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, A)
         A = np.random.randint(10, size=n).astype(np.int32)
         self.check(test_impl, A)
+        # test checking the number of arguments for the reduce function
+        def test_impl():
+            g = lambda x: x ** 2
+            return reduce(g, np.array([1, 2, 3, 4, 5]), 2)
+        with self.assertTypingError():
+            self.check(test_impl)
 
     @skip_unsupported
     def test_min(self):
@@ -936,7 +943,7 @@ class TestPrange(TestParforsBase):
             return b.sum()
         self.prange_tester(test_impl, 4)
 
-class TestParforsMisc(unittest.TestCase):
+class TestParforsMisc(TestCase):
     """
     Tests miscellaneous parts of ParallelAccelerator use.
     """
