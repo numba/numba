@@ -5,6 +5,7 @@
 
 import numpy as np
 from numba import compiler, types, ir_utils, ir, typing, numpy_support, utils
+from numba import config
 from numba.typing.templates import AbstractTemplate, signature
 from numba.targets import cpu
 
@@ -181,9 +182,12 @@ class StencilFunc(object):
     A special type to hold stencil information for the IR.
     """
 
-    def __init__(self, func, kernel_ir, mode, options):
+    id_counter = 0
+
+    def __init__(self, kernel_ir, mode, options):
         from numba import jit
-        self.func = func
+        self.id = type(self).id_counter
+        type(self).id_counter += 1
         self.kernel_ir = kernel_ir
         self.mode = mode
         self.options = options
@@ -201,10 +205,9 @@ class StencilFunc(object):
         self._lower_me = StencilFuncLowerer(self)
 
     def get_return_type(self, argtys):
-        kernel_ir = compiler.run_frontend(self.func)
         _, return_type, _ = compiler.type_inference_stage(
                 self._typingctx,
-                kernel_ir,
+                self.kernel_ir,
                 argtys,
                 None,
                 {})
@@ -219,7 +222,7 @@ class StencilFunc(object):
         jit() and njit()).
         """
         _ty_cls = type('StencilFuncTyping_' +
-                       str(hex(id(self.func)).replace("-", "_")),
+                       str(hex(self.id).replace("-", "_")),
                        (AbstractTemplate,),
                        dict(key=self, generic=self._type_me))
         typingctx.insert_user_function(self, _ty_cls)
@@ -284,7 +287,7 @@ class StencilFunc(object):
 
         stencil_func_name = "__numba_stencil_%s_%s" % (
                                         hex(id(the_array)).replace("-", "_"),
-                                        hex(id(self.func)).replace("-", "_"))
+                                        hex(self.id).replace("-", "_"))
 
         index_vars = []
         for i in range(the_array.ndim):
@@ -408,7 +411,7 @@ class StencilFunc(object):
                 rttype = numpy_support.from_dtype(rdtype)
                 result_type = types.npytypes.Array(rttype, result.ndim, 'C')
                 new_stencil_param_types = array_types + [result_type]
- 
+
         if config.DEBUG_ARRAY_OPT == 1:
             print("new_stencil_param_types", new_stencil_param_types)
             ir_utils.dump_blocks(stencil_ir.blocks)
@@ -426,7 +429,7 @@ class StencilFunc(object):
                 compiler.DEFAULT_FLAGS,
                 {})
             if sigret is not None:
-                self._cache.append((list(new_stencil_param_types), 
+                self._cache.append((list(new_stencil_param_types),
                                     new_stencil_func, sigret))
             return new_stencil_func
 
@@ -465,6 +468,6 @@ def _stencil(mode, options):
     def decorated(func):
         kernel_ir = compiler.run_frontend(func)
         ir_utils.remove_args(kernel_ir.blocks)
-        return StencilFunc(func, kernel_ir, mode, options)
+        return StencilFunc(kernel_ir, mode, options)
 
     return decorated
