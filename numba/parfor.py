@@ -829,10 +829,12 @@ class ParforPass(object):
         Convert a reduce() call to a parfor.
         The call arguments should be (func, array, init_value).
         """
+        from numba.inline_closurecall import check_reduce_func
         args = expr.args
         scope = lhs.scope
         loc = expr.loc
         reduce_func = get_definition(self.func_ir, args[0])
+        check_reduce_func(self.func_ir, reduce_func)
         in_arr = args[1]
         init_val = args[2]
         arr_typ = self.typemap[in_arr.name]
