@@ -1400,3 +1400,9 @@ def gen_np_call(func_as_str, func, lhs, args, typemap, calltypes):
     calltypes[np_call] = func_typ
     np_assign = ir.Assign(np_call, lhs, loc)
     return [g_np_assign, attr_assign, np_assign]
+
+def dump_blocks(blocks):
+    for label, block in blocks.items():
+        print(label, ":")
+        for stmt in block.body:
+            print("    ", stmt)
