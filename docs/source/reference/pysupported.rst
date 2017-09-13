@@ -144,7 +144,7 @@ is an example that produces a 2D Numpy array::
 
     from numba import jit
     import numpy as np
-    
+
     @jit(nopython=True)
     def f(n):
       return np.array([ [ x * y for x in range(n) ] for y in range(n) ])
@@ -382,6 +382,12 @@ The following functions from the :mod:`operator` module are supported:
 * :func:`operator.sub`
 * :func:`operator.truediv`
 * :func:`operator.xor`
+
+``functools``
+------------
+
+The :func:`functools.reduce` function is supported but the `initializer`
+argument is required.
 
 .. _pysupported-random:
 
