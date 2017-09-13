@@ -94,7 +94,9 @@ def add_indices_to_kernel(kernel, ndim, neighborhood):
                     acc_call = ir.Expr.binop('+', stmt.value.index,
                                              index_var, loc)
                     new_body.append(ir.Assign(acc_call, tmpvar, loc))
-                    new_body.append(ir.Assign(ir.Expr.getitem(stmt.value.value,tmpvar,loc),stmt.target,loc))
+                    new_body.append(ir.Assign(
+                                   ir.Expr.getitem(stmt.value.value,tmpvar,loc),
+                                   stmt.target,loc))
                 else:
                     index_vars = []
                     sum_results = []
@@ -133,7 +135,9 @@ def add_indices_to_kernel(kernel, ndim, neighborhood):
 
                     tuple_call = ir.Expr.build_tuple(ind_stencils, loc)
                     new_body.append(ir.Assign(tuple_call, s_index_var, loc))
-                    new_body.append(ir.Assign(ir.Expr.getitem(stmt.value.value,s_index_var,loc),stmt.target,loc))
+                    new_body.append(ir.Assign(
+                              ir.Expr.getitem(stmt.value.value,s_index_var,loc),
+                              stmt.target,loc))
             else:
                 new_body.append(stmt)
         block.body = new_body
@@ -192,9 +196,13 @@ class StencilFunc(object):
         self.kernel_ir = kernel_ir
         self.mode = mode
         self.options = options
-        def nfunc():
-            return None
+        # Find the typing and target contexts and force their initializaiton.
+        def nfunc(a):
+            return a[0,0]
         self._dispatcher = jit()(nfunc)
+        # Force initialization of the contexts by running nfunc.
+        a = np.ones((1,1))
+        self._dispatcher(a)
         self._typingctx = self._dispatcher.targetdescr.typing_context
         self._targetctx = self._dispatcher.targetdescr.target_context
         self._install_type(self._typingctx)
@@ -206,13 +214,18 @@ class StencilFunc(object):
         self._lower_me = StencilFuncLowerer(self)
 
     def get_return_type(self, argtys):
+        if config.DEBUG_ARRAY_OPT == 1:
+            print("get_return_type", argtys)
+            ir_utils.dump_blocks(self.kernel_ir.blocks)
+
         _, return_type, _ = compiler.type_inference_stage(
                 self._typingctx,
                 self.kernel_ir,
                 argtys,
                 None,
                 {})
-        real_ret = types.npytypes.Array(return_type, argtys[0].ndim, argtys[0].layout)
+        real_ret = types.npytypes.Array(return_type, argtys[0].ndim, 
+                                                     argtys[0].layout)
         return real_ret
 
     def _install_type(self, typingctx):
@@ -254,10 +267,10 @@ class StencilFunc(object):
         else:
             result = None
 
-        new_stencil_func = self._stencil_wrapper(result, sigret, *argtys)
-        self._lower_me.libs.append(new_stencil_func.library)
+        new_func = self._stencil_wrapper(result, sigret, return_type, *argtys)
+        self._lower_me.libs.append(new_func.library)
         self._targetctx.insert_func_defn([(self._lower_me, self, argtys)])
-        return new_stencil_func
+        return new_func
 
     def _type_me(self, argtys, kwtys):
         """
@@ -279,13 +292,18 @@ class StencilFunc(object):
 
         return find_res[2]
 
-    def _stencil_wrapper(self, result, sigret, *args):
+    def _stencil_wrapper(self, result, sigret, return_type, *args):
         # Copy the kernel so that our changes for this callsite
         # won't effect other callsites.
         kernel_copy = self.kernel_ir.copy()
         kernel_copy.blocks = copy.deepcopy(self.kernel_ir.blocks)
+        ir_utils.remove_args(kernel_copy.blocks)
 
         the_array = args[0]
+
+        if config.DEBUG_ARRAY_OPT == 1:
+            print("_stencil_wrapper", return_type, return_type.dtype, 
+                                      type(return_type.dtype), *args)
 
         stencil_func_name = "__numba_stencil_%s_%s" % (
                                         hex(id(the_array)).replace("-", "_"),
@@ -300,35 +318,35 @@ class StencilFunc(object):
                                             self.neighborhood)
         replace_return_with_setitem(kernel_copy.blocks, index_vars)
 
-        stencil_func_text = "def " + stencil_func_name + "("
+        func_text = "def " + stencil_func_name + "("
         if result is None:
-            stencil_func_text += ",".join(kernel_copy.arg_names) + "):\n"
+            func_text += ",".join(kernel_copy.arg_names) + "):\n"
         else:
-            stencil_func_text += ",".join(kernel_copy.arg_names) + ", out=None):\n"
-        stencil_func_text += "    full_shape = "
-        stencil_func_text += kernel_copy.arg_names[0] + ".shape\n"
+            func_text += ",".join(kernel_copy.arg_names) + ", out=None):\n"
+        func_text += "    full_shape = "
+        func_text += kernel_copy.arg_names[0] + ".shape\n"
         if result is None:
             if "cval" in self.options:
-                stencil_func_text += "    out = np.full(full_shape, " + str(self.options["cval"]) + ")\n"
+                func_text += "    out = np.full(full_shape, " + str(self.options["cval"]) + ", dtype=np." + str(return_type.dtype) + ")\n"
             else:
-                stencil_func_text += "    out = np.zeros(full_shape)\n"
+                func_text += "    out = np.zeros(full_shape, dtype=np." + str(return_type.dtype) + ")\n"
 
         offset = 1
         for i in range(the_array.ndim):
             stri = str(i)
             for j in range(offset):
-                stencil_func_text += "    "
-            stencil_func_text += "for " + index_vars[i] + " in range("
-            stencil_func_text += str(abs(kernel_size[i][0])) + ", full_shape["
-            stencil_func_text += stri + "] - " + str(kernel_size[i][1]) + "):\n"
+                func_text += "    "
+            func_text += "for " + index_vars[i] + " in range("
+            func_text += str(abs(kernel_size[i][0])) + ", full_shape["
+            func_text += stri + "] - " + str(kernel_size[i][1]) + "):\n"
             offset += 1
 
         for j in range(offset):
-            stencil_func_text += "    "
-        stencil_func_text += "__sentinel__ = 0\n"
-        stencil_func_text += "    return out\n"
+            func_text += "    "
+        func_text += "__sentinel__ = 0\n"
+        func_text += "    return out\n"
 
-        exec(stencil_func_text)
+        exec(func_text)
         stencil_func = eval(stencil_func_name)
         if sigret is not None:
             pysig = utils.pysignature(stencil_func)
@@ -395,24 +413,10 @@ class StencilFunc(object):
         stencil_ir.blocks = ir_utils.rename_labels(stencil_ir.blocks)
         ir_utils.remove_dels(stencil_ir.blocks)
 
-        if isinstance(the_array, types.Type):
-            array_npytype = the_array
-            array_types = args
-        else:
-            array_npytype = typing.typeof.typeof(the_array)
-            array_types = [typing.typeof.typeof(x) for x in args]
+        assert(isinstance(the_array, types.Type))
+        array_types = args
 
-        if result is None:
-            new_stencil_param_types = array_types
-        else:
-            if isinstance(result, types.Type):
-                new_stencil_param_types = list(array_types)
-            else:
-                rdtype = result.dtype
-                # Is 'C' correct here?
-                rttype = numpy_support.from_dtype(rdtype)
-                result_type = types.npytypes.Array(rttype, result.ndim, 'C')
-                new_stencil_param_types = array_types + [result_type]
+        new_stencil_param_types = list(array_types)
 
         if config.DEBUG_ARRAY_OPT == 1:
             print("new_stencil_param_types", new_stencil_param_types)
@@ -422,7 +426,7 @@ class StencilFunc(object):
         typingctx = typing.Context()
         targetctx = cpu.CPUContext(typingctx)
         with cpu_target.nested_context(typingctx, targetctx):
-            new_stencil_func = compiler.compile_ir(
+            new_func = compiler.compile_ir(
                 typingctx,
                 targetctx,
                 stencil_ir,
@@ -432,21 +436,33 @@ class StencilFunc(object):
                 {})
             if sigret is not None:
                 self._cache.append((list(new_stencil_param_types),
-                                    new_stencil_func, sigret))
-            return new_stencil_func
+                                    new_func, sigret))
+            return new_func
 
     def __call__(self, *args, **kwargs):
         if 'out' in kwargs:
             result = kwargs['out']
+            rdtype = result.dtype
+            # Is 'C' correct here?
+            rttype = numpy_support.from_dtype(rdtype)
+            result_type = types.npytypes.Array(rttype, result.ndim, 'C')
+            array_types = tuple([typing.typeof.typeof(x) for x in args])
+            array_types_full = tuple([typing.typeof.typeof(x) for x in args] + [result_type])
         else:
             result = None
+            array_types = tuple([typing.typeof.typeof(x) for x in args])
+            array_types_full = array_types
 
-        new_stencil_func = self._stencil_wrapper(result, None, *args)
+        if config.DEBUG_ARRAY_OPT == 1:
+            print("__call__", array_types, args, kwargs)
+
+        real_ret = self.get_return_type(array_types)
+        new_func = self._stencil_wrapper(result, None, real_ret, *array_types_full)
 
         if result is None:
-            return new_stencil_func.entry_point(*args)
+            return new_func.entry_point(*args)
         else:
-            return new_stencil_func.entry_point(*args, result)
+            return new_func.entry_point(*args, result)
 
 def stencil(func_or_mode='constant', **options):
     # called on function without specifying mode style
