@@ -103,7 +103,7 @@ class InlineClosureCallPass(object):
                                 self.func_ir.func_id.func.__globals__,
                                 stencil_def.code)
                             options = dict(expr.kws)
-                            sf = StencilFunc(None, kernel_ir, options)
+                            sf = StencilFunc(kernel_ir, 'constant', options)
                             instr.value = ir.Global('stencil', sf, expr.loc)
                             modified = True
 
