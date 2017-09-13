@@ -181,10 +181,11 @@ class StencilFunc(object):
     A special type to hold stencil information for the IR.
     """
 
-    def __init__(self, func, kernel_ir, options):
+    def __init__(self, func, kernel_ir, mode, options):
         from numba import jit
         self.func = func
         self.kernel_ir = kernel_ir
+        self.mode = mode
         self.options = options
         def nfunc():
             return None
@@ -224,14 +225,22 @@ class StencilFunc(object):
         typingctx.insert_user_function(self, _ty_cls)
 
     def find_in_cache(self, argtys, kwtys):
+        if config.DEBUG_ARRAY_OPT == 1:
+            print("find_in_cache", argtys, kwtys, self._cache)
         largs = list(argtys)
         if 'out' in kwtys:
             largs.append(kwtys['out'])
 
         for centry in self._cache:
             (centry_argtys, cres, sigret) = centry
+            if config.DEBUG_ARRAY_OPT == 1:
+                print("find_in_cache search", centry_argtys)
             if centry_argtys == largs:
+                if config.DEBUG_ARRAY_OPT == 1:
+                    print("find_in_cache match")
                 return centry
+        if config.DEBUG_ARRAY_OPT == 1:
+            print("find_in_cache NO match")
         return None
 
     def _compile_for_argtys(self, argtys, kwtys, return_type, sigret):
@@ -294,7 +303,10 @@ class StencilFunc(object):
         stencil_func_text += "    full_shape = "
         stencil_func_text += kernel_copy.arg_names[0] + ".shape\n"
         if result is None:
-            stencil_func_text += "    out = np.zeros(full_shape)\n"
+            if "cval" in self.options:
+                stencil_func_text += "    out = np.full(full_shape, " + str(self.options["cval"]) + ")\n"
+            else:
+                stencil_func_text += "    out = np.zeros(full_shape)\n"
 
         offset = 1
         for i in range(the_array.ndim):
@@ -396,6 +408,10 @@ class StencilFunc(object):
                 rttype = numpy_support.from_dtype(rdtype)
                 result_type = types.npytypes.Array(rttype, result.ndim, 'C')
                 new_stencil_param_types = array_types + [result_type]
+ 
+        if config.DEBUG_ARRAY_OPT == 1:
+            print("new_stencil_param_types", new_stencil_param_types)
+            ir_utils.dump_blocks(stencil_ir.blocks)
 
         from .targets.registry import cpu_target
         typingctx = typing.Context()
@@ -410,7 +426,8 @@ class StencilFunc(object):
                 compiler.DEFAULT_FLAGS,
                 {})
             if sigret is not None:
-                self._cache.append((new_stencil_param_types, new_stencil_func, sigret))
+                self._cache.append((list(new_stencil_param_types), 
+                                    new_stencil_func, sigret))
             return new_stencil_func
 
     def __call__(self, *args, **kwargs):
@@ -426,28 +443,28 @@ class StencilFunc(object):
         else:
             return new_stencil_func.entry_point(*args, result)
 
-def stencil(func_or_boundary='skip', **options):
-    # called on function without specifying boundary style
-    if not isinstance(func_or_boundary, str):
-        boundary = 'skip'  # default style
-        func = func_or_boundary
+def stencil(func_or_mode='constant', **options):
+    # called on function without specifying mode style
+    if not isinstance(func_or_mode, str):
+        mode = 'constant'  # default style
+        func = func_or_mode
     else:
-        assert isinstance(func_or_boundary, str), """stencil boundary should be
+        assert isinstance(func_or_mode, str), """stencil mode should be
                                                         a string"""
-        boundary = func_or_boundary
+        mode = func_or_mode
         func = None
-    wrapper = _stencil(boundary, options)
+    wrapper = _stencil(mode, options)
     if func is not None:
         return wrapper(func)
     return wrapper
 
-def _stencil(boundary, options):
-    if boundary != 'skip':
-        raise ValueError("Unsupported boundary style " + boundary)
+def _stencil(mode, options):
+    if mode != 'constant':
+        raise ValueError("Unsupported mode style " + mode)
 
     def decorated(func):
         kernel_ir = compiler.run_frontend(func)
         ir_utils.remove_args(kernel_ir.blocks)
-        return StencilFunc(func, kernel_ir, options)
+        return StencilFunc(func, kernel_ir, mode, options)
 
     return decorated
