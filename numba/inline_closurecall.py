@@ -59,9 +59,9 @@ class InlineClosureCallPass(object):
                             if (call_name == ('reduce', 'builtin')
                                     or call_name == ('reduce', 'functools')):
                                 if len(expr.args) != 3:
-                                    raise ValueError("invalid reduce call, \
-                                        three arguments including initial \
-                                        value required")
+                                    raise TypeError("invalid reduce call, "
+                                        "three arguments including initial "
+                                        "value required")
                                 check_reduce_func(self.func_ir, expr.args[0])
                                 def reduce_func(f, A, v):
                                     s = v
