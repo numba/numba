@@ -110,5 +110,31 @@ class TestStencils(unittest.TestCase):
         np.testing.assert_almost_equal(njit_res, py_output, decimal=1)
         np.testing.assert_almost_equal(par_res, py_output, decimal=1)
 
+    @skip_unsupported
+    @tag('important')
+    def test_stencil3(self):
+        @stencil(cval=1.0)
+        def stencil3_kernel(a):
+            return 0.25 * a[-2,2]
+
+        def test_seq(n):
+            A = np.arange(n**2).reshape((n, n))
+            B = stencil3_kernel(A)
+            return B
+
+        test_njit = njit(test_seq)
+        test_par = njit(test_seq, parallel=True)
+
+        n = 5
+        seq_res = test_seq(n)
+        njit_res = test_njit(n)
+        par_res = test_par(n)
+
+        print("seq_res", seq_res)
+        print("njit_res", njit_res)
+        self.assertTrue(seq_res[0,0] == 1.0 and seq_res[4,4] == 1.0)
+        self.assertTrue(njit_res[0,0] == 1.0 and njit_res[4,4] == 1.0)
+        self.assertTrue(par_res[0,0] == 1.0 and par_res[4,4] == 1.0)
+
 if __name__ == "__main__":
     unittest.main()
