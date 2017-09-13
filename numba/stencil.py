@@ -4,6 +4,7 @@
 #
 
 import numpy as np
+import copy
 from numba import compiler, types, ir_utils, ir, typing, numpy_support, utils
 from numba import config
 from numba.typing.templates import AbstractTemplate, signature
@@ -282,6 +283,7 @@ class StencilFunc(object):
         # Copy the kernel so that our changes for this callsite
         # won't effect other callsites.
         kernel_copy = self.kernel_ir.copy()
+        kernel_copy.blocks = copy.deepcopy(self.kernel_ir.blocks)
 
         the_array = args[0]
 
@@ -467,7 +469,6 @@ def _stencil(mode, options):
 
     def decorated(func):
         kernel_ir = compiler.run_frontend(func)
-        ir_utils.remove_args(kernel_ir.blocks)
         return StencilFunc(kernel_ir, mode, options)
 
     return decorated

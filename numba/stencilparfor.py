@@ -13,6 +13,7 @@ from numba.ir_utils import get_call_table, find_topo_order, mk_unique_var
 from operator import add
 import numpy as np
 import numbers
+import copy
 
 def stencil():
     pass
@@ -67,8 +68,8 @@ class StencilPass(object):
                     #fcode = fix_func_code(stmt.value.stencil_def.code,
                     #                    self.func_ir.func_id.func.__globals__)
                     stencil_blocks, rt = get_stencil_blocks(sf,
-                            self.typingctx, arg_typemap, 
-                            block.scope, block.loc, input_dict, 
+                            self.typingctx, arg_typemap,
+                            block.scope, block.loc, input_dict,
                             self.typemap, self.calltypes)
                     index_offsets = None
                     if 'index_offsets' in stmt.value._kws:
@@ -79,7 +80,7 @@ class StencilPass(object):
                     return self.run()
         return
 
-    def _mk_stencil_parfor(self, label, in_arr, out_arr, stencil_blocks, 
+    def _mk_stencil_parfor(self, label, in_arr, out_arr, stencil_blocks,
                            index_offsets, target, return_type, stencil_func):
         gen_nodes = []
 
@@ -182,7 +183,7 @@ class StencilPass(object):
             shape_name = ir_utils.mk_unique_var("in_arr_shape")
             shape_var = ir.Var(scope, shape_name, loc)
             shape_getattr = ir.Expr.getattr(in_arr, "shape", loc)
-            self.typemap[shape_name] = types.containers.UniTuple(types.intp, 
+            self.typemap[shape_name] = types.containers.UniTuple(types.intp,
                                                                in_arr_typ.ndim)
             init_block.body.extend([ir.Assign(shape_getattr, shape_var,loc)])
 
@@ -196,7 +197,7 @@ class StencilPass(object):
             so_name = ir_utils.mk_unique_var("stencil_output")
             out_arr = ir.Var(scope, so_name, loc)
             self.typemap[out_arr.name] = numba.types.npytypes.Array(
-                                                           return_type.dtype, 
+                                                           return_type.dtype,
                                                            in_arr_typ.ndim,
                                                            in_arr_typ.layout)
             stmts = ir_utils.gen_np_call("full",
@@ -222,7 +223,7 @@ class StencilPass(object):
         gen_nodes.append(ir.Assign(out_arr, target, loc))
         return gen_nodes
 
-    def _replace_stencil_accesses(self, stencil_blocks, parfor_vars, in_arr, 
+    def _replace_stencil_accesses(self, stencil_blocks, parfor_vars, in_arr,
                                   index_offsets, stencil_func):
         ndims = self.typemap[in_arr.name].ndim
         scope = in_arr.scope
@@ -319,10 +320,8 @@ def get_stencil_blocks(sf, typingctx, args, scope, loc, input_dict, typemap,
     from numba.targets.registry import cpu_target
     from numba.annotations import type_annotations
 
-    fcode = sf.func
-
     # get untyped IR
-    stencil_func_ir = numba.compiler.run_frontend(fcode)
+    stencil_func_ir = sf.kernel_ir
 
     # get typed IR with a dummy pipeline (similar to test_parfors.py)
     targetctx = CPUContext(typingctx)
@@ -348,8 +347,10 @@ def get_stencil_blocks(sf, typingctx, args, scope, loc, input_dict, typemap,
         numba.rewrites.rewrite_registry.apply(
             'after-inference', tp, tp.func_ir)
 
+    # copy the IR nodes to avoid changing IR in the StencilFunc object
+    stencil_blocks = copy.deepcopy(stencil_func_ir.blocks)
     # make block labels unique
-    stencil_blocks = ir_utils.add_offset_to_labels(stencil_func_ir.blocks,
+    stencil_blocks = ir_utils.add_offset_to_labels(stencil_blocks,
                                                         ir_utils.next_label())
     min_label = min(stencil_blocks.keys())
     max_label = max(stencil_blocks.keys())
@@ -381,7 +382,7 @@ def get_stencil_blocks(sf, typingctx, args, scope, loc, input_dict, typemap,
         for stmt in block.body:
             if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Arg):
                 if config.DEBUG_ARRAY_OPT == 1:
-                    print("input_dict", input_dict, stmt.value.index, 
+                    print("input_dict", input_dict, stmt.value.index,
                                stmt.value.name, stmt.value.index in input_dict)
                 stmt.value = input_dict[stmt.value.index]
 
