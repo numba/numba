@@ -58,9 +58,11 @@ class InlineClosureCallPass(object):
                             call_name = guard(find_callname, self.func_ir, expr)
                             if (call_name == ('reduce', 'builtin')
                                     or call_name == ('reduce', 'functools')):
-                                assert len(expr.args) == 3, """invalid reduce
-                                    call, three arguments including initial
-                                    value required"""
+                                if len(expr.args) != 3:
+                                    raise ValueError("invalid reduce call, \
+                                        three arguments including initial \
+                                        value required")
+                                self._check_reduce_func(expr.args[0])
                                 def reduce_func(f, A, v):
                                     s = v
                                     it = iter(A)
@@ -115,6 +117,21 @@ class InlineClosureCallPass(object):
                 pass
             self.func_ir.blocks = rename_labels(self.func_ir.blocks)
         debug_print("END")
+
+    def _check_reduce_func(self, func_var):
+        reduce_func = guard(get_definition, self.func_ir, func_var)
+        if reduce_func is None:
+            raise ValueError("Reduce function cannot be found for njit \
+                                analysis")
+        if not (hasattr(reduce_func, 'code')
+                or hasattr(reduce_func, '__code__')):
+            raise ValueError("Invalid reduction function")
+        f_code = (reduce_func.code if hasattr(reduce_func, 'code')
+                                        else reduce_func.__code__)
+        if not f_code.co_argcount == 2:
+            raise TypeError("Reduction function should take 2 arguments")
+        return
+
 
 def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
                         arg_typs=None, typemap=None, calltypes=None):
