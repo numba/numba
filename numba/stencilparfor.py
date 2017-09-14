@@ -55,7 +55,7 @@ class StencilPass(object):
                         and stmt.value.func.name in stencil_calls):
                     kws = dict(stmt.value.kws)
                     input_dict = {i: stmt.value.args[i] for i in range(len(stmt.value.args))}
-                    in_arr = stmt.value.args[0]
+                    in_args = stmt.value.args
                     arg_typemap = tuple(self.typemap[i.name] for i in stmt.value.args)
                     if 'out' in kws:
                         out_arr = kws['out']
@@ -74,22 +74,23 @@ class StencilPass(object):
                     index_offsets = None
                     if 'index_offsets' in stmt.value._kws:
                         index_offsets = stmt.value.index_offsets
-                    gen_nodes = self._mk_stencil_parfor(label, in_arr, out_arr,
+                    gen_nodes = self._mk_stencil_parfor(label, in_args, out_arr,
                             stencil_blocks, index_offsets, stmt.target, rt, sf)
                     block.body = block.body[:i] + gen_nodes + block.body[i+1:]
                     return self.run()
         return
 
-    def _mk_stencil_parfor(self, label, in_arr, out_arr, stencil_blocks,
+    def _mk_stencil_parfor(self, label, in_args, out_arr, stencil_blocks,
                            index_offsets, target, return_type, stencil_func):
         gen_nodes = []
 
         if config.DEBUG_ARRAY_OPT == 1:
-            print("_mk_stencil_parfor", label, in_arr, out_arr, index_offsets,
+            print("_mk_stencil_parfor", label, in_args, out_arr, index_offsets,
                    return_type, stencil_func, stencil_blocks)
             ir_utils.dump_blocks(stencil_blocks)
 
-        # run copy propagate to replace in_arr copies (e.g. a = A)
+        in_arr = in_args[0]
+        # run copy propagate to replace in_args copies (e.g. a = A)
         in_arr_typ = self.typemap[in_arr.name]
         in_cps, out_cps = ir_utils.copy_propagate(stencil_blocks, self.typemap)
         name_var_table = ir_utils.get_name_var_table(stencil_blocks)
@@ -120,7 +121,7 @@ class StencilPass(object):
             parfor_vars.append(parfor_var)
 
         start_lengths, end_lengths = self._replace_stencil_accesses(
-             stencil_blocks, parfor_vars, in_arr, index_offsets, stencil_func)
+             stencil_blocks, parfor_vars, in_args, index_offsets, stencil_func)
 
         # create parfor loop nests
         loopnests = []
@@ -226,8 +227,11 @@ class StencilPass(object):
         gen_nodes.append(ir.Assign(out_arr, target, loc))
         return gen_nodes
 
-    def _replace_stencil_accesses(self, stencil_blocks, parfor_vars, in_arr,
+    def _replace_stencil_accesses(self, stencil_blocks, parfor_vars, in_args,
                                   index_offsets, stencil_func):
+        in_arr = in_args[0]
+        in_arg_names = [x.name for x in in_args]
+
         ndims = self.typemap[in_arr.name].ndim
         scope = in_arr.scope
         loc = in_arr.loc
@@ -250,7 +254,7 @@ class StencilPass(object):
                         and isinstance(stmt.value, ir.Expr)
                         and (stmt.value.op == 'static_getitem' or
                              stmt.value.op == 'getitem')
-                        and stmt.value.value.name == in_arr.name):
+                        and stmt.value.value.name in in_arg_names):
                     index_list = stmt.value.index
                     # handle 1D case
                     if ndims == 1:
@@ -303,10 +307,10 @@ class StencilPass(object):
                         new_body.append(tuple_assign)
 
                     # new getitem with the new index var
-                    getitem_call = ir.Expr.getitem(in_arr, ind_var, loc)
+                    getitem_call = ir.Expr.getitem(stmt.value.value, ind_var, loc)
                     self.calltypes[getitem_call] = signature(
-                        self.typemap[in_arr.name].dtype,
-                        self.typemap[in_arr.name],
+                        self.typemap[stmt.value.value.name].dtype,
+                        self.typemap[stmt.value.value.name],
                         self.typemap[ind_var.name])
                     stmt.value = getitem_call
 
