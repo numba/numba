@@ -743,6 +743,7 @@ class ArrayAnalysis(object):
         typ = self.typemap[var.name]
         if isinstance(typ, types.BaseTuple):
             require(len(typ) == expr.count)
+            require(equiv_set.has_shape(var))
             return var, []
         return None
 
