@@ -212,6 +212,8 @@ class StencilFunc(object):
         # stencils only supported for CPU context currently
         self._typingctx = registry.cpu_target.typing_context
         self._targetctx = registry.cpu_target.target_context
+        self._typingctx.refresh()
+        self._targetctx.refresh()
         self._install_type(self._typingctx)
         if "neighborhood" in self.options:
             self.neighborhood = self.options["neighborhood"]
@@ -444,22 +446,18 @@ class StencilFunc(object):
             print("new_stencil_param_types", new_stencil_param_types)
             ir_utils.dump_blocks(stencil_ir.blocks)
 
-        from .targets.registry import cpu_target
-        typingctx = typing.Context()
-        targetctx = cpu.CPUContext(typingctx)
-        with cpu_target.nested_context(typingctx, targetctx):
-            new_func = compiler.compile_ir(
-                typingctx,
-                targetctx,
-                stencil_ir,
-                new_stencil_param_types,
-                None,
-                compiler.DEFAULT_FLAGS,
-                {})
-            if sigret is not None:
-                self._cache.append((list(new_stencil_param_types),
-                                    new_func, sigret))
-            return new_func
+        new_func = compiler.compile_ir(
+            self._typingctx,
+            self._targetctx,
+            stencil_ir,
+            new_stencil_param_types,
+            None,
+            compiler.DEFAULT_FLAGS,
+            {})
+        if sigret is not None:
+            self._cache.append((list(new_stencil_param_types),
+                                new_func, sigret))
+        return new_func
 
     def __call__(self, *args, **kwargs):
         if 'out' in kwargs:
