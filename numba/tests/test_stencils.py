@@ -11,7 +11,8 @@ import numpy as np
 import numba
 from numba import unittest_support as unittest
 from numba import njit, stencil, types
-from numba.compiler import compile_isolated, Flags
+from numba.compiler import compile_extra, Flags
+from numba.targets import registry
 from .support import tag
 
 # for decorating tests, marking that Windows with Python 2.7 is not supported
@@ -50,7 +51,9 @@ class TestStencils(unittest.TestCase):
         super(TestStencils, self).__init__(*args)
 
     def _compile_this(self, func, sig, flags):
-        return compile_isolated(func, sig, flags=flags)
+        return compile_extra(registry.cpu_target.typing_context,
+                registry.cpu_target.target_context, func, sig, None,
+                         flags, {})
 
     def compile_parallel(self, func, sig):
         return self._compile_this(func, sig, flags=self.pflags)
