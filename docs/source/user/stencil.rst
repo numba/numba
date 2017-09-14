@@ -48,9 +48,10 @@ kernel corresponds to ``a[x-1,y+1]`` in the input array.
 
 Depending on the specified kernel, the kernel cannot be applied to the
 borders of the output image as this may cause the input array to be
-accessed out-of-bounds.  The stencil decorator detects when it is
-unsafe to execute the kernel along the borders of the array and sets
-those elements of the output array to zero.
+accessed out-of-bounds.  How the stencil decorator handles this situation
+is dependent upon which :ref:`stencil-mode` is selected.  
+The default mode is for the stencil decorator to set the border elements 
+of the output array to zero.
 
 To invoke a stencil on an input array, call the stencil as if it were
 a regular function and pass the input array as the argument::
@@ -86,6 +87,17 @@ a regular function and pass the input array as the argument::
 Note that the stencil decorator has determined that the output type
 of the specified stencil kernel is ``float`` and has thus created the
 output array as ``float`` while the input array is of type ``int``.
+
+Stencil Parameters
+==================
+
+Stencil kernel definitions may take any number of arguments with
+the following provisions.  The first parameter must be an array.
+The size and shape of the output array will be the same as the
+first parameter.  Additional parameters may either be scalars or
+arrays.  For array parameters, those arrays must be at least as large
+as the first array in each dimension.  Array indexing is relative for
+all such input array parameters.
 
 .. _stencil-kernel-shape-inference:
 
@@ -146,6 +158,26 @@ maximum index offsets used in the corresponding dimension.
 If a user specifies a neighborhood but then in the kernel 
 accesses elements outside the specified neighborhood, the behavior
 is undefined.
+
+.. _stencil-mode:
+
+``mode``
+--------
+
+The optional mode parameter controls how the border of the output array
+is handled.  Currently, there is only one supported value, ``"constant"``.
+In ``constant`` mode, the stencil kernel is not applied in cases where
+the kernel would access elements outside the valid range of the input
+array.  In such cases, those elements in the output array are assigned
+to a constant value, as specified by the ``cval`` parameter.
+
+``cval``
+--------
+
+The optional cval parameter defaults to zero but can be set to any
+desired value, which is then used for the border of the output array
+if the mode parameter is set to ``constant``.  The cval parameter is 
+ignored in all other modes.
 
 Stencil invocation options
 ==========================
