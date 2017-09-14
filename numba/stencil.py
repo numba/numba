@@ -8,7 +8,7 @@ import copy
 from numba import compiler, types, ir_utils, ir, typing, numpy_support, utils
 from numba import config
 from numba.typing.templates import AbstractTemplate, signature
-from numba.targets import cpu
+from numba.targets import cpu, registry
 
 def replace_return_with_setitem(blocks, index_vars):
     """
@@ -208,15 +208,10 @@ class StencilFunc(object):
         self.kernel_ir = kernel_ir
         self.mode = mode
         self.options = options
-        # Find the typing and target contexts and force their initializaiton.
-        def nfunc(a):
-            return a[0,0]
-        self._dispatcher = jit()(nfunc)
-        # Force initialization of the contexts by running nfunc.
-        a = np.ones((1,1))
-        self._dispatcher(a)
-        self._typingctx = self._dispatcher.targetdescr.typing_context
-        self._targetctx = self._dispatcher.targetdescr.target_context
+
+        # stencils only supported for CPU context currently
+        self._typingctx = registry.cpu_target.typing_context
+        self._targetctx = registry.cpu_target.target_context
         self._install_type(self._typingctx)
         if "neighborhood" in self.options:
             self.neighborhood = self.options["neighborhood"]
@@ -236,7 +231,7 @@ class StencilFunc(object):
                 argtys,
                 None,
                 {})
-        real_ret = types.npytypes.Array(return_type, argtys[0].ndim, 
+        real_ret = types.npytypes.Array(return_type, argtys[0].ndim,
                                                      argtys[0].layout)
         return real_ret
 
@@ -314,7 +309,7 @@ class StencilFunc(object):
         the_array = args[0]
 
         if config.DEBUG_ARRAY_OPT == 1:
-            print("_stencil_wrapper", return_type, return_type.dtype, 
+            print("_stencil_wrapper", return_type, return_type.dtype,
                                       type(return_type.dtype), *args)
             ir_utils.dump_blocks(kernel_copy.blocks)
 
