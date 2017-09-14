@@ -30,6 +30,8 @@ UNKNOWN_CLASS = -1
 CONST_CLASS = 0
 MAP_TYPES = [numpy.ufunc]
 
+array_analysis_extensions = {}
+
 # declaring call classes
 array_creation = ['empty', 'zeros', 'ones', 'full']
 
@@ -721,6 +723,11 @@ class ArrayAnalysis(object):
                         self.pruned_predecessors[pruned_br].append(label)
                     else:
                         self.pruned_predecessors[pruned_br] = [label]
+
+        elif type(inst) in array_analysis_extensions:
+            # let external calls handle stmt if type matches
+            f = array_analysis_extensions[type(inst)]
+            pre, post = f(inst, equiv_set, self.typemap, self)
 
         return pre, post
 
