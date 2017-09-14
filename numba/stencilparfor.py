@@ -185,14 +185,17 @@ class StencilPass(object):
             shape_getattr = ir.Expr.getattr(in_arr, "shape", loc)
             self.typemap[shape_name] = types.containers.UniTuple(types.intp,
                                                                in_arr_typ.ndim)
-            init_block.body.extend([ir.Assign(shape_getattr, shape_var,loc)])
+            init_block.body.extend([ir.Assign(shape_getattr, shape_var, loc)])
 
             zero_name = ir_utils.mk_unique_var("zero_val")
             zero_var = ir.Var(scope, zero_name, loc)
-            temp2 = return_type.dtype(0)
+            if "cval" in stencil_func.options:
+                temp2 = return_type.dtype(stencil_func.options["cval"])
+            else:
+                temp2 = return_type.dtype(0)
             full_const = ir.Const(temp2, loc)
             self.typemap[zero_name] = return_type.dtype
-            init_block.body.extend([ir.Assign(full_const, zero_var,loc)])
+            init_block.body.extend([ir.Assign(full_const, zero_var, loc)])
 
             so_name = ir_utils.mk_unique_var("stencil_output")
             out_arr = ir.Var(scope, so_name, loc)
