@@ -57,6 +57,10 @@ def add_indices_to_kernel(kernel, ndim, neighborhood):
     const_dict = {}
     kernel_consts = []
 
+    if config.DEBUG_ARRAY_OPT == 1:
+        print("add_indices_to_kernel", ndim, neighborhood)
+        ir_utils.dump_blocks(kernel.blocks)
+
     need_to_calc_kernel = False
     if neighborhood is None:
         need_to_calc_kernel = True
@@ -67,19 +71,27 @@ def add_indices_to_kernel(kernel, ndim, neighborhood):
         new_body = []
         for stmt in block.body:
             if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Const):
+                if config.DEBUG_ARRAY_OPT == 1:
+                    print("remembering in const_dict", stmt.target.name, stmt.value.value)
                 # Remember consts for use later.
                 const_dict[stmt.target.name] = stmt.value.value
             if (isinstance(stmt, ir.Assign) and
                 isinstance(stmt.value, ir.Expr) and
-                stmt.value.op == 'getitem' and
+                stmt.value.op in ['getitem', 'static_getitem'] and
                 stmt.value.value.name in kernel.arg_names):
+                if config.DEBUG_ARRAY_OPT == 1:
+                    print("found getitem to modify")
                 # We found a getitem from the input array.
-                rhs = stmt.value
+                if stmt.value.op == 'getitem':
+                    stmt_index_var = stmt.value.index
+                else:
+                    stmt_index_var = stmt.value.index_var
+
                 # Store the index used after looking up the variable in
                 # the const dictionary.
                 if need_to_calc_kernel:
-                    if rhs.index.name in const_dict:
-                        kernel_consts += [const_dict[rhs.index.name]]
+                    if stmt_index_var.name in const_dict:
+                        kernel_consts += [const_dict[stmt_index_var.name]]
                     else:
                         raise ValueError("Non-constant specified for stencil kernel index.")
 
@@ -91,7 +103,7 @@ def add_indices_to_kernel(kernel, ndim, neighborhood):
                     index_var = ir.Var(scope, "index0", loc)
                     tmpname = ir_utils.mk_unique_var("stencil_index")
                     tmpvar  = ir.Var(scope, tmpname, loc)
-                    acc_call = ir.Expr.binop('+', stmt.value.index,
+                    acc_call = ir.Expr.binop('+', stmt_index_var,
                                              index_var, loc)
                     new_body.append(ir.Assign(acc_call, tmpvar, loc))
                     new_body.append(ir.Assign(
@@ -126,7 +138,7 @@ def add_indices_to_kernel(kernel, ndim, neighborhood):
                         ind_stencils += [tmpvar]
                         getitemname = ir_utils.mk_unique_var("getitem")
                         getitemvar  = ir.Var(scope, getitemname, loc)
-                        getitemcall = ir.Expr.getitem(stmt.value.index,
+                        getitemcall = ir.Expr.getitem(stmt_index_var,
                                                    const_index_vars[dim], loc)
                         new_body.append(ir.Assign(getitemcall, getitemvar, loc))
                         acc_call = ir.Expr.binop('+', getitemvar,
@@ -304,6 +316,7 @@ class StencilFunc(object):
         if config.DEBUG_ARRAY_OPT == 1:
             print("_stencil_wrapper", return_type, return_type.dtype, 
                                       type(return_type.dtype), *args)
+            ir_utils.dump_blocks(kernel_copy.blocks)
 
         stencil_func_name = "__numba_stencil_%s_%s" % (
                                         hex(id(the_array)).replace("-", "_"),
@@ -316,6 +329,10 @@ class StencilFunc(object):
 
         kernel_size = add_indices_to_kernel(kernel_copy, the_array.ndim,
                                             self.neighborhood)
+        if config.DEBUG_ARRAY_OPT == 1:
+            print("after add indices")
+            ir_utils.dump_blocks(kernel_copy.blocks)
+
         replace_return_with_setitem(kernel_copy.blocks, index_vars)
 
         func_text = "def " + stencil_func_name + "("
@@ -346,6 +363,10 @@ class StencilFunc(object):
         func_text += "__sentinel__ = 0\n"
         func_text += "    return out\n"
 
+        if config.DEBUG_ARRAY_OPT == 1:
+            print("new stencil func text")
+            print(func_text)
+
         exec(func_text)
         stencil_func = eval(stencil_func_name)
         if sigret is not None:
@@ -370,6 +391,12 @@ class StencilFunc(object):
         kernel_copy.blocks = ir_utils.add_offset_to_labels(
                                 kernel_copy.blocks, stencil_stub_last_label)
         new_label = max(kernel_copy.blocks.keys()) + 1
+
+        if config.DEBUG_ARRAY_OPT == 1:
+            print("before replace sentinel stencil_ir")
+            ir_utils.dump_blocks(stencil_ir.blocks)
+            print("before replace sentinel kernel_copy")
+            ir_utils.dump_blocks(kernel_copy.blocks)
 
         # Search all the block in the stencil outline for the sentinel.
         for label, block in stencil_ir.blocks.items():
