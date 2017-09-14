@@ -37,6 +37,11 @@ def stencil2_kernel(a):
 def stencil3_kernel(a):
     return 0.25 * a[-2,2]
 
+@stencil
+def stencil_multiple_input_kernel(a, b):
+    return 0.25 * (a[0,1] + a[1,0] + a[0,-1] + a[-1,0] +
+                   b[0,1] + b[1,0] + b[0,-1] + b[-1,0])
+
 class TestStencils(unittest.TestCase):
 
     def __init__(self, *args):
@@ -161,6 +166,30 @@ class TestStencils(unittest.TestCase):
         self.assertTrue(seq_res[0,0] == 1.0 and seq_res[4,4] == 1.0)
         self.assertTrue(njit_res[0,0] == 1.0 and njit_res[4,4] == 1.0)
         self.assertTrue(par_res[0,0] == 1.0 and par_res[4,4] == 1.0)
+
+    @skip_unsupported
+    @tag('important')
+    def test_stencil_multiple_inputs(self):
+        """Tests whether multiple inputs of the same size work.
+        """
+        def test_seq(n):
+            A = np.arange(n**2).reshape((n, n))
+            B = np.arange(n**2).reshape((n, n))
+            C = stencil_multiple_input_kernel(A,B)
+            return C
+
+        def test_impl_seq(n):
+            A = np.arange(n**2).reshape((n, n))
+            B = np.arange(n**2).reshape((n, n))
+            C = np.zeros(n**2).reshape((n, n))
+            for i in range(1, n-1):
+                for j in range(1, n-1):
+                    C[i,j] = 0.25 * (A[i,j+1] + A[i+1,j] + A[i,j-1] + A[i-1,j] +
+                                     B[i,j+1] + B[i+1,j] + B[i,j-1] + B[i-1,j])
+            return C
+
+        n = 3
+        self.check(test_impl_seq, test_seq, n)
 
     @skip_unsupported
     @tag('important')
