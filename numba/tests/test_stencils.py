@@ -90,7 +90,8 @@ class TestStencils(unittest.TestCase):
     @skip_unsupported
     @tag('important')
     def test_stencil1(self):
-
+        """Tests whether the optional out argument to stencil calls works.
+        """
         def test_with_out(n):
             A = np.arange(n**2).reshape((n, n))
             B = np.zeros(n**2).reshape((n, n))
@@ -117,6 +118,9 @@ class TestStencils(unittest.TestCase):
     @skip_unsupported
     @tag('important')
     def test_stencil2(self):
+        """Tests whether the optional neighborhood argument to the stencil
+        decorate works.
+        """
         def test_seq(n):
             A = np.arange(n)
             B = stencil2_kernel(A)
@@ -135,6 +139,9 @@ class TestStencils(unittest.TestCase):
     @skip_unsupported
     @tag('important')
     def test_stencil3(self):
+        """Tests whether a non-zero optional cval argument to the stencil
+        decorator works.  Also tests integer result type.
+        """
         def test_seq(n):
             A = np.arange(n**2).reshape((n, n))
             B = stencil3_kernel(A)
@@ -148,8 +155,6 @@ class TestStencils(unittest.TestCase):
         njit_res = test_njit(n)
         par_res = test_par(n)
 
-        #print("seq_res", seq_res)
-        #print("njit_res", njit_res)
         self.assertTrue(seq_res[0,0] == 1.0 and seq_res[4,4] == 1.0)
         self.assertTrue(njit_res[0,0] == 1.0 and njit_res[4,4] == 1.0)
         self.assertTrue(par_res[0,0] == 1.0 and par_res[4,4] == 1.0)
@@ -157,6 +162,8 @@ class TestStencils(unittest.TestCase):
     @skip_unsupported
     @tag('important')
     def test_stencil_call(self):
+        """Tests 2D numba.stencil calls.
+        """
         def test_impl1(n):
             A = np.arange(n**2).reshape((n, n))
             B = np.zeros(n**2).reshape((n, n))
@@ -187,6 +194,8 @@ class TestStencils(unittest.TestCase):
     @skip_unsupported
     @tag('important')
     def test_stencil_call_1D(self):
+        """Tests 1D numba.stencil calls.
+        """
         def test_impl(n):
             A = np.arange(n)
             B = np.zeros(n)
