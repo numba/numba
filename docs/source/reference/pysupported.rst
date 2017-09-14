@@ -384,7 +384,7 @@ The following functions from the :mod:`operator` module are supported:
 * :func:`operator.xor`
 
 ``functools``
-------------
+-------------
 
 The :func:`functools.reduce` function is supported but the `initializer`
 argument is required.
