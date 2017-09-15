@@ -227,6 +227,7 @@ class TestParfors(TestParforsBase):
             Y = np.zeros((10, 12))
             return np.sum(X + Y)
         self.check(test_impl)
+        self.assertTrue(countParfors(test_impl, ()) == 1)
 
     @skip_unsupported
     @tag('important')
@@ -237,6 +238,7 @@ class TestParfors(TestParforsBase):
             return 4 * np.sum(x**2 + y**2 < 1) / n
 
         self.check(test_impl, 100000, decimal=1)
+        self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
 
     @skip_unsupported
     @tag('important')
@@ -430,6 +432,17 @@ class TestParfors(TestParforsBase):
         self.assertIn(msg, str(raises.exception))
 
     @skip_unsupported
+    def test_random_parfor(self):
+        """
+        Test function with only a random call to make sure a random function
+        like ranf is actually translated to a parfor.
+        """
+        def test_impl(n):
+            A = np.random.ranf((n, n))
+            return A
+        self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
+
+    @skip_unsupported
     def test_randoms(self):
         def test_impl(n):
             A = np.random.standard_normal(size=(n, n))
@@ -446,7 +459,7 @@ class TestParfors(TestParforsBase):
         py_output = test_impl(n)
         # check results within 5% since random numbers generated in parallel
         np.testing.assert_allclose(parfor_output, py_output, rtol=0.05)
-        self.assertIn('@do_scheduling', cpfunc.library.get_llvm_str())
+        self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
 
     @skip_unsupported
     def test_cfg(self):
