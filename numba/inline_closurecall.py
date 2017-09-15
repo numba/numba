@@ -1,5 +1,4 @@
 from numba import config, ir, ir_utils, utils, prange
-import types
 from numba.ir_utils import (
     mk_unique_var,
     next_label,
@@ -14,13 +13,13 @@ from numba.ir_utils import (
     require,
     guard,
     get_definition,
-    find_callname
+    find_callname,
+    get_ir_of_code
     )
 
 from numba.analysis import compute_cfg_from_blocks
 from numba.targets.rangeobj import range_iter_len
 from numba.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
-import numba.types as nbtypes
 import numpy as np
 
 """
@@ -54,10 +53,36 @@ class InlineClosureCallPass(object):
                     lhs = instr.target
                     expr = instr.value
                     if isinstance(expr, ir.Expr) and expr.op == 'call':
+                        # inline reduce() when parallel is off
+                        if not self.flags.auto_parallel:
+                            call_name = guard(find_callname, self.func_ir, expr)
+                            if (call_name == ('reduce', 'builtin')
+                                    or call_name == ('reduce', 'functools')):
+                                if len(expr.args) != 3:
+                                    raise TypeError("invalid reduce call, "
+                                        "three arguments including initial "
+                                        "value required")
+                                check_reduce_func(self.func_ir, expr.args[0])
+                                def reduce_func(f, A, v):
+                                    s = v
+                                    it = iter(A)
+                                    for a in it:
+                                        s = f(s, a)
+                                    return s
+                                new_blocks = inline_closure_call(self.func_ir,
+                                        self.func_ir.func_id.func.__globals__,
+                                        block, i, reduce_func)
+                                for block in new_blocks:
+                                    work_list.append(block)
+                                modified = True
+                                # current block is modified, skip the rest
+                                break
                         func_def = guard(get_definition, self.func_ir, expr.func)
                         debug_print("found call to ", expr.func, " def = ", func_def)
                         if isinstance(func_def, ir.Expr) and func_def.op == "make_function":
-                            new_blocks = self.inline_closure_call(block, i, func_def)
+                            new_blocks = inline_closure_call(self.func_ir,
+                                        self.func_ir.func_id.func.__globals__,
+                                        block, i, func_def)
                             for block in new_blocks:
                                 work_list.append(block)
                             modified = True
@@ -93,147 +118,143 @@ class InlineClosureCallPass(object):
             self.func_ir.blocks = rename_labels(self.func_ir.blocks)
         debug_print("END")
 
-    def inline_closure_call(self, block, i, callee):
-        """Inline the body of `callee` at its callsite (`i`-th instruction of `block`)
-        """
-        scope = block.scope
-        instr = block.body[i]
-        call_expr = instr.value
-        debug_print = _make_debug_print("inline_closure_call")
-        debug_print("Found closure call: ", instr, " with callee = ", callee)
-        func_ir = self.func_ir
-        # first, get the IR of the callee
-        callee_ir = self.get_ir_of_code(callee.code)
-        callee_blocks = callee_ir.blocks
+def check_reduce_func(func_ir, func_var):
+    reduce_func = guard(get_definition, func_ir, func_var)
+    if reduce_func is None:
+        raise ValueError("Reduce function cannot be found for njit \
+                            analysis")
+    if not (hasattr(reduce_func, 'code')
+            or hasattr(reduce_func, '__code__')):
+        raise ValueError("Invalid reduction function")
+    f_code = (reduce_func.code if hasattr(reduce_func, 'code')
+                                    else reduce_func.__code__)
+    if not f_code.co_argcount == 2:
+        raise TypeError("Reduction function should take 2 arguments")
+    return
 
-        # 1. relabel callee_ir by adding an offset
-        max_label = max(func_ir.blocks.keys())
-        callee_blocks = add_offset_to_labels(callee_blocks, max_label + 1)
-        callee_ir.blocks = callee_blocks
-        min_label = min(callee_blocks.keys())
-        max_label = max(callee_blocks.keys())
-        #    reset globals in ir_utils before we use it
-        ir_utils._max_label = max_label
-        debug_print("After relabel")
+
+def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
+                        arg_typs=None, typemap=None, calltypes=None):
+    """Inline the body of `callee` at its callsite (`i`-th instruction of `block`)
+
+    `func_ir` is the func_ir object of the caller function and `glbls` is its
+    global variable environment (func_ir.func_id.func.__globals__).
+    `block` is the IR block of the callsite and `i` is the index of the
+    callsite's node. `callee` is either the called function or a
+    make_function node. `typingctx`, `typemap` and `calltypes` are typing
+    data structures of the caller, available if we are in a typed pass.
+    `arg_typs` includes the types of the arguments at the callsite.
+    """
+    scope = block.scope
+    instr = block.body[i]
+    call_expr = instr.value
+    debug_print = _make_debug_print("inline_closure_call")
+    debug_print("Found closure call: ", instr, " with callee = ", callee)
+    # support both function object and make_function Expr
+    callee_code = callee.code if hasattr(callee, 'code') else callee.__code__
+    callee_defaults = callee.defaults if hasattr(callee, 'defaults') else callee.__defaults__
+    callee_closure = callee.closure if hasattr(callee, 'closure') else callee.__closure__
+    # first, get the IR of the callee
+    callee_ir = get_ir_of_code(glbls, callee_code)
+    callee_blocks = callee_ir.blocks
+
+    # 1. relabel callee_ir by adding an offset
+    max_label = max(func_ir.blocks.keys())
+    callee_blocks = add_offset_to_labels(callee_blocks, max_label + 1)
+    callee_ir.blocks = callee_blocks
+    min_label = min(callee_blocks.keys())
+    max_label = max(callee_blocks.keys())
+    #    reset globals in ir_utils before we use it
+    ir_utils._max_label = max_label
+    debug_print("After relabel")
+    _debug_dump(callee_ir)
+
+    # 2. rename all local variables in callee_ir with new locals created in func_ir
+    callee_scopes = _get_all_scopes(callee_blocks)
+    debug_print("callee_scopes = ", callee_scopes)
+    #    one function should only have one local scope
+    assert(len(callee_scopes) == 1)
+    callee_scope = callee_scopes[0]
+    var_dict = {}
+    for var in callee_scope.localvars._con.values():
+        if not (var.name in callee_code.co_freevars):
+            new_var = scope.define(mk_unique_var(var.name), loc=var.loc)
+            var_dict[var.name] = new_var
+    debug_print("var_dict = ", var_dict)
+    replace_vars(callee_blocks, var_dict)
+    debug_print("After local var rename")
+    _debug_dump(callee_ir)
+
+    # 3. replace formal parameters with actual arguments
+    args = list(call_expr.args)
+    if callee_defaults:
+        debug_print("defaults = ", callee_defaults)
+        if isinstance(callee_defaults, tuple): # Python 3.5
+            args = args + list(callee_defaults)
+        elif isinstance(callee_defaults, ir.Var) or isinstance(callee_defaults, str):
+            defaults = func_ir.get_definition(callee_defaults)
+            assert(isinstance(defaults, ir.Const))
+            loc = defaults.loc
+            args = args + [ir.Const(value=v, loc=loc)
+                           for v in defaults.value]
+        else:
+            raise NotImplementedError(
+                "Unsupported defaults to make_function: {}".format(defaults))
+    debug_print("After arguments rename: ")
+    _debug_dump(callee_ir)
+
+    # 4. replace freevar with actual closure var
+    if callee_closure:
+        closure = func_ir.get_definition(callee_closure)
+        assert(isinstance(closure, ir.Expr)
+               and closure.op == 'build_tuple')
+        assert(len(callee_code.co_freevars) == len(closure.items))
+        debug_print("callee's closure = ", closure)
+        _replace_freevars(callee_blocks, closure.items)
+        debug_print("After closure rename")
         _debug_dump(callee_ir)
 
-        # 2. rename all local variables in callee_ir with new locals created in func_ir
-        callee_scopes = _get_all_scopes(callee_blocks)
-        debug_print("callee_scopes = ", callee_scopes)
-        #    one function should only have one local scope
-        assert(len(callee_scopes) == 1)
-        callee_scope = callee_scopes[0]
-        var_dict = {}
-        for var in callee_scope.localvars._con.values():
-            if not (var.name in callee.code.co_freevars):
-                new_var = scope.define(mk_unique_var(var.name), loc=var.loc)
-                var_dict[var.name] = new_var
-        debug_print("var_dict = ", var_dict)
-        replace_vars(callee_blocks, var_dict)
-        debug_print("After local var rename")
-        _debug_dump(callee_ir)
+    if typingctx:
+        from numba import compiler
+        f_typemap, f_return_type, f_calltypes = compiler.type_inference_stage(
+                typingctx, callee_ir, arg_typs, None)
+        # remove argument entries like arg.a from typemap
+        arg_names = [vname for vname in f_typemap if vname.startswith("arg.")]
+        for a in arg_names:
+            f_typemap.pop(a)
+        typemap.update(f_typemap)
+        calltypes.update(f_calltypes)
 
-        # 3. replace formal parameters with actual arguments
-        args = list(call_expr.args)
-        if callee.defaults:
-            debug_print("defaults = ", callee.defaults)
-            if isinstance(callee.defaults, tuple): # Python 3.5
-                args = args + list(callee.defaults)
-            elif isinstance(callee.defaults, ir.Var) or isinstance(callee.defaults, str):
-                defaults = func_ir.get_definition(callee.defaults)
-                assert(isinstance(defaults, ir.Const))
-                loc = defaults.loc
-                args = args + [ir.Const(value=v, loc=loc)
-                               for v in defaults.value]
-            else:
-                raise NotImplementedError(
-                    "Unsupported defaults to make_function: {}".format(defaults))
-        _replace_args_with(callee_blocks, args)
-        debug_print("After arguments rename: ")
-        _debug_dump(callee_ir)
+    _replace_args_with(callee_blocks, args)
+    # 5. split caller blocks into two
+    new_blocks = []
+    new_block = ir.Block(scope, block.loc)
+    new_block.body = block.body[i + 1:]
+    new_label = next_label()
+    func_ir.blocks[new_label] = new_block
+    new_blocks.append((new_label, new_block))
+    block.body = block.body[:i]
+    block.body.append(ir.Jump(min_label, instr.loc))
 
-        # 4. replace freevar with actual closure var
-        if callee.closure:
-            closure = func_ir.get_definition(callee.closure)
-            assert(isinstance(closure, ir.Expr)
-                   and closure.op == 'build_tuple')
-            assert(len(callee.code.co_freevars) == len(closure.items))
-            debug_print("callee's closure = ", closure)
-            _replace_freevars(callee_blocks, closure.items)
-            debug_print("After closure rename")
-            _debug_dump(callee_ir)
+    # 6. replace Return with assignment to LHS
+    topo_order = find_topo_order(callee_blocks)
+    _replace_returns(callee_blocks, instr.target, new_label)
+    #    remove the old definition of instr.target too
+    if (instr.target.name in func_ir._definitions):
+        func_ir._definitions[instr.target.name] = []
 
-        # 5. split caller blocks into two
-        new_blocks = []
-        new_block = ir.Block(scope, block.loc)
-        new_block.body = block.body[i + 1:]
-        new_label = next_label()
-        func_ir.blocks[new_label] = new_block
-        new_blocks.append((new_label, new_block))
-        block.body = block.body[:i]
-        block.body.append(ir.Jump(min_label, instr.loc))
+    # 7. insert all new blocks, and add back definitions
+    for label in topo_order:
+        # block scope must point to parent's
+        block = callee_blocks[label]
+        block.scope = scope
+        _add_definitions(func_ir, block)
+        func_ir.blocks[label] = block
+        new_blocks.append((label, block))
+    debug_print("After merge in")
+    _debug_dump(func_ir)
 
-        # 6. replace Return with assignment to LHS
-        topo_order = find_topo_order(callee_blocks)
-        _replace_returns(callee_blocks, instr.target, new_label)
-        #    remove the old definition of instr.target too
-        if (instr.target.name in func_ir._definitions):
-            func_ir._definitions[instr.target.name] = []
-
-        # 7. insert all new blocks, and add back definitions
-        for label in topo_order:
-            # block scope must point to parent's
-            block = callee_blocks[label]
-            block.scope = scope
-            _add_definitions(func_ir, block)
-            func_ir.blocks[label] = block
-            new_blocks.append((label, block))
-        debug_print("After merge in")
-        _debug_dump(func_ir)
-
-        return new_blocks
-
-    def get_ir_of_code(self, fcode):
-        """
-        Compile a code object to get its IR.
-        """
-        glbls = self.func_ir.func_id.func.__globals__
-        nfree = len(fcode.co_freevars)
-        func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
-        func_clo = ",".join(["c_%d" % i for i in range(nfree)])
-        func_arg = ",".join(["x_%d" % i for i in range(fcode.co_argcount)])
-        func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (
-            func_env, func_arg, func_clo)
-        loc = {}
-        exec(func_text, glbls, loc)
-
-        # hack parameter name .0 for Python 3 versions < 3.6
-        if utils.PYVERSION >= (3,) and utils.PYVERSION < (3, 6):
-            co_varnames = list(fcode.co_varnames)
-            if co_varnames[0] == ".0":
-                co_varnames[0] = "implicit0"
-            fcode = types.CodeType(
-                fcode.co_argcount,
-                fcode.co_kwonlyargcount,
-                fcode.co_nlocals,
-                fcode.co_stacksize,
-                fcode.co_flags,
-                fcode.co_code,
-                fcode.co_consts,
-                fcode.co_names,
-                tuple(co_varnames),
-                fcode.co_filename,
-                fcode.co_name,
-                fcode.co_firstlineno,
-                fcode.co_lnotab,
-                fcode.co_freevars,
-                fcode.co_cellvars)
-
-        f = loc['g']()
-        f.__code__ = fcode
-        f.__name__ = fcode.co_name
-        ir = self.run_frontend(f)
-        return ir
+    return new_blocks
 
 def _make_debug_print(prefix):
     def debug_print(*args):
@@ -716,4 +737,3 @@ def _fix_nested_array(func_ir):
 def _new_definition(func_ir, var, value, loc):
     func_ir._definitions[var.name] = [value]
     return ir.Assign(value=value, target=var, loc=loc)
-

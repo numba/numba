@@ -23,6 +23,8 @@ ellipsis = EllipsisType('...')
 Any = Phantom('any')
 undefined = Undefined('undefined')
 string = Opaque('str')
+code_type = Opaque('code')
+pyfunc_type = Opaque('pyfunc')
 
 # No operation is defined on voidptr
 # Can only pass it around

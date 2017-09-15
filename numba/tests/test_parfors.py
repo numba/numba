@@ -10,11 +10,12 @@ import re
 import sys
 import types as pytypes
 import warnings
-
+from functools import reduce
 import numpy as np
 
 import numba
 from numba import unittest_support as unittest
+from .support import TestCase
 from numba import njit, prange
 from numba import compiler, typing
 from numba.targets import cpu
@@ -39,7 +40,7 @@ _reason = 'parfors not supported'
 skip_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
 
 
-class TestParforsBase(unittest.TestCase):
+class TestParforsBase(TestCase):
     """
     Base class for testing parfors.
     Provides functions for compilation and three way comparison between
@@ -497,6 +498,99 @@ class TestParfors(TestParforsBase):
         is_positive = np.zeros(N)
         self.check(test_impl, x, is_positive, N)
 
+    @skip_unsupported
+    def test_reduce(self):
+        def test_impl(A):
+            init_val = 10
+            return reduce(lambda a,b: min(a, b), A, init_val)
+
+        n = 211
+        A = np.random.ranf(n)
+        self.check(test_impl, A)
+        A = np.random.randint(10, size=n).astype(np.int32)
+        self.check(test_impl, A)
+        # test checking the number of arguments for the reduce function
+        def test_impl():
+            g = lambda x: x ** 2
+            return reduce(g, np.array([1, 2, 3, 4, 5]), 2)
+        with self.assertTypingError():
+            self.check(test_impl)
+
+    @skip_unsupported
+    def test_min(self):
+        def test_impl1(A):
+            return A.min()
+
+        def test_impl2(A):
+            return np.min(A)
+
+        n = 211
+        A = np.random.ranf(n)
+        B = np.random.randint(10, size=n).astype(np.int32)
+        C = np.random.ranf((n, n))  # test multi-dimensional array
+        self.check(test_impl1, A)
+        self.check(test_impl1, B)
+        self.check(test_impl1, C)
+        self.check(test_impl2, A)
+        self.check(test_impl2, B)
+        self.check(test_impl2, C)
+
+    @skip_unsupported
+    def test_max(self):
+        def test_impl1(A):
+            return A.max()
+
+        def test_impl2(A):
+            return np.max(A)
+
+        n = 211
+        A = np.random.ranf(n)
+        B = np.random.randint(10, size=n).astype(np.int32)
+        C = np.random.ranf((n, n))  # test multi-dimensional array
+        self.check(test_impl1, A)
+        self.check(test_impl1, B)
+        self.check(test_impl1, C)
+        self.check(test_impl2, A)
+        self.check(test_impl2, B)
+        self.check(test_impl2, C)
+
+    @skip_unsupported
+    def test_argmin(self):
+        def test_impl1(A):
+            return A.argmin()
+
+        def test_impl2(A):
+            return np.argmin(A)
+
+        n = 211
+        A = np.array([1., 0., 2., 0., 3.])
+        B = np.random.randint(10, size=n).astype(np.int32)
+        C = np.random.ranf((n, n))  # test multi-dimensional array
+        self.check(test_impl1, A)
+        self.check(test_impl1, B)
+        self.check(test_impl1, C)
+        self.check(test_impl2, A)
+        self.check(test_impl2, B)
+        self.check(test_impl2, C)
+
+    @skip_unsupported
+    def test_argmax(self):
+        def test_impl1(A):
+            return A.argmax()
+
+        def test_impl2(A):
+            return np.argmax(A)
+
+        n = 211
+        A = np.array([1., 0., 3., 2., 3.])
+        B = np.random.randint(10, size=n).astype(np.int32)
+        C = np.random.ranf((n, n))  # test multi-dimensional array
+        self.check(test_impl1, A)
+        self.check(test_impl1, B)
+        self.check(test_impl1, C)
+        self.check(test_impl2, A)
+        self.check(test_impl2, B)
+        self.check(test_impl2, C)
 
 class TestPrange(TestParforsBase):
 
@@ -784,6 +878,18 @@ class TestPrange(TestParforsBase):
         self.prange_tester(test_impl, np.int32(4))
 
     @skip_unsupported
+    def test_prange14(self):
+        def test_impl(A):
+            s = 3
+            for i in range(len(A)):
+                s += A[i]*2
+            return s
+        # this tests reduction detection well since the accumulated variable
+        # is initialized before the parfor and the value accessed from the array
+        # is updated before accumulation
+        self.prange_tester(test_impl, np.random.ranf(4))
+
+    @skip_unsupported
     def test_kde_example(self):
         def test_impl(X):
             # KDE example
@@ -837,7 +943,7 @@ class TestPrange(TestParforsBase):
             return b.sum()
         self.prange_tester(test_impl, 4)
 
-class TestParforsMisc(unittest.TestCase):
+class TestParforsMisc(TestCase):
     """
     Tests miscellaneous parts of ParallelAccelerator use.
     """

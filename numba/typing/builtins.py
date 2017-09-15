@@ -360,6 +360,19 @@ class CmpOpEq(UnorderedCmpOp):
     key = '=='
 
 @infer
+class ConstOpEq(AbstractTemplate):
+    key = '=='
+    def generic(self, args, kws):
+        assert not kws
+        (arg1, arg2) = args
+        if isinstance(arg1, types.Const) and isinstance(arg2, types.Const):
+            return signature(types.boolean, arg1, arg2)
+
+@infer
+class ConstOpNotEq(ConstOpEq):
+    key = '!='
+
+@infer
 class CmpOpNe(UnorderedCmpOp):
     key = '!='
 
@@ -894,3 +907,62 @@ class DeferredAttribute(AttributeTemplate):
 
     def generic_resolve(self, deferred, attr):
         return self.context.resolve_getattr(deferred.get(), attr)
+
+#------------------------------------------------------------------------------
+
+from numba.targets.builtins import get_type_min_value, get_type_max_value
+
+@infer_global(get_type_min_value)
+@infer_global(get_type_max_value)
+class MinValInfer(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        assert len(args) == 1
+        assert isinstance(args[0], types.DType)
+        return signature(args[0].dtype, *args)
+
+#------------------------------------------------------------------------------
+
+from numba.extending import (typeof_impl, type_callable, models, register_model,
+                                make_attribute_wrapper)
+
+class IndexValue(object):
+    """
+    Index and value
+    """
+    def __init__(self, ind, val):
+        self.index = ind
+        self.value = val
+
+    def __repr__(self):
+        return 'IndexValue(%f, %f)' % (self.index, self.value)
+
+class IndexValueType(types.Type):
+    def __init__(self, val_typ):
+        self.val_typ = val_typ
+        super(IndexValueType, self).__init__(
+                                    name='IndexValueType({})'.format(val_typ))
+
+@typeof_impl.register(IndexValue)
+def typeof_index(val, c):
+    val_typ = typeof_impl(val.value, c)
+    return IndexValueType(val_typ)
+
+@type_callable(IndexValue)
+def type_index_value(context):
+    def typer(ind, mval):
+        if ind == types.intp:
+            return IndexValueType(mval)
+    return typer
+
+@register_model(IndexValueType)
+class IndexValueModel(models.StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [
+            ('index', types.intp),
+            ('value', fe_type.val_typ),
+            ]
+        models.StructModel.__init__(self, dmm, fe_type, members)
+
+make_attribute_wrapper(IndexValueType, 'index', 'index')
+make_attribute_wrapper(IndexValueType, 'value', 'value')

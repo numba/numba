@@ -494,6 +494,23 @@ lower_builtin('<=', types.boolean, types.boolean)(int_ule_impl)
 lower_builtin('>', types.boolean, types.boolean)(int_ugt_impl)
 lower_builtin('>=', types.boolean, types.boolean)(int_uge_impl)
 
+@lower_builtin('==', types.Const, types.Const)
+def const_eq_impl(context, builder, sig, args):
+    arg1, arg2 = sig.args
+    val = 0
+    if arg1.value==arg2.value:
+        val = 1
+    res = ir.Constant(ir.IntType(1), val)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+@lower_builtin('!=', types.Const, types.Const)
+def const_eq_impl(context, builder, sig, args):
+    arg1, arg2 = sig.args
+    val = 0
+    if arg1.value!=arg2.value:
+        val = 1
+    res = ir.Constant(ir.IntType(1), val)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 def _implement_integer_operators():
     ty = types.Integer

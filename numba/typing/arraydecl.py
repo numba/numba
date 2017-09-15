@@ -459,6 +459,14 @@ class DTypeAttr(AttributeTemplate):
         # Wrap the numeric type in NumberClass
         return types.NumberClass(ary.dtype)
 
+    def resolve_kind(self, ary):
+        if isinstance(ary.key, types.scalars.Float):
+            val = 'f'
+        elif isinstance(ary.key, types.scalars.Integer):
+            val = 'i'
+        else:
+            return None  # other types not supported yet
+        return types.Const(val)
 
 @infer
 class StaticGetItemArray(AbstractTemplate):

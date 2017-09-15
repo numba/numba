@@ -537,7 +537,6 @@ class Const(object):
     def infer_constant(self):
         return self.value
 
-
 class Global(object):
     def __init__(self, name, value, loc):
         self.name = name
@@ -549,6 +548,11 @@ class Global(object):
 
     def infer_constant(self):
         return self.value
+
+    def __deepcopy__(self, memo):
+        # don't copy value since it can fail (e.g. modules)
+        # value is readonly and doesn't need copying
+        return Global(self.name, self.value, copy.deepcopy(self.loc))
 
 
 class FreeVar(object):
