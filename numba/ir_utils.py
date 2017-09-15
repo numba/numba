@@ -649,8 +649,8 @@ def find_potential_aliases(blocks, args, typemap, alias_map=None, arg_aliases=No
                 if isinstance(expr, ir.Var) and lhs!=expr.name:
                     _add_alias(lhs, expr.name, alias_map, arg_aliases)
                 # subarrays like A = B[0] for 2D B
-                if (isinstance(expr, ir.Expr)
-                        and expr.op in ['getitem', 'static_getitem']):
+                if (isinstance(expr, ir.Expr) and (expr.op == 'cast' or
+                    expr.op in ['getitem', 'static_getitem'])):
                     _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
 
     # copy to avoid changing size during iteration
