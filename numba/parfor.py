@@ -1691,7 +1691,8 @@ def maximize_fusion(func_ir, blocks):
                 # make sure there is no write-write, write-read dependencies
                 if (isinstance(
                         stmt, Parfor) and not isinstance(
-                        next_stmt, Parfor)
+                        next_stmt, Parfor) and not isinstance(
+                        next_stmt, ir.Print)
                         and (not isinstance(next_stmt, ir.Assign)
                              or has_no_side_effect(
                             next_stmt.value, set(), call_table)
