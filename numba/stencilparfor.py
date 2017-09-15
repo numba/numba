@@ -328,7 +328,10 @@ def get_stencil_blocks(sf, typingctx, args, scope, loc, input_dict, typemap,
     from numba.annotations import type_annotations
 
     # get untyped IR
-    stencil_func_ir = sf.kernel_ir
+    stencil_func_ir = sf.kernel_ir.copy()
+    # copy the IR nodes to avoid changing IR in the StencilFunc object
+    stencil_blocks = copy.deepcopy(stencil_func_ir.blocks)
+    stencil_func_ir.blocks = stencil_blocks
 
     # get typed IR with a dummy pipeline (similar to test_parfors.py)
     targetctx = CPUContext(typingctx)
@@ -354,8 +357,6 @@ def get_stencil_blocks(sf, typingctx, args, scope, loc, input_dict, typemap,
         numba.rewrites.rewrite_registry.apply(
             'after-inference', tp, tp.func_ir)
 
-    # copy the IR nodes to avoid changing IR in the StencilFunc object
-    stencil_blocks = copy.deepcopy(stencil_func_ir.blocks)
     # make block labels unique
     stencil_blocks = ir_utils.add_offset_to_labels(stencil_blocks,
                                                         ir_utils.next_label())
