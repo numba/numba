@@ -71,9 +71,7 @@ class StencilPass(object):
                             self.typingctx, arg_typemap,
                             block.scope, block.loc, input_dict,
                             self.typemap, self.calltypes)
-                    index_offsets = None
-                    if 'index_offsets' in stmt.value._kws:
-                        index_offsets = stmt.value.index_offsets
+                    index_offsets = sf.options.get('index_offsets', None)
                     gen_nodes = self._mk_stencil_parfor(label, in_args, out_arr,
                             stencil_blocks, index_offsets, stmt.target, rt, sf)
                     block.body = block.body[:i] + gen_nodes + block.body[i+1:]
