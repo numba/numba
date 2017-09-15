@@ -252,6 +252,7 @@ class ParforPass(object):
                                             self.array_analysis, self.typingctx)
         stencil_pass.run()
         self._convert_prange(self.func_ir.blocks)
+        self._convert_setitem(self.func_ir.blocks)
         self._convert_numpy(self.func_ir.blocks)
         self._convert_reduce(self.func_ir.blocks)
 
@@ -372,6 +373,48 @@ class ParforPass(object):
             block.body = new_body
         return
 
+    def _convert_setitem(self, blocks):
+        # convert setitem expressions like A[C] = c or A[C] = B[C] to parfor,
+        # where C is a boolean array.
+        topo_order = find_topo_order(blocks)
+        # variables available in the program so far (used for finding map
+        # functions in array_expr lowering)
+        avail_vars = []
+        for label in topo_order:
+            block = blocks[label]
+            new_body = []
+            equiv_set = self.array_analysis.get_equiv_set(label)
+            for instr in block.body:
+                if isinstance(instr, ir.SetItem):
+                    target = instr.target
+                    index = instr.index
+                    value = instr.value
+                    target_typ = self.typemap[target.name]
+                    index_typ = self.typemap[index.name]
+                    value_typ = self.typemap[value.name]
+                    if isinstance(target_typ, types.npytypes.Array):
+                        if (isinstance(index_typ, types.npytypes.Array) and
+                            isinstance(index_typ.dtype, types.Boolean) and
+                            target_typ.ndim == index_typ.ndim):
+                            if isinstance(value_typ, types.Number):
+                                instr = self._setitem_to_parfor(equiv_set,
+                                        target, index, value)
+                            elif isinstance(value_typ, types.npytypes.Array):
+                                val_def = guard(get_definition, self.func_ir,
+                                                value.name)
+                                if (isinstance(val_def, ir.Expr) and
+                                    val_def.op == 'getitem' and
+                                    val_def.index.name == index.name):
+                                    instr = self._setitem_to_parfor(equiv_set,
+                                            target, index, val_def.value)
+                        else:
+                            shape = equiv_set.get_shape(instr)
+                            if shape != None:
+                                instr = self._setitem_to_parfor(equiv_set,
+                                        target, index, value, shape=shape)
+                new_body.append(instr)
+            block.body = new_body
+
     def _convert_prange(self, blocks):
         call_table, _ = get_call_table(blocks)
         cfg = compute_cfg_from_blocks(blocks)
@@ -457,6 +500,7 @@ class ParforPass(object):
                     # run on parfor body
                     parfor_blocks = wrap_parfor_blocks(parfor)
                     self._convert_prange(parfor_blocks)
+                    self._convert_setitem(parfor_blocks)
                     self._convert_numpy(parfor_blocks)
                     unwrap_parfor_blocks(parfor, parfor_blocks)
                     # run convert again to handle other prange loops
@@ -563,6 +607,99 @@ class ParforPass(object):
             types.none, self.typemap[lhs.name], index_var_typ, el_typ)
         body_block.body.append(setitem_node)
         parfor.loop_body = {body_label: body_block}
+        if config.DEBUG_ARRAY_OPT == 1:
+            parfor.dump()
+        return parfor
+
+    def _setitem_to_parfor(self, equiv_set, target, index, value, shape=None):
+        """generate parfor from setitem node with a boolean array index.
+        The value can be either a scalar or an array variable, and in
+        the latter case, the same boolean index is used for the value too.
+        """
+        scope = target.scope
+        loc = target.loc
+        arr_typ = self.typemap[target.name]
+        el_typ = arr_typ.dtype
+        index_typ = self.typemap[index.name]
+        init_block = ir.Block(scope, loc)
+
+        if shape:
+            assert(isinstance(index_typ, types.BaseTuple) or
+                   isinstance(index_typ, types.SliceType))
+            # setitem has a custom target shape
+            size_vars = shape
+            # create a new target array via getitem
+            subarr_var = ir.Var(scope, mk_unique_var("$subarr"), loc)
+            getitem_call = ir.Expr.getitem(target, index, loc)
+            from numba.typing import arraydecl
+            subarr_typ = arraydecl.get_array_index_type( arr_typ, index_typ).result
+            self.typemap[subarr_var.name] = subarr_typ
+            self.calltypes[getitem_call] = signature(subarr_typ, arr_typ,
+                                                     index_typ)
+            init_block.append(ir.Assign(getitem_call, subarr_var, loc))
+            target = subarr_var
+        else:
+            # boolean array
+            assert(isinstance(index_typ, types.ArrayCompatible))
+            size_vars = equiv_set.get_shape(target)
+            bool_typ = index_typ.dtype
+
+
+        # generate loopnests and size variables from lhs correlations
+        loopnests = []
+        index_vars = []
+        for size_var in size_vars:
+            index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
+            index_vars.append(index_var)
+            self.typemap[index_var.name] = types.intp
+            loopnests.append(LoopNest(index_var, 0, size_var, 1))
+
+        # generate body
+        body_label = next_label()
+        body_block = ir.Block(scope, loc)
+        index_var, index_var_typ = self._make_index_var(
+                 scope, index_vars, body_block)
+        parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set)
+        if shape:
+            # slice subarray
+            parfor.loop_body = {body_label: body_block}
+            true_block = body_block
+            end_label = None
+        else:
+            # boolean mask
+            true_label = next_label()
+            true_block = ir.Block(scope, loc)
+            end_label = next_label()
+            end_block = ir.Block(scope, loc)
+            parfor.loop_body = {body_label: body_block,
+                                true_label: true_block,
+                                end_label:  end_block,
+                                }
+            mask_var = ir.Var(scope, mk_unique_var("$mask_var"), loc)
+            self.typemap[mask_var.name] = bool_typ
+            mask_val = ir.Expr.getitem(index, index_var, loc)
+            body_block.body.extend([
+               ir.Assign(mask_val, mask_var, loc),
+               ir.Branch(mask_var, true_label, end_label, loc)
+            ])
+
+        value_typ = self.typemap[value.name]
+        if isinstance(value_typ, types.npytypes.Array):
+            value_var = ir.Var(scope, mk_unique_var("$value_var"), loc)
+            self.typemap[value_var.name] = value_typ.dtype
+            getitem_call = ir.Expr.getitem(value, index_var, loc)
+            self.calltypes[getitem_call] = signature(
+                value_typ.dtype, value_typ, index_var_typ)
+            true_block.body.append(ir.Assign(getitem_call, value_var, loc))
+        else:
+            value_var = value
+        setitem_node = ir.SetItem(target, index_var, value_var, loc)
+        self.calltypes[setitem_node] = signature(
+            types.none, self.typemap[target.name], index_var_typ, el_typ)
+        true_block.body.append(setitem_node)
+        if end_label:
+            true_block.body.append(ir.Jump(end_label, loc))
+
         if config.DEBUG_ARRAY_OPT == 1:
             parfor.dump()
         return parfor
