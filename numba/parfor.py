@@ -566,8 +566,11 @@ class ParforPass(object):
         this Numpy call.
         """
         call_name, mod_name = find_callname(self.func_ir, expr)
-        supported_calls = ['zeros', 'ones'] + random_calls
-        if call_name in supported_calls:
+        if not mod_name.startswith('numpy'):
+            return False
+        if call_name in ['zeros', 'ones']:
+            return True
+        if mod_name == 'numpy.random' and call_name in random_calls:
             return True
         # TODO: add more calls
         if call_name == 'dot':
@@ -593,7 +596,7 @@ class ParforPass(object):
         call_name, mod_name = find_callname(self.func_ir, expr)
         args = expr.args
         kws = dict(expr.kws)
-        if call_name in ['zeros', 'ones'] or call_name.startswith('random.'):
+        if call_name in ['zeros', 'ones'] or mod_name == 'numpy.random':
             return self._numpy_map_to_parfor(equiv_set, call_name, lhs, args, kws, expr)
         if call_name == 'dot':
             assert len(args) == 2 or len(args) == 3
@@ -724,7 +727,7 @@ class ParforPass(object):
             value = ir.Const(0, loc)
         elif call_name == 'ones':
             value = ir.Const(1, loc)
-        elif call_name.startswith('random.'):
+        elif call_name in random_calls:
             # remove size arg to reuse the call expr for single value
             _remove_size_arg(call_name, expr)
             # update expr type
@@ -944,7 +947,7 @@ def _remove_size_arg(call_name, expr):
         if len(expr.args) == 2:
             expr.args.pop()
 
-    if call_name == 'random.randint':
+    if call_name == 'randint':
         # has 4 args, 3rd one is size
         if len(expr.args) == 3:
             expr.args.pop()
@@ -953,7 +956,7 @@ def _remove_size_arg(call_name, expr):
             expr.args.pop()  # remove size
             expr.args.append(dt_arg)
 
-    if call_name == 'random.triangular':
+    if call_name == 'triangular':
         # has 4 args, last one is size
         if len(expr.args) == 4:
             expr.args.pop()
