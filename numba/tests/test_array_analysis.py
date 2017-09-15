@@ -115,7 +115,7 @@ class ArrayAnalysisTester(Pipeline):
             self.array_analysis = ArrayAnalysis(self.typingctx, self.func_ir,
                                                 self.type_annotation.typemap,
                                                 self.type_annotation.calltypes)
-            self.array_analysis.run()
+            self.array_analysis.run(self.func_ir.blocks)
             func_ir_copies.append(self.func_ir.copy())
             if test_idempotence and len(func_ir_copies) > 1:
                 test_idempotence(func_ir_copies)
