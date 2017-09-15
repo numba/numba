@@ -11,6 +11,7 @@ from numba.targets.base import BaseContext
 from numba.targets.callconv import MinimalCallConv
 from numba.targets import cmathimpl, operatorimpl
 from numba.typing import cmathdecl, operatordecl
+import numba.llvmthreadsafe as llvmts
 
 from numba import itanium_mangler
 from .cudadrv import nvvm
@@ -65,6 +66,7 @@ class CUDATargetContext(BaseContext):
     def create_module(self, name):
         return self._internal_codegen._create_empty_module(name)
 
+    @llvmts.lock_llvm
     def init(self):
         self._internal_codegen = codegen.JITCUDACodegen("numba.cuda.jit")
         self._target_data = ll.create_target_data(nvvm.default_data_layout)

@@ -34,6 +34,7 @@ from .jitclass import jitclass
 # Keep this for backward compatibility.
 test = runtests.main
 
+from numba import llvmthreadsafe as llvmts
 
 __all__ = """
     autojit
@@ -52,6 +53,7 @@ __all__ = """
 _min_llvmlite_version = (0, 19, 0)
 _min_llvm_version = (4, 0, 0)
 
+@llvmts.lock_llvm
 def _ensure_llvm():
     """
     Make sure llvmlite is operational.

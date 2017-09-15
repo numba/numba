@@ -654,6 +654,8 @@ class BaseCacheUsecasesTest(BaseCacheTest):
     usecases_file = os.path.join(here, "cache_usecases.py")
     modname = "dispatcher_caching_test_fodder"
 
+    _numba_parallel_test_ = False
+
     def run_in_separate_process(self):
         # Cached functions can be run from a distinct process.
         # Also stresses issue #1603: uncached function calling cached function

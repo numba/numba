@@ -149,6 +149,7 @@ class OverloadSelector(object):
 
 
 @utils.runonce
+@llvmts.lock_llvm
 def _load_global_helpers():
     """
     Execute once to install special symbols into the LLVM symbol table.
@@ -1005,6 +1006,7 @@ class BaseContext(object):
         assert isinstance(ty, llvmir.Type), "Expected LLVM type"
         return ty.get_abi_size(self.target_data)
 
+    @llvmts.lock_llvm
     def get_abi_alignment(self, ty):
         """
         Get the ABI alignment of LLVM type *ty*.
@@ -1023,6 +1025,7 @@ class BaseContext(object):
         """Run target specific post-lowering transformation here.
         """
 
+    @llvmts.lock_llvm
     def create_module(self, name):
         """Create a LLVM module
         """
