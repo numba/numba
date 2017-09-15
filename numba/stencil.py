@@ -482,7 +482,7 @@ class StencilFunc(object):
         if result is None:
             return new_func.entry_point(*args)
         else:
-            return new_func.entry_point(*args, result)
+            return new_func.entry_point(*(args+(result,)))
 
 def stencil(func_or_mode='constant', **options):
     # called on function without specifying mode style
