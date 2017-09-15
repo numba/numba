@@ -26,7 +26,6 @@ from numba.analysis import (
 
 from numba.targets.rangeobj import range_iter_len
 from numba.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
-from numba.stencil import StencilFunc
 import numpy as np
 
 """
