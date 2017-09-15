@@ -366,6 +366,17 @@ class ShapeEquivSet(EquivSet):
             return None
         return super(ShapeEquivSet, self).get_equiv_const(names[0])
 
+    def get_equiv_var(self, obj):
+        """If the given object is equivalent to some defined variable,
+        return the variable, or None otherwise.
+        """
+        names = self._get_names(obj)
+        if len(names) != 1:
+            return None
+        ind = self._get_ind(names[0])
+        vs = self.ind_to_var.get(ind, [])
+        return vs[0] if vs != [] else None
+
     def get_equiv_set(self, obj):
         """Return the set of equivalent objects.
         """
