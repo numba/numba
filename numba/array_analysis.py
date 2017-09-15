@@ -984,7 +984,7 @@ class ArrayAnalysis(object):
         # TODO: getattr of npytypes.Record
         if expr.attr == 'T':
             return self._analyze_op_call_numpy_transpose(scope, equiv_set, [expr.value], {})
-        elif expr.attr == 'shape' and equiv_set.has_shape(expr.value):
+        elif expr.attr == 'shape':
             shape = equiv_set.get_shape(expr.value)
             return shape, []
         return None
@@ -1005,8 +1005,7 @@ class ArrayAnalysis(object):
         var = expr.value
         typ = self.typemap[var.name]
         require(isinstance(typ, types.BaseTuple))
-        require(equiv_set.has_shape(var))
-        shape = equiv_set.get_shape(var)
+        shape = equiv_set._get_shape(var)
         require(expr.index < len(shape))
         return shape[expr.index], []
 
@@ -1063,8 +1062,7 @@ class ArrayAnalysis(object):
         typ = self.typemap[var.name]
         require(isinstance(typ, types.ArrayCompatible))
         if typ.ndim == 1:
-            require(equiv_set.has_shape(var))
-            shape = equiv_set.get_shape(var)
+            shape = equiv_set._get_shape(var)
             return shape[0], []
         return None
 
@@ -1118,16 +1116,16 @@ class ArrayAnalysis(object):
         assert(isinstance(a, ir.Var))
         atyp = self.typemap[a.name]
         if isinstance(atyp, types.ArrayCompatible):
-            if atyp.ndim == 2 and equiv_set.has_shape(a):
+            if atyp.ndim == 2:
                 if 'k' in kws:  # will proceed only when k = 0 or absent
                     k = kws['k']
                     if not equiv_set.is_equiv(k, 0):
                         return None
-                (m, n) = equiv_set.get_shape(a)
+                (m, n) = equiv_set._get_shape(a)
                 if equiv_set.is_equiv(m, n):
                     return (m,), []
-            elif atyp.ndim == 1 and equiv_set.has_shape(a):
-                (m,) = equiv_set.get_shape(a)
+            elif atyp.ndim == 1:
+                (m,) = equiv_set._get_shape(a)
                 return (m, m), []
         return None
 
@@ -1173,9 +1171,8 @@ class ArrayAnalysis(object):
         assert(len(args) == 1)
         arg = args[0]
         typ = self.typemap[arg.name]
-        if (isinstance(typ, types.ArrayCompatible) and typ.ndim == 2 and
-                equiv_set.has_shape(arg)):
-            (m, n) = equiv_set.get_shape(arg)
+        if (isinstance(typ, types.ArrayCompatible) and typ.ndim == 2):
+            (m, n) = equiv_set._get_shape(arg)
             return (n, m), []
         return None
 
@@ -1276,8 +1273,7 @@ class ArrayAnalysis(object):
             axis = find_const(self.func_ir, args[1])
         require(isinstance(axis, int))
         require(op == 'build_tuple')
-        require(all(equiv_set.has_shape(x) for x in seq))
-        shapes = [equiv_set.get_shape(x) for x in seq]
+        shapes = [equiv_set._get_shape(x) for x in seq]
         if axis < 0:
             axis = len(shapes[0]) + axis
         require(0 <= axis < len(shapes[0]))
@@ -1325,8 +1321,7 @@ class ArrayAnalysis(object):
         require(isinstance(axis, int))
         # only build_tuple can give reliable count
         require(op == 'build_tuple')
-        require(all(equiv_set.has_shape(x) for x in seq))
-        shapes = [equiv_set.get_shape(x) for x in seq]
+        shapes = [equiv_set._get_shape(x) for x in seq]
         asserts = self._call_assert_equiv(scope, loc, equiv_set, seq)
         shape = shapes[0]
         if axis < 0:
@@ -1410,8 +1405,7 @@ class ArrayAnalysis(object):
         require(all(x > 0 for x in dims))
         if dims[0] == 1 and dims[1] == 1:
             return None
-        require(all([equiv_set.has_shape(x) for x in args]))
-        shapes = [equiv_set.get_shape(x) for x in args]
+        shapes = [equiv_set._get_shape(x) for x in args]
         if dims[0] == 1:
             asserts = self._call_assert_equiv(
                 scope, loc, equiv_set, [shapes[0][0], shapes[1][-2]])
@@ -1459,19 +1453,23 @@ class ArrayAnalysis(object):
         dims = [self.typemap[x.name].ndim for x in arrs]
         max_dim = max(dims)
         require(max_dim > 0)
-        all_has_shapes = all([equiv_set.has_shape(x) for x in arrs])
-        if not all_has_shapes:
+        try:
+            shapes = [equiv_set.get_shape(x) for x in arrs]
+        except GuardException:
             return arrs[0], self._call_assert_equiv(scope, loc, equiv_set, arrs)
-        shapes = [equiv_set.get_shape(x) for x in arrs]
+        return self._broadcast_assert_shapes(scope, equiv_set, loc, shapes, names)
 
-        # Produce assert_equiv for sizes in each dimension, taking into account
-        # of dimension coercion and constant size of 1.
+    def _broadcast_assert_shapes(self, scope, equiv_set, loc, shapes, names):
+        """Produce assert_equiv for sizes in each dimension, taking into account
+        of dimension coercion and constant size of 1.
+        """
         asserts = []
         new_shape = []
+        max_dim = max([len(shape) for shape in shapes])
+        const_size_one = None
         for i in range(max_dim):
             sizes = []
             size_names = []
-            const_size_one = None
             for name, shape in zip(names, shapes):
                 if i < len(shape):
                     size = shape[len(shape) - 1 - i]
@@ -1550,7 +1548,7 @@ class ArrayAnalysis(object):
     def _gen_shape_call(self, equiv_set, var, ndims, shape):
         out = []
         # attr call: A_sh_attr = getattr(A, shape)
-        if isinstance(shape, ir.Var) and equiv_set.has_shape(shape):
+        if isinstance(shape, ir.Var):
             shape = equiv_set.get_shape(shape)
         # already a tuple variable that contains size
         if isinstance(shape, ir.Var):
