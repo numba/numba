@@ -311,6 +311,21 @@ class TestArrayAnalysis(TestCase):
         self._compile_and_test(test_9, (types.intp,),
                                asserts=[self.with_assert('A', 'B')])
 
+        def test_10(m, n):
+            p = m - 1
+            q = n + 1
+            r = q + 1
+            A = np.zeros(p)
+            B = np.zeros(q)
+            C = np.zeros(r)
+            D = np.zeros(m)
+            s = np.sum(A + B)
+            t = np.sum(C + D)
+            return s + t
+        self._compile_and_test(test_10, (types.intp,types.intp,),
+                               asserts=[self.with_assert('A', 'B'),
+                                        self.without_assert('C', 'D')])
+
         def test_shape(A):
             (m, n) = A.shape
             B = np.ones((m, n))
@@ -386,6 +401,61 @@ class TestArrayAnalysis(TestCase):
                                equivs=[self.with_equiv('a', 'b', 'v'),
                                        self.without_equiv('a', 'u')],
                                asserts=[self.with_assert('a', 'b')])
+
+    def test_slice(self):
+        def test_1(m, n):
+            A = np.zeros(m)
+            B = np.zeros(n)
+            C = A[1:m-1]
+            D = B[1:n-1]
+            s = np.sum(A + B)
+            t = np.sum(C + D)
+            return s + t
+        self._compile_and_test(test_1, (types.intp,types.intp,),
+                               asserts=[self.with_assert('A', 'B'),
+                                        self.without_assert('C', 'D')])
+
+        def test_2(m):
+            A = np.zeros(m)
+            B = A[0:m-3]
+            C = A[1:m-2]
+            D = A[2:m-1]
+            E = B + C
+            return D + E
+        self._compile_and_test(test_2, (types.intp,),
+                               asserts=[self.without_assert('B', 'C'),
+                                        self.without_assert('D', 'E')])
+
+        def test_3(m):
+            A = np.zeros((m,m))
+            B = A[0:m-2,0:m-2]
+            C = A[1:m-1,1:m-1]
+            E = B + C
+            return E
+        self._compile_and_test(test_3, (types.intp,),
+                               asserts=[self.without_assert('B', 'C')])
+
+        def test_4(m):
+            A = np.zeros((m,m))
+            B = A[0:m-2,:]
+            C = A[1:m-1,:]
+            E = B + C
+            return E
+        self._compile_and_test(test_4, (types.intp,),
+                               asserts=[self.without_assert('B', 'C')])
+
+        def test_5(m,n):
+            A = np.zeros(m)
+            B = np.zeros(m)
+            B[0:m-2] = A[1:m-1]
+            C = np.zeros(n)
+            D = A[1:m-1]
+            C[0:n-2] = D
+            return B + C
+        self._compile_and_test(test_5, (types.intp,types.intp),
+                               asserts=[self.without_assert('B', 'A'),
+                                        self.with_assert('C', 'D'),
+                                        self.without_assert('B', 'C')])
 
     def test_numpy_calls(self):
         def test_zeros(n):
