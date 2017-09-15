@@ -52,6 +52,7 @@ from numba.ir_utils import (
     simplify_CFG,
     has_no_side_effect,
     canonicalize_array_math,
+    add_offset_to_labels,
     find_callname,
     guard,
     require,
@@ -1779,6 +1780,7 @@ def fuse_parfors_inner(parfor1, parfor2):
     # append parfor2's first block to parfor1's last block
     parfor2_first_label = min(parfor2.loop_body.keys())
     parfor2_first_block = parfor2.loop_body[parfor2_first_label].body
+    parfor1_first_label = min(parfor1.loop_body.keys())
     parfor1_last_label = max(parfor1.loop_body.keys())
     parfor1.loop_body[parfor1_last_label].body.extend(parfor2_first_block)
 
@@ -1793,9 +1795,17 @@ def fuse_parfors_inner(parfor1, parfor2):
         index_dict[parfor2.loop_nests[i].index_variable.name] = parfor1.loop_nests[
             i].index_variable
     replace_vars(parfor1.loop_body, index_dict)
+
+    # re-order labels from min to max
+    blocks = wrap_parfor_blocks(parfor1, entry_label=parfor1_first_label)
+    blocks = rename_labels(blocks)
+    blocks = add_offset_to_labels(blocks, next_label())
+    ir_utils._max_label = max(blocks.keys())
+    unwrap_parfor_blocks(parfor1, blocks)
+
     nameset = set(x.name for x in index_dict.values())
     remove_duplicate_definitions(parfor1.loop_body, nameset)
-    remove_empty_block(parfor1.loop_body)
+    # remove_empty_block(parfor1.loop_body)
     parfor1.patterns.extend(parfor2.patterns)
 
     return parfor1
@@ -1987,18 +1997,19 @@ def find_potential_aliases_parfor(parfor, args, typemap, alias_map, arg_aliases)
 ir_utils.alias_analysis_extensions[Parfor] = find_potential_aliases_parfor
 
 
-def wrap_parfor_blocks(parfor):
+def wrap_parfor_blocks(parfor, entry_label = None):
     """wrap parfor blocks for analysis/optimization like CFG"""
     blocks = parfor.loop_body.copy()  # shallow copy is enough
-    first_body_block = min(blocks.keys())
-    assert first_body_block > 0  # we are using 0 for init block here
-    last_label = max(blocks.keys())
-    loc = blocks[last_label].loc
+    if entry_label == None:
+        entry_label = min(blocks.keys())
+    assert entry_label > 0  # we are using 0 for init block here
 
     # add dummy jump in init_block for CFG to work
     blocks[0] = parfor.init_block
-    blocks[0].body.append(ir.Jump(first_body_block, loc))
-    blocks[last_label].body.append(ir.Jump(first_body_block, loc))
+    blocks[0].body.append(ir.Jump(entry_label, blocks[0].loc))
+    for block in blocks.values():
+        if len(block.body) == 0 or (not block.body[-1].is_terminator):
+            block.body.append(ir.Jump(entry_label, block.loc))
     return blocks
 
 
@@ -2009,25 +2020,25 @@ def unwrap_parfor_blocks(parfor, blocks=None):
     """
     if blocks is not None:
         # make sure init block isn't removed
-        assert 0 in blocks
+        init_block_label = min(blocks.keys())
         # update loop body blocks
-        blocks.pop(0)
+        blocks.pop(init_block_label)
         parfor.loop_body = blocks
 
     # make sure dummy jump to loop body isn't altered
     first_body_label = min(parfor.loop_body.keys())
     assert isinstance(parfor.init_block.body[-1], ir.Jump)
-    assert parfor.init_block.body[-1].target == first_body_label
+    # assert parfor.init_block.body[-1].target == first_body_label
 
     # remove dummy jump to loop body
     parfor.init_block.body.pop()
 
     # make sure dummy jump back to loop body isn't altered
-    last_label = max(parfor.loop_body.keys())
-    assert isinstance(parfor.loop_body[last_label].body[-1], ir.Jump)
-    assert parfor.loop_body[last_label].body[-1].target == first_body_label
-    # remove dummy jump back to loop
-    parfor.loop_body[last_label].body.pop()
+    for block in parfor.loop_body.values():
+        if (isinstance(block.body[-1], ir.Jump) and
+            block.body[-1].target == first_body_label):
+            # remove dummy jump back to loop
+            block.body.pop()
     return
 
 
@@ -2195,7 +2206,7 @@ ir_utils.array_accesses_extensions[Parfor] = get_parfor_array_accesses
 
 def parfor_add_offset_to_labels(parfor, offset):
     blocks = wrap_parfor_blocks(parfor)
-    blocks = ir_utils.add_offset_to_labels(blocks, offset)
+    blocks = add_offset_to_labels(blocks, offset)
     blocks[0] = blocks[offset]
     blocks.pop(offset)
     unwrap_parfor_blocks(parfor, blocks)
