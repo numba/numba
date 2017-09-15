@@ -907,6 +907,28 @@ class ArrayAnalysis(object):
             if shape != None:
                 equiv_set.insert_equiv(lhs, shape)
             equiv_set.define(lhs, self.func_ir)
+        elif isinstance(inst, ir.SetItem):
+            result = guard(self._index_to_shape,
+                scope, equiv_set, inst.target, inst.index)
+            if not result:
+                return [], []
+            (target_shape, pre) = result
+            value_shape = equiv_set.get_shape(inst.value)
+            if value_shape:
+                target_typ = self.typemap[inst.target.name]
+                require(isinstance(target_typ, types.ArrayCompatible))
+                target_ndim = target_typ.ndim
+                shapes = [target_shape, value_shape]
+                names = [inst.target.name, inst.value.name]
+                shape, asserts = self._broadcast_assert_shapes(
+                                scope, equiv_set, inst.loc, shapes, names)
+                n = len(shape)
+                assert(target_ndim <= n)
+                shape = shape[(n - target_ndim):]
+                equiv_set.set_shape(inst, shape)
+                return pre + asserts, []
+            else:
+                return pre, []
         elif isinstance(inst, ir.Branch):
             cond_var = inst.cond
             cond_def = guard(get_definition, self.func_ir, cond_var)
@@ -1001,6 +1023,93 @@ class ArrayAnalysis(object):
             return var, []
         return None
 
+    def _index_to_shape(self, scope, equiv_set, var, ind_var):
+        """For indexing like var[index] (either write or read), see if
+        the index corresponds to a non-unit shape. Return the shape
+        (and prepending instructions) if so, or raise GuardException
+        otherwise.
+        """
+        typ = self.typemap[var.name]
+        require(isinstance(typ, types.ArrayCompatible))
+        ind_typ = self.typemap[ind_var.name]
+        ind_shape = equiv_set._get_shape(ind_var)
+        var_shape = equiv_set._get_shape(var)
+        if isinstance(ind_typ, types.SliceType):
+            seq_typs = (ind_typ,)
+        else:
+            require(isinstance(ind_typ, types.BaseTuple))
+            seq, op = find_build_sequence(self.func_ir, ind_var)
+            require(op == 'build_tuple')
+            ind_shape = equiv_set._get_shape(ind_var)
+            seq_typs = tuple(self.typemap[x.name] for x in seq)
+        require(len(ind_shape)==len(seq_typs)==len(var_shape))
+        stmts = []
+        def slice_size(index, dsize):
+            index_def = get_definition(self.func_ir, index)
+            fname, mod_name = find_callname(
+                self.func_ir, index_def, typemap=self.typemap)
+            require(fname == 'slice' and mod_name == 'type')
+            require(len(index_def.args) == 2)
+            lhs = index_def.args[0]
+            rhs = index_def.args[1]
+            lhs_typ = self.typemap[lhs.name]
+            rhs_typ = self.typemap[lhs.name]
+            if (isinstance(lhs_typ, types.NoneType) and
+                isinstance(rhs_typ, types.NoneType)):
+                # : range that selects all
+                return dsize
+            else:
+                raise NotImplementedError("Unsupported range/slice: {}".
+                        format(index_def))
+        def to_shape(typ, index, dsize):
+            if isinstance(typ, types.SliceType):
+                require(equiv_set.has_shape(index))
+                rel = equiv_set.get_rel(index)
+                if rel == None: # slice relation not known
+                    return slice_size(index, dsize)
+                base_var = equiv_set.get_equiv_var(rel[0])
+                require(base_var != None)
+                loc = index.loc
+                base_type = self.typemap[base_var.name]
+                if rel[1] == 0:
+                    return base_var
+                offset_var = scope.make_temp(loc)
+                self.typemap[offset_var.name] = base_type
+                offset_val = ir.Const(rel[1], loc)
+                self.func_ir._definitions[offset_var.name] = [offset_val]
+                stmts.append(ir.Assign(ir.Const(rel[1], loc),
+                             offset_var, loc))
+                size_var = scope.make_temp(loc)
+                self.typemap[size_var.name] = base_type
+                size_val = ir.Expr.binop('+', base_var, offset_var, loc=loc)
+                self.func_ir._definitions[size_var.name] = [size_val]
+                self.calltypes[size_val] = signature(
+                    base_type, base_type, base_type)
+                stmts.append(ir.Assign(size_val, size_var, loc))
+                equiv_set.define(offset_var, self.func_ir)
+                equiv_set.define(size_var, self.func_ir)
+                return size_var
+            elif isinstance(typ, types.Number):
+                return 1
+            else:
+                # unknown dimension size for this index,
+                # so we'll raise GuardException
+                require(False)
+        shape = tuple(to_shape(typ, size, dsize) for
+                      (typ, size, dsize) in zip(seq_typs, ind_shape, var_shape))
+        require(not all(x == 1 for x in shape))
+        loc = ind_var.loc
+        one_var = scope.make_temp(loc)
+        one_val = ir.Const(1, loc)
+        self.typemap[one_var.name] = types.intp
+        self.func_ir._definitions[one_var.name] = [one_val]
+        stmts.append(ir.Assign(one_val, one_var, loc))
+        shape = tuple(one_var if x == 1 else x for x in shape)
+        return shape, stmts
+
+    def _analyze_op_getitem(self, scope, equiv_set, expr):
+        return self._index_to_shape(scope, equiv_set, expr.value, expr.index)
+
     def _analyze_op_static_getitem(self, scope, equiv_set, expr):
         var = expr.value
         typ = self.typemap[var.name]
@@ -1055,6 +1164,22 @@ class ArrayAnalysis(object):
             except AttributeError:
                 return None
             return guard(fn, scope, equiv_set, args, dict(expr.kws))
+
+    def _analyze_op_call_type_slice(self, scope, equiv_set, args, kws):
+        require(len(args) == 2)
+        lhs = args[0]
+        rhs = args[1]
+        typ = self.typemap[lhs.name]
+        require(isinstance(typ, types.Integer))
+        loc = lhs.loc
+        # innsert new statements: size = rhs - lhs
+        size_var = scope.make_temp(loc)
+        self.typemap[size_var.name] = typ
+        size_val = ir.Expr.binop('-', rhs, lhs, loc=loc)
+        self.func_ir._definitions[size_var.name] = [size_val]
+        self.calltypes[size_val] = signature(typ, typ, typ)
+        equiv_set.define(size_var, self.func_ir)
+        return (size_var,), [ir.Assign(value=size_val, target=size_var, loc=loc)]
 
     def _analyze_op_call_builtin_len(self, scope, equiv_set, args, kws):
         require(len(args) == 1)
@@ -1563,10 +1688,20 @@ class ArrayAnalysis(object):
                 types.intp, ndims)
         size_vars = []
         use_attr_var = False
+        # trim shape tuple if it is more than ndim
+        if shape:
+            nshapes = len(shape)
+            if ndims < nshapes:
+                shape = shape[(nshapes-ndims):]
         for i in range(ndims):
+            skip = False
             if shape and shape[i]:
                 if isinstance(shape[i], ir.Var):
-                    size_var = shape[i]
+                    typ = self.typemap[shape[i].name]
+                    if (isinstance(typ, types.Number) or
+                        isinstance(typ, types.SliceType)):
+                        size_var = shape[i]
+                        skip = True
                 else:
                     if isinstance(shape[i], int):
                         size_val = ir.Const(shape[i], var.loc)
@@ -1579,7 +1714,8 @@ class ArrayAnalysis(object):
                     equiv_set.insert_equiv(size_var, size_val)
                     out.append(ir.Assign(size_val, size_var, var.loc))
                     self.func_ir._definitions[size_var.name] = [size_val]
-            else:
+                    skip = True
+            if not skip:
                 # get size: Asize0 = A_sh_attr[0]
                 size_var = ir.Var(var.scope, mk_unique_var(
                                   "{}_size{}".format(var.name, i)), var.loc)
