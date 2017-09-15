@@ -130,10 +130,39 @@ def test2(Y, X, w, iterations):
     return w
 
 
-def countParfors(func_ir):
+def countParfors(test_func, args):
+    typingctx = typing.Context()
+    targetctx = cpu.CPUContext(typingctx)
+    test_ir = compiler.run_frontend(test_func)
+    with cpu_target.nested_context(typingctx, targetctx):
+        tp = TestPipeline(typingctx, targetctx, args, test_ir)
+
+        numba.rewrites.rewrite_registry.apply(
+            'before-inference', tp, tp.func_ir)
+
+        tp.typemap, tp.return_type, tp.calltypes = compiler.type_inference_stage(
+            tp.typingctx, tp.func_ir, tp.args, None)
+
+        type_annotation = type_annotations.TypeAnnotation(
+            func_ir=tp.func_ir,
+            typemap=tp.typemap,
+            calltypes=tp.calltypes,
+            lifted=(),
+            lifted_from=None,
+            args=tp.args,
+            return_type=tp.return_type,
+            html_output=config.HTML)
+
+        numba.rewrites.rewrite_registry.apply(
+            'after-inference', tp, tp.func_ir)
+
+        parfor_pass = numba.parfor.ParforPass(
+            tp.func_ir, tp.typemap, tp.calltypes, tp.return_type,
+            tp.typingctx)
+        parfor_pass.run()
     ret_count = 0
 
-    for label, block in func_ir.blocks.items():
+    for label, block in test_ir.blocks.items():
         for i, inst in enumerate(block.body):
             if isinstance(inst, numba.parfor.Parfor):
                 ret_count += 1
@@ -212,79 +241,17 @@ class TestParfors(TestParforsBase):
     @skip_unsupported
     @tag('important')
     def test_test1(self):
-        typingctx = typing.Context()
-        targetctx = cpu.CPUContext(typingctx)
-        test_ir = compiler.run_frontend(test1)
-        with cpu_target.nested_context(typingctx, targetctx):
-            one_arg = numba.types.npytypes.Array(
-                numba.types.scalars.Float(name="float64"), 1, 'C')
-            args = (one_arg, one_arg, one_arg, one_arg, one_arg)
-            tp = TestPipeline(typingctx, targetctx, args, test_ir)
-
-            numba.rewrites.rewrite_registry.apply(
-                'before-inference', tp, tp.func_ir)
-
-            tp.typemap, tp.return_type, tp.calltypes = compiler.type_inference_stage(
-                tp.typingctx, tp.func_ir, tp.args, None)
-
-            type_annotation = type_annotations.TypeAnnotation(
-                func_ir=tp.func_ir,
-                typemap=tp.typemap,
-                calltypes=tp.calltypes,
-                lifted=(),
-                lifted_from=None,
-                args=tp.args,
-                return_type=tp.return_type,
-                html_output=config.HTML)
-
-            numba.rewrites.rewrite_registry.apply(
-                'after-inference', tp, tp.func_ir)
-
-            parfor_pass = numba.parfor.ParforPass(
-                tp.func_ir, tp.typemap, tp.calltypes, tp.return_type,
-                tp.typingctx)
-            parfor_pass.run()
-            self.assertTrue(countParfors(test_ir) == 1)
+        # blackscholes takes 5 1D float array args
+        args = (numba.float64[:], ) * 5
+        self.assertTrue(countParfors(test1, args) == 1)
 
     @skip_unsupported
     @needs_blas
     @tag('important')
     def test_test2(self):
-        typingctx = typing.Context()
-        targetctx = cpu.CPUContext(typingctx)
-        test_ir = compiler.run_frontend(test2)
-        with cpu_target.nested_context(typingctx, targetctx):
-            oneD_arg = numba.types.npytypes.Array(
-                numba.types.scalars.Float(name="float64"), 1, 'C')
-            twoD_arg = numba.types.npytypes.Array(
-                numba.types.scalars.Float(name="float64"), 2, 'C')
-            args = (oneD_arg, twoD_arg, oneD_arg, types.int64)
-            tp = TestPipeline(typingctx, targetctx, args, test_ir)
-
-            numba.rewrites.rewrite_registry.apply(
-                'before-inference', tp, tp.func_ir)
-
-            tp.typemap, tp.return_type, tp.calltypes = compiler.type_inference_stage(
-                tp.typingctx, tp.func_ir, tp.args, None)
-
-            type_annotation = type_annotations.TypeAnnotation(
-                func_ir=tp.func_ir,
-                typemap=tp.typemap,
-                calltypes=tp.calltypes,
-                lifted=(),
-                lifted_from=None,
-                args=tp.args,
-                return_type=tp.return_type,
-                html_output=config.HTML)
-
-            numba.rewrites.rewrite_registry.apply(
-                'after-inference', tp, tp.func_ir)
-
-            parfor_pass = numba.parfor.ParforPass(
-                tp.func_ir, tp.typemap, tp.calltypes, tp.return_type,
-                tp.typingctx)
-            parfor_pass.run()
-            self.assertTrue(countParfors(test_ir) == 1)
+        args = (numba.float64[:], numba.float64[:,:], numba.float64[:],
+                numba.int64)
+        self.assertTrue(countParfors(test2, args) == 1)
 
     @unittest.skipIf(not (_windows_py27 or _32bit),
                      "Only impacts Windows with Python 2.7 / 32 bit hardware")
