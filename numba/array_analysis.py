@@ -446,18 +446,27 @@ class ShapeEquivSet(EquivSet):
     def has_shape(self, name):
         """Return true if the shape of the given variable is available.
         """
-        inds = self.get_shape_classes(name)
-        if inds == ():
-            return False
-        else:
-            return all([i in self.ind_to_var for i in inds])
+        return self.get_shape(name) != None
 
     def get_shape(self, name):
         """Return a tuple of variables that corresponds to the shape
-        of the given array.
+        of the given array, or None if not found.
+        """
+        return guard(self._get_shape, name)
+
+    def _get_shape(self, name):
+        """Return a tuple of variables that corresponds to the shape
+        of the given array, or raise GuardException if not found.
         """
         inds = self.get_shape_classes(name)
-        return tuple(self.ind_to_var[i][0] for i in inds)
+        require (inds != ())
+        shape = []
+        for i in inds:
+            require(i in self.ind_to_var)
+            vs = self.ind_to_var[i]
+            assert(vs != [])
+            shape.append(vs[0])
+        return tuple(shape)
 
     def get_shape_classes(self, name):
         """Instead of the shape tuple, return tuple of int, where
@@ -469,17 +478,12 @@ class ShapeEquivSet(EquivSet):
             name = name.name
         typ = self.typemap[name] if name in self.typemap else None
         if not (isinstance(typ, types.BaseTuple) or
+                isinstance(typ, types.SliceType) or
                 isinstance(typ, types.ArrayCompatible)):
             return []
         names = self._get_names(name)
-        next_ind = self.next_ind
-        inds = []
-        for name in names:
-            if name in self.obj_to_ind:
-                inds.append(self.obj_to_ind[name])
-            else:
-                inds.append(-1)
-        return tuple(inds)
+        inds = tuple(self._get_ind(name) for name in names)
+        return inds
 
     def intersect(self, equiv_set):
         """Overload the intersect method to handle ind_to_var.
