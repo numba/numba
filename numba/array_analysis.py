@@ -35,24 +35,24 @@ array_analysis_extensions = {}
 # declaring call classes
 array_creation = ['empty', 'zeros', 'ones', 'full']
 
-random_int_args = ['random.rand', 'random.randn']
+random_int_args = ['rand', 'randn']
 
-random_1arg_size = ['random.ranf', 'random.random_sample', 'random.sample',
-                    'random.random', 'random.standard_normal']
+random_1arg_size = ['ranf', 'random_sample', 'sample',
+                    'random', 'standard_normal']
 
-random_2arg_sizelast = ['random.chisquare', 'random.weibull', 'random.power',
-                        'random.geometric', 'random.exponential',
-                        'random.poisson', 'random.rayleigh']
+random_2arg_sizelast = ['chisquare', 'weibull', 'power',
+                        'geometric', 'exponential',
+                        'poisson', 'rayleigh']
 
-random_3arg_sizelast = ['random.normal', 'random.uniform', 'random.beta',
-                        'random.binomial', 'random.f', 'random.gamma',
-                        'random.lognormal', 'random.laplace']
+random_3arg_sizelast = ['normal', 'uniform', 'beta',
+                        'binomial', 'f', 'gamma',
+                        'lognormal', 'laplace']
 
 random_calls = (random_int_args +
                 random_1arg_size +
                 random_2arg_sizelast +
                 random_3arg_sizelast +
-                ['random.randint', 'random.triangular'])
+                ['randint', 'triangular'])
 
 
 @intrinsic
