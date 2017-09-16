@@ -143,6 +143,26 @@ class TestStencils(unittest.TestCase):
 
         n = 100
         self.check(test_impl_seq, test_seq, n)
+        # variable length neighborhood in numba.stencil call
+        def test_seq(n, w):
+            A = np.arange(n)
+            def stencil2_kernel(a):
+                cum = a[-w]
+                for i in range(-w+1, w+1):
+                    cum += a[i]
+                return 0.3 * cum
+            B = numba.stencil(stencil2_kernel, neighborhood=((-w, w), ))(A)
+            return B
+
+        def test_impl_seq(n, w):
+            A = np.arange(n)
+            B = np.zeros(n)
+            for i in range(w, len(A)-w):
+                B[i] = 0.3 * sum(A[i-w:i+w+1])
+            return B
+        n = 100
+        w = 5
+        self.check(test_impl_seq, test_seq, n, w)
 
     @skip_unsupported
     @tag('important')
