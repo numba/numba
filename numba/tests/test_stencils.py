@@ -42,6 +42,11 @@ def stencil_multiple_input_kernel(a, b):
     return 0.25 * (a[0,1] + a[1,0] + a[0,-1] + a[-1,0] +
                    b[0,1] + b[1,0] + b[0,-1] + b[-1,0])
 
+@stencil
+def stencil_multiple_input_kernel_var(a, b, w):
+    return w * (a[0,1] + a[1,0] + a[0,-1] + a[-1,0] +
+                   b[0,1] + b[1,0] + b[0,-1] + b[-1,0])
+
 class TestStencils(unittest.TestCase):
 
     def __init__(self, *args):
@@ -195,7 +200,7 @@ class TestStencils(unittest.TestCase):
         def test_seq(n):
             A = np.arange(n**2).reshape((n, n))
             B = np.arange(n**2).reshape((n, n))
-            C = stencil_multiple_input_kernel(A,B)
+            C = stencil_multiple_input_kernel(A, B)
             return C
 
         def test_impl_seq(n):
@@ -209,6 +214,14 @@ class TestStencils(unittest.TestCase):
             return C
 
         n = 3
+        self.check(test_impl_seq, test_seq, n)
+        # test stencil with a non-array input
+        def test_seq(n):
+            A = np.arange(n**2).reshape((n, n))
+            B = np.arange(n**2).reshape((n, n))
+            w = 0.25
+            C = stencil_multiple_input_kernel_var(A, B, w)
+            return C
         self.check(test_impl_seq, test_seq, n)
 
     @skip_unsupported
