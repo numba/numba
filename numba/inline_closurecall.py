@@ -103,6 +103,7 @@ class InlineClosureCallPass(object):
                                 self.func_ir.func_id.func.__globals__,
                                 stencil_def.code)
                             options = dict(expr.kws)
+                            guard(self._fix_stencil_neighborhood, options)
                             sf = StencilFunc(kernel_ir, 'constant', options)
                             instr.value = ir.Global('stencil', sf, expr.loc)
                             modified = True
@@ -135,6 +136,29 @@ class InlineClosureCallPass(object):
                 pass
             self.func_ir.blocks = rename_labels(self.func_ir.blocks)
         debug_print("END")
+
+    def _fix_stencil_neighborhood(self, options):
+        """
+        Extract the two-level tuple representing the stencil neighborhood
+        from the program IR to provide a tuple to StencilFunc.
+        """
+        if 'neighborhood' not in options:
+            return
+        error_msg = "stencil neighborhood option should be a tuple \
+                        with constant structure such as ((-w, w),)"
+        # build_tuple node with neighborhood for each dimension
+        dims_build_tuple = guard(get_definition, self.func_ir,
+                                    options['neighborhood'])
+        if dims_build_tuple is None or not hasattr(dims_build_tuple, 'items'):
+            raise ValueError(error_msg)
+        res = []
+        for window_var in dims_build_tuple.items:
+            win_build_tuple = guard(get_definition, self.func_ir, window_var)
+            if win_build_tuple is None or not hasattr(win_build_tuple, 'items'):
+                raise ValueError(error_msg)
+            res.append(tuple(win_build_tuple.items))
+        options['neighborhood'] = tuple(res)
+        return
 
 def check_reduce_func(func_ir, func_var):
     reduce_func = guard(get_definition, func_ir, func_var)
