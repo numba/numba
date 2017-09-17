@@ -124,31 +124,13 @@ class StencilPass(object):
         # create parfor loop nests
         loopnests = []
         equiv_set = self.array_analysis.get_equiv_set(label)
-        sizes = equiv_set.get_shape(in_arr.name)
+        in_arr_dim_sizes = equiv_set.get_shape(in_arr.name)
 
-        assert ndims == len(sizes)
+        assert ndims == len(in_arr_dim_sizes)
         for i in range(ndims):
-            last_ind = sizes[i]
-            if end_lengths[i] != 0:
-                # set last index to size minus stencil size to avoid invalid
-                # memory access
-                index_const = ir.Var(scope, mk_unique_var("stencil_const_var"),
-                                                                            loc)
-                self.typemap[index_const.name] = types.intp
-                if isinstance(end_lengths[i], numbers.Number):
-                    const_assign = ir.Assign(ir.Const(end_lengths[i], loc),
-                                                            index_const, loc)
-                else:
-                    const_assign = ir.Assign(end_lengths[i], index_const, loc)
+            last_ind = self._get_stencil_last_ind(in_arr_dim_sizes[i],
+                                        end_lengths[i], gen_nodes, scope, loc)
 
-                gen_nodes.append(const_assign)
-                last_ind = ir.Var(scope, mk_unique_var("last_ind"), loc)
-                self.typemap[last_ind.name] = types.intp
-                index_call = ir.Expr.binop('-', sizes[i], index_const, loc)
-                self.calltypes[index_call] = ir_utils.find_op_typ('+',
-                                                    [types.intp, types.intp])
-                index_assign = ir.Assign(index_call, last_ind, loc)
-                gen_nodes.append(index_assign)
             # start from stencil size to avoid invalid array access
             loopnests.append(numba.parfor.LoopNest(parfor_vars[i],
                                 abs(start_lengths[i]), last_ind, 1))
@@ -224,6 +206,32 @@ class StencilPass(object):
         gen_nodes.append(parfor)
         gen_nodes.append(ir.Assign(out_arr, target, loc))
         return gen_nodes
+
+    def _get_stencil_last_ind(self, dim_size, end_length, gen_nodes, scope, loc):
+        last_ind = dim_size
+        # TODO: support negative end length
+        if end_length != 0:
+            # set last index to size minus stencil size to avoid invalid
+            # memory access
+            index_const = ir.Var(scope, mk_unique_var("stencil_const_var"),
+                                                                        loc)
+            self.typemap[index_const.name] = types.intp
+            if isinstance(end_length, numbers.Number):
+                const_assign = ir.Assign(ir.Const(end_length, loc),
+                                                        index_const, loc)
+            else:
+                const_assign = ir.Assign(end_length, index_const, loc)
+
+            gen_nodes.append(const_assign)
+            last_ind = ir.Var(scope, mk_unique_var("last_ind"), loc)
+            self.typemap[last_ind.name] = types.intp
+            index_call = ir.Expr.binop('-', dim_size, index_const, loc)
+            self.calltypes[index_call] = ir_utils.find_op_typ('+',
+                                                [types.intp, types.intp])
+            index_assign = ir.Assign(index_call, last_ind, loc)
+            gen_nodes.append(index_assign)
+
+        return last_ind
 
     def _replace_stencil_accesses(self, stencil_blocks, parfor_vars, in_args,
                                   index_offsets, stencil_func):
