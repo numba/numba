@@ -185,12 +185,9 @@ class StencilFuncLowerer(object):
     '''
     def __init__(self, sf):
         self.stencilFunc = sf
-        self.libs = []
 
     def __call__(self, context, builder, sig, args):
-        centry = self.stencilFunc.find_in_cache(sig.args, {})
-        assert centry is not None
-        (argtys, cres, sigret) = centry
+        cres = self.stencilFunc.compile_for_argtys(sig.args, {}, sig.return_type, None)
         return context.call_internal(builder, cres.fndesc, sig, args)
 
 
@@ -220,6 +217,7 @@ class StencilFunc(object):
         else:
             self.neighborhood = None
         self._cache = []
+        self._type_cache = []
         self._lower_me = StencilFuncLowerer(self)
 
     def get_return_type(self, argtys):
@@ -269,16 +267,20 @@ class StencilFunc(object):
             print("find_in_cache NO match")
         return None
 
-    def _compile_for_argtys(self, argtys, kwtys, return_type, sigret):
-        if 'out' in kwtys:
-            result = kwtys['out']
-            argtys += (result,)
-        else:
-            result = None
+    def compile_for_argtys(self, argtys, kwtys, return_type, sigret):
+        # look in cached functions first
+        centry = self.find_in_cache(argtys, kwtys)
+        if centry is not None:
+            (argtys, cres, sigret) = centry
+            return cres
+
+        # look in the type cache to find if result array is passed
+        result = None
+        for (_argtyps, _sig, _res) in self._type_cache:
+            if _argtyps == argtys:
+                result = _res
 
         new_func = self._stencil_wrapper(result, sigret, return_type, *argtys)
-        self._lower_me.libs.append(new_func.library)
-        self._targetctx.insert_func_defn([(self._lower_me, self, argtys)])
         return new_func
 
     def _type_me(self, argtys, kwtys):
@@ -287,19 +289,32 @@ class StencilFunc(object):
         built by StencilFunc._install_type().
         Return the call-site signature.
         """
-        find_res = self.find_in_cache(argtys, kwtys)
-        if find_res is None:
-            real_ret = self.get_return_type(argtys)
-            outtys = [real_ret]
-            outtys.extend(argtys)
-            if 'out' in kwtys:
-                outtys.append(kwtys['out'])
-            sigret = signature(*outtys)
-            pysig = self._compile_for_argtys(argtys, kwtys, real_ret, sigret)
-            find_res = self.find_in_cache(argtys, kwtys)
-            assert find_res is not None
+        argtys_with_out = argtys
+        if 'out' in kwtys:
+            argtys_with_out += (kwtys['out'],)
+        # look in the type cache first
+        for (_argtyps, _sig, _) in self._type_cache:
+            if _argtyps == argtys_with_out:
+                return _sig
 
-        return find_res[2]
+        real_ret = self.get_return_type(argtys)
+        sig = signature(real_ret, *argtys_with_out)
+        # use a dummy wrapper function to get pysignature
+        if 'out' in kwtys:
+            out_sig = ", out=None"
+            result = kwtys['out']
+        else:
+            out_sig = ""
+            result = None
+        dummy_text = ("def __numba_dummy_stencil("
+            + ",".join(self.kernel_ir.arg_names) + out_sig
+            + "):\n    pass\n")
+        exec(dummy_text)
+        dummy_func = eval("__numba_dummy_stencil")
+        sig.pysig = utils.pysignature(dummy_func)
+        self._targetctx.insert_func_defn([(self._lower_me, self, argtys_with_out)])
+        self._type_cache.append((argtys_with_out, sig, result))
+        return sig
 
     def _stencil_wrapper(self, result, sigret, return_type, *args):
         # Copy the kernel so that our changes for this callsite
