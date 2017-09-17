@@ -9,7 +9,8 @@ from numba import types
 from numba.typing.templates import infer_global, AbstractTemplate
 from numba.typing import signature
 from numba import ir_utils, ir, utils, array_analysis, config
-from numba.ir_utils import get_call_table, find_topo_order, mk_unique_var
+from numba.ir_utils import (get_call_table, find_topo_order, mk_unique_var,
+                            compile_to_numba_ir, replace_arg_nodes, guard, find_callname)
 from operator import add
 import numpy as np
 import numbers
@@ -76,6 +77,13 @@ class StencilPass(object):
                             stencil_blocks, index_offsets, stmt.target, rt, sf)
                     block.body = block.body[:i] + gen_nodes + block.body[i+1:]
                     return self.run()
+                if (isinstance(stmt, ir.Assign)
+                        and isinstance(stmt.value, ir.Expr)
+                        and stmt.value.op == 'call'
+                        and guard(find_callname, self.func_ir, stmt.value)
+                                    == ('stencil', 'numba')):
+                    # remove dummy stencil() call
+                    stmt.value = ir.Const(0, stmt.loc)
         return
 
     def _mk_stencil_parfor(self, label, in_args, out_arr, stencil_blocks,
@@ -130,10 +138,11 @@ class StencilPass(object):
         for i in range(ndims):
             last_ind = self._get_stencil_last_ind(in_arr_dim_sizes[i],
                                         end_lengths[i], gen_nodes, scope, loc)
-
+            start_ind = self._get_stencil_start_ind(
+                                        start_lengths[i], gen_nodes, scope, loc)
             # start from stencil size to avoid invalid array access
             loopnests.append(numba.parfor.LoopNest(parfor_vars[i],
-                                abs(start_lengths[i]), last_ind, 1))
+                                start_ind, last_ind, 1))
 
         # replace return value to setitem to output array
         return_node = stencil_blocks[max(stencil_blocks.keys())].body.pop()
@@ -232,6 +241,20 @@ class StencilPass(object):
             gen_nodes.append(index_assign)
 
         return last_ind
+
+    def _get_stencil_start_ind(self, start_length, gen_nodes, scope, loc):
+        if isinstance(start_length, int):
+            return abs(min(start_length, 0))
+        def get_start_ind(s_length):
+            return abs(min(s_length, 0))
+        f_ir = compile_to_numba_ir(get_start_ind, {}, self.typingctx, (types.intp,),
+                                self.typemap, self.calltypes)
+        assert len(f_ir.blocks) == 1
+        block = f_ir.blocks.popitem()[1]
+        replace_arg_nodes(block, [start_length])
+        gen_nodes += block.body[:-2]
+        ret_var = block.body[-2].value.value
+        return ret_var
 
     def _replace_stencil_accesses(self, stencil_blocks, parfor_vars, in_args,
                                   index_offsets, stencil_func):

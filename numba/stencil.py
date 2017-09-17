@@ -7,8 +7,11 @@ import numpy as np
 import copy
 from numba import compiler, types, ir_utils, ir, typing, numpy_support, utils
 from numba import config
-from numba.typing.templates import AbstractTemplate, signature
+from numba.typing.templates import (AbstractTemplate, signature, infer_global,
+                                    AbstractTemplate)
 from numba.targets import cpu, registry
+from numba.targets.imputils import lower_builtin
+from llvmlite import ir as lir
 
 def replace_return_with_setitem(blocks, index_vars):
     """
@@ -523,3 +526,15 @@ def _stencil(mode, options):
         return StencilFunc(kernel_ir, mode, options)
 
     return decorated
+
+
+@infer_global(stencil)
+class StencilInfer(AbstractTemplate):
+    "type inference for dummy stencil calls"
+    def generic(self, args, kws):
+        return signature(types.intp, *(args + tuple(kws.values())))
+
+@lower_builtin(stencil)
+def stencil_dummy_lower(context, builder, sig, args):
+    "lowering for dummy stencil calls"
+    return lir.Constant(lir.IntType(types.intp.bitwidth), 0)

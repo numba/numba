@@ -547,7 +547,7 @@ def has_no_side_effect(rhs, lives, call_table):
         if func_name not in call_table or call_table[func_name] == []:
             return False
         call_list = call_table[func_name]
-        if call_list == ['empty', numpy] or call_list == [slice] or call_list == ['stencil', numba]:
+        if call_list == ['empty', numpy] or call_list == [slice]:
             return True
         from numba.targets.registry import CPUDispatcher
         from numba.targets.linalg import dot_3_mv_check_args

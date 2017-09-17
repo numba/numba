@@ -42,6 +42,7 @@ class InlineClosureCallPass(object):
     def __init__(self, func_ir, flags):
         self.func_ir = func_ir
         self.flags = flags
+        self._processed_stencils = []
 
     def run(self):
         """Run inline closure call pass.
@@ -97,7 +98,9 @@ class InlineClosureCallPass(object):
                             break
                         # check for stencil call
                         if (guard(find_callname, self.func_ir, expr)
-                                    == ('stencil', 'numba')):
+                                    == ('stencil', 'numba')
+                                and expr not in self._processed_stencils):
+                            self._processed_stencils.append(expr)
                             from numba.stencil import StencilFunc
                             if not len(expr.args) == 1:
                                 raise ValueError("invalid stencil call args")
@@ -111,8 +114,18 @@ class InlineClosureCallPass(object):
                             options = dict(expr.kws)
                             guard(self._fix_stencil_neighborhood, options)
                             sf = StencilFunc(kernel_ir, 'constant', options)
-                            instr.value = ir.Global('stencil', sf, expr.loc)
+                            sf_global = ir.Global('stencil', sf, expr.loc)
+                            new_assign = ir.Assign(sf_global, lhs, expr.loc)
+                            block.body.insert(i, new_assign)
+                            # keep stencil() call to avoid removal of args by
+                            # remove_dead, set output to a dummy var
+                            # remove the make_function arg for njit pass to work
+                            expr.args = expr.args[1:]
+                            instr.target = ir.Var(lhs.scope,
+                                            mk_unique_var("dummy_out"), lhs.loc)
+                            work_list.append((label, block))
                             modified = True
+                            break
 
         if enable_inline_arraycall:
             # Identify loop structure
