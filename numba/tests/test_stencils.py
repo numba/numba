@@ -149,14 +149,15 @@ class TestStencils(unittest.TestCase):
         n = 100
         self.check(test_impl_seq, test_seq, n)
         # variable length neighborhood in numba.stencil call
+        # only supported in parallel path
         def test_seq(n, w):
             A = np.arange(n)
-            def stencil2_kernel(a):
+            def stencil2_kernel(a, w):
                 cum = a[-w]
                 for i in range(-w+1, w+1):
                     cum += a[i]
                 return 0.3 * cum
-            B = numba.stencil(stencil2_kernel, neighborhood=((-w, w), ))(A)
+            B = numba.stencil(stencil2_kernel, neighborhood=((-w, w), ))(A, w)
             return B
 
         def test_impl_seq(n, w):
@@ -167,7 +168,12 @@ class TestStencils(unittest.TestCase):
             return B
         n = 100
         w = 5
-        self.check(test_impl_seq, test_seq, n, w)
+        cpfunc = self.compile_parallel(test_seq, (types.intp, types.intp))
+        expected = test_impl_seq(n, w)
+        # parfor result
+        parfor_output = cpfunc.entry_point(n, w)
+        np.testing.assert_almost_equal(parfor_output, expected, decimal=1)
+        self.assertIn('@do_scheduling', cpfunc.library.get_llvm_str())
 
     @skip_unsupported
     @tag('important')
