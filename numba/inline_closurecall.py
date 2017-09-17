@@ -81,9 +81,12 @@ class InlineClosureCallPass(object):
                                 modified = True
                                 # current block is modified, skip the rest
                                 break
-                        func_def = guard(get_definition, self.func_ir, expr.func)
-                        debug_print("found call to ", expr.func, " def = ", func_def)
-                        if isinstance(func_def, ir.Expr) and func_def.op == "make_function":
+                        func_def = guard(get_definition, self.func_ir,
+                                                                    expr.func)
+                        debug_print("found call to ", expr.func, " def = ",
+                                                                    func_def)
+                        if (isinstance(func_def, ir.Expr)
+                                and func_def.op == "make_function"):
                             new_blocks = inline_closure_call(self.func_ir,
                                         self.func_ir.func_id.func.__globals__,
                                         block, i, func_def)
@@ -93,12 +96,15 @@ class InlineClosureCallPass(object):
                             # current block is modified, skip the rest
                             break
                         # check for stencil call
-                        if guard(find_callname, self.func_ir, expr) == ('stencil', 'numba'):
+                        if (guard(find_callname, self.func_ir, expr)
+                                    == ('stencil', 'numba')):
                             from numba.stencil import StencilFunc
-                            assert len(expr.args) == 1, """stencil call with one
-                                                            arg expected"""
-                            stencil_def = guard(get_definition, self.func_ir,expr.args[0])
-                            assert isinstance(stencil_def, ir.Expr) and stencil_def.op == "make_function"
+                            if not len(expr.args) == 1:
+                                raise ValueError("invalid stencil call args")
+                            stencil_def = guard(get_definition, self.func_ir,
+                                                expr.args[0])
+                            assert (isinstance(stencil_def, ir.Expr)
+                                        and stencil_def.op == "make_function")
                             kernel_ir = get_ir_of_code(
                                 self.func_ir.func_id.func.__globals__,
                                 stencil_def.code)
