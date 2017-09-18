@@ -809,6 +809,7 @@ class ParforPass(object):
                 mult_func_typ = find_op_typ('*', [in_typ, in_typ])
                 self.calltypes[mult_call] = mult_func_typ
                 tmp_var = ir.Var(scope, mk_unique_var("$val"), loc)
+                self.typemap[tmp_var.name] = mult_func_typ
                 acc_block.body.append(ir.Assign(mult_call, tmp_var, loc))
 
             acc_call = ir.Expr.inplace_binop(
