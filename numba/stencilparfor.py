@@ -266,7 +266,7 @@ class StencilPass(object):
         loc = in_arr.loc
         # replace access indices, find access lengths in each dimension
         need_to_calc_kernel = False
-        if isinstance(stencil_func.neighborhood, type(None)):
+        if stencil_func.neighborhood is None:
             need_to_calc_kernel = True
 
         if need_to_calc_kernel:
@@ -290,11 +290,16 @@ class StencilPass(object):
                         #assert isinstance(index_list, int)
                         index_list = [index_list]
                     if index_offsets:
-                        # add offsets in all dimensions
-                        index_list = list(map(add, index_list, index_offsets))
+                        index_list = self._add_index_offsets(index_list,
+                                    list(index_offsets), new_body, scope, loc)
 
                     # update min and max indices
                     if need_to_calc_kernel:
+                        # all indices should be integer to be able to calculate
+                        # neighborhood automatically
+                        if any([not isinstance(v, int) for v in index_list]):
+                            raise ValueError("Variable stencil index only "
+                                "possible with known neighborhood")
                         start_lengths = list(map(min, start_lengths, index_list))
                         end_lengths = list(map(max, end_lengths, index_list))
 
@@ -347,6 +352,38 @@ class StencilPass(object):
             block.body = new_body
 
         return start_lengths, end_lengths
+
+    def _add_index_offsets(self, index_list, index_offsets, new_body, scope, loc):
+        if all([isinstance(v, int) for v in index_list+index_offsets]):
+            # add offsets in all dimensions
+            return list(map(add, index_list, index_offsets))
+        assert len(index_list) == len(index_offsets)
+
+        index_vars = []
+        for i in range(len(index_list)):
+            # new_index = old_index + offset
+            offset_var = ir.Var(scope,
+                            mk_unique_var("offset_var"), loc)
+            self.typemap[offset_var.name] = types.intp
+            if isinstance(index_offsets[i], numbers.Number):
+                const_assign = ir.Assign(ir.Const(index_offsets[i], loc),
+                                                offset_var, loc)
+            else:
+                const_assign = ir.Assign(index_offsets[i],
+                                                offset_var, loc)
+
+            index_var = ir.Var(scope,
+                            mk_unique_var("offset_stencil_index"), loc)
+            self.typemap[index_var.name] = types.intp
+            index_call = ir.Expr.binop('+', index_list[i],
+                                                offset_var, loc)
+            self.calltypes[index_call] = ir_utils.find_op_typ('+',
+                                        [types.intp, types.intp])
+            index_assign = ir.Assign(index_call, index_var, loc)
+            new_body.extend([const_assign, index_assign])
+            index_vars.append(index_var)
+
+        return index_vars
 
 def get_stencil_blocks(sf, typingctx, args, scope, loc, input_dict, typemap,
                                                                     calltypes):
