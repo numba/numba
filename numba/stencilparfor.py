@@ -304,29 +304,8 @@ class StencilPass(object):
                         end_lengths = list(map(max, end_lengths, index_list))
 
                     # update access indices
-                    index_vars = []
-                    for i in range(ndims):
-                        # stencil_index = parfor_index + stencil_const
-                        index_const = ir.Var(scope,
-                                        mk_unique_var("stencil_const_var"), loc)
-                        self.typemap[index_const.name] = types.intp
-                        if isinstance(index_list[i], numbers.Number):
-                            const_assign = ir.Assign(ir.Const(index_list[i], loc),
-                                                            index_const, loc)
-                        else:
-                            const_assign = ir.Assign(index_list[i],
-                                                            index_const, loc)
-
-                        index_var = ir.Var(scope,
-                                        mk_unique_var("stencil_index_var"), loc)
-                        self.typemap[index_var.name] = types.intp
-                        index_call = ir.Expr.binop('+', parfor_vars[i],
-                                                            index_const, loc)
-                        self.calltypes[index_call] = ir_utils.find_op_typ('+',
-                                                    [types.intp, types.intp])
-                        index_assign = ir.Assign(index_call, index_var, loc)
-                        new_body.extend([const_assign, index_assign])
-                        index_vars.append(index_var)
+                    index_vars = self._add_index_offsets(parfor_vars,
+                                list(index_list), new_body, scope, loc)
 
                     # new access index tuple
                     if ndims == 1:
@@ -354,35 +333,46 @@ class StencilPass(object):
         return start_lengths, end_lengths
 
     def _add_index_offsets(self, index_list, index_offsets, new_body, scope, loc):
+        # shortcut if all values are integer
         if all([isinstance(v, int) for v in index_list+index_offsets]):
             # add offsets in all dimensions
             return list(map(add, index_list, index_offsets))
         assert len(index_list) == len(index_offsets)
 
+        out_nodes = []
         index_vars = []
         for i in range(len(index_list)):
             # new_index = old_index + offset
-            offset_var = ir.Var(scope,
-                            mk_unique_var("offset_var"), loc)
-            self.typemap[offset_var.name] = types.intp
-            if isinstance(index_offsets[i], numbers.Number):
+            old_index_var = index_list[i]
+            if isinstance(old_index_var, int):
+                old_index_var = ir.Var(scope,
+                                mk_unique_var("old_index_var"), loc)
+                self.typemap[old_index_var.name] = types.intp
+                const_assign = ir.Assign(ir.Const(index_list[i], loc),
+                                                    offset_var, loc)
+                out_nodes.append(const_assign)
+
+            offset_var = index_offsets[i]
+            if isinstance(offset_var, int):
+                offset_var = ir.Var(scope,
+                                mk_unique_var("offset_var"), loc)
+                self.typemap[offset_var.name] = types.intp
                 const_assign = ir.Assign(ir.Const(index_offsets[i], loc),
                                                 offset_var, loc)
-            else:
-                const_assign = ir.Assign(index_offsets[i],
-                                                offset_var, loc)
+                out_nodes.append(const_assign)
 
             index_var = ir.Var(scope,
                             mk_unique_var("offset_stencil_index"), loc)
             self.typemap[index_var.name] = types.intp
-            index_call = ir.Expr.binop('+', index_list[i],
+            index_call = ir.Expr.binop('+', old_index_var,
                                                 offset_var, loc)
             self.calltypes[index_call] = ir_utils.find_op_typ('+',
                                         [types.intp, types.intp])
             index_assign = ir.Assign(index_call, index_var, loc)
-            new_body.extend([const_assign, index_assign])
+            out_nodes.append(index_assign)
             index_vars.append(index_var)
 
+        new_body.extend(out_nodes)
         return index_vars
 
 def get_stencil_blocks(sf, typingctx, args, scope, loc, input_dict, typemap,
