@@ -330,7 +330,7 @@ class StencilFunc(object):
 
         if config.DEBUG_ARRAY_OPT == 1:
             print("_stencil_wrapper", return_type, return_type.dtype,
-                                      type(return_type.dtype), *args)
+                                      type(return_type.dtype), args)
             ir_utils.dump_blocks(kernel_copy.blocks)
 
         stencil_func_name = "__numba_stencil_%s_%s" % (
