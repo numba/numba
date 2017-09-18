@@ -113,6 +113,7 @@ class InlineClosureCallPass(object):
                                 stencil_def.code)
                             options = dict(expr.kws)
                             guard(self._fix_stencil_neighborhood, options)
+                            guard(self._fix_stencil_index_offsets, options)
                             sf = StencilFunc(kernel_ir, 'constant', options)
                             sf_global = ir.Global('stencil', sf, expr.loc)
                             new_assign = ir.Assign(sf_global, lhs, expr.loc)
@@ -163,8 +164,8 @@ class InlineClosureCallPass(object):
         """
         if 'neighborhood' not in options:
             return
-        error_msg = "stencil neighborhood option should be a tuple \
-                        with constant structure such as ((-w, w),)"
+        error_msg = ("stencil neighborhood option should be a tuple "
+                        "with constant structure such as ((-w, w),)")
         # build_tuple node with neighborhood for each dimension
         dims_build_tuple = guard(get_definition, self.func_ir,
                                     options['neighborhood'])
@@ -177,6 +178,22 @@ class InlineClosureCallPass(object):
                 raise ValueError(error_msg)
             res.append(tuple(win_build_tuple.items))
         options['neighborhood'] = tuple(res)
+        return
+
+    def _fix_stencil_index_offsets(self, options):
+        """
+        Extract the tuple representing the stencil index offsets
+        from the program IR to provide to StencilFunc.
+        """
+        if 'index_offsets' not in options:
+            return
+        error_msg = ("stencil index_offsets option should be a tuple "
+                        "with constant structure such as (offset, )")
+        offset_tuple = guard(get_definition, self.func_ir,
+                                    options['index_offsets'])
+        if offset_tuple is None or not hasattr(offset_tuple, 'items'):
+            raise ValueError(error_msg)
+        options['index_offsets'] = tuple(offset_tuple.items)
         return
 
 def check_reduce_func(func_ir, func_var):
