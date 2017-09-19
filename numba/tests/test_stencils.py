@@ -192,6 +192,21 @@ class TestStencils(unittest.TestCase):
         parfor_output = cpfunc.entry_point(n, w, offset)
         np.testing.assert_almost_equal(parfor_output, expected, decimal=1)
         self.assertIn('@do_scheduling', cpfunc.library.get_llvm_str())
+        # test slice in kernel
+        def test_seq(n, w, offset):
+            A = np.arange(n)
+            def stencil2_kernel(a, w):
+                return 0.3 * np.sum(a[-w+1:w+2])
+            B = numba.stencil(stencil2_kernel, neighborhood=((-w, w), ),
+                    index_offsets=(-offset, ))(A, w)
+            return B
+
+        offset = 1
+        cpfunc = self.compile_parallel(test_seq, (types.intp, types.intp,
+                                                                    types.intp))
+        parfor_output = cpfunc.entry_point(n, w, offset)
+        np.testing.assert_almost_equal(parfor_output, expected, decimal=1)
+        self.assertIn('@do_scheduling', cpfunc.library.get_llvm_str())
 
     @skip_unsupported
     @tag('important')
