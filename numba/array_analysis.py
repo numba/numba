@@ -691,7 +691,7 @@ class SymbolicEquivSet(ShapeEquivSet):
                             super(SymbolicEquivSet, self)._insert(names)
             return value
 
-    def define(self, name, func_ir=None):
+    def define(self, var, func_ir=None):
         """Besides incrementing the definition count of the given variable
         name, it will also retrieve and simplify its definition from func_ir,
         and remeber the result for later equivalence comparison. Supported
@@ -699,11 +699,22 @@ class SymbolicEquivSet(ShapeEquivSet):
           1. arithmetic plus and minus with constants
           2. slice
         """
-        if isinstance(name, ir.Var):
-            name = name.name
+        if isinstance(var, ir.Var):
+            name = var.name
+        else:
+            name = var
         super(SymbolicEquivSet, self).define(name)
         if func_ir and self.defs.get(name, 0) == 1:
             value = guard(self._get_or_set_rel, name, func_ir)
+            # turn constant definition into equivalence
+            if isinstance(value, int):
+                self._insert([name, value])
+            ind = self._get_ind(name)
+            if ind >= 0 and isinstance(var, ir.Var):
+              if ind in self.ind_to_var:
+                self.ind_to_var[ind].append(var)
+              else:
+                self.ind_to_var[ind] = [var]
 
     def _insert(self, objs):
         """Overload _insert method to handle ind changes between relative
@@ -862,6 +873,11 @@ class ArrayAnalysis(object):
         """dump per-block equivalence sets for debugging purposes.
         """
         print("Array Analysis: ", self.equiv_sets)
+
+    def _define(self, equiv_set, var, typ, value):
+        self.typemap[var.name] = typ
+        self.func_ir._definitions[var.name] = [value]
+        equiv_set.define(var, self.func_ir)
 
     def _analyze_inst(self, label, scope, equiv_set, inst):
         pre = []
@@ -1075,20 +1091,16 @@ class ArrayAnalysis(object):
                 if rel[1] == 0:
                     return base_var
                 offset_var = scope.make_temp(loc)
-                self.typemap[offset_var.name] = base_type
                 offset_val = ir.Const(rel[1], loc)
-                self.func_ir._definitions[offset_var.name] = [offset_val]
+                self._define(equiv_set, offset_var, base_type, offset_val)
                 stmts.append(ir.Assign(ir.Const(rel[1], loc),
                              offset_var, loc))
                 size_var = scope.make_temp(loc)
-                self.typemap[size_var.name] = base_type
                 size_val = ir.Expr.binop('+', base_var, offset_var, loc=loc)
-                self.func_ir._definitions[size_var.name] = [size_val]
+                self._define(equiv_set, size_var, base_type, size_val)
                 self.calltypes[size_val] = signature(
                     base_type, base_type, base_type)
                 stmts.append(ir.Assign(size_val, size_var, loc))
-                equiv_set.define(offset_var, self.func_ir)
-                equiv_set.define(size_var, self.func_ir)
                 return size_var
             elif isinstance(typ, types.Number):
                 return 1
@@ -1102,8 +1114,7 @@ class ArrayAnalysis(object):
         loc = ind_var.loc
         one_var = scope.make_temp(loc)
         one_val = ir.Const(1, loc)
-        self.typemap[one_var.name] = types.intp
-        self.func_ir._definitions[one_var.name] = [one_val]
+        self._define(equiv_set, one_var, types.intp, one_val)
         stmts.append(ir.Assign(one_val, one_var, loc))
         shape = tuple(one_var if x == 1 else x for x in shape)
         return shape, stmts
@@ -1175,11 +1186,9 @@ class ArrayAnalysis(object):
         loc = lhs.loc
         # innsert new statements: size = rhs - lhs
         size_var = scope.make_temp(loc)
-        self.typemap[size_var.name] = typ
         size_val = ir.Expr.binop('-', rhs, lhs, loc=loc)
-        self.func_ir._definitions[size_var.name] = [size_val]
+        self._define(equiv_set, size_var, typ, size_val)
         self.calltypes[size_val] = signature(typ, typ, typ)
-        equiv_set.define(size_var, self.func_ir)
         return (size_var,), [ir.Assign(value=size_val, target=size_var, loc=loc)]
 
     def _analyze_op_call_builtin_len(self, scope, equiv_set, args, kws):
@@ -1654,16 +1663,14 @@ class ArrayAnalysis(object):
         # prepare function variable whose type may vary since it takes vararg
         assert_var = scope.make_temp(loc)
         assert_def = ir.Global('assert_equiv', assert_equiv, loc=loc)
-        self.func_ir._definitions[assert_var.name] = [assert_def]
         fnty = get_global_func_typ(assert_equiv)
         sig = self.context.resolve_function_type(fnty, (tup_typ,), {})
-        self.typemap[assert_var.name] = fnty
+        self._define(equiv_set, assert_var, fnty, assert_def)
 
         # The return value from assert_equiv is always of none type.
         var = scope.make_temp(loc)
-        self.typemap[var.name] = types.none
         value = ir.Expr.call(assert_var, [msg_var] + args, {}, loc=loc)
-        self.func_ir._definitions[var.name] = [value]
+        self._define(equiv_set, var, types.none, value)
         self.calltypes[value] = sig
 
         return [ir.Assign(value=msg_val, target=msg_var, loc=loc),
@@ -1685,8 +1692,7 @@ class ArrayAnalysis(object):
             shape_attr_call = ir.Expr.getattr(var, "shape", var.loc)
             attr_var = ir.Var(var.scope, mk_unique_var(
                               "{}_shape".format(var.name)), var.loc)
-            self.typemap[attr_var.name] = types.containers.UniTuple(
-                types.intp, ndims)
+            shape_attr_typ = types.containers.UniTuple(types.intp, ndims)
         size_vars = []
         use_attr_var = False
         # trim shape tuple if it is more than ndim
@@ -1711,26 +1717,23 @@ class ArrayAnalysis(object):
                     assert(isinstance(size_val, ir.Const))
                     size_var = ir.Var(var.scope, mk_unique_var(
                         "{}_size{}".format(var.name, i)), var.loc)
-                    self.typemap[size_var.name] = types.intp
-                    equiv_set.insert_equiv(size_var, size_val)
                     out.append(ir.Assign(size_val, size_var, var.loc))
-                    self.func_ir._definitions[size_var.name] = [size_val]
+                    self._define(equiv_set, size_var, types.intp, size_val)
                     skip = True
             if not skip:
                 # get size: Asize0 = A_sh_attr[0]
                 size_var = ir.Var(var.scope, mk_unique_var(
                                   "{}_size{}".format(var.name, i)), var.loc)
-                self.typemap[size_var.name] = types.intp
                 getitem = ir.Expr.static_getitem(attr_var, i, None, var.loc)
                 use_attr_var = True
                 self.calltypes[getitem] = None
                 out.append(ir.Assign(getitem, size_var, var.loc))
-                self.func_ir._definitions[size_var.name] = [getitem]
+                self._define(equiv_set, size_var, types.intp, getitem)
             size_vars.append(size_var)
         if use_attr_var and shape_attr_call:
             # only insert shape call if there is any getitem call
             out.insert(0, ir.Assign(shape_attr_call, attr_var, var.loc))
-            self.func_ir._definitions[attr_var.name] = [shape_attr_call]
+            self._define(equiv_set, attr_var, shape_attr_typ, shape_attr_call)
         return tuple(size_vars), out
 
     def _isarray(self, varname):
