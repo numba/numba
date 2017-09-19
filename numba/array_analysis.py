@@ -73,6 +73,7 @@ def assert_equiv(typingctx, *val):
     # Arguments must be either array, tuple, or integer
     assert all(map(lambda a: (isinstance(a, types.ArrayCompatible) or
                               isinstance(a, types.BaseTuple) or
+                              isinstance(a, types.SliceType) or
                               isinstance(a, types.Integer)), val[0][1:]))
 
     def codegen(context, builder, sig, args):
@@ -1640,7 +1641,7 @@ class ArrayAnalysis(object):
         if len(args) < 2:
             return []
 
-        msg = "Sizes of {} do not match".format(', '.join(arg_names))
+        msg = "Sizes of {} do not match on {}".format(', '.join(arg_names), loc)
         msg_val = ir.Const(msg, loc)
         msg_typ = types.Const(msg)
         msg_var = scope.make_temp(loc)
