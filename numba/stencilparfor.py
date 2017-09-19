@@ -319,10 +319,19 @@ class StencilPass(object):
                         tuple_assign = ir.Assign(tuple_call, ind_var, loc)
                         new_body.append(tuple_assign)
 
+                    # getitem return type is scalar if all indices are integer
+                    if all([self.typemap[v.name] == types.intp
+                                                        for v in index_vars]):
+                        getitem_return_typ = self.typemap[
+                                                    stmt.value.value.name].dtype
+                    else:
+                        # getitem returns an array
+                        getitem_return_typ = self.typemap[stmt.value.value.name]
                     # new getitem with the new index var
-                    getitem_call = ir.Expr.getitem(stmt.value.value, ind_var, loc)
+                    getitem_call = ir.Expr.getitem(stmt.value.value, ind_var,
+                                                                            loc)
                     self.calltypes[getitem_call] = signature(
-                        self.typemap[stmt.value.value.name].dtype,
+                        getitem_return_typ,
                         self.typemap[stmt.value.value.name],
                         self.typemap[ind_var.name])
                     stmt.value = getitem_call
@@ -361,17 +370,23 @@ class StencilPass(object):
                                                 offset_var, loc)
                 out_nodes.append(const_assign)
 
-            if isinstance(self.typemap[old_index_var.name], types.misc.SliceType):
+            if (isinstance(old_index_var, slice)
+                    or isinstance(self.typemap[old_index_var.name],
+                                    types.misc.SliceType)):
                 # only one arg can be slice
                 assert self.typemap[offset_var.name] == types.intp
-                index_var = self._add_offset_to_slice(old_index_var, offset_var, out_nodes)
+                index_var = self._add_offset_to_slice(old_index_var, offset_var,
+                                                        out_nodes, scope, loc)
                 index_vars.append(index_var)
                 continue
 
-            if isinstance(self.typemap[offset_var.name], types.misc.SliceType):
+            if (isinstance(offset_var, slice)
+                    or isinstance(self.typemap[offset_var.name],
+                                    types.misc.SliceType)):
                 # only one arg can be slice
                 assert self.typemap[old_index_var.name] == types.intp
-                index_var = self._add_offset_to_slice(offset_var, old_index_var, out_nodes)
+                index_var = self._add_offset_to_slice(offset_var, old_index_var,
+                                                        out_nodes, scope, loc)
                 index_vars.append(index_var)
                 continue
 
@@ -389,15 +404,28 @@ class StencilPass(object):
         new_body.extend(out_nodes)
         return index_vars
 
-    def _add_offset_to_slice(self, slice_var, offset_var, out_nodes):
-        def f(old_slice, offset):
-            return slice(old_slice.start + offset, old_slice.stop + offset)
+    def _add_offset_to_slice(self, slice_var, offset_var, out_nodes, scope,
+                                loc):
+        if isinstance(slice_var, slice):
+            f_text = """def f(offset):
+                return slice({} + offset, {} + offset)
+            """.format(slice_var.start, slice_var.stop)
+            loc = {}
+            exec(f_text, {}, loc)
+            f = loc['f']
+            args = [offset_var]
+            arg_typs = (types.intp,)
+        else:
+            def f(old_slice, offset):
+                return slice(old_slice.start + offset, old_slice.stop + offset)
+            args = [slice_var, offset_var]
+            slice_type = self.typemap[slice_var.name]
+            arg_typs = (slice_type, types.intp,)
         _globals = self.func_ir.func_id.func.__globals__
-        slice_type = self.typemap[slice_var.name]
-        f_ir = compile_to_numba_ir(f, _globals, self.typingctx,
-                        (slice_type, types.intp), self.typemap, self.calltypes)
+        f_ir = compile_to_numba_ir(f, _globals, self.typingctx, arg_typs,
+                                    self.typemap, self.calltypes)
         _, block = f_ir.blocks.popitem()
-        replace_arg_nodes(block, [slice_var, offset_var])
+        replace_arg_nodes(block, args)
         new_index = block.body[-2].value.value
         out_nodes.extend(block.body[:-2])  # ignore return nodes
         return new_index
