@@ -638,6 +638,8 @@ class ParforPass(object):
                                                      index_typ)
             init_block.append(ir.Assign(getitem_call, subarr_var, loc))
             target = subarr_var
+            size_vars = tuple([ x for x in size_vars
+                                if equiv_set.get_equiv_const(x) != 1 ])
         else:
             # boolean array
             assert(isinstance(index_typ, types.ArrayCompatible))
@@ -1347,7 +1349,7 @@ def _gen_arrayexpr_getitem(
     var_typ =  typemap[var.name]
     ndims = typemap[var.name].ndim
     num_indices = len(all_parfor_indices)
-    size_vars = equiv_set.get_shape(var)
+    size_vars = equiv_set.get_shape(var) or []
     size_consts = [equiv_set.get_equiv_const(x) for x in size_vars]
     if ndims == 0:
         # call np.ravel
