@@ -44,7 +44,10 @@ def main (*args):
 
     input_img = Image.open(input_file)
     input_arr = np.array(input_img)
+    tstart = time.time()
     output_arr = run_gaussian_blur(input_arr, iterations).astype(input_arr.dtype)
+    htime = time.time() - tstart
+    print("SELFTIMED ", htime)
 
     new_img = Image.fromarray(output_arr, mode=input_img.mode)
     new_img.format = input_img.format
