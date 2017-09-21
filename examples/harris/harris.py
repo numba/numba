@@ -43,7 +43,7 @@ def harris(Iin):
     return harris
 
 def main (*args):
-    iterations = 1
+    iterations = 10
     #input_file = "chessboard.jpg" 
     
     if len(args) > 0:
@@ -57,11 +57,12 @@ def main (*args):
     #output_arr = np.zeros_like(input_arr)
     
     tstart = time.time()
-    output_arr = harris(input_arr).astype(np.uint8)
+    for i in range(iterations):
+        output_arr = harris(input_arr)
     htime = time.time() - tstart
     print("SELFTIMED ", htime)
 
-    new_img = Image.fromarray(output_arr, mode=input_img.mode)
+    new_img = Image.fromarray(output_arr.astype(np.uint8), mode=input_img.mode)
     new_img.format = input_img.format
     new_img.save(new_file_name)
 

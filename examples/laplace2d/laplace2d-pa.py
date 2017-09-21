@@ -22,8 +22,8 @@ def jacobi_relax_core(A, Anew):
 
 
 def main():
-    NN = 512
-    NM = 512
+    NN = 3000
+    NM = 3000
 
     A = np.zeros((NN, NM), dtype=np.float64)
     Anew = np.zeros((NN, NM), dtype=np.float64)

@@ -19,15 +19,18 @@ def kde(X):
 
 def main():
     parser = argparse.ArgumentParser(description='Kernel-Density')
-    parser.add_argument('--size', dest='size', type=int, default=1000000)
+    parser.add_argument('--size', dest='size', type=int, default=10000000)
+    parser.add_argument('--iterations', dest='iterations', type=int, default=20)
     args = parser.parse_args()
     size = args.size
+    iterations = args.iterations
 
     kde(np.random.ranf(10))
     print("size:", size)
     X = np.random.ranf(size)
     t1 = time.time()
-    res = kde(X)
+    for _ in range(iterations):
+        res = kde(X)
     t = time.time()-t1
     print("checksum:", res)
     print("SELFTIMED:", t)
