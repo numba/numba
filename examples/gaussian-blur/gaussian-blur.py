@@ -19,8 +19,20 @@ def gaussian_blur(a):
             a[-2, 1] * 0.0133 + a[-1, 1] * 0.0596 + a[0, 1] * 0.0983 + a[1, 1] * 0.0596 + a[2, 1] * 0.0133 +
             a[-2, 2] * 0.003  + a[-1, 2] * 0.0133 + a[0, 2] * 0.0219 + a[1, 2] * 0.0133 + a[2, 2] * 0.0030)
 
+def gaussian_blur_std(a):
+    ashape = a.shape
+    res = np.zeros(ashape)
+    for i in range(2,ashape[0]-2):
+        for j in range(2,ashape[1]-2):
+            res[i,j] = (a[i-2,j-2] * 0.003  + a[i-1,j-2] * 0.0133 + a[i,j-2] * 0.0219 + a[i+1,j-2] * 0.0133 + a[i+2,j-2] * 0.0030 +
+                        a[i-2,j-1] * 0.0133 + a[i-1,j-1] * 0.0596 + a[i,j-1] * 0.0983 + a[i+1,j-1] * 0.0596 + a[i+2,j-1] * 0.0133 +
+                        a[i-2,j+0] * 0.0219 + a[i-1,j+0] * 0.0983 + a[i,j+0] * 0.1621 + a[i+1,j+0] * 0.0983 + a[i+2,j+0] * 0.0219 +
+                        a[i-2,j+1] * 0.0133 + a[i-1,j+1] * 0.0596 + a[i,j+1] * 0.0983 + a[i+1,j+1] * 0.0596 + a[i+2,j+1] * 0.0133 +
+                        a[i-2,j+2] * 0.003  + a[i-1,j+2] * 0.0133 + a[i,j+2] * 0.0219 + a[i+1,j+2] * 0.0133 + a[i+2,j+2] * 0.0030)
+    return res
+
 def main (*args):
-    iterations = 1
+    iterations = 60
     input_file = "sample.jpg" 
     
     if len(args) > 0:
@@ -36,15 +48,28 @@ def main (*args):
     input_arr = np.array(input_img)
     #output_arr = np.zeros_like(input_arr)
 
+    tstart = time.time()
     for i in range(iterations):
         output_arr = gaussian_blur(input_arr)
         input_arr, output_arr = output_arr, input_arr
+    htime = time.time() - tstart
+    print("SELFTIMED ", htime)
 
     output_arr = input_arr.astype(np.uint8)
 
     new_img = Image.fromarray(output_arr, mode=input_img.mode)
     new_img.format = input_img.format
     new_img.save(new_file_name)
+
+    input_img = Image.open(input_file)
+    input_arr = np.array(input_img)
+
+    tstart = time.time()
+    for i in range(iterations):
+        output_arr = gaussian_blur_std(input_arr)
+        input_arr, output_arr = output_arr, input_arr
+    htime = time.time() - tstart
+    print("Standard Python time", htime)
 
 if __name__ == "__main__":
     main(*sys.argv[1:])

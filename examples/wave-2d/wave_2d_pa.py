@@ -67,7 +67,7 @@ def prime_wave2d():
 
 def wave2d():
     speed = 10      # Propagation speed
-    s = 512         # Array size (spatial resolution of the simulation)
+    s = 6000        # Array size (spatial resolution of the simulation)
 
     s2  = s // 2
     s4  = s // 4
