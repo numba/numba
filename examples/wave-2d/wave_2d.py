@@ -6,7 +6,7 @@
 # This code was ported from a Julia implementation as part of the 
 # ParallelAccelerator Julia package which in turn was ported from a
 # MATLAB implementation available at
-# http://www.piso.at/julius/index.php/projects/programmierung/13-2d-wave-equation-in-octave
+# http://www.piso.at/julius/index.php/projects/programmierung/octave-2d-wave-equation
 # with permission of the author.
 # Original MATLAB implementation is copyright (c) 2014 Julius Piso.
 
@@ -14,10 +14,7 @@ from __future__ import print_function
 
 import sys
 import time
-import os
-
 import numpy as np
-
 from numba import stencil
 
 @stencil()
