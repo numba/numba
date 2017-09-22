@@ -40,22 +40,21 @@ def harris(Iin):
     Sxy = harris_common(Ixy)
     det = (Sxx * Syy) - (Sxy * Sxy)
     trace = Sxx + Syy
-    harris = det - (0.04 * trace * trace)
-    return harris
+    return det - (0.04 * trace * trace)
 
 def main (*args):
     iterations = 10
-    #input_file = "chessboard.jpg" 
     
     if len(args) > 0:
         input_file = args[0]
+    else:
+        raise ValueError("A jpeg file must be provided as the first command line parameter.")
 
     parts = os.path.splitext(input_file)
     new_file_name = parts[0] + "-corners" + parts[1]
 
     input_img = Image.open(input_file)
     input_arr = np.array(input_img)
-    #output_arr = np.zeros_like(input_arr)
 
     output_arr = harris(input_arr).astype(np.uint8)
 

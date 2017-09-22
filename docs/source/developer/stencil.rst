@@ -38,10 +38,7 @@ StencilFunc overrides the ``__call__`` method so that calls
 to StencilFunc objects execute the stencil::
 
     def __call__(self, *args, **kwargs):                                        
-        if 'out' in kwargs:                                                     
-            result = kwargs['out']                                              
-        else:                                                                   
-            result = None                                                       
+        result = kwargs.get('out')
                                                                                 
         new_stencil_func = self._stencil_wrapper(result, None, *args)           
                                                                                 
@@ -68,7 +65,7 @@ Each StencilFunc maintains a cache of previously seen combinations
 of input argument types and keyword types.  If previously seen,
 the StencilFunc returns the computed signature.  If not previously
 computed, the StencilFunc computes the return type of the stencil
-by run the Numba compiler frontend on the stencil kernel and
+by running the Numba compiler frontend on the stencil kernel and
 then performing type inference on the IR to get the scalar return
 type of the kernel.  From that, a Numpy array type is constructed
 whose element type matches that scalar return type.

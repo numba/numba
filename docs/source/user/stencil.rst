@@ -13,14 +13,14 @@ Numba provides the ``@stencil`` decorator so that users may
 easily specify a stencil kernel and Numba then generates the looping
 code necessary to apply that kernel to some input array.  Thus, the
 stencil decorator allows clearer, more concise code and in conjunction
-with :ref:`the parallel jit option <parallel_jit_option>` enables higher performance through
-parallelism of the stencil execution.
+with :ref:`the parallel jit option <parallel_jit_option>` enables higher
+performance through parallelism of the stencil execution.
 
 
 Basic usage
 ===========
 
-An example usage of the ``@stencil`` decorator::
+An example use of the ``@stencil`` decorator::
  
    from numba import stencil
 
@@ -47,7 +47,7 @@ is being processed then ``a[0,0]`` in the stencil kernel corresponds to
 kernel corresponds to ``a[x-1,y+1]`` in the input array.
 
 Depending on the specified kernel, the kernel cannot be applied to the
-borders of the output image as this may cause the input array to be
+borders of the output array as this may cause the input array to be
 accessed out-of-bounds.  How the stencil decorator handles this situation
 is dependent upon which :ref:`stencil-mode` is selected.  
 The default mode is for the stencil decorator to set the border elements 
@@ -85,8 +85,8 @@ a regular function and pass the input array as the argument::
    dtype('float64')
 
 Note that the stencil decorator has determined that the output type
-of the specified stencil kernel is ``float`` and has thus created the
-output array as ``float`` while the input array is of type ``int``.
+of the specified stencil kernel is ``float64`` and has thus created the
+output array as ``float64`` while the input array is of type ``int64``.
 
 Stencil Parameters
 ==================
