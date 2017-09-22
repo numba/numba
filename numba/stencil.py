@@ -182,7 +182,6 @@ def add_indices_to_kernel(kernel, ndim, neighborhood):
                 raise ValueError("Non-tuple or non-integer used as stencil index.")
             if index_len != ndim:
                 raise ValueError("Stencil index does not match array dimensionality.")
-        self.neighborhood = neighborhood
 
     return neighborhood
 
@@ -350,6 +349,9 @@ class StencilFunc(object):
 
         kernel_size = add_indices_to_kernel(kernel_copy, the_array.ndim,
                                             self.neighborhood)
+        if self.neighborhood is None:
+            self.neighborhood = kernel_size
+
         if config.DEBUG_ARRAY_OPT == 1:
             print("after add indices")
             ir_utils.dump_blocks(kernel_copy.blocks)
