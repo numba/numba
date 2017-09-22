@@ -14,8 +14,10 @@ import os
 import numpy as np
 
 from numba import jit, stencil
-from PIL import Image
-
+try:
+    from PIL import Image
+except ImportError:
+    raise RuntimeError("Pillow is needed to run this example. Try 'conda install pillow'")
 
 @stencil()
 def gaussian_blur(a):
