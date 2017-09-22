@@ -14,10 +14,12 @@ import os
 import numpy as np
 
 from numba import njit, stencil
-from PIL import Image
+try:
+    from PIL import Image
+except ImportError:
+    raise RuntimeError("Pillow is needed to run this example. Try 'conda install pillow'")
 
-
-@stencil()
+@atencil()
 def gaussian_blur(a):
     return (a[-2,-2] * 0.003  + a[-1,-2] * 0.0133 + a[0,-2] * 0.0219 + a[1,-2] * 0.0133 + a[2,-2] * 0.0030 +
             a[-2,-1] * 0.0133 + a[-1,-1] * 0.0596 + a[0,-1] * 0.0983 + a[1,-1] * 0.0596 + a[2,-1] * 0.0133 +
@@ -25,7 +27,6 @@ def gaussian_blur(a):
             a[-2, 1] * 0.0133 + a[-1, 1] * 0.0596 + a[0, 1] * 0.0983 + a[1, 1] * 0.0596 + a[2, 1] * 0.0133 +
             a[-2, 2] * 0.003  + a[-1, 2] * 0.0133 + a[0, 2] * 0.0219 + a[1, 2] * 0.0133 + a[2, 2] * 0.0030)
 
-#@njit()
 @njit(parallel=True)
 def run_gaussian_blur(input_arr, iterations):
     sinput_arr = gaussian_blur(input_arr)
