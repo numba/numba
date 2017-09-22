@@ -38,10 +38,11 @@ def run_gaussian_blur(input_arr, iterations):
 
 def main (*args):
     iterations = 1
-    input_file = "sample.jpg" 
-    
+
     if len(args) > 0:
         input_file = args[0]
+    else:
+        raise ValueError("A jpeg file must be provided as the first command line parameter.")
 
     if len(args) > 1:
         iterations = int(args[1])
@@ -59,6 +60,7 @@ def main (*args):
     new_img = Image.fromarray(output_arr, mode=input_img.mode)
     new_img.format = input_img.format
     new_img.save(new_file_name)
+    input_img.close()
 
 if __name__ == "__main__":
     main(*sys.argv[1:])
