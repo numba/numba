@@ -67,6 +67,9 @@ def add_indices_to_kernel(kernel, ndim, neighborhood):
     need_to_calc_kernel = False
     if neighborhood is None:
         need_to_calc_kernel = True
+    else:
+        if len(neighborhood) != ndim:
+            raise RuntimeError("%d dimensional neighborhood specified for %d dimensional input array" % (len(self.neighborhood), ndim))
 
     for block in kernel.blocks.values():
         scope = block.scope
@@ -179,6 +182,7 @@ def add_indices_to_kernel(kernel, ndim, neighborhood):
                 raise ValueError("Non-tuple or non-integer used as stencil index.")
             if index_len != ndim:
                 raise ValueError("Stencil index does not match array dimensionality.")
+        self.neighborhood = neighborhood
 
     return neighborhood
 
@@ -292,6 +296,8 @@ class StencilFunc(object):
         built by StencilFunc._install_type().
         Return the call-site signature.
         """
+        if self.neighborhood is not None and len(self.neighborhood) != argtys[0].ndim:
+            raise RuntimeError("%d dimensional neighborhood specified for %d dimensional input array" % (len(self.neighborhood), argtys[0].ndim))
         argtys_with_out = argtys
         if 'out' in kwtys:
             argtys_with_out += (kwtys['out'],)
@@ -478,6 +484,9 @@ class StencilFunc(object):
         return new_func
 
     def __call__(self, *args, **kwargs):
+        if self.neighborhood is not None and len(self.neighborhood) != args[0].ndim:
+            raise RuntimeError("%d dimensional neighborhood specified for %d dimensional input array" % (len(self.neighborhood), args[0].ndim))
+
         if 'out' in kwargs:
             result = kwargs['out']
             rdtype = result.dtype
