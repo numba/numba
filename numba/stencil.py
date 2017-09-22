@@ -368,7 +368,11 @@ class StencilFunc(object):
         func_text += kernel_copy.arg_names[0] + ".shape\n"
         if result is None:
             if "cval" in self.options:
-                func_text += "    out = np.full(full_shape, " + str(self.options["cval"]) + ", dtype=np." + str(return_type.dtype) + ")\n"
+                cval = self.options["cval"]
+                if return_type.dtype != typing.typeof.typeof(cval):
+                    raise ValueError("cval type does not match stencil return type.")
+
+                func_text += "    out = np.full(full_shape, " + str(cval) + ", dtype=np." + str(return_type.dtype) + ")\n"
             else:
                 func_text += "    out = np.zeros(full_shape, dtype=np." + str(return_type.dtype) + ")\n"
 
