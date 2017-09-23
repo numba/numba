@@ -182,6 +182,23 @@ the return type of the stencil kernel.  If the user wishes the output
 array to be constructed of a particular type then they should ensure
 that the stencil kernel returns that type.
 
+``standard_indexing``
+---------------------
+
+By default, all array accesses in a stencil kernel are processed as
+relative indices as described above.  However, sometimes it may be
+advantageous to pass an auxilliary array (e.g., an array of weights)
+to a stencil kernel and have that array use standard Python indexing
+rather than relative indexing.  For this purpose, there is the
+stencil decorator option ``standard_indexing`` whose value is a
+collection of strings whose names match those parameters to the
+stencil function that are to be accessed with standard Python indexing
+rather than relative indexing::
+
+    @stencil(standard_indexing=("b",))
+    def kernel3(a, b):
+        return a[-1] * b[0] + a[0] + b[1]
+
 StencilFunc
 ===========
 
