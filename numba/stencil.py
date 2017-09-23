@@ -13,179 +13,6 @@ from numba.targets import cpu, registry
 from numba.targets.imputils import lower_builtin
 from llvmlite import ir as lir
 
-def replace_return_with_setitem(blocks, index_vars):
-    """
-    Find return statements in the IR and replace them with a SetItem
-    call of the value "returned" by the kernel into the result array.
-    """
-    for block in blocks.values():
-        scope = block.scope
-        loc = block.loc
-        new_body = []
-        for stmt in block.body:
-            if isinstance(stmt, ir.Return):
-                # If 1D array then avoid the tuple construction.
-                if len(index_vars) == 1:
-                    rvar = ir.Var(scope, "out", loc)
-                    ivar = ir.Var(scope, index_vars[0], loc)
-                    new_body.append(ir.SetItem(rvar, ivar, stmt.value, loc))
-                else:
-                    # Convert the string names of the index variables into
-                    # ir.Var's.
-                    var_index_vars = []
-                    for one_var in index_vars:
-                        index_var = ir.Var(scope, one_var, loc)
-                        var_index_vars += [index_var]
-
-                    s_index_name = ir_utils.mk_unique_var("stencil_index")
-                    s_index_var  = ir.Var(scope, s_index_name, loc)
-                    # Build a tuple from the index ir.Var's.
-                    tuple_call = ir.Expr.build_tuple(var_index_vars, loc)
-                    new_body.append(ir.Assign(tuple_call, s_index_var, loc))
-                    rvar = ir.Var(scope, "out", loc)
-                    # Write the return statements original value into
-                    # the array using the tuple index.
-                    si = ir.SetItem(rvar, s_index_var, stmt.value, loc)
-                    new_body.append(si)
-            else:
-                new_body.append(stmt)
-        block.body = new_body
-
-def add_indices_to_kernel(kernel, ndim, neighborhood):
-    """
-    Transforms the stencil kernel as specified by the user into one
-    that includes each dimension's index variable as part of the getitem
-    calls.  So, in effect array[-1] becomes array[index0-1].
-    """
-    const_dict = {}
-    kernel_consts = []
-
-    if config.DEBUG_ARRAY_OPT == 1:
-        print("add_indices_to_kernel", ndim, neighborhood)
-        ir_utils.dump_blocks(kernel.blocks)
-
-    need_to_calc_kernel = False
-    if neighborhood is None:
-        need_to_calc_kernel = True
-    else:
-        if len(neighborhood) != ndim:
-            raise ValueError("%d dimensional neighborhood specified for %d dimensional input array" % (len(self.neighborhood), ndim))
-
-    for block in kernel.blocks.values():
-        scope = block.scope
-        loc = block.loc
-        new_body = []
-        for stmt in block.body:
-            if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Const):
-                if config.DEBUG_ARRAY_OPT == 1:
-                    print("remembering in const_dict", stmt.target.name, stmt.value.value)
-                # Remember consts for use later.
-                const_dict[stmt.target.name] = stmt.value.value
-            if (isinstance(stmt, ir.Assign) and
-                isinstance(stmt.value, ir.Expr) and
-                stmt.value.op in ['getitem', 'static_getitem'] and
-                stmt.value.value.name in kernel.arg_names):
-                if config.DEBUG_ARRAY_OPT == 1:
-                    print("found getitem to modify")
-                # We found a getitem from the input array.
-                if stmt.value.op == 'getitem':
-                    stmt_index_var = stmt.value.index
-                else:
-                    stmt_index_var = stmt.value.index_var
-
-                # Store the index used after looking up the variable in
-                # the const dictionary.
-                if need_to_calc_kernel:
-                    if stmt_index_var.name in const_dict:
-                        kernel_consts += [const_dict[stmt_index_var.name]]
-                    else:
-                        raise ValueError("Non-constant specified for stencil kernel index.")
-
-                if ndim == 1:
-                    # Single dimension always has index variable 'index0'.
-                    # tmpvar will hold the real index and is computed by
-                    # adding the relative offset in stmt.value.index to
-                    # the current absolute location in index0.
-                    index_var = ir.Var(scope, "index0", loc)
-                    tmpname = ir_utils.mk_unique_var("stencil_index")
-                    tmpvar  = ir.Var(scope, tmpname, loc)
-                    acc_call = ir.Expr.binop('+', stmt_index_var,
-                                             index_var, loc)
-                    new_body.append(ir.Assign(acc_call, tmpvar, loc))
-                    new_body.append(ir.Assign(
-                                   ir.Expr.getitem(stmt.value.value,tmpvar,loc),
-                                   stmt.target,loc))
-                else:
-                    index_vars = []
-                    sum_results = []
-                    s_index_name = ir_utils.mk_unique_var("stencil_index")
-                    s_index_var  = ir.Var(scope, s_index_name, loc)
-                    const_index_vars = []
-
-                    # Same idea as above but you have to extract
-                    # individual elements out of the tuple indexing
-                    # expression and add the corresponding index variable
-                    # to them and then reconstitute as a tuple that can
-                    # index the array.
-                    for dim in range(ndim):
-                        tmpname = ir_utils.mk_unique_var("const_index")
-                        tmpvar  = ir.Var(scope, tmpname, loc)
-                        new_body.append(ir.Assign(ir.Const(dim, loc),
-                                                  tmpvar, loc))
-                        const_index_vars += [tmpvar]
-                        index_var = ir.Var(scope, "index" + str(dim), loc)
-                        index_vars += [index_var]
-
-                    ind_stencils = []
-
-                    for dim in range(ndim):
-                        tmpname = ir_utils.mk_unique_var("ind_stencil_index")
-                        tmpvar  = ir.Var(scope, tmpname, loc)
-                        ind_stencils += [tmpvar]
-                        getitemname = ir_utils.mk_unique_var("getitem")
-                        getitemvar  = ir.Var(scope, getitemname, loc)
-                        getitemcall = ir.Expr.getitem(stmt_index_var,
-                                                   const_index_vars[dim], loc)
-                        new_body.append(ir.Assign(getitemcall, getitemvar, loc))
-                        acc_call = ir.Expr.binop('+', getitemvar,
-                                                 index_vars[dim], loc)
-                        new_body.append(ir.Assign(acc_call, tmpvar, loc))
-
-                    tuple_call = ir.Expr.build_tuple(ind_stencils, loc)
-                    new_body.append(ir.Assign(tuple_call, s_index_var, loc))
-                    new_body.append(ir.Assign(
-                              ir.Expr.getitem(stmt.value.value,s_index_var,loc),
-                              stmt.target,loc))
-            else:
-                new_body.append(stmt)
-        block.body = new_body
-
-    if need_to_calc_kernel:
-        # Find the size of the kernel by finding the maximum absolute value
-        # index used in the kernel specification.
-        neighborhood = [[0,0] for _ in range(ndim)]
-        #max_const = 0
-        for index in kernel_consts:
-            if isinstance(index, tuple):
-                for i in range(len(index)):
-                    te = index[i]
-                    #max_const = max(max_const, abs(te))
-                    neighborhood[i][0] = min(neighborhood[i][0], te)
-                    neighborhood[i][1] = max(neighborhood[i][1], te)
-                index_len = len(index)
-            elif isinstance(index, int):
-                #max_const = max(max_const, abs(index))
-                index_len = 1
-                neighborhood[0][0] = min(neighborhood[0][0], index)
-                neighborhood[0][1] = max(neighborhood[0][1], index)
-            else:
-                raise ValueError("Non-tuple or non-integer used as stencil index.")
-            if index_len != ndim:
-                raise ValueError("Stencil index does not match array dimensionality.")
-
-    return neighborhood
-
-
 class StencilFuncLowerer(object):
     '''Callable class responsible for lowering calls to a specific DUFunc.
     '''
@@ -225,6 +52,186 @@ class StencilFunc(object):
         self._cache = []
         self._type_cache = []
         self._lower_me = StencilFuncLowerer(self)
+
+    def replace_return_with_setitem(self, blocks, index_vars):
+        """
+        Find return statements in the IR and replace them with a SetItem
+        call of the value "returned" by the kernel into the result array.
+        """
+        for block in blocks.values():
+            scope = block.scope
+            loc = block.loc
+            new_body = []
+            for stmt in block.body:
+                if isinstance(stmt, ir.Return):
+                    # If 1D array then avoid the tuple construction.
+                    if len(index_vars) == 1:
+                        rvar = ir.Var(scope, "out", loc)
+                        ivar = ir.Var(scope, index_vars[0], loc)
+                        new_body.append(ir.SetItem(rvar, ivar, stmt.value, loc))
+                    else:
+                        # Convert the string names of the index variables into
+                        # ir.Var's.
+                        var_index_vars = []
+                        for one_var in index_vars:
+                            index_var = ir.Var(scope, one_var, loc)
+                            var_index_vars += [index_var]
+
+                        s_index_name = ir_utils.mk_unique_var("stencil_index")
+                        s_index_var  = ir.Var(scope, s_index_name, loc)
+                        # Build a tuple from the index ir.Var's.
+                        tuple_call = ir.Expr.build_tuple(var_index_vars, loc)
+                        new_body.append(ir.Assign(tuple_call, s_index_var, loc))
+                        rvar = ir.Var(scope, "out", loc)
+                        # Write the return statements original value into
+                        # the array using the tuple index.
+                        si = ir.SetItem(rvar, s_index_var, stmt.value, loc)
+                        new_body.append(si)
+                else:
+                    new_body.append(stmt)
+            block.body = new_body
+
+    def add_indices_to_kernel(self, kernel, ndim, neighborhood):
+        """
+        Transforms the stencil kernel as specified by the user into one
+        that includes each dimension's index variable as part of the getitem
+        calls.  So, in effect array[-1] becomes array[index0-1].
+        """
+        const_dict = {}
+        kernel_consts = []
+
+        if "standard_indexing" in self.options:
+            standard_indexed = self.options["standard_indexing"]
+        else:
+            standard_indexed = []
+
+        if config.DEBUG_ARRAY_OPT == 1:
+            print("add_indices_to_kernel", ndim, neighborhood)
+            ir_utils.dump_blocks(kernel.blocks)
+
+        need_to_calc_kernel = False
+        if neighborhood is None:
+            need_to_calc_kernel = True
+        else:
+            if len(neighborhood) != ndim:
+                raise ValueError("%d dimensional neighborhood specified for %d dimensional input array" % (len(self.neighborhood), ndim))
+
+        for block in kernel.blocks.values():
+            scope = block.scope
+            loc = block.loc
+            new_body = []
+            for stmt in block.body:
+                if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Const):
+                    if config.DEBUG_ARRAY_OPT == 1:
+                        print("remembering in const_dict", stmt.target.name, stmt.value.value)
+                    # Remember consts for use later.
+                    const_dict[stmt.target.name] = stmt.value.value
+                if (isinstance(stmt, ir.Assign) and
+                    isinstance(stmt.value, ir.Expr) and
+                    stmt.value.op in ['getitem', 'static_getitem'] and
+                    stmt.value.value.name in kernel.arg_names and
+                    stmt.value.value.name not in standard_indexed):
+                    print("Found getitem for array", stmt.value.value.name)
+                    if config.DEBUG_ARRAY_OPT == 1:
+                        print("found getitem to modify")
+                    # We found a getitem from the input array.
+                    if stmt.value.op == 'getitem':
+                        stmt_index_var = stmt.value.index
+                    else:
+                        stmt_index_var = stmt.value.index_var
+
+                    # Store the index used after looking up the variable in
+                    # the const dictionary.
+                    if need_to_calc_kernel:
+                        if stmt_index_var.name in const_dict:
+                            kernel_consts += [const_dict[stmt_index_var.name]]
+                        else:
+                            raise ValueError("Non-constant specified for stencil kernel index.")
+
+                    if ndim == 1:
+                        # Single dimension always has index variable 'index0'.
+                        # tmpvar will hold the real index and is computed by
+                        # adding the relative offset in stmt.value.index to
+                        # the current absolute location in index0.
+                        index_var = ir.Var(scope, "index0", loc)
+                        tmpname = ir_utils.mk_unique_var("stencil_index")
+                        tmpvar  = ir.Var(scope, tmpname, loc)
+                        acc_call = ir.Expr.binop('+', stmt_index_var,
+                                                 index_var, loc)
+                        new_body.append(ir.Assign(acc_call, tmpvar, loc))
+                        new_body.append(ir.Assign(
+                                       ir.Expr.getitem(stmt.value.value,tmpvar,loc),
+                                       stmt.target,loc))
+                    else:
+                        index_vars = []
+                        sum_results = []
+                        s_index_name = ir_utils.mk_unique_var("stencil_index")
+                        s_index_var  = ir.Var(scope, s_index_name, loc)
+                        const_index_vars = []
+
+                        # Same idea as above but you have to extract
+                        # individual elements out of the tuple indexing
+                        # expression and add the corresponding index variable
+                        # to them and then reconstitute as a tuple that can
+                        # index the array.
+                        for dim in range(ndim):
+                            tmpname = ir_utils.mk_unique_var("const_index")
+                            tmpvar  = ir.Var(scope, tmpname, loc)
+                            new_body.append(ir.Assign(ir.Const(dim, loc),
+                                                      tmpvar, loc))
+                            const_index_vars += [tmpvar]
+                            index_var = ir.Var(scope, "index" + str(dim), loc)
+                            index_vars += [index_var]
+
+                        ind_stencils = []
+
+                        for dim in range(ndim):
+                            tmpname = ir_utils.mk_unique_var("ind_stencil_index")
+                            tmpvar  = ir.Var(scope, tmpname, loc)
+                            ind_stencils += [tmpvar]
+                            getitemname = ir_utils.mk_unique_var("getitem")
+                            getitemvar  = ir.Var(scope, getitemname, loc)
+                            getitemcall = ir.Expr.getitem(stmt_index_var,
+                                                       const_index_vars[dim], loc)
+                            new_body.append(ir.Assign(getitemcall, getitemvar, loc))
+                            acc_call = ir.Expr.binop('+', getitemvar,
+                                                     index_vars[dim], loc)
+                            new_body.append(ir.Assign(acc_call, tmpvar, loc))
+
+                        tuple_call = ir.Expr.build_tuple(ind_stencils, loc)
+                        new_body.append(ir.Assign(tuple_call, s_index_var, loc))
+                        new_body.append(ir.Assign(
+                                  ir.Expr.getitem(stmt.value.value,s_index_var,loc),
+                                  stmt.target,loc))
+                else:
+                    new_body.append(stmt)
+            block.body = new_body
+
+        if need_to_calc_kernel:
+            # Find the size of the kernel by finding the maximum absolute value
+            # index used in the kernel specification.
+            neighborhood = [[0,0] for _ in range(ndim)]
+            #max_const = 0
+            for index in kernel_consts:
+                if isinstance(index, tuple):
+                    for i in range(len(index)):
+                        te = index[i]
+                        #max_const = max(max_const, abs(te))
+                        neighborhood[i][0] = min(neighborhood[i][0], te)
+                        neighborhood[i][1] = max(neighborhood[i][1], te)
+                    index_len = len(index)
+                elif isinstance(index, int):
+                    #max_const = max(max_const, abs(index))
+                    index_len = 1
+                    neighborhood[0][0] = min(neighborhood[0][0], index)
+                    neighborhood[0][1] = max(neighborhood[0][1], index)
+                else:
+                    raise ValueError("Non-tuple or non-integer used as stencil index.")
+                if index_len != ndim:
+                    raise ValueError("Stencil index does not match array dimensionality.")
+
+        return neighborhood
+
 
     def get_return_type(self, argtys):
         if config.DEBUG_ARRAY_OPT == 1:
@@ -348,7 +355,7 @@ class StencilFunc(object):
             index_var_name = "index" + str(i)
             index_vars += [index_var_name]
 
-        kernel_size = add_indices_to_kernel(kernel_copy, the_array.ndim,
+        kernel_size = self.add_indices_to_kernel(kernel_copy, the_array.ndim,
                                             self.neighborhood)
         if self.neighborhood is None:
             self.neighborhood = kernel_size
@@ -357,7 +364,7 @@ class StencilFunc(object):
             print("after add indices")
             ir_utils.dump_blocks(kernel_copy.blocks)
 
-        replace_return_with_setitem(kernel_copy.blocks, index_vars)
+        self.replace_return_with_setitem(kernel_copy.blocks, index_vars)
 
         func_text = "def " + stencil_func_name + "("
         if result is None:
@@ -528,6 +535,11 @@ def stencil(func_or_mode='constant', **options):
                                                         a string"""
         mode = func_or_mode
         func = None
+
+    for option in options:
+        if option not in ["cval", "standard_indexing", "neighborhood"]:
+            raise ValueError("Unknown stencil option " + option)
+
     wrapper = _stencil(mode, options)
     if func is not None:
         return wrapper(func)
