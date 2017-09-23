@@ -177,7 +177,23 @@ to a constant value, as specified by the ``cval`` parameter.
 The optional cval parameter defaults to zero but can be set to any
 desired value, which is then used for the border of the output array
 if the mode parameter is set to ``constant``.  The cval parameter is 
-ignored in all other modes.
+ignored in all other modes.  The type of the cval parameter must match
+the return type of the stencil kernel.  If the user wishes the output
+array to be constructed of a particular type then they should ensure
+that the stencil kernel returns that type.
+
+StencilFunc
+===========
+
+The stencil decorator returns a callable object of type StencilFunc.
+StencilFunc objects contains a number of attributes but the only one of
+potential interest to users is the ``neighborhood`` attribute.
+If the ``neighborhood`` option was passed to the stencil decorator then
+the provided neighborhood is stored in this attribute.  Else, upon 
+first execution or compilation, the system calculates the neighborhood
+as described above and then stores the computer neighborhood into this
+attribute.  A user may then inspect the attribute if they wish to verify
+that the calculated neighborhood is correct.
 
 Stencil invocation options
 ==========================
