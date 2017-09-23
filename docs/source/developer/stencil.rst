@@ -20,9 +20,9 @@ The stencil decorator
 The stencil decorator itself just returns a StencilFunc object.
 This object encapsulates the original stencil kernel function
 as specified in the program and the options passed to the
-stencil decorator.  Also, for convenience, the Numba IR of
-the kernel function is stored after removing the ``arg``
-statements.
+stencil decorator.  Also of note is that after the first compile
+of the stencil that the computed neighborhood of the stencil is
+stored in the StencilFunc object in the ``neighborhood`` attribute.
 
 Handling the three modes
 ========================
@@ -142,3 +142,24 @@ Next, ``compiler_ir`` is used to compile the combined stencil function
 IR.  The resulting compile result is cached in the StencilFunc so that
 other calls to the same stencil do not need to create additional
 stencil functions.
+
+Exceptions raised
+=================
+
+Various checks are performed during stencil compilation to make sure
+that user-specified options do not conflict with each other or with
+other runtime parameters.  For example, if the user has manually
+specified a ``neighborhood`` to the stencil decorator, the length of
+that neighborhood must match the dimensionality of the input array.
+If this is not the case, a ``ValueError`` is thrown.
+
+If the neighborhood has not been specified then it must be inferred
+and a requirement to infer the kernel is that all indices are constant
+integers.  If they are not, a ValueError is thrown indicating that
+kernel indices may not be non-constant.
+
+Finally, the stencil implementation detects the output array type
+by running Numba type inference on the stencil kernel.  If the
+return type of this kernel does not match the type of the value
+passed to the ``cval`` stencil decorator option then a ValueError
+is raised.
