@@ -49,7 +49,6 @@ class StencilFunc(object):
             self.neighborhood = self.options["neighborhood"]
         else:
             self.neighborhood = None
-        self._cache = []
         self._type_cache = []
         self._lower_me = StencilFuncLowerer(self)
 
@@ -131,9 +130,6 @@ class StencilFunc(object):
                     stmt.value.op in ['getitem', 'static_getitem'] and
                     stmt.value.value.name in kernel.arg_names and
                     stmt.value.value.name not in standard_indexed):
-                    print("Found getitem for array", stmt.value.value.name)
-                    if config.DEBUG_ARRAY_OPT == 1:
-                        print("found getitem to modify")
                     # We found a getitem from the input array.
                     if stmt.value.op == 'getitem':
                         stmt_index_var = stmt.value.index
@@ -261,32 +257,7 @@ class StencilFunc(object):
                        dict(key=self, generic=self._type_me))
         typingctx.insert_user_function(self, _ty_cls)
 
-    def find_in_cache(self, argtys, kwtys):
-        if config.DEBUG_ARRAY_OPT == 1:
-            print("find_in_cache", argtys, kwtys, self._cache)
-        largs = list(argtys)
-        if 'out' in kwtys:
-            largs.append(kwtys['out'])
-
-        for centry in self._cache:
-            (centry_argtys, cres, sigret) = centry
-            if config.DEBUG_ARRAY_OPT == 1:
-                print("find_in_cache search", centry_argtys)
-            if centry_argtys == largs:
-                if config.DEBUG_ARRAY_OPT == 1:
-                    print("find_in_cache match")
-                return centry
-        if config.DEBUG_ARRAY_OPT == 1:
-            print("find_in_cache NO match")
-        return None
-
     def compile_for_argtys(self, argtys, kwtys, return_type, sigret):
-        # look in cached functions first
-        centry = self.find_in_cache(argtys, kwtys)
-        if centry is not None:
-            (argtys, cres, sigret) = centry
-            return cres
-
         # look in the type cache to find if result array is passed
         result = None
         for (_argtyps, _sig, _res) in self._type_cache:
@@ -492,9 +463,6 @@ class StencilFunc(object):
             None,
             compiler.DEFAULT_FLAGS,
             {})
-        if sigret is not None:
-            self._cache.append((list(new_stencil_param_types),
-                                new_func, sigret))
         return new_func
 
     def __call__(self, *args, **kwargs):
