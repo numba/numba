@@ -103,7 +103,8 @@ class InlineClosureCallPass(object):
                             self._processed_stencils.append(expr)
                             from numba.stencil import StencilFunc
                             if not len(expr.args) == 1:
-                                raise ValueError("invalid stencil call args")
+                                raise ValueError("As a minimum Stencil requires"
+                                                " a kernel as an argument")
                             stencil_def = guard(get_definition, self.func_ir,
                                                 expr.args[0])
                             assert (isinstance(stencil_def, ir.Expr)
