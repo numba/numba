@@ -169,6 +169,10 @@ class Parfor(ir.Expr, ir.Stmt):
         self.index_var = index_var
         self.params = None  # filled right before parallel lowering
         self.equiv_set = equiv_set
+        # The parallel patterns this parfor was generated from and their options
+        # for example, a parfor could be from the stencil pattern with
+        # the neighborhood option
+        self.patterns = []
 
     def __repr__(self):
         return repr(self.loop_nests) + \
@@ -434,6 +438,7 @@ class ParforPass(object):
                     parfor_loop = LoopNest(index_var, start, size_var, step)
                     parfor = Parfor([parfor_loop], init_block, body, loc, index_var,
                                     self.array_analysis.get_equiv_set(entry))
+                    parfor.patterns = [("prange",)]
                     # add parfor to entry block, change jump target to exit
                     jump = blocks[entry].body.pop()
                     blocks[entry].body.append(parfor)
@@ -1765,6 +1770,7 @@ def fuse_parfors_inner(parfor1, parfor2):
     nameset = set(x.name for x in index_dict.values())
     remove_duplicate_definitions(parfor1.loop_body, nameset)
     remove_empty_block(parfor1.loop_body)
+    parfor1.patterns.extend(parfor2.patterns)
 
     return parfor1
 
