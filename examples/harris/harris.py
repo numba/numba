@@ -13,8 +13,11 @@ import os
 
 import numpy as np
 
-from numba import stencil
-from PIL import Image
+from numba import njit, stencil
+try:
+    from PIL import Image
+except ImportError:
+    raise RuntimeError("Pillow is needed to run this example. Try 'conda install pillow'")
 
 @stencil()
 def xsten(a):
@@ -28,6 +31,7 @@ def ysten(a):
 def harris_common(a):
     return (a[-1,-1] + a[-1,0] + a[-1,1] + a[0,-1] + a[0,0] + a[0,1] + a[1,-1] + a[1,0] + a[1,1])
 
+@njit()
 def harris(Iin):
     Ix = xsten(Iin)
     Iy = ysten(Iin)
