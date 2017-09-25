@@ -14,7 +14,10 @@ import os
 import numpy as np
 
 from numba import njit, stencil
-from PIL import Image
+try:
+    from PIL import Image
+except ImportError:
+    raise RuntimeError("Pillow is needed to run this example. Try 'conda install pillow'")
 
 @stencil()
 def xsten(a):
