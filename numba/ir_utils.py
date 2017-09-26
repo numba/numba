@@ -813,8 +813,18 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, ext_func, ext_data,
                             lhs_kill.append(k)
                     for k in lhs_kill:
                         var_dict.pop(k, None)
+            if (isinstance(stmt, ir.Assign)
+                                        and not isinstance(stmt.value, ir.Var)):
+                lhs = stmt.target.name
+                var_dict.pop(lhs, None)
+                # previous t=a is killed if a is killed
+                lhs_kill = []
+                for k, v in var_dict.items():
+                    if v.name == lhs:
+                        lhs_kill.append(k)
+                for k in lhs_kill:
+                    var_dict.pop(k, None)
     return
-
 
 def fix_setitem_type(stmt, typemap, calltypes):
     """Copy propagation can replace setitem target variable, which can be array
