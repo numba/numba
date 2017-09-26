@@ -358,7 +358,7 @@ class StencilPass(object):
                                 mk_unique_var("old_index_var"), loc)
                 self.typemap[old_index_var.name] = types.intp
                 const_assign = ir.Assign(ir.Const(index_list[i], loc),
-                                                    offset_var, loc)
+                                                    old_index_var, loc)
                 out_nodes.append(const_assign)
 
             offset_var = index_offsets[i]
