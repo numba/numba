@@ -1840,7 +1840,24 @@ def dprint(*s):
         print(*s)
 
 
+def get_parfor_pattern_vars(parfor):
+    """ get the variables used in parfor pattern information
+    """
+    out = set()
+    # currently, only stencil pattern has variables
+    for pattern in parfor.patterns:
+        if pattern[0] == 'stencil':
+            left_lengths = pattern[1][0]
+            right_lengths = pattern[1][1]
+            for v in left_lengths+right_lengths:
+                if isinstance(v, ir.Var):
+                    out.add(v.name)
+    return out
+
 def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, typemap):
+    """ remove dead code inside parfor including get/sets
+    """
+    lives |= get_parfor_pattern_vars(parfor)
     # remove dead get/sets in last block
     # FIXME: I think that "in the last block" is not sufficient in general.  We might need to
     # remove from any block.
@@ -2012,6 +2029,10 @@ ir_utils.copy_propagate_extensions[Parfor] = get_copies_parfor
 def apply_copies_parfor(parfor, var_dict, name_var_table, ext_func, ext_data,
                         typemap, calltypes):
     """apply copy propagate recursively in parfor"""
+    for i, pattern in enumerate(parfor.patterns):
+        if pattern[0] == 'stencil':
+            parfor.patterns[i] = ('stencil',
+                replace_vars_inner(pattern[1], var_dict))
     blocks = wrap_parfor_blocks(parfor)
     # add dummy assigns for each copy
     assign_list = []
