@@ -10,7 +10,8 @@ from numba.typing.templates import infer_global, AbstractTemplate
 from numba.typing import signature
 from numba import ir_utils, ir, utils, array_analysis, config
 from numba.ir_utils import (get_call_table, find_topo_order, mk_unique_var,
-                            compile_to_numba_ir, replace_arg_nodes, guard, find_callname)
+                            compile_to_numba_ir, replace_arg_nodes, guard,
+                            find_callname)
 from operator import add
 import numpy as np
 import numbers
@@ -55,19 +56,17 @@ class StencilPass(object):
                         and stmt.value.op == 'call'
                         and stmt.value.func.name in stencil_calls):
                     kws = dict(stmt.value.kws)
-                    input_dict = {i: stmt.value.args[i] for i in range(len(stmt.value.args))}
+                    input_dict = {i: stmt.value.args[i] for i in
+                                                    range(len(stmt.value.args))}
                     in_args = stmt.value.args
-                    arg_typemap = tuple(self.typemap[i.name] for i in stmt.value.args)
+                    arg_typemap = tuple(self.typemap[i.name] for i in
+                                                                stmt.value.args)
                     if 'out' in kws:
                         out_arr = kws['out']
                     else:
                         out_arr = None
 
                     sf = stencil_dict[stmt.value.func.name]
-
-                    # XXX is this correct?
-                    #fcode = fix_func_code(stmt.value.stencil_def.code,
-                    #                    self.func_ir.func_id.func.__globals__)
                     stencil_blocks, rt = get_stencil_blocks(sf,
                             self.typingctx, arg_typemap,
                             block.scope, block.loc, input_dict,
@@ -216,7 +215,8 @@ class StencilPass(object):
         gen_nodes.append(ir.Assign(out_arr, target, loc))
         return gen_nodes
 
-    def _get_stencil_last_ind(self, dim_size, end_length, gen_nodes, scope, loc):
+    def _get_stencil_last_ind(self, dim_size, end_length, gen_nodes, scope,
+                                                                        loc):
         last_ind = dim_size
         # TODO: support negative end length
         if end_length != 0:
@@ -247,8 +247,8 @@ class StencilPass(object):
             return abs(min(start_length, 0))
         def get_start_ind(s_length):
             return abs(min(s_length, 0))
-        f_ir = compile_to_numba_ir(get_start_ind, {}, self.typingctx, (types.intp,),
-                                self.typemap, self.calltypes)
+        f_ir = compile_to_numba_ir(get_start_ind, {}, self.typingctx,
+                                 (types.intp,), self.typemap, self.calltypes)
         assert len(f_ir.blocks) == 1
         block = f_ir.blocks.popitem()[1]
         replace_arg_nodes(block, [start_length])
@@ -300,7 +300,8 @@ class StencilPass(object):
                         if any([not isinstance(v, int) for v in index_list]):
                             raise ValueError("Variable stencil index only "
                                 "possible with known neighborhood")
-                        start_lengths = list(map(min, start_lengths, index_list))
+                        start_lengths = list(map(min, start_lengths,
+                                                                    index_list))
                         end_lengths = list(map(max, end_lengths, index_list))
 
                     # update access indices
@@ -341,7 +342,8 @@ class StencilPass(object):
 
         return start_lengths, end_lengths
 
-    def _add_index_offsets(self, index_list, index_offsets, new_body, scope, loc):
+    def _add_index_offsets(self, index_list, index_offsets, new_body, scope,
+                                                                        loc):
         # shortcut if all values are integer
         if all([isinstance(v, int) for v in index_list+index_offsets]):
             # add offsets in all dimensions
@@ -437,6 +439,7 @@ def get_stencil_blocks(sf, typingctx, args, scope, loc, input_dict, typemap,
     from numba.targets.cpu import CPUContext
     from numba.targets.registry import cpu_target
     from numba.annotations import type_annotations
+    from numba.compiler import type_inference_stage
 
     # get untyped IR
     stencil_func_ir = sf.kernel_ir.copy()
@@ -452,7 +455,7 @@ def get_stencil_blocks(sf, typingctx, args, scope, loc, input_dict, typemap,
         numba.rewrites.rewrite_registry.apply(
             'before-inference', tp, tp.func_ir)
 
-        tp.typemap, tp.return_type, tp.calltypes = numba.compiler.type_inference_stage(
+        tp.typemap, tp.return_type, tp.calltypes = type_inference_stage(
             tp.typingctx, tp.func_ir, tp.args, None)
 
         type_annotation = type_annotations.TypeAnnotation(
