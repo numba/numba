@@ -153,7 +153,7 @@ void divide_work(const RangeActual &full_iteration_space,
     } else {
         assert(index < dims.size());
         uintp total_len = 0;
-        for(uintp i = index; i < dims.size(); ++i) total_len += dims[i].length;
+        for(uintp i = index; i < dims.size(); ++i) total_len += dims[i].length > 1 ? dims[i].length : 0;
         uintp divisions_for_this_dim;
         if(total_len == 0) {
             divisions_for_this_dim = num_threads;
@@ -161,9 +161,11 @@ void divide_work(const RangeActual &full_iteration_space,
             std::vector<float> percent_dims;
             float dim_prod = 1;
             for(uintp i = index; i < dims.size(); ++i) {
-                float temp = (float)dims[i].length / total_len;
-                percent_dims.push_back(temp);
-                dim_prod *= temp;
+                if (dims[i].length > 1) {
+                    float temp = (float)dims[i].length / total_len;
+                    percent_dims.push_back(temp);
+                    dim_prod *= temp;
+                }
             }
             divisions_for_this_dim = intp(guround(std::pow((double)(num_threads / dim_prod), (double)(1.0 / percent_dims.size())) * percent_dims[0]));
         }
