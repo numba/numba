@@ -1577,6 +1577,10 @@ class ArrayAnalysis(object):
         shape = equiv_set.get_shape(rel_idx_arrs[0])
         return shape, asserts
 
+    def _analyze_op_call_numpy_linalg_inv(self, scope, equiv_set, args, kws):
+        require(len(args) >= 1)
+        return equiv_set._get_shape(args[0]), []
+
     def _analyze_broadcast(self, scope, equiv_set, loc, args):
         """Infer shape equivalence of arguments based on Numpy broadcast rules
         and return shape of output
