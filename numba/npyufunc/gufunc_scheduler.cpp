@@ -146,7 +146,7 @@ void divide_work(const RangeActual &full_iteration_space,
         if(build.size() == dims.size()) {
             assignments[start_thread] = isfRangeToActual(build);
         } else {
-            std::vector<isf_range> new_build(&build[0], &build[index]);
+            std::vector<isf_range> new_build(build.begin()+0, build.begin()+index);
             new_build.push_back(isf_range(dims[index].dim, full_iteration_space.start[dims[index].dim], full_iteration_space.end[dims[index].dim]));
             divide_work(full_iteration_space, assignments, new_build, start_thread, end_thread, dims, index+1);
         }
@@ -167,7 +167,7 @@ void divide_work(const RangeActual &full_iteration_space,
                     dim_prod *= temp;
                 }
             }
-            divisions_for_this_dim = intp(guround(std::pow((double)(num_threads / dim_prod), (double)(1.0 / percent_dims.size())) * percent_dims[0]));
+            divisions_for_this_dim = intp(guround(num_threads * percent_dims[0]));
         }
 
         uintp chunkstart = full_iteration_space.start[dims[index].dim];
@@ -181,7 +181,7 @@ void divide_work(const RangeActual &full_iteration_space,
             chunk_info chunk_thread = chunk(threadstart, threadend, divisions_for_this_dim - i);
             chunkstart = chunk_index.m_c;
             threadstart = chunk_thread.m_c;
-            std::vector<isf_range> new_build(&build[0], &build[index]);
+            std::vector<isf_range> new_build(build.begin()+0, build.begin()+index);
             new_build.push_back(isf_range(dims[index].dim, chunk_index.m_a, chunk_index.m_b));
             divide_work(full_iteration_space, assignments, new_build, chunk_thread.m_a, chunk_thread.m_b, dims, index+1);
         }
