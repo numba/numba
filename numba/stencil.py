@@ -125,11 +125,11 @@ class StencilFunc(object):
                         print("remembering in const_dict", stmt.target.name, stmt.value.value)
                     # Remember consts for use later.
                     const_dict[stmt.target.name] = stmt.value.value
-                if (isinstance(stmt, ir.Assign) and
-                    isinstance(stmt.value, ir.Expr) and
-                    stmt.value.op in ['getitem', 'static_getitem'] and
-                    stmt.value.value.name in kernel.arg_names and
-                    stmt.value.value.name not in standard_indexed):
+                if (isinstance(stmt, ir.Assign)
+                        and isinstance(stmt.value, ir.Expr)
+                        and stmt.value.op in ['getitem', 'static_getitem']
+                        and stmt.value.value.name in kernel.arg_names
+                        and stmt.value.value.name not in standard_indexed):
                     # We found a getitem from the input array.
                     if stmt.value.op == 'getitem':
                         stmt_index_var = stmt.value.index
