@@ -67,13 +67,14 @@ class StencilPass(object):
                         out_arr = None
 
                     sf = stencil_dict[stmt.value.func.name]
-                    stencil_blocks, rt = get_stencil_blocks(sf,
+                    stencil_blocks, rt, arg_to_arr_dict = get_stencil_blocks(sf,
                             self.typingctx, arg_typemap,
                             block.scope, block.loc, input_dict,
                             self.typemap, self.calltypes)
                     index_offsets = sf.options.get('index_offsets', None)
                     gen_nodes = self._mk_stencil_parfor(label, in_args, out_arr,
-                            stencil_blocks, index_offsets, stmt.target, rt, sf)
+                            stencil_blocks, index_offsets, stmt.target, rt, sf,
+                            arg_to_arr_dict)
                     block.body = block.body[:i] + gen_nodes + block.body[i+1:]
                     return self.run()
                 if (isinstance(stmt, ir.Assign)
@@ -86,7 +87,8 @@ class StencilPass(object):
         return
 
     def _mk_stencil_parfor(self, label, in_args, out_arr, stencil_blocks,
-                           index_offsets, target, return_type, stencil_func):
+                           index_offsets, target, return_type, stencil_func,
+                           arg_to_arr_dict):
         gen_nodes = []
 
         if config.DEBUG_ARRAY_OPT == 1:
@@ -126,7 +128,8 @@ class StencilPass(object):
             parfor_vars.append(parfor_var)
 
         start_lengths, end_lengths = self._replace_stencil_accesses(
-             stencil_blocks, parfor_vars, in_args, index_offsets, stencil_func)
+             stencil_blocks, parfor_vars, in_args, index_offsets, stencil_func,
+             arg_to_arr_dict)
 
         # create parfor loop nests
         loopnests = []
@@ -257,9 +260,15 @@ class StencilPass(object):
         return ret_var
 
     def _replace_stencil_accesses(self, stencil_blocks, parfor_vars, in_args,
-                                  index_offsets, stencil_func):
+                                  index_offsets, stencil_func, arg_to_arr_dict):
         in_arr = in_args[0]
         in_arg_names = [x.name for x in in_args]
+
+        if "standard_indexing" in stencil_func.options:
+            standard_indexed = [arg_to_arr_dict[x] for x in
+                                     stencil_func.options["standard_indexing"]]
+        else:
+            standard_indexed = []
 
         ndims = self.typemap[in_arr.name].ndim
         scope = in_arr.scope
@@ -281,9 +290,9 @@ class StencilPass(object):
             for stmt in block.body:
                 if (isinstance(stmt, ir.Assign)
                         and isinstance(stmt.value, ir.Expr)
-                        and (stmt.value.op == 'static_getitem' or
-                             stmt.value.op == 'getitem')
-                        and stmt.value.value.name in in_arg_names):
+                        and stmt.value.op in ['static_getitem', 'getitem']
+                        and stmt.value.value.name in in_arg_names
+                        and stmt.value.value.name not in standard_indexed):
                     index_list = stmt.value.index
                     # handle 1D case
                     if ndims == 1:
@@ -498,6 +507,7 @@ def get_stencil_blocks(sf, typingctx, args, scope, loc, input_dict, typemap,
     for call, call_typ in tp.calltypes.items():
         calltypes[call] = call_typ
 
+    arg_to_arr_dict = {}
     # TODO: handle closure vars
     # replace arg with arr
     for block in stencil_blocks.values():
@@ -506,14 +516,16 @@ def get_stencil_blocks(sf, typingctx, args, scope, loc, input_dict, typemap,
                 if config.DEBUG_ARRAY_OPT == 1:
                     print("input_dict", input_dict, stmt.value.index,
                                stmt.value.name, stmt.value.index in input_dict)
+                arg_to_arr_dict[stmt.value.name] = input_dict[stmt.value.index].name
                 stmt.value = input_dict[stmt.value.index]
 
     if config.DEBUG_ARRAY_OPT == 1:
+        print("arg_to_arr_dict", arg_to_arr_dict)
         print("After replace arg with arr")
         ir_utils.dump_blocks(stencil_blocks)
 
     ir_utils.remove_dels(stencil_blocks)
-    return stencil_blocks, sf.get_return_type(args)
+    return stencil_blocks, sf.get_return_type(args), arg_to_arr_dict
 
 class DummyPipeline(object):
     def __init__(self, typingctx, targetctx, args, f_ir):
