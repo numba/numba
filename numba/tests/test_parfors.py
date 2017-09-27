@@ -462,6 +462,24 @@ class TestParfors(TestParforsBase):
         self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
 
     @skip_unsupported
+    def test_dead_randoms(self):
+        def test_impl(n):
+            A = np.random.standard_normal(size=(n, n))
+            B = np.random.randn(n, n)
+            C = np.random.normal(0.0, 1.0, (n, n))
+            D = np.random.chisquare(1.0, (n, n))
+            E = np.random.randint(1, high=3, size=(n, n))
+            F = np.random.triangular(1, 2, 3, (n, n))
+            return 3
+
+        n = 128
+        cpfunc = self.compile_parallel(test_impl, (numba.typeof(n),))
+        parfor_output = cpfunc.entry_point(n)
+        py_output = test_impl(n)
+        self.assertEqual(parfor_output, py_output)
+        self.assertTrue(countParfors(test_impl, (types.int64, )) == 0)
+
+    @skip_unsupported
     def test_cfg(self):
         # from issue #2477
         def test_impl(x, is_positive, N):

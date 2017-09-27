@@ -505,9 +505,12 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_se
         for v in init_alias_lives:
             alias_lives |= alias_map[v]
         # let external calls handle stmt if type matches
-        for t, f in remove_dead_extensions.items():
-            if isinstance(stmt, t):
-                f(stmt, lives, arg_aliases, alias_map, typemap)
+        if type(stmt) in remove_dead_extensions:
+            f = remove_dead_extensions[type(stmt)]
+            stmt = f(stmt, lives, arg_aliases, alias_map, typemap)
+            if stmt is None:
+                removed = True
+                continue
         # ignore assignments that their lhs is not live or lhs==rhs
         if isinstance(stmt, ir.Assign):
             lhs = stmt.target
@@ -539,6 +542,15 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_se
     block.body = new_body
     return removed
 
+# list of functions
+remove_call_handlers = []
+
+def remove_dead_random_call(rhs, lives, call_list):
+    if len(call_list) == 3 and call_list[1:] == ['random', numpy]:
+        return True
+    return False
+
+remove_call_handlers.append(remove_dead_random_call)
 
 def has_no_side_effect(rhs, lives, call_table):
     # TODO: find side-effect free calls like Numpy calls
@@ -554,6 +566,9 @@ def has_no_side_effect(rhs, lives, call_table):
         if isinstance(call_list[0], CPUDispatcher):
             py_func = call_list[0].py_func
             if py_func == dot_3_mv_check_args:
+                return True
+        for f in remove_call_handlers:
+            if f(rhs, lives, call_list):
                 return True
         return False
     if isinstance(rhs, ir.Expr) and rhs.op == 'inplace_binop':
