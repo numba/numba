@@ -45,7 +45,15 @@ def stencil_multiple_input_kernel(a, b):
 @stencil
 def stencil_multiple_input_kernel_var(a, b, w):
     return w * (a[0,1] + a[1,0] + a[0,-1] + a[-1,0] +
-                   b[0,1] + b[1,0] + b[0,-1] + b[-1,0])
+                b[0,1] + b[1,0] + b[0,-1] + b[-1,0])
+
+@stencil(standard_indexing=("b",))
+def stencil_with_standard_indexing_1d(a, b):
+    return a[-1] * b[0] + a[0] * b[1]
+
+@stencil(standard_indexing=("b",))
+def stencil_with_standard_indexing_2d(a, b):
+    return a[0,1] * b[0,1] + a[1,0] * b[1,0] + a[0,-1] * b[0,-1] + a[-1,0] * b[-1,0]
 
 class TestStencils(unittest.TestCase):
 
@@ -230,6 +238,54 @@ class TestStencils(unittest.TestCase):
         self.assertTrue(seq_res[0,0] == 1.0 and seq_res[4,4] == 1.0)
         self.assertTrue(njit_res[0,0] == 1.0 and njit_res[4,4] == 1.0)
         self.assertTrue(par_res[0,0] == 1.0 and par_res[4,4] == 1.0)
+
+    @skip_unsupported
+    @tag('important')
+    def test_stencil_standard_indexing_1d(self):
+        """Tests standard indexing with a 1d array.
+        """
+        def test_seq(n):
+            A = np.arange(n)
+            B = [3.0, 7.0]
+            C = stencil_with_standard_indexing_1d(A, B)
+            return C
+
+        def test_impl_seq(n):
+            A = np.arange(n)
+            B = [3.0, 7.0]
+            C = np.zeros(n)
+
+            for i in range(1, n):
+                C[i] = A[i-1] * B[0] + A[i] * B[1]
+            return C
+
+        n = 100
+        self.check(test_impl_seq, test_seq, n)
+
+    @skip_unsupported
+    @tag('important')
+    def test_stencil_standard_indexing_2d(self):
+        """Tests standard indexing with a 2d array.
+        """
+        def test_seq(n):
+            A = np.arange(n**2).reshape((n, n))
+            B = np.ones((3,3))
+            C = stencil_with_standard_indexing_2d(A, B)
+            return C
+
+        def test_impl_seq(n):
+            A = np.arange(n**2).reshape((n, n))
+            B = np.ones((3,3))
+            C = np.zeros(n**2).reshape((n, n))
+
+            for i in range(1, n-1):
+                for j in range(1, n-1):
+                    C[i,j] = (A[i,j+1] * B[0,1]  + A[i+1,j] * B[1,0] +
+                              A[i,j-1] * B[0,-1] + A[i-1,j] * B[-1,0])
+            return C
+
+        n = 5
+        self.check(test_impl_seq, test_seq, n)
 
     @skip_unsupported
     @tag('important')
