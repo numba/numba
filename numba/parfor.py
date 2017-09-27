@@ -1900,7 +1900,14 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, typemap):
     # process parfor body recursively
     remove_dead_parfor_recursive(
         parfor, lives, arg_aliases, alias_map, typemap)
-    return
+
+    # remove parfor if empty
+    is_empty = len(parfor.init_block.body) == 0
+    for block in parfor.loop_body.values():
+        is_empty &= len(block.body) == 0
+    if is_empty:
+        return None
+    return parfor
 
 
 ir_utils.remove_dead_extensions[Parfor] = remove_dead_parfor
