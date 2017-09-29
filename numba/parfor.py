@@ -260,8 +260,11 @@ class ParforPass(object):
         simplify(self.func_ir, self.typemap, self.calltypes)
 
         #dprint_func_ir(self.func_ir, "after remove_dead")
+        # try fuse before maximize
+        self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
         # reorder statements to maximize fusion
         maximize_fusion(self.func_ir, self.func_ir.blocks)
+        # try fuse again after maximize
         dprint_func_ir(self.func_ir, "after maximize fusion")
         self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
         dprint_func_ir(self.func_ir, "after fusion")
