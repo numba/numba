@@ -641,8 +641,6 @@ class ParforPass(object):
                                                      index_typ)
             init_block.append(ir.Assign(getitem_call, subarr_var, loc))
             target = subarr_var
-            size_vars = tuple([ x for x in size_vars
-                                if equiv_set.get_equiv_const(x) != 1 ])
         else:
             # boolean array
             assert(isinstance(index_typ, types.ArrayCompatible))

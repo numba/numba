@@ -644,6 +644,9 @@ class SymbolicEquivSet(ShapeEquivSet):
             def minus(x, y):
                 if isinstance(y, int):
                     return plus(x, -y)
+                elif (isinstance(x, tuple) and isinstance(y, tuple) and
+                      x[0] == y[0]):
+                    return minus(x[1], y[1])
                 else:
                     return None
             expr = get_definition(func_ir, name)
@@ -691,7 +694,7 @@ class SymbolicEquivSet(ShapeEquivSet):
                             super(SymbolicEquivSet, self)._insert(names)
             return value
 
-    def define(self, var, func_ir=None):
+    def define(self, var, func_ir=None, typ=None):
         """Besides incrementing the definition count of the given variable
         name, it will also retrieve and simplify its definition from func_ir,
         and remeber the result for later equivalence comparison. Supported
@@ -704,17 +707,21 @@ class SymbolicEquivSet(ShapeEquivSet):
         else:
             name = var
         super(SymbolicEquivSet, self).define(name)
-        if func_ir and self.defs.get(name, 0) == 1:
+        if (func_ir and self.defs.get(name, 0) == 1 and
+                isinstance(typ, types.Number)):
             value = guard(self._get_or_set_rel, name, func_ir)
             # turn constant definition into equivalence
             if isinstance(value, int):
                 self._insert([name, value])
-            ind = self._get_ind(name)
-            if ind >= 0 and isinstance(var, ir.Var):
-              if ind in self.ind_to_var:
-                self.ind_to_var[ind].append(var)
-              else:
-                self.ind_to_var[ind] = [var]
+            if isinstance(var, ir.Var):
+                ind = self._get_or_add_ind(name)
+                if not (ind in self.ind_to_obj):
+                    self.ind_to_obj[ind] = [name]
+                    self.obj_to_ind[name] = ind
+                if ind in self.ind_to_var:
+                    self.ind_to_var[ind].append(var)
+                else:
+                    self.ind_to_var[ind] = [var]
 
     def _insert(self, objs):
         """Overload _insert method to handle ind changes between relative
@@ -877,7 +884,7 @@ class ArrayAnalysis(object):
     def _define(self, equiv_set, var, typ, value):
         self.typemap[var.name] = typ
         self.func_ir._definitions[var.name] = [value]
-        equiv_set.define(var, self.func_ir)
+        equiv_set.define(var, self.func_ir, typ)
 
     def _analyze_inst(self, label, scope, equiv_set, inst):
         pre = []
@@ -923,7 +930,7 @@ class ArrayAnalysis(object):
 
             if shape != None:
                 equiv_set.insert_equiv(lhs, shape)
-            equiv_set.define(lhs, self.func_ir)
+            equiv_set.define(lhs, self.func_ir, typ)
         elif isinstance(inst, ir.SetItem):
             result = guard(self._index_to_shape,
                 scope, equiv_set, inst.target, inst.index)
@@ -940,8 +947,8 @@ class ArrayAnalysis(object):
                 shape, asserts = self._broadcast_assert_shapes(
                                 scope, equiv_set, inst.loc, shapes, names)
                 n = len(shape)
-                assert(target_ndim <= n)
-                shape = shape[(n - target_ndim):]
+                # shape dimension must be within target dimension
+                assert(target_ndim >= n)
                 equiv_set.set_shape(inst, shape)
                 return pre + asserts, []
             else:
@@ -1082,41 +1089,42 @@ class ArrayAnalysis(object):
             if isinstance(typ, types.SliceType):
                 require(equiv_set.has_shape(index))
                 rel = equiv_set.get_rel(index)
+                loc = index.loc
                 if rel == None: # slice relation not known
                     return slice_size(index, dsize)
-                base_var = equiv_set.get_equiv_var(rel[0])
-                require(base_var != None)
-                loc = index.loc
-                base_type = self.typemap[base_var.name]
-                if rel[1] == 0:
-                    return base_var
-                offset_var = scope.make_temp(loc)
-                offset_val = ir.Const(rel[1], loc)
-                self._define(equiv_set, offset_var, base_type, offset_val)
-                stmts.append(ir.Assign(ir.Const(rel[1], loc),
-                             offset_var, loc))
-                size_var = scope.make_temp(loc)
-                size_val = ir.Expr.binop('+', base_var, offset_var, loc=loc)
+                elif isinstance(rel, tuple):
+                    base_var = equiv_set.get_equiv_var(rel[0])
+                    require(base_var != None)
+                    base_type = self.typemap[base_var.name]
+                    if rel[1] == 0:
+                        return base_var
+                    offset_var = scope.make_temp(loc)
+                    offset_val = ir.Const(rel[1], loc)
+                    self._define(equiv_set, offset_var, base_type, offset_val)
+                    stmts.append(ir.Assign(ir.Const(rel[1], loc),
+                                 offset_var, loc))
+                    size_var = scope.make_temp(loc)
+                    size_val = ir.Expr.binop('+', base_var, offset_var, loc=loc)
+                    self.calltypes[size_val] = signature(
+                        base_type, base_type, base_type)
+                else: # otherwise it is a constant
+                    assert(isinstance(rel, int))
+                    size_var = scope.make_temp(loc)
+                    size_val = ir.Const(rel, loc)
+                    base_type = types.intp
                 self._define(equiv_set, size_var, base_type, size_val)
-                self.calltypes[size_val] = signature(
-                    base_type, base_type, base_type)
                 stmts.append(ir.Assign(size_val, size_var, loc))
                 return size_var
             elif isinstance(typ, types.Number):
-                return 1
+                return None
             else:
                 # unknown dimension size for this index,
                 # so we'll raise GuardException
                 require(False)
         shape = tuple(to_shape(typ, size, dsize) for
                       (typ, size, dsize) in zip(seq_typs, ind_shape, var_shape))
-        require(not all(x == 1 for x in shape))
-        loc = ind_var.loc
-        one_var = scope.make_temp(loc)
-        one_val = ir.Const(1, loc)
-        self._define(equiv_set, one_var, types.intp, one_val)
-        stmts.append(ir.Assign(one_val, one_var, loc))
-        shape = tuple(one_var if x == 1 else x for x in shape)
+        require(not all(x == None for x in shape))
+        shape = tuple( x for x in shape if x != None)
         return shape, stmts
 
     def _analyze_op_getitem(self, scope, equiv_set, expr):
