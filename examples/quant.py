@@ -22,7 +22,7 @@ CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 '''
-from numba import *
+import numba
 import numpy as np
 import numpy.linalg as la
 import math
@@ -94,7 +94,6 @@ def model(strike, numPaths, numSteps, asset):
     putpayoff = np.maximum(strike - asset[numSteps], 0.0)
     cashFlowPut = putpayoff * avgPathFactor
     # Now go back in time using regression
-    print(typeof(strike), typeof(asset[0]), typeof(cashFlowPut))
     for s in range(numSteps,1,-1):
         curasset = asset[s]
         cashFloatPut = model_kernel(strike, curasset, cashFlowPut)
