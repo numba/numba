@@ -154,7 +154,8 @@ class Parfor(ir.Expr, ir.Stmt):
             loop_body,
             loc,
             index_var,
-            equiv_set):
+            equiv_set,
+            pattern):
         super(Parfor, self).__init__(
             op='parfor',
             loc=loc
@@ -173,7 +174,9 @@ class Parfor(ir.Expr, ir.Stmt):
         # The parallel patterns this parfor was generated from and their options
         # for example, a parfor could be from the stencil pattern with
         # the neighborhood option
-        self.patterns = []
+        self.patterns = [pattern]
+        if config.DEBUG_PARFOR_STATS:
+            print('Parfor #{} is produced from {} at {}'.format(self.id, pattern[0], loc))
 
     def __repr__(self):
         return repr(self.loop_nests) + \
@@ -389,6 +392,7 @@ class ParforPass(object):
             equiv_set = self.array_analysis.get_equiv_set(label)
             for instr in block.body:
                 if isinstance(instr, ir.SetItem):
+                    loc = instr.loc
                     target = instr.target
                     index = instr.index
                     value = instr.value
@@ -401,7 +405,7 @@ class ParforPass(object):
                             target_typ.ndim == index_typ.ndim):
                             if isinstance(value_typ, types.Number):
                                 instr = self._setitem_to_parfor(equiv_set,
-                                        target, index, value)
+                                        loc, target, index, value)
                             elif isinstance(value_typ, types.npytypes.Array):
                                 val_def = guard(get_definition, self.func_ir,
                                                 value.name)
@@ -409,12 +413,12 @@ class ParforPass(object):
                                     val_def.op == 'getitem' and
                                     val_def.index.name == index.name):
                                     instr = self._setitem_to_parfor(equiv_set,
-                                            target, index, val_def.value)
+                                            loc, target, index, val_def.value)
                         else:
                             shape = equiv_set.get_shape(instr)
                             if shape != None:
                                 instr = self._setitem_to_parfor(equiv_set,
-                                        target, index, value, shape=shape)
+                                        loc, target, index, value, shape=shape)
                 new_body.append(instr)
             block.body = new_body
 
@@ -482,8 +486,8 @@ class ParforPass(object):
                     # TODO: find correlation
                     parfor_loop = LoopNest(index_var, start, size_var, step)
                     parfor = Parfor([parfor_loop], init_block, body, loc, index_var,
-                                    self.array_analysis.get_equiv_set(entry))
-                    parfor.patterns = [("prange",)]
+                                    self.array_analysis.get_equiv_set(entry),
+                                    ("prange",))
                     # add parfor to entry block, change jump target to exit
                     jump = blocks[entry].body.pop()
                     blocks[entry].body.append(parfor)
@@ -603,7 +607,8 @@ class ParforPass(object):
                 index_vars,
                 avail_vars))
 
-        parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set)
+        parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
+                        ('arrayexpr {}'.format(repr_arrayexpr(arrayexpr.expr)),))
 
         setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
         self.calltypes[setitem_node] = signature(
@@ -614,13 +619,12 @@ class ParforPass(object):
             parfor.dump()
         return parfor
 
-    def _setitem_to_parfor(self, equiv_set, target, index, value, shape=None):
+    def _setitem_to_parfor(self, equiv_set, loc, target, index, value, shape=None):
         """generate parfor from setitem node with a boolean array index.
         The value can be either a scalar or an array variable, and in
         the latter case, the same boolean index is used for the value too.
         """
         scope = target.scope
-        loc = target.loc
         arr_typ = self.typemap[target.name]
         el_typ = arr_typ.dtype
         index_typ = self.typemap[index.name]
@@ -662,7 +666,8 @@ class ParforPass(object):
         body_block = ir.Block(scope, loc)
         index_var, index_var_typ = self._make_index_var(
                  scope, index_vars, body_block)
-        parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set)
+        parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
+                        ('setitem',))
         if shape:
             # slice subarray
             parfor.loop_body = {body_label: body_block}
@@ -768,8 +773,8 @@ class ParforPass(object):
             self.typemap[index_var.name] = types.intp
             loopnests = [LoopNest(index_var, 0, size_var, 1)]
             init_block = ir.Block(scope, loc)
-            parfor = Parfor(loopnests, init_block, {}, loc, index_var,
-                            equiv_set)
+            parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
+                            ('{} function'.format(call_name),))
 
             if self._get_ndims(in1.name) == 2:
                 # for 2D input, there is an inner loop
@@ -890,7 +895,8 @@ class ParforPass(object):
         value_assign = ir.Assign(value, expr_out_var, loc)
         body_block.body.append(value_assign)
 
-        parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set)
+        parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
+                        ('{} function'.format(call_name,)))
 
         setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
         self.calltypes[setitem_node] = signature(
@@ -974,7 +980,7 @@ class ParforPass(object):
 
             # parfor
             parfor = Parfor(loopnests, init_block, loop_body, loc, index_var,
-                            equiv_set)
+                            equiv_set, ('{} function'.format(call_name),))
             return parfor
         # return error if we couldn't handle it (avoid rewrite infinite loop)
         raise NotImplementedError("parfor translation failed for ", expr)
@@ -988,7 +994,8 @@ class ParforPass(object):
         args = expr.args
         scope = lhs.scope
         loc = expr.loc
-        reduce_func = get_definition(self.func_ir, args[0])
+        call_name = args[0]
+        reduce_func = get_definition(self.func_ir, call_name)
         check_reduce_func(self.func_ir, reduce_func)
         in_arr = args[1]
         init_val = args[2]
@@ -1031,7 +1038,7 @@ class ParforPass(object):
         replace_returns(loop_body, acc_var, acc_label)
 
         parfor = Parfor(loopnests, init_block, loop_body, loc, index_var,
-                        equiv_set)
+                        equiv_set, ('{} function'.format(call_name),))
         return parfor
 
 
@@ -1521,6 +1528,7 @@ def get_parfor_params(blocks):
     # live_map[first_non_init_block] contains variables defined in parfor body
     # that could be undefined before. So we only consider variables that are
     # actually defined before the parfor body in the program.
+    parfor_ids = set()
     pre_defs = set()
     _, all_defs = compute_use_defs(blocks)
     topo_order = find_topo_order(blocks)
@@ -1533,8 +1541,13 @@ def get_parfor_params(blocks):
             before_defs = compute_use_defs({0: dummy_block}).defmap[0]
             pre_defs |= before_defs
             parfor.params = get_parfor_params_inner(parfor, pre_defs)
+            parfor_ids.add(parfor.id)
 
         pre_defs |= all_defs[label]
+
+    if config.DEBUG_PARFOR_STATS:
+        print('After fusion, {} Parfor(s) #{} will run in parallel over {} threads.'.format(
+            len(parfor_ids), parfor_ids, config.NUMBA_NUM_THREADS))
     return
 
 
@@ -1947,6 +1960,9 @@ def fuse_parfors_inner(parfor1, parfor2):
     remove_duplicate_definitions(parfor1.loop_body, nameset)
     # remove_empty_block(parfor1.loop_body)
     parfor1.patterns.extend(parfor2.patterns)
+    if config.DEBUG_PARFOR_STATS:
+        print('Parfor #{} is fused into Parfor #{}.'.format(
+              parfor2.id, parfor1.id))
 
     return parfor1
 
@@ -2292,6 +2308,18 @@ def _get_saved_call_nodes(fname, saved_globals, saved_getattrs, block_defs):
     nodes.reverse()
     return nodes
 
+def repr_arrayexpr(arrayexpr):
+    """Extract operators from arrayexpr to represent it abstractly as a string.
+    """
+    if isinstance(arrayexpr, tuple):
+        opr = arrayexpr[0]
+        args = arrayexpr[1]
+        if len(args) == 1:
+            return '({}{})'.format(opr, repr_arrayexpr(args[0]))
+        else:
+            return '({})'.format(opr.join([ repr_arrayexpr(x) for x in args ]))
+    else:
+        return '_'
 
 def fix_generator_types(generator_info, return_type, typemap):
     """postproc updates generator_info with live variables after transformations

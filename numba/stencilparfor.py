@@ -241,9 +241,9 @@ class StencilPass(object):
                                         )
         stencil_blocks[max(stencil_blocks.keys())].body.append(setitem_call)
 
+        pattern = ('stencil', [start_lengths, end_lengths])
         parfor = numba.parfor.Parfor(loopnests, init_block, stencil_blocks,
-                                     loc, parfor_ind_var, equiv_set)
-        parfor.patterns = [('stencil', [start_lengths, end_lengths])]
+                                     loc, parfor_ind_var, equiv_set, pattern)
         gen_nodes.append(parfor)
         gen_nodes.append(ir.Assign(out_arr, target, loc))
         return gen_nodes
