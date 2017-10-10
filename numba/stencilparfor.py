@@ -195,10 +195,22 @@ class StencilPass(object):
                                                            return_type.dtype,
                                                            in_arr_typ.ndim,
                                                            in_arr_typ.layout)
+            dtype_g_np_var = ir.Var(scope, mk_unique_var("$np_g_var"), loc)
+            self.typemap[dtype_g_np_var.name] = types.misc.Module(np)
+            dtype_g_np = ir.Global('np', np, loc)
+            dtype_g_np_assign = ir.Assign(dtype_g_np, dtype_g_np_var, loc)
+            init_block.body.append(dtype_g_np_assign)
+
+            dtype_np_attr_call = ir.Expr.getattr(dtype_g_np_var, return_type.dtype.name, loc)
+            dtype_attr_var = ir.Var(scope, mk_unique_var("$np_attr_attr"), loc)
+            self.typemap[dtype_attr_var.name] = types.functions.NumberClass(return_type.dtype)
+            dtype_attr_assign = ir.Assign(dtype_np_attr_call, dtype_attr_var, loc)
+            init_block.body.append(dtype_attr_assign)
+
             stmts = ir_utils.gen_np_call("full",
                                        np.full,
                                        out_arr,
-                                       [shape_var, zero_var],
+                                       [shape_var, zero_var, dtype_attr_var],
                                        self.typemap,
                                        self.calltypes)
             init_block.body.extend(stmts)
