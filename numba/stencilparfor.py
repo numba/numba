@@ -318,7 +318,8 @@ class StencilPass(object):
                     if need_to_calc_kernel:
                         # all indices should be integer to be able to calculate
                         # neighborhood automatically
-                        if any([not isinstance(v, int) for v in index_list]):
+                        if (isinstance(index_list, ir.Var) or 
+                            any([not isinstance(v, int) for v in index_list])):
                             raise ValueError("Variable stencil index only "
                                 "possible with known neighborhood")
                         start_lengths = list(map(min, start_lengths,
@@ -537,7 +538,7 @@ def get_stencil_blocks(sf, typingctx, args, scope, loc, input_dict, typemap,
         ir_utils.dump_blocks(stencil_blocks)
 
     ir_utils.remove_dels(stencil_blocks)
-    return stencil_blocks, sf.get_return_type(args), arg_to_arr_dict
+    return stencil_blocks, sf.get_return_type(args)[0], arg_to_arr_dict
 
 class DummyPipeline(object):
     def __init__(self, typingctx, targetctx, args, f_ir):
