@@ -300,6 +300,13 @@ class StencilPass(object):
         for label, block in stencil_blocks.items():
             new_body = []
             for stmt in block.body:
+                if ((isinstance(stmt, ir.Assign)
+                        and isinstance(stmt.value, ir.Expr)
+                        and stmt.value.op in ['setitem', 'static_setitem']
+                        and stmt.value.value.name in in_arg_names) or 
+                   (isinstance(stmt, ir.SetItem)
+                        and stmt.target.name in in_arg_names)):
+                    raise ValueError("Assignments to arrays passed to stencil kernels is not allowed.")
                 if (isinstance(stmt, ir.Assign)
                         and isinstance(stmt.value, ir.Expr)
                         and stmt.value.op in ['static_getitem', 'getitem']
