@@ -127,6 +127,13 @@ class StencilFunc(object):
                         print("remembering in const_dict", stmt.target.name, stmt.value.value)
                     # Remember consts for use later.
                     const_dict[stmt.target.name] = stmt.value.value
+                if ((isinstance(stmt, ir.Assign)
+                        and isinstance(stmt.value, ir.Expr)
+                        and stmt.value.op in ['setitem', 'static_setitem']
+                        and stmt.value.value.name in kernel.arg_names) or 
+                   (isinstance(stmt, ir.SetItem)
+                        and stmt.target.name in kernel.arg_names)):
+                    raise ValueError("Assignments to arrays passed to stencil kernels is not allowed.")
                 if (isinstance(stmt, ir.Assign)
                         and isinstance(stmt.value, ir.Expr)
                         and stmt.value.op in ['getitem', 'static_getitem']
@@ -315,11 +322,25 @@ class StencilFunc(object):
         self._type_cache.append((argtys_with_out, sig, result, typemap, calltypes))
         return sig
 
+    def copy_ir_with_calltypes(self, ir, calltypes):
+        copy_calltypes = {}
+        kernel_copy = ir.copy()
+        kernel_copy.blocks = {}
+        for (block_label, block) in ir.blocks.items():
+            new_block = copy.deepcopy(ir.blocks[block_label])
+            new_block.body = []
+            for stmt in ir.blocks[block_label].body:
+                scopy = copy.deepcopy(stmt)
+                new_block.body.append(scopy)
+                if stmt in calltypes:
+                    copy_calltypes[scopy] = calltypes[stmt]
+            kernel_copy.blocks[block_label] = new_block
+        return (kernel_copy, copy_calltypes)
+
     def _stencil_wrapper(self, result, sigret, return_type, typemap, calltypes, *args):
         # Copy the kernel so that our changes for this callsite
         # won't effect other callsites.
-        kernel_copy = self.kernel_ir.copy()
-        kernel_copy.blocks = copy.deepcopy(self.kernel_ir.blocks)
+        (kernel_copy, copy_calltypes) = self.copy_ir_with_calltypes(self.kernel_ir, calltypes)
         ir_utils.remove_args(kernel_copy.blocks)
 
         in_cps, out_cps = ir_utils.copy_propagate(kernel_copy.blocks, typemap)
@@ -331,7 +352,7 @@ class StencilFunc(object):
             lambda a, b, c, d:None, # a null func
             None,                   # no extra data
             typemap,
-            calltypes)
+            copy_calltypes)
 
         the_array = args[0]
 
