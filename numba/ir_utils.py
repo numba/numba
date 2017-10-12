@@ -1403,7 +1403,7 @@ def replace_returns(blocks, target, return_label):
             elif isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr) and stmt.value.op == 'cast':
                 casts.append(stmt)
 
-def gen_np_call(func_as_str, func, lhs, args, typemap, calltypes):
+def gen_np_call(func_as_str, func, lhs, args, typingctx, typemap, calltypes):
     scope = args[0].scope
     loc = args[0].loc
 
@@ -1421,7 +1421,7 @@ def gen_np_call(func_as_str, func, lhs, args, typemap, calltypes):
     # np call: lhs = np_attr(*args)
     np_call = ir.Expr.call(attr_var, args, (), loc)
     arg_types = [typemap[x.name] for x in args]
-    func_typ = func_var_typ.get_call_type(typing.Context(), arg_types, {})
+    func_typ = func_var_typ.get_call_type(typingctx, arg_types, {})
     calltypes[np_call] = func_typ
     np_assign = ir.Assign(np_call, lhs, loc)
     return [g_np_assign, attr_assign, np_assign]

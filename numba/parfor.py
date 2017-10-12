@@ -546,9 +546,11 @@ class ParforPass(object):
         body_block.body.extend(
             _arrayexpr_tree_to_ir(
                 self.func_ir,
+                self.typingctx,
                 self.typemap,
                 self.calltypes,
                 equiv_set,
+                init_block,
                 expr_out_var,
                 expr,
                 index_var,
@@ -1063,9 +1065,11 @@ def _mk_mvdot_body(typemap, calltypes, phi_b_var, index_var, in1, in2, sum_var,
 
 def _arrayexpr_tree_to_ir(
         func_ir,
+        typingctx,
         typemap,
         calltypes,
         equiv_set,
+        init_block,
         expr_out_var,
         expr,
         parfor_index_tuple_var,
@@ -1086,9 +1090,11 @@ def _arrayexpr_tree_to_ir(
             arg_out_var = ir.Var(scope, mk_unique_var("$arg_out_var"), loc)
             typemap[arg_out_var.name] = el_typ
             out_ir += _arrayexpr_tree_to_ir(func_ir,
+                                            typingctx,
                                             typemap,
                                             calltypes,
                                             equiv_set,
+                                            init_block,
                                             arg_out_var,
                                             arg,
                                             parfor_index_tuple_var,
@@ -1138,7 +1144,9 @@ def _arrayexpr_tree_to_ir(
                 all_parfor_indices,
                 el_typ,
                 calltypes,
+                typingctx,
                 typemap,
+                init_block,
                 out_ir)
         else:
             # assert typemap[expr.name]==el_typ
@@ -1189,7 +1197,9 @@ def _gen_arrayexpr_getitem(
         all_parfor_indices,
         el_typ,
         calltypes,
+        typingctx,
         typemap,
+        init_block,
         out_ir):
     """if there is implicit dimension broadcast, generate proper access variable
     for getitem. For example, if indices are (i1,i2,i3) but shape is (c1,0,c3),
@@ -1198,11 +1208,27 @@ def _gen_arrayexpr_getitem(
     """
     loc = var.loc
     index_var = parfor_index_tuple_var
+    var_typ =  typemap[var.name]
     ndims = typemap[var.name].ndim
     num_indices = len(all_parfor_indices)
     size_vars = equiv_set.get_shape(var)
     size_consts = [equiv_set.get_equiv_const(x) for x in size_vars]
-    if ndims == 1:
+    if ndims == 0:
+        # call np.ravel
+        ravel_var = ir.Var(var.scope, mk_unique_var("$ravel"), loc)
+        ravel_typ = types.npytypes.Array(dtype=var_typ.dtype, ndim=1, layout='C')
+        typemap[ravel_var.name] = ravel_typ
+        stmts = ir_utils.gen_np_call('ravel', numpy.ravel, ravel_var, [var], typingctx, typemap, calltypes)
+        init_block.body.extend(stmts)
+        var = ravel_var
+        # Const(0)
+        const_node = ir.Const(0, var.loc)
+        const_var = ir.Var(var.scope, mk_unique_var("$const_ind_0"), loc)
+        typemap[const_var.name] = types.intp
+        const_assign = ir.Assign(const_node, const_var, loc)
+        out_ir.append(const_assign)
+        index_var = const_var
+    elif ndims == 1:
         # Use last index for 1D arrays
         index_var = all_parfor_indices[-1]
     elif any([x != None for x in size_consts]):
