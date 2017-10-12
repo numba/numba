@@ -211,6 +211,7 @@ class StencilPass(object):
                                        np.full,
                                        out_arr,
                                        [shape_var, zero_var, dtype_attr_var],
+                                       self.typingctx,
                                        self.typemap,
                                        self.calltypes)
             init_block.body.extend(stmts)

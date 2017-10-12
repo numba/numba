@@ -221,6 +221,16 @@ class TestParfors(TestParforsBase):
 
     @skip_unsupported
     @tag('important')
+    def test_0d_broadcast(self):
+        def test_impl():
+            X = np.array(1)
+            Y = np.ones((10, 12))
+            return np.sum(X + Y)
+        self.check(test_impl)
+        self.assertTrue(countParfors(test_impl, ()) == 1)
+
+    @skip_unsupported
+    @tag('important')
     def test_2d_parfor(self):
         def test_impl():
             X = np.ones((10, 12))
