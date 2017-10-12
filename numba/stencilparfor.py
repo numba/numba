@@ -304,7 +304,8 @@ class StencilPass(object):
                         and isinstance(stmt.value, ir.Expr)
                         and stmt.value.op in ['setitem', 'static_setitem']
                         and stmt.value.value.name in in_arg_names) or 
-                   (isinstance(stmt, ir.SetItem)
+                   ((isinstance(stmt, ir.SetItem) or
+                     isinstance(stmt, ir.StaticSetItem))
                         and stmt.target.name in in_arg_names)):
                     raise ValueError("Assignments to arrays passed to stencil kernels is not allowed.")
                 if (isinstance(stmt, ir.Assign)
