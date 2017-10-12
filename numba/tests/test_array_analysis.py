@@ -356,6 +356,14 @@ class TestArrayAnalysis(TestCase):
                                        self.with_equiv('b', ('n', 'n')),
                                        self.with_equiv('b', 'c')])
 
+        def test_0d_array(n):
+            a = np.array(1)
+            b = np.ones(2)
+            return a + b
+        self._compile_and_test(test_0d_array, (types.intp,),
+                               equivs=[self.without_equiv('a', 'b')],
+                               asserts=[self.without_shapecall('a')])
+
         def test_ones(n):
             a = np.ones(n)
             b = np.ones((n, n))

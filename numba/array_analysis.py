@@ -318,7 +318,7 @@ class ShapeEquivSet(EquivSet):
                 ndim = (typ.ndim if isinstance(typ, types.ArrayCompatible)
                         else len(typ))
                 if ndim == 0:
-                    return name
+                    return ()
                 else:
                     return tuple("{}#{}".format(name, i) for i in range(ndim))
             else:
@@ -342,6 +342,9 @@ class ShapeEquivSet(EquivSet):
         """
         assert(len(objs) > 1)
         obj_names = [self._get_names(x) for x in objs]
+        obj_names = [x for x in obj_names if x != ()] # rule out 0d shape
+        if len(obj_names) <= 1:
+            return False;
         ndims = [len(names) for names in obj_names]
         ndim = ndims[0]
         assert all(ndim == x for x in ndims), (
@@ -396,6 +399,9 @@ class ShapeEquivSet(EquivSet):
         """
         assert(len(objs) > 1)
         obj_names = [self._get_names(x) for x in objs]
+        obj_names = [x for x in obj_names if x != ()] # rule out 0d shape
+        if len(obj_names) <= 1:
+            return;
         names = sum([list(x) for x in obj_names], [])
         ndims = [len(x) for x in obj_names]
         ndim = ndims[0]
@@ -633,7 +639,9 @@ class ArrayAnalysis(object):
             lhs = inst.target
             typ = self.typemap[lhs.name]
             shape = None
-            if isinstance(inst.value, ir.Expr):
+            if isinstance(typ, types.ArrayCompatible) and typ.ndim == 0:
+                shape = ()
+            elif isinstance(inst.value, ir.Expr):
                 result = self._analyze_expr(scope, equiv_set, inst.value)
                 if result:
                     (shape, pre) = result
@@ -666,7 +674,7 @@ class ArrayAnalysis(object):
                                                          len(typ), shape)
                     #equiv_set.set_shape(lhs, shape)
 
-            if shape:
+            if shape != None:
                 equiv_set.insert_equiv(lhs, shape)
             equiv_set.define(lhs)
         elif isinstance(inst, ir.Branch):
@@ -1187,6 +1195,7 @@ class ArrayAnalysis(object):
         names = [x.name for x in arrs]
         dims = [self.typemap[x.name].ndim for x in arrs]
         max_dim = max(dims)
+        require(max_dim > 0)
         all_has_shapes = all([equiv_set.has_shape(x) for x in arrs])
         if not all_has_shapes:
             return arrs[0], self._call_assert_equiv(scope, loc, equiv_set, arrs)
@@ -1328,9 +1337,10 @@ class ArrayAnalysis(object):
 
     def _isarray(self, varname):
         # no SmartArrayType support yet (can't generate parfor, allocate, etc)
-        return (isinstance(self.typemap[varname], types.npytypes.Array) and
-                not isinstance(self.typemap[varname],
-                               types.npytypes.SmartArrayType))
+        typ = self.typemap[varname]
+        return (isinstance(typ, types.npytypes.Array) and
+                not isinstance(typ, types.npytypes.SmartArrayType) and
+                typ.ndim > 0)
 
     def _sum_size(self, equiv_set, sizes):
         """Return the sum of the given list of sizes if they are all equivalent
