@@ -796,6 +796,14 @@ class ArrayAnalysis(object):
         return tuple(expr.items), []
 
     def _analyze_op_call(self, scope, equiv_set, expr):
+        from numba.stencil import StencilFunc
+
+        callee = expr.func
+        callee_def = get_definition(self.func_ir, callee)
+        if isinstance(callee_def, ir.Global) and isinstance(callee_def.value, StencilFunc):
+            args = expr.args
+            return self._analyze_numpy_array_like(scope, equiv_set, args, dict(expr.kws))
+
         fname, mod_name = find_callname(
             self.func_ir, expr, typemap=self.typemap)
         if isinstance(mod_name, ir.Var):  # call via attribute
