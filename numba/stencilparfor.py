@@ -149,7 +149,10 @@ class StencilPass(object):
         # replace return value to setitem to output array
         return_node = stencil_blocks[max(stencil_blocks.keys())].body.pop()
         assert isinstance(return_node, ir.Return)
+
         last_node = stencil_blocks[max(stencil_blocks.keys())].body.pop()
+        while not isinstance(last_node, ir.Assign) or not isinstance(last_node.value, ir.Expr) or not last_node.value.op == 'cast':
+            last_node = stencil_blocks[max(stencil_blocks.keys())].body.pop()
         assert isinstance(last_node, ir.Assign)
         assert isinstance(last_node.value, ir.Expr)
         assert last_node.value.op == 'cast'
