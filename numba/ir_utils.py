@@ -362,6 +362,8 @@ def visit_vars_stmt(stmt, callback, cbdata):
         stmt.target = visit_vars_inner(stmt.target, callback, cbdata)
         stmt.index = visit_vars_inner(stmt.index, callback, cbdata)
         stmt.value = visit_vars_inner(stmt.value, callback, cbdata)
+    elif isinstance(stmt, ir.Print):
+        stmt.args = [visit_vars_inner(x, callback, cbdata) for x in stmt.args]
     else:
         # TODO: raise NotImplementedError("no replacement for IR node: ", stmt)
         pass
