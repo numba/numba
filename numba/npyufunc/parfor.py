@@ -110,6 +110,11 @@ def _create_shape_signature(
         func_sig):
     '''Create shape signature for GUFunc
     '''
+    if config.DEBUG_ARRAY_OPT:
+        print("_create_shape_signature", num_inputs, num_reductions, args, func_sig)
+        for i in args[1:]:
+            print("argument", i, type(i), get_shape_classes(i))
+
     num_inouts = len(args) - num_reductions
     # maximum class number for array shapes
     classes = [get_shape_classes(var) for var in args[1:]]
@@ -125,8 +130,18 @@ def _create_shape_signature(
     # TODO: use prefix + class number instead of single char
     alphabet = ord('a')
     for n in class_set:
-       class_map[n] = chr(alphabet)
-       alphabet += 1
+       if n >= 0:
+           class_map[n] = chr(alphabet)
+           alphabet += 1
+
+    alpha_dict = {'latest_alpha' : alphabet}
+
+    def bump_alpha(c, class_map):
+        if c >= 0:
+            return class_map[c]
+        else:
+            alpha_dict['latest_alpha'] += 1
+            return chr(alpha_dict['latest_alpha'])
 
     gu_sin = []
     gu_sout = []
@@ -136,7 +151,7 @@ def _create_shape_signature(
         # print("create_shape_signature: var = ", var, " typ = ", typ)
         count = count + 1
         if cls:
-            dim_syms = tuple(class_map[c] for c in cls)
+            dim_syms = tuple(bump_alpha(c, class_map) for c in cls)
         else:
             dim_syms = ()
         if (count > num_inouts):
@@ -310,6 +325,15 @@ def _create_gufunc_for_parfor_body(
                        str(sched_dim +
                            parfor_dim) +
                        "] + 1):\n")
+
+    if config.DEBUG_ARRAY_OPT_RUNTIME:
+        for indent in range(parfor_dim + 1):
+            gufunc_txt += "    "
+        gufunc_txt += "print("
+        for eachdim in range(parfor_dim):
+            gufunc_txt += "\"" + legal_loop_indices[eachdim] + "\"," + legal_loop_indices[eachdim] + ","
+        gufunc_txt += ")\n"
+
     # Add the sentinel assignment so that we can find the loop body position
     # in the IR.
     for indent in range(parfor_dim + 1):
@@ -366,6 +390,41 @@ def _create_gufunc_for_parfor_body(
     loop_body = add_offset_to_labels(loop_body, gufunc_stub_last_label)
     # new label for splitting sentinel block
     new_label = max(loop_body.keys()) + 1
+
+    # If enabled, add a print statement after every assignment.
+    if config.DEBUG_ARRAY_OPT_RUNTIME:
+        for label, block in loop_body.items():
+            new_block = block.copy()
+            new_block.clear()
+            loc = block.loc
+            scope = block.scope
+            for inst in block.body:
+                new_block.append(inst)
+                # Append print after assignment
+                if isinstance(inst, ir.Assign):
+                    # Only apply to numbers
+                    if typemap[inst.target.name] not in types.number_domain:
+                        continue
+
+                    # Make constant string
+                    strval = "{} =".format(inst.target.name)
+                    strconsttyp = types.Const(strval)
+
+                    lhs = scope.make_temp(loc=loc)
+                    assign_lhs = ir.Assign(value=ir.Const(value=strval, loc=loc),
+                                           target=lhs, loc=loc)
+                    typemap[lhs.name] = strconsttyp
+                    new_block.append(assign_lhs)
+
+                    # Make print node
+                    print_node = ir.Print(args=[lhs, inst.target], vararg=None, loc=loc)
+                    new_block.append(print_node)
+                    sig = numba.typing.signature(types.none,
+                                           typemap[lhs.name],
+                                           typemap[inst.target.name])
+                    lowerer.fndesc.calltypes[print_node] = sig
+            loop_body[label] = new_block
+
     if config.DEBUG_ARRAY_OPT:
         _print_body(loop_body)
 
