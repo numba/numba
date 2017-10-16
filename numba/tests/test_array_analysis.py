@@ -10,7 +10,7 @@ from numba import njit, typeof, types, typing, typeof, ir, utils, bytecode
 from .support import TestCase, tag
 from numba.array_analysis import EquivSet, ArrayAnalysis
 from numba.compiler import Pipeline, Flags, _PipelineManager
-from numba.targets import cpu
+from numba.targets import cpu, registry
 from numba.numpy_support import version as numpy_version
 from numba.ir_utils import remove_dead
 
@@ -71,9 +71,9 @@ class ArrayAnalysisTester(Pipeline):
             flags = Flags()
         flags.nrt = True
         if typing_context is None:
-            typing_context = typing.Context()
+            typing_context = registry.cpu_target.typing_context
         if target_context is None:
-            target_context = cpu.CPUContext(typing_context)
+            target_context =  registry.cpu_target.target_context
         return cls(typing_context, target_context, library, args, return_type,
                    flags, locals)
 
@@ -345,6 +345,30 @@ class TestArrayAnalysis(TestCase):
             return np.sum(A + B)
         self._compile_and_test(test_assert, (types.intp, types.intp),
                                asserts=None)
+
+    def test_stencilcall(self):
+        from numba import stencil
+        @stencil
+        def kernel_1(a):
+            return 0.25 * (a[0,1] + a[1,0] + a[0,-1] + a[-1,0])
+
+        def test_1(n):
+            a = np.ones((n,n))
+            b = kernel_1(a)
+            return a + b
+
+        self._compile_and_test(test_1, (types.intp,),
+                               equivs=[self.with_equiv('a', 'b')],
+                               asserts=[self.without_assert('a', 'b')])
+
+        def test_2(n):
+            a = np.ones((n,n))
+            b = np.ones((n+1,n+1))
+            kernel_1(a, out=b)
+            return a
+
+        self._compile_and_test(test_2, (types.intp,),
+                               equivs=[self.without_equiv('a', 'b')])
 
     def test_numpy_calls(self):
         def test_zeros(n):
