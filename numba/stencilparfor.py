@@ -217,6 +217,7 @@ class StencilPass(object):
                                        self.typingctx,
                                        self.typemap,
                                        self.calltypes)
+            equiv_set.insert_equiv(out_arr, in_arr_dim_sizes)
             init_block.body.extend(stmts)
 
         setitem_call = ir.SetItem(out_arr, parfor_ind_var, return_val, loc)
