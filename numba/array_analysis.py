@@ -800,7 +800,8 @@ class ArrayAnalysis(object):
 
         callee = expr.func
         callee_def = get_definition(self.func_ir, callee)
-        if isinstance(callee_def, ir.Global) and isinstance(callee_def.value, StencilFunc):
+        if ((isinstance(callee_def, ir.Global) or isinstance(callee_def, ir.FreeVar))
+            and isinstance(callee_def.value, StencilFunc)):
             args = expr.args
             return self._analyze_numpy_array_like(scope, equiv_set, args, dict(expr.kws))
 
