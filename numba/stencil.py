@@ -247,6 +247,9 @@ class StencilFunc(object):
             print("get_return_type", argtys)
             ir_utils.dump_blocks(self.kernel_ir.blocks)
 
+        if not isinstance(argtys[0], types.npytypes.Array):
+            raise ValueError("The first argument to a stencil kernel must be the primary input array.")
+
         typemap, return_type, calltypes = compiler.type_inference_stage(
                 self._typingctx,
                 self.kernel_ir,
