@@ -1405,6 +1405,7 @@ def get_parfor_params_inner(parfor, pre_defs):
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
+    get_parfor_params(blocks)
     unwrap_parfor_blocks(parfor)
     keylist = sorted(live_map.keys())
     init_block = keylist[0]
