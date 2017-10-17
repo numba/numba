@@ -19,7 +19,7 @@ try:
 except ImportError:
     raise RuntimeError("Pillow is needed to run this example. Try 'conda install pillow'")
 
-@atencil()
+@stencil()
 def gaussian_blur(a):
     return (a[-2,-2] * 0.003  + a[-1,-2] * 0.0133 + a[0,-2] * 0.0219 + a[1,-2] * 0.0133 + a[2,-2] * 0.0030 +
             a[-2,-1] * 0.0133 + a[-1,-1] * 0.0596 + a[0,-1] * 0.0983 + a[1,-1] * 0.0596 + a[2,-1] * 0.0133 +
@@ -52,6 +52,11 @@ def main (*args):
 
     input_img = Image.open(input_file)
     input_arr = np.array(input_img)
+    tstart = time.time()
+    output_arr = run_gaussian_blur(input_arr, 1).astype(input_arr.dtype)
+    htime = time.time() - tstart
+    print("SELFPRIMED ", htime)
+
     tstart = time.time()
     output_arr = run_gaussian_blur(input_arr, iterations).astype(input_arr.dtype)
     htime = time.time() - tstart
