@@ -57,6 +57,11 @@ def main (*args):
     input_arr = np.array(input_img)
 
     tstart = time.time()
+    output_arr = gaussian_blur(input_arr)
+    htime = time.time() - tstart
+    print("SELFPRIMED ", htime)
+
+    tstart = time.time()
     for i in range(iterations):
         output_arr = gaussian_blur(input_arr)
         input_arr, output_arr = output_arr, input_arr
