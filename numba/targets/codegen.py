@@ -418,6 +418,8 @@ class CodeLibrary(object):
             self._set_compiled_object(object_code)
             self._shared_module = llvmts.parse_bitcode(shared_bitcode)
             self._finalize_final_module()
+            # Load symbols from cache
+            self._codegen._engine._load_defined_symbols(self._shared_module)
             return self
         else:
             raise ValueError("unsupported serialization kind %r" % (kind,))
@@ -457,9 +459,20 @@ class JITCodeLibrary(CodeLibrary):
         to the start of the function (as an integer).
 
         This function implicitly calls .finalize().
+
+        Returns
+        -------
+        pointer : int
+            - zero (null) if no symbol of *name* is defined by this code
+              library.
+            - non-zero if the symbol is defined.
         """
         self._ensure_finalized()
-        return self._codegen._engine.get_function_address(name)
+        ee = self._codegen._engine
+        if not ee.is_symbol_defined(name):
+            return 0
+        else:
+            return self._codegen._engine.get_function_address(name)
 
     @llvmts.lock_llvm
     def _finalize_specific(self):
@@ -489,7 +502,7 @@ class RuntimeLinker(object):
             if gv.name.startswith(prefix):
                 sym = gv.name[len(prefix):]
                 # Avoid remapping to existing GV
-                if engine.get_global_value_address(gv.name):
+                if engine.is_symbol_defined(gv.name):
                     continue
                 # Allocate a memory space for the pointer
                 abortfn = engine.get_function_address('nrt_unresolved_abort')
@@ -523,6 +536,58 @@ class RuntimeLinker(object):
             del self._unresolved[name]
 
 
+def _proxy(old):
+    @functools.wraps(old)
+    def wrapper(self, *args, **kwargs):
+        return old(self._ee, *args, **kwargs)
+    return wrapper
+
+
+class JitEngine(object):
+    """Wraps a ExecutionEngine to provide custom symbol tracking.
+    Since the symbol tracking is incomplete  (doesn't consider
+    loaded code object), we are not putting it in llvmlite.
+    """
+    def __init__(self, ee):
+        self._ee = ee
+        # Track symbol defined via codegen'd Module
+        # but not any cached object
+        self._defined_symbols = set()
+
+    def is_symbol_defined(self, name):
+        """Is the symbol defined in this session?
+        """
+        return name in self._defined_symbols
+
+    def _load_defined_symbols(self, mod):
+        """Extract symbols from the module
+        """
+        for gsets in (mod.functions, mod.global_variables):
+            self._defined_symbols |= {gv.name for gv in gsets
+                                      if not gv.is_declaration}
+
+    def add_module(self, module):
+        """Override ExecutionEngine.add_module
+        to keep info about defined symbols.
+        """
+        self._load_defined_symbols(module)
+        return self._ee.add_module(module)
+
+    def add_global_mapping(self, gv, addr):
+        """Override ExecutionEngine.add_global_mapping
+        to keep info about defined symbols.
+        """
+        self._defined_symbols.add(gv.name)
+        return self._ee.add_global_mapping(gv, addr)
+
+    #
+    # The remaining methods are re-export of the ExecutionEngine APIs
+    #
+    set_object_cache = _proxy(ll.ExecutionEngine.set_object_cache)
+    finalize_object = _proxy(ll.ExecutionEngine.finalize_object)
+    get_function_address = _proxy(ll.ExecutionEngine.get_function_address)
+
+
 class BaseCPUCodegen(object):
 
     def __init__(self, module_name):
@@ -547,7 +612,7 @@ class BaseCPUCodegen(object):
         engine = llvmts.create_mcjit_compiler(llvm_module, tm)
 
         self._tm = tm
-        self._engine = engine
+        self._engine = JitEngine(engine)
         self._target_data = engine.target_data
         self._data_layout = str(self._target_data)
         self._mpm = self._module_pass_manager()
