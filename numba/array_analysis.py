@@ -711,7 +711,10 @@ class ArrayAnalysis(object):
                     br = inst.falsebr
                     otherbr = inst.truebr
                     cond_val = 0
-                if br != None:
+                lhs_typ = self.typemap[cond_def.lhs.name]
+                rhs_typ = self.typemap[cond_def.rhs.name]
+                if (br != None and isinstance(lhs_typ, types.Integer) and
+                    isinstance(rhs_typ, types.Integer)):
                     loc = inst.loc
                     args = (cond_def.lhs, cond_def.rhs)
                     asserts = self._make_assert_equiv(
