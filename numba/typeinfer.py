@@ -1209,6 +1209,8 @@ class TypeInferer(object):
                                               loc=inst.loc))
         elif expr.op == 'make_function':
             self.lock_type(target.name, types.pyfunc_type, loc=inst.loc)
+        elif expr.op == 'arrayexpr':
+            self.add_type(target.name, expr.ty, loc=inst.loc)
         else:
             raise NotImplementedError(type(expr), expr)
 
