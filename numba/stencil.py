@@ -12,6 +12,7 @@ from numba.typing.templates import (AbstractTemplate, signature, infer_global,
 from numba.targets import cpu, registry
 from numba.targets.imputils import lower_builtin
 from llvmlite import ir as lir
+from numba.extending import register_jitable
 
 class StencilFuncLowerer(object):
     '''Callable class responsible for lowering calls to a specific DUFunc.
@@ -23,6 +24,16 @@ class StencilFuncLowerer(object):
         cres = self.stencilFunc.compile_for_argtys(sig.args, {}, sig.return_type, None)
         return context.call_internal(builder, cres.fndesc, sig, args)
 
+@register_jitable
+def raise_if_incompatible_array_sizes(a, *args):
+    ashape = a.shape
+    for arg in args:
+        if a.ndim != arg.ndim:
+            raise ValueError("Secondary stencil array does not have same number of dimensions as the first stencil input.")
+        argshape = arg.shape
+        for i in range(len(ashape)):
+            if ashape[i] > argshape[i]:
+                raise ValueError("Secondary stencil array has some dimension smaller the same dimension in the first stencil input.")
 
 class StencilFunc(object):
     """
@@ -90,7 +101,7 @@ class StencilFunc(object):
                     new_body.append(stmt)
             block.body = new_body
 
-    def add_indices_to_kernel(self, kernel, ndim, neighborhood):
+    def add_indices_to_kernel(self, kernel, ndim, neighborhood, standard_indexed):
         """
         Transforms the stencil kernel as specified by the user into one
         that includes each dimension's index variable as part of the getitem
@@ -98,11 +109,6 @@ class StencilFunc(object):
         """
         const_dict = {}
         kernel_consts = []
-
-        if "standard_indexing" in self.options:
-            standard_indexed = self.options["standard_indexing"]
-        else:
-            standard_indexed = []
 
         if config.DEBUG_ARRAY_OPT == 1:
             print("add_indices_to_kernel", ndim, neighborhood)
@@ -116,6 +122,8 @@ class StencilFunc(object):
                 raise ValueError("%d dimensional neighborhood specified for %d dimensional input array" % (len(self.neighborhood), ndim))
 
         tuple_table = ir_utils.get_tuple_table(kernel.blocks)
+
+        relatively_indexed = set()
 
         for block in kernel.blocks.values():
             scope = block.scope
@@ -144,6 +152,7 @@ class StencilFunc(object):
                         stmt_index_var = stmt.value.index
                     else:
                         stmt_index_var = stmt.value.index_var
+                    relatively_indexed.add(stmt.value.value.name)
 
                     # Store the index used after looking up the variable in
                     # the const dictionary.
@@ -218,6 +227,9 @@ class StencilFunc(object):
             # Find the size of the kernel by finding the maximum absolute value
             # index used in the kernel specification.
             neighborhood = [[0,0] for _ in range(ndim)]
+            if len(kernel_consts) == 0:
+                raise ValueError("Stencil kernel with no accesses to relatively indexed arrays.")
+
             for index in kernel_consts:
                 if isinstance(index, tuple) or isinstance(index, list):
                     for i in range(len(index)):
@@ -239,7 +251,7 @@ class StencilFunc(object):
                 if index_len != ndim:
                     raise ValueError("Stencil index does not match array dimensionality.")
 
-        return neighborhood
+        return (neighborhood, relatively_indexed)
 
 
     def get_return_type(self, argtys):
@@ -345,6 +357,7 @@ class StencilFunc(object):
         # won't effect other callsites.
         (kernel_copy, copy_calltypes) = self.copy_ir_with_calltypes(self.kernel_ir, calltypes)
         ir_utils.remove_args(kernel_copy.blocks)
+        first_arg = kernel_copy.arg_names[0]
 
         in_cps, out_cps = ir_utils.copy_propagate(kernel_copy.blocks, typemap)
         name_var_table = ir_utils.get_name_var_table(kernel_copy.blocks)
@@ -373,8 +386,19 @@ class StencilFunc(object):
             index_var_name = "index" + str(i)
             index_vars += [index_var_name]
 
-        kernel_size = self.add_indices_to_kernel(kernel_copy, the_array.ndim,
-                                            self.neighborhood)
+        if "standard_indexing" in self.options:
+            standard_indexed = self.options["standard_indexing"]
+        else:
+            standard_indexed = []
+
+        if first_arg in standard_indexed:
+            raise ValueError("The first argument to a stencil kernel must use relative indexing, not standard indexing.")
+
+        if len(set(standard_indexed) - set(kernel_copy.arg_names)) != 0:
+            raise ValueError("Standard indexing requested for an array name not present in the stencil kernel definition.")
+
+        (kernel_size, relatively_indexed) = self.add_indices_to_kernel(kernel_copy,
+                                         the_array.ndim, self.neighborhood, standard_indexed)
         if self.neighborhood is None:
             self.neighborhood = kernel_size
 
@@ -389,6 +413,13 @@ class StencilFunc(object):
             func_text += ",".join(kernel_copy.arg_names) + "):\n"
         else:
             func_text += ",".join(kernel_copy.arg_names) + ", out=None):\n"
+        if len(relatively_indexed) > 1:
+            func_text += "    raise_if_incompatible_array_sizes(" + first_arg
+            for other_array in relatively_indexed:
+                if other_array != first_arg:
+                    func_text += "," + other_array
+            func_text += ")\n"
+
         func_text += "    full_shape = "
         func_text += kernel_copy.arg_names[0] + ".shape\n"
         if result is None:
