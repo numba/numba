@@ -8,7 +8,7 @@ import numba
 from numba import types
 from numba.typing.templates import infer_global, AbstractTemplate
 from numba.typing import signature
-from numba import ir_utils, ir, utils, array_analysis, config
+from numba import ir_utils, ir, utils, array_analysis, config, typing
 from numba.ir_utils import (get_call_table, find_topo_order, mk_unique_var,
                             compile_to_numba_ir, replace_arg_nodes, guard,
                             find_callname)
@@ -61,6 +61,10 @@ class StencilPass(object):
                     in_args = stmt.value.args
                     arg_typemap = tuple(self.typemap[i.name] for i in
                                                                 stmt.value.args)
+                    for arg_type in arg_typemap:
+                        if isinstance(arg_type, types.BaseTuple):
+                            raise ValueError("Tuple parameters not supported for stencil kernels in parallel=True mode.")
+
                     if 'out' in kws:
                         out_arr = kws['out']
                     else:
@@ -185,6 +189,10 @@ class StencilPass(object):
             zero_name = ir_utils.mk_unique_var("zero_val")
             zero_var = ir.Var(scope, zero_name, loc)
             if "cval" in stencil_func.options:
+                cval = stencil_func.options["cval"]
+                if return_type.dtype != typing.typeof.typeof(cval):
+                    raise ValueError("cval type does not match stencil return type.")
+
                 temp2 = return_type.dtype(stencil_func.options["cval"])
             else:
                 temp2 = return_type.dtype(0)
@@ -282,10 +290,16 @@ class StencilPass(object):
         in_arg_names = [x.name for x in in_args]
 
         if "standard_indexing" in stencil_func.options:
+            for x in stencil_func.options["standard_indexing"]:
+                if x not in arg_to_arr_dict:
+                    raise ValueError("Standard indexing requested for an array name not present in the stencil kernel definition.")
             standard_indexed = [arg_to_arr_dict[x] for x in
                                      stencil_func.options["standard_indexing"]]
         else:
             standard_indexed = []
+
+        if in_arr.name in standard_indexed:
+            raise ValueError("The first argument to a stencil kernel must use relative indexing, not standard indexing.")
 
         ndims = self.typemap[in_arr.name].ndim
         scope = in_arr.scope
@@ -301,6 +315,8 @@ class StencilPass(object):
         else:
             start_lengths = [x[0] for x in stencil_func.neighborhood]
             end_lengths   = [x[1] for x in stencil_func.neighborhood]
+
+        found_relative_index = False
 
         for label, block in stencil_blocks.items():
             new_body = []
@@ -338,6 +354,7 @@ class StencilPass(object):
                         start_lengths = list(map(min, start_lengths,
                                                                     index_list))
                         end_lengths = list(map(max, end_lengths, index_list))
+                        found_relative_index = True
 
                     # update access indices
                     index_vars = self._add_index_offsets(parfor_vars,
@@ -374,6 +391,8 @@ class StencilPass(object):
 
                 new_body.append(stmt)
             block.body = new_body
+        if need_to_calc_kernel and not found_relative_index:
+            raise ValueError("Stencil kernel with no accesses to relatively indexed arrays..")
 
         return start_lengths, end_lengths
 
