@@ -347,8 +347,10 @@ class ShapeEquivSet(EquivSet):
             return False;
         ndims = [len(names) for names in obj_names]
         ndim = ndims[0]
-        assert all(ndim == x for x in ndims), (
-            "Dimension mismatch for {}".format(objs))
+        if not all(ndim == x for x in ndims):
+            if config.DEBUG_ARRAY_OPT == 1:
+                print("is_equiv: Dimension mismatch for {}".format(objs))
+            return False
         for i in range(ndim):
             names = [obj_name[i] for obj_name in obj_names]
             if not super(ShapeEquivSet, self).is_equiv(*names):
@@ -806,7 +808,8 @@ class ArrayAnalysis(object):
         if ((isinstance(callee_def, ir.Global) or isinstance(callee_def, ir.FreeVar))
             and isinstance(callee_def.value, StencilFunc)):
             args = expr.args
-            return self._analyze_numpy_array_like(scope, equiv_set, args, dict(expr.kws))
+            return self._analyze_stencil(scope, equiv_set, callee_def.value,
+                                         expr.loc, args, dict(expr.kws))
 
         fname, mod_name = find_callname(
             self.func_ir, expr, typemap=self.typemap)
@@ -1196,6 +1199,25 @@ class ArrayAnalysis(object):
         if dims[0] > 2:  # TODO: handle higher dimension cases
             pass
         return None
+
+    def _analyze_stencil(self, scope, equiv_set, stencil_func, loc, args, kws):
+        # stencil requires that all relatively indexed array arguments are
+        # of same size
+        std_idx_arrs = stencil_func.options.get('standard_indexing', ())
+        if isinstance(std_idx_arrs, str):
+            std_idx_arrs = (std_idx_arrs,)
+        rel_idx_arrs = []
+        assert(len(args) > 0)
+        for var in args:
+            typ = self.typemap[var.name]
+            if (isinstance(typ, types.ArrayCompatible) and
+                not(var.name in std_idx_arrs)):
+                rel_idx_arrs.append(var)
+        n = len(rel_idx_arrs)
+        require(n > 0)
+        asserts = self._call_assert_equiv(scope, loc, equiv_set, rel_idx_arrs)
+        shape = equiv_set.get_shape(rel_idx_arrs[0])
+        return shape, asserts
 
     def _analyze_broadcast(self, scope, equiv_set, loc, args):
         """Infer shape equivalence of arguments based on Numpy broadcast rules

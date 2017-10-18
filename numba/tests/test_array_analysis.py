@@ -370,6 +370,23 @@ class TestArrayAnalysis(TestCase):
         self._compile_and_test(test_2, (types.intp,),
                                equivs=[self.without_equiv('a', 'b')])
 
+        @stencil(standard_indexing=('c',))
+        def kernel_2(a, b, c):
+            return a[0,1,0] + b[0,-1,0] + c[0]
+
+        def test_3(n):
+            a = np.arange(64).reshape(4,8,2)
+            b = np.arange(64).reshape(n,8,2)
+            c = np.zeros(1)
+            d = kernel_2(a, b, c)
+            return d
+
+        # standard indexed arrays are not considered in size equivalence
+        self._compile_and_test(test_3, (types.intp,),
+                               equivs=[self.with_equiv('a', 'b', 'd'),
+                                       self.without_equiv('a', 'c')],
+                               asserts=[self.with_assert('a', 'b')])
+
     def test_numpy_calls(self):
         def test_zeros(n):
             a = np.zeros(n)
