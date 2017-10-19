@@ -1204,14 +1204,15 @@ class ArrayAnalysis(object):
         # stencil requires that all relatively indexed array arguments are
         # of same size
         std_idx_arrs = stencil_func.options.get('standard_indexing', ())
+        kernel_arg_names = stencil_func.kernel_ir.arg_names
         if isinstance(std_idx_arrs, str):
             std_idx_arrs = (std_idx_arrs,)
         rel_idx_arrs = []
-        assert(len(args) > 0)
-        for var in args:
+        assert(len(args) > 0 and len(args) == len(kernel_arg_names))
+        for arg, var in zip(kernel_arg_names, args):
             typ = self.typemap[var.name]
             if (isinstance(typ, types.ArrayCompatible) and
-                not(var.name in std_idx_arrs)):
+                not(arg in std_idx_arrs)):
                 rel_idx_arrs.append(var)
         n = len(rel_idx_arrs)
         require(n > 0)

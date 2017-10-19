@@ -377,14 +377,14 @@ class TestArrayAnalysis(TestCase):
         def test_3(n):
             a = np.arange(64).reshape(4,8,2)
             b = np.arange(64).reshape(n,8,2)
-            c = np.zeros(1)
-            d = kernel_2(a, b, c)
-            return d
+            u = np.zeros(1)
+            v = kernel_2(a, b, u)
+            return v
 
         # standard indexed arrays are not considered in size equivalence
         self._compile_and_test(test_3, (types.intp,),
-                               equivs=[self.with_equiv('a', 'b', 'd'),
-                                       self.without_equiv('a', 'c')],
+                               equivs=[self.with_equiv('a', 'b', 'v'),
+                                       self.without_equiv('a', 'u')],
                                asserts=[self.with_assert('a', 'b')])
 
     def test_numpy_calls(self):
