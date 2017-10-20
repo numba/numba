@@ -17,7 +17,11 @@ from numba.ir_utils import (
     get_ir_of_code
     )
 
-from numba.analysis import compute_cfg_from_blocks
+from numba.analysis import (
+    compute_cfg_from_blocks,
+    compute_use_defs,
+    compute_live_map)
+
 from numba.targets.rangeobj import range_iter_len
 from numba.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
 import numpy as np
@@ -660,15 +664,10 @@ def _fix_nested_array(func_ir):
     """Look for assignment like: a[..] = b, where both a and b are numpy arrays, and
     try to eliminate array b by expanding a with an extra dimension.
     """
-    """
-    cfg = compute_cfg_from_blocks(func_ir.blocks)
-    all_loops = list(cfg.loops().values())
-    def find_nest_level(label):
-        level = 0
-        for loop in all_loops:
-            if label in loop.body:
-                level += 1
-    """
+    blocks = func_ir.blocks
+    cfg = compute_cfg_from_blocks(blocks)
+    usedefs = compute_use_defs(blocks)
+    livemap = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
 
     def find_array_def(arr):
         """Find numpy array definition such as
@@ -682,6 +681,51 @@ def _fix_nested_array(func_ir):
                 return arr_def
             elif arr_def.op == 'getitem':
                 return find_array_def(arr_def.value)
+        raise GuardException
+
+    def fix_dependencies(expr, varlist):
+        """Double check if all variables in varlist are defined before
+        expr is used. Try to move constant definition when the check fails.
+        Bails out by raising GuardException if it can't be moved.
+        """
+        debug_print = _make_debug_print("fix_dependencies")
+        for label, block in blocks.items():
+            scope = block.scope
+            body = block.body
+            defined = set()
+            for i in range(len(body)):
+                inst = body[i]
+                if isinstance(inst, ir.Assign):
+                    defined.add(inst.target.name)
+                    if inst.value == expr:
+                        new_varlist = []
+                        for var in varlist:
+                            # var must be defined before this inst, or live
+                            # and not later defined.
+                            if (var.name in defined or 
+                                (var.name in livemap[label] and
+                                 not (var.name in usedefs.defmap))):
+                                debug_print(var.name, " already defined")
+                                new_varlist.append(var)
+                            else: 
+                                debug_print(var.name, " not yet defined")
+                                var_def = get_definition(func_ir, var.name)
+                                if isinstance(var_def, ir.Const):
+                                    loc = var.loc
+                                    new_var = scope.make_temp(loc)
+                                    new_const = ir.Const(var_def.value, loc)
+                                    new_vardef = _new_definition(func_ir, 
+                                                    new_var, new_const, loc)
+                                    new_body = []
+                                    new_body.extend(body[:i])
+                                    new_body.append(new_vardef)
+                                    new_body.extend(body[i:])
+                                    block.body = new_body
+                                    new_varlist.append(new_var)
+                                else:
+                                    raise GuardException
+                        return new_varlist
+        # when expr is not found in block
         raise GuardException
 
     def fix_array_assign(stmt):
@@ -716,6 +760,7 @@ def _fix_nested_array(func_ir):
         size_tuple_def = get_definition(func_ir, lhs_def.args[0])
         require(isinstance(size_tuple_def, ir.Expr) and size_tuple_def.op == 'build_tuple')
         debug_print("size_tuple_def = ", size_tuple_def)
+        extra_dims = fix_dependencies(size_tuple_def, extra_dims)
         size_tuple_def.items += extra_dims
         # In-place modify rhs_def to be getitem
         rhs_def.op = 'getitem'
