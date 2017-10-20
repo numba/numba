@@ -1121,10 +1121,10 @@ def _arrayexpr_tree_to_ir(
                 # elif isinstance(op, (np.ufunc, DUFunc)):
                 # function calls are stored in variables which are not removed
                 # op is typing_key to the variables type
-                func_var = ir.Var(
-                    scope, _find_func_var(
-                        typemap, op, avail_vars), loc)
-                func_var_def = func_ir.get_definition(func_var.name)
+                func_var_name = _find_func_var(typemap, op, avail_vars)
+                func_var = ir.Var(scope, mk_unique_var(func_var_name), loc)
+                typemap[func_var.name] = typemap[func_var_name]
+                func_var_def = func_ir.get_definition(func_var_name)
                 ir_expr = ir.Expr.call(func_var, arg_vars, (), loc)
                 call_typ = typemap[func_var.name].get_call_type(
                     typing.Context(), [el_typ] * len(arg_vars), {})
