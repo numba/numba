@@ -7,7 +7,11 @@ import sys
 from .. import compiler, ir, types, six, cgutils, sigutils, lowering, parfor
 from numba.ir_utils import (add_offset_to_labels, replace_var_names,
                             remove_dels, legalize_names, mk_unique_var,
-                            rename_labels, get_name_var_table)
+                            rename_labels, get_name_var_table, visit_vars_inner,
+                            get_definition, guard, find_callname, 
+                            get_call_table, has_no_side_effect)
+from numba.analysis import (compute_use_defs, compute_live_map,
+                            compute_dead_maps, compute_cfg_from_blocks)
 from ..typing import signature
 from numba import config
 import llvmlite.llvmpy.core as lc
@@ -166,15 +170,136 @@ def _create_shape_signature(
             syms_sin += dim_syms
     return (gu_sin, gu_sout)
 
+def _print_block(block):
+    for i, inst in enumerate(block.body):
+        print("    ", i, " ", inst)
 
 def _print_body(body_dict):
     '''Pretty-print a set of IR blocks.
     '''
     for label, block in body_dict.items():
         print("label: ", label)
-        for i, inst in enumerate(block.body):
-            print("    ", i, " ", inst)
+        _print_block(block)
 
+
+def wrap_loop_body(loop_body):
+    blocks = loop_body.copy()  # shallow copy is enough
+    last_label = max(blocks.keys())
+    loc = blocks[last_label].loc
+
+    val_to_return = None
+
+    last_node = blocks[last_label].body[-1]
+    if isinstance(last_node, ir.SetItem):
+        val_to_return = last_node.target
+    elif isinstance(last_node, ir.Assign):
+        val_to_return = last_node.target
+
+    if val_to_return == None:
+        print("last_node", last_node, type(last_node))
+
+    assert val_to_return != None
+    # add dummy jump in init_block for CFG to work
+    blocks[last_label].body.append(ir.Return(val_to_return, loc))
+    return blocks
+
+def unwrap_loop_body(loop_body):
+    last_label = max(loop_body.keys())
+    loop_body[last_label].body = loop_body[last_label].body[:-1]
+
+def compute_def_once_block(block, def_once, def_more):
+    assignments = block.find_insts(ir.Assign)
+    for one_assign in assignments:
+        a_def = one_assign.target.name
+        if a_def in def_more:
+            pass
+        elif a_def in def_once:
+            def_more.add(a_def)
+            def_once.remove(a_def)
+        else:
+            def_once.add(a_def)
+
+def compute_def_once_internal(loop_body, def_once, def_more):
+    for label, block in loop_body.items():
+        compute_def_once_block(block, def_once, def_more)
+        for inst in block.body:
+            if isinstance(inst, parfor.Parfor):
+                compute_def_once_block(inst.init_block, def_once, def_more)
+                compute_def_once_internal(inst.loop_body, def_once, def_more)
+
+def compute_def_once(loop_body):
+    def_once = set()
+    def_more = set()
+    compute_def_once_internal(loop_body, def_once, def_more)
+    return def_once
+
+def find_vars(var, varset):
+    assert isinstance(var, ir.Var)
+    varset.add(var.name)
+    return var
+
+def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
+    dep_on_param = copy.copy(parfor_params)
+    hoisted = []
+    count = 0
+
+    def_once = compute_def_once(loop_body)
+    (call_table, reverse_call_table) = get_call_table(wrapped_blocks)
+
+    for label, block in loop_body.items():
+        new_block = []
+        for inst in block.body:
+            if isinstance(inst, ir.Assign) and inst.target.name in def_once:
+                uses = set()
+                visit_vars_inner(inst.value, find_vars, uses)
+                diff = uses.difference(dep_on_param)
+                if len(diff) == 0 and has_no_side_effect(inst.value, None, call_table) and count > 0:
+                    if config.DEBUG_ARRAY_OPT == 1:
+                        print("Will hoist instruction", inst)
+                    hoisted.append(inst)
+                    count -= 1
+                    if not isinstance(typemap[inst.target.name], types.npytypes.Array):
+                        dep_on_param += [inst.target.name]
+                    continue
+                elif config.DEBUG_ARRAY_OPT == 1:
+                    if len(diff) > 0:
+                        print("Instruction", inst, " could not be hoisted because of a dependency.")
+                    elif count <= 0:
+                        print("Instruction", inst, " could not be hoisted because of count.")
+                    else:
+                        print("Instruction", inst, " could not be hoisted because of a side-effect.")
+
+            if isinstance(inst, parfor.Parfor):
+                new_init_block = []
+                if config.DEBUG_ARRAY_OPT == 1:
+                    print("parfor")
+                    inst.dump()
+                for ib_inst in inst.init_block.body:
+                    if isinstance(ib_inst, ir.Assign) and ib_inst.target.name in def_once:
+                        uses = set()
+                        visit_vars_inner(ib_inst.value, find_vars, uses)
+                        diff = uses.difference(dep_on_param)
+                        if len(diff) == 0 and has_no_side_effect(ib_inst.value, None, call_table) and count > 0:
+                            if config.DEBUG_ARRAY_OPT == 1:
+                                print("Will hoist init-block instruction", ib_inst)
+                            hoisted.append(ib_inst)
+                            count -= 1
+                            if not isinstance(typemap[ib_inst.target.name], types.npytypes.Array):
+                                dep_on_param += [ib_inst.target.name]
+                            continue
+                        elif config.DEBUG_ARRAY_OPT == 1:
+                            if len(diff) > 0:
+                                print("Instruction", ib_inst, " could not be hoisted because of a dependency.")
+                            elif count <= 0:
+                                print("Instruction", ib_inst, " could not be hoisted because of count.")
+                            else:
+                                print("Instruction", ib_inst, " could not be hoisted because of a side-effect.")
+                    new_init_block.append(ib_inst)
+                inst.init_block.body = new_init_block
+
+            new_block.append(inst)
+        block.body = new_block
+    return hoisted
 
 def _create_gufunc_for_parfor_body(
         lowerer,
@@ -202,6 +327,7 @@ def _create_gufunc_for_parfor_body(
     # legal parameter names.  If we don't copy then the Vars in the main function also
     # would incorrectly change their name.
     loop_body = copy.copy(parfor.loop_body)
+    remove_dels(loop_body)
 
     parfor_dim = len(parfor.loop_nests)
     loop_indices = [l.index_variable.name for l in parfor.loop_nests]
@@ -239,7 +365,6 @@ def _create_gufunc_for_parfor_body(
 
     if config.DEBUG_ARRAY_OPT == 1:
         print("parfor_params = ", parfor_params, " ", type(parfor_params))
-        #print("loop_ranges = ", loop_ranges, " ", type(loop_ranges))
         print("loop_indices = ", loop_indices, " ", type(loop_indices))
         print("loop_body = ", loop_body, " ", type(loop_body))
         _print_body(loop_body)
@@ -426,6 +551,17 @@ def _create_gufunc_for_parfor_body(
             loop_body[label] = new_block
 
     if config.DEBUG_ARRAY_OPT:
+        print("parfor loop body")
+        _print_body(loop_body)
+
+    wrapped_blocks = wrap_loop_body(loop_body)
+    hoisted = hoist(parfor_params, loop_body, typemap, wrapped_blocks)
+    start_block = gufunc_ir.blocks[min(gufunc_ir.blocks.keys())]
+    start_block.body = start_block.body[:-1] + hoisted + [start_block.body[-1]]
+    unwrap_loop_body(loop_body)
+
+    if config.DEBUG_ARRAY_OPT:
+        print("After hoisting")
         _print_body(loop_body)
 
     # Search all the block in the gufunc outline for the sentinel assignment.
