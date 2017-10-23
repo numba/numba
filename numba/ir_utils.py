@@ -561,7 +561,9 @@ def has_no_side_effect(rhs, lives, call_table):
         if func_name not in call_table or call_table[func_name] == []:
             return False
         call_list = call_table[func_name]
-        if call_list == ['empty', numpy] or call_list == [slice]:
+        if (call_list == ['empty', numpy] or 
+            call_list == [slice] or
+            call_list == ['log', numpy]):
             return True
         from numba.targets.registry import CPUDispatcher
         from numba.targets.linalg import dot_3_mv_check_args
@@ -1222,7 +1224,7 @@ def get_definition(func_ir, name, **kwargs):
     except KeyError:
         raise GuardException
 
-def find_callname(func_ir, expr, typemap=None):
+def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition):
     """Check if a call expression is calling a numpy function, and
     return the callee's function name and module name (both are strings),
     or raise GuardException. For array attribute calls such as 'a.f(x)'
@@ -1231,7 +1233,7 @@ def find_callname(func_ir, expr, typemap=None):
     """
     require(isinstance(expr, ir.Expr) and expr.op == 'call')
     callee = expr.func
-    callee_def = get_definition(func_ir, callee)
+    callee_def = definition_finder(func_ir, callee)
     attrs = []
     while True:
         if isinstance(callee_def, ir.Global):
@@ -1260,7 +1262,7 @@ def find_callname(func_ir, expr, typemap=None):
                 typ = typemap[obj.name]
                 if isinstance(typ, types.npytypes.Array):
                     return attrs[0], obj
-            callee_def = get_definition(func_ir, obj)
+            callee_def = definition_finder(func_ir, obj)
         else:
             raise GuardException
     return attrs[0], '.'.join(reversed(attrs[1:]))
