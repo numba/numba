@@ -544,14 +544,21 @@ def _proxy(old):
 
 
 class JitEngine(object):
-    """Wraps a ExecutionEngine to provide custom symbol tracking.
+    """Wraps an ExecutionEngine to provide custom symbol tracking.
     Since the symbol tracking is incomplete  (doesn't consider
     loaded code object), we are not putting it in llvmlite.
     """
     def __init__(self, ee):
         self._ee = ee
         # Track symbol defined via codegen'd Module
-        # but not any cached object
+        # but not any cached object.
+        # NOTE: `llvm::ExecutionEngine` will catch duplicated symbols and
+        # we are not going to protect against that.  A proper duplicated
+        # symbol detection will need a more logic to check for the linkage
+        # (e.g. like `weak` linkage symbol can override).   This
+        # `_defined_symbols` set will be just enough to tell if a symbol
+        # exists and will not cause the `EE` symbol lookup to `exit(1)`
+        # when symbol-not-found.
         self._defined_symbols = set()
 
     def is_symbol_defined(self, name):
