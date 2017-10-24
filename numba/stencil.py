@@ -330,7 +330,7 @@ class StencilFunc(object):
         dummy_text = ("def __numba_dummy_stencil("
             + ",".join(self.kernel_ir.arg_names) + out_sig
             + "):\n    pass\n")
-        exec(dummy_text)
+        exec(dummy_text) in globals(), locals()
         dummy_func = eval("__numba_dummy_stencil")
         sig.pysig = utils.pysignature(dummy_func)
         self._targetctx.insert_func_defn([(self._lower_me, self, argtys_with_out)])
@@ -451,7 +451,7 @@ class StencilFunc(object):
             print("new stencil func text")
             print(func_text)
 
-        exec(func_text)
+        exec(func_text) in globals(), locals()
         stencil_func = eval(stencil_func_name)
         if sigret is not None:
             pysig = utils.pysignature(stencil_func)
