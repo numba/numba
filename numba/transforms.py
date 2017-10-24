@@ -20,7 +20,13 @@ def _extract_loop_lifting_candidates(cfg, blocks):
         "all exits must point to the same location"
         outedges = set()
         for k in loop.exits:
-            outedges |= set(x for x, _ in cfg.successors(k))
+            succs = set(x for x, _ in cfg.successors(k))
+            if not succs:
+                # If the exit point has no successor, it contains an return
+                # statement, which is not handled by the looplifting code.
+                # Thus, this loop is not a candidate.
+                return False
+            outedges |= succs
         return len(outedges) == 1
 
     def one_entry(loop):
@@ -53,16 +59,8 @@ def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
     loopinfos = []
     for loop in loops:
         [callfrom] = loop.entries   # requirement checked earlier
-        # This loop exists to handle missing cfg.successors, only *an* exit is
-        # needed. Walk in stable order, higher exits first.
-        for an_exit in iter(sorted(loop.exits)):
-            # requirement checked earlier
-            ret = [x for x in cfg.successors(an_exit)]
-            if ret:
-                break
-        else:
-            continue # drop this loop from being liftable 
-        [(returnto, _)] = ret
+        an_exit = next(iter(loop.exits))  # anyone of the exit block
+        [(returnto, _)] = cfg.successors(an_exit)  # requirement checked earlier
         # note: sorted for stable ordering
         inputs = sorted(livemap[callfrom])
         outputs = sorted(livemap[returnto])

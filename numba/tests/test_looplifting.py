@@ -70,10 +70,12 @@ def lift_gen1(x):
         a[i] = x
     yield np.sum(a)
 
-def lift_issue2561(x):
+def lift_issue2561():
+    np.empty(1)   # This forces objectmode because no nrt
     for i in range(10):
         for j in range(10):
-            return
+            return 1
+    return 2
 
 def reject1(x):
     a = np.arange(4)
@@ -206,7 +208,7 @@ class TestLoopLifting(MemoryLeakMixin, TestCase):
         self.check_lift_ok(lift5, (types.intp,), (123,))
 
     def test_lift_issue2561(self):
-        self.check_lift_ok(lift_issue2561, (types.List,), ([],))
+        self.check_no_lift(lift_issue2561, (), ())
 
     @tag('important')
     def test_lift_gen1(self):
