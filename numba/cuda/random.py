@@ -212,27 +212,23 @@ def xoroshiro128p_normal_float64(states, index):
     return z0
 
 
-@cuda.jit
-def init_xoroshiro128p_states_kernel(states, seed, subsequence_start):
+@jit
+def init_xoroshiro128p_states_cpu(states, seed, subsequence_start):
+    n = states.shape[0]
     seed = uint64(seed)
     subsequence_start = uint64(subsequence_start)
 
-    # Only run this with a single thread and block
-    n = states.shape[0]
+    if n >= 1:
+        init_xoroshiro128p_state(states, 0, seed)
 
-    if n < 1:
-        return  # assuming at least 1 state going forward
+        # advance to starting subsequence number
+        for _ in range(subsequence_start):
+            xoroshiro128p_jump(states, 0)
 
-    init_xoroshiro128p_state(states, 0, seed)
-
-    # advance to starting subsequence number
-    for _ in range(subsequence_start):
-        xoroshiro128p_jump(states, 0)
-
-    # populate the rest of the array
-    for i in range(1, n):
-        states[i] = states[i - 1]  # take state of previous generator
-        xoroshiro128p_jump(states, i)  # and jump forward 2**64 steps
+        # populate the rest of the array
+        for i in range(1, n):
+            states[i] = states[i - 1]  # take state of previous generator
+            xoroshiro128p_jump(states, i)  # and jump forward 2**64 steps
 
 
 def init_xoroshiro128p_states(states, seed, subsequence_start=0, stream=0):
@@ -252,7 +248,12 @@ def init_xoroshiro128p_states(states, seed, subsequence_start=0, stream=0):
     :type seed: uint64
     :param seed: starting seed for list of generators
     '''
-    init_xoroshiro128p_states_kernel[1, 1, stream](states, seed, subsequence_start)
+
+    # Initialization on CPU is much faster than the GPU
+    states_cpu = np.empty(shape=states.shape, dtype=xoroshiro128p_dtype)
+    init_xoroshiro128p_states_cpu(states_cpu, seed, subsequence_start)
+
+    states.copy_to_device(states_cpu, stream=stream)
 
 
 def create_xoroshiro128p_states(n, seed, subsequence_start=0, stream=0):
