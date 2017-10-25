@@ -184,23 +184,10 @@ def _print_body(body_dict):
 
 def wrap_loop_body(loop_body):
     blocks = loop_body.copy()  # shallow copy is enough
+    first_label = min(blocks.keys())
     last_label = max(blocks.keys())
     loc = blocks[last_label].loc
-
-    val_to_return = None
-
-    last_node = blocks[last_label].body[-1]
-    if isinstance(last_node, ir.SetItem):
-        val_to_return = last_node.target
-    elif isinstance(last_node, ir.Assign):
-        val_to_return = last_node.target
-
-    if val_to_return == None:
-        print("last_node", last_node, type(last_node))
-
-    assert val_to_return != None
-    # add dummy jump in init_block for CFG to work
-    blocks[last_label].body.append(ir.Return(val_to_return, loc))
+    blocks[last_label].body.append(ir.Jump(first_label, loc))
     return blocks
 
 def unwrap_loop_body(loop_body):
