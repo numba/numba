@@ -522,9 +522,6 @@ def get_stencil_blocks(sf, typingctx, args, scope, loc, input_dict, typemap,
             return_type=tp.return_type,
             html_output=numba.config.HTML)
 
-        numba.rewrites.rewrite_registry.apply(
-            'after-inference', tp, tp.func_ir)
-
     # make block labels unique
     stencil_blocks = ir_utils.add_offset_to_labels(stencil_blocks,
                                                         ir_utils.next_label())
