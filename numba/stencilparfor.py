@@ -142,7 +142,7 @@ class StencilPass(object):
         # create parfor loop nests
         loopnests = []
         equiv_set = self.array_analysis.get_equiv_set(label)
-        in_arr_dim_sizes = equiv_set.get_shape(in_arr.name)
+        in_arr_dim_sizes = equiv_set.get_shape(in_arr)
 
         assert ndims == len(in_arr_dim_sizes)
         for i in range(ndims):
