@@ -391,10 +391,10 @@ class ParforPass(object):
             new_body = []
             equiv_set = self.array_analysis.get_equiv_set(label)
             for instr in block.body:
-                if isinstance(instr, ir.SetItem):
+                if isinstance(instr, ir.StaticSetItem) or isinstance(instr, ir.SetItem):
                     loc = instr.loc
                     target = instr.target
-                    index = instr.index
+                    index = instr.index if isinstance(instr, ir.SetItem) else instr.index_var
                     value = instr.value
                     target_typ = self.typemap[target.name]
                     index_typ = self.typemap[index.name]

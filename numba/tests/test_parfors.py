@@ -1083,6 +1083,38 @@ class TestParforsSlice(TestParforsBase):
 
         self.check(test_impl, np.arange(27).reshape((3,3,3)))
 
+    @skip_unsupported
+    def test_parfor_slice12(self):
+        def test_impl(a):
+            (m,n) = a.shape
+            b = a.copy()
+            b[1,1:-1] = a[0,:-2]
+            return b
+
+        self.check(test_impl, np.arange(12).reshape((3,4)))
+
+    @skip_unsupported
+    def test_parfor_slice13(self):
+        def test_impl(a):
+            (m,n) = a.shape
+            b = a.copy()
+            c = -1
+            b[1,1:c] = a[0,-n:c-1]
+            return b
+
+        self.check(test_impl, np.arange(12).reshape((3,4)))
+
+    @skip_unsupported
+    def test_parfor_slice14(self):
+        def test_impl(a):
+            (m,n) = a.shape
+            b = a.copy()
+            c = -1
+            b[1,:-1] = a[0,-3:4]
+            return b
+
+        self.check(test_impl, np.arange(12).reshape((3,4)))
+
 class TestParforsBitMask(TestParforsBase):
 
     def check(self, pyfunc, *args, **kwargs):
