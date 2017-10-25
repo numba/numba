@@ -59,8 +59,8 @@ class InlineClosureCallPass(object):
                     expr = instr.value
                     if isinstance(expr, ir.Expr) and expr.op == 'call':
                         # inline reduce() when parallel is off
+                        call_name = guard(find_callname, self.func_ir, expr)
                         if not self.flags.auto_parallel:
-                            call_name = guard(find_callname, self.func_ir, expr)
                             if (call_name == ('reduce', 'builtin')
                                     or call_name == ('reduce', 'functools')):
                                 if len(expr.args) != 3:
@@ -97,8 +97,7 @@ class InlineClosureCallPass(object):
                             # current block is modified, skip the rest
                             break
                         # check for stencil call
-                        if (guard(find_callname, self.func_ir, expr)
-                                    == ('stencil', 'numba')
+                        if (call_name == ('stencil', 'numba')
                                 and expr not in self._processed_stencils):
                             self._processed_stencils.append(expr)
                             from numba.stencil import StencilFunc
@@ -117,17 +116,23 @@ class InlineClosureCallPass(object):
                             guard(self._fix_stencil_index_offsets, options)
                             sf = StencilFunc(kernel_ir, 'constant', options)
                             sf_global = ir.Global('stencil', sf, expr.loc)
-                            new_assign = ir.Assign(sf_global, lhs, expr.loc)
-                            block.body.insert(i, new_assign)
-                            # keep stencil() call to avoid removal of args by
-                            # remove_dead, set output to a dummy var
-                            # remove the make_function arg for njit pass to work
-                            expr.args = expr.args[1:]
-                            instr.target = ir.Var(lhs.scope,
-                                            mk_unique_var("dummy_out"), lhs.loc)
-                            work_list.append((label, block))
+                            self.func_ir._definitions[lhs.name] = [sf_global]
+                            instr.value = sf_global
                             modified = True
-                            break
+
+                        # We keep the escaping variables of the stencil kernel
+                        # alive by adding them to the actual kernel call as extra
+                        # keyword arguments, which is ignored anyway.
+                        if (isinstance(func_def, ir.Global) and
+                            func_def.name == 'stencil'):
+                            freevars = []
+                            options = func_def.value.options
+                            vs = options.get("neighborhood", [])
+                            freevars.extend(sum([list(x) for x in vs], []))
+                            vs = options.get("index_offsets", [])
+                            freevars.extend(list(vs))
+                            expr.kws = tuple(list(expr.kws) +
+                                             [(x.name, x) for x in freevars])
 
         if enable_inline_arraycall:
             # Identify loop structure
