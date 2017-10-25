@@ -141,13 +141,13 @@ class TestArrayAnalysis(TestCase):
             outputs.append(output.getvalue())
         self.assertTrue(len(set(outputs)) == 1)  # assert all outputs are equal
 
-    def _compile_and_test(self, fn, arg_tys, asserts=[], equivs=[]):
+    def _compile_and_test(self, fn, arg_tys, asserts=[], equivs=[], idempotent=True):
         """
         Compile the given function and get its IR.
         """
         test_pipeline = ArrayAnalysisTester.mk_pipeline(arg_tys)
-        analysis = test_pipeline.compile_to_ir(
-            fn, test_idempotence=self.compare_ir)
+        test_idempotence = self.compare_ir if idempotent else lambda x:()
+        analysis = test_pipeline.compile_to_ir(fn, test_idempotence)
         if equivs:
             for func in equivs:
                 # only test the equiv_set of the first block
@@ -406,14 +406,15 @@ class TestArrayAnalysis(TestCase):
         def test_1(m, n):
             A = np.zeros(m)
             B = np.zeros(n)
+            s = np.sum(A + B)
             C = A[1:m-1]
             D = B[1:n-1]
-            s = np.sum(A + B)
             t = np.sum(C + D)
             return s + t
         self._compile_and_test(test_1, (types.intp,types.intp,),
                                asserts=[self.with_assert('A', 'B'),
-                                        self.without_assert('C', 'D')])
+                                        self.without_assert('C', 'D')],
+                               idempotent=False)
 
         def test_2(m):
             A = np.zeros(m)
@@ -424,7 +425,8 @@ class TestArrayAnalysis(TestCase):
             return D + E
         self._compile_and_test(test_2, (types.intp,),
                                asserts=[self.without_assert('B', 'C'),
-                                        self.without_assert('D', 'E')])
+                                        self.without_assert('D', 'E')],
+                               idempotent=False)
 
         def test_3(m):
             A = np.zeros((m,m))
@@ -433,7 +435,8 @@ class TestArrayAnalysis(TestCase):
             E = B + C
             return E
         self._compile_and_test(test_3, (types.intp,),
-                               asserts=[self.without_assert('B', 'C')])
+                               asserts=[self.without_assert('B', 'C')],
+                               idempotent=False)
 
         def test_4(m):
             A = np.zeros((m,m))
@@ -442,7 +445,8 @@ class TestArrayAnalysis(TestCase):
             E = B + C
             return E
         self._compile_and_test(test_4, (types.intp,),
-                               asserts=[self.without_assert('B', 'C')])
+                               asserts=[self.without_assert('B', 'C')],
+                               idempotent=False)
 
         def test_5(m,n):
             A = np.zeros(m)
@@ -451,11 +455,44 @@ class TestArrayAnalysis(TestCase):
             C = np.zeros(n)
             D = A[1:m-1]
             C[0:n-2] = D
+            # B and C are not necessarily of the same size because we can't
+            # derive m == n from (m-2) % m == (n-2) % n
             return B + C
         self._compile_and_test(test_5, (types.intp,types.intp),
                                asserts=[self.without_assert('B', 'A'),
                                         self.with_assert('C', 'D'),
-                                        self.without_assert('B', 'C')])
+                                        self.with_assert('B', 'C')],
+                               idempotent=False)
+
+        def test_6(m):
+            A = np.zeros((m,m))
+            B = A[0:m-2,:-1]
+            C = A[1:m-1,:-1]
+            E = B + C
+            return E
+        self._compile_and_test(test_6, (types.intp,),
+                               asserts=[self.without_assert('B', 'C')],
+                               idempotent=False)
+
+        def test_7(m):
+            A = np.zeros((m,m))
+            B = A[0:m-2,-3:-1]
+            C = A[1:m-1,-4:-2]
+            E = B + C
+            return E
+        self._compile_and_test(test_7, (types.intp,),
+                               asserts=[self.without_assert('B', 'C')],
+                               idempotent=False)
+
+        def test_8(m):
+            A = np.zeros((m,m))
+            B = A[0:m-2,:]
+            C = A[1:-1,:]
+            E = B + C
+            return E
+        self._compile_and_test(test_8, (types.intp,),
+                               asserts=[self.without_assert('B', 'C')],
+                               idempotent=False)
 
     def test_numpy_calls(self):
         def test_zeros(n):
