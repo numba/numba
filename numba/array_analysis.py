@@ -25,6 +25,7 @@ import collections
 import copy
 from numba.extending import intrinsic
 import llvmlite.llvmpy.core as lc
+import llvmlite
 
 UNKNOWN_CLASS = -1
 CONST_CLASS = 0
@@ -54,6 +55,30 @@ random_calls = (random_int_args +
                 random_3arg_sizelast +
                 ['randint', 'triangular'])
 
+@intrinsic
+def wrap_index(typingctx, idx, size):
+    """
+    Calculate index value "idx" relative to a size "size" value as
+    (idx % size), where "size" is known to be positive.
+    Note that We use mod(%) operation here instead of
+    (idx < 0 ? idx + size : idx) because we may have situations
+    where idx > size due to the way indices are calculated
+    during slice/range analysis.
+    """
+    assert idx == size, "Argument types for wrap_index must match"
+
+    def codegen(context, builder, sig, args):
+        assert(len(args) == 2)
+        idx = args[0]
+        size = args[1]
+        rem = builder.srem(idx, size)
+        zero = llvmlite.ir.Constant(idx.type, 0)
+        is_negative = builder.icmp_signed('<', rem, zero)
+        wrapped_rem = builder.add(rem, size)
+        mod = builder.select(is_negative, wrapped_rem, rem)
+        return mod
+
+    return signature(idx, idx, size), codegen
 
 @intrinsic
 def assert_equiv(typingctx, *val):
@@ -579,7 +604,8 @@ class SymbolicEquivSet(ShapeEquivSet):
         # integer constants.
         self.ref_by = ref_by if ref_by else {}
         # A extended shape table that can map an arbitrary object to a shape,
-        # currently only used to remember shapes for SetItem IR node.
+        # currently used to remember shapes for SetItem IR node, and wrapped
+        # indices for Slice objects.
         self.ext_shapes = ext_shapes if ext_shapes else {}
         super(SymbolicEquivSet, self).__init__(
             typemap, defs, ind_to_var, obj_to_ind, ind_to_obj, next_id)
@@ -655,12 +681,16 @@ class SymbolicEquivSet(ShapeEquivSet):
                 if expr.op == 'call':
                     fname, mod_name = find_callname(
                             func_ir, expr, typemap=self.typemap)
-                    if fname == 'slice' and mod_name == 'type':
-                        # NOTE: steps is not supported now
-                        require(len(expr.args) == 2)
-                        fr = self._get_or_set_rel(expr.args[0], func_ir)
-                        to = self._get_or_set_rel(expr.args[1], func_ir)
-                        value = minus(to, fr)
+                    if fname == 'wrap_index' and mod_name == '_Intrinsic':
+                        index = tuple(self.obj_to_ind.get(x.name, -1)
+                                      for x in expr.args)
+                        if -1 in index:
+                            return None
+                        names = self.ext_shapes.get(index, [])
+                        names.append(name)
+                        if len(names) > 0:
+                            self._insert(names)
+                        self.ext_shapes[index] = names
                 elif expr.op == 'binop':
                     lhs = self._get_or_set_rel(expr.lhs, func_ir)
                     rhs = self._get_or_set_rel(expr.rhs, func_ir)
@@ -700,7 +730,7 @@ class SymbolicEquivSet(ShapeEquivSet):
         and remeber the result for later equivalence comparison. Supported
         operations are:
           1. arithmetic plus and minus with constants
-          2. slice
+          2. wrap_index (relative to some given size)
         """
         if isinstance(var, ir.Var):
             name = var.name
@@ -767,23 +797,29 @@ class SymbolicEquivSet(ShapeEquivSet):
             self._insert(names)
 
     def set_shape(self, obj, shape):
-        """Overload set_shape to remember shapes of SetItem IR nodes
-        in addition to just variables.
+        """Overload set_shape to remember shapes of SetItem IR nodes.
         """
-        if isinstance(obj, ir.SetItem):
+        if isinstance(obj, ir.StaticSetItem) or isinstance(obj, ir.SetItem):
             self.ext_shapes[obj] = shape
         else:
+            assert(isinstance(obj, ir.Var))
+            typ = self.typemap[obj.name]
             super(SymbolicEquivSet, self).set_shape(obj, shape)
 
     def _get_shape(self, obj):
-        """Overload _get_shape to retrieve the shape of SetItem IR nodes
-        in addition to just variables.
+        """Overload _get_shape to retrieve the shape of SetItem IR nodes.
         """
-        if isinstance(obj, ir.SetItem):
+        if isinstance(obj, ir.StaticSetItem) or isinstance(obj, ir.SetItem):
             require(obj in self.ext_shapes)
             return self.ext_shapes[obj]
         else:
-            return super(SymbolicEquivSet, self)._get_shape(obj)
+            assert(isinstance(obj, ir.Var))
+            typ = self.typemap[obj.name]
+            # for slice type, return the shape variable itself
+            if isinstance(typ, types.SliceType):
+                return (obj,)
+            else:
+                return super(SymbolicEquivSet, self)._get_shape(obj)
 
 class ArrayAnalysis(object):
 
@@ -921,19 +957,21 @@ class ArrayAnalysis(object):
                      not equiv_set.has_shape(shape))):
                     (shape, post) = self._gen_shape_call(equiv_set, lhs,
                                                          typ.ndim, shape)
-                #equiv_set.set_shape(lhs, shape)
             elif isinstance(typ, types.UniTuple):
                 if shape and isinstance(typ.dtype, types.Integer):
                     (shape, post) = self._gen_shape_call(equiv_set, lhs,
                                                          len(typ), shape)
-                    #equiv_set.set_shape(lhs, shape)
 
             if shape != None:
-                equiv_set.insert_equiv(lhs, shape)
+                if isinstance(typ, types.SliceType):
+                    equiv_set.set_shape(lhs, shape)
+                else:
+                    equiv_set.insert_equiv(lhs, shape)
             equiv_set.define(lhs, self.func_ir, typ)
-        elif isinstance(inst, ir.SetItem):
+        elif isinstance(inst, ir.StaticSetItem) or isinstance(inst, ir.SetItem):
+            index = inst.index if isinstance(inst, ir.SetItem) else inst.index_var
             result = guard(self._index_to_shape,
-                scope, equiv_set, inst.target, inst.index)
+                scope, equiv_set, inst.target, index)
             if not result:
                 return [], []
             (target_shape, pre) = result
@@ -1064,11 +1102,49 @@ class ArrayAnalysis(object):
             require(isinstance(ind_typ, types.BaseTuple))
             seq, op = find_build_sequence(self.func_ir, ind_var)
             require(op == 'build_tuple')
-            ind_shape = equiv_set._get_shape(ind_var)
             seq_typs = tuple(self.typemap[x.name] for x in seq)
         require(len(ind_shape)==len(seq_typs)==len(var_shape))
         stmts = []
+
+        def make_wrapped_index(loc, index, size, default=None):
+            size_typ = self.typemap[size.name]
+            index_typ = self.typemap[index.name]
+            if isinstance(index_typ, types.NoneType):
+                if default != None:
+                    return default, size_typ
+                lhs = scope.make_temp(loc)
+                zero = ir.Const(0, loc)
+                stmts.append(ir.Assign(value=zero, target=lhs, loc=loc))
+                return lhs, size_typ
+
+            index_def = get_definition(self.func_ir, index)
+
+            rel = equiv_set.get_rel(index)
+            # known to be positive? return index without wrapping
+            if ((isinstance(rel, int) and rel >= 0) or
+                (isinstance(rel, tuple) and
+                 equiv_set.is_equiv(size, rel[0]) and
+                 isinstance(rel[1], int) and rel[1] >= 0)):
+                return index, index_typ
+
+            wrap_var = scope.make_temp(loc)
+            wrap_def = ir.Global('wrap_index', wrap_index, loc=loc)
+            fnty = get_global_func_typ(wrap_index)
+            sig = self.context.resolve_function_type(fnty, (index_typ, size_typ,), {})
+            self._define(equiv_set, wrap_var, fnty, wrap_def)
+
+            var = scope.make_temp(loc)
+            value = ir.Expr.call(wrap_var, [index, size], {}, loc)
+            self._define(equiv_set, var, index_typ, value)
+            self.calltypes[value] = sig
+
+            stmts.append(ir.Assign(value=wrap_def, target=wrap_var, loc=loc))
+            stmts.append(ir.Assign(value=value, target=var, loc=loc))
+
+            return var, index_typ
+
         def slice_size(index, dsize):
+            loc = index.loc
             index_def = get_definition(self.func_ir, index)
             fname, mod_name = find_callname(
                 self.func_ir, index_def, typemap=self.typemap)
@@ -1076,45 +1152,61 @@ class ArrayAnalysis(object):
             require(len(index_def.args) == 2)
             lhs = index_def.args[0]
             rhs = index_def.args[1]
+            size_typ = self.typemap[dsize.name]
             lhs_typ = self.typemap[lhs.name]
-            rhs_typ = self.typemap[lhs.name]
-            if (isinstance(lhs_typ, types.NoneType) and
-                isinstance(rhs_typ, types.NoneType)):
-                # : range that selects all
+            rhs_typ = self.typemap[rhs.name]
+            zero_var = scope.make_temp(loc)
+
+            if isinstance(lhs_typ, types.NoneType):
+                zero = ir.Const(0, loc)
+                stmts.append(ir.Assign(value=zero, target=lhs, loc=loc))
+                self._define(equiv_set, zero_var, size_typ, zero)
+                lhs = zero_var
+
+            if isinstance(rhs_typ, types.NoneType):
+                rhs = dsize
+
+            lhs_rel = equiv_set.get_rel(lhs)
+            rhs_rel = equiv_set.get_rel(rhs)
+            if (lhs_rel == 0 and isinstance(rhs_rel, tuple) and
+                equiv_set.is_equiv(dsize, rhs_rel[0]) and
+                rhs_rel[1] == 0):
                 return dsize
-            else:
-                raise NotImplementedError("Unsupported range/slice: {}".
-                        format(index_def))
+
+            size_var = scope.make_temp(loc)
+            size_val = ir.Expr.binop('-', rhs, lhs, loc=loc)
+            self.calltypes[size_val] = signature(size_typ, lhs_typ, rhs_typ)
+            self._define(equiv_set, size_var, size_typ, size_val)
+
+            # short cut size_val to a constant if its relation is known to be
+            # a constant or its basis matches dsize
+            size_rel = equiv_set.get_rel(size_var)
+            if (isinstance(size_rel, int) or (isinstance(size_rel, tuple) and
+                equiv_set.is_equiv(size_rel[0], dsize.name))):
+                rel = size_rel if isinstance(size_rel, int) else size_rel[1]
+                size_val = ir.Const(rel, size_typ)
+                size_var = scope.make_temp(loc)
+                self._define(equiv_set, size_var, size_typ, size_val)
+
+            wrap_var = scope.make_temp(loc)
+            wrap_def = ir.Global('wrap_index', wrap_index, loc=loc)
+            fnty = get_global_func_typ(wrap_index)
+            sig = self.context.resolve_function_type(fnty, (size_typ, size_typ,), {})
+            self._define(equiv_set, wrap_var, fnty, wrap_def)
+
+            var = scope.make_temp(loc)
+            value = ir.Expr.call(wrap_var, [size_var, dsize], {}, loc)
+            self._define(equiv_set, var, size_typ, value)
+            self.calltypes[value] = sig
+
+            stmts.append(ir.Assign(value=size_val, target=size_var, loc=loc))
+            stmts.append(ir.Assign(value=wrap_def, target=wrap_var, loc=loc))
+            stmts.append(ir.Assign(value=value, target=var, loc=loc))
+            return var
+
         def to_shape(typ, index, dsize):
             if isinstance(typ, types.SliceType):
-                require(equiv_set.has_shape(index))
-                rel = equiv_set.get_rel(index)
-                loc = index.loc
-                if rel == None: # slice relation not known
-                    return slice_size(index, dsize)
-                elif isinstance(rel, tuple):
-                    base_var = equiv_set.get_equiv_var(rel[0])
-                    require(base_var != None)
-                    base_type = self.typemap[base_var.name]
-                    if rel[1] == 0:
-                        return base_var
-                    offset_var = scope.make_temp(loc)
-                    offset_val = ir.Const(rel[1], loc)
-                    self._define(equiv_set, offset_var, base_type, offset_val)
-                    stmts.append(ir.Assign(ir.Const(rel[1], loc),
-                                 offset_var, loc))
-                    size_var = scope.make_temp(loc)
-                    size_val = ir.Expr.binop('+', base_var, offset_var, loc=loc)
-                    self.calltypes[size_val] = signature(
-                        base_type, base_type, base_type)
-                else: # otherwise it is a constant
-                    assert(isinstance(rel, int))
-                    size_var = scope.make_temp(loc)
-                    size_val = ir.Const(rel, loc)
-                    base_type = types.intp
-                self._define(equiv_set, size_var, base_type, size_val)
-                stmts.append(ir.Assign(size_val, size_var, loc))
-                return size_var
+                return slice_size(index, dsize)
             elif isinstance(typ, types.Number):
                 return None
             else:
@@ -1133,9 +1225,10 @@ class ArrayAnalysis(object):
     def _analyze_op_static_getitem(self, scope, equiv_set, expr):
         var = expr.value
         typ = self.typemap[var.name]
-        require(isinstance(typ, types.BaseTuple))
+        if not isinstance(typ, types.BaseTuple):
+            return self._index_to_shape(scope, equiv_set, expr.value, expr.index_var)
         shape = equiv_set._get_shape(var)
-        require(expr.index < len(shape))
+        require(isinstance(expr.index, int) and expr.index < len(shape))
         return shape[expr.index], []
 
     def _analyze_op_unary(self, scope, equiv_set, expr):
@@ -1184,20 +1277,6 @@ class ArrayAnalysis(object):
             except AttributeError:
                 return None
             return guard(fn, scope, equiv_set, args, dict(expr.kws))
-
-    def _analyze_op_call_type_slice(self, scope, equiv_set, args, kws):
-        require(len(args) == 2)
-        lhs = args[0]
-        rhs = args[1]
-        typ = self.typemap[lhs.name]
-        require(isinstance(typ, types.Integer))
-        loc = lhs.loc
-        # innsert new statements: size = rhs - lhs
-        size_var = scope.make_temp(loc)
-        size_val = ir.Expr.binop('-', rhs, lhs, loc=loc)
-        self._define(equiv_set, size_var, typ, size_val)
-        self.calltypes[size_val] = signature(typ, typ, typ)
-        return (size_var,), [ir.Assign(value=size_val, target=size_var, loc=loc)]
 
     def _analyze_op_call_builtin_len(self, scope, equiv_set, args, kws):
         require(len(args) == 1)
