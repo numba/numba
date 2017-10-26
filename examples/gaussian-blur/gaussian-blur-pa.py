@@ -29,15 +29,15 @@ def gaussian_blur(a):
 
 @njit(parallel=True)
 def run_gaussian_blur(input_arr, iterations):
-    sinput_arr = gaussian_blur(input_arr)
-    for i in range(iterations-1):
-        output_arr = gaussian_blur(sinput_arr)
-        sinput_arr, output_arr = output_arr, sinput_arr
+    output_arr = input_arr.copy()
+    for i in range(iterations):
+        gaussian_blur(input_arr, out=output_arr)
+        input_arr, output_arr = output_arr, input_arr
 
-    return sinput_arr
+    return input_arr
 
 def main (*args):
-    iterations = 1
+    iterations = 60
 
     if len(args) > 0:
         input_file = args[0]
