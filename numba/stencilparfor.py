@@ -50,7 +50,7 @@ class StencilPass(object):
 
         # find and transform stencil calls
         for label, block in self.func_ir.blocks.items():
-            for i, stmt in enumerate(block.body):
+            for i, stmt in reversed(list(enumerate(block.body))):
                 if (isinstance(stmt, ir.Assign)
                         and isinstance(stmt.value, ir.Expr)
                         and stmt.value.op == 'call'
@@ -80,15 +80,13 @@ class StencilPass(object):
                             stencil_blocks, index_offsets, stmt.target, rt, sf,
                             arg_to_arr_dict)
                     block.body = block.body[:i] + gen_nodes + block.body[i+1:]
-                    return self.run()
-                if (isinstance(stmt, ir.Assign)
+                elif (isinstance(stmt, ir.Assign)
                         and isinstance(stmt.value, ir.Expr)
                         and stmt.value.op == 'call'
                         and guard(find_callname, self.func_ir, stmt.value)
                                     == ('stencil', 'numba')):
                     # remove dummy stencil() call
                     stmt.value = ir.Const(0, stmt.loc)
-        return
 
     def _mk_stencil_parfor(self, label, in_args, out_arr, stencil_blocks,
                            index_offsets, target, return_type, stencil_func,
