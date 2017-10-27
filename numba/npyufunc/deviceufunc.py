@@ -751,7 +751,7 @@ class GUFuncCallSteps(object):
             if isdev:
                 inputs.append(a)
             else:
-                inputs.append(np.array(a))
+                inputs.append(np.asarray(a))
         self.norm_inputs = inputs
 
     def adjust_input_types(self, indtypes):
