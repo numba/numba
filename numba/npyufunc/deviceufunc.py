@@ -637,7 +637,8 @@ class GenerializedUFunc(object):
         assert self.engine.nout == 1, "only support single output"
 
     def __call__(self, *args, **kws):
-        callsteps = self._call_steps(args, kws)
+        callsteps = self._call_steps(self.engine.nin, self.engine.nout,
+                                     args, kws)
         callsteps.prepare_inputs()
         indtypes, schedule, outdtype, kernel = self._schedule(
             callsteps.norm_inputs, callsteps.output)
@@ -737,7 +738,9 @@ class GUFuncCallSteps(object):
         '_need_device_conversion',
     ]
 
-    def __init__(self, args, kwargs):
+    def __init__(self, nin, nout, args, kwargs):
+        if nout > 1:
+            raise ValueError('multiple output is not supported')
         self.args = args
         self.kwargs = kwargs
 
@@ -752,7 +755,15 @@ class GUFuncCallSteps(object):
                 inputs.append(a)
             else:
                 inputs.append(np.asarray(a))
-        self.norm_inputs = inputs
+        self.norm_inputs = inputs[:nin]
+        # Check if there are extra arguments for outputs.
+        unused_inputs = inputs[nin:]
+        if unused_inputs:
+            if self.output is not None:
+                raise ValueError("cannot specify 'out' as both a positional "
+                                 "and keyword argument")
+            else:
+                [self.output] = unused_inputs
 
     def adjust_input_types(self, indtypes):
         """
