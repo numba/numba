@@ -314,6 +314,8 @@ class StencilPass(object):
             start_lengths = [x[0] for x in stencil_func.neighborhood]
             end_lengths   = [x[1] for x in stencil_func.neighborhood]
 
+        tuple_table = ir_utils.get_tuple_table(stencil_blocks)
+
         found_relative_index = False
 
         for label, block in stencil_blocks.items():
@@ -337,6 +339,9 @@ class StencilPass(object):
                     if ndims == 1:
                         #assert isinstance(index_list, int)
                         index_list = [index_list]
+                    else:
+                        if index_list.name in tuple_table:
+                            index_list = tuple_table[index_list.name]
                     if index_offsets:
                         index_list = self._add_index_offsets(index_list,
                                     list(index_offsets), new_body, scope, loc)
