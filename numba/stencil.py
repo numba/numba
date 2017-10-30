@@ -157,6 +157,8 @@ class StencilFunc(object):
                     # Store the index used after looking up the variable in
                     # the const dictionary.
                     if need_to_calc_kernel:
+                        assert hasattr(stmt_index_var, 'name')
+
                         if stmt_index_var.name in tuple_table:
                             kernel_consts += [tuple_table[stmt_index_var.name]]
                         elif stmt_index_var.name in const_dict:

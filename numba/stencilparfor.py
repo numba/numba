@@ -340,7 +340,7 @@ class StencilPass(object):
                         #assert isinstance(index_list, int)
                         index_list = [index_list]
                     else:
-                        if index_list.name in tuple_table:
+                        if hasattr(index_list, 'name') and index_list.name in tuple_table:
                             index_list = tuple_table[index_list.name]
                     if index_offsets:
                         index_list = self._add_index_offsets(index_list,
