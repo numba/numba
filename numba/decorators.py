@@ -38,7 +38,8 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "Signatures should be passed as the first "
                                  "positional argument.")
 
-def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **options):
+def jit(signature_or_function=None, locals={}, user_pipeline_funcs=[],
+                                    target='cpu', cache=False, **options):
     """
     This decorator is used to compile a Python function into native code.
 
@@ -168,15 +169,17 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **opti
         pyfunc = signature_or_function
         sigs = None
 
-    wrapper = _jit(sigs, locals=locals, target=target, cache=cache,
-                   targetoptions=options)
+    wrapper = _jit(sigs, locals=locals, user_pipeline_funcs=user_pipeline_funcs,
+                    target=target, cache=cache, targetoptions=options)
     if pyfunc is not None:
         return wrapper(pyfunc)
     else:
         return wrapper
 
 
-def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
+def _jit(sigs, locals, user_pipeline_funcs, target, cache, targetoptions,
+                                                            **dispatcher_args):
+
     dispatcher = registry.dispatcher_registry[target]
 
     def wrapper(func):
@@ -186,6 +189,7 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
         if config.DISABLE_JIT and not target == 'npyufunc':
             return _DisableJitWrapper(func)
         disp = dispatcher(py_func=func, locals=locals,
+                          user_pipeline_funcs=user_pipeline_funcs,
                           targetoptions=targetoptions,
                           **dispatcher_args)
         if cache:
@@ -210,7 +214,8 @@ def generated_jit(function=None, target='cpu', cache=False, **options):
     function is called at compile-time with the *types* of the arguments
     and should return an implementation function for those types.
     """
-    wrapper = _jit(sigs=None, locals={}, target=target, cache=cache,
+    wrapper = _jit(sigs=None, locals={}, user_pipeline_funcs=[],
+                   target=target, cache=cache,
                    targetoptions=options, impl_kind='generated')
     if function is not None:
         return wrapper(function)

@@ -49,11 +49,12 @@ class UFuncDispatcher(object):
     """
     targetdescr = ufunc_target
 
-    def __init__(self, py_func, locals={}, targetoptions={}):
+    def __init__(self, py_func, locals={}, user_pipeline_funcs=[], targetoptions={}):
         self.py_func = py_func
         self.overloads = utils.UniqueDict()
         self.targetoptions = targetoptions
         self.locals = locals
+        self.user_pipeline_funcs = user_pipeline_funcs
         self.cache = NullCache()
 
     def enable_caching(self):

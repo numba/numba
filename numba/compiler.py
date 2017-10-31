@@ -139,7 +139,7 @@ def compile_result(**kws):
 
 
 def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
-                     locals={}):
+                     locals={}, user_pipeline_funcs=[]):
     """
     Compile the function in an isolated environment (typing and target context).
     Good for testing.
@@ -150,7 +150,7 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
     # Register the contexts in case for nested @jit or @overload calls
     with cpu_target.nested_context(typingctx, targetctx):
         return compile_extra(typingctx, targetctx, func, args, return_type,
-                             flags, locals)
+                             flags, locals, user_pipeline_funcs)
 
 
 def run_frontend(func):
@@ -260,7 +260,7 @@ class Pipeline(object):
     Stores and manages states for the compiler pipeline
     """
     def __init__(self, typingctx, targetctx, library, args, return_type, flags,
-                 locals):
+                 locals, user_pipeline_funcs=[]):
         # Make sure the environment is reloaded
         config.reload_config()
         typingctx.refresh()
@@ -273,6 +273,7 @@ class Pipeline(object):
         self.return_type = return_type
         self.flags = flags
         self.locals = locals
+        self.user_pipeline_funcs = user_pipeline_funcs
 
         # Results of various steps of the compilation pipeline
         self.bc = None
@@ -705,6 +706,9 @@ class Pipeline(object):
             pm.add_stage(self.stage_compile_interp_mode, "compiling with interpreter mode")
             pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
 
+        for func in self.user_pipeline_funcs:
+            func(pm, self)
+
         pm.finalize()
         res = pm.run(self.status)
         if res is not None:
@@ -751,7 +755,7 @@ def _make_subtarget(targetctx, flags):
 
 
 def compile_extra(typingctx, targetctx, func, args, return_type, flags,
-                  locals, library=None):
+                  locals, user_pipeline_funcs=[], library=None):
     """
     Args
     ----
@@ -759,12 +763,13 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
         Use ``None`` to indicate
     """
     pipeline = Pipeline(typingctx, targetctx, library,
-                        args, return_type, flags, locals)
+                        args, return_type, flags, locals, user_pipeline_funcs)
     return pipeline.compile_extra(func)
 
 
 def compile_ir(typingctx, targetctx, func_ir, args, return_type, flags,
-               locals, lifted=(), lifted_from=None, library=None):
+               locals, user_pipeline_funcs=[], lifted=(), lifted_from=None,
+               library=None):
     """
     Compile a function with the given IR.
 
@@ -772,18 +777,19 @@ def compile_ir(typingctx, targetctx, func_ir, args, return_type, flags,
     """
 
     pipeline = Pipeline(typingctx, targetctx, library,
-                        args, return_type, flags, locals)
+                        args, return_type, flags, locals, user_pipeline_funcs)
     return pipeline.compile_ir(func_ir=func_ir, lifted=lifted,
                                lifted_from=lifted_from)
 
 
 def compile_internal(typingctx, targetctx, library,
-                     func, args, return_type, flags, locals):
+                     func, args, return_type, flags, locals,
+                     user_pipeline_funcs=[]):
     """
     For internal use only.
     """
     pipeline = Pipeline(typingctx, targetctx, library,
-                        args, return_type, flags, locals)
+                        args, return_type, flags, locals, user_pipeline_funcs)
     return pipeline.compile_extra(func)
 
 
