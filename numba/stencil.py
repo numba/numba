@@ -440,8 +440,8 @@ class StencilFunc(object):
             for j in range(offset):
                 func_text += "    "
             func_text += "for " + index_vars[i] + " in range("
-            func_text += str(abs(kernel_size[i][0])) + ", full_shape["
-            func_text += stri + "] - " + str(kernel_size[i][1]) + "):\n"
+            func_text += str(-min(0,kernel_size[i][0])) + ", full_shape["
+            func_text += stri + "] - " + str(max(0,kernel_size[i][1])) + "):\n"
             offset += 1
 
         for j in range(offset):
