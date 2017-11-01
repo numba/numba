@@ -1259,11 +1259,15 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
             if not value:
                 raise GuardException
             attrs.append(value)
-            class_name = callee_def.value.__class__.__name__
-            if class_name == 'builtin_function_or_method':
-                class_name = 'builtin'
-            if class_name != 'module':
-                attrs.append(class_name)
+            if hasattr(callee_def.value, '__module__'):
+                mod_name = callee_def.value.__module__
+                attrs.append(mod_name)
+            else:
+                class_name = callee_def.value.__class__.__name__
+                if class_name == 'builtin_function_or_method':
+                    class_name = 'builtin'
+                if class_name != 'module':
+                    attrs.append(class_name)
             break
         elif isinstance(callee_def, ir.Expr) and callee_def.op == 'getattr':
             obj = callee_def.value

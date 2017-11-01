@@ -479,8 +479,8 @@ class ParforPass(object):
         require(isinstance(rhs, ir.Expr))
         require(rhs.op == 'call')
         callname = find_callname(self.func_ir, rhs)
-        return (callname == ('reduce', 'builtin')
-                or callname == ('reduce', 'functools'))
+        return (callname == ('reduce', 'builtins')
+                or callname == ('reduce', '_functools'))
 
     def _is_C_order(self, arr_name):
         typ = self.typemap[arr_name]
