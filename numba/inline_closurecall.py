@@ -61,8 +61,8 @@ class InlineClosureCallPass(object):
                         # inline reduce() when parallel is off
                         call_name = guard(find_callname, self.func_ir, expr)
                         if not self.flags.auto_parallel:
-                            if (call_name == ('reduce', 'builtin')
-                                    or call_name == ('reduce', 'functools')):
+                            if (call_name == ('reduce', 'builtins') or
+                                call_name == ('reduce', '_functools')):
                                 if len(expr.args) != 3:
                                     raise TypeError("invalid reduce call, "
                                         "three arguments including initial "
@@ -97,7 +97,7 @@ class InlineClosureCallPass(object):
                             # current block is modified, skip the rest
                             break
                         # check for stencil call
-                        if (call_name == ('stencil', 'numba')
+                        if (call_name == ('stencil', 'numba.stencil')
                                 and expr not in self._processed_stencils):
                             self._processed_stencils.append(expr)
                             from numba.stencil import StencilFunc
@@ -124,7 +124,8 @@ class InlineClosureCallPass(object):
                         # alive by adding them to the actual kernel call as extra
                         # keyword arguments, which is ignored anyway.
                         if (isinstance(func_def, ir.Global) and
-                            func_def.name == 'stencil'):
+                            func_def.name == 'stencil' and
+                            isinstance(func_def.value, StencilFunc)):
                             freevars = []
                             options = func_def.value.options
                             vs = options.get("neighborhood", [])
@@ -782,19 +783,19 @@ def _fix_nested_array(func_ir):
                         for var in varlist:
                             # var must be defined before this inst, or live
                             # and not later defined.
-                            if (var.name in defined or 
+                            if (var.name in defined or
                                 (var.name in livemap[label] and
                                  not (var.name in usedefs.defmap))):
                                 debug_print(var.name, " already defined")
                                 new_varlist.append(var)
-                            else: 
+                            else:
                                 debug_print(var.name, " not yet defined")
                                 var_def = get_definition(func_ir, var.name)
                                 if isinstance(var_def, ir.Const):
                                     loc = var.loc
                                     new_var = scope.make_temp(loc)
                                     new_const = ir.Const(var_def.value, loc)
-                                    new_vardef = _new_definition(func_ir, 
+                                    new_vardef = _new_definition(func_ir,
                                                     new_var, new_const, loc)
                                     new_body = []
                                     new_body.extend(body[:i])

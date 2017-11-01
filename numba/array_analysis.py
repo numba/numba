@@ -840,7 +840,7 @@ class ArrayAnalysis(object):
             return shape[0], []
         return None
 
-    def _analyze_op_call__Intrinsic_assert_equiv(self, scope, equiv_set, args, kws):
+    def _analyze_op_call_numba_extending_assert_equiv(self, scope, equiv_set, args, kws):
         equiv_set.insert_equiv(*args[1:])
         return None
 
