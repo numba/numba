@@ -779,6 +779,7 @@ class Int(AbstractTemplate):
 
 @infer_global(float)
 class Float(AbstractTemplate):
+    description = "float(number) -> float"
 
     def generic(self, args, kws):
         assert not kws

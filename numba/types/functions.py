@@ -2,6 +2,9 @@ from __future__ import print_function, division, absolute_import
 
 from .abstract import *
 from .common import *
+from numba import errors
+import traceback
+
 
 class BaseFunction(Callable):
     """
@@ -43,23 +46,33 @@ class BaseFunction(Callable):
         return self._impl_keys[sig.args]
 
     def get_call_type(self, context, args, kws):
-        for temp_cls in self.templates:
-            temp = temp_cls(context)
-            sig = temp.apply(args, kws)
-            if sig is not None:
-                self._impl_keys[sig.args] = temp.get_impl_key(sig)
-                return sig
+        return self.get_call_type_with_literals(context, args, kws,
+                                                literals=None)
 
     def get_call_type_with_literals(self, context, args, kws, literals):
+        failed = []
         for temp_cls in self.templates:
             temp = temp_cls(context)
-            if literals is not None and temp.support_literals:
-                sig = temp.apply(*literals)
-            else:
-                sig = temp.apply(args, kws)
+            try:
+                if literals is not None and temp.support_literals:
+                    sig = temp.apply(*literals)
+                else:
+                    sig = temp.apply(args, kws)
+            except Exception as e:
+                sig = None
+                failed.append((temp, e))
             if sig is not None:
                 self._impl_keys[sig.args] = temp.get_impl_key(sig)
                 return sig
+        if failed:
+            msgbuf = []
+            for temp_cls, exc in failed:
+                desc = getattr(temp_cls, 'description', temp_cls.key)
+                msgbuf.append("*** with overload :: {}".format(desc))
+                msgbuf.append(repr(exc))
+                frame = traceback.extract_tb(exc.__traceback__)[-1]
+                msgbuf.append("{}:{}".format(frame.filename, frame.lineno))
+            raise errors.TypingError('\n  '.join(msgbuf))
 
     def get_call_signatures(self):
         sigs = []
