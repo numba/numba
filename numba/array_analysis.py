@@ -681,7 +681,7 @@ class SymbolicEquivSet(ShapeEquivSet):
                 if expr.op == 'call':
                     fname, mod_name = find_callname(
                             func_ir, expr, typemap=self.typemap)
-                    if fname == 'wrap_index' and mod_name == '_Intrinsic':
+                    if fname == 'wrap_index' and mod_name == 'numba.extending':
                         index = tuple(self.obj_to_ind.get(x.name, -1)
                                       for x in expr.args)
                         if -1 in index:
@@ -1148,7 +1148,7 @@ class ArrayAnalysis(object):
             index_def = get_definition(self.func_ir, index)
             fname, mod_name = find_callname(
                 self.func_ir, index_def, typemap=self.typemap)
-            require(fname == 'slice' and mod_name == 'type')
+            require(fname == 'slice' and mod_name == 'builtins')
             require(len(index_def.args) == 2)
             lhs = index_def.args[0]
             rhs = index_def.args[1]
