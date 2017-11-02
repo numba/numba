@@ -30,6 +30,7 @@ def main():
     size = args.size
     iterations = args.iterations
 
+    np.random.seed(0)
     kde(np.random.ranf(10))
     print("size:", size)
     X = np.random.ranf(size)
