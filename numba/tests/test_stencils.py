@@ -100,9 +100,9 @@ class TestStencils(unittest.TestCase):
         # parfor result
         parfor_output = cpfunc.entry_point(*args)
 
-        np.testing.assert_almost_equal(py_output, expected, decimal=1)
-        np.testing.assert_almost_equal(njit_output, expected, decimal=1)
-        np.testing.assert_almost_equal(parfor_output, expected, decimal=1)
+        np.testing.assert_almost_equal(py_output, expected, decimal=3)
+        np.testing.assert_almost_equal(njit_output, expected, decimal=3)
+        np.testing.assert_almost_equal(parfor_output, expected, decimal=3)
 
         # make sure parfor set up scheduling
         self.assertIn('@do_scheduling', cpfunc.library.get_llvm_str())
@@ -180,7 +180,7 @@ class TestStencils(unittest.TestCase):
         expected = test_impl_seq(n, w)
         # parfor result
         parfor_output = cpfunc.entry_point(n, w)
-        np.testing.assert_almost_equal(parfor_output, expected, decimal=1)
+        np.testing.assert_almost_equal(parfor_output, expected, decimal=3)
         self.assertIn('@do_scheduling', cpfunc.library.get_llvm_str())
         # test index_offsets
         def test_seq(n, w, offset):
@@ -198,7 +198,7 @@ class TestStencils(unittest.TestCase):
         cpfunc = self.compile_parallel(test_seq, (types.intp, types.intp,
                                                                     types.intp))
         parfor_output = cpfunc.entry_point(n, w, offset)
-        np.testing.assert_almost_equal(parfor_output, expected, decimal=1)
+        np.testing.assert_almost_equal(parfor_output, expected, decimal=3)
         self.assertIn('@do_scheduling', cpfunc.library.get_llvm_str())
         # test slice in kernel
         def test_seq(n, w, offset):
@@ -213,7 +213,7 @@ class TestStencils(unittest.TestCase):
         cpfunc = self.compile_parallel(test_seq, (types.intp, types.intp,
                                                                     types.intp))
         parfor_output = cpfunc.entry_point(n, w, offset)
-        np.testing.assert_almost_equal(parfor_output, expected, decimal=1)
+        np.testing.assert_almost_equal(parfor_output, expected, decimal=3)
         self.assertIn('@do_scheduling', cpfunc.library.get_llvm_str())
 
     @skip_unsupported
