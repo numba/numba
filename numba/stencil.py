@@ -114,7 +114,8 @@ class StencilFunc(object):
             need_to_calc_kernel = True
         else:
             if len(neighborhood) != ndim:
-                raise ValueError("%d dimensional neighborhood specified for %d dimensional input array" % (len(self.neighborhood), ndim))
+                raise ValueError("%d dimensional neighborhood specified for %d " \
+                    "dimensional input array" % (len(self.neighborhood), ndim))
 
         tuple_table = ir_utils.get_tuple_table(kernel.blocks)
 
@@ -136,7 +137,8 @@ class StencilFunc(object):
                         and stmt.value.value.name in kernel.arg_names) or 
                    (isinstance(stmt, ir.SetItem)
                         and stmt.target.name in kernel.arg_names)):
-                    raise ValueError("Assignments to arrays passed to stencil kernels is not allowed.")
+                    raise ValueError("Assignments to arrays passed to stencil " \
+                        "kernels is not allowed.")
                 if (isinstance(stmt, ir.Assign)
                         and isinstance(stmt.value, ir.Expr)
                         and stmt.value.op in ['getitem', 'static_getitem']
@@ -146,7 +148,8 @@ class StencilFunc(object):
                     if stmt.value.op == 'getitem':
                         stmt_index_var = stmt.value.index
                     else:
-                        stmt_index_var = stmt.value.index_var
+                        raise ValueError("Unexpected static_getitem in add_indices_to_kernel.")
+
                     relatively_indexed.add(stmt.value.value.name)
 
                     # Store the index used after looking up the variable in
