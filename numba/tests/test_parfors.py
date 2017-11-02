@@ -143,7 +143,7 @@ def countParfors(test_func, args):
         tp.typemap, tp.return_type, tp.calltypes = compiler.type_inference_stage(
             tp.typingctx, tp.func_ir, tp.args, None)
 
-        type_annotation = type_annotations.TypeAnnotation(
+        type_annotations.TypeAnnotation(
             func_ir=tp.func_ir,
             typemap=tp.typemap,
             calltypes=tp.calltypes,
