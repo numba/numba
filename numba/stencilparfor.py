@@ -26,6 +26,12 @@ class Stencil(AbstractTemplate):
         assert not kws
         return signature(types.none, *args)
 
+def _compute_last_ind(dim_size, index_const):
+    if index_const > 0:
+        return dim_size - index_const
+    else:
+        return dim_size
+
 class StencilPass(object):
     def __init__(self, func_ir, typemap, calltypes, array_analysis, typingctx):
         self.func_ir = func_ir
@@ -190,10 +196,11 @@ class StencilPass(object):
             zero_var = ir.Var(scope, zero_name, loc)
             if "cval" in stencil_func.options:
                 cval = stencil_func.options["cval"]
+                # TODO: Loosen this restriction to adhere to casting rules.
                 if return_type.dtype != typing.typeof.typeof(cval):
                     raise ValueError("cval type does not match stencil return type.")
 
-                temp2 = return_type.dtype(stencil_func.options["cval"])
+                temp2 = return_type.dtype(cval)
             else:
                 temp2 = return_type.dtype(0)
             full_const = ir.Const(temp2, loc)
@@ -246,7 +253,6 @@ class StencilPass(object):
     def _get_stencil_last_ind(self, dim_size, end_length, gen_nodes, scope,
                                                                         loc):
         last_ind = dim_size
-        # TODO: support negative end length
         if end_length != 0:
             # set last index to size minus stencil size to avoid invalid
             # memory access
@@ -262,9 +268,17 @@ class StencilPass(object):
             gen_nodes.append(const_assign)
             last_ind = ir.Var(scope, mk_unique_var("last_ind"), loc)
             self.typemap[last_ind.name] = types.intp
-            index_call = ir.Expr.binop('-', dim_size, index_const, loc)
-            self.calltypes[index_call] = ir_utils.find_op_typ('+',
-                                                [types.intp, types.intp])
+
+            g_var = ir.Var(scope, mk_unique_var("compute_last_ind_var"), loc)
+            check_func = numba.njit(_compute_last_ind)
+            func_typ = types.functions.Dispatcher(check_func)
+            self.typemap[g_var.name] = func_typ
+            g_obj = ir.Global("_compute_last_ind", check_func, loc)
+            g_assign = ir.Assign(g_obj, g_var, loc)
+            gen_nodes.append(g_assign)
+            index_call = ir.Expr.call(g_var, [dim_size, index_const], (), loc)
+            self.calltypes[index_call] = func_typ.get_call_type(
+                self.typingctx, [types.intp, types.intp], {})
             index_assign = ir.Assign(index_call, last_ind, loc)
             gen_nodes.append(index_assign)
 
