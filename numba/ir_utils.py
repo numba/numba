@@ -786,8 +786,8 @@ def get_block_copies(blocks, typemap):
 apply_copy_propagate_extensions = {}
 
 
-def apply_copy_propagate(blocks, in_copies, name_var_table, ext_func, ext_data,
-                         typemap, calltypes):
+def apply_copy_propagate(blocks, in_copies, name_var_table, typemap, calltypes,
+                         ext_func=lambda a, b, c, d:None, ext_data=None):
     """apply copy propagation to IR: replace variables when copies available"""
     for label, block in blocks.items():
         var_dict = {l: name_var_table[r] for l, r in in_copies[label]}
@@ -1184,8 +1184,6 @@ def simplify(func_ir, typemap, calltypes):
         func_ir.blocks,
         in_cps,
         name_var_table,
-        lambda a, b, c, d:None, # a null func
-        None,                   # no extra data
         typemap,
         calltypes)
     # remove dead code to enable fusion

@@ -109,8 +109,6 @@ class StencilPass(object):
             stencil_blocks,
             in_cps,
             name_var_table,
-            lambda a, b, c, d:None, # a null func
-            None,                   # no extra data
             self.typemap,
             self.calltypes)
         if config.DEBUG_ARRAY_OPT == 1:
