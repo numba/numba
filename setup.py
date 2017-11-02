@@ -9,10 +9,15 @@ except ImportError:
 
 from distutils.command import build
 from distutils.spawn import spawn
+from distutils import sysconfig
 import sys
 import os
 
 import versioneer
+
+if sys.platform.startswith('linux'):
+    # Patch for #2555 to make wheels without libpython
+    sysconfig.get_config_vars()['Py_ENABLE_SHARED'] = 0
 
 
 class build_doc(build.build):
