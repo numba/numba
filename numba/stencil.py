@@ -55,7 +55,7 @@ class StencilFunc(object):
         self._targetctx.refresh()
         self._install_type(self._typingctx)
         self.neighborhood = self.options.get("neighborhood")
-        self._type_cache = []
+        self._type_cache = {}
         self._lower_me = StencilFuncLowerer(self)
 
     def replace_return_with_setitem(self, blocks, index_vars):
@@ -282,13 +282,7 @@ class StencilFunc(object):
 
     def compile_for_argtys(self, argtys, kwtys, return_type, sigret):
         # look in the type cache to find if result array is passed
-        result = None
-        for (_argtyps, _sig, _res, _typemap, _calltypes) in self._type_cache:
-            if _argtyps == argtys:
-                result = _res
-                typemap = _typemap
-                calltypes = _calltypes
-
+        (_, result, typemap, calltypes) = self._type_cache[argtys]
         new_func = self._stencil_wrapper(result, sigret, return_type, 
                                          typemap, calltypes, *argtys)
         return new_func
@@ -306,9 +300,9 @@ class StencilFunc(object):
         if 'out' in kwtys:
             argtys_with_out += (kwtys['out'],)
         # look in the type cache first
-        for (_argtyps, _sig, _, _, _) in self._type_cache:
-            if _argtyps == argtys_with_out:
-                return _sig
+        if argtys_with_out in self._type_cache:
+            (_sig, _, _, _) = self._type_cache[argtys_with_out]
+            return _sig
 
         (real_ret, typemap, calltypes) = self.get_return_type(argtys)
         sig = signature(real_ret, *argtys_with_out)
@@ -326,7 +320,7 @@ class StencilFunc(object):
         dummy_func = eval("__numba_dummy_stencil")
         sig.pysig = utils.pysignature(dummy_func)
         self._targetctx.insert_func_defn([(self._lower_me, self, argtys_with_out)])
-        self._type_cache.append((argtys_with_out, sig, result, typemap, calltypes))
+        self._type_cache[argtys_with_out] = (sig, result, typemap, calltypes)
         return sig
 
     def copy_ir_with_calltypes(self, ir, calltypes):
