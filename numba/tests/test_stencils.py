@@ -713,6 +713,10 @@ class pyStencilGenerator:
                                 self._mins[x] = relvalue
                             if relvalue > self._maxes[x]:
                                 self._maxes[x] = relvalue
+                    else:
+                        for x, lnode in enumerate(self._neighborhood):
+                            self._mins[x] = self._neighborhood[x][0]
+                            self._maxes[x] = self._neighborhood[x][1]
 
                     return newnode
                 # 1D index
@@ -765,6 +769,9 @@ class pyStencilGenerator:
                             self._mins[0] = relvalue
                         if relvalue > self._maxes[0]:
                             self._maxes[0] = relvalue
+                    else:
+                        self._mins[0] = self._neighborhood[0][0]
+                        self._maxes[0] = self._neighborhood[0][1]
 
                     return newnode
                 else:  # unknown
@@ -787,6 +794,10 @@ class pyStencilGenerator:
         @property
         def mins(self):
             return self._mins
+
+        @property
+        def id_pattern(self):
+            return self._id_pat
 
     class FixFunc(ast.NodeTransformer, Builder):
         """ The main function rewriter, takes the body of the kernel and generates:
@@ -863,87 +874,44 @@ class pyStencilGenerator:
             retvar = '__b%s' % self.varidx()
             nloops = self._relidx_info.idx_len
 
-            if not self._neighborhood:  # relative indexing
-                # replay blocks, switch return for assign
-                blocks = [x for x in blk[: -1]]
-                loop_body = blocks + [self.gen_assign(
-                    retvar, blk[-1],
-                    ['__%s' % self.ids[l] for l in range(nloops)])]
-                nloops -= 1  # account for inner loop peeled/0 indexing
+            def computebound(mins, maxs):
+                minlim = 0 if mins >= 0 else -mins
+                maxlim = -maxs if maxs > 0 else 0
+                return (minlim, maxlim)
 
-                def computebound(mins, maxs):
-                    minlim = 0 if mins >= 0 else -mins
-                    maxlim = -maxs if maxs > 0 else 0
-                    return (minlim, maxlim)
+            var_pattern = self._relidx_info.id_pattern
 
+            # replay blocks, switch return for assign
+            blocks = [x for x in blk[: -1]]
+            loop_body = blocks + [self.gen_assign(
+                retvar, blk[-1],
+                [var_pattern % self.ids[l] for l in range(nloops)])]
+
+            # create loop nests
+            loop_count = 0
+            for l in range(nloops):
                 minlim, maxlim = computebound(
-                    self._relidx_info.mins[-1],
-                    self._relidx_info.maxes[-1])
-
+                    self._relidx_info.mins[loop_count],
+                    self._relidx_info.maxes[loop_count])
                 minbound = minlim
                 maxbound = self.gen_subscript(
-                    self.stencil_arr, 'shape', nloops, maxlim)
-
-                # Compute loop nests based on indexes
-                # this is the inner loop
+                    self.stencil_arr, 'shape', loop_count, maxlim)
                 loops = self.gen_loop(
-                    '__%s' %
-                    self.ids[nloops],
-                    minbound,
-                    maxbound,
-                    body=loop_body)
-
-                # tile outer loops
-                for l in range(nloops):
-                    minlim, maxlim = computebound(
-                        self._relidx_info.mins[nloops - l - 1],
-                        self._relidx_info.maxes[nloops - l - 1])
-                    minbound = minlim
-                    maxbound = self.gen_subscript(
-                        self.stencil_arr, 'shape', nloops - l - 1, maxlim)
-                    loops = self.gen_loop(
-                        '__%s' % self.ids[nloops - l - 1],
-                        minbound, maxbound, body=[loops])
-
-            else:  # neighborhood indexing
-                blocks = [x for x in blk[: -1]]
-                loop_body = blocks + [self.gen_assign(
-                    retvar, blk[-1],
-                    ['__%sn' % self.ids[l] for l in range(nloops)])]
-
-                def computebound(mins, maxs):
-                    minlim = mins if mins >= 0 else -mins
-                    maxlim = -maxs if maxs > 0 else 0
-                    return (minlim, maxlim)
-
-                # tile neighborhood, loop body is not changed
-                nbound = len(self._neighborhood)
-                bound = self._neighborhood[nbound - 1]
-                minlim, maxlim = computebound(bound[0], bound[1])
-                minbound = minlim
-                maxbound = self.gen_subscript(
-                    self.stencil_arr, 'shape', nbound - 1, maxlim)
-                loops = self.gen_loop(
-                    '__%sn' % (self.ids[nbound - 1]),
+                    var_pattern % self.ids[loop_count],
                     minbound, maxbound, body=loop_body)
+                loop_body = [loops]
+                loop_count += 1
 
-                nbound -= 1
-
-                for l in range(nbound):
-                    bound = self._neighborhood[nbound - l - 1]
-                    minlim, maxlim = computebound(bound[0], bound[1])
-                    minbound = minlim
-                    maxbound = self.gen_subscript(
-                        self.stencil_arr, 'shape', nbound - l - 1, maxlim)
-                    loops = self.gen_loop(
-                        '__%sn' % (self.ids[nbound - l - 1]),
-                        minbound, maxbound, body=[loops])
-
+            # patch loop location
             ast.copy_location(loops, node)
             _rettyname = self._retty.targets[0]
+
+            # allocate a return
             allocate = self.gen_alloc_return(
                 self.stencil_arr, retvar, _rettyname, self.cval)
             ast.copy_location(allocate, node)
+
+            # generate the return
             returner = self.gen_return(retvar)
             ast.copy_location(returner, node)
 
@@ -1259,7 +1227,6 @@ class TestManyStencils(TestStencilBase):
                 raise ex
             pyStencil_unhandled_ex = ex
             expected_present = False
-
         stencilfunc_output = None
         with errorhandler(stencil_ex, "@stencil"):
             stencil_func_impl = stencil(**stencil_args)
@@ -1345,7 +1312,7 @@ class TestManyStencils(TestStencilBase):
         if should_fail:
             msg = ["%s" % x for x in should_fail]
             raise RuntimeError(("The following implementations should have "
-                               "raised an exception but did not:\n%s") % msg)
+                                "raised an exception but did not:\n%s") % msg)
 
         if should_not_fail:
             impls = ["%s" % x[0] for x in should_not_fail]
@@ -2137,9 +2104,6 @@ class TestManyStencils(TestStencilBase):
         a = np.arange(60.)
         self.check(kernel, a, options={'neighborhood': ((-29, 0),)})
 
-    # parfors fails:
-    # ['parfors'] Errors were:
-    # parfors: Message: Arrays are not almost equal to 1 decimals
     def test_basic73(self):
         """neighborhood, +ve range"""
         def kernel(a):
@@ -2149,6 +2113,16 @@ class TestManyStencils(TestStencilBase):
             return cumul / 30
         a = np.arange(60.)
         self.check(kernel, a, options={'neighborhood': ((5, 10),)})
+
+    def test_basic73b(self):
+        """neighborhood, -ve range"""
+        def kernel(a):
+            cumul = 0
+            for i in range(-10, -4):
+                cumul += a[i]
+            return cumul / 30
+        a = np.arange(60.)
+        self.check(kernel, a, options={'neighborhood': ((-10, -5),)})
 
     def test_basic74(self):
         """neighborhood, -ve->+ve range span"""
@@ -2196,17 +2170,34 @@ class TestManyStencils(TestStencilBase):
         b = np.arange(10. * 20.).reshape(10, 20)
         self.check(kernel, a, b, options={'neighborhood': ((-3, 0), (-3, 0),)})
 
+    @unittest.skip("segfaults")
     def test_basic78(self):
-        """ neighborhood, two args """
+        """ neighborhood, two args, -ve range, -ve range """
         def kernel(a, b):
             cumul = 0
-            for i in range(-3, 1):
-                for j in range(-3, 1):
+            for i in range(-6, -2):
+                for j in range(-7, -1):
                     cumul += a[i, j] + b[i, j]
             return cumul / (9.)
-        a = np.arange(10. * 20.).reshape(10, 20)
-        b = np.arange(10. * 20.).reshape(10, 20)
-        self.check(kernel, a, b, options={'neighborhood': ((-3, 0), (-3, 0),)})
+        a = np.arange(15. * 20.).reshape(15, 20)
+        b = np.arange(15. * 20.).reshape(15, 20)
+        self.check(
+            kernel, a, b, options={
+                'neighborhood': (
+                    (-6, -3), (-7, -2),)})
+
+    @unittest.skip("segfaults")
+    def test_basic78b(self):
+        """ neighborhood, two args, -ve range, +ve range """
+        def kernel(a, b):
+            cumul = 0
+            for i in range(-6, -2):
+                for j in range(2, 10):
+                    cumul += a[i, j] + b[i, j]
+            return cumul / (9.)
+        a = np.arange(15. * 20.).reshape(15, 20)
+        b = np.arange(15. * 20.).reshape(15, 20)
+        self.check(kernel, a, b, options={'neighborhood': ((-6, -3), (2, 9),)})
 
     def test_basic79(self):
         """ neighborhood, two incompatible args """
@@ -2315,6 +2306,15 @@ class TestManyStencils(TestStencilBase):
         a = np.arange(10. * 20.).reshape(10, 20)
         self.check(kernel, a, options={'bad': 10},
                    expected_exception=[ValueError, TypingError])
+
+    @unittest.skip("TODO: Make this work.")
+    def test_basic87(self):
+        """ reserved arg name in use """
+        def kernel(__sentinel__):
+            return __sentinel__[0, 0]
+
+        a = np.arange(10. * 20.).reshape(10, 20)
+        self.check(kernel, a)
 
 
 if __name__ == "__main__":
