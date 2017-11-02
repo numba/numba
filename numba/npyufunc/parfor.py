@@ -225,10 +225,31 @@ def find_vars(var, varset):
     varset.add(var.name)
     return var
 
+def _hoist_internal(inst, dep_on_param, call_table, count, hoisted, typemap):
+    uses = set()
+    visit_vars_inner(inst.value, find_vars, uses)
+    diff = uses.difference(dep_on_param)
+    if len(diff) == 0 and has_no_side_effect(inst.value, None, call_table) and count[0] != 0:
+        if config.DEBUG_ARRAY_OPT == 1:
+            print("Will hoist instruction", inst)
+        hoisted.append(inst)
+        count[0] -= 1
+        if not isinstance(typemap[inst.target.name], types.npytypes.Array):
+            dep_on_param += [inst.target.name]
+        return True
+    elif config.DEBUG_ARRAY_OPT == 1:
+        if len(diff) > 0:
+            print("Instruction", inst, " could not be hoisted because of a dependency.")
+        elif count[0] == 0:
+            print("Instruction", inst, " could not be hoisted because of count.")
+        else:
+            print("Instruction", inst, " could not be hoisted because of a side-effect.")
+    return False
+
 def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     dep_on_param = copy.copy(parfor_params)
     hoisted = []
-    count = 0
+    count = [-1]
 
     def_once = compute_def_once(loop_body)
     (call_table, reverse_call_table) = get_call_table(wrapped_blocks)
@@ -237,50 +258,22 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
         new_block = []
         for inst in block.body:
             if isinstance(inst, ir.Assign) and inst.target.name in def_once:
-                uses = set()
-                visit_vars_inner(inst.value, find_vars, uses)
-                diff = uses.difference(dep_on_param)
-                if len(diff) == 0 and has_no_side_effect(inst.value, None, call_table) and count > 0:
-                    if config.DEBUG_ARRAY_OPT == 1:
-                        print("Will hoist instruction", inst)
-                    hoisted.append(inst)
-                    count -= 1
-                    if not isinstance(typemap[inst.target.name], types.npytypes.Array):
-                        dep_on_param += [inst.target.name]
+                if _hoist_internal(inst, dep_on_param, call_table, 
+                                   count, hoisted, typemap):
+                    # don't add this instuction to the block since it is hoisted
                     continue
-                elif config.DEBUG_ARRAY_OPT == 1:
-                    if len(diff) > 0:
-                        print("Instruction", inst, " could not be hoisted because of a dependency.")
-                    elif count <= 0:
-                        print("Instruction", inst, " could not be hoisted because of count.")
-                    else:
-                        print("Instruction", inst, " could not be hoisted because of a side-effect.")
-
-            if isinstance(inst, parfor.Parfor):
+            elif isinstance(inst, parfor.Parfor):
                 new_init_block = []
                 if config.DEBUG_ARRAY_OPT == 1:
                     print("parfor")
                     inst.dump()
                 for ib_inst in inst.init_block.body:
-                    if isinstance(ib_inst, ir.Assign) and ib_inst.target.name in def_once:
-                        uses = set()
-                        visit_vars_inner(ib_inst.value, find_vars, uses)
-                        diff = uses.difference(dep_on_param)
-                        if len(diff) == 0 and has_no_side_effect(ib_inst.value, None, call_table) and count > 0:
-                            if config.DEBUG_ARRAY_OPT == 1:
-                                print("Will hoist init-block instruction", ib_inst)
-                            hoisted.append(ib_inst)
-                            count -= 1
-                            if not isinstance(typemap[ib_inst.target.name], types.npytypes.Array):
-                                dep_on_param += [ib_inst.target.name]
+                    if (isinstance(ib_inst, ir.Assign) and
+                        ib_inst.target.name in def_once):
+                        if _hoist_internal(ib_inst, dep_on_param, call_table,
+                                           count, hoisted, typemap):
+                            # don't add this instuction to the block since it is hoisted
                             continue
-                        elif config.DEBUG_ARRAY_OPT == 1:
-                            if len(diff) > 0:
-                                print("Instruction", ib_inst, " could not be hoisted because of a dependency.")
-                            elif count <= 0:
-                                print("Instruction", ib_inst, " could not be hoisted because of count.")
-                            else:
-                                print("Instruction", ib_inst, " could not be hoisted because of a side-effect.")
                     new_init_block.append(ib_inst)
                 inst.init_block.body = new_init_block
 
