@@ -306,14 +306,16 @@ class StencilPass(object):
         if "standard_indexing" in stencil_func.options:
             for x in stencil_func.options["standard_indexing"]:
                 if x not in arg_to_arr_dict:
-                    raise ValueError("Standard indexing requested for an array name not present in the stencil kernel definition.")
+                    raise ValueError("Standard indexing requested for an array " \
+                        "name not present in the stencil kernel definition.")
             standard_indexed = [arg_to_arr_dict[x] for x in
                                      stencil_func.options["standard_indexing"]]
         else:
             standard_indexed = []
 
         if in_arr.name in standard_indexed:
-            raise ValueError("The first argument to a stencil kernel must use relative indexing, not standard indexing.")
+            raise ValueError("The first argument to a stencil kernel must use " \
+                "relative indexing, not standard indexing.")
 
         ndims = self.typemap[in_arr.name].ndim
         scope = in_arr.scope
@@ -412,13 +414,14 @@ class StencilPass(object):
 
         return start_lengths, end_lengths
 
-    def _add_index_offsets(self, index_list, index_offsets, new_body, scope,
-                                                                        loc):
+    def _add_index_offsets(self, index_list, index_offsets, new_body,
+                           scope, loc):
+        assert len(index_list) == len(index_offsets)
+
         # shortcut if all values are integer
         if all([isinstance(v, int) for v in index_list+index_offsets]):
             # add offsets in all dimensions
             return list(map(add, index_list, index_offsets))
-        assert len(index_list) == len(index_offsets)
 
         out_nodes = []
         index_vars = []
@@ -528,7 +531,7 @@ def get_stencil_blocks(sf, typingctx, args, scope, loc, input_dict, typemap,
         tp.typemap, tp.return_type, tp.calltypes = type_inference_stage(
             tp.typingctx, tp.func_ir, tp.args, None)
 
-        type_annotation = type_annotations.TypeAnnotation(
+        type_annotations.TypeAnnotation(
             func_ir=tp.func_ir,
             typemap=tp.typemap,
             calltypes=tp.calltypes,
