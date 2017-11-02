@@ -351,6 +351,22 @@ class StencilFunc(object):
         return (kernel_copy, copy_calltypes)
 
     def _stencil_wrapper(self, result, sigret, return_type, typemap, calltypes, *args):
+        # Overall approach:
+        # 1) Construct a string containing a function definition for the stencil function
+        #    that will execute the stencil kernel.  This function definition includes a 
+        #    unique stencil function name, the parameters to the stencil kernel, loop
+        #    nests across the dimenions of the input array.  Those loop nests use the
+        #    computed stencil kernel size so as not to try to compute elements where
+        #    elements outside the bounds of the input array would be needed.
+        # 2) The but of the loop nest in this new function is a special sentinel
+        #    assignment.
+        # 3) Get the IR of this new function.
+        # 4) Split the block containing the sentinel assignment and remove the sentinel
+        #    assignment.  Insert the stencil kernel IR into the stencil function IR
+        #    after label and variable renaming of the stencil kernel IR to prevent
+        #    conflicts with the stencil function IR.
+        # 5) Compile the combined stencil function IR + stencil kernel IR into existence.
+
         # Copy the kernel so that our changes for this callsite
         # won't effect other callsites.
         (kernel_copy, copy_calltypes) = self.copy_ir_with_calltypes(self.kernel_ir, calltypes)
@@ -364,8 +380,6 @@ class StencilFunc(object):
             kernel_copy.blocks,
             in_cps,
             name_var_table,
-            lambda a, b, c, d:None, # a null func
-            None,                   # no extra data
             typemap,
             copy_calltypes)
 

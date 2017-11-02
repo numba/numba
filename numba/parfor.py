@@ -2075,8 +2075,8 @@ def apply_copies_parfor(parfor, var_dict, name_var_table, ext_func, ext_data,
                                      ir.Loc("dummy", -1)))
     blocks[0].body = assign_list + blocks[0].body
     in_copies_parfor, out_copies_parfor = copy_propagate(blocks, typemap)
-    apply_copy_propagate(blocks, in_copies_parfor, name_var_table, ext_func,
-                         ext_data, typemap, calltypes)
+    apply_copy_propagate(blocks, in_copies_parfor, name_var_table, typemap,
+                         calltypes, ext_func, ext_data)
     unwrap_parfor_blocks(parfor)
     # remove dummy assignments
     blocks[0].body = blocks[0].body[len(assign_list):]
