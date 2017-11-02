@@ -41,6 +41,8 @@ class StencilPass(object):
         self.typingctx = typingctx
 
     def run(self):
+        """ Finds all calls to StencilFuncs in the IR and converts them to parfor.
+        """
         from numba.stencil import StencilFunc
 
         # Get all the calls in the function IR.
@@ -69,14 +71,15 @@ class StencilPass(object):
                     input_dict = {i: stmt.value.args[i] for i in
                                                     range(len(stmt.value.args))}
                     in_args = stmt.value.args
-                    arg_typemap = tuple(self.typemap[i.name] for i in
-                                                                stmt.value.args)
+                    arg_typemap = tuple(self.typemap[i.name] for i in in_args)
                     for arg_type in arg_typemap:
                         if isinstance(arg_type, types.BaseTuple):
-                            raise ValueError("Tuple parameters not supported for stencil kernels in parallel=True mode.")
+                            raise ValueError("Tuple parameters not supported " \
+                                "for stencil kernels in parallel=True mode.")
 
                     out_arr = kws.get('out')
 
+                    # Get the StencilFunc object corresponding to this call.
                     sf = stencil_dict[stmt.value.func.name]
                     stencil_blocks, rt, arg_to_arr_dict = get_stencil_blocks(sf,
                             self.typingctx, arg_typemap,
@@ -99,6 +102,8 @@ class StencilPass(object):
     def _mk_stencil_parfor(self, label, in_args, out_arr, stencil_blocks,
                            index_offsets, target, return_type, stencil_func,
                            arg_to_arr_dict):
+        """ Converts a set of stencil kernel blocks to a parfor.
+        """
         gen_nodes = []
 
         if config.DEBUG_ARRAY_OPT == 1:
@@ -300,6 +305,10 @@ class StencilPass(object):
 
     def _replace_stencil_accesses(self, stencil_blocks, parfor_vars, in_args,
                                   index_offsets, stencil_func, arg_to_arr_dict):
+        """ Convert relative indexing in the stencil kernel to standard indexing
+            by adding the loop index variables to the corresponding dimensions
+            of the array index tuples.
+        """
         in_arr = in_args[0]
         in_arg_names = [x.name for x in in_args]
 
@@ -323,6 +332,10 @@ class StencilPass(object):
         # replace access indices, find access lengths in each dimension
         need_to_calc_kernel = stencil_func.neighborhood is None
 
+        # If we need to infer the kernel size then initialize the minimum and
+        # maximum seen indices for each dimension to 0.  If we already have
+        # the neighborhood calculated then just convert from neighborhood format
+        # to the separate start and end lengths format used here.
         if need_to_calc_kernel:
             start_lengths = ndims*[0]
             end_lengths = ndims*[0]
@@ -330,13 +343,17 @@ class StencilPass(object):
             start_lengths = [x[0] for x in stencil_func.neighborhood]
             end_lengths   = [x[1] for x in stencil_func.neighborhood]
 
+        # Get all the tuples defined in the stencil blocks.
         tuple_table = ir_utils.get_tuple_table(stencil_blocks)
 
         found_relative_index = False
 
+        # For all blocks in the stencil kernel...
         for label, block in stencil_blocks.items():
             new_body = []
+            # For all statements in those blocks...
             for stmt in block.body:
+                # Reject assignments to input arrays.
                 if ((isinstance(stmt, ir.Assign)
                         and isinstance(stmt.value, ir.Expr)
                         and stmt.value.op in ['setitem', 'static_setitem']
@@ -345,6 +362,11 @@ class StencilPass(object):
                      isinstance(stmt, ir.StaticSetItem))
                         and stmt.target.name in in_arg_names)):
                     raise ValueError("Assignments to arrays passed to stencil kernels is not allowed.")
+                # We found a getitem for some array.  If that array is an input
+                # array and isn't in the list of standard indexed arrays then
+                # update min and max seen indices if we are inferring the
+                # kernel size and create a new tuple where the relative offsets
+                # are added to loop index vars to get standard indexing.
                 if (isinstance(stmt, ir.Assign)
                         and isinstance(stmt.value, ir.Expr)
                         and stmt.value.op in ['static_getitem', 'getitem']
@@ -410,12 +432,16 @@ class StencilPass(object):
                 new_body.append(stmt)
             block.body = new_body
         if need_to_calc_kernel and not found_relative_index:
-            raise ValueError("Stencil kernel with no accesses to relatively indexed arrays.")
+            raise ValueError("Stencil kernel with no accesses to " \
+                "relatively indexed arrays.")
 
         return start_lengths, end_lengths
 
     def _add_index_offsets(self, index_list, index_offsets, new_body,
                            scope, loc):
+        """ Does the actual work of adding loop index variables to the
+            relative index constants or variables.
+        """
         assert len(index_list) == len(index_offsets)
 
         # shortcut if all values are integer
