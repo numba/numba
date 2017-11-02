@@ -8,8 +8,8 @@ import numba
 from numba import types
 from numba.typing.templates import infer_global, AbstractTemplate
 from numba.typing import signature
-from numba import ir_utils, ir, utils, array_analysis, config, typing
-from numba.ir_utils import (get_call_table, find_topo_order, mk_unique_var,
+from numba import ir_utils, ir, utils, config, typing
+from numba.ir_utils import (get_call_table, mk_unique_var,
                             compile_to_numba_ir, replace_arg_nodes, guard,
                             find_callname)
 from operator import add
@@ -36,13 +36,14 @@ class StencilPass(object):
 
     def run(self):
         from numba.stencil import StencilFunc
-        from numba import compiler
 
+        # Get all the calls in the function IR.
         call_table, _ = get_call_table(self.func_ir.blocks)
         stencil_calls = []
         stencil_dict = {}
         for call_varname, call_list in call_table.items():
             if isinstance(call_list[0], StencilFunc):
+                # Remember all calls to StencilFuncs.
                 stencil_calls.append(call_varname)
                 stencil_dict[call_varname] = call_list[0]
         if not stencil_calls:
@@ -51,11 +52,14 @@ class StencilPass(object):
         # find and transform stencil calls
         for label, block in self.func_ir.blocks.items():
             for i, stmt in reversed(list(enumerate(block.body))):
+                # Found a call to a StencilFunc.
                 if (isinstance(stmt, ir.Assign)
                         and isinstance(stmt.value, ir.Expr)
                         and stmt.value.op == 'call'
                         and stmt.value.func.name in stencil_calls):
                     kws = dict(stmt.value.kws)
+                    # Create dictionary of input argument number to
+                    # the argument itself.
                     input_dict = {i: stmt.value.args[i] for i in
                                                     range(len(stmt.value.args))}
                     in_args = stmt.value.args
@@ -65,10 +69,7 @@ class StencilPass(object):
                         if isinstance(arg_type, types.BaseTuple):
                             raise ValueError("Tuple parameters not supported for stencil kernels in parallel=True mode.")
 
-                    if 'out' in kws:
-                        out_arr = kws['out']
-                    else:
-                        out_arr = None
+                    out_arr = kws.get('out')
 
                     sf = stencil_dict[stmt.value.func.name]
                     stencil_blocks, rt, arg_to_arr_dict = get_stencil_blocks(sf,
@@ -80,6 +81,7 @@ class StencilPass(object):
                             stencil_blocks, index_offsets, stmt.target, rt, sf,
                             arg_to_arr_dict)
                     block.body = block.body[:i] + gen_nodes + block.body[i+1:]
+                # Found a call to a stencil via numba.stencil().
                 elif (isinstance(stmt, ir.Assign)
                         and isinstance(stmt.value, ir.Expr)
                         and stmt.value.op == 'call'
@@ -112,10 +114,12 @@ class StencilPass(object):
             self.typemap,
             self.calltypes)
         if config.DEBUG_ARRAY_OPT == 1:
+            print("stencil_blocks after copy_propagate")
             ir_utils.dump_blocks(stencil_blocks)
         ir_utils.remove_dead(stencil_blocks, self.func_ir.arg_names,
-                                                                self.typemap)
+                             self.typemap)
         if config.DEBUG_ARRAY_OPT == 1:
+            print("stencil_blocks after removing dead code")
             ir_utils.dump_blocks(stencil_blocks)
 
         # create parfor vars
@@ -303,9 +307,7 @@ class StencilPass(object):
         scope = in_arr.scope
         loc = in_arr.loc
         # replace access indices, find access lengths in each dimension
-        need_to_calc_kernel = False
-        if stencil_func.neighborhood is None:
-            need_to_calc_kernel = True
+        need_to_calc_kernel = stencil_func.neighborhood is None
 
         if need_to_calc_kernel:
             start_lengths = ndims*[0]
@@ -337,7 +339,6 @@ class StencilPass(object):
                     index_list = stmt.value.index
                     # handle 1D case
                     if ndims == 1:
-                        #assert isinstance(index_list, int)
                         index_list = [index_list]
                     else:
                         if hasattr(index_list, 'name') and index_list.name in tuple_table:
@@ -395,7 +396,7 @@ class StencilPass(object):
                 new_body.append(stmt)
             block.body = new_body
         if need_to_calc_kernel and not found_relative_index:
-            raise ValueError("Stencil kernel with no accesses to relatively indexed arrays..")
+            raise ValueError("Stencil kernel with no accesses to relatively indexed arrays.")
 
         return start_lengths, end_lengths
 
@@ -581,42 +582,3 @@ class DummyPipeline(object):
         self.typemap = None
         self.return_type = None
         self.calltypes = None
-
-def fix_func_code(fcode, glbls):
-    # similar to inline_closurecall.py
-
-    nfree = len(fcode.co_freevars)
-    func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
-    func_clo = ",".join(["c_%d" % i for i in range(nfree)])
-    func_arg = ",".join(["x_%d" % i for i in range(fcode.co_argcount)])
-    func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (
-        func_env, func_arg, func_clo)
-    loc = {}
-    exec(func_text, glbls, loc)
-
-    # hack parameter name .0 for Python 3 versions < 3.6
-    if utils.PYVERSION >= (3,) and utils.PYVERSION < (3, 6):
-        co_varnames = list(fcode.co_varnames)
-        if co_varnames[0] == ".0":
-            co_varnames[0] = "implicit0"
-        fcode = pytypes.CodeType(
-            fcode.co_argcount,
-            fcode.co_kwonlyargcount,
-            fcode.co_nlocals,
-            fcode.co_stacksize,
-            fcode.co_flags,
-            fcode.co_code,
-            fcode.co_consts,
-            fcode.co_names,
-            tuple(co_varnames),
-            fcode.co_filename,
-            fcode.co_name,
-            fcode.co_firstlineno,
-            fcode.co_lnotab,
-            fcode.co_freevars,
-            fcode.co_cellvars)
-
-    f = loc['g']()
-    f.__code__ = fcode
-    f.__name__ = fcode.co_name
-    return f
