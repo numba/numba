@@ -56,7 +56,7 @@ def main (*args):
     parts = os.path.splitext(input_file)
     new_file_name = parts[0] + "-corners" + parts[1]
 
-    input_img = Image.open(input_file)
+    input_img = Image.open(input_file).convert('L')
     input_arr = np.array(input_img)
     
     tstart = time.time()

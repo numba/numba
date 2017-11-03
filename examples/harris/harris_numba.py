@@ -19,28 +19,43 @@ try:
 except ImportError:
     raise RuntimeError("Pillow is needed to run this example. Try 'conda install pillow'")
 
-@stencil()
+@njit
 def xsten(a):
-    return ((a[-1,-1] * -1.0) + (a[-1,0] * -2.0) + (a[-1,1] * -1.0) + a[1,-1] + (a[1,0] * 2.0) + a[1,1]) / 12.0
+    ret = np.zeros_like(a)
+    ashape = a.shape
+    for i in range(1,ashape[0]-1):
+        for j in range(1,ashape[1]-1):
+            ret[i,j] = ((a[i-1,j-1] * -1.0) + (a[i-1,j] * -2.0) + (a[i-1,j+1] * -1.0) + a[i+1,j-1] + (a[i+1,j] * 2.0) + a[i+1,j+1]) / 12.0
+    return ret
 
-@stencil()
+@njit
 def ysten(a):
-    return ((a[-1,-1] * -1.0) + (a[0,-1] * -2.0) + (a[1,-1] * -1.0) + a[-1,1] + (a[0,1] * 2.0) + a[1,1]) / 12.0
+    ret = np.zeros_like(a)
+    ashape = a.shape
+    for i in range(1,ashape[0]-1):
+        for j in range(1,ashape[1]-1):
+            ret[i,j] = ((a[i-1,j-1] * -1.0) + (a[i,j-1] * -2.0) + (a[i+1,j-1] * -1.0) + a[i-1,j+1] + (a[i,j+1] * 2.0) + a[i+1,j+1]) / 12.0
+    return ret
 
-@stencil()
+@njit
 def harris_common(a):
-    return (a[-1,-1] + a[-1,0] + a[-1,1] + a[0,-1] + a[0,0] + a[0,1] + a[1,-1] + a[1,0] + a[1,1])
+    ret = np.zeros_like(a)
+    ashape = a.shape
+    for i in range(1,ashape[0]-1):
+        for j in range(1,ashape[1]-1):
+            ret[i,j] = (a[i-1,j-1] + a[i-1,j] + a[i-1,j+1] + a[i,j-1] + a[i,j] + a[i,j+1] + a[i+1,j-1] + a[i+1,j] + a[i+1,j+1])
+    return ret
 
-@njit(parallel=True)
-def harris(Iin,Ixout,Iyout,Sxxout,Syyout,Sxyout):
-    Ix = xsten(Iin,out=Ixout)
-    Iy = ysten(Iin,out=Iyout)
+@njit
+def harris(Iin):
+    Ix = xsten(Iin)
+    Iy = ysten(Iin)
     Ixx = Ix * Ix
     Iyy = Iy * Iy
     Ixy = Ix * Iy
-    Sxx = harris_common(Ixx,out=Sxxout)
-    Syy = harris_common(Iyy,out=Syyout)
-    Sxy = harris_common(Ixy,out=Sxyout)
+    Sxx = harris_common(Ixx)
+    Syy = harris_common(Iyy)
+    Sxy = harris_common(Ixy)
     det = (Sxx * Syy) - (Sxy * Sxy)
     trace = Sxx + Syy
     return det - (0.04 * trace * trace)
@@ -58,18 +73,10 @@ def main (*args):
 
     input_img = Image.open(input_file).convert('L')
     input_arr = np.array(input_img)
-
-    Ixout = np.empty_like(input_arr,dtype=float)
-    Iyout = np.empty_like(input_arr,dtype=float)
-    Sxxout = np.empty_like(input_arr,dtype=float)
-    Syyout = np.empty_like(input_arr,dtype=float)
-    Sxyout = np.empty_like(input_arr,dtype=float)
-
-    output_arr = harris(input_arr,Ixout,Iyout,Sxxout,Syyout,Sxyout).astype(np.uint8)
-
+    
     tstart = time.time()
     for i in range(iterations):
-        output_arr = harris(input_arr,Ixout,Iyout,Sxxout,Syyout,Sxyout)
+        output_arr = harris(input_arr)
     htime = time.time() - tstart
     print("SELFTIMED ", htime)
 
