@@ -2144,7 +2144,6 @@ class TestManyStencils(TestStencilBase):
         a = np.arange(60.)
         self.check(kernel, a, options={'neighborhood': ((-10, -2),)})
 
-    @unittest.skip("segfaults?! corruption/double free")
     def test_basic76(self):
         """neighborhood, mixed range span"""
         def kernel(a):
@@ -2170,7 +2169,6 @@ class TestManyStencils(TestStencilBase):
         b = np.arange(10. * 20.).reshape(10, 20)
         self.check(kernel, a, b, options={'neighborhood': ((-3, 0), (-3, 0),)})
 
-    @unittest.skip("segfaults")
     def test_basic78(self):
         """ neighborhood, two args, -ve range, -ve range """
         def kernel(a, b):
@@ -2186,7 +2184,6 @@ class TestManyStencils(TestStencilBase):
                 'neighborhood': (
                     (-6, -3), (-7, -2),)})
 
-    @unittest.skip("segfaults")
     def test_basic78b(self):
         """ neighborhood, two args, -ve range, +ve range """
         def kernel(a, b):
@@ -2307,7 +2304,6 @@ class TestManyStencils(TestStencilBase):
         self.check(kernel, a, options={'bad': 10},
                    expected_exception=[ValueError, TypingError])
 
-    @unittest.skip("TODO: Make this work.")
     def test_basic87(self):
         """ reserved arg name in use """
         def kernel(__sentinel__):
