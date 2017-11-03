@@ -2321,7 +2321,7 @@ class TestManyStencils(TestStencilBase):
             pyStencil=ValueError,
             stencil=ValueError,
             parfor=ValueError,
-            njit=ValueError)
+            njit=LoweringError)
         self.check(
             kernel,
             a,
