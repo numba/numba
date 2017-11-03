@@ -27,12 +27,12 @@ from numba.analysis import (
 from numba.targets.rangeobj import range_iter_len
 from numba.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
 import numpy as np
+from numba.stencil import StencilFunc
 
 """
 Variable enable_inline_arraycall is only used for testing purpose.
 """
 enable_inline_arraycall = True
-
 
 class InlineClosureCallPass(object):
     """InlineClosureCallPass class looks for direct calls to locally defined
@@ -58,82 +58,22 @@ class InlineClosureCallPass(object):
                     lhs = instr.target
                     expr = instr.value
                     if isinstance(expr, ir.Expr) and expr.op == 'call':
-                        # inline reduce() when parallel is off
                         call_name = guard(find_callname, self.func_ir, expr)
-                        if not self.flags.auto_parallel:
-                            if (call_name == ('reduce', 'builtins') or
-                                call_name == ('reduce', '_functools')):
-                                if len(expr.args) != 3:
-                                    raise TypeError("invalid reduce call, "
-                                        "three arguments including initial "
-                                        "value required")
-                                check_reduce_func(self.func_ir, expr.args[0])
-                                def reduce_func(f, A, v):
-                                    s = v
-                                    it = iter(A)
-                                    for a in it:
-                                        s = f(s, a)
-                                    return s
-                                new_blocks = inline_closure_call(self.func_ir,
-                                        self.func_ir.func_id.func.__globals__,
-                                        block, i, reduce_func)
-                                for block in new_blocks:
-                                    work_list.append(block)
-                                modified = True
-                                # current block is modified, skip the rest
-                                break
-                        func_def = guard(get_definition, self.func_ir,
-                                                                    expr.func)
-                        debug_print("found call to ", expr.func, " def = ",
-                                                                    func_def)
-                        if (isinstance(func_def, ir.Expr)
-                                and func_def.op == "make_function"):
-                            new_blocks = inline_closure_call(self.func_ir,
-                                        self.func_ir.func_id.func.__globals__,
-                                        block, i, func_def)
-                            for block in new_blocks:
-                                work_list.append(block)
-                            modified = True
-                            # current block is modified, skip the rest
-                            break
-                        # check for stencil call
-                        if (call_name == ('stencil', 'numba.stencil')
-                                and expr not in self._processed_stencils):
-                            self._processed_stencils.append(expr)
-                            from numba.stencil import StencilFunc
-                            if not len(expr.args) == 1:
-                                raise ValueError("As a minimum Stencil requires"
-                                                " a kernel as an argument")
-                            stencil_def = guard(get_definition, self.func_ir,
-                                                expr.args[0])
-                            assert (isinstance(stencil_def, ir.Expr)
-                                        and stencil_def.op == "make_function")
-                            kernel_ir = get_ir_of_code(
-                                self.func_ir.func_id.func.__globals__,
-                                stencil_def.code)
-                            options = dict(expr.kws)
-                            guard(self._fix_stencil_neighborhood, options)
-                            guard(self._fix_stencil_index_offsets, options)
-                            sf = StencilFunc(kernel_ir, 'constant', options)
-                            sf_global = ir.Global('stencil', sf, expr.loc)
-                            self.func_ir._definitions[lhs.name] = [sf_global]
-                            instr.value = sf_global
-                            modified = True
+                        func_def = guard(get_definition, self.func_ir, expr.func)
 
-                        # We keep the escaping variables of the stencil kernel
-                        # alive by adding them to the actual kernel call as extra
-                        # keyword arguments, which is ignored anyway.
-                        if (isinstance(func_def, ir.Global) and
-                            func_def.name == 'stencil' and
-                            isinstance(func_def.value, StencilFunc)):
-                            freevars = []
-                            options = func_def.value.options
-                            vs = options.get("neighborhood", [])
-                            freevars.extend(sum([list(x) for x in vs], []))
-                            vs = options.get("index_offsets", [])
-                            freevars.extend(list(vs))
-                            expr.kws = tuple(list(expr.kws) +
-                                             [(x.name, x) for x in freevars])
+                        if guard(self._inline_reduction,
+                                 work_list, block, i, expr, call_name):
+                            modified = True
+                            break # because block structure changed
+
+                        if guard(self._inline_closure,
+                                work_list, block, i, func_def):
+                            modified = True
+                            break # because block structure changed
+
+                        if guard(self._inline_stencil,
+                                instr, call_name, func_def):
+                            modified = True
 
         if enable_inline_arraycall:
             # Identify loop structure
@@ -164,44 +104,106 @@ class InlineClosureCallPass(object):
             self.func_ir.blocks = rename_labels(self.func_ir.blocks)
         debug_print("END")
 
+    def _inline_reduction(self, work_list, block, i, expr, call_name):
+        # only inline reduction in sequential execution, parallel handling
+        # is done in ParforPass.
+        require(self.flags.auto_parallel != True)
+        require(call_name == ('reduce', 'builtins') or
+                call_name == ('reduce', '_functools'))
+        if len(expr.args) != 3:
+            raise TypeError("invalid reduce call, "
+                            "three arguments including initial "
+                            "value required")
+        check_reduce_func(self.func_ir, expr.args[0])
+        def reduce_func(f, A, v):
+            s = v
+            it = iter(A)
+            for a in it:
+               s = f(s, a)
+            return s
+        inline_closure_call(self.func_ir,
+                        self.func_ir.func_id.func.__globals__,
+                        block, i, reduce_func, work_list=work_list)
+        return True
+
+    def _inline_stencil(self, instr, call_name, func_def):
+        lhs = instr.target
+        expr = instr.value
+        # We keep the escaping variables of the stencil kernel
+        # alive by adding them to the actual kernel call as extra
+        # keyword arguments, which is ignored anyway.
+        if (isinstance(func_def, ir.Global) and
+            func_def.name == 'stencil' and
+            isinstance(func_def.value, StencilFunc)):
+            if expr.kws:
+                expr.kws += func_def.value.kws
+            else:
+                expr.kws = func_def.value.kws
+            return True
+        # Otherwise we proceed to check if it is a call to numba.stencil
+        require(call_name == ('stencil', 'numba.stencil') or
+                call_name == ('stencil', 'numba'))
+        require(expr not in self._processed_stencils)
+        self._processed_stencils.append(expr)
+        if not len(expr.args) == 1:
+            raise ValueError("As a minimum Stencil requires"
+                " a kernel as an argument")
+        stencil_def = guard(get_definition, self.func_ir, expr.args[0])
+        require(isinstance(stencil_def, ir.Expr) and
+                stencil_def.op == "make_function")
+        kernel_ir = get_ir_of_code(self.func_ir.func_id.func.__globals__,
+                stencil_def.code)
+        options = dict(expr.kws)
+        if 'neighborhood' in options:
+            fixed = guard(self._fix_stencil_neighborhood, options)
+            if not fixed:
+               raise ValueError("stencil neighborhood option should be a tuple"
+                        " with constant structure such as ((-w, w),)")
+        if 'index_offsets' in options:
+            fixed = guard(self._fix_stencil_index_offsets, options)
+            if not fixed:
+               raise ValueError("stencil index_offsets option should be a tuple"
+                        " with constant structure such as (offset, )")
+        sf = StencilFunc(kernel_ir, 'constant', options)
+        sf.kws = expr.kws # hack to keep variables live
+        sf_global = ir.Global('stencil', sf, expr.loc)
+        self.func_ir._definitions[lhs.name] = [sf_global]
+        instr.value = sf_global
+        return True
+
     def _fix_stencil_neighborhood(self, options):
         """
         Extract the two-level tuple representing the stencil neighborhood
         from the program IR to provide a tuple to StencilFunc.
         """
-        if 'neighborhood' not in options:
-            return
-        error_msg = ("stencil neighborhood option should be a tuple "
-                        "with constant structure such as ((-w, w),)")
         # build_tuple node with neighborhood for each dimension
-        dims_build_tuple = guard(get_definition, self.func_ir,
-                                    options['neighborhood'])
-        if dims_build_tuple is None or not hasattr(dims_build_tuple, 'items'):
-            raise ValueError(error_msg)
+        dims_build_tuple = get_definition(self.func_ir, options['neighborhood'])
+        require(hasattr(dims_build_tuple, 'items'))
         res = []
         for window_var in dims_build_tuple.items:
-            win_build_tuple = guard(get_definition, self.func_ir, window_var)
-            if win_build_tuple is None or not hasattr(win_build_tuple, 'items'):
-                raise ValueError(error_msg)
+            win_build_tuple = get_definition(self.func_ir, window_var)
+            require(hasattr(win_build_tuple, 'items'))
             res.append(tuple(win_build_tuple.items))
         options['neighborhood'] = tuple(res)
-        return
+        return True
 
     def _fix_stencil_index_offsets(self, options):
         """
         Extract the tuple representing the stencil index offsets
         from the program IR to provide to StencilFunc.
         """
-        if 'index_offsets' not in options:
-            return
-        error_msg = ("stencil index_offsets option should be a tuple "
-                        "with constant structure such as (offset, )")
-        offset_tuple = guard(get_definition, self.func_ir,
-                                    options['index_offsets'])
-        if offset_tuple is None or not hasattr(offset_tuple, 'items'):
-            raise ValueError(error_msg)
+        offset_tuple = get_definition(self.func_ir, options['index_offsets'])
+        require(hasattr(offset_tuple, 'items'))
         options['index_offsets'] = tuple(offset_tuple.items)
-        return
+        return True
+
+    def _inline_closure(self, work_list, block, i, func_def):
+        require(isinstance(func_def, ir.Expr) and
+                func_def.op == "make_function")
+        inline_closure_call(self.func_ir,
+                            self.func_ir.func_id.func.__globals__,
+                            block, i, func_def, work_list=work_list)
+        return True
 
 def check_reduce_func(func_ir, func_var):
     reduce_func = guard(get_definition, func_ir, func_var)
@@ -219,7 +221,8 @@ def check_reduce_func(func_ir, func_var):
 
 
 def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
-                        arg_typs=None, typemap=None, calltypes=None):
+                        arg_typs=None, typemap=None, calltypes=None,
+                        work_list=None):
     """Inline the body of `callee` at its callsite (`i`-th instruction of `block`)
 
     `func_ir` is the func_ir object of the caller function and `glbls` is its
@@ -339,7 +342,10 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     debug_print("After merge in")
     _debug_dump(func_ir)
 
-    return new_blocks
+    if work_list != None:
+        for block in new_blocks:
+            work_list.append(block)
+    return
 
 def _make_debug_print(prefix):
     def debug_print(*args):

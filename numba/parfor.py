@@ -313,12 +313,10 @@ class ParforPass(object):
                             g = copy.copy(self.func_ir.func_id.func.__globals__)
                             g['numba'] = numba
                             # inline the parallel implementation
-                            new_blocks = inline_closure_call(self.func_ir, g,
+                            inline_closure_call(self.func_ir, g,
                                         block, i, new_func, self.typingctx,
                                         (self.typemap[expr.args[0].name],),
-                                        self.typemap, self.calltypes)
-                            for block in new_blocks:
-                                work_list.append(block)
+                                        self.typemap, self.calltypes, work_list)
                             modified = True
                             # current block is modified, skip the rest
                             break
