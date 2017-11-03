@@ -17,14 +17,6 @@ import numpy as np
 import numbers
 import copy
 
-def stencil():
-    pass
-
-@infer_global(stencil)
-class Stencil(AbstractTemplate):
-    def generic(self, args, kws):
-        assert not kws
-        return signature(types.none, *args)
 
 def _compute_last_ind(dim_size, index_const):
     if index_const > 0:

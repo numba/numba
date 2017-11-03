@@ -9,7 +9,7 @@ import sys
 from . import config, errors, runtests, types
 
 # Re-export typeof
-from .special import typeof, prange, stencil
+from .special import typeof, prange
 
 # Re-export error classes
 from .errors import *
