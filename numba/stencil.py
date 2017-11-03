@@ -386,6 +386,13 @@ class StencilFunc(object):
             typemap,
             copy_calltypes)
 
+        if "out" in name_var_table:
+            raise ValueError("Cannot use the reserved word 'out' in stencil kernels.")
+
+        sentinel_name = ir_utils.get_unused_var_name("__sentinel__", name_var_table)
+        if config.DEBUG_ARRAY_OPT == 1:
+            print("name_var_table", name_var_table, sentinel_name)
+
         the_array = args[0]
 
         if config.DEBUG_ARRAY_OPT == 1:
@@ -491,7 +498,7 @@ class StencilFunc(object):
         # Put a sentinel in the code so we can locate it in the IR.  We will
         # remove this sentinel assignment and replace it with the IR for the
         # stencil kernel body.
-        func_text += "__sentinel__ = 0\n"
+        func_text += sentinel_name + " = 0\n"
         func_text += "    return out\n"
 
         if config.DEBUG_ARRAY_OPT == 1:
@@ -511,7 +518,7 @@ class StencilFunc(object):
         # rename all variables in stencil_ir afresh
         var_table = ir_utils.get_name_var_table(stencil_ir.blocks)
         new_var_dict = {}
-        reserved_names = (["__sentinel__", "out"] +
+        reserved_names = ([sentinel_name, "out"] +
                           kernel_copy.arg_names + index_vars)
         for name, var in var_table.items():
             if not (name in reserved_names):
@@ -537,7 +544,7 @@ class StencilFunc(object):
             for i, inst in enumerate(block.body):
                 if isinstance(
                         inst,
-                        ir.Assign) and inst.target.name == "__sentinel__":
+                        ir.Assign) and inst.target.name == sentinel_name:
                     # We found the sentinel assignment.
                     loc = inst.loc
                     scope = block.scope
