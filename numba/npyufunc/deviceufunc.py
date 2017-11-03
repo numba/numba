@@ -462,17 +462,17 @@ class DeviceGUFuncVectorize(_BaseUFuncBuilder):
 
         indims = [len(x) for x in self.inputsig]
         outdims = [len(x) for x in self.outputsig]
+        args, return_type = sigutils.normalize_signature(sig)
 
         funcname = self.py_func.__name__
         src = expand_gufunc_template(self._kernel_template, indims,
-                                     outdims, funcname)
+                                     outdims, funcname, args)
 
         glbls = self._get_globals(sig)
 
         _exec(src, glbls)
         fnobj = glbls['__gufunc_{name}'.format(name=funcname)]
 
-        args, return_type = sigutils.normalize_signature(sig)
         outertys = list(_determine_gufunc_outer_types(args, indims + outdims))
         kernel = self._compile_kernel(fnobj, sig=tuple(outertys))
 
@@ -496,17 +496,18 @@ def _determine_gufunc_outer_types(argtys, dims):
             yield types.Array(dtype=at, ndim=1, layout='A')
 
 
-def expand_gufunc_template(template, indims, outdims, funcname):
+def expand_gufunc_template(template, indims, outdims, funcname, argtypes):
     """Expand gufunc source template
     """
     argdims = indims + outdims
     argnames = ["arg{0}".format(i) for i in range(len(argdims))]
     checkedarg = "min({0})".format(', '.join(["{0}.shape[0]".format(a)
                                               for a in argnames]))
-    inputs = [_gen_src_for_indexing(aref, adims, _gen_src_for_input_indexing)
-              for aref, adims in zip(argnames, indims)]
-    outputs = [_gen_src_for_indexing(aref, adims, _gen_src_for_output_indexing)
-               for aref, adims in zip(argnames[len(indims):], outdims)]
+    inputs = [_gen_src_for_indexing(aref, adims, atype)
+              for aref, adims, atype in zip(argnames, indims, argtypes)]
+    outputs = [_gen_src_for_indexing(aref, adims, atype)
+               for aref, adims, atype in zip(argnames[len(indims):], outdims,
+                                             argtypes)]
     argitems = inputs + outputs
     src = template.format(name=funcname, args=', '.join(argnames),
                           checkedarg=checkedarg,
@@ -514,26 +515,21 @@ def expand_gufunc_template(template, indims, outdims, funcname):
     return src
 
 
-def _gen_src_for_indexing(aref, adims, gen_sliced):
-    return "{aref}[{sliced}]".format(aref=aref, sliced=gen_sliced(adims))
+def _gen_src_for_indexing(aref, adims, atype):
+    return "{aref}[{sliced}]".format(aref=aref,
+                                     sliced=_gen_src_index(adims, atype))
 
 
-def _gen_src_for_input_indexing(adims):
+def _gen_src_index(adims, atype):
     if adims > 0:
-        return _gen_src_for_array_indexing(adims)
+        return ','.join(['__tid__'] + [':'] * adims)
+    elif isinstance(atype, types.Array) and atype.ndim - 1 == adims:
+        # Special case for 0-nd in shape-signature but
+        # 1d array in type signature.
+        # Slice it so that the result has the same dimension.
+        return '__tid__:(__tid__ + 1)'
     else:
         return '__tid__'
-
-
-def _gen_src_for_output_indexing(adims):
-    if adims > 0:
-        return _gen_src_for_array_indexing(adims)
-    else:
-        return '__tid__:(__tid__ + 1)'
-
-
-def _gen_src_for_array_indexing(adims):
-    return ','.join(['__tid__'] + [':'] * adims)
 
 
 class GUFuncEngine(object):
@@ -641,7 +637,8 @@ class GenerializedUFunc(object):
         assert self.engine.nout == 1, "only support single output"
 
     def __call__(self, *args, **kws):
-        callsteps = self._call_steps(args, kws)
+        callsteps = self._call_steps(self.engine.nin, self.engine.nout,
+                                     args, kws)
         callsteps.prepare_inputs()
         indtypes, schedule, outdtype, kernel = self._schedule(
             callsteps.norm_inputs, callsteps.output)
@@ -741,7 +738,9 @@ class GUFuncCallSteps(object):
         '_need_device_conversion',
     ]
 
-    def __init__(self, args, kwargs):
+    def __init__(self, nin, nout, args, kwargs):
+        if nout > 1:
+            raise ValueError('multiple output is not supported')
         self.args = args
         self.kwargs = kwargs
 
@@ -755,8 +754,16 @@ class GUFuncCallSteps(object):
             if isdev:
                 inputs.append(a)
             else:
-                inputs.append(np.array(a))
-        self.norm_inputs = inputs
+                inputs.append(np.asarray(a))
+        self.norm_inputs = inputs[:nin]
+        # Check if there are extra arguments for outputs.
+        unused_inputs = inputs[nin:]
+        if unused_inputs:
+            if self.output is not None:
+                raise ValueError("cannot specify 'out' as both a positional "
+                                 "and keyword argument")
+            else:
+                [self.output] = unused_inputs
 
     def adjust_input_types(self, indtypes):
         """

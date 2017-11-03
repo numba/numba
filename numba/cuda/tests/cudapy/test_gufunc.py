@@ -287,6 +287,17 @@ class TestCUDAGufunc(unittest.TestCase):
         items = [i.strip("'\" ") for i in items]
         self.assertEqual(set(['what1', 'ever2']), set(items))
 
+    def test_duplicated_output(self):
+        @guvectorize([void(float32[:], float32[:])], '(x)->(x)', target='cuda')
+        def foo(inp, out):
+            pass  # intentionally empty; never executed
+
+        inp = out = np.zeros(10, dtype=np.float32)
+        with self.assertRaises(ValueError) as raises:
+            foo(inp, out, out=out)
+        self.assertEqual(str(raises.exception),
+            "cannot specify 'out' as both a positional and keyword argument")
+
 
 if __name__ == '__main__':
     unittest.main()
