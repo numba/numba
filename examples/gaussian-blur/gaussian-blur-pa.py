@@ -27,11 +27,28 @@ def gaussian_blur(a):
             a[-2, 1] * 0.0133 + a[-1, 1] * 0.0596 + a[0, 1] * 0.0983 + a[1, 1] * 0.0596 + a[2, 1] * 0.0133 +
             a[-2, 2] * 0.003  + a[-1, 2] * 0.0133 + a[0, 2] * 0.0219 + a[1, 2] * 0.0133 + a[2, 2] * 0.0030)
 
+@stencil()
+def gaussian_blur_3d(a):
+    return (a[-2,-2,0] * 0.003  + a[-1,-2,0] * 0.0133 + a[0,-2,0] * 0.0219 + a[1,-2,0] * 0.0133 + a[2,-2,0] * 0.0030 +
+            a[-2,-1,0] * 0.0133 + a[-1,-1,0] * 0.0596 + a[0,-1,0] * 0.0983 + a[1,-1,0] * 0.0596 + a[2,-1,0] * 0.0133 +
+            a[-2, 0,0] * 0.0219 + a[-1, 0,0] * 0.0983 + a[0, 0,0] * 0.1621 + a[1, 0,0] * 0.0983 + a[2, 0,0] * 0.0219 +
+            a[-2, 1,0] * 0.0133 + a[-1, 1,0] * 0.0596 + a[0, 1,0] * 0.0983 + a[1, 1,0] * 0.0596 + a[2, 1,0] * 0.0133 +
+            a[-2, 2,0] * 0.003  + a[-1, 2,0] * 0.0133 + a[0, 2,0] * 0.0219 + a[1, 2,0] * 0.0133 + a[2, 2,0] * 0.0030)
+
 @njit(parallel=True)
 def run_gaussian_blur(input_arr, iterations):
     output_arr = input_arr.copy()
     for i in range(iterations):
         gaussian_blur(input_arr, out=output_arr)
+        input_arr, output_arr = output_arr, input_arr
+
+    return input_arr
+
+@njit(parallel=True)
+def run_gaussian_blur_3d(input_arr, iterations):
+    output_arr = input_arr.copy()
+    for i in range(iterations):
+        gaussian_blur_3d(input_arr, out=output_arr)
         input_arr, output_arr = output_arr, input_arr
 
     return input_arr
@@ -52,13 +69,20 @@ def main (*args):
 
     input_img = Image.open(input_file)
     input_arr = np.array(input_img)
+    assert(input_arr.ndim == 2 or input_arr.ndim == 3)
     tstart = time.time()
-    output_arr = run_gaussian_blur(input_arr, 1).astype(input_arr.dtype)
+    if input_arr.ndim == 2:
+        output_arr = run_gaussian_blur(input_arr, 1).astype(input_arr.dtype)
+    else:
+        output_arr = run_gaussian_blur_3d(input_arr, 1).astype(input_arr.dtype)
     htime = time.time() - tstart
     print("SELFPRIMED ", htime)
 
     tstart = time.time()
-    output_arr = run_gaussian_blur(input_arr, iterations).astype(input_arr.dtype)
+    if input_arr.ndim == 2:
+        output_arr = run_gaussian_blur(input_arr, iterations).astype(input_arr.dtype)
+    else:
+        output_arr = run_gaussian_blur_3d(input_arr, iterations).astype(input_arr.dtype)
     htime = time.time() - tstart
     print("SELFTIMED ", htime)
 
