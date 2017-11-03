@@ -27,6 +27,18 @@ def mk_unique_var(prefix):
 _max_label = 0
 
 
+def get_unused_var_name(prefix, var_table):
+    """ Get a new var name with a given prefix and
+        make sure it is unused in the given variable table.
+    """
+    cur = 0
+    while True:
+        var = prefix + str(cur)
+        if var not in var_table:
+            return var
+        cur += 1
+
+
 def next_label():
     global _max_label
     _max_label += 1
