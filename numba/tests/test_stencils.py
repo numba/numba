@@ -2316,6 +2316,23 @@ class TestManyStencils(TestStencilBase):
         a = np.arange(10. * 20.).reshape(10, 20)
         self.check(kernel, a)
 
+    def test_basic88(self):
+        """ use of reserved word """
+        def kernel(a, out):
+            return out * a[0, 1]
+        a = np.arange(12.).reshape(3, 4)
+        ex = self.exception_dict(
+            pyStencil=ValueError,
+            stencil=ValueError,
+            parfor=ValueError,
+            njit=ValueError)
+        self.check(
+            kernel,
+            a,
+            1.0,
+            options={},
+            expected_exception=ex)
+
 
 if __name__ == "__main__":
     unittest.main()
