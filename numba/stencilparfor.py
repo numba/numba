@@ -357,7 +357,7 @@ class StencilPass(object):
                 if ((isinstance(stmt, ir.Assign)
                         and isinstance(stmt.value, ir.Expr)
                         and stmt.value.op in ['setitem', 'static_setitem']
-                        and stmt.value.value.name in in_arg_names) or 
+                        and stmt.value.value.name in in_arg_names) or
                    ((isinstance(stmt, ir.SetItem) or
                      isinstance(stmt, ir.StaticSetItem))
                         and stmt.target.name in in_arg_names)):
@@ -387,7 +387,7 @@ class StencilPass(object):
                     if need_to_calc_kernel:
                         # all indices should be integer to be able to calculate
                         # neighborhood automatically
-                        if (isinstance(index_list, ir.Var) or 
+                        if (isinstance(index_list, ir.Var) or
                             any([not isinstance(v, int) for v in index_list])):
                             raise ValueError("Variable stencil index only "
                                 "possible with known neighborhood")
@@ -595,7 +595,6 @@ def get_stencil_blocks(sf, typingctx, args, scope, loc, input_dict, typemap,
         calltypes[call] = call_typ
 
     arg_to_arr_dict = {}
-    # TODO: handle closure vars
     # replace arg with arr
     for block in stencil_blocks.values():
         for stmt in block.body:
