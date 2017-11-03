@@ -9,7 +9,8 @@ from numba.ir_utils import (add_offset_to_labels, replace_var_names,
                             remove_dels, legalize_names, mk_unique_var,
                             rename_labels, get_name_var_table, visit_vars_inner,
                             get_definition, guard, find_callname, 
-                            get_call_table, has_no_side_effect)
+                            get_call_table, has_no_side_effect, 
+                            get_unused_var_name)
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
 from ..typing import signature
@@ -301,7 +302,6 @@ def _create_gufunc_for_parfor_body(
     for the parfor body inserted.
     '''
 
-    # TODO: need copy?
     # The parfor body and the main function body share ir.Var nodes.
     # We have to do some replacements of Var names in the parfor body to make them
     # legal parameter names.  If we don't copy then the Vars in the main function also
@@ -391,6 +391,8 @@ def _create_gufunc_for_parfor_body(
     parfor_params = [param_dict[v] for v in parfor_params]
     # Change parfor body to replace illegal loop index vars with legal ones.
     replace_var_names(loop_body, ind_dict)
+    loop_body_var_table = get_name_var_table(loop_body)
+    sentinel_name = get_unused_var_name("__sentinel__", loop_body_var_table)
 
     if config.DEBUG_ARRAY_OPT == 1:
         print(
@@ -443,7 +445,7 @@ def _create_gufunc_for_parfor_body(
     # in the IR.
     for indent in range(parfor_dim + 1):
         gufunc_txt += "    "
-    gufunc_txt += "__sentinel__ = 0\n"
+    gufunc_txt += sentinel_name + " = 0\n"
     # Add assignments of reduction variables (for returning the value)
     for arr, var in zip(parfor_redarrs, parfor_redvars):
         gufunc_txt += "    " + param_dict[arr] + \
@@ -468,7 +470,7 @@ def _create_gufunc_for_parfor_body(
     # rename all variables in gufunc_ir afresh
     var_table = get_name_var_table(gufunc_ir.blocks)
     new_var_dict = {}
-    reserved_names = ["__sentinel__"] + \
+    reserved_names = [sentinel_name] + \
         list(param_dict.values()) + legal_loop_indices
     for name, var in var_table.items():
         if not (name in reserved_names):
@@ -549,7 +551,7 @@ def _create_gufunc_for_parfor_body(
         for i, inst in enumerate(block.body):
             if isinstance(
                     inst,
-                    ir.Assign) and inst.target.name == "__sentinel__":
+                    ir.Assign) and inst.target.name == sentinel_name:
                 # We found the sentinel assignment.
                 loc = inst.loc
                 scope = block.scope
