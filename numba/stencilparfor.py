@@ -108,6 +108,7 @@ class StencilPass(object):
         in_arr_typ = self.typemap[in_arr.name]
         in_cps, out_cps = ir_utils.copy_propagate(stencil_blocks, self.typemap)
         name_var_table = ir_utils.get_name_var_table(stencil_blocks)
+
         ir_utils.apply_copy_propagate(
             stencil_blocks,
             in_cps,
@@ -537,6 +538,10 @@ def get_stencil_blocks(sf, typingctx, args, scope, loc, input_dict, typemap,
     # copy the IR nodes to avoid changing IR in the StencilFunc object
     stencil_blocks = copy.deepcopy(stencil_func_ir.blocks)
     stencil_func_ir.blocks = stencil_blocks
+
+    name_var_table = ir_utils.get_name_var_table(stencil_func_ir.blocks)
+    if "out" in name_var_table:
+        raise ValueError("Cannot use the reserved word 'out' in stencil kernels.")
 
     # get typed IR with a dummy pipeline (similar to test_parfors.py)
     targetctx = CPUContext(typingctx)
