@@ -27,7 +27,6 @@ from numba.analysis import (
 from numba.targets.rangeobj import range_iter_len
 from numba.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
 import numpy as np
-from numba.stencil import StencilFunc
 
 """
 Variable enable_inline_arraycall is only used for testing purpose.
@@ -127,6 +126,7 @@ class InlineClosureCallPass(object):
         return True
 
     def _inline_stencil(self, instr, call_name, func_def):
+        from numba.stencil import StencilFunc
         lhs = instr.target
         expr = instr.value
         # We keep the escaping variables of the stencil kernel
