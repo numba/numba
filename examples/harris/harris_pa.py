@@ -68,6 +68,11 @@ def main (*args):
     output_arr = harris(input_arr,Ixout,Iyout,Sxxout,Syyout,Sxyout).astype(np.uint8)
 
     tstart = time.time()
+    output_arr = harris(input_arr,Ixout,Iyout,Sxxout,Syyout,Sxyout)
+    htime = time.time() - tstart
+    print("SELFPRIMED ", htime)
+
+    tstart = time.time()
     for i in range(iterations):
         output_arr = harris(input_arr,Ixout,Iyout,Sxxout,Syyout,Sxyout)
     htime = time.time() - tstart
