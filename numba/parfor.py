@@ -2217,8 +2217,8 @@ def parfor_typeinfer(parfor, typeinferer):
     save_blocks = typeinferer.blocks
     blocks = wrap_parfor_blocks(parfor)
     index_vars = [l.index_variable for l in parfor.loop_nests]
-    if len(parfor.loop_nests) > 1:
-        index_vars.append(parfor.index_var)
+    # no need to handle parfor.index_var (tuple of variables), since it will be
+    # assigned to a tuple from individual indices
     first_block = min(blocks.keys())
     loc = blocks[first_block].loc
     index_assigns = [ir.Assign(ir.Const(1, loc), v, loc) for v in index_vars]
