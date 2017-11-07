@@ -88,7 +88,11 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
     if typemap:
         typemap[typ_var.name] = types.functions.NumberClass(dtype)
     # assuming str(dtype) returns valid np dtype string
-    np_typ_getattr = ir.Expr.getattr(g_np_var, str(dtype), loc)
+    dtype_str = str(dtype)
+    if dtype_str=='bool':
+        # empty doesn't like 'bool' sometimes (e.g. kmeans example)
+        dtype_str = 'bool_'
+    np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
     typ_var_assign = ir.Assign(np_typ_getattr, typ_var, loc)
     alloc_call = ir.Expr.call(attr_var, [size_var, typ_var], (), loc)
     if calltypes:
@@ -573,7 +577,7 @@ def has_no_side_effect(rhs, lives, call_table):
         if func_name not in call_table or call_table[func_name] == []:
             return False
         call_list = call_table[func_name]
-        if (call_list == ['empty', numpy] or 
+        if (call_list == ['empty', numpy] or
             call_list == [slice] or
             call_list == ['log', numpy]):
             return True
