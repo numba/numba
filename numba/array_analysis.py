@@ -1148,7 +1148,7 @@ class ArrayAnalysis(object):
             index_def = get_definition(self.func_ir, index)
             fname, mod_name = find_callname(
                 self.func_ir, index_def, typemap=self.typemap)
-            require(fname == 'slice' and mod_name == 'builtins')
+            require(fname == 'slice' and mod_name in ('__builtin__', 'builtins'))
             require(len(index_def.args) == 2)
             lhs = index_def.args[0]
             rhs = index_def.args[1]
