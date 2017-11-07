@@ -9,7 +9,7 @@ from numba.ir_utils import (add_offset_to_labels, replace_var_names,
                             remove_dels, legalize_names, mk_unique_var,
                             rename_labels, get_name_var_table, visit_vars_inner,
                             get_definition, guard, find_callname, 
-                            get_call_table, has_no_side_effect, 
+                            get_call_table, is_pure, 
                             get_unused_var_name)
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
@@ -226,31 +226,27 @@ def find_vars(var, varset):
     varset.add(var.name)
     return var
 
-def _hoist_internal(inst, dep_on_param, call_table, count, hoisted, typemap):
+def _hoist_internal(inst, dep_on_param, call_table, hoisted, typemap):
     uses = set()
     visit_vars_inner(inst.value, find_vars, uses)
     diff = uses.difference(dep_on_param)
-    if len(diff) == 0 and has_no_side_effect(inst.value, None, call_table) and count[0] != 0:
+    if len(diff) == 0 and is_pure(inst.value, None, call_table):
         if config.DEBUG_ARRAY_OPT == 1:
             print("Will hoist instruction", inst)
         hoisted.append(inst)
-        count[0] -= 1
         if not isinstance(typemap[inst.target.name], types.npytypes.Array):
             dep_on_param += [inst.target.name]
         return True
     elif config.DEBUG_ARRAY_OPT == 1:
         if len(diff) > 0:
             print("Instruction", inst, " could not be hoisted because of a dependency.")
-        elif count[0] == 0:
-            print("Instruction", inst, " could not be hoisted because of count.")
         else:
-            print("Instruction", inst, " could not be hoisted because of a side-effect.")
+            print("Instruction", inst, " could not be hoisted because it isn't pure.")
     return False
 
 def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     dep_on_param = copy.copy(parfor_params)
     hoisted = []
-    count = [-1]
 
     def_once = compute_def_once(loop_body)
     (call_table, reverse_call_table) = get_call_table(wrapped_blocks)
@@ -260,7 +256,7 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
         for inst in block.body:
             if isinstance(inst, ir.Assign) and inst.target.name in def_once:
                 if _hoist_internal(inst, dep_on_param, call_table, 
-                                   count, hoisted, typemap):
+                                   hoisted, typemap):
                     # don't add this instuction to the block since it is hoisted
                     continue
             elif isinstance(inst, parfor.Parfor):
@@ -272,7 +268,7 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
                     if (isinstance(ib_inst, ir.Assign) and
                         ib_inst.target.name in def_once):
                         if _hoist_internal(ib_inst, dep_on_param, call_table,
-                                           count, hoisted, typemap):
+                                           hoisted, typemap):
                             # don't add this instuction to the block since it is hoisted
                             continue
                     new_init_block.append(ib_inst)
