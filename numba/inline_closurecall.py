@@ -22,7 +22,7 @@ from numba.ir_utils import (
 from numba.analysis import (
     compute_cfg_from_blocks,
     compute_use_defs,
-    compute_live_map)
+    compute_live_variables)
 
 from numba.targets.rangeobj import range_iter_len
 from numba.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
@@ -754,7 +754,8 @@ def _fix_nested_array(func_ir):
     blocks = func_ir.blocks
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
-    livemap = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
+    empty_deadmap = dict([(label, set()) for label in blocks.keys()])
+    livemap = compute_live_variables(cfg, blocks, usedefs.defmap, empty_deadmap)
 
     def find_array_def(arr):
         """Find numpy array definition such as
@@ -791,7 +792,7 @@ def _fix_nested_array(func_ir):
                             # and not later defined.
                             if (var.name in defined or
                                 (var.name in livemap[label] and
-                                 not (var.name in usedefs.defmap))):
+                                 not (var.name in usedefs.defmap[label]))):
                                 debug_print(var.name, " already defined")
                                 new_varlist.append(var)
                             else:
