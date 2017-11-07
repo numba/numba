@@ -62,8 +62,9 @@ def juliaset(iters):
         W = iterate(col, Z, c)
 
         # Mask out the NaN values (overflow).
-        minval = np.min(W)
+        minval = np.nanmin(W)
         W[np.isnan(W)] = minval - minval/10
+        print("checksum W = ", W.sum())
 
         # Zoom into the next frame, shrinking the distance that `x`
         # and `y` will cover.
@@ -71,7 +72,7 @@ def juliaset(iters):
 
 def main (*args):
     tstart = time.time()
-    iterate(0, np.empty((1,2), dtype=complex), complex(0.0))
+    iterate(1, np.empty((1,2), dtype=complex), complex(0.0))
     htime = time.time() - tstart
     print("SELFPRIMED ", htime)
 

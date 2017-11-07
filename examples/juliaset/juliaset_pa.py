@@ -33,7 +33,7 @@ def meshgrid(vx, vy):
 
 def juliaset(iters):
     col = 128             # color depth
-    m = 3000              # image size
+    m = 5000              # image size
     cx = 0                # center X
     cy = 0                # center Y
     l = 1.5               # span
@@ -62,8 +62,9 @@ def juliaset(iters):
         W = iterate(col, Z, c)
 
         # Mask out the NaN values (overflow).
-        minval = np.min(W)
+        minval = np.nanmin(W)
         W[np.isnan(W)] = minval - minval/10
+        print("checksum W = ", W.sum())
 
         # Zoom into the next frame, shrinking the distance that `x`
         # and `y` will cover.
@@ -71,12 +72,12 @@ def juliaset(iters):
 
 def main (*args):
     tstart = time.time()
-    iterate(0, np.empty((1,2), dtype=complex), complex(0.0))
+    iterate(1, np.empty((1,2), dtype=complex), complex(0.0))
     htime = time.time() - tstart
     print("SELFPRIMED ", htime)
 
     tstart = time.time()
-    juliaset(40)
+    juliaset(10)
     htime = time.time() - tstart
     print("SELFTIMED ", htime)
 
