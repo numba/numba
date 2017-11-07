@@ -119,6 +119,20 @@ chunk_info chunk(intp rs, intp re, intp divisions) {
     }
 }
 
+chunk_info equalizing_chunk(intp rs, intp re, intp divisions, float thread_percent) {
+    assert(divisions >= 1);
+    intp total = (re - rs) + 1;
+    if (divisions == 1) {
+        return chunk_info(rs, re, re + 1);
+    }
+    else {
+        //intp len = total / divisions;
+        intp len = total * thread_percent;
+        intp res_end = rs + len - 1;
+        return chunk_info(rs, res_end, res_end + 1);
+    }
+}
+
 RangeActual isfRangeToActual(const std::vector<isf_range> &build) {
     std::vector<isf_range> bunsort(build);
     std::sort(bunsort.begin(), bunsort.end(), isf_range_by_dim());
@@ -158,16 +172,7 @@ void divide_work(const RangeActual &full_iteration_space,
         if(total_len == 0) {
             divisions_for_this_dim = num_threads;
         } else {
-            std::vector<float> percent_dims;
-            float dim_prod = 1;
-            for(uintp i = index; i < dims.size(); ++i) {
-                if (dims[i].length > 1) {
-                    float temp = (float)dims[i].length / total_len;
-                    percent_dims.push_back(temp);
-                    dim_prod *= temp;
-                }
-            }
-            divisions_for_this_dim = intp(guround(num_threads * percent_dims[0]));
+            divisions_for_this_dim = intp(guround(num_threads * ((float)dims[index].length / total_len)));
         }
 
         uintp chunkstart = full_iteration_space.start[dims[index].dim];
@@ -177,8 +182,10 @@ void divide_work(const RangeActual &full_iteration_space,
         uintp threadend   = end_thread;
 
         for(uintp i = 0; i < divisions_for_this_dim; ++i) {
-            chunk_info chunk_index = chunk(chunkstart,  chunkend,  divisions_for_this_dim - i);
             chunk_info chunk_thread = chunk(threadstart, threadend, divisions_for_this_dim - i);
+            intp threads_used_here = (1 + (chunk_thread.m_b - chunk_thread.m_a));
+            chunk_info chunk_index = equalizing_chunk(chunkstart, chunkend, divisions_for_this_dim - i, threads_used_here / (float)num_threads);
+            num_threads -= threads_used_here;
             chunkstart = chunk_index.m_c;
             threadstart = chunk_thread.m_c;
             std::vector<isf_range> new_build(build.begin()+0, build.begin()+index);
