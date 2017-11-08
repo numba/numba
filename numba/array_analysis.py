@@ -30,27 +30,29 @@ UNKNOWN_CLASS = -1
 CONST_CLASS = 0
 MAP_TYPES = [numpy.ufunc]
 
+array_analysis_extensions = {}
+
 # declaring call classes
 array_creation = ['empty', 'zeros', 'ones', 'full']
 
-random_int_args = ['random.rand', 'random.randn']
+random_int_args = ['rand', 'randn']
 
-random_1arg_size = ['random.ranf', 'random.random_sample', 'random.sample',
-                    'random.random', 'random.standard_normal']
+random_1arg_size = ['ranf', 'random_sample', 'sample',
+                    'random', 'standard_normal']
 
-random_2arg_sizelast = ['random.chisquare', 'random.weibull', 'random.power',
-                        'random.geometric', 'random.exponential',
-                        'random.poisson', 'random.rayleigh']
+random_2arg_sizelast = ['chisquare', 'weibull', 'power',
+                        'geometric', 'exponential',
+                        'poisson', 'rayleigh']
 
-random_3arg_sizelast = ['random.normal', 'random.uniform', 'random.beta',
-                        'random.binomial', 'random.f', 'random.gamma',
-                        'random.lognormal', 'random.laplace']
+random_3arg_sizelast = ['normal', 'uniform', 'beta',
+                        'binomial', 'f', 'gamma',
+                        'lognormal', 'laplace']
 
 random_calls = (random_int_args +
                 random_1arg_size +
                 random_2arg_sizelast +
                 random_3arg_sizelast +
-                ['random.randint', 'random.triangular'])
+                ['randint', 'triangular'])
 
 
 @intrinsic
@@ -316,7 +318,7 @@ class ShapeEquivSet(EquivSet):
                 ndim = (typ.ndim if isinstance(typ, types.ArrayCompatible)
                         else len(typ))
                 if ndim == 0:
-                    return name
+                    return ()
                 else:
                     return tuple("{}#{}".format(name, i) for i in range(ndim))
             else:
@@ -340,10 +342,15 @@ class ShapeEquivSet(EquivSet):
         """
         assert(len(objs) > 1)
         obj_names = [self._get_names(x) for x in objs]
+        obj_names = [x for x in obj_names if x != ()] # rule out 0d shape
+        if len(obj_names) <= 1:
+            return False;
         ndims = [len(names) for names in obj_names]
         ndim = ndims[0]
-        assert all(ndim == x for x in ndims), (
-            "Dimension mismatch for {}".format(objs))
+        if not all(ndim == x for x in ndims):
+            if config.DEBUG_ARRAY_OPT == 1:
+                print("is_equiv: Dimension mismatch for {}".format(objs))
+            return False
         for i in range(ndim):
             names = [obj_name[i] for obj_name in obj_names]
             if not super(ShapeEquivSet, self).is_equiv(*names):
@@ -394,6 +401,9 @@ class ShapeEquivSet(EquivSet):
         """
         assert(len(objs) > 1)
         obj_names = [self._get_names(x) for x in objs]
+        obj_names = [x for x in obj_names if x != ()] # rule out 0d shape
+        if len(obj_names) <= 1:
+            return;
         names = sum([list(x) for x in obj_names], [])
         ndims = [len(x) for x in obj_names]
         ndim = ndims[0]
@@ -557,7 +567,7 @@ class ArrayAnalysis(object):
         """
         return self.equiv_sets[block_label]
 
-    def run(self):
+    def run(self, blocks):
         """run array shape analysis on the IR, resulting in modified IR
         and finalized EquivSet for each block.
         """
@@ -566,7 +576,6 @@ class ArrayAnalysis(object):
             print("variable types: ", sorted(self.typemap.items()))
             print("call types: ", self.calltypes)
 
-        blocks = self.func_ir.blocks
         cfg = compute_cfg_from_blocks(blocks)
         topo_order = find_topo_order(blocks, cfg=cfg)
         # Traverse blocks in topological order
@@ -632,7 +641,9 @@ class ArrayAnalysis(object):
             lhs = inst.target
             typ = self.typemap[lhs.name]
             shape = None
-            if isinstance(inst.value, ir.Expr):
+            if isinstance(typ, types.ArrayCompatible) and typ.ndim == 0:
+                shape = ()
+            elif isinstance(inst.value, ir.Expr):
                 result = self._analyze_expr(scope, equiv_set, inst.value)
                 if result:
                     (shape, pre) = result
@@ -665,7 +676,7 @@ class ArrayAnalysis(object):
                                                          len(typ), shape)
                     #equiv_set.set_shape(lhs, shape)
 
-            if shape:
+            if shape != None:
                 equiv_set.insert_equiv(lhs, shape)
             equiv_set.define(lhs)
         elif isinstance(inst, ir.Branch):
@@ -702,7 +713,10 @@ class ArrayAnalysis(object):
                     br = inst.falsebr
                     otherbr = inst.truebr
                     cond_val = 0
-                if br != None:
+                lhs_typ = self.typemap[cond_def.lhs.name]
+                rhs_typ = self.typemap[cond_def.rhs.name]
+                if (br != None and isinstance(lhs_typ, types.Integer) and
+                    isinstance(rhs_typ, types.Integer)):
                     loc = inst.loc
                     args = (cond_def.lhs, cond_def.rhs)
                     asserts = self._make_assert_equiv(
@@ -722,6 +736,11 @@ class ArrayAnalysis(object):
                         self.pruned_predecessors[pruned_br].append(label)
                     else:
                         self.pruned_predecessors[pruned_br] = [label]
+
+        elif type(inst) in array_analysis_extensions:
+            # let external calls handle stmt if type matches
+            f = array_analysis_extensions[type(inst)]
+            pre, post = f(inst, equiv_set, self.typemap, self)
 
         return pre, post
 
@@ -782,6 +801,16 @@ class ArrayAnalysis(object):
         return tuple(expr.items), []
 
     def _analyze_op_call(self, scope, equiv_set, expr):
+        from numba.stencil import StencilFunc
+
+        callee = expr.func
+        callee_def = get_definition(self.func_ir, callee)
+        if ((isinstance(callee_def, ir.Global) or isinstance(callee_def, ir.FreeVar))
+            and isinstance(callee_def.value, StencilFunc)):
+            args = expr.args
+            return self._analyze_stencil(scope, equiv_set, callee_def.value,
+                                         expr.loc, args, dict(expr.kws))
+
         fname, mod_name = find_callname(
             self.func_ir, expr, typemap=self.typemap)
         if isinstance(mod_name, ir.Var):  # call via attribute
@@ -811,7 +840,7 @@ class ArrayAnalysis(object):
             return shape[0], []
         return None
 
-    def _analyze_op_call__Intrinsic_assert_equiv(self, scope, equiv_set, args, kws):
+    def _analyze_op_call_numba_extending_assert_equiv(self, scope, equiv_set, args, kws):
         equiv_set.insert_equiv(*args[1:])
         return None
 
@@ -1171,6 +1200,26 @@ class ArrayAnalysis(object):
             pass
         return None
 
+    def _analyze_stencil(self, scope, equiv_set, stencil_func, loc, args, kws):
+        # stencil requires that all relatively indexed array arguments are
+        # of same size
+        std_idx_arrs = stencil_func.options.get('standard_indexing', ())
+        kernel_arg_names = stencil_func.kernel_ir.arg_names
+        if isinstance(std_idx_arrs, str):
+            std_idx_arrs = (std_idx_arrs,)
+        rel_idx_arrs = []
+        assert(len(args) > 0 and len(args) == len(kernel_arg_names))
+        for arg, var in zip(kernel_arg_names, args):
+            typ = self.typemap[var.name]
+            if (isinstance(typ, types.ArrayCompatible) and
+                not(arg in std_idx_arrs)):
+                rel_idx_arrs.append(var)
+        n = len(rel_idx_arrs)
+        require(n > 0)
+        asserts = self._call_assert_equiv(scope, loc, equiv_set, rel_idx_arrs)
+        shape = equiv_set.get_shape(rel_idx_arrs[0])
+        return shape, asserts
+
     def _analyze_broadcast(self, scope, equiv_set, loc, args):
         """Infer shape equivalence of arguments based on Numpy broadcast rules
         and return shape of output
@@ -1181,6 +1230,7 @@ class ArrayAnalysis(object):
         names = [x.name for x in arrs]
         dims = [self.typemap[x.name].ndim for x in arrs]
         max_dim = max(dims)
+        require(max_dim > 0)
         all_has_shapes = all([equiv_set.has_shape(x) for x in arrs])
         if not all_has_shapes:
             return arrs[0], self._call_assert_equiv(scope, loc, equiv_set, arrs)
@@ -1322,9 +1372,10 @@ class ArrayAnalysis(object):
 
     def _isarray(self, varname):
         # no SmartArrayType support yet (can't generate parfor, allocate, etc)
-        return (isinstance(self.typemap[varname], types.npytypes.Array) and
-                not isinstance(self.typemap[varname],
-                               types.npytypes.SmartArrayType))
+        typ = self.typemap[varname]
+        return (isinstance(typ, types.npytypes.Array) and
+                not isinstance(typ, types.npytypes.SmartArrayType) and
+                typ.ndim > 0)
 
     def _sum_size(self, equiv_set, sizes):
         """Return the sum of the given list of sizes if they are all equivalent

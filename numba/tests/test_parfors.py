@@ -16,7 +16,7 @@ import numpy as np
 import numba
 from numba import unittest_support as unittest
 from .support import TestCase
-from numba import njit, prange
+from numba import njit, prange, stencil
 from numba import compiler, typing
 from numba.targets import cpu
 from numba import types
@@ -130,10 +130,39 @@ def test2(Y, X, w, iterations):
     return w
 
 
-def countParfors(func_ir):
+def countParfors(test_func, args):
+    typingctx = typing.Context()
+    targetctx = cpu.CPUContext(typingctx)
+    test_ir = compiler.run_frontend(test_func)
+    with cpu_target.nested_context(typingctx, targetctx):
+        tp = TestPipeline(typingctx, targetctx, args, test_ir)
+
+        numba.rewrites.rewrite_registry.apply(
+            'before-inference', tp, tp.func_ir)
+
+        tp.typemap, tp.return_type, tp.calltypes = compiler.type_inference_stage(
+            tp.typingctx, tp.func_ir, tp.args, None)
+
+        type_annotations.TypeAnnotation(
+            func_ir=tp.func_ir,
+            typemap=tp.typemap,
+            calltypes=tp.calltypes,
+            lifted=(),
+            lifted_from=None,
+            args=tp.args,
+            return_type=tp.return_type,
+            html_output=config.HTML)
+
+        numba.rewrites.rewrite_registry.apply(
+            'after-inference', tp, tp.func_ir)
+
+        parfor_pass = numba.parfor.ParforPass(
+            tp.func_ir, tp.typemap, tp.calltypes, tp.return_type,
+            tp.typingctx)
+        parfor_pass.run()
     ret_count = 0
 
-    for label, block in func_ir.blocks.items():
+    for label, block in test_ir.blocks.items():
         for i, inst in enumerate(block.body):
             if isinstance(inst, numba.parfor.Parfor):
                 ret_count += 1
@@ -192,12 +221,23 @@ class TestParfors(TestParforsBase):
 
     @skip_unsupported
     @tag('important')
+    def test_0d_broadcast(self):
+        def test_impl():
+            X = np.array(1)
+            Y = np.ones((10, 12))
+            return np.sum(X + Y)
+        self.check(test_impl)
+        self.assertTrue(countParfors(test_impl, ()) == 1)
+
+    @skip_unsupported
+    @tag('important')
     def test_2d_parfor(self):
         def test_impl():
             X = np.ones((10, 12))
             Y = np.zeros((10, 12))
             return np.sum(X + Y)
         self.check(test_impl)
+        self.assertTrue(countParfors(test_impl, ()) == 1)
 
     @skip_unsupported
     @tag('important')
@@ -208,83 +248,22 @@ class TestParfors(TestParforsBase):
             return 4 * np.sum(x**2 + y**2 < 1) / n
 
         self.check(test_impl, 100000, decimal=1)
+        self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
 
     @skip_unsupported
     @tag('important')
     def test_test1(self):
-        typingctx = typing.Context()
-        targetctx = cpu.CPUContext(typingctx)
-        test_ir = compiler.run_frontend(test1)
-        with cpu_target.nested_context(typingctx, targetctx):
-            one_arg = numba.types.npytypes.Array(
-                numba.types.scalars.Float(name="float64"), 1, 'C')
-            args = (one_arg, one_arg, one_arg, one_arg, one_arg)
-            tp = TestPipeline(typingctx, targetctx, args, test_ir)
-
-            numba.rewrites.rewrite_registry.apply(
-                'before-inference', tp, tp.func_ir)
-
-            tp.typemap, tp.return_type, tp.calltypes = compiler.type_inference_stage(
-                tp.typingctx, tp.func_ir, tp.args, None)
-
-            type_annotation = type_annotations.TypeAnnotation(
-                func_ir=tp.func_ir,
-                typemap=tp.typemap,
-                calltypes=tp.calltypes,
-                lifted=(),
-                lifted_from=None,
-                args=tp.args,
-                return_type=tp.return_type,
-                html_output=config.HTML)
-
-            numba.rewrites.rewrite_registry.apply(
-                'after-inference', tp, tp.func_ir)
-
-            parfor_pass = numba.parfor.ParforPass(
-                tp.func_ir, tp.typemap, tp.calltypes, tp.return_type,
-                tp.typingctx)
-            parfor_pass.run()
-            self.assertTrue(countParfors(test_ir) == 1)
+        # blackscholes takes 5 1D float array args
+        args = (numba.float64[:], ) * 5
+        self.assertTrue(countParfors(test1, args) == 1)
 
     @skip_unsupported
     @needs_blas
     @tag('important')
     def test_test2(self):
-        typingctx = typing.Context()
-        targetctx = cpu.CPUContext(typingctx)
-        test_ir = compiler.run_frontend(test2)
-        with cpu_target.nested_context(typingctx, targetctx):
-            oneD_arg = numba.types.npytypes.Array(
-                numba.types.scalars.Float(name="float64"), 1, 'C')
-            twoD_arg = numba.types.npytypes.Array(
-                numba.types.scalars.Float(name="float64"), 2, 'C')
-            args = (oneD_arg, twoD_arg, oneD_arg, types.int64)
-            tp = TestPipeline(typingctx, targetctx, args, test_ir)
-
-            numba.rewrites.rewrite_registry.apply(
-                'before-inference', tp, tp.func_ir)
-
-            tp.typemap, tp.return_type, tp.calltypes = compiler.type_inference_stage(
-                tp.typingctx, tp.func_ir, tp.args, None)
-
-            type_annotation = type_annotations.TypeAnnotation(
-                func_ir=tp.func_ir,
-                typemap=tp.typemap,
-                calltypes=tp.calltypes,
-                lifted=(),
-                lifted_from=None,
-                args=tp.args,
-                return_type=tp.return_type,
-                html_output=config.HTML)
-
-            numba.rewrites.rewrite_registry.apply(
-                'after-inference', tp, tp.func_ir)
-
-            parfor_pass = numba.parfor.ParforPass(
-                tp.func_ir, tp.typemap, tp.calltypes, tp.return_type,
-                tp.typingctx)
-            parfor_pass.run()
-            self.assertTrue(countParfors(test_ir) == 1)
+        args = (numba.float64[:], numba.float64[:,:], numba.float64[:],
+                numba.int64)
+        self.assertTrue(countParfors(test2, args) == 1)
 
     @unittest.skipIf(not (_windows_py27 or _32bit),
                      "Only impacts Windows with Python 2.7 / 32 bit hardware")
@@ -463,6 +442,17 @@ class TestParfors(TestParforsBase):
         self.assertIn(msg, str(raises.exception))
 
     @skip_unsupported
+    def test_random_parfor(self):
+        """
+        Test function with only a random call to make sure a random function
+        like ranf is actually translated to a parfor.
+        """
+        def test_impl(n):
+            A = np.random.ranf((n, n))
+            return A
+        self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
+
+    @skip_unsupported
     def test_randoms(self):
         def test_impl(n):
             A = np.random.standard_normal(size=(n, n))
@@ -479,7 +469,25 @@ class TestParfors(TestParforsBase):
         py_output = test_impl(n)
         # check results within 5% since random numbers generated in parallel
         np.testing.assert_allclose(parfor_output, py_output, rtol=0.05)
-        self.assertIn('@do_scheduling', cpfunc.library.get_llvm_str())
+        self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
+
+    @skip_unsupported
+    def test_dead_randoms(self):
+        def test_impl(n):
+            A = np.random.standard_normal(size=(n, n))
+            B = np.random.randn(n, n)
+            C = np.random.normal(0.0, 1.0, (n, n))
+            D = np.random.chisquare(1.0, (n, n))
+            E = np.random.randint(1, high=3, size=(n, n))
+            F = np.random.triangular(1, 2, 3, (n, n))
+            return 3
+
+        n = 128
+        cpfunc = self.compile_parallel(test_impl, (numba.typeof(n),))
+        parfor_output = cpfunc.entry_point(n)
+        py_output = test_impl(n)
+        self.assertEqual(parfor_output, py_output)
+        self.assertTrue(countParfors(test_impl, (types.int64, )) == 0)
 
     @skip_unsupported
     def test_cfg(self):

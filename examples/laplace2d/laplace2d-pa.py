@@ -1,35 +1,28 @@
 #!/usr/bin/env python
+
 from __future__ import print_function
 
-import sys
 import time
 
 import numpy as np
 
+from numba import jit, prange, stencil
 
+@stencil
+def jacobi_kernel(A):
+    return 0.25 * (A[0,1] + A[0,-1] + A[-1,0] + A[1,0])
+
+@jit(parallel=True)
 def jacobi_relax_core(A, Anew):
     error = 0.0
     n = A.shape[0]
     m = A.shape[1]
-
-    for j in range(1, n - 1):
-        for i in range(1, m - 1):
-            Anew[j, i] = 0.25 * ( A[j, i + 1] + A[j, i - 1] \
-                                + A[j - 1, i] + A[j + 1, i])
-            error = max(error, abs(Anew[j, i] - A[j, i]))
+    Anew = jacobi_kernel(A)
+    error = np.max(np.abs(Anew - A))
     return error
 
 
 def main():
-    argv = sys.argv[1:]
-    if len(argv) == 1:
-        [iter_max] = argv
-        iter_max = int(iter_max)
-    else:
-        print('Using default max number of iteration to 2 due to long run time.')
-        print('Override by passing a cmdline arg: python {} <max_iter>'.format(__file__))
-        iter_max = 1000
-
     NN = 3000
     NM = 3000
 
@@ -38,6 +31,7 @@ def main():
 
     n = NN
     m = NM
+    iter_max = 1000
 
     tol = 1.0e-6
     error = 1.0
