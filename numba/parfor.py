@@ -221,6 +221,21 @@ class Parfor(ir.Expr, ir.Stmt):
             block.dump(file)
         print(("end parfor {}".format(self.id)).center(20, '-'), file=file)
 
+def _analyze_parfor(parfor, equiv_set, typemap, array_analysis):
+    block = parfor.init_block
+    scope = block.scope
+    new_body = []
+    for inst in block.body:
+        pre, post = array_analysis._analyze_inst(None, scope, equiv_set, inst)
+        for instr in pre:
+            new_body.append(instr)
+        new_body.append(inst)
+        for instr in post:
+            new_body.append(instr)
+    block.body = new_body
+    return [], []
+
+array_analysis.array_analysis_extensions[Parfor] = _analyze_parfor
 
 class ParforPass(object):
 
