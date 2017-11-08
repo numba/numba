@@ -890,6 +890,19 @@ class TestPrange(TestParforsBase):
         self.prange_tester(test_impl, np.random.ranf(4))
 
     @skip_unsupported
+    def test_prange15(self):
+        # from issue 2587
+        # test parfor type inference when there is multi-dimensional indexing
+        def test_impl(N):
+            acc = 0
+            for i in range(N):
+                x = np.ones((1, 1))
+                acc += x[0, 0]
+            return acc
+
+        self.prange_tester(test_impl, 1024)
+
+    @skip_unsupported
     def test_kde_example(self):
         def test_impl(X):
             # KDE example
