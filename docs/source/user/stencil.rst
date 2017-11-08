@@ -26,7 +26,7 @@ An example use of the ``@stencil`` decorator::
 
    @stencil
    def kernel1(a):
-       return 0.25 * (a[0,1] + a[1,0] + a[0,-1] + a[-1,0])
+       return 0.25 * (a[0, 1] + a[1, 0] + a[0, -1] + a[-1, 0])
 
 The stencil kernel is specified by what looks like a standard Python
 function definition but there are different semantics with
@@ -41,10 +41,10 @@ written into the output array for that particular element.
 The parameter ``a`` represents the input array over which the 
 kernel is applied.  
 Indexing into this array takes place with respect to the current element
-of the output array being processed.  For example, if element ``(x,y)``
-is being processed then ``a[0,0]`` in the stencil kernel corresponds to 
-``a[x+0,y+0]`` in the input array.  Similarly, ``a[-1,1]`` in the stencil
-kernel corresponds to ``a[x-1,y+1]`` in the input array.
+of the output array being processed.  For example, if element ``(x, y)``
+is being processed then ``a[0, 0]`` in the stencil kernel corresponds to
+``a[x + 0, y + 0]`` in the input array.  Similarly, ``a[-1, 1]`` in the stencil
+kernel corresponds to ``a[x - 1, y + 1]`` in the input array.
 
 Depending on the specified kernel, the kernel may not be applicable to the
 borders of the output array as this may cause the input array to be
@@ -54,8 +54,8 @@ The default mode is for the stencil decorator to set the border elements
 of the output array to zero.
 
 To invoke a stencil on an input array, call the stencil as if it were
-a regular function and pass the input array as the argument, using the
-kernel defined above::
+a regular function and pass the input array as the argument. For example, using
+the kernel defined above::
 
    >>> import numpy as np
    >>> input_arr = np.arange(100).reshape((10, 10))
@@ -93,12 +93,12 @@ Stencil Parameters
 ==================
 
 Stencil kernel definitions may take any number of arguments with
-the following provisions.  The first parameter must be an array.
-The size and shape of the output array will be the same as the
-first parameter.  Additional parameters may either be scalars or
-arrays.  For array parameters, those arrays must be at least as large
-as the first array in each dimension.  Array indexing is relative for
-all such input array parameters.
+the following provisions.  The first argument must be an array.
+The size and shape of the output array will be the same as that of the
+first argument.  Additional arguments may either be scalars or
+arrays.  For array arguments, those arrays must be at least as large
+as the first argument (array) in each dimension.  Array indexing is relative for
+all such input array arguments.
 
 .. _stencil-kernel-shape-inference:
 
@@ -106,11 +106,11 @@ Kernel shape inference and border handling
 ==========================================
 
 In the above example and in most cases, the array indexing in the 
-stencil kernel will exclusively use Integer literals.
+stencil kernel will exclusively use ``Integer`` literals.
 In such cases, the stencil decorator is able to analyze the stencil
 kernel to determine its size.  In the above example, the stencil
-decorator determines that the kernel is 3x3 since indices -1 to 1
-are used for both the first and second dimensions.  Note that
+decorator determines that the kernel is ``3 x 3`` in shape since indices
+``-1`` to ``1`` are used for both the first and second dimensions.  Note that
 the stencil decorator also correctly handles non-symmetric and 
 non-square stencil kernels.
 
@@ -118,7 +118,7 @@ Based on the size of the stencil kernel, the stencil decorator is
 able to compute the size of the border in the output array.  If
 applying the kernel to some element of input array would cause
 an index to be out-of-bounds then that element belongs to the border
-of the output array.  In the above example, points -1 and +1 are
+of the output array.  In the above example, points ``-1`` and ``+1`` are
 accessed in each dimension and thus the output array has a border
 of size one in all dimensions.
 
@@ -136,7 +136,7 @@ the stencil decorator currently supports only one option.
 ----------------
 
 Sometimes it may be inconvenient to write the stencil kernel
-exclusively with Integer literals.  For example, let us say we
+exclusively with ``Integer`` literals.  For example, let us say we
 would like to compute the trailing 30-day moving average of a
 time series of data.  One could write 
 ``(a[-29] + a[-28] + ... + a[-1] + a[0]) / 30`` but the stencil
@@ -146,19 +146,18 @@ option::
    @stencil(neighborhood = ((-29, 0),))
    def kernel2(a):
        cumul = 0
-       for i in range(-29,1):
+       for i in range(-29, 1):
            cumul += a[i]
        return cumul / 30
 
 The neighborhood option is a tuple of tuples.  The outer tuple's
 length is equal to the number of dimensions of the input array.
-The inner tuples' lengths are always 2 because
+The inner tuple's lengths are always two because
 each element of the outer tuple corresponds to minimum and
 maximum index offsets used in the corresponding dimension.
 
-If a user specifies a neighborhood but then in the kernel 
-accesses elements outside the specified neighborhood, **the behavior
-is undefined.**
+If a user specifies a neighborhood but the kernel accesses elements outside the
+specified neighborhood, **the behavior is undefined.**
 
 .. _stencil-mode:
 
@@ -200,11 +199,11 @@ rather than relative indexing::
     def kernel3(a, b):
         return a[-1] * b[0] + a[0] + b[1]
 
-StencilFunc
-===========
+``StencilFunc``
+===============
 
-The stencil decorator returns a callable object of type StencilFunc.
-StencilFunc objects contains a number of attributes but the only one of
+The stencil decorator returns a callable object of type ``StencilFunc``.
+``StencilFunc`` objects contains a number of attributes but the only one of
 potential interest to users is the ``neighborhood`` attribute.
 If the ``neighborhood`` option was passed to the stencil decorator then
 the provided neighborhood is stored in this attribute.  Else, upon 
