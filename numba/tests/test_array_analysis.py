@@ -353,13 +353,32 @@ class TestArrayAnalysis(TestCase):
         self._compile_and_test(test_cond, (types.intp, types.intp, types.intp),
                                asserts=None)
 
-        def test_assert(m, n):
+        def test_assert_1(m, n):
             assert(m == n)
             A = np.ones(m)
             B = np.ones(n)
             return np.sum(A + B)
-        self._compile_and_test(test_assert, (types.intp, types.intp),
+        self._compile_and_test(test_assert_1, (types.intp, types.intp),
                                asserts=None)
+
+        def test_assert_2(A, B):
+            assert(A.shape == B.shape)
+            return np.sum(A + B)
+
+        self._compile_and_test(test_assert_2, (types.Array(types.intp, 1, 'C'),
+                                               types.Array(types.intp, 1, 'C'),),
+                               asserts=None)
+        self._compile_and_test(test_assert_2, (types.Array(types.intp, 2, 'C'),
+                                               types.Array(types.intp, 2, 'C'),),
+                               asserts=None)
+        # expected failure
+        with self.assertRaises(AssertionError) as raises:
+            self._compile_and_test(test_assert_2, (types.Array(types.intp, 1, 'C'),
+                                                   types.Array(types.intp, 2, 'C'),),
+                                   asserts=None)
+        msg = "Dimension mismatch"
+        self.assertIn(msg, str(raises.exception))
+
 
     def test_stencilcall(self):
         from numba import stencil
