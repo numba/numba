@@ -850,11 +850,15 @@ class ArrayAnalysis(object):
         """
         return self.equiv_sets[block_label]
 
-    def run(self, blocks):
-        """run array shape analysis on the IR, resulting in modified IR
-        and finalized EquivSet for each block.
+    def run(self, blocks=None):
+        """run array shape analysis on the given IR blocks, resulting in
+        modified IR and finalized EquivSet for each block.
         """
-        dprint_func_ir(self.func_ir, "before array analysis")
+        if blocks == None:
+            blocks = self.func_ir.blocks
+
+        dprint_func_ir(self.func_ir, "before array analysis", blocks)
+
         if config.DEBUG_ARRAY_OPT == 1:
             print("variable types: ", sorted(self.typemap.items()))
             print("call types: ", self.calltypes)
@@ -910,7 +914,8 @@ class ArrayAnalysis(object):
 
         if config.DEBUG_ARRAY_OPT == 1:
             self.dump()
-        dprint_func_ir(self.func_ir, "after array analysis")
+
+        dprint_func_ir(self.func_ir, "after array analysis", blocks)
 
     def dump(self):
         """dump per-block equivalence sets for debugging purposes.

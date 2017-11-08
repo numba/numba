@@ -912,12 +912,18 @@ def fix_setitem_type(stmt, typemap, calltypes):
     return
 
 
-def dprint_func_ir(func_ir, title):
+def dprint_func_ir(func_ir, title, blocks=None):
+    """Debug print function IR, with an optional blocks argument
+    that may differ than the IR's original blocks.
+    """
     if config.DEBUG_ARRAY_OPT == 1:
+        ir_blocks = func_ir.blocks
+        func_ir.blocks = ir_blocks if blocks == None else blocks
         name = func_ir.func_id.func_qualname
         print(("IR %s: %s" % (title, name)).center(80, "-"))
         func_ir.dump()
         print("-" * 40)
+        func_ir.blocks = ir_blocks
 
 
 def find_topo_order(blocks, cfg = None):
