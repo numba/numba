@@ -8,6 +8,7 @@ import subprocess
 import sys
 import threading
 import warnings
+from contextlib import contextmanager
 
 import numpy as np
 
@@ -16,7 +17,8 @@ from numba import utils, jit, generated_jit, types, typeof
 from numba import config
 from numba import _dispatcher
 from numba.errors import NumbaWarning
-from .support import TestCase, tag, temp_directory, import_dynamic
+from .support import (TestCase, tag, temp_directory, import_dynamic,
+                      captured_stdout)
 from numba.targets import codegen
 
 import llvmlite.binding as ll
@@ -1134,6 +1136,136 @@ class TestMultiprocessCache(BaseCacheTest):
         finally:
             pool.close()
         self.assertEqual(res, n * (n - 1) // 2)
+
+
+class TestCacheFileCollision(unittest.TestCase):
+    _numba_parallel_test_ = False
+
+    here = os.path.dirname(__file__)
+    usecases_file = os.path.join(here, "cache_usecases.py")
+    modname = "caching_file_loc_fodder"
+    source_text_1 = """
+from numba import njit
+@njit(cache=True)
+def bar():
+    return 123
+"""
+    source_text_2 = """
+from numba import njit
+@njit(cache=True)
+def bar():
+    return 321
+"""
+
+    def setUp(self):
+        self.tempdir = temp_directory('test_cache_file_loc')
+        sys.path.insert(0, self.tempdir)
+        self.modname = 'module_name_that_is_unlikely'
+        self.assertNotIn(self.modname, sys.modules)
+        self.modname_bar1 = self.modname
+        self.modname_bar2 = '.'.join([self.modname, 'foo'])
+        foomod = os.path.join(self.tempdir, self.modname)
+        os.mkdir(foomod)
+        with open(os.path.join(foomod, '__init__.py'), 'w') as fout:
+            print(self.source_text_1, file=fout)
+        with open(os.path.join(foomod, 'foo.py'), 'w') as fout:
+            print(self.source_text_2, file=fout)
+
+    def tearDown(self):
+        config.reload_config()
+        sys.modules.pop(self.modname_bar1, None)
+        sys.modules.pop(self.modname_bar2, None)
+        sys.path.remove(self.tempdir)
+
+    def import_bar1(self):
+        return import_dynamic(self.modname_bar1).bar
+
+    def import_bar2(self):
+        return import_dynamic(self.modname_bar2).bar
+
+    def test_file_location(self):
+        bar1 = self.import_bar1()
+        bar2 = self.import_bar2()
+        idxname1 = bar1._cache._cache_file._index_name
+        idxname2 = bar2._cache._cache_file._index_name
+        self.assertNotEqual(idxname1, idxname2)
+        self.assertTrue(idxname1.startswith("__init__.bar-3.py"))
+        self.assertTrue(idxname2.startswith("foo.bar-3.py"))
+
+    def test_no_collision(self):
+        bar1 = self.import_bar1()
+        bar2 = self.import_bar2()
+        with capture_cache_log() as buf:
+            res1 = bar1()
+        cachelog = buf.getvalue()
+        print(cachelog)
+        self.assertEqual(cachelog.count('index saved'), 1)
+        self.assertEqual(cachelog.count('data saved'), 1)
+        self.assertEqual(cachelog.count('index loaded'), 0)
+        self.assertEqual(cachelog.count('data loaded'), 0)
+        with capture_cache_log() as buf:
+            res2 = bar2()
+        cachelog = buf.getvalue()
+        print(cachelog)
+        self.assertEqual(cachelog.count('index saved'), 1)
+        self.assertEqual(cachelog.count('data saved'), 1)
+        self.assertEqual(cachelog.count('index loaded'), 0)
+        self.assertEqual(cachelog.count('data loaded'), 0)
+        self.assertNotEqual(res1, res2)
+
+        try:
+            mp = multiprocessing.get_context('spawn')
+        except ValueError:
+            print("missing spawn context")
+            pass
+
+        q = mp.Queue()
+        proc = mp.Process(target=self.run_this,
+                          args=(q, self.tempdir,
+                                self.modname_bar1,
+                                self.modname_bar2))
+        proc.start()
+        log1 = q.get()
+        got1 = q.get()
+        log2 = q.get()
+        got2 = q.get()
+        proc.join()
+
+        self.assertEqual(got1, res1)
+        self.assertEqual(got2, res2)
+
+        self.assertEqual(log1.count('index saved'), 0)
+        self.assertEqual(log1.count('data saved'), 0)
+        self.assertEqual(log1.count('index loaded'), 1)
+        self.assertEqual(log1.count('data loaded'), 1)
+
+        self.assertEqual(log2.count('index saved'), 0)
+        self.assertEqual(log2.count('data saved'), 0)
+        self.assertEqual(log2.count('index loaded'), 1)
+        self.assertEqual(log2.count('data loaded'), 1)
+
+    @staticmethod
+    def run_this(q, tempdir, modname_bar1, modname_bar2):
+        sys.path.insert(0, tempdir)
+        bar1 = import_dynamic(modname_bar1).bar
+        bar2 = import_dynamic(modname_bar2).bar
+        with capture_cache_log() as buf:
+            r1 = bar1()
+        q.put(buf.getvalue())
+        q.put(r1)
+        with capture_cache_log() as buf:
+            r2 = bar2()
+        q.put(buf.getvalue())
+        q.put(r2)
+
+
+@contextmanager
+def capture_cache_log():
+    with captured_stdout() as out:
+        os.environ['NUMBA_DEBUG_CACHE'] = '1'
+        config.reload_config()
+        yield out
+        del os.environ['NUMBA_DEBUG_CACHE']
 
 
 if __name__ == '__main__':
