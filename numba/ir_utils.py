@@ -584,6 +584,10 @@ def has_no_side_effect(rhs, lives, call_table):
             call_list == ['stencil', numba] or
             call_list == ['log', numpy]):
             return True
+        elif (isinstance(call_list[0], numba.extending._Intrinsic) and
+              (call_list[0]._name == 'empty_inferred' or
+               call_list[0]._name == 'unsafe_empty_inferred')):
+            return True
         from numba.targets.registry import CPUDispatcher
         from numba.targets.linalg import dot_3_mv_check_args
         if isinstance(call_list[0], CPUDispatcher):
@@ -1223,6 +1227,7 @@ def merge_adjacent_blocks(func_ir):
         del func_ir.blocks[next_label]
 
 def simplify(func_ir, typemap, calltypes):
+    merge_adjacent_blocks(func_ir)
     remove_dels(func_ir.blocks)
     # get copies in to blocks and out from blocks
     in_cps, out_cps = copy_propagate(func_ir.blocks, typemap)
