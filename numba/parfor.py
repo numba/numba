@@ -176,7 +176,8 @@ class Parfor(ir.Expr, ir.Stmt):
         # the neighborhood option
         self.patterns = [pattern]
         if config.DEBUG_PARFOR_STATS:
-            print('Parfor #{} is produced from {} at {}'.format(self.id, pattern[0], loc))
+            print('Parfor #{} is produced from {} at {}'.format(
+                  self.id, pattern[0], loc))
 
     def __repr__(self):
         return repr(self.loop_nests) + \
@@ -310,7 +311,15 @@ class ParforPass(object):
             # prepare for parallel lowering
             # add parfor params to parfors here since lowering is destructive
             # changing the IR after this is not allowed
-            get_parfor_params(self.func_ir.blocks)
+            parfor_ids = get_parfor_params(self.func_ir.blocks)
+            if config.DEBUG_PARFOR_STATS:
+                name = self.func_ir.func_id.func_qualname
+                n_parfors = len(parfor_ids)
+                if n_parfors > 0:
+                    print('After fusion, function {} has {} Parfor(s) #{}.'.format(
+                        name, n_parfors, parfor_ids))
+                else:
+                    print('Function {} has no Parfor.'.format(name))
         return
 
     def _replace_parallel_functions(self, blocks):
@@ -1560,10 +1569,7 @@ def get_parfor_params(blocks):
 
         pre_defs |= all_defs[label]
 
-    if config.DEBUG_PARFOR_STATS:
-        print('After fusion, {} Parfor(s) #{} will run in parallel over {} threads.'.format(
-            len(parfor_ids), parfor_ids, config.NUMBA_NUM_THREADS))
-    return
+    return parfor_ids
 
 
 def get_parfor_params_inner(parfor, pre_defs):
@@ -1572,7 +1578,12 @@ def get_parfor_params_inner(parfor, pre_defs):
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
-    get_parfor_params(blocks)
+    parfor_ids = get_parfor_params(blocks)
+    if config.DEBUG_PARFOR_STATS:
+        n_parfors = len(parfor_ids)
+        if n_parfors > 0:
+            print('After fusion, Parfor {} has {} nested Parfor(s) #{}.'.format(
+                  parfor.id, n_parfors, parfor_ids))
     unwrap_parfor_blocks(parfor)
     keylist = sorted(live_map.keys())
     init_block = keylist[0]
