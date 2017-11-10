@@ -939,7 +939,11 @@ class ArrayAnalysis(object):
             elif isinstance(inst.value, ir.Expr):
                 result = self._analyze_expr(scope, equiv_set, inst.value)
                 if result:
-                    (shape, pre) = result
+                    shape = result[0]
+                    pre = result[1]
+                    if len(result) > 2:
+                        rhs = result[2]
+                        inst.value = rhs
             elif (isinstance(inst.value, ir.Var) or
                   isinstance(inst.value, ir.Const)):
                 shape = inst.value
@@ -1258,7 +1262,7 @@ class ArrayAnalysis(object):
         require(isinstance(typ, types.ArrayCompatible))
         if typ.ndim == 1:
             shape = equiv_set._get_shape(var)
-            return shape[0], []
+            return shape[0], [], shape[0]
         return None
 
     def _analyze_op_call_numba_extending_assert_equiv(self, scope, equiv_set, args, kws):
