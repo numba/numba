@@ -80,7 +80,7 @@ class InlineClosureCallPass(object):
             # Identify loop structure
             if modified:
                 # Need to do some cleanups if closure inlining kicked in
-                merge_adjacent_blocks(self.func_ir)
+                merge_adjacent_blocks(self.func_ir.blocks)
             cfg = compute_cfg_from_blocks(self.func_ir.blocks)
             debug_print("start inline arraycall")
             _debug_dump(cfg)
