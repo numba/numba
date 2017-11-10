@@ -1105,26 +1105,7 @@ def simplify_CFG(blocks):
                 delete_block = False
         if delete_block:
             del blocks[label]
-    cfg = compute_cfg_from_blocks(blocks)
-    label_map = {}
-    for node in cfg.nodes():
-        # find nodes with one successors, that has one predecessor
-        successors = [n for n, _ in cfg.successors(node)]
-        if len(successors) == 1:
-            next_node = successors[0]
-            next_preds = list(cfg.predecessors(successors[0]))
-            if len(next_preds) == 1:
-                # nodes could have been replaced with previous nodes
-                node = label_map.get(node, node)
-                next_node = label_map.get(next_node, next_node)
-                assert isinstance(blocks[node].body[-1], ir.Jump)
-                assert blocks[node].body[-1].target == next_node
-                # remove next_node and append it's body to node
-                blocks[node].body.pop()
-                blocks[node].body.extend(blocks[next_node].body)
-                blocks.pop(next_node)
-                label_map[next_node] = node
-
+    merge_adjacent_blocks(blocks)
     return rename_labels(blocks)
 
 
@@ -1210,30 +1191,37 @@ def get_array_accesses(blocks, accesses=None):
                     f(inst, accesses)
     return accesses
 
-def merge_adjacent_blocks(func_ir):
-    cfg = compute_cfg_from_blocks(func_ir.blocks)
+def merge_adjacent_blocks(blocks):
+    cfg = compute_cfg_from_blocks(blocks)
     # merge adjacent blocks
-    removed = []
-    for label in list(func_ir.blocks.keys()):
+    removed = set()
+    for label in list(blocks.keys()):
         if label in removed:
             continue
+        block = blocks[label]
         succs = list(cfg.successors(label))
-        if len(succs) != 1:
-            continue
-        next_label = succs[0][0]
-        preds = list(cfg.predecessors(next_label))
-        if len(preds) != 1 or preds[0][0] != label:
-            continue
-        block = func_ir.blocks[label]
-        next_block = func_ir.blocks[next_label]
-        if block.scope != next_block.scope:
-            continue
-        # merge
-        removed.append(next_label)
-        block.body = block.body[:(len(block.body) - 1)]
-        for stmts in next_block.body:
-            block.body.append(stmts)
-        del func_ir.blocks[next_label]
+        while True:
+            if len(succs) != 1:
+                break
+            next_label = succs[0][0]
+            if next_label in removed:
+                break
+            preds = list(cfg.predecessors(next_label))
+            succs = list(cfg.successors(next_label))
+            if len(preds) != 1 or preds[0][0] != label:
+                break
+            next_block = blocks[next_label]
+            if block.scope != next_block.scope:
+                break
+            # merge
+            block.body = block.body[:(len(block.body) - 1)]
+            for stmts in next_block.body:
+                block.body.append(stmts)
+            del blocks[next_label]
+            removed.add(next_label)
+            label = next_label
+
+    cfg = compute_cfg_from_blocks(blocks)
 
 def restore_copy_var_names(blocks, save_copies, typemap):
     """
@@ -1254,7 +1242,6 @@ def restore_copy_var_names(blocks, save_copies, typemap):
     replace_var_names(blocks, rename_dict)
 
 def simplify(func_ir, typemap, calltypes):
-    merge_adjacent_blocks(func_ir)
     remove_dels(func_ir.blocks)
     # get copies in to blocks and out from blocks
     in_cps, out_cps = copy_propagate(func_ir.blocks, typemap)
@@ -1269,6 +1256,7 @@ def simplify(func_ir, typemap, calltypes):
     restore_copy_var_names(func_ir.blocks, save_copies, typemap)
     # remove dead code to enable fusion
     remove_dead(func_ir.blocks, func_ir.arg_names, typemap)
+    func_ir.blocks = simplify_CFG(func_ir.blocks)
     if config.DEBUG_ARRAY_OPT == 1:
         dprint_func_ir(func_ir, "after simplify")
 
