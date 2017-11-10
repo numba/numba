@@ -38,7 +38,7 @@ class BaseComplexTest(object):
                  float('inf'), float('-inf')]
         return [complex(x, y) for x, y in itertools.product(reals, reals)]
 
-    def run_unary(self, pyfunc, x_types, x_values, ulps=1,
+    def run_unary(self, pyfunc, x_types, x_values, ulps=1, abs_tol=None,
                   flags=enable_pyobj_flags):
         for tx in x_types:
             cr = compile_isolated(pyfunc, [tx], flags=flags)
@@ -53,7 +53,7 @@ class BaseComplexTest(object):
                 got = cfunc(vx)
                 msg = 'for input %r with prec %r' % (vx, prec)
                 self.assertPreciseEqual(got, expected, prec=prec,
-                                        ulps=ulps, msg=msg)
+                                        ulps=ulps, abs_tol=abs_tol, msg=msg)
 
     def run_binary(self, pyfunc, value_types, values, ulps=1,
                    flags=enable_pyobj_flags):
@@ -136,12 +136,15 @@ class TestCMath(BaseComplexTest, TestCase):
         self.run_unary(pyfunc, [types.complex128, types.complex64],
                        self.basic_values(), flags=flags)
 
-    def check_unary_func(self, pyfunc, flags, ulps=1, values=None):
+    def check_unary_func(self, pyfunc, flags, ulps=1, abs_tol=None,
+                         values=None):
         self.run_unary(pyfunc, [types.complex128],
-                       values or self.more_values(), flags=flags, ulps=ulps)
+                       values or self.more_values(), flags=flags, ulps=ulps,
+                       abs_tol=abs_tol)
         # Avoid discontinuities around pi when in single precision.
         self.run_unary(pyfunc, [types.complex64],
-                       values or self.basic_values(), flags=flags, ulps=ulps)
+                       values or self.basic_values(), flags=flags, ulps=ulps,
+                       abs_tol=abs_tol)
 
     # Conversions
 
@@ -260,10 +263,10 @@ class TestCMath(BaseComplexTest, TestCase):
 
     def test_sin(self):
         # See test_sinh.
-        self.check_unary_func(sin_usecase, enable_pyobj_flags)
+        self.check_unary_func(sin_usecase, enable_pyobj_flags, abs_tol='eps')
 
     def test_sin_npm(self):
-        self.check_unary_func(sin_usecase, no_pyobj_flags)
+        self.check_unary_func(sin_usecase, no_pyobj_flags, abs_tol='eps')
 
     def test_tan(self):
         self.check_unary_func(tan_usecase, enable_pyobj_flags, ulps=2)
@@ -298,10 +301,10 @@ class TestCMath(BaseComplexTest, TestCase):
         self.check_unary_func(cosh_usecase, no_pyobj_flags, ulps=2)
 
     def test_sinh(self):
-        self.check_unary_func(sinh_usecase, enable_pyobj_flags)
+        self.check_unary_func(sinh_usecase, enable_pyobj_flags, abs_tol='eps')
 
     def test_sinh_npm(self):
-        self.check_unary_func(sinh_usecase, no_pyobj_flags)
+        self.check_unary_func(sinh_usecase, no_pyobj_flags, abs_tol='eps')
 
     def test_tanh(self):
         self.check_unary_func(tanh_usecase, enable_pyobj_flags, ulps=2)
