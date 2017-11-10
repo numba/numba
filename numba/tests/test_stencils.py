@@ -28,7 +28,8 @@ _py27 = sys.version_info[:2] == (2, 7)
 _windows_py27 = (sys.platform.startswith('win32') and _py27)
 _32bit = sys.maxsize <= 2 ** 32
 _reason = 'parfors not supported'
-skip_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
+_unsupported = _32bit or _windows_py27
+skip_unsupported = unittest.skipIf(_unsupported, _reason)
 
 
 @stencil
@@ -76,10 +77,12 @@ def stencil_with_standard_indexing_2d(a, b):
 def addone_njit(a):
     return a + 1
 
-
-@njit(parallel=True)
-def addone_pjit(a):
-    return a + 1
+# guard against the decorator being run on unsupported platforms
+# as it will raise and stop test discovery from working
+if not _unsupported:
+    @njit(parallel=True)
+    def addone_pjit(a):
+        return a + 1
 
 
 class TestStencilBase(unittest.TestCase):
