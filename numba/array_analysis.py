@@ -1114,43 +1114,6 @@ class ArrayAnalysis(object):
         require(len(ind_shape)==len(seq_typs)==len(var_shape))
         stmts = []
 
-        def make_wrapped_index(loc, index, size, default=None):
-            size_typ = self.typemap[size.name]
-            index_typ = self.typemap[index.name]
-            if isinstance(index_typ, types.NoneType):
-                if default != None:
-                    return default, size_typ
-                lhs = scope.make_temp(loc)
-                zero = ir.Const(0, loc)
-                stmts.append(ir.Assign(value=zero, target=lhs, loc=loc))
-                return lhs, size_typ
-
-            index_def = get_definition(self.func_ir, index)
-
-            rel = equiv_set.get_rel(index)
-            # known to be positive? return index without wrapping
-            if ((isinstance(rel, int) and rel >= 0) or
-                (isinstance(rel, tuple) and
-                 equiv_set.is_equiv(size, rel[0]) and
-                 isinstance(rel[1], int) and rel[1] >= 0)):
-                return index, index_typ
-
-            wrap_var = scope.make_temp(loc)
-            wrap_def = ir.Global('wrap_index', wrap_index, loc=loc)
-            fnty = get_global_func_typ(wrap_index)
-            sig = self.context.resolve_function_type(fnty, (index_typ, size_typ,), {})
-            self._define(equiv_set, wrap_var, fnty, wrap_def)
-
-            var = scope.make_temp(loc)
-            value = ir.Expr.call(wrap_var, [index, size], {}, loc)
-            self._define(equiv_set, var, index_typ, value)
-            self.calltypes[value] = sig
-
-            stmts.append(ir.Assign(value=wrap_def, target=wrap_var, loc=loc))
-            stmts.append(ir.Assign(value=value, target=var, loc=loc))
-
-            return var, index_typ
-
         def slice_size(index, dsize):
             loc = index.loc
             index_def = get_definition(self.func_ir, index)
@@ -1174,6 +1137,7 @@ class ArrayAnalysis(object):
 
             if isinstance(rhs_typ, types.NoneType):
                 rhs = dsize
+                rhs_typ = size_typ
 
             lhs_rel = equiv_set.get_rel(lhs)
             rhs_rel = equiv_set.get_rel(rhs)
