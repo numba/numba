@@ -1210,7 +1210,11 @@ class ArrayAnalysis(object):
 
     def _analyze_op_unary(self, scope, equiv_set, expr):
         require(expr.fn in UNARY_MAP_OP)
-        return expr.value, []
+        # for scalars, only + operator results in equivalence
+        # for example, if "m = -n", m and n are not equivalent
+        if self._isarray(expr.value.name) or expr.fn == '+':
+            return expr.value, []
+        return None
 
     def _analyze_op_binop(self, scope, equiv_set, expr):
         require(expr.fn in BINARY_MAP_OP)
