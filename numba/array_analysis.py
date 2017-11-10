@@ -1251,7 +1251,7 @@ class ArrayAnalysis(object):
                 return None
             return guard(fn, scope, equiv_set, args, dict(expr.kws))
 
-    def _analyze_op_call_builtin_len(self, scope, equiv_set, args, kws):
+    def _analyze_op_call_builtins_len(self, scope, equiv_set, args, kws):
         require(len(args) == 1)
         var = args[0]
         typ = self.typemap[var.name]
