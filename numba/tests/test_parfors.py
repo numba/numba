@@ -300,7 +300,7 @@ class TestParfors(TestParforsBase):
     def test_test2(self):
         args = (numba.float64[:], numba.float64[:,:], numba.float64[:],
                 numba.int64)
-        self.assertTrue(countParfors(test2, args) == 1)
+        self.assertTrue(countParfors(test2, args) == 2)
 
     @skip_unsupported
     @tag('important')
@@ -598,12 +598,36 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, A)
         A = np.random.randint(10, size=n).astype(np.int32)
         self.check(test_impl, A)
+
         # test checking the number of arguments for the reduce function
         def test_impl():
             g = lambda x: x ** 2
             return reduce(g, np.array([1, 2, 3, 4, 5]), 2)
         with self.assertTypingError():
             self.check(test_impl)
+
+        # test checking reduction over bitarray masked arrays
+        n = 160
+        A = np.random.randint(10, size=n).astype(np.int32)
+        def test_impl(A):
+            return np.sum(A[A>=3])
+        self.check(test_impl, A)
+        # this should fuse
+        self.assertTrue(countParfors(test_impl, (numba.float64[:],)) == 1)
+
+        def test_impl(A):
+            B = A[:,0]
+            return np.sum(A[B>=3,1])
+        self.check(test_impl, A.reshape((16,10)))
+        # this should also fuse
+        self.assertTrue(countParfors(test_impl, (numba.float64[:,:],)) == 1)
+
+        def test_impl(A):
+            B = A[:,0]
+            return np.sum(A[B>=3,1:2])
+        self.check(test_impl, A.reshape((16,10)))
+        # this doesn't fuse due to mixed indices
+        self.assertTrue(countParfors(test_impl, (numba.float64[:,:],)) == 2)
 
     @skip_unsupported
     def test_min(self):
