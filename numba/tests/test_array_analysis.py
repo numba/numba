@@ -505,7 +505,7 @@ class TestArrayAnalysis(TestCase):
 
         def test_8(m):
             A = np.zeros((m,m))
-            B = A[0:m-2,:]
+            B = A[:m-2,0:]
             C = A[1:-1,:]
             E = B + C
             return E

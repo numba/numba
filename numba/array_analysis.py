@@ -1167,9 +1167,10 @@ class ArrayAnalysis(object):
 
             if isinstance(lhs_typ, types.NoneType):
                 zero = ir.Const(0, loc)
-                stmts.append(ir.Assign(value=zero, target=lhs, loc=loc))
+                stmts.append(ir.Assign(value=zero, target=zero_var, loc=loc))
                 self._define(equiv_set, zero_var, size_typ, zero)
                 lhs = zero_var
+                lhs_typ = size_typ
 
             if isinstance(rhs_typ, types.NoneType):
                 rhs = dsize
