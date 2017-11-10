@@ -68,13 +68,17 @@ class StencilFunc(object):
         """
         Find return statements in the IR and replace them with a SetItem
         call of the value "returned" by the kernel into the result array.
+        Returns the block labels that contained return statements.
         """
-        for block in blocks.values():
+        ret_blocks = []
+
+        for label, block in blocks.items():
             scope = block.scope
             loc = block.loc
             new_body = []
             for stmt in block.body:
                 if isinstance(stmt, ir.Return):
+                    ret_blocks.append(label)
                     # If 1D array then avoid the tuple construction.
                     if len(index_vars) == 1:
                         rvar = ir.Var(scope, out_name, loc)
@@ -101,6 +105,7 @@ class StencilFunc(object):
                 else:
                     new_body.append(stmt)
             block.body = new_body
+        return ret_blocks
 
     def add_indices_to_kernel(self, kernel, index_names, ndim,
                               neighborhood, standard_indexed):
@@ -468,11 +473,17 @@ class StencilFunc(object):
             self.neighborhood = kernel_size
 
         if config.DEBUG_ARRAY_OPT == 1:
+            print("After add_indices_to_kernel")
             ir_utils.dump_blocks(kernel_copy.blocks)
 
         # The return in the stencil kernel becomes a setitem for that
         # particular point in the iteration space.
-        self.replace_return_with_setitem(kernel_copy.blocks, index_vars, out_name)
+        ret_blocks = self.replace_return_with_setitem(kernel_copy.blocks,
+                                                      index_vars, out_name)
+
+        if config.DEBUG_ARRAY_OPT == 1:
+            print("After replace_return_with_setitem", ret_blocks)
+            ir_utils.dump_blocks(kernel_copy.blocks)
 
         # Start to form the new function to execute the stencil kernel.
         func_text = "def {}({}{}):\n".format(stencil_func_name,
@@ -586,8 +597,11 @@ class StencilFunc(object):
         kernel_copy.blocks = ir_utils.add_offset_to_labels(
                                 kernel_copy.blocks, stencil_stub_last_label)
         new_label = max(kernel_copy.blocks.keys()) + 1
+        # Adjust ret_blocks to account for addition of the offset.
+        ret_blocks = [x + stencil_stub_last_label for x in ret_blocks]
 
         if config.DEBUG_ARRAY_OPT == 1:
+            print("ret_blocks w/ offsets", ret_blocks, stencil_stub_last_label)
             print("before replace sentinel stencil_ir")
             ir_utils.dump_blocks(stencil_ir.blocks)
             print("before replace sentinel kernel_copy")
@@ -619,13 +633,15 @@ class StencilFunc(object):
                     # function's IR.
                     for (l, b) in kernel_copy.blocks.items():
                         stencil_ir.blocks[l] = b
-                    body_last_label = max(kernel_copy.blocks.keys())
+
                     stencil_ir.blocks[new_label] = block
                     stencil_ir.blocks[label] = prev_block
-                    # Add a jump from the last parfor body block to the block
+                    # Add a jump from all the blocks that previously contained 
+                    # a return in the stencil kernel to the block
                     # containing statements after the sentinel.
-                    stencil_ir.blocks[body_last_label].append(
-                        ir.Jump(new_label, loc))
+                    for ret_block in ret_blocks:
+                        stencil_ir.blocks[ret_block].append(
+                            ir.Jump(new_label, loc))
                     break
             else:
                 continue

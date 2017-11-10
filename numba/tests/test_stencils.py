@@ -2267,13 +2267,17 @@ class TestManyStencils(TestStencilBase):
                     (-3, 0), (-3, 0)), 'standard_indexing': 'b'})
 
     def test_basic83(self):
-        """ neighborhood, with standard_indexing and cval"""
+        """ neighborhood, with standard_indexing and cval, multiple returns"""
         def kernel(a, b):
             cumul = 0
             for i in range(-3, 1):
                 for j in range(-3, 1):
                     cumul += a[i, j] + b[1, 3]
-            return cumul / (9.)
+            res = cumul / (9.)
+            if res > 200.0:
+                return res + 1.0
+            else:
+                return res
         a = np.arange(10. * 20.).reshape(10, 20)
         b = a.copy()
         self.check(
