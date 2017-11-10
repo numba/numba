@@ -850,12 +850,17 @@ class ArrayAnalysis(object):
         """
         return self.equiv_sets[block_label]
 
-    def run(self, blocks=None):
+    def run(self, blocks=None, equiv_set=None):
         """run array shape analysis on the given IR blocks, resulting in
         modified IR and finalized EquivSet for each block.
         """
         if blocks == None:
             blocks = self.func_ir.blocks
+
+        if equiv_set == None:
+            init_equiv_set = SymbolicEquivSet(self.typemap)
+        else:
+            init_equiv_set = equiv_set
 
         dprint_func_ir(self.func_ir, "before array analysis", blocks)
 
@@ -899,7 +904,7 @@ class ArrayAnalysis(object):
 
             # Start with a new equiv_set if none is computed
             if equiv_set == None:
-                equiv_set = SymbolicEquivSet(self.typemap)
+                equiv_set = init_equiv_set
             self.equiv_sets[label] = equiv_set
             # Go through instructions in a block, and insert pre/post
             # instructions as we analyze them.
