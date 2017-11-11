@@ -833,8 +833,15 @@ apply_copy_propagate_extensions = {}
 
 
 def apply_copy_propagate(blocks, in_copies, name_var_table, typemap, calltypes,
-                         ext_func=lambda a, b, c, d:None, ext_data=None):
+                         ext_func=lambda a, b, c, d:None, ext_data=None,
+                         save_copies=None):
     """apply copy propagation to IR: replace variables when copies available"""
+    # save_copies keeps an approximation of the copies that were applied, so
+    # that the variable names of removed user variables can be recovered to some
+    # extent.
+    if save_copies is None:
+        save_copies = []
+
     for label, block in blocks.items():
         var_dict = {l: name_var_table[r] for l, r in in_copies[label]}
         # assignments as dict to replace with latest value
@@ -843,7 +850,7 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, typemap, calltypes,
             if type(stmt) in apply_copy_propagate_extensions:
                 f = apply_copy_propagate_extensions[type(stmt)]
                 f(stmt, var_dict, name_var_table, ext_func, ext_data,
-                    typemap, calltypes)
+                    typemap, calltypes, save_copies)
             # only rhs of assignments should be replaced
             # e.g. if x=y is available, x in x=z shouldn't be replaced
             elif isinstance(stmt, ir.Assign):
@@ -889,7 +896,9 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, typemap, calltypes,
                         lhs_kill.append(k)
                 for k in lhs_kill:
                     var_dict.pop(k, None)
-    return
+        save_copies.extend(var_dict.items())
+
+    return save_copies
 
 def fix_setitem_type(stmt, typemap, calltypes):
     """Copy propagation can replace setitem target variable, which can be array
@@ -1226,6 +1235,24 @@ def merge_adjacent_blocks(func_ir):
             block.body.append(stmts)
         del func_ir.blocks[next_label]
 
+def restore_copy_var_names(blocks, save_copies, typemap):
+    """
+    restores variable names of user variables after applying copy propagation
+    """
+    rename_dict = {}
+    for (a, b) in save_copies:
+        # a is string name, b is variable
+        # if a is user variable and b is generated temporary and b is not
+        # already renamed
+        if (not a.startswith('$') and b.name.startswith('$')
+                                                and b.name not in rename_dict):
+            new_name = mk_unique_var('${}'.format(a));
+            rename_dict[b.name] = new_name
+            typ = typemap.pop(b.name)
+            typemap[new_name] = typ
+
+    replace_var_names(blocks, rename_dict)
+
 def simplify(func_ir, typemap, calltypes):
     merge_adjacent_blocks(func_ir)
     remove_dels(func_ir.blocks)
@@ -1233,12 +1260,13 @@ def simplify(func_ir, typemap, calltypes):
     in_cps, out_cps = copy_propagate(func_ir.blocks, typemap)
     # table mapping variable names to ir.Var objects to help replacement
     name_var_table = get_name_var_table(func_ir.blocks)
-    apply_copy_propagate(
+    save_copies = apply_copy_propagate(
         func_ir.blocks,
         in_cps,
         name_var_table,
         typemap,
         calltypes)
+    restore_copy_var_names(func_ir.blocks, save_copies, typemap)
     # remove dead code to enable fusion
     remove_dead(func_ir.blocks, func_ir.arg_names, typemap)
     if config.DEBUG_ARRAY_OPT == 1:
