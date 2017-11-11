@@ -1729,6 +1729,21 @@ def get_expr_args(expr):
         return [v.name for v in expr.args]
     raise NotImplementedError("get arguments for expression {}".format(expr))
 
+def visit_parfor_pattern_vars(parfor, callback, cbdata):
+    # currently, only stencil pattern has variables
+    for pattern in parfor.patterns:
+        if pattern[0] == 'stencil':
+            left_lengths = pattern[1][0]
+            for i in range(len(left_lengths)):
+                if isinstance(left_lengths[i], ir.Var):
+                    left_lengths[i] = visit_vars_inner(left_lengths[i],
+                                                            callback, cbdata)
+            right_lengths = pattern[1][1]
+            for i in range(len(right_lengths)):
+                if isinstance(right_lengths[i], ir.Var):
+                    right_lengths[i] = visit_vars_inner(right_lengths[i],
+                                                            callback, cbdata)
+
 def visit_vars_parfor(parfor, callback, cbdata):
     if config.DEBUG_ARRAY_OPT == 1:
         print("visiting parfor vars for:", parfor)
@@ -1742,6 +1757,7 @@ def visit_vars_parfor(parfor, callback, cbdata):
         if isinstance(l.step, ir.Var):
             l.step = visit_vars_inner(l.step, callback, cbdata)
     visit_vars({-1: parfor.init_block}, callback, cbdata)
+    visit_parfor_pattern_vars(parfor, callback, cbdata)
     visit_vars(parfor.loop_body, callback, cbdata)
     return
 
@@ -1797,6 +1813,7 @@ def parfor_defs(parfor, use_set=None, def_set=None):
         l.step.name for l in parfor.loop_nests if isinstance(
             l.step, ir.Var)}
     use_set.update(loop_vars)
+    use_set |= get_parfor_pattern_vars(parfor)
 
     return analysis._use_defs_result(usemap=use_set, defmap=def_set)
 
@@ -2075,7 +2092,6 @@ def get_parfor_pattern_vars(parfor):
 def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, typemap):
     """ remove dead code inside parfor including get/sets
     """
-    lives |= get_parfor_pattern_vars(parfor)
     # remove dead get/sets in last block
     # FIXME: I think that "in the last block" is not sufficient in general.  We might need to
     # remove from any block.
