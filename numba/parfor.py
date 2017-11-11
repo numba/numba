@@ -2253,7 +2253,7 @@ ir_utils.copy_propagate_extensions[Parfor] = get_copies_parfor
 
 
 def apply_copies_parfor(parfor, var_dict, name_var_table, ext_func, ext_data,
-                        typemap, calltypes):
+                        typemap, calltypes, save_copies):
     """apply copy propagate recursively in parfor"""
     for i, pattern in enumerate(parfor.patterns):
         if pattern[0] == 'stencil':
@@ -2268,7 +2268,7 @@ def apply_copies_parfor(parfor, var_dict, name_var_table, ext_func, ext_data,
     blocks[0].body = assign_list + blocks[0].body
     in_copies_parfor, out_copies_parfor = copy_propagate(blocks, typemap)
     apply_copy_propagate(blocks, in_copies_parfor, name_var_table, typemap,
-                         calltypes, ext_func, ext_data)
+                         calltypes, ext_func, ext_data, save_copies)
     unwrap_parfor_blocks(parfor)
     # remove dummy assignments
     blocks[0].body = blocks[0].body[len(assign_list):]
