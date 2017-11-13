@@ -927,7 +927,7 @@ def fix_setitem_type(stmt, typemap, calltypes):
 
 def dprint_func_ir(func_ir, title, blocks=None):
     """Debug print function IR, with an optional blocks argument
-    that may differ than the IR's original blocks.
+    that may differ from the IR's original blocks.
     """
     if config.DEBUG_ARRAY_OPT == 1:
         ir_blocks = func_ir.blocks

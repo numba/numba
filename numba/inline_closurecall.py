@@ -900,7 +900,7 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
     """Look for array(list) call where list is a constant list created by build_list,
     and turn them into direct array creation and initialization, if the following
     conditions are met:
-      1. The build_list call immediate preceeds the array call;j
+      1. The build_list call immediate preceeds the array call;
       2. The list variable is no longer live after array call;
     If any condition check fails, no modification will be made.
     """
@@ -908,6 +908,12 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
     scope = block.scope
 
     def inline_array(array_var, expr, stmts, list_vars, dels):
+        """Check to see if the given "array_var" is created from a list
+        of constants, and try to inline the list definition as array
+        initialization.
+
+        Extra statements produced with be appended to "stmts".
+        """
         callname = guard(find_callname, func_ir, expr)
         require(callname and callname[1] == 'numpy' and callname[0] == 'array')
         require(expr.args[0].name in list_vars)
@@ -961,10 +967,16 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
         stmts.extend(dels)
         return True
 
+    # list_vars keep track of the variable created from the latest
+    # build_list instruction, as well as its synonyms.
     list_vars = []
+    # dead_vars keep track of those in list_vars that are considered dead.
     dead_vars = []
+    # list_items keep track of the elements used in build_list.
     list_items = []
     stmts = []
+    # dels keep track of the deletion of list_items, which will need to be
+    # moved after array initialization.
     dels = []
     modified = False
     for inst in block.body:
@@ -993,10 +1005,16 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
                 dels.append(inst)
                 continue
             elif removed_var in list_vars:
+                # one of the list_vars is considered dead.
                 dead_vars.append(removed_var)
                 list_vars.remove(removed_var)
                 stmts.append(inst)
                 if list_vars == []:
+                    # if all list_vars are considered dead, we need to filter
+                    # them out from existing stmts to completely remove
+                    # build_list.
+                    # Note that if a translation didn't take place, dead_vars
+                    # will also be empty when we reach this point.
                     body = []
                     for inst in stmts:
                         if ((isinstance(inst, ir.Assign) and
@@ -1011,6 +1029,9 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
                     continue
         stmts.append(inst)
 
+        # If the list is used in any capacity bebetween build_list and array
+        # call, then we must call off the translation for this list because
+        # it could be mutated and list_items would no longer be applicable.
         list_var_used = any([ x.name in list_vars for x in inst.list_vars() ])
         if list_var_used:
             list_vars = []
