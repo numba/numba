@@ -23,12 +23,6 @@ def iterate(col, Z, c):
         Z = Z*Z + c
     return np.exp(-np.abs(Z))
 
-def meshgrid(vx, vy):
-    m, n = len(vy), len(vx)
-    vx = vx.reshape((1, n))
-    vy = vy.reshape((m, 1))
-    return (np.matlib.repmat(vx, m, 1), np.matlib.repmat(vy, 1, n))
-
 def juliaset(iters):
     col = 128             # color depth
     m = 5000              # image size
@@ -49,7 +43,7 @@ def juliaset(iters):
 
         # `X` and `Y` are two arrays containing, respectively, the x-
         # and y-coordinates of each point on a 1000x1000 grid.
-        (X, Y) = meshgrid(x, y)
+        (X, Y) = np.meshgrid(x, y)
 
         # Let `Z` represent the complex plane: a 1000x1000 array of
         # numbers each with a real and a complex part.
