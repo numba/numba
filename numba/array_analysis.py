@@ -991,7 +991,10 @@ class ArrayAnalysis(object):
                 return [], []
             (target_shape, pre) = result
             value_shape = equiv_set.get_shape(inst.value)
-            if value_shape:
+            if value_shape is (): # constant
+                equiv_set.set_shape(inst, target_shape)
+                return pre, []
+            elif value_shape != None:
                 target_typ = self.typemap[inst.target.name]
                 require(isinstance(target_typ, types.ArrayCompatible))
                 target_ndim = target_typ.ndim

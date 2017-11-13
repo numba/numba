@@ -1126,6 +1126,18 @@ class TestParforsSlice(TestParforsBase):
 
         self.check(test_impl, np.arange(12).reshape((3,4)))
 
+    @skip_unsupported
+    def test_parfor_slice16(self):
+        def test_impl(a, b, n):
+            assert(a.shape == b.shape)
+            a[1:n] = 10
+            b[0:(n-1)] = 10
+            return a * b
+
+        self.check(test_impl, np.ones(10), np.zeros(10), 2)
+        args = (numba.float64[:], numba.float64[:], numba.int64)
+        self.assertEqual(countParfors(test_impl, args), 2)
+
 class TestParforsBitMask(TestParforsBase):
 
     def check(self, pyfunc, *args, **kwargs):
