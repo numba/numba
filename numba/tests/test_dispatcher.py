@@ -1180,6 +1180,7 @@ def bar():
     def test_file_location(self):
         bar1 = self.import_bar1()
         bar2 = self.import_bar2()
+        # Check that the cache file is named correctly
         idxname1 = bar1._cache._cache_file._index_name
         idxname2 = bar2._cache._cache_file._index_name
         self.assertNotEqual(idxname1, idxname2)
@@ -1192,7 +1193,7 @@ def bar():
         with capture_cache_log() as buf:
             res1 = bar1()
         cachelog = buf.getvalue()
-        print(cachelog)
+        # bar1 should save new index and data
         self.assertEqual(cachelog.count('index saved'), 1)
         self.assertEqual(cachelog.count('data saved'), 1)
         self.assertEqual(cachelog.count('index loaded'), 0)
@@ -1200,7 +1201,7 @@ def bar():
         with capture_cache_log() as buf:
             res2 = bar2()
         cachelog = buf.getvalue()
-        print(cachelog)
+        # bar2 should save new index and data
         self.assertEqual(cachelog.count('index saved'), 1)
         self.assertEqual(cachelog.count('data saved'), 1)
         self.assertEqual(cachelog.count('index loaded'), 0)
@@ -1208,31 +1209,38 @@ def bar():
         self.assertNotEqual(res1, res2)
 
         try:
+            # Make sure we can spawn new process without inheriting
+            # the parent context.
             mp = multiprocessing.get_context('spawn')
         except ValueError:
             print("missing spawn context")
-            pass
 
         q = mp.Queue()
+        # Start new process that calls `run_this`
         proc = mp.Process(target=self.run_this,
                           args=(q, self.tempdir,
                                 self.modname_bar1,
                                 self.modname_bar2))
         proc.start()
+        # Get results from the process
         log1 = q.get()
         got1 = q.get()
         log2 = q.get()
         got2 = q.get()
         proc.join()
 
+        # The remote execution result of bar1() and bar2() should match
+        # the one executed locally.
         self.assertEqual(got1, res1)
         self.assertEqual(got2, res2)
 
+        # The remote should have loaded bar1 from cache
         self.assertEqual(log1.count('index saved'), 0)
         self.assertEqual(log1.count('data saved'), 0)
         self.assertEqual(log1.count('index loaded'), 1)
         self.assertEqual(log1.count('data loaded'), 1)
 
+        # The remote should have loaded bar2 from cache
         self.assertEqual(log2.count('index saved'), 0)
         self.assertEqual(log2.count('data saved'), 0)
         self.assertEqual(log2.count('index loaded'), 1)
