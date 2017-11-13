@@ -1105,7 +1105,7 @@ class ArrayAnalysis(object):
 
     def _index_to_shape(self, scope, equiv_set, var, ind_var):
         """For indexing like var[index] (either write or read), see if
-        the index corresponds to a non-unit shape. Return the shape
+        the index corresponds to a range/slice shape. Return the shape
         (and prepending instructions) if so, or raise GuardException
         otherwise.
         """
@@ -1209,7 +1209,7 @@ class ArrayAnalysis(object):
         shape = tuple(to_shape(typ, size, dsize) for
                       (typ, size, dsize) in zip(seq_typs, ind_shape, var_shape))
         require(not all(x == None for x in shape))
-        shape = tuple( x for x in shape if x != None)
+        shape = tuple(x for x in shape if x != None)
         return shape, stmts
 
     def _analyze_op_getitem(self, scope, equiv_set, expr):
