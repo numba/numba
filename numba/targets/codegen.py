@@ -14,6 +14,7 @@ import llvmlite.ir as llvmir
 
 from numba import config, utils, cgutils
 from numba.runtime.nrtopt import remove_redundant_nrt_refct
+from numba.runtime import rtsys
 from numba import llvmthreadsafe as llvmts
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
@@ -505,7 +506,7 @@ class RuntimeLinker(object):
                 if engine.is_symbol_defined(gv.name):
                     continue
                 # Allocate a memory space for the pointer
-                abortfn = engine.get_function_address('nrt_unresolved_abort')
+                abortfn = rtsys.library.get_pointer_to_function("nrt_unresolved_abort")
                 ptr = ctypes.c_void_p(abortfn)
                 engine.add_global_mapping(gv, ctypes.addressof(ptr))
                 self._unresolved[sym] = ptr
