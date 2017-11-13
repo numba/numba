@@ -8,7 +8,6 @@ import subprocess
 import sys
 import threading
 import warnings
-from contextlib import contextmanager
 
 import numpy as np
 
@@ -18,10 +17,11 @@ from numba import config
 from numba import _dispatcher
 from numba.errors import NumbaWarning
 from .support import (TestCase, tag, temp_directory, import_dynamic,
-                      captured_stdout, override_env_config)
+                      override_env_config, capture_cache_log)
 from numba.targets import codegen
 
 import llvmlite.binding as ll
+
 
 def dummy(x):
     return x
@@ -1251,13 +1251,6 @@ def bar():
             r2 = bar2()
         q.put(buf.getvalue())
         q.put(r2)
-
-
-@contextmanager
-def capture_cache_log():
-    with captured_stdout() as out:
-        with override_env_config('NUMBA_DEBUG_CACHE', '1'):
-            yield out
 
 
 if __name__ == '__main__':
