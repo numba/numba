@@ -582,7 +582,8 @@ def has_no_side_effect(rhs, lives, call_table):
         if (call_list == ['empty', numpy] or
             call_list == [slice] or
             call_list == ['stencil', numba] or
-            call_list == ['log', numpy]):
+            call_list == ['log', numpy] or
+            call_list == [numba.array_analysis.wrap_index]):
             return True
         elif (isinstance(call_list[0], numba.extending._Intrinsic) and
               (call_list[0]._name == 'empty_inferred' or
