@@ -644,9 +644,9 @@ class ParforPass(object):
         return parfor
 
     def _setitem_to_parfor(self, equiv_set, loc, target, index, value, shape=None):
-        """generate parfor from setitem node with a boolean array index.
-        The value can be either a scalar or an array variable, and in
-        the latter case, the same boolean index is used for the value too.
+        """generate parfor from setitem node with a boolean or slice array indices.
+        The value can be either a scalar or an array variable, and if a boolean index
+        is used for the latter case, the same index must be used for the value too.
         """
         scope = target.scope
         arr_typ = self.typemap[target.name]
@@ -655,6 +655,8 @@ class ParforPass(object):
         init_block = ir.Block(scope, loc)
 
         if shape:
+            # Slice index is being used on the target array, we'll have to create
+            # a sub-array so that the target dimension matches the given shape.
             assert(isinstance(index_typ, types.BaseTuple) or
                    isinstance(index_typ, types.SliceType))
             # setitem has a custom target shape
@@ -662,15 +664,14 @@ class ParforPass(object):
             # create a new target array via getitem
             subarr_var = ir.Var(scope, mk_unique_var("$subarr"), loc)
             getitem_call = ir.Expr.getitem(target, index, loc)
-            from numba.typing import arraydecl
-            subarr_typ = arraydecl.get_array_index_type( arr_typ, index_typ).result
+            subarr_typ = typing.arraydecl.get_array_index_type( arr_typ, index_typ).result
             self.typemap[subarr_var.name] = subarr_typ
             self.calltypes[getitem_call] = signature(subarr_typ, arr_typ,
                                                      index_typ)
             init_block.append(ir.Assign(getitem_call, subarr_var, loc))
             target = subarr_var
         else:
-            # boolean array
+            # Otherwise it is a boolean array that is used as index.
             assert(isinstance(index_typ, types.ArrayCompatible))
             size_vars = equiv_set.get_shape(target)
             bool_typ = index_typ.dtype
@@ -2001,7 +2002,6 @@ def fuse_parfors_inner(parfor1, parfor2):
 
     nameset = set(x.name for x in index_dict.values())
     remove_duplicate_definitions(parfor1.loop_body, nameset)
-    # remove_empty_block(parfor1.loop_body)
     parfor1.patterns.extend(parfor2.patterns)
     if config.DEBUG_PARFOR_STATS:
         print('Parfor #{} is fused into Parfor #{}.'.format(
@@ -2028,22 +2028,6 @@ def remove_duplicate_definitions(blocks, nameset):
             new_body.append(inst)
         block.body = new_body
     return
-
-
-def remove_empty_block(blocks):
-    """Remove empty blocks and any jumps to them, which can be a result
-    from prange conversion and/or fusion.
-    """
-    emptyset = set()
-    for label, block in blocks.items():
-        if len(block.body) == 0:
-            emptyset.add(label)
-    for label in emptyset:
-        blocks.pop(label)
-    for label, block in blocks.items():
-        inst = block.body[-1]
-        if isinstance(inst, ir.Jump) and inst.target in emptyset:
-            block.body.pop()
 
 
 def has_cross_iter_dep(parfor):
@@ -2226,7 +2210,6 @@ def unwrap_parfor_blocks(parfor, blocks=None):
     # make sure dummy jump to loop body isn't altered
     first_body_label = min(parfor.loop_body.keys())
     assert isinstance(parfor.init_block.body[-1], ir.Jump)
-    # assert parfor.init_block.body[-1].target == first_body_label
 
     # remove dummy jump to loop body
     parfor.init_block.body.pop()

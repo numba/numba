@@ -60,12 +60,13 @@ def wrap_index(typingctx, idx, size):
     """
     Calculate index value "idx" relative to a size "size" value as
     (idx % size), where "size" is known to be positive.
-    Note that We use mod(%) operation here instead of
+    Note that we use the mod(%) operation here instead of
     (idx < 0 ? idx + size : idx) because we may have situations
     where idx > size due to the way indices are calculated
     during slice/range analysis.
     """
-    assert idx == size, "Argument types for wrap_index must match"
+    if idx != size:
+        raise ValueError("Argument types for wrap_index must match")
 
     def codegen(context, builder, sig, args):
         assert(len(args) == 2)
@@ -727,7 +728,7 @@ class SymbolicEquivSet(ShapeEquivSet):
     def define(self, var, func_ir=None, typ=None):
         """Besides incrementing the definition count of the given variable
         name, it will also retrieve and simplify its definition from func_ir,
-        and remeber the result for later equivalence comparison. Supported
+        and remember the result for later equivalence comparison. Supported
         operations are:
           1. arithmetic plus and minus with constants
           2. wrap_index (relative to some given size)
@@ -1124,6 +1125,16 @@ class ArrayAnalysis(object):
         stmts = []
 
         def slice_size(index, dsize):
+            """Reason about the size of a slice represented by the "index"
+            variable, and return a variable that has this size data, or
+            raise GuardException if it cannot reason about it.
+
+            The computation takes care of negative values used in the slice
+            with respect to the given dimensional size ("dsize").
+
+            Extra statments required to produce the result are appended
+            to parent function's stmts list.
+            """
             loc = index.loc
             index_def = get_definition(self.func_ir, index)
             fname, mod_name = find_callname(
