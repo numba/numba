@@ -155,7 +155,8 @@ class Parfor(ir.Expr, ir.Stmt):
             loc,
             index_var,
             equiv_set,
-            pattern):
+            pattern,
+            no_sequential_lowering=False):
         super(Parfor, self).__init__(
             op='parfor',
             loc=loc
@@ -175,6 +176,9 @@ class Parfor(ir.Expr, ir.Stmt):
         # for example, a parfor could be from the stencil pattern with
         # the neighborhood option
         self.patterns = [pattern]
+        # if True, this parfor shouldn't be lowered sequentially even with the
+        # sequential lowering option
+        self.no_sequential_lowering = no_sequential_lowering
         if config.DEBUG_ARRAY_OPT_STATS:
             print('Parallel for-loop #{} is produced from {} at {}'.format(
                   self.id, pattern[0], loc))
@@ -1540,7 +1544,7 @@ def _lower_parfor_sequential_block(
 
 def _find_first_parfor(body):
     for (i, inst) in enumerate(body):
-        if isinstance(inst, Parfor):
+        if isinstance(inst, Parfor) and not inst.no_sequential_lowering:
             return i
     return -1
 
