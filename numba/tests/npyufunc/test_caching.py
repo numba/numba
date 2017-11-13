@@ -11,7 +11,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import config
 
-from ..support import captured_stdout
+from ..support import captured_stdout, override_config
 from ..test_dispatcher import BaseCacheTest
 
 
@@ -33,9 +33,8 @@ class UfuncCacheTest(BaseCacheTest):
     @contextmanager
     def capture_cache_log(self):
         with captured_stdout() as out:
-            old, config.DEBUG_CACHE = config.DEBUG_CACHE, True
-            yield out
-            config.DEBUG_CACHE = old
+            with override_config('DEBUG_CACHE', True):
+                yield out
 
     def check_cache_saved(self, cachelog, count):
         """

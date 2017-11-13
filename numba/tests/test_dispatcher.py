@@ -18,7 +18,7 @@ from numba import config
 from numba import _dispatcher
 from numba.errors import NumbaWarning
 from .support import (TestCase, tag, temp_directory, import_dynamic,
-                      captured_stdout)
+                      captured_stdout, override_env_config)
 from numba.targets import codegen
 
 import llvmlite.binding as ll
@@ -1049,11 +1049,9 @@ class TestCacheWithCpuSetting(BaseCacheUsecasesTest):
 
         mtimes = self.get_cache_mtimes()
         # Change CPU name to generic
-        try:
-            os.environ['NUMBA_CPU_NAME'] = 'generic'
+        with override_env_config('NUMBA_CPU_NAME', 'generic'):
             self.run_in_separate_process()
-        finally:
-            del os.environ['NUMBA_CPU_NAME']
+
         self.check_later_mtimes(mtimes)
         self.assertGreater(len(self.cache_contents()), cache_size)
         # Check cache index
@@ -1084,11 +1082,8 @@ class TestCacheWithCpuSetting(BaseCacheUsecasesTest):
         system_features = codegen.get_host_cpu_features()
 
         self.assertNotEqual(system_features, my_cpu_features)
-        try:
-            os.environ['NUMBA_CPU_FEATURES'] = my_cpu_features
+        with override_env_config('NUMBA_CPU_FEATURES', my_cpu_features):
             self.run_in_separate_process()
-        finally:
-            del os.environ['NUMBA_CPU_FEATURES']
         self.check_later_mtimes(mtimes)
         self.assertGreater(len(self.cache_contents()), cache_size)
         # Check cache index
@@ -1172,7 +1167,6 @@ def bar():
             print(self.source_text_2, file=fout)
 
     def tearDown(self):
-        config.reload_config()
         sys.modules.pop(self.modname_bar1, None)
         sys.modules.pop(self.modname_bar2, None)
         sys.path.remove(self.tempdir)
@@ -1262,10 +1256,8 @@ def bar():
 @contextmanager
 def capture_cache_log():
     with captured_stdout() as out:
-        os.environ['NUMBA_DEBUG_CACHE'] = '1'
-        config.reload_config()
-        yield out
-        del os.environ['NUMBA_DEBUG_CACHE']
+        with override_env_config('NUMBA_DEBUG_CACHE', '1'):
+            yield out
 
 
 if __name__ == '__main__':
