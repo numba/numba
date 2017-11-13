@@ -471,6 +471,31 @@ The automatic parallelization pass has a number of sub-passes.
     routines rich in Numpy operations will enable equivalence classes to be
     fully known for all arrays created within a function.
 
+    Array analysis will also reason about size equivalvence for slice selection,
+    and boolean array masking (one dimensional only). For example, it is able to
+    infer that `a[1:n-1]` is of the same size as `b[0:n-2]`.
+
+    Array analysis may also insert safety assumptions to ensure pre-conditions
+    related to array sizes are met before an operation can be parallelized.
+    For example, `np.dot(X,w)` between a 2-D matrix `X` and a 1-D vector `w`
+    requires that the second dimension of `X` is of the same size as `w`.
+    Usually this kind of runtime checks are automatically inserted, but if array
+    analysis can infer such equivalence, it will skip them.
+
+    Users can even help array analysis by turnning implicit knowledge about
+    array sizes into explicit assertions. For example, in the code below:
+
+.. code-block:: python
+    @numba.njit(parallel=run_parallel)
+    def logistic_regression(Y,X,w,iterations):
+        assert(X.shape == (Y.shape[0], w.shape[0]))
+        for i in range(iterations):
+            w -= np.dot(((1.0 / (1.0 + np.exp(-Y * np.dot(X,w))) - 1.0) * Y),X)
+        return w
+
+    Making the explicit assertion helps eliminate all bounds checks in the
+    rest of the function.
+
 #. ``prange()`` to parfor
     The use of prange (:ref:`numba-prange`) in a for loop is an explicit
     indication from the programmer that all iterations of the for loop can
