@@ -424,6 +424,29 @@ def override_config(name, value):
         setattr(config, name, old_value)
 
 
+@contextlib.contextmanager
+def override_env_config(name, value):
+    """
+    Return a context manager that temporarily sets an Numba config environment
+    *name* to *value*.
+    """
+    old = os.environ.get(name)
+    os.environ[name] = value
+    config.reload_config()
+
+    try:
+        yield
+    finally:
+        if old is None:
+            # If it wasn't set originally, delete the environ var
+            del os.environ[name]
+        else:
+            # Otherwise, restore to the old value
+            os.environ[name] = old
+        # Always reload config
+        config.reload_config()
+
+
 def compile_function(name, code, globs):
     """
     Given a *code* string, compile it with globals *globs* and return
