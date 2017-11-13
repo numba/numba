@@ -583,6 +583,13 @@ def captured_stderr():
     return captured_output("stderr")
 
 
+@contextlib.contextmanager
+def capture_cache_log():
+    with captured_stdout() as out:
+        with override_config('DEBUG_CACHE', True):
+            yield out
+
+
 class MemoryLeak(object):
 
     __enable_leak_check = True
