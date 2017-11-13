@@ -175,8 +175,8 @@ class Parfor(ir.Expr, ir.Stmt):
         # for example, a parfor could be from the stencil pattern with
         # the neighborhood option
         self.patterns = [pattern]
-        if config.DEBUG_PARFOR_STATS:
-            print('Parfor #{} is produced from {} at {}'.format(
+        if config.DEBUG_ARRAY_OPT_STATS:
+            print('Parallel for-loop #{} is produced from {} at {}'.format(
                   self.id, pattern[0], loc))
 
     def __repr__(self):
@@ -312,12 +312,13 @@ class ParforPass(object):
             # add parfor params to parfors here since lowering is destructive
             # changing the IR after this is not allowed
             parfor_ids = get_parfor_params(self.func_ir.blocks)
-            if config.DEBUG_PARFOR_STATS:
+            if config.DEBUG_ARRAY_OPT_STATS:
                 name = self.func_ir.func_id.func_qualname
                 n_parfors = len(parfor_ids)
                 if n_parfors > 0:
-                    print('After fusion, function {} has {} Parfor(s) #{}.'.format(
-                        name, n_parfors, parfor_ids))
+                    print(('After fusion, function {} has '
+                           '{} parallel for-loop(s) #{}.').format(
+                           name, n_parfors, parfor_ids))
                 else:
                     print('Function {} has no Parfor.'.format(name))
         return
@@ -1580,10 +1581,11 @@ def get_parfor_params_inner(parfor, pre_defs):
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
     parfor_ids = get_parfor_params(blocks)
-    if config.DEBUG_PARFOR_STATS:
+    if config.DEBUG_ARRAY_OPT_STATS:
         n_parfors = len(parfor_ids)
         if n_parfors > 0:
-            print('After fusion, Parfor {} has {} nested Parfor(s) #{}.'.format(
+            print(('After fusion, parallel for-loop {} has '
+                   '{} nested Parfor(s) #{}.').format(
                   parfor.id, n_parfors, parfor_ids))
     unwrap_parfor_blocks(parfor)
     keylist = sorted(live_map.keys())
@@ -2003,8 +2005,8 @@ def fuse_parfors_inner(parfor1, parfor2):
     nameset = set(x.name for x in index_dict.values())
     remove_duplicate_definitions(parfor1.loop_body, nameset)
     parfor1.patterns.extend(parfor2.patterns)
-    if config.DEBUG_PARFOR_STATS:
-        print('Parfor #{} is fused into Parfor #{}.'.format(
+    if config.DEBUG_ARRAY_OPT_STATS:
+        print('Parallel for-loop #{} is fused into for-loop #{}.'.format(
               parfor2.id, parfor1.id))
 
     return parfor1

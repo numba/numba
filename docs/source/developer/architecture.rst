@@ -522,6 +522,9 @@ The automatic parallelization pass has a number of sub-passes.
     and the reduction operation is applied to that value and the current
     reduction value and the result stored back into the reduction value.
 
+    Setting the :envvar:`NUMBA_DEBUG_ARRAY_OPT_STATS` environment variable to
+    1 will show some statistics about parfor conversions.
+
 #. Simplification
     Performs a copy propagation and dead code elimination pass.
 
@@ -545,6 +548,9 @@ The automatic parallelization pass has a number of sub-passes.
     to the first's, merging the two parfors' loop bodies together and replacing
     the instances of the second parfor's loop index variables in the second
     parfor's body with the loop index variables for the first parfor.
+
+    Setting the :envvar:`NUMBA_DEBUG_ARRAY_OPT_STATS` environment variable to
+    1 will show some statistics about parfor fusions.
 
 #. Push call objects and compute parfor parameters
     In the lowering phase described in Section :ref:`lowering`, each parfor

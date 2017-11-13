@@ -93,6 +93,17 @@ These variables influence what is printed out during compilation of
    Dump debugging information related to the processing associated with
    the ``parallel=True`` jit decorator option.
 
+.. envvar:: NUMBA_DEBUG_ARRAY_OPT_RUNTIME
+
+   Dump debugging information related to the runtime scheduler associated
+   with the ``parallel=True`` jit decorator option.
+
+.. envvar:: NUMBA_DEBUG_ARRAY_OPT_STATS
+
+   Dump statistics about how many operators/calls are converted to
+   parallel for-loops and how many are fused together, which are associated
+   with the ``parallel=True`` jit decorator option.
+
 .. envvar:: NUMBA_DUMP_ASSEMBLY
 
    Dump the native assembler code of compiled functions.
