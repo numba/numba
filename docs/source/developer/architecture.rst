@@ -445,13 +445,22 @@ the number of parfors that are adjacent to each other such that they can
 then be fused together into one parfor that takes only one pass over the
 data and will thus typically have better cache performance.  Finally,
 during lowering, these parfor operators are converted to a form similar
-to guvectorize to implement the actual parallelism.  All these processes
-are described in more detail in the following paragraphs, and many of
-them can be individually controlled by setting the ``parallel`` option
-to a dictionary of sub-options instead of a boolean. The default
-is to enable all of them.
+to guvectorize to implement the actual parallelism.
 
-The automatic parallelization pass has a number of sub-passes.
+The automatic parallelization pass has a number of sub-passes, many of
+which are controllable using a dictionary of options passed via the
+``parallel`` keyword argument to :func:`~numba.jit`::
+
+   { 'comprehension': True/False,  # parallel comprehension
+     'setitem':       True/False,  # parallel setitem
+     'reduction':     True/False,  # parallel reduce calls
+     'numpy':         True/False,  # parallel numpy calls
+     'stencil':       True/False,  # parallel stencils
+     'fusion':        True/False,  # enable fusion or not
+   }
+
+The default is set to `True` for all of them. The sub-passes are
+described in more detail in the following paragraphs.
 
 #. CFG Simplification
     Sometimes Numba IR will contain chains of blocks containing no loops which
@@ -568,7 +577,7 @@ The automatic parallelization pass has a number of sub-passes.
 #. Setitem to parfor
     Setting a range of array elements using a slice or boolean array selection
     can also run in parallel.  Statement such as ``A[P] = B[Q]``
-    (or a simpler case ``A[P] = c``, where c is a scalar) is translated to
+    (or a simpler case ``A[P] = c``, where ``c`` is a scalar) is translated to
     `parfor` if one of the following conditions is met:
 
      a. ``P`` and ``Q`` are slices or multi-dimensional selector involving
