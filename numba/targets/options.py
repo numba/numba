@@ -5,7 +5,6 @@ from __future__ import print_function, division, absolute_import
 
 from .. import config
 
-
 class TargetOptions(object):
     OPTIONS = {}
 
@@ -64,8 +63,8 @@ class TargetOptions(object):
         if kws.pop('no_cpython_wrapper', False):
             flags.set('no_cpython_wrapper')
 
-        if kws.pop('parallel', False):
-            flags.set('auto_parallel')
+        if 'parallel' in kws:
+            flags.set('auto_parallel', kws.pop('parallel'))
 
         if kws.pop('fastmath', False):
             flags.set('fastmath')

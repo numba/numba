@@ -185,6 +185,33 @@ class CPUContext(BaseContext):
         aryty = types.Array(types.int32, ndim, 'A')
         return self.get_abi_sizeof(self.get_value_type(aryty))
 
+"""
+Options for controlling auto parallelization.
+"""
+class ParallelOptions(object):
+    def __init__(self, value):
+        if isinstance(value, bool):
+            self.enabled = value
+            self.comprehension = value
+            self.reduction = value
+            self.setitem = value
+            self.numpy = value
+            self.stencil = value
+            self.fusion = value
+            self.comprehension = value
+        elif isinstance(value, dict):
+            self.enabled = True
+            self.comprehension = value.pop('comprehension', True)
+            self.reduction = value.pop('reduction', True)
+            self.setitem = value.pop('setitem', True)
+            self.numpy = value.pop('numpy', True)
+            self.stencil = value.pop('stencil', True)
+            self.fusion = value.pop('fusion', True)
+            if value:
+                raise NameError("Unrecognized parallel options: %s" % value.keys())
+        else:
+            raise ValueError("expect parallel option to be either a bool or a dict")
+
 
 # ----------------------------------------------------------------------------
 # TargetOptions
@@ -202,7 +229,7 @@ class CPUTargetOptions(TargetOptions):
         "no_cpython_wrapper": bool,
         "fastmath": bool,
         "error_model": str,
-        "parallel": bool,
+        "parallel": ParallelOptions,
     }
 
 

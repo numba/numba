@@ -250,12 +250,13 @@ class ParforPass(object):
     stage.
     """
 
-    def __init__(self, func_ir, typemap, calltypes, return_type, typingctx):
+    def __init__(self, func_ir, typemap, calltypes, return_type, typingctx, options):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
         self.typingctx = typingctx
         self.return_type = return_type
+        self.options = options
         self.array_analysis = array_analysis.ArrayAnalysis(typingctx, func_ir, typemap,
                                                            calltypes)
         ir_utils._max_label = max(func_ir.blocks.keys())
@@ -269,35 +270,44 @@ class ParforPass(object):
         # e.g. convert A.sum() to np.sum(A) for easier match and optimization
         canonicalize_array_math(self.func_ir, self.typemap,
                                 self.calltypes, self.typingctx)
-        self._replace_parallel_functions(self.func_ir.blocks)
+        # some numpy functions are given parallel implementations
+        if self.options.numpy:
+            self._replace_parallel_functions(self.func_ir.blocks)
+        # run array analysis, a pre-requisite for parfor translation
         self.array_analysis.run(self.func_ir.blocks)
-        stencil_pass = StencilPass(self.func_ir, self.typemap, self.calltypes,
+        # run stencil translation to parfor
+        if self.options.stencil:
+            stencil_pass = StencilPass(self.func_ir, self.typemap, self.calltypes,
                                             self.array_analysis, self.typingctx)
-        stencil_pass.run()
+            stencil_pass.run()
+        # prange is always parallelized
         self._convert_prange(self.func_ir.blocks)
-        self._convert_setitem(self.func_ir.blocks)
-        self._convert_numpy(self.func_ir.blocks)
-        self._convert_reduce(self.func_ir.blocks)
+        if self.options.setitem:
+            self._convert_setitem(self.func_ir.blocks)
+        if self.options.numpy:
+            self._convert_numpy(self.func_ir.blocks)
+        if self.options.reduction:
+            self._convert_reduce(self.func_ir.blocks)
 
         dprint_func_ir(self.func_ir, "after parfor pass")
         simplify(self.func_ir, self.typemap, self.calltypes)
 
-        #dprint_func_ir(self.func_ir, "after remove_dead")
-        # try fuse before maximize
-        self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
-        # reorder statements to maximize fusion
-        maximize_fusion(self.func_ir, self.func_ir.blocks)
-        # try fuse again after maximize
-        dprint_func_ir(self.func_ir, "after maximize fusion")
-        self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
-        dprint_func_ir(self.func_ir, "after fusion")
-        # remove dead code after fusion to remove extra arrays and variables
-        remove_dead(self.func_ir.blocks, self.func_ir.arg_names, self.typemap)
-        #dprint_func_ir(self.func_ir, "after second remove_dead")
+        if self.options.fusion:
+            # try fuse before maximize
+            self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
+            # reorder statements to maximize fusion
+            maximize_fusion(self.func_ir, self.func_ir.blocks)
+            dprint_func_ir(self.func_ir, "after maximize fusion")
+            # try fuse again after maximize
+            self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
+            dprint_func_ir(self.func_ir, "after fusion")
+        # simplify again
+        simplify(self.func_ir, self.typemap, self.calltypes)
         # push function call variables inside parfors so gufunc function
         # wouldn't need function variables as argument
         push_call_vars(self.func_ir.blocks, {}, {})
-        remove_dead(self.func_ir.blocks, self.func_ir.arg_names, self.typemap)
+        # simplify again
+        simplify(self.func_ir, self.typemap, self.calltypes)
         dprint_func_ir(self.func_ir, "after optimization")
         if config.DEBUG_ARRAY_OPT == 1:
             print("variable types: ", sorted(self.typemap.items()))
@@ -320,9 +330,11 @@ class ParforPass(object):
                 name = self.func_ir.func_id.func_qualname
                 n_parfors = len(parfor_ids)
                 if n_parfors > 0:
-                    print(('After fusion, function {} has '
+                    after_fusion = ("After fusion" if self.options.fusion
+                                    else "With fusion disabled")
+                    print(('{}, function {} has '
                            '{} parallel for-loop(s) #{}.').format(
-                           name, n_parfors, parfor_ids))
+                           after_fusion, name, n_parfors, parfor_ids))
                 else:
                     print('Function {} has no Parfor.'.format(name))
         return
@@ -1588,9 +1600,11 @@ def get_parfor_params_inner(parfor, pre_defs):
     if config.DEBUG_ARRAY_OPT_STATS:
         n_parfors = len(parfor_ids)
         if n_parfors > 0:
-            print(('After fusion, parallel for-loop {} has '
+             after_fusion = ("After fusion" if self.options.fusion
+                             else "With fusion disabled")
+             print(('After fusion, parallel for-loop {} has '
                    '{} nested Parfor(s) #{}.').format(
-                  parfor.id, n_parfors, parfor_ids))
+                  after_fusion, parfor.id, n_parfors, parfor_ids))
     unwrap_parfor_blocks(parfor)
     keylist = sorted(live_map.keys())
     init_block = keylist[0]

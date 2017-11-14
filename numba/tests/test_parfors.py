@@ -16,7 +16,7 @@ import numpy as np
 import numba
 from numba import unittest_support as unittest
 from .support import TestCase
-from numba import njit, prange, stencil
+from numba import njit, prange, stencil, inline_closurecall
 from numba import compiler, typing
 from numba.targets import cpu
 from numba import types
@@ -54,7 +54,7 @@ class TestParforsBase(TestCase):
 
         # flags for njit(parallel=True)
         self.pflags = Flags()
-        self.pflags.set('auto_parallel')
+        self.pflags.set('auto_parallel', cpu.ParallelOptions(True))
         self.pflags.set('nrt')
         super(TestParforsBase, self).__init__(*args)
 
@@ -130,12 +130,20 @@ def test2(Y, X, w, iterations):
     return w
 
 
-def countParfors(test_func, args):
+def countParfors(test_func, args, **kws):
     typingctx = typing.Context()
     targetctx = cpu.CPUContext(typingctx)
     test_ir = compiler.run_frontend(test_func)
+    if kws:
+        options = cpu.ParallelOptions(kws)
+    else:
+        options = cpu.ParallelOptions(True)
+
     with cpu_target.nested_context(typingctx, targetctx):
         tp = TestPipeline(typingctx, targetctx, args, test_ir)
+
+        inline_pass = inline_closurecall.InlineClosureCallPass(tp.func_ir, options)
+        inline_pass.run()
 
         numba.rewrites.rewrite_registry.apply(
             'before-inference', tp, tp.func_ir)
@@ -158,7 +166,7 @@ def countParfors(test_func, args):
 
         parfor_pass = numba.parfor.ParforPass(
             tp.func_ir, tp.typemap, tp.calltypes, tp.return_type,
-            tp.typingctx)
+            tp.typingctx, options)
         parfor_pass.run()
     ret_count = 0
 
@@ -1137,6 +1145,39 @@ class TestParforsSlice(TestParforsBase):
         self.check(test_impl, np.ones(10), np.zeros(10), 2)
         args = (numba.float64[:], numba.float64[:], numba.int64)
         self.assertEqual(countParfors(test_impl, args), 2)
+
+
+class TestParforsOptions(TestParforsBase):
+
+    def check(self, pyfunc, *args, **kwargs):
+        cfunc, cpfunc = self.compile_all(pyfunc, *args)
+        self.check_prange_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
+
+    @skip_unsupported
+    def test_parfor_options(self):
+        def test_impl(a):
+            n = a.shape[0]
+            b = np.ones(n)
+            c = np.array([ i for i in range(n) ])
+            # a[:n] = a + b * c
+            return reduce(lambda x,y:x+y, a+b*c, 0)
+
+        self.check(test_impl, np.ones(10))
+        args = (numba.float64[:],)
+        # everything should fuse with default option
+        self.assertEqual(countParfors(test_impl, args), 1)
+        # with no fusion
+        self.assertEqual(countParfors(test_impl, args, fusion=False), 4)
+        # with no fusion, no comprehension
+        self.assertEqual(countParfors(test_impl, args, fusion=False,
+                         comprehension=False), 3)
+        # with no fusion, no comprehension, no reduction
+        self.assertEqual(countParfors(test_impl, args, fusion=False,
+                         comprehension=False, reduction=False), 2)
+        # with no fusion, no comprehension, no reduction, no numpy
+        self.assertEqual(countParfors(test_impl, args, fusion=False,
+                         comprehension=False, reduction=False, numpy=False), 0)
+
 
 class TestParforsBitMask(TestParforsBase):
 
