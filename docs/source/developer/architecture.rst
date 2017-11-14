@@ -436,8 +436,8 @@ allocates a single result array.
 Stage 6b: Perform Automatic Parallelization
 -------------------------------------------
 
-This pass is only performed if the parallel option in the :func:`~numba.jit`
-decorator is set to True.  This pass find parallelism implicit in the
+This pass is only performed if the ``parallel`` option in the :func:`~numba.jit`
+decorator is set to ``True``.  This pass find parallelism implicit in the
 semantics of operations in the Numba IR and replaces those operations
 with explicitly parallel representations of those operations using a
 special `parfor` operator.  Then, optimizations are performed to maximize
@@ -446,7 +446,11 @@ then be fused together into one parfor that takes only one pass over the
 data and will thus typically have better cache performance.  Finally,
 during lowering, these parfor operators are converted to a form similar
 to guvectorize to implement the actual parallelism.  All these processes
-are described in more detail in the following paragraphs.
+are described in more detail in the following paragraphs, and many of
+them can be individually controlled by setting the ``parallel`` option
+to a dictionary of sub-options instead of a boolean. The default
+is to enable all of them.
+
 The automatic parallelization pass has a number of sub-passes.
 
 #. CFG Simplification
@@ -465,32 +469,33 @@ The automatic parallelization pass has a number of sub-passes.
     identical iteration spaces and these iteration spaces typically correspond
     to the sizes of the dimensions of Numpy arrays.  In this sub-pass, the IR is
     analyzed to determine equivalence classes for the dimensions of Numpy
-    arrays.  Consider the example, ``a = b + 1``, where `a` and `b` are both
-    Numpy arrays.  Here, we know that each dimension of `a` must have the same
-    equivalence class as the corresponding dimension of `b`.  Typically,
+    arrays.  Consider the example, ``a = b + 1``, where ``a`` and ``b`` are both
+    Numpy arrays.  Here, we know that each dimension of ``a`` must have the same
+    equivalence class as the corresponding dimension of ``b``.  Typically,
     routines rich in Numpy operations will enable equivalence classes to be
     fully known for all arrays created within a function.
 
     Array analysis will also reason about size equivalvence for slice selection,
     and boolean array masking (one dimensional only). For example, it is able to
-    infer that `a[1:n-1]` is of the same size as `b[0:n-2]`.
+    infer that ``a[1 : n-1]`` is of the same size as ``b[0 : n-2]``.
 
     Array analysis may also insert safety assumptions to ensure pre-conditions
     related to array sizes are met before an operation can be parallelized.
-    For example, `np.dot(X,w)` between a 2-D matrix `X` and a 1-D vector `w`
-    requires that the second dimension of `X` is of the same size as `w`.
-    Usually this kind of runtime checks are automatically inserted, but if array
+    For example, ``np.dot(X, w)`` between a 2-D matrix ``X`` and a 1-D vector ``w``
+    requires that the second dimension of ``X`` is of the same size as ``w``.
+    Usually this kind of runtime check is automatically inserted, but if array
     analysis can infer such equivalence, it will skip them.
 
-    Users can even help array analysis by turnning implicit knowledge about
+    Users can even help array analysis by turning implicit knowledge about
     array sizes into explicit assertions. For example, in the code below:
 
     .. code-block:: python
-       @numba.njit(parallel=run_parallel)
-       def logistic_regression(Y,X,w,iterations):
+
+       @numba.njit(parallel=True)
+       def logistic_regression(Y, X, w, iterations):
            assert(X.shape == (Y.shape[0], w.shape[0]))
            for i in range(iterations):
-               w -= np.dot(((1.0 / (1.0 + np.exp(-Y * np.dot(X,w))) - 1.0) * Y),X)
+               w -= np.dot(((1.0 / (1.0 + np.exp(-Y * np.dot(X, w))) - 1.0) * Y), X)
            return w
 
     Making the explicit assertion helps eliminate all bounds checks in the
@@ -500,7 +505,7 @@ The automatic parallelization pass has a number of sub-passes.
     The use of prange (:ref:`numba-prange`) in a for loop is an explicit
     indication from the programmer that all iterations of the for loop can
     execute in parallel.  In this sub-pass, we analyze the CFG to locate loops
-    and to convert those loops controlled by a prange object to the explici
+    and to convert those loops controlled by a prange object to the explicit
     `parfor` operator.  Each explicit parfor operator consists of:
 
     a. A list of loop nest information that describes the iteration space of the
@@ -513,12 +518,18 @@ The automatic parallelization pass has a number of sub-passes.
        of the loop and compute one point in the iteration space.
     #. The index variables used for each dimension of the iteration space.
 
-
-
-    For parfor ``pranges``, the loop nest is a single entry where the start,
-    stop, and step fields come from the specified ``prange``.  The init block is
-    empty for ``prange`` parfors and the loop body is the set of blocks in the
+    For parfor `pranges`, the loop nest is a single entry where the start,
+    stop, and step fields come from the specified `prange`.  The init block is
+    empty for `prange` parfors and the loop body is the set of blocks in the
     loop minus the loop header.
+
+    With parallelization on, array comprehensions (:ref:`pysupported-comprehension`)
+    will also be translated to prange so as to run in parallel. This behavior
+    be disabled by setting ``parallel={'comprehension': False}``.
+
+    Likewise, the overall `prange` to `parfor` translation can be disabled by
+    setting ``parallel={'prange': False}``, in which case `prange` is treated the
+    same as `range`.
 
 #. Numpy to parfor
     In this sub-pass, Numpy functions such as ``ones``, ``zeros``, ``dot``, most
@@ -538,7 +549,9 @@ The automatic parallelization pass has a number of sub-passes.
     value comes from a call to the same random number function but with the size
     parameter dropped and therefore returning a scalar.  For arrayexpr operators,
     the arrayexpr tree is converted to Numba IR and the value at the root of that
-    expression tree is used to write into the output array.
+    expression tree is used to write into the output array. The translation from
+    Numpy functions and arrayexpr operators to `parfor` can be disabled by
+    setting ``parallel={'numpy': False}``.
 
     For reductions, the loop nest list is similarly created using the array
     analysis information for the array being reduced.  In the init block, the
@@ -546,9 +559,25 @@ The automatic parallelization pass has a number of sub-passes.
     of a single block in which the next value in the iteration space is fetched
     and the reduction operation is applied to that value and the current
     reduction value and the result stored back into the reduction value.
+    The translation of reduction functions to `parfor` can be disabled by
+    setting ``parallel={'reduction': False}``.
 
     Setting the :envvar:`NUMBA_DEBUG_ARRAY_OPT_STATS` environment variable to
-    1 will show some statistics about parfor conversions.
+    1 will show some statistics about parfor conversions in general.
+
+#. Setitem to parfor
+    Setting a range of array elements using a slice or boolean array selection
+    can also run in parallel.  Statement such as ``A[P] = B[Q]``
+    (or a simpler case ``A[P] = c``, where c is a scalar) is translated to
+    `parfor` if one of the following conditions is met:
+
+     a. ``P`` and ``Q`` are slices or multi-dimensional selector involving
+        scalar and slices, and ``A[P]`` and ``B[Q]`` are considered size
+        equivalent by array analysis. Only 2-value slice/range is supported,
+        3-value with a step will not be translated to `parfor`.
+     #. ``P`` and ``Q`` are the same boolean array.
+
+    This translation can be disabled by setting ``parallel={'setitem': False}``.
 
 #. Simplification
     Performs a copy propagation and dead code elimination pass.
@@ -573,6 +602,7 @@ The automatic parallelization pass has a number of sub-passes.
     to the first's, merging the two parfors' loop bodies together and replacing
     the instances of the second parfor's loop index variables in the second
     parfor's body with the loop index variables for the first parfor.
+    Fusion can be disabled by setting ``parallel={'fusion': False}``.
 
     Setting the :envvar:`NUMBA_DEBUG_ARRAY_OPT_STATS` environment variable to
     1 will show some statistics about parfor fusions.

@@ -60,7 +60,7 @@ parallel semantics and for which we attempt to parallelize.
    not supported, nor is the reduction across a selected dimension.
 
 6. Array assignment in which the target is an array selection using a slice
-   or a boolean array, and the value to be assigned is either a scalar or
+   or a boolean array, and the value being assigned is either a scalar or
    another selection where the slice range or bitarray are inferred to be
    compatible.
 
