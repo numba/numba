@@ -1050,7 +1050,7 @@ def get_stmt_writes(stmt):
 
 def rename_labels(blocks):
     """rename labels of function body blocks according to topological sort.
-    lowering requires this order.
+    The set of labels of these blocks will remain unchanged.
     """
     topo_order = find_topo_order(blocks)
 
@@ -1065,10 +1065,9 @@ def rename_labels(blocks):
         topo_order.append(return_label)
 
     label_map = {}
-    new_label = 0
+    all_labels = sorted(topo_order, reverse=True)
     for label in topo_order:
-        label_map[label] = new_label
-        new_label += 1
+        label_map[label] = all_labels.pop()
     # update target labels in jumps/branches
     for b in blocks.values():
         term = b.terminator

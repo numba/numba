@@ -547,10 +547,17 @@ class ParforPass(object):
                         blocks.pop(l)
                     # run on parfor body
                     parfor_blocks = wrap_parfor_blocks(parfor)
+                    # but we also need to make up equiv_set for init_block
+                    backup_equivset = self.array_analysis.equiv_sets.get(0, None)
+                    self.array_analysis.equiv_sets[0] = parfor.equiv_set
                     self._convert_prange(parfor_blocks)
                     self._convert_setitem(parfor_blocks)
                     self._convert_numpy(parfor_blocks)
+                    parfor_blocks = rename_labels(parfor_blocks)
                     unwrap_parfor_blocks(parfor, parfor_blocks)
+                    # restore equiv_set for real block 0
+                    if backup_equivset:
+                        self.array_analysis.equiv_sets[0] = backup_equivset
                     # run convert again to handle other prange loops
                     return self._convert_prange(blocks)
 
@@ -1464,8 +1471,8 @@ def _find_func_var(typemap, func, avail_vars):
 
 
 def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes):
-    ir_utils._max_label = ir_utils.find_max_label(func_ir.blocks) + 1
-
+    ir_utils._max_label = max(ir_utils._max_label,
+                              ir_utils.find_max_label(func_ir.blocks))
     parfor_found = False
     new_blocks = {}
     for (block_label, block) in func_ir.blocks.items():
@@ -2016,8 +2023,6 @@ def fuse_parfors_inner(parfor1, parfor2):
     # re-order labels from min to max
     blocks = wrap_parfor_blocks(parfor1, entry_label=parfor1_first_label)
     blocks = rename_labels(blocks)
-    blocks = add_offset_to_labels(blocks, next_label())
-    ir_utils._max_label = max(blocks.keys())
     unwrap_parfor_blocks(parfor1, blocks)
 
     nameset = set(x.name for x in index_dict.values())
