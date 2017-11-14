@@ -40,9 +40,9 @@ class InlineClosureCallPass(object):
     closures, and inlines the body of the closure function to the call site.
     """
 
-    def __init__(self, func_ir, flags):
+    def __init__(self, func_ir, parallel_options):
         self.func_ir = func_ir
-        self.flags = flags
+        self.parallel_options = parallel_options
         self._processed_stencils = []
 
     def run(self):
@@ -91,7 +91,7 @@ class InlineClosureCallPass(object):
             for k, s in sorted(sized_loops, key=lambda tup: tup[1], reverse=True):
                 visited.append(k)
                 if guard(_inline_arraycall, self.func_ir, cfg, visited, loops[k],
-                        self.flags.auto_parallel):
+                         self.parallel_options.comprehension):
                     modified = True
             if modified:
                 _fix_nested_array(self.func_ir)
@@ -108,7 +108,7 @@ class InlineClosureCallPass(object):
     def _inline_reduction(self, work_list, block, i, expr, call_name):
         # only inline reduction in sequential execution, parallel handling
         # is done in ParforPass.
-        require(self.flags.auto_parallel != True)
+        require(not self.parallel_options.reduction)
         require(call_name == ('reduce', 'builtins') or
                 call_name == ('reduce', '_functools'))
         if len(expr.args) != 3:

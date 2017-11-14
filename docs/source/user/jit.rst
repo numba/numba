@@ -196,4 +196,22 @@ must be used in conjunction with ``nopython=True``::
    def f(x, y):
        return x + y
 
+Alternatively, this option can take a dictionary of sub-options to enable
+finer controls over how the parallelization is run. Available sub-options
+are::
+
+   { 'comprehension': True/False,  # parallel comprehension
+     'setitem':       True/False,  # parallel setitem
+     'reduction':     True/False,  # parallel reduce calls
+     'numpy':         True/False,  # parallel numpy calls
+     'stencil':       True/False,  # parallel stencils
+     'fusion':        True/False,  # enable fusion or not
+   }
+
+As an example, the following shows how to disable fusion::
+
+   @jit(nopython=True, parallel={'fusion':False})
+   def f(x, y):
+       return np.sum(x + y)
+
 .. seealso:: :ref:`numba-parallel`

@@ -19,6 +19,7 @@ from numba import unittest_support as unittest
 from numba import njit, stencil, types
 from numba.compiler import compile_extra, Flags
 from numba.targets import registry
+from numba.targets.cpu import ParallelOptions
 from .support import tag
 from numba.errors import LoweringError, TypingError
 
@@ -89,10 +90,6 @@ class TestStencilBase(unittest.TestCase):
         self.cflags = Flags()
         self.cflags.set('nrt')
 
-        # flags for njit(parallel=True)
-        self.pflags = Flags()
-        self.pflags.set('auto_parallel')
-        self.pflags.set('nrt')
         super(TestStencilBase, self).__init__(*args)
 
     def _compile_this(self, func, sig, flags):
@@ -100,8 +97,12 @@ class TestStencilBase(unittest.TestCase):
                              registry.cpu_target.target_context, func, sig,
                              None, flags, {})
 
-    def compile_parallel(self, func, sig):
-        return self._compile_this(func, sig, flags=self.pflags)
+    def compile_parallel(self, func, sig, **kws):
+        flags = Flags()
+        flags.set('nrt')
+        options = True if not kws else kws
+        flags.set('auto_parallel', ParallelOptions(options))
+        return self._compile_this(func, sig, flags)
 
     def compile_njit(self, func, sig):
         return self._compile_this(func, sig, flags=self.cflags)
@@ -422,6 +423,19 @@ class TestStencil(TestStencilBase):
 
         n = 100
         self.check(test_impl_seq, test_impl, n)
+
+    @skip_unsupported
+    @tag('important')
+    def test_stencil_parallel_off(self):
+        """Tests 1D numba.stencil calls without parallel translation
+           turned off.
+        """
+        def test_impl(A):
+            return numba.stencil(lambda a: 0.3 * (a[-1] + a[0] + a[1]))(A)
+
+        cpfunc = self.compile_parallel(test_impl, (numba.float64[:],), stencil=False)
+        self.assertNotIn('@do_scheduling', cpfunc.library.get_llvm_str())
+
 
 
 class pyStencilGenerator:

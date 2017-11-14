@@ -11,6 +11,7 @@ from .support import TestCase, override_config, captured_stdout, forbid_codegen
 from numba import unittest_support as unittest
 from numba import jit, jitclass, types
 from numba.compiler import compile_isolated, Flags
+from numba.targets.cpu import ParallelOptions
 from numba.errors import NumbaWarning
 from numba import compiler
 from .test_parfors import skip_unsupported
@@ -37,7 +38,7 @@ def unsupported_parfor(a, b):
     return np.dot(a, b) # dot as gemm unsupported
 
 force_parallel_flags = Flags()
-force_parallel_flags.set("auto_parallel")
+force_parallel_flags.set("auto_parallel", ParallelOptions(True))
 force_parallel_flags.set('nrt')
 
 class DebugTestBase(TestCase):
@@ -74,7 +75,7 @@ class DebugTestBase(TestCase):
 
     def _check_dump_llvm(self, out):
         self.assertIn('--LLVM DUMP', out)
-        if compiler.Flags.OPTIONS['auto_parallel'] == False:
+        if compiler.Flags.OPTIONS['auto_parallel'].enabled == False:
             self.assertIn('%"retval" = alloca', out)
 
     def _check_dump_func_opt_llvm(self, out):

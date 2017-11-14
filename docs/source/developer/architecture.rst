@@ -485,13 +485,13 @@ The automatic parallelization pass has a number of sub-passes.
     Users can even help array analysis by turnning implicit knowledge about
     array sizes into explicit assertions. For example, in the code below:
 
-.. code-block:: python
-    @numba.njit(parallel=run_parallel)
-    def logistic_regression(Y,X,w,iterations):
-        assert(X.shape == (Y.shape[0], w.shape[0]))
-        for i in range(iterations):
-            w -= np.dot(((1.0 / (1.0 + np.exp(-Y * np.dot(X,w))) - 1.0) * Y),X)
-        return w
+    .. code-block:: python
+        @numba.njit(parallel=run_parallel)
+        def logistic_regression(Y,X,w,iterations):
+            assert(X.shape == (Y.shape[0], w.shape[0]))
+            for i in range(iterations):
+                w -= np.dot(((1.0 / (1.0 + np.exp(-Y * np.dot(X,w))) - 1.0) * Y),X)
+            return w
 
     Making the explicit assertion helps eliminate all bounds checks in the
     rest of the function.
