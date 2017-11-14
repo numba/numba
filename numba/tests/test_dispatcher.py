@@ -1187,6 +1187,8 @@ def bar():
         self.assertTrue(idxname1.startswith("__init__.bar-3.py"))
         self.assertTrue(idxname2.startswith("foo.bar-3.py"))
 
+    @unittest.skipUnless(hasattr(multiprocessing, 'get_context'),
+                         'Test requires multiprocessing.get_context')
     def test_no_collision(self):
         bar1 = self.import_bar1()
         bar2 = self.import_bar2()
@@ -1216,8 +1218,8 @@ def bar():
             print("missing spawn context")
 
         q = mp.Queue()
-        # Start new process that calls `run_this`
-        proc = mp.Process(target=self.run_this,
+        # Start new process that calls `cache_file_collision_tester`
+        proc = mp.Process(target=cache_file_collision_tester,
                           args=(q, self.tempdir,
                                 self.modname_bar1,
                                 self.modname_bar2))
@@ -1246,19 +1248,19 @@ def bar():
         self.assertEqual(log2.count('index loaded'), 1)
         self.assertEqual(log2.count('data loaded'), 1)
 
-    @staticmethod
-    def run_this(q, tempdir, modname_bar1, modname_bar2):
-        sys.path.insert(0, tempdir)
-        bar1 = import_dynamic(modname_bar1).bar
-        bar2 = import_dynamic(modname_bar2).bar
-        with capture_cache_log() as buf:
-            r1 = bar1()
-        q.put(buf.getvalue())
-        q.put(r1)
-        with capture_cache_log() as buf:
-            r2 = bar2()
-        q.put(buf.getvalue())
-        q.put(r2)
+
+def cache_file_collision_tester(q, tempdir, modname_bar1, modname_bar2):
+    sys.path.insert(0, tempdir)
+    bar1 = import_dynamic(modname_bar1).bar
+    bar2 = import_dynamic(modname_bar2).bar
+    with capture_cache_log() as buf:
+        r1 = bar1()
+    q.put(buf.getvalue())
+    q.put(r1)
+    with capture_cache_log() as buf:
+        r2 = bar2()
+    q.put(buf.getvalue())
+    q.put(r2)
 
 
 if __name__ == '__main__':
