@@ -1159,30 +1159,33 @@ class TestParforsOptions(TestParforsBase):
             n = a.shape[0]
             b = np.ones(n)
             c = np.array([ i for i in range(n) ])
-            # a[:n] = a + b * c
+            b[:n] = a + b * c
             for i in prange(n):
-                b[i] = b[i] * a[i]
-            return reduce(lambda x,y:x+y, a+b*c, 0)
+                c[i] = b[i] * a[i]
+            return reduce(lambda x,y:x+y, c, 0)
 
         self.check(test_impl, np.ones(10))
         args = (numba.float64[:],)
         # everything should fuse with default option
         self.assertEqual(countParfors(test_impl, args), 1)
         # with no fusion
-        self.assertEqual(countParfors(test_impl, args, fusion=False), 5)
+        self.assertEqual(countParfors(test_impl, args, fusion=False), 6)
         # with no fusion, comprehension
         self.assertEqual(countParfors(test_impl, args, fusion=False,
-                         comprehension=False), 4)
-        # with no fusion, comprehension, prange
+                         comprehension=False), 5)
+        #with no fusion, comprehension, setitem
         self.assertEqual(countParfors(test_impl, args, fusion=False,
-                         comprehension=False, prange=False), 3)
+                         comprehension=False, setitem=False), 4)
+         # with no fusion, comprehension, prange
+        self.assertEqual(countParfors(test_impl, args, fusion=False,
+                         comprehension=False, setitem=False, prange=False), 3)
          # with no fusion, comprehension, prange, reduction
         self.assertEqual(countParfors(test_impl, args, fusion=False,
-                         comprehension=False, prange=False,
+                         comprehension=False, setitem=False, prange=False,
                          reduction=False), 2)
         # with no fusion, comprehension, prange, reduction, numpy
         self.assertEqual(countParfors(test_impl, args, fusion=False,
-                         prange=False, comprehension=False,
+                         comprehension=False, setitem=False, prange=False,
                          reduction=False, numpy=False), 0)
 
 
