@@ -211,7 +211,7 @@ class ParallelOptions(object):
             if value:
                 raise NameError("Unrecognized parallel options: %s" % value.keys())
         else:
-            raise ValueError("expect parallel option to be either a bool or a dict")
+            raise ValueError("Expect parallel option to be either a bool or a dict")
 
 
 # ----------------------------------------------------------------------------
