@@ -281,7 +281,8 @@ class ParforPass(object):
                                             self.array_analysis, self.typingctx)
             stencil_pass.run()
         # prange is always parallelized
-        self._convert_prange(self.func_ir.blocks)
+        if self.options.prange:
+           self._convert_prange(self.func_ir.blocks)
         if self.options.setitem:
             self._convert_setitem(self.func_ir.blocks)
         if self.options.numpy:
@@ -551,8 +552,12 @@ class ParforPass(object):
                     backup_equivset = self.array_analysis.equiv_sets.get(0, None)
                     self.array_analysis.equiv_sets[0] = parfor.equiv_set
                     self._convert_prange(parfor_blocks)
-                    self._convert_setitem(parfor_blocks)
-                    self._convert_numpy(parfor_blocks)
+                    if self.options.setitem:
+                        self._convert_setitem(parfor_blocks)
+                    if self.options.numpy:
+                        self._convert_numpy(parfor_blocks)
+                    if self.options.reduction:
+                        self._convert_reduce(parfor_blocks)
                     parfor_blocks = rename_labels(parfor_blocks)
                     unwrap_parfor_blocks(parfor, parfor_blocks)
                     # restore equiv_set for real block 0

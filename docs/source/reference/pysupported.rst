@@ -133,10 +133,12 @@ contains a :class:`int` and a :class:`float`).
    List sorting currently uses a quicksort algorithm, which has different
    performance characterics than the algorithm used by Python.
 
+.. _pysupported-comprehension:
+
 List comprehension
 ''''''''''''''''''
-
 Numba supports list comprehension, but not the creation of nested list.
+
 
 Numba also supports "array comprehension" that is a list comprehension
 followed immediately by a call to :func:`numpy.array`. The following

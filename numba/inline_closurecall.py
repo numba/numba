@@ -1029,7 +1029,7 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
                     continue
         stmts.append(inst)
 
-        # If the list is used in any capacity bebetween build_list and array
+        # If the list is used in any capacity between build_list and array
         # call, then we must call off the translation for this list because
         # it could be mutated and list_items would no longer be applicable.
         list_var_used = any([ x.name in list_vars for x in inst.list_vars() ])
