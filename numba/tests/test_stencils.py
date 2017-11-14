@@ -456,19 +456,19 @@ class pyStencilGenerator:
         def gen_alloc_return(self, orig, var, dtype_var, init_val=0):
             """
             Generates an AST equivalent to:
-                `var = np.ones(orig.shape, dtype_var) * init_val`
+                `var = np.full(orig.shape, init_val, dtype = dtype_var)`
             """
             new = ast.Assign(
                 targets=[
                     ast.Name(
                         id=var,
                         ctx=ast.Store())],
-                value=ast.BinOp(op=ast.Mult(), left=ast.Call(
+                value=ast.Call(
                     func=ast.Attribute(
                         value=ast.Name(
                             id='np',
                             ctx=ast.Load()),
-                        attr='ones',
+                        attr='full',
                         ctx=ast.Load()),
                     args=[
                         ast.Attribute(
@@ -477,10 +477,12 @@ class pyStencilGenerator:
                                 ctx=ast.Load()),
                             attr='shape',
                             ctx=ast.Load()),
-                        self.gen_call('type', [dtype_var.id]).value],
-                    keywords=[],
+                        self.gen_num(init_val)],
+                    keywords=[ast.keyword(arg='dtype',
+                                          value=self.gen_call('type', [dtype_var.id]).value)],
                     starargs=None,
-                    kwargs=None), right=self.gen_num(init_val)))
+                    kwargs=None),
+            )
             return new
 
         def gen_assign(self, var, value, index_names):
@@ -802,6 +804,31 @@ class pyStencilGenerator:
         def id_pattern(self):
             return self._id_pat
 
+    class TransformReturns(ast.NodeTransformer, Builder):
+        """
+        Transforms return nodes into assignments.
+        """
+
+        def __init__(self, relidx_info, *args, **kwargs):
+            ast.NodeTransformer.__init__(self, *args, **kwargs)
+            pyStencilGenerator.Builder.__init__(self, *args, **kwargs)
+            self._relidx_info = relidx_info
+            self._ret_var_idx = self.varidx()
+            retvar = '__b%s' % self._ret_var_idx
+            self._retvarname = retvar
+
+        def visit_Return(self, node):
+            self.generic_visit(node)
+            nloops = self._relidx_info.idx_len
+            var_pattern = self._relidx_info.id_pattern
+            return self.gen_assign(
+                self._retvarname, node.value,
+                [var_pattern % self.ids[l] for l in range(nloops)])
+
+        @property
+        def ret_var_name(self):
+            return self._retvarname
+
     class FixFunc(ast.NodeTransformer, Builder):
         """ The main function rewriter, takes the body of the kernel and generates:
          * checking function calls
@@ -811,7 +838,7 @@ class pyStencilGenerator:
          * Function definition as an entry point
         """
 
-        def __init__(self, kprops, relidx_info,
+        def __init__(self, kprops, relidx_info, ret_info,
                      cval, standard_indexing, neighborhood, *args, **kwargs):
             ast.NodeTransformer.__init__(self, *args, **kwargs)
             pyStencilGenerator.Builder.__init__(self, *args, **kwargs)
@@ -819,6 +846,7 @@ class pyStencilGenerator:
             self._argnames = kprops.argnames
             self._retty = kprops.retty
             self._relidx_info = relidx_info
+            self._ret_info = ret_info
             self._standard_indexing = standard_indexing \
                 if standard_indexing else []
             self._neighborhood = neighborhood if neighborhood else tuple()
@@ -831,16 +859,12 @@ class pyStencilGenerator:
                 self.cval = cval
             self.stencil_arr = self._argnames[0]
 
-        def visit_Return(self, node):
-            return node.value
-
         def visit_FunctionDef(self, node):
             """
             Transforms the kernel function into a function that will perform
             the stencil like behaviour on the kernel.
             """
-            # make sure there is a return and its the last statement
-            assert(isinstance(node.body[-1], ast.Return))
+            self.generic_visit(node)
 
             # this function validates arguments and is injected into the top
             # of the stencil call
@@ -867,14 +891,6 @@ class pyStencilGenerator:
                 self._relidx_args,
                 kwargs=['neighborhood'])
 
-            blk = []
-            for b in node.body:
-                # strip return block
-                if isinstance(b, ast.Return):
-                    blk.append(b.value)
-                else:
-                    blk.append(b)
-            retvar = '__b%s' % self.varidx()
             nloops = self._relidx_info.idx_len
 
             def computebound(mins, maxs):
@@ -884,11 +900,7 @@ class pyStencilGenerator:
 
             var_pattern = self._relidx_info.id_pattern
 
-            # replay blocks, switch return for assign
-            blocks = [x for x in blk[: -1]]
-            loop_body = blocks + [self.gen_assign(
-                retvar, blk[-1],
-                [var_pattern % self.ids[l] for l in range(nloops)])]
+            loop_body = node.body
 
             # create loop nests
             loop_count = 0
@@ -910,6 +922,7 @@ class pyStencilGenerator:
             _rettyname = self._retty.targets[0]
 
             # allocate a return
+            retvar = self._ret_info.ret_var_name
             allocate = self.gen_alloc_return(
                 self.stencil_arr, retvar, _rettyname, self.cval)
             ast.copy_location(allocate, node)
@@ -1080,10 +1093,15 @@ class pyStencilGenerator:
                 argnm, const_asgn, standard_indexing, neighborhood)
             relidx_fixer.visit(tree)
 
+            # switch returns into assigns
+            return_transformer = self.TransformReturns(relidx_fixer)
+            return_transformer.visit(tree)
+
             # generate the function body and loop nests and assemble
             fixer = self.FixFunc(
                 kernel_props,
                 relidx_fixer,
+                return_transformer,
                 cval,
                 standard_indexing,
                 neighborhood)
@@ -2331,6 +2349,38 @@ class TestManyStencils(TestStencilBase):
             1.0,
             options={},
             expected_exception=ex)
+
+    def test_basic89(self):
+        """ basic multiple return"""
+        def kernel(a):
+            if a[0, 1] > 10:
+                return 10.
+            elif a[0, 3] < 8:
+                return a[0, 0]
+            else:
+                return 7.
+
+        a = np.arange(10. * 20.).reshape(10, 20)
+        self.check(kernel, a)
+
+    def test_basic90(self):
+        """ neighborhood, with standard_indexing and cval, multiple returns"""
+        def kernel(a, b):
+            cumul = 0
+            for i in range(-3, 1):
+                for j in range(-3, 1):
+                    cumul += a[i, j] + b[1, 3]
+            res = cumul / (9.)
+            if res > 200.0:
+                return res + 1.0
+            else:
+                return res
+        a = np.arange(10. * 20.).reshape(10, 20)
+        b = a.copy()
+        self.check(
+            kernel, a, b, options={
+                'neighborhood': (
+                    (-3, 0), (-3, 0)), 'standard_indexing': 'b', 'cval': 1.5})
 
 
 if __name__ == "__main__":

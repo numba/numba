@@ -91,6 +91,25 @@ class StencilPass(object):
                     # remove dummy stencil() call
                     stmt.value = ir.Const(0, stmt.loc)
 
+    def replace_return_with_setitem(self, blocks, exit_value_var,
+                                    parfor_body_exit_label):
+        """
+        Find return statements in the IR and replace them with a SetItem
+        call of the value "returned" by the kernel into the result array.
+        Returns the block labels that contained return statements.
+        """
+        for label, block in blocks.items():
+            scope = block.scope
+            loc = block.loc
+            new_body = []
+            for stmt in block.body:
+                if isinstance(stmt, ir.Return):
+                    new_body.append(ir.Assign(stmt.value, exit_value_var, loc))
+                    new_body.append(ir.Jump(parfor_body_exit_label, loc))
+                else:
+                    new_body.append(stmt)
+            block.body = new_body
+
     def _mk_stencil_parfor(self, label, in_args, out_arr, stencil_blocks,
                            index_offsets, target, return_type, stencil_func,
                            arg_to_arr_dict):
@@ -139,6 +158,10 @@ class StencilPass(object):
              stencil_blocks, parfor_vars, in_args, index_offsets, stencil_func,
              arg_to_arr_dict)
 
+        if config.DEBUG_ARRAY_OPT == 1:
+            print("stencil_blocks after replace stencil accesses")
+            ir_utils.dump_blocks(stencil_blocks)
+
         # create parfor loop nests
         loopnests = []
         equiv_set = self.array_analysis.get_equiv_set(label)
@@ -154,19 +177,16 @@ class StencilPass(object):
             loopnests.append(numba.parfor.LoopNest(parfor_vars[i],
                                 start_ind, last_ind, 1))
 
-        # replace return value to setitem to output array
-        return_node = stencil_blocks[max(stencil_blocks.keys())].body.pop()
-        assert isinstance(return_node, ir.Return)
-
-        last_node = stencil_blocks[max(stencil_blocks.keys())].body.pop()
-        while not isinstance(last_node, ir.Assign) or not isinstance(last_node.value, ir.Expr) or not last_node.value.op == 'cast':
-            last_node = stencil_blocks[max(stencil_blocks.keys())].body.pop()
-        assert isinstance(last_node, ir.Assign)
-        assert isinstance(last_node.value, ir.Expr)
-        assert last_node.value.op == 'cast'
-        return_val = last_node.value.value
+        # We have to guarantee that the exit block has maximum label and that
+        # there's only one exit block for the parfor body.
+        # So, all return statements will change to jump to the parfor exit block.
+        parfor_body_exit_label = max(stencil_blocks.keys()) + 1
+        stencil_blocks[parfor_body_exit_label] = ir.Block(scope, loc)
+        exit_value_var = ir.Var(scope, mk_unique_var("$parfor_exit_value"), loc)
+        self.typemap[exit_value_var.name] = return_type.dtype
 
         # create parfor index var
+        for_replacing_ret = []
         if ndims == 1:
             parfor_ind_var = parfor_vars[0]
         else:
@@ -176,7 +196,11 @@ class StencilPass(object):
                 types.intp, ndims)
             tuple_call = ir.Expr.build_tuple(parfor_vars, loc)
             tuple_assign = ir.Assign(tuple_call, parfor_ind_var, loc)
-            stencil_blocks[max(stencil_blocks.keys())].body.append(tuple_assign)
+            for_replacing_ret.append(tuple_assign)
+
+        if config.DEBUG_ARRAY_OPT == 1:
+            print("stencil_blocks after creating parfor index var")
+            ir_utils.dump_blocks(stencil_blocks)
 
         # empty init block
         init_block = ir.Block(scope, loc)
@@ -233,13 +257,25 @@ class StencilPass(object):
             equiv_set.insert_equiv(out_arr, in_arr_dim_sizes)
             init_block.body.extend(stmts)
 
-        setitem_call = ir.SetItem(out_arr, parfor_ind_var, return_val, loc)
+        self.replace_return_with_setitem(stencil_blocks, exit_value_var,
+                                         parfor_body_exit_label)
+
+        if config.DEBUG_ARRAY_OPT == 1:
+            print("stencil_blocks after replacing return")
+            ir_utils.dump_blocks(stencil_blocks)
+
+        setitem_call = ir.SetItem(out_arr, parfor_ind_var, exit_value_var, loc)
         self.calltypes[setitem_call] = signature(
                                         types.none, self.typemap[out_arr.name],
                                         self.typemap[parfor_ind_var.name],
                                         self.typemap[out_arr.name].dtype
                                         )
-        stencil_blocks[max(stencil_blocks.keys())].body.append(setitem_call)
+        stencil_blocks[parfor_body_exit_label].body.extend(for_replacing_ret)
+        stencil_blocks[parfor_body_exit_label].body.append(setitem_call)
+
+        if config.DEBUG_ARRAY_OPT == 1:
+            print("stencil_blocks after adding SetItem")
+            ir_utils.dump_blocks(stencil_blocks)
 
         parfor = numba.parfor.Parfor(loopnests, init_block, stencil_blocks,
                                      loc, parfor_ind_var, equiv_set)
