@@ -16,7 +16,7 @@ import numpy as np
 import numba
 from numba import unittest_support as unittest
 from .support import TestCase
-from numba import njit, prange, stencil
+from numba import njit, prange, stencil, inline_closurecall
 from numba import compiler, typing
 from numba.targets import cpu
 from numba import types
@@ -54,7 +54,7 @@ class TestParforsBase(TestCase):
 
         # flags for njit(parallel=True)
         self.pflags = Flags()
-        self.pflags.set('auto_parallel')
+        self.pflags.set('auto_parallel', cpu.ParallelOptions(True))
         self.pflags.set('nrt')
         super(TestParforsBase, self).__init__(*args)
 
@@ -130,12 +130,20 @@ def test2(Y, X, w, iterations):
     return w
 
 
-def countParfors(test_func, args):
+def countParfors(test_func, args, **kws):
     typingctx = typing.Context()
     targetctx = cpu.CPUContext(typingctx)
     test_ir = compiler.run_frontend(test_func)
+    if kws:
+        options = cpu.ParallelOptions(kws)
+    else:
+        options = cpu.ParallelOptions(True)
+
     with cpu_target.nested_context(typingctx, targetctx):
         tp = TestPipeline(typingctx, targetctx, args, test_ir)
+
+        inline_pass = inline_closurecall.InlineClosureCallPass(tp.func_ir, options)
+        inline_pass.run()
 
         numba.rewrites.rewrite_registry.apply(
             'before-inference', tp, tp.func_ir)
@@ -158,7 +166,7 @@ def countParfors(test_func, args):
 
         parfor_pass = numba.parfor.ParforPass(
             tp.func_ir, tp.typemap, tp.calltypes, tp.return_type,
-            tp.typingctx)
+            tp.typingctx, options)
         parfor_pass.run()
     ret_count = 0
 
@@ -963,6 +971,293 @@ class TestPrange(TestParforsBase):
                   c[k] = i + j + k
             return b.sum()
         self.prange_tester(test_impl, 4)
+
+class TestParforsSlice(TestParforsBase):
+
+    def check(self, pyfunc, *args, **kwargs):
+        cfunc, cpfunc = self.compile_all(pyfunc, *args)
+        self.check_prange_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
+
+    @skip_unsupported
+    def test_parfor_slice1(self):
+        def test_impl(a):
+            (n,) = a.shape
+            b = a[0:n-2] + a[1:n-1]
+            return b
+
+        self.check(test_impl, np.ones(10))
+
+    @skip_unsupported
+    def test_parfor_slice2(self):
+        def test_impl(a, m):
+            (n,) = a.shape
+            b = a[0:n-2] + a[1:m]
+            return b
+
+        # runtime assertion should succeed
+        self.check(test_impl, np.ones(10), 9)
+        # next we expect failure
+        with self.assertRaises(AssertionError) as raises:
+            njit(parallel=True)(test_impl)(np.ones(10),10)
+        self.assertIn("do not match", str(raises.exception))
+
+    @skip_unsupported
+    def test_parfor_slice3(self):
+        def test_impl(a):
+            (m,n) = a.shape
+            b = a[0:m-1,0:n-1] + a[1:m,1:n]
+            return b
+
+        self.check(test_impl, np.ones((4,3)))
+
+    @skip_unsupported
+    def test_parfor_slice4(self):
+        def test_impl(a):
+            (m,n) = a.shape
+            b = a[:,0:n-1] + a[:,1:n]
+            return b
+
+        self.check(test_impl, np.ones((4,3)))
+
+    @skip_unsupported
+    def test_parfor_slice5(self):
+        def test_impl(a):
+            (m,n) = a.shape
+            b = a[0:m-1,:] + a[1:m,:]
+            return b
+
+        self.check(test_impl, np.ones((4,3)))
+
+    @skip_unsupported
+    def test_parfor_slice6(self):
+        def test_impl(a):
+            b = a.transpose()
+            c = a[1,:] + b[:,1]
+            return c
+
+        self.check(test_impl, np.ones((4,3)))
+
+    @skip_unsupported
+    def test_parfor_slice7(self):
+        def test_impl(a):
+            b = a.transpose()
+            c = a[1,:] + b[1,:]
+            return c
+
+        # runtime check should succeed
+        self.check(test_impl, np.ones((3,3)))
+        # next we expect failure
+        with self.assertRaises(AssertionError) as raises:
+            njit(parallel=True)(test_impl)(np.ones((3,4)))
+        self.assertIn("do not match", str(raises.exception))
+
+    @skip_unsupported
+    def test_parfor_slice8(self):
+        def test_impl(a):
+            (m,n) = a.shape
+            b = a.transpose()
+            b[1:m,1:n] = a[1:m,1:n]
+            return b
+
+        self.check(test_impl, np.arange(9).reshape((3,3)))
+
+    @skip_unsupported
+    def test_parfor_slice9(self):
+        def test_impl(a):
+            (m,n) = a.shape
+            b = a.transpose()
+            b[1:n,1:m] = a[:,1:m]
+            return b
+
+        self.check(test_impl, np.arange(12).reshape((3,4)))
+
+    @skip_unsupported
+    def test_parfor_slice10(self):
+        def test_impl(a):
+            (m,n) = a.shape
+            b = a.transpose()
+            b[2,1:m] = a[2,1:m]
+            return b
+
+        self.check(test_impl, np.arange(9).reshape((3,3)))
+
+    @skip_unsupported
+    def test_parfor_slice11(self):
+        def test_impl(a):
+            (m,n,l) = a.shape
+            b = a.copy()
+            b[:,1,1:l] = a[:,2,1:l]
+            return b
+
+        self.check(test_impl, np.arange(27).reshape((3,3,3)))
+
+    @skip_unsupported
+    def test_parfor_slice12(self):
+        def test_impl(a):
+            (m,n) = a.shape
+            b = a.copy()
+            b[1,1:-1] = a[0,:-2]
+            return b
+
+        self.check(test_impl, np.arange(12).reshape((3,4)))
+
+    @skip_unsupported
+    def test_parfor_slice13(self):
+        def test_impl(a):
+            (m,n) = a.shape
+            b = a.copy()
+            c = -1
+            b[1,1:c] = a[0,-n:c-1]
+            return b
+
+        self.check(test_impl, np.arange(12).reshape((3,4)))
+
+    @skip_unsupported
+    def test_parfor_slice14(self):
+        def test_impl(a):
+            (m,n) = a.shape
+            b = a.copy()
+            c = -1
+            b[1,:-1] = a[0,-3:4]
+            return b
+
+        self.check(test_impl, np.arange(12).reshape((3,4)))
+
+    @skip_unsupported
+    def test_parfor_slice15(self):
+        def test_impl(a):
+            (m,n) = a.shape
+            b = a.copy()
+            c = -1
+            b[1,-(n-1):] = a[0,-3:4]
+            return b
+
+        self.check(test_impl, np.arange(12).reshape((3,4)))
+
+    @skip_unsupported
+    def test_parfor_slice16(self):
+        def test_impl(a, b, n):
+            assert(a.shape == b.shape)
+            a[1:n] = 10
+            b[0:(n-1)] = 10
+            return a * b
+
+        self.check(test_impl, np.ones(10), np.zeros(10), 2)
+        args = (numba.float64[:], numba.float64[:], numba.int64)
+        self.assertEqual(countParfors(test_impl, args), 2)
+
+
+class TestParforsOptions(TestParforsBase):
+
+    def check(self, pyfunc, *args, **kwargs):
+        cfunc, cpfunc = self.compile_all(pyfunc, *args)
+        self.check_prange_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
+
+    @skip_unsupported
+    def test_parfor_options(self):
+        def test_impl(a):
+            n = a.shape[0]
+            b = np.ones(n)
+            c = np.array([ i for i in range(n) ])
+            b[:n] = a + b * c
+            for i in prange(n):
+                c[i] = b[i] * a[i]
+            return reduce(lambda x,y:x+y, c, 0)
+
+        self.check(test_impl, np.ones(10))
+        args = (numba.float64[:],)
+        # everything should fuse with default option
+        self.assertEqual(countParfors(test_impl, args), 1)
+        # with no fusion
+        self.assertEqual(countParfors(test_impl, args, fusion=False), 6)
+        # with no fusion, comprehension
+        self.assertEqual(countParfors(test_impl, args, fusion=False,
+                         comprehension=False), 5)
+        #with no fusion, comprehension, setitem
+        self.assertEqual(countParfors(test_impl, args, fusion=False,
+                         comprehension=False, setitem=False), 4)
+         # with no fusion, comprehension, prange
+        self.assertEqual(countParfors(test_impl, args, fusion=False,
+                         comprehension=False, setitem=False, prange=False), 3)
+         # with no fusion, comprehension, prange, reduction
+        self.assertEqual(countParfors(test_impl, args, fusion=False,
+                         comprehension=False, setitem=False, prange=False,
+                         reduction=False), 2)
+        # with no fusion, comprehension, prange, reduction, numpy
+        self.assertEqual(countParfors(test_impl, args, fusion=False,
+                         comprehension=False, setitem=False, prange=False,
+                         reduction=False, numpy=False), 0)
+
+
+class TestParforsBitMask(TestParforsBase):
+
+    def check(self, pyfunc, *args, **kwargs):
+        cfunc, cpfunc = self.compile_all(pyfunc, *args)
+        self.check_prange_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
+
+    @skip_unsupported
+    def test_parfor_bitmask1(self):
+        def test_impl(a, n):
+            b = a > n
+            a[b] = 0
+            return a
+
+        self.check(test_impl, np.arange(10), 5)
+
+    @skip_unsupported
+    def test_parfor_bitmask2(self):
+        def test_impl(a, b):
+            a[b] = 0
+            return a
+
+        a = np.arange(10)
+        b = a > 5
+        self.check(test_impl, a, b)
+
+    @skip_unsupported
+    def test_parfor_bitmask3(self):
+        def test_impl(a, b):
+            a[b] = a[b]
+            return a
+
+        a = np.arange(10)
+        b = a > 5
+        self.check(test_impl, a, b)
+
+    @skip_unsupported
+    def test_parfor_bitmask4(self):
+        def test_impl(a, b):
+            a[b] = (2 * a)[b]
+            return a
+
+        a = np.arange(10)
+        b = a > 5
+        self.check(test_impl, a, b)
+
+    @skip_unsupported
+    def test_parfor_bitmask5(self):
+        def test_impl(a, b):
+            a[b] = a[b] * a[b]
+            return a
+
+        a = np.arange(10)
+        b = a > 5
+        self.check(test_impl, a, b)
+
+    @skip_unsupported
+    def test_parfor_bitmask6(self):
+        def test_impl(a, b, c):
+            a[b] = c
+            return a
+
+        a = np.arange(10)
+        b = a > 5
+        c = np.zeros(sum(b))
+
+        # expect failure due to lack of parallelism
+        with self.assertRaises(AssertionError) as raises:
+            self.check(test_impl, a, b, c)
+        self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
 
 class TestParforsMisc(TestCase):
     """

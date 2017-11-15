@@ -15,6 +15,7 @@ from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
 from ..typing import signature
 from numba import config
+from numba.targets.cpu import ParallelOptions
 import llvmlite.llvmpy.core as lc
 import numba
 import copy
@@ -60,7 +61,7 @@ def _lower_parfor_parallel(lowerer, parfor):
     # compile parfor body as a separate function to be used with GUFuncWrapper
     flags = compiler.Flags()
     flags.set('error_model', 'numpy')
-    flags.set('auto_parallel')
+    flags.set('auto_parallel', ParallelOptions(True))
     numba.parfor.sequential_parfor_lowering = True
     func, func_args, func_sig = _create_gufunc_for_parfor_body(
         lowerer, parfor, typemap, typingctx, targetctx, flags, {})

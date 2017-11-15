@@ -155,6 +155,9 @@ class _EnvReloader(object):
         # insert debug stmts to print information at runtime
         DEBUG_ARRAY_OPT_RUNTIME = _readenv("NUMBA_DEBUG_ARRAY_OPT_RUNTIME", int, 0)
 
+        # print stats about parallel for-loops
+        DEBUG_ARRAY_OPT_STATS = _readenv("NUMBA_DEBUG_ARRAY_OPT_STATS", int, 0)
+
         # print debug info of inline closure pass
         DEBUG_INLINE_CLOSURE = _readenv("NUMBA_DEBUG_INLINE_CLOSURE", int, 0)
 

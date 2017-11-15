@@ -59,6 +59,11 @@ parallel semantics and for which we attempt to parallelize.
    Numpy broadcast between arrays with mixed dimensionality or size is
    not supported, nor is the reduction across a selected dimension.
 
+6. Array assignment in which the target is an array selection using a slice
+   or a boolean array, and the value being assigned is either a scalar or
+   another selection where the slice range or bitarray are inferred to be
+   compatible.
+
 6. The ``reduce`` operator of ``functools`` is supported for specifying parallel
    reductions on 1D Numpy arrays but the initial value argument is mandatory.
 

@@ -165,7 +165,7 @@ class StencilPass(object):
         # create parfor loop nests
         loopnests = []
         equiv_set = self.array_analysis.get_equiv_set(label)
-        in_arr_dim_sizes = equiv_set.get_shape(in_arr.name)
+        in_arr_dim_sizes = equiv_set.get_shape(in_arr)
 
         assert ndims == len(in_arr_dim_sizes)
         for i in range(ndims):
@@ -277,9 +277,9 @@ class StencilPass(object):
             print("stencil_blocks after adding SetItem")
             ir_utils.dump_blocks(stencil_blocks)
 
+        pattern = ('stencil', [start_lengths, end_lengths])
         parfor = numba.parfor.Parfor(loopnests, init_block, stencil_blocks,
-                                     loc, parfor_ind_var, equiv_set)
-        parfor.patterns = [('stencil', [start_lengths, end_lengths])]
+                                     loc, parfor_ind_var, equiv_set, pattern)
         gen_nodes.append(parfor)
         gen_nodes.append(ir.Assign(out_arr, target, loc))
         return gen_nodes

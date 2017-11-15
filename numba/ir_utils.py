@@ -581,7 +581,13 @@ def has_no_side_effect(rhs, lives, call_table):
         call_list = call_table[func_name]
         if (call_list == ['empty', numpy] or
             call_list == [slice] or
-            call_list == ['log', numpy]):
+            call_list == ['stencil', numba] or
+            call_list == ['log', numpy] or
+            call_list == [numba.array_analysis.wrap_index]):
+            return True
+        elif (isinstance(call_list[0], numba.extending._Intrinsic) and
+              (call_list[0]._name == 'empty_inferred' or
+               call_list[0]._name == 'unsafe_empty_inferred')):
             return True
         from numba.targets.registry import CPUDispatcher
         from numba.targets.linalg import dot_3_mv_check_args
@@ -648,8 +654,8 @@ def find_potential_aliases(blocks, args, typemap, alias_map=None, arg_aliases=No
                 if isinstance(expr, ir.Var) and lhs!=expr.name:
                     _add_alias(lhs, expr.name, alias_map, arg_aliases)
                 # subarrays like A = B[0] for 2D B
-                if (isinstance(expr, ir.Expr)
-                        and expr.op in ['getitem', 'static_getitem']):
+                if (isinstance(expr, ir.Expr) and (expr.op == 'cast' or
+                    expr.op in ['getitem', 'static_getitem'])):
                     _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
 
     # copy to avoid changing size during iteration
@@ -828,8 +834,15 @@ apply_copy_propagate_extensions = {}
 
 
 def apply_copy_propagate(blocks, in_copies, name_var_table, typemap, calltypes,
-                         ext_func=lambda a, b, c, d:None, ext_data=None):
+                         ext_func=lambda a, b, c, d:None, ext_data=None,
+                         save_copies=None):
     """apply copy propagation to IR: replace variables when copies available"""
+    # save_copies keeps an approximation of the copies that were applied, so
+    # that the variable names of removed user variables can be recovered to some
+    # extent.
+    if save_copies is None:
+        save_copies = []
+
     for label, block in blocks.items():
         var_dict = {l: name_var_table[r] for l, r in in_copies[label]}
         # assignments as dict to replace with latest value
@@ -838,7 +851,7 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, typemap, calltypes,
             if type(stmt) in apply_copy_propagate_extensions:
                 f = apply_copy_propagate_extensions[type(stmt)]
                 f(stmt, var_dict, name_var_table, ext_func, ext_data,
-                    typemap, calltypes)
+                    typemap, calltypes, save_copies)
             # only rhs of assignments should be replaced
             # e.g. if x=y is available, x in x=z shouldn't be replaced
             elif isinstance(stmt, ir.Assign):
@@ -884,7 +897,9 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, typemap, calltypes,
                         lhs_kill.append(k)
                 for k in lhs_kill:
                     var_dict.pop(k, None)
-    return
+        save_copies.extend(var_dict.items())
+
+    return save_copies
 
 def fix_setitem_type(stmt, typemap, calltypes):
     """Copy propagation can replace setitem target variable, which can be array
@@ -911,12 +926,18 @@ def fix_setitem_type(stmt, typemap, calltypes):
     return
 
 
-def dprint_func_ir(func_ir, title):
+def dprint_func_ir(func_ir, title, blocks=None):
+    """Debug print function IR, with an optional blocks argument
+    that may differ from the IR's original blocks.
+    """
     if config.DEBUG_ARRAY_OPT == 1:
+        ir_blocks = func_ir.blocks
+        func_ir.blocks = ir_blocks if blocks == None else blocks
         name = func_ir.func_id.func_qualname
         print(("IR %s: %s" % (title, name)).center(80, "-"))
         func_ir.dump()
         print("-" * 40)
+        func_ir.blocks = ir_blocks
 
 
 def find_topo_order(blocks, cfg = None):
@@ -1029,7 +1050,7 @@ def get_stmt_writes(stmt):
 
 def rename_labels(blocks):
     """rename labels of function body blocks according to topological sort.
-    lowering requires this order.
+    The set of labels of these blocks will remain unchanged.
     """
     topo_order = find_topo_order(blocks)
 
@@ -1044,10 +1065,9 @@ def rename_labels(blocks):
         topo_order.append(return_label)
 
     label_map = {}
-    new_label = 0
+    all_labels = sorted(topo_order, reverse=True)
     for label in topo_order:
-        label_map[label] = new_label
-        new_label += 1
+        label_map[label] = all_labels.pop()
     # update target labels in jumps/branches
     for b in blocks.values():
         term = b.terminator
@@ -1085,26 +1105,7 @@ def simplify_CFG(blocks):
                 delete_block = False
         if delete_block:
             del blocks[label]
-    cfg = compute_cfg_from_blocks(blocks)
-    label_map = {}
-    for node in cfg.nodes():
-        # find nodes with one successors, that has one predecessor
-        successors = [n for n, _ in cfg.successors(node)]
-        if len(successors) == 1:
-            next_node = successors[0]
-            next_preds = list(cfg.predecessors(successors[0]))
-            if len(next_preds) == 1:
-                # nodes could have been replaced with previous nodes
-                node = label_map.get(node, node)
-                next_node = label_map.get(next_node, next_node)
-                assert isinstance(blocks[node].body[-1], ir.Jump)
-                assert blocks[node].body[-1].target == next_node
-                # remove next_node and append it's body to node
-                blocks[node].body.pop()
-                blocks[node].body.extend(blocks[next_node].body)
-                blocks.pop(next_node)
-                label_map[next_node] = node
-
+    merge_adjacent_blocks(blocks)
     return rename_labels(blocks)
 
 
@@ -1190,30 +1191,55 @@ def get_array_accesses(blocks, accesses=None):
                     f(inst, accesses)
     return accesses
 
-def merge_adjacent_blocks(func_ir):
-    cfg = compute_cfg_from_blocks(func_ir.blocks)
+def merge_adjacent_blocks(blocks):
+    cfg = compute_cfg_from_blocks(blocks)
     # merge adjacent blocks
-    removed = []
-    for label in list(func_ir.blocks.keys()):
+    removed = set()
+    for label in list(blocks.keys()):
         if label in removed:
             continue
+        block = blocks[label]
         succs = list(cfg.successors(label))
-        if len(succs) != 1:
-            continue
-        next_label = succs[0][0]
-        preds = list(cfg.predecessors(next_label))
-        if len(preds) != 1 or preds[0][0] != label:
-            continue
-        block = func_ir.blocks[label]
-        next_block = func_ir.blocks[next_label]
-        if block.scope != next_block.scope:
-            continue
-        # merge
-        removed.append(next_label)
-        block.body = block.body[:(len(block.body) - 1)]
-        for stmts in next_block.body:
-            block.body.append(stmts)
-        del func_ir.blocks[next_label]
+        while True:
+            if len(succs) != 1:
+                break
+            next_label = succs[0][0]
+            if next_label in removed:
+                break
+            preds = list(cfg.predecessors(next_label))
+            succs = list(cfg.successors(next_label))
+            if len(preds) != 1 or preds[0][0] != label:
+                break
+            next_block = blocks[next_label]
+            if block.scope != next_block.scope:
+                break
+            # merge
+            block.body = block.body[:(len(block.body) - 1)]
+            for stmts in next_block.body:
+                block.body.append(stmts)
+            del blocks[next_label]
+            removed.add(next_label)
+            label = next_label
+
+    cfg = compute_cfg_from_blocks(blocks)
+
+def restore_copy_var_names(blocks, save_copies, typemap):
+    """
+    restores variable names of user variables after applying copy propagation
+    """
+    rename_dict = {}
+    for (a, b) in save_copies:
+        # a is string name, b is variable
+        # if a is user variable and b is generated temporary and b is not
+        # already renamed
+        if (not a.startswith('$') and b.name.startswith('$')
+                                                and b.name not in rename_dict):
+            new_name = mk_unique_var('${}'.format(a));
+            rename_dict[b.name] = new_name
+            typ = typemap.pop(b.name)
+            typemap[new_name] = typ
+
+    replace_var_names(blocks, rename_dict)
 
 def simplify(func_ir, typemap, calltypes):
     remove_dels(func_ir.blocks)
@@ -1221,14 +1247,16 @@ def simplify(func_ir, typemap, calltypes):
     in_cps, out_cps = copy_propagate(func_ir.blocks, typemap)
     # table mapping variable names to ir.Var objects to help replacement
     name_var_table = get_name_var_table(func_ir.blocks)
-    apply_copy_propagate(
+    save_copies = apply_copy_propagate(
         func_ir.blocks,
         in_cps,
         name_var_table,
         typemap,
         calltypes)
+    restore_copy_var_names(func_ir.blocks, save_copies, typemap)
     # remove dead code to enable fusion
     remove_dead(func_ir.blocks, func_ir.arg_names, typemap)
+    func_ir.blocks = simplify_CFG(func_ir.blocks)
     if config.DEBUG_ARRAY_OPT == 1:
         dprint_func_ir(func_ir, "after simplify")
 

@@ -1,6 +1,7 @@
 import types as pytypes  # avoid confusion with numba.types
 import numba
-from numba import config, ir, ir_utils, utils, prange
+from numba import config, ir, ir_utils, utils, prange, rewrites, types, typing
+from numba.parfor import internal_prange
 from numba.ir_utils import (
     mk_unique_var,
     next_label,
@@ -16,6 +17,8 @@ from numba.ir_utils import (
     guard,
     get_definition,
     find_callname,
+    find_build_sequence,
+    get_np_ufunc_typ,
     get_ir_of_code
     )
 
@@ -38,9 +41,9 @@ class InlineClosureCallPass(object):
     closures, and inlines the body of the closure function to the call site.
     """
 
-    def __init__(self, func_ir, flags):
+    def __init__(self, func_ir, parallel_options):
         self.func_ir = func_ir
-        self.flags = flags
+        self.parallel_options = parallel_options
         self._processed_stencils = []
 
     def run(self):
@@ -78,7 +81,7 @@ class InlineClosureCallPass(object):
             # Identify loop structure
             if modified:
                 # Need to do some cleanups if closure inlining kicked in
-                merge_adjacent_blocks(self.func_ir)
+                merge_adjacent_blocks(self.func_ir.blocks)
             cfg = compute_cfg_from_blocks(self.func_ir.blocks)
             debug_print("start inline arraycall")
             _debug_dump(cfg)
@@ -89,7 +92,7 @@ class InlineClosureCallPass(object):
             for k, s in sorted(sized_loops, key=lambda tup: tup[1], reverse=True):
                 visited.append(k)
                 if guard(_inline_arraycall, self.func_ir, cfg, visited, loops[k],
-                        self.flags.auto_parallel):
+                         self.parallel_options.comprehension):
                     modified = True
             if modified:
                 _fix_nested_array(self.func_ir)
@@ -106,7 +109,7 @@ class InlineClosureCallPass(object):
     def _inline_reduction(self, work_list, block, i, expr, call_name):
         # only inline reduction in sequential execution, parallel handling
         # is done in ParforPass.
-        require(self.flags.auto_parallel != True)
+        require(not self.parallel_options.reduction)
         require(call_name == ('reduce', 'builtins') or
                 call_name == ('reduce', '_functools'))
         if len(expr.args) != 3:
@@ -640,8 +643,8 @@ def _inline_arraycall(func_ir, cfg, visited, loop, enable_prange=False):
         # we can parallelize this loop if enable_prange = True, by changing
         # range function from range, to prange.
         if enable_prange and isinstance(range_func_def, ir.Global):
-            range_func_def.name = 'prange'
-            range_func_def.value = prange
+            range_func_def.name = 'internal_prange'
+            range_func_def.value = internal_prange
 
     else:
         len_func_var = scope.make_temp(loc)
@@ -870,3 +873,171 @@ def _fix_nested_array(func_ir):
 def _new_definition(func_ir, var, value, loc):
     func_ir._definitions[var.name] = [value]
     return ir.Assign(value=value, target=var, loc=loc)
+
+@rewrites.register_rewrite('after-inference')
+class RewriteArrayOfConsts(rewrites.Rewrite):
+    '''The RewriteArrayOfConsts class is responsible for finding
+    1D array creations from a constant list, and rewriting it into
+    direct initialization of array elements without creating the list.
+    '''
+    def __init__(self, pipeline, *args, **kws):
+        self.typingctx = pipeline.typingctx
+        super(RewriteArrayOfConsts, self).__init__(pipeline, *args, **kws)
+
+    def match(self, func_ir, block, typemap, calltypes):
+        if len(calltypes) == 0:
+            return False
+        self.crnt_block = block
+        self.new_body = guard(_inline_const_arraycall, block, func_ir,
+                              self.typingctx, typemap, calltypes)
+        return self.new_body != None
+
+    def apply(self):
+        self.crnt_block.body = self.new_body
+        return self.crnt_block
+
+
+def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
+    """Look for array(list) call where list is a constant list created by build_list,
+    and turn them into direct array creation and initialization, if the following
+    conditions are met:
+      1. The build_list call immediate preceeds the array call;
+      2. The list variable is no longer live after array call;
+    If any condition check fails, no modification will be made.
+    """
+    debug_print = _make_debug_print("inline_const_arraycall")
+    scope = block.scope
+
+    def inline_array(array_var, expr, stmts, list_vars, dels):
+        """Check to see if the given "array_var" is created from a list
+        of constants, and try to inline the list definition as array
+        initialization.
+
+        Extra statements produced with be appended to "stmts".
+        """
+        callname = guard(find_callname, func_ir, expr)
+        require(callname and callname[1] == 'numpy' and callname[0] == 'array')
+        require(expr.args[0].name in list_vars)
+        ret_type = calltypes[expr].return_type
+        require(isinstance(ret_type, types.ArrayCompatible) and
+                           ret_type.ndim == 1)
+        loc = expr.loc
+        list_var = expr.args[0]
+        array_typ = typemap[array_var.name]
+        debug_print("inline array_var = ", array_var, " list_var = ", list_var)
+        dtype = array_typ.dtype
+        seq, op = find_build_sequence(func_ir, list_var)
+        size = len(seq)
+        size_var = scope.make_temp(loc)
+        size_tuple_var = scope.make_temp(loc)
+        size_typ = types.intp
+        size_tuple_typ = types.UniTuple(size_typ, 1)
+
+        typemap[size_var.name] = size_typ
+        typemap[size_tuple_var.name] = size_tuple_typ
+
+        stmts.append(_new_definition(func_ir, size_var,
+                 ir.Const(size, loc=loc), loc))
+
+        stmts.append(_new_definition(func_ir, size_tuple_var,
+                 ir.Expr.build_tuple(items=[size_var], loc=loc), loc))
+
+        empty_func = scope.make_temp(loc)
+        fnty = get_np_ufunc_typ(np.empty)
+        sig = context.resolve_function_type(fnty, (size_typ,), {})
+        typemap[empty_func.name] = fnty #
+
+        stmts.append(_new_definition(func_ir, empty_func,
+                         ir.Global('empty', np.empty, loc=loc), loc))
+
+        empty_call = ir.Expr.call(empty_func, [size_var], {}, loc=loc)
+        calltypes[empty_call] = typing.signature(array_typ, size_typ)
+        stmts.append(_new_definition(func_ir, array_var, empty_call, loc))
+
+        for i in range(size):
+            index_var = scope.make_temp(loc)
+            index_typ = types.intp
+            typemap[index_var.name] = index_typ
+            stmts.append(_new_definition(func_ir, index_var,
+                    ir.Const(i, loc), loc))
+            setitem = ir.SetItem(array_var, index_var, seq[i], loc)
+            calltypes[setitem] = typing.signature(types.none, array_typ,
+                                                  index_typ, dtype)
+            stmts.append(setitem)
+
+        stmts.extend(dels)
+        return True
+
+    # list_vars keep track of the variable created from the latest
+    # build_list instruction, as well as its synonyms.
+    list_vars = []
+    # dead_vars keep track of those in list_vars that are considered dead.
+    dead_vars = []
+    # list_items keep track of the elements used in build_list.
+    list_items = []
+    stmts = []
+    # dels keep track of the deletion of list_items, which will need to be
+    # moved after array initialization.
+    dels = []
+    modified = False
+    for inst in block.body:
+        if isinstance(inst, ir.Assign):
+            if isinstance(inst.value, ir.Var):
+                if inst.value.name in list_vars:
+                    list_vars.append(inst.target.name)
+                    stmts.append(inst)
+                    continue
+            elif isinstance(inst.value, ir.Expr):
+                expr = inst.value
+                if expr.op == 'build_list':
+                    list_vars = [inst.target.name]
+                    list_items = [x.name for x in expr.items]
+                    stmts.append(inst)
+                    continue
+                elif expr.op == 'call' and expr in calltypes:
+                    arr_var = inst.target
+                    if guard(inline_array, inst.target, expr,
+                                           stmts, list_vars, dels):
+                        modified = True
+                        continue
+        elif isinstance(inst, ir.Del):
+            removed_var = inst.value
+            if removed_var in list_items:
+                dels.append(inst)
+                continue
+            elif removed_var in list_vars:
+                # one of the list_vars is considered dead.
+                dead_vars.append(removed_var)
+                list_vars.remove(removed_var)
+                stmts.append(inst)
+                if list_vars == []:
+                    # if all list_vars are considered dead, we need to filter
+                    # them out from existing stmts to completely remove
+                    # build_list.
+                    # Note that if a translation didn't take place, dead_vars
+                    # will also be empty when we reach this point.
+                    body = []
+                    for inst in stmts:
+                        if ((isinstance(inst, ir.Assign) and
+                             inst.target.name in dead_vars) or
+                             (isinstance(inst, ir.Del) and
+                             inst.value in dead_vars)):
+                            continue
+                        body.append(inst)
+                    stmts = body
+                    dead_vars = []
+                    modified = True
+                    continue
+        stmts.append(inst)
+
+        # If the list is used in any capacity between build_list and array
+        # call, then we must call off the translation for this list because
+        # it could be mutated and list_items would no longer be applicable.
+        list_var_used = any([ x.name in list_vars for x in inst.list_vars() ])
+        if list_var_used:
+            list_vars = []
+            dead_vars = []
+            list_items = []
+            dels = []
+
+    return stmts if modified else None
