@@ -81,6 +81,10 @@ class prange(object):
     def __new__(cls, *args):
         return range(*args)
 
+class internal_prange(object):
+
+    def __new__(cls, *args):
+        return range(*args)
 
 _reduction_ops = {
     'sum': ('+=', '+', 0),
@@ -91,14 +95,14 @@ _reduction_ops = {
 def min_parallel_impl(in_arr):
     A = in_arr.ravel()
     val = numba.targets.builtins.get_type_max_value(A.dtype)
-    for i in numba.prange(len(A)):
+    for i in numba.parfor.internal_prange(len(A)):
         val = min(val, A[i])
     return val
 
 def max_parallel_impl(in_arr):
     A = in_arr.ravel()
     val = numba.targets.builtins.get_type_min_value(A.dtype)
-    for i in numba.prange(len(A)):
+    for i in numba.parfor.internal_prange(len(A)):
         val = max(val, A[i])
     return val
 
@@ -106,7 +110,7 @@ def argmin_parallel_impl(in_arr):
     A = in_arr.ravel()
     init_val = numba.targets.builtins.get_type_max_value(A.dtype)
     ival = numba.typing.builtins.IndexValue(0, init_val)
-    for i in numba.prange(len(A)):
+    for i in numba.parfor.internal_prange(len(A)):
         curr_ival = numba.typing.builtins.IndexValue(i, A[i])
         ival = min(ival, curr_ival)
     return ival.index
@@ -115,7 +119,7 @@ def argmax_parallel_impl(in_arr):
     A = in_arr.ravel()
     init_val = numba.targets.builtins.get_type_min_value(A.dtype)
     ival = numba.typing.builtins.IndexValue(0, init_val)
-    for i in numba.prange(len(A)):
+    for i in numba.parfor.internal_prange(len(A)):
         curr_ival = numba.typing.builtins.IndexValue(i, A[i])
         ival = max(ival, curr_ival)
     return ival.index
@@ -478,6 +482,8 @@ class ParforPass(object):
                         and self._is_prange(inst.value.func.name, call_table)):
                     body_labels = list(loop.body - {loop.header})
                     args = inst.value.args
+                    prange_kind = self._get_prange_kind(inst.value.func.name,
+                                                                    call_table)
                     # find loop index variable (pair_first in header block)
                     for stmt in blocks[loop.header].body:
                         if (isinstance(stmt, ir.Assign)
@@ -525,11 +531,10 @@ class ParforPass(object):
                     self.typemap[index_var.name] = types.intp
                     index_var_map = {v: index_var for v in loop_index_vars}
                     replace_vars(body, index_var_map)
-                    # TODO: find correlation
                     parfor_loop = LoopNest(index_var, start, size_var, step)
                     parfor = Parfor([parfor_loop], init_block, body, loc, index_var,
                                     self.array_analysis.get_equiv_set(entry),
-                                    ("prange",))
+                                    ("prange", prange_kind))
                     # add parfor to entry block, change jump target to exit
                     jump = blocks[entry].body.pop()
                     blocks[entry].body.append(parfor)
@@ -571,7 +576,19 @@ class ParforPass(object):
         if func_var not in call_table:
             return False
         call = call_table[func_var]
-        return len(call) > 0 and (call[0] == 'prange' or call[0] == prange)
+        return len(call) > 0 and (call[0] == 'prange' or call[0] == prange
+                or call[0] == 'internal_prange' or call[0] == internal_prange)
+
+    def _get_prange_kind(self, func_var, call_table):
+        """see if prange is user prange or internal"""
+        # prange can be either getattr (numba.prange) or global (prange)
+        assert func_var in call_table
+        call = call_table[func_var]
+        assert len(call) > 0
+        kind = 'user'
+        if call[0] == 'internal_prange' or call[0] == internal_prange:
+            kind = 'internal'
+        return kind
 
     def _is_reduce_assign(self, inst):
         """

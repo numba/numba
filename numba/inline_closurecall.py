@@ -1,6 +1,7 @@
 import types as pytypes  # avoid confusion with numba.types
 import numba
 from numba import config, ir, ir_utils, utils, prange, rewrites, types, typing
+from numba.parfor import internal_prange
 from numba.ir_utils import (
     mk_unique_var,
     next_label,
@@ -642,8 +643,8 @@ def _inline_arraycall(func_ir, cfg, visited, loop, enable_prange=False):
         # we can parallelize this loop if enable_prange = True, by changing
         # range function from range, to prange.
         if enable_prange and isinstance(range_func_def, ir.Global):
-            range_func_def.name = 'prange'
-            range_func_def.value = prange
+            range_func_def.name = 'internal_prange'
+            range_func_def.value = internal_prange
 
     else:
         len_func_var = scope.make_temp(loc)
