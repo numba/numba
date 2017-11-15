@@ -93,21 +93,21 @@ _reduction_ops = {
 }
 
 def min_parallel_impl(in_arr):
-    A = in_arr.ravel()
+    A = np.ravel(in_arr)
     val = numba.targets.builtins.get_type_max_value(A.dtype)
     for i in numba.parfor.internal_prange(len(A)):
         val = min(val, A[i])
     return val
 
 def max_parallel_impl(in_arr):
-    A = in_arr.ravel()
+    A = np.ravel(in_arr)
     val = numba.targets.builtins.get_type_min_value(A.dtype)
     for i in numba.parfor.internal_prange(len(A)):
         val = max(val, A[i])
     return val
 
 def argmin_parallel_impl(in_arr):
-    A = in_arr.ravel()
+    A = np.ravel(in_arr)
     init_val = numba.targets.builtins.get_type_max_value(A.dtype)
     ival = numba.typing.builtins.IndexValue(0, init_val)
     for i in numba.parfor.internal_prange(len(A)):
@@ -116,7 +116,7 @@ def argmin_parallel_impl(in_arr):
     return ival.index
 
 def argmax_parallel_impl(in_arr):
-    A = in_arr.ravel()
+    A = np.ravel(in_arr)
     init_val = numba.targets.builtins.get_type_min_value(A.dtype)
     ival = numba.typing.builtins.IndexValue(0, init_val)
     for i in numba.parfor.internal_prange(len(A)):
@@ -366,6 +366,7 @@ class ParforPass(object):
                             new_func = replace_functions_map[callname]
                             g = copy.copy(self.func_ir.func_id.func.__globals__)
                             g['numba'] = numba
+                            g['np'] = numpy
                             # inline the parallel implementation
                             inline_closure_call(self.func_ir, g,
                                         block, i, new_func, self.typingctx,
