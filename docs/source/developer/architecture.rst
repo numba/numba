@@ -452,9 +452,10 @@ which are controllable using a dictionary of options passed via the
 ``parallel`` keyword argument to :func:`~numba.jit`::
 
    { 'comprehension': True/False,  # parallel comprehension
-     'setitem':       True/False,  # parallel setitem
-     'reduction':     True/False,  # parallel reduce calls
+     'prange':        True/False,  # parallel for-loop
      'numpy':         True/False,  # parallel numpy calls
+     'reduction':     True/False,  # parallel reduce calls
+     'setitem':       True/False,  # parallel setitem
      'stencil':       True/False,  # parallel stencils
      'fusion':        True/False,  # enable fusion or not
    }
