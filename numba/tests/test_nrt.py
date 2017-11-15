@@ -222,7 +222,8 @@ class TestTracemalloc(unittest.TestCase):
         stat = diff[0]
         # There is a slight overhead, so the allocated size won't exactly be N
         self.assertGreaterEqual(stat.size, N)
-        self.assertLess(stat.size, N * 1.01)
+
+        self.assertLess(stat.size, N * 1.015)
         frame = stat.traceback[0]
         self.assertEqual(os.path.basename(frame.filename), "test_nrt.py")
         self.assertEqual(frame.lineno, alloc_lineno)
