@@ -3,7 +3,7 @@ import numpy as np
 
 from llvmlite.llvmpy.core import Type, Builder, ICMP_EQ, Constant
 
-from numba import types, cgutils, compiler
+from numba import types, cgutils, compiler, numpy_support
 from ..caching import make_library_cache, NullCache
 
 
@@ -281,6 +281,11 @@ class _GufuncWrapper(object):
         self.is_objectmode = self.signature.return_type == types.pyobject
         self.cache = (GufWrapperCache(py_func=self.py_func)
                       if cache else NullCache())
+        # legalize arg types
+        for ty in self.signature.args:
+            ty = ty.dtype if isinstance(ty, types.Array) else ty
+            # let as_dtype raise error for illegal argument types
+            numpy_support.as_dtype(ty)
 
     @property
     def library(self):
