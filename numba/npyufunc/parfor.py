@@ -515,7 +515,7 @@ def _create_gufunc_for_parfor_body(
                     strval = "{} =".format(inst.target.name)
                     strconsttyp = types.Const(strval)
 
-                    lhs = scope.make_temp(loc=loc)
+                    lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
                     assign_lhs = ir.Assign(value=ir.Const(value=strval, loc=loc),
                                            target=lhs, loc=loc)
                     typemap[lhs.name] = strconsttyp
