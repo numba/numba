@@ -1149,7 +1149,7 @@ class ArrayAnalysis(object):
             size_typ = self.typemap[dsize.name]
             lhs_typ = self.typemap[lhs.name]
             rhs_typ = self.typemap[rhs.name]
-            zero_var = scope.make_temp(loc)
+            zero_var = ir.Var(scope, mk_unique_var("zero"), loc)
 
             if isinstance(lhs_typ, types.NoneType):
                 zero = ir.Const(0, loc)
@@ -1169,7 +1169,7 @@ class ArrayAnalysis(object):
                 rhs_rel[1] == 0):
                 return dsize
 
-            size_var = scope.make_temp(loc)
+            size_var = ir.Var(scope, mk_unique_var("slice_size"), loc)
             size_val = ir.Expr.binop('-', rhs, lhs, loc=loc)
             self.calltypes[size_val] = signature(size_typ, lhs_typ, rhs_typ)
             self._define(equiv_set, size_var, size_typ, size_val)
@@ -1181,16 +1181,16 @@ class ArrayAnalysis(object):
                 equiv_set.is_equiv(size_rel[0], dsize.name))):
                 rel = size_rel if isinstance(size_rel, int) else size_rel[1]
                 size_val = ir.Const(rel, size_typ)
-                size_var = scope.make_temp(loc)
+                size_var = ir.Var(scope, mk_unique_var("slice_size"), loc)
                 self._define(equiv_set, size_var, size_typ, size_val)
 
-            wrap_var = scope.make_temp(loc)
+            wrap_var = ir.Var(scope, mk_unique_var("wrap"), loc)
             wrap_def = ir.Global('wrap_index', wrap_index, loc=loc)
             fnty = get_global_func_typ(wrap_index)
             sig = self.context.resolve_function_type(fnty, (size_typ, size_typ,), {})
             self._define(equiv_set, wrap_var, fnty, wrap_def)
 
-            var = scope.make_temp(loc)
+            var = ir.Var(scope, mk_unique_var("var"), loc)
             value = ir.Expr.call(wrap_var, [size_var, dsize], {}, loc)
             self._define(equiv_set, var, size_typ, value)
             self.calltypes[value] = sig
@@ -1744,7 +1744,7 @@ class ArrayAnalysis(object):
         msg = "Sizes of {} do not match on {}".format(', '.join(arg_names), loc)
         msg_val = ir.Const(msg, loc)
         msg_typ = types.Const(msg)
-        msg_var = scope.make_temp(loc)
+        msg_var = ir.Var(scope, mk_unique_var("msg"), loc)
         self.typemap[msg_var.name] = msg_typ
         argtyps = tuple([msg_typ] + [self.typemap[x.name] for x in args])
 
@@ -1752,14 +1752,14 @@ class ArrayAnalysis(object):
         tup_typ = types.BaseTuple.from_types(argtyps)
 
         # prepare function variable whose type may vary since it takes vararg
-        assert_var = scope.make_temp(loc)
+        assert_var = ir.Var(scope, mk_unique_var("assert"), loc)
         assert_def = ir.Global('assert_equiv', assert_equiv, loc=loc)
         fnty = get_global_func_typ(assert_equiv)
         sig = self.context.resolve_function_type(fnty, (tup_typ,), {})
         self._define(equiv_set, assert_var, fnty, assert_def)
 
         # The return value from assert_equiv is always of none type.
-        var = scope.make_temp(loc)
+        var = ir.Var(scope, mk_unique_var("ret"), loc)
         value = ir.Expr.call(assert_var, [msg_var] + args, {}, loc=loc)
         self._define(equiv_set, var, types.none, value)
         self.calltypes[value] = sig
