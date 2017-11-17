@@ -298,6 +298,7 @@ class ParforPass(object):
         simplify(self.func_ir, self.typemap, self.calltypes)
 
         if self.options.fusion:
+            self.array_analysis.run(self.func_ir.blocks)
             # try fuse before maximize
             self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
             # reorder statements to maximize fusion
@@ -2302,10 +2303,18 @@ ir_utils.copy_propagate_extensions[Parfor] = get_copies_parfor
 def apply_copies_parfor(parfor, var_dict, name_var_table, ext_func, ext_data,
                         typemap, calltypes, save_copies):
     """apply copy propagate recursively in parfor"""
+    # replace variables in pattern metadata like stencil neighborhood
     for i, pattern in enumerate(parfor.patterns):
         if pattern[0] == 'stencil':
             parfor.patterns[i] = ('stencil',
                 replace_vars_inner(pattern[1], var_dict))
+
+    # replace loop boundary variables
+    for l in parfor.loop_nests:
+        l.start = replace_vars_inner(l.start, var_dict)
+        l.stop = replace_vars_inner(l.stop, var_dict)
+        l.step = replace_vars_inner(l.step, var_dict)
+
     blocks = wrap_parfor_blocks(parfor)
     # add dummy assigns for each copy
     assign_list = []
