@@ -1218,9 +1218,8 @@ def merge_adjacent_blocks(blocks):
             if block.scope != next_block.scope:
                 break
             # merge
-            block.body = block.body[:(len(block.body) - 1)]
-            for stmts in next_block.body:
-                block.body.append(stmts)
+            block.body.pop()  # remove Jump
+            block.body += next_block.body
             del blocks[next_label]
             removed.add(next_label)
             label = next_label
