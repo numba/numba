@@ -17,17 +17,16 @@ build:
   entry_points:
     - pycc = numba.pycc:main
     - numba = numba.numba_entry:main
-  # needed so cross compilation flags are picked up from bb env
   script_env:
-    - CFLAGS
-    - CXXFLAGS
     - PY_VCRUNTIME_REDIST
-    - LD_LIBRARY_PATH # for CUDA on Linux
 
 requirements:
   # build and run dependencies are duplicated to avoid setuptools issues
   # when we also set install_requires in setup.py
   build:
+    - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
+  host:
     - python
     - numpy x.x
     - setuptools
@@ -42,6 +41,9 @@ requirements:
     - llvmlite 0.21.*
     - funcsigs       [py27]
     - singledispatch [py27]
+    # Need these for AOT?
+    - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
 test:
   requires:
     - jinja2
@@ -63,6 +65,7 @@ test:
     - python -m numba.tests.test_runtests
     # Run the CUDA test suite
     - python -m numba.runtests -v -m -b numba.cuda.tests
+
 about:
   home: http://numba.pydata.org/
   license: BSD
