@@ -1215,8 +1215,11 @@ def merge_adjacent_blocks(blocks):
             if len(preds) != 1 or preds[0][0] != label:
                 break
             next_block = blocks[next_label]
-            if block.scope != next_block.scope:
-                break
+            # XXX: commented out since scope objects are not consistent
+            # thoughout the compiler. for example, pieces of code are compiled
+            # and inlined on the fly without proper scope merge.
+            # if block.scope != next_block.scope:
+            #     break
             # merge
             block.body.pop()  # remove Jump
             block.body += next_block.body
