@@ -35,8 +35,8 @@ requirements:
     - funcsigs       [py27]
     - singledispatch [py27]
     # Need these for AOT?
-    - {{ compiler('c') }}    # [not win]
-    - {{ compiler('cxx') }}  # [not win]
+    - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
 test:
   requires:
     - jinja2
