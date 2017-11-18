@@ -1189,11 +1189,25 @@ def get_array_accesses(blocks, accesses=None):
                 if isinstance(rhs, ir.Expr) and rhs.op == 'getitem':
                     accesses.add((rhs.value.name, rhs.index.name))
                 if isinstance(rhs, ir.Expr) and rhs.op == 'static_getitem':
-                    accesses.add((rhs.value.name, rhs.index))
+                    index = rhs.index
+                    # slice is unhashable, so just keep the variable
+                    if is_slice_index(index):
+                        index = rhs.index_var.name
+                    accesses.add((rhs.value.name, index))
             for T, f in array_accesses_extensions.items():
                 if isinstance(inst, T):
                     f(inst, accesses)
     return accesses
+
+def is_slice_index(index):
+    """see if index is a slice index or has slice in it"""
+    if isinstance(index, slice):
+        return True
+    if isinstance(index, tuple):
+        for i in index:
+            if isinstance(i, slice):
+                return True
+    return False
 
 def merge_adjacent_blocks(blocks):
     cfg = compute_cfg_from_blocks(blocks)
