@@ -1921,43 +1921,56 @@ def parfor_insert_dels(parfor, curr_dead_set):
 
 postproc.ir_extension_insert_dels[Parfor] = parfor_insert_dels
 
-# reorder statements to maximize fusion
 
-
-def maximize_fusion(func_ir, blocks):
+def maximize_fusion(func_ir, blocks, up_direction=True):
+    """
+    Reorder statements to maximize parfor fusion. Push all parfors up or down
+    so they are adjacent.
+    """
     call_table, _ = get_call_table(blocks)
     for block in blocks.values():
         order_changed = True
         while order_changed:
-            order_changed = False
-            i = 0
-            while i < len(block.body) - 2:
-                stmt = block.body[i]
-                next_stmt = block.body[i + 1]
-                # swap only parfors with non-parfors
-                # don't reorder calls with side effects (e.g. file close)
-                # only read-read dependencies are OK
-                # make sure there is no write-write, write-read dependencies
-                if (isinstance(
-                        stmt, Parfor) and not isinstance(
-                        next_stmt, Parfor) and not isinstance(
-                        next_stmt, ir.Print)
-                        and (not isinstance(next_stmt, ir.Assign)
-                             or has_no_side_effect(
-                            next_stmt.value, set(), call_table)
-                        or guard(is_assert_equiv, func_ir, next_stmt.value))):
-                    stmt_accesses = {v.name for v in stmt.list_vars()}
-                    stmt_writes = get_parfor_writes(stmt)
-                    next_accesses = {v.name for v in next_stmt.list_vars()}
-                    next_writes = get_stmt_writes(next_stmt)
-                    if len((stmt_writes & next_accesses)
-                            | (next_writes & stmt_accesses)) == 0:
-                        block.body[i] = next_stmt
-                        block.body[i + 1] = stmt
-                        order_changed = True
-                i += 1
-    return
+            order_changed = maximize_fusion_inner_up(func_ir, block, call_table)
 
+def maximize_fusion_inner_up(func_ir, block, call_table):
+    order_changed = False
+    i = 0
+    while i < len(block.body) - 2:
+        stmt = block.body[i]
+        next_stmt = block.body[i + 1]
+        if _can_reorder_stmts(stmt, next_stmt, func_ir, call_table):
+            block.body[i] = next_stmt
+            block.body[i + 1] = stmt
+            order_changed = True
+        i += 1
+    return order_changed
+
+def _can_reorder_stmts(stmt, next_stmt, func_ir, call_table):
+    """
+    Check dependencies to determine if two statements can be reordered in an IR
+    block.
+    """
+    # swap only parfors with non-parfors
+    # don't reorder calls with side effects (e.g. file close)
+    # only read-read dependencies are OK
+    # make sure there is no write-write, write-read dependencies
+    if (isinstance(
+            stmt, Parfor) and not isinstance(
+            next_stmt, Parfor) and not isinstance(
+            next_stmt, ir.Print)
+            and (not isinstance(next_stmt, ir.Assign)
+                 or has_no_side_effect(
+                next_stmt.value, set(), call_table)
+            or guard(is_assert_equiv, func_ir, next_stmt.value))):
+        stmt_accesses = {v.name for v in stmt.list_vars()}
+        stmt_writes = get_parfor_writes(stmt)
+        next_accesses = {v.name for v in next_stmt.list_vars()}
+        next_writes = get_stmt_writes(next_stmt)
+        if len((stmt_writes & next_accesses)
+                | (next_writes & stmt_accesses)) == 0:
+            return True
+    return False
 
 def is_assert_equiv(func_ir, expr):
     func_name, mod_name = find_callname(func_ir, expr)
