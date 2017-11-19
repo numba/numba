@@ -299,11 +299,15 @@ class ParforPass(object):
 
         if self.options.fusion:
             self.array_analysis.run(self.func_ir.blocks)
-            # try fuse before maximize
-            self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
             # reorder statements to maximize fusion
+            # push non-parfors down
+            maximize_fusion(self.func_ir, self.func_ir.blocks,
+                                                            up_direction=False)
+            dprint_func_ir(self.func_ir, "after maximize fusion down")
+            self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
+            # push non-parfors up
             maximize_fusion(self.func_ir, self.func_ir.blocks)
-            dprint_func_ir(self.func_ir, "after maximize fusion")
+            dprint_func_ir(self.func_ir, "after maximize fusion up")
             # try fuse again after maximize
             self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
             dprint_func_ir(self.func_ir, "after fusion")
@@ -1931,22 +1935,27 @@ def maximize_fusion(func_ir, blocks, up_direction=True):
     for block in blocks.values():
         order_changed = True
         while order_changed:
-            order_changed = maximize_fusion_inner_up(func_ir, block, call_table)
+            order_changed = maximize_fusion_inner(func_ir, block,
+                                                    call_table, up_direction)
 
-def maximize_fusion_inner_up(func_ir, block, call_table):
+def maximize_fusion_inner(func_ir, block, call_table, up_direction=True):
     order_changed = False
     i = 0
+    can_reorder = (_can_reorder_stmts_up if up_direction
+                                                else _can_reorder_stmts_down)
+    # i goes to body[-3] (i+1 to body[-2]) since body[-1] is terminator and
+    # shouldn't be reordered
     while i < len(block.body) - 2:
         stmt = block.body[i]
-        next_stmt = block.body[i + 1]
-        if _can_reorder_stmts(stmt, next_stmt, func_ir, call_table):
+        next_stmt = block.body[i+1]
+        if can_reorder(stmt, next_stmt, func_ir, call_table):
             block.body[i] = next_stmt
-            block.body[i + 1] = stmt
+            block.body[i+1] = stmt
             order_changed = True
         i += 1
     return order_changed
 
-def _can_reorder_stmts(stmt, next_stmt, func_ir, call_table):
+def _can_reorder_stmts_up(stmt, next_stmt, func_ir, call_table):
     """
     Check dependencies to determine if two statements can be reordered in an IR
     block.
@@ -1967,6 +1976,28 @@ def _can_reorder_stmts(stmt, next_stmt, func_ir, call_table):
         stmt_writes = get_parfor_writes(stmt)
         next_accesses = {v.name for v in next_stmt.list_vars()}
         next_writes = get_stmt_writes(next_stmt)
+        if len((stmt_writes & next_accesses)
+                | (next_writes & stmt_accesses)) == 0:
+            return True
+    return False
+
+def _can_reorder_stmts_down(stmt, next_stmt, func_ir, call_table):
+    """
+    Check dependencies to determine if two statements can be reordered in an IR
+    block.
+    """
+    if ( not isinstance(
+            stmt, Parfor) and isinstance(
+            next_stmt, Parfor) and not isinstance(
+            stmt, ir.Print)
+            and (not isinstance(stmt, ir.Assign)
+                 or has_no_side_effect(
+                stmt.value, set(), call_table)
+            or guard(is_assert_equiv, func_ir, stmt.value))):
+        stmt_accesses = {v.name for v in stmt.list_vars()}
+        stmt_writes = get_stmt_writes(stmt)
+        next_accesses = {v.name for v in next_stmt.list_vars()}
+        next_writes = get_parfor_writes(next_stmt)
         if len((stmt_writes & next_accesses)
                 | (next_writes & stmt_accesses)) == 0:
             return True
