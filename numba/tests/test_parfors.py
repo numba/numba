@@ -5,7 +5,7 @@
 
 from __future__ import print_function, division, absolute_import
 
-import math
+from math import sqrt
 import re
 import sys
 import types as pytypes
@@ -129,6 +129,19 @@ def test2(Y, X, w, iterations):
         w -= np.dot(((1.0 / (1.0 + np.exp(-Y * np.dot(X, w))) - 1.0) * Y), X)
     return w
 
+def test_kmeans_example(A, numCenter, numIter, init_centroids):
+    centroids = init_centroids
+    N, D = A.shape
+
+    for l in range(numIter):
+        dist = np.array([[sqrt(np.sum((A[i,:]-centroids[j,:])**2))
+                                for j in range(numCenter)] for i in range(N)])
+        labels = np.array([dist[i,:].argmin() for i in range(N)])
+
+        centroids = np.array([[np.sum(A[labels==i, j])/np.sum(labels==i)
+                                 for j in range(D)] for i in range(numCenter)])
+
+    return centroids
 
 def countParfors(test_func, args, **kws):
     typingctx = typing.Context()
@@ -272,6 +285,20 @@ class TestParfors(TestParforsBase):
         args = (numba.float64[:], numba.float64[:,:], numba.float64[:],
                 numba.int64)
         self.assertTrue(countParfors(test2, args) == 1)
+
+    @skip_unsupported
+    @tag('important')
+    def test_kmeans(self):
+        np.random.seed(0)
+        N = 1024
+        D = 10
+        centers = 3
+        A = np.random.ranf((N, D))
+        init_centroids = np.random.ranf((centers, D))
+        self.check(test_kmeans_example, A, centers, 3, init_centroids,
+                                                                    decimal=1)
+        # TODO: count parfors after k-means fusion is working
+        # requires recursive parfor counting
 
     @unittest.skipIf(not (_windows_py27 or _32bit),
                      "Only impacts Windows with Python 2.7 / 32 bit hardware")
