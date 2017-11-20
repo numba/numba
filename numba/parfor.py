@@ -81,6 +81,19 @@ class prange(object):
     def __new__(cls, *args):
         return range(*args)
 
+# init_prange is a sentinel call that specifies the start of the initialization
+# code for the computation in the upcoming prange call
+# This lets the prange pass to put the code in the generated parfor's init_block
+def init_prange():
+    return
+
+from numba.extending import overload
+@overload(init_prange)
+def init_prange_overload():
+    def no_op():
+        return
+    return no_op
+
 class internal_prange(object):
 
     def __new__(cls, *args):
@@ -93,6 +106,7 @@ _reduction_ops = {
 }
 
 def min_parallel_impl(in_arr):
+    numba.parfor.init_prange()
     A = np.ravel(in_arr)
     val = numba.targets.builtins.get_type_max_value(A.dtype)
     for i in numba.parfor.internal_prange(len(A)):
@@ -100,6 +114,7 @@ def min_parallel_impl(in_arr):
     return val
 
 def max_parallel_impl(in_arr):
+    numba.parfor.init_prange()
     A = np.ravel(in_arr)
     val = numba.targets.builtins.get_type_min_value(A.dtype)
     for i in numba.parfor.internal_prange(len(A)):
@@ -107,6 +122,7 @@ def max_parallel_impl(in_arr):
     return val
 
 def argmin_parallel_impl(in_arr):
+    numba.parfor.init_prange()
     A = np.ravel(in_arr)
     init_val = numba.targets.builtins.get_type_max_value(A.dtype)
     ival = numba.typing.builtins.IndexValue(0, init_val)
@@ -116,6 +132,7 @@ def argmin_parallel_impl(in_arr):
     return ival.index
 
 def argmax_parallel_impl(in_arr):
+    numba.parfor.init_prange()
     A = np.ravel(in_arr)
     init_val = numba.targets.builtins.get_type_min_value(A.dtype)
     ival = numba.typing.builtins.IndexValue(0, init_val)
@@ -526,11 +543,13 @@ class ParforPass(object):
                             raise NotImplementedError(
                                 "Only constant step size of 1 is supported for prange")
 
-                    # set l=l for dead remove
-                    inst.value = inst.target
                     scope = blocks[entry].scope
                     loc = inst.loc
                     init_block = ir.Block(scope, loc)
+                    init_block.body = self._get_prange_init_block(blocks[entry],
+                                                                    call_table)
+                    # set l=l for remove dead prange call
+                    inst.value = inst.target
                     body = {l: blocks[l] for l in body_labels}
                     index_var = ir.Var(
                         scope, mk_unique_var("parfor_index"), loc)
@@ -576,6 +595,37 @@ class ParforPass(object):
                         self.array_analysis.equiv_sets[0] = backup_equivset
                     # run convert again to handle other prange loops
                     return self._convert_prange(blocks)
+
+    def _get_prange_init_block(self, entry_block, call_table):
+        """
+        If there is init_prange, find the code between init_prange and prange
+        calls. Remove the code from entry_block and return it.
+        """
+        init_call_ind = -1
+        prange_call_ind = -1
+        init_body = []
+        for i, inst in enumerate(entry_block.body):
+            # if init_prange call
+            if (isinstance(inst, ir.Assign) and isinstance(inst.value, ir.Expr)
+                    and inst.value.op == 'call'
+                    and self._is_prange_init(inst.value.func.name, call_table)):
+                init_call_ind = i
+            if (isinstance(inst, ir.Assign) and isinstance(inst.value, ir.Expr)
+                    and inst.value.op == 'call'
+                    and self._is_prange(inst.value.func.name, call_table)):
+                prange_call_ind = i
+        if init_call_ind != -1 and prange_call_ind != -1:
+            init_body = entry_block.body[init_call_ind+1:prange_call_ind]
+            entry_block.body = (entry_block.body[:init_call_ind]
+                                        + entry_block.body[prange_call_ind+1:])
+
+        return init_body
+
+    def _is_prange_init(self, func_var, call_table):
+        if func_var not in call_table:
+            return False
+        call = call_table[func_var]
+        return len(call) > 0 and (call[0] == 'init_prange' or call[0] == init_prange)
 
     def _is_prange(self, func_var, call_table):
         # prange can be either getattr (numba.prange) or global (prange)
