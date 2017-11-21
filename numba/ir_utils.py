@@ -1311,6 +1311,35 @@ def get_definition(func_ir, name, **kwargs):
     except KeyError:
         raise GuardException
 
+def build_definitions(blocks=None, func_ir=None):
+    """Build the definitions table of the given blocks by scanning
+    through all blocks and instructions, useful when the definitions
+    table is out-of-sync.
+    Must give at least one argument, and the new definitions table is
+    returned. If func_ir is not None, func_ir._definitions will be
+    updated with new entries. So If we also want to get rid of old
+    definitions table, we must do:
+      func_ir._definitions = build_definitions(blocks=func_ir.blocks)
+    """
+    if func_ir == None:
+        definitions = dict()
+    else:
+        definitions = func_ir._definitions
+
+    if blocks == None:
+        assert(func_ir != None)
+        blocks = func_ir.blocks
+
+    for block in blocks.values():
+        for inst in block.find_insts(ir.Assign):
+            name = inst.target.name
+            definition = definitions.get(name, [])
+            if definition == []:
+                definitions[name] = definition
+            definition.append(inst.value)
+
+    return definitions
+
 def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition):
     """Check if a call expression is calling a numpy function, and
     return the callee's function name and module name (both are strings),
