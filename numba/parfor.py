@@ -259,6 +259,7 @@ def _analyze_parfor(parfor, equiv_set, typemap, array_analysis):
     backup_equivset = array_analysis.equiv_sets.get(0, None)
     array_analysis.run(parfor_blocks, equiv_set)
     unwrap_parfor_blocks(parfor, parfor_blocks)
+    parfor.equiv_set = array_analysis.equiv_sets[0]
     # Restore equivset for block 0 after parfor is unwrapped
     if backup_equivset:
         array_analysis.equiv_sets[0] = backup_equivset
