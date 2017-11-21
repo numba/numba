@@ -212,8 +212,8 @@ queue_state_wait(Queue *queue, int old, int repl)
         queue_condition_wait(cond);
     }
     queue->state = repl;
-    queue_condition_unlock(cond);
     queue_condition_signal(cond);
+    queue_condition_unlock(cond);
 }
 
 static void
