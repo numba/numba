@@ -58,6 +58,7 @@ from numba.ir_utils import (
     require,
     compile_to_numba_ir,
     get_definition,
+    build_definitions,
     replace_arg_nodes,
     replace_returns)
 
@@ -248,17 +249,19 @@ class Parfor(ir.Expr, ir.Stmt):
         print(("end parfor {}".format(self.id)).center(20, '-'), file=file)
 
 def _analyze_parfor(parfor, equiv_set, typemap, array_analysis):
-    block = parfor.init_block
-    scope = block.scope
-    new_body = []
-    for inst in block.body:
-        pre, post = array_analysis._analyze_inst(None, scope, equiv_set, inst)
-        for instr in pre:
-            new_body.append(instr)
-        new_body.append(inst)
-        for instr in post:
-            new_body.append(instr)
-    block.body = new_body
+    """Recursive array analysis for parfor nodes.
+    """
+    func_ir = array_analysis.func_ir
+    parfor_blocks = wrap_parfor_blocks(parfor)
+    build_definitions(blocks=parfor_blocks, func_ir=func_ir)
+    # Since init_block get label 0 after wrap, we need to save
+    # the equivset for the real block label 0.
+    backup_equivset = array_analysis.equiv_sets.get(0, None)
+    array_analysis.run(parfor_blocks, equiv_set)
+    unwrap_parfor_blocks(parfor, parfor_blocks)
+    # Restore equivset for block 0 after parfor is unwrapped
+    if backup_equivset:
+        array_analysis.equiv_sets[0] = backup_equivset
     return [], []
 
 array_analysis.array_analysis_extensions[Parfor] = _analyze_parfor
@@ -315,6 +318,8 @@ class ParforPass(object):
         simplify(self.func_ir, self.typemap, self.calltypes)
 
         if self.options.fusion:
+            self.func_ir._definitions = build_definitions(blocks=self.func_ir.blocks)
+            self.array_analysis.equiv_sets = dict()
             self.array_analysis.run(self.func_ir.blocks)
             # reorder statements to maximize fusion
             # push non-parfors down
