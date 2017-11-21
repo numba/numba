@@ -1207,7 +1207,8 @@ class ParforPass(object):
         maximize_fusion(self.func_ir, blocks)
         arr_analysis = array_analysis.ArrayAnalysis(self.typingctx, self.func_ir,
                                                 self.typemap, self.calltypes)
-        arr_analysis.run(blocks)
+        # initialize analysis with parfor's init_block equivalences
+        arr_analysis.run(blocks, parfor.equiv_set)
         self.fuse_parfors(arr_analysis, blocks)
         unwrap_parfor_blocks(parfor)
 
