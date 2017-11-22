@@ -307,7 +307,7 @@ class ParforPass(object):
             stencil_pass.run()
         # prange is always parallelized
         if self.options.prange:
-           self._convert_prange(self.func_ir.blocks)
+            self._convert_prange(self.func_ir.blocks)
         if self.options.setitem:
             self._convert_setitem(self.func_ir.blocks)
         if self.options.numpy:
@@ -553,7 +553,7 @@ class ParforPass(object):
                     loc = inst.loc
                     init_block = ir.Block(scope, loc)
                     init_block.body = self._get_prange_init_block(blocks[entry],
-                                                                    call_table)
+                                                            call_table, args)
                     # set l=l for remove dead prange call
                     inst.value = inst.target
                     body = {l: blocks[l] for l in body_labels}
@@ -602,7 +602,7 @@ class ParforPass(object):
                     # run convert again to handle other prange loops
                     return self._convert_prange(blocks)
 
-    def _get_prange_init_block(self, entry_block, call_table):
+    def _get_prange_init_block(self, entry_block, call_table, prange_args):
         """
         If there is init_prange, find the code between init_prange and prange
         calls. Remove the code from entry_block and return it.
@@ -621,9 +621,23 @@ class ParforPass(object):
                     and self._is_prange(inst.value.func.name, call_table)):
                 prange_call_ind = i
         if init_call_ind != -1 and prange_call_ind != -1:
-            init_body = entry_block.body[init_call_ind+1:prange_call_ind]
+            #init_body = entry_block.body[init_call_ind+1:prange_call_ind]
+            # we save instructions that are used to calculate prange call args
+            # in the entry block. The rest go to parfor init_block
+            arg_related_vars = {v.name for v in prange_args}
+            saved_nodes = []
+            for i in reversed(range(init_call_ind+1, prange_call_ind)):
+                inst = entry_block.body[i]
+                inst_vars = {v.name for v in inst.list_vars()}
+                if arg_related_vars & inst_vars:
+                    arg_related_vars |= inst_vars
+                    saved_nodes.append(inst)
+                else:
+                    init_body.append(inst)
+
+            init_body.reverse()
             entry_block.body = (entry_block.body[:init_call_ind]
-                                        + entry_block.body[prange_call_ind+1:])
+                        + saved_nodes + entry_block.body[prange_call_ind+1:])
 
         return init_body
 
