@@ -396,10 +396,11 @@ class ParforPass(object):
                             g['numba'] = numba
                             g['np'] = numpy
                             # inline the parallel implementation
-                            inline_closure_call(self.func_ir, g,
+                            inline_blocks = inline_closure_call(self.func_ir, g,
                                         block, i, new_func, self.typingctx,
                                         (self.typemap[expr.args[0].name],),
                                         self.typemap, self.calltypes, work_list)
+                            remove_dels(inline_blocks)
                             modified = True
                             # current block is modified, skip the rest
                             break
@@ -636,6 +637,7 @@ class ParforPass(object):
                     init_body.append(inst)
 
             init_body.reverse()
+            saved_nodes.reverse()
             entry_block.body = (entry_block.body[:init_call_ind]
                         + saved_nodes + entry_block.body[prange_call_ind+1:])
 
