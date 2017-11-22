@@ -273,6 +273,18 @@ class TestParfors(TestParforsBase):
 
     @skip_unsupported
     @tag('important')
+    def test_fuse_argmin(self):
+        def test_impl(n):
+            A = np.ones(n)
+            C = A.argmin()
+            B = A.sum()
+            return B+C
+
+        self.check(test_impl, 256)
+        self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
+
+    @skip_unsupported
+    @tag('important')
     def test_test1(self):
         # blackscholes takes 5 1D float array args
         args = (numba.float64[:], ) * 5
