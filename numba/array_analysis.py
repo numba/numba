@@ -1362,6 +1362,22 @@ class ArrayAnalysis(object):
             return var, []
         return None
 
+    def _analyze_op_call_numpy_ravel(self, scope, equiv_set, args, kws):
+        assert(len(args) == 1)
+        var = args[0]
+        typ = self.typemap[var.name]
+        assert isinstance(typ, types.ArrayCompatible)
+        # output array is same shape as input if input is 1D
+        if typ.ndim == 1 and equiv_set.has_shape(var):
+            if typ.layout == 'C':
+                # output is the same as input (no copy) for 'C' layout
+                # optimize out the call
+                return var, [], var
+            else:
+                return var, []
+        # TODO: handle multi-D input arrays (calc array size)
+        return None
+
     def _analyze_op_call_numpy_copy(self, *args):
         return self._analyze_numpy_array_like(*args)
 
