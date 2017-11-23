@@ -1079,7 +1079,7 @@ class TestLinalgSvd(TestLinalgBase):
 
         # test: column vector, tall, wide, square, row vector
         # prime sizes
-        sizes = [(7, 1), (7, 5), (5, 7), (3, 3), (1, 7)]
+        sizes = [(8, 1), (7, 5), (5, 7), (3, 3), (1, 8)]
 
         # flip on reduced or full matrices
         full_matrices = (True, False)
