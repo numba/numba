@@ -151,11 +151,12 @@ class CodeLibrary(object):
                                "no available functions in %s"
                                % (self,))
         if to_fix:
-            mod = mod.clone()
-            for name in to_fix:
-                # NOTE: this will mark the symbol WEAK if serialized
-                # to an ELF file
-                mod.get_function(name).linkage = 'linkonce_odr'
+            with llvmts.lock_llvm:
+                mod = mod.clone()
+                for name in to_fix:
+                    # NOTE: this will mark the symbol WEAK if serialized
+                    # to an ELF file
+                    mod.get_function(name).linkage = 'linkonce_odr'
         self._shared_module = mod
         return mod
 
