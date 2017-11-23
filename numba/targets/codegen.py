@@ -151,8 +151,9 @@ class CodeLibrary(object):
                                "no available functions in %s"
                                % (self,))
         if to_fix:
+            # lock to clone, patch returned with a threadsafe _dispose
             with llvmts.lock_llvm:
-                mod = mod.clone()
+                mod = llvmts._patch_dispose(mod.clone())
                 for name in to_fix:
                     # NOTE: this will mark the symbol WEAK if serialized
                     # to an ELF file
