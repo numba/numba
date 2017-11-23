@@ -540,7 +540,8 @@ class RuntimeLinker(object):
 def _proxy(old):
     @functools.wraps(old)
     def wrapper(self, *args, **kwargs):
-        return old(self._ee, *args, **kwargs)
+        with llvmts.lock_llvm:
+            return old(self._ee, *args, **kwargs)
     return wrapper
 
 

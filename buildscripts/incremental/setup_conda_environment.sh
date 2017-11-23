@@ -20,6 +20,13 @@ set +v
 source activate $CONDA_ENV
 set -v
 
+# Install the compiler toolchain
+if [[ $(uname) == Linux ]]; then
+$CONDA_INSTALL gcc_linux-64 gxx_linux-64
+elif  [[ $(uname) == Darwin ]]; then
+$CONDA_INSTALL clang_osx-64 clang++_osx-64
+fi
+
 # Install latest llvmlite build
 $CONDA_INSTALL -c numba llvmlite
 # Install enum34 and singledispatch for Python < 3.4
