@@ -64,5 +64,5 @@ def _patch_retval_dispose(fn):
 parse_assembly = lock_llvm(_patch_retval_dispose(llvm.parse_assembly))
 parse_bitcode = lock_llvm(_patch_retval_dispose(llvm.parse_bitcode))
 create_mcjit_compiler = lock_llvm(_patch_retval_dispose(llvm.create_mcjit_compiler))
-create_module_pass_manager = lock_llvm(llvm.create_module_pass_manager)
-create_function_pass_manager = lock_llvm(llvm.create_function_pass_manager)
+create_module_pass_manager = lock_llvm(_patch_retval_dispose(llvm.create_module_pass_manager))
+create_function_pass_manager = lock_llvm(_patch_retval_dispose(llvm.create_function_pass_manager))
