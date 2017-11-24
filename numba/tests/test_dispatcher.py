@@ -497,10 +497,21 @@ class TestDispatcherMethods(TestCase):
             # Look for the function name
             self.assertTrue("foo" in asm)
 
-    @unittest.skipIf(config.IS_WIN32 and not config.IS_32BITS, "access violation on 64-bit windows")
+    def _check_cfg_display(self, cfg, wrapper=''):
+        # simple stringify test
+        if wrapper:
+            wrapper = "{}{}".format(len(wrapper), wrapper)
+        module_name = __name__.split('.', 1)[0]
+        module_len = len(module_name)
+        prefix = r'^digraph "CFG for \'_ZN{}{}{}'.format(wrapper, module_len, module_name)
+        self.assertRegexpMatches(str(cfg), prefix)
+        # .display() requires an optional dependency on `graphviz`.
+        # just test for the attribute without running it.
+        self.assertTrue(callable(cfg.display))
+
     def test_inspect_cfg(self):
-        # Exercise the .inspect_cfg().  These are minimal tests and does not
-        # fully checks the correctness of the function.
+        # Exercise the .inspect_cfg(). These are minimal tests and do not fully
+        # check the correctness of the function.
         @jit
         def foo(the_array):
             return the_array.sum()
@@ -524,30 +535,36 @@ class TestDispatcherMethods(TestCase):
         self.assertEqual(set([s1, s2, s3]),
                          set(map(lambda x: (typeof(x),), [a1, a2, a3])))
 
-        def check_display(cfg, wrapper=''):
-            # simple stringify test
-            if wrapper:
-                wrapper = "{}{}".format(len(wrapper), wrapper)
-            module_name = __name__.split('.', 1)[0]
-            module_len = len(module_name)
-            prefix = r'^digraph "CFG for \'_ZN{}{}{}'.format(wrapper, module_len, module_name)
-            self.assertRegexpMatches(str(cfg), prefix)
-            # .display() requires an optional dependency on `graphviz`.
-            # just test for the attribute without running it.
-            self.assertTrue(callable(cfg.display))
-
         for cfg in cfgs.values():
-            check_display(cfg)
+            self._check_cfg_display(cfg)
         self.assertEqual(len(list(cfgs.values())), 3)
 
         # Call inspect_cfg(signature)
         cfg = foo.inspect_cfg(signature=foo.signatures[0])
-        check_display(cfg)
+        self._check_cfg_display(cfg)
+       
+    @unittest.skipIf(config.IS_WIN32 and not config.IS_32BITS, "access violation on 64-bit windows")
+    @unittest.skipIf(config.IS_OSX, "segfault on OSX")
+    def test_inspect_cfg_with_python_wrapper(self):
+        # Exercise the .inspect_cfg() including the python wrapper. 
+        # These are minimal tests and do not fully check the correctness of
+        # the function.
+        @jit
+        def foo(the_array):
+            return the_array.sum()
 
+        # Generate 3 overloads
+        a1 = np.ones(1)
+        a2 = np.ones((1, 1))
+        a3 = np.ones((1, 1, 1))
+        foo(a1)
+        foo(a2)
+        foo(a3)
+        
         # Call inspect_cfg(signature, show_wrapper="python")
         cfg = foo.inspect_cfg(signature=foo.signatures[0],
                               show_wrapper="python")
-        check_display(cfg, wrapper='cpython')
+        self._check_cfg_display(cfg, wrapper='cpython')
 
     def test_inspect_types(self):
         @jit
