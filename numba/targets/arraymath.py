@@ -770,6 +770,11 @@ if numpy_version >= (1, 9):
                 if not isnan(v):
                     temp_arry[n] = v
                     n += 1
+
+            # all NaNs
+            if n == 0:
+                return np.nan
+
             return _median_inner(temp_arry, n)
 
         return nanmedian_impl
