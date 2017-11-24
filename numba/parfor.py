@@ -14,7 +14,7 @@ https://github.com/IntelLabs/ParallelAccelerator.jl
 """
 from __future__ import print_function, division, absolute_import
 import types as pytypes  # avoid confusion with numba.types
-import sys
+import sys, math
 from functools import reduce
 from collections import defaultdict
 
@@ -24,6 +24,7 @@ from numba import array_analysis, postproc, typeinfer
 from numba.typing.templates import infer_global, AbstractTemplate
 from numba import stencilparfor
 from numba.stencilparfor import StencilPass
+from numba.numpy_support import as_dtype
 
 from numba.ir_utils import (
     mk_unique_var,
@@ -426,6 +427,9 @@ class ParforPass(object):
                         # only translate C order since we can't allocate F
                         if guard(self._is_supported_npycall, expr):
                             instr = self._numpy_to_parfor(equiv_set, lhs, expr)
+                            if isinstance(instr, tuple):
+                                pre_stmts, instr = instr
+                                new_body.extend(pre_stmts)
                         elif isinstance(expr, ir.Expr) and expr.op == 'arrayexpr':
                             instr = self._arrayexpr_to_parfor(
                                 equiv_set, lhs, expr, avail_vars)
@@ -870,6 +874,8 @@ class ParforPass(object):
             return False
         if call_name in ['zeros', 'ones']:
             return True
+        if call_name is 'arange':
+            return True
         if mod_name == 'numpy.random' and call_name in random_calls:
             return True
         # TODO: add more calls
@@ -898,6 +904,8 @@ class ParforPass(object):
         kws = dict(expr.kws)
         if call_name in ['zeros', 'ones'] or mod_name == 'numpy.random':
             return self._numpy_map_to_parfor(equiv_set, call_name, lhs, args, kws, expr)
+        if call_name == 'arange':
+            return self._numpy_arange_to_parfor(equiv_set, lhs, args, kws, expr)
         if call_name == 'dot':
             assert len(args) == 2 or len(args) == 3
             # if 3 args, output is allocated already
@@ -1056,6 +1064,74 @@ class ParforPass(object):
             print("generated parfor for numpy map:")
             parfor.dump()
         return parfor
+
+    def _numpy_arange_to_parfor(self, equiv_set, lhs, args, kws, expr):
+        """convert arange to parfor"""
+        scope = lhs.scope
+        loc = lhs.loc
+        pre_stmts = []
+        zero = ir.Var(scope, mk_unique_var("zero"), loc)
+        one = ir.Var(scope, mk_unique_var("one"), loc)
+        self.typemap[zero.name] = types.intp
+        self.typemap[one.name] = types.intp
+        pre_stmts.append(ir.Assign(ir.Const(0, loc), zero, loc))
+        pre_stmts.append(ir.Assign(ir.Const(1, loc), one, loc))
+        # len(args) == 1
+        start = zero
+        step = one
+        stop = args[0]
+
+        if len(args) >= 2:
+            start = args[0]
+            stop = args[1]
+        if len(args) >= 3:
+            step = args[2]
+
+        def arange_nitems(start, stop, step):
+            nitems_r = math.ceil((stop - start) / step)
+            nitems = max(nitems_r, 0)
+
+        if any([isinstance(self.typemap[v.name], types.Complex)
+                                                for v in [start, stop, step]]):
+            def arange_nitems(start, stop, step):
+                nitems_c = (stop - start) / step
+                nitems_r = math.ceil(nitems_c.real)
+                nitems_i = math.ceil(nitems_c.imag)
+                nitems = max(min(nitems_i, nitems_r), 0)
+
+        f_block = compile_to_numba_ir(arange_nitems,
+                                            {'math': math}, self.typingctx,
+            (self.typemap[start.name], self.typemap[stop.name], self.typemap[step.name]),
+                                            self.typemap,
+                                            self.calltypes).blocks.popitem()[1]
+        replace_arg_nodes(f_block, [start, stop, step])
+        pre_stmts += f_block.body[:-3]  # remove none return
+        nitems = pre_stmts[-1].target
+
+        init_block = ir.Block(scope, loc)
+        init_block.body = mk_alloc(self.typemap, self.calltypes, lhs,
+                (nitems,), self.calltypes[expr].return_type.dtype, scope, loc)
+
+        index_vars, loopnests = self._mk_parfor_loops((nitems,), scope, loc)
+
+        def arange_body(arr, i, start, step):
+            arr[i] = start + i*step
+
+        f_block = compile_to_numba_ir(arange_body, {}, self.typingctx,
+            (self.typemap[lhs.name], types.intp, self.typemap[start.name],
+            self.typemap[step.name]), self.typemap,
+            self.calltypes).blocks.popitem()[1]
+        replace_arg_nodes(f_block, [lhs, index_vars[0], start, step])
+        body_nodes = f_block.body[:-3]  # remove none return
+
+        parfor = Parfor(loopnests, init_block, {}, loc, index_vars[0], equiv_set,
+                        ('arange function'))
+        body_label = next_label()
+        body_block = ir.Block(scope, loc)
+        body_block.body = body_nodes
+        parfor.loop_body = {body_label: body_block}
+
+        return pre_stmts, parfor
 
     def _reduction_to_parfor(self, equiv_set, lhs, expr):
         from numba.targets.builtins import get_type_max_value, get_type_min_value
