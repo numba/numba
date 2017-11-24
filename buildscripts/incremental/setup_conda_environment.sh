@@ -28,7 +28,7 @@ if [[ $(uname) == Linux ]]; then
         $CONDA_INSTALL gcc_linux-64 gxx_linux-64
     fi
 elif  [[ $(uname) == Darwin ]]; then
-    $CONDA_INSTALL clang_osx-64 clang++_osx-64
+    $CONDA_INSTALL clang_osx-64 clangxx_osx-64
 fi
 
 # Install latest llvmlite build
