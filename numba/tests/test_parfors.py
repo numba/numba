@@ -492,6 +492,19 @@ class TestParfors(TestParforsBase):
             self.check(test_impl3, 2, arg, 2)
 
     @skip_unsupported
+    def test_linspace(self):
+        # without num
+        def test_impl1(start, stop):
+            return np.linspace(start, stop)
+        # with num
+        def test_impl2(start, stop, num):
+            return np.linspace(start, stop, num)
+
+        for arg in [11, 128, 30.0, complex(4,5), complex(5,4)]:
+            self.check(test_impl1, 2, arg)
+            self.check(test_impl2, 2, arg, 30)
+
+    @skip_unsupported
     def test_size_assertion(self):
         def test_impl(m, n):
             A = np.ones(m)
