@@ -475,6 +475,23 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, *self.simple_args)
 
     @skip_unsupported
+    def test_arange(self):
+        # test with stop only
+        def test_impl1(n):
+            return np.arange(n)
+        # start and stop
+        def test_impl2(s, n):
+            return np.arange(n)
+        # start, step, stop
+        def test_impl3(s, n, t):
+            return np.arange(s, n, t)
+
+        for arg in [11, 128, 30.0, complex(4,5), complex(5,4)]:
+            self.check(test_impl1, arg)
+            self.check(test_impl2, 2, arg)
+            self.check(test_impl3, 2, arg, 2)
+
+    @skip_unsupported
     def test_size_assertion(self):
         def test_impl(m, n):
             A = np.ones(m)
