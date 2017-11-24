@@ -510,6 +510,7 @@ class TestDispatcherMethods(TestCase):
         self.assertTrue(callable(cfg.display))
 
     @unittest.skipIf(config.IS_WIN32 and not config.IS_32BITS, "access violation on 64-bit windows")
+    @unittest.skipIf(config.IS_OSX, "segfault on OSX")
     def test_inspect_cfg(self):
         # Exercise the .inspect_cfg(). These are minimal tests and do not fully
         # check the correctness of the function.
