@@ -509,6 +509,7 @@ class TestDispatcherMethods(TestCase):
         # just test for the attribute without running it.
         self.assertTrue(callable(cfg.display))
 
+    @unittest.skipIf(config.IS_WIN32 and not config.IS_32BITS, "access violation on 64-bit windows")
     def test_inspect_cfg(self):
         # Exercise the .inspect_cfg(). These are minimal tests and do not fully
         # check the correctness of the function.
