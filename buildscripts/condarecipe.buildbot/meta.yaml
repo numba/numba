@@ -32,18 +32,18 @@ requirements:
     - setuptools
     # On channel https://anaconda.org/numba/
     - llvmlite 0.21.*
-    - funcsigs       [py27]
-    - singledispatch [py27]
+    - funcsigs                 # [py27]
+    - singledispatch           # [py27]
   run:
     - python
     - numpy x.x
     # On channel https://anaconda.org/numba/
     - llvmlite 0.21.*
-    - funcsigs       [py27]
-    - singledispatch [py27]
-    # Need these for AOT?
-    - {{ compiler('c') }}
-    - {{ compiler('cxx') }}
+    - funcsigs                 # [py27]
+    - singledispatch           # [py27]
+    # Need these for AOT. Do not init msvc as it may not be present
+    - {{ compiler('c') }}      # [not win]
+    - {{ compiler('cxx') }}    # [not win]
 test:
   requires:
     - jinja2
