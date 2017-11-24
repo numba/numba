@@ -874,7 +874,7 @@ class ParforPass(object):
             return False
         if call_name in ['zeros', 'ones']:
             return True
-        if call_name is 'arange':
+        if call_name in ['arange', 'linspace']:
             return True
         if mod_name == 'numpy.random' and call_name in random_calls:
             return True
@@ -906,6 +906,8 @@ class ParforPass(object):
             return self._numpy_map_to_parfor(equiv_set, call_name, lhs, args, kws, expr)
         if call_name == 'arange':
             return self._numpy_arange_to_parfor(equiv_set, lhs, args, kws, expr)
+        if call_name == 'linspace':
+            return self._numpy_linspace_to_parfor(equiv_set, lhs, args, kws, expr)
         if call_name == 'dot':
             assert len(args) == 2 or len(args) == 3
             # if 3 args, output is allocated already
@@ -1130,6 +1132,72 @@ class ParforPass(object):
         body_block = ir.Block(scope, loc)
         body_block.body = body_nodes
         parfor.loop_body = {body_label: body_block}
+
+        return pre_stmts, parfor
+
+    def _numpy_linspace_to_parfor(self, equiv_set, lhs, args, kws, expr):
+        """convert linspace to parfor"""
+        scope = lhs.scope
+        loc = lhs.loc
+        pre_stmts = []
+        fifty = ir.Var(scope, mk_unique_var("fifty"), loc)
+        self.typemap[fifty.name] = types.intp
+        pre_stmts.append(ir.Assign(ir.Const(50, loc), fifty, loc))
+        # len(args) == 2
+        start = args[0]
+        stop = args[1]
+        num = fifty
+
+        if len(args) == 3:
+            num = args[2]
+
+        def linspace_init(start, stop, num):
+            div = num - 1
+            delta = stop - start
+
+        f_block = compile_to_numba_ir(linspace_init,
+                                            {}, self.typingctx,
+            (self.typemap[start.name], self.typemap[stop.name], self.typemap[num.name]),
+                                            self.typemap,
+                                            self.calltypes).blocks.popitem()[1]
+        replace_arg_nodes(f_block, [start, stop, num])
+        init_body = f_block.body[:-3]  # remove none return
+        for inst in init_body:
+            if inst.target.name.startswith("delta"):
+                delta = inst.target
+            if inst.target.name.startswith("div"):
+                div = inst.target
+
+        init_block = ir.Block(scope, loc)
+        init_block.body = init_body + mk_alloc(self.typemap, self.calltypes, lhs,
+                (num,), self.calltypes[expr].return_type.dtype, scope, loc)
+
+        index_vars, loopnests = self._mk_parfor_loops((num,), scope, loc)
+
+        def linspace_body(arr, i, start, delta, div):
+            if i == 0:
+                arr[i] = start
+            else:
+                arr[i] = start + delta * (i / div)
+
+        f_blocks = compile_to_numba_ir(linspace_body, {}, self.typingctx,
+            (self.typemap[lhs.name], types.intp, self.typemap[start.name],
+            self.typemap[delta.name],
+            self.typemap[div.name]), self.typemap,
+            self.calltypes).blocks
+        first_label = min(f_blocks.keys())
+        last_label = max(f_blocks.keys())
+        replace_arg_nodes(f_blocks[first_label], [lhs, index_vars[0], start,
+                                                                    delta, div])
+        # remove return nodes
+        f_blocks[last_label].body = f_blocks[last_label].body[:-3]
+        f_blocks = add_offset_to_labels(f_blocks, ir_utils._max_label + 1)
+        ir_utils._max_label = max(f_blocks.keys())
+
+        parfor = Parfor(loopnests, init_block, {}, loc, index_vars[0], equiv_set,
+                        ('linspace function'))
+
+        parfor.loop_body = f_blocks
 
         return pre_stmts, parfor
 
