@@ -394,7 +394,7 @@ class TestParfors(TestParforsBase):
     @needs_lapack
     def test_simple18(self):
         def test_impl(v1, v2, m1, m2):
-            return m1 + np.linalg.svd(m2)[0][:-1, :]
+            return m1.T + np.linalg.svd(m2)[1]
         self.check(test_impl, *self.simple_args)
 
     @skip_unsupported

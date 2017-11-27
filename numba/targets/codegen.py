@@ -151,11 +151,13 @@ class CodeLibrary(object):
                                "no available functions in %s"
                                % (self,))
         if to_fix:
-            mod = mod.clone()
-            for name in to_fix:
-                # NOTE: this will mark the symbol WEAK if serialized
-                # to an ELF file
-                mod.get_function(name).linkage = 'linkonce_odr'
+            # lock to clone, patch returned with a threadsafe _dispose
+            with llvmts.lock_llvm:
+                mod = llvmts._patch_dispose(mod.clone())
+                for name in to_fix:
+                    # NOTE: this will mark the symbol WEAK if serialized
+                    # to an ELF file
+                    mod.get_function(name).linkage = 'linkonce_odr'
         self._shared_module = mod
         return mod
 
@@ -540,7 +542,8 @@ class RuntimeLinker(object):
 def _proxy(old):
     @functools.wraps(old)
     def wrapper(self, *args, **kwargs):
-        return old(self._ee, *args, **kwargs)
+        with llvmts.lock_llvm:
+            return old(self._ee, *args, **kwargs)
     return wrapper
 
 
