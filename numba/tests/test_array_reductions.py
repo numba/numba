@@ -345,6 +345,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             yield a
             a[a % 4 >= 2] = float('nan')
             yield a
+            a[:] = float('nan')
+            yield a
 
         self.check_median_basic(pyfunc, variations)
 
