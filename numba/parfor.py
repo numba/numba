@@ -1034,9 +1034,9 @@ class ParforPass(object):
             scope, index_vars, body_block)
 
         if call_name == 'zeros':
-            value = ir.Const(0, loc)
+            value = ir.Const(el_typ(0), loc)
         elif call_name == 'ones':
-            value = ir.Const(1, loc)
+            value = ir.Const(el_typ(1), loc)
         elif call_name in random_calls:
             # remove size arg to reuse the call expr for single value
             _remove_size_arg(call_name, expr)
