@@ -5,7 +5,6 @@ from collections import namedtuple
 from . import nrtdynmod
 from llvmlite import binding as ll
 
-from ..llvmthreadsafe import lock_llvm
 from numba.utils import finalize as _finalize
 from . import _nrt_python as _nrt
 
@@ -16,7 +15,6 @@ class _Runtime(object):
     def __init__(self):
         self._init = False
 
-    @lock_llvm # prevent race to install compiled library functions
     def initialize(self, ctx):
         """Initializes the NRT
 
