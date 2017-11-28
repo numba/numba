@@ -1,6 +1,13 @@
 from __future__ import print_function, division, absolute_import
 
 from .typing.typeof import typeof
-from .parfor import prange
+import numpy as np
 
-__all__ = ['typeof', 'prange']
+def pndindex(*args):
+    return np.ndindex(*args)
+
+class prange(object):
+    def __new__(cls, *args):
+        return range(*args)
+
+__all__ = ['typeof', 'prange', 'pndindex']

@@ -19,12 +19,11 @@ from functools import reduce
 from collections import defaultdict
 
 import numba
-from numba import ir, ir_utils, types, typing, rewrites, config, analysis
+from numba import ir, ir_utils, types, typing, rewrites, config, analysis, prange, pndindex
 from numba import array_analysis, postproc, typeinfer
 from numba.typing.templates import infer_global, AbstractTemplate
 from numba import stencilparfor
 from numba.stencilparfor import StencilPass
-from numba.numpy_support import as_dtype
 
 from numba.ir_utils import (
     mk_unique_var,
@@ -71,19 +70,13 @@ from numba.typing import npydecl, signature
 from numba.types.functions import Function
 from numba.array_analysis import (random_int_args, random_1arg_size,
                                   random_2arg_sizelast, random_3arg_sizelast,
-                                  random_calls)
+                                  random_calls, assert_equiv)
 import copy
 import numpy
 import numpy as np
 # circular dependency: import numba.npyufunc.dufunc.DUFunc
 
 sequential_parfor_lowering = False
-
-
-class prange(object):
-
-    def __new__(cls, *args):
-        return range(*args)
 
 # init_prange is a sentinel call that specifies the start of the initialization
 # code for the computation in the upcoming prange call
@@ -103,69 +96,68 @@ class internal_prange(object):
     def __new__(cls, *args):
         return range(*args)
 
-_reduction_ops = {
-    'sum':  (lambda a,b:a+b, 0),
-    'prod': (lambda a,b:a*b, 1),
-}
-
 def min_parallel_impl(in_arr):
     numba.parfor.init_prange()
-    A = np.ravel(in_arr)
-    val = numba.targets.builtins.get_type_max_value(A.dtype)
-    for i in numba.parfor.internal_prange(len(A)):
-        val = min(val, A[i])
+    val = numba.targets.builtins.get_type_max_value(in_arr.dtype)
+    for i in pdindex(in_arr.shape):
+        val = min(val, in_arr[i])
     return val
 
 def max_parallel_impl(in_arr):
     numba.parfor.init_prange()
-    A = np.ravel(in_arr)
-    val = numba.targets.builtins.get_type_min_value(A.dtype)
-    for i in numba.parfor.internal_prange(len(A)):
-        val = max(val, A[i])
+    val = numba.targets.builtins.get_type_min_value(in_arr.dtype)
+    for i in numba.parfor.internal_prange(in_arr.shape):
+        val = max(val, in_arr[i])
     return val
 
 def argmin_parallel_impl(in_arr):
     numba.parfor.init_prange()
-    A = np.ravel(in_arr)
-    init_val = numba.targets.builtins.get_type_max_value(A.dtype)
+    init_val = numba.targets.builtins.get_type_max_value(in_arr.dtype)
     ival = numba.typing.builtins.IndexValue(0, init_val)
-    for i in numba.parfor.internal_prange(len(A)):
-        curr_ival = numba.typing.builtins.IndexValue(i, A[i])
+    for i in numba.parfor.internal_prange(in_arr.shape):
+        curr_ival = numba.typing.builtins.IndexValue(i, in_arr[i])
         ival = min(ival, curr_ival)
     return ival.index
 
 def argmax_parallel_impl(in_arr):
     numba.parfor.init_prange()
-    A = np.ravel(in_arr)
-    init_val = numba.targets.builtins.get_type_min_value(A.dtype)
+    init_val = numba.targets.builtins.get_type_min_value(in_arr.dtype)
     ival = numba.typing.builtins.IndexValue(0, init_val)
-    for i in numba.parfor.internal_prange(len(A)):
-        curr_ival = numba.typing.builtins.IndexValue(i, A[i])
+    for i in numba.parfor.internal_prange(in_arr.shape):
+        curr_ival = numba.typing.builtins.IndexValue(i, in_arr[i])
         ival = max(ival, curr_ival)
     return ival.index
 
 def dotvv_parallel_impl(a, b):
+    numba.parfor.init_prange()
     l = a.shape[0]
+    m = b.shape[0]
+    #assert_equiv("sizes of l, m do not match", l, m)
     s = 0
     for i in prange(l):
         s += a[i] * b[i]
     return s
 
 def dotvm_parallel_impl(a, b):
+    numba.parfor.init_prange()
     l = a.shape
     m, n = b.shape
-    c = np.empty(n, a.dtype)
-    for i in prange(n):
-        s = 0
-        for j in range(m):
-            s += a[j] * b[j, i]
-        c[i] = s
+    #assert_equiv("Sizes of l, m do not match", l, m)
+    c = np.zeros(n, a.dtype)
+    #for i in prange(n):
+    #    s = 0
+    #    for j in range(m):
+    #        s += a[j] * b[j, i]
+    #    c[i] = s
+    for i in prange(m):
+        c += a[i] * b[i, :]
     return c
 
 def dotmv_parallel_impl(a, b):
+    numba.parfor.init_prange()
     m, n = a.shape
     l = b.shape
-    #assert(l == m)
+    #assert_equiv("sizes of n, l do not match", n, l)
     c = np.empty(m, a.dtype)
     for i in prange(m):
         s = 0
@@ -180,18 +172,44 @@ def dot_parallel_impl(atyp, btyp):
         isinstance(btyp, types.npytypes.Array)):
         if atyp.ndim == btyp.ndim == 1:
             return dotvv_parallel_impl
-        elif atyp.ndim == 1 and btyp.ndim == 2:
-            return dotvm_parallel_impl
+        #elif atyp.ndim == 1 and btyp.ndim == 2:
+        #    return dotvm_parallel_impl
         elif atyp.ndim == 2 and btyp.ndim == 1:
             return dotmv_parallel_impl
 
+def sum_parallel_impl(in_arr):
+    numba.parfor.init_prange()
+    val = 0
+    for i in pndindex(in_arr.shape):
+        val += in_arr[i]
+    return val
+
+def prod_parallel_impl(in_arr):
+    numba.parfor.init_prange()
+    val = 1
+    for i in pndindex(in_arr.shape):
+        val *= in_arr[i]
+    return val
+
+def arange_parallel_impl(n):
+    numba.parfor.init_prange()
+    arr = empty_inferred(n)
+    for i in prange(n):
+        arr[i] = i
+    return arr
+
+def linspace_parallel_impl(start, stop, num):
+    pass
+    
 replace_functions_map = {
     ('argmin', 'numpy'): lambda args: argmin_parallel_impl,
     ('argmax', 'numpy'): lambda args: argmax_parallel_impl,
     ('min', 'numpy'): lambda args: min_parallel_impl,
     ('max', 'numpy'): lambda args: max_parallel_impl,
+    ('sum', 'numpy'): lambda args: sum_parallel_impl,
+    ('prod', 'numpy'): lambda args: prod_parallel_impl,
     ('dot', 'numpy'): dot_parallel_impl,
-    ('arange', 'numpy'): arange_parallel_impl,
+    ('arange', 'numpy'): lambda args: arange_parallel_impl,
     ('linspace', 'numpy'): linspace_parallel_impl,
 }
 
@@ -432,15 +450,14 @@ class ParforPass(object):
             stencil_pass = StencilPass(self.func_ir, self.typemap, self.calltypes,
                                             self.array_analysis, self.typingctx)
             stencil_pass.run()
-        # prange is always parallelized
-        if self.options.prange:
-            self._convert_prange(self.func_ir.blocks)
         if self.options.setitem:
             self._convert_setitem(self.func_ir.blocks)
         if self.options.numpy:
             self._convert_numpy(self.func_ir.blocks)
         if self.options.reduction:
             self._convert_reduce(self.func_ir.blocks)
+        if self.options.prange:
+           self._convert_loop(self.func_ir.blocks)
         dprint_func_ir(self.func_ir, "after parfor pass")
 
         # simplify before fusion
@@ -552,15 +569,6 @@ class ParforPass(object):
                         # reduce function with generic function
                         parfor = guard(self._reduce_to_parfor, equiv_set, lhs,
                                        expr.args, loc)
-                    elif (callname != None and callname[1] == 'numpy' and
-                          callname[0] in _reduction_ops):
-                        # other supported operations
-                        expr = instr.value
-                        func, initval = _reduction_ops[callname[0]]
-                        args = [func, expr.args[0], ir.Const(initval, loc)]
-                        expr.args = args
-                        parfor = guard(self._reduce_to_parfor, equiv_set, lhs,
-                                       args, loc)
                     if parfor:
                         instr = parfor
                 new_body.append(instr)
@@ -610,10 +618,14 @@ class ParforPass(object):
                 new_body.append(instr)
             block.body = new_body
 
-    def _convert_prange(self, blocks):
+    def _convert_loop(self, blocks):
         call_table, _ = get_call_table(blocks)
         cfg = compute_cfg_from_blocks(blocks)
-        for loop in cfg.loops().values():
+        loops = cfg.loops()
+        sized_loops = [(loops[k], len(loops[k].body)) for k in loops.keys()]
+        moved_blocks = []
+        # We go over all loops, smaller loops first (inner first)
+        for loop, s in sorted(sized_loops, key=lambda tup: tup[1]):
             if len(loop.entries) != 1 or len(loop.exits) != 1:
                 continue
             entry = list(loop.entries)[0]
@@ -621,10 +633,10 @@ class ParforPass(object):
                 # if prange call
                 if (isinstance(inst, ir.Assign) and isinstance(inst.value, ir.Expr)
                         and inst.value.op == 'call'
-                        and self._is_prange(inst.value.func.name, call_table)):
-                    body_labels = list(loop.body - {loop.header})
+                        and self._is_parallel_loop(inst.value.func.name, call_table)):
+                    body_labels = [ l for l in loop.body if l in blocks and l != loop.header ]
                     args = inst.value.args
-                    prange_kind = self._get_prange_kind(inst.value.func.name,
+                    loop_kind = self._get_loop_kind(inst.value.func.name,
                                                                     call_table)
                     # find loop index variable (pair_first in header block)
                     for stmt in blocks[loop.header].body:
@@ -640,50 +652,64 @@ class ParforPass(object):
                     cps = cps[0]
                     loop_index_vars = set(t for t, v in cps if v == loop_index)
                     loop_index_vars.add(loop_index)
-                    start = 0
-                    step = 1
-                    size_var = args[0]
-                    if len(args) == 2:
-                        start = args[0]
-                        size_var = args[1]
-                    if len(args) == 3:
-                        start = args[0]
-                        size_var = args[1]
-                        try:
-                            step = self.func_ir.get_definition(args[2])
-                        except KeyError:
-                            raise NotImplementedError(
-                                "Only known step size is supported for prange")
-                        if not isinstance(step, ir.Const):
-                            raise NotImplementedError(
-                                "Only constant step size is supported for prange")
-                        step = step.value
-                        if step != 1:
-                            raise NotImplementedError(
-                                "Only constant step size of 1 is supported for prange")
 
                     scope = blocks[entry].scope
                     loc = inst.loc
+                    equiv_set = self.array_analysis.get_equiv_set(loop.header)
                     init_block = ir.Block(scope, loc)
                     init_block.body = self._get_prange_init_block(blocks[entry],
                                                             call_table, args)
                     # set l=l for remove dead prange call
                     inst.value = inst.target
                     body = {l: blocks[l] for l in body_labels}
-                    index_var = ir.Var(
-                        scope, mk_unique_var("parfor_index"), loc)
-                    self.typemap[index_var.name] = types.intp
+                    if loop_kind == 'pndindex':
+                        print("args[0] = ", args[0], equiv_set.get_shape(args[0]))
+                        assert(equiv_set.has_shape(args[0]))
+                        size_vars = equiv_set.get_shape(args[0])
+                        index_vars, loops = self._mk_parfor_loops(size_vars, scope, loc)
+                        first_body_block = body[min(body.keys())]
+                        body_block = ir.Block(scope, loc)
+                        index_var, index_var_typ = self._make_index_var(scope, index_vars, body_block)
+                        first_body_block.body = body_block.body + first_body_block.body
+                    else: # prange 
+                        start = 0
+                        step = 1
+                        size_var = args[0]
+                        if len(args) == 2:
+                            start = args[0]
+                            size_var = args[1]
+                        if len(args) == 3:
+                            start = args[0]
+                            size_var = args[1]
+                            try:
+                                step = self.func_ir.get_definition(args[2])
+                            except KeyError:
+                                raise NotImplementedError(
+                                    "Only known step size is supported for prange")
+                            if not isinstance(step, ir.Const):
+                                raise NotImplementedError(
+                                    "Only constant step size is supported for prange")
+                            step = step.value
+                            if step != 1:
+                                raise NotImplementedError(
+                                    "Only constant step size of 1 is supported for prange")
+                        index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
+                        index_var_typ = types.intp
+                        loops = [LoopNest(index_var, start, size_var, step)]
+                        self.typemap[index_var.name] = index_var_typ
+
+                    # set l=l for dead remove
+                    inst.value = inst.target
                     index_var_map = {v: index_var for v in loop_index_vars}
                     replace_vars(body, index_var_map)
-                    parfor_loop = LoopNest(index_var, start, size_var, step)
-                    parfor = Parfor([parfor_loop], init_block, body, loc, index_var,
-                                    self.array_analysis.get_equiv_set(entry),
-                                    ("prange", prange_kind))
-                    # add parfor to entry block, change jump target to exit
-                    jump = blocks[entry].body.pop()
-                    blocks[entry].body.append(parfor)
+                    parfor = Parfor(loops, init_block, body, loc, index_var,
+                                    equiv_set,
+                                    ("prange", loop_kind))
+                    # add parfor to entry block's jump target
+                    jump = blocks[entry].body[-1]
+                    print("jump.target = ", jump.target, " loop.header = ", loop.header)
                     jump.target = list(loop.exits)[0]
-                    blocks[entry].body.append(jump)
+                    blocks[jump.target].body.insert(0, parfor)
                     # remove jumps back to header block
                     for l in body_labels:
                         last_inst = body[l].body[-1]
@@ -695,25 +721,6 @@ class ParforPass(object):
                     blocks.pop(loop.header)
                     for l in body_labels:
                         blocks.pop(l)
-                    # run on parfor body
-                    parfor_blocks = wrap_parfor_blocks(parfor)
-                    # but we also need to make up equiv_set for init_block
-                    backup_equivset = self.array_analysis.equiv_sets.get(0, None)
-                    self.array_analysis.equiv_sets[0] = parfor.equiv_set
-                    self._convert_prange(parfor_blocks)
-                    if self.options.setitem:
-                        self._convert_setitem(parfor_blocks)
-                    if self.options.numpy:
-                        self._convert_numpy(parfor_blocks)
-                    if self.options.reduction:
-                        self._convert_reduce(parfor_blocks)
-                    parfor_blocks = rename_labels(parfor_blocks)
-                    unwrap_parfor_blocks(parfor, parfor_blocks)
-                    # restore equiv_set for real block 0
-                    if backup_equivset:
-                        self.array_analysis.equiv_sets[0] = backup_equivset
-                    # run convert again to handle other prange loops
-                    return self._convert_prange(blocks)
 
     def _get_prange_init_block(self, entry_block, call_table, prange_args):
         """
@@ -731,7 +738,7 @@ class ParforPass(object):
                 init_call_ind = i
             if (isinstance(inst, ir.Assign) and isinstance(inst.value, ir.Expr)
                     and inst.value.op == 'call'
-                    and self._is_prange(inst.value.func.name, call_table)):
+                    and self._is_parallel_loop(inst.value.func.name, call_table)):
                 prange_call_ind = i
         if init_call_ind != -1 and prange_call_ind != -1:
             #init_body = entry_block.body[init_call_ind+1:prange_call_ind]
@@ -761,15 +768,16 @@ class ParforPass(object):
         call = call_table[func_var]
         return len(call) > 0 and (call[0] == 'init_prange' or call[0] == init_prange)
 
-    def _is_prange(self, func_var, call_table):
+    def _is_parallel_loop(self, func_var, call_table):
         # prange can be either getattr (numba.prange) or global (prange)
         if func_var not in call_table:
             return False
         call = call_table[func_var]
         return len(call) > 0 and (call[0] == 'prange' or call[0] == prange
-                or call[0] == 'internal_prange' or call[0] == internal_prange)
+                or call[0] == 'internal_prange' or call[0] == internal_prange
+                or call[0] == 'pndindex' or call[0] == pndindex)
 
-    def _get_prange_kind(self, func_var, call_table):
+    def _get_loop_kind(self, func_var, call_table):
         """see if prange is user prange or internal"""
         # prange can be either getattr (numba.prange) or global (prange)
         assert func_var in call_table
@@ -778,6 +786,8 @@ class ParforPass(object):
         kind = 'user'
         if call[0] == 'internal_prange' or call[0] == internal_prange:
             kind = 'internal'
+        elif call[0] == 'pndindex' or call[0] == pndindex:
+            kind = 'pndindex'
         return kind
 
     def _is_C_order(self, arr_name):
