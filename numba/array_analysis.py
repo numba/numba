@@ -75,8 +75,10 @@ def wrap_index(typingctx, idx, size):
         rem = builder.srem(idx, size)
         zero = llvmlite.ir.Constant(idx.type, 0)
         is_negative = builder.icmp_signed('<', rem, zero)
+        is_oversize = builder.icmp_signed('>', idx, size)
         wrapped_rem = builder.add(rem, size)
-        mod = builder.select(is_negative, wrapped_rem, rem)
+        mod = builder.select(is_negative, wrapped_rem,
+                builder.select(is_oversize, wrapped_rem, rem))
         return mod
 
     return signature(idx, idx, size), codegen
