@@ -300,6 +300,7 @@ class ParforPass(object):
         if self.options.numpy:
             self._replace_parallel_functions(self.func_ir.blocks)
         # run array analysis, a pre-requisite for parfor translation
+        remove_dels(self.func_ir.blocks)
         self.array_analysis.run(self.func_ir.blocks)
         # run stencil translation to parfor
         if self.options.stencil:
