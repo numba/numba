@@ -1307,6 +1307,10 @@ class ArrayAnalysis(object):
     def _analyze_op_call_numpy_empty(self, scope, equiv_set, args, kws):
         return self._analyze_numpy_create_array(scope, equiv_set, args, kws)
 
+    def _analyze_op_call_numba_extending_empty_inferred(self, scope, equiv_set,
+                                                                    args, kws):
+        return self._analyze_numpy_create_array(scope, equiv_set, args, kws)
+
     def _analyze_op_call_numpy_zeros(self, scope, equiv_set, args, kws):
         return self._analyze_numpy_create_array(scope, equiv_set, args, kws)
 
