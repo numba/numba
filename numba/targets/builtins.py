@@ -376,7 +376,7 @@ def lower_get_type_min_value(context, builder, sig, args):
     return impl_ret_untracked(context, builder, lty, res)
 
 @lower_builtin(get_type_max_value, types.DType)
-def lower_get_type_min_value(context, builder, sig, args):
+def lower_get_type_max_value(context, builder, sig, args):
     typ = sig.args[0].dtype
     bw = typ.bitwidth
 
