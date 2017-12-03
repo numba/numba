@@ -2268,14 +2268,20 @@ def try_fuse(equiv_set, parfor1, parfor2):
         dprint("try_fuse parfor cross iteration dependency found")
         return None
 
-    # make sure parfor2's init block isn't using any output of parfor1
-    parfor1_body_usedefs = compute_use_defs(parfor1.loop_body)
-    parfor1_body_vardefs = set()
-    for defs in parfor1_body_usedefs.defmap.values():
-        parfor1_body_vardefs |= defs
-    init2_uses = compute_use_defs({0: parfor2.init_block}).usemap[0]
-    if not parfor1_body_vardefs.isdisjoint(init2_uses):
-        dprint("try_fuse parfor2 init block depends on parfor1 body")
+    # find parfor1's defs, only body is considered since init_block will run
+    # first after fusion as well
+    p1_body_usedefs = compute_use_defs(parfor1.loop_body)
+    p1_body_defs = set()
+    for defs in p1_body_usedefs.defmap.values():
+        p1_body_defs |= defs
+
+    p2_usedefs = compute_use_defs(parfor2.loop_body)
+    p2_uses = compute_use_defs({0: parfor2.init_block}).usemap[0]
+    for uses in p2_usedefs.usemap.values():
+        p2_uses |= uses
+
+    if not p1_body_defs.isdisjoint(p2_uses):
+        dprint("try_fuse parfor2 depends on parfor1 body")
         return None
 
     return fuse_parfors_inner(parfor1, parfor2)
@@ -2704,7 +2710,7 @@ ir_utils.tuple_table_extensions[Parfor] = get_parfor_tuple_table
 
 def get_parfor_array_accesses(parfor, accesses=None):
     if accesses is None:
-        accesses = {}
+        accesses = set()
     blocks = wrap_parfor_blocks(parfor)
     accesses = ir_utils.get_array_accesses(blocks, accesses)
     unwrap_parfor_blocks(parfor)
