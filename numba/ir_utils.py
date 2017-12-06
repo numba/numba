@@ -1241,8 +1241,6 @@ def merge_adjacent_blocks(blocks):
             removed.add(next_label)
             label = next_label
 
-    cfg = compute_cfg_from_blocks(blocks)
-
 def restore_copy_var_names(blocks, save_copies, typemap):
     """
     restores variable names of user variables after applying copy propagation
