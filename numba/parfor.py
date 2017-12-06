@@ -180,23 +180,51 @@ def dot_parallel_impl(atyp, btyp):
 def sum_parallel_impl(in_arr):
     numba.parfor.init_prange()
     val = 0
-    for i in pndindex(in_arr.shape):
+    for i in numba.pndindex(in_arr.shape):
         val += in_arr[i]
     return val
 
 def prod_parallel_impl(in_arr):
     numba.parfor.init_prange()
     val = 1
-    for i in pndindex(in_arr.shape):
+    for i in numba.ndindex(in_arr.shape):
         val *= in_arr[i]
     return val
 
-def arange_parallel_impl(n):
-    numba.parfor.init_prange()
-    arr = empty_inferred(n)
-    for i in prange(n):
-        arr[i] = i
-    return arr
+def arange_1(stop):
+        numba.parfor.init_prange()
+        n = int(stop)
+        arr = numba.unsafe.ndarray.empty_inferred((n,))
+        for i in numba.parfor.internal_prange(n):
+            arr[i] = stop - stop + i
+        return arr
+
+def arange_2(start, stop):
+        numba.parfor.init_prange()
+        n = int(stop - start + 1)
+        arr = numba.unsafe.ndarray.empty_inferred((n,))
+        for i in numba.parfor.internal_prange(n):
+            arr[i] = stop - stop + start + i
+        return arr
+
+def arange_3(start, stop, step):
+        numba.parfor.init_prange()
+        n = int((stop - start + 1) // step)
+        arr = numba.unsafe.ndarray.empty_inferred((n,))
+        for i in numba.parfor.internal_prange(n):
+            arr[i] = stop - stop + start + step * i
+        return arr
+
+def arange_parallel_impl(*args):
+    if len(args) == 1:
+        return arange_1
+    elif len(args) == 2:
+        return arange_2
+    elif len(args) == 3:
+        print("arange_parallel_impl args = ", args)
+        return arange_3
+    else:
+        raise NotImplemented("parallel arange with argument types {}".format(args))
 
 def linspace_parallel_impl(start, stop, num):
     pass
@@ -209,7 +237,7 @@ replace_functions_map = {
     ('sum', 'numpy'): lambda args: sum_parallel_impl,
     ('prod', 'numpy'): lambda args: prod_parallel_impl,
     ('dot', 'numpy'): dot_parallel_impl,
-    ('arange', 'numpy'): lambda args: arange_parallel_impl,
+    ('arange', 'numpy'): arange_parallel_impl,
     ('linspace', 'numpy'): linspace_parallel_impl,
 }
 
