@@ -325,6 +325,31 @@ class PreParforPass(object):
                             return True
                         if guard(replace_func):
                             break
+                    elif (isinstance(expr, ir.Expr) and expr.op == 'getattr' and
+                          expr.attr == 'dtype'):
+                        # Replace getattr call "A.dtype" with the actual type itself.
+                        # This helps remove superfulous dependencies from parfor.
+                        typ = self.typemap[expr.value.name]
+                        if isinstance(typ, types.npytypes.Array):
+                            dtype = typ.dtype
+                            scope = block.scope
+                            loc = instr.loc
+                            g_np_var = ir.Var(scope, mk_unique_var("$np_g_var"), loc)
+                            self.typemap[g_np_var.name] = types.misc.Module(numpy)
+                            g_np = ir.Global('np', numpy, loc)
+                            g_np_assign = ir.Assign(g_np, g_np_var, loc)
+                            typ_var = ir.Var(scope, mk_unique_var("$np_typ_var"), loc)
+                            self.typemap[typ_var.name] = types.DType(dtype)
+                            dtype_str = str(dtype)
+                            if dtype_str == 'bool':
+                                dtype_str = 'bool_'
+                            np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
+                            typ_var_assign = ir.Assign(np_typ_getattr, typ_var, loc)
+                            instr.value = typ_var
+                            block.body.insert(0, typ_var_assign)
+                            block.body.insert(0, g_np_assign)
+                            break
+
 
 class ParforPass(object):
 
