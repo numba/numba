@@ -174,6 +174,10 @@ def countParfors(test_func, args, **kws):
             return_type=tp.return_type,
             html_output=config.HTML)
 
+        preparfor_pass = numba.parfor.PreParforPass(
+            tp.func_ir, tp.typemap, tp.calltypes, tp.typingctx, options)
+        preparfor_pass.run()
+
         numba.rewrites.rewrite_registry.apply(
             'after-inference', tp, tp.func_ir)
 

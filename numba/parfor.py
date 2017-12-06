@@ -73,6 +73,7 @@ from numba.array_analysis import (random_int_args, random_1arg_size,
                                   random_calls)
 import copy
 import numpy
+import numpy as np
 # circular dependency: import numba.npyufunc.dufunc.DUFunc
 
 sequential_parfor_lowering = False
@@ -143,10 +144,10 @@ def argmax_parallel_impl(in_arr):
         ival = max(ival, curr_ival)
     return ival.index
 
-replace_functions_map = {('argmin', 'numpy'): argmin_parallel_impl,
-                        ('argmax', 'numpy'): argmax_parallel_impl,
-                        ('min', 'numpy'): min_parallel_impl,
-                        ('max', 'numpy'): max_parallel_impl,}
+replace_functions_map = {('argmin', 'numpy'): lambda args:argmin_parallel_impl,
+                        ('argmax', 'numpy'): lambda args:argmax_parallel_impl,
+                        ('min', 'numpy'): lambda args:min_parallel_impl,
+                        ('max', 'numpy'): lambda args:max_parallel_impl,}
 
 class LoopNest(object):
 
@@ -268,6 +269,63 @@ def _analyze_parfor(parfor, equiv_set, typemap, array_analysis):
 
 array_analysis.array_analysis_extensions[Parfor] = _analyze_parfor
 
+
+class PreParforPass(object):
+    """Preprocessing for the Parfor pass. It mostly inlines parallel
+    implementations of numpy functions if available.
+    """
+    def __init__(self, func_ir, typemap, calltypes, typingctx, options):
+        self.func_ir = func_ir
+        self.typemap = typemap
+        self.calltypes = calltypes
+        self.typingctx = typingctx
+        self.options = options
+
+    def run(self):
+        """Run pre-parfor processing pass.
+        """
+        # e.g. convert A.sum() to np.sum(A) for easier match and optimization
+        canonicalize_array_math(self.func_ir, self.typemap,
+                                self.calltypes, self.typingctx)
+        if self.options.numpy:
+            self._replace_parallel_functions(self.func_ir.blocks)
+        self.func_ir.blocks = simplify_CFG(self.func_ir.blocks)
+
+    def _replace_parallel_functions(self, blocks):
+        """
+        Replace functions with their parallel implemntation in
+        replace_functions_map if available.
+        The implementation code is inlined to enable more optimization.
+        """
+        from numba.inline_closurecall import inline_closure_call
+        work_list = list(blocks.items())
+        while work_list:
+            label, block = work_list.pop()
+            for i, instr in enumerate(block.body):
+                if isinstance(instr, ir.Assign):
+                    lhs = instr.target
+                    expr = instr.value
+                    if isinstance(expr, ir.Expr) and expr.op == 'call':
+                        # Try inline known calls with their parallel implementations
+                        def replace_func():
+                            func_def = get_definition(self.func_ir, expr.func)
+                            callname = find_callname(self.func_ir, expr)
+                            repl_func = replace_functions_map.get(callname, None)
+                            require(repl_func != None)
+                            typs = tuple(self.typemap[x.name] for x in expr.args)
+                            new_func =  repl_func(*typs)
+                            require(new_func != None)
+                            g = copy.copy(self.func_ir.func_id.func.__globals__)
+                            g['numba'] = numba
+                            g['np'] = numpy
+                            # inline the parallel implementation
+                            inline_closure_call(self.func_ir, g,
+                                            block, i, new_func, self.typingctx, typs,
+                                            self.typemap, self.calltypes, work_list)
+                            return True
+                        if guard(replace_func):
+                            break
+
 class ParforPass(object):
 
     """ParforPass class is responsible for converting Numpy
@@ -290,15 +348,6 @@ class ParforPass(object):
     def run(self):
         """run parfor conversion pass: replace Numpy calls
         with Parfors when possible and optimize the IR."""
-        self.func_ir.blocks = simplify_CFG(self.func_ir.blocks)
-        # remove Del statements for easier optimization
-        remove_dels(self.func_ir.blocks)
-        # e.g. convert A.sum() to np.sum(A) for easier match and optimization
-        canonicalize_array_math(self.func_ir, self.typemap,
-                                self.calltypes, self.typingctx)
-        # some numpy functions are given parallel implementations
-        if self.options.numpy:
-            self._replace_parallel_functions(self.func_ir.blocks)
         # run array analysis, a pre-requisite for parfor translation
         remove_dels(self.func_ir.blocks)
         self.array_analysis.run(self.func_ir.blocks)
@@ -373,39 +422,6 @@ class ParforPass(object):
                 else:
                     print('Function {} has no Parfor.'.format(name))
         return
-
-    def _replace_parallel_functions(self, blocks):
-        """
-        Replace functions with their parallel implemntation in
-        replace_functions_map if available.
-        The implementation code is inlined to enable more optimization.
-        """
-        from numba.inline_closurecall import inline_closure_call
-        modified = False
-        work_list = list(blocks.items())
-        while work_list:
-            label, block = work_list.pop()
-            for i, instr in enumerate(block.body):
-                if isinstance(instr, ir.Assign):
-                    lhs = instr.target
-                    expr = instr.value
-                    if isinstance(expr, ir.Expr) and expr.op == 'call':
-                        func_def = guard(get_definition, self.func_ir, expr.func)
-                        callname = guard(find_callname, self.func_ir, expr)
-                        if callname in replace_functions_map:
-                            new_func = replace_functions_map[callname]
-                            g = copy.copy(self.func_ir.func_id.func.__globals__)
-                            g['numba'] = numba
-                            g['np'] = numpy
-                            # inline the parallel implementation
-                            inline_blocks = inline_closure_call(self.func_ir, g,
-                                        block, i, new_func, self.typingctx,
-                                        (self.typemap[expr.args[0].name],),
-                                        self.typemap, self.calltypes, work_list)
-                            remove_dels(inline_blocks)
-                            modified = True
-                            # current block is modified, skip the rest
-                            break
 
     def _convert_numpy(self, blocks):
         """
