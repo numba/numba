@@ -169,7 +169,7 @@ There are two things there:
 
 .. note::
    1D array type can also receive scalar arguments (those with shape ``()``).
-   In the above example, the second argument can be declared as
+   In the above example, the second argument also could be declared as
    ``int64[:]``.  In that case, the value must be read by ``y[0]``.
 
 We can now check what the compiled ufunc does, over a simple example::
