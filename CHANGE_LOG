@@ -1,4 +1,4 @@
-Version 0.36.0
+Version 0.36.1
 --------------
 
 This release continues to add new features to the work undertaken in partnership
@@ -6,6 +6,7 @@ with Intel on ParallelAccelerator technology. Other changes of note include the
 compilation chain being updated to use LLVM 5.0 and the production of conda
 packages using conda-build 3 and the new compilers that ship with it.
 
+NOTE: A version 0.36.0 was tagged for internal use but not released.
 
 ParallelAccelerator:
 
