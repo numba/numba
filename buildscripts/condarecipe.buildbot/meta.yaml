@@ -41,9 +41,6 @@ requirements:
     - llvmlite 0.21.*
     - funcsigs                 # [py27]
     - singledispatch           # [py27]
-    # Need these for AOT. Do not init msvc as it may not be present
-    - {{ compiler('c') }}      # [not win]
-    - {{ compiler('cxx') }}    # [not win]
 test:
   requires:
     - jinja2
@@ -53,6 +50,9 @@ test:
     - ipython
     - cudatoolkit {{ environ.get('CUDATOOLKIT_VERSION', '7.5') }} # default to 7.5
     - setuptools
+    # Need these for AOT. Do not init msvc as it may not be present
+    - {{ compiler('c') }}      # [not win]
+    - {{ compiler('cxx') }}    # [not win]
   files:
     - mandel.py
   commands:
