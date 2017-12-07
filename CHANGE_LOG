@@ -62,7 +62,8 @@ Misc fixes/enhancements:
 * PR #2612: Fix NRT test failure due to increased overhead when running in coverage
 * PR #2619: Fix dubious pthread_cond_signal not in lock
 * PR #2622: Fix `np.nanmedian` for all NaN case.
-
+* PR #2633: Fix markdown in CONTRIBUTING.md
+* PR #2635: Make the dependency on compilers for AOT optional.
 
 CUDA support fixes:
 
