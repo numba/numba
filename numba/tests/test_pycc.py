@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from unittest import skip
 from ctypes import *
 
 import numpy as np
@@ -21,6 +22,13 @@ from numba import unittest_support as unittest
 from numba.pycc import main
 from numba.pycc.decorators import clear_export_registry
 from numba.pycc.platform import find_shared_ending, find_pyext_ending
+from numba.pycc.platform import _external_compiler_ok
+
+# if suitable compilers are not present then skip.
+_skip_reason = 'AOT compatible compilers missing'
+_skip_missing_compilers = unittest.skipIf(not _external_compiler_ok,
+                                          _skip_reason)
+
 from .matmul_usecase import has_blas
 from .support import TestCase, tag, import_dynamic, temp_directory
 
@@ -64,6 +72,7 @@ class BasePYCCTest(TestCase):
             sys.modules.pop(name, None)
 
 
+@_skip_missing_compilers
 class TestLegacyAPI(BasePYCCTest):
 
     def test_pycc_ctypes_lib(self):
@@ -136,6 +145,7 @@ class TestLegacyAPI(BasePYCCTest):
         self.assertTrue(bc.startswith((bitcode_magic, bitcode_wrapper_magic)), bc)
 
 
+@_skip_missing_compilers
 class TestCC(BasePYCCTest):
 
     def setUp(self):
@@ -265,6 +275,7 @@ class TestCC(BasePYCCTest):
             self.check_cc_compiled_in_subprocess(lib, code)
 
 
+@_skip_missing_compilers
 class TestDistutilsSupport(TestCase):
 
     def setUp(self):
