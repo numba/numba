@@ -2,14 +2,16 @@
 # Copyright (c) 2017 Intel Corporation
 # SPDX-License-Identifier: BSD-2-Clause
 #
+import numpy
 
-import numba
 import types as pytypes
+
+from llvmlite import ir as lir
+import numba
+from numba.six import exec_
 from numba import ir, types, typing, config, analysis, utils, cgutils
 from numba.typing.templates import signature, infer_global, AbstractTemplate
-from llvmlite import ir as lir
 from numba.targets.imputils import impl_ret_untracked
-import numpy
 from numba.analysis import (compute_live_map, compute_use_defs,
                             compute_cfg_from_blocks)
 import copy
@@ -1418,7 +1420,7 @@ def get_ir_of_code(glbls, fcode):
     func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (
         func_env, func_arg, func_clo)
     loc = {}
-    exec(func_text, glbls, loc)
+    exec_(func_text, glbls, loc)
 
     # hack parameter name .0 for Python 3 versions < 3.6
     if utils.PYVERSION >= (3,) and utils.PYVERSION < (3, 6):
