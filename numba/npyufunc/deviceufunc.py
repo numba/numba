@@ -10,22 +10,13 @@ from functools import reduce
 
 import numpy as np
 
+from numba.six import exec_
 from numba.utils import longint
 from numba.utils import IS_PY3
 from numba.npyufunc.ufuncbuilder import _BaseUFuncBuilder, parse_identity
 from numba import sigutils, types
 from numba.typing import signature
 from numba.npyufunc.sigparse import parse_signature
-
-if IS_PY3:
-    def _exec(codestr, glbls):
-        exec(codestr, glbls)
-else:
-    eval(compile("""
-def _exec(codestr, glbls):
-    exec codestr in glbls
-""",
-                 "<_exec>", "exec"))
 
 
 def _broadcast_axis(a, b):
@@ -393,7 +384,7 @@ class DeviceVectorize(_BaseUFuncBuilder):
         corefn, return_type = self._compile_core(devfnsig)
         glbl = self._get_globals(corefn)
         sig = signature(types.void, *([a[:] for a in args] + [return_type[:]]))
-        _exec(kernelsource, glbl)
+        exec_(kernelsource, glbl)
 
         stager = glbl['__vectorized_%s' % funcname]
         kernel = self._compile_kernel(stager, sig)
@@ -470,7 +461,7 @@ class DeviceGUFuncVectorize(_BaseUFuncBuilder):
 
         glbls = self._get_globals(sig)
 
-        _exec(src, glbls)
+        exec_(src, glbls)
         fnobj = glbls['__gufunc_{name}'.format(name=funcname)]
 
         outertys = list(_determine_gufunc_outer_types(args, indims + outdims))
