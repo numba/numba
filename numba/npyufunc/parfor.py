@@ -3,23 +3,24 @@ from __future__ import print_function, division, absolute_import
 import ast
 from collections import defaultdict, OrderedDict
 import sys
+import copy
 
+import llvmlite.llvmpy.core as lc
+
+import numba
 from .. import compiler, ir, types, six, cgutils, sigutils, lowering, parfor
 from numba.ir_utils import (add_offset_to_labels, replace_var_names,
                             remove_dels, legalize_names, mk_unique_var,
                             rename_labels, get_name_var_table, visit_vars_inner,
-                            get_definition, guard, find_callname, 
-                            get_call_table, is_pure, 
+                            get_definition, guard, find_callname,
+                            get_call_table, is_pure,
                             get_unused_var_name)
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
 from ..typing import signature
 from numba import config
 from numba.targets.cpu import ParallelOptions
-import llvmlite.llvmpy.core as lc
-import numba
-import copy
-
+from numba.six import exec_
 
 def _lower_parfor_parallel(lowerer, parfor):
     """Lowerer that handles LLVM code generation for parfor.
@@ -256,7 +257,7 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
         new_block = []
         for inst in block.body:
             if isinstance(inst, ir.Assign) and inst.target.name in def_once:
-                if _hoist_internal(inst, dep_on_param, call_table, 
+                if _hoist_internal(inst, dep_on_param, call_table,
                                    hoisted, typemap):
                     # don't add this instuction to the block since it is hoisted
                     continue
@@ -452,7 +453,7 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_txt = ", type(gufunc_txt), "\n", gufunc_txt)
     # Force gufunc outline into existence.
-    exec(gufunc_txt)
+    exec_(gufunc_txt)
     gufunc_func = eval(gufunc_name)
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_func = ", type(gufunc_func), "\n", gufunc_func)

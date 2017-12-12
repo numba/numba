@@ -3,16 +3,20 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
-import numpy as np
 import copy
+
+import numpy as np
+from llvmlite import ir as lir
+
 from numba import compiler, types, ir_utils, ir, typing, numpy_support, utils
 from numba import config
 from numba.typing.templates import (CallableTemplate, signature, infer_global,
                                     AbstractTemplate)
 from numba.targets import registry
 from numba.targets.imputils import lower_builtin
-from llvmlite import ir as lir
 from numba.extending import register_jitable
+from numba.six import exec_
+
 
 class StencilFuncLowerer(object):
     '''Callable class responsible for lowering calls to a specific StencilFunc.
@@ -344,7 +348,7 @@ class StencilFunc(object):
         sig = signature(real_ret, *argtys_extra)
         dummy_text = ("def __numba_dummy_stencil({}{}):\n    pass\n".format(
                         ",".join(self.kernel_ir.arg_names), sig_extra))
-        exec(dummy_text) in globals(), locals()
+        exec_(dummy_text) in globals(), locals()
         dummy_func = eval("__numba_dummy_stencil")
         sig.pysig = utils.pysignature(dummy_func)
         self._targetctx.insert_func_defn([(self._lower_me, self, argtys_extra)])
@@ -437,7 +441,7 @@ class StencilFunc(object):
         # the index variable for each dimension.  index0, index1, ...
         index_vars = []
         for i in range(the_array.ndim):
-            index_var_name = ir_utils.get_unused_var_name("index" + str(i), 
+            index_var_name = ir_utils.get_unused_var_name("index" + str(i),
                                                           name_var_table)
             index_vars += [index_var_name]
 
@@ -571,7 +575,7 @@ class StencilFunc(object):
             print(func_text)
 
         # Force the new stencil function into existence.
-        exec(func_text) in globals(), locals()
+        exec_(func_text) in globals(), locals()
         stencil_func = eval(stencil_func_name)
         if sigret is not None:
             pysig = utils.pysignature(stencil_func)
@@ -610,7 +614,7 @@ class StencilFunc(object):
         # Search all the block in the stencil outline for the sentinel.
         for label, block in stencil_ir.blocks.items():
             for i, inst in enumerate(block.body):
-                if (isinstance( inst, ir.Assign) and 
+                if (isinstance( inst, ir.Assign) and
                     inst.target.name == sentinel_name):
                     # We found the sentinel assignment.
                     loc = inst.loc
@@ -636,7 +640,7 @@ class StencilFunc(object):
 
                     stencil_ir.blocks[new_label] = block
                     stencil_ir.blocks[label] = prev_block
-                    # Add a jump from all the blocks that previously contained 
+                    # Add a jump from all the blocks that previously contained
                     # a return in the stencil kernel to the block
                     # containing statements after the sentinel.
                     for ret_block in ret_blocks:
