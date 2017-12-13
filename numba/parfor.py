@@ -691,6 +691,8 @@ class ParforPass(object):
     def _convert_loop(self, blocks):
         call_table, _ = get_call_table(blocks)
         cfg = compute_cfg_from_blocks(blocks)
+        usedefs = compute_use_defs(blocks)
+        live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
         loops = cfg.loops()
         sized_loops = [(loops[k], len(loops[k].body)) for k in loops.keys()]
         moved_blocks = []
@@ -700,11 +702,13 @@ class ParforPass(object):
                 continue
             entry = list(loop.entries)[0]
             for inst in blocks[entry].body:
-                # if prange call
-                if (isinstance(inst, ir.Assign) and isinstance(inst.value, ir.Expr)
+                # if prange or pndindex call
+                if (isinstance(inst, ir.Assign)
+                        and isinstance(inst.value, ir.Expr)
                         and inst.value.op == 'call'
                         and self._is_parallel_loop(inst.value.func.name, call_table)):
-                    body_labels = [ l for l in loop.body if l in blocks and l != loop.header ]
+                    body_labels = [ l for l in loop.body if
+                                    l in blocks and l != loop.header ]
                     args = inst.value.args
                     loop_kind = self._get_loop_kind(inst.value.func.name,
                                                                     call_table)
@@ -731,17 +735,111 @@ class ParforPass(object):
                                                             call_table, args)
                     # set l=l for remove dead prange call
                     inst.value = inst.target
-                    body = {l: blocks[l] for l in body_labels}
+                    loop_body = {l: blocks[l] for l in body_labels}
+                    # Add an empty block to the end of loop body
+                    end_label = next_label()
+                    loop_body[end_label] = ir.Block(scope, loc)
+                    # replace jumps to header block with the end block
+                    for l in body_labels:
+                        last_inst = loop_body[l].body[-1]
+                        if (isinstance(last_inst, ir.Jump) and
+                            last_inst.target == loop.header):
+                            last_inst.target = end_label
+
+                    def find_indexed_arrays():
+                        """find expressions that involve getitem using the
+                        index variable. Return both the arrays and expressions.
+                        """
+                        indices = copy.copy(loop_index_vars)
+                        for block in loop_body.values():
+                            for inst in block.find_insts(ir.Assign):
+                                if (isinstance(inst.value, ir.Var) and
+                                    inst.value.name in indices):
+                                    indices.add(inst.target.name)
+                        arrs = []
+                        exprs = []
+                        for block in loop_body.values():
+                            for inst in block.body:
+                                lv = set(x.name for x in inst.list_vars())
+                                if lv & indices:
+                                    if lv.issubset(indices):
+                                        continue
+                                    require(isinstance(inst, ir.Assign))
+                                    expr = inst.value
+                                    require(isinstance(expr, ir.Expr) and
+                                            expr.op == 'getitem')
+                                    arrs.append(expr.value.name)
+                                    exprs.append(expr)
+                        return arrs, exprs
+
+                    mask_var = None
+                    mask_indices = None
+                    def find_mask_from_size(size_var):
+                        """Find the case where size_var is defined by A[M].shape,
+                        where M is a boolean array.
+                        """
+                        size_def = get_definition(self.func_ir, size_var)
+                        require(size_def and isinstance(size_def, ir.Expr) and
+                                size_def.op == 'getattr' and size_def.attr == 'shape')
+                        arr_var = size_def.value
+                        live_vars = set.union(*[live_map[l] for l in loop.exits])
+                        index_arrs, index_exprs = find_indexed_arrays()
+                        require([arr_var.name] == list(index_arrs))
+                        # input array has to be dead after loop
+                        require(arr_var.name not in live_vars)
+                        # loop for arr's definition, where size = arr.shape
+                        arr_def = get_definition(self.func_ir, size_def.value)
+                        result = self._find_mask(arr_def)
+                        # Found the mask.
+                        # Replace B[i] with A[i], where B = A[M]
+                        for expr in index_exprs:
+                            expr.value = result[0]
+                        return result
+
                     if loop_kind == 'pndindex':
-                        print("args[0] = ", args[0], equiv_set.get_shape(args[0]))
                         assert(equiv_set.has_shape(args[0]))
-                        size_vars = equiv_set.get_shape(args[0])
-                        index_vars, loops = self._mk_parfor_loops(size_vars, scope, loc)
-                        first_body_block = body[min(body.keys())]
+                        result = guard(find_mask_from_size, args[0])
+                        if result:
+                            in_arr, mask_var, mask_typ, mask_indices = result
+                        else:
+                            in_arr = args[0]
+                        size_vars = equiv_set.get_shape(in_arr
+                                        if mask_indices == None else mask_var)
+                        index_vars, loops = self._mk_parfor_loops(
+                                                size_vars, scope, loc)
+                        orig_index = index_vars
+                        if mask_indices:
+                            index_vars = tuple(x if x else index_vars[0]
+                                               for x in mask_indices)
+                        first_body_block = loop_body[min(loop_body.keys())]
                         body_block = ir.Block(scope, loc)
-                        index_var, index_var_typ = self._make_index_var(scope, index_vars, body_block)
-                        first_body_block.body = body_block.body + first_body_block.body
-                    else: # prange 
+                        index_var, index_var_typ = self._make_index_var(
+                                                scope, index_vars, body_block)
+                        body = body_block.body + first_body_block.body
+                        first_body_block.body = body
+                        if mask_indices:
+                            orig_index_var = orig_index[0]
+                        else:
+                            orig_index_var = index_var
+
+                        if mask_var != None:
+                            body_label = next_label()
+                            # loop_body needs new labels greater than body_label
+                            loop_body = add_offset_to_labels(loop_body,
+                                            body_label - min(loop_body.keys()) + 1)
+                            labels = loop_body.keys()
+                            true_label = min(labels)
+                            false_label = max(labels)
+                            body_block = ir.Block(scope, loc)
+                            loop_body[body_label] = body_block
+                            mask = ir.Var(scope, mk_unique_var("$mask_val"), loc)
+                            self.typemap[mask.name] = mask_typ
+                            mask_val = ir.Expr.getitem(mask_var, orig_index_var, loc)
+                            body_block.body.extend([
+                               ir.Assign(mask_val, mask, loc),
+                               ir.Branch(mask, true_label, false_label, loc)
+                            ])
+                    else: # prange
                         start = 0
                         step = 1
                         size_var = args[0]
@@ -768,29 +866,57 @@ class ParforPass(object):
                         loops = [LoopNest(index_var, start, size_var, step)]
                         self.typemap[index_var.name] = index_var_typ
 
-                    # set l=l for dead remove
-                    inst.value = inst.target
                     index_var_map = {v: index_var for v in loop_index_vars}
-                    replace_vars(body, index_var_map)
-                    parfor = Parfor(loops, init_block, body, loc, index_var,
+                    replace_vars(loop_body, index_var_map)
+                    parfor = Parfor(loops, init_block, loop_body, loc,
+                                    orig_index_var if mask_indices else index_var,
                                     equiv_set,
                                     ("prange", loop_kind))
                     # add parfor to entry block's jump target
                     jump = blocks[entry].body[-1]
-                    print("jump.target = ", jump.target, " loop.header = ", loop.header)
                     jump.target = list(loop.exits)[0]
                     blocks[jump.target].body.insert(0, parfor)
-                    # remove jumps back to header block
-                    for l in body_labels:
-                        last_inst = body[l].body[-1]
-                        if isinstance(
-                                last_inst,
-                                ir.Jump) and last_inst.target == loop.header:
-                            body[l].body.pop()
                     # remove loop blocks from top level dict
                     blocks.pop(loop.header)
                     for l in body_labels:
                         blocks.pop(l)
+
+    def _find_mask(self, arr_def):
+        """check if an array is of B[...M...], where M is a
+        boolean array, and other indices (if available) are ints.
+        If found, return B, M, M's type, and a tuple representing mask indices.
+        Otherwise, raise GuardException.
+        """
+        require(isinstance(arr_def, ir.Expr) and arr_def.op == 'getitem')
+        value = arr_def.value
+        index = arr_def.index
+        value_typ = self.typemap[value.name]
+        index_typ = self.typemap[index.name]
+        ndim = value_typ.ndim
+        require(isinstance(value_typ, types.npytypes.Array))
+        if (isinstance(index_typ, types.npytypes.Array) and
+            isinstance(index_typ.dtype, types.Boolean) and
+            ndim == index_typ.ndim):
+            return value, index, index_typ.dtype, None
+        elif isinstance(index_typ, types.BaseTuple):
+            # Handle multi-dimension differently by requiring
+            # all indices to be constant except the one for mask.
+            seq, op = find_build_sequence(self.func_ir, index)
+            require(op == 'build_tuple' and len(seq) == ndim)
+            count_consts = 0
+            mask_indices = []
+            for ind in seq:
+                index_typ = self.typemap[ind.name]
+                if (isinstance(index_typ, types.npytypes.Array) and
+                    isinstance(index_typ.dtype, types.Boolean)):
+                    mask_var = ind
+                    mask_typ = index_typ.dtype
+                    mask_indices.append(None)
+                elif isinstance(index_typ, types.Integer):
+                    count_consts += 1
+                    mask_indices.append(ind)
+            require(mask_var and count_consts == ndim - 1)
+            return value, mask_var, mask_typ, mask_indices
 
     def _get_prange_init_block(self, entry_block, call_table, prange_args):
         """
@@ -1178,45 +1304,9 @@ class ParforPass(object):
         in_arr = args[1]
         arr_def = get_definition(self.func_ir, in_arr.name)
 
-        def find_mask():
-            """check if array to be reduced is of B[...M...], where M is a
-            boolean array, and other indices (if available) are ints.
-            """
-            require(isinstance(arr_def, ir.Expr) and arr_def.op == 'getitem')
-            value = arr_def.value
-            index = arr_def.index
-            value_typ = self.typemap[value.name]
-            index_typ = self.typemap[index.name]
-            ndim = value_typ.ndim
-            require(isinstance(value_typ, types.npytypes.Array))
-            if (isinstance(index_typ, types.npytypes.Array) and
-                isinstance(index_typ.dtype, types.Boolean) and
-                ndim == index_typ.ndim):
-                return value, index, index_typ.dtype, None
-            elif isinstance(index_typ, types.BaseTuple):
-                # handle multi-dimension differently
-                seq, op = find_build_sequence(self.func_ir, index)
-                require(op == 'build_tuple' and len(seq) == ndim)
-                count_consts = 0
-                mask_indices = []
-                for ind in seq:
-                    index_typ = self.typemap[ind.name]
-                    if (isinstance(index_typ, types.npytypes.Array) and
-                        isinstance(index_typ.dtype, types.Boolean)):
-                        mask_var = ind
-                        mask_typ = index_typ.dtype
-                        mask_indices.append(None)
-                    elif isinstance(index_typ, types.Integer):
-                        count_consts += 1
-                        mask_indices.append(ind)
-                if mask_var and count_consts == ndim - 1:
-                    return value, mask_var, mask_typ, mask_indices
-                else:
-                    return None
-
         mask_var = None
         mask_indices = None
-        result = guard(find_mask)
+        result = guard(self._find_mask, arr_def)
         if result:
             in_arr, mask_var, mask_typ, mask_indices = result
 
