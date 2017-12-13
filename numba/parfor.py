@@ -220,7 +220,7 @@ def arange_parallel_impl(return_type, *args):
             nitems_c = (stop - start) / step
             nitems_r = math.ceil(nitems_c.real)
             nitems_i = math.ceil(nitems_c.imag)
-            nitems = max(min(nitems_i, nitems_r), 0)
+            nitems = int(max(min(nitems_i, nitems_r), 0))
             arr = np.empty(nitems, dtype)
             for i in numba.parfor.internal_prange(nitems):
                 arr[i] = start + i * step
@@ -229,7 +229,7 @@ def arange_parallel_impl(return_type, *args):
         def arange_4(start, stop, step, dtype):
             numba.parfor.init_prange()
             nitems_r = math.ceil((stop - start) / step)
-            nitems = max(nitems_r, 0)
+            nitems = int(max(nitems_r, 0))
             arr = np.empty(nitems, dtype)
             val = start
             for i in numba.parfor.internal_prange(nitems):
