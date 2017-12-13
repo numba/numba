@@ -299,11 +299,19 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     # 4. replace freevar with actual closure var
     if callee_closure:
         closure = func_ir.get_definition(callee_closure)
-        assert(isinstance(closure, ir.Expr)
-               and closure.op == 'build_tuple')
-        assert(len(callee_code.co_freevars) == len(closure.items))
         debug_print("callee's closure = ", closure)
-        _replace_freevars(callee_blocks, closure.items)
+        if isinstance(closure, tuple):
+            import ctypes
+            cellget = ctypes.pythonapi.PyCell_Get
+            cellget.restype = ctypes.py_object
+            cellget.argtypes = (ctypes.py_object,)
+            items = tuple(cellget(x) for x in closure)
+        else:
+            assert(isinstance(closure, ir.Expr)
+                   and closure.op == 'build_tuple')
+            items = closure.items
+        assert(len(callee_code.co_freevars) == len(items))
+        _replace_freevars(callee_blocks, items)
         debug_print("After closure rename")
         _debug_dump(callee_ir)
 
@@ -396,7 +404,10 @@ def _replace_freevars(blocks, args):
             if isinstance(stmt.value, ir.FreeVar):
                 idx = stmt.value.index
                 assert(idx < len(args))
-                stmt.value = args[idx]
+                if isinstance(args[idx], ir.Var):
+                    stmt.value = args[idx]
+                else:
+                    stmt.value = ir.Const(args[idx], stmt.loc)
 
 
 def _replace_returns(blocks, target, return_label):
