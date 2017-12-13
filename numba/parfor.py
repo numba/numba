@@ -2246,7 +2246,8 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, typemap):
         for v in alias_lives:
             in_lives |= alias_map[v]
         if (isinstance(stmt, ir.SetItem) and stmt.index.name ==
-                parfor.index_var.name and stmt.target.name not in in_lives):
+                parfor.index_var.name and stmt.target.name not in in_lives and
+                stmt.target.name not in arg_aliases):
             continue
         in_lives |= {v.name for v in stmt.list_vars()}
         new_body.append(stmt)

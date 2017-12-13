@@ -498,7 +498,6 @@ def remove_dead(blocks, args, typemap=None, alias_map=None, arg_aliases=None):
         # find live variables at the end of block
         for out_blk, _data in cfg.successors(label):
             lives |= live_map[out_blk]
-        lives |= arg_aliases
         removed |= remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_set, typemap)
     return removed
 
@@ -523,7 +522,7 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_se
     for stmt in reversed(block.body[:-1]):
         # aliases of lives are also live
         alias_lives = set()
-        init_alias_lives = lives & alias_set
+        init_alias_lives = (lives | arg_aliases) & alias_set
         for v in init_alias_lives:
             alias_lives |= alias_map[v]
         # let external calls handle stmt if type matches
@@ -546,7 +545,8 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_se
                 continue
             # TODO: remove other nodes like SetItem etc.
         if isinstance(stmt, ir.SetItem):
-            if stmt.target.name not in lives and stmt.target.name not in alias_lives:
+            name = stmt.target.name
+            if not (name in lives or name in alias_lives or name in arg_aliases):
                 continue
 
         if type(stmt) in analysis.ir_extension_usedefs:
