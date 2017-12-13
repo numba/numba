@@ -21,6 +21,7 @@ from collections import defaultdict
 import numba
 from numba import ir, ir_utils, types, typing, rewrites, config, analysis, prange, pndindex
 from numba import array_analysis, postproc, typeinfer
+from numba.numpy_support import as_dtype
 from numba.typing.templates import infer_global, AbstractTemplate
 from numba import stencilparfor
 from numba.stencilparfor import StencilPass
@@ -99,32 +100,34 @@ class internal_prange(object):
 def min_parallel_impl(in_arr):
     numba.parfor.init_prange()
     val = numba.targets.builtins.get_type_max_value(in_arr.dtype)
-    for i in pdindex(in_arr.shape):
+    for i in numba.pndindex(in_arr.shape):
         val = min(val, in_arr[i])
     return val
 
 def max_parallel_impl(in_arr):
     numba.parfor.init_prange()
     val = numba.targets.builtins.get_type_min_value(in_arr.dtype)
-    for i in numba.parfor.internal_prange(in_arr.shape):
+    for i in numba.pndindex(in_arr.shape):
         val = max(val, in_arr[i])
     return val
 
 def argmin_parallel_impl(in_arr):
     numba.parfor.init_prange()
-    init_val = numba.targets.builtins.get_type_max_value(in_arr.dtype)
+    A = in_arr.ravel()
+    init_val = numba.targets.builtins.get_type_max_value(A.dtype)
     ival = numba.typing.builtins.IndexValue(0, init_val)
-    for i in numba.parfor.internal_prange(in_arr.shape):
-        curr_ival = numba.typing.builtins.IndexValue(i, in_arr[i])
+    for i in numba.parfor.internal_prange(len(A)):
+        curr_ival = numba.typing.builtins.IndexValue(i, A[i])
         ival = min(ival, curr_ival)
     return ival.index
 
 def argmax_parallel_impl(in_arr):
     numba.parfor.init_prange()
-    init_val = numba.targets.builtins.get_type_min_value(in_arr.dtype)
+    A = in_arr.ravel()
+    init_val = numba.targets.builtins.get_type_min_value(A.dtype)
     ival = numba.typing.builtins.IndexValue(0, init_val)
-    for i in numba.parfor.internal_prange(in_arr.shape):
-        curr_ival = numba.typing.builtins.IndexValue(i, in_arr[i])
+    for i in numba.parfor.internal_prange(len(A)):
+        curr_ival = numba.typing.builtins.IndexValue(i, A[i])
         ival = max(ival, curr_ival)
     return ival.index
 
@@ -166,7 +169,7 @@ def dotmv_parallel_impl(a, b):
         c[i] = s
     return c
 
-def dot_parallel_impl(atyp, btyp):
+def dot_parallel_impl(return_type, atyp, btyp):
     # Note that matrix matrix multiply is not translated.
     if (isinstance(atyp, types.npytypes.Array) and
         isinstance(btyp, types.npytypes.Array)):
@@ -177,65 +180,102 @@ def dot_parallel_impl(atyp, btyp):
         elif atyp.ndim == 2 and btyp.ndim == 1:
             return dotmv_parallel_impl
 
-def sum_parallel_impl(in_arr):
-    numba.parfor.init_prange()
-    val = 0
-    for i in numba.pndindex(in_arr.shape):
-        val += in_arr[i]
-    return val
+def sum_parallel_impl(return_type, arg):
+    zero = return_type(0)
 
-def prod_parallel_impl(in_arr):
-    numba.parfor.init_prange()
-    val = 1
-    for i in numba.ndindex(in_arr.shape):
-        val *= in_arr[i]
-    return val
-
-def arange_1(stop):
+    def sum_1(in_arr):
         numba.parfor.init_prange()
-        n = int(stop)
-        arr = numba.unsafe.ndarray.empty_inferred((n,))
-        for i in numba.parfor.internal_prange(n):
-            arr[i] = stop - stop + i
-        return arr
+        val = zero
+        for i in numba.pndindex(in_arr.shape):
+            val += in_arr[i]
+        return val
+    return sum_1
 
-def arange_2(start, stop):
+def prod_parallel_impl(return_type, arg):
+    one = return_type(1)
+
+    def prod_1(in_arr):
         numba.parfor.init_prange()
-        n = int(stop - start + 1)
-        arr = numba.unsafe.ndarray.empty_inferred((n,))
-        for i in numba.parfor.internal_prange(n):
-            arr[i] = stop - stop + start + i
-        return arr
+        val = one
+        for i in numba.ndindex(in_arr.shape):
+            val *= in_arr[i]
+        return val
+    return prod_1
 
-def arange_3(start, stop, step):
-        numba.parfor.init_prange()
-        n = int((stop - start + 1) // step)
-        arr = numba.unsafe.ndarray.empty_inferred((n,))
-        for i in numba.parfor.internal_prange(n):
-            arr[i] = stop - stop + start + step * i
-        return arr
+def arange_parallel_impl(return_type, *args):
+    dtype = as_dtype(return_type.dtype)
 
-def arange_parallel_impl(*args):
+    def arange_1(stop):
+        return np.arange(0, stop, 1, dtype)
+
+    def arange_2(start, stop):
+        return np.arange(start, stop, 1, dtype)
+
+    def arange_3(start, stop, step):
+        return np.arange(start, stop, step, dtype)
+
+    if any(isinstance(a, types.Complex) for a in args):
+        def arange_4(start, stop, step, dtype):
+            numba.parfor.init_prange()
+            nitems_c = (stop - start) / step
+            nitems_r = math.ceil(nitems_c.real)
+            nitems_i = math.ceil(nitems_c.imag)
+            nitems = max(min(nitems_i, nitems_r), 0)
+            arr = np.empty(nitems, dtype)
+            for i in numba.parfor.internal_prange(nitems):
+                arr[i] = start + i * step
+            return arr
+    else:
+        def arange_4(start, stop, step, dtype):
+            numba.parfor.init_prange()
+            nitems_r = math.ceil((stop - start) / step)
+            nitems = max(nitems_r, 0)
+            arr = np.empty(nitems, dtype)
+            val = start
+            for i in numba.parfor.internal_prange(nitems):
+                arr[i] = start + i * step
+            return arr
+
     if len(args) == 1:
         return arange_1
     elif len(args) == 2:
         return arange_2
     elif len(args) == 3:
-        print("arange_parallel_impl args = ", args)
         return arange_3
+    elif len(args) == 4:
+        return arange_4
     else:
-        raise NotImplemented("parallel arange with argument types {}".format(args))
+        raise ValueError("parallel arange with types {}".format(args))
 
-def linspace_parallel_impl(start, stop, num):
-    pass
-    
+def linspace_parallel_impl(return_type, *args):
+    dtype = as_dtype(return_type.dtype)
+
+    def linspace_2(start, stop):
+        return np.linspace(start, stop, 50)
+
+    def linspace_3(start, stop, num):
+        arr = np.empty(num, dtype)
+        div = num - 1
+        delta = stop - start
+        arr[0] = start
+        for i in numba.parfor.internal_prange(num):
+            arr[i] = start + delta * (i / div)
+        return arr
+
+    if len(args) == 2:
+        return linspace_2
+    elif len(args) == 3:
+        return linspace_3
+    else:
+        raise ValueError("parallel linspace with types {}".format(args))
+
 replace_functions_map = {
-    ('argmin', 'numpy'): lambda args: argmin_parallel_impl,
-    ('argmax', 'numpy'): lambda args: argmax_parallel_impl,
-    ('min', 'numpy'): lambda args: min_parallel_impl,
-    ('max', 'numpy'): lambda args: max_parallel_impl,
-    ('sum', 'numpy'): lambda args: sum_parallel_impl,
-    ('prod', 'numpy'): lambda args: prod_parallel_impl,
+    ('argmin', 'numpy'): lambda r,a: argmin_parallel_impl,
+    ('argmax', 'numpy'): lambda r,a: argmax_parallel_impl,
+    ('min', 'numpy'): lambda r,a: min_parallel_impl,
+    ('max', 'numpy'): lambda r,a: max_parallel_impl,
+    ('sum', 'numpy'): sum_parallel_impl,
+    ('prod', 'numpy'): prod_parallel_impl,
     ('dot', 'numpy'): dot_parallel_impl,
     ('arange', 'numpy'): arange_parallel_impl,
     ('linspace', 'numpy'): linspace_parallel_impl,
@@ -401,6 +441,7 @@ class PreParforPass(object):
             for i, instr in enumerate(block.body):
                 if isinstance(instr, ir.Assign):
                     lhs = instr.target
+                    lhs_typ = self.typemap[lhs.name]
                     expr = instr.value
                     if isinstance(expr, ir.Expr) and expr.op == 'call':
                         # Try inline known calls with their parallel implementations
@@ -410,11 +451,12 @@ class PreParforPass(object):
                             repl_func = replace_functions_map.get(callname, None)
                             require(repl_func != None)
                             typs = tuple(self.typemap[x.name] for x in expr.args)
-                            new_func =  repl_func(*typs)
+                            new_func =  repl_func(lhs_typ, *typs)
                             require(new_func != None)
                             g = copy.copy(self.func_ir.func_id.func.__globals__)
                             g['numba'] = numba
                             g['np'] = numpy
+                            g['math'] = math
                             # inline the parallel implementation
                             inline_closure_call(self.func_ir, g,
                                             block, i, new_func, self.typingctx, typs,
