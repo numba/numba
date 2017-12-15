@@ -13,15 +13,7 @@ from llvmlite import ir
 from numba import config
 from .error import NvvmError, NvvmSupportError
 from .libs import get_libdevice, open_libdevice, open_cudalib
-from .driver import driver as cudriver
 
-
-def get_cuda_version_int():
-    dv = c_int(0)
-    cudriver.cuDriverGetVersion(byref(dv))
-    return dv.value
-
-CUDA_VERSION = get_cuda_version_int()
 
 logger = logging.getLogger(__name__)
 
@@ -282,12 +274,21 @@ data_layout = {
 default_data_layout = data_layout[tuple.__itemsize__ * 8]
 
 
+try:
+    NVVM_VERSION = NVVM().get_version()
+except:
+    # the CUDA driver may not be present
+    NVVM_VERSION = (0, 0)
+
 # List of supported compute capability in sorted order
-if CUDA_VERSION < 8000:
+if NVVM_VERSION < (1, 3):
+    # CUDA 7.5 and earlier
     SUPPORTED_CC = (2, 0), (2, 1), (3, 0), (3, 5), (5, 0), (5, 2)
-elif CUDA_VERSION < 9000:
+elif NVVM_VERSION < (1, 4):
+    # CUDA 8.0
     SUPPORTED_CC = (2, 0), (2, 1), (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2)
 else:
+    # CUDA 9.0 and later
     SUPPORTED_CC = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0)
 
 
