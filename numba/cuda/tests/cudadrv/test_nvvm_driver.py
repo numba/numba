@@ -77,6 +77,11 @@ class TestNvvmDriver(unittest.TestCase):
 @skip_on_cudasim('NVVM Driver unsupported in the simulator')
 class TestArchOption(unittest.TestCase):
     def test_get_arch_option(self):
+        # Test returning the nearest lowest arch.
+        self.assertEqual(get_arch_option(3, 0), 'compute_30')
+        self.assertEqual(get_arch_option(3, 3), 'compute_30')
+        self.assertEqual(get_arch_option(3, 4), 'compute_30')
+        # Test known arch.
         for arch in SUPPORTED_CC:
             self.assertEqual(get_arch_option(*arch), 'compute_%d%d' % arch)
         self.assertEqual(get_arch_option(1000, 0),
