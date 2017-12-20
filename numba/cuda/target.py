@@ -91,7 +91,7 @@ class CUDATargetContext(BaseContext):
     def mangler(self, name, argtypes):
         return itanium_mangler.mangle(name, argtypes)
 
-    def prepare_cuda_kernel(self, codelib, fname, argtypes):
+    def prepare_cuda_kernel(self, codelib, fname, argtypes, debug):
         """
         Adapt a code library ``codelib`` with the numba compiled CUDA kernel
         with name ``fname`` and arguments ``argtypes`` for NVVM.
@@ -102,11 +102,12 @@ class CUDATargetContext(BaseContext):
         """
         library = self.codegen().create_library('')
         library.add_linking_library(codelib)
-        wrapper = self.generate_kernel_wrapper(library, fname, argtypes)
+        wrapper = self.generate_kernel_wrapper(library, fname, argtypes,
+                                               debug=debug)
         nvvm.fix_data_layout(library._final_module)
         return library, wrapper
 
-    def generate_kernel_wrapper(self, library, fname, argtypes):
+    def generate_kernel_wrapper(self, library, fname, argtypes, debug):
         """
         Generate the kernel wrapper in the given ``library``.
         The function being wrapped have the name ``fname`` and argument types
@@ -142,35 +143,37 @@ class CUDATargetContext(BaseContext):
         status, _ = self.call_conv.call_function(
             builder, func, types.void, argtypes, callargs)
 
-        # Check error status
-        with cgutils.if_likely(builder, status.is_ok):
-            builder.ret_void()
 
-        with builder.if_then(builder.not_(status.is_python_exc)):
-            # User exception raised
-            old = Constant.null(gv_exc.type.pointee)
+        if debug:
+            # Check error status
+            with cgutils.if_likely(builder, status.is_ok):
+                builder.ret_void()
 
-            # Use atomic cmpxchg to prevent rewriting the error status
-            # Only the first error is recorded
+            with builder.if_then(builder.not_(status.is_python_exc)):
+                # User exception raised
+                old = Constant.null(gv_exc.type.pointee)
 
-            casfnty = lc.Type.function(old.type, [gv_exc.type, old.type,
-                                                  old.type])
+                # Use atomic cmpxchg to prevent rewriting the error status
+                # Only the first error is recorded
 
-            casfn = wrapper_module.add_function(casfnty,
-                                                name="___numba_cas_hack")
-            xchg = builder.call(casfn, [gv_exc, old, status.code])
-            changed = builder.icmp(ICMP_EQ, xchg, old)
+                casfnty = lc.Type.function(old.type, [gv_exc.type, old.type,
+                                                    old.type])
 
-            # If the xchange is successful, save the thread ID.
-            sreg = nvvmutils.SRegBuilder(builder)
-            with builder.if_then(changed):
-                for dim, ptr, in zip("xyz", gv_tid):
-                    val = sreg.tid(dim)
-                    builder.store(val, ptr)
+                casfn = wrapper_module.add_function(casfnty,
+                                                    name="___numba_cas_hack")
+                xchg = builder.call(casfn, [gv_exc, old, status.code])
+                changed = builder.icmp(ICMP_EQ, xchg, old)
 
-                for dim, ptr, in zip("xyz", gv_ctaid):
-                    val = sreg.ctaid(dim)
-                    builder.store(val, ptr)
+                # If the xchange is successful, save the thread ID.
+                sreg = nvvmutils.SRegBuilder(builder)
+                with builder.if_then(changed):
+                    for dim, ptr, in zip("xyz", gv_tid):
+                        val = sreg.tid(dim)
+                        builder.store(val, ptr)
+
+                    for dim, ptr, in zip("xyz", gv_ctaid):
+                        val = sreg.ctaid(dim)
+                        builder.store(val, ptr)
 
         builder.ret_void()
 
@@ -249,4 +252,24 @@ class CUDATargetContext(BaseContext):
 
 
 class CUDACallConv(MinimalCallConv):
-    pass
+
+    def call_function(self, builder, callee, resty, argtys, args, env=None):
+        """
+        Call the Numba-compiled *callee*.
+        """
+        assert env is None
+        retty = callee.args[0].type.pointee
+        retvaltmp = cgutils.alloca_once(builder, retty)
+        # initialize return value
+        builder.store(cgutils.get_null_value(retty), retvaltmp)
+
+        arginfo = self._get_arg_packer(argtys)
+        args = arginfo.as_arguments(builder, args)
+        realargs = [retvaltmp] + list(args)
+        code = builder.call(callee, realargs)
+        status = self._get_return_status(builder, code)
+        retval = builder.load(retvaltmp)
+        out = self.context.get_returned_value(builder, resty, retval)
+        return status, out
+
+
