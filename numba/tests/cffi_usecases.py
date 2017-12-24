@@ -22,6 +22,7 @@ def load_inline_module():
     double _numba_test_sin(double x);
     double _numba_test_cos(double x);
     double _numba_test_funcptr(double (*func)(double));
+    bool _numba_test_boolean();
     """
 
     ffi = FFI()
@@ -107,12 +108,13 @@ def init():
     Initialize module globals.  This can invoke external utilities, hence not
     being executed implicitly at module import.
     """
-    global ffi, cffi_sin, cffi_cos
+    global ffi, cffi_sin, cffi_cos, cffi_bool
 
     if ffi is None:
         ffi, dll = load_inline_module()
         cffi_sin = dll._numba_test_sin
         cffi_cos = dll._numba_test_cos
+        cffi_bool = dll._numba_test_boolean
         del dll
 
 def init_ool():
