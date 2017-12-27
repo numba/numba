@@ -27,9 +27,7 @@ First of all, clone this repository and install Numba following http://numba.pyd
 Now the details for the OpenCL / SPIR-V backend. First install OpenCL 2.1 from the Intel website. A new OpenCL platform should appear by the name *“Experimental OpenCL 2.1 CPU Only Platform”*. Clone *thewilsonator/* *llvm-target-spirv* and *llvm*, place the files in llvm-target-spirv/* into llvm/lib/Target/SPIRV/, and build llvm with cmake to obtain the **llc** binary. Build the SPIRV-Tools binaries too, i.e. **spirv-as/dis/opt/val**. Finally place the binaries in a folder pointed by the environtment variable $SPIRVDIR, which defaults to /opt/spirv/
 
 Verify the installation by running the examples available in /numba/examples/ocljit/.
-Do not hesitate to contact jesus@streamcomputing.eu for more information or help.
-
-**NB!** This project is on pause until September 2017!
+Do not hesitate to open an issue for more information or help.
 
 An effort by **StreamHPC** www.streamhpc.eu (formerly StreamComputing)
 
