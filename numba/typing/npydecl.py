@@ -521,7 +521,7 @@ class NdConstructorLike(CallableTemplate):
             if nb_dtype is not None:
                 if isinstance(arg, types.Array):
                     layout = arg.layout if arg.layout != 'A' else 'C'
-                    return arg.copy(dtype=nb_dtype, layout=layout)
+                    return arg.copy(dtype=nb_dtype, layout=layout, readonly=False)
                 else:
                     return types.Array(nb_dtype, 0, 'C')
 
