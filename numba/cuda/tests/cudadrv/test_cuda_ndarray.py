@@ -100,6 +100,21 @@ class TestCudaNDArray(unittest.TestCase):
         array = cuda.to_device(original).T.copy_to_host()
         self.assertTrue(np.all(array == original.T))
 
+    def test_devicearray_contiguous(self):
+        # memcpys are dumb ranges of bytes, so trying to
+        # copy to a non-contiguous range shouldn't work!
+        a = np.arange(25).reshape(5, 5, order='F')
+        s = np.full(fill_value=5, shape=(5,))
+
+        d = cuda.to_device(a)
+        a[2] = s
+
+        # d is in F-order (not C-order), so d[2] is not contiguous
+        # (40-byte strides). This means we can't memcpy to it!
+        self.assertRaises(ValueError, d[2].copy_to_device, s)
+
+        # if d[2].copy_to_device(s), then this would pass:
+        # self.assertTrue((a == d.copy_to_host()).all())
 
 if __name__ == '__main__':
     unittest.main()

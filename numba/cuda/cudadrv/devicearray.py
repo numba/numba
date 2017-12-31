@@ -161,6 +161,7 @@ class DeviceNDArrayBase(object):
         if ary.size == 0:
             # Nothing to do
             return
+        sentry_contiguous(self)
         stream = self._default_stream(stream)
         if _driver.is_device_memory(ary):
             sz = min(self.alloc_size, ary.alloc_size)
@@ -300,11 +301,27 @@ class DeviceNDArray(DeviceNDArrayBase):
         '''
         return self._dummy.is_f_contig
 
+    @property
+    def flags(self):
+        """
+        For `numpy.ndarray` compatibility. Ideally this would return a
+        `np.core.multiarray.flagsobj`, but that needs to be constructed
+        with an existing `numpy.ndarray` (as the C- and F- contiguous flags
+        aren't writeable).
+        """
+        return dict(self._dummy.flags) # defensive copy
+
     def is_c_contiguous(self):
         '''
         Return true if the array is C-contiguous.
         '''
         return self._dummy.is_c_contig
+
+    def __array__(self, dtype=None):
+        """
+        :return: an `numpy.ndarray`, so copies to the host.
+        """
+        return self.copy_to_host().__array__(dtype)
 
     def reshape(self, *newshape, **kws):
         """
