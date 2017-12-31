@@ -225,6 +225,7 @@ class Array(object):
 
         dims = [dim.__getitem__(it) for dim, it in zip(self.dims, item)]
         newshape = [d.size for d in dims if not d.single]
+
         arr = Array(dims, self.itemsize)
         if newshape:
             return arr.reshape(*newshape)[0]
@@ -278,7 +279,7 @@ class Array(object):
         if order not in 'CFA':
             raise ValueError('order not C|F|A')
 
-        newsize = functools.reduce(operator.mul, newshape, 1)
+        newsize = np.prod(newshape)
 
         if order == 'A':
             order = 'F' if self.is_f_contig else 'C'
@@ -286,20 +287,23 @@ class Array(object):
         if newsize != self.size:
             raise ValueError("reshape changes the size of the array")
 
-        elif newnd == 1 or self.is_c_contig or self.is_f_contig:
+        if self.is_c_contig or self.is_f_contig:
             if order == 'C':
                 newstrides = list(iter_strides_c_contig(self, newshape))
             elif order == 'F':
                 newstrides = list(iter_strides_f_contig(self, newshape))
             else:
                 raise AssertionError("unreachable")
-
-            ret = self.from_desc(self.extent.begin, shape=newshape,
-                                 strides=newstrides, itemsize=self.itemsize)
-
-            return ret, list(self.iter_contiguous_extent())
+        elif newnd == 1:
+            s = [self.strides[i] for i in range(oldnd) if self.shape[i] > 1]
+            newstrides = (min(s) if len(s) else self.itemsize,)
         else:
             raise NotImplementedError("reshape on non-contiguous array")
+
+        ret = self.from_desc(self.extent.begin, shape=newshape,
+                             strides=newstrides, itemsize=self.itemsize)
+
+        return ret, list(self.iter_contiguous_extent())
 
     def ravel(self, order='C'):
         if order not in 'CFA':

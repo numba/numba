@@ -82,18 +82,31 @@ class CudaArraySlicing(unittest.TestCase):
                 got = sliced.copy_to_host()
                 self.assertTrue(np.all(expect == got))
 
-    def test_select_column(self):
-        a = np.arange(25).reshape(5, 5, order='F')
+    def test_select_f(self):
+        a = np.arange(5 * 5 * 5).reshape(5, 5, 5, order='F')
         da = cuda.to_device(a)
 
-        for i in range(a.shape[1]):
-            self.assertTrue(np.all(da[:, i].copy_to_host() == a[:, i]))
-
-    def test_select_row(self):
-        a = np.arange(25).reshape(5, 5, order='C')
-        da = cuda.to_device(a)
         for i in range(a.shape[0]):
-            self.assertTrue(np.all(da[i, :].copy_to_host() == a[i, :]))
+            for j in range(a.shape[1]):
+                self.assertTrue(np.all(da[i, j, :].copy_to_host() == a[i, j, :]))
+            for j in range(a.shape[2]):
+                self.assertTrue(np.all(da[i, :, j].copy_to_host() == a[i, :, j]))
+        for i in range(a.shape[1]):
+            for j in range(a.shape[2]):
+                self.assertTrue(np.all(da[:, i, j].copy_to_host() == a[:, i, j]))
+
+    def test_select_c(self):
+        a = np.arange(5 * 5 * 5).reshape(5, 5, 5, order='C')
+        da = cuda.to_device(a)
+
+        for i in range(a.shape[0]):
+            for j in range(a.shape[1]):
+                self.assertTrue(np.all(da[i, j, :].copy_to_host() == a[i, j, :]))
+            for j in range(a.shape[2]):
+                self.assertTrue(np.all(da[i, :, j].copy_to_host() == a[i, :, j]))
+        for i in range(a.shape[1]):
+            for j in range(a.shape[2]):
+                self.assertTrue(np.all(da[:, i, j].copy_to_host() == a[:, i, j]))
 
     def test_prefix_select(self):
         arr = np.arange(5 ** 2).reshape(5, 5, order='F')
