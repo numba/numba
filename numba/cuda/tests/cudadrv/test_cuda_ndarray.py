@@ -100,7 +100,7 @@ class TestCudaNDArray(unittest.TestCase):
         array = cuda.to_device(original).T.copy_to_host()
         self.assertTrue(np.all(array == original.T))
 
-    def test_devicearray_contiguous(self):
+    def test_devicearray_contiguous_slice(self):
         # memcpys are dumb ranges of bytes, so trying to
         # copy to a non-contiguous range shouldn't work!
         a = np.arange(25).reshape(5, 5, order='F')
@@ -111,10 +111,92 @@ class TestCudaNDArray(unittest.TestCase):
 
         # d is in F-order (not C-order), so d[2] is not contiguous
         # (40-byte strides). This means we can't memcpy to it!
-        self.assertRaises(ValueError, d[2].copy_to_device, s)
+        with self.assertRaises(ValueError) as e:
+            d[2].copy_to_device(s)
+        self.assertEqual(
+            devicearray.errmsg_contiguous_buffer,
+            str(e.exception))
 
         # if d[2].copy_to_device(s), then this would pass:
         # self.assertTrue((a == d.copy_to_host()).all())
+
+    def _test_devicearray_contiguous_host_copy(self, a_c, a_f):
+        """
+        Checks host->device memcpys
+        """
+        self.assertTrue(a_c.flags.c_contiguous)
+        self.assertTrue(a_f.flags.f_contiguous)
+
+        for original, copy in [
+            (a_f, a_f),
+            (a_f, a_c),
+            (a_c, a_f),
+            (a_c, a_c),
+        ]:
+            msg = '%s => %s' % (
+                'C' if original.flags.c_contiguous else 'F',
+                'C' if copy.flags.c_contiguous else 'F',
+            )
+
+            d = cuda.to_device(original)
+            d.copy_to_device(copy)
+            self.assertTrue(np.all(d.copy_to_host() == a_c), msg=msg)
+            self.assertTrue(np.all(d.copy_to_host() == a_f), msg=msg)
+
+    def test_devicearray_contiguous_copy_host_3d(self):
+        a_c = np.arange(5 * 5 * 5).reshape(5, 5, 5)
+        a_f = np.array(a_c, order='F')
+        self._test_devicearray_contiguous_host_copy(a_c, a_f)
+
+    def test_devicearray_contiguous_copy_host_1d(self):
+        a_c = np.arange(5)
+        a_f = np.array(a_c, order='F')
+        self._test_devicearray_contiguous_host_copy(a_c, a_f)
+
+    def test_devicearray_contiguous_copy_device(self):
+        a_c = np.arange(5 * 5 * 5).reshape(5, 5, 5)
+        a_f = np.array(a_c, order='F')
+        self.assertTrue(a_c.flags.c_contiguous)
+        self.assertTrue(a_f.flags.f_contiguous)
+
+        d = cuda.to_device(a_c)
+
+        with self.assertRaises(ValueError) as e:
+            d.copy_to_device(cuda.to_device(a_f))
+        self.assertEqual(
+            "Can't copy F-contiguous array to a C-contiguous array",
+            str(e.exception))
+
+        d.copy_to_device(cuda.to_device(a_c))
+        self.assertTrue(np.all(d.copy_to_host() == a_c))
+
+        d = cuda.to_device(a_f)
+
+        with self.assertRaises(ValueError) as e:
+            d.copy_to_device(cuda.to_device(a_c))
+        self.assertEqual(
+            "Can't copy C-contiguous array to a F-contiguous array",
+            str(e.exception))
+
+        d.copy_to_device(cuda.to_device(a_f))
+        self.assertTrue(np.all(d.copy_to_host() == a_f))
+
+    def test_devicearray_contiguous_host_strided(self):
+        a_c = np.arange(10)
+        d = cuda.to_device(a_c)
+        arr = np.arange(20)[::2]
+        d.copy_to_device(arr)
+        np.testing.assert_array_equal(d.copy_to_host(), arr)
+
+    def test_devicearray_contiguous_device_strided(self):
+        d = cuda.to_device(np.arange(20))
+        arr = np.arange(20)
+
+        with self.assertRaises(ValueError) as e:
+            d.copy_to_device(cuda.to_device(arr)[::2])
+        self.assertEqual(
+            devicearray.errmsg_contiguous_buffer,
+            str(e.exception))
 
 if __name__ == '__main__':
     unittest.main()

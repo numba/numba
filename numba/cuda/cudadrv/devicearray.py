@@ -161,12 +161,30 @@ class DeviceNDArrayBase(object):
         if ary.size == 0:
             # Nothing to do
             return
+
         sentry_contiguous(self)
         stream = self._default_stream(stream)
+        
         if _driver.is_device_memory(ary):
+            sentry_contiguous(ary)
+
+            if self.flags['C_CONTIGUOUS'] != ary.flags['C_CONTIGUOUS']:
+                raise ValueError("Can't copy %s-contiguous array to a %s-contiguous array" % (
+                    'C' if ary.flags['C_CONTIGUOUS'] else 'F',
+                    'C' if self.flags['C_CONTIGUOUS'] else 'F',
+                ))
+
             sz = min(self.alloc_size, ary.alloc_size)
             _driver.device_to_device(self, ary, sz, stream=stream)
         else:
+            # Ensure same contiguous-nous. Only copies (host-side)
+            # if necessary (e.g. it needs to materialize a strided view)
+            ary = np.array(
+                ary,
+                order='C' if self.flags['C_CONTIGUOUS'] else 'F',
+                subok=True,
+                copy=False)
+
             sz = min(_driver.host_memory_size(ary), self.alloc_size)
             _driver.host_to_device(self, ary, sz, stream=stream)
 
@@ -281,6 +299,16 @@ class DeviceRecord(DeviceNDArrayBase):
         strides = ()
         super(DeviceRecord, self).__init__(shape, strides, dtype, stream,
                                            gpu_data)
+
+    @property
+    def flags(self):
+        """
+        For `numpy.ndarray` compatibility. Ideally this would return a
+        `np.core.multiarray.flagsobj`, but that needs to be constructed
+        with an existing `numpy.ndarray` (as the C- and F- contiguous flags
+        aren't writeable).
+        """
+        return dict(self._dummy.flags) # defensive copy
 
     @property
     def _numba_type_(self):

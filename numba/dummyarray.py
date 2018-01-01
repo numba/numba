@@ -78,11 +78,13 @@ class Dim(object):
         if (stop - start) > self.size * self.stride:
             stop = start + self.size * stride
 
-        size = (stop - start + (stride - 1)) // stride
-
         if stop < start:
             start = stop
             size = 0
+        elif stride == 0:
+            size = 1 if single else ((stop - start) // step)
+        else:
+            size = (stop - start + (stride - 1)) // stride
 
         return Dim(start, stop, size, stride, single)
 
