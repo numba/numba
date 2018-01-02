@@ -3577,6 +3577,37 @@ def array_asfortranarray(context, builder, sig, args):
         return _array_copy(context, builder, sig, args)
 
 
+@lower_builtin(np.ascontiguousarray, types.Array)
+def array_ascontiguousarray(context, builder, sig, args):
+    retty = sig.return_type
+    aryty = sig.args[0]
+    assert retty.layout == 'C'
+
+    if aryty.ndim == 0:
+        # 0-dim input => ascontiguousarray() returns a 1-dim array
+        assert retty.ndim == 1
+        ary = make_array(aryty)(context, builder, value=args[0])
+        ret = make_array(retty)(context, builder)
+
+        shape = context.get_constant(types.UniTuple(types.intp, 1), (1,))
+        strides = context.make_tuple(builder,
+                                     types.UniTuple(types.intp, 1),
+                                     (ary.itemsize,))
+        populate_array(ret, ary.data, shape, strides, ary.itemsize,
+                       ary.meminfo, ary.parent)
+        return impl_ret_borrowed(context, builder, retty, ret._getvalue())
+
+    elif (retty.layout == aryty.layout
+        or (aryty.ndim == 1 and aryty.layout in 'CF')):
+        # 1-dim contiguous input => return the same array
+        return impl_ret_borrowed(context, builder, retty, args[0])
+
+    else:
+        # Return a copy with the right layout
+        return _array_copy(context, builder, sig, args)
+
+
+
 @lower_builtin("array.astype", types.Array, types.DTypeSpec)
 def array_astype(context, builder, sig, args):
     arytype = sig.args[0]

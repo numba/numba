@@ -73,6 +73,9 @@ def np_copy(arr):
 def np_asfortranarray(arr):
     return np.asfortranarray(arr)
 
+def np_ascontiguousarray(arr):
+    return np.ascontiguousarray(arr)
+
 def array_view(arr, newtype):
     return arr.view(newtype)
 
@@ -467,6 +470,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
     def test_np_asfortranarray(self):
         self.check_layout_dependent_func(np_asfortranarray,
+                                         check_sameness=numpy_version >= (1, 8))
+
+    def test_np_ascontiguousarray(self):
+        self.check_layout_dependent_func(np_ascontiguousarray,
                                          check_sameness=numpy_version >= (1, 8))
 
     def check_np_frombuffer_allocated(self, pyfunc):
