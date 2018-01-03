@@ -15,7 +15,8 @@ from llvmlite.llvmpy.core import Constant
 import numpy as np
 
 from numba import types, cgutils, typing, utils, extending
-from numba.numpy_support import as_dtype, carray, farray
+from numba.numpy_support import (as_dtype, carray, farray, is_contiguous,
+                                 is_fortran)
 from numba.numpy_support import version as numpy_version
 from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     lower_getattr_generic,
@@ -3577,8 +3578,39 @@ def _as_layout_array(context, builder, sig, args, output_layout):
         return impl_ret_borrowed(context, builder, retty, args[0])
 
     else:
-        # Return a copy with the right layout
-        return _array_copy(context, builder, sig, args)
+        if aryty.layout == 'A':
+            # There's still chance the array is in contiguous layout,
+            # just that we don't know at compile time.
+            # We can do a runtime check.
+
+            # Prepare and call is_contiguous or is_fortran
+            ary = make_array(aryty)(context, builder, value=args[0])
+            tup_intp = types.UniTuple(types.intp, aryty.ndim)
+            check_sig = signature(types.bool_, tup_intp, tup_intp)
+            check_args = ary.shape, ary.strides
+            assert output_layout in 'CF'
+            check_func = is_contiguous if output_layout == 'C' else is_fortran
+            is_contig = context.compile_internal(builder, check_func,
+                                                 check_sig, check_args)
+            with builder.if_else(is_contig) as (then, orelse):
+                # If the array is already contiguous, just return it
+                with then:
+                    out_then = impl_ret_borrowed(context, builder, retty,
+                                                 args[0])
+                    then_blk = builder.block
+                # Otherwise, copy to a new contiguous region
+                with orelse:
+                    out_orelse = _array_copy(context, builder, sig, args)
+                    orelse_blk = builder.block
+            # Phi node for the return value
+            ret_phi = builder.phi(out_then.type)
+            ret_phi.add_incoming(out_then, then_blk)
+            ret_phi.add_incoming(out_orelse, orelse_blk)
+            return ret_phi
+
+        else:
+            # Return a copy with the right layout
+            return _array_copy(context, builder, sig, args)
 
 
 @lower_builtin(np.asfortranarray, types.Array)
