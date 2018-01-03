@@ -3586,8 +3586,10 @@ def _as_layout_array(context, builder, sig, args, output_layout):
             # Prepare and call is_contiguous or is_fortran
             ary = make_array(aryty)(context, builder, value=args[0])
             tup_intp = types.UniTuple(types.intp, aryty.ndim)
-            check_sig = signature(types.bool_, tup_intp, tup_intp)
-            check_args = ary.shape, ary.strides
+            itemsize = context.get_abi_sizeof(context.get_value_type(aryty.dtype))
+            check_sig = signature(types.bool_, tup_intp, tup_intp, types.intp)
+            check_args = [ary.shape, ary.strides,
+                          context.get_constant(types.intp, itemsize)]
             assert output_layout in 'CF'
             check_func = is_contiguous if output_layout == 'C' else is_fortran
             is_contig = context.compile_internal(builder, check_func,
