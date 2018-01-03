@@ -464,3 +464,25 @@ def farray(ptr, shape, dtype=None):
     if not isinstance(shape, utils.INT_TYPES):
         shape = shape[::-1]
     return carray(ptr, shape, dtype).T
+
+
+def is_contiguous(dims, strides):
+    """Is the given shape and strides of C layout?
+
+    Note: The code is usable as a numba-compiled function
+    """
+    for ax in range(len(dims) - 1, 0, -1):
+        if strides[ax] * dims[ax] != strides[ax - 1]:
+            return False
+    return True
+
+
+def is_fortran(dims, strides):
+    """Is the given shape and strides of F layout?
+
+    Note: The code is usable as a numba-compiled function
+    """
+    for ax in range(len(dims) - 1):
+        if strides[ax] * dims[ax] != strides[ax + 1]:
+            return False
+    return True
