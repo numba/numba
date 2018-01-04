@@ -474,7 +474,8 @@ def is_contiguous(dims, strides, itemsize):
     if itemsize != strides[-1]:
         return False
     for ax in range(len(dims) - 1, 0, -1):
-        if strides[ax] * dims[ax] != strides[ax - 1]:
+        if (strides[ax] * dims[ax] != strides[ax - 1] and
+                not (ax - 1 == 0 and dims[0] <= 1)):
             return False
     return True
 
@@ -486,7 +487,9 @@ def is_fortran(dims, strides, itemsize):
     """
     if itemsize != strides[0]:
         return False
-    for ax in range(len(dims) - 1):
-        if strides[ax] * dims[ax] != strides[ax + 1]:
+    lastnd = len(dims) - 1
+    for ax in range(lastnd):
+        if (strides[ax] * dims[ax] != strides[ax + 1] and
+                not (ax + 1 == lastnd and dims[lastnd] <= 1)):
             return False
     return True
