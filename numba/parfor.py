@@ -532,6 +532,10 @@ class ParforPass(object):
 
         # simplify before fusion
         simplify(self.func_ir, self.typemap, self.calltypes)
+        # need two rounds of copy propagation to enable fusion of long sequences
+        # of parfors like test_fuse_argmin (some PYTHONHASHSEED values since
+        # apply_copies_parfor depends on set order for creating dummy assigns)
+        simplify(self.func_ir, self.typemap, self.calltypes)
 
         if self.options.fusion:
             self.func_ir._definitions = build_definitions(blocks=self.func_ir.blocks)
