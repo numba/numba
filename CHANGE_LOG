@@ -1,3 +1,12 @@
+Version 0.36.2
+--------------
+
+This is a bugfix release that provides minor changes to address:
+
+* PR #2645: Avoid CPython bug with ``exec`` in older 2.7.x.
+* PR #2652: Add support for CUDA 9.
+
+
 Version 0.36.1
 --------------
 
@@ -132,7 +141,7 @@ fixes were also made.
 Misc fixes/enhancements:
 
 * PR #2455: add contextual information to runtime errors
-* PR #2470: Fixes #2458, poor performance in np.median 
+* PR #2470: Fixes #2458, poor performance in np.median
 * PR #2471: Ensure LLVM threadsafety in {g,}ufunc building.
 * PR #2494: Update doc theme
 * PR #2503: Remove hacky code added in 2482 and feature enhancement
@@ -195,23 +204,23 @@ release):
 
 CUDA support enhancements:
 
-* PR #2377: New GPU reduction algorithm 
+* PR #2377: New GPU reduction algorithm
 
 
 CUDA support fixes:
 
-* PR #2397: Fix #2393, always set alignment of cuda static memory regions 
+* PR #2397: Fix #2393, always set alignment of cuda static memory regions
 
 
 Misc Fixes:
 
 * PR #2373, Issue #2372: 32-bit compatibility fix for parfor related code
 * PR #2376: Fix #2375 missing stdint.h for py2.7 vc9
-* PR #2378: Fix deadlock in parallel gufunc when kernel acquires the GIL. 
-* PR #2382: Forbid unsafe casting in bitwise operation 
-* PR #2385: docs: fix Sphinx errors 
-* PR #2396: Use 64-bit RHS operand for shift 
-* PR #2404: Fix threadsafety logic issue in ufunc compilation cache.  
+* PR #2378: Fix deadlock in parallel gufunc when kernel acquires the GIL.
+* PR #2382: Forbid unsafe casting in bitwise operation
+* PR #2385: docs: fix Sphinx errors
+* PR #2396: Use 64-bit RHS operand for shift
+* PR #2404: Fix threadsafety logic issue in ufunc compilation cache.
 * PR #2424: Ensure consistent iteration order of blocks for type inference.
 * PR #2425: Guard code to prevent the use of 'parallel' on win32 + py27
 * PR #2426: Basic test for Enum member type recovery.
@@ -225,16 +234,16 @@ Misc Fixes:
 Misc Enhancements:
 
 * PR #2366: Improvements to IR utils
-* PR #2388: Update README.rst to indicate the proper version of LLVM 
-* PR #2394: Upgrade to llvmlite 0.19.* 
+* PR #2388: Update README.rst to indicate the proper version of LLVM
+* PR #2394: Upgrade to llvmlite 0.19.*
 * PR #2395: Update llvmlite version to 0.19
-* PR #2406: Expose environment object to ufuncs 
-* PR #2407: Expose environment object to target-context inside lowerer 
-* PR #2413: Add flags to pass through to conda build for buildbot  
+* PR #2406: Expose environment object to ufuncs
+* PR #2407: Expose environment object to target-context inside lowerer
+* PR #2413: Add flags to pass through to conda build for buildbot
 * PR #2414: Add cross compile flags to local recipe
 * PR #2415: A few cleanups for rewrites
 * PR #2418: Add getitem support for Enum classes
-* PR #2419: Add support for returning enums in vectorize 
+* PR #2419: Add support for returning enums in vectorize
 * PR #2421: Add copyright notice for Intel contributed files.
 * PR #2422: Patch code base to work with np 1.13 release
 * PR #2448: Adds in warning message when using 'parallel' if cache=True

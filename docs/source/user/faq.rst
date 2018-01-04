@@ -192,9 +192,6 @@ value, for example::
    locale.setlocale(locale.LC_NUMERIC, 'C')
 
 
-.. _NumbaPro: http://docs.continuum.io/numbapro/
-
-
 Miscellaneous
 =============
 

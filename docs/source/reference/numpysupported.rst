@@ -147,7 +147,6 @@ The following methods of Numpy arrays are supported in their basic form
 * :meth:`~numpy.ndarray.std`
 * :meth:`~numpy.ndarray.take`
 * :meth:`~numpy.ndarray.var`
-* :meth:`~numpy.ndarray.var`
 
 The corresponding top-level Numpy functions (such as :func:`numpy.prod`)
 are similarly supported.

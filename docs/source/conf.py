@@ -217,7 +217,7 @@ latex_elements = {
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
   ('index', 'numba.tex', u'Numba Documentation',
-   u'Continuum Analytics', 'manual'),
+   u'Anaconda', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -247,7 +247,7 @@ latex_documents = [
 # (source start file, name, description, authors, manual section).
 man_pages = [
     ('index', 'numba', 'Numba Documentation',
-     ['Continuum Analytics'], 1)
+     ['Anaconda'], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -261,7 +261,7 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
   ('index', 'Numba', 'Numba Documentation',
-   'Continuum Analytics', 'Numba', 'One line description of project.',
+   'Anaconda', 'Numba', 'One line description of project.',
    'Miscellaneous'),
 ]
 
