@@ -471,12 +471,31 @@ def is_contiguous(dims, strides, itemsize):
 
     Note: The code is usable as a numba-compiled function
     """
-    if itemsize != strides[-1]:
+    nd = len(dims)
+    # Check and skip 1s or 0s in inner dims
+    innerax = nd - 1
+    while innerax > -1 and dims[innerax] <= 1:
+        innerax -= 1
+
+    # Early exit if all axis are 1s or 0s
+    if innerax < 0:
+        return True
+
+    # Check itemsize matches innermost stride
+    if itemsize != strides[innerax]:
         return False
-    for ax in range(len(dims) - 1, 0, -1):
-        if (strides[ax] * dims[ax] != strides[ax - 1] and
-                not (ax - 1 == 0 and dims[0] <= 1)):
+
+    # Check and skip 1s or 0s in outer dims
+    outerax = 0
+    while outerax < innerax and dims[outerax] <= 1:
+        outerax += 1
+
+    # Check remaining strides to be contiguous
+    ax = innerax
+    while ax > outerax:
+        if strides[ax] * dims[ax] != strides[ax - 1]:
             return False
+        ax -= 1
     return True
 
 
@@ -485,11 +504,29 @@ def is_fortran(dims, strides, itemsize):
 
     Note: The code is usable as a numba-compiled function
     """
-    if itemsize != strides[0]:
+    nd = len(dims)
+    # Check and skip 1s or 0s in inner dims
+    firstax = 0
+    while firstax < nd and dims[firstax] <= 1:
+        firstax += 1
+
+    # Early exit if all axis are 1s or 0s
+    if firstax >= nd:
+        return True
+
+    # Check itemsize matches innermost stride
+    if itemsize != strides[firstax]:
         return False
-    lastnd = len(dims) - 1
-    for ax in range(lastnd):
-        if (strides[ax] * dims[ax] != strides[ax + 1] and
-                not (ax + 1 == lastnd and dims[lastnd] <= 1)):
+
+    # Check and skip 1s or 0s in outer dims
+    lastax = nd - 1
+    while lastax > firstax and dims[lastax] <= 1:
+        lastax -= 1
+
+    # Check remaining strides to be contiguous
+    ax = firstax
+    while ax < lastax:
+        if strides[ax] * dims[ax] != strides[ax + 1]:
             return False
+        ax += 1
     return True
