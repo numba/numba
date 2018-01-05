@@ -838,6 +838,7 @@ class ParforPass(object):
                             expr.value = result[0]
                         return result
 
+                    # TODO: support array mask optimization for prange
                     if loop_kind == 'pndindex':
                         assert(equiv_set.has_shape(args[0]))
                         result = guard(find_mask_from_size, args[0])
