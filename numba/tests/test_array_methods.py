@@ -474,7 +474,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
     def test_np_ascontiguousarray(self):
         self.check_layout_dependent_func(np_ascontiguousarray,
-                                         check_sameness=numpy_version >= (1, 8))
+                                         check_sameness=numpy_version > (1, 11))
 
     def check_np_frombuffer_allocated(self, pyfunc):
         def run(shape):
