@@ -97,19 +97,41 @@ class internal_prange(object):
     def __new__(cls, *args):
         return range(*args)
 
-def min_parallel_impl(in_arr):
-    numba.parfor.init_prange()
-    val = numba.targets.builtins.get_type_max_value(in_arr.dtype)
-    for i in numba.pndindex(in_arr.shape):
-        val = min(val, in_arr[i])
-    return val
+def min_parallel_impl(return_type, arg):
+    # XXX: use prange for 1D arrays since pndindex returns a 1-tuple instead of
+    # integer. This causes type and fusion issues.
+    if arg.ndim == 1:
+        def min_1(in_arr):
+            numba.parfor.init_prange()
+            val = numba.targets.builtins.get_type_max_value(in_arr.dtype)
+            for i in numba.parfor.internal_prange(len(in_arr)):
+                val = min(val, in_arr[i])
+            return val
+    else:
+        def min_1(in_arr):
+            numba.parfor.init_prange()
+            val = numba.targets.builtins.get_type_max_value(in_arr.dtype)
+            for i in numba.pndindex(in_arr.shape):
+                val = min(val, in_arr[i])
+            return val
+    return min_1
 
-def max_parallel_impl(in_arr):
-    numba.parfor.init_prange()
-    val = numba.targets.builtins.get_type_min_value(in_arr.dtype)
-    for i in numba.pndindex(in_arr.shape):
-        val = max(val, in_arr[i])
-    return val
+def max_parallel_impl(return_type, arg):
+    if arg.ndim == 1:
+        def max_1(in_arr):
+            numba.parfor.init_prange()
+            val = numba.targets.builtins.get_type_min_value(in_arr.dtype)
+            for i in numba.parfor.internal_prange(len(in_arr)):
+                val = max(val, in_arr[i])
+            return val
+    else:
+        def max_1(in_arr):
+            numba.parfor.init_prange()
+            val = numba.targets.builtins.get_type_min_value(in_arr.dtype)
+            for i in numba.pndindex(in_arr.shape):
+                val = max(val, in_arr[i])
+            return val
+    return max_1
 
 def argmin_parallel_impl(in_arr):
     numba.parfor.init_prange()
@@ -183,23 +205,39 @@ def dot_parallel_impl(return_type, atyp, btyp):
 def sum_parallel_impl(return_type, arg):
     zero = return_type(0)
 
-    def sum_1(in_arr):
-        numba.parfor.init_prange()
-        val = zero
-        for i in numba.pndindex(in_arr.shape):
-            val += in_arr[i]
-        return val
+    if arg.ndim == 1:
+        def sum_1(in_arr):
+            numba.parfor.init_prange()
+            val = zero
+            for i in numba.parfor.internal_prange(len(in_arr)):
+                val += in_arr[i]
+            return val
+    else:
+        def sum_1(in_arr):
+            numba.parfor.init_prange()
+            val = zero
+            for i in numba.pndindex(in_arr.shape):
+                val += in_arr[i]
+            return val
     return sum_1
 
 def prod_parallel_impl(return_type, arg):
     one = return_type(1)
 
-    def prod_1(in_arr):
-        numba.parfor.init_prange()
-        val = one
-        for i in numba.ndindex(in_arr.shape):
-            val *= in_arr[i]
-        return val
+    if arg.ndim == 1:
+        def prod_1(in_arr):
+            numba.parfor.init_prange()
+            val = one
+            for i in numba.parfor.internal_prange(len(in_arr)):
+                val *= in_arr[i]
+            return val
+    else:
+        def prod_1(in_arr):
+            numba.parfor.init_prange()
+            val = one
+            for i in numba.pndindex(in_arr.shape):
+                val *= in_arr[i]
+            return val
     return prod_1
 
 def arange_parallel_impl(return_type, *args):
@@ -272,8 +310,8 @@ def linspace_parallel_impl(return_type, *args):
 replace_functions_map = {
     ('argmin', 'numpy'): lambda r,a: argmin_parallel_impl,
     ('argmax', 'numpy'): lambda r,a: argmax_parallel_impl,
-    ('min', 'numpy'): lambda r,a: min_parallel_impl,
-    ('max', 'numpy'): lambda r,a: max_parallel_impl,
+    ('min', 'numpy'): min_parallel_impl,
+    ('max', 'numpy'): max_parallel_impl,
     ('sum', 'numpy'): sum_parallel_impl,
     ('prod', 'numpy'): prod_parallel_impl,
     ('dot', 'numpy'): dot_parallel_impl,
