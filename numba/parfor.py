@@ -2350,45 +2350,63 @@ def get_parfor_pattern_vars(parfor):
 def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, typemap):
     """ remove dead code inside parfor including get/sets
     """
-    # remove dead get/sets in last block
-    # FIXME: I think that "in the last block" is not sufficient in general.  We might need to
-    # remove from any block.
-    last_label = max(parfor.loop_body.keys())
-    last_block = parfor.loop_body[last_label]
 
-    # save array values set to replace getitems
-    saved_values = {}
-    new_body = []
-    for stmt in last_block.body:
-        if (isinstance(stmt, ir.SetItem) and stmt.index.name ==
-                parfor.index_var.name and stmt.target.name not in lives):
-            saved_values[stmt.target.name] = stmt.value
-        if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
-            rhs = stmt.value
-            if rhs.op == 'getitem' and isinstance(rhs.index, ir.Var):
-                if rhs.index.name == parfor.index_var.name:
-                    # replace getitem if value saved
-                    stmt.value = saved_values.get(rhs.value.name, rhs)
-        new_body.append(stmt)
-    last_block.body = new_body
+    # replace getitems with available value
+    # e.g. A[i] = v; ... s = A[i]  ->  s = v
+    for block in parfor.loop_body.values():
+        saved_values = {}
+        for stmt in block.body:
+            if (isinstance(stmt, ir.SetItem) and stmt.index.name ==
+                    parfor.index_var.name and stmt.target.name not in lives):
+                saved_values[stmt.target.name] = stmt.value
+                continue
+            if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
+                rhs = stmt.value
+                if rhs.op == 'getitem' and isinstance(rhs.index, ir.Var):
+                    if rhs.index.name == parfor.index_var.name:
+                        # replace getitem if value saved
+                        stmt.value = saved_values.get(rhs.value.name, rhs)
+                        continue
+            # conservative assumption: array is modified if referenced
+            # remove all referenced arrays
+            for v in stmt.list_vars():
+                saved_values.pop(v.name, None)
 
-    alias_set = set(alias_map.keys())
     # after getitem replacement, remove extra setitems
-    new_body = []
-    in_lives = copy.copy(lives)
-    for stmt in reversed(last_block.body):
-        # aliases of lives are also live for setitems
-        alias_lives = in_lives & alias_set
-        for v in alias_lives:
-            in_lives |= alias_map[v]
-        if (isinstance(stmt, ir.SetItem) and stmt.index.name ==
-                parfor.index_var.name and stmt.target.name not in in_lives and
-                stmt.target.name not in arg_aliases):
-            continue
-        in_lives |= {v.name for v in stmt.list_vars()}
-        new_body.append(stmt)
-    new_body.reverse()
-    last_block.body = new_body
+    blocks = parfor.loop_body.copy()  # shallow copy is enough
+    last_label = max(blocks.keys())
+    return_label, tuple_var = _add_liveness_return_block(blocks, lives, typemap)
+    # jump to return label
+    jump = ir.Jump(return_label, ir.Loc("", 0))
+    blocks[last_label].body.append(jump)
+    cfg = compute_cfg_from_blocks(blocks)
+    usedefs = compute_use_defs(blocks)
+    live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
+    alias_set = set(alias_map.keys())
+
+    for label, block in blocks.items():
+        new_body = []
+        in_lives = {v.name for v in block.terminator.list_vars()}
+        # find live variables at the end of block
+        for out_blk, _data in cfg.successors(label):
+            in_lives |= live_map[out_blk]
+        for stmt in reversed(block.body):
+            # aliases of lives are also live for setitems
+            alias_lives = in_lives & alias_set
+            for v in alias_lives:
+                in_lives |= alias_map[v]
+            if (isinstance(stmt, ir.SetItem) and stmt.index.name ==
+                    parfor.index_var.name and stmt.target.name not in in_lives and
+                    stmt.target.name not in arg_aliases):
+                continue
+            in_lives |= {v.name for v in stmt.list_vars()}
+            new_body.append(stmt)
+        new_body.reverse()
+        block.body = new_body
+
+    typemap.pop(tuple_var.name)  # remove dummy tuple type
+    blocks[last_label].body.pop()  # remove jump
+
 
     # process parfor body recursively
     remove_dead_parfor_recursive(
@@ -2413,15 +2431,31 @@ def remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map, typemap)
     first_body_block = min(blocks.keys())
     assert first_body_block > 0  # we are using 0 for init block here
     last_label = max(blocks.keys())
+
+    return_label, tuple_var = _add_liveness_return_block(blocks, lives, typemap)
+
+    # branch back to firsts body label to simulate loop
+    branch = ir.Branch(0, first_body_block, return_label, ir.Loc("", 0))
+    blocks[last_label].body.append(branch)
+
+    # add dummy jump in init_block for CFG to work
+    blocks[0] = parfor.init_block
+    blocks[0].body.append(ir.Jump(first_body_block, ir.Loc("", 0)))
+
+    # args var including aliases is ok
+    remove_dead(blocks, arg_aliases, typemap, alias_map, arg_aliases)
+    typemap.pop(tuple_var.name)  # remove dummy tuple type
+    blocks[0].body.pop()  # remove dummy jump
+    blocks[last_label].body.pop()  # remove branch
+    return
+
+def _add_liveness_return_block(blocks, lives, typemap):
+    last_label = max(blocks.keys())
     return_label = last_label + 1
 
     loc = blocks[last_label].loc
     scope = blocks[last_label].scope
     blocks[return_label] = ir.Block(scope, loc)
-
-    # add dummy jump in init_block for CFG to work
-    blocks[0] = parfor.init_block
-    blocks[0].body.append(ir.Jump(first_body_block, loc))
 
     # add lives in a dummpy return to last block to avoid their removal
     tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
@@ -2432,16 +2466,7 @@ def remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map, typemap)
     tuple_call = ir.Expr.build_tuple(live_vars, loc)
     blocks[return_label].body.append(ir.Assign(tuple_call, tuple_var, loc))
     blocks[return_label].body.append(ir.Return(tuple_var, loc))
-
-    branch = ir.Branch(0, first_body_block, return_label, loc)
-    blocks[last_label].body.append(branch)
-
-    # args var including aliases is ok
-    remove_dead(blocks, arg_aliases, typemap, alias_map, arg_aliases)
-    typemap.pop(tuple_var.name)  # remove dummy tuple type
-    blocks[0].body.pop()  # remove dummy jump
-    blocks[last_label].body.pop()  # remove branch
-    return
+    return return_label, tuple_var
 
 
 def find_potential_aliases_parfor(parfor, args, typemap, alias_map, arg_aliases):
