@@ -571,6 +571,9 @@ class ParforPass(object):
            self._convert_loop(self.func_ir.blocks)
         dprint_func_ir(self.func_ir, "after parfor pass")
 
+        # simplify CFG of parfor body loops since nested parfors with extra
+        # jumps can be created with prange conversion
+        simplify_parfor_body_CFG(self.func_ir.blocks)
         # simplify before fusion
         simplify(self.func_ir, self.typemap, self.calltypes)
         # need two rounds of copy propagation to enable fusion of long sequences
@@ -2519,6 +2522,21 @@ def find_potential_aliases_parfor(parfor, args, typemap, alias_map, arg_aliases)
     return
 
 ir_utils.alias_analysis_extensions[Parfor] = find_potential_aliases_parfor
+
+def simplify_parfor_body_CFG(blocks):
+    """simplify CFG of body loops in parfors"""
+    for block in blocks.values():
+        for stmt in block.body:
+            if isinstance(stmt, Parfor):
+                parfor = stmt
+                # add dummy return to enable CFG creation
+                last_block = parfor.loop_body[max(parfor.loop_body.keys())]
+                last_block.body.append(ir.Return(0, ir.Loc("", 0)))
+                parfor.loop_body = simplify_CFG(parfor.loop_body)
+                last_block = parfor.loop_body[max(parfor.loop_body.keys())]
+                last_block.body.pop()
+                # call on body recursively
+                simplify_parfor_body_CFG(parfor.loop_body)
 
 
 def wrap_parfor_blocks(parfor, entry_label = None):
