@@ -338,6 +338,11 @@ class Array(Buffer):
                 and (self.aligned or not other.aligned)):
                 return Conversion.safe
 
+        if self.ndim == 1 and isinstance(other, Sequence):
+            element_wise = typingctx.can_convert(self.dtype, other.dtype)
+            if element_wise is not None:
+                return max(element_wise, Conversion.safe)
+
     def is_precise(self):
         return self.dtype.is_precise()
 

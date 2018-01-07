@@ -266,13 +266,20 @@ def getiter_array(context, builder, sig, args):
     return out
 
 
-def _getitem_array1d(context, builder, arrayty, array, idx, wraparound):
+def _getitem_array1d(context, builder, arrayty, array, idx, wraparound, cast_to=None):
     """
     Look up and return an element from a 1D array.
     """
     ptr = cgutils.get_item_pointer(builder, arrayty, array, [idx],
                                    wraparound=wraparound)
-    return load_item(context, builder, arrayty, ptr)
+    v = load_item(context, builder, arrayty, ptr)
+    if cast_to:
+        v = context.cast(
+            builder,
+            v,
+            arrayty.dtype,
+            cast_to)
+    return v
 
 @lower_builtin('iternext', types.ArrayIterator)
 @iternext_impl
@@ -913,7 +920,7 @@ class FancyIndexer(object):
                     indexer = BooleanArrayIndexer(context, builder,
                                                   idxty, idxary)
                 else:
-                    assert 0
+                    raise AssertionError('unsupported dtype %r' % idxty.dtype)
                 indexers.append(indexer)
             else:
                 raise AssertionError("unexpected index type: %s" % (idxty,))
@@ -4441,6 +4448,30 @@ def array_to_array(context, builder, fromty, toty, val):
     assert toty.layout == 'A'
     return val
 
+
+@lower_cast(types.Array, types.Sequence)
+def array_to_sequence(context, builder, fromty, toty, val):
+    # Type inference should ensure we have one dimension & convertable
+    # value types
+
+    ary = make_array(fromty)(context, builder, value=val)
+
+    items = [
+        _getitem_array1d(
+            context,
+            builder,
+            fromty,
+            ary,
+            context.get_constant(types.intp, i),
+            wraparound=False,
+            cast_to=toty.dtype)
+        for i in range(len(toty))
+    ]
+
+    return context.make_tuple(
+        builder,
+        toty,
+        items)
 
 # -----------------------------------------------------------------------------
 # Stride tricks
