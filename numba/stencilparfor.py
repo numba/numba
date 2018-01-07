@@ -107,7 +107,13 @@ class StencilPass(object):
             new_body = []
             for stmt in block.body:
                 if isinstance(stmt, ir.Return):
-                    new_body.append(ir.Assign(stmt.value, exit_value_var, loc))
+                    # previous stmt should have been a cast
+                    prev_stmt = new_body.pop()
+                    assert (isinstance(prev_stmt, ir.Assign)
+                        and isinstance(prev_stmt.value, ir.Expr)
+                        and prev_stmt.value.op == 'cast')
+
+                    new_body.append(ir.Assign(prev_stmt.value.value, exit_value_var, loc))
                     new_body.append(ir.Jump(parfor_body_exit_label, loc))
                 else:
                     new_body.append(stmt)
@@ -275,6 +281,13 @@ class StencilPass(object):
                                         )
         stencil_blocks[parfor_body_exit_label].body.extend(for_replacing_ret)
         stencil_blocks[parfor_body_exit_label].body.append(setitem_call)
+
+        # simplify CFG of parfor body (exit block could be simplified often)
+        # add dummy return to enable CFG
+        stencil_blocks[parfor_body_exit_label].body.append(ir.Return(0,
+                                                                ir.Loc("", 0)))
+        stencil_blocks = ir_utils.simplify_CFG(stencil_blocks)
+        stencil_blocks[max(stencil_blocks.keys())].body.pop()
 
         if config.DEBUG_ARRAY_OPT == 1:
             print("stencil_blocks after adding SetItem")
