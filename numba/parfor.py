@@ -159,7 +159,7 @@ def dotvv_parallel_impl(a, b):
     m = b.shape[0]
     #assert_equiv("sizes of l, m do not match", l, m)
     s = 0
-    for i in prange(l):
+    for i in numba.parfor.internal_prange(l):
         s += a[i] * b[i]
     return s
 
@@ -174,7 +174,7 @@ def dotvm_parallel_impl(a, b):
     #    for j in range(m):
     #        s += a[j] * b[j, i]
     #    c[i] = s
-    for i in prange(m):
+    for i in numba.parfor.internal_prange(m):
         c += a[i] * b[i, :]
     return c
 
@@ -184,7 +184,7 @@ def dotmv_parallel_impl(a, b):
     l = b.shape
     #assert_equiv("sizes of n, l do not match", n, l)
     c = np.empty(m, a.dtype)
-    for i in prange(m):
+    for i in numba.parfor.internal_prange(m):
         s = 0
         for j in range(n):
             s += a[i, j] * b[j]
