@@ -27,14 +27,6 @@ def autojit(*args, **kws):
     return jit(*args, **kws)
 
 
-class _DisableJitWrapper(object):
-    def __init__(self, py_func):
-        self.py_func = py_func
-
-    def __call__(self, *args, **kwargs):
-        return self.py_func(*args, **kwargs)
-
-
 _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "Signatures should be passed as the first "
                                  "positional argument.")
@@ -185,7 +177,7 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
             from . import cuda
             return cuda.jit(func)
         if config.DISABLE_JIT and not target == 'npyufunc':
-            return _DisableJitWrapper(func)
+            return func
         disp = dispatcher(py_func=func, locals=locals,
                           targetoptions=targetoptions,
                           **dispatcher_args)
