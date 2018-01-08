@@ -2404,6 +2404,9 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, typemap):
             if (isinstance(stmt, ir.SetItem) and stmt.index.name ==
                     parfor.index_var.name and stmt.target.name not in lives):
                 saved_values[stmt.target.name] = stmt.value
+                # saved values of aliases of SetItem target array are invalid
+                for w in alias_map.get(stmt.target.name, []):
+                    saved_values.pop(w, None)
                 continue
             if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
                 rhs = stmt.value
@@ -2416,6 +2419,9 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, typemap):
             # remove all referenced arrays
             for v in stmt.list_vars():
                 saved_values.pop(v.name, None)
+                # aliases are potentially modified as well
+                for w in alias_map.get(v.name, []):
+                    saved_values.pop(w, None)
 
     # after getitem replacement, remove extra setitems
     blocks = parfor.loop_body.copy()  # shallow copy is enough
