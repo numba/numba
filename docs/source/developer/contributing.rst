@@ -154,7 +154,7 @@ Examples:
 
 * to run those tests::
 
-    $ python -m numba.runtests -l numba.tests.test_usecases
+    $ python -m numba.runtests numba.tests.test_usecases
 
 * to run all tests in parallel, using multiple sub-processes::
 

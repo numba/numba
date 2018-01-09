@@ -115,6 +115,21 @@ class DeviceNDArrayBase(object):
         clone.stream = stream
         return clone
 
+    @property
+    def T(self):
+        return self.transpose()
+
+    def transpose(self, axes=None):
+        if axes and tuple(axes) == tuple(range(self.ndim)):
+            return self
+        elif self.ndim != 2:
+            raise NotImplementedError("transposing a non-2D DeviceNDArray isn't supported")
+        elif axes is not None and set(axes) != set(range(self.ndim)):
+            raise ValueError("invalid axes list %r" % (axes,))
+        else:
+            from numba.cuda.kernels.transpose import transpose
+            return transpose(self)
+
     def _default_stream(self, stream):
         return self.stream if not stream else stream
 
