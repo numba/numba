@@ -450,8 +450,16 @@ class Lower(BaseLower):
         # Yield to caller
         val = self.loadvar(inst.value.name)
         typ = self.typeof(inst.value.name)
-        val = self.context.cast(self.builder, val, typ, self.gentype.yield_type)
-        self.call_conv.return_value(self.builder, val)
+
+        # cast the local val to the type yielded
+        yret = self.context.cast(self.builder, val, typ,
+                                    self.gentype.yield_type)
+
+        # get the return repr of yielded value
+        retval = self.context.get_return_value(self.builder, typ, yret)
+        
+        # return
+        self.call_conv.return_value(self.builder, retval)
 
         # Resumption point
         y.lower_yield_resume()
