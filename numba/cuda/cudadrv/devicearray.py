@@ -105,7 +105,7 @@ class DeviceNDArrayBase(object):
         self.gpu_data = gpu_data
 
         self.__writeback = writeback    # should deprecate the use of this
-        self.stream = 0
+        self.stream = stream
 
     def bind(self, stream=0):
         """Bind a CUDA stream to this object so that all subsequent operation
@@ -164,7 +164,7 @@ class DeviceNDArrayBase(object):
 
         sentry_contiguous(self)
         stream = self._default_stream(stream)
-        
+
         if _driver.is_device_memory(ary):
             sentry_contiguous(ary)
 
