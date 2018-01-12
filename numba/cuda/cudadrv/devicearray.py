@@ -620,7 +620,10 @@ def auto_device(obj, stream=0, copy=True):
         if isinstance(obj, np.void):
             devobj = from_record_like(obj, stream=stream)
         else:
-            obj = np.asarray(obj)
+            obj = np.array(
+                obj,
+                copy=False,
+                subok=True)
             sentry_contiguous(obj)
             devobj = from_array_like(obj, stream=stream)
         if copy:
