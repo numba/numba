@@ -48,7 +48,7 @@ class TestCase(unittest.TestCase):
     def test_cuda(self):
         # Even without CUDA enabled, there is at least one test
         # (in numba.cuda.tests.nocuda)
-        self.check_testsuite_size(['numba.cuda.tests'], 1, 400)
+        self.check_testsuite_size(['numba.cuda.tests'], 1, 450)
 
     def test_module(self):
         self.check_testsuite_size(['numba.tests.test_utils'], 3, 15)
