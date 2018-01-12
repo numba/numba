@@ -163,6 +163,7 @@ class Array(object):
             dim = Dim(offset, offset + ashape * astride, ashape, astride,
                       single=False)
             dims.append(dim)
+            offset = 0  # offset only applies to first dimension
         return cls(dims, itemsize)
 
     def __init__(self, dims, itemsize):
