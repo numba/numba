@@ -512,9 +512,6 @@ class PreParforPass(object):
         if self.options.numpy:
             self._replace_parallel_functions(self.func_ir.blocks)
         self.func_ir.blocks = simplify_CFG(self.func_ir.blocks)
-        # run again since replaced functions can have array math
-        canonicalize_array_math(self.func_ir, self.typemap,
-                                self.calltypes, self.typingctx)
 
     def _replace_parallel_functions(self, blocks):
         """

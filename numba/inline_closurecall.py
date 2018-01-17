@@ -20,7 +20,8 @@ from numba.ir_utils import (
     find_build_sequence,
     get_np_ufunc_typ,
     get_ir_of_code,
-    simplify_CFG
+    simplify_CFG,
+    canonicalize_array_math
     )
 
 from numba.analysis import (
@@ -319,6 +320,8 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
         from numba import compiler
         f_typemap, f_return_type, f_calltypes = compiler.type_inference_stage(
                 typingctx, callee_ir, arg_typs, None)
+        canonicalize_array_math(callee_ir, f_typemap,
+                                f_calltypes, typingctx)
         # remove argument entries like arg.a from typemap
         arg_names = [vname for vname in f_typemap if vname.startswith("arg.")]
         for a in arg_names:
