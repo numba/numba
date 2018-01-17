@@ -261,6 +261,30 @@ def mean_parallel_impl(return_type, arg):
             return val/in_arr.size
     return mean_1
 
+def var_parallel_impl(return_type, arg):
+
+    if arg.ndim == 1:
+        def var_1(in_arr):
+            # Compute the mean
+            m = in_arr.mean()
+            # Compute the sum of square diffs
+            numba.parfor.init_prange()
+            ssd = 0
+            for i in numba.parfor.internal_prange(len(in_arr)):
+                ssd += (in_arr[i] - m) ** 2
+            return ssd / len(in_arr)
+    else:
+        def var_1(in_arr):
+            # Compute the mean
+            m = in_arr.mean()
+            # Compute the sum of square diffs
+            numba.parfor.init_prange()
+            ssd = 0
+            for i in numba.pndindex(in_arr.shape):
+                ssd += (in_arr[i] - m) ** 2
+            return ssd / in_arr.size
+    return var_1
+
 def arange_parallel_impl(return_type, *args):
     dtype = as_dtype(return_type.dtype)
 
@@ -336,6 +360,7 @@ replace_functions_map = {
     ('sum', 'numpy'): sum_parallel_impl,
     ('prod', 'numpy'): prod_parallel_impl,
     ('mean', 'numpy'): mean_parallel_impl,
+    ('var', 'numpy'): var_parallel_impl,
     ('dot', 'numpy'): dot_parallel_impl,
     ('arange', 'numpy'): arange_parallel_impl,
     ('linspace', 'numpy'): linspace_parallel_impl,
