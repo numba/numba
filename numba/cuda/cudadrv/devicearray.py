@@ -14,7 +14,7 @@ import numpy as np
 
 from . import driver as _driver
 from . import devices
-from numba import dummyarray, types, numpy_support
+from numba import dummyarray, types, numpy_support, cuda
 
 try:
     long
@@ -478,9 +478,6 @@ class DeviceNDArray(DeviceNDArrayBase):
 
         # (3) do the copy
 
-        from numba import cuda, int64
-        from numba.cuda.cudadrv.driver import driver
-
         @cuda.jit('UniTuple(i8, %d)(i8[:])' % lhs.ndim, device=True)
         def cast(it):
             """
@@ -491,7 +488,6 @@ class DeviceNDArray(DeviceNDArrayBase):
             """
             return it
 
-        tpb = driver.get_device().MAX_THREADS_PER_BLOCK
         n_elements = np.prod(lhs.shape)
 
         # need to have static array sizes for cuda.local.array, so bake in the
@@ -511,7 +507,7 @@ class DeviceNDArray(DeviceNDArrayBase):
             # [1, :] is the from-index (into `rhs`)
             idx = cuda.local.array(
                 shape=(2, ndim),
-                dtype=int64)
+                dtype=types.int64)
 
             for i in range(ndim - 1, -1, -1):
                 idx[0, i] = location % lhs.shape[i]
@@ -520,9 +516,7 @@ class DeviceNDArray(DeviceNDArrayBase):
 
             lhs[cast(idx[0])] = rhs[cast(idx[1])]
 
-        kernel[(n_elements + tpb -1) // tpb, tpb, stream](
-            lhs,
-            rhs)
+        kernel.forall(n_elements, stream=stream)(lhs, rhs)
 
 
 
@@ -620,6 +614,11 @@ def auto_device(obj, stream=0, copy=True):
         if isinstance(obj, np.void):
             devobj = from_record_like(obj, stream=stream)
         else:
+            # This allows you to pass non-array objects like constants
+            # and objects implementing the
+            # [array interface](https://docs.scipy.org/doc/numpy-1.13.0/reference/arrays.interface.html)
+            # into this function (with no overhead -- copies -- for `obj`s
+            # that are already `ndarray`s.
             obj = np.array(
                 obj,
                 copy=False,
