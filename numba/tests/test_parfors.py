@@ -523,6 +523,18 @@ class TestParfors(TestParforsBase):
         self.assertIn(msg, str(raises.exception))
 
     @skip_unsupported
+    def test_mean(self):
+        def test_impl(A):
+            return A.mean()
+        N = 100
+        A = np.random.ranf(N)
+        B = np.random.randint(10, size=(N, 3))
+        self.check(test_impl, A)
+        self.check(test_impl, B)
+        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'), )) == 1)
+        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )) == 1)
+
+    @skip_unsupported
     def test_random_parfor(self):
         """
         Test function with only a random call to make sure a random function
