@@ -14,7 +14,7 @@ import numpy as np
 
 from . import driver as _driver
 from . import devices
-from numba import dummyarray, types, numpy_support, cuda
+from numba import dummyarray, types, numpy_support
 
 try:
     long
@@ -477,6 +477,8 @@ class DeviceNDArray(DeviceNDArrayBase):
                     l))
 
         # (3) do the copy
+
+        from numba import cuda # circular!
 
         @cuda.jit('UniTuple(i8, %d)(i8[:])' % lhs.ndim, device=True)
         def cast(it):
