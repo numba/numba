@@ -240,6 +240,27 @@ def prod_parallel_impl(return_type, arg):
             return val
     return prod_1
 
+
+def mean_parallel_impl(return_type, arg):
+    # can't reuse sum since output type is different
+    zero = return_type(0)
+
+    if arg.ndim == 1:
+        def mean_1(in_arr):
+            numba.parfor.init_prange()
+            val = zero
+            for i in numba.parfor.internal_prange(len(in_arr)):
+                val += in_arr[i]
+            return val/len(in_arr)
+    else:
+        def mean_1(in_arr):
+            numba.parfor.init_prange()
+            val = zero
+            for i in numba.pndindex(in_arr.shape):
+                val += in_arr[i]
+            return val/in_arr.size
+    return mean_1
+
 def arange_parallel_impl(return_type, *args):
     dtype = as_dtype(return_type.dtype)
 
@@ -314,6 +335,7 @@ replace_functions_map = {
     ('max', 'numpy'): max_parallel_impl,
     ('sum', 'numpy'): sum_parallel_impl,
     ('prod', 'numpy'): prod_parallel_impl,
+    ('mean', 'numpy'): mean_parallel_impl,
     ('dot', 'numpy'): dot_parallel_impl,
     ('arange', 'numpy'): arange_parallel_impl,
     ('linspace', 'numpy'): linspace_parallel_impl,
