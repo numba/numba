@@ -547,6 +547,18 @@ class TestParfors(TestParforsBase):
         self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )) == 2)
 
     @skip_unsupported
+    def test_std(self):
+        def test_impl(A):
+            return A.std()
+        N = 100
+        A = np.random.ranf(N)
+        B = np.random.randint(10, size=(N, 3))
+        self.check(test_impl, A)
+        self.check(test_impl, B)
+        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'), )) == 2)
+        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )) == 2)
+
+    @skip_unsupported
     def test_random_parfor(self):
         """
         Test function with only a random call to make sure a random function

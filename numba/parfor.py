@@ -285,6 +285,11 @@ def var_parallel_impl(return_type, arg):
             return ssd / in_arr.size
     return var_1
 
+def std_parallel_impl(return_type, arg):
+    def std_1(in_arr):
+        return in_arr.var() ** 0.5
+    return std_1
+
 def arange_parallel_impl(return_type, *args):
     dtype = as_dtype(return_type.dtype)
 
@@ -361,6 +366,7 @@ replace_functions_map = {
     ('prod', 'numpy'): prod_parallel_impl,
     ('mean', 'numpy'): mean_parallel_impl,
     ('var', 'numpy'): var_parallel_impl,
+    ('std', 'numpy'): std_parallel_impl,
     ('dot', 'numpy'): dot_parallel_impl,
     ('arange', 'numpy'): arange_parallel_impl,
     ('linspace', 'numpy'): linspace_parallel_impl,
