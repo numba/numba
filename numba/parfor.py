@@ -58,6 +58,7 @@ from numba.ir_utils import (
     find_build_sequence,
     guard,
     require,
+    GuardException,
     compile_to_numba_ir,
     get_definition,
     build_definitions,
@@ -1016,6 +1017,7 @@ class ParforPass(object):
                     mask_indices.append(ind)
             require(mask_var and count_consts == ndim - 1)
             return value, mask_var, mask_typ, mask_indices
+        raise GuardException
 
     def _get_prange_init_block(self, entry_block, call_table, prange_args):
         """
