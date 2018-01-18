@@ -543,7 +543,10 @@ class PreParforPass(object):
                             repl_func = replace_functions_map.get(callname, None)
                             require(repl_func != None)
                             typs = tuple(self.typemap[x.name] for x in expr.args)
-                            new_func =  repl_func(lhs_typ, *typs)
+                            try:
+                                new_func =  repl_func(lhs_typ, *typs)
+                            except:
+                                new_func = None
                             require(new_func != None)
                             g = copy.copy(self.func_ir.func_id.func.__globals__)
                             g['numba'] = numba
