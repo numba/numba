@@ -274,8 +274,22 @@ data_layout = {
 default_data_layout = data_layout[tuple.__itemsize__ * 8]
 
 
+try:
+    NVVM_VERSION = NVVM().get_version()
+except:
+    # the CUDA driver may not be present
+    NVVM_VERSION = (0, 0)
+
 # List of supported compute capability in sorted order
-SUPPORTED_CC = (2, 0), (2, 1), (3, 0), (3, 5), (5, 0), (5, 2)
+if NVVM_VERSION < (1, 3):
+    # CUDA 7.5 and earlier
+    SUPPORTED_CC = (2, 0), (2, 1), (3, 0), (3, 5), (5, 0), (5, 2)
+elif NVVM_VERSION < (1, 4):
+    # CUDA 8.0
+    SUPPORTED_CC = (2, 0), (2, 1), (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2)
+else:
+    # CUDA 9.0 and later
+    SUPPORTED_CC = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0)
 
 
 def _find_arch(mycc):

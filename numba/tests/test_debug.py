@@ -7,10 +7,12 @@ import warnings
 
 import numpy as np
 
-from .support import TestCase, override_config, captured_stdout, forbid_codegen
+from .support import (TestCase, override_config, override_env_config,
+                      captured_stdout, forbid_codegen)
 from numba import unittest_support as unittest
 from numba import jit, jitclass, types
 from numba.compiler import compile_isolated, Flags
+from numba.targets.cpu import ParallelOptions
 from numba.errors import NumbaWarning
 from numba import compiler
 from .test_parfors import skip_unsupported
@@ -37,7 +39,7 @@ def unsupported_parfor(a, b):
     return np.dot(a, b) # dot as gemm unsupported
 
 force_parallel_flags = Flags()
-force_parallel_flags.set("auto_parallel")
+force_parallel_flags.set("auto_parallel", ParallelOptions(True))
 force_parallel_flags.set('nrt')
 
 class DebugTestBase(TestCase):
@@ -74,7 +76,7 @@ class DebugTestBase(TestCase):
 
     def _check_dump_llvm(self, out):
         self.assertIn('--LLVM DUMP', out)
-        if compiler.Flags.OPTIONS['auto_parallel'] == False:
+        if compiler.Flags.OPTIONS['auto_parallel'].enabled == False:
             self.assertIn('%"retval" = alloca', out)
 
     def _check_dump_func_opt_llvm(self, out):
@@ -193,23 +195,20 @@ class TestEnvironmentOverride(FunctionDebugTestBase):
     """
     Test that environment variables are reloaded by Numba when modified.
     """
-    
+
     # mutates env with os.environ so must be run serially
     _numba_parallel_test_ = False
 
     def test_debug(self):
         out = self.compile_simple_nopython()
         self.assertFalse(out)
-        os.environ['NUMBA_DEBUG'] = '1'
-        try:
+        with override_env_config('NUMBA_DEBUG', '1'):
             out = self.compile_simple_nopython()
             # Note that all variables dependent on NUMBA_DEBUG are
             # updated too.
             self.check_debug_output(out, ['ir', 'typeinfer',
                                           'llvm', 'func_opt_llvm',
                                           'optimized_llvm', 'assembly'])
-        finally:
-            del os.environ['NUMBA_DEBUG']
         out = self.compile_simple_nopython()
         self.assertFalse(out)
 
@@ -234,17 +233,13 @@ class TestParforWarnings(TestCase):
 
     @skip_unsupported
     def test_warns(self):
-        try:
+        with override_env_config('NUMBA_WARNINGS', '1'):
             arr_ty = types.Array(types.float64, 2, "C")
-            os.environ['NUMBA_WARNINGS'] = '1'
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter("always", NumbaWarning)
                 cres = compile_isolated(unsupported_parfor, (arr_ty, arr_ty),
                                         flags=force_parallel_flags)
-
             self.check_parfors_warning(w)
-        finally:
-            del os.environ['NUMBA_WARNINGS']
 
 
 if __name__ == '__main__':

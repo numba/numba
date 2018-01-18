@@ -14,7 +14,7 @@ import llvmlite.ir as llvmir
 
 from numba import config, utils, cgutils
 from numba.runtime.nrtopt import remove_redundant_nrt_refct
-from numba import llvmthreadsafe as llvmts
+from numba.runtime import rtsys
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
                       'i886', 'i986'])
@@ -72,7 +72,7 @@ class CodeLibrary(object):
         self._codegen = codegen
         self._name = name
         self._linking_libraries = set()
-        self._final_module = llvmts.parse_assembly(
+        self._final_module = ll.parse_assembly(
             str(self._codegen._create_empty_module(self._name)))
         self._final_module.name = cgutils.normalize_ir_text(self._name)
         self._shared_module = None
@@ -181,10 +181,9 @@ class CodeLibrary(object):
         self._raise_if_finalized()
         assert isinstance(ir_module, llvmir.Module)
         ir = cgutils.normalize_ir_text(str(ir_module))
-        with llvmts.lock_llvm:
-            ll_module = llvmts.parse_assembly(ir)
-            ll_module.name = ir_module.name
-            ll_module.verify()
+        ll_module = ll.parse_assembly(ir)
+        ll_module.name = ir_module.name
+        ll_module.verify()
         self.add_llvm_module(ll_module)
 
     def _scan_dynamic_globals(self, ll_module):
@@ -195,7 +194,6 @@ class CodeLibrary(object):
             if gv.name.startswith("numba.dynamic.globals"):
                 self._dynamic_globals.append(gv.name)
 
-    @llvmts.lock_llvm
     def add_llvm_module(self, ll_module):
         self._scan_dynamic_globals(ll_module)
         self._optimize_functions(ll_module)
@@ -203,7 +201,6 @@ class CodeLibrary(object):
         ll_module = remove_redundant_nrt_refct(ll_module)
         self._final_module.link_in(ll_module)
 
-    @llvmts.lock_llvm
     def finalize(self):
         """
         Finalize the library.  After this call, nothing can be added anymore.
@@ -233,7 +230,6 @@ class CodeLibrary(object):
         self._final_module.verify()
         self._finalize_final_module()
 
-    @llvmts.lock_llvm
     def _finalize_final_module(self):
         """
         Make the underlying LLVM module ready to use.
@@ -293,7 +289,6 @@ class CodeLibrary(object):
         self._sentry_cache_disable_inspection()
         return str(self._codegen._tm.emit_assembly(self._final_module))
 
-    @llvmts.lock_llvm
     def get_function_cfg(self, name):
         """
         Get control-flow graph of the LLVM function
@@ -381,7 +376,6 @@ class CodeLibrary(object):
             self._compiled_object = None
             return buf
 
-    @llvmts.lock_llvm
     def serialize_using_bitcode(self):
         """
         Serialize this library using its bitcode as the cached representation.
@@ -389,7 +383,6 @@ class CodeLibrary(object):
         self._ensure_finalized()
         return (self._name, 'bitcode', self._final_module.as_bitcode())
 
-    @llvmts.lock_llvm
     def serialize_using_object_code(self):
         """
         Serialize this library using its object code as the cached
@@ -402,21 +395,20 @@ class CodeLibrary(object):
         return (self._name, 'object', data)
 
     @classmethod
-    @llvmts.lock_llvm
     def _unserialize(cls, codegen, state):
         name, kind, data = state
         self = codegen.create_library(name)
         assert isinstance(self, cls)
         if kind == 'bitcode':
             # No need to re-run optimizations, just make the module ready
-            self._final_module = llvmts.parse_bitcode(data)
+            self._final_module = ll.parse_bitcode(data)
             self._finalize_final_module()
             return self
         elif kind == 'object':
             object_code, shared_bitcode = data
             self.enable_object_caching()
             self._set_compiled_object(object_code)
-            self._shared_module = llvmts.parse_bitcode(shared_bitcode)
+            self._shared_module = ll.parse_bitcode(shared_bitcode)
             self._finalize_final_module()
             # Load symbols from cache
             self._codegen._engine._load_defined_symbols(self._shared_module)
@@ -452,7 +444,6 @@ class AOTCodeLibrary(CodeLibrary):
 
 class JITCodeLibrary(CodeLibrary):
 
-    @llvmts.lock_llvm
     def get_pointer_to_function(self, name):
         """
         Generate native code for function named *name* and return a pointer
@@ -474,7 +465,6 @@ class JITCodeLibrary(CodeLibrary):
         else:
             return self._codegen._engine.get_function_address(name)
 
-    @llvmts.lock_llvm
     def _finalize_specific(self):
         self._codegen._scan_and_fix_unresolved_refs(self._final_module)
         self._codegen._engine.finalize_object()
@@ -505,7 +495,7 @@ class RuntimeLinker(object):
                 if engine.is_symbol_defined(gv.name):
                     continue
                 # Allocate a memory space for the pointer
-                abortfn = engine.get_function_address('nrt_unresolved_abort')
+                abortfn = rtsys.library.get_pointer_to_function("nrt_unresolved_abort")
                 ptr = ctypes.c_void_p(abortfn)
                 engine.add_global_mapping(gv, ctypes.addressof(ptr))
                 self._unresolved[sym] = ptr
@@ -602,7 +592,7 @@ class BaseCPUCodegen(object):
 
         self._libraries = set()
         self._data_layout = None
-        self._llvm_module = llvmts.parse_assembly(
+        self._llvm_module = ll.parse_assembly(
             str(self._create_empty_module(module_name)))
         self._llvm_module.name = "global_codegen_module"
         self._rtlinker = RuntimeLinker()
@@ -616,7 +606,7 @@ class BaseCPUCodegen(object):
         self._tm_features = self._customize_tm_features()
         self._customize_tm_options(tm_options)
         tm = target.create_target_machine(**tm_options)
-        engine = llvmts.create_mcjit_compiler(llvm_module, tm)
+        engine = ll.create_mcjit_compiler(llvm_module, tm)
 
         self._tm = tm
         self._engine = JitEngine(engine)
@@ -660,14 +650,14 @@ class BaseCPUCodegen(object):
         return self._library_class._unserialize(self, serialized)
 
     def _module_pass_manager(self):
-        pm = llvmts.create_module_pass_manager()
+        pm = ll.create_module_pass_manager()
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder() as pmb:
             pmb.populate(pm)
         return pm
 
     def _function_pass_manager(self, llvm_module):
-        pm = llvmts.create_function_pass_manager(llvm_module)
+        pm = ll.create_function_pass_manager(llvm_module)
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder() as pmb:
             pmb.populate(pm)
@@ -701,7 +691,7 @@ class BaseCPUCodegen(object):
                 ret double 1.23e+01
             }
             """
-        mod = llvmts.parse_assembly(ir)
+        mod = ll.parse_assembly(ir)
         ir_out = str(mod)
         if "12.3" in ir_out or "1.23" in ir_out:
             # Everything ok
@@ -815,7 +805,6 @@ class JITCPUCodegen(BaseCPUCodegen):
         # return functools.partial(self._engine.remove_module, module)
 
 
-@llvmts.lock_llvm
 def initialize_llvm():
     """Safe to use multiple times.
     """

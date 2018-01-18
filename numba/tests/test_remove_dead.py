@@ -60,7 +60,7 @@ class TestRemoveDead(unittest.TestCase):
             in_cps, out_cps = copy_propagate(test_ir.blocks, typemap)
             #print("in_cps = ", in_cps)
             #print("out_cps = ", out_cps)
-            apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(test_ir.blocks), null_func, None, typemap, calltypes)
+            apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(test_ir.blocks), typemap, calltypes, null_func, None)
             #print(test_ir.dump())
 
             #print("findAssign = ", findAssign(test_ir, "x"))

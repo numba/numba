@@ -83,6 +83,9 @@ Set the :ref:`environment variable <numba-envvars>` ``NUMBA_WARNINGS`` to
 non-zero and if the ``parallel=True`` transformations failed for a function
 decorated as such, a warning will be displayed.
 
+Also, setting the :ref:`environment variable <numba-envvars>`
+``NUMBA_DEBUG_ARRAY_OPT_STATS`` will show some statistics about which
+operators/calls are converted to parallel for-loops.
 
 Performance
 ===========
@@ -98,6 +101,55 @@ Does Numba vectorize array computations (SIMD)?
 
 Numba doesn't implement such optimizations by itself, but it lets LLVM
 apply them.
+
+Why my loop is not vectorized?
+------------------------------
+
+Numba enables the loop-vectorize optimization in LLVM by default.
+While it is a powerful optimization, not all loops are applicable.
+Sometimes, loop-vectorization may fail due to subtle details like memory access
+pattern. To see additional diagnostic information from LLVM,
+add the following lines:
+
+.. code-block:: python
+
+    import llvmlite.binding as llvm
+    llvm.set_option('', '--debug-only=loop-vectorize')
+
+This tells LLVM to print debug information from the **loop-vectorize**
+pass to stderr.  Each function entry looks like:
+
+.. code-block:: text
+
+    LV: Checking a loop in "<low-level symbol name>" from <function name>
+    LV: Loop hints: force=? width=0 unroll=0
+    ...
+    LV: Vectorization is possible but not beneficial.
+    LV: Interleaving is not beneficial.
+
+Each function entry is separated by an empty line.  The reason for rejecting
+the vectorization is usually at the end of the entry.  In the example above,
+LLVM rejected the vectorization because doing so will not speedup the loop.
+In this case, it can be due to memory access pattern.  For instance, the
+array being looped over may not be in contiguous layout.
+
+When memory access pattern is non-trivial such that it cannot determine the
+access memory region, LLVM may reject with the following message:
+
+.. code-block:: text
+
+    LV: Can't vectorize due to memory conflicts
+
+Another common reason is:
+
+.. code-block:: text
+
+    LV: Not vectorizing: loop did not meet vectorization requirements.
+
+In this case, vectorization is rejected because the vectorized code may behave
+differently.  This is a case to try turning on ``fastmath=True`` to allow
+fastmath instructions.
+
 
 Does Numba automatically parallelize code?
 ------------------------------------------

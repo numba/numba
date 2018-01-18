@@ -329,9 +329,10 @@ class _CacheImpl(object):
             raise RuntimeError("cannot cache function %r: no locator available "
                                "for file %r" % (qualname, source_path))
         self._locator = locator
-        # Keep the last dotted component, since the package name is already
-        # encoded in the directory.
-        modname = py_func.__module__.split('.')[-1]
+        # Use filename base name as module name to avoid conflict between
+        # foo/__init__.py and foo/foo.py
+        filename = inspect.getfile(py_func)
+        modname = os.path.splitext(os.path.basename(filename))[0]
         fullname = "%s.%s" % (modname, qualname)
         abiflags = getattr(sys, 'abiflags', '')
         self._filename_base = self.get_filename_base(fullname, abiflags)

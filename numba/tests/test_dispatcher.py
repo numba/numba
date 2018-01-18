@@ -16,10 +16,12 @@ from numba import utils, jit, generated_jit, types, typeof
 from numba import config
 from numba import _dispatcher
 from numba.errors import NumbaWarning
-from .support import TestCase, tag, temp_directory, import_dynamic
+from .support import (TestCase, tag, temp_directory, import_dynamic,
+                      override_env_config, capture_cache_log)
 from numba.targets import codegen
 
 import llvmlite.binding as ll
+
 
 def dummy(x):
     return x
@@ -495,10 +497,23 @@ class TestDispatcherMethods(TestCase):
             # Look for the function name
             self.assertTrue("foo" in asm)
 
+    def _check_cfg_display(self, cfg, wrapper=''):
+        # simple stringify test
+        if wrapper:
+            wrapper = "{}{}".format(len(wrapper), wrapper)
+        module_name = __name__.split('.', 1)[0]
+        module_len = len(module_name)
+        prefix = r'^digraph "CFG for \'_ZN{}{}{}'.format(wrapper, module_len, module_name)
+        self.assertRegexpMatches(str(cfg), prefix)
+        # .display() requires an optional dependency on `graphviz`.
+        # just test for the attribute without running it.
+        self.assertTrue(callable(cfg.display))
+
     @unittest.skipIf(config.IS_WIN32 and not config.IS_32BITS, "access violation on 64-bit windows")
+    @unittest.skipIf(config.IS_OSX, "segfault on OSX")
     def test_inspect_cfg(self):
-        # Exercise the .inspect_cfg().  These are minimal tests and does not
-        # fully checks the correctness of the function.
+        # Exercise the .inspect_cfg(). These are minimal tests and do not fully
+        # check the correctness of the function.
         @jit
         def foo(the_array):
             return the_array.sum()
@@ -522,30 +537,36 @@ class TestDispatcherMethods(TestCase):
         self.assertEqual(set([s1, s2, s3]),
                          set(map(lambda x: (typeof(x),), [a1, a2, a3])))
 
-        def check_display(cfg, wrapper=''):
-            # simple stringify test
-            if wrapper:
-                wrapper = "{}{}".format(len(wrapper), wrapper)
-            module_name = __name__.split('.', 1)[0]
-            module_len = len(module_name)
-            prefix = r'^digraph "CFG for \'_ZN{}{}{}'.format(wrapper, module_len, module_name)
-            self.assertRegexpMatches(str(cfg), prefix)
-            # .display() requires an optional dependency on `graphviz`.
-            # just test for the attribute without running it.
-            self.assertTrue(callable(cfg.display))
-
         for cfg in cfgs.values():
-            check_display(cfg)
+            self._check_cfg_display(cfg)
         self.assertEqual(len(list(cfgs.values())), 3)
 
         # Call inspect_cfg(signature)
         cfg = foo.inspect_cfg(signature=foo.signatures[0])
-        check_display(cfg)
+        self._check_cfg_display(cfg)
+       
+    @unittest.skipIf(config.IS_WIN32 and not config.IS_32BITS, "access violation on 64-bit windows")
+    @unittest.skipIf(config.IS_OSX, "segfault on OSX")
+    def test_inspect_cfg_with_python_wrapper(self):
+        # Exercise the .inspect_cfg() including the python wrapper. 
+        # These are minimal tests and do not fully check the correctness of
+        # the function.
+        @jit
+        def foo(the_array):
+            return the_array.sum()
 
+        # Generate 3 overloads
+        a1 = np.ones(1)
+        a2 = np.ones((1, 1))
+        a3 = np.ones((1, 1, 1))
+        foo(a1)
+        foo(a2)
+        foo(a3)
+        
         # Call inspect_cfg(signature, show_wrapper="python")
         cfg = foo.inspect_cfg(signature=foo.signatures[0],
                               show_wrapper="python")
-        check_display(cfg, wrapper='cpython')
+        self._check_cfg_display(cfg, wrapper='cpython')
 
     def test_inspect_types(self):
         @jit
@@ -1047,11 +1068,9 @@ class TestCacheWithCpuSetting(BaseCacheUsecasesTest):
 
         mtimes = self.get_cache_mtimes()
         # Change CPU name to generic
-        try:
-            os.environ['NUMBA_CPU_NAME'] = 'generic'
+        with override_env_config('NUMBA_CPU_NAME', 'generic'):
             self.run_in_separate_process()
-        finally:
-            del os.environ['NUMBA_CPU_NAME']
+
         self.check_later_mtimes(mtimes)
         self.assertGreater(len(self.cache_contents()), cache_size)
         # Check cache index
@@ -1082,11 +1101,8 @@ class TestCacheWithCpuSetting(BaseCacheUsecasesTest):
         system_features = codegen.get_host_cpu_features()
 
         self.assertNotEqual(system_features, my_cpu_features)
-        try:
-            os.environ['NUMBA_CPU_FEATURES'] = my_cpu_features
+        with override_env_config('NUMBA_CPU_FEATURES', my_cpu_features):
             self.run_in_separate_process()
-        finally:
-            del os.environ['NUMBA_CPU_FEATURES']
         self.check_later_mtimes(mtimes)
         self.assertGreater(len(self.cache_contents()), cache_size)
         # Check cache index
@@ -1134,6 +1150,136 @@ class TestMultiprocessCache(BaseCacheTest):
         finally:
             pool.close()
         self.assertEqual(res, n * (n - 1) // 2)
+
+
+class TestCacheFileCollision(unittest.TestCase):
+    _numba_parallel_test_ = False
+
+    here = os.path.dirname(__file__)
+    usecases_file = os.path.join(here, "cache_usecases.py")
+    modname = "caching_file_loc_fodder"
+    source_text_1 = """
+from numba import njit
+@njit(cache=True)
+def bar():
+    return 123
+"""
+    source_text_2 = """
+from numba import njit
+@njit(cache=True)
+def bar():
+    return 321
+"""
+
+    def setUp(self):
+        self.tempdir = temp_directory('test_cache_file_loc')
+        sys.path.insert(0, self.tempdir)
+        self.modname = 'module_name_that_is_unlikely'
+        self.assertNotIn(self.modname, sys.modules)
+        self.modname_bar1 = self.modname
+        self.modname_bar2 = '.'.join([self.modname, 'foo'])
+        foomod = os.path.join(self.tempdir, self.modname)
+        os.mkdir(foomod)
+        with open(os.path.join(foomod, '__init__.py'), 'w') as fout:
+            print(self.source_text_1, file=fout)
+        with open(os.path.join(foomod, 'foo.py'), 'w') as fout:
+            print(self.source_text_2, file=fout)
+
+    def tearDown(self):
+        sys.modules.pop(self.modname_bar1, None)
+        sys.modules.pop(self.modname_bar2, None)
+        sys.path.remove(self.tempdir)
+
+    def import_bar1(self):
+        return import_dynamic(self.modname_bar1).bar
+
+    def import_bar2(self):
+        return import_dynamic(self.modname_bar2).bar
+
+    def test_file_location(self):
+        bar1 = self.import_bar1()
+        bar2 = self.import_bar2()
+        # Check that the cache file is named correctly
+        idxname1 = bar1._cache._cache_file._index_name
+        idxname2 = bar2._cache._cache_file._index_name
+        self.assertNotEqual(idxname1, idxname2)
+        self.assertTrue(idxname1.startswith("__init__.bar-3.py"))
+        self.assertTrue(idxname2.startswith("foo.bar-3.py"))
+
+    @unittest.skipUnless(hasattr(multiprocessing, 'get_context'),
+                         'Test requires multiprocessing.get_context')
+    def test_no_collision(self):
+        bar1 = self.import_bar1()
+        bar2 = self.import_bar2()
+        with capture_cache_log() as buf:
+            res1 = bar1()
+        cachelog = buf.getvalue()
+        # bar1 should save new index and data
+        self.assertEqual(cachelog.count('index saved'), 1)
+        self.assertEqual(cachelog.count('data saved'), 1)
+        self.assertEqual(cachelog.count('index loaded'), 0)
+        self.assertEqual(cachelog.count('data loaded'), 0)
+        with capture_cache_log() as buf:
+            res2 = bar2()
+        cachelog = buf.getvalue()
+        # bar2 should save new index and data
+        self.assertEqual(cachelog.count('index saved'), 1)
+        self.assertEqual(cachelog.count('data saved'), 1)
+        self.assertEqual(cachelog.count('index loaded'), 0)
+        self.assertEqual(cachelog.count('data loaded'), 0)
+        self.assertNotEqual(res1, res2)
+
+        try:
+            # Make sure we can spawn new process without inheriting
+            # the parent context.
+            mp = multiprocessing.get_context('spawn')
+        except ValueError:
+            print("missing spawn context")
+
+        q = mp.Queue()
+        # Start new process that calls `cache_file_collision_tester`
+        proc = mp.Process(target=cache_file_collision_tester,
+                          args=(q, self.tempdir,
+                                self.modname_bar1,
+                                self.modname_bar2))
+        proc.start()
+        # Get results from the process
+        log1 = q.get()
+        got1 = q.get()
+        log2 = q.get()
+        got2 = q.get()
+        proc.join()
+
+        # The remote execution result of bar1() and bar2() should match
+        # the one executed locally.
+        self.assertEqual(got1, res1)
+        self.assertEqual(got2, res2)
+
+        # The remote should have loaded bar1 from cache
+        self.assertEqual(log1.count('index saved'), 0)
+        self.assertEqual(log1.count('data saved'), 0)
+        self.assertEqual(log1.count('index loaded'), 1)
+        self.assertEqual(log1.count('data loaded'), 1)
+
+        # The remote should have loaded bar2 from cache
+        self.assertEqual(log2.count('index saved'), 0)
+        self.assertEqual(log2.count('data saved'), 0)
+        self.assertEqual(log2.count('index loaded'), 1)
+        self.assertEqual(log2.count('data loaded'), 1)
+
+
+def cache_file_collision_tester(q, tempdir, modname_bar1, modname_bar2):
+    sys.path.insert(0, tempdir)
+    bar1 = import_dynamic(modname_bar1).bar
+    bar2 = import_dynamic(modname_bar2).bar
+    with capture_cache_log() as buf:
+        r1 = bar1()
+    q.put(buf.getvalue())
+    q.put(r1)
+    with capture_cache_log() as buf:
+        r2 = bar2()
+    q.put(buf.getvalue())
+    q.put(r2)
 
 
 if __name__ == '__main__':

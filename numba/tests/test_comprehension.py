@@ -371,11 +371,18 @@ class TestArrayComprehension(unittest.TestCase):
 
     @tag('important')
     def test_no_array_comp(self):
-        def no_array_comp(n):
-            l = np.array([1,2,3,n])
-            return l
-        # no arraycall inline without comprehension
-        self.check(no_array_comp, 10, assert_allocate_list=True)
+        def no_array_comp1(n):
+            l = [1,2,3,4]
+            a = np.array(l)
+            return a
+        # const 1D array is actually inlined
+        self.check(no_array_comp1, 10, assert_allocate_list=False)
+        def no_array_comp2(n):
+            l = [1,2,3,4]
+            a = np.array(l)
+            l.append(5)
+            return a
+        self.check(no_array_comp2, 10, assert_allocate_list=True)
 
     @tag('important')
     def test_nested_array(self):

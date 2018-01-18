@@ -10,7 +10,7 @@ from numba import njit, typeof, types, typing, typeof, ir, utils, bytecode
 from .support import TestCase, tag
 from numba.array_analysis import EquivSet, ArrayAnalysis
 from numba.compiler import Pipeline, Flags, _PipelineManager
-from numba.targets import cpu
+from numba.targets import cpu, registry
 from numba.numpy_support import version as numpy_version
 from numba.ir_utils import remove_dead
 
@@ -71,9 +71,9 @@ class ArrayAnalysisTester(Pipeline):
             flags = Flags()
         flags.nrt = True
         if typing_context is None:
-            typing_context = typing.Context()
+            typing_context = registry.cpu_target.typing_context
         if target_context is None:
-            target_context = cpu.CPUContext(typing_context)
+            target_context =  registry.cpu_target.target_context
         return cls(typing_context, target_context, library, args, return_type,
                    flags, locals)
 
@@ -115,7 +115,7 @@ class ArrayAnalysisTester(Pipeline):
             self.array_analysis = ArrayAnalysis(self.typingctx, self.func_ir,
                                                 self.type_annotation.typemap,
                                                 self.type_annotation.calltypes)
-            self.array_analysis.run()
+            self.array_analysis.run(self.func_ir.blocks)
             func_ir_copies.append(self.func_ir.copy())
             if test_idempotence and len(func_ir_copies) > 1:
                 test_idempotence(func_ir_copies)
@@ -141,13 +141,13 @@ class TestArrayAnalysis(TestCase):
             outputs.append(output.getvalue())
         self.assertTrue(len(set(outputs)) == 1)  # assert all outputs are equal
 
-    def _compile_and_test(self, fn, arg_tys, asserts=[], equivs=[]):
+    def _compile_and_test(self, fn, arg_tys, asserts=[], equivs=[], idempotent=True):
         """
         Compile the given function and get its IR.
         """
         test_pipeline = ArrayAnalysisTester.mk_pipeline(arg_tys)
-        analysis = test_pipeline.compile_to_ir(
-            fn, test_idempotence=self.compare_ir)
+        test_idempotence = self.compare_ir if idempotent else lambda x:()
+        analysis = test_pipeline.compile_to_ir(fn, test_idempotence)
         if equivs:
             for func in equivs:
                 # only test the equiv_set of the first block
@@ -165,7 +165,7 @@ class TestArrayAnalysis(TestCase):
                 fn = func_ir.get_definition(expr.func.name)
                 if isinstance(fn, ir.Global) and fn.name == 'assert_equiv':
                     typ = typemap[expr.args[0].name]
-                    if msg == typ.value:
+                    if typ.value.startswith(msg):
                         return True
         return False
 
@@ -311,6 +311,21 @@ class TestArrayAnalysis(TestCase):
         self._compile_and_test(test_9, (types.intp,),
                                asserts=[self.with_assert('A', 'B')])
 
+        def test_10(m, n):
+            p = m - 1
+            q = n + 1
+            r = q + 1
+            A = np.zeros(p)
+            B = np.zeros(q)
+            C = np.zeros(r)
+            D = np.zeros(m)
+            s = np.sum(A + B)
+            t = np.sum(C + D)
+            return s + t
+        self._compile_and_test(test_10, (types.intp,types.intp,),
+                               asserts=[self.with_assert('A', 'B'),
+                                        self.without_assert('C', 'D')])
+
         def test_shape(A):
             (m, n) = A.shape
             B = np.ones((m, n))
@@ -338,13 +353,165 @@ class TestArrayAnalysis(TestCase):
         self._compile_and_test(test_cond, (types.intp, types.intp, types.intp),
                                asserts=None)
 
-        def test_assert(m, n):
+        def test_assert_1(m, n):
             assert(m == n)
             A = np.ones(m)
             B = np.ones(n)
             return np.sum(A + B)
-        self._compile_and_test(test_assert, (types.intp, types.intp),
+        self._compile_and_test(test_assert_1, (types.intp, types.intp),
                                asserts=None)
+
+        def test_assert_2(A, B):
+            assert(A.shape == B.shape)
+            return np.sum(A + B)
+
+        self._compile_and_test(test_assert_2, (types.Array(types.intp, 1, 'C'),
+                                               types.Array(types.intp, 1, 'C'),),
+                               asserts=None)
+        self._compile_and_test(test_assert_2, (types.Array(types.intp, 2, 'C'),
+                                               types.Array(types.intp, 2, 'C'),),
+                               asserts=None)
+        # expected failure
+        with self.assertRaises(AssertionError) as raises:
+            self._compile_and_test(test_assert_2, (types.Array(types.intp, 1, 'C'),
+                                                   types.Array(types.intp, 2, 'C'),),
+                                   asserts=None)
+        msg = "Dimension mismatch"
+        self.assertIn(msg, str(raises.exception))
+
+
+    def test_stencilcall(self):
+        from numba import stencil
+        @stencil
+        def kernel_1(a):
+            return 0.25 * (a[0,1] + a[1,0] + a[0,-1] + a[-1,0])
+
+        def test_1(n):
+            a = np.ones((n,n))
+            b = kernel_1(a)
+            return a + b
+
+        self._compile_and_test(test_1, (types.intp,),
+                               equivs=[self.with_equiv('a', 'b')],
+                               asserts=[self.without_assert('a', 'b')])
+
+        def test_2(n):
+            a = np.ones((n,n))
+            b = np.ones((n+1,n+1))
+            kernel_1(a, out=b)
+            return a
+
+        self._compile_and_test(test_2, (types.intp,),
+                               equivs=[self.without_equiv('a', 'b')])
+
+        @stencil(standard_indexing=('c',))
+        def kernel_2(a, b, c):
+            return a[0,1,0] + b[0,-1,0] + c[0]
+
+        def test_3(n):
+            a = np.arange(64).reshape(4,8,2)
+            b = np.arange(64).reshape(n,8,2)
+            u = np.zeros(1)
+            v = kernel_2(a, b, u)
+            return v
+
+        # standard indexed arrays are not considered in size equivalence
+        self._compile_and_test(test_3, (types.intp,),
+                               equivs=[self.with_equiv('a', 'b', 'v'),
+                                       self.without_equiv('a', 'u')],
+                               asserts=[self.with_assert('a', 'b')])
+
+    def test_slice(self):
+        def test_1(m, n):
+            A = np.zeros(m)
+            B = np.zeros(n)
+            s = np.sum(A + B)
+            C = A[1:m-1]
+            D = B[1:n-1]
+            t = np.sum(C + D)
+            return s + t
+        self._compile_and_test(test_1, (types.intp,types.intp,),
+                               asserts=[self.with_assert('A', 'B'),
+                                        self.without_assert('C', 'D')],
+                               idempotent=False)
+
+        def test_2(m):
+            A = np.zeros(m)
+            B = A[0:m-3]
+            C = A[1:m-2]
+            D = A[2:m-1]
+            E = B + C
+            return D + E
+        self._compile_and_test(test_2, (types.intp,),
+                               asserts=[self.without_assert('B', 'C'),
+                                        self.without_assert('D', 'E')],
+                               idempotent=False)
+
+        def test_3(m):
+            A = np.zeros((m,m))
+            B = A[0:m-2,0:m-2]
+            C = A[1:m-1,1:m-1]
+            E = B + C
+            return E
+        self._compile_and_test(test_3, (types.intp,),
+                               asserts=[self.without_assert('B', 'C')],
+                               idempotent=False)
+
+        def test_4(m):
+            A = np.zeros((m,m))
+            B = A[0:m-2,:]
+            C = A[1:m-1,:]
+            E = B + C
+            return E
+        self._compile_and_test(test_4, (types.intp,),
+                               asserts=[self.without_assert('B', 'C')],
+                               idempotent=False)
+
+        def test_5(m,n):
+            A = np.zeros(m)
+            B = np.zeros(m)
+            B[0:m-2] = A[1:m-1]
+            C = np.zeros(n)
+            D = A[1:m-1]
+            C[0:n-2] = D
+            # B and C are not necessarily of the same size because we can't
+            # derive m == n from (m-2) % m == (n-2) % n
+            return B + C
+        self._compile_and_test(test_5, (types.intp,types.intp),
+                               asserts=[self.without_assert('B', 'A'),
+                                        self.with_assert('C', 'D'),
+                                        self.with_assert('B', 'C')],
+                               idempotent=False)
+
+        def test_6(m):
+            A = np.zeros((m,m))
+            B = A[0:m-2,:-1]
+            C = A[1:m-1,:-1]
+            E = B + C
+            return E
+        self._compile_and_test(test_6, (types.intp,),
+                               asserts=[self.without_assert('B', 'C')],
+                               idempotent=False)
+
+        def test_7(m):
+            A = np.zeros((m,m))
+            B = A[0:m-2,-3:-1]
+            C = A[1:m-1,-4:-2]
+            E = B + C
+            return E
+        self._compile_and_test(test_7, (types.intp,),
+                               asserts=[self.without_assert('B', 'C')],
+                               idempotent=False)
+
+        def test_8(m):
+            A = np.zeros((m,m))
+            B = A[:m-2,0:]
+            C = A[1:-1,:]
+            E = B + C
+            return E
+        self._compile_and_test(test_8, (types.intp,),
+                               asserts=[self.without_assert('B', 'C')],
+                               idempotent=False)
 
     def test_numpy_calls(self):
         def test_zeros(n):
@@ -355,6 +522,14 @@ class TestArrayAnalysis(TestCase):
                                equivs=[self.with_equiv('a', 'n'),
                                        self.with_equiv('b', ('n', 'n')),
                                        self.with_equiv('b', 'c')])
+
+        def test_0d_array(n):
+            a = np.array(1)
+            b = np.ones(2)
+            return a + b
+        self._compile_and_test(test_0d_array, (types.intp,),
+                               equivs=[self.without_equiv('a', 'b')],
+                               asserts=[self.without_shapecall('a')])
 
         def test_ones(n):
             a = np.ones(n)

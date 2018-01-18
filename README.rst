@@ -2,6 +2,10 @@
 Numba
 *****
 
+.. image:: https://badges.gitter.im/numba/numba.svg
+   :target: https://gitter.im/numba/numba?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge
+   :alt: Gitter
+
 A compiler for Python array and numerical functions
 ###################################################
 
@@ -27,7 +31,7 @@ Dependencies
 ============
 
 * llvmlite
-* numpy (version 1.7 or higher)
+* numpy (version 1.9 or higher)
 * funcsigs (for Python 2)
 
 
@@ -70,7 +74,7 @@ Building and installing llvmlite
 ''''''''''''''''''''''''''''''''
 
 See https://github.com/numba/llvmlite for the most up-to-date instructions.
-You will need a build of LLVM 4.0.x.
+You will need a build of LLVM 5.0.x.
 
 ::
 

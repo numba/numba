@@ -20,7 +20,7 @@ from .types import *
 from .smartarray import SmartArray
 
 # Re-export decorators
-from .decorators import autojit, cfunc, generated_jit, jit, njit
+from .decorators import autojit, cfunc, generated_jit, jit, njit, stencil
 
 # Re-export vectorize decorators
 from .npyufunc import vectorize, guvectorize
@@ -43,14 +43,16 @@ __all__ = """
     jit
     jitclass
     njit
+    stencil
     typeof
     prange
+    stencil
     vectorize
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 19, 0)
-_min_llvm_version = (4, 0, 0)
+_min_llvmlite_version = (0, 21, 0)
+_min_llvm_version = (5, 0, 0)
 
 def _ensure_llvm():
     """

@@ -3,17 +3,24 @@ from __future__ import print_function, division, absolute_import
 import ast
 from collections import defaultdict, OrderedDict
 import sys
+import copy
 
+import llvmlite.llvmpy.core as lc
+
+import numba
 from .. import compiler, ir, types, six, cgutils, sigutils, lowering, parfor
 from numba.ir_utils import (add_offset_to_labels, replace_var_names,
                             remove_dels, legalize_names, mk_unique_var,
-                            rename_labels, get_name_var_table)
+                            rename_labels, get_name_var_table, visit_vars_inner,
+                            get_definition, guard, find_callname,
+                            get_call_table, is_pure,
+                            get_unused_var_name)
+from numba.analysis import (compute_use_defs, compute_live_map,
+                            compute_dead_maps, compute_cfg_from_blocks)
 from ..typing import signature
 from numba import config
-import llvmlite.llvmpy.core as lc
-import numba
-import copy
-
+from numba.targets.cpu import ParallelOptions
+from numba.six import exec_
 
 def _lower_parfor_parallel(lowerer, parfor):
     """Lowerer that handles LLVM code generation for parfor.
@@ -55,7 +62,7 @@ def _lower_parfor_parallel(lowerer, parfor):
     # compile parfor body as a separate function to be used with GUFuncWrapper
     flags = compiler.Flags()
     flags.set('error_model', 'numpy')
-    flags.set('auto_parallel')
+    flags.set('auto_parallel', ParallelOptions(True))
     numba.parfor.sequential_parfor_lowering = True
     func, func_args, func_sig = _create_gufunc_for_parfor_body(
         lowerer, parfor, typemap, typingctx, targetctx, flags, {})
@@ -110,6 +117,11 @@ def _create_shape_signature(
         func_sig):
     '''Create shape signature for GUFunc
     '''
+    if config.DEBUG_ARRAY_OPT:
+        print("_create_shape_signature", num_inputs, num_reductions, args, func_sig)
+        for i in args[1:]:
+            print("argument", i, type(i), get_shape_classes(i))
+
     num_inouts = len(args) - num_reductions
     # maximum class number for array shapes
     classes = [get_shape_classes(var) for var in args[1:]]
@@ -125,8 +137,18 @@ def _create_shape_signature(
     # TODO: use prefix + class number instead of single char
     alphabet = ord('a')
     for n in class_set:
-       class_map[n] = chr(alphabet)
-       alphabet += 1
+       if n >= 0:
+           class_map[n] = chr(alphabet)
+           alphabet += 1
+
+    alpha_dict = {'latest_alpha' : alphabet}
+
+    def bump_alpha(c, class_map):
+        if c >= 0:
+            return class_map[c]
+        else:
+            alpha_dict['latest_alpha'] += 1
+            return chr(alpha_dict['latest_alpha'])
 
     gu_sin = []
     gu_sout = []
@@ -136,7 +158,7 @@ def _create_shape_signature(
         # print("create_shape_signature: var = ", var, " typ = ", typ)
         count = count + 1
         if cls:
-            dim_syms = tuple(class_map[c] for c in cls)
+            dim_syms = tuple(bump_alpha(c, class_map) for c in cls)
         else:
             dim_syms = ()
         if (count > num_inouts):
@@ -151,15 +173,112 @@ def _create_shape_signature(
             syms_sin += dim_syms
     return (gu_sin, gu_sout)
 
+def _print_block(block):
+    for i, inst in enumerate(block.body):
+        print("    ", i, " ", inst)
 
 def _print_body(body_dict):
     '''Pretty-print a set of IR blocks.
     '''
     for label, block in body_dict.items():
         print("label: ", label)
-        for i, inst in enumerate(block.body):
-            print("    ", i, " ", inst)
+        _print_block(block)
 
+
+def wrap_loop_body(loop_body):
+    blocks = loop_body.copy()  # shallow copy is enough
+    first_label = min(blocks.keys())
+    last_label = max(blocks.keys())
+    loc = blocks[last_label].loc
+    blocks[last_label].body.append(ir.Jump(first_label, loc))
+    return blocks
+
+def unwrap_loop_body(loop_body):
+    last_label = max(loop_body.keys())
+    loop_body[last_label].body = loop_body[last_label].body[:-1]
+
+def compute_def_once_block(block, def_once, def_more):
+    assignments = block.find_insts(ir.Assign)
+    for one_assign in assignments:
+        a_def = one_assign.target.name
+        if a_def in def_more:
+            pass
+        elif a_def in def_once:
+            def_more.add(a_def)
+            def_once.remove(a_def)
+        else:
+            def_once.add(a_def)
+
+def compute_def_once_internal(loop_body, def_once, def_more):
+    for label, block in loop_body.items():
+        compute_def_once_block(block, def_once, def_more)
+        for inst in block.body:
+            if isinstance(inst, parfor.Parfor):
+                compute_def_once_block(inst.init_block, def_once, def_more)
+                compute_def_once_internal(inst.loop_body, def_once, def_more)
+
+def compute_def_once(loop_body):
+    def_once = set()
+    def_more = set()
+    compute_def_once_internal(loop_body, def_once, def_more)
+    return def_once
+
+def find_vars(var, varset):
+    assert isinstance(var, ir.Var)
+    varset.add(var.name)
+    return var
+
+def _hoist_internal(inst, dep_on_param, call_table, hoisted, typemap):
+    uses = set()
+    visit_vars_inner(inst.value, find_vars, uses)
+    diff = uses.difference(dep_on_param)
+    if len(diff) == 0 and is_pure(inst.value, None, call_table):
+        if config.DEBUG_ARRAY_OPT == 1:
+            print("Will hoist instruction", inst)
+        hoisted.append(inst)
+        if not isinstance(typemap[inst.target.name], types.npytypes.Array):
+            dep_on_param += [inst.target.name]
+        return True
+    elif config.DEBUG_ARRAY_OPT == 1:
+        if len(diff) > 0:
+            print("Instruction", inst, " could not be hoisted because of a dependency.")
+        else:
+            print("Instruction", inst, " could not be hoisted because it isn't pure.")
+    return False
+
+def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
+    dep_on_param = copy.copy(parfor_params)
+    hoisted = []
+
+    def_once = compute_def_once(loop_body)
+    (call_table, reverse_call_table) = get_call_table(wrapped_blocks)
+
+    for label, block in loop_body.items():
+        new_block = []
+        for inst in block.body:
+            if isinstance(inst, ir.Assign) and inst.target.name in def_once:
+                if _hoist_internal(inst, dep_on_param, call_table,
+                                   hoisted, typemap):
+                    # don't add this instuction to the block since it is hoisted
+                    continue
+            elif isinstance(inst, parfor.Parfor):
+                new_init_block = []
+                if config.DEBUG_ARRAY_OPT == 1:
+                    print("parfor")
+                    inst.dump()
+                for ib_inst in inst.init_block.body:
+                    if (isinstance(ib_inst, ir.Assign) and
+                        ib_inst.target.name in def_once):
+                        if _hoist_internal(ib_inst, dep_on_param, call_table,
+                                           hoisted, typemap):
+                            # don't add this instuction to the block since it is hoisted
+                            continue
+                    new_init_block.append(ib_inst)
+                inst.init_block.body = new_init_block
+
+            new_block.append(inst)
+        block.body = new_block
+    return hoisted
 
 def _create_gufunc_for_parfor_body(
         lowerer,
@@ -181,12 +300,12 @@ def _create_gufunc_for_parfor_body(
     for the parfor body inserted.
     '''
 
-    # TODO: need copy?
     # The parfor body and the main function body share ir.Var nodes.
     # We have to do some replacements of Var names in the parfor body to make them
     # legal parameter names.  If we don't copy then the Vars in the main function also
     # would incorrectly change their name.
     loop_body = copy.copy(parfor.loop_body)
+    remove_dels(loop_body)
 
     parfor_dim = len(parfor.loop_nests)
     loop_indices = [l.index_variable.name for l in parfor.loop_nests]
@@ -224,7 +343,6 @@ def _create_gufunc_for_parfor_body(
 
     if config.DEBUG_ARRAY_OPT == 1:
         print("parfor_params = ", parfor_params, " ", type(parfor_params))
-        #print("loop_ranges = ", loop_ranges, " ", type(loop_ranges))
         print("loop_indices = ", loop_indices, " ", type(loop_indices))
         print("loop_body = ", loop_body, " ", type(loop_body))
         _print_body(loop_body)
@@ -271,6 +389,8 @@ def _create_gufunc_for_parfor_body(
     parfor_params = [param_dict[v] for v in parfor_params]
     # Change parfor body to replace illegal loop index vars with legal ones.
     replace_var_names(loop_body, ind_dict)
+    loop_body_var_table = get_name_var_table(loop_body)
+    sentinel_name = get_unused_var_name("__sentinel__", loop_body_var_table)
 
     if config.DEBUG_ARRAY_OPT == 1:
         print(
@@ -310,11 +430,20 @@ def _create_gufunc_for_parfor_body(
                        str(sched_dim +
                            parfor_dim) +
                        "] + 1):\n")
+
+    if config.DEBUG_ARRAY_OPT_RUNTIME:
+        for indent in range(parfor_dim + 1):
+            gufunc_txt += "    "
+        gufunc_txt += "print("
+        for eachdim in range(parfor_dim):
+            gufunc_txt += "\"" + legal_loop_indices[eachdim] + "\"," + legal_loop_indices[eachdim] + ","
+        gufunc_txt += ")\n"
+
     # Add the sentinel assignment so that we can find the loop body position
     # in the IR.
     for indent in range(parfor_dim + 1):
         gufunc_txt += "    "
-    gufunc_txt += "__sentinel__ = 0\n"
+    gufunc_txt += sentinel_name + " = 0\n"
     # Add assignments of reduction variables (for returning the value)
     for arr, var in zip(parfor_redarrs, parfor_redvars):
         gufunc_txt += "    " + param_dict[arr] + \
@@ -324,7 +453,7 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_txt = ", type(gufunc_txt), "\n", gufunc_txt)
     # Force gufunc outline into existence.
-    exec(gufunc_txt)
+    exec_(gufunc_txt)
     gufunc_func = eval(gufunc_name)
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_func = ", type(gufunc_func), "\n", gufunc_func)
@@ -339,7 +468,7 @@ def _create_gufunc_for_parfor_body(
     # rename all variables in gufunc_ir afresh
     var_table = get_name_var_table(gufunc_ir.blocks)
     new_var_dict = {}
-    reserved_names = ["__sentinel__"] + \
+    reserved_names = [sentinel_name] + \
         list(param_dict.values()) + legal_loop_indices
     for name, var in var_table.items():
         if not (name in reserved_names):
@@ -359,14 +488,60 @@ def _create_gufunc_for_parfor_body(
             "\n",
             gufunc_param_types)
 
-    gufunc_stub_last_label = max(gufunc_ir.blocks.keys())
+    gufunc_stub_last_label = max(gufunc_ir.blocks.keys()) + 1
 
     # Add gufunc stub last label to each parfor.loop_body label to prevent
     # label conflicts.
     loop_body = add_offset_to_labels(loop_body, gufunc_stub_last_label)
     # new label for splitting sentinel block
     new_label = max(loop_body.keys()) + 1
+
+    # If enabled, add a print statement after every assignment.
+    if config.DEBUG_ARRAY_OPT_RUNTIME:
+        for label, block in loop_body.items():
+            new_block = block.copy()
+            new_block.clear()
+            loc = block.loc
+            scope = block.scope
+            for inst in block.body:
+                new_block.append(inst)
+                # Append print after assignment
+                if isinstance(inst, ir.Assign):
+                    # Only apply to numbers
+                    if typemap[inst.target.name] not in types.number_domain:
+                        continue
+
+                    # Make constant string
+                    strval = "{} =".format(inst.target.name)
+                    strconsttyp = types.Const(strval)
+
+                    lhs = scope.make_temp(loc=loc)
+                    assign_lhs = ir.Assign(value=ir.Const(value=strval, loc=loc),
+                                           target=lhs, loc=loc)
+                    typemap[lhs.name] = strconsttyp
+                    new_block.append(assign_lhs)
+
+                    # Make print node
+                    print_node = ir.Print(args=[lhs, inst.target], vararg=None, loc=loc)
+                    new_block.append(print_node)
+                    sig = numba.typing.signature(types.none,
+                                           typemap[lhs.name],
+                                           typemap[inst.target.name])
+                    lowerer.fndesc.calltypes[print_node] = sig
+            loop_body[label] = new_block
+
     if config.DEBUG_ARRAY_OPT:
+        print("parfor loop body")
+        _print_body(loop_body)
+
+    wrapped_blocks = wrap_loop_body(loop_body)
+    hoisted = hoist(parfor_params, loop_body, typemap, wrapped_blocks)
+    start_block = gufunc_ir.blocks[min(gufunc_ir.blocks.keys())]
+    start_block.body = start_block.body[:-1] + hoisted + [start_block.body[-1]]
+    unwrap_loop_body(loop_body)
+
+    if config.DEBUG_ARRAY_OPT:
+        print("After hoisting")
         _print_body(loop_body)
 
     # Search all the block in the gufunc outline for the sentinel assignment.
@@ -374,7 +549,7 @@ def _create_gufunc_for_parfor_body(
         for i, inst in enumerate(block.body):
             if isinstance(
                     inst,
-                    ir.Assign) and inst.target.name == "__sentinel__":
+                    ir.Assign) and inst.target.name == sentinel_name:
                 # We found the sentinel assignment.
                 loc = inst.loc
                 scope = block.scope

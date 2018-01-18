@@ -44,7 +44,9 @@ class Flags(utils.ConfigOptions):
         'boundcheck': False,
         'forceinline': False,
         'no_cpython_wrapper': False,
-        'auto_parallel': False,
+        # Enable automatic parallel optimization, can be fine-tuned by taking
+        # a dictionary of sub-options instead of a boolean, see parfor.py for detail.
+        'auto_parallel': cpu.ParallelOptions(False),
         'nrt': False,
         'no_rewrites': False,
         'error_model': 'python',
@@ -490,7 +492,8 @@ class Pipeline(object):
         # Ensure we have an IR and type information.
         assert self.func_ir
         parfor_pass = ParforPass(self.func_ir, self.type_annotation.typemap,
-            self.type_annotation.calltypes, self.return_type, self.typingctx)
+            self.type_annotation.calltypes, self.return_type, self.typingctx,
+            self.flags.auto_parallel)
         parfor_pass.run()
 
         if config.WARNINGS:
@@ -522,7 +525,7 @@ class Pipeline(object):
         """
         # Ensure we have an IR and type information.
         assert self.func_ir
-        inline_pass = InlineClosureCallPass(self.func_ir, self.flags, run_frontend)
+        inline_pass = InlineClosureCallPass(self.func_ir, self.flags.auto_parallel)
         inline_pass.run()
         # Remove all Dels, and re-run postproc
         post_proc = postproc.PostProcessor(self.func_ir)
@@ -685,7 +688,7 @@ class Pipeline(object):
             pm.add_stage(self.stage_annotate_type, "annotate type")
             if not self.flags.no_rewrites:
                 pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
-            if self.flags.auto_parallel:
+            if self.flags.auto_parallel.enabled:
                 pm.add_stage(self.stage_parfor_pass, "convert to parfors")
             pm.add_stage(self.stage_nopython_backend, "nopython mode backend")
             pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
@@ -741,7 +744,7 @@ def _make_subtarget(targetctx, flags):
     if flags.nrt:
         subtargetoptions['enable_nrt'] = True
     if flags.auto_parallel:
-        subtargetoptions['auto_parallel'] = True
+        subtargetoptions['auto_parallel'] = flags.auto_parallel
     if flags.fastmath:
         subtargetoptions['enable_fastmath'] = True
     error_model = callconv.create_error_model(flags.error_model, targetctx)

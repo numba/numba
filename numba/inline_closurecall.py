@@ -1,4 +1,7 @@
-from numba import config, ir, ir_utils, utils, prange
+import types as pytypes  # avoid confusion with numba.types
+import numba
+from numba import config, ir, ir_utils, utils, prange, rewrites, types, typing
+from numba.parfor import internal_prange
 from numba.ir_utils import (
     mk_unique_var,
     next_label,
@@ -14,13 +17,15 @@ from numba.ir_utils import (
     guard,
     get_definition,
     find_callname,
+    find_build_sequence,
+    get_np_ufunc_typ,
     get_ir_of_code
     )
 
 from numba.analysis import (
     compute_cfg_from_blocks,
     compute_use_defs,
-    compute_live_map)
+    compute_live_variables)
 
 from numba.targets.rangeobj import range_iter_len
 from numba.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
@@ -31,16 +36,15 @@ Variable enable_inline_arraycall is only used for testing purpose.
 """
 enable_inline_arraycall = True
 
-
 class InlineClosureCallPass(object):
     """InlineClosureCallPass class looks for direct calls to locally defined
     closures, and inlines the body of the closure function to the call site.
     """
 
-    def __init__(self, func_ir, flags, run_frontend):
+    def __init__(self, func_ir, parallel_options):
         self.func_ir = func_ir
-        self.flags = flags
-        self.run_frontend = run_frontend
+        self.parallel_options = parallel_options
+        self._processed_stencils = []
 
     def run(self):
         """Run inline closure call pass.
@@ -51,53 +55,33 @@ class InlineClosureCallPass(object):
         debug_print("START")
         while work_list:
             label, block = work_list.pop()
-            for i in range(len(block.body)):
-                instr = block.body[i]
+            for i, instr in enumerate(block.body):
                 if isinstance(instr, ir.Assign):
                     lhs = instr.target
                     expr = instr.value
                     if isinstance(expr, ir.Expr) and expr.op == 'call':
-                        # inline reduce() when parallel is off
-                        if not self.flags.auto_parallel:
-                            call_name = guard(find_callname, self.func_ir, expr)
-                            if (call_name == ('reduce', 'builtin')
-                                    or call_name == ('reduce', 'functools')):
-                                if len(expr.args) != 3:
-                                    raise TypeError("invalid reduce call, "
-                                        "three arguments including initial "
-                                        "value required")
-                                check_reduce_func(self.func_ir, expr.args[0])
-                                def reduce_func(f, A, v):
-                                    s = v
-                                    it = iter(A)
-                                    for a in it:
-                                        s = f(s, a)
-                                    return s
-                                new_blocks = inline_closure_call(self.func_ir,
-                                        self.func_ir.func_id.func.__globals__,
-                                        block, i, reduce_func)
-                                for block in new_blocks:
-                                    work_list.append(block)
-                                modified = True
-                                # current block is modified, skip the rest
-                                break
+                        call_name = guard(find_callname, self.func_ir, expr)
                         func_def = guard(get_definition, self.func_ir, expr.func)
-                        debug_print("found call to ", expr.func, " def = ", func_def)
-                        if isinstance(func_def, ir.Expr) and func_def.op == "make_function":
-                            new_blocks = inline_closure_call(self.func_ir,
-                                        self.func_ir.func_id.func.__globals__,
-                                        block, i, func_def)
-                            for block in new_blocks:
-                                work_list.append(block)
+
+                        if guard(self._inline_reduction,
+                                 work_list, block, i, expr, call_name):
                             modified = True
-                            # current block is modified, skip the rest
-                            break
+                            break # because block structure changed
+
+                        if guard(self._inline_closure,
+                                work_list, block, i, func_def):
+                            modified = True
+                            break # because block structure changed
+
+                        if guard(self._inline_stencil,
+                                instr, call_name, func_def):
+                            modified = True
 
         if enable_inline_arraycall:
             # Identify loop structure
             if modified:
                 # Need to do some cleanups if closure inlining kicked in
-                merge_adjacent_blocks(self.func_ir)
+                merge_adjacent_blocks(self.func_ir.blocks)
             cfg = compute_cfg_from_blocks(self.func_ir.blocks)
             debug_print("start inline arraycall")
             _debug_dump(cfg)
@@ -108,7 +92,7 @@ class InlineClosureCallPass(object):
             for k, s in sorted(sized_loops, key=lambda tup: tup[1], reverse=True):
                 visited.append(k)
                 if guard(_inline_arraycall, self.func_ir, cfg, visited, loops[k],
-                        self.flags.auto_parallel):
+                         self.parallel_options.comprehension):
                     modified = True
             if modified:
                 _fix_nested_array(self.func_ir)
@@ -121,6 +105,108 @@ class InlineClosureCallPass(object):
                 pass
             self.func_ir.blocks = rename_labels(self.func_ir.blocks)
         debug_print("END")
+
+    def _inline_reduction(self, work_list, block, i, expr, call_name):
+        # only inline reduction in sequential execution, parallel handling
+        # is done in ParforPass.
+        require(not self.parallel_options.reduction)
+        require(call_name == ('reduce', 'builtins') or
+                call_name == ('reduce', '_functools'))
+        if len(expr.args) != 3:
+            raise TypeError("invalid reduce call, "
+                            "three arguments including initial "
+                            "value required")
+        check_reduce_func(self.func_ir, expr.args[0])
+        def reduce_func(f, A, v):
+            s = v
+            it = iter(A)
+            for a in it:
+               s = f(s, a)
+            return s
+        inline_closure_call(self.func_ir,
+                        self.func_ir.func_id.func.__globals__,
+                        block, i, reduce_func, work_list=work_list)
+        return True
+
+    def _inline_stencil(self, instr, call_name, func_def):
+        from numba.stencil import StencilFunc
+        lhs = instr.target
+        expr = instr.value
+        # We keep the escaping variables of the stencil kernel
+        # alive by adding them to the actual kernel call as extra
+        # keyword arguments, which is ignored anyway.
+        if (isinstance(func_def, ir.Global) and
+            func_def.name == 'stencil' and
+            isinstance(func_def.value, StencilFunc)):
+            if expr.kws:
+                expr.kws += func_def.value.kws
+            else:
+                expr.kws = func_def.value.kws
+            return True
+        # Otherwise we proceed to check if it is a call to numba.stencil
+        require(call_name == ('stencil', 'numba.stencil') or
+                call_name == ('stencil', 'numba'))
+        require(expr not in self._processed_stencils)
+        self._processed_stencils.append(expr)
+        if not len(expr.args) == 1:
+            raise ValueError("As a minimum Stencil requires"
+                " a kernel as an argument")
+        stencil_def = guard(get_definition, self.func_ir, expr.args[0])
+        require(isinstance(stencil_def, ir.Expr) and
+                stencil_def.op == "make_function")
+        kernel_ir = get_ir_of_code(self.func_ir.func_id.func.__globals__,
+                stencil_def.code)
+        options = dict(expr.kws)
+        if 'neighborhood' in options:
+            fixed = guard(self._fix_stencil_neighborhood, options)
+            if not fixed:
+               raise ValueError("stencil neighborhood option should be a tuple"
+                        " with constant structure such as ((-w, w),)")
+        if 'index_offsets' in options:
+            fixed = guard(self._fix_stencil_index_offsets, options)
+            if not fixed:
+               raise ValueError("stencil index_offsets option should be a tuple"
+                        " with constant structure such as (offset, )")
+        sf = StencilFunc(kernel_ir, 'constant', options)
+        sf.kws = expr.kws # hack to keep variables live
+        sf_global = ir.Global('stencil', sf, expr.loc)
+        self.func_ir._definitions[lhs.name] = [sf_global]
+        instr.value = sf_global
+        return True
+
+    def _fix_stencil_neighborhood(self, options):
+        """
+        Extract the two-level tuple representing the stencil neighborhood
+        from the program IR to provide a tuple to StencilFunc.
+        """
+        # build_tuple node with neighborhood for each dimension
+        dims_build_tuple = get_definition(self.func_ir, options['neighborhood'])
+        require(hasattr(dims_build_tuple, 'items'))
+        res = []
+        for window_var in dims_build_tuple.items:
+            win_build_tuple = get_definition(self.func_ir, window_var)
+            require(hasattr(win_build_tuple, 'items'))
+            res.append(tuple(win_build_tuple.items))
+        options['neighborhood'] = tuple(res)
+        return True
+
+    def _fix_stencil_index_offsets(self, options):
+        """
+        Extract the tuple representing the stencil index offsets
+        from the program IR to provide to StencilFunc.
+        """
+        offset_tuple = get_definition(self.func_ir, options['index_offsets'])
+        require(hasattr(offset_tuple, 'items'))
+        options['index_offsets'] = tuple(offset_tuple.items)
+        return True
+
+    def _inline_closure(self, work_list, block, i, func_def):
+        require(isinstance(func_def, ir.Expr) and
+                func_def.op == "make_function")
+        inline_closure_call(self.func_ir,
+                            self.func_ir.func_id.func.__globals__,
+                            block, i, func_def, work_list=work_list)
+        return True
 
 def check_reduce_func(func_ir, func_var):
     reduce_func = guard(get_definition, func_ir, func_var)
@@ -138,7 +224,8 @@ def check_reduce_func(func_ir, func_var):
 
 
 def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
-                        arg_typs=None, typemap=None, calltypes=None):
+                        arg_typs=None, typemap=None, calltypes=None,
+                        work_list=None):
     """Inline the body of `callee` at its callsite (`i`-th instruction of `block`)
 
     `func_ir` is the func_ir object of the caller function and `glbls` is its
@@ -258,7 +345,10 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     debug_print("After merge in")
     _debug_dump(func_ir)
 
-    return new_blocks
+    if work_list != None:
+        for block in new_blocks:
+            work_list.append(block)
+    return
 
 def _make_debug_print(prefix):
     def debug_print(*args):
@@ -553,8 +643,8 @@ def _inline_arraycall(func_ir, cfg, visited, loop, enable_prange=False):
         # we can parallelize this loop if enable_prange = True, by changing
         # range function from range, to prange.
         if enable_prange and isinstance(range_func_def, ir.Global):
-            range_func_def.name = 'prange'
-            range_func_def.value = prange
+            range_func_def.name = 'internal_prange'
+            range_func_def.value = internal_prange
 
     else:
         len_func_var = scope.make_temp(loc)
@@ -667,7 +757,8 @@ def _fix_nested_array(func_ir):
     blocks = func_ir.blocks
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
-    livemap = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
+    empty_deadmap = dict([(label, set()) for label in blocks.keys()])
+    livemap = compute_live_variables(cfg, blocks, usedefs.defmap, empty_deadmap)
 
     def find_array_def(arr):
         """Find numpy array definition such as
@@ -702,19 +793,19 @@ def _fix_nested_array(func_ir):
                         for var in varlist:
                             # var must be defined before this inst, or live
                             # and not later defined.
-                            if (var.name in defined or 
+                            if (var.name in defined or
                                 (var.name in livemap[label] and
-                                 not (var.name in usedefs.defmap))):
+                                 not (var.name in usedefs.defmap[label]))):
                                 debug_print(var.name, " already defined")
                                 new_varlist.append(var)
-                            else: 
+                            else:
                                 debug_print(var.name, " not yet defined")
                                 var_def = get_definition(func_ir, var.name)
                                 if isinstance(var_def, ir.Const):
                                     loc = var.loc
                                     new_var = scope.make_temp(loc)
                                     new_const = ir.Const(var_def.value, loc)
-                                    new_vardef = _new_definition(func_ir, 
+                                    new_vardef = _new_definition(func_ir,
                                                     new_var, new_const, loc)
                                     new_body = []
                                     new_body.extend(body[:i])
@@ -782,3 +873,171 @@ def _fix_nested_array(func_ir):
 def _new_definition(func_ir, var, value, loc):
     func_ir._definitions[var.name] = [value]
     return ir.Assign(value=value, target=var, loc=loc)
+
+@rewrites.register_rewrite('after-inference')
+class RewriteArrayOfConsts(rewrites.Rewrite):
+    '''The RewriteArrayOfConsts class is responsible for finding
+    1D array creations from a constant list, and rewriting it into
+    direct initialization of array elements without creating the list.
+    '''
+    def __init__(self, pipeline, *args, **kws):
+        self.typingctx = pipeline.typingctx
+        super(RewriteArrayOfConsts, self).__init__(pipeline, *args, **kws)
+
+    def match(self, func_ir, block, typemap, calltypes):
+        if len(calltypes) == 0:
+            return False
+        self.crnt_block = block
+        self.new_body = guard(_inline_const_arraycall, block, func_ir,
+                              self.typingctx, typemap, calltypes)
+        return self.new_body != None
+
+    def apply(self):
+        self.crnt_block.body = self.new_body
+        return self.crnt_block
+
+
+def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
+    """Look for array(list) call where list is a constant list created by build_list,
+    and turn them into direct array creation and initialization, if the following
+    conditions are met:
+      1. The build_list call immediate preceeds the array call;
+      2. The list variable is no longer live after array call;
+    If any condition check fails, no modification will be made.
+    """
+    debug_print = _make_debug_print("inline_const_arraycall")
+    scope = block.scope
+
+    def inline_array(array_var, expr, stmts, list_vars, dels):
+        """Check to see if the given "array_var" is created from a list
+        of constants, and try to inline the list definition as array
+        initialization.
+
+        Extra statements produced with be appended to "stmts".
+        """
+        callname = guard(find_callname, func_ir, expr)
+        require(callname and callname[1] == 'numpy' and callname[0] == 'array')
+        require(expr.args[0].name in list_vars)
+        ret_type = calltypes[expr].return_type
+        require(isinstance(ret_type, types.ArrayCompatible) and
+                           ret_type.ndim == 1)
+        loc = expr.loc
+        list_var = expr.args[0]
+        array_typ = typemap[array_var.name]
+        debug_print("inline array_var = ", array_var, " list_var = ", list_var)
+        dtype = array_typ.dtype
+        seq, op = find_build_sequence(func_ir, list_var)
+        size = len(seq)
+        size_var = scope.make_temp(loc)
+        size_tuple_var = scope.make_temp(loc)
+        size_typ = types.intp
+        size_tuple_typ = types.UniTuple(size_typ, 1)
+
+        typemap[size_var.name] = size_typ
+        typemap[size_tuple_var.name] = size_tuple_typ
+
+        stmts.append(_new_definition(func_ir, size_var,
+                 ir.Const(size, loc=loc), loc))
+
+        stmts.append(_new_definition(func_ir, size_tuple_var,
+                 ir.Expr.build_tuple(items=[size_var], loc=loc), loc))
+
+        empty_func = scope.make_temp(loc)
+        fnty = get_np_ufunc_typ(np.empty)
+        sig = context.resolve_function_type(fnty, (size_typ,), {})
+        typemap[empty_func.name] = fnty #
+
+        stmts.append(_new_definition(func_ir, empty_func,
+                         ir.Global('empty', np.empty, loc=loc), loc))
+
+        empty_call = ir.Expr.call(empty_func, [size_var], {}, loc=loc)
+        calltypes[empty_call] = typing.signature(array_typ, size_typ)
+        stmts.append(_new_definition(func_ir, array_var, empty_call, loc))
+
+        for i in range(size):
+            index_var = scope.make_temp(loc)
+            index_typ = types.intp
+            typemap[index_var.name] = index_typ
+            stmts.append(_new_definition(func_ir, index_var,
+                    ir.Const(i, loc), loc))
+            setitem = ir.SetItem(array_var, index_var, seq[i], loc)
+            calltypes[setitem] = typing.signature(types.none, array_typ,
+                                                  index_typ, dtype)
+            stmts.append(setitem)
+
+        stmts.extend(dels)
+        return True
+
+    # list_vars keep track of the variable created from the latest
+    # build_list instruction, as well as its synonyms.
+    list_vars = []
+    # dead_vars keep track of those in list_vars that are considered dead.
+    dead_vars = []
+    # list_items keep track of the elements used in build_list.
+    list_items = []
+    stmts = []
+    # dels keep track of the deletion of list_items, which will need to be
+    # moved after array initialization.
+    dels = []
+    modified = False
+    for inst in block.body:
+        if isinstance(inst, ir.Assign):
+            if isinstance(inst.value, ir.Var):
+                if inst.value.name in list_vars:
+                    list_vars.append(inst.target.name)
+                    stmts.append(inst)
+                    continue
+            elif isinstance(inst.value, ir.Expr):
+                expr = inst.value
+                if expr.op == 'build_list':
+                    list_vars = [inst.target.name]
+                    list_items = [x.name for x in expr.items]
+                    stmts.append(inst)
+                    continue
+                elif expr.op == 'call' and expr in calltypes:
+                    arr_var = inst.target
+                    if guard(inline_array, inst.target, expr,
+                                           stmts, list_vars, dels):
+                        modified = True
+                        continue
+        elif isinstance(inst, ir.Del):
+            removed_var = inst.value
+            if removed_var in list_items:
+                dels.append(inst)
+                continue
+            elif removed_var in list_vars:
+                # one of the list_vars is considered dead.
+                dead_vars.append(removed_var)
+                list_vars.remove(removed_var)
+                stmts.append(inst)
+                if list_vars == []:
+                    # if all list_vars are considered dead, we need to filter
+                    # them out from existing stmts to completely remove
+                    # build_list.
+                    # Note that if a translation didn't take place, dead_vars
+                    # will also be empty when we reach this point.
+                    body = []
+                    for inst in stmts:
+                        if ((isinstance(inst, ir.Assign) and
+                             inst.target.name in dead_vars) or
+                             (isinstance(inst, ir.Del) and
+                             inst.value in dead_vars)):
+                            continue
+                        body.append(inst)
+                    stmts = body
+                    dead_vars = []
+                    modified = True
+                    continue
+        stmts.append(inst)
+
+        # If the list is used in any capacity between build_list and array
+        # call, then we must call off the translation for this list because
+        # it could be mutated and list_items would no longer be applicable.
+        list_var_used = any([ x.name in list_vars for x in inst.list_vars() ])
+        if list_var_used:
+            list_vars = []
+            dead_vars = []
+            list_items = []
+            dels = []
+
+    return stmts if modified else None

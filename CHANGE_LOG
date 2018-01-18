@@ -1,3 +1,87 @@
+Version 0.36.2
+--------------
+
+This is a bugfix release that provides minor changes to address:
+
+* PR #2645: Avoid CPython bug with ``exec`` in older 2.7.x.
+* PR #2652: Add support for CUDA 9.
+
+
+Version 0.36.1
+--------------
+
+This release continues to add new features to the work undertaken in partnership
+with Intel on ParallelAccelerator technology. Other changes of note include the
+compilation chain being updated to use LLVM 5.0 and the production of conda
+packages using conda-build 3 and the new compilers that ship with it.
+
+NOTE: A version 0.36.0 was tagged for internal use but not released.
+
+ParallelAccelerator:
+
+NOTE: The ParallelAccelerator technology is under active development and should
+be considered experimental.
+
+New features relating to ParallelAccelerator, from work undertaken with Intel,
+include the addition of the `@stencil` decorator for ease of implementation of
+stencil-like computations, support for general reductions, and slice and
+range fusion for parallel slice/bit-array assignments. Documentation on both the
+use and implementation of the above has been added. Further, a new debug
+environment variable `NUMBA_DEBUG_ARRAY_OPT_STATS` is made available to give
+information about which operators/calls are converted to parallel for-loops.
+
+ParallelAccelerator features:
+
+* PR #2457: Stencil Computations in ParallelAccelerator
+* PR #2548: Slice and range fusion, parallelizing bitarray and slice assignment
+* PR #2516: Support general reductions in ParallelAccelerator
+
+ParallelAccelerator fixes:
+
+* PR #2540: Fix bug #2537
+* PR #2566: Fix issue #2564.
+* PR #2599: Fix nested multi-dimensional parfor type inference issue
+* PR #2604: Fixes for stencil tests and cmath sin().
+* PR #2605: Fixes issue #2603.
+
+Additional features of note:
+
+This release of Numba (and llvmlite) is updated to use LLVM version 5.0 as the
+compiler back end, the main change to Numba to support this was the addition of
+a custom symbol tracker to avoid the calls to LLVM's `ExecutionEngine` that was
+crashing when asking for non-existent symbol addresses. Further, the conda
+packages for this release of Numba are built using conda build version 3 and the
+new compilers/recipe grammar that are present in that release.
+
+* PR #2568: Update for LLVM 5
+* PR #2607: Fixes abort when getting address to "nrt_unresolved_abort"
+* PR #2615: Working towards conda build 3
+
+Thanks to community feedback and bug reports, the following fixes were also
+made.
+
+Misc fixes/enhancements:
+
+* PR #2534: Add tuple support to np.take.
+* PR #2551: Rebranding fix
+* PR #2552: relative doc links
+* PR #2570: Fix issue #2561, handle missing successor on loop exit
+* PR #2588: Fix #2555. Disable libpython.so linking on linux
+* PR #2601: Update llvmlite version dependency.
+* PR #2608: Fix potential cache file collision
+* PR #2612: Fix NRT test failure due to increased overhead when running in coverage
+* PR #2619: Fix dubious pthread_cond_signal not in lock
+* PR #2622: Fix `np.nanmedian` for all NaN case.
+* PR #2633: Fix markdown in CONTRIBUTING.md
+* PR #2635: Make the dependency on compilers for AOT optional.
+
+CUDA support fixes:
+
+* PR #2523: Fix invalid cuda context in memory transfer calls in another thread
+* PR #2575: Use CPU to initialize xoroshiro states for GPU RNG. Fixes #2573
+* PR #2581: Fix cuda gufunc mishandling of scalar arg as array and out argument
+
+
 Version 0.35.0
 --------------
 
@@ -57,7 +141,7 @@ fixes were also made.
 Misc fixes/enhancements:
 
 * PR #2455: add contextual information to runtime errors
-* PR #2470: Fixes #2458, poor performance in np.median 
+* PR #2470: Fixes #2458, poor performance in np.median
 * PR #2471: Ensure LLVM threadsafety in {g,}ufunc building.
 * PR #2494: Update doc theme
 * PR #2503: Remove hacky code added in 2482 and feature enhancement
@@ -120,23 +204,23 @@ release):
 
 CUDA support enhancements:
 
-* PR #2377: New GPU reduction algorithm 
+* PR #2377: New GPU reduction algorithm
 
 
 CUDA support fixes:
 
-* PR #2397: Fix #2393, always set alignment of cuda static memory regions 
+* PR #2397: Fix #2393, always set alignment of cuda static memory regions
 
 
 Misc Fixes:
 
 * PR #2373, Issue #2372: 32-bit compatibility fix for parfor related code
 * PR #2376: Fix #2375 missing stdint.h for py2.7 vc9
-* PR #2378: Fix deadlock in parallel gufunc when kernel acquires the GIL. 
-* PR #2382: Forbid unsafe casting in bitwise operation 
-* PR #2385: docs: fix Sphinx errors 
-* PR #2396: Use 64-bit RHS operand for shift 
-* PR #2404: Fix threadsafety logic issue in ufunc compilation cache.  
+* PR #2378: Fix deadlock in parallel gufunc when kernel acquires the GIL.
+* PR #2382: Forbid unsafe casting in bitwise operation
+* PR #2385: docs: fix Sphinx errors
+* PR #2396: Use 64-bit RHS operand for shift
+* PR #2404: Fix threadsafety logic issue in ufunc compilation cache.
 * PR #2424: Ensure consistent iteration order of blocks for type inference.
 * PR #2425: Guard code to prevent the use of 'parallel' on win32 + py27
 * PR #2426: Basic test for Enum member type recovery.
@@ -150,16 +234,16 @@ Misc Fixes:
 Misc Enhancements:
 
 * PR #2366: Improvements to IR utils
-* PR #2388: Update README.rst to indicate the proper version of LLVM 
-* PR #2394: Upgrade to llvmlite 0.19.* 
+* PR #2388: Update README.rst to indicate the proper version of LLVM
+* PR #2394: Upgrade to llvmlite 0.19.*
 * PR #2395: Update llvmlite version to 0.19
-* PR #2406: Expose environment object to ufuncs 
-* PR #2407: Expose environment object to target-context inside lowerer 
-* PR #2413: Add flags to pass through to conda build for buildbot  
+* PR #2406: Expose environment object to ufuncs
+* PR #2407: Expose environment object to target-context inside lowerer
+* PR #2413: Add flags to pass through to conda build for buildbot
 * PR #2414: Add cross compile flags to local recipe
 * PR #2415: A few cleanups for rewrites
 * PR #2418: Add getitem support for Enum classes
-* PR #2419: Add support for returning enums in vectorize 
+* PR #2419: Add support for returning enums in vectorize
 * PR #2421: Add copyright notice for Intel contributed files.
 * PR #2422: Patch code base to work with np 1.13 release
 * PR #2448: Adds in warning message when using 'parallel' if cache=True

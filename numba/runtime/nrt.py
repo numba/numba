@@ -5,7 +5,6 @@ from collections import namedtuple
 from . import nrtdynmod
 from llvmlite import binding as ll
 
-from ..llvmthreadsafe import lock_llvm
 from numba.utils import finalize as _finalize
 from . import _nrt_python as _nrt
 
@@ -16,35 +15,37 @@ class _Runtime(object):
     def __init__(self):
         self._init = False
 
-    @lock_llvm # prevent race to install compiled library functions
     def initialize(self, ctx):
         """Initializes the NRT
 
         Must be called before any actual call to the NRT API.
         Safe to be called multiple times.
         """
-        if self._init:
-            # Already initialized
-            return
+        from numba.compiler import lock_compiler
 
-        # Register globals into the system
-        for py_name in _nrt.c_helpers:
-            c_name = "NRT_" + py_name
-            c_address = _nrt.c_helpers[py_name]
-            ll.add_symbol(c_name, c_address)
+        with lock_compiler:
+            if self._init:
+                # Already initialized
+                return
 
-        # Compile atomic operations
-        self._library = nrtdynmod.compile_nrt_functions(ctx)
+            # Register globals into the system
+            for py_name in _nrt.c_helpers:
+                c_name = "NRT_" + py_name
+                c_address = _nrt.c_helpers[py_name]
+                ll.add_symbol(c_name, c_address)
 
-        self._ptr_inc = self._library.get_pointer_to_function("nrt_atomic_add")
-        self._ptr_dec = self._library.get_pointer_to_function("nrt_atomic_sub")
-        self._ptr_cas = self._library.get_pointer_to_function("nrt_atomic_cas")
+            # Compile atomic operations
+            self._library = nrtdynmod.compile_nrt_functions(ctx)
 
-        # Install atomic ops to NRT
-        _nrt.memsys_set_atomic_inc_dec(self._ptr_inc, self._ptr_dec)
-        _nrt.memsys_set_atomic_cas(self._ptr_cas)
+            self._ptr_inc = self._library.get_pointer_to_function("nrt_atomic_add")
+            self._ptr_dec = self._library.get_pointer_to_function("nrt_atomic_sub")
+            self._ptr_cas = self._library.get_pointer_to_function("nrt_atomic_cas")
 
-        self._init = True
+            # Install atomic ops to NRT
+            _nrt.memsys_set_atomic_inc_dec(self._ptr_inc, self._ptr_dec)
+            _nrt.memsys_set_atomic_cas(self._ptr_cas)
+
+            self._init = True
 
     @staticmethod
     def shutdown():
