@@ -43,6 +43,8 @@ def empty_inferred(typingctx, shape):
 def to_fixed_tuple(typingctx, array, length):
     """Convert *array* into a tuple of *length*
 
+    Returns ``UniTuple(array.dtype, length)``
+
     ** Warning **
     - No boundchecking.
       If *length* is longer than *array.size*, the behavior is undefined.

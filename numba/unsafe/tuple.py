@@ -1,3 +1,7 @@
+"""
+This file provides internal compiler utilities that support certain special
+operations with tuple and workaround limitation enforced in the userland.
+"""
 
 from numba.cgutils import alloca_once
 from numba.extending import intrinsic
@@ -12,6 +16,8 @@ def tuple_setitem(typingctx, tup, idx, val):
     **Warning**
 
     - No boundchecking.
+    - The dtype of the tuple cannot be changed.
+      *val* is always cast to the existing dtype of the tuple.
     """
     def codegen(context, builder, signature, args):
         tup, idx, val = args
@@ -24,5 +30,3 @@ def tuple_setitem(typingctx, tup, idx, val):
 
     sig = tup(tup, idx, tup.dtype)
     return sig, codegen
-
-
