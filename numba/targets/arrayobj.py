@@ -1865,25 +1865,63 @@ def array_ctypes_to_pointer(context, builder, fromty, toty, val):
     return impl_ret_untracked(context, builder, toty, res)
 
 
+def _call_contiguous_check(checker, context, builder, aryty, ary):
+    """Helper to invoke the contiguous checker function on an array
+
+    Args
+    ----
+    checker :
+        ``numba.numpy_supports.is_contiguous``, or
+        ``numba.numpy_supports.is_fortran``.
+    context : target context
+    builder : llvm ir builder
+    aryty : numba type
+    ary : llvm value
+    """
+    ary = make_array(aryty)(context, builder, value=ary)
+    tup_intp = types.UniTuple(types.intp, aryty.ndim)
+    itemsize = context.get_abi_sizeof(context.get_value_type(aryty.dtype))
+    check_sig = signature(types.bool_, tup_intp, tup_intp, types.intp)
+    check_args = [ary.shape, ary.strides,
+                  context.get_constant(types.intp, itemsize)]
+    is_contig = context.compile_internal(builder, checker, check_sig,
+                                         check_args)
+    return is_contig
+
+
 # array.flags
 
 @lower_getattr(types.Array, "flags")
 def array_flags(context, builder, typ, value):
-    res = context.get_dummy_value()
-    return impl_ret_untracked(context, builder, typ, res)
+    flagsobj = context.make_helper(builder, types.ArrayFlags(typ))
+    flagsobj.parent = value
+    res = flagsobj._getvalue()
+    return impl_ret_new_ref(context, builder, typ, res)
 
 @lower_getattr(types.ArrayFlags, "contiguous")
 @lower_getattr(types.ArrayFlags, "c_contiguous")
-def array_ctypes_data(context, builder, typ, value):
-    val = typ.array_type.layout == 'C'
-    res = context.get_constant(types.boolean, val)
+def array_flags_c_contiguous(context, builder, typ, value):
+    if typ.array_type.layout == 'A':
+        # any layout can stil be contiguous
+        flagsobj = context.make_helper(builder, typ, value=value)
+        res = _call_contiguous_check(is_contiguous, context, builder,
+                                     typ.array_type, flagsobj.parent)
+    else:
+        val = typ.array_type.layout == 'C'
+        res = context.get_constant(types.boolean, val)
     return impl_ret_untracked(context, builder, typ, res)
 
 @lower_getattr(types.ArrayFlags, "f_contiguous")
-def array_ctypes_data(context, builder, typ, value):
-    layout = typ.array_type.layout
-    val = layout == 'F' if typ.array_type.ndim > 1 else layout in 'CF'
-    res = context.get_constant(types.boolean, val)
+def array_flags_f_contiguous(context, builder, typ, value):
+    if typ.array_type.layout == 'A':
+        # any layout can stil be contiguous
+        flagsobj = context.make_helper(builder, typ, value=value)
+        res = _call_contiguous_check(is_fortran, context, builder,
+                                     typ.array_type, flagsobj.parent)
+    else:
+        layout = typ.array_type.layout
+        val = layout == 'F' if typ.array_type.ndim > 1 else layout in 'CF'
+        res = context.get_constant(types.boolean, val)
     return impl_ret_untracked(context, builder, typ, res)
 
 
@@ -3584,16 +3622,9 @@ def _as_layout_array(context, builder, sig, args, output_layout):
             # We can do a runtime check.
 
             # Prepare and call is_contiguous or is_fortran
-            ary = make_array(aryty)(context, builder, value=args[0])
-            tup_intp = types.UniTuple(types.intp, aryty.ndim)
-            itemsize = context.get_abi_sizeof(context.get_value_type(aryty.dtype))
-            check_sig = signature(types.bool_, tup_intp, tup_intp, types.intp)
-            check_args = [ary.shape, ary.strides,
-                          context.get_constant(types.intp, itemsize)]
             assert output_layout in 'CF'
             check_func = is_contiguous if output_layout == 'C' else is_fortran
-            is_contig = context.compile_internal(builder, check_func,
-                                                 check_sig, check_args)
+            is_contig = _call_contiguous_check(check_func, context, builder, aryty, args[0])
             with builder.if_else(is_contig) as (then, orelse):
                 # If the array is already contiguous, just return it
                 with then:

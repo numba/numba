@@ -300,7 +300,6 @@ class EnumModel(ProxyModel):
 @register_default(types.NumberClass)
 @register_default(types.NamedTupleClass)
 @register_default(types.DType)
-@register_default(types.ArrayFlags)
 @register_default(types.RecursiveCall)
 class OpaqueModel(PrimitiveModel):
     """
@@ -848,6 +847,16 @@ class ArrayModel(StructModel):
 
         ]
         super(ArrayModel, self).__init__(dmm, fe_type, members)
+
+
+@register_default(types.ArrayFlags)
+class ArrayFlagsModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [
+            ('parent', fe_type.array_type),
+        ]
+        super(ArrayFlagsModel, self).__init__(dmm, fe_type, members)
+
 
 @register_default(types.SmartArrayType)
 class SmartArrayModel(StructModel):
