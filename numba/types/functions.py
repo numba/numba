@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import traceback
 import inspect
+import sys
 
 from .abstract import *
 from .common import *
@@ -58,7 +59,8 @@ class _ResolutionFailures(object):
     def get_loc(self, classtemplate, error):
         """Get source location information from the error message.
         """
-        if isinstance(error, Exception):
+        if isinstance(error, Exception) and hasattr(error, '__traceback__'):
+            # traceback is unavailable in py2
             frame = traceback.extract_tb(error.__traceback__)[-1]
             return "{}:{}".format(frame.filename, frame.lineno)
 
