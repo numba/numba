@@ -94,8 +94,12 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
         self.a = np.arange(20, dtype=np.int32).reshape(4, 5)
 
     def check_unary(self, pyfunc, arr):
-        cfunc = self.get_cfunc(pyfunc, (typeof(arr),))
+        aryty = typeof(arr)
+        cfunc = self.get_cfunc(pyfunc, (aryty,))
         expected = pyfunc(arr)
+        self.assertPreciseEqual(cfunc(arr), expected)
+        # Retry with forced any layout
+        cfunc = self.get_cfunc(pyfunc, (aryty.copy(layout='A'),))
         self.assertPreciseEqual(cfunc(arr), expected)
 
     def check_unary_with_arrays(self, pyfunc,
