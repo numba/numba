@@ -62,7 +62,7 @@ class _ResolutionFailures(object):
         if isinstance(error, Exception) and hasattr(error, '__traceback__'):
             # traceback is unavailable in py2
             frame = traceback.extract_tb(error.__traceback__)[-1]
-            return "{}:{}".format(frame.filename, frame.lineno)
+            return "{}:{}".format(frame[0], frame[1])
 
 
 class BaseFunction(Callable):
