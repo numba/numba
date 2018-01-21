@@ -1191,7 +1191,7 @@ def get_array_accesses(blocks, accesses=None):
                 if isinstance(rhs, ir.Expr) and rhs.op == 'static_getitem':
                     index = rhs.index
                     # slice is unhashable, so just keep the variable
-                    if is_slice_index(index):
+                    if index is None or is_slice_index(index):
                         index = rhs.index_var.name
                     accesses.add((rhs.value.name, index))
             for T, f in array_accesses_extensions.items():
