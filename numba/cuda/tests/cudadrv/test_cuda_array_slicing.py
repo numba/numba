@@ -215,6 +215,14 @@ class CudaArraySetting(unittest.TestCase):
         darr[:, 2] = _400
         np.testing.assert_array_equal(darr.copy_to_host(), arr)
 
+    def test_array_assign_subarray(self):
+        arr = np.arange(5 * 5 * 5).reshape(5, 5, 5)
+        darr = cuda.to_device(arr)
+        _400 = np.full(shape=(5, 5), fill_value=400)
+        arr[2] = _400
+        darr[2] = _400
+        np.testing.assert_array_equal(darr.copy_to_host(), arr)
+
     def test_array_assign_all(self):
         arr = np.arange(5 * 5).reshape(5, 5)
         darr = cuda.to_device(arr)
