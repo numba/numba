@@ -33,6 +33,17 @@ class TestCudaNDArray(unittest.TestCase):
 
         self.assertTrue((array == original).all())
 
+    def test_stream_bind(self):
+        stream = cuda.stream()
+        with stream.auto_synchronize():
+            arr = cuda.device_array(
+                (3, 3),
+                dtype=np.float64,
+                stream=stream)
+            self.assertEqual(arr.bind(stream).stream, stream)
+            self.assertEqual(arr.stream, stream)
+
+
     def test_devicearray_partition(self):
         N = 100
         array = np.arange(N, dtype=np.int32)

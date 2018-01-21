@@ -105,7 +105,7 @@ class DeviceNDArrayBase(object):
         self.gpu_data = gpu_data
 
         self.__writeback = writeback    # should deprecate the use of this
-        self.stream = 0
+        self.stream = stream
 
     def bind(self, stream=0):
         """Bind a CUDA stream to this object so that all subsequent operation

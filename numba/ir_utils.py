@@ -1095,6 +1095,7 @@ def simplify_CFG(blocks):
         block = blocks[label]
         return len(block.body) == 1 and isinstance(block.body[0], ir.Branch)
     single_branch_blocks = list(filter(find_single_branch, blocks.keys()))
+    marked_for_del = set()
     for label in single_branch_blocks:
         inst = blocks[label].body[0]
         predecessors = cfg.predecessors(label)
@@ -1106,7 +1107,10 @@ def simplify_CFG(blocks):
             else:
                 delete_block = False
         if delete_block:
-            del blocks[label]
+            marked_for_del.add(label)
+    # Delete marked labels
+    for label in marked_for_del:
+        del blocks[label]
     merge_adjacent_blocks(blocks)
     return rename_labels(blocks)
 
