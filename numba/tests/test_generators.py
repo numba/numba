@@ -113,6 +113,9 @@ def gen_ndenumerate(arr):
         yield tup
 
 
+def gen_bool():
+    yield True
+
 class TestGenerators(MemoryLeakMixin, TestCase):
     def check_generator(self, pygen, cgen):
         self.assertEqual(next(cgen), next(pygen))
@@ -244,6 +247,20 @@ class TestGenerators(MemoryLeakMixin, TestCase):
 
     def test_gen8_objmode(self):
         self.check_gen8(forceobj=True)
+
+    def check_gen9(self, flags=no_pyobj_flags):
+        pyfunc = gen_bool
+        cr = compile_isolated(pyfunc, (), flags=flags)
+        pygen = pyfunc()
+        cgen = cr.entry_point()
+        self.check_generator(pygen, cgen)
+
+    @tag('important')
+    def test_gen9(self):
+        self.check_gen9(flags=no_pyobj_flags)
+
+    def test_gen9_objmode(self):
+        self.check_gen9(flags=forceobj_flags)
 
     def check_consume_generator(self, gen_func):
         cgen = jit(nopython=True)(gen_func)
