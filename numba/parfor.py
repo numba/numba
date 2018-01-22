@@ -348,6 +348,7 @@ def linspace_parallel_impl(return_type, *args):
         return np.linspace(start, stop, 50)
 
     def linspace_3(start, stop, num):
+        numba.parfor.init_prange()
         arr = np.empty(num, dtype)
         div = num - 1
         delta = stop - start
