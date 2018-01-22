@@ -285,7 +285,7 @@ class StencilPass(object):
         # simplify CFG of parfor body (exit block could be simplified often)
         # add dummy return to enable CFG
         stencil_blocks[parfor_body_exit_label].body.append(ir.Return(0,
-                                                                ir.Loc("", 0)))
+                                            ir.Loc("stencilparfor_dummy", -1)))
         stencil_blocks = ir_utils.simplify_CFG(stencil_blocks)
         stencil_blocks[max(stencil_blocks.keys())].body.pop()
 
