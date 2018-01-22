@@ -444,8 +444,9 @@ class Parfor(ir.Expr, ir.Stmt):
         # sequential lowering option
         self.no_sequential_lowering = no_sequential_lowering
         if config.DEBUG_ARRAY_OPT_STATS:
-            print('Parallel for-loop #{} is produced from {} at {}'.format(
-                  self.id, pattern[0], loc))
+            fmt = 'Parallel for-loop #{} is produced from pattern \'{}\' at {}'
+            print(fmt.format(
+                  self.id, pattern, loc))
 
     def __repr__(self):
         return "id=" + str(self.id) + repr(self.loop_nests) + \
@@ -680,7 +681,7 @@ class ParforPass(object):
             # prepare for parallel lowering
             # add parfor params to parfors here since lowering is destructive
             # changing the IR after this is not allowed
-            parfor_ids = get_parfor_params(self.func_ir.blocks)
+            parfor_ids = get_parfor_params(self.func_ir.blocks, self.options.fusion)
             if config.DEBUG_ARRAY_OPT_STATS:
                 name = self.func_ir.func_id.func_qualname
                 n_parfors = len(parfor_ids)
@@ -1862,7 +1863,7 @@ def _find_first_parfor(body):
     return -1
 
 
-def get_parfor_params(blocks):
+def get_parfor_params(blocks, options_fusion):
     """find variables used in body of parfors from outside and save them.
     computed as live variables at entry of first block.
     """
@@ -1883,7 +1884,7 @@ def get_parfor_params(blocks):
             dummy_block.body = block.body[:i]
             before_defs = compute_use_defs({0: dummy_block}).defmap[0]
             pre_defs |= before_defs
-            parfor.params = get_parfor_params_inner(parfor, pre_defs)
+            parfor.params = get_parfor_params_inner(parfor, pre_defs, options_fusion)
             parfor_ids.add(parfor.id)
 
         pre_defs |= all_defs[label]
@@ -1891,17 +1892,17 @@ def get_parfor_params(blocks):
     return parfor_ids
 
 
-def get_parfor_params_inner(parfor, pre_defs):
+def get_parfor_params_inner(parfor, pre_defs, options_fusion):
 
     blocks = wrap_parfor_blocks(parfor)
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
-    parfor_ids = get_parfor_params(blocks)
+    parfor_ids = get_parfor_params(blocks, options_fusion)
     if config.DEBUG_ARRAY_OPT_STATS:
         n_parfors = len(parfor_ids)
         if n_parfors > 0:
-             after_fusion = ("After fusion" if self.options.fusion
+             after_fusion = ("After fusion" if options_fusion
                              else "With fusion disabled")
              print(('After fusion, parallel for-loop {} has '
                    '{} nested Parfor(s) #{}.').format(
