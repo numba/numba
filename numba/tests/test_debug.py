@@ -249,7 +249,7 @@ class TestParforsDebug(TestCase):
                 cres = compile_isolated(unsupported_parfor, (arr_ty, arr_ty),
                                         flags=force_parallel_flags)
             self.check_parfors_warning(w)
-    
+
     @skip_unsupported
     def test_array_debug_opt_stats(self):
         """
@@ -259,7 +259,7 @@ class TestParforsDebug(TestCase):
             with captured_stdout() as out:
                 cres = compile_isolated(supported_parfor, (types.int64,),
                                         flags=force_parallel_flags)
-            
+
             # grab the various parts out the output
             output = out.getvalue().split('\n')
             parallel_loop_output = \
@@ -268,11 +268,11 @@ class TestParforsDebug(TestCase):
                 [x for x in output if 'is fused into' in x]
             after_fusion_output = \
                 [x for x in output if 'After fusion, function' in x]
-            
+
             # Check the Parallel for-loop <index> is produced from <pattern>
             # works first
             pattern = ('ones function', ('prange', 'user'))
-            fmt = 'Parallel for-loop #{} is produced from pattern \'{}\' at'           
+            fmt = 'Parallel for-loop #{} is produced from pattern \'{}\' at'
             for i, trials in enumerate(parallel_loop_output):
                 to_match = fmt.format(i, pattern[i])
                 self.assertIn(to_match, trials)
@@ -283,16 +283,16 @@ class TestParforsDebug(TestCase):
             for trials in fuse_output:
                 to_match = fmt.format(*pattern)
                 self.assertIn(to_match, trials)
-                
+
             # Check the post fusion statements are correct
-            pattern = (supported_parfor.__name__, 1, 0)
-            fmt = 'After fusion, function {} has {} parallel for-loop(s) #{{{}}}.'
+            pattern = (supported_parfor.__name__, 1, set([0]))
+            fmt = 'After fusion, function {} has {} parallel for-loop(s) #{}.'
             for trials in after_fusion_output:
                 to_match = fmt.format(*pattern)
                 self.assertIn(to_match, trials)
 
-            
-            
+
+
 
 
 if __name__ == '__main__':
