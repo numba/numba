@@ -2474,7 +2474,7 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, typemap):
     last_label = max(blocks.keys())
     return_label, tuple_var = _add_liveness_return_block(blocks, lives, typemap)
     # jump to return label
-    jump = ir.Jump(return_label, ir.Loc("", 0))
+    jump = ir.Jump(return_label, ir.Loc("parfors_dummy", -1))
     blocks[last_label].body.append(jump)
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
@@ -2531,13 +2531,13 @@ def remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map, typemap)
 
     return_label, tuple_var = _add_liveness_return_block(blocks, lives, typemap)
 
-    # branch back to firsts body label to simulate loop
-    branch = ir.Branch(0, first_body_block, return_label, ir.Loc("", 0))
+    # branch back to first body label to simulate loop
+    branch = ir.Branch(0, first_body_block, return_label, ir.Loc("parfors_dummy", -1))
     blocks[last_label].body.append(branch)
 
     # add dummy jump in init_block for CFG to work
     blocks[0] = parfor.init_block
-    blocks[0].body.append(ir.Jump(first_body_block, ir.Loc("", 0)))
+    blocks[0].body.append(ir.Jump(first_body_block, ir.Loc("parfors_dummy", -1)))
 
     # args var including aliases is ok
     remove_dead(blocks, arg_aliases, typemap, alias_map, arg_aliases)
@@ -2583,7 +2583,7 @@ def simplify_parfor_body_CFG(blocks):
                 parfor = stmt
                 # add dummy return to enable CFG creation
                 last_block = parfor.loop_body[max(parfor.loop_body.keys())]
-                last_block.body.append(ir.Return(0, ir.Loc("", 0)))
+                last_block.body.append(ir.Return(0, ir.Loc("parfors_dummy", -1)))
                 parfor.loop_body = simplify_CFG(parfor.loop_body)
                 last_block = parfor.loop_body[max(parfor.loop_body.keys())]
                 last_block.body.pop()
