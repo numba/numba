@@ -158,6 +158,7 @@ def dotvv_parallel_impl(a, b):
     numba.parfor.init_prange()
     l = a.shape[0]
     m = b.shape[0]
+    # TODO: investigate assert_equiv
     #assert_equiv("sizes of l, m do not match", l, m)
     s = 0
     for i in numba.parfor.internal_prange(l):
@@ -168,8 +169,10 @@ def dotvm_parallel_impl(a, b):
     numba.parfor.init_prange()
     l = a.shape
     m, n = b.shape
+    # TODO: investigate assert_equiv
     #assert_equiv("Sizes of l, m do not match", l, m)
     c = np.zeros(n, a.dtype)
+    # TODO: evaluate dotvm implementation options
     #for i in prange(n):
     #    s = 0
     #    for j in range(m):
@@ -183,6 +186,7 @@ def dotmv_parallel_impl(a, b):
     numba.parfor.init_prange()
     m, n = a.shape
     l = b.shape
+    # TODO: investigate assert_equiv
     #assert_equiv("sizes of n, l do not match", n, l)
     c = np.empty(m, a.dtype)
     for i in numba.parfor.internal_prange(m):
@@ -198,6 +202,7 @@ def dot_parallel_impl(return_type, atyp, btyp):
         isinstance(btyp, types.npytypes.Array)):
         if atyp.ndim == btyp.ndim == 1:
             return dotvv_parallel_impl
+        # TODO: evaluate support for dotvm and enable
         #elif atyp.ndim == 1 and btyp.ndim == 2:
         #    return dotvm_parallel_impl
         elif atyp.ndim == 2 and btyp.ndim == 1:
