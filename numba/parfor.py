@@ -876,7 +876,7 @@ class ParforPass(object):
                                     require(isinstance(inst, ir.Assign))
                                     expr = inst.value
                                     require(isinstance(expr, ir.Expr) and
-                                            expr.op == 'getitem')
+                                       expr.op in ['getitem', 'static_getitem'])
                                     arrs.append(expr.value.name)
                                     exprs.append(expr)
                         return arrs, exprs
