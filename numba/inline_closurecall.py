@@ -1,4 +1,5 @@
 import types as pytypes  # avoid confusion with numba.types
+import ctypes
 import numba
 from numba import config, ir, ir_utils, utils, prange, rewrites, types, typing
 from numba.parfor import internal_prange
@@ -302,7 +303,6 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
         closure = func_ir.get_definition(callee_closure)
         debug_print("callee's closure = ", closure)
         if isinstance(closure, tuple):
-            import ctypes
             cellget = ctypes.pythonapi.PyCell_Get
             cellget.restype = ctypes.py_object
             cellget.argtypes = (ctypes.py_object,)
