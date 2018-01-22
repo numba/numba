@@ -73,6 +73,7 @@ from numba.types.functions import Function
 from numba.array_analysis import (random_int_args, random_1arg_size,
                                   random_2arg_sizelast, random_3arg_sizelast,
                                   random_calls, assert_equiv)
+from numba.extending import overload
 import copy
 import numpy
 import numpy as np
@@ -86,7 +87,6 @@ sequential_parfor_lowering = False
 def init_prange():
     return
 
-from numba.extending import overload
 @overload(init_prange)
 def init_prange_overload():
     def no_op():
