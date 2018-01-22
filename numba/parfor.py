@@ -2713,10 +2713,8 @@ def push_call_vars(blocks, saved_globals, saved_getattrs):
                     rhs = stmt.value
                     lhs = stmt.target
                     if (isinstance(rhs, ir.Global)):
-                            # and isinstance(rhs.value, pytypes.ModuleType)):
                         saved_globals[lhs.name] = stmt
                         block_defs.add(lhs.name)
-                        # continue
                     elif isinstance(rhs, ir.Expr) and rhs.op == 'getattr':
                         if (rhs.value.name in saved_globals
                                 or rhs.value.name in saved_getattrs):
