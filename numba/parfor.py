@@ -1430,8 +1430,6 @@ class ParforPass(object):
 
         init_val = args[2]
         size_vars = equiv_set.get_shape(in_arr if mask_indices == None else mask_var)
-        #assert len(size_vars) == 1, """only parallel reduce() on 1D arrays is
-        #                                supported"""
         index_vars, loopnests = self._mk_parfor_loops(size_vars, scope, loc)
         mask_index = index_vars
         if mask_indices:
