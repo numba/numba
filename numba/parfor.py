@@ -1056,7 +1056,6 @@ class ParforPass(object):
                     and self._is_parallel_loop(inst.value.func.name, call_table)):
                 prange_call_ind = i
         if init_call_ind != -1 and prange_call_ind != -1:
-            #init_body = entry_block.body[init_call_ind+1:prange_call_ind]
             # we save instructions that are used to calculate prange call args
             # in the entry block. The rest go to parfor init_block
             arg_related_vars = {v.name for v in prange_args}
