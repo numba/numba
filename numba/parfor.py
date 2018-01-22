@@ -906,8 +906,11 @@ class ParforPass(object):
                         return result
 
                     # TODO: support array mask optimization for prange
+                    # TODO: refactor and simplify array mask optimization
                     if loop_kind == 'pndindex':
                         assert(equiv_set.has_shape(args[0]))
+                        # see if input array to pndindex is output of array
+                        # mask like B = A[M]
                         result = guard(find_mask_from_size, args[0])
                         if result:
                             in_arr, mask_var, mask_typ, mask_indices = result
@@ -919,6 +922,9 @@ class ParforPass(object):
                                                 size_vars, scope, loc)
                         orig_index = index_vars
                         if mask_indices:
+                            # replace mask indices if required;
+                            # integer indices of original array should be used
+                            # instead of parfor indices
                             index_vars = tuple(x if x else index_vars[0]
                                                for x in mask_indices)
                         first_body_block = loop_body[min(loop_body.keys())]
@@ -932,6 +938,8 @@ class ParforPass(object):
                         else:
                             orig_index_var = index_var
 
+                        # if masked array optimization is being applied, create
+                        # the branch for array selection
                         if mask_var != None:
                             body_label = next_label()
                             # loop_body needs new labels greater than body_label
