@@ -43,7 +43,7 @@ parallel semantics and for which we attempt to parallelize.
     * User defined :class:`~numba.DUFunc` through :func:`~numba.vectorize`.
 
 2. Numpy reduction functions ``sum``, ``prod``, ``min``, ``max``, ``argmin``,
-   and ``argmax``.
+   and ``argmax``. Also, array math functions ``mean``, ``var``, and ``std``.
 
 3. Numpy array creation functions ``zeros``, ``ones``, ``arange``, ``linspace``,
    and several random functions (rand, randn, ranf, random_sample, sample,
