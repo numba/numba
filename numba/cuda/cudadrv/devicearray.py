@@ -15,6 +15,7 @@ import numpy as np
 from . import driver as _driver
 from . import devices
 from numba import dummyarray, types, numpy_support
+from numba.unsafe.ndarray import to_fixed_tuple
 
 try:
     long
@@ -478,17 +479,7 @@ class DeviceNDArray(DeviceNDArrayBase):
 
         # (3) do the copy
 
-        from numba import cuda # circular!
-
-        @cuda.jit('UniTuple(i8, %d)(i8[:])' % lhs.ndim, device=True)
-        def cast(it):
-            """
-            We can't dynamically look up an element in lhs with an array
-            due to `FancyIndexer`: it interprets `a[[1, 2]] = b` as
-            `a[1, :] = b` and `a[2, :] = b`. To generate the right code we need
-            to pass in a `BaseTuple` as the index -- so cast it here.
-            """
-            return it
+        from numba import cuda  # circular!
 
         n_elements = np.prod(lhs.shape)
 
@@ -516,7 +507,7 @@ class DeviceNDArray(DeviceNDArrayBase):
                 idx[1, i] = (location % lhs.shape[i]) * (rhs.shape[i] > 1)
                 location //= lhs.shape[i]
 
-            lhs[cast(idx[0])] = rhs[cast(idx[1])]
+            lhs[to_fixed_tuple(idx[0], ndim)] = rhs[to_fixed_tuple(idx[1], ndim)]
 
         kernel.forall(n_elements, stream=stream)(lhs, rhs)
 
