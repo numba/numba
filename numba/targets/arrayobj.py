@@ -14,7 +14,7 @@ from llvmlite.llvmpy.core import Constant
 
 import numpy as np
 
-from numba import types, cgutils, typing, utils, extending, pndindex
+from numba import types, cgutils, typing, utils, extending
 from numba.numpy_support import as_dtype, carray, farray
 from numba.numpy_support import version as numpy_version
 from numba.targets.imputils import (lower_builtin, lower_getattr,
@@ -266,20 +266,13 @@ def getiter_array(context, builder, sig, args):
     return out
 
 
-def _getitem_array1d(context, builder, arrayty, array, idx, wraparound, cast_to=None):
+def _getitem_array1d(context, builder, arrayty, array, idx, wraparound):
     """
     Look up and return an element from a 1D array.
     """
     ptr = cgutils.get_item_pointer(builder, arrayty, array, [idx],
                                    wraparound=wraparound)
-    v = load_item(context, builder, arrayty, ptr)
-    if cast_to:
-        v = context.cast(
-            builder,
-            v,
-            arrayty.dtype,
-            cast_to)
-    return v
+    return load_item(context, builder, arrayty, ptr)
 
 @lower_builtin('iternext', types.ArrayIterator)
 @iternext_impl
@@ -920,7 +913,7 @@ class FancyIndexer(object):
                     indexer = BooleanArrayIndexer(context, builder,
                                                   idxty, idxary)
                 else:
-                    raise AssertionError('unsupported dtype %r' % idxty.dtype)
+                    assert 0
                 indexers.append(indexer)
             else:
                 raise AssertionError("unexpected index type: %s" % (idxty,))
@@ -2915,7 +2908,6 @@ def iternext_numpy_nditer(context, builder, sig, args, result):
     nditer.iternext_specific(context, builder, arrty, arr, result)
 
 
-@lower_builtin(pndindex, types.VarArg(types.Integer))
 @lower_builtin(np.ndindex, types.VarArg(types.Integer))
 def make_array_ndindex(context, builder, sig, args):
     """ndindex(*shape)"""
@@ -2929,7 +2921,6 @@ def make_array_ndindex(context, builder, sig, args):
     res = nditer._getvalue()
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
-@lower_builtin(pndindex, types.BaseTuple)
 @lower_builtin(np.ndindex, types.BaseTuple)
 def make_array_ndindex(context, builder, sig, args):
     """ndindex(shape)"""
@@ -4450,30 +4441,6 @@ def array_to_array(context, builder, fromty, toty, val):
     assert toty.layout == 'A'
     return val
 
-
-@lower_cast(types.Array, types.Sequence)
-def array_to_sequence(context, builder, fromty, toty, val):
-    # Type inference should ensure we have one dimension & convertable
-    # value types
-
-    ary = make_array(fromty)(context, builder, value=val)
-
-    items = [
-        _getitem_array1d(
-            context,
-            builder,
-            fromty,
-            ary,
-            context.get_constant(types.intp, i),
-            wraparound=False,
-            cast_to=toty.dtype)
-        for i in range(len(toty))
-    ]
-
-    return context.make_tuple(
-        builder,
-        toty,
-        items)
 
 # -----------------------------------------------------------------------------
 # Stride tricks

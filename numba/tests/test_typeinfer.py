@@ -413,19 +413,6 @@ class TestTypeConversion(CompatibilityTestMixin, unittest.TestCase):
         bty = types.Array(i64, 2, "C")
         self.assert_cannot_convert(aty, bty)
 
-    def test_array_tuple(self):
-        aty = types.Array(i32, 1, "C")
-
-        # we'll catch a shape mis-match later:
-        self.assert_can_convert(aty, types.UniTuple(i32, 2), Conversion.safe)
-        self.assert_can_convert(aty, types.UniTuple(i32, 3), Conversion.safe)
-        self.assert_can_convert(aty, types.UniTuple(i32, 4), Conversion.safe)
-
-        self.assert_can_convert(aty, types.UniTuple(i64, 3), Conversion.safe) # not promote!
-        self.assert_can_convert(aty, types.UniTuple(i16, 3), Conversion.unsafe)
-
-        self.assert_cannot_convert(aty, types.UniTuple(types.Array(i64, 5, 'F'), 3))
-
     def test_optional(self):
         aty = types.int32
         bty = types.Optional(i32)
