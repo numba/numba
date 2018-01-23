@@ -452,7 +452,6 @@ class DeviceNDArray(DeviceNDArrayBase):
             shape = arr.shape
             strides = arr.strides
 
-
         lhs = type(self)(
             shape=shape,
             strides=strides,
