@@ -269,11 +269,11 @@ class Array(object):
                     offset = compute_index(indices, self.dims)
                     yield offset, offset + self.itemsize
 
-    def reshape(self, *newshape, **kws):
+    def reshape(self, *newdims, **kws):
         oldnd = self.ndim
-        newnd = len(newshape)
+        newnd = len(newdims)
 
-        if newshape == self.shape:
+        if newdims == self.shape:
             return self, None
 
         order = kws.pop('order', 'C')
@@ -282,7 +282,7 @@ class Array(object):
         if order not in 'CFA':
             raise ValueError('order not C|F|A')
 
-        newsize = np.prod(newshape)
+        newsize = np.prod(newdims)
 
         if order == 'A':
             order = 'F' if self.is_f_contig else 'C'
@@ -292,18 +292,77 @@ class Array(object):
 
         if self.is_c_contig or self.is_f_contig:
             if order == 'C':
-                newstrides = list(iter_strides_c_contig(self, newshape))
+                newstrides = list(iter_strides_c_contig(self, newdims))
             elif order == 'F':
-                newstrides = list(iter_strides_f_contig(self, newshape))
+                newstrides = list(iter_strides_f_contig(self, newdims))
             else:
                 raise AssertionError("unreachable")
-        elif newnd == 1:
-            s = [self.strides[i] for i in range(oldnd) if self.shape[i] > 1]
-            newstrides = (min(s) if len(s) else self.itemsize,)
         else:
-            raise NotImplementedError("reshape on non-contiguous array")
+            # Transliteration of numpy's `_attempt_nocopy_reshape`
 
-        ret = self.from_desc(self.extent.begin, shape=newshape,
+            # Remove axes with dimension 1 from the old array. They have no effect
+            # but would need special cases since their strides do not matter.
+            olddims, oldstrides = zip(*[
+                (self.shape[i], self.strides[i])
+                for i in range(oldnd)
+                if self.shape[i] > 1
+            ])
+
+            newstrides = np.empty(newnd, int)
+
+            # oi to oj and ni to nj give the axis ranges currently worked with
+            oi, oj, ni, nj = 0, 1, 0, 1
+
+            while ni < newnd and oi < oldnd:
+                np_ = newdims[ni]
+                op = olddims[oi]
+
+                while np_ != op:
+                    if np_ < op:
+                        # Misses trailing 1s, these are handled later
+                        np_ *= newdims[nj]
+                        nj += 1
+                    else:
+                        op *= olddims[oj]
+                        oj += 1
+
+                for ok in range(oi, oj - 1):
+                    if order == 'F':
+                        if oldstrides[ok+1] != olddims[ok]*oldstrides[ok]:
+                            # not contiguous enough
+                            raise NotImplementedError('reshape would require copy')
+                    else:
+                        # C order
+                        if oldstrides[ok] != olddims[ok+1]*oldstrides[ok+1]:
+                            # not contiguous enough
+                            raise NotImplementedError('reshape would require copy')
+
+                # Calculate new strides for all axes currently worked with
+                if order == 'F':
+                    newstrides[ni] = oldstrides[oi]
+                    for nk in range(ni + 1, nk < nj):
+                        newstrides[nk] = newstrides[nk - 1] * newdims[nk - 1]
+                else:
+                    # C order
+                    newstrides[nj - 1] = oldstrides[oj - 1]
+                    for nk in range(nj - 1, ni, -1):
+                        newstrides[nk - 1] = newstrides[nk] * newdims[nk]
+                ni = nj
+                nj += 1
+                oi = oj
+                oj += 1
+
+            # Set strides corresponding to trailing 1s of the new shape.
+            if ni >= 1:
+                last_stride = newstrides[ni - 1]
+            else:
+                last_stride = self.itemsize
+            if order == 'F':
+                last_stride *= newdims[ni - 1]
+            for nk in range(ni, newnd):
+                newstrides[nk] = last_stride
+
+        ret = self.from_desc(self.extent.begin, shape=newdims,
                              strides=newstrides, itemsize=self.itemsize)
 
         return ret, list(self.iter_contiguous_extent())
