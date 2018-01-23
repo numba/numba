@@ -1,6 +1,6 @@
 """
 This file provides internal compiler utilities that support certain special
-operations with tuple and workaround limitation enforced in the userland.
+operations with tuple and workarounds for limitations enforced in userland.
 """
 
 from numba.cgutils import alloca_once
