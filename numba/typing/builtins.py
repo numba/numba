@@ -787,9 +787,6 @@ class Float(AbstractTemplate):
 
         [arg] = args
 
-        if arg not in types.number_domain:
-            raise TypeError("float() only support for numbers")
-
         if arg in types.complex_domain:
             raise TypeError("float() does not support complex")
 
