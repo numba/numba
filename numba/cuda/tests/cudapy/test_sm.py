@@ -1,11 +1,11 @@
 from numba import cuda, int32, float64
 
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 import numpy as np
 
 
-class TestSharedMemoryIssue(unittest.TestCase):
+class TestSharedMemoryIssue(SerialMixin, unittest.TestCase):
     def test_issue_953_sm_linkage_conflict(self):
         @cuda.jit(device=True)
         def inner():

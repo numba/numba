@@ -9,7 +9,11 @@ from numba import config, unittest_support as unittest
 from numba.tests.support import captured_stdout
 
 
-class CUDATestCase(unittest.TestCase):
+class SerialMixin(object):
+    _numba_parallel_test_ = False
+
+
+class CUDATestCase(SerialMixin, unittest.TestCase):
     def tearDown(self):
         from numba.cuda.cudadrv.devices import reset
 

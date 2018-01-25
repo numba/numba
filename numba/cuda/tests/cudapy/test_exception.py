@@ -3,7 +3,7 @@ from __future__ import print_function, absolute_import
 import numpy as np
 
 from numba import config, cuda, jit
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 
 def foo(ary):
@@ -15,7 +15,7 @@ def foo(ary):
         ary.shape[-x]
 
 
-class TestException(unittest.TestCase):
+class TestException(SerialMixin, unittest.TestCase):
     def test_exception(self):
         unsafe_foo = cuda.jit(foo)
         safe_foo = cuda.jit(debug=True)(foo)

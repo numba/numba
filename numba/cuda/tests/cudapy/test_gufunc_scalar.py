@@ -7,19 +7,19 @@ from __future__ import absolute_import, print_function, division
 import numpy as np
 from numba import guvectorize, cuda
 from numba import unittest_support as unittest
-from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import skip_on_cudasim, SerialMixin
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
-class TestGUFuncScalr(unittest.TestCase):
+class TestGUFuncScalr(SerialMixin, unittest.TestCase):
     def test_gufunc_scalar_output(self):
-    #    function type:
-    #        - has no void return type
-    #        - array argument is one dimenion fewer than the source array
-    #        - scalar output is passed as a 1-element array.
-    #
-    #    signature: (n)->()
-    #        - the function takes an array of n-element and output a scalar.
+        #    function type:
+        #        - has no void return type
+        #        - array argument is one dimenion fewer than the source array
+        #        - scalar output is passed as a 1-element array.
+        #
+        #    signature: (n)->()
+        #        - the function takes an array of n-element and output a scalar.
 
         @guvectorize(['void(int32[:], int32[:])'], '(n)->()', target='cuda')
         def sum_row(inp, out):

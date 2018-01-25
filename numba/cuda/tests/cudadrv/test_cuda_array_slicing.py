@@ -5,10 +5,10 @@ from itertools import product
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 
-class CudaArrayIndexing(unittest.TestCase):
+class CudaArrayIndexing(SerialMixin, unittest.TestCase):
     def test_index_1d(self):
         arr = np.arange(10)
         darr = cuda.to_device(arr)
@@ -33,7 +33,7 @@ class CudaArrayIndexing(unittest.TestCase):
                     self.assertEqual(arr[i, j, k], darr[i, j, k])
 
 
-class CudaArrayStridedSlice(unittest.TestCase):
+class CudaArrayStridedSlice(SerialMixin, unittest.TestCase):
 
     def test_strided_index_1d(self):
         arr = np.arange(10)
@@ -61,7 +61,7 @@ class CudaArrayStridedSlice(unittest.TestCase):
                                             darr[i::2, j::2, k::2].copy_to_host())
 
 
-class CudaArraySlicing(unittest.TestCase):
+class CudaArraySlicing(SerialMixin, unittest.TestCase):
     def test_prefix_1d(self):
         arr = np.arange(5)
         darr = cuda.to_device(arr)

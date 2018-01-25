@@ -4,7 +4,7 @@ import numpy as np
 
 from numba import cuda
 from numba import unittest_support as unittest
-from numba.cuda.testing import captured_cuda_stdout
+from numba.cuda.testing import captured_cuda_stdout, SerialMixin
 
 
 def cuhello():
@@ -27,7 +27,7 @@ def printempty():
     print()
 
 
-class TestPrint(unittest.TestCase):
+class TestPrint(SerialMixin, unittest.TestCase):
 
     def test_cuhello(self):
         jcuhello = cuda.jit('void()', debug=False)(cuhello)
