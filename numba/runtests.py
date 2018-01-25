@@ -14,7 +14,10 @@ def _main(argv, **kwds):
     if '--failed-first' in argv:
         # Failed first
         argv.remove('--failed-first')
-        _FailedFirstRunner().main(argv, kwds)
+        return _FailedFirstRunner().main(argv, kwds)
+    elif '--last-failed' in argv:
+        argv.remove('--last-failed')
+        return _FailedFirstRunner(last_failed=True).main(argv, kwds)
     else:
         return run_tests(argv, defaultTest='numba.tests',
                          **kwds).wasSuccessful()
@@ -32,6 +35,9 @@ class _FailedFirstRunner(object):
     """
     cache_filename = '.runtests_lastfailed'
 
+    def __init__(self, last_failed=False):
+        self.last_failed = last_failed
+
     def main(self, argv, kwds):
         from numba.testing import run_tests
         prog = argv[0]
@@ -45,15 +51,26 @@ class _FailedFirstRunner(object):
             print(ft.format(len(failed_tests)))
             remaing_tests = [t for t in all_tests
                              if t not in failed_tests]
-            tests = failed_tests + remaing_tests
+            if self.last_failed:
+                tests = list(failed_tests)
+            else:
+                tests = failed_tests + remaing_tests
         else:
-            tests = list(all_tests)
+            if self.last_failed:
+                tests = []
+            else:
+                tests = list(all_tests)
+
+        if not tests:
+            print("No tests to run")
+            return True
         # Run the testsuite
         print("Running {} tests".format(len(tests)))
         print('Flags', flags)
         result = run_tests([prog] + flags + tests, **kwds)
         # Save failed
         self.save_failed_tests(result, all_tests)
+        return result.wasSuccessful()
 
     def save_failed_tests(self, result, all_tests):
         cache = []
