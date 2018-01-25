@@ -9,7 +9,7 @@ import textwrap
 
 import numpy as np
 
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 from numba import cuda, types, utils, numpy_support
 from numba.tests.support import TestCase, compile_function
 from numba.tests.complex_usecases import *
@@ -53,7 +53,7 @@ def compile_scalar_func(pyfunc, argtypes, restype):
     return kernel_wrapper
 
 
-class BaseComplexTest(object):
+class BaseComplexTest(SerialMixin):
 
     def basic_values(self):
         reals = [-0.0, +0.0, 1, -1, +1.5, -3.5,

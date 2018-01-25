@@ -11,7 +11,7 @@ import functools
 import os
 import subprocess
 import sys
-from tempfile import NamedTemporaryFile
+from tempfile import NamedTemporaryFile, gettempdir
 
 _configs = {
     # DLL suffix, Python C extension suffix
@@ -39,7 +39,9 @@ def _check_external_compiler():
             ntf.write(simple_c)
             ntf.flush()
             try:
-                compiler.compile([ntf.name])
+                # *output_dir* is set to avoid the compiler putting temp files
+                # in the current directory.
+                compiler.compile([ntf.name], output_dir=gettempdir())
             except Exception: # likely CompileError
                 return False
     return True

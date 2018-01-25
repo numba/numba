@@ -70,9 +70,10 @@ traditional dynamic memory management.
 
    Allocate a shared array of the given *shape* and *type* on the device.
    This function must be called on the device (i.e. from a kernel or
-   device function).  *shape* is either an integer or a tuple of integers
-   representing the array's dimensions.  *type* is a :ref:`Numba type <numba-types>`
-   of the elements needing to be stored in the array.
+   device function). *shape* is either an integer or a tuple of integers
+   representing the array's dimensions and must be a simple constant
+   expression. *type* is a :ref:`Numba type <numba-types>` of the elements
+   needing to be stored in the array.
 
    The returned array-like object can be read and written to like any normal
    device array (e.g. through indexing).
@@ -107,9 +108,25 @@ unlike traditional dynamic memory management.
    :noindex:
 
    Allocate a local array of the given *shape* and *type* on the device.
-   The array is private to the current thread.  An array-like object is
+   *shape* is either an integer or a tuple of integers representing the array's
+   dimensions and must be a simple constant expression. *type* is a
+   :ref:`Numba type <numba-types>` of the elements needing to be stored in the
+   array. The array is private to the current thread. An array-like object is
    returned which can be read and written to like any standard array
    (e.g. through indexing).
+
+Constant memory
+===============
+
+Constant memory is an area of memory that is read only, cached and off-chip, it
+is accessible by all threads and is host allocated. A method of
+creating an array in constant memory is through the use of:
+
+.. function:: numba.cuda.const.array_like(arr)
+   :noindex:
+   
+   Allocate and make accessible an array in constant memory based on array-like
+   *arr*.
 
 SmartArrays (experimental)
 ==========================

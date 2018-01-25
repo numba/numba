@@ -8,13 +8,25 @@ def transpose(a, b=None):
     and return it. If 'b' is not given, allocate a new array
     and return that.
 
-    This implements the algorithm documented in 
-    http://devblogs.nvidia.com/parallelforall/efficient-matrix-transpose-cuda-cc/"""
+    This implements the algorithm documented in
+    http://devblogs.nvidia.com/parallelforall/efficient-matrix-transpose-cuda-cc/
+
+    :param a: an `np.ndarray` or a `DeviceNDArrayBase` subclass. If already on
+        the device its stream will be used to perform the transpose (and to copy
+        `b` to the device if necessary).
+    """
+
+    # prefer `a`'s stream if
+    stream = getattr(a, 'stream', 0)
 
     if not b:
         cols, rows = a.shape
         strides = a.dtype.itemsize * cols, a.dtype.itemsize
-        b = cuda.cudadrv.devicearray.DeviceNDArray((rows, cols), strides, dtype=a.dtype)
+        b = cuda.cudadrv.devicearray.DeviceNDArray(
+            (rows, cols),
+            strides,
+            dtype=a.dtype,
+            stream=stream)
 
     dt=nps.from_dtype(a.dtype)
 
@@ -48,6 +60,6 @@ def transpose(a, b=None):
     blocks = int(b.shape[0]/tile_height + 1), int(b.shape[1]/tile_width + 1)
     # one thread per tile element
     threads = tile_height, tile_width
-    kernel[blocks, threads](a, b)
+    kernel[blocks, threads, stream](a, b)
 
     return b

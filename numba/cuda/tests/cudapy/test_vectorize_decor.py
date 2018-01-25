@@ -5,11 +5,11 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import vectorize, cuda
 from numba.tests.npyufunc import test_vectorize_decor
-from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import skip_on_cudasim, SerialMixin
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
-class TestVectorizeDecor(test_vectorize_decor.BaseVectorizeDecor):
+class TestVectorizeDecor(SerialMixin, test_vectorize_decor.BaseVectorizeDecor):
     def test_gpu_1(self):
         self._test_template_1('cuda')
 
@@ -21,7 +21,7 @@ class TestVectorizeDecor(test_vectorize_decor.BaseVectorizeDecor):
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
-class TestGPUVectorizeBroadcast(unittest.TestCase):
+class TestGPUVectorizeBroadcast(SerialMixin, unittest.TestCase):
     def test_broadcast_bug_90(self):
         """
         https://github.com/ContinuumIO/numbapro/issues/90

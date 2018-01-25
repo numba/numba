@@ -2,6 +2,7 @@ from numba import unittest_support as unittest
 import numpy as np
 from numba import cuda, types
 import struct
+from numba.cuda.testing import SerialMixin
 
 
 def float_to_int(x):
@@ -20,7 +21,7 @@ def float_to_complex(x):
     return np.complex128(x)
 
 
-class TestCasting(unittest.TestCase):
+class TestCasting(SerialMixin, unittest.TestCase):
     def _create_wrapped(self, pyfunc, intype, outtype):
         wrapped_func = cuda.jit(device=True)(pyfunc)
 

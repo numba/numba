@@ -407,6 +407,13 @@ class TestCase(unittest.TestCase):
         self.assertPreciseEqual(got, expected)
         return got, expected
 
+
+class SerialMixin(object):
+    """Mixin to mark test for serial execution.
+    """
+    _numba_parallel_test_ = False
+
+
 # Various helpers
 
 @contextlib.contextmanager
