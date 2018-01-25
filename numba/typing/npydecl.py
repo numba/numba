@@ -697,6 +697,17 @@ class AsFortranArray(CallableTemplate):
         return typer
 
 
+@infer_global(np.ascontiguousarray)
+class AsContiguousArray(CallableTemplate):
+
+    def generic(self):
+        def typer(a):
+            if isinstance(a, types.Array):
+                return a.copy(layout='C', ndim=max(a.ndim, 1))
+
+        return typer
+
+
 @infer_global(np.copy)
 class NdCopy(CallableTemplate):
 

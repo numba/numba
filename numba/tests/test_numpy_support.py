@@ -136,20 +136,20 @@ class TestFromDtype(TestCase):
               fields={'m': (types.int32, 0),
                       'n': (types.CharSeq(5), 4)},
               size=9, aligned=False)
-              
+
     @tag('important')
     def test_enum_type(self):
-        
+
         def check(base_inst, enum_def, type_class):
             np_dt = np.dtype(base_inst)
             nb_ty = numpy_support.from_dtype(np_dt)
             inst = type_class(enum_def, nb_ty)
             recovered = numpy_support.as_dtype(inst)
             self.assertEqual(np_dt, recovered)
-                  
+
         dts = [np.float64, np.int32, np.complex128, np.bool]
         enums = [Shake, RequestError]
-        
+
         for dt, enum in product(dts, enums):
             check(dt, enum, types.EnumMember)
 
@@ -383,6 +383,48 @@ class TestUFuncs(TestCase):
         # No implicit casting from int64 to timedelta64 (Numpy would allow
         # this).
         check_no_match(np_add, (types.NPTimedelta('s'), types.int64))
+
+    def test_layout_checker(self):
+        def check_arr(arr):
+            dims = arr.shape
+            strides = arr.strides
+            itemsize = arr.dtype.itemsize
+            is_c = numpy_support.is_contiguous(dims, strides, itemsize)
+            is_f = numpy_support.is_fortran(dims, strides, itemsize)
+            expect_c = arr.flags['C_CONTIGUOUS']
+            expect_f = arr.flags['F_CONTIGUOUS']
+            self.assertEqual(is_c, expect_c)
+            self.assertEqual(is_f, expect_f)
+
+        arr = np.arange(24)
+        # 1D
+        check_arr(arr)
+        # 2D
+        check_arr(arr.reshape((3, 8)))
+        check_arr(arr.reshape((3, 8)).T)
+        check_arr(arr.reshape((3, 8))[::2])
+        # 3D
+        check_arr(arr.reshape((2, 3, 4)))
+        check_arr(arr.reshape((2, 3, 4)).T)
+        # middle axis is shape 1
+        check_arr(arr.reshape((2, 3, 4))[:, ::3])
+        check_arr(arr.reshape((2, 3, 4)).T[:, ::3])
+        if numpy_support.version > (1, 11):
+            # leading axis is shape 1
+            check_arr(arr.reshape((2, 3, 4))[::2])
+            check_arr(arr.reshape((2, 3, 4)).T[:, :, ::2])
+            # 2 leading axis are shape 1
+            check_arr(arr.reshape((2, 3, 4))[::2, ::3])
+            check_arr(arr.reshape((2, 3, 4)).T[:, ::3, ::2])
+            # single item slices for all axis
+            check_arr(arr.reshape((2, 3, 4))[::2, ::3, ::4])
+            check_arr(arr.reshape((2, 3, 4)).T[::4, ::3, ::2])
+            # 4D
+            check_arr(arr.reshape((2, 2, 3, 2))[::2, ::2, ::3])
+            check_arr(arr.reshape((2, 2, 3, 2)).T[:, ::3, ::2, ::2])
+            # outer zero dims
+            check_arr(arr.reshape((2, 2, 3, 2))[::5, ::2, ::3])
+            check_arr(arr.reshape((2, 2, 3, 2)).T[:, ::3, ::2, ::5])
 
 
 if __name__ == '__main__':

@@ -15,7 +15,8 @@ from llvmlite.llvmpy.core import Constant
 import numpy as np
 
 from numba import types, cgutils, typing, utils, extending, pndindex
-from numba.numpy_support import as_dtype, carray, farray
+from numba.numpy_support import (as_dtype, carray, farray, is_contiguous,
+                                 is_fortran)
 from numba.numpy_support import version as numpy_version
 from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     lower_getattr_generic,
@@ -1864,25 +1865,63 @@ def array_ctypes_to_pointer(context, builder, fromty, toty, val):
     return impl_ret_untracked(context, builder, toty, res)
 
 
+def _call_contiguous_check(checker, context, builder, aryty, ary):
+    """Helper to invoke the contiguous checker function on an array
+
+    Args
+    ----
+    checker :
+        ``numba.numpy_supports.is_contiguous``, or
+        ``numba.numpy_supports.is_fortran``.
+    context : target context
+    builder : llvm ir builder
+    aryty : numba type
+    ary : llvm value
+    """
+    ary = make_array(aryty)(context, builder, value=ary)
+    tup_intp = types.UniTuple(types.intp, aryty.ndim)
+    itemsize = context.get_abi_sizeof(context.get_value_type(aryty.dtype))
+    check_sig = signature(types.bool_, tup_intp, tup_intp, types.intp)
+    check_args = [ary.shape, ary.strides,
+                  context.get_constant(types.intp, itemsize)]
+    is_contig = context.compile_internal(builder, checker, check_sig,
+                                         check_args)
+    return is_contig
+
+
 # array.flags
 
 @lower_getattr(types.Array, "flags")
 def array_flags(context, builder, typ, value):
-    res = context.get_dummy_value()
-    return impl_ret_untracked(context, builder, typ, res)
+    flagsobj = context.make_helper(builder, types.ArrayFlags(typ))
+    flagsobj.parent = value
+    res = flagsobj._getvalue()
+    return impl_ret_new_ref(context, builder, typ, res)
 
 @lower_getattr(types.ArrayFlags, "contiguous")
 @lower_getattr(types.ArrayFlags, "c_contiguous")
-def array_ctypes_data(context, builder, typ, value):
-    val = typ.array_type.layout == 'C'
-    res = context.get_constant(types.boolean, val)
+def array_flags_c_contiguous(context, builder, typ, value):
+    if typ.array_type.layout == 'A':
+        # any layout can stil be contiguous
+        flagsobj = context.make_helper(builder, typ, value=value)
+        res = _call_contiguous_check(is_contiguous, context, builder,
+                                     typ.array_type, flagsobj.parent)
+    else:
+        val = typ.array_type.layout == 'C'
+        res = context.get_constant(types.boolean, val)
     return impl_ret_untracked(context, builder, typ, res)
 
 @lower_getattr(types.ArrayFlags, "f_contiguous")
-def array_ctypes_data(context, builder, typ, value):
-    layout = typ.array_type.layout
-    val = layout == 'F' if typ.array_type.ndim > 1 else layout in 'CF'
-    res = context.get_constant(types.boolean, val)
+def array_flags_f_contiguous(context, builder, typ, value):
+    if typ.array_type.layout == 'A':
+        # any layout can stil be contiguous
+        flagsobj = context.make_helper(builder, typ, value=value)
+        res = _call_contiguous_check(is_fortran, context, builder,
+                                     typ.array_type, flagsobj.parent)
+    else:
+        layout = typ.array_type.layout
+        val = layout == 'F' if typ.array_type.ndim > 1 else layout in 'CF'
+        res = context.get_constant(types.boolean, val)
     return impl_ret_untracked(context, builder, typ, res)
 
 
@@ -3549,11 +3588,15 @@ def array_copy(context, builder, sig, args):
 def numpy_copy(context, builder, sig, args):
     return _array_copy(context, builder, sig, args)
 
-@lower_builtin(np.asfortranarray, types.Array)
-def array_asfortranarray(context, builder, sig, args):
+
+def _as_layout_array(context, builder, sig, args, output_layout):
+    """
+    Common logic for layout conversion function;
+    e.g. ascontiguousarray and asfortranarray
+    """
     retty = sig.return_type
     aryty = sig.args[0]
-    assert retty.layout == 'F'
+    assert retty.layout == output_layout, 'return-type has incorrect layout'
 
     if aryty.ndim == 0:
         # 0-dim input => asfortranarray() returns a 1-dim array
@@ -3575,8 +3618,44 @@ def array_asfortranarray(context, builder, sig, args):
         return impl_ret_borrowed(context, builder, retty, args[0])
 
     else:
-        # Return a copy with the right layout
-        return _array_copy(context, builder, sig, args)
+        if aryty.layout == 'A':
+            # There's still chance the array is in contiguous layout,
+            # just that we don't know at compile time.
+            # We can do a runtime check.
+
+            # Prepare and call is_contiguous or is_fortran
+            assert output_layout in 'CF'
+            check_func = is_contiguous if output_layout == 'C' else is_fortran
+            is_contig = _call_contiguous_check(check_func, context, builder, aryty, args[0])
+            with builder.if_else(is_contig) as (then, orelse):
+                # If the array is already contiguous, just return it
+                with then:
+                    out_then = impl_ret_borrowed(context, builder, retty,
+                                                 args[0])
+                    then_blk = builder.block
+                # Otherwise, copy to a new contiguous region
+                with orelse:
+                    out_orelse = _array_copy(context, builder, sig, args)
+                    orelse_blk = builder.block
+            # Phi node for the return value
+            ret_phi = builder.phi(out_then.type)
+            ret_phi.add_incoming(out_then, then_blk)
+            ret_phi.add_incoming(out_orelse, orelse_blk)
+            return ret_phi
+
+        else:
+            # Return a copy with the right layout
+            return _array_copy(context, builder, sig, args)
+
+
+@lower_builtin(np.asfortranarray, types.Array)
+def array_asfortranarray(context, builder, sig, args):
+    return _as_layout_array(context, builder, sig, args, output_layout='F')
+
+
+@lower_builtin(np.ascontiguousarray, types.Array)
+def array_ascontiguousarray(context, builder, sig, args):
+    return _as_layout_array(context, builder, sig, args, output_layout='C')
 
 
 @lower_builtin("array.astype", types.Array, types.DTypeSpec)
