@@ -1,23 +1,21 @@
 from __future__ import print_function, division, absolute_import
 
-import os
-import inspect
 from contextlib import contextmanager
 from collections import namedtuple, defaultdict
-from pprint import pprint
 import sys
 import warnings
 import traceback
 import threading
-from .tracing import trace, event
+from .tracing import event
 
 from numba import (bytecode, interpreter, funcdesc, postproc,
                    typing, typeinfer, lowering, objmode, utils, config,
-                   errors, types, ir, types, rewrites, transforms)
+                   errors, types, ir, rewrites, transforms)
 from numba.targets import cpu, callconv
 from numba.annotations import type_annotations
 from numba.parfor import PreParforPass, ParforPass, Parfor
 from numba.inline_closurecall import InlineClosureCallPass
+from numba.errors import CompilerError
 
 
 # Lock for the preventing multiple compiler execution
@@ -45,7 +43,8 @@ class Flags(utils.ConfigOptions):
         'forceinline': False,
         'no_cpython_wrapper': False,
         # Enable automatic parallel optimization, can be fine-tuned by taking
-        # a dictionary of sub-options instead of a boolean, see parfor.py for detail.
+        # a dictionary of sub-options instead of a boolean, see parfor.py for
+        # detail.
         'auto_parallel': cpu.ParallelOptions(False),
         'nrt': False,
         'no_rewrites': False,
@@ -143,7 +142,8 @@ def compile_result(**kws):
 def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
                      locals={}):
     """
-    Compile the function in an isolated environment (typing and target context).
+    Compile the function in an isolated environment (typing and target
+    context).
     Good for testing.
     """
     from .targets.registry import cpu_target
@@ -230,7 +230,6 @@ class _PipelineManager(object):
 
     def run(self, status):
         assert self._finalized, "PM must be finalized before run()"
-        res = None
         for pipeline_name in self.pipeline_order:
             event(pipeline_name)
             is_final_pipeline = pipeline_name == self.pipeline_order[-1]
@@ -446,12 +445,15 @@ class Pipeline(object):
         with self.fallback_context('Function "%s" failed type inference'
                                    % (self.func_id.func_name,)):
             # Type inference
-            self.typemap, self.return_type, self.calltypes = type_inference_stage(
+            typemap, return_type, calltypes = type_inference_stage(
                 self.typingctx,
                 self.func_ir,
                 self.args,
                 self.return_type,
                 self.locals)
+            self.typemap = typemap
+            self.return_type = return_type
+            self.calltypes = calltypes
 
         with self.fallback_context('Function "%s" has invalid return type'
                                    % (self.func_id.func_name,)):
@@ -464,9 +466,10 @@ class Pipeline(object):
         inference.
         """
         assert self.func_ir
-        with self.fallback_context('Internal error in pre-inference rewriting '
-                                   'pass encountered during compilation of '
-                                   'function "%s"' % (self.func_id.func_name,)):
+        msg = ('Internal error in pre-inference rewriting '
+               'pass encountered during compilation of '
+               'function "%s"' % (self.func_id.func_name,))
+        with self.fallback_context(msg):
             rewrites.rewrite_registry.apply('before-inference',
                                             self, self.func_ir)
 
@@ -479,9 +482,10 @@ class Pipeline(object):
         assert self.func_ir
         assert isinstance(getattr(self, 'typemap', None), dict)
         assert isinstance(getattr(self, 'calltypes', None), dict)
-        with self.fallback_context('Internal error in post-inference rewriting '
-                                   'pass encountered during compilation of '
-                                   'function "%s"' % (self.func_id.func_name,)):
+        msg = ('Internal error in post-inference rewriting '
+               'pass encountered during compilation of '
+               'function "%s"' % (self.func_id.func_name,))
+        with self.fallback_context(msg):
             rewrites.rewrite_registry.apply('after-inference',
                                             self, self.func_ir)
 
@@ -491,9 +495,12 @@ class Pipeline(object):
         """
         # Ensure we have an IR and type information.
         assert self.func_ir
-        preparfor_pass = PreParforPass(self.func_ir, self.type_annotation.typemap,
+        preparfor_pass = PreParforPass(
+            self.func_ir,
+            self.type_annotation.typemap,
             self.type_annotation.calltypes, self.typingctx,
-            self.flags.auto_parallel)
+            self.flags.auto_parallel
+            )
         preparfor_pass.run()
 
     def stage_parfor_pass(self):
@@ -502,9 +509,14 @@ class Pipeline(object):
         """
         # Ensure we have an IR and type information.
         assert self.func_ir
-        parfor_pass = ParforPass(self.func_ir, self.type_annotation.typemap,
-            self.type_annotation.calltypes, self.return_type, self.typingctx,
-            self.flags.auto_parallel)
+        parfor_pass = ParforPass(
+            self.func_ir,
+            self.type_annotation.typemap,
+            self.type_annotation.calltypes,
+            self.return_type,
+            self.typingctx,
+            self.flags.auto_parallel
+            )
         parfor_pass.run()
 
         if config.WARNINGS:
@@ -524,11 +536,12 @@ class Pipeline(object):
                 if not self.func_ir.loc.filename == '<string>':
                     msg = ("parallel=True was specified but no transformation"
                            " for parallel execution was possible.")
-                    warnings.warn_explicit(msg,
-                                errors.NumbaWarning,
-                                self.func_id.filename,
-                                self.func_id.firstlineno)
-
+                    warnings.warn_explicit(
+                        msg,
+                        errors.NumbaWarning,
+                        self.func_id.filename,
+                        self.func_id.firstlineno
+                        )
 
     def stage_inline_pass(self):
         """
@@ -536,7 +549,8 @@ class Pipeline(object):
         """
         # Ensure we have an IR and type information.
         assert self.func_ir
-        inline_pass = InlineClosureCallPass(self.func_ir, self.flags.auto_parallel)
+        inline_pass = InlineClosureCallPass(self.func_ir,
+                                            self.flags.auto_parallel)
         inline_pass.run()
         # Remove all Dels, and re-run postproc
         post_proc = postproc.PostProcessor(self.func_ir)
@@ -546,7 +560,6 @@ class Pipeline(object):
             name = self.func_ir.func_id.func_qualname
             print(("IR DUMP: %s" % name).center(80, "-"))
             self.func_ir.dump()
-
 
     def stage_annotate_type(self):
         """
@@ -588,8 +601,9 @@ class Pipeline(object):
 
     def backend_nopython_mode(self):
         """Native mode compilation"""
-        with self.fallback_context("Function %s failed at nopython "
-                                   "mode lowering" % (self.func_id.func_name,)):
+        msg = ("Function %s failed at nopython "
+               "mode lowering" % (self.func_id.func_name,))
+        with self.fallback_context(msg):
             return native_lowering_stage(
                 self.targetctx,
                 self.library,
@@ -612,21 +626,22 @@ class Pipeline(object):
 
         lowered = lowerfn()
         signature = typing.signature(self.return_type, *self.args)
-        self.cr = compile_result(typing_context=self.typingctx,
-                                 target_context=self.targetctx,
-                                 entry_point=lowered.cfunc,
-                                 typing_error=self.status.fail_reason,
-                                 type_annotation=self.type_annotation,
-                                 library=self.library,
-                                 call_helper=lowered.call_helper,
-                                 signature=signature,
-                                 objectmode=objectmode,
-                                 interpmode=False,
-                                 lifted=self.lifted,
-                                 fndesc=lowered.fndesc,
-                                 environment=lowered.env,
-                                 has_dynamic_globals=lowered.has_dynamic_globals,
-                                 )
+        self.cr = compile_result(
+            typing_context=self.typingctx,
+            target_context=self.targetctx,
+            entry_point=lowered.cfunc,
+            typing_error=self.status.fail_reason,
+            type_annotation=self.type_annotation,
+            library=self.library,
+            call_helper=lowered.call_helper,
+            signature=signature,
+            objectmode=objectmode,
+            interpmode=False,
+            lifted=self.lifted,
+            fndesc=lowered.fndesc,
+            environment=lowered.env,
+            has_dynamic_globals=lowered.has_dynamic_globals,
+            )
 
     def stage_objectmode_backend(self):
         """
@@ -638,14 +653,18 @@ class Pipeline(object):
         # Warn if compiled function in object mode and force_pyobject not set
         if not self.flags.force_pyobject:
             if len(self.lifted) > 0:
-                warn_msg = 'Function "%s" was compiled in object mode without forceobj=True, but has lifted loops.' % (self.func_id.func_name,)
+                warn_msg = ('Function "%s" was compiled in object mode without'
+                            ' forceobj=True, but has lifted loops.' %
+                            (self.func_id.func_name,))
             else:
-                warn_msg = 'Function "%s" was compiled in object mode without forceobj=True.' % (self.func_id.func_name,)
+                warn_msg = ('Function "%s" was compiled in object mode without'
+                            ' forceobj=True.' % (self.func_id.func_name,))
             warnings.warn_explicit(warn_msg, errors.NumbaWarning,
                                    self.func_id.filename,
                                    self.func_id.firstlineno)
             if self.flags.release_gil:
-                warn_msg = "Code running in object mode won't allow parallel execution despite nogil=True."
+                warn_msg = ("Code running in object mode won't allow parallel"
+                            " execution despite nogil=True.")
                 warnings.warn_explicit(warn_msg, errors.NumbaWarning,
                                        self.func_id.filename,
                                        self.func_id.firstlineno)
@@ -692,13 +711,16 @@ class Pipeline(object):
             pm.add_stage(self.stage_process_ir, "processing IR")
             if not self.flags.no_rewrites:
                 if self.status.can_fallback:
-                    pm.add_stage(self.stage_preserve_ir, "preserve IR for fallback")
+                    pm.add_stage(self.stage_preserve_ir,
+                                 "preserve IR for fallback")
                 pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
-            pm.add_stage(self.stage_inline_pass, "inline calls to locally defined closures")
+            pm.add_stage(self.stage_inline_pass,
+                         "inline calls to locally defined closures")
             pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
             pm.add_stage(self.stage_annotate_type, "annotate type")
             if self.flags.auto_parallel.enabled:
-                pm.add_stage(self.stage_pre_parfor_pass, "Preprocessing for parfors")
+                pm.add_stage(self.stage_pre_parfor_pass,
+                             "Preprocessing for parfors")
             if not self.flags.no_rewrites:
                 pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
             if self.flags.auto_parallel.enabled:
@@ -711,14 +733,16 @@ class Pipeline(object):
             if self.func_ir is None:
                 pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
             pm.add_stage(self.stage_process_ir, "processing IR")
-            pm.add_stage(self.stage_objectmode_frontend, "object mode frontend")
+            pm.add_stage(self.stage_objectmode_frontend,
+                         "object mode frontend")
             pm.add_stage(self.stage_annotate_type, "annotate type")
             pm.add_stage(self.stage_objectmode_backend, "object mode backend")
             pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
 
         if self.status.can_giveup:
             pm.create_pipeline("interp")
-            pm.add_stage(self.stage_compile_interp_mode, "compiling with interpreter mode")
+            pm.add_stage(self.stage_compile_interp_mode,
+                         "compiling with interpreter mode")
             pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
 
         pm.finalize()
@@ -819,7 +843,7 @@ def legalize_return_type(return_type, interp, targetctx):
                     retstmts.append(inst.value.name)
                 elif isinstance(inst, ir.Assign):
                     if (isinstance(inst.value, ir.Expr)
-                        and inst.value.op == 'cast'):
+                            and inst.value.op == 'cast'):
                         caststmts[inst.target.name] = inst.value
                     elif isinstance(inst.value, ir.Arg):
                         argvars.add(inst.target.name)
@@ -829,8 +853,8 @@ def legalize_return_type(return_type, interp, targetctx):
         for var in retstmts:
             cast = caststmts.get(var)
             if cast is None or cast.value.name not in argvars:
-                raise TypeError("Only accept returning of array passed into the "
-                                "function as argument")
+                raise TypeError("Only accept returning of array passed into "
+                                "the function as argument")
 
     elif (isinstance(return_type, types.Function) or
             isinstance(return_type, types.Phantom)):
@@ -917,7 +941,9 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
 
 
 def py_lowering_stage(targetctx, library, interp, flags):
-    fndesc = funcdesc.PythonFunctionDescriptor.from_object_mode_function(interp)
+    fndesc = funcdesc.PythonFunctionDescriptor.from_object_mode_function(
+        interp
+        )
     lower = objmode.PyLower(targetctx, library, fndesc, interp)
     lower.lower()
     if not flags.no_cpython_wrapper:
