@@ -1,9 +1,9 @@
 import numpy as np
 from numba import cuda
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 
-class TestArrayAttr(unittest.TestCase):
+class TestArrayAttr(SerialMixin, unittest.TestCase):
     def test_contigous_2d(self):
         ary = np.arange(10)
         cary = ary.reshape(2, 5)

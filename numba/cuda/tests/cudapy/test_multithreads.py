@@ -4,7 +4,7 @@ import multiprocessing
 import numpy as np
 from numba import cuda
 from numba import unittest_support as unittest
-from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import skip_on_cudasim, SerialMixin
 
 try:
     from concurrent.futures import ThreadPoolExecutor
@@ -45,7 +45,7 @@ def spawn_process_entry(q):
 
 
 @skip_on_cudasim('disabled for cudasim')
-class TestMultiThreadCompiling(unittest.TestCase):
+class TestMultiThreadCompiling(SerialMixin, unittest.TestCase):
 
     @unittest.skipIf(not has_concurrent_futures, "no concurrent.futures")
     def test_concurrent_compiling(self):

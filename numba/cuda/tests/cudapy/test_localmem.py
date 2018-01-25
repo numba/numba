@@ -3,7 +3,7 @@ from __future__ import print_function, absolute_import, division
 import numpy as np
 
 from numba import cuda, int32, complex128
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 
 def culocal(A, B):
@@ -30,7 +30,7 @@ def culocal1tuple(A, B):
         B[i] = C[i]
 
 
-class TestCudaLocalMem(unittest.TestCase):
+class TestCudaLocalMem(SerialMixin, unittest.TestCase):
     def test_local_array(self):
         jculocal = cuda.jit('void(int32[:], int32[:])')(culocal)
         self.assertTrue('.local' in jculocal.ptx)

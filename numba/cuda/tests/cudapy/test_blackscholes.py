@@ -4,7 +4,7 @@ import numpy as np
 import math
 import time
 from numba import cuda, double
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 
 RISKFREE = 0.02
@@ -47,7 +47,7 @@ def randfloat(rand_var, low, high):
     return (1.0 - rand_var) * low + rand_var * high
 
 
-class TestBlackScholes(unittest.TestCase):
+class TestBlackScholes(SerialMixin, unittest.TestCase):
     def test_blackscholes(self):
         OPT_N = 400
         iterations = 2

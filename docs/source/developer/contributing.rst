@@ -159,11 +159,24 @@ Examples:
 * to run all tests in parallel, using multiple sub-processes::
 
     $ python -m numba.runtests -m
-    
+
 * For a detailed list of all options::
 
     $ python -m numba.runtests -h
 
+The numba test suite can take a long time to complete.  When you want to avoid
+the long wait,  it is useful to focus on the failing tests first with the
+following test runner options:
+
+* The ``--failed-first`` option is added to capture the list of failed tests
+  and to re-execute them first::
+
+    $ python -m numba.runtests --failed-first -mvb
+
+* The ``--last-failed`` option is used with ``--failed-first`` to execute
+  the previously failed tests only::
+
+    $ python -m numba.runtests --last-failed -mvb
 
 Development rules
 -----------------

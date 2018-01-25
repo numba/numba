@@ -3,7 +3,7 @@ import numpy as np
 from numba import vectorize
 from numba import cuda, float64
 from numba import unittest_support as unittest
-from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import skip_on_cudasim, SerialMixin
 from numba import config
 
 sig = [float64(float64, float64)]
@@ -15,7 +15,7 @@ if config.ENABLE_CUDASIM:
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
-class TestCUDAVectorizeScalarArg(unittest.TestCase):
+class TestCUDAVectorizeScalarArg(SerialMixin, unittest.TestCase):
 
     def test_vectorize_scalar_arg(self):
         @vectorize(sig, target=target)

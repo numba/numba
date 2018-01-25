@@ -1,11 +1,11 @@
 from numba import cuda
 import numpy as np
 from numba import unittest_support as unittest
-from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import skip_on_cudasim, SerialMixin
 import threading
 
 
-class TestMultiGPUContext(unittest.TestCase):
+class TestMultiGPUContext(SerialMixin, unittest.TestCase):
     @unittest.skipIf(len(cuda.gpus) < 2, "need more than 1 gpus")
     def test_multigpu_context(self):
         @cuda.jit("void(float64[:], float64[:])")

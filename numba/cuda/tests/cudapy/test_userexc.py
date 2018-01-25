@@ -1,6 +1,6 @@
 from __future__ import print_function, absolute_import, division
 
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 from numba import cuda
 
 
@@ -8,7 +8,7 @@ class MyError(Exception):
     pass
 
 
-class TestUserExc(unittest.TestCase):
+class TestUserExc(SerialMixin, unittest.TestCase):
     def test_user_exception(self):
         @cuda.jit("void(int32)", debug=True)
         def test_exc(x):

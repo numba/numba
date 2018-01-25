@@ -4,10 +4,11 @@ from numba.tests.support import override_config, TestCase
 from numba.cuda.testing import skip_on_cudasim
 from numba import unittest_support as unittest
 from numba import cuda, types
+from numba.cuda.testing import SerialMixin
 
 
 @skip_on_cudasim('Simulator does not produce debug dumps')
-class TestCudaDebugInfo(TestCase):
+class TestCudaDebugInfo(SerialMixin, TestCase):
     """
     These tests only checks the compiled PTX for debuginfo section
     """
