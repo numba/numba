@@ -6,10 +6,10 @@ import os
 import sys
 
 from numba import config, unittest_support as unittest
-from numba.tests.support import captured_stdout
+from numba.tests.support import captured_stdout, SerialMixin
 
 
-class CUDATestCase(unittest.TestCase):
+class CUDATestCase(SerialMixin, unittest.TestCase):
     def tearDown(self):
         from numba.cuda.cudadrv.devices import reset
 

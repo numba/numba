@@ -3,12 +3,13 @@ import os.path
 import numpy as np
 from numba.cuda.testing import unittest
 from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import SerialMixin
 from numba.cuda.cudadrv.driver import Linker
 from numba.cuda import require_context
 from numba import cuda
 
 @skip_on_cudasim('Linking unsupported in the simulator')
-class TestLinker(unittest.TestCase):
+class TestLinker(SerialMixin, unittest.TestCase):
 
     @require_context
     def test_linker_basic(self):
@@ -35,6 +36,7 @@ class TestLinker(unittest.TestCase):
         foo(A, B)
 
         self.assertTrue(A[0] == 123 + 2 * 321)
+
 
 if __name__ == '__main__':
     unittest.main()

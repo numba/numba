@@ -15,6 +15,7 @@ from ..numpy_support import (ufunc_find_matching_loop,
 from ..numpy_support import version as numpy_version
 from ..errors import TypingError
 from ..config import PerformanceWarning
+from numba import pndindex
 
 registry = Registry()
 infer = registry.register
@@ -1056,6 +1057,7 @@ class NdIter(AbstractTemplate):
         return signature(nditerty, *args)
 
 
+@infer_global(pndindex)
 @infer_global(np.ndindex)
 class NdIndex(AbstractTemplate):
 

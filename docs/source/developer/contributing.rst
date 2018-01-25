@@ -20,6 +20,32 @@ on this mailing-list.  You can subscribe and read the archives on
 and there is also a `Gmane mirror <http://news.gmane.org/gmane.comp.python.numba.user>`_
 allowing NNTP access.
 
+Real-time Chat
+''''''''''''''
+
+Numba uses Gitter for public real-time chat.  To help improve the
+signal-to-noise ratio, we have two channels:
+
+* `numba/numba <https://gitter.im/numba/numba>`_: General Numba discussion,
+  questions, and debugging help.
+* `numba/numba-dev <https://gitter.im/numba/numba-dev>`_: Discussion of PRs,
+  planning, release coordination, etc.
+
+Both channels are public, but we may ask that discussions on numba-dev move to
+the numba channel.  This is simply to ensure that numba-dev is easy for core
+developers to keep up with.
+
+Note that the Github issue tracker is the best place to report bugs.  Bug
+reports in chat are difficult to track and likely to be lost.
+
+Weekly Meetings
+'''''''''''''''
+
+The core Numba developers have a weekly video conference to discuss roadmap,
+feature planning, and outstanding issues.  These meetings are invite only, but
+minutes will be taken and will be posted to the
+`Numba wiki <https://github.com/numba/numba/wiki/Meeting-Minutes>`_.
+
 .. _report-numba-bugs:
 
 Bug tracker
@@ -128,16 +154,29 @@ Examples:
 
 * to run those tests::
 
-    $ python -m numba.runtests -l numba.tests.test_usecases
+    $ python -m numba.runtests numba.tests.test_usecases
 
 * to run all tests in parallel, using multiple sub-processes::
 
     $ python -m numba.runtests -m
-    
+
 * For a detailed list of all options::
 
     $ python -m numba.runtests -h
 
+The numba test suite can take a long time to complete.  When you want to avoid
+the long wait,  it is useful to focus on the failing tests first with the
+following test runner options:
+
+* The ``--failed-first`` option is added to capture the list of failed tests
+  and to re-execute them first::
+
+    $ python -m numba.runtests --failed-first -mvb
+
+* The ``--last-failed`` option is used with ``--failed-first`` to execute
+  the previously failed tests only::
+
+    $ python -m numba.runtests --last-failed -mvb
 
 Development rules
 -----------------

@@ -4,9 +4,10 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import cuda
+from numba.cuda.testing import SerialMixin
 
 
-class TestCudaSimIssues(unittest.TestCase):
+class TestCudaSimIssues(SerialMixin, unittest.TestCase):
 
     def test_cuda_module_in_device_function(self):
         """
