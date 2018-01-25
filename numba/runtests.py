@@ -11,10 +11,10 @@ def _main(argv, **kwds):
     # The 'main' API function is invoked in-process, and thus
     # will synthesize that name.
 
-    if '--ff' in argv:
-        # Fail first
-        argv.remove('--ff')
-        _FailFirstRunner().main(argv, kwds)
+    if '--failed-first' in argv:
+        # Failed first
+        argv.remove('--failed-first')
+        _FailedFirstRunner().main(argv, kwds)
     else:
         return run_tests(argv, defaultTest='numba.tests',
                          **kwds).wasSuccessful()
@@ -26,9 +26,9 @@ def main(*argv, **kwds):
     return _main(['<main>'] + list(argv), **kwds)
 
 
-class _FailFirstRunner(object):
+class _FailedFirstRunner(object):
     """
-    Test Runner to handle the failfirst (--ff) option.
+    Test Runner to handle the failed-first (--failed-first) option.
     """
     cache_filename = '.runtests_lastfailed'
 
