@@ -6,11 +6,7 @@ import os
 import sys
 
 from numba import config, unittest_support as unittest
-from numba.tests.support import captured_stdout
-
-
-class SerialMixin(object):
-    _numba_parallel_test_ = False
+from numba.tests.support import captured_stdout, SerialMixin
 
 
 class CUDATestCase(SerialMixin, unittest.TestCase):
