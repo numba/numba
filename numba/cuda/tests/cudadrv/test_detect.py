@@ -1,9 +1,9 @@
 from __future__ import absolute_import, print_function
 from numba import cuda
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 from numba.tests.support import captured_stdout
 
-class TestCudaDetect(unittest.TestCase):
+class TestCudaDetect(SerialMixin, unittest.TestCase):
     def test_cuda_detect(self):
         # exercise the code path
         with captured_stdout() as out:

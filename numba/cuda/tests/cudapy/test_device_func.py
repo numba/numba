@@ -5,12 +5,12 @@ import types
 
 import numpy as np
 
-from numba.cuda.testing import unittest, skip_on_cudasim
+from numba.cuda.testing import unittest, skip_on_cudasim, SerialMixin
 from numba import cuda, jit
 from numba.errors import TypingError
 
 
-class TestDeviceFunc(unittest.TestCase):
+class TestDeviceFunc(SerialMixin, unittest.TestCase):
 
     def test_use_add2f(self):
 

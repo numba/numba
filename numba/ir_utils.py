@@ -9,7 +9,7 @@ import types as pytypes
 from llvmlite import ir as lir
 import numba
 from numba.six import exec_
-from numba import ir, types, typing, config, analysis, utils, cgutils
+from numba import ir, types, typing, config, analysis, utils, cgutils, rewrites
 from numba.typing.templates import signature, infer_global, AbstractTemplate
 from numba.targets.imputils import impl_ret_untracked
 from numba.analysis import (compute_live_map, compute_use_defs,
@@ -352,6 +352,8 @@ def visit_vars_stmt(stmt, callback, cbdata):
         stmt.name = visit_vars_inner(stmt.name, callback, cbdata)
     elif isinstance(stmt, ir.Return):
         stmt.value = visit_vars_inner(stmt.value, callback, cbdata)
+    elif isinstance(stmt, ir.Raise):
+        stmt.exception = visit_vars_inner(stmt.exception, callback, cbdata)
     elif isinstance(stmt, ir.Branch):
         stmt.cond = visit_vars_inner(stmt.cond, callback, cbdata)
     elif isinstance(stmt, ir.Jump):
@@ -496,7 +498,6 @@ def remove_dead(blocks, args, typemap=None, alias_map=None, arg_aliases=None):
         # find live variables at the end of block
         for out_blk, _data in cfg.successors(label):
             lives |= live_map[out_blk]
-        lives |= arg_aliases
         removed |= remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_set, typemap)
     return removed
 
@@ -521,7 +522,7 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_se
     for stmt in reversed(block.body[:-1]):
         # aliases of lives are also live
         alias_lives = set()
-        init_alias_lives = lives & alias_set
+        init_alias_lives = (lives | arg_aliases) & alias_set
         for v in init_alias_lives:
             alias_lives |= alias_map[v]
         # let external calls handle stmt if type matches
@@ -544,7 +545,8 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_se
                 continue
             # TODO: remove other nodes like SetItem etc.
         if isinstance(stmt, ir.SetItem):
-            if stmt.target.name not in lives and stmt.target.name not in alias_lives:
+            name = stmt.target.name
+            if not (name in lives or name in alias_lives or name in arg_aliases):
                 continue
 
         if type(stmt) in analysis.ir_extension_usedefs:
@@ -1095,6 +1097,7 @@ def simplify_CFG(blocks):
         block = blocks[label]
         return len(block.body) == 1 and isinstance(block.body[0], ir.Branch)
     single_branch_blocks = list(filter(find_single_branch, blocks.keys()))
+    marked_for_del = set()
     for label in single_branch_blocks:
         inst = blocks[label].body[0]
         predecessors = cfg.predecessors(label)
@@ -1106,7 +1109,10 @@ def simplify_CFG(blocks):
             else:
                 delete_block = False
         if delete_block:
-            del blocks[label]
+            marked_for_del.add(label)
+    # Delete marked labels
+    for label in marked_for_del:
+        del blocks[label]
     merge_adjacent_blocks(blocks)
     return rename_labels(blocks)
 
@@ -1187,11 +1193,25 @@ def get_array_accesses(blocks, accesses=None):
                 if isinstance(rhs, ir.Expr) and rhs.op == 'getitem':
                     accesses.add((rhs.value.name, rhs.index.name))
                 if isinstance(rhs, ir.Expr) and rhs.op == 'static_getitem':
-                    accesses.add((rhs.value.name, rhs.index))
+                    index = rhs.index
+                    # slice is unhashable, so just keep the variable
+                    if index is None or is_slice_index(index):
+                        index = rhs.index_var.name
+                    accesses.add((rhs.value.name, index))
             for T, f in array_accesses_extensions.items():
                 if isinstance(inst, T):
                     f(inst, accesses)
     return accesses
+
+def is_slice_index(index):
+    """see if index is a slice index or has slice in it"""
+    if isinstance(index, slice):
+        return True
+    if isinstance(index, tuple):
+        for i in index:
+            if isinstance(i, slice):
+                return True
+    return False
 
 def merge_adjacent_blocks(blocks):
     cfg = compute_cfg_from_blocks(blocks)
@@ -1213,17 +1233,17 @@ def merge_adjacent_blocks(blocks):
             if len(preds) != 1 or preds[0][0] != label:
                 break
             next_block = blocks[next_label]
-            if block.scope != next_block.scope:
-                break
+            # XXX: commented out since scope objects are not consistent
+            # thoughout the compiler. for example, pieces of code are compiled
+            # and inlined on the fly without proper scope merge.
+            # if block.scope != next_block.scope:
+            #     break
             # merge
-            block.body = block.body[:(len(block.body) - 1)]
-            for stmts in next_block.body:
-                block.body.append(stmts)
+            block.body.pop()  # remove Jump
+            block.body += next_block.body
             del blocks[next_label]
             removed.add(next_label)
             label = next_label
-
-    cfg = compute_cfg_from_blocks(blocks)
 
 def restore_copy_var_names(blocks, save_copies, typemap):
     """
@@ -1292,6 +1312,35 @@ def get_definition(func_ir, name, **kwargs):
         return func_ir.get_definition(name, **kwargs)
     except KeyError:
         raise GuardException
+
+def build_definitions(blocks=None, func_ir=None):
+    """Build the definitions table of the given blocks by scanning
+    through all blocks and instructions, useful when the definitions
+    table is out-of-sync.
+    Must give at least one argument, and the new definitions table is
+    returned. If func_ir is not None, func_ir._definitions will be
+    updated with new entries. So If we also want to get rid of old
+    definitions table, we must do:
+      func_ir._definitions = build_definitions(blocks=func_ir.blocks)
+    """
+    if func_ir == None:
+        definitions = dict()
+    else:
+        definitions = func_ir._definitions
+
+    if blocks == None:
+        assert(func_ir != None)
+        blocks = func_ir.blocks
+
+    for block in blocks.values():
+        for inst in block.find_insts(ir.Assign):
+            name = inst.target.name
+            definition = definitions.get(name, [])
+            if definition == []:
+                definitions[name] = definition
+            definition.append(inst.value)
+
+    return definitions
 
 def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition):
     """Check if a call expression is calling a numpy function, and
@@ -1449,6 +1498,20 @@ def get_ir_of_code(glbls, fcode):
     f.__name__ = fcode.co_name
     from numba import compiler
     ir = compiler.run_frontend(f)
+    # we need to run the before inference rewrite pass to normalize the IR
+    # XXX: check rewrite pass flag?
+    # for example, Raise nodes need to become StaticRaise before type inference
+    class DummyPipeline(object):
+        def __init__(self, f_ir):
+            self.typingctx = None
+            self.targetctx = None
+            self.args = None
+            self.func_ir = f_ir
+            self.typemap = None
+            self.return_type = None
+            self.calltypes = None
+    rewrites.rewrite_registry.apply('before-inference',
+                                    DummyPipeline(ir), ir)
     return ir
 
 def replace_arg_nodes(block, args):

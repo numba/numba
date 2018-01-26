@@ -14,7 +14,7 @@ from numba import jit, jitclass, types
 from numba.compiler import compile_isolated, Flags
 from numba.targets.cpu import ParallelOptions
 from numba.errors import NumbaWarning
-from numba import compiler
+from numba import compiler, prange
 from .test_parfors import skip_unsupported
 
 def simple_nopython(somearg):
@@ -37,6 +37,12 @@ def simple_class_user(obj):
 
 def unsupported_parfor(a, b):
     return np.dot(a, b) # dot as gemm unsupported
+
+def supported_parfor(n):
+    a = np.ones(n)
+    for i in prange(n):
+        a[i] = a[i] + np.sin(i)
+    return a
 
 force_parallel_flags = Flags()
 force_parallel_flags.set("auto_parallel", ParallelOptions(True))
@@ -212,10 +218,9 @@ class TestEnvironmentOverride(FunctionDebugTestBase):
         out = self.compile_simple_nopython()
         self.assertFalse(out)
 
-class TestParforWarnings(TestCase):
+class TestParforsDebug(TestCase):
     """
-    Test that using parallel=True on a function that does not have parallel
-    semantics warns if NUMBA_WARNINGS is set.
+    Tests debug options associated with parfors
     """
 
     # mutates env with os.environ so must be run serially
@@ -233,6 +238,10 @@ class TestParforWarnings(TestCase):
 
     @skip_unsupported
     def test_warns(self):
+        """
+        Test that using parallel=True on a function that does not have parallel
+        semantics warns if NUMBA_WARNINGS is set.
+        """
         with override_env_config('NUMBA_WARNINGS', '1'):
             arr_ty = types.Array(types.float64, 2, "C")
             with warnings.catch_warnings(record=True) as w:
@@ -240,6 +249,50 @@ class TestParforWarnings(TestCase):
                 cres = compile_isolated(unsupported_parfor, (arr_ty, arr_ty),
                                         flags=force_parallel_flags)
             self.check_parfors_warning(w)
+
+    @skip_unsupported
+    def test_array_debug_opt_stats(self):
+        """
+        Test that NUMBA_DEBUG_ARRAY_OPT_STATS produces valid output
+        """
+        with override_env_config('NUMBA_DEBUG_ARRAY_OPT_STATS', '1'):
+            with captured_stdout() as out:
+                cres = compile_isolated(supported_parfor, (types.int64,),
+                                        flags=force_parallel_flags)
+
+            # grab the various parts out the output
+            output = out.getvalue().split('\n')
+            parallel_loop_output = \
+                [x for x in output if 'is produced from pattern' in x]
+            fuse_output = \
+                [x for x in output if 'is fused into' in x]
+            after_fusion_output = \
+                [x for x in output if 'After fusion, function' in x]
+
+            # Check the Parallel for-loop <index> is produced from <pattern>
+            # works first
+            pattern = ('ones function', ('prange', 'user'))
+            fmt = 'Parallel for-loop #{} is produced from pattern \'{}\' at'
+            for i, trials in enumerate(parallel_loop_output):
+                to_match = fmt.format(i, pattern[i])
+                self.assertIn(to_match, trials)
+
+            # Check the fusion statements are correct
+            pattern = (1, 0)
+            fmt = 'Parallel for-loop #{} is fused into for-loop #{}.'
+            for trials in fuse_output:
+                to_match = fmt.format(*pattern)
+                self.assertIn(to_match, trials)
+
+            # Check the post fusion statements are correct
+            pattern = (supported_parfor.__name__, 1, set([0]))
+            fmt = 'After fusion, function {} has {} parallel for-loop(s) #{}.'
+            for trials in after_fusion_output:
+                to_match = fmt.format(*pattern)
+                self.assertIn(to_match, trials)
+
+
+
 
 
 if __name__ == '__main__':

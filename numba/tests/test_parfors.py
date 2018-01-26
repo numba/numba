@@ -5,7 +5,7 @@
 
 from __future__ import print_function, division, absolute_import
 
-import math
+from math import sqrt
 import re
 import sys
 import types as pytypes
@@ -129,6 +129,19 @@ def test2(Y, X, w, iterations):
         w -= np.dot(((1.0 / (1.0 + np.exp(-Y * np.dot(X, w))) - 1.0) * Y), X)
     return w
 
+def test_kmeans_example(A, numCenter, numIter, init_centroids):
+    centroids = init_centroids
+    N, D = A.shape
+
+    for l in range(numIter):
+        dist = np.array([[sqrt(np.sum((A[i,:]-centroids[j,:])**2))
+                                for j in range(numCenter)] for i in range(N)])
+        labels = np.array([dist[i,:].argmin() for i in range(N)])
+
+        centroids = np.array([[np.sum(A[labels==i, j])/np.sum(labels==i)
+                                 for j in range(D)] for i in range(numCenter)])
+
+    return centroids
 
 def countParfors(test_func, args, **kws):
     typingctx = typing.Context()
@@ -160,6 +173,10 @@ def countParfors(test_func, args, **kws):
             args=tp.args,
             return_type=tp.return_type,
             html_output=config.HTML)
+
+        preparfor_pass = numba.parfor.PreParforPass(
+            tp.func_ir, tp.typemap, tp.calltypes, tp.typingctx, options)
+        preparfor_pass.run()
 
         numba.rewrites.rewrite_registry.apply(
             'after-inference', tp, tp.func_ir)
@@ -260,6 +277,18 @@ class TestParfors(TestParforsBase):
 
     @skip_unsupported
     @tag('important')
+    def test_fuse_argmin(self):
+        def test_impl(n):
+            A = np.ones(n)
+            C = A.argmin()
+            B = A.sum()
+            return B+C
+
+        self.check(test_impl, 256)
+        self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
+
+    @skip_unsupported
+    @tag('important')
     def test_test1(self):
         # blackscholes takes 5 1D float array args
         args = (numba.float64[:], ) * 5
@@ -272,6 +301,20 @@ class TestParfors(TestParforsBase):
         args = (numba.float64[:], numba.float64[:,:], numba.float64[:],
                 numba.int64)
         self.assertTrue(countParfors(test2, args) == 1)
+
+    @skip_unsupported
+    @tag('important')
+    def test_kmeans(self):
+        np.random.seed(0)
+        N = 1024
+        D = 10
+        centers = 3
+        A = np.random.ranf((N, D))
+        init_centroids = np.random.ranf((centers, D))
+        self.check(test_kmeans_example, A, centers, 3, init_centroids,
+                                                                    decimal=1)
+        # TODO: count parfors after k-means fusion is working
+        # requires recursive parfor counting
 
     @unittest.skipIf(not (_windows_py27 or _32bit),
                      "Only impacts Windows with Python 2.7 / 32 bit hardware")
@@ -436,6 +479,36 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, *self.simple_args)
 
     @skip_unsupported
+    def test_arange(self):
+        # test with stop only
+        def test_impl1(n):
+            return np.arange(n)
+        # start and stop
+        def test_impl2(s, n):
+            return np.arange(n)
+        # start, step, stop
+        def test_impl3(s, n, t):
+            return np.arange(s, n, t)
+
+        for arg in [11, 128, 30.0, complex(4,5), complex(5,4)]:
+            self.check(test_impl1, arg)
+            self.check(test_impl2, 2, arg)
+            self.check(test_impl3, 2, arg, 2)
+
+    @skip_unsupported
+    def test_linspace(self):
+        # without num
+        def test_impl1(start, stop):
+            return np.linspace(start, stop)
+        # with num
+        def test_impl2(start, stop, num):
+            return np.linspace(start, stop, num)
+
+        for arg in [11, 128, 30.0, complex(4,5), complex(5,4)]:
+            self.check(test_impl1, 2, arg)
+            self.check(test_impl2, 2, arg, 30)
+
+    @skip_unsupported
     def test_size_assertion(self):
         def test_impl(m, n):
             A = np.ones(m)
@@ -448,6 +521,42 @@ class TestParfors(TestParforsBase):
             cfunc(10, 9)
         msg = "Sizes of A, B do not match"
         self.assertIn(msg, str(raises.exception))
+
+    @skip_unsupported
+    def test_mean(self):
+        def test_impl(A):
+            return A.mean()
+        N = 100
+        A = np.random.ranf(N)
+        B = np.random.randint(10, size=(N, 3))
+        self.check(test_impl, A)
+        self.check(test_impl, B)
+        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'), )) == 1)
+        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )) == 1)
+
+    @skip_unsupported
+    def test_var(self):
+        def test_impl(A):
+            return A.var()
+        N = 100
+        A = np.random.ranf(N)
+        B = np.random.randint(10, size=(N, 3))
+        self.check(test_impl, A)
+        self.check(test_impl, B)
+        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'), )) == 2)
+        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )) == 2)
+
+    @skip_unsupported
+    def test_std(self):
+        def test_impl(A):
+            return A.std()
+        N = 100
+        A = np.random.ranf(N)
+        B = np.random.randint(10, size=(N, 3))
+        self.check(test_impl, A)
+        self.check(test_impl, B)
+        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'), )) == 2)
+        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )) == 2)
 
     @skip_unsupported
     def test_random_parfor(self):
@@ -525,12 +634,36 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, A)
         A = np.random.randint(10, size=n).astype(np.int32)
         self.check(test_impl, A)
+
         # test checking the number of arguments for the reduce function
         def test_impl():
             g = lambda x: x ** 2
             return reduce(g, np.array([1, 2, 3, 4, 5]), 2)
         with self.assertTypingError():
             self.check(test_impl)
+
+        # test checking reduction over bitarray masked arrays
+        n = 160
+        A = np.random.randint(10, size=n).astype(np.int32)
+        def test_impl(A):
+            return np.sum(A[A>=3])
+        self.check(test_impl, A)
+        # TODO: this should fuse
+        # self.assertTrue(countParfors(test_impl, (numba.float64[:],)) == 1)
+
+        def test_impl(A):
+            B = A[:,0]
+            return np.sum(A[B>=3,1])
+        self.check(test_impl, A.reshape((16,10)))
+        # TODO: this should also fuse
+        #self.assertTrue(countParfors(test_impl, (numba.float64[:,:],)) == 1)
+
+        def test_impl(A):
+            B = A[:,0]
+            return np.sum(A[B>=3,1:2])
+        self.check(test_impl, A.reshape((16,10)))
+        # this doesn't fuse due to mixed indices
+        self.assertTrue(countParfors(test_impl, (numba.float64[:,:],)) == 2)
 
     @skip_unsupported
     def test_min(self):
@@ -1142,9 +1275,19 @@ class TestParforsSlice(TestParforsBase):
             b[0:(n-1)] = 10
             return a * b
 
-        self.check(test_impl, np.ones(10), np.zeros(10), 2)
+        self.check(test_impl, np.ones(10), np.zeros(10), 8)
         args = (numba.float64[:], numba.float64[:], numba.int64)
         self.assertEqual(countParfors(test_impl, args), 2)
+
+    @skip_unsupported
+    def test_parfor_slice17(self):
+        def test_impl(m, A):
+            B = np.zeros(m)
+            n = len(A)
+            B[-n:] = A
+            return B
+
+        self.check(test_impl, 10, np.ones(10))
 
 
 class TestParforsOptions(TestParforsBase):

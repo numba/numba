@@ -105,7 +105,7 @@ class DeviceNDArrayBase(object):
         self.gpu_data = gpu_data
 
         self.__writeback = writeback    # should deprecate the use of this
-        self.stream = 0
+        self.stream = stream
 
     def bind(self, stream=0):
         """Bind a CUDA stream to this object so that all subsequent operation
@@ -114,6 +114,21 @@ class DeviceNDArrayBase(object):
         clone = copy.copy(self)
         clone.stream = stream
         return clone
+
+    @property
+    def T(self):
+        return self.transpose()
+
+    def transpose(self, axes=None):
+        if axes and tuple(axes) == tuple(range(self.ndim)):
+            return self
+        elif self.ndim != 2:
+            raise NotImplementedError("transposing a non-2D DeviceNDArray isn't supported")
+        elif axes is not None and set(axes) != set(range(self.ndim)):
+            raise ValueError("invalid axes list %r" % (axes,))
+        else:
+            from numba.cuda.kernels.transpose import transpose
+            return transpose(self)
 
     def _default_stream(self, stream):
         return self.stream if not stream else stream
@@ -146,11 +161,30 @@ class DeviceNDArrayBase(object):
         if ary.size == 0:
             # Nothing to do
             return
+
+        sentry_contiguous(self)
         stream = self._default_stream(stream)
+
         if _driver.is_device_memory(ary):
+            sentry_contiguous(ary)
+
+            if self.flags['C_CONTIGUOUS'] != ary.flags['C_CONTIGUOUS']:
+                raise ValueError("Can't copy %s-contiguous array to a %s-contiguous array" % (
+                    'C' if ary.flags['C_CONTIGUOUS'] else 'F',
+                    'C' if self.flags['C_CONTIGUOUS'] else 'F',
+                ))
+
             sz = min(self.alloc_size, ary.alloc_size)
             _driver.device_to_device(self, ary, sz, stream=stream)
         else:
+            # Ensure same contiguous-nous. Only copies (host-side)
+            # if necessary (e.g. it needs to materialize a strided view)
+            ary = np.array(
+                ary,
+                order='C' if self.flags['C_CONTIGUOUS'] else 'F',
+                subok=True,
+                copy=False)
+
             sz = min(_driver.host_memory_size(ary), self.alloc_size)
             _driver.host_to_device(self, ary, sz, stream=stream)
 
@@ -267,6 +301,16 @@ class DeviceRecord(DeviceNDArrayBase):
                                            gpu_data)
 
     @property
+    def flags(self):
+        """
+        For `numpy.ndarray` compatibility. Ideally this would return a
+        `np.core.multiarray.flagsobj`, but that needs to be constructed
+        with an existing `numpy.ndarray` (as the C- and F- contiguous flags
+        aren't writeable).
+        """
+        return dict(self._dummy.flags) # defensive copy
+
+    @property
     def _numba_type_(self):
         """
         Magic attribute expected by Numba to get the numba type that
@@ -285,11 +329,27 @@ class DeviceNDArray(DeviceNDArrayBase):
         '''
         return self._dummy.is_f_contig
 
+    @property
+    def flags(self):
+        """
+        For `numpy.ndarray` compatibility. Ideally this would return a
+        `np.core.multiarray.flagsobj`, but that needs to be constructed
+        with an existing `numpy.ndarray` (as the C- and F- contiguous flags
+        aren't writeable).
+        """
+        return dict(self._dummy.flags) # defensive copy
+
     def is_c_contiguous(self):
         '''
         Return true if the array is C-contiguous.
         '''
         return self._dummy.is_c_contig
+
+    def __array__(self, dtype=None):
+        """
+        :return: an `numpy.ndarray`, so copies to the host.
+        """
+        return self.copy_to_host().__array__(dtype)
 
     def reshape(self, *newshape, **kws):
         """

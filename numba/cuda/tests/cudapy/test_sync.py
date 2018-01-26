@@ -1,7 +1,7 @@
 from __future__ import print_function, absolute_import
 import numpy as np
 from numba import cuda, int32, float32
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 from numba.config import ENABLE_CUDASIM
 
 
@@ -56,7 +56,7 @@ def use_threadfence_system(ary):
     ary[0] += 321
 
 
-class TestCudaSync(unittest.TestCase):
+class TestCudaSync(SerialMixin, unittest.TestCase):
     def test_useless_sync(self):
         compiled = cuda.jit("void(int32[::1])")(useless_sync)
         nelem = 10

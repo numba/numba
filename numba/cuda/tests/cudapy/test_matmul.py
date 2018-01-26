@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 
 from numba import cuda, config, float32
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 # Ensure the test takes a reasonable amount of time in the simulator
 if config.ENABLE_CUDASIM:
@@ -15,7 +15,7 @@ n = bpg * tpb
 SM_SIZE = (tpb, tpb)
 
 
-class TestCudaMatMul(unittest.TestCase):
+class TestCudaMatMul(SerialMixin, unittest.TestCase):
 
     def test_func(self):
 

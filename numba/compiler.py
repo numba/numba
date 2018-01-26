@@ -16,7 +16,7 @@ from numba import (bytecode, interpreter, funcdesc, postproc,
                    errors, types, ir, types, rewrites, transforms)
 from numba.targets import cpu, callconv
 from numba.annotations import type_annotations
-from numba.parfor import ParforPass, Parfor
+from numba.parfor import PreParforPass, ParforPass, Parfor
 from numba.inline_closurecall import InlineClosureCallPass
 
 
@@ -485,6 +485,17 @@ class Pipeline(object):
             rewrites.rewrite_registry.apply('after-inference',
                                             self, self.func_ir)
 
+    def stage_pre_parfor_pass(self):
+        """
+        Preprocessing for data-parallel computations.
+        """
+        # Ensure we have an IR and type information.
+        assert self.func_ir
+        preparfor_pass = PreParforPass(self.func_ir, self.type_annotation.typemap,
+            self.type_annotation.calltypes, self.typingctx,
+            self.flags.auto_parallel)
+        preparfor_pass.run()
+
     def stage_parfor_pass(self):
         """
         Convert data-parallel computations into Parfor nodes
@@ -686,6 +697,8 @@ class Pipeline(object):
             pm.add_stage(self.stage_inline_pass, "inline calls to locally defined closures")
             pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
             pm.add_stage(self.stage_annotate_type, "annotate type")
+            if self.flags.auto_parallel.enabled:
+                pm.add_stage(self.stage_pre_parfor_pass, "Preprocessing for parfors")
             if not self.flags.no_rewrites:
                 pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
             if self.flags.auto_parallel.enabled:

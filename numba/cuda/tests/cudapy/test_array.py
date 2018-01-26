@@ -2,11 +2,11 @@ from __future__ import print_function, division, absolute_import
 
 import numpy as np
 
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 from numba import cuda
 
 
-class TestCudaArray(unittest.TestCase):
+class TestCudaArray(SerialMixin, unittest.TestCase):
     def test_gpu_array_zero_length(self):
         x = np.arange(0)
         dx = cuda.to_device(x)
