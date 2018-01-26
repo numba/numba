@@ -127,8 +127,11 @@ class BaseFunction(Callable):
                 else:
                     failures.add_error(temp_cls, "rejected")
 
-        if failures:
-            raise errors.TypingError(failures.format())
+        if not failures:
+            raise AssertionError("Internal Error. "
+                                 "Function resolution ended with no failures "
+                                 "or successfull signature")
+        raise errors.TypingError(failures.format())
 
     def get_call_signatures(self):
         sigs = []
