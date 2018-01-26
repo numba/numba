@@ -256,7 +256,7 @@ class _PipelineManager(object):
         raise CompilerError("All pipelines have failed")
 
 
-class Pipeline(object):
+class BasePipeline(object):
     """
     Stores and manages states for the compiler pipeline
     """
@@ -698,53 +698,72 @@ class Pipeline(object):
         Cleanup intermediate results to release resources.
         """
 
+    def define_pipelines(self, pm):
+        raise NotImplementedError()
+
+    def add_preprocessing_stage(self, pm):
+        if self.func_ir is None:
+            pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
+        pm.add_stage(self.stage_process_ir, "processing IR")
+
+    def add_pre_typing_stage(self, pm):
+        if not self.flags.no_rewrites:
+            if self.status.can_fallback:
+                pm.add_stage(self.stage_preserve_ir,
+                             "preserve IR for fallback")
+            pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
+        pm.add_stage(self.stage_inline_pass,
+                     "inline calls to locally defined closures")
+
+    def add_typing_stage(self, pm):
+        pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
+        pm.add_stage(self.stage_annotate_type, "annotate type")
+
+    def add_optimization_stage(self, pm):
+        if self.flags.auto_parallel.enabled:
+            pm.add_stage(self.stage_pre_parfor_pass,
+                         "Preprocessing for parfors")
+        if not self.flags.no_rewrites:
+            pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
+        if self.flags.auto_parallel.enabled:
+            pm.add_stage(self.stage_parfor_pass, "convert to parfors")
+
+    def add_lowering_stage(self, pm):
+        pm.add_stage(self.stage_nopython_backend, "nopython mode backend")
+
+    def add_cleanup_stage(self, pm):
+        pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
+
+    def define_nopython_pipeline(self, pm, name='nopython'):
+        pm.create_pipeline(name)
+        self.add_preprocessing_stage(pm)
+        self.add_pre_typing_stage(pm)
+        self.add_typing_stage(pm)
+        self.add_optimization_stage(pm)
+        self.add_lowering_stage(pm)
+        self.add_cleanup_stage(pm)
+
+    def define_objectmode_pipeline(self, pm, name='object'):
+        pm.create_pipeline(name)
+        self.add_preprocessing_stage(pm)
+        pm.add_stage(self.stage_objectmode_frontend,
+                     "object mode frontend")
+        pm.add_stage(self.stage_annotate_type, "annotate type")
+        pm.add_stage(self.stage_objectmode_backend, "object mode backend")
+        self.add_cleanup_stage(pm)
+
+    def define_interpreted_pipeline(self, pm, name="interp"):
+        pm.create_pipeline(name)
+        pm.add_stage(self.stage_compile_interp_mode,
+                     "compiling with interpreter mode")
+        self.add_cleanup_stage(pm)
+
     def _compile_core(self):
         """
         Populate and run compiler pipeline
         """
         pm = _PipelineManager()
-
-        if not self.flags.force_pyobject:
-            pm.create_pipeline("nopython")
-            if self.func_ir is None:
-                pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
-            pm.add_stage(self.stage_process_ir, "processing IR")
-            if not self.flags.no_rewrites:
-                if self.status.can_fallback:
-                    pm.add_stage(self.stage_preserve_ir,
-                                 "preserve IR for fallback")
-                pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
-            pm.add_stage(self.stage_inline_pass,
-                         "inline calls to locally defined closures")
-            pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
-            pm.add_stage(self.stage_annotate_type, "annotate type")
-            if self.flags.auto_parallel.enabled:
-                pm.add_stage(self.stage_pre_parfor_pass,
-                             "Preprocessing for parfors")
-            if not self.flags.no_rewrites:
-                pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
-            if self.flags.auto_parallel.enabled:
-                pm.add_stage(self.stage_parfor_pass, "convert to parfors")
-            pm.add_stage(self.stage_nopython_backend, "nopython mode backend")
-            pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
-
-        if self.status.can_fallback or self.flags.force_pyobject:
-            pm.create_pipeline("object")
-            if self.func_ir is None:
-                pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
-            pm.add_stage(self.stage_process_ir, "processing IR")
-            pm.add_stage(self.stage_objectmode_frontend,
-                         "object mode frontend")
-            pm.add_stage(self.stage_annotate_type, "annotate type")
-            pm.add_stage(self.stage_objectmode_backend, "object mode backend")
-            pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
-
-        if self.status.can_giveup:
-            pm.create_pipeline("interp")
-            pm.add_stage(self.stage_compile_interp_mode,
-                         "compiling with interpreter mode")
-            pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
-
+        self.define_pipelines(pm)
         pm.finalize()
         res = pm.run(self.status)
         if res is not None:
@@ -767,6 +786,18 @@ class Pipeline(object):
         """
         assert self.func_ir is not None
         return self._compile_core()
+
+
+class Pipeline(BasePipeline):
+    """The default compiler pipeline
+    """
+    def define_pipelines(self, pm):
+        if not self.flags.force_pyobject:
+            self.define_nopython_pipeline(pm)
+        if self.status.can_fallback or self.flags.force_pyobject:
+            self.define_objectmode_pipeline(pm)
+        if self.status.can_giveup:
+            self.define_interpreted_pipeline(pm)
 
 
 def _make_subtarget(targetctx, flags):
