@@ -3,7 +3,7 @@ from __future__ import print_function
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 
 CONST1D = np.arange(10, dtype=np.float64) / 2.
@@ -33,7 +33,7 @@ def cuconst3d(A):
     A[i, j, k] = C[i, j, k]
 
 
-class TestCudaConstantMemory(unittest.TestCase):
+class TestCudaConstantMemory(SerialMixin, unittest.TestCase):
     def test_const_array(self):
         jcuconst = cuda.jit('void(float64[:])')(cuconst)
         self.assertTrue('.const' in jcuconst.ptx)

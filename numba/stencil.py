@@ -166,7 +166,9 @@ class StencilFunc(object):
                     if stmt.value.op == 'getitem':
                         stmt_index_var = stmt.value.index
                     else:
-                        raise ValueError("Unexpected static_getitem in add_indices_to_kernel.")
+                        stmt_index_var = stmt.value.index_var
+                        # allow static_getitem since rewrite passes are applied
+                        #raise ValueError("Unexpected static_getitem in add_indices_to_kernel.")
 
                     relatively_indexed.add(stmt.value.value.name)
 

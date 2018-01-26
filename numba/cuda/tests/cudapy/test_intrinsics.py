@@ -2,7 +2,7 @@ from __future__ import print_function, absolute_import, division
 
 import numpy as np
 from numba import cuda, int32, float32
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 
 def simple_threadidx(ary):
@@ -59,7 +59,7 @@ def intrinsic_forloop_step(c):
             c[y, x] = x + y
 
 
-class TestCudaIntrinsic(unittest.TestCase):
+class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
     def test_simple_threadidx(self):
         compiled = cuda.jit("void(int32[:])")(simple_threadidx)
         ary = np.ones(1, dtype=np.int32)

@@ -1,7 +1,7 @@
 from __future__ import print_function, absolute_import
 import numpy as np
 from numba import cuda, float32, int32
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 
 def foo(inp, out):
@@ -14,7 +14,7 @@ def copy(inp, out):
     cufoo(inp[i, :], out[i, :])
 
 
-class TestCudaSlicing(unittest.TestCase):
+class TestCudaSlicing(SerialMixin, unittest.TestCase):
     def test_slice_as_arg(self):
         global cufoo
         cufoo = cuda.jit("void(int32[:], int32[:])", device=True)(foo)

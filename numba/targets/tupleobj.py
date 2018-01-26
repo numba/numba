@@ -197,31 +197,47 @@ def getitem_unituple(context, builder, sig, args):
     tupty, _ = sig.args
     tup, idx = args
 
-    bbelse = builder.append_basic_block("switch.else")
-    bbend = builder.append_basic_block("switch.end")
-    switch = builder.switch(idx, bbelse)
+    errmsg_oob = ("tuple index out of range",)
 
-    with builder.goto_block(bbelse):
-        context.call_conv.return_user_exc(builder, IndexError,
-                                          ("tuple index out of range",))
+    if len(tupty) == 0:
+        # Empty tuple.
 
-    lrtty = context.get_value_type(tupty.dtype)
-    with builder.goto_block(bbend):
-        phinode = builder.phi(lrtty)
+        # Always branch and raise IndexError
+        with builder.if_then(cgutils.true_bit):
+            context.call_conv.return_user_exc(builder, IndexError,
+                                              errmsg_oob)
+        # This is unreachable in runtime,
+        # but it exists to not terminate the current basicblock.
+        res = context.get_constant_null(sig.return_type)
+        return impl_ret_untracked(context, builder,
+                                  sig.return_type, res)
+    else:
+        # The tuple is not empty
+        bbelse = builder.append_basic_block("switch.else")
+        bbend = builder.append_basic_block("switch.end")
+        switch = builder.switch(idx, bbelse)
 
-    for i in range(tupty.count):
-        ki = context.get_constant(types.intp, i)
-        bbi = builder.append_basic_block("switch.%d" % i)
-        switch.add_case(ki, bbi)
-        with builder.goto_block(bbi):
-            value = builder.extract_value(tup, i)
-            builder.branch(bbend)
-            phinode.add_incoming(value, bbi)
+        with builder.goto_block(bbelse):
+            context.call_conv.return_user_exc(builder, IndexError,
+                                              errmsg_oob)
 
-    builder.position_at_end(bbend)
-    res = phinode
-    assert sig.return_type == tupty.dtype
-    return impl_ret_borrowed(context, builder, sig.return_type, res)
+        lrtty = context.get_value_type(tupty.dtype)
+        with builder.goto_block(bbend):
+            phinode = builder.phi(lrtty)
+
+        for i in range(tupty.count):
+            ki = context.get_constant(types.intp, i)
+            bbi = builder.append_basic_block("switch.%d" % i)
+            switch.add_case(ki, bbi)
+            with builder.goto_block(bbi):
+                value = builder.extract_value(tup, i)
+                builder.branch(bbend)
+                phinode.add_incoming(value, bbi)
+
+        builder.position_at_end(bbend)
+        res = phinode
+        assert sig.return_type == tupty.dtype
+        return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
 @lower_builtin('static_getitem', types.BaseTuple, types.Const)

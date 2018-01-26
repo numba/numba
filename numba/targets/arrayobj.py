@@ -14,7 +14,7 @@ from llvmlite.llvmpy.core import Constant
 
 import numpy as np
 
-from numba import types, cgutils, typing, utils, extending
+from numba import types, cgutils, typing, utils, extending, pndindex
 from numba.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                  is_fortran)
 from numba.numpy_support import version as numpy_version
@@ -2947,6 +2947,7 @@ def iternext_numpy_nditer(context, builder, sig, args, result):
     nditer.iternext_specific(context, builder, arrty, arr, result)
 
 
+@lower_builtin(pndindex, types.VarArg(types.Integer))
 @lower_builtin(np.ndindex, types.VarArg(types.Integer))
 def make_array_ndindex(context, builder, sig, args):
     """ndindex(*shape)"""
@@ -2960,6 +2961,7 @@ def make_array_ndindex(context, builder, sig, args):
     res = nditer._getvalue()
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
+@lower_builtin(pndindex, types.BaseTuple)
 @lower_builtin(np.ndindex, types.BaseTuple)
 def make_array_ndindex(context, builder, sig, args):
     """ndindex(shape)"""

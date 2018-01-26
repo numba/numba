@@ -7,11 +7,11 @@ from numba import void, float32, float64
 from numba import guvectorize
 from numba import cuda
 from numba import unittest_support as unittest
-from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import skip_on_cudasim, SerialMixin
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
-class TestCUDAGufunc(unittest.TestCase):
+class TestCUDAGufunc(SerialMixin, unittest.TestCase):
 
     def test_gufunc_small(self):
 

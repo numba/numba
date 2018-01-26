@@ -5,7 +5,7 @@ import numpy as np
 
 from numba import config
 from numba import cuda, uint32, uint64, float32, float64
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 
 def cc_X_or_above(major, minor):
@@ -183,7 +183,7 @@ def atomic_compare_and_swap(res, old, ary):
         old[gid] = out
 
 
-class TestCudaAtomics(unittest.TestCase):
+class TestCudaAtomics(SerialMixin, unittest.TestCase):
     def test_atomic_add(self):
         ary = np.random.randint(0, 32, size=32).astype(np.uint32)
         orig = ary.copy()

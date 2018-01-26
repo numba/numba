@@ -5,12 +5,12 @@ from contextlib import contextmanager
 import numpy as np
 
 from numba import cuda, config
-from numba.cuda.testing import unittest, skip_on_cudasim
+from numba.cuda.testing import unittest, skip_on_cudasim, SerialMixin
 from numba.tests.support import captured_stderr
 
 
 @skip_on_cudasim('not supported on CUDASIM')
-class TestDeallocation(unittest.TestCase):
+class TestDeallocation(SerialMixin, unittest.TestCase):
     def test_max_pending_count(self):
         # get deallocation manager and flush it
         deallocs = cuda.current_context().deallocations
@@ -57,7 +57,7 @@ class TestDeallocation(unittest.TestCase):
 
 
 @skip_on_cudasim("defer_cleanup has no effect in CUDASIM")
-class TestDeferCleanup(unittest.TestCase):
+class TestDeferCleanup(SerialMixin, unittest.TestCase):
     def test_basic(self):
         harr = np.arange(5)
         darr1 = cuda.to_device(harr)
@@ -123,7 +123,7 @@ class TestDeferCleanup(unittest.TestCase):
         self.assertEqual(len(deallocs), 0)
 
 
-class TestDeferCleanupAvail(unittest.TestCase):
+class TestDeferCleanupAvail(SerialMixin, unittest.TestCase):
     def test_context_manager(self):
         # just make sure the API is available
         with cuda.defer_cleanup():
@@ -131,7 +131,7 @@ class TestDeferCleanupAvail(unittest.TestCase):
 
 
 @skip_on_cudasim('not supported on CUDASIM')
-class TestDel(unittest.TestCase):
+class TestDel(SerialMixin, unittest.TestCase):
     """
     Ensure resources are deleted properly without ignored exception.
     """

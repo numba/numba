@@ -920,7 +920,7 @@ class MinValInfer(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         assert len(args) == 1
-        assert isinstance(args[0], types.DType)
+        assert isinstance(args[0], (types.DType, types.NumberClass))
         return signature(args[0].dtype, *args)
 
 #------------------------------------------------------------------------------

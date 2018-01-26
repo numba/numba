@@ -1,4 +1,5 @@
 import types as pytypes  # avoid confusion with numba.types
+import ctypes
 import numba
 from numba import config, ir, ir_utils, utils, prange, rewrites, types, typing
 from numba.parfor import internal_prange
@@ -19,7 +20,9 @@ from numba.ir_utils import (
     find_callname,
     find_build_sequence,
     get_np_ufunc_typ,
-    get_ir_of_code
+    get_ir_of_code,
+    simplify_CFG,
+    canonicalize_array_math
     )
 
 from numba.analysis import (
@@ -252,6 +255,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     # 1. relabel callee_ir by adding an offset
     max_label = max(func_ir.blocks.keys())
     callee_blocks = add_offset_to_labels(callee_blocks, max_label + 1)
+    callee_blocks = simplify_CFG(callee_blocks)
     callee_ir.blocks = callee_blocks
     min_label = min(callee_blocks.keys())
     max_label = max(callee_blocks.keys())
@@ -297,11 +301,18 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     # 4. replace freevar with actual closure var
     if callee_closure:
         closure = func_ir.get_definition(callee_closure)
-        assert(isinstance(closure, ir.Expr)
-               and closure.op == 'build_tuple')
-        assert(len(callee_code.co_freevars) == len(closure.items))
         debug_print("callee's closure = ", closure)
-        _replace_freevars(callee_blocks, closure.items)
+        if isinstance(closure, tuple):
+            cellget = ctypes.pythonapi.PyCell_Get
+            cellget.restype = ctypes.py_object
+            cellget.argtypes = (ctypes.py_object,)
+            items = tuple(cellget(x) for x in closure)
+        else:
+            assert(isinstance(closure, ir.Expr)
+                   and closure.op == 'build_tuple')
+            items = closure.items
+        assert(len(callee_code.co_freevars) == len(items))
+        _replace_freevars(callee_blocks, items)
         debug_print("After closure rename")
         _debug_dump(callee_ir)
 
@@ -309,6 +320,8 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
         from numba import compiler
         f_typemap, f_return_type, f_calltypes = compiler.type_inference_stage(
                 typingctx, callee_ir, arg_typs, None)
+        canonicalize_array_math(callee_ir, f_typemap,
+                                f_calltypes, typingctx)
         # remove argument entries like arg.a from typemap
         arg_names = [vname for vname in f_typemap if vname.startswith("arg.")]
         for a in arg_names:
@@ -348,7 +361,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     if work_list != None:
         for block in new_blocks:
             work_list.append(block)
-    return
+    return callee_blocks
 
 def _make_debug_print(prefix):
     def debug_print(*args):
@@ -394,7 +407,10 @@ def _replace_freevars(blocks, args):
             if isinstance(stmt.value, ir.FreeVar):
                 idx = stmt.value.index
                 assert(idx < len(args))
-                stmt.value = args[idx]
+                if isinstance(args[idx], ir.Var):
+                    stmt.value = args[idx]
+                else:
+                    stmt.value = ir.Const(args[idx], stmt.loc)
 
 
 def _replace_returns(blocks, target, return_label):
@@ -624,7 +640,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, enable_prange=False):
     # then the index_var correlates to iterator index; otherwise we'll have to
     # define a new counter.
     range_def = guard(_find_iter_range, func_ir, iter_var)
-    index_var = scope.make_temp(loc)
+    index_var = ir.Var(scope, mk_unique_var("index"), loc)
     if range_def and range_def[0] == 0:
         # iterator starts with 0, index_var can just be iter_first_var
         index_var = iter_first_var
@@ -633,7 +649,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, enable_prange=False):
         stmts.append(_new_definition(func_ir, index_var, ir.Const(value=-1, loc=loc), loc))
 
     # Insert statement to get the size of the loop iterator
-    size_var = scope.make_temp(loc)
+    size_var = ir.Var(scope, mk_unique_var("size"), loc)
     if range_def:
         start, stop, range_func_def = range_def
         if start == 0:
@@ -647,25 +663,24 @@ def _inline_arraycall(func_ir, cfg, visited, loop, enable_prange=False):
             range_func_def.value = internal_prange
 
     else:
-        len_func_var = scope.make_temp(loc)
+        len_func_var = ir.Var(scope, mk_unique_var("len_func"), loc)
         stmts.append(_new_definition(func_ir, len_func_var,
                      ir.Global('range_iter_len', range_iter_len, loc=loc), loc))
         size_val = ir.Expr.call(len_func_var, (iter_var,), (), loc=loc)
 
     stmts.append(_new_definition(func_ir, size_var, size_val, loc))
 
-    size_tuple_var = scope.make_temp(loc)
+    size_tuple_var = ir.Var(scope, mk_unique_var("size_tuple"), loc)
     stmts.append(_new_definition(func_ir, size_tuple_var,
                  ir.Expr.build_tuple(items=[size_var], loc=loc), loc))
 
-    array_var = scope.make_temp(loc)
     # Insert array allocation
-    array_var = scope.make_temp(loc)
-    empty_func = scope.make_temp(loc)
+    array_var = ir.Var(scope, mk_unique_var("array"), loc)
+    empty_func = ir.Var(scope, mk_unique_var("empty_func"), loc)
     if dtype_def and dtype_mod_def:
         # when dtype is present, we'll call emtpy with dtype
-        dtype_mod_var = scope.make_temp(loc)
-        dtype_var = scope.make_temp(loc)
+        dtype_mod_var = ir.Var(scope, mk_unique_var("dtype_mod"), loc)
+        dtype_var = ir.Var(scope, mk_unique_var("dtype"), loc)
         stmts.append(_new_definition(func_ir, dtype_mod_var, dtype_mod_def, loc))
         stmts.append(_new_definition(func_ir, dtype_var,
                          ir.Expr.getattr(dtype_mod_var, dtype_def.attr, loc), loc))
@@ -710,8 +725,8 @@ def _inline_arraycall(func_ir, cfg, visited, loop, enable_prange=False):
         loc = loop_header.loc
         terminator = loop_header.terminator
         stmts = loop_header.body[0:-1]
-        next_index_var = scope.make_temp(loc)
-        one = scope.make_temp(loc)
+        next_index_var = ir.Var(scope, mk_unique_var("next_index"), loc)
+        one = ir.Var(scope, mk_unique_var("one"), loc)
         # one = 1
         stmts.append(_new_definition(func_ir, one,
                      ir.Const(value=1,loc=loc), loc))
@@ -803,7 +818,7 @@ def _fix_nested_array(func_ir):
                                 var_def = get_definition(func_ir, var.name)
                                 if isinstance(var_def, ir.Const):
                                     loc = var.loc
-                                    new_var = scope.make_temp(loc)
+                                    new_var = ir.Var(scope, mk_unique_var("new_var"), loc)
                                     new_const = ir.Const(var_def.value, loc)
                                     new_vardef = _new_definition(func_ir,
                                                     new_var, new_const, loc)
@@ -928,8 +943,8 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
         dtype = array_typ.dtype
         seq, op = find_build_sequence(func_ir, list_var)
         size = len(seq)
-        size_var = scope.make_temp(loc)
-        size_tuple_var = scope.make_temp(loc)
+        size_var = ir.Var(scope, mk_unique_var("size"), loc)
+        size_tuple_var = ir.Var(scope, mk_unique_var("size_tuple"), loc)
         size_typ = types.intp
         size_tuple_typ = types.UniTuple(size_typ, 1)
 
@@ -942,7 +957,7 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
         stmts.append(_new_definition(func_ir, size_tuple_var,
                  ir.Expr.build_tuple(items=[size_var], loc=loc), loc))
 
-        empty_func = scope.make_temp(loc)
+        empty_func = ir.Var(scope, mk_unique_var("empty_func"), loc)
         fnty = get_np_ufunc_typ(np.empty)
         sig = context.resolve_function_type(fnty, (size_typ,), {})
         typemap[empty_func.name] = fnty #
@@ -955,7 +970,7 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
         stmts.append(_new_definition(func_ir, array_var, empty_call, loc))
 
         for i in range(size):
-            index_var = scope.make_temp(loc)
+            index_var = ir.Var(scope, mk_unique_var("index"), loc)
             index_typ = types.intp
             typemap[index_var.name] = index_typ
             stmts.append(_new_definition(func_ir, index_var,
