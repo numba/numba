@@ -1901,7 +1901,7 @@ def array_flags(context, builder, typ, value):
 @lower_getattr(types.ArrayFlags, "contiguous")
 @lower_getattr(types.ArrayFlags, "c_contiguous")
 def array_flags_c_contiguous(context, builder, typ, value):
-    if typ.array_type.layout == 'A':
+    if typ.array_type.layout != 'C':
         # any layout can stil be contiguous
         flagsobj = context.make_helper(builder, typ, value=value)
         res = _call_contiguous_check(is_contiguous, context, builder,
@@ -1913,7 +1913,7 @@ def array_flags_c_contiguous(context, builder, typ, value):
 
 @lower_getattr(types.ArrayFlags, "f_contiguous")
 def array_flags_f_contiguous(context, builder, typ, value):
-    if typ.array_type.layout == 'A':
+    if typ.array_type.layout != 'F':
         # any layout can stil be contiguous
         flagsobj = context.make_helper(builder, typ, value=value)
         res = _call_contiguous_check(is_fortran, context, builder,

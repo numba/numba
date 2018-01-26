@@ -166,9 +166,9 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
         self.check_unary_with_arrays(array_flags_c_contiguous)
 
     def test_flags_f_contiguous(self):
-        # Numpy 1.10 is more opportunistic when computing contiguousness
+        # Numpy 1.12+ is more opportunistic when computing contiguousness
         # of empty arrays.
-        use_reshaped_empty_array = numpy_support.version < (1, 10)
+        use_reshaped_empty_array = numpy_support.version > (1, 11)
         self.check_unary_with_arrays(array_flags_f_contiguous,
                                      use_reshaped_empty_array=use_reshaped_empty_array)
 
