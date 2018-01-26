@@ -280,6 +280,15 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
         block.body = new_block
     return hoisted
 
+def fix_numpy_module(blocks):
+    npmod = sys.modules['numpy']
+    for label, block in blocks.items():
+        for inst in block.body:
+            if isinstance(inst, ir.Assign):
+                rhs = inst.value
+                if isinstance(rhs, ir.Global) and rhs.name == 'numpy':
+                    rhs.value = npmod
+
 def _create_gufunc_for_parfor_body(
         lowerer,
         parfor,
@@ -387,6 +396,8 @@ def _create_gufunc_for_parfor_body(
     parfor_args = parfor_params
     # Change parfor_params to be legal names.
     parfor_params = [param_dict[v] for v in parfor_params]
+    parfor_params_orig = parfor_params
+    parfor_params = [v+"param" for v in parfor_params]
     # Change parfor body to replace illegal loop index vars with legal ones.
     replace_var_names(loop_body, ind_dict)
     loop_body_var_table = get_name_var_table(loop_body)
@@ -407,13 +418,23 @@ def _create_gufunc_for_parfor_body(
         # print("sched_func_name ", type(sched_func_name), " ", sched_func_name)
         print("gufunc_name ", type(gufunc_name), " ", gufunc_name)
 
+    gufunc_txt = ""
+
     # Create the gufunc function.
-    gufunc_txt = "def " + gufunc_name + \
+    gufunc_txt += "def " + gufunc_name + \
         "(sched, " + (", ".join(parfor_params)) + "):\n"
+
+    for pindex in range(len(parfor_params)):
+        if isinstance(param_types[pindex], types.npytypes.Array):
+            gufunc_txt += "    " + parfor_params_orig[pindex] + " = numpy.ascontiguousarray(" + parfor_params[pindex] + ")\n"
+        else:
+            gufunc_txt += "    " + parfor_params_orig[pindex] + " = " + parfor_params[pindex] + "\n"
+
     # Add initialization of reduction variables
     for arr, var in zip(parfor_redarrs, parfor_redvars):
         gufunc_txt += "    " + param_dict[var] + \
             "=" + param_dict[arr] + "[0]\n"
+
     # For each dimension of the parfor, create a for loop in the generated gufunc function.
     # Iterate across the proper values extracted from the schedule.
     # The form of the schedule is start_dim0, start_dim1, ..., start_dimN, end_dim0,
@@ -459,6 +480,7 @@ def _create_gufunc_for_parfor_body(
         print("gufunc_func = ", type(gufunc_func), "\n", gufunc_func)
     # Get the IR for the gufunc outline.
     gufunc_ir = compiler.run_frontend(gufunc_func)
+    fix_numpy_module(gufunc_ir.blocks)
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_ir dump ", type(gufunc_ir))
         gufunc_ir.dump()
