@@ -1788,7 +1788,9 @@ def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes):
     dprint_func_ir(func_ir, "after parfor sequential lowering")
     simplify(func_ir, typemap, calltypes)
     dprint_func_ir(func_ir, "after parfor sequential simplify")
-
+    # add dels since simplify removes dels
+    post_proc = postproc.PostProcessor(func_ir)
+    post_proc.run()
     return
 
 
