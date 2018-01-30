@@ -33,11 +33,11 @@ class FunctionDescriptor(object):
     """
     __slots__ = ('native', 'modname', 'qualname', 'doc', 'typemap',
                  'calltypes', 'args', 'kws', 'restype', 'argtypes',
-                 'mangled_name', 'unique_name', 'inline')
+                 'mangled_name', 'unique_name', 'inline', 'noalias')
 
     def __init__(self, native, modname, qualname, unique_name, doc,
                  typemap, restype, calltypes, args, kws, mangler=None,
-                 argtypes=None, inline=False):
+                 argtypes=None, inline=False, noalias=False):
         self.native = native
         self.modname = modname
         self.qualname = qualname
@@ -64,6 +64,7 @@ class FunctionDescriptor(object):
         qualprefix = qualifying_prefix(self.modname, self.unique_name)
         self.mangled_name = mangler(qualprefix, self.argtypes)
         self.inline = inline
+        self.noalias = noalias
 
     def lookup_module(self):
         """
@@ -138,12 +139,12 @@ class FunctionDescriptor(object):
 
     @classmethod
     def _from_python_function(cls, func_ir, typemap, restype, calltypes,
-                              native, mangler=None, inline=False):
+                              native, mangler=None, inline=False, noalias=False):
         (qualname, unique_name, modname, doc, args, kws,
          )= cls._get_function_info(func_ir)
         self = cls(native, modname, qualname, unique_name, doc,
                    typemap, restype, calltypes,
-                   args, kws, mangler=mangler, inline=inline)
+                   args, kws, mangler=mangler, inline=inline, noalias=noalias)
         return self
 
 
@@ -155,14 +156,14 @@ class PythonFunctionDescriptor(FunctionDescriptor):
 
     @classmethod
     def from_specialized_function(cls, func_ir, typemap, restype, calltypes,
-                                  mangler, inline):
+                                  mangler, inline, noalias):
         """
         Build a FunctionDescriptor for a given specialization of a Python
         function (in nopython mode).
         """
         return cls._from_python_function(func_ir, typemap, restype, calltypes,
                                          native=True, mangler=mangler,
-                                         inline=inline)
+                                         inline=inline, noalias=noalias)
 
     @classmethod
     def from_object_mode_function(cls, func_ir):

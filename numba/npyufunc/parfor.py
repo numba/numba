@@ -615,6 +615,8 @@ def _create_gufunc_for_parfor_body(
         print("gufunc_ir last dump")
         gufunc_ir.dump()
 
+    old_alias = flags.noalias
+    flags.noalias = True
     kernel_func = compiler.compile_ir(
         typingctx,
         targetctx,
@@ -623,6 +625,8 @@ def _create_gufunc_for_parfor_body(
         types.none,
         flags,
         locals)
+
+    flags.noalias = old_alias
 
     kernel_sig = signature(types.none, *gufunc_param_types)
     if config.DEBUG_ARRAY_OPT:
