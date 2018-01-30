@@ -8,6 +8,7 @@ import subprocess
 import sys
 import threading
 import warnings
+import inspect
 
 import numpy as np
 
@@ -19,6 +20,7 @@ from numba.errors import NumbaWarning
 from .support import (TestCase, tag, temp_directory, import_dynamic,
                       override_env_config, capture_cache_log)
 from numba.targets import codegen
+from numba.caching import _UserWideCacheLocator
 
 import llvmlite.binding as ll
 
@@ -544,11 +546,11 @@ class TestDispatcherMethods(TestCase):
         # Call inspect_cfg(signature)
         cfg = foo.inspect_cfg(signature=foo.signatures[0])
         self._check_cfg_display(cfg)
-       
+
     @unittest.skipIf(config.IS_WIN32 and not config.IS_32BITS, "access violation on 64-bit windows")
     @unittest.skipIf(config.IS_OSX, "segfault on OSX")
     def test_inspect_cfg_with_python_wrapper(self):
-        # Exercise the .inspect_cfg() including the python wrapper. 
+        # Exercise the .inspect_cfg() including the python wrapper.
         # These are minimal tests and do not fully check the correctness of
         # the function.
         @jit
@@ -562,7 +564,7 @@ class TestDispatcherMethods(TestCase):
         foo(a1)
         foo(a2)
         foo(a3)
-        
+
         # Call inspect_cfg(signature, show_wrapper="python")
         cfg = foo.inspect_cfg(signature=foo.signatures[0],
                               show_wrapper="python")
@@ -944,6 +946,28 @@ class TestCache(BaseCacheUsecasesTest):
         self.assertPreciseEqual(f(2), 4)
         f = mod.renamed_function2
         self.assertPreciseEqual(f(2), 8)
+
+    def test_frozen(self):
+        from .dummy_module import function
+        old_code = function.__code__
+        code_obj = compile('pass', 'tests/dummy_module.py', 'exec')
+        try:
+            function.__code__ = code_obj
+
+            source = inspect.getfile(function)
+            # doesn't return anything, since it cannot find the module
+            # fails unless the executable is frozen
+            locator = _UserWideCacheLocator.from_function(function, source)
+            self.assertIsNone(locator)
+
+            sys.frozen = True
+            # returns a cache locator object, only works when executable is frozen
+            locator = _UserWideCacheLocator.from_function(function, source)
+            self.assertIsInstance(locator, _UserWideCacheLocator)
+
+        finally:
+            function.__code__ = old_code
+            del sys.frozen
 
     def _test_pycache_fallback(self):
         """
