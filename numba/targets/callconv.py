@@ -390,7 +390,7 @@ class CPUCallConv(BaseCallConv):
                                + argtypes)
         return fnty
 
-    def decorate_function(self, fn, args, fe_argtypes):
+    def decorate_function(self, fn, args, fe_argtypes, noalias=False):
         """
         Set names of function arguments, and add useful attributes to them.
         """
@@ -409,6 +409,13 @@ class CPUCallConv(BaseCallConv):
         envarg.name = "env"
         envarg.add_attribute("nocapture")
         envarg.add_attribute("noalias")
+
+        if noalias:
+            args = self.get_arguments(fn)
+            for a in args:
+                if isinstance(a.type, ir.PointerType):
+                    a.add_attribute("nocapture")
+                    a.add_attribute("noalias")
         return fn
 
     def get_arguments(self, func):
