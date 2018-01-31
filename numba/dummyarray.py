@@ -298,15 +298,15 @@ class Array(object):
             else:
                 raise AssertionError("unreachable")
         else:
-            # Transliteration of numpy's `_attempt_nocopy_reshape`
+            # Transliteration of numpy's `_attempt_nocopy_reshape`, see
+            # https://github.com/numpy/numpy/blob/1706056ab7e3bc321f3bc6f605fdbd6a55fb3c42/numpy/core/src/multiarray/shape.c#L374-L466
 
             # Remove axes with dimension 1 from the old array. They have no effect
             # but would need special cases since their strides do not matter.
-            olddims, oldstrides = zip(*[
-                (self.shape[i], self.strides[i])
-                for i in range(oldnd)
-                if self.shape[i] > 1
-            ])
+            shape_gt_one = [i for i in range(oldnd) if self.shape[i] > 1]
+            olddims = [self.shape[i] for i in shape_gt_one]
+            oldstrides = [self.strides[i] for i in shape_gt_one]
+            oldnd = len(shape_gt_one)
 
             newstrides = np.empty(newnd, int)
 
