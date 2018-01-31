@@ -19,6 +19,9 @@ class _ResolutionFailures(object):
         self._kwargs = kwargs
         self._failures = []
 
+    def __len__(self):
+        return len(self._failures)
+
     def add_error(self, calltemplate, error):
         """
         Args
@@ -127,7 +130,7 @@ class BaseFunction(Callable):
                 else:
                     failures.add_error(temp_cls, "rejected")
 
-        if not failures:
+        if len(failures) == 0:
             raise AssertionError("Internal Error. "
                                  "Function resolution ended with no failures "
                                  "or successfull signature")
