@@ -1,9 +1,10 @@
 from __future__ import division, print_function
 
-from numba import unittest_support as unittest
-
 import sys
 import subprocess
+
+from numba import unittest_support as unittest
+from numba import cuda
 
 
 class TestCase(unittest.TestCase):
@@ -60,6 +61,7 @@ class TestCase(unittest.TestCase):
         # (in numba.cuda.tests.nocuda)
         self.check_testsuite_size(['numba.cuda.tests'], 1, 400)
 
+    @unittest.skipIf(not cuda.is_available(), "NO CUDA")
     def test_cuda_submodules(self):
         self.check_listing_prefix('numba.cuda.tests.cudadrv')
         self.check_listing_prefix('numba.cuda.tests.cudapy')
