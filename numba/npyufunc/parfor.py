@@ -397,7 +397,15 @@ def _create_gufunc_for_parfor_body(
     # Change parfor_params to be legal names.
     parfor_params = [param_dict[v] for v in parfor_params]
     parfor_params_orig = parfor_params
-    parfor_params = [v+"param" for v in parfor_params]
+
+    parfor_params = []
+    for pindex in range(len(parfor_params_orig)):
+        if pindex < len(parfor_inputs) and isinstance(param_types[pindex], types.npytypes.Array):
+            parfor_params.append(parfor_params_orig[pindex]+"param")
+        else:
+            parfor_params.append(parfor_params_orig[pindex])
+
+    #parfor_params = [v+"param" for v in parfor_params]
     # Change parfor body to replace illegal loop index vars with legal ones.
     replace_var_names(loop_body, ind_dict)
     loop_body_var_table = get_name_var_table(loop_body)
@@ -424,11 +432,9 @@ def _create_gufunc_for_parfor_body(
     gufunc_txt += "def " + gufunc_name + \
         "(sched, " + (", ".join(parfor_params)) + "):\n"
 
-    for pindex in range(len(parfor_params)):
+    for pindex in range(len(parfor_inputs)):
         if isinstance(param_types[pindex], types.npytypes.Array):
             gufunc_txt += "    " + parfor_params_orig[pindex] + " = numpy.ascontiguousarray(" + parfor_params[pindex] + ")\n"
-        else:
-            gufunc_txt += "    " + parfor_params_orig[pindex] + " = " + parfor_params[pindex] + "\n"
 
     # Add initialization of reduction variables
     for arr, var in zip(parfor_redarrs, parfor_redvars):
