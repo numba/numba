@@ -3,7 +3,7 @@ from __future__ import print_function, absolute_import, division
 import numpy as np
 
 from numba import config, cuda, jit
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
 
 
 def foo(ary):
@@ -93,6 +93,7 @@ class TestException(SerialMixin, unittest.TestCase):
         """
         self.case_raise_causing_warp_diverge(with_debug_mode=False)
 
+    @skip_on_cudasim("failing case doesn't happen in CUDASIM")
     @unittest.expectedFailure
     def test_raise_causing_warp_diverge_failing(self):
         """Test case for issue #2655.
