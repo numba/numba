@@ -172,5 +172,98 @@ class CudaArraySlicing(SerialMixin, unittest.TestCase):
         np.testing.assert_array_equal(darr[:0][-1:].copy_to_host(), arr[:0][-1:])
 
 
+class CudaArraySetting(unittest.TestCase):
+    """
+    Most of the slicing logic is tested in the cases above, so these
+    tests focus on the setting logic.
+    """
+
+    def test_scalar(self):
+        arr = np.arange(5 * 5).reshape(5, 5)
+        darr = cuda.to_device(arr)
+        arr[2, 2] = 500
+        darr[2, 2] = 500
+        np.testing.assert_array_equal(darr.copy_to_host(), arr)
+
+    def test_rank(self):
+        arr = np.arange(5 * 5).reshape(5, 5)
+        darr = cuda.to_device(arr)
+        arr[2] = 500
+        darr[2] = 500
+        np.testing.assert_array_equal(darr.copy_to_host(), arr)
+
+    def test_broadcast(self):
+        arr = np.arange(5 * 5).reshape(5, 5)
+        darr = cuda.to_device(arr)
+        arr[:, 2] = 500
+        darr[:, 2] = 500
+        np.testing.assert_array_equal(darr.copy_to_host(), arr)
+
+    def test_array_assign_column(self):
+        arr = np.arange(5 * 5).reshape(5, 5)
+        darr = cuda.to_device(arr)
+        _400 = np.full(shape=5, fill_value=400)
+        arr[2] = _400
+        darr[2] = _400
+        np.testing.assert_array_equal(darr.copy_to_host(), arr)
+
+    def test_array_assign_row(self):
+        arr = np.arange(5 * 5).reshape(5, 5)
+        darr = cuda.to_device(arr)
+        _400 = np.full(shape=5, fill_value=400)
+        arr[:, 2] = _400
+        darr[:, 2] = _400
+        np.testing.assert_array_equal(darr.copy_to_host(), arr)
+
+    def test_array_assign_subarray(self):
+        arr = np.arange(5 * 5 * 5).reshape(5, 5, 5)
+        darr = cuda.to_device(arr)
+        _400 = np.full(shape=(5, 5), fill_value=400)
+        arr[2] = _400
+        darr[2] = _400
+        np.testing.assert_array_equal(darr.copy_to_host(), arr)
+
+    def test_array_assign_all(self):
+        arr = np.arange(5 * 5).reshape(5, 5)
+        darr = cuda.to_device(arr)
+        _400 = np.full(shape=5, fill_value=400)
+        arr[:] = _400
+        darr[:] = _400
+        np.testing.assert_array_equal(darr.copy_to_host(), arr)
+
+    def test_strides(self):
+        arr = np.ones(20)
+        darr = cuda.to_device(arr)
+        arr[::2] = 500
+        darr[::2] = 500
+        np.testing.assert_array_equal(darr.copy_to_host(), arr)
+
+    def test_incompatible_highdim(self):
+        darr = cuda.to_device(np.arange(5 * 5))
+
+        with self.assertRaises(ValueError) as e:
+            darr[:] = np.ones(shape=(1, 2, 3))
+
+        self.assertIn(
+            member=str(e.exception),
+            container=[
+                "Can't assign 3-D array to 1-D self",  # device
+                "could not broadcast input array from shape (2,3) into shape (25)",  # simulator
+            ])
+
+    def test_incompatible_shape(self):
+        darr = cuda.to_device(np.arange(5))
+
+        with self.assertRaises(ValueError) as e:
+            darr[:] = [1, 3]
+
+        self.assertIn(
+            member=str(e.exception),
+            container=[
+                "Can't copy sequence with size 2 to array axis 0 with dimension 5",  # device
+                "cannot copy sequence with size 2 to array axis with dimension 5",  # simulator
+            ])
+
+
 if __name__ == '__main__':
     unittest.main()

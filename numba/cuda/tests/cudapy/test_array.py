@@ -57,6 +57,9 @@ class TestCudaArray(SerialMixin, unittest.TestCase):
             # assert np.all(y == z)
             # assert np.all(y == list(range(n)))
 
+    def test_auto_device_const(self):
+        d, _ = cuda.devicearray.auto_device(2)
+        self.assertTrue(np.all(d.copy_to_host() == np.array(2)))
 
 if __name__ == '__main__':
     unittest.main()
