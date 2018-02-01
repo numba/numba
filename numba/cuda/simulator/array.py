@@ -139,6 +139,11 @@ def device_array_like(ary, stream=0):
 class devicearray(object):
     @staticmethod
     def auto_device(ary, stream=0, copy=True):
+        if not isinstance(ary, np.void):
+            ary = np.array(
+                ary,
+                copy=False,
+                subok=True)
         return to_device(ary, stream, copy), False
 
 

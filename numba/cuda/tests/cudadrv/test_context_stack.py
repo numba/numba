@@ -1,9 +1,9 @@
 from __future__ import print_function
 from numba import cuda
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 
-class TestContextStack(unittest.TestCase):
+class TestContextStack(SerialMixin, unittest.TestCase):
     def setUp(self):
         # Reset before testing
         cuda.close()

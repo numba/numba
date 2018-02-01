@@ -2,11 +2,11 @@ from __future__ import absolute_import, print_function, division
 import numpy as np
 from numba import vectorize
 from numba import unittest_support as unittest
-from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import skip_on_cudasim, SerialMixin
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
-class TestVectorizeComplex(unittest.TestCase):
+class TestVectorizeComplex(SerialMixin, unittest.TestCase):
     def test_vectorize_complex(self):
         @vectorize(['complex128(complex128)'], target='cuda')
         def vcomp(a):

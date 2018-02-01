@@ -1,7 +1,7 @@
 from __future__ import print_function, absolute_import
 import numpy as np
 from numba import cuda, float32
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 
 def generate_input(n):
@@ -10,7 +10,7 @@ def generate_input(n):
     return A, B
 
 
-class TestCudaNonDet(unittest.TestCase):
+class TestCudaNonDet(SerialMixin, unittest.TestCase):
     def test_for_pre(self):
         """Test issue with loop not running due to bad sign-extension at the for loop
         precondition.

@@ -1,12 +1,12 @@
 import numpy as np
 from numba.cuda.cudadrv import devicearray
 from numba import cuda
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 from numba.cuda.testing import skip_on_cudasim
 
 
 @skip_on_cudasim('Device Array API unsupported in the simulator')
-class TestCudaNDArray(unittest.TestCase):
+class TestCudaNDArray(SerialMixin, unittest.TestCase):
     def test_device_array_interface(self):
         dary = cuda.device_array(shape=100)
         devicearray.verify_cuda_ndarray_interface(dary)

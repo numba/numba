@@ -2,9 +2,10 @@ from __future__ import print_function
 from numba import unittest_support as unittest
 from numba import cuda
 import numpy as np
+from numba.cuda.testing import SerialMixin
 
 
-class TestCudaAutojit(unittest.TestCase):
+class TestCudaAutojit(SerialMixin, unittest.TestCase):
     def test_device_array(self):
         @cuda.autojit
         def foo(x, y):

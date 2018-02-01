@@ -4,10 +4,10 @@ import numpy as np
 
 from numba import cuda
 import numba.unittest_support as unittest
-from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import skip_on_cudasim, SerialMixin
 
 @skip_on_cudasim('forall API unsupported in the simulator')
-class TestForAll(unittest.TestCase):
+class TestForAll(SerialMixin, unittest.TestCase):
     def test_forall_1(self):
 
         @cuda.jit
