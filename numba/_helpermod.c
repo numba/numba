@@ -85,6 +85,7 @@ build_c_helpers_dict(void)
     declmethod(get_pyobject_private_data);
     declmethod(set_pyobject_private_data);
     declmethod(reset_pyobject_private_data);
+    declmethod(attempt_nocopy_reshape);
 
     /* BLAS / LAPACK */
     declmethod(xxgemm);
