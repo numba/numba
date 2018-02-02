@@ -4438,7 +4438,7 @@ def array_argsort(context, builder, sig, args):
 @lower_cast(types.Array, types.Array)
 def array_to_array(context, builder, fromty, toty, val):
     # Type inference should have prevented illegal array casting.
-    assert toty.layout == 'A'
+    assert fromty.mutable != toty.mutable or toty.layout == 'A'
     return val
 
 
