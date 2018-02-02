@@ -565,7 +565,7 @@ if numpy_version >= (1, 8):
                     nb_dtype = arg
                 if nb_dtype is not None:
                     if isinstance(arg, types.Array):
-                        return arg.copy(dtype=nb_dtype)
+                        return arg.copy(dtype=nb_dtype, readonly=False)
                     else:
                         return types.Array(dtype=nb_dtype, ndim=0, layout='C')
 
