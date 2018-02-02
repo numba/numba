@@ -162,7 +162,10 @@ class _SourceFileBackedLocatorMixin(object):
     """
 
     def get_source_stamp(self):
-        st = os.stat(self._py_file)
+        if getattr(sys, 'frozen', False):
+            st = os.stat(sys.executable)
+        else:
+            st = os.stat(self._py_file)
         # We use both timestamp and size as some filesystems only have second
         # granularity.
         return st.st_mtime, st.st_size
@@ -224,8 +227,8 @@ class _InTreeCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
 
 class _UserWideCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
     """
-    A locator for functions backed by a regular Python module, cached
-    into a user-wide cache directory.
+    A locator for functions backed by a regular Python module or a 
+    frozen executable, cached into a user-wide cache directory. 
     """
 
     def __init__(self, py_func, py_file):
@@ -234,16 +237,33 @@ class _UserWideCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
         appdirs = AppDirs(appname="numba", appauthor=False)
         cache_dir = appdirs.user_cache_dir
         cache_subpath = os.path.dirname(py_file)
-        if os.name != "nt":
+        if not (os.name == "nt" or getattr(sys, 'frozen', False)):
             # On non-Windows, further disambiguate by appending the entire
             # absolute source path to the cache dir, e.g.
             # "$HOME/.cache/numba/usr/lib/.../mypkg/mysubpkg"
             # On Windows, this is undesirable because of path length limitations
+
+            # For frozen applications, there is no existing "full path"
+            # directory, and depends on a relocatable executable.
             cache_subpath = os.path.abspath(cache_subpath).lstrip(os.path.sep)
         self._cache_path = os.path.join(cache_dir, cache_subpath)
 
     def get_cache_path(self):
         return self._cache_path
+
+    @classmethod
+    def from_function(cls, py_func, py_file):
+        if not (os.path.exists(py_file) or getattr(sys, 'frozen', False)):
+            # Perhaps a placeholder (e.g. "<ipython-XXX>")
+            # stop function exit if frozen, since it uses a temp placeholder
+            return
+        self = cls(py_func, py_file)
+        try:
+            self.ensure_cache_path()
+        except OSError:
+            # Cannot ensure the cache directory exists or is writable
+            return
+        return self
 
 
 class _IPythonCacheLocator(_CacheLocator):
