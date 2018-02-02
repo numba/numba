@@ -702,6 +702,12 @@ class ConstructorLikeBaseTest(object):
             # Non-contiguous array
             if arr.ndim > 0:
                 check_arr(arr[::2])
+            # Check new array doesn't inherit readonly flag
+            arr.flags['WRITEABLE'] = False
+            # verify read-only
+            with self.assertRaises(ValueError):
+                arr[0] = 1
+            check_arr(arr)
 
         # Scalar argument => should produce a 0-d array
         check_arr(orig[0])
