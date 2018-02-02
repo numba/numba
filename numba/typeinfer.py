@@ -440,6 +440,8 @@ class CallConstraint(object):
         # Resolve call type
         sig = typeinfer.resolve_call(fnty, pos_args, kw_args, literals=literals)
         if sig is None:
+            # Note: duplicated error checking.
+            #       See types.BaseFunction.get_call_type
             # Arguments are invalid => explain why
             headtemp = "Invalid usage of {0} with parameters ({1})"
             args = [str(a) for a in pos_args]

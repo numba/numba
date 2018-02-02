@@ -7,6 +7,7 @@ import numpy
 import types as pytypes
 
 from llvmlite import ir as lir
+
 import numba
 from numba.six import exec_
 from numba import ir, types, typing, config, analysis, utils, cgutils, rewrites
@@ -14,6 +15,7 @@ from numba.typing.templates import signature, infer_global, AbstractTemplate
 from numba.targets.imputils import impl_ret_untracked
 from numba.analysis import (compute_live_map, compute_use_defs,
                             compute_cfg_from_blocks)
+from numba.errors import TypingError
 import copy
 
 _unique_var_count = 0
@@ -253,8 +255,11 @@ def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
 def find_op_typ(op, arg_typs):
     for ft in typing.templates.builtin_registry.functions:
         if ft.key == op:
-            func_typ = types.Function(ft).get_call_type(typing.Context(),
-                                                        arg_typs, {})
+            try:
+                func_typ = types.Function(ft).get_call_type(typing.Context(),
+                                                            arg_typs, {})
+            except TypingError:
+                func_typ = None
             if func_typ is not None:
                 return func_typ
     raise RuntimeError("unknown array operation")
