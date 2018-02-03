@@ -18,50 +18,50 @@ double guround (double number) {
 
 class RangeActual {
 public:
-    std::vector<intp> start, end;
+    std::vector<uintp> start, end;
 
     RangeActual() {}
 
-    RangeActual(intp s, intp e) {
+    RangeActual(uintp s, uintp e) {
         start.push_back(s);
         end.push_back(e);
     }
 
-    RangeActual(const std::vector<intp> &s, const std::vector<intp> &e) {
+    RangeActual(const std::vector<uintp> &s, const std::vector<uintp> &e) {
         assert(s.size() == e.size());
         start = s;
         end = e;
     }
 
-    RangeActual(const std::vector<intp> &lens) {
+    RangeActual(const std::vector<uintp> &lens) {
         for(uintp i = 0; i < lens.size(); ++i) {
             start.push_back(0);
             end.push_back(lens[i] - 1);
         }
     }
 
-    RangeActual(intp num_dims, intp *lens) {
-        for(intp i = 0; i < num_dims; ++i) {
+    RangeActual(uintp num_dims, uintp *lens) {
+        for(uintp i = 0; i < num_dims; ++i) {
             start.push_back(0);
             end.push_back(lens[i] - 1);
         }
     }
 
-    RangeActual(intp num_dims, intp *starts, intp *ends) {
-        for(intp i = 0; i < num_dims; ++i) {
+    RangeActual(uintp num_dims, uintp *starts, uintp *ends) {
+        for(uintp i = 0; i < num_dims; ++i) {
             start.push_back(starts[i]);
             end.push_back(ends[i]);
         }
     }
 
-    intp ndim() const {
+    uintp ndim() const {
         return start.size();
     }
 
-    std::vector<intp> iters_per_dim() const {
-        std::vector<intp> ret;
+    std::vector<uintp> iters_per_dim() const {
+        std::vector<uintp> ret;
         for(uintp i = 0; i < start.size(); ++i) {
-			intp ret_val = end[i] - start[i] + 1;
+			uintp ret_val = end[i] - start[i] + 1;
 			if(end[i] < start[i])
 				ret_val = 0;
             ret.push_back(ret_val);
@@ -90,8 +90,8 @@ struct dimlength_by_length_reverse {
 
 class isf_range {
 public:
-    intp dim, lower_bound, upper_bound;
-    isf_range(intp d, intp l, intp u) : dim(d), lower_bound(l), upper_bound(u) {}
+    uintp dim, lower_bound, upper_bound;
+    isf_range(uintp d, uintp l, uintp u) : dim(d), lower_bound(l), upper_bound(u) {}
 };
 
 struct isf_range_by_dim {
@@ -102,33 +102,33 @@ struct isf_range_by_dim {
 
 class chunk_info {
 public:
-    intp m_a, m_b, m_c;
-    chunk_info(intp a, intp b, intp c) : m_a(a), m_b(b), m_c(c) {}
+    uintp m_a, m_b, m_c;
+    chunk_info(uintp a, uintp b, uintp c) : m_a(a), m_b(b), m_c(c) {}
 };
 
-chunk_info chunk(intp rs, intp re, intp divisions) {
+chunk_info chunk(uintp rs, uintp re, uintp divisions) {
     assert(divisions >= 1);
-    intp total = (re - rs) + 1;
+    uintp total = (re - rs) + 1;
     if( divisions == 1) {
         return chunk_info(rs, re, re + 1);
     } else {
-        intp len = total / divisions;
+        uintp len = total / divisions;
         //intp rem = total % divisions;
-        intp res_end = rs + len - 1;
+        uintp res_end = rs + len - 1;
         return chunk_info(rs, res_end, res_end + 1);
     }
 }
 
-chunk_info equalizing_chunk(intp rs, intp re, intp divisions, float thread_percent) {
+chunk_info equalizing_chunk(uintp rs, uintp re, uintp divisions, float thread_percent) {
     assert(divisions >= 1);
-    intp total = (re - rs) + 1;
+    uintp total = (re - rs) + 1;
     if (divisions == 1) {
         return chunk_info(rs, re, re + 1);
     }
     else {
         //intp len = total / divisions;
-        intp len = total * thread_percent;
-        intp res_end = rs + len - 1;
+        uintp len = total * thread_percent;
+        uintp res_end = rs + len - 1;
         return chunk_info(rs, res_end, res_end + 1);
     }
 }
@@ -136,7 +136,7 @@ chunk_info equalizing_chunk(intp rs, intp re, intp divisions, float thread_perce
 RangeActual isfRangeToActual(const std::vector<isf_range> &build) {
     std::vector<isf_range> bunsort(build);
     std::sort(bunsort.begin(), bunsort.end(), isf_range_by_dim());
-    std::vector<intp> lower_bounds(bunsort.size()), upper_bounds(bunsort.size());
+    std::vector<uintp> lower_bounds(bunsort.size()), upper_bounds(bunsort.size());
     for(uintp i = 0; i < bunsort.size(); ++i) {
         lower_bounds[i] = bunsort[i].lower_bound;
         upper_bounds[i] = bunsort[i].upper_bound;
@@ -172,7 +172,7 @@ void divide_work(const RangeActual &full_iteration_space,
         if(total_len == 0) {
             divisions_for_this_dim = num_threads;
         } else {
-            divisions_for_this_dim = intp(guround(num_threads * ((float)dims[index].length / total_len)));
+            divisions_for_this_dim = uintp(guround(num_threads * ((float)dims[index].length / total_len)));
         }
 
         uintp chunkstart = full_iteration_space.start[dims[index].dim];
@@ -183,7 +183,7 @@ void divide_work(const RangeActual &full_iteration_space,
 
         for(uintp i = 0; i < divisions_for_this_dim; ++i) {
             chunk_info chunk_thread = chunk(threadstart, threadend, divisions_for_this_dim - i);
-            intp threads_used_here = (1 + (chunk_thread.m_b - chunk_thread.m_a));
+            uintp threads_used_here = (1 + (chunk_thread.m_b - chunk_thread.m_a));
             chunk_info chunk_index = equalizing_chunk(chunkstart, chunkend, divisions_for_this_dim - i, threads_used_here / (float)num_threads);
             num_threads -= threads_used_here;
             chunkstart = chunk_index.m_c;
@@ -195,7 +195,7 @@ void divide_work(const RangeActual &full_iteration_space,
     }
 }
 
-void flatten_schedule(const std::vector<RangeActual> &sched, intp *out_sched) {
+void flatten_schedule(const std::vector<RangeActual> &sched, uintp *out_sched) {
     uintp outer = sched.size();
     uintp inner = sched[0].start.size();
     for(uintp i = 0; i < outer; ++i) {
@@ -208,8 +208,8 @@ void flatten_schedule(const std::vector<RangeActual> &sched, intp *out_sched) {
     }
 }
 
-void create_schedule(const RangeActual &full_space, uintp num_sched, intp *sched) {
-    std::vector<intp> ipd = full_space.iters_per_dim();
+void create_schedule(const RangeActual &full_space, uintp num_sched, uintp *sched) {
+    std::vector<uintp> ipd = full_space.iters_per_dim();
     if(full_space.ndim() == 1) {
         uintp ra_len = ipd[0];
         if(ra_len <= num_sched) {
@@ -218,7 +218,7 @@ void create_schedule(const RangeActual &full_space, uintp num_sched, intp *sched
                 if(i < ra_len) {
                     ret.push_back(RangeActual(full_space.start[0] + i, full_space.start[0] + i));
                 } else {
-                    ret.push_back(RangeActual(-1, -2));
+                    ret.push_back(RangeActual((uintp)1, (uintp)0));
                 }
             }
             flatten_schedule(ret, sched);
@@ -229,8 +229,8 @@ void create_schedule(const RangeActual &full_space, uintp num_sched, intp *sched
 
             std::vector<RangeActual> ret;
             for(uintp i = 0; i < num_sched; ++i) {
-                intp start = full_space.start[0] + (ilen * i);
-                intp end;
+                uintp start = full_space.start[0] + (ilen * i);
+                uintp end;
                 if(i < num_sched-1) {
                     end = full_space.start[0] + (ilen * (i+1)) - 1;
                 } else {
@@ -246,7 +246,7 @@ void create_schedule(const RangeActual &full_space, uintp num_sched, intp *sched
         for(uintp i = 0; i < ipd.size(); ++i) dims.push_back(dimlength(i, ipd[i]));
 
         std::sort(dims.begin(), dims.end(), dimlength_by_length_reverse());
-        std::vector<RangeActual> assignments(num_sched, RangeActual(-1,-2));
+        std::vector<RangeActual> assignments(num_sched, RangeActual((uintp)1,(uintp)0));
         std::vector<isf_range> build;
         divide_work(full_space, assignments, build, 0, num_sched-1, dims, 0);
         flatten_schedule(assignments, sched);
@@ -262,11 +262,11 @@ void create_schedule(const RangeActual &full_space, uintp num_sched, intp *sched
     sched is pre-allocated memory for the schedule to be stored in and is of size NxD.
     debug is non-zero if DEBUG_ARRAY_OPT is turned on.
 */
-extern "C" void do_scheduling(intp num_dim, intp *starts, intp *ends, uintp num_threads, intp *sched, intp debug) {
+extern "C" void do_scheduling(uintp num_dim, uintp *starts, uintp *ends, uintp num_threads, uintp *sched, intp debug) {
     if (debug) {
         printf("num_dim = %d\n", (int)num_dim);
         printf("ranges = (");
-        for (int i = 0; i < num_dim; i++) {
+        for (unsigned i = 0; i < num_dim; i++) {
             printf("[%d, %d], ", (int)starts[i], (int)ends[i]);
         }
         printf(")\n");
