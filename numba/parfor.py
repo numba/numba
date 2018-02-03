@@ -980,7 +980,7 @@ class ParforPass(object):
                                 raise NotImplementedError(
                                     "Only constant step size of 1 is supported for prange")
                         index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
-                        index_var_typ = types.intp
+                        index_var_typ = types.uintp
                         loops = [LoopNest(index_var, start, size_var, step)]
                         self.typemap[index_var.name] = index_var_typ
 
@@ -1115,13 +1115,13 @@ class ParforPass(object):
             tuple_var = ir.Var(scope, mk_unique_var(
                 "$parfor_index_tuple_var"), loc)
             self.typemap[tuple_var.name] = types.containers.UniTuple(
-                types.intp, ndims)
+                types.uintp, ndims)
             tuple_call = ir.Expr.build_tuple(list(index_vars), loc)
             tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
             body_block.body.append(tuple_assign)
-            return tuple_var, types.containers.UniTuple(types.intp, ndims)
+            return tuple_var, types.containers.UniTuple(types.uintp, ndims)
         elif ndims == 1:
-            return index_vars[0], types.intp
+            return index_vars[0], types.uintp
         else:
             raise NotImplementedError(
                 "Parfor does not handle arrays of dimension 0")
@@ -1135,7 +1135,7 @@ class ParforPass(object):
         for size_var in size_vars:
             index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
             index_vars.append(index_var)
-            self.typemap[index_var.name] = types.intp
+            self.typemap[index_var.name] = types.uintp
             loopnests.append(LoopNest(index_var, 0, size_var, 1))
         return index_vars, loopnests
 
@@ -1231,7 +1231,7 @@ class ParforPass(object):
         for size_var in size_vars:
             index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
             index_vars.append(index_var)
-            self.typemap[index_var.name] = types.intp
+            self.typemap[index_var.name] = types.uintp
             loopnests.append(LoopNest(index_var, 0, size_var, 1))
 
         # generate body
@@ -1720,7 +1720,7 @@ def _gen_arrayexpr_getitem(
         # Const(0)
         const_node = ir.Const(0, var.loc)
         const_var = ir.Var(var.scope, mk_unique_var("$const_ind_0"), loc)
-        typemap[const_var.name] = types.intp
+        typemap[const_var.name] = types.uintp
         const_assign = ir.Assign(const_node, const_var, loc)
         out_ir.append(const_assign)
         index_var = const_var
@@ -1732,12 +1732,12 @@ def _gen_arrayexpr_getitem(
         ind_offset = num_indices - ndims
         tuple_var = ir.Var(var.scope, mk_unique_var(
             "$parfor_index_tuple_var_bcast"), loc)
-        typemap[tuple_var.name] = types.containers.UniTuple(types.intp, ndims)
+        typemap[tuple_var.name] = types.containers.UniTuple(types.uintp, ndims)
         # Just in case, const var for size 1 dim access index: $const0 =
         # Const(0)
         const_node = ir.Const(0, var.loc)
         const_var = ir.Var(var.scope, mk_unique_var("$const_ind_0"), loc)
-        typemap[const_var.name] = types.intp
+        typemap[const_var.name] = types.uintp
         const_assign = ir.Assign(const_node, const_var, loc)
         out_ir.append(const_assign)
         index_vars = []
@@ -2558,7 +2558,7 @@ def _add_liveness_return_block(blocks, lives, typemap):
     tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
     # dummy type for tuple_var
     typemap[tuple_var.name] = types.containers.UniTuple(
-        types.intp, 2)
+        types.uintp, 2)
     live_vars = [ir.Var(scope, v, loc) for v in lives]
     tuple_call = ir.Expr.build_tuple(live_vars, loc)
     blocks[return_label].body.append(ir.Assign(tuple_call, tuple_var, loc))

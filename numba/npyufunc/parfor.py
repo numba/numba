@@ -22,6 +22,7 @@ from numba import config
 from numba.targets.cpu import ParallelOptions
 from numba.six import exec_
 
+
 def _lower_parfor_parallel(lowerer, parfor):
     """Lowerer that handles LLVM code generation for parfor.
     This function lowers a parfor IR node to LLVM.
@@ -456,7 +457,7 @@ def _create_gufunc_for_parfor_body(
                        "], sched[" +
                        str(sched_dim +
                            parfor_dim) +
-                       "] + 1):\n")
+                       "] + numpy.uint32(1)):\n")
 
     if config.DEBUG_ARRAY_OPT_RUNTIME:
         for indent in range(parfor_dim + 1):
@@ -508,7 +509,7 @@ def _create_gufunc_for_parfor_body(
 
     gufunc_param_types = [
         numba.types.npytypes.Array(
-            numba.intp, 1, "C")] + param_types
+            numba.uintp, 1, "C")] + param_types
     if config.DEBUG_ARRAY_OPT:
         print(
             "gufunc_param_types = ",
@@ -620,9 +621,13 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_ir last dump")
         gufunc_ir.dump()
+        print("flags", flags)
+        print("typemap", typemap)
 
     old_alias = flags.noalias
+    old_fastmath = flags.fastmath
     flags.noalias = True
+    flags.fastmath = True
     kernel_func = compiler.compile_ir(
         typingctx,
         targetctx,
@@ -633,6 +638,7 @@ def _create_gufunc_for_parfor_body(
         locals)
 
     flags.noalias = old_alias
+    flags.fastmath = old_fastmath
 
     kernel_sig = signature(types.none, *gufunc_param_types)
     if config.DEBUG_ARRAY_OPT:
@@ -681,7 +687,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
         if isinstance(v, ir.Var):
             return lowerer.loadvar(v.name)
         else:
-            return context.get_constant(types.intp, v)
+            return context.get_constant(types.uintp, v)
 
     num_dim = len(loop_ranges)
     for i in range(num_dim):
@@ -705,8 +711,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
     intp_t = context.get_value_type(types.intp)
     uintp_t = context.get_value_type(types.uintp)
     intp_ptr_t = lc.Type.pointer(intp_t)
-    zero = context.get_constant(types.intp, 0)
-    one = context.get_constant(types.intp, 1)
+    uintp_ptr_t = lc.Type.pointer(uintp_t)
+    zero = context.get_constant(types.uintp, 0)
+    one = context.get_constant(types.uintp, 1)
     one_type = one.type
     sizeof_intp = context.get_abi_sizeof(intp_t)
 
@@ -717,11 +724,11 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
 
     # Call do_scheduling with appropriate arguments
     dim_starts = cgutils.alloca_once(
-        builder, intp_t, size=context.get_constant(
-            types.intp, num_dim), name="dims")
+        builder, uintp_t, size=context.get_constant(
+            types.uintp, num_dim), name="dims")
     dim_stops = cgutils.alloca_once(
-        builder, intp_t, size=context.get_constant(
-            types.intp, num_dim), name="dims")
+        builder, uintp_t, size=context.get_constant(
+            types.uintp, num_dim), name="dims")
     for i in range(num_dim):
         start, stop, step = loop_ranges[i]
         if start.type != one_type:
@@ -736,22 +743,22 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
             start, builder.gep(
                 dim_starts, [
                     context.get_constant(
-                        types.intp, i)]))
+                        types.uintp, i)]))
         builder.store(stop, builder.gep(dim_stops,
-                                        [context.get_constant(types.intp, i)]))
+                                        [context.get_constant(types.uintp, i)]))
     sched_size = get_thread_count() * num_dim * 2
     sched = cgutils.alloca_once(
-        builder, intp_t, size=context.get_constant(
-            types.intp, sched_size), name="sched")
+        builder, uintp_t, size=context.get_constant(
+            types.uintp, sched_size), name="sched")
     debug_flag = 1 if config.DEBUG_ARRAY_OPT else 0
     scheduling_fnty = lc.Type.function(
-        intp_ptr_t, [intp_t, intp_ptr_t, intp_ptr_t, uintp_t, intp_ptr_t, intp_t])
+        intp_ptr_t, [uintp_t, uintp_ptr_t, uintp_ptr_t, uintp_t, uintp_ptr_t, intp_t])
     do_scheduling = builder.module.get_or_insert_function(scheduling_fnty,
                                                           name="do_scheduling")
     builder.call(
         do_scheduling, [
             context.get_constant(
-                types.intp, num_dim), dim_starts, dim_stops, context.get_constant(
+                types.uintp, num_dim), dim_starts, dim_stops, context.get_constant(
                 types.uintp, get_thread_count()), sched, context.get_constant(
                     types.intp, debug_flag)])
 
