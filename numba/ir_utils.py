@@ -1376,6 +1376,10 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
                 mod_name = callee_def.value.__module__
                 if mod_name is not None:
                     attrs.append(mod_name)
+                else:
+                    # it might be a np.random function imported directly
+                    if hasattr(numpy.random, value):
+                        attrs += ['random', 'numpy']
             else:
                 class_name = callee_def.value.__class__.__name__
                 if class_name == 'builtin_function_or_method':
