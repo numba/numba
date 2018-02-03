@@ -953,7 +953,7 @@ def typeof_index(val, c):
 @type_callable(IndexValue)
 def type_index_value(context):
     def typer(ind, mval):
-        if ind == types.intp:
+        if ind == types.intp or ind == types.uintp:
             return IndexValueType(mval)
     return typer
 
