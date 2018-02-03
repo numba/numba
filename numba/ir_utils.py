@@ -1359,7 +1359,7 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
     callee_def = definition_finder(func_ir, callee)
     attrs = []
     while True:
-        if isinstance(callee_def, ir.Global):
+        if isinstance(callee_def, (ir.Global, ir.FreeVar)):
             # require(callee_def.value == numpy)
             # these checks support modules like numpy, numpy.random as well as
             # calls like len() and intrinsitcs like assertEquiv
