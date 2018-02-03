@@ -12,6 +12,7 @@ import types as pytypes
 import warnings
 from functools import reduce
 import numpy as np
+from numpy.random import randn
 
 import numba
 from numba import unittest_support as unittest
@@ -477,6 +478,22 @@ class TestParfors(TestParforsBase):
             y = 2 * v1
             return 4 * np.sum(x**2 + y**2 < 1) / 10
         self.check(test_impl, *self.simple_args)
+
+    @skip_unsupported
+    def test_np_func_direct_import(self):
+        from numpy import ones  # import here becomes FreeVar
+        def test_impl(n):
+            A = ones(n)
+            return A[0]
+        n = 111
+        self.check(test_impl, n)
+
+    @skip_unsupported
+    def test_np_random_func_direct_import(self):
+        def test_impl(n):
+            A = randn(n)
+            return A[0]
+        self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
 
     @skip_unsupported
     def test_arange(self):
