@@ -1374,7 +1374,8 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
             attrs.append(value)
             if hasattr(callee_def.value, '__module__'):
                 mod_name = callee_def.value.__module__
-                attrs.append(mod_name)
+                if mod_name is not None:
+                    attrs.append(mod_name)
             else:
                 class_name = callee_def.value.__class__.__name__
                 if class_name == 'builtin_function_or_method':
