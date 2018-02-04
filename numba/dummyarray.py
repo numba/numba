@@ -16,14 +16,14 @@ Extent = namedtuple("Extent", ["begin", "end"])
 
 attempt_nocopy_reshape = ctypes.CFUNCTYPE(
     ctypes.c_int,
-    ctypes.c_long, # nd
-    ctypes.POINTER(ctypes.c_long), # dims
-    ctypes.POINTER(ctypes.c_long), # strides
-    ctypes.c_long, # newnd
-    ctypes.POINTER(ctypes.c_long), # newdims
-    ctypes.POINTER(ctypes.c_long), # newstrides
-    ctypes.c_long, # itemsize
-    ctypes.c_int, # is_f_order
+    ctypes.c_long,  # nd
+    np.ctypeslib.ndpointer(np.ctypeslib.c_intp, ndim=1),  # dims
+    np.ctypeslib.ndpointer(np.ctypeslib.c_intp, ndim=1),  # strides
+    ctypes.c_long,  # newnd
+    np.ctypeslib.ndpointer(np.ctypeslib.c_intp, ndim=1),  # newdims
+    np.ctypeslib.ndpointer(np.ctypeslib.c_intp, ndim=1),  # newstrides
+    ctypes.c_long,  # itemsize
+    ctypes.c_int,  # is_f_order
 )(_helperlib.c_helpers['attempt_nocopy_reshape'])
 
 class Dim(object):
@@ -317,17 +317,17 @@ class Array(object):
 
             # need to keep these around in variables, not temporaries, so they
             # don't get GC'ed before we call into the C code
-            olddims = np.array(self.shape, dtype=int)
-            oldstrides = np.array(self.strides, dtype=int)
-            newdims = np.array(newdims, dtype=int)
+            olddims = np.array(self.shape, dtype=np.ctypeslib.c_intp)
+            oldstrides = np.array(self.strides, dtype=np.ctypeslib.c_intp)
+            newdims = np.array(newdims, dtype=np.ctypeslib.c_intp)
 
             if not attempt_nocopy_reshape(
                 oldnd,
-                olddims.ctypes.data_as(ctypes.POINTER(ctypes.c_long)),
-                oldstrides.ctypes.data_as(ctypes.POINTER(ctypes.c_long)),
+                olddims,
+                oldstrides,
                 newnd,
-                newdims.ctypes.data_as(ctypes.POINTER(ctypes.c_long)),
-                newstrides.ctypes.data_as(ctypes.POINTER(ctypes.c_long)),
+                newdims,
+                newstrides,
                 self.itemsize,
                 order == 'F',
             ):
