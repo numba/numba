@@ -4,12 +4,27 @@ from collections import namedtuple
 import itertools
 import functools
 import operator
+import ctypes
 
 import numpy as np
+
+from . import _helperlib
 
 
 Extent = namedtuple("Extent", ["begin", "end"])
 
+
+attempt_nocopy_reshape = ctypes.CFUNCTYPE(
+    ctypes.c_int,
+    ctypes.c_long,  # nd
+    np.ctypeslib.ndpointer(np.ctypeslib.c_intp, ndim=1),  # dims
+    np.ctypeslib.ndpointer(np.ctypeslib.c_intp, ndim=1),  # strides
+    ctypes.c_long,  # newnd
+    np.ctypeslib.ndpointer(np.ctypeslib.c_intp, ndim=1),  # newdims
+    np.ctypeslib.ndpointer(np.ctypeslib.c_intp, ndim=1),  # newstrides
+    ctypes.c_long,  # itemsize
+    ctypes.c_int,  # is_f_order
+)(_helperlib.c_helpers['attempt_nocopy_reshape'])
 
 class Dim(object):
     """A single dimension of the array
@@ -298,69 +313,25 @@ class Array(object):
             else:
                 raise AssertionError("unreachable")
         else:
-            # Transliteration of numpy's `_attempt_nocopy_reshape`, see
-            # https://github.com/numpy/numpy/blob/1706056ab7e3bc321f3bc6f605fdbd6a55fb3c42/numpy/core/src/multiarray/shape.c#L374-L466
-
-            # Remove axes with dimension 1 from the old array. They have no effect
-            # but would need special cases since their strides do not matter.
-            shape_gt_one = [i for i in range(oldnd) if self.shape[i] > 1]
-            olddims = [self.shape[i] for i in shape_gt_one]
-            oldstrides = [self.strides[i] for i in shape_gt_one]
-            oldnd = len(shape_gt_one)
-
             newstrides = np.empty(newnd, int)
 
-            # oi to oj and ni to nj give the axis ranges currently worked with
-            oi, oj, ni, nj = 0, 1, 0, 1
+            # need to keep these around in variables, not temporaries, so they
+            # don't get GC'ed before we call into the C code
+            olddims = np.array(self.shape, dtype=np.ctypeslib.c_intp)
+            oldstrides = np.array(self.strides, dtype=np.ctypeslib.c_intp)
+            newdims = np.array(newdims, dtype=np.ctypeslib.c_intp)
 
-            while ni < newnd and oi < oldnd:
-                np_ = newdims[ni]
-                op = olddims[oi]
-
-                while np_ != op:
-                    if np_ < op:
-                        # Misses trailing 1s, these are handled later
-                        np_ *= newdims[nj]
-                        nj += 1
-                    else:
-                        op *= olddims[oj]
-                        oj += 1
-
-                for ok in range(oi, oj - 1):
-                    if order == 'F':
-                        if oldstrides[ok+1] != olddims[ok]*oldstrides[ok]:
-                            # not contiguous enough
-                            raise NotImplementedError('reshape would require copy')
-                    else:
-                        # C order
-                        if oldstrides[ok] != olddims[ok+1]*oldstrides[ok+1]:
-                            # not contiguous enough
-                            raise NotImplementedError('reshape would require copy')
-
-                # Calculate new strides for all axes currently worked with
-                if order == 'F':
-                    newstrides[ni] = oldstrides[oi]
-                    for nk in range(ni + 1, nk < nj):
-                        newstrides[nk] = newstrides[nk - 1] * newdims[nk - 1]
-                else:
-                    # C order
-                    newstrides[nj - 1] = oldstrides[oj - 1]
-                    for nk in range(nj - 1, ni, -1):
-                        newstrides[nk - 1] = newstrides[nk] * newdims[nk]
-                ni = nj
-                nj += 1
-                oi = oj
-                oj += 1
-
-            # Set strides corresponding to trailing 1s of the new shape.
-            if ni >= 1:
-                last_stride = newstrides[ni - 1]
-            else:
-                last_stride = self.itemsize
-            if order == 'F':
-                last_stride *= newdims[ni - 1]
-            for nk in range(ni, newnd):
-                newstrides[nk] = last_stride
+            if not attempt_nocopy_reshape(
+                oldnd,
+                olddims,
+                oldstrides,
+                newnd,
+                newdims,
+                newstrides,
+                self.itemsize,
+                order == 'F',
+            ):
+                raise NotImplementedError('reshape would require copy')
 
         ret = self.from_desc(self.extent.begin, shape=newdims,
                              strides=newstrides, itemsize=self.itemsize)
