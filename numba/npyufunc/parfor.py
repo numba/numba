@@ -14,7 +14,7 @@ from numba.ir_utils import (add_offset_to_labels, replace_var_names,
                             rename_labels, get_name_var_table, visit_vars_inner,
                             get_definition, guard, find_callname,
                             get_call_table, is_pure,
-                            get_unused_var_name)
+                            get_unused_var_name, find_potential_aliases)
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
 from ..typing import signature
@@ -52,6 +52,13 @@ def _lower_parfor_parallel(lowerer, parfor):
             print("lower init_block instr = ", instr)
         lowerer.lower_inst(instr)
 
+    alias_map = {}
+    arg_aliases = {}
+    numba.parfor.find_potential_aliases_parfor(parfor, parfor.params, typemap, alias_map, arg_aliases)
+    if config.DEBUG_ARRAY_OPT:
+        print("alias_map", alias_map)
+        print("arg_aliases", arg_aliases)
+
     # run get_parfor_outputs() and get_parfor_reductions() before gufunc creation
     # since Jumps are modified so CFG of loop_body dict will become invalid
     assert parfor.params != None
@@ -66,7 +73,7 @@ def _lower_parfor_parallel(lowerer, parfor):
     flags.set('auto_parallel', ParallelOptions(True))
     numba.parfor.sequential_parfor_lowering = True
     func, func_args, func_sig = _create_gufunc_for_parfor_body(
-        lowerer, parfor, typemap, typingctx, targetctx, flags, {})
+        lowerer, parfor, typemap, typingctx, targetctx, flags, {}, bool(alias_map))
     numba.parfor.sequential_parfor_lowering = False
 
     # get the shape signature
@@ -297,7 +304,8 @@ def _create_gufunc_for_parfor_body(
         typingctx,
         targetctx,
         flags,
-        locals):
+        locals,
+        has_aliases):
     '''
     Takes a parfor and creates a gufunc function for its body.
     There are two parts to this function.
@@ -629,8 +637,11 @@ def _create_gufunc_for_parfor_body(
 
     old_alias = flags.noalias
     old_fastmath = flags.fastmath
-    flags.noalias = True
     flags.fastmath = True
+    if not has_aliases:
+        if config.DEBUG_ARRAY_OPT:
+            print("No aliases found so adding noalias flag.")
+        flags.noalias = True
     kernel_func = compiler.compile_ir(
         typingctx,
         targetctx,
