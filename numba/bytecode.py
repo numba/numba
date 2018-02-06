@@ -67,17 +67,17 @@ class ByteCodeInst(object):
     '''
     __slots__ = 'offset', 'next', 'opcode', 'opname', 'arg', 'lineno'
 
-    def __init__(self, offset, opcode, arg, nextoffset):
+    def __init__(self, offset, opcode, arg, nextoffset, lineno=-1):
         self.offset = offset
         self.next = nextoffset
         self.opcode = opcode
         self.opname = dis.opname[opcode]
         self.arg = arg
-        self.lineno = -1  # unknown line number
+        self.lineno = lineno # -1 is unknown line number
 
     @classmethod
-    def get(cls, offset, opname, arg):
-        return cls(offset, dis.opmap[opname], arg)
+    def get(cls, offset, opname, arg, nextoffset, lineno=-1):
+        return cls(offset, dis.opmap[opname], arg, nextoffset, lineno)
 
     @property
     def is_jump(self):
