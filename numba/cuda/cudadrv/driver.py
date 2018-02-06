@@ -316,7 +316,7 @@ class Driver(object):
             _logger.error(msg)
             if retcode == enums.CUDA_ERROR_NOT_INITIALIZED:
                 # Detect forking
-                if _getpid() != self.pid:
+                if self.pid is not None and _getpid() != self.pid:
                     msg = 'pid %s forked from pid %s after CUDA driver init'
                     _logger.critical(msg, _getpid(), self.pid)
                     raise CudaDriverError("CUDA initialized before forking")
