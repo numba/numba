@@ -399,12 +399,14 @@ def _create_gufunc_for_parfor_body(
     parfor_params = [param_dict[v] for v in parfor_params]
     parfor_params_orig = parfor_params
 
-    parfor_params = []
-    for pindex in range(len(parfor_params_orig)):
-        if pindex < len(parfor_inputs) and isinstance(param_types[pindex], types.npytypes.Array):
-            parfor_params.append(parfor_params_orig[pindex]+"param")
-        else:
-            parfor_params.append(parfor_params_orig[pindex])
+    do_ascont = False
+    if do_ascont:
+        parfor_params = []
+        for pindex in range(len(parfor_params_orig)):
+            if pindex < len(parfor_inputs) and isinstance(param_types[pindex], types.npytypes.Array):
+                parfor_params.append(parfor_params_orig[pindex]+"param")
+            else:
+                parfor_params.append(parfor_params_orig[pindex])
 
     #parfor_params = [v+"param" for v in parfor_params]
     # Change parfor body to replace illegal loop index vars with legal ones.
@@ -433,9 +435,10 @@ def _create_gufunc_for_parfor_body(
     gufunc_txt += "def " + gufunc_name + \
         "(sched, " + (", ".join(parfor_params)) + "):\n"
 
-    for pindex in range(len(parfor_inputs)):
-        if isinstance(param_types[pindex], types.npytypes.Array):
-            gufunc_txt += "    " + parfor_params_orig[pindex] + " = numpy.ascontiguousarray(" + parfor_params[pindex] + ")\n"
+    if do_ascont:
+        for pindex in range(len(parfor_inputs)):
+            if isinstance(param_types[pindex], types.npytypes.Array):
+                gufunc_txt += "    " + parfor_params_orig[pindex] + " = numpy.ascontiguousarray(" + parfor_params[pindex] + ")\n"
 
     # Add initialization of reduction variables
     for arr, var in zip(parfor_redarrs, parfor_redvars):
@@ -752,7 +755,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
             types.uintp, sched_size), name="sched")
     debug_flag = 1 if config.DEBUG_ARRAY_OPT else 0
     scheduling_fnty = lc.Type.function(
-        intp_ptr_t, [uintp_t, uintp_ptr_t, uintp_ptr_t, uintp_t, uintp_ptr_t, intp_t])
+        intp_ptr_t, [uintp_t, intp_ptr_t, intp_ptr_t, uintp_t, uintp_ptr_t, intp_t])
     do_scheduling = builder.module.get_or_insert_function(scheduling_fnty,
                                                           name="do_scheduling")
     builder.call(

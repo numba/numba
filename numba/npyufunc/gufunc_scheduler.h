@@ -38,7 +38,7 @@ extern "C"
 {
 #endif
 
-void do_scheduling(uintp num_dim, uintp *starts, uintp *ends, uintp num_threads, uintp *sched, intp debug);
+void do_scheduling(uintp num_dim, intp *starts, intp *ends, uintp num_threads, uintp *sched, intp debug);
 
 #ifdef __cplusplus
 }
