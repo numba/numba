@@ -403,6 +403,7 @@ from numba.typing.builtins import IndexValue, IndexValueType
 from numba.extending import overload
 
 @lower_builtin(IndexValue, types.intp, types.Type)
+@lower_builtin(IndexValue, types.uintp, types.Type)
 def impl_index_value(context, builder, sig, args):
     typ = sig.return_type
     index, value = args

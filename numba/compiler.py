@@ -51,6 +51,7 @@ class Flags(utils.ConfigOptions):
         'no_rewrites': False,
         'error_model': 'python',
         'fastmath': False,
+        'noalias': False,
     }
 
 
@@ -892,7 +893,7 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
     # Lowering
     fndesc = funcdesc.PythonFunctionDescriptor.from_specialized_function(
         interp, typemap, restype, calltypes, mangler=targetctx.mangler,
-        inline=flags.forceinline)
+        inline=flags.forceinline, noalias=flags.noalias)
 
     lower = lowering.Lower(targetctx, library, fndesc, interp)
     lower.lower()

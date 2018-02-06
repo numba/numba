@@ -14,13 +14,14 @@ from numba.ir_utils import (add_offset_to_labels, replace_var_names,
                             rename_labels, get_name_var_table, visit_vars_inner,
                             get_definition, guard, find_callname,
                             get_call_table, is_pure,
-                            get_unused_var_name)
+                            get_unused_var_name, find_potential_aliases)
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
 from ..typing import signature
 from numba import config
 from numba.targets.cpu import ParallelOptions
 from numba.six import exec_
+
 
 def _lower_parfor_parallel(lowerer, parfor):
     """Lowerer that handles LLVM code generation for parfor.
@@ -51,6 +52,13 @@ def _lower_parfor_parallel(lowerer, parfor):
             print("lower init_block instr = ", instr)
         lowerer.lower_inst(instr)
 
+    alias_map = {}
+    arg_aliases = {}
+    numba.parfor.find_potential_aliases_parfor(parfor, parfor.params, typemap, alias_map, arg_aliases)
+    if config.DEBUG_ARRAY_OPT:
+        print("alias_map", alias_map)
+        print("arg_aliases", arg_aliases)
+
     # run get_parfor_outputs() and get_parfor_reductions() before gufunc creation
     # since Jumps are modified so CFG of loop_body dict will become invalid
     assert parfor.params != None
@@ -65,7 +73,7 @@ def _lower_parfor_parallel(lowerer, parfor):
     flags.set('auto_parallel', ParallelOptions(True))
     numba.parfor.sequential_parfor_lowering = True
     func, func_args, func_sig = _create_gufunc_for_parfor_body(
-        lowerer, parfor, typemap, typingctx, targetctx, flags, {})
+        lowerer, parfor, typemap, typingctx, targetctx, flags, {}, bool(alias_map))
     numba.parfor.sequential_parfor_lowering = False
 
     # get the shape signature
@@ -280,6 +288,15 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
         block.body = new_block
     return hoisted
 
+def fix_numpy_module(blocks):
+    npmod = sys.modules['numpy']
+    for label, block in blocks.items():
+        for inst in block.body:
+            if isinstance(inst, ir.Assign):
+                rhs = inst.value
+                if isinstance(rhs, ir.Global) and rhs.name == 'numpy':
+                    rhs.value = npmod
+
 def _create_gufunc_for_parfor_body(
         lowerer,
         parfor,
@@ -287,7 +304,8 @@ def _create_gufunc_for_parfor_body(
         typingctx,
         targetctx,
         flags,
-        locals):
+        locals,
+        has_aliases):
     '''
     Takes a parfor and creates a gufunc function for its body.
     There are two parts to this function.
@@ -387,6 +405,18 @@ def _create_gufunc_for_parfor_body(
     parfor_args = parfor_params
     # Change parfor_params to be legal names.
     parfor_params = [param_dict[v] for v in parfor_params]
+    parfor_params_orig = parfor_params
+
+    do_ascont = False
+    if do_ascont:
+        parfor_params = []
+        for pindex in range(len(parfor_params_orig)):
+            if pindex < len(parfor_inputs) and isinstance(param_types[pindex], types.npytypes.Array):
+                parfor_params.append(parfor_params_orig[pindex]+"param")
+            else:
+                parfor_params.append(parfor_params_orig[pindex])
+
+    #parfor_params = [v+"param" for v in parfor_params]
     # Change parfor body to replace illegal loop index vars with legal ones.
     replace_var_names(loop_body, ind_dict)
     loop_body_var_table = get_name_var_table(loop_body)
@@ -407,13 +437,22 @@ def _create_gufunc_for_parfor_body(
         # print("sched_func_name ", type(sched_func_name), " ", sched_func_name)
         print("gufunc_name ", type(gufunc_name), " ", gufunc_name)
 
+    gufunc_txt = ""
+
     # Create the gufunc function.
-    gufunc_txt = "def " + gufunc_name + \
+    gufunc_txt += "def " + gufunc_name + \
         "(sched, " + (", ".join(parfor_params)) + "):\n"
+
+    if do_ascont:
+        for pindex in range(len(parfor_inputs)):
+            if isinstance(param_types[pindex], types.npytypes.Array):
+                gufunc_txt += "    " + parfor_params_orig[pindex] + " = numpy.ascontiguousarray(" + parfor_params[pindex] + ")\n"
+
     # Add initialization of reduction variables
     for arr, var in zip(parfor_redarrs, parfor_redvars):
         gufunc_txt += "    " + param_dict[var] + \
             "=" + param_dict[arr] + "[0]\n"
+
     # For each dimension of the parfor, create a for loop in the generated gufunc function.
     # Iterate across the proper values extracted from the schedule.
     # The form of the schedule is start_dim0, start_dim1, ..., start_dimN, end_dim0,
@@ -429,7 +468,7 @@ def _create_gufunc_for_parfor_body(
                        "], sched[" +
                        str(sched_dim +
                            parfor_dim) +
-                       "] + 1):\n")
+                       "] + numpy.uint32(1)):\n")
 
     if config.DEBUG_ARRAY_OPT_RUNTIME:
         for indent in range(parfor_dim + 1):
@@ -459,6 +498,7 @@ def _create_gufunc_for_parfor_body(
         print("gufunc_func = ", type(gufunc_func), "\n", gufunc_func)
     # Get the IR for the gufunc outline.
     gufunc_ir = compiler.run_frontend(gufunc_func)
+    fix_numpy_module(gufunc_ir.blocks)
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_ir dump ", type(gufunc_ir))
         gufunc_ir.dump()
@@ -480,7 +520,7 @@ def _create_gufunc_for_parfor_body(
 
     gufunc_param_types = [
         numba.types.npytypes.Array(
-            numba.intp, 1, "C")] + param_types
+            numba.uintp, 1, "C")] + param_types
     if config.DEBUG_ARRAY_OPT:
         print(
             "gufunc_param_types = ",
@@ -592,7 +632,16 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_ir last dump")
         gufunc_ir.dump()
+        print("flags", flags)
+        print("typemap", typemap)
 
+    old_alias = flags.noalias
+    old_fastmath = flags.fastmath
+    flags.fastmath = True
+    if not has_aliases:
+        if config.DEBUG_ARRAY_OPT:
+            print("No aliases found so adding noalias flag.")
+        flags.noalias = True
     kernel_func = compiler.compile_ir(
         typingctx,
         targetctx,
@@ -601,6 +650,9 @@ def _create_gufunc_for_parfor_body(
         types.none,
         flags,
         locals)
+
+    flags.noalias = old_alias
+    flags.fastmath = old_fastmath
 
     kernel_sig = signature(types.none, *gufunc_param_types)
     if config.DEBUG_ARRAY_OPT:
@@ -649,7 +701,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
         if isinstance(v, ir.Var):
             return lowerer.loadvar(v.name)
         else:
-            return context.get_constant(types.intp, v)
+            return context.get_constant(types.uintp, v)
 
     num_dim = len(loop_ranges)
     for i in range(num_dim):
@@ -673,8 +725,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
     intp_t = context.get_value_type(types.intp)
     uintp_t = context.get_value_type(types.uintp)
     intp_ptr_t = lc.Type.pointer(intp_t)
-    zero = context.get_constant(types.intp, 0)
-    one = context.get_constant(types.intp, 1)
+    uintp_ptr_t = lc.Type.pointer(uintp_t)
+    zero = context.get_constant(types.uintp, 0)
+    one = context.get_constant(types.uintp, 1)
     one_type = one.type
     sizeof_intp = context.get_abi_sizeof(intp_t)
 
@@ -685,11 +738,11 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
 
     # Call do_scheduling with appropriate arguments
     dim_starts = cgutils.alloca_once(
-        builder, intp_t, size=context.get_constant(
-            types.intp, num_dim), name="dims")
+        builder, uintp_t, size=context.get_constant(
+            types.uintp, num_dim), name="dims")
     dim_stops = cgutils.alloca_once(
-        builder, intp_t, size=context.get_constant(
-            types.intp, num_dim), name="dims")
+        builder, uintp_t, size=context.get_constant(
+            types.uintp, num_dim), name="dims")
     for i in range(num_dim):
         start, stop, step = loop_ranges[i]
         if start.type != one_type:
@@ -704,22 +757,22 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
             start, builder.gep(
                 dim_starts, [
                     context.get_constant(
-                        types.intp, i)]))
+                        types.uintp, i)]))
         builder.store(stop, builder.gep(dim_stops,
-                                        [context.get_constant(types.intp, i)]))
+                                        [context.get_constant(types.uintp, i)]))
     sched_size = get_thread_count() * num_dim * 2
     sched = cgutils.alloca_once(
-        builder, intp_t, size=context.get_constant(
-            types.intp, sched_size), name="sched")
+        builder, uintp_t, size=context.get_constant(
+            types.uintp, sched_size), name="sched")
     debug_flag = 1 if config.DEBUG_ARRAY_OPT else 0
     scheduling_fnty = lc.Type.function(
-        intp_ptr_t, [intp_t, intp_ptr_t, intp_ptr_t, uintp_t, intp_ptr_t, intp_t])
+        intp_ptr_t, [uintp_t, intp_ptr_t, intp_ptr_t, uintp_t, uintp_ptr_t, intp_t])
     do_scheduling = builder.module.get_or_insert_function(scheduling_fnty,
                                                           name="do_scheduling")
     builder.call(
         do_scheduling, [
             context.get_constant(
-                types.intp, num_dim), dim_starts, dim_stops, context.get_constant(
+                types.uintp, num_dim), dim_starts, dim_stops, context.get_constant(
                 types.uintp, get_thread_count()), sched, context.get_constant(
                     types.intp, debug_flag)])
 
