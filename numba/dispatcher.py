@@ -649,9 +649,11 @@ class LiftedLoop(_DispatcherBase):
                     return existing.entry_point
 
                 assert not flags.enable_looplift, "Enable looplift flags is on"
+                # Clone IR to avoid mutation in rewrite pass
+                cloned_func_ir = self.func_ir.copy()
                 cres = compiler.compile_ir(typingctx=self.typingctx,
                                            targetctx=self.targetctx,
-                                           func_ir=self.func_ir,
+                                           func_ir=cloned_func_ir,
                                            args=args, return_type=return_type,
                                            flags=flags, locals=self.locals,
                                            lifted=(),
