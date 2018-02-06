@@ -436,6 +436,39 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         cfoo = jit(foo)
         self.assertEqual(foo(10), cfoo(10))
 
+    def test_recompilation_loop(self):
+        """
+        https://github.com/numba/numba/issues/2481
+        """
+        from numba import jit
+
+        def foo(x, y):
+            # slicing to make array `x` into different layout
+            # to cause a new compilation of the lifted loop
+            A = x[::y]
+            c = 1
+            for k in range(A.size):
+                object()  # to force objectmode and looplifting
+                c = c * A[::-1][k]   # the slice that is failing in static_getitem
+            return c
+
+        cfoo = jit(foo)
+        # First run just works
+        args = np.arange(10), 1
+        self.assertEqual(foo(*args), cfoo(*args))
+        # Exactly 1 lifted loop so far
+        self.assertEqual(len(cfoo.overloads[cfoo.signatures[0]].lifted), 1)
+        lifted = cfoo.overloads[cfoo.signatures[0]].lifted[0]
+        # The lifted loop has 1 signature
+        self.assertEqual(len(lifted.signatures), 1)
+        # Use different argument to trigger a new compilation of the lifted loop
+        args = np.arange(10), -1
+        self.assertEqual(foo(*args), cfoo(*args))
+        # Ensure that is really a new overload for the lifted loop
+        print(cfoo.signatures)
+        self.assertEqual(len(lifted.signatures), 2)
+
+
 
 if __name__ == '__main__':
     unittest.main()
