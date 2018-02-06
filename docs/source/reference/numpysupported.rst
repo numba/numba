@@ -356,7 +356,7 @@ Simple random data
 ''''''''''''''''''
 
 * :func:`numpy.random.rand`
-* :func:`numpy.random.randint`
+* :func:`numpy.random.randint` (only the first two arguments)
 * :func:`numpy.random.randn`
 * :func:`numpy.random.random`
 * :func:`numpy.random.random_sample`
@@ -375,6 +375,8 @@ Permutations
 
 Distributions
 '''''''''''''
+
+.. warning:: The `size` argument is not supported in the following functions.
 
 * :func:`numpy.random.beta`
 * :func:`numpy.random.binomial`
