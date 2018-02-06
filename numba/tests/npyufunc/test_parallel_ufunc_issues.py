@@ -11,6 +11,9 @@ from numba import vectorize, guvectorize
 
 
 class TestParUfuncIssues(unittest.TestCase):
+    
+    _numba_parallel_test_ = False
+    
     def test_thread_response(self):
         """
         Related to #89.
@@ -76,6 +79,9 @@ class TestParUfuncIssues(unittest.TestCase):
 
 
 class TestParGUfuncIssues(unittest.TestCase):
+    
+    _numba_parallel_test_ = False
+    
     def test_gil_reacquire_deadlock(self):
         """
         Testing similar issue to #1998 due to GIL reacquiring for Gufunc
