@@ -172,7 +172,7 @@ class CudaArraySlicing(SerialMixin, unittest.TestCase):
         np.testing.assert_array_equal(darr[:0][-1:].copy_to_host(), arr[:0][-1:])
 
 
-class CudaArraySetting(unittest.TestCase):
+class CudaArraySetting(SerialMixin, unittest.TestCase):
     """
     Most of the slicing logic is tested in the cases above, so these
     tests focus on the setting logic.
