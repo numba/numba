@@ -16,6 +16,7 @@ from numba.targets.cpu import ParallelOptions
 from numba.errors import NumbaWarning
 from numba import compiler, prange
 from .test_parfors import skip_unsupported
+from .matmul_usecase import needs_blas
 
 def simple_nopython(somearg):
     retval = somearg + 1
@@ -236,6 +237,7 @@ class TestParforsDebug(TestCase):
                 break
         self.assertTrue(warning_found, "Warning message should be found.")
 
+    @needs_blas
     @skip_unsupported
     def test_warns(self):
         """
