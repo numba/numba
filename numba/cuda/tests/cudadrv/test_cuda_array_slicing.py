@@ -256,7 +256,7 @@ class CudaArraySetting(SerialMixin, unittest.TestCase):
             member=str(e.exception),
             container=[
                 "Can't assign 3-D array to 1-D self",  # device
-                "could not broadcast input array from shape (2,3) into shape (25)",  # simulator
+                "could not broadcast input array from shape (2,3) into shape (35)",  # simulator
             ])
 
     def test_incompatible_shape(self):
