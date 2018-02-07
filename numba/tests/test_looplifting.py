@@ -465,7 +465,6 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         args = np.arange(10), -1
         self.assertEqual(foo(*args), cfoo(*args))
         # Ensure that is really a new overload for the lifted loop
-        print(cfoo.signatures)
         self.assertEqual(len(lifted.signatures), 2)
 
 
