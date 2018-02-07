@@ -4456,6 +4456,14 @@ def np_dstack(context, builder, sig, args):
 
         return context.compile_internal(builder, np_vstack_impl, sig, args)
 
+@extending.overload_method(types.Array, 'fill')
+def arr_fill(arr, val):
+
+    def fill_impl(arr, val):
+        arr[:] = val
+        return None
+
+    return fill_impl
 
 # -----------------------------------------------------------------------------
 # Sorting
