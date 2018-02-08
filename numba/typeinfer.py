@@ -882,7 +882,21 @@ class TypeInferer(object):
         def check_var(name):
             tv = self.typevars[name]
             if not tv.defined:
-                raise TypingError("Undefined variable '%s'" % (var,))
+                def find_offender(name):
+                    """
+                    finds the offending variable definition to allow its
+                    inclusion in an error message
+                    """
+                    for block in self.func_ir.blocks.values():
+                        for x in block.find_insts(ir.Assign):
+                            if x.target.name == name:
+                                return x
+                    return None
+                offender = find_offender(var)
+                val = getattr(offender, 'value', 'unknown operation')
+                loc = getattr(offender, 'loc', 'unknown location')
+                msg = "Undefined variable '%s', operation: %s, location: %s"
+                raise TypingError(msg % (var, val, loc))
             tp = tv.getone()
             if not tp.is_precise():
                 raise TypingError("Can't infer type of variable '%s': %s" % (var, tp))
