@@ -585,6 +585,10 @@ class TestLinalgBase(TestCase):
         msg = "Invalid norm order for matrices."
         self.assert_error(cfunc, args, msg, ValueError)
 
+    def assert_raise_on_empty(self, cfunc, args):
+        msg = 'Arrays cannot be empty'
+        self.assert_error(cfunc, args, msg, np.linalg.LinAlgError)
+
 
 class TestTestLinalgBase(TestCase):
     """
@@ -733,6 +737,9 @@ class TestLinalgInv(TestLinalgBase):
             a = self.specific_sample_matrix((n, n), dtype, order)
             check(a)
 
+        # 0 dimensioned matrix
+        check(np.empty((0, 0)))
+
         # Non square matrix
         self.assert_non_square(cfunc, (np.ones((2, 3)),))
 
@@ -745,6 +752,7 @@ class TestLinalgInv(TestLinalgBase):
 
         # Singular matrix
         self.assert_raise_on_singular(cfunc, (np.zeros((2, 2)),))
+        
 
 
 class TestLinalgCholesky(TestLinalgBase):
@@ -809,6 +817,9 @@ class TestLinalgCholesky(TestLinalgBase):
         for dtype, order in product(self.dtypes, 'FC'):
             a = self.sample_matrix(n, dtype, order)
             check(a)
+
+        # 0 dimensioned matrix
+        check(np.empty((0, 0)))
 
         rn = "cholesky"
         # Non square matrices
@@ -954,6 +965,10 @@ class TestLinalgEigenSystems(TestLinalgBase):
 
         # Test both a real and complex type as the impls are different
         for ty in [np.float32, np.complex64]:
+
+            # 0 dimensioned matrix
+            check(np.empty((0, 0), dtype=ty))
+
             # Non square matrices
             self.assert_non_square(cfunc, (np.ones((2, 3), dtype=ty),))
 
@@ -1105,6 +1120,10 @@ class TestLinalgSvd(TestLinalgBase):
         self.assert_no_nan_or_inf(cfunc,
                                   (np.array([[1., 2., ], [np.inf, np.nan]],
                                             dtype=np.float64),))
+        # empty
+        for sz in [(0, 1), (1, 0), (0, 0)]:
+            args = (np.empty(sz), True)
+            self.assert_raise_on_empty(cfunc, args)
 
 
 class TestLinalgQr(TestLinalgBase):
@@ -1196,6 +1215,10 @@ class TestLinalgQr(TestLinalgBase):
         self.assert_no_nan_or_inf(cfunc,
                                   (np.array([[1., 2., ], [np.inf, np.nan]],
                                             dtype=np.float64),))
+
+        # empty
+        for sz in [(0, 1), (1, 0), (0, 0)]:
+            self.assert_raise_on_empty(cfunc, (np.empty(sz),))
 
 
 class TestLinalgSystems(TestLinalgBase):
@@ -1408,6 +1431,18 @@ class TestLinalgLstsq(TestLinalgSystems):
                 inner_test_loop_fn(A, dt,
                                    rcond=approx_half_rank_rcond)
 
+        # check empty arrays
+        empties = [
+        [(0, 1), (1,)], # empty A, valid b
+        [(1, 0), (1,)], # empty A, valid b
+        [(1, 1), (0,)], # valid A, empty 1D b 
+        [(1, 1), (1, 0)],  # valid A, empty 2D b 
+        ]
+
+        for A, b in empties:
+            args = (np.empty(A), np.empty(b))
+            self.assert_raise_on_empty(cfunc, args)
+
         # Test input validation
         ok = np.array([[1., 2.], [3., 4.]], dtype=np.float64)
 
@@ -1524,6 +1559,9 @@ class TestLinalgSolve(TestLinalgSystems):
                 # check 1D B
                 tmp = B[:, 0].copy(order=b_order)
                 check(A, tmp)
+
+        # check empty
+        cfunc(np.empty((0, 0)), np.empty((0,)))
 
         # Test input validation
         ok = np.array([[1., 0.], [0., 1.]], dtype=np.float64)
@@ -1673,6 +1711,10 @@ class TestLinalgPinv(TestLinalgBase):
                 approx_half_rank_rcond = minmn * rcond
                 check(a, rcond=approx_half_rank_rcond)
 
+        # check empty
+        for sz in [(0, 1), (1, 0)]:
+            check(np.empty(sz))
+
         rn = "pinv"
 
         # Wrong dtype
@@ -1762,6 +1804,9 @@ class TestLinalgDetAndSlogdet(TestLinalgBase):
             a = np.zeros((3, 3), dtype=dtype)
             check(cfunc, a)
 
+        # check empty
+        check(cfunc, np.empty((0, 0)))
+
         # Wrong dtype
         self.assert_wrong_dtype(rn, cfunc,
                                 (np.ones((2, 2), dtype=np.int32),))
@@ -1833,13 +1878,6 @@ class TestLinalgNorm(TestLinalgSystems):
             a = self.sample_vector(10, dtype)[::3]
             check(a, ord=nrm_type)
 
-        # check that numba returns zero for empty arrays. Numpy returns zero
-        # for most norm types and raises ValueError for +/-np.inf.
-        for dtype, nrm_type, order in \
-                product(self.dtypes, nrm_types, 'FC'):
-            a = np.array([], dtype=dtype, order=order)
-            self.assertEqual(cfunc(a, nrm_type), 0.0)
-
         # Check 2D inputs:
         # test: column vector, tall, wide, square, row vector
         # prime sizes
@@ -1869,10 +1907,14 @@ class TestLinalgNorm(TestLinalgSystems):
             check(a[1, 4::3], ord=nrm_type)
 
         # check that numba returns zero for empty arrays. Numpy returns zero
-        # for some norm types and raises a variety of errors for others.
+        # for most norm types and raises ValueError for +/-np.inf.
+        # there is not a great deal of consistency in Numpy's response so
+        # it is not being emulated in Numba
         for dtype, nrm_type, order in \
                 product(self.dtypes, nrm_types, 'FC'):
-            a = np.array([[]], dtype=dtype, order=order)
+            a = np.empty((0,), dtype=dtype, order=order)
+            self.assertEqual(cfunc(a, nrm_type), 0.0)
+            a = np.empty((0, 0), dtype=dtype, order=order)
             self.assertEqual(cfunc(a, nrm_type), 0.0)
 
         rn = "norm"
@@ -1941,6 +1983,10 @@ class TestLinalgCond(TestLinalgBase):
                 product(sizes, self.dtypes, 'FC'):
             a = self.specific_sample_matrix(size, dtype, order)
             check(a)
+
+        # empty
+        for sz in [(0, 1), (1, 0), (0, 0)]:
+            self.assert_raise_on_empty(cfunc, (np.empty(sz),))
 
         # try an ill-conditioned system with 2-norm, make sure np raises an
         # overflow warning as the result is `+inf` and that the result from
@@ -2058,6 +2104,11 @@ class TestLinalgMatrixRank(TestLinalgSystems):
             self.assertEqual(cfunc(a), 1)
             check(a)
 
+        # empty
+        for sz in [(0, 1), (1, 0), (0, 0)]:
+            for tol in [None, 1e-13]:
+                self.assert_raise_on_empty(cfunc, (np.empty(sz), tol))
+
         rn = "matrix_rank"
 
         # Wrong dtype
@@ -2113,6 +2164,8 @@ class TestLinalgMatrixPower(TestLinalgBase):
                 product(sizes, powers, self.dtypes, 'FC'):
             a = self.specific_sample_matrix(size, dtype, order)
             check(a, pwr)
+            a = np.empty((0, 0), dtype=dtype, order=order)
+            check(a, pwr)
 
         rn = "matrix_power"
 
@@ -2123,6 +2176,11 @@ class TestLinalgMatrixPower(TestLinalgBase):
         # not an int power
         self.assert_wrong_dtype(rn, cfunc,
                                 (np.ones((2, 2), dtype=np.int32), 1))
+
+        # non square system
+        args = (np.ones((3, 5)), 1)
+        msg = 'input must be a square array'
+        self.assert_error(cfunc, args, msg)
 
         # Dimension issue
         self.assert_wrong_dimensions(rn, cfunc,
@@ -2182,6 +2240,10 @@ class TestTrace(TestLinalgBase):
         for size, offset, dtype, order in \
                 product(sizes, offsets, self.dtypes, 'FC'):
             a = self.specific_sample_matrix(size, dtype, order)
+            check(a, offset=offset)
+            if offset == 0:
+                check(a)
+            a = np.empty((0, 0), dtype=dtype, order=order)
             check(a, offset=offset)
             if offset == 0:
                 check(a)
