@@ -499,6 +499,20 @@ class TestLinalgBase(TestCase):
 
         return Q
 
+    def shape_with_0_input(self, *args):
+        """
+        returns True if an input argument has a dimension that is zero
+        and Numpy version is < 1.13, else False. This is due to behaviour
+        changes in handling dimension zero arrays:
+        https://github.com/numpy/numpy/issues/10573
+        """
+        if numpy_version < (1, 13):
+            for x in args:
+                if isinstance(x, np.ndarray):
+                    if 0 in x.shape:
+                        return True
+        return False
+
     def assert_error(self, cfunc, args, msg, err=ValueError):
         with self.assertRaises(err) as raises:
             cfunc(*args)
@@ -752,7 +766,6 @@ class TestLinalgInv(TestLinalgBase):
 
         # Singular matrix
         self.assert_raise_on_singular(cfunc, (np.zeros((2, 2)),))
-        
 
 
 class TestLinalgCholesky(TestLinalgBase):
@@ -785,6 +798,11 @@ class TestLinalgCholesky(TestLinalgBase):
         cfunc = jit(nopython=True)(cholesky_matrix)
 
         def check(a):
+            if self.shape_with_0_input(a):
+                # has shape with 0 on input, numpy will fail,
+                # just make sure Numba runs without error
+                cfunc(a)
+                return
             expected = cholesky_matrix(a)
             got = cfunc(a)
             use_reconstruction = False
@@ -867,6 +885,11 @@ class TestLinalgEigenSystems(TestLinalgBase):
         cfunc = jit(nopython=True)(func)
 
         def check(a):
+            if self.shape_with_0_input(a):
+                # has shape with 0 on input, numpy will fail,
+                # just make sure Numba runs without error
+                cfunc(a)
+                return
             expected = func(a)
             got = cfunc(a)
             # check that the returned tuple is same length
@@ -1622,6 +1645,11 @@ class TestLinalgPinv(TestLinalgBase):
         cfunc = jit(nopython=True)(pinv_matrix)
 
         def check(a, **kwargs):
+            if self.shape_with_0_input(a):
+                # has shape with 0 on input, numpy will fail,
+                # just make sure Numba runs without error
+                cfunc(a, **kwargs)
+                return
             expected = pinv_matrix(a, **kwargs)
             got = cfunc(a, **kwargs)
 
@@ -1740,6 +1768,11 @@ class TestLinalgDetAndSlogdet(TestLinalgBase):
     """
 
     def check_det(self, cfunc, a, **kwargs):
+        if self.shape_with_0_input(a):
+            # has shape with 0 on input, numpy will fail,
+            # just make sure Numba runs without error
+            cfunc(a, **kwargs)
+            return
         expected = det_matrix(a, **kwargs)
         got = cfunc(a, **kwargs)
 
@@ -1753,6 +1786,11 @@ class TestLinalgDetAndSlogdet(TestLinalgBase):
             cfunc(a, **kwargs)
 
     def check_slogdet(self, cfunc, a, **kwargs):
+        if self.shape_with_0_input(a):
+            # has shape with 0 on input, numpy will fail,
+            # just make sure Numba runs without error
+            cfunc(a, **kwargs)
+            return
         expected = slogdet_matrix(a, **kwargs)
         got = cfunc(a, **kwargs)
 
