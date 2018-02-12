@@ -882,17 +882,11 @@ class TypeInferer(object):
         def check_var(name):
             tv = self.typevars[name]
             if not tv.defined:
-                def find_offender(name):
-                    """
-                    finds the offending variable definition to allow its
-                    inclusion in an error message
-                    """
-                    for block in self.func_ir.blocks.values():
-                        for x in block.find_insts(ir.Assign):
-                            if x.target.name == name:
-                                return x
-                    return None
-                offender = find_offender(var)
+                offender = None
+                for block in self.func_ir.blocks.values():
+                    offender = block.find_variable_assignment(name)
+                    if offender is not None:
+                        break
                 val = getattr(offender, 'value', 'unknown operation')
                 loc = getattr(offender, 'loc', 'unknown location')
                 msg = "Undefined variable '%s', operation: %s, location: %s"
