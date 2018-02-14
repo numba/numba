@@ -196,11 +196,10 @@ if utils.PYVERSION > (3, 0):
     log2_impl = unary_math_extern(math.log2, "log2f", "log2")
     ceil_impl = unary_math_extern(math.ceil, "ceilf", "ceil", True)
     floor_impl = unary_math_extern(math.floor, "floorf", "floor", True)
-    gamma_impl = unary_math_extern(math.gamma, "gammaf", "gamma")
 else:
     ceil_impl = unary_math_extern(math.ceil, "ceilf", "ceil")
     floor_impl = unary_math_extern(math.floor, "floorf", "floor")
-    gamma_impl = unary_math_extern(math.gamma, "numba_gammaf", "numba_gamma") # work-around
+gamma_impl = unary_math_extern(math.gamma, "numba_gammaf", "numba_gamma") # work-around
 sqrt_impl = unary_math_extern(math.sqrt, "sqrtf", "sqrt")
 trunc_impl = unary_math_extern(math.trunc, "truncf", "trunc", True)
 lgamma_impl = unary_math_extern(math.lgamma, "lgammaf", "lgamma")
