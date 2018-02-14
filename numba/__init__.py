@@ -86,8 +86,23 @@ def _ensure_llvm():
                (_min_llvm_version + llvm_version_info))
         raise ImportError(msg)
 
-    check_jit_execution()
+    if config.INTEL_SVML:
+        try:
+            if sys.platform.startswith('linux'):
+                llvmlite.binding.load_library_permanently("libsvml.so")
+            elif sys.platform.startswith('darwin'):
+                llvmlite.binding.load_library_permanently("libsvml.dylib")
+            elif sys.platform.startswith('win'):
+                llvmlite.binding.load_library_permanently("svml_dispmd")
+            else:
+                raise ImportError("Unsupported platform")
+            llvmlite.binding.set_option(__name__, '-vector-library=SVML')
+        except:
+            if config.DEBUG:
+                print("Warning: Cannot load Intel SVML library")
+            config.INTEL_SVML = False
 
+    check_jit_execution()
 
 def _ensure_pynumpy():
     """
