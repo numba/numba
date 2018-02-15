@@ -79,7 +79,7 @@ class TestParforsBase(TestCase):
 
         return cfunc, cpfunc
 
-    def check_prange_vs_others(self, pyfunc, cfunc, cpfunc, *args, **kwargs):
+    def check_parfors_vs_others(self, pyfunc, cfunc, cpfunc, *args, **kwargs):
         """
         Checks python, njit and parfor impls produce the same result.
 
@@ -88,9 +88,13 @@ class TestParforsBase(TestCase):
             cfunc - CompilerResult from njit of pyfunc
             cpfunc - CompilerResult from njit(parallel=True) of pyfunc
             args - arguments for the function being tested
-            kwargs - to pass to np.testing.assert_almost_equal
-                     'decimal' is supported.
+        Keyword Arguments:
+            scheduler_type - 'signed', 'unsigned' or None, default is None.
+                           Supply in cases where the presence of a specific
+                           scheduler is to be asserted.
+            Remaining kwargs are passed to np.testing.assert_almost_equal
         """
+        scheduler_type = kwargs.pop('scheduler_type', None)
 
         # python result
         py_expected = pyfunc(*args)
@@ -105,7 +109,15 @@ class TestParforsBase(TestCase):
         np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
 
         # make sure parfor set up scheduling
-        self.assertIn('@do_scheduling', cpfunc.library.get_llvm_str())
+        scheduler_str = '@do_scheduling'
+        if scheduler_type is not None:
+            if scheduler_type in ['signed', 'unsigned']:
+                scheduler_str += '_' + scheduler_type
+            else:
+                msg = "Unknown scheduler_type specified: %s"
+                raise ValueError(msg % scheduler_type)
+
+        self.assertIn(scheduler_str, cpfunc.library.get_llvm_str())
 
 
 def test1(sptprice, strike, rate, volatility, timev):
@@ -219,7 +231,7 @@ class TestParfors(TestParforsBase):
 
     def check(self, pyfunc, *args, **kwargs):
         cfunc, cpfunc = self.compile_all(pyfunc, *args)
-        self.check_prange_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
+        self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
 
     @skip_unsupported
     @tag('important')
@@ -785,6 +797,9 @@ class TestPrange(TestParforsBase):
          patch_instance - iterable containing which instances of `range` to
                           replace. If not present all instance of `range` are
                           replaced.
+         scheduler_type - 'signed', 'unsigned' or None, default is None.
+                           Supply in cases where the presence of a specific
+                           scheduler is to be asserted.
          Remaining kwargs are passed to np.testing.assert_almost_equal
 
 
@@ -886,7 +901,7 @@ class TestPrange(TestParforsBase):
         cpfunc = self.compile_parallel(pfunc, sig)
 
         # compare
-        self.check_prange_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
+        self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
 
     @skip_unsupported
     def test_prange01(self):
@@ -896,7 +911,7 @@ class TestPrange(TestParforsBase):
             for i in range(n):
                 A[i] = 2.0 * i
             return A
-        self.prange_tester(test_impl)
+        self.prange_tester(test_impl, scheduler_type='unsigned')
 
     @skip_unsupported
     def test_prange02(self):
@@ -906,7 +921,7 @@ class TestPrange(TestParforsBase):
             for i in range(1, n):
                 A[i - 1] = 2.0 * i
             return A
-        self.prange_tester(test_impl)
+        self.prange_tester(test_impl, scheduler_type='unsigned')
 
     @skip_unsupported
     def test_prange03(self):
@@ -915,7 +930,7 @@ class TestPrange(TestParforsBase):
             for i in range(10):
                 s += 2
             return s
-        self.prange_tester(test_impl)
+        self.prange_tester(test_impl, scheduler_type='unsigned')
 
     @skip_unsupported
     def test_prange04(self):
@@ -929,7 +944,7 @@ class TestPrange(TestParforsBase):
                 else:
                     A[i] = 0
             return A
-        self.prange_tester(test_impl)
+        self.prange_tester(test_impl, scheduler_type='unsigned')
 
     @skip_unsupported
     def test_prange05(self):
@@ -940,7 +955,7 @@ class TestPrange(TestParforsBase):
             for i in range(1, n - 1, 1):
                 s += A[i]
             return s
-        self.prange_tester(test_impl)
+        self.prange_tester(test_impl, scheduler_type='unsigned')
 
     @skip_unsupported
     def test_prange06(self):
@@ -951,7 +966,7 @@ class TestPrange(TestParforsBase):
             for i in range(1, 1, 1):
                 s += A[i]
             return s
-        self.prange_tester(test_impl)
+        self.prange_tester(test_impl, scheduler_type='unsigned')
 
     @skip_unsupported
     def test_prange07(self):
@@ -962,7 +977,7 @@ class TestPrange(TestParforsBase):
             for i in range(n, 1):
                 s += A[i]
             return s
-        self.prange_tester(test_impl)
+        self.prange_tester(test_impl, scheduler_type='unsigned')
 
     @skip_unsupported
     def test_prange08(self):
@@ -974,8 +989,7 @@ class TestPrange(TestParforsBase):
                 for j in range(len(A)):
                     acc += A[i]
             return acc
-
-        test_impl()
+        self.prange_tester(test_impl, scheduler_type='unsigned')
 
     @skip_unsupported
     def test_prange08_1(self):
@@ -987,7 +1001,7 @@ class TestPrange(TestParforsBase):
                 for j in range(4):
                     acc += A[i]
             return acc
-        self.prange_tester(test_impl)
+        self.prange_tester(test_impl, scheduler_type='unsigned')
 
     @skip_unsupported
     def test_prange09(self):
@@ -999,7 +1013,7 @@ class TestPrange(TestParforsBase):
                     acc += 1
             return acc
         # patch inner loop to 'prange'
-        self.prange_tester(test_impl, patch_instance=[1])
+        self.prange_tester(test_impl, patch_instance=[1], scheduler_type='unsigned')
 
     @skip_unsupported
     def test_prange10(self):
@@ -1013,7 +1027,7 @@ class TestPrange(TestParforsBase):
                 acc2 += acc1
             return acc2
         # patch outer loop to 'prange'
-        self.prange_tester(test_impl, patch_instance=[0])
+        self.prange_tester(test_impl, patch_instance=[0], scheduler_type='unsigned')
 
     @skip_unsupported
     @unittest.skip("list append is not thread-safe yet (#2391, #2408)")
@@ -1021,7 +1035,7 @@ class TestPrange(TestParforsBase):
         def test_impl():
             n = 4
             return [np.sin(j) for j in range(n)]
-        self.prange_tester(test_impl)
+        self.prange_tester(test_impl, scheduler_type='unsigned')
 
     @skip_unsupported
     def test_prange12(self):
@@ -1032,7 +1046,7 @@ class TestPrange(TestParforsBase):
             for i in range(-len(X)):
                 acc += X[i]
             return acc
-        self.prange_tester(test_impl)
+        self.prange_tester(test_impl, scheduler_type='unsigned')
 
     @skip_unsupported
     def test_prange13(self):
@@ -1041,7 +1055,7 @@ class TestPrange(TestParforsBase):
             for i in range(n):
                 acc += 1
             return acc
-        self.prange_tester(test_impl, np.int32(4))
+        self.prange_tester(test_impl, np.int32(4), scheduler_type='unsigned')
 
     @skip_unsupported
     def test_prange14(self):
@@ -1053,7 +1067,7 @@ class TestPrange(TestParforsBase):
         # this tests reduction detection well since the accumulated variable
         # is initialized before the parfor and the value accessed from the array
         # is updated before accumulation
-        self.prange_tester(test_impl, np.random.ranf(4))
+        self.prange_tester(test_impl, np.random.ranf(4), scheduler_type='unsigned')
 
     @skip_unsupported
     def test_prange15(self):
@@ -1065,8 +1079,104 @@ class TestPrange(TestParforsBase):
                 x = np.ones((1, 1))
                 acc += x[0, 0]
             return acc
+        self.prange_tester(test_impl, 1024, scheduler_type='unsigned')
 
-        self.prange_tester(test_impl, 1024)
+    # Tests for negative ranges
+    @skip_unsupported
+    def test_prange16(self):
+        def test_impl(N):
+            acc = 0
+            for i in range(-N, N):
+                acc += 2
+            return acc
+        self.prange_tester(test_impl, 1024, scheduler_type='signed')
+
+    # currently fails
+    @skip_unsupported
+    def test_prange17(self):
+        def test_impl(N):
+            acc = 0
+            X = np.ones(N)
+            for i in range(-N, N):
+                acc += X[i]
+            return acc
+        self.prange_tester(test_impl, 9, scheduler_type='signed')
+
+    # currently fails
+    @skip_unsupported
+    def test_prange18(self):
+        def test_impl(N):
+            acc = 0
+            X = np.ones(N)
+            for i in range(-N, 5):
+                acc -= X[i]
+                for j in range(-4, N):
+                    acc += X[j]
+            return acc
+        self.prange_tester(test_impl, 9, scheduler_type='signed')
+
+    # currently fails
+    @skip_unsupported
+    def test_prange19(self):
+        def test_impl(N):
+            acc = 0
+            M = N + 4
+            X = np.ones((N, M))
+            for i in range(-N, N):
+                for j in range(-M, M):
+                    acc += X[i, j]
+            return acc
+        self.prange_tester(test_impl, 9, scheduler_type='signed')
+
+    # currently fails
+    @skip_unsupported
+    def test_prange20(self):
+        def test_impl(N):
+            acc = 0
+            X = np.ones(N)
+            for i in range(-1, N):
+                acc += X[i]
+            return acc
+        self.prange_tester(test_impl, 9, scheduler_type='signed')
+
+    @skip_unsupported
+    def test_prange21(self):
+        def test_impl(N):
+            acc = 0
+            for i in range(-3, -1):
+                acc += 3
+            return acc
+        self.prange_tester(test_impl, 9, scheduler_type='signed')
+
+    # segfaults
+    @skip_unsupported
+    def test_prange22(self):
+        def test_impl():
+            a = 2
+            b = 3
+            A = np.empty(4)
+            for i in range(-2, 4):
+                if i == a:
+                    A[i] = b
+                elif i < 1:
+                    A[i] = -1
+                else:
+                    A[i] = 7
+            return A
+        self.prange_tester(test_impl, scheduler_type='signed')
+
+    @skip_unsupported
+    def test_prange_raises_invalid_step_size(self):
+        def test_impl(N):
+            acc = 0
+            for i in range(0, N, 2):
+                acc += 2
+            return acc
+
+        with self.assertRaises(NotImplementedError) as raises:
+            self.prange_tester(test_impl, 1024)
+        msg = 'Only constant step size of 1 is supported for prange'
+        self.assertIn(msg, str(raises.exception))
 
     @skip_unsupported
     def test_kde_example(self):
@@ -1126,7 +1236,7 @@ class TestParforsSlice(TestParforsBase):
 
     def check(self, pyfunc, *args, **kwargs):
         cfunc, cpfunc = self.compile_all(pyfunc, *args)
-        self.check_prange_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
+        self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
 
     @skip_unsupported
     def test_parfor_slice1(self):
@@ -1311,7 +1421,7 @@ class TestParforsOptions(TestParforsBase):
 
     def check(self, pyfunc, *args, **kwargs):
         cfunc, cpfunc = self.compile_all(pyfunc, *args)
-        self.check_prange_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
+        self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
 
     @skip_unsupported
     def test_parfor_options(self):
@@ -1353,7 +1463,7 @@ class TestParforsBitMask(TestParforsBase):
 
     def check(self, pyfunc, *args, **kwargs):
         cfunc, cpfunc = self.compile_all(pyfunc, *args)
-        self.check_prange_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
+        self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
 
     @skip_unsupported
     def test_parfor_bitmask1(self):
