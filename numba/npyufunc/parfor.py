@@ -4,6 +4,7 @@ import ast
 from collections import defaultdict, OrderedDict
 import sys
 import copy
+import numpy as np
 
 import llvmlite.llvmpy.core as lc
 import llvmlite.ir.values as liv
@@ -289,15 +290,6 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
         block.body = new_block
     return hoisted
 
-def fix_numpy_module(blocks):
-    npmod = sys.modules['numpy']
-    for label, block in blocks.items():
-        for inst in block.body:
-            if isinstance(inst, ir.Assign):
-                rhs = inst.value
-                if isinstance(rhs, ir.Global) and rhs.name == 'numpy':
-                    rhs.value = npmod
-
 def _create_gufunc_for_parfor_body(
         lowerer,
         parfor,
@@ -447,7 +439,7 @@ def _create_gufunc_for_parfor_body(
     if do_ascont:
         for pindex in range(len(parfor_inputs)):
             if isinstance(param_types[pindex], types.npytypes.Array):
-                gufunc_txt += "    " + parfor_params_orig[pindex] + " = numpy.ascontiguousarray(" + parfor_params[pindex] + ")\n"
+                gufunc_txt += "    " + parfor_params_orig[pindex] + " = np.ascontiguousarray(" + parfor_params[pindex] + ")\n"
 
     # Add initialization of reduction variables
     for arr, var in zip(parfor_redarrs, parfor_redvars):
@@ -469,7 +461,7 @@ def _create_gufunc_for_parfor_body(
                        "], sched[" +
                        str(sched_dim +
                            parfor_dim) +
-                       "] + numpy.uint32(1)):\n")
+                       "] + np.uint32(1)):\n")
 
     if config.DEBUG_ARRAY_OPT_RUNTIME:
         for indent in range(parfor_dim + 1):
@@ -493,13 +485,16 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_txt = ", type(gufunc_txt), "\n", gufunc_txt)
     # Force gufunc outline into existence.
-    exec_(gufunc_txt)
-    gufunc_func = eval(gufunc_name)
+    globls = {"np": np}
+    locls = {}
+    exec_(gufunc_txt, globls, locls)
+    gufunc_func = locls[gufunc_name]
+
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_func = ", type(gufunc_func), "\n", gufunc_func)
     # Get the IR for the gufunc outline.
     gufunc_ir = compiler.run_frontend(gufunc_func)
-    fix_numpy_module(gufunc_ir.blocks)
+
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_ir dump ", type(gufunc_ir))
         gufunc_ir.dump()
