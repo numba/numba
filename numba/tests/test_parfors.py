@@ -1156,7 +1156,7 @@ class TestPrange(TestParforsBase):
             a = 2
             b = 3
             A = np.empty(4)
-            for i in range(-2, 4):
+            for i in range(-2, 2):
                 if i == a:
                     A[i] = b
                 elif i < 1:
