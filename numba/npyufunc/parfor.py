@@ -458,7 +458,7 @@ def _create_gufunc_for_parfor_body(
                        "], sched[" +
                        str(sched_dim +
                            parfor_dim) +
-                       "] + np.uint32(1)):\n")
+                       "] + np.uint8(1)):\n")
 
     if config.DEBUG_ARRAY_OPT_RUNTIME:
         for indent in range(parfor_dim + 1):
