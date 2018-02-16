@@ -73,9 +73,14 @@ def _lower_parfor_parallel(lowerer, parfor):
     flags = copy.copy(parfor.flags)
     flags.set('error_model', 'numpy')
     # Can't get here unless  flags.set('auto_parallel', ParallelOptions(True))
+    index_var_typ = typemap[parfor.loop_nests[0].index_variable.name]
+    # index variables should have the same type, check rest of indices
+    for l in parfor.loop_nests[1:]:
+        assert typemap[l.index_variable.name] == index_var_typ
     numba.parfor.sequential_parfor_lowering = True
     func, func_args, func_sig = _create_gufunc_for_parfor_body(
-        lowerer, parfor, typemap, typingctx, targetctx, flags, {}, bool(alias_map))
+        lowerer, parfor, typemap, typingctx, targetctx, flags, {},
+        bool(alias_map), index_var_typ)
     numba.parfor.sequential_parfor_lowering = False
 
     # get the shape signature
@@ -110,7 +115,8 @@ def _lower_parfor_parallel(lowerer, parfor):
         loop_ranges,
         parfor_redvars,
         parfor_reddict,
-        parfor.init_block)
+        parfor.init_block,
+        index_var_typ)
     if config.DEBUG_ARRAY_OPT:
         sys.stdout.flush()
 
@@ -298,7 +304,8 @@ def _create_gufunc_for_parfor_body(
         targetctx,
         flags,
         locals,
-        has_aliases):
+        has_aliases,
+        index_var_typ):
     '''
     Takes a parfor and creates a gufunc function for its body.
     There are two parts to this function.
@@ -511,10 +518,6 @@ def _create_gufunc_for_parfor_body(
         print("gufunc_ir dump after renaming ")
         gufunc_ir.dump()
 
-    index_var_typ = typemap[parfor.loop_nests[0].index_variable.name]
-    # index variables should have the same type, check rest of indices
-    for l in parfor.loop_nests[1:]:
-        assert typemap[l.index_variable.name] == index_var_typ
     gufunc_param_types = [
         numba.types.npytypes.Array(
             index_var_typ, 1, "C")] + param_types
@@ -656,7 +659,7 @@ def _create_gufunc_for_parfor_body(
 
 
 def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
-                         loop_ranges, redvars, reddict, init_block):
+                         loop_ranges, redvars, reddict, init_block, index_var_typ):
     '''
     Adds the call to the gufunc function from the main function.
     '''
@@ -730,7 +733,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
     sched_typ = outer_sig.args[0]
     sched_sig = sin.pop(0)
 
-    has_neg_start = False
+    has_neg_start = index_var_typ.signed
 
     # Call do_scheduling with appropriate arguments
     dim_starts = cgutils.alloca_once(
@@ -741,8 +744,6 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
             types.uintp, num_dim), name="dims")
     for i in range(num_dim):
         start, stop, step = loop_ranges[i]
-        if not isinstance(start, liv.Constant) or start.constant < 0:
-            has_neg_start = True
         if start.type != one_type:
             start = builder.sext(start, one_type)
         if stop.type != one_type:
