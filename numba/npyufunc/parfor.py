@@ -511,9 +511,13 @@ def _create_gufunc_for_parfor_body(
         print("gufunc_ir dump after renaming ")
         gufunc_ir.dump()
 
+    index_var_typ = typemap[parfor.loop_nests[0].index_variable.name]
+    # index variables should have the same type, check rest of indices
+    for l in parfor.loop_nests[1:]:
+        assert typemap[l.index_variable.name] == index_var_typ
     gufunc_param_types = [
         numba.types.npytypes.Array(
-            numba.uintp, 1, "C")] + param_types
+            index_var_typ, 1, "C")] + param_types
     if config.DEBUG_ARRAY_OPT:
         print(
             "gufunc_param_types = ",
