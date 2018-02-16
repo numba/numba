@@ -980,7 +980,12 @@ class ParforPass(object):
                                 raise NotImplementedError(
                                     "Only constant step size of 1 is supported for prange")
                         index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
-                        index_var_typ = types.uintp
+                        # assume user-provided start to prange can be negative
+                        # this is the only case parfor can have negative index
+                        if isinstance(start, int) and start >= 0:
+                            index_var_typ = types.uintp
+                        else:
+                            index_var_typ = types.intp
                         loops = [LoopNest(index_var, start, size_var, step)]
                         self.typemap[index_var.name] = index_var_typ
 
