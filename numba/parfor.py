@@ -26,6 +26,7 @@ from numba.typing.templates import infer_global, AbstractTemplate
 from numba import stencilparfor
 from numba.stencilparfor import StencilPass
 
+
 from numba.ir_utils import (
     mk_unique_var,
     next_label,
@@ -421,6 +422,7 @@ class Parfor(ir.Expr, ir.Stmt):
             index_var,
             equiv_set,
             pattern,
+            flags,
             no_sequential_lowering=False):
         super(Parfor, self).__init__(
             op='parfor',
@@ -441,6 +443,7 @@ class Parfor(ir.Expr, ir.Stmt):
         # for example, a parfor could be from the stencil pattern with
         # the neighborhood option
         self.patterns = [pattern]
+        self.flags = flags
         # if True, this parfor shouldn't be lowered sequentially even with the
         # sequential lowering option
         self.no_sequential_lowering = no_sequential_lowering
@@ -600,7 +603,7 @@ class ParforPass(object):
     stage.
     """
 
-    def __init__(self, func_ir, typemap, calltypes, return_type, typingctx, options):
+    def __init__(self, func_ir, typemap, calltypes, return_type, typingctx, options, flags):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
@@ -610,6 +613,7 @@ class ParforPass(object):
         self.array_analysis = array_analysis.ArrayAnalysis(typingctx, func_ir, typemap,
                                                            calltypes)
         ir_utils._max_label = max(func_ir.blocks.keys())
+        self.flags = flags
 
     def run(self):
         """run parfor conversion pass: replace Numpy calls
@@ -994,7 +998,8 @@ class ParforPass(object):
                     parfor = Parfor(loops, init_block, loop_body, loc,
                                     orig_index_var if mask_indices else index_var,
                                     equiv_set,
-                                    ("prange", loop_kind))
+                                    ("prange", loop_kind),
+                                    self.flags)
                     # add parfor to entry block's jump target
                     jump = blocks[entry].body[-1]
                     jump.target = list(loop.exits)[0]
@@ -1185,7 +1190,8 @@ class ParforPass(object):
                 avail_vars))
 
         parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
-                        ('arrayexpr {}'.format(repr_arrayexpr(arrayexpr.expr)),))
+                        ('arrayexpr {}'.format(repr_arrayexpr(arrayexpr.expr)),), 
+                        self.flags)
 
         setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
         self.calltypes[setitem_node] = signature(
@@ -1245,7 +1251,7 @@ class ParforPass(object):
         index_var, index_var_typ = self._make_index_var(
                  scope, index_vars, body_block)
         parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
-                        ('setitem',))
+                        ('setitem',), self.flags)
         if shape:
             # slice subarray
             parfor.loop_body = {body_label: body_block}
@@ -1365,7 +1371,7 @@ class ParforPass(object):
         body_block.body.append(value_assign)
 
         parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
-                        ('{} function'.format(call_name,)))
+                        ('{} function'.format(call_name,)), self.flags)
 
         setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
         self.calltypes[setitem_node] = signature(
@@ -1466,7 +1472,7 @@ class ParforPass(object):
             ])
 
         parfor = Parfor(loopnests, init_block, loop_body, loc, index_var,
-                        equiv_set, ('{} function'.format(call_name),))
+                        equiv_set, ('{} function'.format(call_name),), self.flags)
         return parfor
 
 
@@ -1626,6 +1632,14 @@ def _arrayexpr_tree_to_ir(
                 func_var = ir.Var(scope, mk_unique_var(func_var_name), loc)
                 typemap[func_var.name] = typemap[func_var_name]
                 func_var_def = func_ir.get_definition(func_var_name)
+                if isinstance(func_var_def, ir.Expr) and func_var_def.op == 'getattr' and func_var_def.attr == 'sqrt':
+                     g_math_var = ir.Var(scope, mk_unique_var("$math_g_var"), loc)
+                     typemap[g_math_var.name] = types.misc.Module(math)
+                     g_math = ir.Global('math', math, loc)
+                     g_math_assign = ir.Assign(g_math, g_math_var, loc)
+                     func_var_def = ir.Expr.getattr(g_math_var, 'sqrt', loc)
+                     out_ir.append(g_math_assign)
+#                     out_ir.append(func_var_def)
                 ir_expr = ir.Expr.call(func_var, arg_vars, (), loc)
                 call_typ = typemap[func_var.name].get_call_type(
                     typing.Context(), [el_typ] * len(arg_vars), {})

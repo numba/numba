@@ -70,9 +70,9 @@ def _lower_parfor_parallel(lowerer, parfor):
     parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(
         parfor, parfor.params, lowerer.fndesc.calltypes)
     # compile parfor body as a separate function to be used with GUFuncWrapper
-    flags = compiler.Flags()
+    flags = copy.copy(parfor.flags)
     flags.set('error_model', 'numpy')
-    flags.set('auto_parallel', ParallelOptions(True))
+    # Can't get here unless  flags.set('auto_parallel', ParallelOptions(True))
     numba.parfor.sequential_parfor_lowering = True
     func, func_args, func_sig = _create_gufunc_for_parfor_body(
         lowerer, parfor, typemap, typingctx, targetctx, flags, {}, bool(alias_map))
@@ -400,16 +400,13 @@ def _create_gufunc_for_parfor_body(
     parfor_params = [param_dict[v] for v in parfor_params]
     parfor_params_orig = parfor_params
 
-    do_ascont = False
-    if do_ascont:
-        parfor_params = []
-        for pindex in range(len(parfor_params_orig)):
-            if pindex < len(parfor_inputs) and isinstance(param_types[pindex], types.npytypes.Array):
-                parfor_params.append(parfor_params_orig[pindex]+"param")
-            else:
-                parfor_params.append(parfor_params_orig[pindex])
+    parfor_params = []
+    for pindex in range(len(parfor_params_orig)):
+        if pindex < len(parfor_inputs) and isinstance(param_types[pindex], types.npytypes.Array):
+            parfor_params.append(parfor_params_orig[pindex]+"param")
+        else:
+            parfor_params.append(parfor_params_orig[pindex])
 
-    #parfor_params = [v+"param" for v in parfor_params]
     # Change parfor body to replace illegal loop index vars with legal ones.
     replace_var_names(loop_body, ind_dict)
     loop_body_var_table = get_name_var_table(loop_body)
@@ -436,10 +433,10 @@ def _create_gufunc_for_parfor_body(
     gufunc_txt += "def " + gufunc_name + \
         "(sched, " + (", ".join(parfor_params)) + "):\n"
 
-    if do_ascont:
-        for pindex in range(len(parfor_inputs)):
-            if isinstance(param_types[pindex], types.npytypes.Array):
-                gufunc_txt += "    " + parfor_params_orig[pindex] + " = np.ascontiguousarray(" + parfor_params[pindex] + ")\n"
+    for pindex in range(len(parfor_inputs)):
+        if isinstance(param_types[pindex], types.npytypes.Array):
+            gufunc_txt += ("    " + parfor_params_orig[pindex]
+                + " = np.ascontiguousarray(" + parfor_params[pindex] + ")\n")
 
     # Add initialization of reduction variables
     for arr, var in zip(parfor_redarrs, parfor_redvars):
@@ -632,8 +629,6 @@ def _create_gufunc_for_parfor_body(
         print("typemap", typemap)
 
     old_alias = flags.noalias
-    old_fastmath = flags.fastmath
-    flags.fastmath = True
     if not has_aliases:
         if config.DEBUG_ARRAY_OPT:
             print("No aliases found so adding noalias flag.")
@@ -648,7 +643,6 @@ def _create_gufunc_for_parfor_body(
         locals)
 
     flags.noalias = old_alias
-    flags.fastmath = old_fastmath
 
     kernel_sig = signature(types.none, *gufunc_param_types)
     if config.DEBUG_ARRAY_OPT:

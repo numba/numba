@@ -194,9 +194,10 @@ def countParfors(test_func, args, **kws):
         numba.rewrites.rewrite_registry.apply(
             'after-inference', tp, tp.func_ir)
 
+        flags = compiler.Flags()
         parfor_pass = numba.parfor.ParforPass(
             tp.func_ir, tp.typemap, tp.calltypes, tp.return_type,
-            tp.typingctx, options)
+            tp.typingctx, options, flags)
         parfor_pass.run()
     ret_count = 0
 
