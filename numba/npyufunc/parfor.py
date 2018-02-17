@@ -733,14 +733,22 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
     sched_typ = outer_sig.args[0]
     sched_sig = sin.pop(0)
 
-    has_neg_start = index_var_typ.signed
+    if config.DEBUG_ARRAY_OPT:
+        print("Parfor has potentially negative start", index_var_typ.signed)
+
+    if index_var_typ.signed:
+        sched_type = intp_t
+        sched_ptr_type = intp_ptr_t
+    else:
+        sched_type = uintp_t
+        sched_ptr_type = uintp_ptr_t
 
     # Call do_scheduling with appropriate arguments
     dim_starts = cgutils.alloca_once(
-        builder, uintp_t, size=context.get_constant(
+        builder, sched_type, size=context.get_constant(
             types.uintp, num_dim), name="dims")
     dim_stops = cgutils.alloca_once(
-        builder, uintp_t, size=context.get_constant(
+        builder, sched_type, size=context.get_constant(
             types.uintp, num_dim), name="dims")
     for i in range(num_dim):
         start, stop, step = loop_ranges[i]
@@ -760,24 +768,14 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
         builder.store(stop, builder.gep(dim_stops,
                                         [context.get_constant(types.uintp, i)]))
 
-    if config.DEBUG_ARRAY_OPT:
-        print("Parfor has potentially negative start", has_neg_start)
-
-    if has_neg_start:
-        sched_type = intp_t
-        sched_ptr_type = intp_ptr_t
-    else:
-        sched_type = uintp_t
-        sched_ptr_type = uintp_ptr_t
-
     sched_size = get_thread_count() * num_dim * 2
     sched = cgutils.alloca_once(
         builder, sched_type, size=context.get_constant(
             types.uintp, sched_size), name="sched")
     debug_flag = 1 if config.DEBUG_ARRAY_OPT else 0
     scheduling_fnty = lc.Type.function(
-        intp_ptr_t, [uintp_t, intp_ptr_t, intp_ptr_t, uintp_t, sched_ptr_type, intp_t])
-    if has_neg_start:
+        intp_ptr_t, [uintp_t, sched_ptr_type, sched_ptr_type, uintp_t, sched_ptr_type, intp_t])
+    if index_var_typ.signed:
         do_scheduling = builder.module.get_or_insert_function(scheduling_fnty,
                                                           name="do_scheduling_signed")
     else:
@@ -807,10 +805,10 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
         typ = context.get_value_type(redvar_typ)
         size = get_thread_count()
         arr = cgutils.alloca_once(builder, typ,
-                                  size=context.get_constant(types.intp, size))
+                                  size=context.get_constant(types.uintp, size))
         redarrs.append(arr)
         for j in range(size):
-            dst = builder.gep(arr, [context.get_constant(types.intp, j)])
+            dst = builder.gep(arr, [context.get_constant(types.uintp, j)])
             builder.store(val, dst)
 
     if config.DEBUG_ARRAY_OPT:
