@@ -1382,9 +1382,96 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 #-------------------------------------------------------------------------------
 # Shape / layout altering
 
+def vararg_to_tuple(context, builder, sig, args):
+    aryty = sig.args[0]
+    dimtys = sig.args[1:]
+    # values
+    ary = args[0]
+    dims = args[1:]
+    # coerce all types to intp
+    dims = [context.cast(builder, val, ty, types.intp)
+            for ty, val in zip(dimtys, dims)]
+    # make a tuple
+    shape = cgutils.pack_array(builder, dims, dims[0].type)
+
+    shapety = types.UniTuple(dtype=types.intp, count=len(dims))
+    new_sig = typing.signature(sig.return_type, aryty, shapety)
+    new_args = ary, shape
+
+    return new_sig, new_args
+
+
 @lower_builtin('array.transpose', types.Array)
 def array_transpose(context, builder, sig, args):
     return array_T(context, builder, sig.args[0], args[0])
+
+
+def permute_arrays(axis, shape, strides):
+    if len(axis) != len(shape):
+        raise ValueError("axes don't match array")
+    if len(axis) != len(set(axis)):
+        raise ValueError("repeated axis in transpose")
+    for x in axis:
+        if x >= len(shape):
+            raise ValueError("axis is out of bounds for array of given dimension")
+
+    shape[:] = shape[axis]
+    strides[:] = strides[axis]
+
+
+@lower_builtin('array.transpose', types.Array, types.BaseTuple)
+def array_transpose_tuple(context, builder, sig, args):
+    aryty = sig.args[0]
+    ary = make_array(aryty)(context, builder, args[0])
+
+    axisty, axis = sig.args[1], args[1]
+    num_axis, dtype = axisty.count, axisty.dtype
+
+    ll_intp = context.get_value_type(types.intp)
+    ll_ary_size = lc.Type.array(ll_intp, num_axis)
+
+    arys = [axis, ary.shape, ary.strides]
+    ll_arys = [cgutils.alloca_once(builder, ll_ary_size) for _ in arys]
+
+    for src, dst in zip(arys, ll_arys):
+        builder.store(src, dst)
+
+    np_ary_ty = types.Array(dtype=dtype, ndim=1, layout='C')
+    np_itemsize = context.get_constant(types.intp,
+                                       context.get_abi_sizeof(ll_intp))
+
+    np_arys = [make_array(np_ary_ty)(context, builder) for _ in arys]
+
+    for np_ary, ll_ary in zip(np_arys, ll_arys):
+        populate_array(np_ary,
+                       data=builder.bitcast(ll_ary, ll_intp.as_pointer()),
+                       shape=[context.get_constant(types.intp, num_axis)],
+                       strides=[np_itemsize],
+                       itemsize=np_itemsize,
+                       meminfo=None)
+
+    context.compile_internal(builder, permute_arrays,
+                             typing.signature(types.void,
+                                              np_ary_ty, np_ary_ty, np_ary_ty),
+                             [ary._getvalue() for ary in np_arys])
+
+    ret = make_array(sig.return_type)(context, builder)
+    populate_array(ret,
+                   data=ary.data,
+                   shape=builder.load(ll_arys[1]),
+                   strides=builder.load(ll_arys[2]),
+                   itemsize=ary.itemsize,
+                   meminfo=ary.meminfo,
+                   parent=ary.parent)
+    res = ret._getvalue()
+    return impl_ret_borrowed(context, builder, sig.return_type, res)
+
+
+@lower_builtin('array.transpose', types.Array, types.VarArg(types.Any))
+def array_transpose_vararg(context, builder, sig, args):
+    return array_transpose_tuple(context, builder,
+                                 *vararg_to_tuple(context, builder, sig, args))
+
 
 @lower_getattr(types.Array, 'T')
 def array_T(context, builder, typ, value):
@@ -1538,22 +1625,8 @@ def array_reshape(context, builder, sig, args):
 
 @lower_builtin('array.reshape', types.Array, types.VarArg(types.Any))
 def array_reshape_vararg(context, builder, sig, args):
-    # types
-    aryty = sig.args[0]
-    dimtys = sig.args[1:]
-    # values
-    ary = args[0]
-    dims = args[1:]
-    # coerce all types to intp
-    dims = [context.cast(builder, val, ty, types.intp)
-            for ty, val in zip(dimtys, dims)]
-    # make a tuple
-    shape = cgutils.pack_array(builder, dims, dims[0].type)
-
-    shapety = types.UniTuple(dtype=types.intp, count=len(dims))
-    new_sig = typing.signature(sig.return_type, aryty, shapety)
-    new_args = ary, shape
-    return array_reshape(context, builder, new_sig, new_args)
+    return array_reshape(context, builder,
+                         *vararg_to_tuple(context, builder, sig, args))
 
 
 @lower_builtin('array.ravel', types.Array)

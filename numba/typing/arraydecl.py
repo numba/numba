@@ -292,9 +292,38 @@ class ArrayAttribute(AttributeTemplate):
 
     @bound_function("array.transpose")
     def resolve_transpose(self, ary, args, kws):
-        assert not args
+        def sentry_shape_scalar(ty):
+            if ty in types.number_domain:
+                # Guard against non integer type
+                if not isinstance(ty, types.Integer):
+                    raise TypeError("transpose() arg cannot be {0}".format(ty))
+                return True
+            else:
+                return False
+
         assert not kws
-        return signature(self.resolve_T(ary))
+        if len(args) == 0:
+            return signature(self.resolve_T(ary))
+
+        if len(args) == 1:
+            shape, = args
+
+            if sentry_shape_scalar(shape):
+                ndim = 1
+            else:
+                shape = normalize_shape(shape)
+                if shape is None:
+                    return
+                ndim = shape.count
+            retty = ary.copy(ndim=ndim)
+            return signature(retty, shape)
+        else:
+            if any(not sentry_shape_scalar(a) for a in args):
+                raise TypeError("transpose({0}) is not supported".format(
+                    ', '.join(args)))
+
+            retty = ary.copy(ndim=len(args))
+            return signature(retty, *args)
 
     @bound_function("array.copy")
     def resolve_copy(self, ary, args, kws):
