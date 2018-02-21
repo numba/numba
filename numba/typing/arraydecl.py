@@ -264,14 +264,6 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_flags(self, ary):
         return types.ArrayFlags(ary)
 
-    def resolve_T(self, ary):
-        if ary.ndim <= 1:
-            retty = ary
-        else:
-            layout = {"C": "F", "F": "C"}.get(ary.layout, "A")
-            retty = ary.copy(layout=layout)
-        return retty
-
     def resolve_real(self, ary):
         return self._resolve_real_imag(ary, attr='real')
 
@@ -302,14 +294,13 @@ class ArrayAttribute(AttributeTemplate):
                 return False
 
         def layout(ary):
-            if ary.ndim == 2:
-                return ary.copy(layout={'C':'F', 'F':'C'}[ary.layout])
-            assert ary.ndim > 2
-            return ary.copy(layout='A')
+            if ary.ndim <= 1:
+                return ary
+            return ary.copy(layout={"C": "F", "F": "C"}.get(ary.layout, "A"))
 
         assert not kws
         if len(args) == 0:
-            return signature(self.resolve_T(ary))
+            return signature(layout(ary))
 
         if len(args) == 1:
             shape, = args
