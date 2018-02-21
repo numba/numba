@@ -264,6 +264,14 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_flags(self, ary):
         return types.ArrayFlags(ary)
 
+    def resolve_T(self, ary):
+        if ary.ndim <= 1:
+            retty = ary
+        else:
+            layout = {"C": "F", "F": "C"}.get(ary.layout, "A")
+            retty = ary.copy(layout=layout)
+        return retty
+
     def resolve_real(self, ary):
         return self._resolve_real_imag(ary, attr='real')
 
@@ -293,14 +301,9 @@ class ArrayAttribute(AttributeTemplate):
             else:
                 return False
 
-        def layout(ary):
-            if ary.ndim <= 1:
-                return ary
-            return ary.copy(layout={"C": "F", "F": "C"}.get(ary.layout, "A"))
-
         assert not kws
         if len(args) == 0:
-            return signature(layout(ary))
+            return signature(self.resolve_T(ary))
 
         if len(args) == 1:
             shape, = args
@@ -314,14 +317,14 @@ class ArrayAttribute(AttributeTemplate):
                 return
 
             assert ary.ndim == shape.count
-            return signature(layout(ary), shape)
+            return signature(self.resolve_T(ary), shape)
 
         else:
             if any(not sentry_shape_scalar(a) for a in args):
                 raise TypeError("transpose({0}) is not supported".format(
                     ', '.join(args)))
             assert ary.ndim == len(args)
-            return signature(layout(ary), *args)
+            return signature(self.resolve_T(ary), *args)
 
     @bound_function("array.copy")
     def resolve_copy(self, ary, args, kws):
