@@ -1407,8 +1407,6 @@ def array_transpose(context, builder, sig, args):
 
 
 def permute_arrays(axis, shape, strides):
-    if len(axis) != len(shape):
-        raise ValueError("axes don't match array")
     if len(axis) != len(set(axis)):
         raise ValueError("repeated axis in transpose")
     for x in axis:
