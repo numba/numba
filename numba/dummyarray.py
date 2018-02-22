@@ -313,7 +313,7 @@ class Array(object):
             else:
                 raise AssertionError("unreachable")
         else:
-            newstrides = np.empty(newnd, int)
+            newstrides = np.empty(newnd, np.ctypeslib.c_intp)
 
             # need to keep these around in variables, not temporaries, so they
             # don't get GC'ed before we call into the C code
