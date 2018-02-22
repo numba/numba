@@ -352,6 +352,9 @@ class DeviceNDArray(DeviceNDArrayBase):
         """
         return self.copy_to_host().__array__(dtype)
 
+    def __len__(self):
+        return self.shape[0]
+
     def reshape(self, *newshape, **kws):
         """
         Reshape the array without changing its contents, similarly to
