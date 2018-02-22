@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import, division
 
 import warnings
 import math
+import functools
 import copy
 from ctypes import c_void_p
 
@@ -21,6 +22,12 @@ try:
     long
 except NameError:
     long = int
+try:
+    lru_cache = getattr(functools, 'lru_cache')(None)
+except AttributeError:
+    # Python 3.1 or lower
+    def lru_cache(func):
+        return func
 
 
 def is_cuda_ndarray(obj):
@@ -320,6 +327,43 @@ class DeviceRecord(DeviceNDArrayBase):
         return numpy_support.from_dtype(self.dtype)
 
 
+@lru_cache
+def _assign_kernel(ndim):
+    """
+    A separate method so we don't need to compile code every assignment (!).
+
+    :param ndim: We need to have static array sizes for cuda.local.array, so
+        bake in the number of dimensions into the kernel
+    """
+    from numba import cuda  # circular!
+
+    @cuda.jit
+    def kernel(lhs, rhs):
+        location = cuda.grid(1)
+
+        n_elements = 1
+        for i in range(lhs.ndim):
+            n_elements *= lhs.shape[i]
+        if location >= n_elements:
+            # bake n_elements into the kernel, better than passing it in
+            # as another argument.
+            return
+
+        # [0, :] is the to-index (into `lhs`)
+        # [1, :] is the from-index (into `rhs`)
+        idx = cuda.local.array(
+            shape=(2, ndim),
+            dtype=types.int64)
+
+        for i in range(ndim - 1, -1, -1):
+            idx[0, i] = location % lhs.shape[i]
+            idx[1, i] = (location % lhs.shape[i]) * (rhs.shape[i] > 1)
+            location //= lhs.shape[i]
+
+        lhs[to_fixed_tuple(idx[0], ndim)] = rhs[to_fixed_tuple(idx[1], ndim)]
+    return kernel
+
+
 class DeviceNDArray(DeviceNDArrayBase):
     '''
     An on-GPU array type
@@ -478,37 +522,8 @@ class DeviceNDArray(DeviceNDArrayBase):
 
         # (3) do the copy
 
-        from numba import cuda  # circular!
-
         n_elements = np.prod(lhs.shape)
-
-        # need to have static array sizes for cuda.local.array, so bake in the
-        # dimensions
-        ndim = lhs.ndim
-
-        @cuda.jit
-        def kernel(lhs, rhs):
-            location = cuda.grid(1)
-
-            if location >= n_elements:
-                # bake n_elements into the kernel, better than passing it in
-                # as another argument.
-                return
-
-            # [0, :] is the to-index (into `lhs`)
-            # [1, :] is the from-index (into `rhs`)
-            idx = cuda.local.array(
-                shape=(2, ndim),
-                dtype=types.int64)
-
-            for i in range(ndim - 1, -1, -1):
-                idx[0, i] = location % lhs.shape[i]
-                idx[1, i] = (location % lhs.shape[i]) * (rhs.shape[i] > 1)
-                location //= lhs.shape[i]
-
-            lhs[to_fixed_tuple(idx[0], ndim)] = rhs[to_fixed_tuple(idx[1], ndim)]
-
-        kernel.forall(n_elements, stream=stream)(lhs, rhs)
+        _assign_kernel(lhs.ndim).forall(n_elements, stream=stream)(lhs, rhs)
 
 
 
