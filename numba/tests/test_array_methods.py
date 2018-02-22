@@ -64,6 +64,9 @@ def array_T(arr):
 def array_transpose(arr):
     return arr.transpose()
 
+def array_transpose_axes(arr, axes):
+    return arr.transpose(axes)
+
 def array_copy(arr):
     return arr.copy()
 
@@ -455,6 +458,85 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check_arr(arr.reshape((2, 3, 4))[::2])
         arr = np.array([0]).reshape(())
         check_arr(arr)
+
+    def test_array_transpose_axes(self):
+        pyfunc = array_transpose_axes
+        def run(arr, axes):
+            cres = self.ccache.compile(pyfunc, (typeof(arr), typeof(axes)))
+            return cres.entry_point(arr, axes)
+        def check(arr, axes):
+            expected = pyfunc(arr, axes)
+            got = run(arr, axes)
+            self.assertPreciseEqual(got, expected)
+        def check_err_axis_repeated(arr, axes):
+            with self.assertRaises(ValueError) as raises:
+                run(arr, axes)
+            self.assertEqual(str(raises.exception),
+                             "repeated axis in transpose")
+        def check_err_axis_oob(arr, axes):
+            with self.assertRaises(ValueError) as raises:
+                run(arr, axes)
+            self.assertEqual(str(raises.exception),
+                             "axis is out of bounds for array of given dimension")
+
+        arr = np.arange(24)
+        check(arr, (0,))
+        # check_err_axis_oob(arr, (1,))
+
+        arr = np.arange(24).reshape(4, 6)
+        check(arr, (0,1))
+        check(arr, (1,0))
+        check(arr, (0,1))
+        check(arr, (1,0))
+        # check_err_repeated_axis(arr, (1,1))
+        # check_err_repeated_axis(arr, (0,0))
+        # check_err_axis_oob(arr, (0,2))
+        # check_err_axis_oob(arr, (2,1))
+
+        arr = np.arange(24).reshape(2, 3, 4)
+        check(arr, (0,1,2))
+        check(arr, (0,2,1))
+        check(arr, (1,0,2))
+        check(arr, (1,2,0))
+        check(arr, (2,0,1))
+        check(arr, (2,1,0))
+        # check_err_repeated_axis(arr, (2,1,1))
+        # check_err_repeated_axis(arr, (2,0,0))
+        # check_err_axis_oob(arr, (3,1,2))
+        # check_err_axis_oob(arr, (0,5,1))
+        # check_err_axis_oob(arr, (5,0,1))
+
+        arr = np.arange(24).reshape(1, 2, 3, 4)
+        check(arr, (0,1,2,3))
+        check(arr, (0,1,3,2))
+        check(arr, (0,2,1,3))
+        check(arr, (0,2,3,1))
+        check(arr, (0,3,1,2))
+        check(arr, (0,3,2,1))
+        check(arr, (1,0,2,3))
+        check(arr, (1,0,3,2))
+        check(arr, (1,2,0,3))
+        check(arr, (1,2,3,0))
+        check(arr, (1,3,0,2))
+        check(arr, (1,3,2,0))
+        check(arr, (2,0,1,3))
+        check(arr, (2,0,3,1))
+        check(arr, (2,1,0,3))
+        check(arr, (2,1,3,0))
+        check(arr, (2,3,0,1))
+        check(arr, (2,3,1,0))
+        check(arr, (3,0,1,2))
+        check(arr, (3,0,2,1))
+        check(arr, (3,1,0,2))
+        check(arr, (3,1,2,0))
+        check(arr, (3,2,0,1))
+        check(arr, (3,2,1,0))
+        # check_err_repeated_axis(arr, (3,2,1,1))
+        # check_err_repeated_axis(arr, (2,2,3,0))
+        # check_err_axis_oob(arr, (3,1,2,5))
+        # check_err_axis_oob(arr, (0,5,1,2))
+        # check_err_axis_oob(arr, (5,0,1,3))
+
 
     def test_array_transpose(self):
         self.check_layout_dependent_func(array_transpose)

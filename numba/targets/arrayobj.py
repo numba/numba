@@ -1467,8 +1467,8 @@ def array_transpose_tuple(context, builder, sig, args):
 
 @lower_builtin('array.transpose', types.Array, types.VarArg(types.Any))
 def array_transpose_vararg(context, builder, sig, args):
-    return array_transpose_tuple(context, builder,
-                                 *vararg_to_tuple(context, builder, sig, args))
+    new_sig, new_args = vararg_to_tuple(context, builder, sig, args)
+    return array_transpose_tuple(context, builder, new_sig, new_args)
 
 
 @lower_getattr(types.Array, 'T')
@@ -1623,8 +1623,8 @@ def array_reshape(context, builder, sig, args):
 
 @lower_builtin('array.reshape', types.Array, types.VarArg(types.Any))
 def array_reshape_vararg(context, builder, sig, args):
-    return array_reshape(context, builder,
-                         *vararg_to_tuple(context, builder, sig, args))
+    new_sig, new_args = vararg_to_tuple(context, builder, sig, args)
+    return array_reshape(context, builder, new_sig, new_args)
 
 
 @lower_builtin('array.ravel', types.Array)
