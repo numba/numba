@@ -1,6 +1,6 @@
 from __future__ import division
 
-from itertools import product, cycle
+from itertools import product, cycle, permutations
 import sys
 
 import numpy as np
@@ -479,63 +479,26 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             self.assertEqual(str(raises.exception),
                              "axis is out of bounds for array of given dimension")
 
-        arr = np.arange(24)
-        check(arr, (0,))
-        # check_err_axis_oob(arr, (1,))
+        arrs = [np.arange(24),
+                np.arange(24).reshape(4, 6),
+                np.arange(24).reshape(2, 3, 4),
+                np.arange(24).reshape(1, 2, 3, 4)]
 
-        arr = np.arange(24).reshape(4, 6)
-        check(arr, (0,1))
-        check(arr, (1,0))
-        check(arr, (0,1))
-        check(arr, (1,0))
-        # check_err_repeated_axis(arr, (1,1))
-        # check_err_repeated_axis(arr, (0,0))
-        # check_err_axis_oob(arr, (0,2))
-        # check_err_axis_oob(arr, (2,1))
+        for i in range(len(arrs)):
+            for axes in permutations(tuple(range(i+1))):
+                check(arrs[i], axes)
 
-        arr = np.arange(24).reshape(2, 3, 4)
-        check(arr, (0,1,2))
-        check(arr, (0,2,1))
-        check(arr, (1,0,2))
-        check(arr, (1,2,0))
-        check(arr, (2,0,1))
-        check(arr, (2,1,0))
-        # check_err_repeated_axis(arr, (2,1,1))
-        # check_err_repeated_axis(arr, (2,0,0))
-        # check_err_axis_oob(arr, (3,1,2))
-        # check_err_axis_oob(arr, (0,5,1))
-        # check_err_axis_oob(arr, (5,0,1))
+        # Exceptions leak references
+        self.disable_leak_check()
 
-        arr = np.arange(24).reshape(1, 2, 3, 4)
-        check(arr, (0,1,2,3))
-        check(arr, (0,1,3,2))
-        check(arr, (0,2,1,3))
-        check(arr, (0,2,3,1))
-        check(arr, (0,3,1,2))
-        check(arr, (0,3,2,1))
-        check(arr, (1,0,2,3))
-        check(arr, (1,0,3,2))
-        check(arr, (1,2,0,3))
-        check(arr, (1,2,3,0))
-        check(arr, (1,3,0,2))
-        check(arr, (1,3,2,0))
-        check(arr, (2,0,1,3))
-        check(arr, (2,0,3,1))
-        check(arr, (2,1,0,3))
-        check(arr, (2,1,3,0))
-        check(arr, (2,3,0,1))
-        check(arr, (2,3,1,0))
-        check(arr, (3,0,1,2))
-        check(arr, (3,0,2,1))
-        check(arr, (3,1,0,2))
-        check(arr, (3,1,2,0))
-        check(arr, (3,2,0,1))
-        check(arr, (3,2,1,0))
-        # check_err_repeated_axis(arr, (3,2,1,1))
-        # check_err_repeated_axis(arr, (2,2,3,0))
-        # check_err_axis_oob(arr, (3,1,2,5))
-        # check_err_axis_oob(arr, (0,5,1,2))
-        # check_err_axis_oob(arr, (5,0,1,3))
+        check_err_axis_repeated(arrs[1], (0,0))
+        check_err_axis_repeated(arrs[2], (2,0,0))
+        check_err_axis_repeated(arrs[3], (3,2,1,1))
+
+        check_err_axis_oob(arrs[0], (1,))
+        check_err_axis_oob(arrs[1], (0,2))
+        check_err_axis_oob(arrs[2], (3,1,2))
+        check_err_axis_oob(arrs[3], (3,1,2,5))
 
 
     def test_array_transpose(self):
