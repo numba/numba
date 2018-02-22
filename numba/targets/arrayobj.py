@@ -1451,7 +1451,7 @@ def array_transpose_tuple(context, builder, sig, args):
     context.compile_internal(builder, permute_arrays,
                              typing.signature(types.void,
                                               np_ary_ty, np_ary_ty, np_ary_ty),
-                             [ary._getvalue() for ary in np_arys])
+                             [a._getvalue() for a in np_arys])
 
     ret = make_array(sig.return_type)(context, builder)
     populate_array(ret,
