@@ -1166,6 +1166,22 @@ def _shuffle_impl(context, builder, sig, args, _randrange):
 
     return context.compile_internal(builder, shuffle_impl, sig, args)
 
+@lower("np.random.permutation", types.Integer)
+def permutation_impl_1(context, builder, sig, args):
+    def permutation_impl(n):
+        arr = np.arange(n)
+        np.random.shuffle(arr)
+        return arr
+    res = context.compile_internal(builder, permutation_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+@lower("np.random.permutation", types.Array)
+def permutation_impl_2(context, builder, sig, args):
+    def permutation_impl(arr):
+        np.random.shuffle(arr)
+        return arr
+    res = context.compile_internal(builder, permutation_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 # ------------------------------------------------------------------------
 # Array-producing variants of scalar random functions

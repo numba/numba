@@ -295,5 +295,14 @@ class Random_shuffle(AbstractTemplate):
             return signature(types.void, arr)
 
 
+@infer_global(np.random.permutation, typing_key="np.random.permutation")
+class Random_permutation(AbstractTemplate):
+    def generic(self, args, kws):
+        in_arg, = args
+        if isinstance(in_arg, types.Array):
+            return signature(in_arg, in_arg)
+        elif isinstance(in_arg, types.Integer):
+            return signature(types.Array(types.intp, 1, 'C'), in_arg)
+
 # NOTE: some functions can have @overloads in numba.targets.randomimpl,
 # and therefore don't need a typing declaration here.
