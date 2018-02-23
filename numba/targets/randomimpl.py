@@ -1153,7 +1153,8 @@ def shuffle_impl(context, builder, sig, args):
 
 @lower("np.random.shuffle", types.Buffer)
 def shuffle_impl(context, builder, sig, args):
-    res = _shuffle_impl(context, builder, sig, args, np.random.randint)
+    fn = _shuffle_impl if sig.args[0].ndim == 1 else _shuffle_impl_multidim
+    res = fn(context, builder, sig, args, np.random.randint)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 def _shuffle_impl(context, builder, sig, args, _randrange):
@@ -1162,6 +1163,16 @@ def _shuffle_impl(context, builder, sig, args, _randrange):
         while i > 0:
             j = _randrange(i + 1)
             arr[i], arr[j] = arr[j], arr[i]
+            i -= 1
+
+    return context.compile_internal(builder, shuffle_impl, sig, args)
+
+def _shuffle_impl_multidim(context, builder, sig, args, _randrange):
+    def shuffle_impl(arr):
+        i = arr.shape[0] - 1
+        while i > 0:
+            j = _randrange(i + 1)
+            arr[i], arr[j] = np.copy(arr[j]), np.copy(arr[i])
             i -= 1
 
     return context.compile_internal(builder, shuffle_impl, sig, args)
