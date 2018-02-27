@@ -6,7 +6,6 @@ from numba.cuda.testing import skip_on_cudasim
 
 
 class TestCudaNDArray(SerialMixin, unittest.TestCase):
-    @skip_on_cudasim('CUDA Driver API unsupported in the simulator')
     def test_device_array_interface(self):
         dary = cuda.device_array(shape=100)
         devicearray.verify_cuda_ndarray_interface(dary)
@@ -17,7 +16,7 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
 
         ary = np.asarray(1.234)
         dary = cuda.to_device(ary)
-        self.assertTrue(dary.ndim == 1)
+        self.assertEquals(dary.ndim, 1)
         devicearray.verify_cuda_ndarray_interface(dary)
 
     def test_devicearray_no_copy(self):
@@ -68,7 +67,7 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         gpumem.copy_to_host(array)
         np.testing.assert_array_equal(array, original * 2)
 
-    @skip_on_cudasim('CUDA Driver API unsupported in the simulator')
+    @skip_on_cudasim('This works in the simulator')
     def test_devicearray_transpose_wrongdim(self):
         gpumem = cuda.to_device(np.array(np.arange(12)).reshape(3, 4, 1))
 

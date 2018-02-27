@@ -1,9 +1,9 @@
 from __future__ import absolute_import
 
 from .api import *
-from .array import (devicearray, device_array, device_array_like, pinned,
-                    pinned_array, to_device)
 from .reduction import Reduce
+from .cudadrv.devicearray import (device_array, device_array_like, pinned,
+                    pinned_array, to_device)
 reduce = Reduce
 
 # Ensure that any user code attempting to import cudadrv etc. gets the

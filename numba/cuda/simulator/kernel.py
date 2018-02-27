@@ -7,7 +7,7 @@ import threading
 import numpy as np
 
 from numba.six import reraise
-from .array import to_device
+from .cudadrv.devicearray import to_device
 from .kernelapi import Dim3, FakeCUDAModule, swapped_cuda_module
 from ..errors import normalize_kernel_dimensions
 
