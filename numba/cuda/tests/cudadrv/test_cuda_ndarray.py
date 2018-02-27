@@ -5,8 +5,8 @@ from numba.cuda.testing import unittest, SerialMixin
 from numba.cuda.testing import skip_on_cudasim
 
 
-@skip_on_cudasim('Device Array API unsupported in the simulator')
 class TestCudaNDArray(SerialMixin, unittest.TestCase):
+    @skip_on_cudasim('CUDA Driver API unsupported in the simulator')
     def test_device_array_interface(self):
         dary = cuda.device_array(shape=100)
         devicearray.verify_cuda_ndarray_interface(dary)
@@ -31,7 +31,7 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         array[:] = 0
         gpumem.copy_to_host(array)
 
-        self.assertTrue((array == original).all())
+        np.testing.assert_array_equal(array, original)
 
     def test_stream_bind(self):
         stream = cuda.stream()
@@ -42,7 +42,6 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
                 stream=stream)
             self.assertEqual(arr.bind(stream).stream, stream)
             self.assertEqual(arr.stream, stream)
-
 
     def test_devicearray_partition(self):
         N = 100
@@ -67,8 +66,9 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         gpumem = cuda.to_device(array)
         cuda.to_device(array * 2, to=gpumem)
         gpumem.copy_to_host(array)
-        self.assertTrue((array == original * 2).all())
+        np.testing.assert_array_equal(array, original * 2)
 
+    @skip_on_cudasim('CUDA Driver API unsupported in the simulator')
     def test_devicearray_transpose_wrongdim(self):
         gpumem = cuda.to_device(np.array(np.arange(12)).reshape(3, 4, 1))
 
@@ -91,7 +91,12 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         with self.assertRaises(ValueError) as e:
             np.transpose(gpumem, axes=(0, 0))
 
-        self.assertEqual('invalid axes list (0, 0)', str(e.exception))
+        self.assertIn(
+            str(e.exception),
+            container=[
+                'invalid axes list (0, 0)',  # GPU
+                'repeated axis in transpose',  # sim
+            ])
 
     def test_devicearray_transpose_wrongaxis(self):
         gpumem = cuda.to_device(np.array(np.arange(12)).reshape(3, 4))
@@ -99,7 +104,12 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         with self.assertRaises(ValueError) as e:
             np.transpose(gpumem, axes=(0, 2))
 
-        self.assertEqual('invalid axes list (0, 2)', str(e.exception))
+        self.assertIn(
+            str(e.exception),
+            container=[
+                'invalid axes list (0, 2)',  # GPU
+                'axis 2 is out of bounds for array of dimension 2',  # sim
+            ])
 
     def test_devicearray_transpose_ok(self):
         original = np.array(np.arange(12)).reshape(3, 4)

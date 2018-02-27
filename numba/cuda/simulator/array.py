@@ -3,6 +3,12 @@ import numpy as np
 from warnings import warn
 from numba.six import raise_from
 
+
+errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "
+                            "be transferred as a single memory region. Please "
+                            "ensure contiguous buffer with numpy "
+                            ".ascontiguousarray()")
+
 class FakeShape(tuple):
     '''
     The FakeShape class is used to provide a shape which does not allow negative
@@ -24,8 +30,9 @@ class FakeCUDAArray(object):
     __cuda_ndarray__ = True     # There must be gpu_data attribute
 
 
-    def __init__(self, ary):
+    def __init__(self, ary, stream=0):
         self._ary = ary
+        self.stream = stream
 
     def __getattr__(self, attrname):
         try:
@@ -35,10 +42,20 @@ class FakeCUDAArray(object):
             raise_from(AttributeError("Wrapped array has no attribute '%s'"
                                       % attrname), e)
 
+    def bind(self, stream=0):
+        return FakeCUDAArray(self._ary, stream)
+
+    @property
+    def T(self):
+        return self.transpose()
+
+    def transpose(self, axes=None):
+        return FakeCUDAArray(np.transpose(self._ary, axes=axes))
+
     def __getitem__(self, idx):
         item = self._ary.__getitem__(idx)
         if isinstance(item, np.ndarray):
-            return FakeCUDAArray(item)
+            return FakeCUDAArray(item, stream=self.stream)
         return item
 
     def __setitem__(self, idx, val):
@@ -62,6 +79,21 @@ class FakeCUDAArray(object):
         will copy data up to the length of the smallest of the two arrays,
         whereas this expects the size of the arrays to be equal.
         '''
+        sentry_contiguous(self)
+        if isinstance(ary, FakeCUDAArray):
+            sentry_contiguous(ary)
+
+            if self.flags['C_CONTIGUOUS'] != ary.flags['C_CONTIGUOUS']:
+                raise ValueError("Can't copy %s-contiguous array to a %s-contiguous array" % (
+                    'C' if ary.flags['C_CONTIGUOUS'] else 'F',
+                    'C' if self.flags['C_CONTIGUOUS'] else 'F',
+                ))
+        else:
+            ary = np.array(
+                ary,
+                order='C' if self.flags['C_CONTIGUOUS'] else 'F',
+                subok=True,
+                copy=False)
         try:
             np.copyto(self._ary, ary)
         except AttributeError:
@@ -95,12 +127,11 @@ class FakeCUDAArray(object):
     def __len__(self):
         return len(self._ary)
 
-
-errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "
-                            "be transferred as a single memory region. Please "
-                            "ensure contiguous buffer with numpy "
-                            ".ascontiguousarray()")
-
+    def split(self, section, stream=0):
+        return [
+            FakeCUDAArray(a)
+            for a in np.split(self._ary, range(section, len(self), section))
+        ]
 
 def sentry_contiguous(ary):
     if not ary.flags['C_CONTIGUOUS'] and not ary.flags['F_CONTIGUOUS']:
@@ -113,7 +144,12 @@ def sentry_contiguous(ary):
 
 def to_device(ary, stream=0, copy=True, to=None):
     sentry_contiguous(ary)
-    return FakeCUDAArray(ary)
+    if to is None:
+        return FakeCUDAArray(np.array(
+            ary,
+            order='C' if ary.flags['C_CONTIGUOUS'] else 'F', copy=True))
+    else:
+        to.copy_to_device(ary, stream=stream)
 
 
 @contextmanager
@@ -126,9 +162,8 @@ def pinned_array(shape, dtype=np.float, strides=None, order='C'):
 
 
 def device_array(*args, **kwargs):
-    if 'stream' in kwargs:
-        kwargs.pop('stream')
-    return FakeCUDAArray(np.ndarray(*args, **kwargs))
+    stream = kwargs.pop('stream') if 'stream' in kwargs else 0
+    return FakeCUDAArray(np.ndarray(*args, **kwargs), stream=stream)
 
 
 def device_array_like(ary, stream=0):

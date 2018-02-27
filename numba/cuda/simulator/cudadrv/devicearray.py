@@ -9,3 +9,9 @@ auto_device = None
 
 def is_cuda_ndarray(obj):
     return getattr(obj, '__cuda_ndarray__', False)
+
+
+errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "
+                            "be transferred as a single memory region. Please "
+                            "ensure contiguous buffer with numpy "
+                            ".ascontiguousarray()")
