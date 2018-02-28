@@ -7,7 +7,7 @@ import threading
 import numpy as np
 
 from numba.six import reraise
-from .cudadrv.devicearray import to_device
+from .cudadrv.devicearray import to_device, auto_device
 from .kernelapi import Dim3, FakeCUDAModule, swapped_cuda_module
 from ..errors import normalize_kernel_dimensions
 
@@ -64,10 +64,16 @@ class FakeCUDAKernel(object):
         with _push_kernel_context(fake_cuda_module):
             # fake_args substitutes all numpy arrays for FakeCUDAArrays
             # because they implement some semantics differently
+            retr = []
+
             def fake_arg(arg):
                 if isinstance(arg, np.ndarray) and arg.ndim > 0:
-                    return to_device(arg)
+                    devary, conv = auto_device(arg)
+                    if conv:
+                        retr.append(lambda: devary.copy_to_host(arg))
+                    return devary
                 return arg
+
             fake_args = [fake_arg(arg) for arg in args]
 
             with swapped_cuda_module(self.fn, fake_cuda_module):
@@ -75,6 +81,9 @@ class FakeCUDAKernel(object):
                 for grid_point in np.ndindex(*self.grid_dim):
                     bm = BlockManager(self.fn, self.grid_dim, self.block_dim)
                     bm.run(grid_point, *fake_args)
+
+            for wb in retr:
+                wb()
 
     def __getitem__(self, configuration):
         self.grid_dim, self.block_dim = \
@@ -87,6 +96,9 @@ class FakeCUDAKernel(object):
 
     def bind(self):
         pass
+
+    def forall(self, ntasks, tpb=0, stream=0, sharedmem=0):
+        return self[ntasks, 1, stream, sharedmem]
 
     @property
     def ptx(self):

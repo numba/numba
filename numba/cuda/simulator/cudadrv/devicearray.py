@@ -120,6 +120,7 @@ class FakeCUDAArray(object):
 
     def to_host(self):
         warn('to_host() is deprecated and will be removed')
+        raise NotImplementedError
 
     @property
     def shape(self):
@@ -190,12 +191,15 @@ def device_array_like(ary, stream=0):
 
 
 def auto_device(ary, stream=0, copy=True):
+    if isinstance(ary, FakeCUDAArray):
+        return ary, False
+
     if not isinstance(ary, np.void):
         ary = np.array(
             ary,
             copy=False,
             subok=True)
-    return to_device(ary, stream, copy), False
+    return to_device(ary, stream, copy), True
 
 
 def is_cuda_ndarray(obj):
