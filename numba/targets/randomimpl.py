@@ -1189,8 +1189,9 @@ def permutation_impl_1(context, builder, sig, args):
 @lower("np.random.permutation", types.Array)
 def permutation_impl_2(context, builder, sig, args):
     def permutation_impl(arr):
-        np.random.shuffle(arr)
-        return arr
+        arr_copy = arr.copy()
+        np.random.shuffle(arr_copy)
+        return arr_copy
     res = context.compile_internal(builder, permutation_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
