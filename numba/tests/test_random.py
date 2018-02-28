@@ -898,6 +898,31 @@ class TestRandom(BaseTest):
     def test_numpy_gauss_startup(self):
         self._check_startup_randomness("numpy_normal", (1.0, 1.0))
 
+    def test_numpy_random_permutation(self):
+
+        # Numba's current PRNG for NumPy follows Python's implementation, hence,
+        # we cannot test np.random.permutation against NumPy.  Since Python does
+        # not have a permutation implementation, with which we can test
+        # np.random.permutation, we implement one, just for testing purposes.
+        def python_permutation(r, x):
+            if isinstance(x, int):
+                arr = np.arange(x)
+            else:
+                arr = np.array(x)
+            r.shuffle(arr)
+            return arr
+
+        r = self._follow_cpython(get_np_state_ptr())
+        func = jit_unary("np.random.permutation")
+        for s in [5, 10, 15, 20]:
+            a = np.arange(s)
+            b = a.copy()
+            # Test array version
+            self.assertPreciseEqual(func(a), python_permutation(r, a))
+            # Test int version
+            self.assertPreciseEqual(func(s), python_permutation(r, s))
+            # Permutation should not modify its argument
+            self.assertPreciseEqual(a, b)
 
 class TestRandomArrays(BaseTest):
     """
