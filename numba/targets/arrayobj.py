@@ -1409,14 +1409,17 @@ def array_transpose(context, builder, sig, args):
 def permute_arrays(axis, shape, strides):
     if len(axis) != len(set(axis)):
         raise ValueError("repeated axis in transpose")
+    dim = len(shape)
     for x in axis:
-        if x >= len(shape):
+        if x >= dim or abs(x) > dim:
             raise ValueError("axis is out of bounds for array of given dimension")
 
     shape[:] = shape[axis]
     strides[:] = strides[axis]
 
 
+# Transposing an array involves permuting the shape and strides of the array
+# based on the given axes.
 @lower_builtin('array.transpose', types.Array, types.BaseTuple)
 def array_transpose_tuple(context, builder, sig, args):
     aryty = sig.args[0]
@@ -1428,9 +1431,11 @@ def array_transpose_tuple(context, builder, sig, args):
     ll_intp = context.get_value_type(types.intp)
     ll_ary_size = lc.Type.array(ll_intp, num_axis)
 
+    # Allocate memory for axes, shapes, and strides arrays.
     arys = [axis, ary.shape, ary.strides]
     ll_arys = [cgutils.alloca_once(builder, ll_ary_size) for _ in arys]
 
+    # Store axes, shapes, and strides arrays to the allocated memory.
     for src, dst in zip(arys, ll_arys):
         builder.store(src, dst)
 
@@ -1438,8 +1443,10 @@ def array_transpose_tuple(context, builder, sig, args):
     np_itemsize = context.get_constant(types.intp,
                                        context.get_abi_sizeof(ll_intp))
 
+    # Form NumPy arrays for axes, shapes, and strides arrays.
     np_arys = [make_array(np_ary_ty)(context, builder) for _ in arys]
 
+    # Roughly, `np_ary = np.array(ll_ary)` for each of axes, shapes, and strides.
     for np_ary, ll_ary in zip(np_arys, ll_arys):
         populate_array(np_ary,
                        data=builder.bitcast(ll_ary, ll_intp.as_pointer()),
@@ -1448,11 +1455,14 @@ def array_transpose_tuple(context, builder, sig, args):
                        itemsize=np_itemsize,
                        meminfo=None)
 
+    # Pass NumPy arrays formed above to permute_arrays function that permutes
+    # shapes and strides based on axis contents.
     context.compile_internal(builder, permute_arrays,
                              typing.signature(types.void,
                                               np_ary_ty, np_ary_ty, np_ary_ty),
                              [a._getvalue() for a in np_arys])
 
+    # Make a new array based on permuted shape and strides and return it.
     ret = make_array(sig.return_type)(context, builder)
     populate_array(ret,
                    data=ary.data,
