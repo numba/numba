@@ -912,17 +912,28 @@ class TestRandom(BaseTest):
             r.shuffle(arr)
             return arr
 
-        r = self._follow_cpython(get_np_state_ptr())
+        # Our implementation follows Python 3's.
         func = jit_unary("np.random.permutation")
-        for s in [5, 10, 15, 20]:
-            a = np.arange(s)
-            b = a.copy()
-            # Test array version
-            self.assertPreciseEqual(func(a), python_permutation(r, a))
-            # Test int version
-            self.assertPreciseEqual(func(s), python_permutation(r, s))
-            # Permutation should not modify its argument
-            self.assertPreciseEqual(a, b)
+        if sys.version_info >= (3,):
+            r = self._follow_cpython(get_np_state_ptr())
+
+            for s in [5, 10, 15, 20]:
+                a = np.arange(s)
+                b = a.copy()
+                # Test array version
+                self.assertPreciseEqual(func(a), python_permutation(r, a))
+                # Test int version
+                self.assertPreciseEqual(func(s), python_permutation(r, s))
+                # Permutation should not modify its argument
+                self.assertPreciseEqual(a, b)
+        else:
+            # Sanity check
+            a = np.arange(20)
+            for i in range(3):
+                b = func(a)
+                self.assertNotEqual(list(a), list(b))
+                self.assertEqual(sorted(a), sorted(b))
+
 
 class TestRandomArrays(BaseTest):
     """
