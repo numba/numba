@@ -107,6 +107,7 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
             str(e.exception),
             container=[
                 'invalid axes list (0, 2)',  # GPU
+                'invalid axis for this array',
                 'axis 2 is out of bounds for array of dimension 2',  # sim
             ])
 
