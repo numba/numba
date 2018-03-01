@@ -40,6 +40,7 @@ _windows_py27 = (sys.platform.startswith('win32') and
 _32bit = sys.maxsize <= 2 ** 32
 _reason = 'parfors not supported'
 skip_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
+test_disabled = unittest.skipIf(True, 'Test disabled')
 _lnx_reason = 'linux only test'
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
 
@@ -1378,7 +1379,8 @@ class TestPrange(TestPrangeBase):
         self.prange_tester(test_impl, A, scheduler_type='unsigned',
                            check_fastmath=True, check_fastmath_result=True)
 
-    @skip_unsupported
+#    @skip_unsupported
+    @test_disabled
     def test_check_error_model(self):
         def test_impl():
             n = 32
@@ -1799,7 +1801,8 @@ class TestParforsSlice(TestParforsBase):
             njit(parallel=True)(test_impl)(np.ones((3,4)))
         self.assertIn("do not match", str(raises.exception))
 
-    @skip_unsupported
+#    @skip_unsupported
+    @test_disabled
     def test_parfor_slice8(self):
         def test_impl(a):
             (m,n) = a.shape

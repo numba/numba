@@ -408,8 +408,9 @@ def _create_gufunc_for_parfor_body(
     parfor_params_orig = parfor_params
 
     parfor_params = []
+    ascontig = False
     for pindex in range(len(parfor_params_orig)):
-        if pindex < len(parfor_inputs) and isinstance(param_types[pindex], types.npytypes.Array):
+        if ascontig and pindex < len(parfor_inputs) and isinstance(param_types[pindex], types.npytypes.Array):
             parfor_params.append(parfor_params_orig[pindex]+"param")
         else:
             parfor_params.append(parfor_params_orig[pindex])
@@ -441,7 +442,7 @@ def _create_gufunc_for_parfor_body(
         "(sched, " + (", ".join(parfor_params)) + "):\n"
 
     for pindex in range(len(parfor_inputs)):
-        if isinstance(param_types[pindex], types.npytypes.Array):
+        if ascontig and isinstance(param_types[pindex], types.npytypes.Array):
             gufunc_txt += ("    " + parfor_params_orig[pindex]
                 + " = np.ascontiguousarray(" + parfor_params[pindex] + ")\n")
 
