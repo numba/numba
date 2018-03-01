@@ -5,6 +5,8 @@ from .reduction import Reduce
 from .cudadrv.devicearray import (device_array, device_array_like, pinned,
                     pinned_array, to_device, auto_device)
 from .cudadrv import devicearray
+from .cudadrv.devices import require_context, gpus
+from .cudadrv.devices import get_context as current_context
 
 reduce = Reduce
 
