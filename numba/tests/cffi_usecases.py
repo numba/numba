@@ -22,6 +22,7 @@ def load_inline_module():
     double _numba_test_sin(double x);
     double _numba_test_cos(double x);
     double _numba_test_funcptr(double (*func)(double));
+    bool _numba_test_boolean();
     """
 
     ffi = FFI()
@@ -45,7 +46,18 @@ def load_ool_module():
     } numba_complex;
     """
 
+    bool_define = """
+    #ifdef _MSC_VER
+        #define false 0
+        #define true 1
+        #define bool int
+    #else
+        #include <stdbool.h>
+    #endif
+    """
+
     defs = numba_complex + """
+    bool boolean();
     double sin(double x);
     double cos(double x);
     int foo(int a, int b, int c);
@@ -55,7 +67,12 @@ def load_ool_module():
     void vector_imag(numba_complex *c, double *imag, int n);
     """
 
-    source = numba_complex + """
+    source = numba_complex + bool_define + """
+    static bool boolean()
+    {
+        return true;
+    }
+
     static int foo(int a, int b, int c)
     {
         return a + b * c;
@@ -107,26 +124,28 @@ def init():
     Initialize module globals.  This can invoke external utilities, hence not
     being executed implicitly at module import.
     """
-    global ffi, cffi_sin, cffi_cos
+    global ffi, cffi_sin, cffi_cos, cffi_bool
 
     if ffi is None:
         ffi, dll = load_inline_module()
         cffi_sin = dll._numba_test_sin
         cffi_cos = dll._numba_test_cos
+        cffi_bool = dll._numba_test_boolean
         del dll
 
 def init_ool():
     """
     Same as init() for OOL mode.
     """
-    global ffi_ool, cffi_sin_ool, cffi_cos_ool, cffi_foo, vsSin, vdSin
-    global vector_real, vector_imag
+    global ffi_ool, cffi_sin_ool, cffi_cos_ool, cffi_foo, cffi_bool_ool
+    global vsSin, vdSin, vector_real, vector_imag
 
     if ffi_ool is None:
         ffi_ool, mod = load_ool_module()
         cffi_sin_ool = mod.lib.sin
         cffi_cos_ool = mod.lib.cos
         cffi_foo = mod.lib.foo
+        cffi_bool_ool = mod.lib.boolean
         vsSin = mod.lib.vsSin
         vdSin = mod.lib.vdSin
         vector_real = mod.lib.vector_real
@@ -144,6 +163,9 @@ def use_two_funcs(x):
 
 def use_cffi_sin_ool(x):
     return cffi_sin_ool(x) * 2
+
+def use_cffi_boolean_true():
+    return cffi_bool_ool()
 
 def use_two_funcs_ool(x):
     return cffi_sin_ool(x) - cffi_cos_ool(x)

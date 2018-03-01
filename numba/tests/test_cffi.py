@@ -45,6 +45,13 @@ class TestCFFI(TestCase):
     def test_sin_function(self):
         self._test_function(mod.use_cffi_sin)
 
+    def test_bool_function_ool(self):
+        pyfunc = mod.use_cffi_boolean_true
+        cres = compile_isolated(pyfunc, (), flags=no_pyobj_flags)
+        cfunc = cres.entry_point
+        self.assertEqual(pyfunc(), True)
+        self.assertEqual(cfunc(), True)
+
     @tag('important')
     def test_sin_function_npm(self):
         self._test_function(mod.use_cffi_sin, flags=no_pyobj_flags)
