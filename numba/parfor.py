@@ -1033,10 +1033,16 @@ class ParforPass(object):
             require(op == 'build_tuple' and len(seq) == ndim)
             count_consts = 0
             mask_indices = []
+            mask_var = None
             for ind in seq:
                 index_typ = self.typemap[ind.name]
                 if (isinstance(index_typ, types.npytypes.Array) and
                     isinstance(index_typ.dtype, types.Boolean)):
+                    mask_var = ind
+                    mask_typ = index_typ.dtype
+                    mask_indices.append(None)
+                elif (isinstance(index_typ, types.npytypes.Array) and
+                    isinstance(index_typ.dtype, types.Integer)):
                     mask_var = ind
                     mask_typ = index_typ.dtype
                     mask_indices.append(None)
