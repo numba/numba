@@ -23,6 +23,12 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         array = np.arange(100, dtype=np.float32)
         cuda.to_device(array, copy=False)
 
+    def test_devicearray_shape(self):
+        ary = np.arange(2 * 3 * 4).reshape(2, 3, 4)
+        dary = cuda.to_device(ary)
+        self.assertEquals(ary.shape, dary.shape)
+        self.assertEquals(ary.shape[1:], dary.shape[1:])
+
     def test_devicearray(self):
         array = np.arange(100, dtype=np.int32)
         original = array.copy()

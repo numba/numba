@@ -31,7 +31,7 @@ class FakeShape(tuple):
     negative indexing)
     '''
     def __getitem__(self, k):
-        if k < 0:
+        if isinstance(k, six.integer_types) and k < 0:
             raise IndexError('tuple index out of range')
         return super(FakeShape, self).__getitem__(k)
 
