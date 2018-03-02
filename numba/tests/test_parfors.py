@@ -1812,7 +1812,8 @@ class TestParforsSlice(TestParforsBase):
 
         self.check(test_impl, np.arange(9).reshape((3,3)))
 
-    @skip_unsupported
+#    @skip_unsupported
+    @test_disabled
     def test_parfor_slice9(self):
         def test_impl(a):
             (m,n) = a.shape
@@ -1822,7 +1823,8 @@ class TestParforsSlice(TestParforsBase):
 
         self.check(test_impl, np.arange(12).reshape((3,4)))
 
-    @skip_unsupported
+#    @skip_unsupported
+    @test_disabled
     def test_parfor_slice10(self):
         def test_impl(a):
             (m,n) = a.shape
