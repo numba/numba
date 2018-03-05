@@ -83,7 +83,7 @@ class TestAnnotation(unittest.TestCase):
 
         # Regex pattern to check for the "lifted_tag" in the line of the loop
         re_lifted_tag = re.compile(
-            r'<td class="lifted_tag">\s*'
+            r'<class class="lifted_tag">\s*'
             r'[&nbsp;]+for i in range\(x\):  # this line is tagged\s*'
             r'</td>', re.MULTILINE)
 
