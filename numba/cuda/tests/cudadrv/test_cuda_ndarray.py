@@ -43,6 +43,20 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
             self.assertEqual(arr.bind(stream).stream, stream)
             self.assertEqual(arr.stream, stream)
 
+    def test_len_1d(self):
+        ary = np.empty((3,))
+        dary = cuda.device_array(3)
+        self.assertEqual(len(ary), len(dary))
+
+    def test_len_2d(self):
+        ary = np.empty((3, 5))
+        dary = cuda.device_array((3, 5))
+        self.assertEqual(len(ary), len(dary))
+
+    def test_len_3d(self):
+        ary = np.empty((3, 5, 7))
+        dary = cuda.device_array((3, 5, 7))
+        self.assertEqual(len(ary), len(dary))
 
     def test_devicearray_partition(self):
         N = 100
