@@ -24,7 +24,7 @@ class TestContextStack(SerialMixin, unittest.TestCase):
         self.assertGreater(len(gpulist), 0)
 
 
-class TestContextAPI(unittest.TestCase):
+class TestContextAPI(SerialMixin, unittest.TestCase):
 
     def test_context_memory(self):
         mem = cuda.current_context().get_memory_info()
