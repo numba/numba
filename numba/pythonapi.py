@@ -1330,9 +1330,9 @@ class PythonAPI(object):
         pointer is returned (NULL if an error occurred).
         This method steals any native (NRT) reference embedded in *val*.
         """
-        impl = _boxers.lookup(typ.__class__)
-        if impl is None:
-            raise NotImplementedError("cannot convert native %s to Python object" % (typ,))
+        from numba.targets.boxing import box_unsupported
+
+        impl = _boxers.lookup(typ.__class__, box_unsupported)
 
         c = _BoxContext(self.context, self.builder, self, env_manager)
         return impl(typ, val, c)

@@ -931,3 +931,11 @@ def unbox_unsupported(typ, obj, c):
                            "can't unbox {!r} type".format(typ))
     res = c.pyapi.get_null_object()
     return NativeValue(res, is_error=cgutils.true_bit)
+
+
+def box_unsupported(typ, val, c):
+    msg = "cannot convert native %s to Python object" % (typ,)
+    c.pyapi.err_set_string("PyExc_TypeError", msg)
+    res = c.pyapi.get_null_object()
+    return res
+

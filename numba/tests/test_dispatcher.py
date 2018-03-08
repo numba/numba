@@ -1351,6 +1351,18 @@ class TestDispatcherFunctionBoundaries(TestCase):
                       cmpfn=jit(lambda x, y: x[1] - y[1]))
         self.assertEqual(got, (0, 4))
 
+    def test_dispatcher_cannot_return_to_python(self):
+        @jit(nopython=True)
+        def foo(fn):
+            return fn
+
+        fn = jit(lambda x: x)
+
+        with self.assertRaises(TypeError) as raises:
+            foo(fn)
+        self.assertRegexpMatches(str(raises.exception),
+                                 "cannot convert native .* to Python object")
+
 
 if __name__ == '__main__':
     unittest.main()
