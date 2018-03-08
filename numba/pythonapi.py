@@ -5,12 +5,12 @@ import contextlib
 import pickle
 
 from llvmlite import ir
-from llvmlite.llvmpy.core import Type, Constant, LLVMException
+from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
 from numba.config import PYVERSION
 import numba.ctypes_support as ctypes
-from numba import numpy_support, config
+from numba import config
 from numba import types, utils, cgutils, lowering, _helperlib
 
 
@@ -28,13 +28,13 @@ class _Registry(object):
             return func
         return decorator
 
-    def lookup(self, typeclass):
+    def lookup(self, typeclass, default=None):
         assert issubclass(typeclass, types.Type)
         for cls in typeclass.__mro__:
             func = self.functions.get(cls)
             if func is not None:
                 return func
-        return None
+        return default
 
 # Registries of boxing / unboxing implementations
 _boxers = _Registry()
@@ -1311,10 +1311,9 @@ class PythonAPI(object):
         Unbox the Python object as the given Numba type.
         A NativeValue instance is returned.
         """
-        impl = _unboxers.lookup(typ.__class__)
-        if impl is None:
-            raise NotImplementedError("cannot convert %s to native value" % (typ,))
+        from numba.targets.boxing import unbox_unsupported
 
+        impl = _unboxers.lookup(typ.__class__, unbox_unsupported)
         c = _UnboxContext(self.context, self.builder, self)
         return impl(typ, obj, c)
 

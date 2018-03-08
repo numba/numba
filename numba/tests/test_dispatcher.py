@@ -1306,5 +1306,28 @@ def cache_file_collision_tester(q, tempdir, modname_bar1, modname_bar2):
     q.put(r2)
 
 
+class TestDispatcherFunctionBoundaries(TestCase):
+    def test_pass_dispatcher_as_arg_inside(self):
+        # Test that a Dispatcher object can be pass as argument
+        # inside a nopython function.
+        @jit(nopython=True)
+        def add1(x):
+            return x + 1
+
+        @jit(nopython=True)
+        def bar(fn, x):
+            return fn(x)
+
+        @jit(nopython=True)
+        def foo(x):
+            return bar(add1, x)
+
+        self.assertEqual(foo(1), 1 + 1)
+        self.assertEqual(foo(11.1), 11.1 + 1)
+        self.assertPreciseEqual(foo(np.arange(10)), np.arange(10) + 1)
+
+
+
+
 if __name__ == '__main__':
     unittest.main()
