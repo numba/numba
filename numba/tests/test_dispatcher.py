@@ -1332,6 +1332,25 @@ class TestDispatcherFunctionBoundaries(TestCase):
         for arg, expect in zip(inputs, expected_results):
             self.assertPreciseEqual(bar(add1, arg), expect)
 
+    def test_dispatcher_as_arg_usecase(self):
+        @jit(nopython=True)
+        def maximum(seq, cmpfn):
+            tmp = seq[0]
+            for each in seq[1:]:
+                cmpval = cmpfn(tmp, each)
+                if cmpval < 0:
+                    tmp = each
+            return tmp
+
+        got = maximum([1, 2, 3, 4], cmpfn=jit(lambda x, y: x - y))
+        self.assertEqual(got, 4)
+        got = maximum(list(zip(range(5), range(5)[::-1])),
+                      cmpfn=jit(lambda x, y: x[0] - y[0]))
+        self.assertEqual(got, (4, 0))
+        got = maximum(list(zip(range(5), range(5)[::-1])),
+                      cmpfn=jit(lambda x, y: x[1] - y[1]))
+        self.assertEqual(got, (0, 4))
+
 
 if __name__ == '__main__':
     unittest.main()
