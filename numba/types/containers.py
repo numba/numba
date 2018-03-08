@@ -192,7 +192,7 @@ class UniTuple(BaseAnonymousTuple, _HomogenousTuple, Sequence):
     def __init__(self, dtype, count):
         self.dtype = dtype
         self.count = count
-        name = "(%s x %d)" % (dtype, count)
+        name = "tuple(%s x %d)" % (dtype, count)
         super(UniTuple, self).__init__(name)
 
     @property

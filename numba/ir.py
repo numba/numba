@@ -2,14 +2,17 @@ from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
 import copy
+import itertools
 import os
+import linecache
 import pprint
 import sys
+import warnings
+from numba import config, errors
 
 from . import utils
 from .errors import (NotDefinedError, RedefinedError, VerificationError,
                      ConstantInferenceError)
-from numba import config
 
 
 class Loc(object):
@@ -36,16 +39,58 @@ class Loc(object):
         else:
             return "%s (%s)" % (self.filename, self.line)
 
-    def strformat(self):
+    def strformat(self, nlines_up=2):
         try:
             # Try to get a relative path
+            # ipython/jupyter input just returns as self.filename
             path = os.path.relpath(self.filename)
         except ValueError:
-            # Fallback to absolute path if error occured in getting the
+            # Fallback to absolute path if error occurred in getting the
             # relative path.
             # This may happen on windows if the drive is different
             path = os.path.abspath(self.filename)
-        return 'File "%s", line %d' % (path, self.line)
+
+        lines = linecache.getlines(path)
+
+        ret = [] # accumulates output
+        if lines and self.line:
+
+            def count_spaces(string):
+                spaces = 0
+                for x in itertools.takewhile(str.isspace, string):
+                    spaces += 1
+                return spaces
+
+            selected = lines[self.line - nlines_up:self.line]
+            # see if selected contains a definition
+            def_found = False
+            for x in selected:
+                if 'def ' in x:
+                    def_found = True
+
+            # no definition found, try and find one
+            if not def_found:
+                # try and find a def, go backwards from error line
+                fn_name = None
+                for x in reversed(lines[:self.line - 1]):
+                    if 'def ' in x:
+                        fn_name = x
+                        break
+                if fn_name:
+                    ret.append(fn_name)
+                    spaces = count_spaces(x)
+                    ret.append(' '*(4 + spaces) + '<source elided>\n')
+
+            ret.extend(selected[:-1])
+            ret.append(errors.termcolor.highlight(selected[-1]))
+
+            # point at the problem with a caret
+            spaces = count_spaces(selected[-1])
+            ret.append(' '*(spaces) + errors.termcolor.indicate("^"))
+
+        err = errors.termcolor.filename('\nFile "%s", line %d:')+'\n%s'
+        tmp = err % (path, self.line, errors.termcolor.code(''.join(ret)))
+        return tmp
 
     def with_lineno(self, line, col=None):
         """
