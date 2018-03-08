@@ -919,6 +919,13 @@ def unbox_deferred(typ, obj, c):
                        cleanup=native_value.cleanup)
 
 
+@unbox(types.Dispatcher)
+def unbox_dispatcher(typ, obj, c):
+    # A dispatcher object has no meaningful value in native code
+    res = c.context.get_constant_undef(typ)
+    return NativeValue(res)
+
+
 def unbox_unsupported(typ, obj, c):
     c.pyapi.err_set_string("PyExc_TypeError",
                            "can't unbox {!r} type".format(typ))

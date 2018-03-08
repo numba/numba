@@ -1307,9 +1307,8 @@ def cache_file_collision_tester(q, tempdir, modname_bar1, modname_bar2):
 
 
 class TestDispatcherFunctionBoundaries(TestCase):
-    def test_pass_dispatcher_as_arg_inside(self):
+    def test_pass_dispatcher_as_arg(self):
         # Test that a Dispatcher object can be pass as argument
-        # inside a nopython function.
         @jit(nopython=True)
         def add1(x):
             return x + 1
@@ -1322,11 +1321,16 @@ class TestDispatcherFunctionBoundaries(TestCase):
         def foo(x):
             return bar(add1, x)
 
-        self.assertEqual(foo(1), 1 + 1)
-        self.assertEqual(foo(11.1), 11.1 + 1)
-        self.assertPreciseEqual(foo(np.arange(10)), np.arange(10) + 1)
+        # Check dispatcher as argument inside NPM
+        inputs = [1, 11.1, np.arange(10)]
+        expected_results = [x + 1 for x in inputs]
 
+        for arg, expect in zip(inputs, expected_results):
+            self.assertPreciseEqual(foo(arg), expect)
 
+        # Check dispatcher as argument from python
+        for arg, expect in zip(inputs, expected_results):
+            self.assertPreciseEqual(bar(add1, arg), expect)
 
 
 if __name__ == '__main__':
