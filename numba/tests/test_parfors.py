@@ -618,6 +618,15 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, *self.simple_args)
 
     @skip_unsupported
+    def test_simple24(self):
+        def test_impl():
+            n = 20
+            A = np.ones((n, n))
+            b = np.arange(n)
+            return np.sum(A[:, b])
+        self.check(test_impl)
+
+    @skip_unsupported
     def test_np_func_direct_import(self):
         from numpy import ones  # import here becomes FreeVar
         def test_impl(n):
