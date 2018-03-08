@@ -9,6 +9,7 @@ import warnings
 import math
 import functools
 import copy
+import six
 from ctypes import c_void_p
 
 import numpy as np
@@ -18,10 +19,6 @@ from . import devices
 from numba import dummyarray, types, numpy_support
 from numba.unsafe.ndarray import to_fixed_tuple
 
-try:
-    long
-except NameError:
-    long = int
 try:
     lru_cache = getattr(functools, 'lru_cache')(None)
 except AttributeError:
@@ -48,7 +45,7 @@ def verify_cuda_ndarray_interface(obj):
     requires_attr('shape', tuple)
     requires_attr('strides', tuple)
     requires_attr('dtype', np.dtype)
-    requires_attr('size', (int, long))
+    requires_attr('size', six.integer_types)
 
 
 def require_cuda_ndarray(obj):
@@ -82,9 +79,9 @@ class DeviceNDArrayBase(object):
         gpu_data
             user provided device memory for the ndarray data buffer
         """
-        if isinstance(shape, (int, long)):
+        if isinstance(shape, six.integer_types):
             shape = (shape,)
-        if isinstance(strides, (int, long)):
+        if isinstance(strides, six.integer_types):
             strides = (strides,)
         self.ndim = len(shape)
         if len(strides) != self.ndim:
