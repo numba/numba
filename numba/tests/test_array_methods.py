@@ -468,6 +468,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             expected = pyfunc(arr, axes)
             got = run(arr, axes)
             self.assertPreciseEqual(got, expected)
+            self.assertEqual(got.flags.f_contiguous,
+                             expected.flags.f_contiguous)
+            self.assertEqual(got.flags.c_contiguous,
+                             expected.flags.c_contiguous)
         def check_err_axis_repeated(arr, axes):
             with self.assertRaises(ValueError) as raises:
                 run(arr, axes)
@@ -485,10 +489,11 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         arrs = [np.arange(24),
                 np.arange(24).reshape(4, 6),
                 np.arange(24).reshape(2, 3, 4),
-                np.arange(24).reshape(1, 2, 3, 4)]
+                np.arange(24).reshape(1, 2, 3, 4),
+                np.arange(64).reshape(8, 4, 2)[::3,::2,:]]
 
         for i in range(len(arrs)):
-            for axes in permutations(tuple(range(i+1))):
+            for axes in permutations(tuple(range(arrs[i].ndim))):
                 ndim = len(axes)
                 neg_axes = tuple([x - ndim for x in axes])
                 check(arrs[i], axes)
