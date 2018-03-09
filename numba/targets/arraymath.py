@@ -1043,6 +1043,22 @@ def any_where(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
+@overload(np.real)
+def np_real(a):
+    def np_real_impl(a):
+        return a.real
+
+    return np_real_impl
+
+
+@overload(np.imag)
+def np_imag(a):
+    def np_imag_impl(a):
+        return a.imag
+
+    return np_imag_impl
+
+
 #----------------------------------------------------------------------------
 # Misc functions
 
