@@ -170,6 +170,13 @@ def array_cumsum(a, *args):
 def array_cumsum_kws(a, axis):
     return a.cumsum(axis=axis)
 
+def array_real(a):
+    return np.real(a)
+
+
+def array_imag(a):
+    return np.imag(a)
+
 
 class TestArrayMethods(MemoryLeakMixin, TestCase):
     """
@@ -826,6 +833,29 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         A = np.arange(48, dtype=np.complex64).reshape(2, 3, 4, 2)
         for x in [np.float64, np.complex128, np.bool_]:
             check(A, x(10))
+
+    def test_real(self):
+        pyfunc = array_real
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.linspace(-10, 10)
+        np.testing.assert_equal(pyfunc(x), cfunc(x))
+
+        x, y = np.meshgrid(x, x)
+        z = x + 1j*y
+        np.testing.assert_equal(pyfunc(z), cfunc(z))
+
+    def test_imag(self):
+        pyfunc = array_imag
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.linspace(-10, 10)
+        np.testing.assert_equal(pyfunc(x), cfunc(x))
+
+        x, y = np.meshgrid(x, x)
+        z = x + 1j*y
+        np.testing.assert_equal(pyfunc(z), cfunc(z))
+
 
 class TestArrayComparisons(TestCase):
 
