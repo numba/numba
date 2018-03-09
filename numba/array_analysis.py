@@ -1417,7 +1417,6 @@ class ArrayAnalysis(object):
         return tuple(args[1:]), []
 
     def _analyze_op_call_numpy_transpose(self, scope, equiv_set, args, kws):
-        assert(len(args) == 1)
         arg = args[0]
         typ = self.typemap[arg.name]
         if (isinstance(typ, types.ArrayCompatible) and typ.ndim == 2):
