@@ -597,6 +597,7 @@ class TestArrayAnalysis(TestCase):
                                equivs=[self.with_equiv('b', ('n', 'n'))],
                                asserts=[self.without_shapecall('b')])
 
+
         def test_transpose(m, n):
             a = np.ones((m, n))
             b = a.T
@@ -605,6 +606,16 @@ class TestArrayAnalysis(TestCase):
         self._compile_and_test(test_transpose, (types.intp, types.intp),
                                equivs=[self.with_equiv('a', ('m', 'n')),
                                        self.with_equiv('b', ('n', 'm'))])
+
+
+        def test_transpose_3d(m, n, k):
+            a = np.ones((m, n, k))
+            b = a.T
+            # Numba njit cannot compile explicit transpose call!
+            # c = np.transpose(b)
+        self._compile_and_test(test_transpose_3d, (types.intp, types.intp, types.intp),
+                               equivs=[self.with_equiv('a', ('m', 'n', 'k')),
+                                       self.with_equiv('b', ('k', 'n', 'm'))])
 
         def test_random(n):
             a0 = np.random.rand(n)

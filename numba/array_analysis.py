@@ -1417,11 +1417,13 @@ class ArrayAnalysis(object):
         return tuple(args[1:]), []
 
     def _analyze_op_call_numpy_transpose(self, scope, equiv_set, args, kws):
-        arg = args[0]
-        typ = self.typemap[arg.name]
-        if (isinstance(typ, types.ArrayCompatible) and typ.ndim == 2):
-            (m, n) = equiv_set._get_shape(arg)
-            return (n, m), []
+        in_arr = args[0]
+        typ = self.typemap[in_arr.name]
+        assert (isinstance(typ, types.ArrayCompatible),
+                "Invalid np.transpose argument")
+        in_shape = equiv_set._get_shape(in_arr)
+        if len(args) == 1:
+            return tuple(reversed(in_shape)), []
         return None
 
     def _analyze_op_call_numpy_random_rand(self, scope, equiv_set, args, kws):
