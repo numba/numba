@@ -601,21 +601,33 @@ class TestArrayAnalysis(TestCase):
         def test_transpose(m, n):
             a = np.ones((m, n))
             b = a.T
+            c = a.transpose()
             # Numba njit cannot compile explicit transpose call!
             # c = np.transpose(b)
         self._compile_and_test(test_transpose, (types.intp, types.intp),
                                equivs=[self.with_equiv('a', ('m', 'n')),
-                                       self.with_equiv('b', ('n', 'm'))])
+                                       self.with_equiv('b', ('n', 'm')),
+                                       self.with_equiv('c', ('n', 'm'))])
 
 
         def test_transpose_3d(m, n, k):
             a = np.ones((m, n, k))
             b = a.T
+            c = a.transpose()
+            d = a.transpose(2,0,1)
+            dt = a.transpose((2,0,1))
+            e = a.transpose(0,2,1)
+            et = a.transpose((0,2,1))
             # Numba njit cannot compile explicit transpose call!
             # c = np.transpose(b)
         self._compile_and_test(test_transpose_3d, (types.intp, types.intp, types.intp),
                                equivs=[self.with_equiv('a', ('m', 'n', 'k')),
-                                       self.with_equiv('b', ('k', 'n', 'm'))])
+                                       self.with_equiv('b', ('k', 'n', 'm')),
+                                       self.with_equiv('c', ('k', 'n', 'm')),
+                                       self.with_equiv('d', ('k', 'm', 'n')),
+                                       self.with_equiv('dt', ('k', 'm', 'n')),
+                                       self.with_equiv('e', ('m', 'k', 'n')),
+                                       self.with_equiv('et', ('m', 'k', 'n'))])
 
         def test_random(n):
             a0 = np.random.rand(n)
