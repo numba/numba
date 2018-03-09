@@ -385,7 +385,7 @@ def _numpy_redirect(fname):
 
 for func in ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
              'cumsum', 'cumprod', 'argmin', 'argmax', 'argsort',
-             'nonzero', 'ravel']:
+             'nonzero', 'ravel', 'reshape']:
     _numpy_redirect(func)
 
 
