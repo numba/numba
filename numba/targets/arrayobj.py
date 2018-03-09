@@ -1556,6 +1556,14 @@ def array_reshape_vararg(context, builder, sig, args):
     return array_reshape(context, builder, new_sig, new_args)
 
 
+@lower_builtin(np.reshape, types.Array, types.BaseTuple)
+def np_reshape(context, builder, sig, args):
+    def np_reshape_impl(a, shape):
+        return a.reshape(shape)
+
+    return context.compile_internal(builder, np_reshape_impl, sig, args)
+
+
 @lower_builtin('array.ravel', types.Array)
 def array_ravel(context, builder, sig, args):
     # Only support no argument version (default order='C')
