@@ -2,11 +2,16 @@
 The Device Array API is not implemented in the simulator. This module provides
 stubs to allow tests to import correctly.
 '''
+from contextlib import contextmanager
+from warnings import warn
 
-import six
+import numpy as np
+
+from numba import six
 
 DeviceRecord = None
 from_record_like = None
+
 
 def is_cuda_ndarray(obj):
     return getattr(obj, '__cuda_ndarray__', False)
@@ -16,12 +21,6 @@ errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "
                             "be transferred as a single memory region. Please "
                             "ensure contiguous buffer with numpy "
                             ".ascontiguousarray()")
-from contextlib import contextmanager
-from warnings import warn
-
-import numpy as np
-
-from numba.six import raise_from
 
 
 class FakeShape(tuple):
@@ -58,8 +57,8 @@ class FakeCUDAArray(object):
             attr = getattr(self._ary, attrname)
             return attr
         except AttributeError as e:
-            raise_from(AttributeError("Wrapped array has no attribute '%s'"
-                                      % attrname), e)
+            six.raise_from(AttributeError("Wrapped array has no attribute '%s'"
+                                          % attrname), e)
 
     def bind(self, stream=0):
         return FakeCUDAArray(self._ary, stream)

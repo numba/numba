@@ -9,7 +9,7 @@ import warnings
 import math
 import functools
 import copy
-import six
+from numba import six
 from ctypes import c_void_p
 
 import numpy as np
