@@ -61,9 +61,9 @@ the :meth:`~numpy.ndarray.take()` method on Numpy arrays::
 Implementing attributes
 -----------------------
 
-Finally, the ``@overload_attribute`` decorator allows implementing a data
-attribute (or property) on a type.  Only reading the attribute is possible;
-writable attributes are only supported through the
+The ``@overload_attribute`` decorator allows implementing a data
+attribute (or property) on a type.  Only reading the attribute is
+possible; writable attributes are only supported through the
 :ref:`low-level API <low-level-extending>`.
 
 The following example implements the :attr:`~numpy.ndarray.nbytes` attribute
@@ -75,3 +75,36 @@ on Numpy arrays::
           return arr.size * arr.itemsize
       return get
 
+Importing Cython Functions
+--------------------------
+
+The function ``get_cython_function_address`` obtains the address of a
+C function in a Cython extension module, which can then be cast to a
+function for use in jitted functions. For example, suppose that you
+have the file ``foo.pyx``::
+
+   from libc.math cimport exp
+
+   cdef api double myexp(double x):
+       return exp(x)
+
+You can access ``myexp`` from Numba in the following way::
+
+   import ctypes
+   from numba.extending import get_cython_function_address
+
+   addr = get_cython_function_address("foo", "myexp")
+   functype = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.c_double)
+   myexp = functype(addr)
+
+The function ``myexp`` can now be used inside jitted functions, for
+example::
+
+   @njit
+   def double_myexp(x):
+       return 2*myexp(x)
+
+One caveat is that if your function uses Cython's fused types, then
+the function's name will be mangled. To find out the mangled name of
+your function you can check the extension module's ``__pyx_capi__``
+attribute.

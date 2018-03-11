@@ -4,6 +4,8 @@ import math
 import sys
 import pickle
 import multiprocessing
+import ctypes
+from distutils.version import LooseVersion
 
 import numpy as np
 
@@ -22,12 +24,22 @@ from numba.extending import (typeof_impl, type_callable,
                              make_attribute_wrapper,
                              intrinsic, _Intrinsic,
                              register_jitable,
+                             get_cython_function_address
                              )
 from numba.typing.templates import (
     ConcreteTemplate, signature, infer)
 
 # Pandas-like API implementation
 from .pdlike_usecase import Index, Series
+
+try:
+    import scipy
+    if LooseVersion(scipy.__version__) < '0.19':
+        sc = None
+    else:
+        import scipy.special.cython_special as sc
+except ImportError:
+    sc = None
 
 
 # -----------------------------------------------------------------------
@@ -707,6 +719,25 @@ class TestRegisterJitable(unittest.TestCase):
             cbar(2)
         msg = "Only accept returning of array passed into the function as argument"
         self.assertIn(msg, str(raises.exception))
+
+
+class TestImportCythonFunction(unittest.TestCase):
+    @unittest.skipIf(sc is None, "Only run if SciPy >= 0.19 is installed")
+    def test_getting_function(self):
+        addr = get_cython_function_address("scipy.special.cython_special", "j0")
+        functype = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.c_double)
+        _j0 = functype(addr)
+        j0 = jit(nopython=True)(lambda x: _j0(x))
+        self.assertEqual(j0(0), 1)
+
+    def test_missing_module(self):
+        with self.assertRaises(ImportError):
+            addr = get_cython_function_address("fakemodule", "fakefunction")
+
+    @unittest.skipIf(sc is None, "Only run if SciPy >= 0.19 is installed")
+    def test_missing_function(self):
+        with self.assertRaises(ValueError):
+            addr = get_cython_function_address("scipy.special.cython_special", "foo")
 
 
 if __name__ == '__main__':
