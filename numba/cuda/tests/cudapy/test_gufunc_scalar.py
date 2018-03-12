@@ -7,11 +7,12 @@ from __future__ import absolute_import, print_function, division
 import numpy as np
 from numba import guvectorize, cuda
 from numba import unittest_support as unittest
+from numba.tests.support import TestCase
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
-class TestGUFuncScalr(SerialMixin, unittest.TestCase):
+class TestGUFuncScalr(SerialMixin, TestCase):
     def test_gufunc_scalar_output(self):
         #    function type:
         #        - has no void return type
@@ -53,6 +54,16 @@ class TestGUFuncScalr(SerialMixin, unittest.TestCase):
         for i in range(inp.shape[0]):
             self.assertTrue(out1[i] == inp[i].sum())
             self.assertTrue(out2[i] == inp[i].sum())
+
+    def test_gufunc_scalar_output_bug(self):
+        # Issue 2812: Error due to using input argument types as output argument
+        @guvectorize(['void(int32, int32[:])'], '()->()', target='cuda')
+        def twice(inp, out):
+            out[0] = inp * 2
+
+        self.assertEqual(twice(10), 20)
+        arg = np.arange(10).astype(np.int32)
+        self.assertPreciseEqual(twice(arg), arg * 2)
 
     def test_gufunc_scalar_input_saxpy(self):
         @guvectorize(['void(float32, float32[:], float32[:], float32[:])'],
