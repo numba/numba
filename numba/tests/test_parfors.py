@@ -1543,12 +1543,16 @@ class TestParforsVectorizer(TestPrangeBase):
     # env mutating test
     _numba_parallel_test_ = False
 
-    def get_gufunc_asm(self, func, schedule_type, *args, fastmath=False,
-                       nkernels=2, cpu_name='skylake-avx512', assertions=True):
+    def get_gufunc_asm(self, func, schedule_type, *args, **kwargs):
+
+        fastmath = kwargs.pop('fastmath', False)
+        nthreads = kwargs.pop('nthreads', 2)
+        cpu_name = kwargs.pop('cpu_name', 'skylake-avx512')
+        assertions = kwargs.pop('assertions', True)
 
         env_opts = {'NUMBA_CPU_NAME': cpu_name,
                     'NUMBA_CPU_FEATURES': '',
-                    'NUMBA_NUM_THREADS': str(nkernels)
+                    'NUMBA_NUM_THREADS': str(nthreads)
                     }
 
         overrides = []
@@ -1563,15 +1567,13 @@ class TestParforsVectorizer(TestPrangeBase):
             else:
                 cres = self.compile_parallel(pfunc_vectorizable, sig)
 
-            # make sure there's `nkernels` schedule calls of the same type
-            schedty = re.compile('call\s+\w+\*\s+@do_scheduling_(\w+)\(')
-            matches = schedty.findall(cres.library.get_llvm_str())
-
             # get the gufunc asm
             asm = self._get_gufunc_asm(cres)
 
             if assertions:
-                self.assertEqual(len(matches), 2)
+                schedty = re.compile('call\s+\w+\*\s+@do_scheduling_(\w+)\(')
+                matches = schedty.findall(cres.library.get_llvm_str())
+                self.assertEqual(len(matches), 2) # 1x decl, 1x call
                 self.assertEqual(matches[0], matches[1])
                 self.assertTrue(asm != {})
 
@@ -1579,7 +1581,7 @@ class TestParforsVectorizer(TestPrangeBase):
 
     # this is a common match pattern for something like:
     # \n\tvsqrtpd\t-192(%rbx,%rsi,8), %zmm0\n
-    # to check vsqrtpd oeprates on zmm
+    # to check vsqrtpd operates on zmm
     match_vsqrtpd_on_zmm = re.compile('\n\s+vsqrtpd\s+.*zmm.*\n')
 
     @linux_only
