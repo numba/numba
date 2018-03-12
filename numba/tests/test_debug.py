@@ -2,6 +2,7 @@ from __future__ import print_function, absolute_import
 
 import os
 import platform
+import re
 import textwrap
 import warnings
 
@@ -255,6 +256,13 @@ class TestParforsDebug(TestCase):
         """
         Test that NUMBA_DEBUG_ARRAY_OPT_STATS produces valid output
         """
+        # deliberately trigger a compilation loop to increment the
+        # Parfor class state, this is to ensure the test works based
+        # on indices computed based on this state and not hard coded
+        # indices.
+        cres = compile_isolated(supported_parfor, (types.int64,),
+                                flags=force_parallel_flags)
+
         with override_env_config('NUMBA_DEBUG_ARRAY_OPT_STATS', '1'):
             with captured_stdout() as out:
                 cres = compile_isolated(supported_parfor, (types.int64,),
@@ -269,30 +277,35 @@ class TestParforsDebug(TestCase):
             after_fusion_output = \
                 [x for x in output if 'After fusion, function' in x]
 
+            # Parfor's have a shared state index, grab the current value
+            # as it will be used as an offset for all loop messages
+            parfor_state = int(re.compile(r'#([0-9]+)').search(
+                parallel_loop_output[0]).group(1))
+            bounds = range(parfor_state,
+                           parfor_state + len(parallel_loop_output))
+
             # Check the Parallel for-loop <index> is produced from <pattern>
             # works first
             pattern = ('ones function', ('prange', 'user'))
             fmt = 'Parallel for-loop #{} is produced from pattern \'{}\' at'
-            for i, trials in enumerate(parallel_loop_output):
-                to_match = fmt.format(i, pattern[i])
+            for i, trials, lpattern in zip(bounds, parallel_loop_output,
+                                           pattern):
+                to_match = fmt.format(i, lpattern)
                 self.assertIn(to_match, trials)
 
             # Check the fusion statements are correct
-            pattern = (1, 0)
+            pattern = (parfor_state + 1, parfor_state + 0)
             fmt = 'Parallel for-loop #{} is fused into for-loop #{}.'
             for trials in fuse_output:
                 to_match = fmt.format(*pattern)
                 self.assertIn(to_match, trials)
 
             # Check the post fusion statements are correct
-            pattern = (supported_parfor.__name__, 1, set([0]))
+            pattern = (supported_parfor.__name__, 1, set([parfor_state]))
             fmt = 'After fusion, function {} has {} parallel for-loop(s) #{}.'
             for trials in after_fusion_output:
                 to_match = fmt.format(*pattern)
                 self.assertIn(to_match, trials)
-
-
-
 
 
 if __name__ == '__main__':
