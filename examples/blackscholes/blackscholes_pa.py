@@ -16,7 +16,7 @@ def cndf2(inp):
     out = 0.5 + 0.5 * math.erf((math.sqrt(2.0)/2.0) * inp)
     return out
 
-@numba.njit(parallel=run_parallel)
+@numba.njit(parallel=run_parallel,fastmath=True)
 def blackscholes(sptprice, strike, rate, volatility, timev):
     logterm = np.log(sptprice / strike)
     powterm = 0.5 * volatility * volatility

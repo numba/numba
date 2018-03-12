@@ -326,7 +326,7 @@ class _GufuncWrapper(object):
         fnty = Type.function(Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                            intp_ptr_t, byte_ptr_t])
 
-        wrapper_module = library.create_ir_module('')
+        wrapper_module = library.create_ir_module('_gufunc_wrapper')
         func_type = self.call_conv.get_function_type(self.fndesc.restype,
                                                      self.fndesc.argtypes)
         fname = self.fndesc.llvm_func_name
