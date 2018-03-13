@@ -1671,6 +1671,9 @@ class TestParforsVectorizer(TestPrangeBase):
             self.assertTrue(len(self.match_vsqrtpd_on_zmm.findall(v)) > 1)
 
     @linux_only
+    # needed as 32bit doesn't have equivalent signed/unsigned instruction generation
+    # for this function
+    @skip_unsupported 
     def test_signed_vs_unsigned_vec_asm(self):
         """ This checks vectorization for signed vs unsigned variants of a
         trivial accumulator, the only meaningful difference should be the

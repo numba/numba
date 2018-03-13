@@ -237,10 +237,11 @@ class MinimalCallConv(BaseCallConv):
         fnty = ir.FunctionType(errcode_t, [resptr] + argtypes)
         return fnty
 
-    def decorate_function(self, fn, args, fe_argtypes):
+    def decorate_function(self, fn, args, fe_argtypes, noalias=False):
         """
         Set names and attributes of function arguments.
         """
+        assert not noalias
         arginfo = self._get_arg_packer(fe_argtypes)
         arginfo.assign_names(self.get_arguments(fn),
                              ['arg.' + a for a in args])
