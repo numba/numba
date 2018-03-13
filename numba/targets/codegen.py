@@ -4,8 +4,9 @@ import warnings
 import functools
 import locale
 import weakref
-from collections import defaultdict
 import ctypes
+import os
+import time
 
 import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.passes as lp
@@ -120,8 +121,25 @@ class CodeLibrary(object):
         """
         Internal: optimize this library's final module.
         """
-        self._codegen._mpm.run(self._final_module)
+        remarks_file = self._get_opt_remarks_path()
+        self._codegen._mpm.run(self._final_module, remarks_file=remarks_file)
         self._final_module = remove_redundant_nrt_refct(self._final_module)
+
+    def _get_opt_remarks_path(self):
+        "Get file path for the optimization remark"
+        if config.OPT_REMARKS:
+            # Optimization remarks is enabled
+            dirpath = 'numba_opt_remarks'
+            _ensure_dir_exist(dirpath)
+            # Avoid duplication of filename by using the id of this CodeLibrary
+            # and the current timestamp.
+            filename = '{}-{:08x}-{}.yaml'.format(self._name, id(self),
+                                                time.time())
+            remarks_file = os.path.join(dirpath, filename)
+        else:
+            # Set to None to disable it
+            remarks_file = None
+        return remarks_file
 
     def _get_module_for_linking(self):
         """
@@ -832,3 +850,8 @@ def get_host_cpu_features():
 
         # Set feature attributes
         return features.flatten()
+
+
+def _ensure_dir_exist(dirpath):
+    if not os.path.exists(dirpath):
+        os.makedirs(dirpath)
