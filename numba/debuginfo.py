@@ -132,8 +132,6 @@ class DIBuilder(AbstractDIBuilder):
         di_subp = self._add_subprogram(name=name, linkagename=function.name,
                                        line=loc.line)
         function.set_metadata("dbg", di_subp)
-        # disable inlining for this function for easier debugging
-        function.attributes.add('noinline')
 
     def finalize(self):
         dbgcu = self.module.get_or_insert_named_metadata(self.DBG_CU_NAME)
