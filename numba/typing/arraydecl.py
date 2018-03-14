@@ -413,9 +413,17 @@ class ArrayAttribute(AttributeTemplate):
     @bound_function("array.argsort")
     def resolve_argsort(self, ary, args, kws):
         assert not args
-        assert not kws
+        kwargs = dict(kws)
+        kind = kwargs.pop('kind', types.Const('quicksort'))
+        if kwargs:
+            msg = "usupported keywords: {!r}"
+            raise TypingError(msg.format(kwargs.keys()))
         if ary.ndim == 1:
-            return signature(types.Array(types.intp, 1, 'C'))
+            def argsort_stub(kind='quicksort'):
+                pass
+            pysig = utils.pysignature(argsort_stub)
+            sig = signature(types.Array(types.intp, 1, 'C'), kind).replace(pysig=pysig)
+            return sig
 
     @bound_function("array.view")
     def resolve_view(self, ary, args, kws):

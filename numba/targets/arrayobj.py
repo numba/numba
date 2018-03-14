@@ -4589,17 +4589,21 @@ def np_sort(context, builder, sig, args):
 
     return context.compile_internal(builder, np_sort_impl, sig, args)
 
-@lower_builtin("array.argsort", types.Array)
-@lower_builtin(np.argsort, types.Array)
+@lower_builtin("array.argsort", types.Array, types.Const)
+@lower_builtin(np.argsort, types.Array, types.Const)
 def array_argsort(context, builder, sig, args):
-    arytype = sig.args[0]
+    arytype, kind = sig.args
+    assert kind.value == 'quicksort'
     sort_func = get_sort_func(is_float=isinstance(arytype.dtype, types.Float),
                               is_argsort=True)
 
     def array_argsort_impl(arr):
         return sort_func(arr)
 
-    return context.compile_internal(builder, array_argsort_impl, sig, args)
+    innersig = sig.replace(args=sig.args[:1])
+    innerargs = args[:1]
+    return context.compile_internal(builder, array_argsort_impl,
+                                    innersig, innerargs)
 
 
 # -----------------------------------------------------------------------------
