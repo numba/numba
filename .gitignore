@@ -24,4 +24,3 @@ htmlcov/
 __pycache__/
 
 docs/source/developer/autogen*
-reshape_test.py
