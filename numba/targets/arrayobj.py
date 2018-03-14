@@ -25,8 +25,8 @@ from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     iternext_impl, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
-from numba.extending import register_jitable
-from . import quicksort, mergesort, slicing
+from numba.extending import register_jitable, overload
+from . import quicksort, slicing
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
@@ -1637,12 +1637,11 @@ def array_reshape_vararg(context, builder, sig, args):
     return array_reshape(context, builder, new_sig, new_args)
 
 
-@lower_builtin(np.reshape, types.Array, types.BaseTuple)
-def np_reshape(context, builder, sig, args):
+@overload(np.reshape)
+def np_reshape(a, shape):
     def np_reshape_impl(a, shape):
         return a.reshape(shape)
-
-    return context.compile_internal(builder, np_reshape_impl, sig, args)
+    return np_reshape_impl
 
 
 @lower_builtin('array.ravel', types.Array)
