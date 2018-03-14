@@ -284,25 +284,5 @@ class Random_triangular(ConcreteTemplate):
     cases = [signature(tp, tp, tp) for tp in _float_types]
     cases += [signature(tp, tp, tp, tp) for tp in _float_types]
 
-# Other
-
-@infer_global(random.shuffle, typing_key="random.shuffle")
-@infer_global(np.random.shuffle, typing_key="np.random.shuffle")
-class Random_shuffle(AbstractTemplate):
-    def generic(self, args, kws):
-        arr, = args
-        if isinstance(arr, types.Buffer) and arr.mutable:
-            return signature(types.void, arr)
-
-
-@infer_global(np.random.permutation, typing_key="np.random.permutation")
-class Random_permutation(AbstractTemplate):
-    def generic(self, args, kws):
-        in_arg, = args
-        if isinstance(in_arg, types.Array):
-            return signature(in_arg, in_arg)
-        elif isinstance(in_arg, types.Integer):
-            return signature(types.Array(types.intp, 1, 'C'), in_arg)
-
 # NOTE: some functions can have @overloads in numba.targets.randomimpl,
 # and therefore don't need a typing declaration here.
