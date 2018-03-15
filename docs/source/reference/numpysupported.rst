@@ -277,7 +277,7 @@ The following top-level functions are supported:
 * :func:`numpy.ravel` (no order argument; 'C' order only)
 * :func:`numpy.roots`
 * :func:`numpy.round_`
-* :func:`numpy.searchsorted` (only the 2 first arguments)
+* :func:`numpy.searchsorted` (only the 3 first arguments)
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
 * :func:`numpy.stack`

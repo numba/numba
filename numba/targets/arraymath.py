@@ -1158,59 +1158,67 @@ def np_bincount(a, weights=None):
 
     return bincount_impl
 
+def _searchsorted(func):
+    def searchsorted_inner(a, v):
+        n = len(a)
+        if np.isnan(v):
+            # Find the first nan (i.e. the last from the end of a,
+            # since there shouldn't be many of them in practice)
+            for i in range(n, 0, -1):
+                if not np.isnan(a[i - 1]):
+                    return i
+            return 0
+        lo = 0
+        hi = n
+        while hi > lo:
+            mid = (lo + hi) >> 1
+            if func(a[mid], (v)):
+                # mid is too low => go up
+                lo = mid + 1
+            else:
+                # mid is too high, or is a NaN => go down
+                hi = mid
+        return lo
+    return searchsorted_inner
+
+_lt = register_jitable(lambda x, y: x < y)
+_le = register_jitable(lambda x, y: x <= y)
+_searchsorted_left = register_jitable(_searchsorted(_lt))
+_searchsorted_right = register_jitable(_searchsorted(_le))
 
 @overload(np.searchsorted)
-def searchsorted(a, v):
+def searchsorted(a, v, side='left'):
+    side_val = getattr(side, 'value', side)
+    if side_val == 'left':
+        loop_impl = _searchsorted_left
+    elif side_val == 'right':
+        loop_impl = _searchsorted_right
+    else:
+        raise ValueError("Invalid value given for 'side': %s" % side_val)
+
     if isinstance(v, types.Array):
         # N-d array and output
-
-        def searchsorted_impl(a, v):
+        def searchsorted_impl(a, v, side='left'):
             out = np.empty(v.shape, np.intp)
             for view, outview in np.nditer((v, out)):
-                index = np.searchsorted(a, view.item())
+                index = loop_impl(a, view.item())
                 outview.itemset(index)
             return out
 
-        return searchsorted_impl
-
     elif isinstance(v, types.Sequence):
         # 1-d sequence and output
-
-        def searchsorted_impl(a, v):
+        def searchsorted_impl(a, v, side='left'):
             out = np.empty(len(v), np.intp)
             for i in range(len(v)):
-                out[i] = np.searchsorted(a, v[i])
+                out[i] = loop_impl(a, v[i])
             return out
-
-        return searchsorted_impl
-
     else:
         # Scalar value and output
         # Note: NaNs come last in Numpy-sorted arrays
+        def searchsorted_impl(a, v, side='left'):
+            return loop_impl(a, v)
 
-        def searchsorted_impl(a, v):
-            n = len(a)
-            if np.isnan(v):
-                # Find the first nan (i.e. the last from the end of a,
-                # since there shouldn't be many of them in practice)
-                for i in range(n, 0, -1):
-                    if not np.isnan(a[i - 1]):
-                        return i
-                return 0
-            lo = 0
-            hi = n
-            while hi > lo:
-                mid = (lo + hi) >> 1
-                if a[mid] < v:
-                    # mid is too low => go up
-                    lo = mid + 1
-                else:
-                    # mid is too high, or is a NaN => go down
-                    hi = mid
-            return lo
-
-        return searchsorted_impl
-
+    return searchsorted_impl
 
 @overload(np.digitize)
 def np_digitize(x, bins, right=False):

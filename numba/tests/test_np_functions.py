@@ -42,6 +42,12 @@ def bincount2(a, w):
 def searchsorted(a, v):
     return np.searchsorted(a, v)
 
+def searchsorted_left(a, v):
+    return np.searchsorted(a, v, side='left')
+
+def searchsorted_right(a, v):
+    return np.searchsorted(a, v, side='right')
+
 def digitize(*args):
     return np.digitize(*args)
 
@@ -312,9 +318,23 @@ class TestNPFunctions(TestCase):
         pyfunc = searchsorted
         cfunc = jit(nopython=True)(pyfunc)
 
+        pyfunc_left = searchsorted_left
+        cfunc_left = jit(nopython=True)(pyfunc_left)
+
+        pyfunc_right = searchsorted_right
+        cfunc_right = jit(nopython=True)(pyfunc_right)
+
         def check(a, v):
             expected = pyfunc(a, v)
             got = cfunc(a, v)
+            self.assertPreciseEqual(expected, got)
+
+            expected = pyfunc_left(a, v)
+            got = cfunc_left(a, v)
+            self.assertPreciseEqual(expected, got)
+
+            expected = pyfunc_right(a, v)
+            got = cfunc_right(a, v)
             self.assertPreciseEqual(expected, got)
 
         # First with integer values (no NaNs)
@@ -344,6 +364,20 @@ class TestNPFunctions(TestCase):
                 check(a, v)
             # Sequence values
             check(a, list(values))
+
+        # nonsense value for 'side' raises TypingError
+        def bad_side(a, v):
+            return np.searchsorted(a, v, side='nonsense')
+        cfunc = jit(nopython=True)(bad_side)
+        with self.assertTypingError():
+            cfunc([1,2], 1)
+
+        # non-constant value for 'side' raises TypingError
+        def nonconst_side(a, v, side='left'):
+            return np.searchsorted(a, v, side=side)
+        cfunc = jit(nopython=True)(nonconst_side)
+        with self.assertTypingError():
+            cfunc([1,2], 1, side='right')
 
     def test_digitize(self):
         pyfunc = digitize
