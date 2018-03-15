@@ -7,9 +7,7 @@ the pure-C implementation in numpy.
 import numpy as np
 from collections import namedtuple
 
-from numba.extending import register_jitable
-
-
+# Array size smaller than this will be sorted by insertion sort
 SMALL_MERGESORT = 20
 
 
@@ -20,10 +18,14 @@ MergesortImplementation = namedtuple('MergesortImplementation', [
 
 def make_mergesort_impl(wrap, lt=None, is_argsort=False):
     kwargs_lite = dict(no_cpython_wrapper=True, _nrt=False)
+
+    # The less than
     if lt is None:
         @wrap(**kwargs_lite)
         def lt(a, b):
             return a < b
+    else:
+        lt = wrap(**kwargs_lite)(lt)
 
     if is_argsort:
         @wrap(**kwargs_lite)
@@ -36,6 +38,18 @@ def make_mergesort_impl(wrap, lt=None, is_argsort=False):
 
     @wrap(**kwargs_lite)
     def argmergesort_inner(arr, vals, ws):
+        """The actual mergesort function
+
+        Parameters
+        ----------
+        arr : array [read+write]
+            The values being sorted inplace.  For argsort, this is the
+            indices.
+        vals : array [readonly]
+            ``None`` for normal sort.  In argsort, this is the actual array values.
+        ws : array [write]
+            The workspace.  Must be of size ``arr.size // 2``
+        """
         if arr.size > SMALL_MERGESORT:
             # Merge sort
             mid = arr.size // 2
@@ -82,6 +96,8 @@ def make_mergesort_impl(wrap, lt=None, is_argsort=False):
                     j -= 1
                 i += 1
 
+    # The top-level entry points
+
     @wrap(no_cpython_wrapper=True)
     def mergesort(arr):
         "Inplace"
@@ -94,7 +110,7 @@ def make_mergesort_impl(wrap, lt=None, is_argsort=False):
     def argmergesort(arr):
         "Out-of-place"
         idxs = np.arange(arr.size)
-        ws = np.empty(arr.size // 2, dtype=arr.dtype)
+        ws = np.empty(arr.size // 2, dtype=idxs.dtype)
         argmergesort_inner(idxs, arr, ws)
         return idxs
 
