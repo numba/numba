@@ -19,6 +19,8 @@ no_pyobj_flags.set('nrt')
 def array_reshape(arr, newshape):
     return arr.reshape(newshape)
 
+def numpy_array_reshape(arr, newshape):
+    return np.reshape(arr, newshape)
 
 def flatten_array(a):
     return a.flatten()
@@ -101,41 +103,60 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
     @tag('important')
     def test_array_reshape(self):
-        pyfunc = array_reshape
-        def run(arr, shape):
-            cres = self.ccache.compile(pyfunc, (typeof(arr), typeof(shape)))
+        pyfuncs_to_use = [array_reshape, numpy_array_reshape]
+
+        def from_generic(pyfuncs_to_use):
+            def decorator(func):
+                def result(*args, **kwargs):
+                    return (func(pyfunc, *args, **kwargs) for pyfunc in pyfuncs_to_use)
+                return result
+            return decorator
+
+        def generic_run(pyfunc, arr, shape):
+            cres = compile_isolated(pyfunc, (typeof(arr), typeof(shape)))
+            # cres = self.ccache.compile(pyfunc, (typeof(arr), typeof(shape)))
             return cres.entry_point(arr, shape)
-        def check(arr, shape):
+
+        @from_generic(pyfuncs_to_use)
+        def check(pyfunc, arr, shape):
             expected = pyfunc(arr, shape)
             self.memory_leak_setup()
-            got = run(arr, shape)
+            got = generic_run(pyfunc, arr, shape)
             self.assertPreciseEqual(got, expected)
             del got
             self.memory_leak_teardown()
-        def check_only_shape(arr, shape, expected_shape):
+
+        @from_generic(pyfuncs_to_use)
+        def check_only_shape(pyfunc, arr, shape, expected_shape):
             # Only check Numba result to avoid Numpy bugs
             self.memory_leak_setup()
-            got = run(arr, shape)
+            got = generic_run(pyfunc, arr, shape)
             self.assertEqual(got.shape, expected_shape)
             self.assertEqual(got.size, arr.size)
             del got
             self.memory_leak_teardown()
-        def check_err_shape(arr, shape):
+
+        @from_generic(pyfuncs_to_use)
+        def check_err_shape(pyfunc, arr, shape):
             with self.assertRaises(NotImplementedError) as raises:
-                run(arr, shape)
+                generic_run(pyfunc, arr, shape)
             self.assertEqual(str(raises.exception),
                              "incompatible shape for array")
-        def check_err_size(arr, shape):
+
+        @from_generic(pyfuncs_to_use)
+        def check_err_size(pyfunc, arr, shape):
             with self.assertRaises(ValueError) as raises:
-                run(arr, shape)
+                generic_run(pyfunc, arr, shape)
             self.assertEqual(str(raises.exception),
                              "total size of new array must be unchanged")
 
-        def check_err_multiple_negative(arr, shape):
+        @from_generic(pyfuncs_to_use)
+        def check_err_multiple_negative(pyfunc, arr, shape):
             with self.assertRaises(ValueError) as raises:
-                run(arr, shape)
+                generic_run(pyfunc, arr, shape)
             self.assertEqual(str(raises.exception),
                              "multiple negative shape values")
+
 
         # C-contiguous
         arr = np.arange(24)
