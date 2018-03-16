@@ -356,6 +356,10 @@ class Numpy_method_redirection(AbstractTemplate):
                 def sum_stub(arr, axis):
                     pass
                 pysig = utils.pysignature(sum_stub)
+            elif self.method_name == 'argsort':
+                def argsort_stub(arr, kind='quicksort'):
+                    pass
+                pysig = utils.pysignature(argsort_stub)
             else:
                 fmt = "numba doesn't support kwarg for {}"
                 raise TypingError(fmt.format(self.method_name))
@@ -376,7 +380,7 @@ def _numpy_redirect(fname):
                dict(key=numpy_function, method_name=fname))
     infer_global(numpy_function, types.Function(cls))
     # special case literal support for 'sum'
-    if fname == 'sum':
+    if fname in ['sum', 'argsort']:
         cls.support_literals = True
 
 for func in ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',

@@ -26,7 +26,7 @@ from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
 from numba.extending import register_jitable
-from . import quicksort, slicing
+from . import quicksort, mergesort, slicing
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
@@ -4554,24 +4554,33 @@ _sorts = {}
 def lt_floats(a, b):
     return math.isnan(b) or a < b
 
-def get_sort_func(is_float, is_argsort=False):
+def get_sort_func(kind, is_float, is_argsort=False):
     """
     Get a sort implementation of the given kind.
     """
-    key = is_float, is_argsort
+    key = kind, is_float, is_argsort
     try:
         return _sorts[key]
     except KeyError:
-        sort = quicksort.make_jit_quicksort(lt=lt_floats if is_float else None,
-                                            is_argsort=is_argsort)
-        func = _sorts[key] = sort.run_quicksort
+        if kind == 'quicksort':
+            sort = quicksort.make_jit_quicksort(
+                lt=lt_floats if is_float else None,
+                is_argsort=is_argsort)
+            func = sort.run_quicksort
+        elif kind == 'mergesort':
+            sort = mergesort.make_jit_mergesort(
+                lt=lt_floats if is_float else None,
+                is_argsort=is_argsort)
+            func = sort.run_mergesort
+        _sorts[key] = func
         return func
 
 
 @lower_builtin("array.sort", types.Array)
 def array_sort(context, builder, sig, args):
     arytype = sig.args[0]
-    sort_func = get_sort_func(is_float=isinstance(arytype.dtype, types.Float))
+    sort_func = get_sort_func(kind='quicksort',
+                              is_float=isinstance(arytype.dtype, types.Float))
 
     def array_sort_impl(arr):
         # Note we clobber the return value
@@ -4589,17 +4598,21 @@ def np_sort(context, builder, sig, args):
 
     return context.compile_internal(builder, np_sort_impl, sig, args)
 
-@lower_builtin("array.argsort", types.Array)
-@lower_builtin(np.argsort, types.Array)
+@lower_builtin("array.argsort", types.Array, types.Const)
+@lower_builtin(np.argsort, types.Array, types.Const)
 def array_argsort(context, builder, sig, args):
-    arytype = sig.args[0]
-    sort_func = get_sort_func(is_float=isinstance(arytype.dtype, types.Float),
+    arytype, kind = sig.args
+    sort_func = get_sort_func(kind=kind.value,
+                              is_float=isinstance(arytype.dtype, types.Float),
                               is_argsort=True)
 
     def array_argsort_impl(arr):
         return sort_func(arr)
 
-    return context.compile_internal(builder, array_argsort_impl, sig, args)
+    innersig = sig.replace(args=sig.args[:1])
+    innerargs = args[:1]
+    return context.compile_internal(builder, array_argsort_impl,
+                                    innersig, innerargs)
 
 
 # -----------------------------------------------------------------------------
