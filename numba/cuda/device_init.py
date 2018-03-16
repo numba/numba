@@ -4,7 +4,7 @@ from __future__ import print_function, absolute_import, division
 from .stubs import (threadIdx, blockIdx, blockDim, gridDim, syncthreads,
                     shared, local, const, grid, gridsize, atomic,
                     threadfence_block, threadfence_system,
-                    threadfence)
+                    threadfence, popc)
 from .cudadrv.error import CudaSupportError
 from .cudadrv import nvvm
 from . import initialize

@@ -59,6 +59,10 @@ def intrinsic_forloop_step(c):
             c[y, x] = x + y
 
 
+def simple_popc(ary, c):
+    ary[0] = cuda.popc(c)
+
+
 class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
     def test_simple_threadidx(self):
         compiled = cuda.jit("void(int32[:])")(simple_threadidx)
@@ -182,6 +186,18 @@ class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
         foo[(4, 3, 2), (3, 2, 4)](arr)
 
         self.assertTrue(np.all(arr))
+
+    def test_popc_u4(self):
+        compiled = cuda.jit("void(int32[:], uint32)")(simple_popc)
+        ary = np.zeros(1, dtype=np.int32)
+        compiled(ary, 0xF0)
+        self.assertTrue(ary[0] == 4)
+
+    def test_popc_u8(self):
+        compiled = cuda.jit("void(int32[:], uint64)")(simple_popc)
+        ary = np.zeros(1, dtype=np.int32)
+        compiled(ary, 0xF00000000000)
+        self.assertTrue(ary[0] == 4)
 
 
 if __name__ == '__main__':

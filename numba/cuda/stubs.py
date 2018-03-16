@@ -243,6 +243,17 @@ def local_array(shape, dtype):
     return ir.Intrinsic(fname, sig, args=(shape, dtype))
 
 
+class popc(Stub):
+    """
+    popc(val)
+
+    Returns the number of set bits in the given val.
+
+    Supported on uint32 & uint64 operands only.
+
+    """
+
+
 class local(Stub):
     '''
     Local memory namespace.

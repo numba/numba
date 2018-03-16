@@ -244,6 +244,24 @@ def ptx_threadfence_device(context, builder, sig, args):
     return context.get_dummy_value()
 
 
+@lower(stubs.popc, types.u4)
+def ptx_popc_u4(context, builder, sig, args):
+    """
+    LLVM IR implementation as suggested by `IntrinsicsNVVM.td`
+    """
+    return builder.ctpop(args[0])
+
+
+@lower(stubs.popc, types.u8)
+def ptx_popc_u8(context, builder, sig, args):
+    """
+    LLVM IR implementation as suggested by `IntrinsicsNVVM.td`
+    """
+    return builder.trunc(
+        builder.ctpop(args[0]),
+        Type.int(32))
+
+
 def _normalize_indices(context, builder, indty, inds):
     """
     Convert integer indices into tuple of intp

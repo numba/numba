@@ -106,6 +106,15 @@ class Cuda_threadfence_system(ConcreteTemplate):
 
 
 @intrinsic
+class Cuda_popc(ConcreteTemplate):
+    key = cuda.popc
+    cases = [
+        signature(types.int32, types.uint32),
+        signature(types.int32, types.uint64),
+    ]
+
+
+@intrinsic
 class Cuda_atomic_add(AbstractTemplate):
     key = cuda.atomic.add
 
@@ -282,6 +291,9 @@ class CudaModuleTemplate(AttributeTemplate):
 
     def resolve_shared(self, mod):
         return types.Module(cuda.shared)
+
+    def resolve_popc(self, mod):
+        return types.Function(Cuda_popc)
 
     def resolve_syncthreads(self, mod):
         return types.Function(Cuda_syncthreads)

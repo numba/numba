@@ -196,6 +196,9 @@ class FakeCUDAModule(object):
         # No-op
         pass
 
+    def popc(self, val):
+        return bin(val).count("1")
+
     def grid(self, n):
         bdim = self.blockDim
         bid = self.blockIdx
