@@ -191,13 +191,13 @@ class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
         compiled = cuda.jit("void(int32[:], uint32)")(simple_popc)
         ary = np.zeros(1, dtype=np.int32)
         compiled(ary, 0xF0)
-        self.assertTrue(ary[0] == 4)
+        self.assertEquals(ary[0], 4)
 
     def test_popc_u8(self):
         compiled = cuda.jit("void(int32[:], uint64)")(simple_popc)
         ary = np.zeros(1, dtype=np.int32)
         compiled(ary, 0xF00000000000)
-        self.assertTrue(ary[0] == 4)
+        self.assertEquals(ary[0], 4)
 
 
 if __name__ == '__main__':
