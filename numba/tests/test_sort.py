@@ -9,12 +9,13 @@ import sys
 import numpy as np
 
 from numba.compiler import compile_isolated, Flags
-from numba import jit, types, utils
+from numba import jit, types, utils, njit
 import numba.unittest_support as unittest
 from numba import testing
 from .support import TestCase, MemoryLeakMixin, tag
 
 from numba.targets.quicksort import make_py_quicksort, make_jit_quicksort
+from numba.targets.mergesort import make_jit_mergesort
 from .timsort import make_py_timsort, make_jit_timsort, MergeRun
 
 
@@ -895,6 +896,31 @@ class TestPythonSort(TestCase):
             got = cfunc(orig, b)
             self.assertPreciseEqual(got, expected)
             self.assertNotEqual(list(orig), got)   # sanity check
+
+
+class TestMergeSort(unittest.TestCase):
+    def setUp(self):
+        np.random.seed(321)
+
+    def check_argsort_stable(self, sorter, low, high, count):
+        # make data with high possibility of duplicated key
+        data = np.random.randint(low, high, count)
+        expect = np.argsort(data, kind='mergesort')
+        got = sorter(data)
+        np.testing.assert_equal(expect, got)
+
+    def test_argsort_stable(self):
+        arglist = [
+            (-2, 2, 5),
+            (-5, 5, 10),
+            (0, 10, 101),
+            (0, 100, 1003),
+        ]
+        imp = make_jit_mergesort(is_argsort=True)
+        toplevel = imp.run_mergesort
+        sorter = njit(lambda arr: toplevel(arr))
+        for args in arglist:
+            self.check_argsort_stable(sorter, *args)
 
 
 if __name__ == '__main__':
