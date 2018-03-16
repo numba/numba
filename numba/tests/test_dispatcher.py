@@ -16,6 +16,7 @@ from numba import unittest_support as unittest
 from numba import utils, jit, generated_jit, types, typeof
 from numba import config
 from numba import _dispatcher
+from numba.compiler import compile_isolated
 from numba.errors import NumbaWarning
 from .support import (TestCase, tag, temp_directory, import_dynamic,
                       override_env_config, capture_cache_log)
@@ -1362,6 +1363,31 @@ class TestDispatcherFunctionBoundaries(TestCase):
             foo(fn)
         self.assertRegexpMatches(str(raises.exception),
                                  "cannot convert native .* to Python object")
+
+
+class TestBoxingDefaultError(unittest.TestCase):
+    # Testing default error at boxing/unboxing
+    def test_unbox_runtime_error(self):
+        # Dummy type has no unbox support
+        def foo(x):
+            pass
+        cres = compile_isolated(foo, (types.Dummy("dummy_type"),))
+        with self.assertRaises(TypeError) as raises:
+            # Can pass in whatever and the unbox logic will always raise
+            # without checking the input value.
+            cres.entry_point(None)
+        self.assertEqual(str(raises.exception), "can't unbox dummy_type type")
+
+    def test_box_runtime_error(self):
+        def foo():
+            return unittest  # Module type has no boxing logic
+        cres = compile_isolated(foo, ())
+        with self.assertRaises(TypeError) as raises:
+            # Can pass in whatever and the unbox logic will always raise
+            # without checking the input value.
+            cres.entry_point()
+        pat = "cannot convert native Module.* to Python object"
+        self.assertRegexpMatches(str(raises.exception), pat)
 
 
 if __name__ == '__main__':
