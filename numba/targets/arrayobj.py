@@ -1480,6 +1480,12 @@ def array_transpose_vararg(context, builder, sig, args):
     new_sig, new_args = vararg_to_tuple(context, builder, sig, args)
     return array_transpose_tuple(context, builder, new_sig, new_args)
 
+@overload(np.transpose)
+def numpy_transpose(a):
+    def np_transpose_impl(a):
+        return a.transpose()
+    return np_transpose_impl
+
 
 @lower_getattr(types.Array, 'T')
 def array_T(context, builder, typ, value):
