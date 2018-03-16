@@ -1364,6 +1364,28 @@ class TestDispatcherFunctionBoundaries(TestCase):
         self.assertRegexpMatches(str(raises.exception),
                                  "cannot convert native .* to Python object")
 
+    def test_dispatcher_in_sequence_arg(self):
+        @jit(nopython=True)
+        def one(x):
+            return x + 1
+
+        @jit(nopython=True)
+        def two(x):
+            return one(one(x))
+
+        @jit(nopython=True)
+        def three(x):
+            return one(one(one(x)))
+
+        @jit(nopython=True)
+        def choose(fns, x):
+            return fns[0](x), fns[1](x), fns[2](x)
+
+        # Tuple case
+        self.assertEqual(choose((one, two, three), 1), (2, 3, 4))
+        # List case
+        self.assertEqual(choose([one, one, one], 1), (2, 2, 2))
+
 
 class TestBoxingDefaultError(unittest.TestCase):
     # Testing default error at boxing/unboxing
