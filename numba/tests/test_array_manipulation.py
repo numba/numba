@@ -16,6 +16,27 @@ no_pyobj_flags = Flags()
 no_pyobj_flags.set('nrt')
 
 
+def from_generic(pyfuncs_to_use):
+    """Decorator for generic check functions. Executes the check function with as first argument an item from the
+        iterator pyfuncs_to_use. Example:
+
+        @from_generic(numpy_array_reshape, array_reshape)
+        def check_only_shape(pyfunc, arr, shape, expected_shape):
+            # Only check Numba result to avoid Numpy bugs
+            self.memory_leak_setup()
+            got = generic_run(pyfunc, arr, shape)
+            self.assertEqual(got.shape, expected_shape)
+            self.assertEqual(got.size, arr.size)
+            del got
+            self.memory_leak_teardown()
+    """
+    def decorator(func):
+        def result(*args, **kwargs):
+            return (func(pyfunc, *args, **kwargs) for pyfunc in pyfuncs_to_use)
+        return result
+    return decorator
+
+
 def array_reshape(arr, newshape):
     return arr.reshape(newshape)
 
@@ -42,6 +63,10 @@ def transpose_array(a):
     return a.transpose()
 
 
+def numpy_transpose_array(a):
+    return np.transpose(a)
+
+
 def squeeze_array(a):
     return a.squeeze()
 
@@ -66,6 +91,7 @@ def as_strided1(a):
     # as_strided() with implicit shape
     strides = (a.strides[0] // 2,) + a.strides[1:]
     return np.lib.stride_tricks.as_strided(a, strides=strides)
+
 
 def as_strided2(a):
     # Rolling window example as in https://github.com/numba/numba/issues/1884
@@ -104,13 +130,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
     @tag('important')
     def test_array_reshape(self):
         pyfuncs_to_use = [array_reshape, numpy_array_reshape]
-
-        def from_generic(pyfuncs_to_use):
-            def decorator(func):
-                def result(*args, **kwargs):
-                    return (func(pyfunc, *args, **kwargs) for pyfunc in pyfuncs_to_use)
-                return result
-            return decorator
 
         def generic_run(pyfunc, arr, shape):
             cres = compile_isolated(pyfunc, (typeof(arr), typeof(shape)))
@@ -412,16 +431,19 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.test_ravel_array_size(flags=no_pyobj_flags)
 
     def test_transpose_array(self, flags=enable_pyobj_flags):
-        a = np.arange(9).reshape(3, 3)
+        @from_generic([transpose_array, numpy_transpose_array])
+        def check(pyfunc):
+            a = np.arange(9).reshape(3, 3)
 
-        pyfunc = transpose_array
-        arraytype1 = typeof(a)
-        cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
-        cfunc = cr.entry_point
+            arraytype1 = typeof(a)
+            cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
+            cfunc = cr.entry_point
 
-        expected = pyfunc(a)
-        got = cfunc(a)
-        np.testing.assert_equal(expected, got)
+            expected = pyfunc(a)
+            got = cfunc(a)
+            np.testing.assert_equal(expected, got)
+
+        check()
 
     def test_transpose_array_npm(self):
         self.test_transpose_array(flags=no_pyobj_flags)
