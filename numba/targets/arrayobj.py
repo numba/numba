@@ -1386,6 +1386,14 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 def array_transpose(context, builder, sig, args):
     return array_T(context, builder, sig.args[0], args[0])
 
+
+@overload(np.transpose)
+def numpy_transpose(a):
+    def np_transpose_impl(a):
+        return a.transpose()
+    return np_transpose_impl
+
+
 @lower_getattr(types.Array, 'T')
 def array_T(context, builder, typ, value):
     if typ.ndim <= 1:
