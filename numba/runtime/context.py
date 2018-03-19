@@ -89,6 +89,14 @@ class NRTContext(object):
             assert align.type == u32, "align must be a uint32"
         return builder.call(fn, [size, align])
 
+    def meminfo_set_dtor(self, builder, mi, dtor, dtor_info):
+        self._require_nrt()
+
+        mod = builder.module
+        fnty = ir.FunctionType(ir.VoidType(), [cgutils.voidptr_t] * 3)
+        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_set_dtor")
+        return builder.call(fn, [mi, dtor, dtor_info])
+
     def meminfo_new_varsize(self, builder, size):
         """
         Allocate a MemInfo pointing to a variable-sized data area.  The area

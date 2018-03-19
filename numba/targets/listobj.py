@@ -100,7 +100,7 @@ class _ListPayloadMixin(object):
         overflow = self._builder.icmp_signed('>=', idx, size)
         with builder.if_then(overflow, likely=False):
             builder.store(size, idxptr)
-            
+
         return builder.load(idxptr)
 
     def guard_index(self, idx, msg):
@@ -119,8 +119,22 @@ class _ListPayloadMixin(object):
         return slicing.fix_slice(self._builder, slice, self.size)
 
 
+class ListPayloadAccessor(_ListPayloadMixin):
+    def __init__(self, context, builder, list_type, payload_ptr):
+        self._context = context
+        self._builder = builder
+        self._ty = list_type
+        self._datamodel = context.data_model_manager[list_type.dtype]
+        payload_type = types.ListPayload(list_type)
+        ptrty = context.get_data_type(payload_type).as_pointer()
+        payload_ptr = builder.bitcast(payload_ptr, ptrty)
+        payload = context.make_data_helper(builder, payload_type,
+                                           ref=payload_ptr)
+        self._payload = payload
+
+
 class ListInstance(_ListPayloadMixin):
-    
+
     def __init__(self, context, builder, list_type, list_val):
         self._context = context
         self._builder = builder
@@ -161,8 +175,11 @@ class ListInstance(_ListPayloadMixin):
     def setitem(self, idx, val):
         ptr = self._gep(idx)
         data_item = self._datamodel.as_data(self._builder, val)
+        cgutils.printf(self._builder, 'setitem ptr %p | base %p\n', ptr, self.data)
         self._builder.store(data_item, ptr)
         self.set_dirty(True)
+        # Incref the underlying data
+        self._context.nrt.incref(self._builder, self.dtype, val)
 
     def inititem(self, idx, val):
         ptr = self._gep(idx)
@@ -212,6 +229,42 @@ class ListInstance(_ListPayloadMixin):
                     self._payload.size = ir.Constant(intp_t, 0)  # for safety
                     self._payload.dirty = cgutils.false_bit
 
+                    # TODO: SET DTOR
+                    def make_dtor(mod):
+                        # Declare dtor
+                        fnty = ir.FunctionType(ir.VoidType(), [cgutils.voidptr_t])
+                        fn = mod.get_or_insert_function(fnty, name='.dtor.list.{}'.format(self.dtype))
+                        if not fn.is_declaration:
+                            # End early if the dtor is already defined
+                            return fn
+                        fn.linkage = 'internal'
+                        # Populate the dtor
+                        builder = ir.IRBuilder(fn.append_basic_block())
+                        base_ptr = fn.args[0]  # void*
+
+                        cgutils.printf(builder, "DTOR PAYLOAD BASE %p\n", base_ptr)
+
+                        # get payload
+                        payload = ListPayloadAccessor(context, builder, self._ty, base_ptr)
+
+                        # Loop over all data to decref
+                        intp = payload.size.type
+                        start = intp(0)
+                        stop = payload.size
+                        step = intp(1)
+                        with cgutils.for_range_slice(
+                                builder, start, stop, step, intp=intp) as (idx, _):
+                            val = payload.getitem(0)
+
+                            context.nrt.decref(builder, self.dtype, val)
+                        builder.ret_void()
+                        return fn
+
+                    dtor = make_dtor(builder.module)
+                    dtor_fnptr = builder.bitcast(dtor, cgutils.voidptr_t)
+
+                    nullptr = cgutils.get_null_value(cgutils.voidptr_t)
+                    context.nrt.meminfo_set_dtor(builder, self._list.meminfo, dtor_fnptr, nullptr)
         return builder.load(ok), self
 
     @classmethod
@@ -310,7 +363,7 @@ class ListInstance(_ListPayloadMixin):
 
 
 class ListIterInstance(_ListPayloadMixin):
-    
+
     def __init__(self, context, builder, iter_type, iter_val):
         self._context = context
         self._builder = builder
@@ -488,7 +541,7 @@ def setitem_list(context, builder, sig, args):
             with cgutils.for_range(builder, src_size) as loop:
                 value = src.getitem(loop.index)
                 dest.setitem(builder.add(loop.index, dest_offset), value)
-        
+
         with otherwise:
             with builder.if_then(builder.icmp_signed('!=', size_delta, zero)):
                 msg = "cannot resize extended list slice with step != 1"
@@ -518,7 +571,7 @@ def setitem_list(context, builder, sig, args):
 
     zero = ir.Constant(slice_len.type, 0)
     one = ir.Constant(slice_len.type, 1)
-    
+
     with builder.if_then(builder.icmp_signed('!=', slice.step, one), likely=False):
         msg = "unsupported del list[start:stop:step] with step != 1"
         context.call_conv.return_user_exc(builder, NotImplementedError, (msg,))

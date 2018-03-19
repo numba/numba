@@ -9,7 +9,7 @@ from numba import cgutils, types
 from llvmlite import ir
 
 # Flag to enable debug print in NRT_incref and NRT_decref
-_debug_print = False
+_debug_print = True
 
 _word_type = ir.IntType(MACHINE_BITS)
 _pointer_type = ir.PointerType(ir.IntType(8))
