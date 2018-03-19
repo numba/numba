@@ -262,6 +262,39 @@ def ptx_popc_u8(context, builder, sig, args):
         Type.int(32))
 
 
+@lower(stubs.brev, types.u4)
+@lower(stubs.brev, types.u8)
+def ptx_brev(context, builder, sig, args):
+    """
+    LLVM IR implementation as suggested by `IntrinsicsNVVM.td`
+    """
+    return builder.bitreverse(args[0])
+
+
+@lower(stubs.clz, types.i4)
+@lower(stubs.clz, types.u4)
+def ptx_clz_i4(context, builder, sig, args):
+    """
+    LLVM IR implementation as suggested by `IntrinsicsNVVM.td`
+    """
+    return builder.ctlz(
+        args[0],
+        context.get_constant(Type.int(1), 0))
+
+
+@lower(stubs.clz, types.i8)
+@lower(stubs.clz, types.u8)
+def ptx_clz_u8(context, builder, sig, args):
+    """
+    LLVM IR implementation as suggested by `IntrinsicsNVVM.td`
+    """
+    return builder.trunc(
+        builder.ctlz(
+            args[0],
+            context.get_constant(Type.int(1), 0)),
+        Type.int(32))
+
+
 def _normalize_indices(context, builder, indty, inds):
     """
     Convert integer indices into tuple of intp

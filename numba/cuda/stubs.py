@@ -243,17 +243,6 @@ def local_array(shape, dtype):
     return ir.Intrinsic(fname, sig, args=(shape, dtype))
 
 
-class popc(Stub):
-    """
-    popc(val)
-
-    Returns the number of set bits in the given val.
-
-    Supported on uint32 & uint64 operands only.
-
-    """
-
-
 class local(Stub):
     '''
     Local memory namespace.
@@ -295,6 +284,42 @@ class const(Stub):
     Create a const array from *ary*. The resulting const array will have the
     same shape, type, and values as *ary*.
     '''
+
+#-------------------------------------------------------------------------------
+# bit manipulation
+
+class popc(Stub):
+    """
+    popc(val)
+
+    Returns the number of set bits in the given val.
+
+    Supported on uint32 & uint64 operands only.
+
+    """
+
+
+class brev(Stub):
+    """
+    brev(val)
+
+    Reverse the bitpattern of an integer value; for example 0b10110110
+    becomes 0b01101101.
+
+    Supported on uint32 & uint64 operands only.
+
+    """
+
+
+class clz(Stub):
+    """
+    clz(val)
+
+    Counts the number of leading zeros in a variable.
+
+    Supported on int32 & int64 operands only.
+
+    """
 
 #-------------------------------------------------------------------------------
 # atomic

@@ -2,7 +2,7 @@ from __future__ import print_function, absolute_import, division
 
 import numpy as np
 from numba import cuda, int32, float32
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
 
 
 def simple_threadidx(ary):
@@ -61,6 +61,14 @@ def intrinsic_forloop_step(c):
 
 def simple_popc(ary, c):
     ary[0] = cuda.popc(c)
+
+
+def simple_brev(ary, c):
+    ary[0] = cuda.brev(c)
+
+
+def simple_clz(ary, c):
+    ary[0] = cuda.clz(c)
 
 
 class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
@@ -198,6 +206,44 @@ class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
         ary = np.zeros(1, dtype=np.int32)
         compiled(ary, 0xF00000000000)
         self.assertEquals(ary[0], 4)
+
+    def test_brev_u4(self):
+        compiled = cuda.jit("void(uint32[:], uint32)")(simple_brev)
+        ary = np.zeros(1, dtype=np.uint32)
+        compiled(ary, 0x0000_30F0)
+        self.assertEquals(ary[0], 0x0F0C_0000)
+
+    @skip_on_cudasim('only get given a Python "int", assumes 32 bits')
+    def test_brev_u8(self):
+        compiled = cuda.jit("void(uint64[:], uint64)")(simple_brev)
+        ary = np.zeros(1, dtype=np.uint64)
+        compiled(ary, 0x0000_30F0_0000_30F0)
+        self.assertEquals(ary[0], 0x0F0C_0000_0F0C_0000)
+
+    def test_clz_u4(self):
+        compiled = cuda.jit("void(int32[:], int32)")(simple_clz)
+        ary = np.zeros(1, dtype=np.int32)
+        compiled(ary, 0x0010_0000)
+        self.assertEquals(ary[0], 11)
+
+    def test_clz_u4_1s(self):
+        compiled = cuda.jit("void(int32[:], int32)")(simple_clz)
+        ary = np.zeros(1, dtype=np.int32)
+        compiled(ary, 0xFFFF_FFFF)
+        self.assertEquals(ary[0], 0)
+
+    def test_clz_u4_0s(self):
+        compiled = cuda.jit("void(int32[:], int32)")(simple_clz)
+        ary = np.zeros(1, dtype=np.int32)
+        compiled(ary, 0x0)
+        self.assertEquals(ary[0], 32, "CUDA semantics")
+
+    @skip_on_cudasim('only get given a Python "int", assumes 32 bits')
+    def test_clz_u8(self):
+        compiled = cuda.jit("void(int32[:], int64)")(simple_clz)
+        ary = np.zeros(1, dtype=np.int32)
+        compiled(ary, 0x0000_0000_0010_000)
+        self.assertEquals(ary[0], 43)
 
 
 if __name__ == '__main__':

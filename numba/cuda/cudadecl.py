@@ -115,6 +115,24 @@ class Cuda_popc(ConcreteTemplate):
 
 
 @intrinsic
+class Cuda_brev(ConcreteTemplate):
+    key = cuda.brev
+    cases = [
+        signature(types.uint32, types.uint32),
+        signature(types.uint64, types.uint64),
+    ]
+
+
+@intrinsic
+class Cuda_clz(ConcreteTemplate):
+    key = cuda.clz
+    cases = [
+        signature(types.int32, types.uint32),
+        signature(types.int32, types.uint64),
+    ]
+
+
+@intrinsic
 class Cuda_atomic_add(AbstractTemplate):
     key = cuda.atomic.add
 
@@ -294,6 +312,12 @@ class CudaModuleTemplate(AttributeTemplate):
 
     def resolve_popc(self, mod):
         return types.Function(Cuda_popc)
+
+    def resolve_brev(self, mod):
+        return types.Function(Cuda_brev)
+
+    def resolve_clz(self, mod):
+        return types.Function(Cuda_clz)
 
     def resolve_syncthreads(self, mod):
         return types.Function(Cuda_syncthreads)
