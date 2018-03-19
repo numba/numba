@@ -376,11 +376,10 @@ class TestLists(MemoryLeakMixin, TestCase):
 
     def test_create_nested_list(self):
         pyfunc = create_nested_list
-        with self.assertTypingError():
-            cr = compile_isolated(pyfunc, (types.int32, types.int32, types.int32,
-                types.int32, types.int32, types.int32))
-            cfunc = cr.entry_point
-            self.assertEqual(cfunc(1, 2, 3, 4, 5, 6), pyfunc(1, 2, 3, 4, 5, 6))
+        cr = compile_isolated(pyfunc, (types.int32, types.int32, types.int32,
+                                       types.int32, types.int32, types.int32))
+        cfunc = cr.entry_point
+        self.assertEqual(cfunc(1, 2, 3, 4, 5, 6), pyfunc(1, 2, 3, 4, 5, 6))
 
     @testing.allow_interpreter_mode
     def test_list_comprehension(self):
@@ -448,7 +447,7 @@ class TestLists(MemoryLeakMixin, TestCase):
         pyfunc = list_insert
         cfunc = jit(nopython=True)(pyfunc)
         for n in [5, 40]:
-            indices = [0, 1, n - 2, n - 1, n + 1, -1, -2, -n + 3, -n - 1] 
+            indices = [0, 1, n - 2, n - 1, n + 1, -1, -2, -n + 3, -n - 1]
             for i in indices:
                 expected = pyfunc(n, i, 42)
                 self.assertPreciseEqual(cfunc(n, i, 42), expected)
