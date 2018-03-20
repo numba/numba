@@ -1007,7 +1007,7 @@ class TestCache(BaseCacheUsecasesTest):
             cmd = ['chattr', '+i', self.tempdir]
             # redirect stderr to stdout and use check_output as a noise sink
             subprocess.check_output(cmd, stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError:
+        except Exception:
             pass
         else:
             cmd = ['chattr', '-i', self.tempdir]
@@ -1030,7 +1030,7 @@ class TestCache(BaseCacheUsecasesTest):
             cmd = ['chattr', '+i', pycache]
             # redirect stderr to stdout and use check_output as a noise sink
             subprocess.check_output(cmd, stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError:
+        except Exception:
             pass
         else:
             cmd = ['chattr', '-i', pycache]
