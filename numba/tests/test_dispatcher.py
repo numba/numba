@@ -1002,6 +1002,17 @@ class TestCache(BaseCacheUsecasesTest):
         os.chmod(self.tempdir, 0o500)
         self.addCleanup(os.chmod, self.tempdir, old_perms)
 
+        # if run as root dir perms have no effect, so call chattr +i
+        try: # will fail if not root
+            cmd = ['chattr', '+i', self.tempdir]
+            # redirect stderr to stdout and use check_output as a noise sink
+            subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+        except subprocess.CalledProcessError:
+            pass
+        else:
+            cmd = ['chattr', '-i', self.tempdir]
+            self.addCleanup(subprocess.check_output, cmd, stderr=subprocess.STDOUT)
+
         self._test_pycache_fallback()
 
     @unittest.skipIf(os.name == "nt",
@@ -1013,6 +1024,17 @@ class TestCache(BaseCacheUsecasesTest):
         old_perms = os.stat(pycache).st_mode
         os.chmod(pycache, 0o500)
         self.addCleanup(os.chmod, pycache, old_perms)
+
+        # if run as root dir perms have no effect, so call chattr +i
+        try: # will fail if not root
+            cmd = ['chattr', '+i', pycache]
+            # redirect stderr to stdout and use check_output as a noise sink
+            subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+        except subprocess.CalledProcessError:
+            pass
+        else:
+            cmd = ['chattr', '-i', pycache]
+            self.addCleanup(subprocess.check_output, cmd, stderr=subprocess.STDOUT)
 
         self._test_pycache_fallback()
 
