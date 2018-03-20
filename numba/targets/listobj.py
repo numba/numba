@@ -174,6 +174,12 @@ class ListInstance(_ListPayloadMixin):
         if self._ty.reflected:
             self._payload.dirty = cgutils.true_bit if val else cgutils.false_bit
 
+    def clear_value(self, idx):
+        """Remove the value at the location
+        """
+        self.decref_value(self.getitem(idx))
+        self.zfill(idx, self._builder.add(idx, idx.type(1)))
+
     def setitem(self, idx, val, incref):
         # Decref old data
         self.decref_value(self.getitem(idx))
@@ -195,6 +201,8 @@ class ListInstance(_ListPayloadMixin):
 
     def zfill(self, start, stop):
         """Zero-fill the memory at index *start* to *stop*
+
+        *stop* MUST not be small than *start*.
         """
         builder = self._builder
         base = self._gep(start)
@@ -350,7 +358,6 @@ class ListInstance(_ListPayloadMixin):
             cgutils.guard_memory_error(context, builder, ptr,
                                        "cannot resize list")
             self._payload.allocated = new_allocated
-            self.zfill(self.size, new_allocated)
 
         context = self._context
         builder = self._builder
@@ -379,6 +386,7 @@ class ListInstance(_ListPayloadMixin):
                                         builder.add(new_size,
                                                     builder.ashr(new_size, two)))
             _payload_realloc(new_allocated)
+            self.zfill(self.size, new_allocated)
 
         self._payload.size = new_size
         self.set_dirty(True)
@@ -391,8 +399,8 @@ class ListInstance(_ListPayloadMixin):
         src_ptr = self._gep(src_idx)
         cgutils.raw_memmove(self._builder, dest_ptr, src_ptr,
                             count, itemsize=self._itemsize)
-        self.set_dirty(True)
 
+        self.set_dirty(True)
 
 class ListIterInstance(_ListPayloadMixin):
 
@@ -601,7 +609,6 @@ def delitem_list(context, builder, sig, args):
 
     slice_len = slicing.get_slice_length(builder, slice)
 
-    zero = ir.Constant(slice_len.type, 0)
     one = ir.Constant(slice_len.type, 1)
 
     with builder.if_then(builder.icmp_signed('!=', slice.step, one), likely=False):
@@ -611,6 +618,12 @@ def delitem_list(context, builder, sig, args):
     # Compute the real stop, e.g. for dest[2:0]
     start = slice.start
     real_stop = builder.add(start, slice_len)
+    # Decref the removed range
+    with cgutils.for_range_slice(
+            builder, start, real_stop, start.type(1)
+            ) as (idx, _):
+        inst.decref_value(inst.getitem(idx))
+
     # Size of the list tail, after the end of slice
     tail_size = builder.sub(inst.size, real_stop)
     inst.move(start, real_stop, tail_size)
@@ -949,6 +962,7 @@ def list_pop(context, builder, sig, args):
                        (IndexError, "pop from empty list"))
     n = builder.sub(n, ir.Constant(n.type, 1))
     res = inst.getitem(n)
+    inst.clear_value(n)
     inst.resize(n)
     return res
 

@@ -873,7 +873,7 @@ class TestListManagedElements(MemoryLeakMixin, TestCase):
         for a, b in zip(expect, got):
             self.assertPreciseEqual(a, b)
 
-    def test_unbox_passthru(self):
+    def test_reflect_passthru(self):
         def pyfunc(con):
             pass #con.append(np.arange(10))
 
@@ -887,9 +887,37 @@ class TestListManagedElements(MemoryLeakMixin, TestCase):
             expect=expect, got=got
             )
 
-    def test_unbox_modified(self):
+    def test_reflect_appended(self):
         def pyfunc(con):
             con.append(np.arange(10))
+
+        cfunc = jit(nopython=True)(pyfunc)
+        con = [np.arange(3), np.arange(5)]
+        expect = list(con)
+        pyfunc(expect)
+        got = list(con)
+        cfunc(got)
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
+
+    def test_reflect_setitem(self):
+        def pyfunc(con):
+            con[1] = np.arange(10)
+
+        cfunc = jit(nopython=True)(pyfunc)
+        con = [np.arange(3), np.arange(5)]
+        expect = list(con)
+        pyfunc(expect)
+        got = list(con)
+        cfunc(got)
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
+
+    def test_reflect_popped(self):
+        def pyfunc(con):
+            con.pop()
 
         cfunc = jit(nopython=True)(pyfunc)
         con = [np.arange(3), np.arange(5)]
@@ -979,6 +1007,57 @@ class TestListManagedElements(MemoryLeakMixin, TestCase):
         self.assert_list_element_precise_equal(
             expect=expect, got=got
             )
+
+    def test_pop(self):
+        def pyfunc():
+            con = []
+            for i in range(20):
+                con.append(np.arange(i + 1))
+            while len(con) > 2:
+                con.pop()
+            return con
+
+        cfunc = jit(nopython=True)(pyfunc)
+        expect = pyfunc()
+        got = cfunc()
+
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
+
+    def test_pop_loc(self):
+        def pyfunc():
+            con = []
+            for i in range(1000):
+                con.append(np.arange(i + 1))
+            while len(con) > 2:
+                con.pop(1)
+            return con
+
+        cfunc = jit(nopython=True)(pyfunc)
+        expect = pyfunc()
+        got = cfunc()
+
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
+
+    def test_del_range(self):
+        def pyfunc():
+            con = []
+            for i in range(20):
+                con.append(np.arange(i + 1))
+            del con[3:10]
+            return con
+
+        cfunc = jit(nopython=True)(pyfunc)
+        expect = pyfunc()
+        got = cfunc()
+
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
+
 
 
 if __name__ == '__main__':
