@@ -284,7 +284,7 @@ def ptx_clz_i4(context, builder, sig, args):
 
 @lower(stubs.clz, types.i8)
 @lower(stubs.clz, types.u8)
-def ptx_clz_u8(context, builder, sig, args):
+def ptx_clz_i8(context, builder, sig, args):
     """
     LLVM IR implementation as suggested by `IntrinsicsNVVM.td`
     """
