@@ -310,11 +310,8 @@ class TestArrayComprehension(unittest.TestCase):
         import numba.inline_closurecall as ic
         try:
             ic.enable_inline_arraycall = False
-            # test is expected to fail
-            msg = 'unsupported nested memory-managed object'
-            with self.assertRaises(LoweringError) as raises:
-                self.check(comp_nest_with_array_noinline, 5)
-            self.assertIn(msg, str(raises.exception))
+            self.check(comp_nest_with_array_noinline, 5,
+                       assert_allocate_list=True)
         finally:
             ic.enable_inline_arraycall = True
 
@@ -347,11 +344,8 @@ class TestArrayComprehension(unittest.TestCase):
         def comp_nest_with_array_conditional(n):
             l = np.array([[i * j for j in range(n)] for i in range(n) if i % 2 == 1])
             return l
-        # test is expected to fail
-        with self.assertRaises(LoweringError) as raises:
-            self.check(comp_nest_with_array_conditional, 5)
-        msg = 'unsupported nested memory-managed object'
-        self.assertIn(msg, str(raises.exception))
+        self.check(comp_nest_with_array_conditional, 5,
+                   assert_allocate_list=True)
 
     @tag('important')
     def test_comp_nest_with_dependency(self):
