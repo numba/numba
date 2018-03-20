@@ -1058,6 +1058,32 @@ class TestListManagedElements(MemoryLeakMixin, TestCase):
             expect=expect, got=got
             )
 
+    def test_list_of_list(self):
+        def pyfunc():
+            con = []
+            for i in range(10):
+                con.append([0] * i)
+            return con
+
+        cfunc = jit(nopython=True)(pyfunc)
+        expect = pyfunc()
+        got = cfunc()
+
+        self.assertEqual(expect, got)
+
+    def test_list_of_list_reflected(self):
+        def pyfunc(l1, l2):
+            l1.append(l2)
+            l1[-1].append(123)
+
+        cfunc = jit(nopython=True)(pyfunc)
+        l1 = [[0, 1], [2, 3]]
+        l2 = [4, 5]
+        expect = list(l1), list(l2)
+        got = list(l1), list(l2)
+        pyfunc(*expect)
+        cfunc(*got)
+        self.assertEqual(expect, got)
 
 
 if __name__ == '__main__':

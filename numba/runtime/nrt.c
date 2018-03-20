@@ -347,7 +347,6 @@ static void
 nrt_varsize_dtor(void *ptr, size_t size, void *info) {
     NRT_Debug(nrt_debug_print("nrt_buffer_dtor %p\n", ptr));
     if (info) {
-        printf("=== has custom dtor %p\n", info);
         typedef void dtor_fn_t(void *ptr);
         dtor_fn_t *dtor = info;
         dtor(ptr);
