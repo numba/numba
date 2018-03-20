@@ -5,6 +5,7 @@ import contextlib
 import itertools
 import math
 import sys
+import numpy as np
 
 from numba.compiler import compile_isolated, Flags
 from numba import jit, types
@@ -862,6 +863,47 @@ class TestListReflection(MemoryLeakMixin, TestCase):
         ids = [id(x) for x in l]
         cfunc(l)
         self.assertEqual([id(x) for x in l], ids)
+
+
+class TestListManagedElements(MemoryLeakMixin, TestCase):
+    "Test list containing objects that need refct"
+
+
+    def assert_list_element_precise_equal(self, expect, got):
+        self.assertEqual(len(expect), len(got))
+        for a, b in zip(expect, got):
+            self.assertPreciseEqual(a, b)
+
+    def test_append(self):
+        def pyfunc():
+            con = []
+            for i in range(300):
+                con.append(np.arange(i))
+            return con
+
+        cfunc = jit(nopython=True)(pyfunc)
+        expect = pyfunc()
+        got = cfunc()
+
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
+
+    def test_reassign_refct(self):
+        def pyfunc():
+            con = []
+            for i in range(5):
+                con.append(np.arange(2))
+            con[0] = np.arange(4)
+            return con
+
+        cfunc = jit(nopython=True)(pyfunc)
+        expect = pyfunc()
+        got = cfunc()
+
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
 
 
 if __name__ == '__main__':

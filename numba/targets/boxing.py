@@ -536,6 +536,8 @@ def box_list(typ, val, c):
 
             c.builder.store(obj, res)
 
+    # Clear the list-element dtor
+    list.clear_dtor()
     # Steal NRT ref
     c.context.nrt.decref(c.builder, typ, val)
     return c.builder.load(res)

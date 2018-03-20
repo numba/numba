@@ -302,13 +302,8 @@ void NRT_MemInfo_acquire(NRT_MemInfo *mi) {
 }
 
 
-void NRT_MemInfo_set_dtor(NRT_MemInfo *mi, NRT_dtor_function dtor, void *dtor_info)
+void NRT_MemInfo_set_dtor(NRT_MemInfo *mi, NRT_dtor_function dtor)
 {
-    printf("Set DTOR %p\n", mi);
-    printf("old dtor %p %p | new dtor %p %p\n",
-                    mi->dtor, mi->dtor_info,
-                    dtor, dtor_info);
-    // mi->dtor = dtor;
     mi->dtor_info = dtor;
 }
 
@@ -352,7 +347,7 @@ static void
 nrt_varsize_dtor(void *ptr, size_t size, void *info) {
     NRT_Debug(nrt_debug_print("nrt_buffer_dtor %p\n", ptr));
     if (info) {
-        printf("has custom dtor %p\n", info);
+        printf("=== has custom dtor %p\n", info);
         typedef void dtor_fn_t(void *ptr);
         dtor_fn_t *dtor = info;
         dtor(ptr);

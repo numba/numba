@@ -12,8 +12,7 @@ All functions described here are threadsafe.
 
 /* Debugging facilities - enabled at compile-time */
 /* #undef NDEBUG */
-#undef NDEBUG
-#if 1
+#if 0
 #   define NRT_Debug(X) X
 #else
 #   define NRT_Debug(X) if (0) { X; }
@@ -165,7 +164,7 @@ void NRT_MemInfo_release(NRT_MemInfo* mi);
  * Internal/Compiler API.
  * Set dtor
  */
-void NRT_MemInfo_set_dtor(NRT_MemInfo *mi, NRT_dtor_function dtor, void *dtor_info);
+void NRT_MemInfo_set_dtor(NRT_MemInfo *mi, NRT_dtor_function dtor);
 
 /*
  * Internal/Compiler API.
