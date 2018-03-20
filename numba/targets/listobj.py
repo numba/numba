@@ -115,9 +115,11 @@ class _ListPayloadMixin(object):
         return slicing.fix_slice(self._builder, slice, self.size)
 
     def incref_value(self, val):
+        "Incref an element value"
         self._context.nrt.incref(self._builder, self.dtype, val)
 
     def decref_value(self, val):
+        "Decref an element value"
         self._context.nrt.decref(self._builder, self.dtype, val)
 
 
@@ -243,7 +245,8 @@ class ListInstance(_ListPayloadMixin):
             builder.store(cgutils.false_bit, ok)
 
         with builder.if_then(builder.load(ok), likely=True):
-            meminfo = context.nrt.meminfo_new_varsize(builder, size=allocsize)
+            meminfo = context.nrt.meminfo_new_varsize_dtor(
+                builder, size=allocsize, dtor=self.get_dtor())
             with builder.if_else(cgutils.is_null(builder, meminfo),
                                  likely=False) as (if_error, if_ok):
                 with if_error:
@@ -254,8 +257,6 @@ class ListInstance(_ListPayloadMixin):
                     self._payload.allocated = nitems
                     self._payload.size = ir.Constant(intp_t, 0)  # for safety
                     self._payload.dirty = cgutils.false_bit
-                    # Set the element destructor
-                    self.set_dtor()
                     # Zero the allocated region
                     self.zfill(self.size.type(0), nitems)
 
@@ -290,22 +291,15 @@ class ListInstance(_ListPayloadMixin):
         builder.ret_void()
         return fn
 
-    def set_dtor(self):
-        """"Set the element dtor.
+    def get_dtor(self):
+        """"Get the element dtor function pointer as void pointer.
 
         It's safe to be called multiple times.
         """
         # Define and set the Dtor
         dtor = self.define_dtor()
         dtor_fnptr = self._builder.bitcast(dtor, cgutils.voidptr_t)
-        self._context.nrt.meminfo_set_dtor(self._builder, self._list.meminfo,
-                                           dtor_fnptr)
-
-    def clear_dtor(self):
-        """Clear the element dtor.
-        """
-        nil = cgutils.get_null_value(cgutils.voidptr_t)
-        self._context.nrt.meminfo_set_dtor(self._builder, self._list.meminfo, nil)
+        return dtor_fnptr
 
     @classmethod
     def allocate(cls, context, builder, list_type, nitems):

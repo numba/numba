@@ -531,13 +531,12 @@ def box_list(typ, val, c):
                                    likely=True):
                 with cgutils.for_range(c.builder, nitems) as loop:
                     item = list.getitem(loop.index)
+                    list.incref_value(item)
                     itemobj = c.box(typ.dtype, item)
                     c.pyapi.list_setitem(obj, loop.index, itemobj)
 
             c.builder.store(obj, res)
 
-    # Clear the list-element dtor
-    list.clear_dtor()
     # Steal NRT ref
     c.context.nrt.decref(c.builder, typ, val)
     return c.builder.load(res)

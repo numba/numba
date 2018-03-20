@@ -301,12 +301,6 @@ void NRT_MemInfo_acquire(NRT_MemInfo *mi) {
     TheMSys.atomic_inc(&mi->refct);
 }
 
-
-void NRT_MemInfo_set_dtor(NRT_MemInfo *mi, NRT_dtor_function dtor)
-{
-    mi->dtor_info = dtor;
-}
-
 void NRT_MemInfo_call_dtor(NRT_MemInfo *mi) {
     NRT_Debug(nrt_debug_print("nrt_meminfo_call_dtor %p\n", mi));
     if (mi->dtor && !TheMSys.shutting)
@@ -347,6 +341,7 @@ static void
 nrt_varsize_dtor(void *ptr, size_t size, void *info) {
     NRT_Debug(nrt_debug_print("nrt_buffer_dtor %p\n", ptr));
     if (info) {
+        /* call element dtor */
         typedef void dtor_fn_t(void *ptr);
         dtor_fn_t *dtor = info;
         dtor(ptr);
@@ -364,6 +359,14 @@ NRT_MemInfo *NRT_MemInfo_new_varsize(size_t size)
     mi = NRT_MemInfo_new(data, size, nrt_varsize_dtor, NULL);
     NRT_Debug(nrt_debug_print("NRT_MemInfo_varsize_alloc size=%zu "
                               "-> meminfo=%p, data=%p\n", size, mi, data));
+    return mi;
+}
+
+NRT_MemInfo *NRT_MemInfo_new_varsize_dtor(size_t size, NRT_dtor_function dtor) {
+    NRT_MemInfo *mi = NRT_MemInfo_new_varsize(size);
+    if (mi) {
+        mi->dtor_info = dtor;
+    }
     return mi;
 }
 
