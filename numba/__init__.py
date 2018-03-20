@@ -51,8 +51,8 @@ __all__ = """
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 22, 0)
-_min_llvm_version = (5, 0, 0)
+_min_llvmlite_version = (0, 23, 0)
+_min_llvm_version = (6, 0, 0)
 
 def _ensure_llvm():
     """
