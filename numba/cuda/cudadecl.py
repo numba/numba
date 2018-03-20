@@ -106,6 +106,28 @@ class Cuda_threadfence_system(ConcreteTemplate):
 
 
 @intrinsic
+class Cuda_selp(AbstractTemplate):
+    key = cuda.selp
+
+    def generic(self, args, kws):
+        assert not kws
+        test, a, b = args
+
+
+        # per docs
+        # http://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions-selp
+        supported_types = (types.float64, types.float32,
+                           types.int16, types.uint16,
+                           types.int32, types.uint32,
+                           types.int64, types.uint64)
+
+        if a != b or a not in supported_types:
+            return
+
+        return signature(a, test, a, a)
+
+
+@intrinsic
 class Cuda_atomic_add(AbstractTemplate):
     key = cuda.atomic.add
 
@@ -294,6 +316,9 @@ class CudaModuleTemplate(AttributeTemplate):
 
     def resolve_threadfence_system(self, mod):
         return types.Function(Cuda_threadfence_system)
+
+    def resolve_selp(self, mod):
+        return types.Function(Cuda_selp)
 
     def resolve_atomic(self, mod):
         return types.Module(cuda.atomic)
