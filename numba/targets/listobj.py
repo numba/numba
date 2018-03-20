@@ -114,6 +114,12 @@ class _ListPayloadMixin(object):
         """
         return slicing.fix_slice(self._builder, slice, self.size)
 
+    def incref_value(self, val):
+        self._context.nrt.incref(self._builder, self.dtype, val)
+
+    def decref_value(self, val):
+        self._context.nrt.decref(self._builder, self.dtype, val)
+
 
 class ListPayloadAccessor(_ListPayloadMixin):
     def __init__(self, context, builder, list_type, payload_ptr):
@@ -168,19 +174,35 @@ class ListInstance(_ListPayloadMixin):
         if self._ty.reflected:
             self._payload.dirty = cgutils.true_bit if val else cgutils.false_bit
 
-    def setitem(self, idx, val, incref=False):
+    def setitem(self, idx, val, incref):
+        # Decref old data
+        self.decref_value(self.getitem(idx))
+
         ptr = self._gep(idx)
         data_item = self._datamodel.as_data(self._builder, val)
         self._builder.store(data_item, ptr)
         self.set_dirty(True)
         if incref:
             # Incref the underlying data
-            self._context.nrt.incref(self._builder, self.dtype, val)
+            self.incref_value(val)
 
-    def inititem(self, idx, val):
+    def inititem(self, idx, val, incref=True):
         ptr = self._gep(idx)
         data_item = self._datamodel.as_data(self._builder, val)
         self._builder.store(data_item, ptr)
+        if incref:
+            self.incref_value(val)
+
+    def zfill(self, start, stop):
+        """Zero-fill the memory at index *start* to *stop*
+        """
+        builder = self._builder
+        base = self._gep(start)
+        end = self._gep(stop)
+        intaddr_t = self._context.get_value_type(types.intp)
+        size = builder.sub(builder.ptrtoint(end, intaddr_t),
+                           builder.ptrtoint(base, intaddr_t))
+        cgutils.memset(builder, base, size, ir.IntType(8)(0))
 
     @classmethod
     def allocate_ex(cls, context, builder, list_type, nitems):
@@ -226,6 +248,8 @@ class ListInstance(_ListPayloadMixin):
                     self._payload.dirty = cgutils.false_bit
                     # Set the element destructor
                     self.set_dtor()
+                    # Zero the allocated region
+                    self.zfill(self.size.type(0), nitems)
 
         return builder.load(ok), self
 
@@ -245,8 +269,6 @@ class ListInstance(_ListPayloadMixin):
         builder = ir.IRBuilder(fn.append_basic_block())
         base_ptr = fn.args[0]  # void*
 
-        cgutils.printf(builder, "DTOR PAYLOAD BASE %p\n", base_ptr)
-
         # get payload
         payload = ListPayloadAccessor(context, builder, self._ty, base_ptr)
 
@@ -255,7 +277,6 @@ class ListInstance(_ListPayloadMixin):
         with cgutils.for_range_slice(
                 builder, start=intp(0), stop=payload.size, step=intp(1),
                 intp=intp) as (idx, _):
-            cgutils.printf(builder, "DTOR clear %lld\n", idx)
             val = payload.getitem(idx)
             context.nrt.decref(builder, self.dtype, val)
         builder.ret_void()
@@ -329,6 +350,7 @@ class ListInstance(_ListPayloadMixin):
             cgutils.guard_memory_error(context, builder, ptr,
                                        "cannot resize list")
             self._payload.allocated = new_allocated
+            self.zfill(self.size, new_allocated)
 
         context = self._context
         builder = self._builder
@@ -482,15 +504,7 @@ def setitem_list(context, builder, sig, args):
     value = args[2]
 
     index = inst.fix_index(index)
-
-    # Load old data
-    old = inst.getitem(index)
-
-    # Setitem
     inst.setitem(index, value, incref=True)
-
-    # Decref the old data
-    context.nrt.decref(builder, inst.dtype, old)
     return context.get_dummy_value()
 
 
@@ -510,10 +524,10 @@ def getslice_list(context, builder, sig, args):
                                          slice.step) as (pos_range, neg_range):
         with pos_range as (idx, count):
             value = inst.getitem(idx)
-            result.inititem(count, value)
+            result.inititem(count, value, incref=True)
         with neg_range as (idx, count):
             value = inst.getitem(idx)
-            result.inititem(count, value)
+            result.inititem(count, value, incref=True)
 
     return impl_ret_new_ref(context, builder, sig.return_type, result.value)
 

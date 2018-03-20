@@ -868,11 +868,38 @@ class TestListReflection(MemoryLeakMixin, TestCase):
 class TestListManagedElements(MemoryLeakMixin, TestCase):
     "Test list containing objects that need refct"
 
-
     def assert_list_element_precise_equal(self, expect, got):
         self.assertEqual(len(expect), len(got))
         for a, b in zip(expect, got):
             self.assertPreciseEqual(a, b)
+
+    def test_unbox_passthru(self):
+        def pyfunc(con):
+            pass #con.append(np.arange(10))
+
+        cfunc = jit(nopython=True)(pyfunc)
+        con = [np.arange(3), np.arange(5)]
+        expect = list(con)
+        pyfunc(expect)
+        got = list(con)
+        cfunc(got)
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
+
+    def test_unbox_modified(self):
+        def pyfunc(con):
+            con.append(np.arange(10))
+
+        cfunc = jit(nopython=True)(pyfunc)
+        con = [np.arange(3), np.arange(5)]
+        expect = list(con)
+        pyfunc(expect)
+        got = list(con)
+        cfunc(got)
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
 
     def test_append(self):
         def pyfunc():
@@ -889,12 +916,60 @@ class TestListManagedElements(MemoryLeakMixin, TestCase):
             expect=expect, got=got
             )
 
+    def test_append_noret(self):
+        # This test make sure local dtor works
+        def pyfunc():
+            con = []
+            for i in range(300):
+                con.append(np.arange(i))
+            c = 0.0
+            for arr in con:
+                c += arr.sum() / (1 + arr.size)
+            return c
+
+        cfunc = jit(nopython=True)(pyfunc)
+        expect = pyfunc()
+        got = cfunc()
+
+        self.assertEqual(expect, got)
+
     def test_reassign_refct(self):
         def pyfunc():
             con = []
             for i in range(5):
                 con.append(np.arange(2))
             con[0] = np.arange(4)
+            return con
+
+        cfunc = jit(nopython=True)(pyfunc)
+        expect = pyfunc()
+        got = cfunc()
+
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
+
+    def test_get_slice(self):
+        def pyfunc():
+            con = []
+            for i in range(5):
+                con.append(np.arange(2))
+            return con[2:4]
+
+        cfunc = jit(nopython=True)(pyfunc)
+        expect = pyfunc()
+        got = cfunc()
+
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
+
+    def test_set_slice(self):
+        def pyfunc():
+            con = []
+            for i in range(5):
+                con.append(np.arange(2))
+            con[1:3] = con[2:4]
             return con
 
         cfunc = jit(nopython=True)(pyfunc)

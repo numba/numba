@@ -576,7 +576,8 @@ def _python_list_to_native(typ, obj, c, size, listptr, errorptr):
                     native = c.unbox(typ.dtype, itemobj)
                     with c.builder.if_then(native.is_error, likely=False):
                         c.builder.store(cgutils.true_bit, errorptr)
-                    list.setitem(loop.index, native.value)
+                    # The reference is borrowed so incref=False
+                    list.setitem(loop.index, native.value, incref=False)
 
             if typ.reflected:
                 list.parent = obj
@@ -656,12 +657,14 @@ def reflect_list(typ, val, c):
                 # First overwrite existing items
                 with cgutils.for_range(c.builder, size) as loop:
                     item = list.getitem(loop.index)
+                    list.incref_value(item)
                     itemobj = c.box(typ.dtype, item)
                     c.pyapi.list_setitem(obj, loop.index, itemobj)
                 # Then add missing items
                 with cgutils.for_range(c.builder, diff) as loop:
                     idx = c.builder.add(size, loop.index)
                     item = list.getitem(idx)
+                    list.incref_value(item)
                     itemobj = c.box(typ.dtype, item)
                     c.pyapi.list_append(obj, itemobj)
                     c.pyapi.decref(itemobj)
@@ -672,6 +675,7 @@ def reflect_list(typ, val, c):
                 # Then overwrite remaining items
                 with cgutils.for_range(c.builder, new_size) as loop:
                     item = list.getitem(loop.index)
+                    list.incref_value(item)
                     itemobj = c.box(typ.dtype, item)
                     c.pyapi.list_setitem(obj, loop.index, itemobj)
 
