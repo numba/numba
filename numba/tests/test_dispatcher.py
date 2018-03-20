@@ -76,6 +76,31 @@ class BaseTest(TestCase):
         f = jit(**self.jit_args)(pyfunc)
         return f, check
 
+def check_access_is_preventable():
+    tempdir = temp_directory('test_cache')
+    test_dir = (os.path.join(tempdir, 'writable_test'))
+    os.mkdir(test_dir)
+    # check a write is possible
+    with open(os.path.join(test_dir, 'write_ok'), 'wt') as f:
+        f.write('check1')
+    # now forbid access
+    os.chmod(test_dir, 0o500)
+    try:
+        with open(os.path.join(test_dir, 'write_forbidden'), 'wt') as f:
+            f.write('check2')
+    except PermissionError:
+        ret = True
+    else:
+        ret = False
+    finally:
+        os.chmod(test_dir, 0o775)
+        shutil.rmtree(test_dir)
+    return ret
+
+_access_preventable = check_access_is_preventable()
+_access_msg = "Cannot create a directory to which writes are preventable"
+skip_bad_access = unittest.skipUnless(_access_preventable, _access_msg)
+
 
 class TestDispatcher(BaseTest):
 
@@ -994,6 +1019,7 @@ class TestCache(BaseCacheUsecasesTest):
         # wouldn't be met)
         self.check_pycache(0)
 
+    @skip_bad_access
     @unittest.skipIf(os.name == "nt",
                      "cannot easily make a directory read-only on Windows")
     def test_non_creatable_pycache(self):
@@ -1002,19 +1028,9 @@ class TestCache(BaseCacheUsecasesTest):
         os.chmod(self.tempdir, 0o500)
         self.addCleanup(os.chmod, self.tempdir, old_perms)
 
-        # if run as root dir perms have no effect, so call chattr +i
-        try: # will fail if not root
-            cmd = ['chattr', '+i', self.tempdir]
-            # redirect stderr to stdout and use check_output as a noise sink
-            subprocess.check_output(cmd, stderr=subprocess.STDOUT)
-        except Exception:
-            pass
-        else:
-            cmd = ['chattr', '-i', self.tempdir]
-            self.addCleanup(subprocess.check_output, cmd, stderr=subprocess.STDOUT)
-
         self._test_pycache_fallback()
 
+    @skip_bad_access
     @unittest.skipIf(os.name == "nt",
                      "cannot easily make a directory read-only on Windows")
     def test_non_writable_pycache(self):
@@ -1024,17 +1040,6 @@ class TestCache(BaseCacheUsecasesTest):
         old_perms = os.stat(pycache).st_mode
         os.chmod(pycache, 0o500)
         self.addCleanup(os.chmod, pycache, old_perms)
-
-        # if run as root dir perms have no effect, so call chattr +i
-        try: # will fail if not root
-            cmd = ['chattr', '+i', pycache]
-            # redirect stderr to stdout and use check_output as a noise sink
-            subprocess.check_output(cmd, stderr=subprocess.STDOUT)
-        except Exception:
-            pass
-        else:
-            cmd = ['chattr', '-i', pycache]
-            self.addCleanup(subprocess.check_output, cmd, stderr=subprocess.STDOUT)
 
         self._test_pycache_fallback()
 
