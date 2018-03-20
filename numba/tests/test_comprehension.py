@@ -189,7 +189,7 @@ class TestListComprehension(unittest.TestCase):
 
         # functions to test that are expected to pass
         f = [list1, list2, list3, list4,
-             list6, list7, list8, list9, list10,
+             list6, list7, list8, list9, list10, list11,
              list12, list13, list14, list15,
              list16, list17, list18, list19, list20,
              list21, list23, list24]
@@ -214,12 +214,6 @@ class TestListComprehension(unittest.TestCase):
             cfunc(var)
         # TODO: we can't really assert the error message for the above
         # Also, test_nested_array is a similar case (but without list) that works.
-
-        with self.assertRaises(LoweringError) as raises:
-            cfunc = jit(nopython=True)(list11)
-            cfunc(var)
-        msg = "unsupported nested memory-managed object"
-        self.assertIn(msg, str(raises.exception))
 
         if sys.maxsize > 2 ** 32:
             bits = 64
