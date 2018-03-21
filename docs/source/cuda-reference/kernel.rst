@@ -168,3 +168,19 @@ are guaranteed to not move across the memory fences by optimization passes.
 .. function:: numba.cuda.threadfence_system
 
    A memory fence at system level (across GPUs)
+
+Control Flow Instructions
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A subset of the CUDA's control flow instructions are directly available as
+intrinsics. Avoiding branches is a key way to improve CUDA performance, and
+using these intrinsics mean you don't have to rely on the ``nvcc`` optimizer
+identifying and removing branches. For further documentation, including
+semantics, please refer to the `relevant CUDA Toolkit documentation
+<docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions>`_.
+
+
+.. function:: numba.cuda.selp
+
+    Select between two expressions, depending on the value of the first
+    argument. Similar to LLVM's ``select`` instruction.
