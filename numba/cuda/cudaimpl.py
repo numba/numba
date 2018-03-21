@@ -249,10 +249,26 @@ def ptx_popc(context, builder, sig, args):
     return builder.ctpop(args[0])
 
 
-@lower(stubs.brev, types.Any)
-def ptx_brev(context, builder, sig, args):
-    return builder.bitreverse(args[0])
+@lower(stubs.brev, types.u4)
+def ptx_brev_u4(context, builder, sig, args):
+    # FIXME the llvm.bitreverse.i32 intrinsic isn't supported by nvcc
+    # return builder.bitreverse(args[0])
 
+    fn = builder.module.get_or_insert_function(
+        lc.Type.function(lc.Type.int(32), (lc.Type.int(32),)),
+        '__nv_brev')
+    return builder.call(fn, args)
+
+
+@lower(stubs.brev, types.u8)
+def ptx_brev_u8(context, builder, sig, args):
+    # FIXME the llvm.bitreverse.i64 intrinsic isn't supported by nvcc
+    # return builder.bitreverse(args[0])
+
+    fn = builder.module.get_or_insert_function(
+        lc.Type.function(lc.Type.int(64), (lc.Type.int(64),)),
+        '__nv_brevll')
+    return builder.call(fn, args)
 
 
 @lower(stubs.clz, types.Any)
