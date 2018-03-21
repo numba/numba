@@ -822,15 +822,29 @@ def _make_subtarget(targetctx, flags):
 
 
 def compile_extra(typingctx, targetctx, func, args, return_type, flags,
-                  locals, library=None):
+                  locals, library=None, pipeline_class=Pipeline):
+    """Compiler entry point
+
+    Parameter
+    ---------
+    typingctx :
+        typing context
+    targetctx :
+        target context
+    func : function
+        the python function to be compiled
+    args : tuple, list
+        argument types
+    return_type :
+        Use ``None`` to indicate void return
+    flags : numba.compiler.Flags
+        compiler flags
+    library : numba.codegen.CodeLibrary
+    pipeline_class : type like numba.compiler.BasePipeline
+        compiler pipeline
     """
-    Args
-    ----
-    - return_type
-        Use ``None`` to indicate
-    """
-    pipeline = Pipeline(typingctx, targetctx, library,
-                        args, return_type, flags, locals)
+    pipeline = pipeline_class(typingctx, targetctx, library,
+                              args, return_type, flags, locals)
     return pipeline.compile_extra(func)
 
 
