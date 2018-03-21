@@ -180,13 +180,17 @@ documentation
 
 .. function:: numba.cuda.popc
 
-   Returns the number of set bits in the given val.
+   Returns the number of set bits in the given value.
 
 .. function:: numba.cuda.brev
 
-   Reverse the bitpattern of an integer value; for example 0b10110110
+   Reverses the bit pattern of an integer value, for example 0b10110110
    becomes 0b01101101.
 
 .. function:: numba.cuda.clz
 
    Counts the number of leading zeros in a variable.
+
+.. function:: numba.cuda.ffs
+
+   Find the position of the least significant bit set to 1 in a 32 bit integer.

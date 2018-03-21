@@ -244,55 +244,32 @@ def ptx_threadfence_device(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-@lower(stubs.popc, types.u4)
-def ptx_popc_u4(context, builder, sig, args):
-    """
-    LLVM IR implementation as suggested by `IntrinsicsNVVM.td`
-    """
+@lower(stubs.popc, types.Any)
+def ptx_popc(context, builder, sig, args):
     return builder.ctpop(args[0])
 
 
-@lower(stubs.popc, types.u8)
-def ptx_popc_u8(context, builder, sig, args):
-    """
-    LLVM IR implementation as suggested by `IntrinsicsNVVM.td`
-    """
-    return builder.trunc(
-        builder.ctpop(args[0]),
-        Type.int(32))
-
-
-@lower(stubs.brev, types.u4)
-@lower(stubs.brev, types.u8)
+@lower(stubs.brev, types.Any)
 def ptx_brev(context, builder, sig, args):
-    """
-    LLVM IR implementation as suggested by `IntrinsicsNVVM.td`
-    """
     return builder.bitreverse(args[0])
 
 
-@lower(stubs.clz, types.i4)
-@lower(stubs.clz, types.u4)
-def ptx_clz_i4(context, builder, sig, args):
-    """
-    LLVM IR implementation as suggested by `IntrinsicsNVVM.td`
-    """
+
+@lower(stubs.clz, types.Any)
+def ptx_clz(context, builder, sig, args):
     return builder.ctlz(
         args[0],
-        context.get_constant(Type.int(1), 0))
+        context.get_constant(types.boolean, 0))
 
 
-@lower(stubs.clz, types.i8)
-@lower(stubs.clz, types.u8)
-def ptx_clz_i8(context, builder, sig, args):
+@lower(stubs.ffs, types.Any)
+def ptx_ffs(context, builder, sig, args):
     """
     LLVM IR implementation as suggested by `IntrinsicsNVVM.td`
     """
-    return builder.trunc(
-        builder.ctlz(
-            args[0],
-            context.get_constant(Type.int(1), 0)),
-        Type.int(32))
+    return builder.cttz(
+        args[0],
+        context.get_constant(types.boolean, 0))
 
 
 def _normalize_indices(context, builder, indty, inds):

@@ -107,10 +107,19 @@ class Cuda_threadfence_system(ConcreteTemplate):
 
 @intrinsic
 class Cuda_popc(ConcreteTemplate):
+    """
+    Supported types from http://docs.nvidia.com/cuda/nvvm-ir-spec/index.html#bit-manipulations-intrinics
+    """
     key = cuda.popc
     cases = [
-        signature(types.int32, types.uint32),
-        signature(types.int32, types.uint64),
+        signature(types.int8, types.int8),
+        signature(types.int16, types.int16),
+        signature(types.int32, types.int32),
+        signature(types.int64, types.int64),
+        signature(types.uint8, types.uint8),
+        signature(types.uint16, types.uint16),
+        signature(types.uint32, types.uint32),
+        signature(types.uint64, types.uint64),
     ]
 
 
@@ -125,10 +134,37 @@ class Cuda_brev(ConcreteTemplate):
 
 @intrinsic
 class Cuda_clz(ConcreteTemplate):
+    """
+    Supported types from http://docs.nvidia.com/cuda/nvvm-ir-spec/index.html#bit-manipulations-intrinics
+    """
     key = cuda.clz
     cases = [
-        signature(types.int32, types.uint32),
-        signature(types.int32, types.uint64),
+        signature(types.int8, types.int8),
+        signature(types.int16, types.int16),
+        signature(types.int32, types.int32),
+        signature(types.int64, types.int64),
+        signature(types.uint8, types.uint8),
+        signature(types.uint16, types.uint16),
+        signature(types.uint32, types.uint32),
+        signature(types.uint64, types.uint64),
+    ]
+
+
+@intrinsic
+class Cuda_ffs(ConcreteTemplate):
+    """
+    Supported types from http://docs.nvidia.com/cuda/nvvm-ir-spec/index.html#bit-manipulations-intrinics
+    """
+    key = cuda.ffs
+    cases = [
+        signature(types.int8, types.int8),
+        signature(types.int16, types.int16),
+        signature(types.int32, types.int32),
+        signature(types.int64, types.int64),
+        signature(types.uint8, types.uint8),
+        signature(types.uint16, types.uint16),
+        signature(types.uint32, types.uint32),
+        signature(types.uint64, types.uint64),
     ]
 
 
@@ -318,6 +354,9 @@ class CudaModuleTemplate(AttributeTemplate):
 
     def resolve_clz(self, mod):
         return types.Function(Cuda_clz)
+
+    def resolve_ffs(self, mod):
+        return types.Function(Cuda_ffs)
 
     def resolve_syncthreads(self, mod):
         return types.Function(Cuda_syncthreads)

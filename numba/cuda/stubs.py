@@ -292,10 +292,7 @@ class popc(Stub):
     """
     popc(val)
 
-    Returns the number of set bits in the given val.
-
-    Supported on uint32 & uint64 operands only.
-
+    Returns the number of set bits in the given value.
     """
 
 
@@ -305,9 +302,6 @@ class brev(Stub):
 
     Reverse the bitpattern of an integer value; for example 0b10110110
     becomes 0b01101101.
-
-    Supported on uint32 & uint64 operands only.
-
     """
 
 
@@ -315,10 +309,15 @@ class clz(Stub):
     """
     clz(val)
 
-    Counts the number of leading zeros in a variable.
+    Counts the number of leading zeros in a value.
+    """
 
-    Supported on int32 & int64 operands only.
 
+class ffs(Stub):
+    """
+    ffs(val)
+
+    Find the position of the least significant bit set to 1 in a 32 bit integer.
     """
 
 #-------------------------------------------------------------------------------
