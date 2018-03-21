@@ -699,6 +699,8 @@ class BasePipeline(object):
         """
 
     def define_pipelines(self, pm):
+        """Child classes override this to customize the pipeline.
+        """
         raise NotImplementedError()
 
     def add_preprocessing_stage(self, pm):
@@ -735,6 +737,8 @@ class BasePipeline(object):
         pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
 
     def define_nopython_pipeline(self, pm, name='nopython'):
+        """Add the nopython-mode pipeline to the pipeline manager
+        """
         pm.create_pipeline(name)
         self.add_preprocessing_stage(pm)
         self.add_pre_typing_stage(pm)
@@ -744,6 +748,8 @@ class BasePipeline(object):
         self.add_cleanup_stage(pm)
 
     def define_objectmode_pipeline(self, pm, name='object'):
+        """Add the object-mode pipeline to the pipeline manager
+        """
         pm.create_pipeline(name)
         self.add_preprocessing_stage(pm)
         pm.add_stage(self.stage_objectmode_frontend,
@@ -753,6 +759,8 @@ class BasePipeline(object):
         self.add_cleanup_stage(pm)
 
     def define_interpreted_pipeline(self, pm, name="interp"):
+        """Add the interpreted-mode (fallback) pipeline to the pipeline manager
+        """
         pm.create_pipeline(name)
         pm.add_stage(self.stage_compile_interp_mode,
                      "compiling with interpreter mode")

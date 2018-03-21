@@ -467,6 +467,10 @@ class Dispatcher(_DispatcherBase):
             the types deduced by the type inference engine.
         targetoptions: dict, optional
             Target-specific config options.
+        impl_kind: str
+            Select the compiler mode for `@jit` and `@generated_jit`
+        pipeline_class: type numba.compiler.BasePipeline
+            The compiler pipeline type.
         """
         self.typingctx = self.targetdescr.typing_context
         self.targetctx = self.targetdescr.target_context
