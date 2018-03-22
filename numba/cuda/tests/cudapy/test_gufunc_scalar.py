@@ -12,7 +12,7 @@ from numba.cuda.testing import skip_on_cudasim, SerialMixin
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
-class TestGUFuncScalr(SerialMixin, TestCase):
+class TestGUFuncScalar(SerialMixin, TestCase):
     def test_gufunc_scalar_output(self):
         #    function type:
         #        - has no void return type
