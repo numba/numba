@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import
 
 from . import _typeconv, castgraph, Conversion
+from .. import types
 
 
 class TypeManager(object):
@@ -23,6 +24,9 @@ class TypeManager(object):
                                          allow_unsafe)
 
     def check_compatible(self, fromty, toty):
+        if not isinstance(toty, types.Type):
+            raise ValueError("Specified type '%s' (%s) is not a Numba type" %
+                             (toty, type(toty)))
         name = _typeconv.check_compatible(self._ptr, fromty._code, toty._code)
         conv = Conversion[name] if name is not None else None
         assert conv is not Conversion.nil

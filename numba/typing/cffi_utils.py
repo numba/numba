@@ -64,6 +64,7 @@ def _type_map():
     global _cached_type_map
     if _cached_type_map is None:
         _cached_type_map = {
+            ffi.typeof('bool') :                types.boolean,
             ffi.typeof('char') :                types.char,
             ffi.typeof('short') :               types.short,
             ffi.typeof('int') :                 types.intc,

@@ -35,12 +35,27 @@ class TestCase(unittest.TestCase):
         number = int(last_line.split(' ')[0])
         # There may be some "skipped" messages at the beginning,
         # so do an approximate check.
-        self.assertIn(len(lines), range(number + 1, number + 10))
-        if maxsize is None:
-            self.assertEqual(number, minsize)
-        else:
-            self.assertGreaterEqual(number, minsize)
-            self.assertLessEqual(number, maxsize)
+        try:
+            self.assertIn(len(lines), range(number + 1, number + 10))
+            if maxsize is None:
+                self.assertEqual(number, minsize)
+            else:
+                self.assertGreaterEqual(number, minsize)
+                self.assertLessEqual(number, maxsize)
+        except AssertionError:
+            # catch any error in the above, chances are test discovery
+            # has failed due to a syntax error or import problem.
+            # run the actual test suite to try and find the cause to
+            # inject into the error message for the user
+            try:
+                cmd = ['python', '-m', 'numba.runtests'] + list(args)
+                subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+            except Exception as e:
+                msg = ("Test discovery has failed, the reported cause of the "
+                       " failure is:\n\n:")
+                indented  = '\n'.join(['\t' + x for x in
+                                       e.output.decode().splitlines()])
+                raise RuntimeError(msg + indented)
         return lines
 
     def check_all(self, ids):

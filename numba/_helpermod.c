@@ -8,7 +8,13 @@ Expose all functions as pointers in a dedicated C extension.
 /* Import _pymodule.h first, for a recent _POSIX_C_SOURCE */
 #include "_pymodule.h"
 #include <math.h>
-
+#ifdef _MSC_VER
+    #define false 0
+    #define true 1
+    #define bool int
+#else
+    #include <stdbool.h>
+#endif
 /* Numba C helpers */
 #include "_helperlib.c"
 
@@ -174,6 +180,7 @@ PyAPI_FUNC(double) _numba_test_cos(double x);
 PyAPI_FUNC(double) _numba_test_exp(double x);
 PyAPI_FUNC(void) _numba_test_vsquare(int n, double *x, double *out);
 PyAPI_FUNC(double) _numba_test_funcptr(double (*func)(double));
+PyAPI_FUNC(bool) _numba_test_boolean();
 
 double _numba_test_sin(double x)
 {
@@ -209,6 +216,10 @@ double _numba_test_funcptr(double (*func)(double))
     return func(1.5);
 }
 
+bool _numba_test_boolean()
+{
+    return true;
+}
 
 MOD_INIT(_helperlib) {
     PyObject *m;
