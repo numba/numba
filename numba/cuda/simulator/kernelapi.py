@@ -196,6 +196,9 @@ class FakeCUDAModule(object):
         # No-op
         pass
 
+    def selp(self, a, b, c):
+        return b if a else c
+
     def grid(self, n):
         bdim = self.blockDim
         bid = self.blockIdx
