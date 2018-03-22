@@ -77,6 +77,42 @@ class BaseTest(TestCase):
         f = jit(**self.jit_args)(pyfunc)
         return f, check
 
+def check_access_is_preventable():
+    # This exists to check whether it is possible to prevent access to
+    # a file/directory through the use of `chmod 500`. If a user has
+    # elevated rights (e.g. root) then writes are likely to be possible
+    # anyway. Tests that require functioning access prevention are
+    # therefore skipped based on the result of this check.
+    tempdir = temp_directory('test_cache')
+    test_dir = (os.path.join(tempdir, 'writable_test'))
+    os.mkdir(test_dir)
+    # assume access prevention is not possible
+    ret = False
+    # check a write is possible
+    with open(os.path.join(test_dir, 'write_ok'), 'wt') as f:
+        f.write('check1')
+    # now forbid access
+    os.chmod(test_dir, 0o500)
+    try:
+        with open(os.path.join(test_dir, 'write_forbidden'), 'wt') as f:
+            f.write('check2')
+    except (OSError, IOError) as e:
+        # Check that the cause of the exception is due to access/permission
+        # as per https://github.com/conda/conda/blob/4.5.0/conda/gateways/disk/permissions.py#L35-L37
+        eno = getattr(e, 'errno', None)
+        if eno in (errno.EACCES, errno.EPERM):
+            # errno reports access/perm fail so access prevention via
+            # `chmod 500` works for this user.
+            ret = True
+    finally:
+        os.chmod(test_dir, 0o775)
+        shutil.rmtree(test_dir)
+    return ret
+
+_access_preventable = check_access_is_preventable()
+_access_msg = "Cannot create a directory to which writes are preventable"
+skip_bad_access = unittest.skipUnless(_access_preventable, _access_msg)
+
 
 class TestDispatcher(BaseTest):
 
@@ -995,6 +1031,7 @@ class TestCache(BaseCacheUsecasesTest):
         # wouldn't be met)
         self.check_pycache(0)
 
+    @skip_bad_access
     @unittest.skipIf(os.name == "nt",
                      "cannot easily make a directory read-only on Windows")
     def test_non_creatable_pycache(self):
@@ -1005,6 +1042,7 @@ class TestCache(BaseCacheUsecasesTest):
 
         self._test_pycache_fallback()
 
+    @skip_bad_access
     @unittest.skipIf(os.name == "nt",
                      "cannot easily make a directory read-only on Windows")
     def test_non_writable_pycache(self):
