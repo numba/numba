@@ -847,7 +847,7 @@ class TestRandom(BaseTest):
         Check a shuffle()-like function for arrays.
         """
         # Our implementation follows Python 3's.
-        arrs = [np.arange(20), np.arange(9).reshape((3, 3))]
+        arrs = [np.arange(20), np.arange(32).reshape((8, 4))]
         if sys.version_info >= (3,):
             r = self._follow_cpython(ptr)
             for a in arrs:
@@ -863,8 +863,9 @@ class TestRandom(BaseTest):
                 for i in range(3):
                     b = a.copy()
                     func(b)
-                    self.assertNotEqual(list(a), list(b))
-                    self.assertEqual(sorted(a), sorted(b))
+                    self.assertFalse(np.array_equal(a, b))
+                    self.assertTrue(np.array_equal(np.sort(a, axis=0),
+                                                   np.sort(b, axis=0)))
                     a = b
         # Test with an arbitrary buffer-providing object
         a = arrs[0]
@@ -953,12 +954,13 @@ class TestRandom(BaseTest):
                 self.assertPreciseEqual(a, b)
         else:
             # Sanity check
-            arrs = [np.arange(20), np.arange(20).reshape(1, 2, 2, 5)]
+            arrs = [np.arange(20), np.arange(20).reshape(5, 2, 2)]
             for a in arrs:
                 for i in range(3):
                     b = func(a)
-                    self.assertNotEqual(list(a), list(b))
-                    self.assertEqual(sorted(a), sorted(b))
+                    self.assertFalse(np.array_equal(a, b))
+                    self.assertTrue(np.array_equal(np.sort(a, axis=0),
+                                                   np.sort(b, axis=0)))
 
 
 class TestRandomArrays(BaseTest):
