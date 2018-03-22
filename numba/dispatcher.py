@@ -486,6 +486,10 @@ class Dispatcher(_DispatcherBase):
         self._type = types.Dispatcher(self)
         self.typingctx.insert_global(self, self._type)
 
+    @property
+    def _numba_type_(self):
+        return types.Dispatcher(self)
+
     def enable_caching(self):
         self._cache = FunctionCache(self.py_func)
 

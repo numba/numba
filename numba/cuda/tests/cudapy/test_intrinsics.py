@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import, division
 
 import numpy as np
+import re
 from numba import cuda, int32, float32
 from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
 
@@ -75,6 +76,27 @@ def simple_ffs(ary, c):
     ary[0] = cuda.ffs(c)
 
 
+@cuda.jit
+def branching_with_ifs(a, b, c):
+    i = cuda.grid(1)
+
+    if a[i] > 4:
+        if b % 2 == 0:
+            a[i] = c[i]
+        else:
+            a[i] = 13
+    else:
+        a[i] = 3
+
+
+@cuda.jit
+def branching_with_selps(a, b, c):
+    i = cuda.grid(1)
+
+    inner = cuda.selp(b % 2 == 0, c[i], 13)
+    a[i] = cuda.selp(a[i] > 4, inner, 3)
+
+
 class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
     def test_simple_threadidx(self):
         compiled = cuda.jit("void(int32[:])")(simple_threadidx)
@@ -138,6 +160,27 @@ class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
         ary = np.zeros(1, dtype=np.int32)
         compiled[nctaid, ntid](ary)
         self.assertEqual(ary[0], nctaid * ntid)
+
+    @skip_on_cudasim('Tests PTX emission')
+    def test_selp(self):
+        n = 32
+        b = 6
+        c = np.full(shape=32, fill_value=17)
+
+        expected = c.copy()
+        expected[:5] = 3
+
+        a = np.arange(n)
+        branching_with_ifs[n, 1](a, b, c)
+        ptx = list(branching_with_ifs.inspect_asm().values())[0]
+        self.assertEqual(2, len(re.findall(r'\s+bra\s+', ptx)))
+        np.testing.assert_array_equal(a, expected, err_msg='branching')
+
+        a = np.arange(n)
+        branching_with_selps[n, 1](a, b, c)
+        ptx = list(branching_with_selps.inspect_asm().values())[0]
+        self.assertEqual(0, len(re.findall(r'\s+bra\s+', ptx)))
+        np.testing.assert_array_equal(a, expected, err_msg='selp')
 
     def test_simple_gridsize2d(self):
         compiled = cuda.jit("void(int32[::1])")(simple_gridsize2d)

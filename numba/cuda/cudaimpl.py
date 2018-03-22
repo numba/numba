@@ -288,6 +288,12 @@ def ptx_ffs(context, builder, sig, args):
         context.get_constant(types.boolean, 0))
 
 
+@lower(stubs.selp, types.Any, types.Any, types.Any)
+def ptx_selp(context, builder, sig, args):
+    test, a, b = args
+    return builder.select(test, a, b)
+
+
 def _normalize_indices(context, builder, indty, inds):
     """
     Convert integer indices into tuple of intp

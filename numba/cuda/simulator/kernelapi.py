@@ -210,6 +210,9 @@ class FakeCUDAModule(object):
         s = '{:032b}'.format(val)
         return len(s) - len(s.rstrip('0'))
 
+    def selp(self, a, b, c):
+        return b if a else c
+
     def grid(self, n):
         bdim = self.blockDim
         bid = self.blockIdx
