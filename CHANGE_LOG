@@ -1,3 +1,95 @@
+Version 0.37.0
+--------------
+
+This release focuses on bug fixing and stability but also adds a few new
+features including support for Numpy 1.14. The key change for Numba core was the
+long awaited addition of the final tranche of thread safety improvements that
+allow Numba to be run concurrently on multiple threads without hitting known
+thread safety issues inside LLVM itself. Further, a number of fixes and
+enhancements went into the CUDA implementation and ParallelAccelerator gained
+some new features and underwent some internal refactoring.
+
+Misc enhancements:
+
+* PR #2627: Remove hacks to make llvmlite threadsafe
+* PR #2672: Add ascontiguousarray
+* PR #2678: Add Gitter badge
+* PR #2691: Fix #2690: add intrinsic to convert array to tuple
+* PR #2703: Test runner feature: failed-first and last-failed
+* PR #2708: Patch for issue #1907
+* PR #2732: Add support for array.fill
+
+Misc Fixes:
+
+* PR #2610: Fix #2606 lowering of optional.setattr
+* PR #2650: Remove skip for win32 cosine test
+* PR #2668: Fix empty_like from readonly arrays.
+* PR #2682: Fixes 2210, remove _DisableJitWrapper
+* PR #2684: Fix #2340, generator error yielding bool
+* PR #2693: Add travis-ci testing of NumPy 1.14, and also check on Python 2.7
+* PR #2694: Avoid type inference failure due to a typing template rejection
+* PR #2695: Update llvmlite version dependency.
+* PR #2696: Fix tuple indexing codegeneration for empty tuple
+* PR #2698: Fix #2697 by deferring deletion in the simplify_CFG loop.
+* PR #2701: Small fix to avoid tempfiles being created in the current directory
+* PR #2725: Fix 2481, LLVM IR parsing error due to mutated IR
+* PR #2726: Fix #2673: incorrect fork error msg.
+* PR #2728: Alternative to #2620.  Remove dead code ByteCodeInst.get.
+* PR #2730: Add guard for test needing SciPy/BLAS
+
+Documentation updates:
+
+* PR #2670: Update communication channels
+* PR #2671: Add docs about diagnosing loop vectorizer
+* PR #2683: Add docs on const arg requirements and on const mem alloc
+* PR #2722: Add docs on numpy support in cuda
+* PR #2724: Update doc: warning about unsupported arguments
+
+ParallelAccelerator enhancements/fixes:
+
+Parallel support for `np.arange` and `np.linspace`, also `np.mean`, `np.std`
+and `np.var` are added. This was performed as part of a general refactor and
+cleanup of the core ParallelAccelerator code.
+
+* PR #2674: Core pa
+* PR #2704: Generate Dels after parfor sequential lowering
+* PR #2716: Handle matching directly supported functions
+
+CUDA enhancements:
+
+* PR #2665: CUDA DeviceNDArray: Support numpy tranpose API
+* PR #2681: Allow Assigning to DeviceNDArrays
+* PR #2702: Make DummyArray do High Dimensional Reshapes
+* PR #2714: Use CFFI to Reuse Code
+
+CUDA fixes:
+
+* PR #2667: Fix CUDA DeviceNDArray slicing
+* PR #2686: Fix #2663: incorrect offset when indexing cuda array.
+* PR #2687: Ensure Constructed Stream Bound
+* PR #2706: Workaround for unexpected warp divergence due to exception raising
+  code
+* PR #2707: Fix regression: cuda test submodules not loading properly in
+  runtests
+* PR #2731: Use more challenging values in slice tests.
+* PR #2720: A quick testsuite fix to not run the new cuda testcase in the
+  multiprocess pool
+
+Contributors:
+
+The following people contributed to this release.
+
+* Coutinho Menezes Nilo
+* Daniel
+* Ehsan Totoni
+* Nick White
+* Paul H. Liu
+* Siu Kwan Lam
+* Stan Seibert
+* Stuart Archibald
+* Todd A. Anderson
+
+
 Version 0.36.2
 --------------
 

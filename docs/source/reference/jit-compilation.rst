@@ -214,7 +214,8 @@ Vectorized functions (ufuncs and DUFuncs)
    then the decorator will wrap the user Python function in a
    :class:`~numba.DUFunc` instance, which will compile the user
    function at call time whenever Numpy can not find a matching loop
-   for the input arguments.
+   for the input arguments.  *signatures* is required if *target* is
+   ``"parallel"``.
 
    *identity* is the identity (or unit) value of the function being
    implemented.  Possible values are 0, 1, None, and the string
@@ -238,8 +239,9 @@ Vectorized functions (ufuncs and DUFuncs)
       @vectorize(["float32(float32)", "float64(float64)"])
       def f(x): ...
 
-   *target* is a string for backend target; Available values are "cpu", "parallel", and "cuda".
-   To use a multithreaded version, change the target to "parallel"::
+   *target* is a string for backend target; Available values are "cpu",
+   "parallel", and "cuda".  To use a multithreaded version, change the
+   target to "parallel" (which requires signatures to be specified)::
 
       @vectorize(["float64(float64)", "float32(float32)"], target='parallel')
       def f(x): ...

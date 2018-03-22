@@ -7,7 +7,9 @@ from __future__ import print_function, absolute_import, division
 
 import warnings
 import math
+import functools
 import copy
+from numba import six
 from ctypes import c_void_p
 
 import numpy as np
@@ -15,11 +17,14 @@ import numpy as np
 from . import driver as _driver
 from . import devices
 from numba import dummyarray, types, numpy_support
+from numba.unsafe.ndarray import to_fixed_tuple
 
 try:
-    long
-except NameError:
-    long = int
+    lru_cache = getattr(functools, 'lru_cache')(None)
+except AttributeError:
+    # Python 3.1 or lower
+    def lru_cache(func):
+        return func
 
 
 def is_cuda_ndarray(obj):
@@ -40,7 +45,7 @@ def verify_cuda_ndarray_interface(obj):
     requires_attr('shape', tuple)
     requires_attr('strides', tuple)
     requires_attr('dtype', np.dtype)
-    requires_attr('size', (int, long))
+    requires_attr('size', six.integer_types)
 
 
 def require_cuda_ndarray(obj):
@@ -74,9 +79,9 @@ class DeviceNDArrayBase(object):
         gpu_data
             user provided device memory for the ndarray data buffer
         """
-        if isinstance(shape, (int, long)):
+        if isinstance(shape, six.integer_types):
             shape = (shape,)
-        if isinstance(strides, (int, long)):
+        if isinstance(strides, six.integer_types):
             strides = (strides,)
         self.ndim = len(shape)
         if len(strides) != self.ndim:
@@ -319,6 +324,43 @@ class DeviceRecord(DeviceNDArrayBase):
         return numpy_support.from_dtype(self.dtype)
 
 
+@lru_cache
+def _assign_kernel(ndim):
+    """
+    A separate method so we don't need to compile code every assignment (!).
+
+    :param ndim: We need to have static array sizes for cuda.local.array, so
+        bake in the number of dimensions into the kernel
+    """
+    from numba import cuda  # circular!
+
+    @cuda.jit
+    def kernel(lhs, rhs):
+        location = cuda.grid(1)
+
+        n_elements = 1
+        for i in range(lhs.ndim):
+            n_elements *= lhs.shape[i]
+        if location >= n_elements:
+            # bake n_elements into the kernel, better than passing it in
+            # as another argument.
+            return
+
+        # [0, :] is the to-index (into `lhs`)
+        # [1, :] is the from-index (into `rhs`)
+        idx = cuda.local.array(
+            shape=(2, ndim),
+            dtype=types.int64)
+
+        for i in range(ndim - 1, -1, -1):
+            idx[0, i] = location % lhs.shape[i]
+            idx[1, i] = (location % lhs.shape[i]) * (rhs.shape[i] > 1)
+            location //= lhs.shape[i]
+
+        lhs[to_fixed_tuple(idx[0], ndim)] = rhs[to_fixed_tuple(idx[1], ndim)]
+    return kernel
+
+
 class DeviceNDArray(DeviceNDArrayBase):
     '''
     An on-GPU array type
@@ -350,6 +392,9 @@ class DeviceNDArray(DeviceNDArrayBase):
         :return: an `numpy.ndarray`, so copies to the host.
         """
         return self.copy_to_host().__array__(dtype)
+
+    def __len__(self):
+        return self.shape[0]
 
     def reshape(self, *newshape, **kws):
         """
@@ -424,6 +469,62 @@ class DeviceNDArray(DeviceNDArrayBase):
             newdata = self.gpu_data.view(*arr.extent)
             return cls(shape=arr.shape, strides=arr.strides,
                        dtype=self.dtype, gpu_data=newdata, stream=stream)
+
+    @devices.require_context
+    def __setitem__(self, key, value):
+        return self._do_setitem(key, value)
+
+    def setitem(self, key, value, stream=0):
+        """Do `__setitem__(key, value)` with CUDA stream
+        """
+        return self._so_getitem(key, value, stream)
+
+    def _do_setitem(self, key, value, stream=0):
+
+        stream = self._default_stream(stream)
+
+        # (1) prepare LHS
+
+        arr = self._dummy.__getitem__(key)
+        newdata = self.gpu_data.view(*arr.extent)
+
+        if isinstance(arr, dummyarray.Element):
+            # convert to a 1d array
+            shape = (1,)
+            strides = (self.dtype.itemsize,)
+        else:
+            shape = arr.shape
+            strides = arr.strides
+
+        lhs = type(self)(
+            shape=shape,
+            strides=strides,
+            dtype=self.dtype,
+            gpu_data=newdata,
+            stream=stream)
+
+        # (2) prepare RHS
+
+        rhs, _ = auto_device(value, stream=stream)
+        if rhs.ndim > lhs.ndim:
+            raise ValueError("Can't assign %s-D array to %s-D self" % (
+                rhs.ndim,
+                lhs.ndim))
+        rhs_shape = np.ones(lhs.ndim, dtype=np.int64)
+        rhs_shape[-rhs.ndim:] = rhs.shape
+        rhs = rhs.reshape(*rhs_shape)
+        for i, (l, r) in enumerate(zip(lhs.shape, rhs.shape)):
+            if r != 1 and l != r:
+                raise ValueError("Can't copy sequence with size %d to array axis %d with dimension %d" % (
+                    r,
+                    i,
+                    l))
+
+        # (3) do the copy
+
+        n_elements = np.prod(lhs.shape)
+        _assign_kernel(lhs.ndim).forall(n_elements, stream=stream)(lhs, rhs)
+
 
 
 class IpcArrayHandle(object):
@@ -517,10 +618,19 @@ def auto_device(obj, stream=0, copy=True):
     if _driver.is_device_memory(obj):
         return obj, False
     else:
-        sentry_contiguous(obj)
         if isinstance(obj, np.void):
             devobj = from_record_like(obj, stream=stream)
         else:
+            # This allows you to pass non-array objects like constants
+            # and objects implementing the
+            # [array interface](https://docs.scipy.org/doc/numpy-1.13.0/reference/arrays.interface.html)
+            # into this function (with no overhead -- copies -- for `obj`s
+            # that are already `ndarray`s.
+            obj = np.array(
+                obj,
+                copy=False,
+                subok=True)
+            sentry_contiguous(obj)
             devobj = from_array_like(obj, stream=stream)
         if copy:
             devobj.copy_to_device(obj, stream=stream)

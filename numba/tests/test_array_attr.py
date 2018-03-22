@@ -94,8 +94,12 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
         self.a = np.arange(20, dtype=np.int32).reshape(4, 5)
 
     def check_unary(self, pyfunc, arr):
-        cfunc = self.get_cfunc(pyfunc, (typeof(arr),))
+        aryty = typeof(arr)
+        cfunc = self.get_cfunc(pyfunc, (aryty,))
         expected = pyfunc(arr)
+        self.assertPreciseEqual(cfunc(arr), expected)
+        # Retry with forced any layout
+        cfunc = self.get_cfunc(pyfunc, (aryty.copy(layout='A'),))
         self.assertPreciseEqual(cfunc(arr), expected)
 
     def check_unary_with_arrays(self, pyfunc,
@@ -162,9 +166,9 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
         self.check_unary_with_arrays(array_flags_c_contiguous)
 
     def test_flags_f_contiguous(self):
-        # Numpy 1.10 is more opportunistic when computing contiguousness
+        # Numpy 1.12+ is more opportunistic when computing contiguousness
         # of empty arrays.
-        use_reshaped_empty_array = numpy_support.version < (1, 10)
+        use_reshaped_empty_array = numpy_support.version > (1, 11)
         self.check_unary_with_arrays(array_flags_f_contiguous,
                                      use_reshaped_empty_array=use_reshaped_empty_array)
 

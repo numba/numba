@@ -356,6 +356,10 @@ class Numpy_method_redirection(AbstractTemplate):
                 def sum_stub(arr, axis):
                     pass
                 pysig = utils.pysignature(sum_stub)
+            elif self.method_name == 'argsort':
+                def argsort_stub(arr, kind='quicksort'):
+                    pass
+                pysig = utils.pysignature(argsort_stub)
             else:
                 fmt = "numba doesn't support kwarg for {}"
                 raise TypingError(fmt.format(self.method_name))
@@ -376,7 +380,7 @@ def _numpy_redirect(fname):
                dict(key=numpy_function, method_name=fname))
     infer_global(numpy_function, types.Function(cls))
     # special case literal support for 'sum'
-    if fname == 'sum':
+    if fname in ['sum', 'argsort']:
         cls.support_literals = True
 
 for func in ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
@@ -522,7 +526,7 @@ class NdConstructorLike(CallableTemplate):
             if nb_dtype is not None:
                 if isinstance(arg, types.Array):
                     layout = arg.layout if arg.layout != 'A' else 'C'
-                    return arg.copy(dtype=nb_dtype, layout=layout)
+                    return arg.copy(dtype=nb_dtype, layout=layout, readonly=False)
                 else:
                     return types.Array(nb_dtype, 0, 'C')
 
@@ -566,7 +570,7 @@ if numpy_version >= (1, 8):
                     nb_dtype = arg
                 if nb_dtype is not None:
                     if isinstance(arg, types.Array):
-                        return arg.copy(dtype=nb_dtype)
+                        return arg.copy(dtype=nb_dtype, readonly=False)
                     else:
                         return types.Array(dtype=nb_dtype, ndim=0, layout='C')
 
@@ -693,6 +697,17 @@ class AsFortranArray(CallableTemplate):
         def typer(a):
             if isinstance(a, types.Array):
                 return a.copy(layout='F', ndim=max(a.ndim, 1))
+
+        return typer
+
+
+@infer_global(np.ascontiguousarray)
+class AsContiguousArray(CallableTemplate):
+
+    def generic(self):
+        def typer(a):
+            if isinstance(a, types.Array):
+                return a.copy(layout='C', ndim=max(a.ndim, 1))
 
         return typer
 

@@ -79,7 +79,7 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
                 The error-model affects divide-by-zero behavior.
                 Valid values are 'python' and 'numpy'. The 'python' model
                 raises exception.  The 'numpy' model sets the result to
-                *+/-inf* or *nan*.
+                *+/-inf* or *nan*. Default value is 'python'.
 
     Returns
     --------

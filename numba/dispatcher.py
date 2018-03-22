@@ -495,6 +495,10 @@ class Dispatcher(_DispatcherBase):
         self._type = types.Dispatcher(self)
         self.typingctx.insert_global(self, self._type)
 
+    @property
+    def _numba_type_(self):
+        return types.Dispatcher(self)
+
     def enable_caching(self):
         self._cache = FunctionCache(self.py_func)
 
@@ -658,9 +662,11 @@ class LiftedLoop(_DispatcherBase):
                     return existing.entry_point
 
                 assert not flags.enable_looplift, "Enable looplift flags is on"
+                # Clone IR to avoid mutation in rewrite pass
+                cloned_func_ir = self.func_ir.copy()
                 cres = compiler.compile_ir(typingctx=self.typingctx,
                                            targetctx=self.targetctx,
-                                           func_ir=self.func_ir,
+                                           func_ir=cloned_func_ir,
                                            args=args, return_type=return_type,
                                            flags=flags, locals=self.locals,
                                            lifted=(),

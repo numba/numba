@@ -50,6 +50,7 @@ class Flags(utils.ConfigOptions):
         'no_rewrites': False,
         'error_model': 'python',
         'fastmath': False,
+        'noalias': False,
     }
 
 
@@ -509,14 +510,9 @@ class BasePipeline(object):
         """
         # Ensure we have an IR and type information.
         assert self.func_ir
-        parfor_pass = ParforPass(
-            self.func_ir,
-            self.type_annotation.typemap,
-            self.type_annotation.calltypes,
-            self.return_type,
-            self.typingctx,
-            self.flags.auto_parallel
-            )
+        parfor_pass = ParforPass(self.func_ir, self.type_annotation.typemap,
+            self.type_annotation.calltypes, self.return_type, self.typingctx,
+            self.flags.auto_parallel, self.flags)
         parfor_pass.run()
 
         if config.WARNINGS:
@@ -969,7 +965,7 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
     # Lowering
     fndesc = funcdesc.PythonFunctionDescriptor.from_specialized_function(
         interp, typemap, restype, calltypes, mangler=targetctx.mangler,
-        inline=flags.forceinline)
+        inline=flags.forceinline, noalias=flags.noalias)
 
     lower = lowering.Lower(targetctx, library, fndesc, interp)
     lower.lower()

@@ -184,6 +184,8 @@ class BaseContext(object):
             if functy is not None:
                 func = functy
         if func in self._functions:
+            # Note: Duplicating code with types.Function.get_call_type().
+            #       *defns* are CallTemplates.
             defns = self._functions[func]
             for defn in defns:
                 res = defn.apply(args, kws)

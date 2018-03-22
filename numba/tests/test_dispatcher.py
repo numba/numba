@@ -8,6 +8,7 @@ import subprocess
 import sys
 import threading
 import warnings
+import inspect
 
 import numpy as np
 
@@ -15,10 +16,12 @@ from numba import unittest_support as unittest
 from numba import utils, jit, generated_jit, types, typeof
 from numba import config
 from numba import _dispatcher
+from numba.compiler import compile_isolated
 from numba.errors import NumbaWarning
 from .support import (TestCase, tag, temp_directory, import_dynamic,
                       override_env_config, capture_cache_log)
 from numba.targets import codegen
+from numba.caching import _UserWideCacheLocator
 
 import llvmlite.binding as ll
 
@@ -544,11 +547,11 @@ class TestDispatcherMethods(TestCase):
         # Call inspect_cfg(signature)
         cfg = foo.inspect_cfg(signature=foo.signatures[0])
         self._check_cfg_display(cfg)
-       
+
     @unittest.skipIf(config.IS_WIN32 and not config.IS_32BITS, "access violation on 64-bit windows")
     @unittest.skipIf(config.IS_OSX, "segfault on OSX")
     def test_inspect_cfg_with_python_wrapper(self):
-        # Exercise the .inspect_cfg() including the python wrapper. 
+        # Exercise the .inspect_cfg() including the python wrapper.
         # These are minimal tests and do not fully check the correctness of
         # the function.
         @jit
@@ -562,7 +565,7 @@ class TestDispatcherMethods(TestCase):
         foo(a1)
         foo(a2)
         foo(a3)
-        
+
         # Call inspect_cfg(signature, show_wrapper="python")
         cfg = foo.inspect_cfg(signature=foo.signatures[0],
                               show_wrapper="python")
@@ -945,6 +948,28 @@ class TestCache(BaseCacheUsecasesTest):
         f = mod.renamed_function2
         self.assertPreciseEqual(f(2), 8)
 
+    def test_frozen(self):
+        from .dummy_module import function
+        old_code = function.__code__
+        code_obj = compile('pass', 'tests/dummy_module.py', 'exec')
+        try:
+            function.__code__ = code_obj
+
+            source = inspect.getfile(function)
+            # doesn't return anything, since it cannot find the module
+            # fails unless the executable is frozen
+            locator = _UserWideCacheLocator.from_function(function, source)
+            self.assertIsNone(locator)
+
+            sys.frozen = True
+            # returns a cache locator object, only works when executable is frozen
+            locator = _UserWideCacheLocator.from_function(function, source)
+            self.assertIsInstance(locator, _UserWideCacheLocator)
+
+        finally:
+            function.__code__ = old_code
+            del sys.frozen
+
     def _test_pycache_fallback(self):
         """
         With a disabled __pycache__, test there is a working fallback
@@ -1280,6 +1305,111 @@ def cache_file_collision_tester(q, tempdir, modname_bar1, modname_bar2):
         r2 = bar2()
     q.put(buf.getvalue())
     q.put(r2)
+
+
+class TestDispatcherFunctionBoundaries(TestCase):
+    def test_pass_dispatcher_as_arg(self):
+        # Test that a Dispatcher object can be pass as argument
+        @jit(nopython=True)
+        def add1(x):
+            return x + 1
+
+        @jit(nopython=True)
+        def bar(fn, x):
+            return fn(x)
+
+        @jit(nopython=True)
+        def foo(x):
+            return bar(add1, x)
+
+        # Check dispatcher as argument inside NPM
+        inputs = [1, 11.1, np.arange(10)]
+        expected_results = [x + 1 for x in inputs]
+
+        for arg, expect in zip(inputs, expected_results):
+            self.assertPreciseEqual(foo(arg), expect)
+
+        # Check dispatcher as argument from python
+        for arg, expect in zip(inputs, expected_results):
+            self.assertPreciseEqual(bar(add1, arg), expect)
+
+    def test_dispatcher_as_arg_usecase(self):
+        @jit(nopython=True)
+        def maximum(seq, cmpfn):
+            tmp = seq[0]
+            for each in seq[1:]:
+                cmpval = cmpfn(tmp, each)
+                if cmpval < 0:
+                    tmp = each
+            return tmp
+
+        got = maximum([1, 2, 3, 4], cmpfn=jit(lambda x, y: x - y))
+        self.assertEqual(got, 4)
+        got = maximum(list(zip(range(5), range(5)[::-1])),
+                      cmpfn=jit(lambda x, y: x[0] - y[0]))
+        self.assertEqual(got, (4, 0))
+        got = maximum(list(zip(range(5), range(5)[::-1])),
+                      cmpfn=jit(lambda x, y: x[1] - y[1]))
+        self.assertEqual(got, (0, 4))
+
+    def test_dispatcher_cannot_return_to_python(self):
+        @jit(nopython=True)
+        def foo(fn):
+            return fn
+
+        fn = jit(lambda x: x)
+
+        with self.assertRaises(TypeError) as raises:
+            foo(fn)
+        self.assertRegexpMatches(str(raises.exception),
+                                 "cannot convert native .* to Python object")
+
+    def test_dispatcher_in_sequence_arg(self):
+        @jit(nopython=True)
+        def one(x):
+            return x + 1
+
+        @jit(nopython=True)
+        def two(x):
+            return one(one(x))
+
+        @jit(nopython=True)
+        def three(x):
+            return one(one(one(x)))
+
+        @jit(nopython=True)
+        def choose(fns, x):
+            return fns[0](x), fns[1](x), fns[2](x)
+
+        # Tuple case
+        self.assertEqual(choose((one, two, three), 1), (2, 3, 4))
+        # List case
+        self.assertEqual(choose([one, one, one], 1), (2, 2, 2))
+
+
+class TestBoxingDefaultError(unittest.TestCase):
+    # Testing default error at boxing/unboxing
+    def test_unbox_runtime_error(self):
+        # Dummy type has no unbox support
+        def foo(x):
+            pass
+        cres = compile_isolated(foo, (types.Dummy("dummy_type"),))
+        with self.assertRaises(TypeError) as raises:
+            # Can pass in whatever and the unbox logic will always raise
+            # without checking the input value.
+            cres.entry_point(None)
+        self.assertEqual(str(raises.exception), "can't unbox dummy_type type")
+
+    def test_box_runtime_error(self):
+        def foo():
+            return unittest  # Module type has no boxing logic
+        cres = compile_isolated(foo, ())
+        with self.assertRaises(TypeError) as raises:
+            # Can pass in whatever and the unbox logic will always raise
+            # without checking the input value.
+            cres.entry_point()
+        pat = "cannot convert native Module.* to Python object"
+        self.assertRegexpMatches(str(raises.exception), pat)
 
 
 if __name__ == '__main__':

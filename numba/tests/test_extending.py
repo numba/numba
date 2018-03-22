@@ -466,7 +466,7 @@ class TestHighLevelExtending(TestCase):
         np.testing.assert_equal(expect, got)
         # Verify that the Module type cannot be returned to CPython
         bad_cfunc = jit(nopython=True)(non_boxable_bad_usecase)
-        with self.assertRaises(NotImplementedError) as raises:
+        with self.assertRaises(TypeError) as raises:
             bad_cfunc()
         errmsg = str(raises.exception)
         expectmsg = "cannot convert native Module"

@@ -754,6 +754,16 @@ class Block(object):
             if isinstance(inst, cls):
                 yield inst
 
+    def find_variable_assignment(self, name):
+        """
+        Returns the assignment inst associated with variable "name", None if
+        it cannot be found.
+        """
+        for x in self.find_insts(cls=Assign):
+            if x.target.name == name:
+                return x
+        return None
+
     def prepend(self, inst):
         assert isinstance(inst, Stmt)
         self.body.insert(0, inst)

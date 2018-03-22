@@ -26,6 +26,7 @@ from numba.typing.templates import infer_global, AbstractTemplate
 from numba import stencilparfor
 from numba.stencilparfor import StencilPass
 
+
 from numba.ir_utils import (
     mk_unique_var,
     next_label,
@@ -421,6 +422,7 @@ class Parfor(ir.Expr, ir.Stmt):
             index_var,
             equiv_set,
             pattern,
+            flags,
             no_sequential_lowering=False):
         super(Parfor, self).__init__(
             op='parfor',
@@ -441,6 +443,7 @@ class Parfor(ir.Expr, ir.Stmt):
         # for example, a parfor could be from the stencil pattern with
         # the neighborhood option
         self.patterns = [pattern]
+        self.flags = flags
         # if True, this parfor shouldn't be lowered sequentially even with the
         # sequential lowering option
         self.no_sequential_lowering = no_sequential_lowering
@@ -600,7 +603,7 @@ class ParforPass(object):
     stage.
     """
 
-    def __init__(self, func_ir, typemap, calltypes, return_type, typingctx, options):
+    def __init__(self, func_ir, typemap, calltypes, return_type, typingctx, options, flags):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
@@ -610,6 +613,7 @@ class ParforPass(object):
         self.array_analysis = array_analysis.ArrayAnalysis(typingctx, func_ir, typemap,
                                                            calltypes)
         ir_utils._max_label = max(func_ir.blocks.keys())
+        self.flags = flags
 
     def run(self):
         """run parfor conversion pass: replace Numpy calls
@@ -620,7 +624,7 @@ class ParforPass(object):
         # run stencil translation to parfor
         if self.options.stencil:
             stencil_pass = StencilPass(self.func_ir, self.typemap, self.calltypes,
-                                            self.array_analysis, self.typingctx)
+                                            self.array_analysis, self.typingctx, self.flags)
             stencil_pass.run()
         if self.options.setitem:
             self._convert_setitem(self.func_ir.blocks)
@@ -980,7 +984,12 @@ class ParforPass(object):
                                 raise NotImplementedError(
                                     "Only constant step size of 1 is supported for prange")
                         index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
-                        index_var_typ = types.intp
+                        # assume user-provided start to prange can be negative
+                        # this is the only case parfor can have negative index
+                        if isinstance(start, int) and start >= 0:
+                            index_var_typ = types.uintp
+                        else:
+                            index_var_typ = types.intp
                         loops = [LoopNest(index_var, start, size_var, step)]
                         self.typemap[index_var.name] = index_var_typ
 
@@ -989,7 +998,8 @@ class ParforPass(object):
                     parfor = Parfor(loops, init_block, loop_body, loc,
                                     orig_index_var if mask_indices else index_var,
                                     equiv_set,
-                                    ("prange", loop_kind))
+                                    ("prange", loop_kind),
+                                    self.flags)
                     # add parfor to entry block's jump target
                     jump = blocks[entry].body[-1]
                     jump.target = list(loop.exits)[0]
@@ -1023,10 +1033,16 @@ class ParforPass(object):
             require(op == 'build_tuple' and len(seq) == ndim)
             count_consts = 0
             mask_indices = []
+            mask_var = None
             for ind in seq:
                 index_typ = self.typemap[ind.name]
                 if (isinstance(index_typ, types.npytypes.Array) and
                     isinstance(index_typ.dtype, types.Boolean)):
+                    mask_var = ind
+                    mask_typ = index_typ.dtype
+                    mask_indices.append(None)
+                elif (isinstance(index_typ, types.npytypes.Array) and
+                    isinstance(index_typ.dtype, types.Integer)):
                     mask_var = ind
                     mask_typ = index_typ.dtype
                     mask_indices.append(None)
@@ -1115,13 +1131,13 @@ class ParforPass(object):
             tuple_var = ir.Var(scope, mk_unique_var(
                 "$parfor_index_tuple_var"), loc)
             self.typemap[tuple_var.name] = types.containers.UniTuple(
-                types.intp, ndims)
+                types.uintp, ndims)
             tuple_call = ir.Expr.build_tuple(list(index_vars), loc)
             tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
             body_block.body.append(tuple_assign)
-            return tuple_var, types.containers.UniTuple(types.intp, ndims)
+            return tuple_var, types.containers.UniTuple(types.uintp, ndims)
         elif ndims == 1:
-            return index_vars[0], types.intp
+            return index_vars[0], types.uintp
         else:
             raise NotImplementedError(
                 "Parfor does not handle arrays of dimension 0")
@@ -1135,7 +1151,7 @@ class ParforPass(object):
         for size_var in size_vars:
             index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
             index_vars.append(index_var)
-            self.typemap[index_var.name] = types.intp
+            self.typemap[index_var.name] = types.uintp
             loopnests.append(LoopNest(index_var, 0, size_var, 1))
         return index_vars, loopnests
 
@@ -1180,7 +1196,8 @@ class ParforPass(object):
                 avail_vars))
 
         parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
-                        ('arrayexpr {}'.format(repr_arrayexpr(arrayexpr.expr)),))
+                        ('arrayexpr {}'.format(repr_arrayexpr(arrayexpr.expr)),), 
+                        self.flags)
 
         setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
         self.calltypes[setitem_node] = signature(
@@ -1231,7 +1248,7 @@ class ParforPass(object):
         for size_var in size_vars:
             index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
             index_vars.append(index_var)
-            self.typemap[index_var.name] = types.intp
+            self.typemap[index_var.name] = types.uintp
             loopnests.append(LoopNest(index_var, 0, size_var, 1))
 
         # generate body
@@ -1240,7 +1257,7 @@ class ParforPass(object):
         index_var, index_var_typ = self._make_index_var(
                  scope, index_vars, body_block)
         parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
-                        ('setitem',))
+                        ('setitem',), self.flags)
         if shape:
             # slice subarray
             parfor.loop_body = {body_label: body_block}
@@ -1360,7 +1377,7 @@ class ParforPass(object):
         body_block.body.append(value_assign)
 
         parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
-                        ('{} function'.format(call_name,)))
+                        ('{} function'.format(call_name,)), self.flags)
 
         setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
         self.calltypes[setitem_node] = signature(
@@ -1461,7 +1478,7 @@ class ParforPass(object):
             ])
 
         parfor = Parfor(loopnests, init_block, loop_body, loc, index_var,
-                        equiv_set, ('{} function'.format(call_name),))
+                        equiv_set, ('{} function'.format(call_name),), self.flags)
         return parfor
 
 
@@ -1621,6 +1638,14 @@ def _arrayexpr_tree_to_ir(
                 func_var = ir.Var(scope, mk_unique_var(func_var_name), loc)
                 typemap[func_var.name] = typemap[func_var_name]
                 func_var_def = func_ir.get_definition(func_var_name)
+                if isinstance(func_var_def, ir.Expr) and func_var_def.op == 'getattr' and func_var_def.attr == 'sqrt':
+                     g_math_var = ir.Var(scope, mk_unique_var("$math_g_var"), loc)
+                     typemap[g_math_var.name] = types.misc.Module(math)
+                     g_math = ir.Global('math', math, loc)
+                     g_math_assign = ir.Assign(g_math, g_math_var, loc)
+                     func_var_def = ir.Expr.getattr(g_math_var, 'sqrt', loc)
+                     out_ir.append(g_math_assign)
+#                     out_ir.append(func_var_def)
                 ir_expr = ir.Expr.call(func_var, arg_vars, (), loc)
                 call_typ = typemap[func_var.name].get_call_type(
                     typing.Context(), [el_typ] * len(arg_vars), {})
@@ -1720,7 +1745,7 @@ def _gen_arrayexpr_getitem(
         # Const(0)
         const_node = ir.Const(0, var.loc)
         const_var = ir.Var(var.scope, mk_unique_var("$const_ind_0"), loc)
-        typemap[const_var.name] = types.intp
+        typemap[const_var.name] = types.uintp
         const_assign = ir.Assign(const_node, const_var, loc)
         out_ir.append(const_assign)
         index_var = const_var
@@ -1732,12 +1757,12 @@ def _gen_arrayexpr_getitem(
         ind_offset = num_indices - ndims
         tuple_var = ir.Var(var.scope, mk_unique_var(
             "$parfor_index_tuple_var_bcast"), loc)
-        typemap[tuple_var.name] = types.containers.UniTuple(types.intp, ndims)
+        typemap[tuple_var.name] = types.containers.UniTuple(types.uintp, ndims)
         # Just in case, const var for size 1 dim access index: $const0 =
         # Const(0)
         const_node = ir.Const(0, var.loc)
         const_var = ir.Var(var.scope, mk_unique_var("$const_ind_0"), loc)
-        typemap[const_var.name] = types.intp
+        typemap[const_var.name] = types.uintp
         const_assign = ir.Assign(const_node, const_var, loc)
         out_ir.append(const_assign)
         index_vars = []
@@ -1788,7 +1813,9 @@ def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes):
     dprint_func_ir(func_ir, "after parfor sequential lowering")
     simplify(func_ir, typemap, calltypes)
     dprint_func_ir(func_ir, "after parfor sequential simplify")
-
+    # add dels since simplify removes dels
+    post_proc = postproc.PostProcessor(func_ir)
+    post_proc.run()
     return
 
 
@@ -2558,7 +2585,7 @@ def _add_liveness_return_block(blocks, lives, typemap):
     tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
     # dummy type for tuple_var
     typemap[tuple_var.name] = types.containers.UniTuple(
-        types.intp, 2)
+        types.uintp, 2)
     live_vars = [ir.Var(scope, v, loc) for v in lives]
     tuple_call = ir.Expr.build_tuple(live_vars, loc)
     blocks[return_label].body.append(ir.Assign(tuple_call, tuple_var, loc))

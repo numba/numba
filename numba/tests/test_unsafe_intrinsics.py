@@ -8,7 +8,7 @@ from .support import TestCase
 from numba import njit
 from numba.unsafe.tuple import tuple_setitem
 from numba.unsafe.ndarray import to_fixed_tuple
-from numba.errors import TypingError, RequireConstValue
+from numba.errors import TypingError
 
 
 class TestTupleIntrinsic(TestCase):
@@ -79,7 +79,7 @@ class TestNdarrayIntrinsic(TestCase):
         def tuple_with_length(array, length):
             return to_fixed_tuple(array, length)
 
-        with self.assertRaises(RequireConstValue) as raises:
+        with self.assertRaises(TypingError) as raises:
             tuple_with_length(np.random.random(3), 1)
-        self.assertIn("*length* argument must be a constant",
-                      str(raises.exception))
+        expectmsg = "RequireConstValue: *length* argument must be a constant"
+        self.assertIn(expectmsg, str(raises.exception))

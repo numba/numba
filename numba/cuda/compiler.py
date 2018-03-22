@@ -75,7 +75,8 @@ def compile_kernel(pyfunc, args, link, debug=False, inline=False,
     cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=inline)
     fname = cres.fndesc.llvm_func_name
     lib, kernel = cres.target_context.prepare_cuda_kernel(cres.library, fname,
-                                                          cres.signature.args)
+                                                          cres.signature.args,
+                                                          debug=debug)
 
     cukern = CUDAKernel(llvm_module=lib._final_module,
                         name=kernel.name,

@@ -28,12 +28,13 @@ def _compute_last_ind(dim_size, index_const):
         return dim_size
 
 class StencilPass(object):
-    def __init__(self, func_ir, typemap, calltypes, array_analysis, typingctx):
+    def __init__(self, func_ir, typemap, calltypes, array_analysis, typingctx, flags):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
         self.array_analysis = array_analysis
         self.typingctx = typingctx
+        self.flags = flags
 
     def run(self):
         """ Finds all calls to StencilFuncs in the IR and converts them to parfor.
@@ -295,7 +296,7 @@ class StencilPass(object):
 
         pattern = ('stencil', [start_lengths, end_lengths])
         parfor = numba.parfor.Parfor(loopnests, init_block, stencil_blocks,
-                                     loc, parfor_ind_var, equiv_set, pattern)
+                                     loc, parfor_ind_var, equiv_set, pattern, self.flags)
         gen_nodes.append(parfor)
         gen_nodes.append(ir.Assign(out_arr, target, loc))
         return gen_nodes
