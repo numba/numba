@@ -1406,6 +1406,13 @@ def array_transpose(context, builder, sig, args):
     return array_T(context, builder, sig.args[0], args[0])
 
 
+@overload(np.transpose)
+def numpy_transpose(a):
+    def np_transpose_impl(a):
+        return a.transpose()
+    return np_transpose_impl
+
+
 def permute_arrays(axis, shape, strides):
     if len(axis) != len(set(axis)):
         raise ValueError("repeated axis in transpose")
