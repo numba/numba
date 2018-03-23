@@ -783,7 +783,7 @@ class JITCPUCodegen(BaseCPUCodegen):
         # we can specialize for this CPU.
         options['cpu'] = self._get_host_cpu_name()
         options['reloc'] = 'default'
-        options['codemodel'] = 'jitdefault'
+        options['codemodel'] = 'default'
 
         # Set feature attributes (such as ISA extensions)
         # This overrides default feature selection by CPU model above
