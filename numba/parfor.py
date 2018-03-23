@@ -909,6 +909,9 @@ class ParforPass(object):
                             expr.value = result[0]
                         return result
 
+                    # pndindex and prange are provably positive except when
+                    # user provides negative start to prange()
+                    unsigned_index = True
                     # TODO: support array mask optimization for prange
                     # TODO: refactor and simplify array mask optimization
                     if loop_kind == 'pndindex':
@@ -990,11 +993,17 @@ class ParforPass(object):
                             index_var_typ = types.uintp
                         else:
                             index_var_typ = types.intp
+                            unsigned_index = False
                         loops = [LoopNest(index_var, start, size_var, step)]
                         self.typemap[index_var.name] = index_var_typ
 
                     index_var_map = {v: index_var for v in loop_index_vars}
                     replace_vars(loop_body, index_var_map)
+                    if unsigned_index:
+                        # need to replace signed array access indices to enable
+                        # optimizations (see #2846)
+                        self._replace_loop_access_indices(
+                            loop_body, loop_index_vars, index_var)
                     parfor = Parfor(loops, init_block, loop_body, loc,
                                     orig_index_var if mask_indices else index_var,
                                     equiv_set,
@@ -1008,6 +1017,26 @@ class ParforPass(object):
                     blocks.pop(loop.header)
                     for l in body_labels:
                         blocks.pop(l)
+
+    def _replace_loop_access_indices(self, loop_body, index_set, new_index):
+        """
+        Replace array access indices in a loop body with a new index.
+        index_set has all the variables that are equivalent to loop index.
+        """
+        for block in loop_body.values():
+            for stmt in block.body:
+                if (isinstance(stmt, ir.Assign)
+                        and isinstance(stmt.value, ir.Expr)
+                        and stmt.value.op == 'getitem'):
+                    ind_def = guard(get_definition, self.func_ir,
+                                    stmt.value.index, lhs_only=True)
+                    if ind_def is not None and ind_def.name in index_set:
+                        stmt.value.index = new_index
+                if isinstance(stmt, ir.SetItem):
+                    ind_def = guard(get_definition, self.func_ir, stmt.index,
+                                    lhs_only=True)
+                    if ind_def is not None and ind_def.name in index_set:
+                        stmt.index = new_index
 
     def _find_mask(self, arr_def):
         """check if an array is of B[...M...], where M is a
@@ -1196,7 +1225,7 @@ class ParforPass(object):
                 avail_vars))
 
         parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
-                        ('arrayexpr {}'.format(repr_arrayexpr(arrayexpr.expr)),), 
+                        ('arrayexpr {}'.format(repr_arrayexpr(arrayexpr.expr)),),
                         self.flags)
 
         setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
