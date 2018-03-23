@@ -280,7 +280,7 @@ def test_kmeans_example(A, numCenter, numIter, init_centroids):
 
     return centroids
 
-def countParfors(test_func, args, **kws):
+def get_optimized_numba_ir(test_func, args, **kws):
     typingctx = typing.Context()
     targetctx = cpu.CPUContext(typingctx)
     test_ir = compiler.run_frontend(test_func)
@@ -289,8 +289,11 @@ def countParfors(test_func, args, **kws):
     else:
         options = cpu.ParallelOptions(True)
 
+    tp = TestPipeline(typingctx, targetctx, args, test_ir)
+
     with cpu_target.nested_context(typingctx, targetctx):
-        tp = TestPipeline(typingctx, targetctx, args, test_ir)
+        typingctx.refresh()
+        targetctx.refresh()
 
         inline_pass = inline_closurecall.InlineClosureCallPass(tp.func_ir, options)
         inline_pass.run()
@@ -323,6 +326,11 @@ def countParfors(test_func, args, **kws):
             tp.func_ir, tp.typemap, tp.calltypes, tp.return_type,
             tp.typingctx, options, flags)
         parfor_pass.run()
+
+    return test_ir, tp
+
+def countParfors(test_func, args, **kws):
+    test_ir, tp = get_optimized_numba_ir(test_func, args, **kws)
     ret_count = 0
 
     for label, block in test_ir.blocks.items():
@@ -333,10 +341,30 @@ def countParfors(test_func, args, **kws):
     return ret_count
 
 
+def countArrays(test_func, args, **kws):
+    test_ir, tp = get_optimized_numba_ir(test_func, args, **kws)
+    return _count_arrays_inner(test_ir.blocks, tp.typemap)
+
+def _count_arrays_inner(blocks, typemap):
+    ret_count = 0
+    arr_set = set()
+
+    for label, block in blocks.items():
+        for i, inst in enumerate(block.body):
+            if isinstance(inst, numba.parfor.Parfor):
+                parfor_blocks = inst.loop_body.copy()
+                parfor_blocks[0] = inst.init_block
+                ret_count += _count_arrays_inner(parfor_blocks, typemap)
+            if (isinstance(inst, ir.Assign)
+                    and isinstance(typemap[inst.target.name],
+                                    types.ArrayCompatible)):
+                arr_set.add(inst.target.name)
+
+    ret_count += len(arr_set)
+    return ret_count
+
 class TestPipeline(object):
     def __init__(self, typingctx, targetctx, args, test_ir):
-        typingctx.refresh()
-        targetctx.refresh()
         self.typingctx = typingctx
         self.targetctx = targetctx
         self.args = args
@@ -903,6 +931,17 @@ class TestParfors(TestParforsBase):
         self.check(test_impl2, A)
         self.check(test_impl2, B)
         self.check(test_impl2, C)
+
+
+    @skip_unsupported
+    def test_parfor_array_access1(self):
+        def test_impl(n):
+            A = np.ones(n)
+            return A.sum()
+
+        self.assertEqual(countArrays(test_impl, (types.intp,)), 0)
+        n = 211
+        self.check(test_impl, n)
 
 
 class TestPrangeBase(TestParforsBase):
