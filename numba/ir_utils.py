@@ -843,7 +843,6 @@ apply_copy_propagate_extensions = {}
 
 
 def apply_copy_propagate(blocks, in_copies, name_var_table, typemap, calltypes,
-                         ext_func=lambda a, b, c, d:None, ext_data=None,
                          save_copies=None):
     """apply copy propagation to IR: replace variables when copies available"""
     # save_copies keeps an approximation of the copies that were applied, so
@@ -856,10 +855,9 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, typemap, calltypes,
         var_dict = {l: name_var_table[r] for l, r in in_copies[label]}
         # assignments as dict to replace with latest value
         for stmt in block.body:
-            ext_func(label, stmt, var_dict, ext_data)
             if type(stmt) in apply_copy_propagate_extensions:
                 f = apply_copy_propagate_extensions[type(stmt)]
-                f(stmt, var_dict, name_var_table, ext_func, ext_data,
+                f(stmt, var_dict, name_var_table,
                     typemap, calltypes, save_copies)
             # only rhs of assignments should be replaced
             # e.g. if x=y is available, x in x=z shouldn't be replaced

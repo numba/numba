@@ -58,14 +58,9 @@ class TestRemoveDead(unittest.TestCase):
                 html_output=config.HTML)
             remove_dels(test_ir.blocks)
             in_cps, out_cps = copy_propagate(test_ir.blocks, typemap)
-            #print("in_cps = ", in_cps)
-            #print("out_cps = ", out_cps)
-            apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(test_ir.blocks), typemap, calltypes, null_func, None)
-            #print(test_ir.dump())
+            apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(test_ir.blocks), typemap, calltypes)
 
-            #print("findAssign = ", findAssign(test_ir, "x"))
             remove_dead(test_ir.blocks, test_ir.arg_names)
-            #print(test_ir.dump())
             self.assertFalse(findLhsAssign(test_ir, "x"))
 
 if __name__ == "__main__":
