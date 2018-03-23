@@ -1023,20 +1023,56 @@ class ParforPass(object):
         Replace array access indices in a loop body with a new index.
         index_set has all the variables that are equivalent to loop index.
         """
-        for block in loop_body.values():
+        # treat new index like others since replacing it with itself is ok
+        index_set.add(new_index.name)
+
+        # add dummy return to last block for CFG computation
+        # max is last block since we add it manually for prange
+        last_label = max(loop_body.keys())
+        loop_body[last_label].body.append(
+            ir.Return(0, ir.Loc("parfors_dummy", -1)))
+
+        labels = find_topo_order(loop_body)
+
+        # remove dummy return
+        loop_body[last_label].body.pop()
+
+        first_label = labels[0]
+
+        for l in labels:
+            block = loop_body[l]
             for stmt in block.body:
+                if (isinstance(stmt, ir.Assign)
+                        and isinstance(stmt.value, ir.Var)):
+                    # the first block dominates others so we can use copies
+                    # of indices safely
+                    if l == first_label and stmt.value.name in index_set:
+                        index_set.add(stmt.target.name)
+                    # make sure parallel index is not overwritten
+                    elif stmt.target.name in index_set:
+                        raise ValueError(
+                            "Overwrite of parallel loop index at {}".format(
+                            stmt.target.loc))
+                # handle getitem
                 if (isinstance(stmt, ir.Assign)
                         and isinstance(stmt.value, ir.Expr)
                         and stmt.value.op == 'getitem'):
                     ind_def = guard(get_definition, self.func_ir,
                                     stmt.value.index, lhs_only=True)
-                    if ind_def is not None and ind_def.name in index_set:
+                    if (stmt.value.index.name in index_set
+                            or (ind_def is not None
+                                and ind_def.name in index_set)):
                         stmt.value.index = new_index
+                # handle setitem
                 if isinstance(stmt, ir.SetItem):
                     ind_def = guard(get_definition, self.func_ir, stmt.index,
                                     lhs_only=True)
-                    if ind_def is not None and ind_def.name in index_set:
+                    if (stmt.index.name in index_set
+                            or (ind_def is not None
+                                and ind_def.name in index_set)):
                         stmt.index = new_index
+
+        return
 
     def _find_mask(self, arr_def):
         """check if an array is of B[...M...], where M is a
