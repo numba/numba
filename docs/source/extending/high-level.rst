@@ -79,9 +79,10 @@ Importing Cython Functions
 --------------------------
 
 The function ``get_cython_function_address`` obtains the address of a
-C function in a Cython extension module, which can then be cast to a
-function for use in jitted functions. For example, suppose that you
-have the file ``foo.pyx``::
+C function in a Cython extension module. The address can be used to
+access the C function via a :func:`ctypes.CFUNCTYPE` callback, thus
+allowing use of the C function inside a Numba jitted function. For
+example, suppose that you have the file ``foo.pyx``::
 
    from libc.math cimport exp
 

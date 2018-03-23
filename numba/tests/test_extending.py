@@ -731,13 +731,16 @@ class TestImportCythonFunction(unittest.TestCase):
         self.assertEqual(j0(0), 1)
 
     def test_missing_module(self):
-        with self.assertRaises(ImportError):
+        with self.assertRaises(ImportError) as raises:
             addr = get_cython_function_address("fakemodule", "fakefunction")
+        self.assertEqual("No module named 'fakemodule'", str(raises.exception))
 
     @unittest.skipIf(sc is None, "Only run if SciPy >= 0.19 is installed")
     def test_missing_function(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as raises:
             addr = get_cython_function_address("scipy.special.cython_special", "foo")
+        msg = "No function 'foo' found in __pyx_capi__ of 'scipy.special.cython_special'"
+        self.assertEqual(msg, str(raises.exception))
 
 
 if __name__ == '__main__':

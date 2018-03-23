@@ -580,8 +580,8 @@ import_cython_function(const char *module_name, const char *function_name)
     if (cobj == NULL) {
 	PyErr_Clear();
 	PyErr_Format(PyExc_ValueError,
-		     "No function '%s' found in __pyx_capi__ of the module",
-		     function_name);
+		     "No function '%s' found in __pyx_capi__ of '%s'",
+		     function_name, module_name);
         return NULL;
     }
     /* 2.7+ => Cython exports a PyCapsule */
@@ -611,7 +611,7 @@ _numba_import_cython_function(PyObject *self, PyObject *args)
     res = PyLong_FromVoidPtr(p);
     if (res == NULL) {
       PyErr_SetString(PyExc_RuntimeError,
-		      "Couldn't convert function address to int");
+		      "Could not convert function address to int");
       return NULL;
     }
     return res;
