@@ -602,7 +602,6 @@ class TestIntrinsic(TestCase):
 
         # Test
         arr = np.arange(10, dtype=np.float32)
-        foo(arr)
         with captured_stdout() as buf:
             foo(arr)
             got = buf.getvalue().splitlines()
