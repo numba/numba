@@ -6,6 +6,7 @@ import pickle
 import multiprocessing
 import ctypes
 from distutils.version import LooseVersion
+import re
 
 import numpy as np
 
@@ -733,7 +734,10 @@ class TestImportCythonFunction(unittest.TestCase):
     def test_missing_module(self):
         with self.assertRaises(ImportError) as raises:
             addr = get_cython_function_address("fakemodule", "fakefunction")
-        self.assertEqual("No module named 'fakemodule'", str(raises.exception))
+        # The quotes are not there in Python 2
+        msg = "No module named '?fakemodule'?"
+        match = re.match(msg, str(raises.exception))
+        self.assertIsNotNone(match)
 
     @unittest.skipIf(sc is None, "Only run if SciPy >= 0.19 is installed")
     def test_missing_function(self):
