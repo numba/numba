@@ -2541,10 +2541,12 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, typemap):
         for stmt in block.body:
             if (isinstance(stmt, ir.SetItem) and stmt.index.name ==
                     parfor.index_var.name and stmt.target.name not in lives):
-                saved_values[stmt.target.name] = stmt.value
                 # saved values of aliases of SetItem target array are invalid
                 for w in alias_map.get(stmt.target.name, []):
                     saved_values.pop(w, None)
+                # set saved value after invalidation since alias_map may
+                # contain the array itself (e.g. pi example)
+                saved_values[stmt.target.name] = stmt.value
                 continue
             if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
                 rhs = stmt.value
