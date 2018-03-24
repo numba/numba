@@ -476,6 +476,7 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, 100000, decimal=1)
         self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
+        self.assertTrue(countArrays(test_impl, (types.intp,)) == 0)
 
     @skip_unsupported
     @tag('important')
@@ -488,6 +489,7 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, 256)
         self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
+        self.assertTrue(countArrays(test_impl, (types.intp,)) == 0)
 
     @skip_unsupported
     @tag('important')
