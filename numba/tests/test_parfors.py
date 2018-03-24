@@ -1004,6 +1004,21 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, n)
         self.assertEqual(countNonParforArrayAccesses(test_impl, (types.intp,)), 0)
 
+    @skip_unsupported
+    def test_parfor_array_access3(self):
+        def test_impl(n):
+            A = np.ones(n, np.int64)
+            m = 0
+            for i in numba.prange(len(A)):
+                m += A[i]
+                if m==2:
+                    i = m
+
+        n = 211
+        with self.assertRaises(ValueError) as raises:
+            self.check(test_impl, n)
+        self.assertIn("Overwrite of parallel loop index", str(raises.exception))
+
 
 class TestPrangeBase(TestParforsBase):
 
