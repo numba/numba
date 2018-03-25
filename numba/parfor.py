@@ -494,7 +494,7 @@ def _analyze_parfor(parfor, equiv_set, typemap, array_analysis):
     """
     func_ir = array_analysis.func_ir
     parfor_blocks = wrap_parfor_blocks(parfor)
-    build_definitions(blocks=parfor_blocks, func_ir=func_ir)
+    build_definitions(parfor_blocks, func_ir._definitions)
     # Since init_block get label 0 after wrap, we need to save
     # the equivset for the real block label 0.
     backup_equivset = array_analysis.equiv_sets.get(0, None)
@@ -647,7 +647,7 @@ class ParforPass(object):
         simplify(self.func_ir, self.typemap, self.calltypes)
 
         if self.options.fusion:
-            self.func_ir._definitions = build_definitions(blocks=self.func_ir.blocks)
+            self.func_ir._definitions = build_definitions(self.func_ir.blocks)
             self.array_analysis.equiv_sets = dict()
             self.array_analysis.run(self.func_ir.blocks)
             # reorder statements to maximize fusion
