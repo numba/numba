@@ -1082,6 +1082,8 @@ class ParforPass(object):
 
     def _replace_multi_dim_ind(self, ind_var, index_set, new_index):
         """
+        replace individual indices in multi-dimensional access variable, which
+        is a build_tuple
         """
         require(ind_var is not None)
         require(isinstance(self.typemap[ind_var.name], types.UniTuple))
