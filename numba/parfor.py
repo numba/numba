@@ -1063,6 +1063,10 @@ class ParforPass(object):
                             or (ind_def is not None
                                 and ind_def.name in index_set)):
                         stmt.value.index = new_index
+                    # corner case where one dimension of a multi-dim access
+                    # should be replaced
+                    guard(self._replace_multi_dim_ind, ind_def, index_set,
+                                                                     new_index)
                 # handle setitem
                 if isinstance(stmt, ir.SetItem):
                     ind_def = guard(get_definition, self.func_ir, stmt.index,
@@ -1071,8 +1075,21 @@ class ParforPass(object):
                             or (ind_def is not None
                                 and ind_def.name in index_set)):
                         stmt.index = new_index
+                    guard(self._replace_multi_dim_ind, ind_def, index_set,
+                                                                     new_index)
 
         return
+
+    def _replace_multi_dim_ind(self, ind_var, index_set, new_index):
+        """
+        """
+        require(ind_var is not None)
+        require(isinstance(self.typemap[ind_var.name], types.UniTuple))
+        ind_def_node = get_definition(self.func_ir, ind_var)
+        require(isinstance(ind_def_node, ir.Expr)
+                and ind_def_node.op == 'build_tuple')
+        ind_def_node.items = [new_index if v.name in index_set else v
+                              for v in ind_def_node.items]
 
     def _find_mask(self, arr_def):
         """check if an array is of B[...M...], where M is a
