@@ -25,7 +25,7 @@ from numba import types
 from numba.targets.registry import cpu_target
 from numba import config
 from numba.annotations import type_annotations
-from numba.ir_utils import (get_name_var_table, remove_dels, remove_dead)
+from numba.ir_utils import find_callname, guard, build_definitions
 from numba import ir
 from numba.compiler import compile_isolated, Flags
 from numba.bytecode import ByteCodeIter
@@ -326,6 +326,7 @@ def get_optimized_numba_ir(test_func, args, **kws):
             tp.func_ir, tp.typemap, tp.calltypes, tp.return_type,
             tp.typingctx, options, flags)
         parfor_pass.run()
+        test_ir._definitions = build_definitions(test_ir.blocks)
 
     return test_ir, tp
 
@@ -361,6 +362,30 @@ def _count_arrays_inner(blocks, typemap):
                 arr_set.add(inst.target.name)
 
     ret_count += len(arr_set)
+    return ret_count
+
+def countArrayAllocs(test_func, args, **kws):
+    test_ir, tp = get_optimized_numba_ir(test_func, args, **kws)
+    ret_count = 0
+
+    for block in test_ir.blocks.values():
+        ret_count += _count_array_allocs_inner(test_ir, block)
+
+    return ret_count
+
+def _count_array_allocs_inner(func_ir, block):
+    ret_count = 0
+    for inst in block.body:
+        if isinstance(inst, numba.parfor.Parfor):
+            ret_count += _count_array_allocs_inner(func_ir, inst.init_block)
+            for b in inst.loop_body.values():
+                ret_count += _count_array_allocs_inner(func_ir, b)
+
+        if (isinstance(inst, ir.Assign) and isinstance(inst.value, ir.Expr)
+                and inst.value.op == 'call'
+                and guard(find_callname, func_ir, inst.value) == ('empty', 'numpy')):
+            ret_count += 1
+
     return ret_count
 
 def countNonParforArrayAccesses(test_func, args, **kws):
@@ -505,6 +530,7 @@ class TestParfors(TestParforsBase):
         args = (numba.float64[:], numba.float64[:,:], numba.float64[:],
                 numba.int64)
         self.assertTrue(countParfors(test2, args) == 1)
+        self.assertTrue(countArrayAllocs(test2, args) == 1)
 
     @skip_unsupported
     @tag('important')
