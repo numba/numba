@@ -1084,7 +1084,8 @@ class ParforPass(object):
         """
         require(ind_var is not None)
         # check for Tuple instead of UniTuple since some dims could be slices
-        require(isinstance(self.typemap[ind_var.name], types.Tuple))
+        require(isinstance(self.typemap[ind_var.name],
+                (types.Tuple, types.UniTuple)))
         ind_def_node = get_definition(self.func_ir, ind_var)
         require(isinstance(ind_def_node, ir.Expr)
                 and ind_def_node.op == 'build_tuple')
