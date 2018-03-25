@@ -25,7 +25,7 @@ from numba import types
 from numba.targets.registry import cpu_target
 from numba import config
 from numba.annotations import type_annotations
-from numba.ir_utils import find_callname, guard, build_definitions
+from numba.ir_utils import find_callname, guard, build_definitions, get_definition
 from numba import ir
 from numba.compiler import compile_isolated, Flags
 from numba.bytecode import ByteCodeIter
@@ -390,9 +390,9 @@ def _count_array_allocs_inner(func_ir, block):
 
 def countNonParforArrayAccesses(test_func, args, **kws):
     test_ir, tp = get_optimized_numba_ir(test_func, args, **kws)
-    return _count_non_parfor_array_accesses_inner(test_ir.blocks, tp.typemap)
+    return _count_non_parfor_array_accesses_inner(test_ir, test_ir.blocks, tp.typemap)
 
-def _count_non_parfor_array_accesses_inner(blocks, typemap, parfor_indices=None):
+def _count_non_parfor_array_accesses_inner(f_ir, blocks, typemap, parfor_indices=None):
     ret_count = 0
     if parfor_indices is None:
         parfor_indices = set()
@@ -404,7 +404,7 @@ def _count_non_parfor_array_accesses_inner(blocks, typemap, parfor_indices=None)
                 parfor_blocks = stmt.loop_body.copy()
                 parfor_blocks[0] = stmt.init_block
                 ret_count += _count_non_parfor_array_accesses_inner(
-                    parfor_blocks, typemap, parfor_indices)
+                    f_ir, parfor_blocks, typemap, parfor_indices)
 
             # getitem
             if (isinstance(stmt, ir.Assign)
@@ -412,17 +412,29 @@ def _count_non_parfor_array_accesses_inner(blocks, typemap, parfor_indices=None)
                     and stmt.value.op == 'getitem'
                     and isinstance(typemap[stmt.value.value.name],
                                     types.ArrayCompatible)
-                    and stmt.value.index.name not in parfor_indices):
+                    and not _uses_indices(f_ir, stmt.value.index, parfor_indices)):
                 ret_count += 1
 
             # setitem
             if (isinstance(stmt, ir.SetItem)
                     and isinstance(typemap[stmt.target.name],
                                     types.ArrayCompatible)
-                    and stmt.index.name not in parfor_indices):
+                    and not _uses_indices(f_ir, stmt.index, parfor_indices)):
                 ret_count += 1
 
     return ret_count
+
+def _uses_indices(f_ir, index, index_set):
+    if index.name in index_set:
+        return True
+
+    ind_def = guard(get_definition, f_ir, index)
+    if isinstance(ind_def, ir.Expr) and ind_def.op == 'build_tuple':
+        varnames = set(v.name for v in ind_def.items)
+        return len(varnames & index_set) != 0
+
+    return False
+
 
 class TestPipeline(object):
     def __init__(self, typingctx, targetctx, args, test_ir):
@@ -1083,6 +1095,20 @@ class TestParfors(TestParforsBase):
                     self.assertTrue(parfor.index_var in stmt.value.items)
 
         self.assertTrue(build_tuple_found)
+
+    @skip_unsupported
+    def test_parfor_array_access5(self):
+        # one dim is slice in multi-dim access
+        def test_impl(n):
+            X = np.ones((n, 3))
+            y = 0
+            for i in numba.prange(n):
+                y += X[i,:].sum()
+            return y
+
+        n = 211
+        self.check(test_impl, n)
+        self.assertEqual(countNonParforArrayAccesses(test_impl, (types.intp,)), 0)
 
 
 class TestPrangeBase(TestParforsBase):
