@@ -64,7 +64,12 @@ from numba.ir_utils import (
     get_definition,
     build_definitions,
     replace_arg_nodes,
-    replace_returns)
+    replace_returns,
+    is_getitem,
+    is_setitem,
+    is_get_setitem,
+    index_var_of_get_setitem,
+    set_index_var_of_get_setitem)
 
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
@@ -1053,28 +1058,20 @@ class ParforPass(object):
                         raise ValueError(
                             "Overwrite of parallel loop index at {}".format(
                             stmt.target.loc))
-                # handle getitem
-                if (isinstance(stmt, ir.Assign)
-                        and isinstance(stmt.value, ir.Expr)
-                        and stmt.value.op == 'getitem'):
+
+                if is_get_setitem(stmt):
+                    index = index_var_of_get_setitem(stmt)
+                    # statics can have none indices
+                    if index is None:
+                        continue
                     ind_def = guard(get_definition, self.func_ir,
-                                    stmt.value.index, lhs_only=True)
-                    if (stmt.value.index.name in index_set
+                                    index, lhs_only=True)
+                    if (index.name in index_set
                             or (ind_def is not None
                                 and ind_def.name in index_set)):
-                        stmt.value.index = new_index
+                        set_index_var_of_get_setitem(stmt, new_index)
                     # corner case where one dimension of a multi-dim access
                     # should be replaced
-                    guard(self._replace_multi_dim_ind, ind_def, index_set,
-                                                                     new_index)
-                # handle setitem
-                if isinstance(stmt, ir.SetItem):
-                    ind_def = guard(get_definition, self.func_ir, stmt.index,
-                                    lhs_only=True)
-                    if (stmt.index.name in index_set
-                            or (ind_def is not None
-                                and ind_def.name in index_set)):
-                        stmt.index = new_index
                     guard(self._replace_multi_dim_ind, ind_def, index_set,
                                                                      new_index)
 

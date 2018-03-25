@@ -1579,3 +1579,49 @@ def dump_blocks(blocks):
         print(label, ":")
         for stmt in block.body:
             print("    ", stmt)
+
+def is_get_setitem(stmt):
+    """stmt is getitem assignment or setitem (and static cases)"""
+    return is_getitem(stmt) or is_setitem(stmt)
+
+
+def is_getitem(stmt):
+    """true if stmt is a getitem or static_getitem assignment"""
+    return (isinstance(stmt, ir.Assign)
+            and isinstance(stmt.value, ir.Expr)
+            and stmt.value.op in ['getitem', 'static_getitem'])
+
+def is_setitem(stmt):
+    """true if stmt is a SetItem or StaticSetItem node"""
+    return isinstance(stmt, (ir.SetItem, ir.StaticSetItem))
+
+def index_var_of_get_setitem(stmt):
+    """get index variable for getitem/setitem nodes (and static cases)"""
+    if is_getitem(stmt):
+        if stmt.value.op == 'getitem':
+            return stmt.value.index
+        else:
+            return stmt.value.index_var
+
+    if is_setitem(stmt):
+        if isinstance(stmt, ir.SetItem):
+            return stmt.index
+        else:
+            return stmt.index_var
+
+    return None
+
+def set_index_var_of_get_setitem(stmt, new_index):
+    if is_getitem(stmt):
+        if stmt.value.op == 'getitem':
+            stmt.value.index = new_index
+        else:
+            stmt.value.index_var = new_index
+    elif is_setitem(stmt):
+        if isinstance(stmt, ir.SetItem):
+            stmt.index = new_index
+        else:
+            stmt.index_var = new_index
+    else:
+        raise ValueError("getitem or setitem node expected but received {}".format(
+                     stmt))
