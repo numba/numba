@@ -2553,34 +2553,56 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, typemap):
     """ remove dead code inside parfor including get/sets
     """
 
+    # add dummy return to last block for CFG computation
+    # max is last block since we add it manually for parfors
+    last_label = max(parfor.loop_body.keys())
+    parfor.loop_body[last_label].body.append(
+        ir.Return(0, ir.Loc("parfors_dummy", -1)))
+
+    labels = find_topo_order(parfor.loop_body)
+
+    # remove dummy return
+    parfor.loop_body[last_label].body.pop()
+
+    # get/setitem replacement should ideally use dataflow to propagate setitem
+    # saved values, but for simplicity we handle the common case of propagating
+    # setitems in the first block (which is dominant) if the array is not
+    # potentially changed in any way
+    first_label = labels[0]
+    first_block_saved_values = {}
+    _update_parfor_get_setitems(
+        parfor.loop_body[first_label].body,
+        parfor.index_var, alias_map,
+        first_block_saved_values,
+        lives
+        )
+
+    # remove saved first block setitems if array potentially changed later
+    saved_arrs = set(first_block_saved_values.keys())
+    for l in labels:
+        if l == first_label:
+            continue
+        for stmt in parfor.loop_body[l].body:
+            if (isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr)
+                    and stmt.value.op == 'getitem'
+                    and stmt.value.index.name == parfor.index_var.name):
+                continue
+            varnames = set(v.name for v in stmt.list_vars())
+            rm_arrs = varnames & saved_arrs
+            for a in rm_arrs:
+                first_block_saved_values.pop(a, None)
+
+
     # replace getitems with available value
     # e.g. A[i] = v; ... s = A[i]  ->  s = v
-    for block in parfor.loop_body.values():
-        saved_values = {}
-        for stmt in block.body:
-            if (isinstance(stmt, ir.SetItem) and stmt.index.name ==
-                    parfor.index_var.name and stmt.target.name not in lives):
-                # saved values of aliases of SetItem target array are invalid
-                for w in alias_map.get(stmt.target.name, []):
-                    saved_values.pop(w, None)
-                # set saved value after invalidation since alias_map may
-                # contain the array itself (e.g. pi example)
-                saved_values[stmt.target.name] = stmt.value
-                continue
-            if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
-                rhs = stmt.value
-                if rhs.op == 'getitem' and isinstance(rhs.index, ir.Var):
-                    if rhs.index.name == parfor.index_var.name:
-                        # replace getitem if value saved
-                        stmt.value = saved_values.get(rhs.value.name, rhs)
-                        continue
-            # conservative assumption: array is modified if referenced
-            # remove all referenced arrays
-            for v in stmt.list_vars():
-                saved_values.pop(v.name, None)
-                # aliases are potentially modified as well
-                for w in alias_map.get(v.name, []):
-                    saved_values.pop(w, None)
+    for l in labels:
+        if l == first_label:
+            continue
+        block = parfor.loop_body[l]
+        saved_values = first_block_saved_values.copy()
+        _update_parfor_get_setitems(block.body, parfor.index_var, alias_map,
+                                        saved_values, lives)
+
 
     # after getitem replacement, remove extra setitems
     blocks = parfor.loop_body.copy()  # shallow copy is enough
@@ -2630,6 +2652,37 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, typemap):
         return None
     return parfor
 
+def _update_parfor_get_setitems(block_body, index_var, alias_map,
+                                  saved_values, lives):
+    """
+    replace getitems of a previously set array in a block of parfor loop body
+    """
+    for stmt in block_body:
+        if (isinstance(stmt, ir.SetItem) and stmt.index.name ==
+                index_var.name and stmt.target.name not in lives):
+            # saved values of aliases of SetItem target array are invalid
+            for w in alias_map.get(stmt.target.name, []):
+                saved_values.pop(w, None)
+            # set saved value after invalidation since alias_map may
+            # contain the array itself (e.g. pi example)
+            saved_values[stmt.target.name] = stmt.value
+            continue
+        if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
+            rhs = stmt.value
+            if rhs.op == 'getitem' and isinstance(rhs.index, ir.Var):
+                if rhs.index.name == index_var.name:
+                    # replace getitem if value saved
+                    stmt.value = saved_values.get(rhs.value.name, rhs)
+                    continue
+        # conservative assumption: array is modified if referenced
+        # remove all referenced arrays
+        for v in stmt.list_vars():
+            saved_values.pop(v.name, None)
+            # aliases are potentially modified as well
+            for w in alias_map.get(v.name, []):
+                saved_values.pop(w, None)
+
+    return
 
 ir_utils.remove_dead_extensions[Parfor] = remove_dead_parfor
 
