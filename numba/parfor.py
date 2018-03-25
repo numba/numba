@@ -3026,6 +3026,18 @@ def parfor_typeinfer(parfor, typeinferer):
 
 typeinfer.typeinfer_extensions[Parfor] = parfor_typeinfer
 
+def build_parfor_definitions(parfor, definitions=None):
+    """get variable definition table for parfors"""
+    if definitions is None:
+        definitions = dict()
+
+    blocks = wrap_parfor_blocks(parfor)
+    build_definitions(blocks, definitions)
+    unwrap_parfor_blocks(parfor)
+    return definitions
+
+ir_utils.build_defs_extensions[Parfor] = build_parfor_definitions
+
 @infer_global(reduce)
 class ReduceInfer(AbstractTemplate):
     def generic(self, args, kws):
