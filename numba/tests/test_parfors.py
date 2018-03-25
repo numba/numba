@@ -244,7 +244,7 @@ class TestParforsBase(TestCase):
             _assert_fast(inst)
 
 
-def test1(sptprice, strike, rate, volatility, timev):
+def blackscholes_impl(sptprice, strike, rate, volatility, timev):
     # blackscholes example
     logterm = np.log(sptprice / strike)
     powterm = 0.5 * volatility * volatility
@@ -260,7 +260,7 @@ def test1(sptprice, strike, rate, volatility, timev):
     return put
 
 
-def test2(Y, X, w, iterations):
+def lr_impl(Y, X, w, iterations):
     # logistic regression example
     for i in range(iterations):
         w -= np.dot(((1.0 / (1.0 + np.exp(-Y * np.dot(X, w))) - 1.0) * Y), X)
@@ -518,19 +518,19 @@ class TestParfors(TestParforsBase):
 
     @skip_unsupported
     @tag('important')
-    def test_test1(self):
+    def test_blackscholes(self):
         # blackscholes takes 5 1D float array args
         args = (numba.float64[:], ) * 5
-        self.assertTrue(countParfors(test1, args) == 1)
+        self.assertTrue(countParfors(blackscholes_impl, args) == 1)
 
     @skip_unsupported
     @needs_blas
     @tag('important')
-    def test_test2(self):
+    def test_logistic_regression(self):
         args = (numba.float64[:], numba.float64[:,:], numba.float64[:],
                 numba.int64)
-        self.assertTrue(countParfors(test2, args) == 1)
-        self.assertTrue(countArrayAllocs(test2, args) == 1)
+        self.assertTrue(countParfors(lr_impl, args) == 1)
+        self.assertTrue(countArrayAllocs(lr_impl, args) == 1)
 
     @skip_unsupported
     @tag('important')
