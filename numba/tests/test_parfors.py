@@ -1019,6 +1019,45 @@ class TestParfors(TestParforsBase):
             self.check(test_impl, n)
         self.assertIn("Overwrite of parallel loop index", str(raises.exception))
 
+    @skip_unsupported
+    def test_parfor_array_access4(self):
+        # in this test, one index of a multi-dim access should be replaced
+        # np.dot parallel implementation produces this case
+        def test_impl(A, b):
+            return np.dot(A, b)
+
+        n = 211
+        d = 4
+        A = np.random.ranf((n, d))
+        b = np.random.ranf(d)
+        self.check(test_impl, A, b)
+        # make sure the parfor index is replaced in build_tuple of access to A
+        test_ir, tp = get_optimized_numba_ir(
+            test_impl, (types.Array(types.float64, 2, 'C'),
+                        types.Array(types.float64, 1, 'C')))
+        # this code should have one basic block after optimization
+        self.assertTrue(len(test_ir.blocks) == 1 and 0 in test_ir.blocks)
+        block = test_ir.blocks[0]
+        parfor_found = False
+        parfor = None
+        for stmt in block.body:
+            if isinstance(stmt, numba.parfor.Parfor):
+                parfor_found = True
+                parfor = stmt
+
+        self.assertTrue(parfor_found)
+        build_tuple_found = False
+        # there should be only one build_tuple
+        for bl in parfor.loop_body.values():
+            for stmt in bl.body:
+                if (isinstance(stmt, ir.Assign)
+                        and isinstance(stmt.value, ir.Expr)
+                        and stmt.value.op == 'build_tuple'):
+                    build_tuple_found = True
+                    self.assertTrue(parfor.index_var in stmt.value.items)
+
+        self.assertTrue(build_tuple_found)
+
 
 class TestPrangeBase(TestParforsBase):
 
