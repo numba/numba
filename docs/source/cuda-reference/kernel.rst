@@ -174,7 +174,7 @@ Integer Intrinsics
 ~~~~~~~~~~~~~~~~~~
 
 A subset of the CUDA Math API's integer intrisics are available. For further
-documentation, including semantics, please refer to the `relevant CUDA Toolkit
+documentation, including semantics, please refer to the `CUDA Toolkit
 documentation
 <docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__INTRINSIC__INT.html>`_.
 
