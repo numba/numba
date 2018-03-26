@@ -1043,6 +1043,7 @@ class ParforPass(object):
         loop_body[last_label].body.pop()
 
         first_label = labels[0]
+        added_indices = set()
 
         for l in labels:
             block = loop_body[l]
@@ -1051,8 +1052,10 @@ class ParforPass(object):
                         and isinstance(stmt.value, ir.Var)):
                     # the first block dominates others so we can use copies
                     # of indices safely
-                    if l == first_label and stmt.value.name in index_set:
+                    if (l == first_label and stmt.value.name in index_set
+                            and stmt.target.name not in index_set):
                         index_set.add(stmt.target.name)
+                        added_indices.add(stmt.target.name)
                     # make sure parallel index is not overwritten
                     elif stmt.target.name in index_set:
                         raise ValueError(
@@ -1075,6 +1078,11 @@ class ParforPass(object):
                     guard(self._replace_multi_dim_ind, ind_def, index_set,
                                                                      new_index)
 
+                if isinstance(stmt, Parfor):
+                    self._replace_loop_access_indices(stmt.loop_body, index_set, new_index)
+
+        # remove added indices for currect recursive parfor handling
+        index_set -= added_indices
         return
 
     def _replace_multi_dim_ind(self, ind_var, index_set, new_index):
