@@ -9,6 +9,7 @@ from math import sqrt
 import numbers
 import re
 import sys
+import platform
 import types as pytypes
 import warnings
 from functools import reduce
@@ -43,7 +44,7 @@ skip_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
 test_disabled = unittest.skipIf(True, 'Test disabled')
 _lnx_reason = 'linux only test'
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
-
+x86_only = unittest.skipIf(platform.machine() not in ('i386', 'x86_64'), 'x86 only test')
 
 class TestParforsBase(TestCase):
     """
@@ -1538,6 +1539,7 @@ class TestPrange(TestPrangeBase):
         self.prange_tester(test_impl, 4)
 
 
+@x86_only
 class TestParforsVectorizer(TestPrangeBase):
 
     # env mutating test
