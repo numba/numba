@@ -149,6 +149,7 @@ The following operations are supported:
 * iteration and indexing over homogenous tuples
 * addition (concatenation) between tuples
 * slicing tuples with a constant slice
+* the index method on tuples
 
 list
 ----

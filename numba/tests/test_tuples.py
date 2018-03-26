@@ -494,8 +494,10 @@ class TestMethods(TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         self.assertEqual(cfunc((1, 2, 3), 2), 1)
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as raises:
             cfunc((1, 2, 3), 4)
+        msg = 'tuple.index(x): x not in tuple'
+        self.assertEqual(msg, str(raises.exception))
 
 
 if __name__ == '__main__':
