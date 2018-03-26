@@ -1112,6 +1112,24 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, n)
         self.assertEqual(countNonParforArrayAccesses(test_impl, (types.intp,)), 0)
 
+    @skip_unsupported
+    def test_parfor_generate_fuse(self):
+        # issue #2857
+        def test_impl(N, D):
+            w = np.ones(D)
+            X = np.ones((N, D))
+            Y = np.ones(N)
+            for i in range(3):
+                B = (-Y * np.dot(X, w))
+
+            return B
+
+        n = 211
+        d = 3
+        self.check(test_impl, n, d)
+        self.assertEqual(countArrayAllocs(test_impl, (types.intp, types.intp)), 4)
+        self.assertEqual(countParfors(test_impl, (types.intp, types.intp)), 4)
+
 
 class TestPrangeBase(TestParforsBase):
 
