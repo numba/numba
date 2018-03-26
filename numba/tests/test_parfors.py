@@ -25,7 +25,9 @@ from numba import types
 from numba.targets.registry import cpu_target
 from numba import config
 from numba.annotations import type_annotations
-from numba.ir_utils import find_callname, guard, build_definitions, get_definition
+from numba.ir_utils import (find_callname, guard, build_definitions,
+                            get_definition, is_getitem, is_setitem,
+                            index_var_of_get_setitem)
 from numba import ir
 from numba.compiler import compile_isolated, Flags
 from numba.bytecode import ByteCodeIter
@@ -407,19 +409,15 @@ def _count_non_parfor_array_accesses_inner(f_ir, blocks, typemap, parfor_indices
                     f_ir, parfor_blocks, typemap, parfor_indices)
 
             # getitem
-            if (isinstance(stmt, ir.Assign)
-                    and isinstance(stmt.value, ir.Expr)
-                    and stmt.value.op == 'getitem'
-                    and isinstance(typemap[stmt.value.value.name],
-                                    types.ArrayCompatible)
-                    and not _uses_indices(f_ir, stmt.value.index, parfor_indices)):
+            if (is_getitem(stmt) and isinstance(typemap[stmt.value.value.name],
+                        types.ArrayCompatible) and not _uses_indices(
+                        f_ir, index_var_of_get_setitem(stmt), parfor_indices)):
                 ret_count += 1
 
             # setitem
-            if (isinstance(stmt, ir.SetItem)
-                    and isinstance(typemap[stmt.target.name],
-                                    types.ArrayCompatible)
-                    and not _uses_indices(f_ir, stmt.index, parfor_indices)):
+            if (is_setitem(stmt) and isinstance(typemap[stmt.target.name],
+                    types.ArrayCompatible) and not _uses_indices(
+                    f_ir, index_var_of_get_setitem(stmt), parfor_indices)):
                 ret_count += 1
 
     return ret_count
@@ -557,6 +555,10 @@ class TestParfors(TestParforsBase):
                                                                     decimal=1)
         # TODO: count parfors after k-means fusion is working
         # requires recursive parfor counting
+        arg_typs = (types.Array(types.float64, 2, 'C'), types.intp, types.intp,
+                    types.Array(types.float64, 2, 'C'))
+        self.assertTrue(
+            countNonParforArrayAccesses(test_kmeans_example, arg_typs) == 0)
 
     @unittest.skipIf(not (_windows_py27 or _32bit),
                      "Only impacts Windows with Python 2.7 / 32 bit hardware")
