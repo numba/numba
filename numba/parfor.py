@@ -499,7 +499,6 @@ def _analyze_parfor(parfor, equiv_set, typemap, array_analysis):
     """
     func_ir = array_analysis.func_ir
     parfor_blocks = wrap_parfor_blocks(parfor)
-    build_definitions(parfor_blocks, func_ir._definitions)
     # Since init_block get label 0 after wrap, we need to save
     # the equivset for the real block label 0.
     backup_equivset = array_analysis.equiv_sets.get(0, None)
