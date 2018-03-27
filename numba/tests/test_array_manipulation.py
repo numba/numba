@@ -17,8 +17,9 @@ no_pyobj_flags.set('nrt')
 
 
 def from_generic(pyfuncs_to_use):
-    """Decorator for generic check functions. Executes the check function with as first argument an item from the
-        iterator pyfuncs_to_use. Example:
+    """Decorator for generic check functions.
+        Iterates over 'pyfuncs_to_use', calling 'func' with the iterated
+        item as first argument. Example:
 
         @from_generic(numpy_array_reshape, array_reshape)
         def check_only_shape(pyfunc, arr, shape, expected_shape):
@@ -40,8 +41,10 @@ def from_generic(pyfuncs_to_use):
 def array_reshape(arr, newshape):
     return arr.reshape(newshape)
 
+
 def numpy_array_reshape(arr, newshape):
     return np.reshape(arr, newshape)
+
 
 def flatten_array(a):
     return a.flatten()
@@ -133,7 +136,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         def generic_run(pyfunc, arr, shape):
             cres = compile_isolated(pyfunc, (typeof(arr), typeof(shape)))
-            # cres = self.ccache.compile(pyfunc, (typeof(arr), typeof(shape)))
             return cres.entry_point(arr, shape)
 
         @from_generic(pyfuncs_to_use)

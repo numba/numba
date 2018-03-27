@@ -1406,13 +1406,6 @@ def array_transpose(context, builder, sig, args):
     return array_T(context, builder, sig.args[0], args[0])
 
 
-@overload(np.transpose)
-def numpy_transpose(a):
-    def np_transpose_impl(a):
-        return a.transpose()
-    return np_transpose_impl
-
-
 def permute_arrays(axis, shape, strides):
     if len(axis) != len(set(axis)):
         raise ValueError("repeated axis in transpose")
@@ -1487,11 +1480,17 @@ def array_transpose_vararg(context, builder, sig, args):
     new_sig, new_args = vararg_to_tuple(context, builder, sig, args)
     return array_transpose_tuple(context, builder, new_sig, new_args)
 
+
 @overload(np.transpose)
-def numpy_transpose(a):
-    def np_transpose_impl(a):
-        return a.transpose()
-    return np_transpose_impl
+def numpy_transpose(a, *axes):
+    if not axes:
+        def np_transpose_impl(arr):
+            return arr.transpose()
+        return np_transpose_impl
+    else:
+        def np_transpose_impl(arr, axes):
+            return arr.transpose(axes)
+        return np_transpose_impl
 
 
 @lower_getattr(types.Array, 'T')
