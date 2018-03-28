@@ -112,6 +112,16 @@ class DeviceNDArrayBase(object):
         self.__writeback = writeback    # should deprecate the use of this
         self.stream = stream
 
+    @property
+    def __cuda_array_interface__(self):
+        return {
+            'shape': tuple(self.shape),
+            'strides': tuple(self.strides),
+            'data': self.device_ctypes_pointer.value,
+            'typestr': self.dtype.str,
+            'version': 0,
+        }
+
     def bind(self, stream=0):
         """Bind a CUDA stream to this object so that all subsequent operation
         on this array defaults to the given stream.

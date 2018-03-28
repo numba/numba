@@ -126,7 +126,7 @@ CU_EVENT_DISABLE_TIMING = 0x2
 CU_EVENT_INTERPROCESS   = 0x4
 
 # The CUcontext on which a pointer was allocated or registered
-CU_POINTER_ATTRIBUTE_CONTEXT = 1,
+CU_POINTER_ATTRIBUTE_CONTEXT = 1
 # The CUmemorytype describing the physical location of a pointer
 CU_POINTER_ATTRIBUTE_MEMORY_TYPE = 2
 # The address at which a pointer's memory may be accessed on the device

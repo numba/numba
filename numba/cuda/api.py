@@ -23,6 +23,32 @@ current_context = devices.get_context
 gpus = devices.gpus
 
 
+
+@require_context
+def from_cuda_array_interface(desc):
+    shape = desc['shape']
+    strides = desc.get('strides')
+    dtype = np.dtype(desc['typestr'])
+
+    shape, strides, dtype = _prepare_shape_strides_dtype(
+        shape, strides, dtype, order='C')
+
+    devptr = driver.get_devptr_for_active_ctx(desc['data'])
+    data = driver.MemoryPointer(
+        current_context(), devptr, size=np.prod(shape) * dtype.itemsize)
+    da = devicearray.DeviceNDArray(shape=shape, strides=strides,
+                                   dtype=dtype, gpu_data=data)
+    return da
+
+
+def as_cuda_array(obj):
+    desc = getattr(obj, '__cuda_array_interface__', None)
+    if desc is None:
+        raise TypeError("*obj* doesn't implement the cuda array interface.")
+    else:
+        return from_cuda_array_interface(desc)
+
+
 @require_context
 def to_device(obj, stream=0, copy=True, to=None):
     """to_device(obj, stream=0, copy=True, to=None)
