@@ -33,7 +33,7 @@ def from_cuda_array_interface(desc):
     shape, strides, dtype = _prepare_shape_strides_dtype(
         shape, strides, dtype, order='C')
 
-    devptr = driver.get_devptr_for_active_ctx(desc['data'])
+    devptr = driver.get_devptr_for_active_ctx(desc['data'][0])
     data = driver.MemoryPointer(
         current_context(), devptr, size=np.prod(shape) * dtype.itemsize)
     da = devicearray.DeviceNDArray(shape=shape, strides=strides,

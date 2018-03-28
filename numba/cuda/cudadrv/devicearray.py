@@ -117,7 +117,7 @@ class DeviceNDArrayBase(object):
         return {
             'shape': tuple(self.shape),
             'strides': tuple(self.strides),
-            'data': self.device_ctypes_pointer.value,
+            'data': (self.device_ctypes_pointer.value, False),
             'typestr': self.dtype.str,
             'version': 0,
         }
