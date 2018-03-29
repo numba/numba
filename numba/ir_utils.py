@@ -5,6 +5,7 @@
 import numpy
 
 import types as pytypes
+import collections
 
 from llvmlite import ir as lir
 
@@ -1323,7 +1324,7 @@ def build_definitions(blocks, definitions=None):
     Will return a new definition table if one is not passed.
     """
     if definitions is None:
-        definitions = dict()
+        definitions = collections.defaultdict(list)
 
     for block in blocks.values():
         for inst in block.body:
