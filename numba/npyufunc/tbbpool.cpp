@@ -109,8 +109,10 @@ MOD_INIT(workqueue) {
                            PyLong_FromVoidPtr((void*)&ready));
     PyObject_SetAttrString(m, "add_task",
                            PyLong_FromVoidPtr((void*)&add_task));
-    PyObject_SetAttrString(m, "do_scheduling",
-                           PyLong_FromVoidPtr((void*)&do_scheduling));
+    PyObject_SetAttrString(m, "do_scheduling_signed",
+                           PyLong_FromVoidPtr((void*)&do_scheduling_signed));
+    PyObject_SetAttrString(m, "do_scheduling_unsigned",
+                           PyLong_FromVoidPtr((void*)&do_scheduling_unsigned));
 
 
     return MOD_SUCCESS_VAL(m);

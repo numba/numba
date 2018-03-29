@@ -498,7 +498,7 @@ def expand_gufunc_template(template, indims, outdims, funcname, argtypes):
               for aref, adims, atype in zip(argnames, indims, argtypes)]
     outputs = [_gen_src_for_indexing(aref, adims, atype)
                for aref, adims, atype in zip(argnames[len(indims):], outdims,
-                                             argtypes)]
+                                             argtypes[len(indims):])]
     argitems = inputs + outputs
     src = template.format(name=funcname, args=', '.join(argnames),
                           checkedarg=checkedarg,

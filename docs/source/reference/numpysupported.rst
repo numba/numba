@@ -172,7 +172,7 @@ The following methods of Numpy arrays are supported:
   * If the ``axis`` argument is not a compile-time constant, only values from 0 to 3 are supported.
     An out-of-range value will result in a runtime exception.
 
-* :meth:`~numpy.ndarray.transpose` (without arguments, and without copying)
+* :meth:`~numpy.ndarray.transpose`
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
 
 
@@ -277,7 +277,7 @@ The following top-level functions are supported:
 * :func:`numpy.ravel` (no order argument; 'C' order only)
 * :func:`numpy.roots`
 * :func:`numpy.round_`
-* :func:`numpy.searchsorted` (only the 2 first arguments)
+* :func:`numpy.searchsorted` (only the 3 first arguments)
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
 * :func:`numpy.stack`
@@ -356,7 +356,7 @@ Simple random data
 ''''''''''''''''''
 
 * :func:`numpy.random.rand`
-* :func:`numpy.random.randint`
+* :func:`numpy.random.randint` (only the first two arguments)
 * :func:`numpy.random.randn`
 * :func:`numpy.random.random`
 * :func:`numpy.random.random_sample`
@@ -375,6 +375,8 @@ Permutations
 
 Distributions
 '''''''''''''
+
+.. warning:: The `size` argument is not supported in the following functions.
 
 * :func:`numpy.random.beta`
 * :func:`numpy.random.binomial`

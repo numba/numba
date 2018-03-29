@@ -505,7 +505,7 @@ class Pipeline(object):
         assert self.func_ir
         parfor_pass = ParforPass(self.func_ir, self.type_annotation.typemap,
             self.type_annotation.calltypes, self.return_type, self.typingctx,
-            self.flags.auto_parallel)
+            self.flags.auto_parallel, self.flags)
         parfor_pass.run()
 
         if config.WARNINGS:

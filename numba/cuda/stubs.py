@@ -286,6 +286,16 @@ class const(Stub):
     '''
 
 #-------------------------------------------------------------------------------
+# comparison and selection instructions
+
+class selp(Stub):
+    """
+    selp(a, b, c)
+
+    Select between source operands, based on the value of the predicate source operand.
+    """
+
+#-------------------------------------------------------------------------------
 # atomic
 
 class atomic(Stub):

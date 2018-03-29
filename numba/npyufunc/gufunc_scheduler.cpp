@@ -197,7 +197,8 @@ void divide_work(const RangeActual &full_iteration_space,
     }
 }
 
-void flatten_schedule(const std::vector<RangeActual> &sched, uintp *out_sched) {
+template<class T>
+void flatten_schedule(const std::vector<RangeActual> &sched, T *out_sched) {
     uintp outer = sched.size();
     uintp inner = sched[0].start.size();
     for(uintp i = 0; i < outer; ++i) {
@@ -210,7 +211,7 @@ void flatten_schedule(const std::vector<RangeActual> &sched, uintp *out_sched) {
     }
 }
 
-void create_schedule(const RangeActual &full_space, uintp num_sched, uintp *sched) {
+std::vector<RangeActual> create_schedule(const RangeActual &full_space, uintp num_sched) {
     std::vector<intp> ipd = full_space.iters_per_dim();
     if(full_space.ndim() == 1) {
         intp ra_len = ipd[0];
@@ -223,8 +224,7 @@ void create_schedule(const RangeActual &full_space, uintp num_sched, uintp *sche
                     ret.push_back(RangeActual((intp)1, (intp)0));
                 }
             }
-            flatten_schedule(ret, sched);
-            return;
+            return ret;
         } else {
             intp ilen = ra_len / num_sched;
             //uintp imod = ra_len % num_sched;
@@ -240,8 +240,7 @@ void create_schedule(const RangeActual &full_space, uintp num_sched, uintp *sche
                 }
                 ret.push_back(RangeActual(start, end));
             }
-            flatten_schedule(ret, sched);
-            return;
+            return ret;
         }
     } else {
         std::vector<dimlength> dims;
@@ -251,8 +250,7 @@ void create_schedule(const RangeActual &full_space, uintp num_sched, uintp *sche
         std::vector<RangeActual> assignments(num_sched, RangeActual((intp)1,(intp)0));
         std::vector<isf_range> build;
         divide_work(full_space, assignments, build, 0, num_sched-1, dims, 0);
-        flatten_schedule(assignments, sched);
-        return;
+        return assignments;
     }
 }
 
@@ -264,7 +262,7 @@ void create_schedule(const RangeActual &full_space, uintp num_sched, uintp *sche
     sched is pre-allocated memory for the schedule to be stored in and is of size NxD.
     debug is non-zero if DEBUG_ARRAY_OPT is turned on.
 */
-extern "C" void do_scheduling(uintp num_dim, intp *starts, intp *ends, uintp num_threads, uintp *sched, intp debug) {
+extern "C" void do_scheduling_signed(uintp num_dim, intp *starts, intp *ends, uintp num_threads, intp *sched, intp debug) {
     if (debug) {
         printf("num_dim = %d\n", (int)num_dim);
         printf("ranges = (");
@@ -278,10 +276,24 @@ extern "C" void do_scheduling(uintp num_dim, intp *starts, intp *ends, uintp num
     if (num_threads == 0) return;
 
     RangeActual full_space(num_dim, starts, ends);
-    create_schedule(full_space, num_threads, sched);
-    static int count = 0;
-    ++count;
-    if(count >= 2) {
-//        exit(-1);
+    std::vector<RangeActual> ret = create_schedule(full_space, num_threads);
+    flatten_schedule(ret, sched);
+}
+
+extern "C" void do_scheduling_unsigned(uintp num_dim, intp *starts, intp *ends, uintp num_threads, uintp *sched, intp debug) {
+    if (debug) {
+        printf("num_dim = %d\n", (int)num_dim);
+        printf("ranges = (");
+        for (unsigned i = 0; i < num_dim; i++) {
+            printf("[%d, %d], ", (int)starts[i], (int)ends[i]);
+        }
+        printf(")\n");
+        printf("num_threads = %d\n", (int)num_threads);
     }
+
+    if (num_threads == 0) return;
+
+    RangeActual full_space(num_dim, starts, ends);
+    std::vector<RangeActual> ret = create_schedule(full_space, num_threads);
+    flatten_schedule(ret, sched);
 }

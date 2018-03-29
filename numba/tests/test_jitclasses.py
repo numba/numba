@@ -220,6 +220,13 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 # use deferred type as argument
                 return get_data(self.next)
 
+            def append_to_tail(self, other):
+                cur = self
+                while cur.next is not None:
+                    cur = cur.next
+                cur.next = other
+
+
         node_type.define(LinkedNode.class_type.instance_type)
 
         first = LinkedNode(123, None)
@@ -238,6 +245,16 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         # Test using deferred type as argument
         first_val = second.get_next_data()
         self.assertEqual(first_val, first.data)
+
+        # Check setattr (issue #2606)
+        self.assertIsNone(first.next)
+        second.append_to_tail(LinkedNode(567, None))
+        self.assertIsNotNone(first.next)
+        self.assertEqual(first.next.data, 567)
+        self.assertIsNone(first.next.next)
+        second.append_to_tail(LinkedNode(678, None))
+        self.assertIsNotNone(first.next.next)
+        self.assertEqual(first.next.next.data, 678)
 
         # Check ownership
         self.assertEqual(first_meminfo.refcount, 3)

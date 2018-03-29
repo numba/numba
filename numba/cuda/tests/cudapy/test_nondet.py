@@ -32,10 +32,7 @@ class TestCudaNonDet(SerialMixin, unittest.TestCase):
 
         A, B = generate_input(N)
 
-        E = np.zeros(A.shape, dtype=A.dtype)
         F = np.empty(A.shape, dtype=A.dtype)
-
-        E = np.dot(A, np.diag(B))
 
         blockdim = (32, 8)
         griddim = (1, 1)
@@ -44,9 +41,9 @@ class TestCudaNonDet(SerialMixin, unittest.TestCase):
         dB = cuda.to_device(B)
         dF = cuda.to_device(F, copy=False)
         diagproduct[griddim, blockdim](dF, dA, dB)
-        dF.to_host()
 
-        self.assertTrue(np.allclose(F, E))
+        E = np.dot(A, np.diag(B))
+        np.testing.assert_array_almost_equal(dF.copy_to_host(), E)
 
 
 if __name__ == '__main__':

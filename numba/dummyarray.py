@@ -4,12 +4,27 @@ from collections import namedtuple
 import itertools
 import functools
 import operator
+import ctypes
 
 import numpy as np
+
+from . import _helperlib
 
 
 Extent = namedtuple("Extent", ["begin", "end"])
 
+
+attempt_nocopy_reshape = ctypes.CFUNCTYPE(
+    ctypes.c_int,
+    ctypes.c_long,  # nd
+    np.ctypeslib.ndpointer(np.ctypeslib.c_intp, ndim=1),  # dims
+    np.ctypeslib.ndpointer(np.ctypeslib.c_intp, ndim=1),  # strides
+    ctypes.c_long,  # newnd
+    np.ctypeslib.ndpointer(np.ctypeslib.c_intp, ndim=1),  # newdims
+    np.ctypeslib.ndpointer(np.ctypeslib.c_intp, ndim=1),  # newstrides
+    ctypes.c_long,  # itemsize
+    ctypes.c_int,  # is_f_order
+)(_helperlib.c_helpers['attempt_nocopy_reshape'])
 
 class Dim(object):
     """A single dimension of the array
@@ -269,11 +284,11 @@ class Array(object):
                     offset = compute_index(indices, self.dims)
                     yield offset, offset + self.itemsize
 
-    def reshape(self, *newshape, **kws):
+    def reshape(self, *newdims, **kws):
         oldnd = self.ndim
-        newnd = len(newshape)
+        newnd = len(newdims)
 
-        if newshape == self.shape:
+        if newdims == self.shape:
             return self, None
 
         order = kws.pop('order', 'C')
@@ -282,7 +297,7 @@ class Array(object):
         if order not in 'CFA':
             raise ValueError('order not C|F|A')
 
-        newsize = np.prod(newshape)
+        newsize = np.prod(newdims)
 
         if order == 'A':
             order = 'F' if self.is_f_contig else 'C'
@@ -292,18 +307,33 @@ class Array(object):
 
         if self.is_c_contig or self.is_f_contig:
             if order == 'C':
-                newstrides = list(iter_strides_c_contig(self, newshape))
+                newstrides = list(iter_strides_c_contig(self, newdims))
             elif order == 'F':
-                newstrides = list(iter_strides_f_contig(self, newshape))
+                newstrides = list(iter_strides_f_contig(self, newdims))
             else:
                 raise AssertionError("unreachable")
-        elif newnd == 1:
-            s = [self.strides[i] for i in range(oldnd) if self.shape[i] > 1]
-            newstrides = (min(s) if len(s) else self.itemsize,)
         else:
-            raise NotImplementedError("reshape on non-contiguous array")
+            newstrides = np.empty(newnd, np.ctypeslib.c_intp)
 
-        ret = self.from_desc(self.extent.begin, shape=newshape,
+            # need to keep these around in variables, not temporaries, so they
+            # don't get GC'ed before we call into the C code
+            olddims = np.array(self.shape, dtype=np.ctypeslib.c_intp)
+            oldstrides = np.array(self.strides, dtype=np.ctypeslib.c_intp)
+            newdims = np.array(newdims, dtype=np.ctypeslib.c_intp)
+
+            if not attempt_nocopy_reshape(
+                oldnd,
+                olddims,
+                oldstrides,
+                newnd,
+                newdims,
+                newstrides,
+                self.itemsize,
+                order == 'F',
+            ):
+                raise NotImplementedError('reshape would require copy')
+
+        ret = self.from_desc(self.extent.begin, shape=newdims,
                              strides=newstrides, itemsize=self.itemsize)
 
         return ret, list(self.iter_contiguous_extent())
