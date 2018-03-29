@@ -170,7 +170,7 @@ void divide_work(const RangeActual &full_iteration_space,
         assert(index < dims.size());
         intp total_len = 0;
         for(uintp i = index; i < dims.size(); ++i) total_len += dims[i].length > 1 ? dims[i].length : 0;
-        uintp divisions_for_this_dim;
+        intp divisions_for_this_dim;
         if(total_len == 0) {
             divisions_for_this_dim = num_threads;
         } else {
