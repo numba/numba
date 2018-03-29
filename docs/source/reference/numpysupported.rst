@@ -282,6 +282,7 @@ The following top-level functions are supported:
 * :func:`numpy.sort` (no optional arguments)
 * :func:`numpy.stack`
 * :func:`numpy.take` (only the 2 first arguments)
+* :func:`numpy.transpose`
 * :func:`numpy.vstack`
 * :func:`numpy.where`
 * :func:`numpy.zeros` (only the 2 first arguments)
