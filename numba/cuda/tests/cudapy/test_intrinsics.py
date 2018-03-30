@@ -60,7 +60,7 @@ def intrinsic_forloop_step(c):
             c[y, x] = x + y
 
 
-@cuda.jit
+@cuda.jit('void(i8[:], i8, i8[:])')
 def branching_with_ifs(a, b, c):
     i = cuda.grid(1)
 
@@ -73,7 +73,7 @@ def branching_with_ifs(a, b, c):
         a[i] = 3
 
 
-@cuda.jit
+@cuda.jit('void(i8[:], i8, i8[:])')
 def branching_with_selps(a, b, c):
     i = cuda.grid(1)
 
@@ -149,20 +149,20 @@ class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
     def test_selp(self):
         n = 32
         b = 6
-        c = np.full(shape=32, fill_value=17)
+        c = np.full(shape=32, fill_value=17, dtype=np.int64)
 
         expected = c.copy()
         expected[:5] = 3
 
-        a = np.arange(n)
+        a = np.arange(n, dtype=np.int64)
         branching_with_ifs[n, 1](a, b, c)
-        ptx = list(branching_with_ifs.inspect_asm().values())[0]
+        ptx = branching_with_ifs.inspect_asm()
         self.assertEqual(2, len(re.findall(r'\s+bra\s+', ptx)))
         np.testing.assert_array_equal(a, expected, err_msg='branching')
 
-        a = np.arange(n)
+        a = np.arange(n, dtype=np.int64)
         branching_with_selps[n, 1](a, b, c)
-        ptx = list(branching_with_selps.inspect_asm().values())[0]
+        ptx = branching_with_selps.inspect_asm()
         self.assertEqual(0, len(re.findall(r'\s+bra\s+', ptx)))
         np.testing.assert_array_equal(a, expected, err_msg='selp')
 
