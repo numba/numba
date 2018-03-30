@@ -1397,7 +1397,7 @@ class ParforPass(object):
         this Numpy call.
         """
         call_name, mod_name = find_callname(self.func_ir, expr)
-        if not mod_name.startswith('numpy'):
+        if not (isinstance(mod_name, str) and mod_name.startswith('numpy')):
             return False
         if call_name in ['zeros', 'ones']:
             return True

@@ -1353,6 +1353,7 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
     callee = expr.func
     callee_def = definition_finder(func_ir, callee)
     attrs = []
+    obj = None
     while True:
         if isinstance(callee_def, (ir.Global, ir.FreeVar)):
             # require(callee_def.value == numpy)
@@ -1395,6 +1396,9 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
                     return attrs[0], obj
             callee_def = definition_finder(func_ir, obj)
         else:
+            # obj.func calls where obj is not np array
+            if obj is not None:
+                return '.'.join(reversed(attrs)), obj
             raise GuardException
     return attrs[0], '.'.join(reversed(attrs[1:]))
 
