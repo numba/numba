@@ -154,16 +154,48 @@ def _gen_index_tuple(tyctx, shape_tuple, value, axis):
 @lower_builtin(np.sum, types.Array)
 @lower_builtin("array.sum", types.Array)
 def array_sum(context, builder, sig, args):
+    # Use njit since register_jitable doesn't support recursion
+    from numba import njit
+
     zero = sig.return_type(0)
+    dtype = sig.args[0].dtype
+
+    @njit
+    def pairwise_sum(arr, n):
+        if n < 8:
+            res = zero
+            for i in range(n):
+                res += arr[i]
+            return res
+        elif n <= 128:
+            r = np.empty(8, dtype=dtype)
+
+            for i in range(8):
+                r[i] = arr[i]
+            m = n - (n % 8)
+            for i in range(8, m, 8):
+                for j in range(8):
+                    r[j] += arr[i+j]
+            res = (((r[0] + r[1]) + (r[2] + r[3])) +
+                   ((r[4] + r[5]) + (r[6] + r[7])))
+
+            for i in range(m, n):
+                res += arr[i]
+
+            return res
+        else:
+            n2 = n // 2
+            n2 -= n2 % 8
+            return (pairwise_sum(arr[:n2], n2)
+                    + pairwise_sum(arr[n2:], n - n2))
 
     def array_sum_impl(arr):
-        c = zero
-        for v in np.nditer(arr):
-            c += v.item()
-        return c
+        size = 1
+        for i in arr.shape:
+            size *= i
+        return pairwise_sum(np.ravel(arr), size)
 
-    res = context.compile_internal(builder, array_sum_impl, sig, args,
-                                    locals=dict(c=sig.return_type))
+    res = context.compile_internal(builder, array_sum_impl, sig, args)
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 @lower_builtin(np.sum, types.Array, types.intp)

@@ -4,6 +4,7 @@ from itertools import product, cycle, permutations
 import sys
 
 import numpy as np
+from numpy.testing import assert_allclose
 
 from numba import unittest_support as unittest
 from numba import jit, typeof, types
@@ -737,6 +738,12 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # Numpy 1.13 has a different error message than prior numpy
         # Just check for the "out of bounds" phrase in it.
         self.assertIn("out of bounds", str(raises.exception))
+
+    def test_gh2855(self):
+        pyfunc = array_sum
+        cfunc = jit(nopython=True)(pyfunc)
+        A = np.ones(10**6, dtype=np.float32) / np.float32(255.0)
+        assert_allclose(cfunc(A), pyfunc(A), rtol=1e-7)
 
     def test_cumsum(self):
         pyfunc = array_cumsum
