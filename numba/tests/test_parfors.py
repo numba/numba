@@ -1598,9 +1598,10 @@ class TestParforsVectorizer(TestPrangeBase):
         # packed dtype=double add and sqrt instructions.
         def will_vectorize(A):
             n = len(A)
+            acc = 0
             for i in range(n):
-                A[i] += np.sqrt(i)
-            return A
+                acc += np.sqrt(i)
+            return acc
 
         arg = np.zeros(10)
 
@@ -1610,7 +1611,7 @@ class TestParforsVectorizer(TestPrangeBase):
                                        fastmath=False)
 
         for v in fast_asm.values():
-            # should unwind and call vector sqrt then vector add 
+            # should unwind and call vector sqrt then vector add
             # all on packed doubles using zmm's
             self.assertTrue('vaddpd' in v)
             self.assertTrue('vsqrtpd' in v)
@@ -1675,7 +1676,7 @@ class TestParforsVectorizer(TestPrangeBase):
     @linux_only
     # needed as 32bit doesn't have equivalent signed/unsigned instruction generation
     # for this function
-    @skip_unsupported 
+    @skip_unsupported
     def test_signed_vs_unsigned_vec_asm(self):
         """ This checks vectorization for signed vs unsigned variants of a
         trivial accumulator, the only meaningful difference should be the
@@ -1708,7 +1709,7 @@ class TestParforsVectorizer(TestPrangeBase):
                 # filter out anything that isn't a trivial instruction
                 # and anything with the gufunc id as it contains an address
                 if spd != '' and not (spd.startswith('.')
-                                     or spd.startswith('_') 
+                                     or spd.startswith('_')
                                      or spd.startswith('"')
                                      or '__numba_parfor_gufunc' in spd):
                         acc.append(re.sub('[\t]', '', spd))

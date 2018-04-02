@@ -74,7 +74,7 @@ Building and installing llvmlite
 ''''''''''''''''''''''''''''''''
 
 See https://github.com/numba/llvmlite for the most up-to-date instructions.
-You will need a build of LLVM 5.0.x.
+You will need a build of LLVM 6.0.x.
 
 ::
 
