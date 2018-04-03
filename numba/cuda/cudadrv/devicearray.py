@@ -14,6 +14,7 @@ from ctypes import c_void_p
 
 import numpy as np
 
+import numba
 from . import driver as _driver
 from . import devices
 from numba import dummyarray, types, numpy_support
@@ -628,8 +629,7 @@ def auto_device(obj, stream=0, copy=True):
     if _driver.is_device_memory(obj):
         return obj, False
     elif hasattr(obj, '__cuda_array_interface__'):
-        from numba.cuda import as_cuda_array
-        return as_cuda_array(obj), False
+        return numba.cuda.as_cuda_array(obj), False
     else:
         if isinstance(obj, np.void):
             devobj = from_record_like(obj, stream=stream)

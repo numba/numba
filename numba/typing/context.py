@@ -6,6 +6,7 @@ import weakref
 import threading
 import contextlib
 
+import numba
 from numba import types, errors
 from numba.typeconv import Conversion, rules
 from . import templates
@@ -290,9 +291,8 @@ class BaseContext(object):
         try:
             return typeof(val, Purpose.argument)
         except ValueError:
-            from numba.cuda import as_cuda_array
             if hasattr(val, '__cuda_array_interface__'):
-                return typeof(as_cuda_array(val), Purpose.argument)
+                return typeof(numba.cuda.as_cuda_array(val), Purpose.argument)
             else:
                 raise
 
