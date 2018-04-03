@@ -12,7 +12,7 @@ import numba
 from numba.compiler import compile_isolated, Flags
 from numba import unittest_support as unittest
 
-needs_svml = unittest.skipUnless(numba.USING_SVML,
+needs_svml = unittest.skipUnless(numba.config.USING_SVML,
                                  "SVML tests need SVML to be present")
 
 
@@ -90,14 +90,8 @@ class TestSVML(TestCase):
         np.testing.assert_almost_equal(jitfast_result, py_expected, **kwargs)
 
         # look for specific patters in the asm for a given target
-        env_opts = {'NUMBA_CPU_NAME': cpu_name,
-                    'NUMBA_CPU_FEATURES': ''
-                    }
-        overrides = []
-        for k, v in env_opts.items():
-            overrides.append(override_env_config(k, v))
-
-        with overrides[0], overrides[1]:
+        with override_env_config('NUMBA_CPU_NAME', cpu_name), \
+             override_env_config('NUMBA_CPU_FEATURES', ''):
             # recompile for overridden CPU
             jitstd, jitfast = self.compile(pyfunc, *args)
             if std_pattern:
@@ -147,15 +141,9 @@ class TestSVML(TestCase):
                     from numba.tests.support import override_env_config
                     from numba.compiler import compile_isolated, Flags
 
-                    env_opts = {'NUMBA_CPU_NAME': 'skylake-avx512',
-                                'NUMBA_CPU_FEATURES': ''
-                                }
-                    overrides = []
-                    for k, v in env_opts.items():
-                        overrides.append(override_env_config(k, v))
-
                     # compile for overridden CPU, with and without fastmath
-                    with overrides[0], overrides[1]:
+                    with override_env_config('NUMBA_CPU_NAME', 'skylake-avx512'), \
+                         override_env_config('NUMBA_CPU_FEATURES', ''):
                         sig = (numba.int32,)
                         f = Flags()
                         f.set('nrt')
@@ -182,3 +170,6 @@ class TestSVML(TestCase):
             raise AssertionError(
                 "process failed with code %s: stderr follows\n%s\n" %
                 (popen.returncode, err.decode()))
+
+if __name__ == '__main__':
+    unittest.main()

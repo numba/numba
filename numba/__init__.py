@@ -108,25 +108,22 @@ def _try_enable_svml():
     """
     Tries to enable SVML if configuration permits use and the library is found.
     """
-    SVML_ENABLED = False
     if not config.DISABLE_INTEL_SVML:
         try:
             if sys.platform.startswith('linux'):
                 llvmlite.binding.load_library_permanently("libsvml.so")
-                SVML_ENABLED = True
             elif sys.platform.startswith('darwin'):
                 llvmlite.binding.load_library_permanently("libsvml.dylib")
-                SVML_ENABLED = True
             elif sys.platform.startswith('win'):
                 llvmlite.binding.load_library_permanently("svml_dispmd")
-                SVML_ENABLED = True
-            if SVML_ENABLED:
-                llvmlite.binding.set_option(__name__, '-vector-library=SVML')
+            else:
+                return False
+            llvmlite.binding.set_option('SVML', '-vector-library=SVML')
+            return True
         except:
             if platform.machine == 'x86_64' and config.DEBUG:
                 warnings.warn("SVML was not found/could not be loaded.")
-
-    return SVML_ENABLED
+    return False
 
 _ensure_llvm()
 _ensure_pynumpy()
@@ -138,7 +135,7 @@ import llvmlite
 """
 Is set to True if Intel SVML is in use.
 """
-USING_SVML = _try_enable_svml()
+config.USING_SVML = _try_enable_svml()
 
 from ._version import get_versions
 __version__ = get_versions()['version']
