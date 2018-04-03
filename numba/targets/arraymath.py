@@ -158,7 +158,6 @@ def array_sum(context, builder, sig, args):
     from numba import njit
 
     zero = sig.return_type(0)
-    dtype = sig.args[0].dtype
 
     @njit
     def pairwise_sum(arr, n):
@@ -168,16 +167,26 @@ def array_sum(context, builder, sig, args):
                 res += arr[i]
             return res
         elif n <= 128:
-            r = np.empty(8, dtype=dtype)
+            r0 = arr[0]
+            r1 = arr[1]
+            r2 = arr[2]
+            r3 = arr[3]
+            r4 = arr[4]
+            r5 = arr[5]
+            r6 = arr[6]
+            r7 = arr[7]
 
-            for i in range(8):
-                r[i] = arr[i]
             m = n - (n % 8)
             for i in range(8, m, 8):
-                for j in range(8):
-                    r[j] += arr[i+j]
-            res = (((r[0] + r[1]) + (r[2] + r[3])) +
-                   ((r[4] + r[5]) + (r[6] + r[7])))
+                r0 += arr[i]
+                r1 += arr[i+1]
+                r2 += arr[i+2]
+                r3 += arr[i+3]
+                r4 += arr[i+4]
+                r5 += arr[i+5]
+                r6 += arr[i+6]
+                r7 += arr[i+7]
+            res = ((r0 + r1) + (r2 + r3)) + ((r4 + r5) + (r6 + r7))
 
             for i in range(m, n):
                 res += arr[i]
@@ -193,7 +202,7 @@ def array_sum(context, builder, sig, args):
         size = 1
         for i in arr.shape:
             size *= i
-        return pairwise_sum(np.ravel(arr), size)
+        return pairwise_sum(arr.reshape(-1), size)
 
     res = context.compile_internal(builder, array_sum_impl, sig, args)
     return impl_ret_borrowed(context, builder, sig.return_type, res)
