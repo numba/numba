@@ -218,8 +218,8 @@ class _EnvReloader(object):
 
         ENABLE_AVX = _readenv("NUMBA_ENABLE_AVX", int, avx_default)
 
-        # Enable Intel SVML library for vectorization of transcedental functions
-        INTEL_SVML = _readenv("NUMBA_INTEL_SVML", int, 1) # by default
+        # if set and SVML is available, it will be disabled
+        DISABLE_INTEL_SVML = _readenv("NUMBA_DISABLE_INTEL_SVML", int, 0)
 
         # Disable jit for debugging
         DISABLE_JIT = _readenv("NUMBA_DISABLE_JIT", int, 0)
