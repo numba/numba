@@ -1145,10 +1145,6 @@ def zipf_impl(context, builder, sig, args):
     res = context.compile_internal(builder, zipf_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-def _shuffle_impl(arr, rng):
-    pass
-
-@overload(_shuffle_impl)
 def do_shuffle_impl(arr, rng):
 
     if not isinstance(arr, types.Buffer):
