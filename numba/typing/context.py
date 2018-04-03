@@ -287,7 +287,14 @@ class BaseContext(object):
 
         ValueError is raised for unsupported types.
         """
-        return typeof(val, Purpose.argument)
+        try:
+            return typeof(val, Purpose.argument)
+        except ValueError:
+            from numba.cuda import as_cuda_array
+            if hasattr(val, '__cuda_array_interface__'):
+                return typeof(as_cuda_array(val), Purpose.argument)
+            else:
+                raise
 
     def resolve_value_type(self, val):
         """
