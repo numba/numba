@@ -10,16 +10,20 @@ from collections import defaultdict
 import warnings
 from numba import six
 from functools import wraps
-from abc import ABC, abstractmethod
+import abc
+from abc import abstractmethod
 
 # Filled at the end
 __all__ = []
 
 # These are needed in the color formatting of errors setup
+
+
 class NumbaWarning(Warning):
     """
     Base category for all Numba compiler warnings.
     """
+
 
 class PerformanceWarning(NumbaWarning):
     """
@@ -27,9 +31,9 @@ class PerformanceWarning(NumbaWarning):
     as fast as expected.
     """
 
-class _ColorScheme(ABC):
-    def __init__(self, theme=None):
-        super().__init__()
+
+@six.add_metaclass(abc.ABCMeta)
+class _ColorScheme(object):
 
     @abstractmethod
     def code(self, msg):
@@ -52,6 +56,27 @@ class _ColorScheme(ABC):
         pass
 
 
+class _DummyColorScheme(_ColorScheme):
+
+    def __init__(self, theme=None):
+        pass
+
+    def code(self, msg):
+        pass
+
+    def errmsg(self, msg):
+        pass
+
+    def filename(self, msg):
+        pass
+
+    def indicate(self, msg):
+        pass
+
+    def highlight(self, msg):
+        pass
+
+
 try:
     import colorama
 except ImportError:
@@ -61,11 +86,11 @@ except ImportError:
            "improved user experience.\n\n")
     warnings.warn(msg, NumbaWarning)
 
-    class NOPColorScheme(_ColorScheme):
+    class NOPColorScheme(_DummyColorScheme):
         def __init__(self, theme=None):
             if theme is not None:
                 raise ValueError("specifying a theme has no effect")
-            super().__init__()
+            _DummyColorScheme.__init__(self, theme=theme)
 
         def code(self, msg):
             return msg
@@ -88,8 +113,10 @@ else:
 
     from colorama import init, reinit, deinit, Fore, Back, Style
     from contextlib import contextmanager
+
     class ColorShell(object):
         _has_initialized = False
+
         def __init__(self):
             init()
             self._has_initialized = True
@@ -101,7 +128,6 @@ else:
         def __exit__(self, *exc_detail):
             Style.RESET_ALL
             deinit()
-
 
     class reset_terminal(object):
         def __init__(self):
@@ -117,22 +143,22 @@ else:
              'errmsg': Fore.YELLOW,
              'filename': Fore.WHITE,
              'indicate': Fore.GREEN,
-             'highlight': Fore.RED,}
+             'highlight': Fore.RED, }
 
     dark = {'code': Fore.BLUE,
             'errmsg': Fore.BLACK,
             'filename': Fore.YELLOW,
             'indicate': Fore.GREEN,
-            'highlight': Fore.RED,}
+            'highlight': Fore.RED, }
 
-    class HighlightColorScheme(_ColorScheme):
+    class HighlightColorScheme(_DummyColorScheme):
         def __init__(self, theme=light):
             self._code = theme['code']
             self._errmsg = theme['errmsg']
             self._filename = theme['filename']
             self._indicate = theme['indicate']
             self._highlight = theme['highlight']
-            super().__init__()
+            _DummyColorScheme.__init__(self, theme=theme)
 
         def _markup(self, msg, color=None, style=Style.BRIGHT):
             features = ''
@@ -162,7 +188,7 @@ else:
             return self._markup(msg, self._highlight)
 
     # TODO: setup theme config
-    termcolor = HighlightColorScheme(theme = light)
+    termcolor = HighlightColorScheme(theme=light)
 
 
 unsupported_error_info = """
@@ -223,6 +249,7 @@ def deprecated(arg):
       def old_func(): ..."""
 
     subst = arg if isinstance(arg, str) else None
+
     def decorator(func):
         def wrapper(*args, **kwargs):
             msg = "Call to deprecated function \"{}\"."
@@ -291,7 +318,7 @@ class NumbaError(Exception):
         if highlighting:
             highlight = termcolor.errmsg
         else:
-            highlight = lambda x: x
+            def highlight(x): return x
         if loc:
             super(NumbaError, self).__init__(
                 highlight("%s\n%s\n" % (msg, loc.strformat())))
@@ -323,18 +350,22 @@ class NumbaError(Exception):
         """
         self.args = (new_message,) + self.args[1:]
 
+
 class UnsupportedError(NumbaError):
     """
     Numba does not have an implementation for this functionality.
     """
+
 
 class IRError(NumbaError):
     """
     An error occurred during Numba IR generation.
     """
 
+
 class RedefinedError(IRError):
     pass
+
 
 class NotDefinedError(IRError):
     def __init__(self, name, loc=None):
@@ -345,6 +376,7 @@ class NotDefinedError(IRError):
         loc = "?" if self.loc is None else self.loc
         return "{name!r} is not defined in {loc}".format(name=self.name,
                                                          loc=self.loc)
+
 
 class VerificationError(IRError):
     pass
@@ -412,6 +444,7 @@ class InternalError(NumbaError):
     """
     For wrapping internal error occured within the compiler
     """
+
     def __init__(self, exception):
         super(InternalError, self).__init__(str(exception))
         self.old_exception = exception
@@ -465,4 +498,4 @@ def new_error_context(fmt_, *args, **kwargs):
 
 __all__ += [name for (name, value) in globals().items()
             if not name.startswith('_') and isinstance(value, type)
-               and issubclass(value, (Exception, Warning))]
+            and issubclass(value, (Exception, Warning))]

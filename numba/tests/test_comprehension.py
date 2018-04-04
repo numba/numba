@@ -230,7 +230,7 @@ class TestListComprehension(unittest.TestCase):
             with self.assertRaises(TypingError) as raises:
                 cfunc = jit(nopython=True)(list22)
                 cfunc(var)
-            msg = "cannot unify reflected list(int%d) and int%d" % (bits, bits)
+            msg = "Cannot unify reflected list(int%d) and int%d" % (bits, bits)
             self.assertIn(msg, str(raises.exception))
 
 class TestArrayComprehension(unittest.TestCase):
