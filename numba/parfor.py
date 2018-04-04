@@ -1037,6 +1037,9 @@ class ParforPass(object):
         first_label = labels[0]
         added_indices = set()
 
+        # traverse loop body and replace indices in getitem/setitem with
+        # new_index if possible.
+        # also, find equivalent indices defined in first block.
         for l in labels:
             block = loop_body[l]
             for stmt in block.body:
