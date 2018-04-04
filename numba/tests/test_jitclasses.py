@@ -557,7 +557,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         def access_dunder(inst):
             return inst.__value
 
-        with self.assertRaises(errors.UntypedAttributeError) as raises:
+        with self.assertRaises(errors.TypingError) as raises:
             access_dunder(inst)
         # It will appear as "_TestJitClass__value" because the `access_dunder`
         # is under the scope of 'TestJitClass'.

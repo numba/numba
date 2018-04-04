@@ -173,8 +173,8 @@ https://github.com/numba/numba/issues/new
 """
 
 typing_error_info = """
-This may not be a bug/problem with Numba but instead the use of unsupported
-features or an issue in resolving types.
+This is not usually a problem with Numba itself but instead often caused by
+the use of unsupported features or an issue in resolving types.
 
 To see Python/NumPy features supported by the latest release of Numba visit:
 http://numba.pydata.org/numba-doc/dev/reference/pysupported.html
