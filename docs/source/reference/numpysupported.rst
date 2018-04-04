@@ -368,7 +368,7 @@ Permutations
 
 * :func:`numpy.random.choice`: the optional *p* argument (probabilities
   array) is not supported
-
+* :func:`numpy.random.permutation`
 * :func:`numpy.random.shuffle`: the sequence argument must be a one-dimension
   Numpy array or buffer-providing object (such as a :class:`bytearray`
   or :class:`array.array`)

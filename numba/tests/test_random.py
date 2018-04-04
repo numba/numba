@@ -76,6 +76,21 @@ def numpy_check_randn(seed, a, b):
     got = np.random.randn(a, b)
     return expected, got
 
+# Numba's current PRNG for NumPy follows Python's implementation,
+# however, Python's implementation of shuffle does not work on
+# multidimensional arrays.  Hence, we cannot test np.random.shuffle with
+# Python's shuffle.  Therefore, we implement a shuffle in Python that
+# works on multidimensional arrays and compare against that.
+def python_shuffle(arr, r):
+    if arr.ndim == 1:
+        r.shuffle(arr)
+    else:
+        i = arr.shape[0] - 1
+        while i > 0:
+            j = r.randrange(i + 1)
+            arr[i], arr[j] = np.copy(arr[j]), np.copy(arr[i])
+            i -= 1
+    return arr
 
 def jit_with_args(name, argstring):
     code = """def func(%(argstring)s):
@@ -829,27 +844,31 @@ class TestRandom(BaseTest):
 
     def _check_shuffle(self, func, ptr):
         """
-        Check a shuffle()-like function for 1D arrays.
+        Check a shuffle()-like function for arrays.
         """
         # Our implementation follows Python 3's.
-        a = np.arange(20)
+        arrs = [np.arange(20), np.arange(32).reshape((8, 4))]
         if sys.version_info >= (3,):
             r = self._follow_cpython(ptr)
-            for i in range(3):
-                got = a.copy()
-                expected = a.copy()
-                func(got)
-                r.shuffle(expected)
-                self.assertPreciseEqual(got, expected)
+            for a in arrs:
+                for i in range(3):
+                    got = a.copy()
+                    expected = a.copy()
+                    func(got)
+                    python_shuffle(expected, r)
+                    self.assertPreciseEqual(got, expected)
         else:
             # Sanity check
-            for i in range(3):
-                b = a.copy()
-                func(b)
-                self.assertNotEqual(list(a), list(b))
-                self.assertEqual(sorted(a), sorted(b))
-                a = b
+            for a in arrs:
+                for i in range(3):
+                    b = a.copy()
+                    func(b)
+                    self.assertFalse(np.array_equal(a, b))
+                    self.assertTrue(np.array_equal(np.sort(a, axis=0),
+                                                   np.sort(b, axis=0)))
+                    a = b
         # Test with an arbitrary buffer-providing object
+        a = arrs[0]
         b = a.copy()
         func(memoryview(b))
         self.assertNotEqual(list(a), list(b))
@@ -897,6 +916,51 @@ class TestRandom(BaseTest):
 
     def test_numpy_gauss_startup(self):
         self._check_startup_randomness("numpy_normal", (1.0, 1.0))
+
+    def test_numpy_random_permutation(self):
+
+        # Numba's current PRNG for NumPy follows Python's implementation, hence,
+        # we cannot test np.random.permutation against NumPy.  Since Python does
+        # not have a permutation implementation, with which we can test
+        # np.random.permutation, we implement one, just for testing purposes.
+        def python_permutation(r, x):
+            if isinstance(x, int):
+                arr = np.arange(x)
+            else:
+                arr = np.array(x)
+            python_shuffle(arr, r)
+            return arr
+
+        # Our implementation follows Python 3's.
+        func = jit_unary("np.random.permutation")
+        if sys.version_info >= (3,):
+            r = self._follow_cpython(get_np_state_ptr())
+            for s in [5, 10, 15, 20]:
+                a = np.arange(s)
+                b = a.copy()
+                # Test array version
+                self.assertPreciseEqual(func(a), python_permutation(r, a))
+                # Test int version
+                self.assertPreciseEqual(func(s), python_permutation(r, s))
+                # Permutation should not modify its argument
+                self.assertPreciseEqual(a, b)
+            # Check multi-dimensional arrays
+            arrs = [np.arange(10).reshape(2, 5),
+                    np.arange(27).reshape(3, 3, 3),
+                    np.arange(36).reshape(2, 3, 3, 2)]
+            for a in arrs:
+                b = a.copy()
+                self.assertPreciseEqual(func(a), python_permutation(r, a))
+                self.assertPreciseEqual(a, b)
+        else:
+            # Sanity check
+            arrs = [np.arange(20), np.arange(20).reshape(5, 2, 2)]
+            for a in arrs:
+                for i in range(3):
+                    b = func(a)
+                    self.assertFalse(np.array_equal(a, b))
+                    self.assertTrue(np.array_equal(np.sort(a, axis=0),
+                                                   np.sort(b, axis=0)))
 
 
 class TestRandomArrays(BaseTest):
