@@ -9,6 +9,7 @@ from collections import namedtuple
 from enum import IntEnum
 
 import numpy as np
+from numpy.lib.stride_tricks import as_strided
 
 from llvmlite import ir
 import llvmlite.llvmpy.core as lc
@@ -199,10 +200,9 @@ def array_sum(context, builder, sig, args):
                     + pairwise_sum(arr[n2:], n - n2))
 
     def array_sum_impl(arr):
-        size = 1
-        for i in arr.shape:
-            size *= i
-        return pairwise_sum(arr.reshape(-1), size)
+        size = arr.size
+        return pairwise_sum(as_strided(arr, shape=(size,),
+                                       strides=arr.strides[-1:]), size)
 
     res = context.compile_internal(builder, array_sum_impl, sig, args)
     return impl_ret_borrowed(context, builder, sig.return_type, res)
