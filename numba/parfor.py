@@ -17,6 +17,7 @@ import types as pytypes  # avoid confusion with numba.types
 import sys, math
 from functools import reduce
 from collections import defaultdict
+from contextlib import contextmanager
 
 import numba
 from numba import ir, ir_utils, types, typing, rewrites, config, analysis, prange, pndindex
@@ -1030,16 +1031,8 @@ class ParforPass(object):
         # treat new index like others since replacing it with itself is ok
         index_set.add(new_index.name)
 
-        # add dummy return to last block for CFG computation
-        # max is last block since we add it manually for prange
-        last_label = max(loop_body.keys())
-        loop_body[last_label].body.append(
-            ir.Return(0, ir.Loc("parfors_dummy", -1)))
-
-        labels = find_topo_order(loop_body)
-
-        # remove dummy return
-        loop_body[last_label].body.pop()
+        with dummy_return_in_loop_body(loop_body):
+            labels = find_topo_order(loop_body)
 
         first_label = labels[0]
         added_indices = set()
@@ -2559,16 +2552,8 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, typemap):
     """ remove dead code inside parfor including get/sets
     """
 
-    # add dummy return to last block for CFG computation
-    # max is last block since we add it manually for parfors
-    last_label = max(parfor.loop_body.keys())
-    parfor.loop_body[last_label].body.append(
-        ir.Return(0, ir.Loc("parfors_dummy", -1)))
-
-    labels = find_topo_order(parfor.loop_body)
-
-    # remove dummy return
-    parfor.loop_body[last_label].body.pop()
+    with dummy_return_in_loop_body(parfor.loop_body):
+        labels = find_topo_order(parfor.loop_body)
 
     # get/setitem replacement should ideally use dataflow to propagate setitem
     # saved values, but for simplicity we handle the common case of propagating
@@ -2754,6 +2739,7 @@ def simplify_parfor_body_CFG(blocks):
             if isinstance(stmt, Parfor):
                 parfor = stmt
                 # add dummy return to enable CFG creation
+                # can't use dummy_return_in_loop_body since body changes
                 last_block = parfor.loop_body[max(parfor.loop_body.keys())]
                 last_block.body.append(ir.Return(0, ir.Loc("parfors_dummy", -1)))
                 parfor.loop_body = simplify_CFG(parfor.loop_body)
@@ -3043,6 +3029,18 @@ def build_parfor_definitions(parfor, definitions=None):
     return definitions
 
 ir_utils.build_defs_extensions[Parfor] = build_parfor_definitions
+
+@contextmanager
+def dummy_return_in_loop_body(loop_body):
+    """adds dummy return to last block of parfor loop body for CFG computation
+    """
+    # max is last block since we add it manually for prange
+    last_label = max(loop_body.keys())
+    loop_body[last_label].body.append(
+        ir.Return(0, ir.Loc("parfors_dummy", -1)))
+    yield
+    # remove dummy return
+    loop_body[last_label].body.pop()
 
 @infer_global(reduce)
 class ReduceInfer(AbstractTemplate):
