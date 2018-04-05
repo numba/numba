@@ -1,0 +1,25 @@
+{% set version = "2018.0.2" %} # this is the intel version to get
+{% set build_number = "0" %}   # and the build number from the intel version
+
+package:
+  name: icc_rt
+  version: {{ version }}
+
+build:
+  number: {{ build_number }}
+
+source:
+    path: scripts
+
+requirements:
+  build:
+    - python>=3.6
+
+test:
+  commands:
+
+about:
+  license: "Intel"
+  license_family: "Proprietary"
+  license_file: LICENSE.txt
+summary: Intel ICC runtime.
