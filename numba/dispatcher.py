@@ -405,6 +405,17 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         return dict((sig, self.inspect_cfg(sig, show_wrapper=show_wrapper))
                     for sig in self.signatures)
 
+    def get_annotation_info(self, signature=None):
+        """
+        Gets the annotation information for the function specified by
+        signature. If no signature is supplied a dictionary of signature to
+        annotation information is returned.
+        """
+        if signature is not None:
+            cres = self.overloads[signature]
+            return cres.type_annotation.annotate_raw()
+        return dict((sig, self.annotate(sig)) for sig in self.signatures)
+
     def _explain_ambiguous(self, *args, **kws):
         """
         Callback for the C _Dispatcher object.
