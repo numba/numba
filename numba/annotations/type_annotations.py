@@ -152,15 +152,24 @@ class TypeAnnotation(object):
         self.annotate_raw()
         # make a deep copy ahead of the pending mutations
         func_data = copy.deepcopy(self.func_data)
-        def add_in_nbsp(key):
-            for this_func in func_data.values():
-                if key in this_func:
-                    idents = {}
-                    for line, amount in this_func[key].items():
-                        idents[line] = '&nbsp;' * amount
-                    this_func[key] = idents
-        add_in_nbsp('python_indent')
-        add_in_nbsp('ir_indent')
+        #def add_in_nbsp(key):
+        key = 'python_indent'
+        for this_func in func_data.values():
+            if key in this_func:
+                idents = {}
+                for line, amount in this_func[key].items():
+                    idents[line] = '&nbsp;' * amount
+                this_func[key] = idents
+
+        key = 'ir_indent'
+        for this_func in func_data.values():
+            if key in this_func:
+                idents = {}
+                for line, ir_id in this_func[key].items():
+                    idents[line] = ['&nbsp;' * amount for amount in ir_id]
+                this_func[key] = idents
+
+
 
         try:
             from jinja2 import Template
@@ -194,7 +203,7 @@ class TypeAnnotation(object):
                 line_type = 'pyobject'
             func_data['ir_lines'][num].append((line_str, line_type))
             indent_len = len(_getindent(line))
-            func_data['ir_indent'][num] += indent_len
+            func_data['ir_indent'][num].append(indent_len)
 
         func_key = (self.func_id.filename + ':' + str(self.func_id.firstlineno + 1),
                     self.signature)
@@ -207,7 +216,7 @@ class TypeAnnotation(object):
                 if num not in ir_lines.keys():
                     continue
                 func_data['ir_lines'][num] = []
-                func_data['ir_indent'][num] = 0
+                func_data['ir_indent'][num] = []
                 for line in ir_lines[num]:
                     add_ir_line(func_data, line)
                     if line.strip().endswith('pyobject'):
@@ -248,7 +257,7 @@ class TypeAnnotation(object):
                 func_data['python_indent'][num] = indent_len
                 func_data['python_tags'][num] = ''
                 func_data['ir_lines'][num] = []
-                func_data['ir_indent'][num] = 0
+                func_data['ir_indent'][num] = []
 
                 for line in ir_lines[num]:
                     add_ir_line(func_data, line)
