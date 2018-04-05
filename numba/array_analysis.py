@@ -1264,7 +1264,10 @@ class ArrayAnalysis(object):
 
         fname, mod_name = find_callname(
             self.func_ir, expr, typemap=self.typemap)
-        if isinstance(mod_name, ir.Var):  # call via attribute
+        # call via attribute (i.e. array.func)
+        if (isinstance(mod_name, ir.Var)
+                and isinstance(self.typemap[mod_name.name],
+                                types.ArrayCompatible)):
             args = [mod_name] + expr.args
             mod_name = 'numpy'
         else:

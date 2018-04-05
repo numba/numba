@@ -26,8 +26,9 @@ from numba import types
 from numba.targets.registry import cpu_target
 from numba import config
 from numba.annotations import type_annotations
-from numba.ir_utils import (copy_propagate, apply_copy_propagate,
-                            get_name_var_table, remove_dels, remove_dead)
+from numba.ir_utils import (find_callname, guard, build_definitions,
+                            get_definition, is_getitem, is_setitem,
+                            index_var_of_get_setitem)
 from numba import ir
 from numba.compiler import compile_isolated, Flags
 from numba.bytecode import ByteCodeIter
@@ -246,7 +247,7 @@ class TestParforsBase(TestCase):
             _assert_fast(inst)
 
 
-def test1(sptprice, strike, rate, volatility, timev):
+def blackscholes_impl(sptprice, strike, rate, volatility, timev):
     # blackscholes example
     logterm = np.log(sptprice / strike)
     powterm = 0.5 * volatility * volatility
@@ -262,7 +263,7 @@ def test1(sptprice, strike, rate, volatility, timev):
     return put
 
 
-def test2(Y, X, w, iterations):
+def lr_impl(Y, X, w, iterations):
     # logistic regression example
     for i in range(iterations):
         w -= np.dot(((1.0 / (1.0 + np.exp(-Y * np.dot(X, w))) - 1.0) * Y), X)
@@ -282,7 +283,7 @@ def test_kmeans_example(A, numCenter, numIter, init_centroids):
 
     return centroids
 
-def countParfors(test_func, args, **kws):
+def get_optimized_numba_ir(test_func, args, **kws):
     typingctx = typing.Context()
     targetctx = cpu.CPUContext(typingctx)
     test_ir = compiler.run_frontend(test_func)
@@ -291,8 +292,11 @@ def countParfors(test_func, args, **kws):
     else:
         options = cpu.ParallelOptions(True)
 
+    tp = TestPipeline(typingctx, targetctx, args, test_ir)
+
     with cpu_target.nested_context(typingctx, targetctx):
-        tp = TestPipeline(typingctx, targetctx, args, test_ir)
+        typingctx.refresh()
+        targetctx.refresh()
 
         inline_pass = inline_closurecall.InlineClosureCallPass(tp.func_ir, options)
         inline_pass.run()
@@ -325,6 +329,12 @@ def countParfors(test_func, args, **kws):
             tp.func_ir, tp.typemap, tp.calltypes, tp.return_type,
             tp.typingctx, options, flags)
         parfor_pass.run()
+        test_ir._definitions = build_definitions(test_ir.blocks)
+
+    return test_ir, tp
+
+def countParfors(test_func, args, **kws):
+    test_ir, tp = get_optimized_numba_ir(test_func, args, **kws)
     ret_count = 0
 
     for label, block in test_ir.blocks.items():
@@ -335,10 +345,98 @@ def countParfors(test_func, args, **kws):
     return ret_count
 
 
+def countArrays(test_func, args, **kws):
+    test_ir, tp = get_optimized_numba_ir(test_func, args, **kws)
+    return _count_arrays_inner(test_ir.blocks, tp.typemap)
+
+def _count_arrays_inner(blocks, typemap):
+    ret_count = 0
+    arr_set = set()
+
+    for label, block in blocks.items():
+        for i, inst in enumerate(block.body):
+            if isinstance(inst, numba.parfor.Parfor):
+                parfor_blocks = inst.loop_body.copy()
+                parfor_blocks[0] = inst.init_block
+                ret_count += _count_arrays_inner(parfor_blocks, typemap)
+            if (isinstance(inst, ir.Assign)
+                    and isinstance(typemap[inst.target.name],
+                                    types.ArrayCompatible)):
+                arr_set.add(inst.target.name)
+
+    ret_count += len(arr_set)
+    return ret_count
+
+def countArrayAllocs(test_func, args, **kws):
+    test_ir, tp = get_optimized_numba_ir(test_func, args, **kws)
+    ret_count = 0
+
+    for block in test_ir.blocks.values():
+        ret_count += _count_array_allocs_inner(test_ir, block)
+
+    return ret_count
+
+def _count_array_allocs_inner(func_ir, block):
+    ret_count = 0
+    for inst in block.body:
+        if isinstance(inst, numba.parfor.Parfor):
+            ret_count += _count_array_allocs_inner(func_ir, inst.init_block)
+            for b in inst.loop_body.values():
+                ret_count += _count_array_allocs_inner(func_ir, b)
+
+        if (isinstance(inst, ir.Assign) and isinstance(inst.value, ir.Expr)
+                and inst.value.op == 'call'
+                and guard(find_callname, func_ir, inst.value) == ('empty', 'numpy')):
+            ret_count += 1
+
+    return ret_count
+
+def countNonParforArrayAccesses(test_func, args, **kws):
+    test_ir, tp = get_optimized_numba_ir(test_func, args, **kws)
+    return _count_non_parfor_array_accesses_inner(test_ir, test_ir.blocks, tp.typemap)
+
+def _count_non_parfor_array_accesses_inner(f_ir, blocks, typemap, parfor_indices=None):
+    ret_count = 0
+    if parfor_indices is None:
+        parfor_indices = set()
+
+    for label, block in blocks.items():
+        for stmt in block.body:
+            if isinstance(stmt, numba.parfor.Parfor):
+                parfor_indices.add(stmt.index_var.name)
+                parfor_blocks = stmt.loop_body.copy()
+                parfor_blocks[0] = stmt.init_block
+                ret_count += _count_non_parfor_array_accesses_inner(
+                    f_ir, parfor_blocks, typemap, parfor_indices)
+
+            # getitem
+            if (is_getitem(stmt) and isinstance(typemap[stmt.value.value.name],
+                        types.ArrayCompatible) and not _uses_indices(
+                        f_ir, index_var_of_get_setitem(stmt), parfor_indices)):
+                ret_count += 1
+
+            # setitem
+            if (is_setitem(stmt) and isinstance(typemap[stmt.target.name],
+                    types.ArrayCompatible) and not _uses_indices(
+                    f_ir, index_var_of_get_setitem(stmt), parfor_indices)):
+                ret_count += 1
+
+    return ret_count
+
+def _uses_indices(f_ir, index, index_set):
+    if index.name in index_set:
+        return True
+
+    ind_def = guard(get_definition, f_ir, index)
+    if isinstance(ind_def, ir.Expr) and ind_def.op == 'build_tuple':
+        varnames = set(v.name for v in ind_def.items)
+        return len(varnames & index_set) != 0
+
+    return False
+
+
 class TestPipeline(object):
     def __init__(self, typingctx, targetctx, args, test_ir):
-        typingctx.refresh()
-        targetctx.refresh()
         self.typingctx = typingctx
         self.targetctx = targetctx
         self.args = args
@@ -414,6 +512,7 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, 100000, decimal=1)
         self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
+        self.assertTrue(countArrays(test_impl, (types.intp,)) == 0)
 
     @skip_unsupported
     @tag('important')
@@ -426,21 +525,23 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, 256)
         self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
+        self.assertTrue(countArrays(test_impl, (types.intp,)) == 0)
 
     @skip_unsupported
     @tag('important')
-    def test_test1(self):
+    def test_blackscholes(self):
         # blackscholes takes 5 1D float array args
         args = (numba.float64[:], ) * 5
-        self.assertTrue(countParfors(test1, args) == 1)
+        self.assertTrue(countParfors(blackscholes_impl, args) == 1)
 
     @skip_unsupported
     @needs_blas
     @tag('important')
-    def test_test2(self):
+    def test_logistic_regression(self):
         args = (numba.float64[:], numba.float64[:,:], numba.float64[:],
                 numba.int64)
-        self.assertTrue(countParfors(test2, args) == 1)
+        self.assertTrue(countParfors(lr_impl, args) == 1)
+        self.assertTrue(countArrayAllocs(lr_impl, args) == 1)
 
     @skip_unsupported
     @tag('important')
@@ -455,6 +556,10 @@ class TestParfors(TestParforsBase):
                                                                     decimal=1)
         # TODO: count parfors after k-means fusion is working
         # requires recursive parfor counting
+        arg_typs = (types.Array(types.float64, 2, 'C'), types.intp, types.intp,
+                    types.Array(types.float64, 2, 'C'))
+        self.assertTrue(
+            countNonParforArrayAccesses(test_kmeans_example, arg_typs) == 0)
 
     @unittest.skipIf(not (_windows_py27 or _32bit),
                      "Only impacts Windows with Python 2.7 / 32 bit hardware")
@@ -905,6 +1010,126 @@ class TestParfors(TestParforsBase):
         self.check(test_impl2, A)
         self.check(test_impl2, B)
         self.check(test_impl2, C)
+
+
+    @skip_unsupported
+    def test_parfor_array_access1(self):
+        # signed index of the prange generated by sum() should be replaced
+        # resulting in array A to be eliminated (see issue #2846)
+        def test_impl(n):
+            A = np.ones(n)
+            return A.sum()
+
+        n = 211
+        self.check(test_impl, n)
+        self.assertEqual(countArrays(test_impl, (types.intp,)), 0)
+
+    @skip_unsupported
+    def test_parfor_array_access2(self):
+        # in this test, the prange index has the same name (i) in two loops
+        # thus, i has multiple definitions and is harder to replace
+        def test_impl(n):
+            A = np.ones(n)
+            m = 0
+            n = 0
+            for i in numba.prange(len(A)):
+                m += A[i]
+
+            for i in numba.prange(len(A)):
+                if m == n:  # access in another block
+                    n += A[i]
+
+            return m + n
+
+        n = 211
+        self.check(test_impl, n)
+        self.assertEqual(countNonParforArrayAccesses(test_impl, (types.intp,)), 0)
+
+    @skip_unsupported
+    def test_parfor_array_access3(self):
+        def test_impl(n):
+            A = np.ones(n, np.int64)
+            m = 0
+            for i in numba.prange(len(A)):
+                m += A[i]
+                if m==2:
+                    i = m
+
+        n = 211
+        with self.assertRaises(ValueError) as raises:
+            self.check(test_impl, n)
+        self.assertIn("Overwrite of parallel loop index", str(raises.exception))
+
+    @skip_unsupported
+    def test_parfor_array_access4(self):
+        # in this test, one index of a multi-dim access should be replaced
+        # np.dot parallel implementation produces this case
+        def test_impl(A, b):
+            return np.dot(A, b)
+
+        n = 211
+        d = 4
+        A = np.random.ranf((n, d))
+        b = np.random.ranf(d)
+        self.check(test_impl, A, b)
+        # make sure the parfor index is replaced in build_tuple of access to A
+        test_ir, tp = get_optimized_numba_ir(
+            test_impl, (types.Array(types.float64, 2, 'C'),
+                        types.Array(types.float64, 1, 'C')))
+        # this code should have one basic block after optimization
+        self.assertTrue(len(test_ir.blocks) == 1 and 0 in test_ir.blocks)
+        block = test_ir.blocks[0]
+        parfor_found = False
+        parfor = None
+        for stmt in block.body:
+            if isinstance(stmt, numba.parfor.Parfor):
+                parfor_found = True
+                parfor = stmt
+
+        self.assertTrue(parfor_found)
+        build_tuple_found = False
+        # there should be only one build_tuple
+        for bl in parfor.loop_body.values():
+            for stmt in bl.body:
+                if (isinstance(stmt, ir.Assign)
+                        and isinstance(stmt.value, ir.Expr)
+                        and stmt.value.op == 'build_tuple'):
+                    build_tuple_found = True
+                    self.assertTrue(parfor.index_var in stmt.value.items)
+
+        self.assertTrue(build_tuple_found)
+
+    @skip_unsupported
+    def test_parfor_array_access5(self):
+        # one dim is slice in multi-dim access
+        def test_impl(n):
+            X = np.ones((n, 3))
+            y = 0
+            for i in numba.prange(n):
+                y += X[i,:].sum()
+            return y
+
+        n = 211
+        self.check(test_impl, n)
+        self.assertEqual(countNonParforArrayAccesses(test_impl, (types.intp,)), 0)
+
+    @skip_unsupported
+    def test_parfor_generate_fuse(self):
+        # issue #2857
+        def test_impl(N, D):
+            w = np.ones(D)
+            X = np.ones((N, D))
+            Y = np.ones(N)
+            for i in range(3):
+                B = (-Y * np.dot(X, w))
+
+            return B
+
+        n = 211
+        d = 3
+        self.check(test_impl, n, d)
+        self.assertEqual(countArrayAllocs(test_impl, (types.intp, types.intp)), 4)
+        self.assertEqual(countParfors(test_impl, (types.intp, types.intp)), 4)
 
 
 class TestPrangeBase(TestParforsBase):
