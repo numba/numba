@@ -700,11 +700,17 @@ class BasePipeline(object):
         raise NotImplementedError()
 
     def add_preprocessing_stage(self, pm):
+        """Add the preprocessing stage that analyze the bytecode to prepare
+        the Numba IR.
+        """
         if self.func_ir is None:
             pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
         pm.add_stage(self.stage_process_ir, "processing IR")
 
     def add_pre_typing_stage(self, pm):
+        """Add any stages that goes before type-inference.
+        The current stages contains type-agnostic rewrite passes.
+        """
         if not self.flags.no_rewrites:
             if self.status.can_fallback:
                 pm.add_stage(self.stage_preserve_ir,
@@ -714,10 +720,14 @@ class BasePipeline(object):
                      "inline calls to locally defined closures")
 
     def add_typing_stage(self, pm):
+        """Add the type-inference stage necessary for nopython mode.
+        """
         pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
         pm.add_stage(self.stage_annotate_type, "annotate type")
 
     def add_optimization_stage(self, pm):
+        """Add optimization stages.
+        """
         if self.flags.auto_parallel.enabled:
             pm.add_stage(self.stage_pre_parfor_pass,
                          "Preprocessing for parfors")
@@ -727,9 +737,13 @@ class BasePipeline(object):
             pm.add_stage(self.stage_parfor_pass, "convert to parfors")
 
     def add_lowering_stage(self, pm):
+        """Add the lowering (code-generation) stage for nopython-mode
+        """
         pm.add_stage(self.stage_nopython_backend, "nopython mode backend")
 
     def add_cleanup_stage(self, pm):
+        """Add the clean-up stage to remove intermediate results.
+        """
         pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
 
     def define_nopython_pipeline(self, pm, name='nopython'):
