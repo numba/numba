@@ -105,15 +105,15 @@ class TestSVML(TestCase):
 
     def test_scalar_context(self):
         # SVML will not be used.
-        pat = '$sin'
+        pat = '$_sin' if numba.config.IS_OSX else '$sin'
         self.check(math_sin_scalar, 7., std_pattern=pat)
         self.check(math_sin_scalar, 7., fast_pattern=pat)
 
     def test_svml(self):
         # loops both with and without fastmath should use SVML.
         # The high accuracy routines are dropped if `fastmath` is set
-        std = "$__svml_sin8_ha,"
-        fast = "$__svml_sin8,"  # No `_ha`!
+        std = "__svml_sin8_ha,"
+        fast = "__svml_sin8,"  # No `_ha`!
         self.check(math_sin_loop, 10, std_pattern=std, fast_pattern=fast)
 
     def test_svml_disabled(self):
