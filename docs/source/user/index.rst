@@ -14,6 +14,7 @@ User Manual
    pycc.rst
    parallel.rst
    stencil.rst
+   performance-tips.rst
    troubleshoot.rst
    faq.rst
    examples.rst
