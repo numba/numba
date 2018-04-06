@@ -201,22 +201,19 @@ html_template = Template("""
 """)
 
 
-def reform_code(annotations):
+def reform_code(annotation):
     """
     Extract the code from the numba annotation datastructure. 
     
     Pygments can only highlight full multiline string, the numba
     annotation is list of single lines, with indentation removed.
     """
-    s = ''
-    for k,v in annotations.items():
-        ln = v['python_indent'].keys()
-        assert len(ln) ==  max(ln)-min(ln)+1
-        ident_dict = v['python_indent']
-
-        for n,l in v['python_lines']:
-            s = s+' '*ident_dict[n]+l+'\n' 
+    ident_dict = annotation['python_indent']
+    s= ''
+    for n,l in annotation['python_lines']:
+        s = s+' '*ident_dict[n]+l+'\n'
     return s
+
 
 class Annotate:
     """
@@ -225,23 +222,24 @@ class Annotate:
     function annotation seem to persist across multiple function re-definition. 
     So this make Annotate and iterative code refinment more difficult.
     
-    We also need to figure out how to show annotated code for a given signature
+    We also need to figure out how to show annotated code only for a given signature
     """
     def __init__(self, function, *, style='default'):
         """
         Todo, process all annotation and not only the first, and pick one.
         """
-        ann = function.get_annotation_info(function.signatures[0])
+        for sig in function.signatures:
+            ann = function.get_annotation_info(sig)
         self.ann = ann
         
-        res = hllines(reform_code(ann), style)
-        rest = htlines(reform_code(ann), style)
         
-        ak = next(iter(ann.keys()))
-        ann[ak]['pygments_lines'] = [(a,b,c, d) for (a,b),c, d in zip(ann[ak]['python_lines'], res, rest)]
+        for k,v in ann.items():
+            res = hllines(reform_code(v), style)
+            rest = htlines(reform_code(v), style)
+            v['pygments_lines'] = [(a,b,c, d) for (a,b),c, d in zip(v['python_lines'], res, rest)]
         
     def _repr_html_(self):
         return html_template.render(func_data=self.ann)
     
     def __repr__(self):
-        return ansi_template.render(func_data=self.ann)  
+        return ansi_template.render(func_data=self.ann)
