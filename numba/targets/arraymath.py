@@ -161,24 +161,24 @@ def array_sum(context, builder, sig, args):
     zero = sig.return_type(0)
 
     @njit
-    def pairwise_sum(arr, n):
+    def pairwise_sum(arr, n, start, stop):
         if n < 8:
             res = zero
-            for i in range(n):
+            for i in range(start, stop):
                 res += arr[i]
             return res
         elif n <= 128:
-            r0 = arr[0]
-            r1 = arr[1]
-            r2 = arr[2]
-            r3 = arr[3]
-            r4 = arr[4]
-            r5 = arr[5]
-            r6 = arr[6]
-            r7 = arr[7]
+            r0 = arr[start+0]
+            r1 = arr[start+1]
+            r2 = arr[start+2]
+            r3 = arr[start+3]
+            r4 = arr[start+4]
+            r5 = arr[start+5]
+            r6 = arr[start+6]
+            r7 = arr[start+7]
 
-            m = n - (n % 8)
-            for i in range(8, m, 8):
+            m = stop - (stop % 8)
+            for i in range(start + 8, m, 8):
                 r0 += arr[i]
                 r1 += arr[i+1]
                 r2 += arr[i+2]
@@ -189,23 +189,24 @@ def array_sum(context, builder, sig, args):
                 r7 += arr[i+7]
             res = ((r0 + r1) + (r2 + r3)) + ((r4 + r5) + (r6 + r7))
 
-            for i in range(m, n):
+            for i in range(m, stop):
                 res += arr[i]
 
             return res
         else:
             n2 = n // 2
             n2 -= n2 % 8
-            return (pairwise_sum(arr[:n2], n2)
-                    + pairwise_sum(arr[n2:], n - n2))
+            return (pairwise_sum(arr, n2, 0, n2)
+                    + pairwise_sum(arr, n - n2, n2, n))
 
     def array_sum_impl(arr):
-        size = arr.size
-        return pairwise_sum(as_strided(arr, shape=(size,),
-                                       strides=arr.strides[-1:]), size)
+        n = arr.size
+        flatarr = as_strided(arr, shape=(n,), strides=arr.strides[-1:])
+        return pairwise_sum(flatarr, n, 0, n)
 
     res = context.compile_internal(builder, array_sum_impl, sig, args)
     return impl_ret_borrowed(context, builder, sig.return_type, res)
+
 
 @lower_builtin(np.sum, types.Array, types.intp)
 @lower_builtin(np.sum, types.Array, types.Const)
