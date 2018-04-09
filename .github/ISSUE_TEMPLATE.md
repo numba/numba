@@ -28,12 +28,16 @@ like to see it/the use case
 
 ## Reporting a bug
 
+<!--
+
 Before submitting a bug report please ensure that you can check off these boxes:
+
+-->
 
  [ ] I am using the latest released version of Numba (most recent is visible in
  the change log (https://github.com/numba/numba/blob/master/CHANGE_LOG).
  [ ] I have included below a minimal working reproducer (if you are unsure how
- to write one see  http://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports).
+ to write one see http://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports).
 
 <!--
 
