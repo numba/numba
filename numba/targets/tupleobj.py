@@ -9,6 +9,7 @@ from .imputils import (lower_builtin, lower_getattr_generic, lower_cast,
                        lower_constant,
                        iternext_impl, impl_ret_borrowed, impl_ret_untracked)
 from .. import typing, types, cgutils
+from ..extending import overload_method
 
 
 @lower_builtin(types.NamedTupleClass, types.VarArg(types.Any))
@@ -277,3 +278,18 @@ def tuple_to_tuple(context, builder, fromty, toty, val):
     items = [context.cast(builder, v, f, t)
              for v, f, t in zip(olditems, fromty, toty)]
     return context.make_tuple(builder, toty, items)
+
+
+#------------------------------------------------------------------------------
+# Methods
+
+@overload_method(types.BaseTuple, 'index')
+def tuple_index(tup, value):
+
+    def tuple_index_impl(tup, value):
+        for i in range(len(tup)):
+            if tup[i] == value:
+                return i
+        raise ValueError("tuple.index(x): x not in tuple")
+
+    return tuple_index_impl

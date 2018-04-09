@@ -253,7 +253,9 @@ The following top-level functions are supported:
 * :func:`numpy.bincount` (only the 2 first arguments)
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate`
+* :func:`numpy.convolve` (only the 2 first arguments)
 * :func:`numpy.copy` (only the first argument)
+* :func:`numpy.correlate` (only the 2 first arguments)
 * :func:`numpy.diag`
 * :func:`numpy.digitize`
 * :func:`numpy.dstack`
@@ -368,7 +370,7 @@ Permutations
 
 * :func:`numpy.random.choice`: the optional *p* argument (probabilities
   array) is not supported
-
+* :func:`numpy.random.permutation`
 * :func:`numpy.random.shuffle`: the sequence argument must be a one-dimension
   Numpy array or buffer-providing object (such as a :class:`bytearray`
   or :class:`array.array`)
