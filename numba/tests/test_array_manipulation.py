@@ -71,14 +71,11 @@ def transpose_array(a):
 def numpy_transpose_array(a):
     return np.transpose(a)
 
+def numpy_transpose_array_axes_kwarg(arr, axes):
+    return np.transpose(arr, axes=axes)
 
 def array_transpose_axes(arr, axes):
     return arr.transpose(axes)
-
-
-def numpy_transpose_array_axes(arr, axes):
-    return np.transpose(arr, axes)
-
 
 def squeeze_array(a):
     return a.squeeze()
@@ -254,7 +251,8 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
 
     def test_array_transpose_axes(self):
-        pyfuncs_to_use = [numpy_transpose_array_axes, array_transpose_axes]
+        pyfuncs_to_use = [numpy_transpose_array_axes_kwarg,
+                          array_transpose_axes]
 
         def run(pyfunc, arr, axes):
             cres = self.ccache.compile(pyfunc, (typeof(arr), typeof(axes)))
@@ -296,6 +294,9 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                 np.arange(64).reshape(8, 4, 2)[::3,::2,:]]
 
         for i in range(len(arrs)):
+            # First check `None`, the default, which is to reverse dims
+            check(arrs[i], None)
+            # Check supplied axis permutations
             for axes in permutations(tuple(range(arrs[i].ndim))):
                 ndim = len(axes)
                 neg_axes = tuple([x - ndim for x in axes])
@@ -310,19 +311,19 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         check_err_invalid_args(arrs[1], 5.3)
         check_err_invalid_args(arrs[2], (1.2, 5))
 
-        check_err_axis_repeated(arrs[1], (0,0))
-        check_err_axis_repeated(arrs[2], (2,0,0))
-        check_err_axis_repeated(arrs[3], (3,2,1,1))
+        check_err_axis_repeated(arrs[1], (0, 0))
+        check_err_axis_repeated(arrs[2], (2, 0, 0))
+        check_err_axis_repeated(arrs[3], (3, 2, 1, 1))
 
         check_err_axis_oob(arrs[0], (1,))
         check_err_axis_oob(arrs[0], (-2,))
-        check_err_axis_oob(arrs[1], (0,2))
-        check_err_axis_oob(arrs[1], (-3,2))
-        check_err_axis_oob(arrs[1], (0,-3))
-        check_err_axis_oob(arrs[2], (3,1,2))
-        check_err_axis_oob(arrs[2], (-4,1,2))
-        check_err_axis_oob(arrs[3], (3,1,2,5))
-        check_err_axis_oob(arrs[3], (3,1,2,-5))
+        check_err_axis_oob(arrs[1], (0, 2))
+        check_err_axis_oob(arrs[1], (-3, 2))
+        check_err_axis_oob(arrs[1], (0, -3))
+        check_err_axis_oob(arrs[2], (3, 1, 2))
+        check_err_axis_oob(arrs[2], (-4, 1, 2))
+        check_err_axis_oob(arrs[3], (3, 1, 2, 5))
+        check_err_axis_oob(arrs[3], (3, 1, 2, -5))
 
 
     @tag('important')

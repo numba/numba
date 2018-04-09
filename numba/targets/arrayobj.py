@@ -1482,15 +1482,16 @@ def array_transpose_vararg(context, builder, sig, args):
 
 
 @overload(np.transpose)
-def numpy_transpose(a, *axes):
-    if not axes:
+def numpy_transpose(a, axes=None):
+
+    if axes is None:
         def np_transpose_impl(arr):
             return arr.transpose()
-        return np_transpose_impl
     else:
-        def np_transpose_impl(arr, axes):
+        def np_transpose_impl(arr, axes=None):
             return arr.transpose(axes)
-        return np_transpose_impl
+
+    return np_transpose_impl
 
 
 @lower_getattr(types.Array, 'T')
