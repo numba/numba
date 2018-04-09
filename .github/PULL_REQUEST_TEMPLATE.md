@@ -24,6 +24,12 @@ Here's some guidelines to help the review process go smoothly.
 4. Once review has taken place please do not add features or make changes out of
    the scope of those requested by the reviewer (doing this just add delays as
    already reviewed code ends up having to be re-reviewed/it is hard to tell
-   what is new etc!)
+   what is new etc!). Further, please do not rebase your branch on master/force
+   push/rewrite history, doing any of these causes the context of any comments
+   made by reviewers to be lost. If conflicts occur against master they should
+   be resolved by merging master into the branch used for making the pull
+   request.
+
+Many thanks in advance for your cooperation!
 
 -->
