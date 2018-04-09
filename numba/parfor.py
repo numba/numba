@@ -17,6 +17,7 @@ import types as pytypes  # avoid confusion with numba.types
 import sys, math
 from functools import reduce
 from collections import defaultdict
+from contextlib import contextmanager
 
 import numba
 from numba import ir, ir_utils, types, typing, rewrites, config, analysis, prange, pndindex
@@ -64,7 +65,12 @@ from numba.ir_utils import (
     get_definition,
     build_definitions,
     replace_arg_nodes,
-    replace_returns)
+    replace_returns,
+    is_getitem,
+    is_setitem,
+    is_get_setitem,
+    index_var_of_get_setitem,
+    set_index_var_of_get_setitem)
 
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
@@ -494,7 +500,6 @@ def _analyze_parfor(parfor, equiv_set, typemap, array_analysis):
     """
     func_ir = array_analysis.func_ir
     parfor_blocks = wrap_parfor_blocks(parfor)
-    build_definitions(blocks=parfor_blocks, func_ir=func_ir)
     # Since init_block get label 0 after wrap, we need to save
     # the equivset for the real block label 0.
     backup_equivset = array_analysis.equiv_sets.get(0, None)
@@ -647,7 +652,7 @@ class ParforPass(object):
         simplify(self.func_ir, self.typemap, self.calltypes)
 
         if self.options.fusion:
-            self.func_ir._definitions = build_definitions(blocks=self.func_ir.blocks)
+            self.func_ir._definitions = build_definitions(self.func_ir.blocks)
             self.array_analysis.equiv_sets = dict()
             self.array_analysis.run(self.func_ir.blocks)
             # reorder statements to maximize fusion
@@ -909,6 +914,9 @@ class ParforPass(object):
                             expr.value = result[0]
                         return result
 
+                    # pndindex and prange are provably positive except when
+                    # user provides negative start to prange()
+                    unsigned_index = True
                     # TODO: support array mask optimization for prange
                     # TODO: refactor and simplify array mask optimization
                     if loop_kind == 'pndindex':
@@ -990,11 +998,17 @@ class ParforPass(object):
                             index_var_typ = types.uintp
                         else:
                             index_var_typ = types.intp
+                            unsigned_index = False
                         loops = [LoopNest(index_var, start, size_var, step)]
                         self.typemap[index_var.name] = index_var_typ
 
                     index_var_map = {v: index_var for v in loop_index_vars}
                     replace_vars(loop_body, index_var_map)
+                    if unsigned_index:
+                        # need to replace signed array access indices to enable
+                        # optimizations (see #2846)
+                        self._replace_loop_access_indices(
+                            loop_body, loop_index_vars, index_var)
                     parfor = Parfor(loops, init_block, loop_body, loc,
                                     orig_index_var if mask_indices else index_var,
                                     equiv_set,
@@ -1008,6 +1022,78 @@ class ParforPass(object):
                     blocks.pop(loop.header)
                     for l in body_labels:
                         blocks.pop(l)
+
+    def _replace_loop_access_indices(self, loop_body, index_set, new_index):
+        """
+        Replace array access indices in a loop body with a new index.
+        index_set has all the variables that are equivalent to loop index.
+        """
+        # treat new index like others since replacing it with itself is ok
+        index_set.add(new_index.name)
+
+        with dummy_return_in_loop_body(loop_body):
+            labels = find_topo_order(loop_body)
+
+        first_label = labels[0]
+        added_indices = set()
+
+        # traverse loop body and replace indices in getitem/setitem with
+        # new_index if possible.
+        # also, find equivalent indices defined in first block.
+        for l in labels:
+            block = loop_body[l]
+            for stmt in block.body:
+                if (isinstance(stmt, ir.Assign)
+                        and isinstance(stmt.value, ir.Var)):
+                    # the first block dominates others so we can use copies
+                    # of indices safely
+                    if (l == first_label and stmt.value.name in index_set
+                            and stmt.target.name not in index_set):
+                        index_set.add(stmt.target.name)
+                        added_indices.add(stmt.target.name)
+                    # make sure parallel index is not overwritten
+                    elif stmt.target.name in index_set:
+                        raise ValueError(
+                            "Overwrite of parallel loop index at {}".format(
+                            stmt.target.loc))
+
+                if is_get_setitem(stmt):
+                    index = index_var_of_get_setitem(stmt)
+                    # statics can have none indices
+                    if index is None:
+                        continue
+                    ind_def = guard(get_definition, self.func_ir,
+                                    index, lhs_only=True)
+                    if (index.name in index_set
+                            or (ind_def is not None
+                                and ind_def.name in index_set)):
+                        set_index_var_of_get_setitem(stmt, new_index)
+                    # corner case where one dimension of a multi-dim access
+                    # should be replaced
+                    guard(self._replace_multi_dim_ind, ind_def, index_set,
+                                                                     new_index)
+
+                if isinstance(stmt, Parfor):
+                    self._replace_loop_access_indices(stmt.loop_body, index_set, new_index)
+
+        # remove added indices for currect recursive parfor handling
+        index_set -= added_indices
+        return
+
+    def _replace_multi_dim_ind(self, ind_var, index_set, new_index):
+        """
+        replace individual indices in multi-dimensional access variable, which
+        is a build_tuple
+        """
+        require(ind_var is not None)
+        # check for Tuple instead of UniTuple since some dims could be slices
+        require(isinstance(self.typemap[ind_var.name],
+                (types.Tuple, types.UniTuple)))
+        ind_def_node = get_definition(self.func_ir, ind_var)
+        require(isinstance(ind_def_node, ir.Expr)
+                and ind_def_node.op == 'build_tuple')
+        ind_def_node.items = [new_index if v.name in index_set else v
+                              for v in ind_def_node.items]
 
     def _find_mask(self, arr_def):
         """check if an array is of B[...M...], where M is a
@@ -1196,7 +1282,7 @@ class ParforPass(object):
                 avail_vars))
 
         parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
-                        ('arrayexpr {}'.format(repr_arrayexpr(arrayexpr.expr)),), 
+                        ('arrayexpr {}'.format(repr_arrayexpr(arrayexpr.expr)),),
                         self.flags)
 
         setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
@@ -1307,7 +1393,7 @@ class ParforPass(object):
         this Numpy call.
         """
         call_name, mod_name = find_callname(self.func_ir, expr)
-        if not mod_name.startswith('numpy'):
+        if not (isinstance(mod_name, str) and mod_name.startswith('numpy')):
             return False
         if call_name in ['zeros', 'ones']:
             return True
@@ -2469,32 +2555,48 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, typemap):
     """ remove dead code inside parfor including get/sets
     """
 
+    with dummy_return_in_loop_body(parfor.loop_body):
+        labels = find_topo_order(parfor.loop_body)
+
+    # get/setitem replacement should ideally use dataflow to propagate setitem
+    # saved values, but for simplicity we handle the common case of propagating
+    # setitems in the first block (which is dominant) if the array is not
+    # potentially changed in any way
+    first_label = labels[0]
+    first_block_saved_values = {}
+    _update_parfor_get_setitems(
+        parfor.loop_body[first_label].body,
+        parfor.index_var, alias_map,
+        first_block_saved_values,
+        lives
+        )
+
+    # remove saved first block setitems if array potentially changed later
+    saved_arrs = set(first_block_saved_values.keys())
+    for l in labels:
+        if l == first_label:
+            continue
+        for stmt in parfor.loop_body[l].body:
+            if (isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr)
+                    and stmt.value.op == 'getitem'
+                    and stmt.value.index.name == parfor.index_var.name):
+                continue
+            varnames = set(v.name for v in stmt.list_vars())
+            rm_arrs = varnames & saved_arrs
+            for a in rm_arrs:
+                first_block_saved_values.pop(a, None)
+
+
     # replace getitems with available value
     # e.g. A[i] = v; ... s = A[i]  ->  s = v
-    for block in parfor.loop_body.values():
-        saved_values = {}
-        for stmt in block.body:
-            if (isinstance(stmt, ir.SetItem) and stmt.index.name ==
-                    parfor.index_var.name and stmt.target.name not in lives):
-                saved_values[stmt.target.name] = stmt.value
-                # saved values of aliases of SetItem target array are invalid
-                for w in alias_map.get(stmt.target.name, []):
-                    saved_values.pop(w, None)
-                continue
-            if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
-                rhs = stmt.value
-                if rhs.op == 'getitem' and isinstance(rhs.index, ir.Var):
-                    if rhs.index.name == parfor.index_var.name:
-                        # replace getitem if value saved
-                        stmt.value = saved_values.get(rhs.value.name, rhs)
-                        continue
-            # conservative assumption: array is modified if referenced
-            # remove all referenced arrays
-            for v in stmt.list_vars():
-                saved_values.pop(v.name, None)
-                # aliases are potentially modified as well
-                for w in alias_map.get(v.name, []):
-                    saved_values.pop(w, None)
+    for l in labels:
+        if l == first_label:
+            continue
+        block = parfor.loop_body[l]
+        saved_values = first_block_saved_values.copy()
+        _update_parfor_get_setitems(block.body, parfor.index_var, alias_map,
+                                        saved_values, lives)
+
 
     # after getitem replacement, remove extra setitems
     blocks = parfor.loop_body.copy()  # shallow copy is enough
@@ -2544,6 +2646,37 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, typemap):
         return None
     return parfor
 
+def _update_parfor_get_setitems(block_body, index_var, alias_map,
+                                  saved_values, lives):
+    """
+    replace getitems of a previously set array in a block of parfor loop body
+    """
+    for stmt in block_body:
+        if (isinstance(stmt, ir.SetItem) and stmt.index.name ==
+                index_var.name and stmt.target.name not in lives):
+            # saved values of aliases of SetItem target array are invalid
+            for w in alias_map.get(stmt.target.name, []):
+                saved_values.pop(w, None)
+            # set saved value after invalidation since alias_map may
+            # contain the array itself (e.g. pi example)
+            saved_values[stmt.target.name] = stmt.value
+            continue
+        if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
+            rhs = stmt.value
+            if rhs.op == 'getitem' and isinstance(rhs.index, ir.Var):
+                if rhs.index.name == index_var.name:
+                    # replace getitem if value saved
+                    stmt.value = saved_values.get(rhs.value.name, rhs)
+                    continue
+        # conservative assumption: array is modified if referenced
+        # remove all referenced arrays
+        for v in stmt.list_vars():
+            saved_values.pop(v.name, None)
+            # aliases are potentially modified as well
+            for w in alias_map.get(v.name, []):
+                saved_values.pop(w, None)
+
+    return
 
 ir_utils.remove_dead_extensions[Parfor] = remove_dead_parfor
 
@@ -2609,6 +2742,7 @@ def simplify_parfor_body_CFG(blocks):
             if isinstance(stmt, Parfor):
                 parfor = stmt
                 # add dummy return to enable CFG creation
+                # can't use dummy_return_in_loop_body since body changes
                 last_block = parfor.loop_body[max(parfor.loop_body.keys())]
                 last_block.body.append(ir.Return(0, ir.Loc("parfors_dummy", -1)))
                 parfor.loop_body = simplify_CFG(parfor.loop_body)
@@ -2690,7 +2824,7 @@ def get_copies_parfor(parfor, typemap):
 ir_utils.copy_propagate_extensions[Parfor] = get_copies_parfor
 
 
-def apply_copies_parfor(parfor, var_dict, name_var_table, ext_func, ext_data,
+def apply_copies_parfor(parfor, var_dict, name_var_table,
                         typemap, calltypes, save_copies):
     """apply copy propagate recursively in parfor"""
     # replace variables in pattern metadata like stencil neighborhood
@@ -2714,7 +2848,7 @@ def apply_copies_parfor(parfor, var_dict, name_var_table, ext_func, ext_data,
     blocks[0].body = assign_list + blocks[0].body
     in_copies_parfor, out_copies_parfor = copy_propagate(blocks, typemap)
     apply_copy_propagate(blocks, in_copies_parfor, name_var_table, typemap,
-                         calltypes, ext_func, ext_data, save_copies)
+                         calltypes, save_copies)
     unwrap_parfor_blocks(parfor)
     # remove dummy assignments
     blocks[0].body = blocks[0].body[len(assign_list):]
@@ -2886,6 +3020,30 @@ def parfor_typeinfer(parfor, typeinferer):
 
 
 typeinfer.typeinfer_extensions[Parfor] = parfor_typeinfer
+
+def build_parfor_definitions(parfor, definitions=None):
+    """get variable definition table for parfors"""
+    if definitions is None:
+        definitions = dict()
+
+    blocks = wrap_parfor_blocks(parfor)
+    build_definitions(blocks, definitions)
+    unwrap_parfor_blocks(parfor)
+    return definitions
+
+ir_utils.build_defs_extensions[Parfor] = build_parfor_definitions
+
+@contextmanager
+def dummy_return_in_loop_body(loop_body):
+    """adds dummy return to last block of parfor loop body for CFG computation
+    """
+    # max is last block since we add it manually for prange
+    last_label = max(loop_body.keys())
+    loop_body[last_label].body.append(
+        ir.Return(0, ir.Loc("parfors_dummy", -1)))
+    yield
+    # remove dummy return
+    loop_body[last_label].body.pop()
 
 @infer_global(reduce)
 class ReduceInfer(AbstractTemplate):
