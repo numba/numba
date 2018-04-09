@@ -9,14 +9,14 @@ build:
   number: {{ build_number }}
 
 source:
-    path: scripts
+    - url: https://anaconda.org/intel/icc_rt/{{ version }}/download/win-64/icc_rt-{{version}}-intel_{{build_number}}.tar.bz2 # [win]
+    - url: https://anaconda.org/intel/icc_rt/{{ version }}/download/osx-64/icc_rt-{{version}}-intel_{{build_number}}.tar.bz2 # [osx]
+    - url: https://anaconda.org/intel/icc_rt/{{ version }}/download/linux-64/icc_rt-{{version}}-intel_{{build_number}}.tar.bz2 # [linux]
+    - path: scripts
 
 requirements:
   build:
     - python>=3.6
-
-test:
-  commands:
 
 about:
   license: "Intel"
