@@ -57,7 +57,7 @@ class Loc(object):
 
             def count_spaces(string):
                 spaces = 0
-                for x in itertools.takewhile(str.isspace, string):
+                for x in itertools.takewhile(str.isspace, str(string)):
                     spaces += 1
                 return spaces
 

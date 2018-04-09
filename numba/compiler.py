@@ -222,9 +222,12 @@ class _PipelineManager(object):
         newmsg = "{desc}\n{exc}".format(desc=desc, exc=exc)
 
         # For python2, attach the traceback of the previous exception.
-        if not utils.IS_PY3:
+        if not utils.IS_PY3 and config.FULL_TRACEBACKS:
+            # strip the new message to just print the error string and not
+            # the marked up source etc (this is handled already).
+            stripped = errors.termcolor.errmsg(newmsg.split('\n')[1])
             fmt = "Caused By:\n{tb}\n{newmsg}"
-            newmsg = fmt.format(tb=traceback.format_exc(), newmsg=newmsg)
+            newmsg = fmt.format(tb=traceback.format_exc(), newmsg=stripped)
 
         exc.args = (newmsg,)
         return exc

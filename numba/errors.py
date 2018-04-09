@@ -335,7 +335,7 @@ class NumbaError(Exception):
 
     def add_context(self, msg):
         """
-        Add contextual info.  The exeception message is expanded with the new
+        Add contextual info.  The exception message is expanded with the new
         contextual information.
         """
         self.contexts.append(msg)
