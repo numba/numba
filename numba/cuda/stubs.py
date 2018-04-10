@@ -317,7 +317,7 @@ class ffs(Stub):
     """
     ffs(val)
 
-    Find the position of the least significant bit set to 1 in a 32 bit integer.
+    Find the position of the least significant bit set to 1 in an integer.
     """
 
 #-------------------------------------------------------------------------------

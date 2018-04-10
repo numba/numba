@@ -280,9 +280,6 @@ def ptx_clz(context, builder, sig, args):
 
 @lower(stubs.ffs, types.Any)
 def ptx_ffs(context, builder, sig, args):
-    """
-    LLVM IR implementation as suggested by `IntrinsicsNVVM.td`
-    """
     return builder.cttz(
         args[0],
         context.get_constant(types.boolean, 0))

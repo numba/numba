@@ -190,11 +190,11 @@ documentation
 
 .. function:: numba.cuda.clz
 
-   Counts the number of leading zeros in a variable.
+   Counts the number of leading zeros in a value.
 
 .. function:: numba.cuda.ffs
 
-   Find the position of the least significant bit set to 1 in a 32 bit integer.
+   Find the position of the least significant bit set to 1 in an integer.
 
 Control Flow Instructions
 ~~~~~~~~~~~~~~~~~~~~~~~~~

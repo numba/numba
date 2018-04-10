@@ -108,7 +108,8 @@ class Cuda_threadfence_system(ConcreteTemplate):
 @intrinsic
 class Cuda_popc(ConcreteTemplate):
     """
-    Supported types from http://docs.nvidia.com/cuda/nvvm-ir-spec/index.html#bit-manipulations-intrinics
+    Supported types from `llvm.popc`
+    [here](http://docs.nvidia.com/cuda/nvvm-ir-spec/index.html#bit-manipulations-intrinics)
     """
     key = cuda.popc
     cases = [
@@ -135,7 +136,8 @@ class Cuda_brev(ConcreteTemplate):
 @intrinsic
 class Cuda_clz(ConcreteTemplate):
     """
-    Supported types from http://docs.nvidia.com/cuda/nvvm-ir-spec/index.html#bit-manipulations-intrinics
+    Supported types from `llvm.ctlz`
+    [here](http://docs.nvidia.com/cuda/nvvm-ir-spec/index.html#bit-manipulations-intrinics)
     """
     key = cuda.clz
     cases = [
@@ -153,7 +155,8 @@ class Cuda_clz(ConcreteTemplate):
 @intrinsic
 class Cuda_ffs(ConcreteTemplate):
     """
-    Supported types from http://docs.nvidia.com/cuda/nvvm-ir-spec/index.html#bit-manipulations-intrinics
+    Supported types from `llvm.cttz`
+    [here](http://docs.nvidia.com/cuda/nvvm-ir-spec/index.html#bit-manipulations-intrinics)
     """
     key = cuda.ffs
     cases = [
