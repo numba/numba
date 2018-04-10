@@ -6,6 +6,7 @@ from __future__ import print_function, absolute_import, division
 
 import math
 from collections import namedtuple
+from enum import IntEnum
 
 import numpy as np
 
@@ -21,10 +22,20 @@ from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
 from .arrayobj import make_array, load_item, store_item, _empty_nd_impl
+from .linalg import ensure_blas
 
 from numba.extending import intrinsic
 from numba.errors import RequireConstValue, TypingError
 
+def _check_blas():
+    # Checks if a BLAS is available so e.g. dot will work
+    try:
+        ensure_blas()
+    except ImportError:
+        return False
+    return True
+
+_HAVE_BLAS = _check_blas()
 
 @intrinsic
 def _create_tuple_result_shape(tyctx, shape_list, shape_tuple):
@@ -1043,6 +1054,22 @@ def any_where(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
+@overload(np.real)
+def np_real(a):
+    def np_real_impl(a):
+        return a.real
+
+    return np_real_impl
+
+
+@overload(np.imag)
+def np_imag(a):
+    def np_imag_impl(a):
+        return a.imag
+
+    return np_imag_impl
+
+
 #----------------------------------------------------------------------------
 # Misc functions
 
@@ -1142,59 +1169,67 @@ def np_bincount(a, weights=None):
 
     return bincount_impl
 
+def _searchsorted(func):
+    def searchsorted_inner(a, v):
+        n = len(a)
+        if np.isnan(v):
+            # Find the first nan (i.e. the last from the end of a,
+            # since there shouldn't be many of them in practice)
+            for i in range(n, 0, -1):
+                if not np.isnan(a[i - 1]):
+                    return i
+            return 0
+        lo = 0
+        hi = n
+        while hi > lo:
+            mid = (lo + hi) >> 1
+            if func(a[mid], (v)):
+                # mid is too low => go up
+                lo = mid + 1
+            else:
+                # mid is too high, or is a NaN => go down
+                hi = mid
+        return lo
+    return searchsorted_inner
+
+_lt = register_jitable(lambda x, y: x < y)
+_le = register_jitable(lambda x, y: x <= y)
+_searchsorted_left = register_jitable(_searchsorted(_lt))
+_searchsorted_right = register_jitable(_searchsorted(_le))
 
 @overload(np.searchsorted)
-def searchsorted(a, v):
+def searchsorted(a, v, side='left'):
+    side_val = getattr(side, 'value', side)
+    if side_val == 'left':
+        loop_impl = _searchsorted_left
+    elif side_val == 'right':
+        loop_impl = _searchsorted_right
+    else:
+        raise ValueError("Invalid value given for 'side': %s" % side_val)
+
     if isinstance(v, types.Array):
         # N-d array and output
-
-        def searchsorted_impl(a, v):
+        def searchsorted_impl(a, v, side='left'):
             out = np.empty(v.shape, np.intp)
             for view, outview in np.nditer((v, out)):
-                index = np.searchsorted(a, view.item())
+                index = loop_impl(a, view.item())
                 outview.itemset(index)
             return out
 
-        return searchsorted_impl
-
     elif isinstance(v, types.Sequence):
         # 1-d sequence and output
-
-        def searchsorted_impl(a, v):
+        def searchsorted_impl(a, v, side='left'):
             out = np.empty(len(v), np.intp)
             for i in range(len(v)):
-                out[i] = np.searchsorted(a, v[i])
+                out[i] = loop_impl(a, v[i])
             return out
-
-        return searchsorted_impl
-
     else:
         # Scalar value and output
         # Note: NaNs come last in Numpy-sorted arrays
+        def searchsorted_impl(a, v, side='left'):
+            return loop_impl(a, v)
 
-        def searchsorted_impl(a, v):
-            n = len(a)
-            if np.isnan(v):
-                # Find the first nan (i.e. the last from the end of a,
-                # since there shouldn't be many of them in practice)
-                for i in range(n, 0, -1):
-                    if not np.isnan(a[i - 1]):
-                        return i
-                return 0
-            lo = 0
-            hi = n
-            while hi > lo:
-                mid = (lo + hi) >> 1
-                if a[mid] < v:
-                    # mid is too low => go up
-                    lo = mid + 1
-                else:
-                    # mid is too high, or is a NaN => go down
-                    hi = mid
-            return lo
-
-        return searchsorted_impl
-
+    return searchsorted_impl
 
 @overload(np.digitize)
 def np_digitize(x, bins, right=False):
@@ -1450,3 +1485,175 @@ def generate_xinfo(np_func, container, attr):
 
 generate_xinfo(np.finfo, finfo, _finfo_supported)
 generate_xinfo(np.iinfo, iinfo, _iinfo_supported)
+
+def _get_inner_prod(dta, dtb):
+    # gets an inner product implementation, if both types are float then
+    # BLAS is used else a local function
+
+    @register_jitable
+    def _innerprod(a, b):
+        acc = 0
+        for i in range(len(a)):
+            acc = acc + a[i] * b[i]
+        return acc
+
+    # no BLAS... use local function regardless
+    if not _HAVE_BLAS:
+        return _innerprod
+
+    flty = types.real_domain | types.complex_domain
+    floats = dta in flty and dtb in flty
+    if not floats:
+        return _innerprod
+    else:
+        a_dt = as_dtype(dta)
+        b_dt = as_dtype(dtb)
+        dt = np.promote_types(a_dt, b_dt)
+
+        @register_jitable
+        def _dot_wrap(a, b):
+            return np.dot(a.astype(dt), b.astype(dt))
+        return _dot_wrap
+
+def _assert_1d(a, func_name):
+    if isinstance(a, types.Array):
+        if not a.ndim <= 1:
+            raise TypingError("%s() only supported on 1D arrays " % func_name)
+
+def _np_correlate_core(ap1, ap2, mode, direction):
+    pass
+
+
+class _corr_conv_Mode(IntEnum):
+    """
+    Enumerated modes for correlate/convolve as per:
+    https://github.com/numpy/numpy/blob/ac6b1a902b99e340cf7eeeeb7392c91e38db9dd8/numpy/core/numeric.py#L862-L870
+    """
+    VALID = 0
+    SAME = 1
+    FULL = 2
+
+
+@overload(_np_correlate_core)
+def _np_correlate_core_impl(ap1, ap2, mode, direction):
+    a_dt = as_dtype(ap1.dtype)
+    b_dt = as_dtype(ap2.dtype)
+    dt = np.promote_types(a_dt, b_dt)
+    innerprod = _get_inner_prod(ap1.dtype, ap2.dtype)
+
+    Mode = _corr_conv_Mode
+
+    def impl(ap1, ap2, mode, direction):
+        # Implementation loosely based on `_pyarray_correlate` from
+        # https://github.com/numpy/numpy/blob/3bce2be74f228684ca2895ad02b63953f37e2a9d/numpy/core/src/multiarray/multiarraymodule.c#L1191
+        # For "Mode":
+        # Convolve uses 'full' by default, this is denoted by the number 2
+        # Correlate uses 'valid' by default, this is denoted by the number 0
+        # For "direction", +1 to write the return values out in order 0->N
+        # -1 to write them out N->0.
+
+        if not (mode == Mode.VALID or mode == Mode.FULL):
+            raise ValueError("Invalid mode")
+
+        n1 = len(ap1)
+        n2 = len(ap2)
+        length = n1
+        n = n2
+        if mode == Mode.VALID: # mode == valid == 0, correlate default
+            length = length - n + 1
+            n_left = 0
+            n_right = 0
+        elif mode == Mode.FULL: # mode == full == 2, convolve default
+            n_right = n - 1
+            n_left = n - 1
+            length = length + n - 1
+        else:
+            raise ValueError("Invalid mode")
+
+        ret = np.zeros(length, dt)
+        n = n - n_left
+
+        if direction == 1:
+            idx = 0
+            inc = 1
+        elif direction == -1:
+            idx = length - 1
+            inc = -1
+        else:
+            raise ValueError("Invalid direction")
+
+        for i in range(n_left):
+            ret[idx] = innerprod(ap1[:idx + 1], ap2[-(idx + 1):])
+            idx = idx + inc
+
+        for i in range(n1 - n2 + 1):
+            ret[idx] = innerprod(ap1[i : i + n2], ap2)
+            idx = idx + inc
+
+        for i in range(n_right, 0, -1):
+            ret[idx] = innerprod(ap1[-i:], ap2[:i])
+            idx = idx + inc
+        return ret
+
+    return impl
+
+@overload(np.correlate)
+def _np_correlate(a, v):
+    _assert_1d(a, 'np.correlate')
+    _assert_1d(v, 'np.correlate')
+
+    @register_jitable
+    def op_conj(x):
+        return np.conj(x)
+
+    @register_jitable
+    def op_nop(x):
+        return x
+
+    Mode = _corr_conv_Mode
+
+    if a.dtype in types.complex_domain:
+        if v.dtype in types.complex_domain:
+            a_op = op_nop
+            b_op = op_conj
+        else:
+            a_op = op_nop
+            b_op = op_nop
+    else:
+        if v.dtype in types.complex_domain:
+            a_op = op_nop
+            b_op = op_conj
+        else:
+            a_op = op_conj
+            b_op = op_nop
+
+    def impl(a, v):
+        if len(a) < len(v):
+            return _np_correlate_core(b_op(v), a_op(a), Mode.VALID, -1)
+        else:
+            return _np_correlate_core(a_op(a), b_op(v), Mode.VALID, 1)
+
+    return impl
+
+@overload(np.convolve)
+def np_convolve(a, v):
+    _assert_1d(a, 'np.convolve')
+    _assert_1d(v, 'np.convolve')
+
+    Mode = _corr_conv_Mode
+
+    def impl(a, v):
+        la = len(a)
+        lv = len(v)
+
+        if la == 0:
+            raise ValueError("'a' cannot be empty")
+        if lv == 0:
+            raise ValueError("'v' cannot be empty")
+
+        if la < lv:
+            return _np_correlate_core(v, a[::-1], Mode.FULL, 1)
+        else:
+            return _np_correlate_core(a, v[::-1], Mode.FULL, 1)
+
+    return impl

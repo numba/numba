@@ -25,8 +25,8 @@ from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     iternext_impl, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
-from numba.extending import register_jitable, overload
-from . import quicksort, slicing
+from numba.extending import register_jitable
+from . import quicksort, mergesort, slicing
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
@@ -1382,9 +1382,104 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 #-------------------------------------------------------------------------------
 # Shape / layout altering
 
+def vararg_to_tuple(context, builder, sig, args):
+    aryty = sig.args[0]
+    dimtys = sig.args[1:]
+    # values
+    ary = args[0]
+    dims = args[1:]
+    # coerce all types to intp
+    dims = [context.cast(builder, val, ty, types.intp)
+            for ty, val in zip(dimtys, dims)]
+    # make a tuple
+    shape = cgutils.pack_array(builder, dims, dims[0].type)
+
+    shapety = types.UniTuple(dtype=types.intp, count=len(dims))
+    new_sig = typing.signature(sig.return_type, aryty, shapety)
+    new_args = ary, shape
+
+    return new_sig, new_args
+
+
 @lower_builtin('array.transpose', types.Array)
 def array_transpose(context, builder, sig, args):
     return array_T(context, builder, sig.args[0], args[0])
+
+
+def permute_arrays(axis, shape, strides):
+    if len(axis) != len(set(axis)):
+        raise ValueError("repeated axis in transpose")
+    dim = len(shape)
+    for x in axis:
+        if x >= dim or abs(x) > dim:
+            raise ValueError("axis is out of bounds for array of given dimension")
+
+    shape[:] = shape[axis]
+    strides[:] = strides[axis]
+
+
+# Transposing an array involves permuting the shape and strides of the array
+# based on the given axes.
+@lower_builtin('array.transpose', types.Array, types.BaseTuple)
+def array_transpose_tuple(context, builder, sig, args):
+    aryty = sig.args[0]
+    ary = make_array(aryty)(context, builder, args[0])
+
+    axisty, axis = sig.args[1], args[1]
+    num_axis, dtype = axisty.count, axisty.dtype
+
+    ll_intp = context.get_value_type(types.intp)
+    ll_ary_size = lc.Type.array(ll_intp, num_axis)
+
+    # Allocate memory for axes, shapes, and strides arrays.
+    arys = [axis, ary.shape, ary.strides]
+    ll_arys = [cgutils.alloca_once(builder, ll_ary_size) for _ in arys]
+
+    # Store axes, shapes, and strides arrays to the allocated memory.
+    for src, dst in zip(arys, ll_arys):
+        builder.store(src, dst)
+
+    np_ary_ty = types.Array(dtype=dtype, ndim=1, layout='C')
+    np_itemsize = context.get_constant(types.intp,
+                                       context.get_abi_sizeof(ll_intp))
+
+    # Form NumPy arrays for axes, shapes, and strides arrays.
+    np_arys = [make_array(np_ary_ty)(context, builder) for _ in arys]
+
+    # Roughly, `np_ary = np.array(ll_ary)` for each of axes, shapes, and strides.
+    for np_ary, ll_ary in zip(np_arys, ll_arys):
+        populate_array(np_ary,
+                       data=builder.bitcast(ll_ary, ll_intp.as_pointer()),
+                       shape=[context.get_constant(types.intp, num_axis)],
+                       strides=[np_itemsize],
+                       itemsize=np_itemsize,
+                       meminfo=None)
+
+    # Pass NumPy arrays formed above to permute_arrays function that permutes
+    # shapes and strides based on axis contents.
+    context.compile_internal(builder, permute_arrays,
+                             typing.signature(types.void,
+                                              np_ary_ty, np_ary_ty, np_ary_ty),
+                             [a._getvalue() for a in np_arys])
+
+    # Make a new array based on permuted shape and strides and return it.
+    ret = make_array(sig.return_type)(context, builder)
+    populate_array(ret,
+                   data=ary.data,
+                   shape=builder.load(ll_arys[1]),
+                   strides=builder.load(ll_arys[2]),
+                   itemsize=ary.itemsize,
+                   meminfo=ary.meminfo,
+                   parent=ary.parent)
+    res = ret._getvalue()
+    return impl_ret_borrowed(context, builder, sig.return_type, res)
+
+
+@lower_builtin('array.transpose', types.Array, types.VarArg(types.Any))
+def array_transpose_vararg(context, builder, sig, args):
+    new_sig, new_args = vararg_to_tuple(context, builder, sig, args)
+    return array_transpose_tuple(context, builder, new_sig, new_args)
+
 
 @lower_getattr(types.Array, 'T')
 def array_T(context, builder, typ, value):
@@ -1538,21 +1633,7 @@ def array_reshape(context, builder, sig, args):
 
 @lower_builtin('array.reshape', types.Array, types.VarArg(types.Any))
 def array_reshape_vararg(context, builder, sig, args):
-    # types
-    aryty = sig.args[0]
-    dimtys = sig.args[1:]
-    # values
-    ary = args[0]
-    dims = args[1:]
-    # coerce all types to intp
-    dims = [context.cast(builder, val, ty, types.intp)
-            for ty, val in zip(dimtys, dims)]
-    # make a tuple
-    shape = cgutils.pack_array(builder, dims, dims[0].type)
-
-    shapety = types.UniTuple(dtype=types.intp, count=len(dims))
-    new_sig = typing.signature(sig.return_type, aryty, shapety)
-    new_args = ary, shape
+    new_sig, new_args = vararg_to_tuple(context, builder, sig, args)
     return array_reshape(context, builder, new_sig, new_args)
 
 
@@ -4480,24 +4561,33 @@ _sorts = {}
 def lt_floats(a, b):
     return math.isnan(b) or a < b
 
-def get_sort_func(is_float, is_argsort=False):
+def get_sort_func(kind, is_float, is_argsort=False):
     """
     Get a sort implementation of the given kind.
     """
-    key = is_float, is_argsort
+    key = kind, is_float, is_argsort
     try:
         return _sorts[key]
     except KeyError:
-        sort = quicksort.make_jit_quicksort(lt=lt_floats if is_float else None,
-                                            is_argsort=is_argsort)
-        func = _sorts[key] = sort.run_quicksort
+        if kind == 'quicksort':
+            sort = quicksort.make_jit_quicksort(
+                lt=lt_floats if is_float else None,
+                is_argsort=is_argsort)
+            func = sort.run_quicksort
+        elif kind == 'mergesort':
+            sort = mergesort.make_jit_mergesort(
+                lt=lt_floats if is_float else None,
+                is_argsort=is_argsort)
+            func = sort.run_mergesort
+        _sorts[key] = func
         return func
 
 
 @lower_builtin("array.sort", types.Array)
 def array_sort(context, builder, sig, args):
     arytype = sig.args[0]
-    sort_func = get_sort_func(is_float=isinstance(arytype.dtype, types.Float))
+    sort_func = get_sort_func(kind='quicksort',
+                              is_float=isinstance(arytype.dtype, types.Float))
 
     def array_sort_impl(arr):
         # Note we clobber the return value
@@ -4515,17 +4605,21 @@ def np_sort(context, builder, sig, args):
 
     return context.compile_internal(builder, np_sort_impl, sig, args)
 
-@lower_builtin("array.argsort", types.Array)
-@lower_builtin(np.argsort, types.Array)
+@lower_builtin("array.argsort", types.Array, types.Const)
+@lower_builtin(np.argsort, types.Array, types.Const)
 def array_argsort(context, builder, sig, args):
-    arytype = sig.args[0]
-    sort_func = get_sort_func(is_float=isinstance(arytype.dtype, types.Float),
+    arytype, kind = sig.args
+    sort_func = get_sort_func(kind=kind.value,
+                              is_float=isinstance(arytype.dtype, types.Float),
                               is_argsort=True)
 
     def array_argsort_impl(arr):
         return sort_func(arr)
 
-    return context.compile_internal(builder, array_argsort_impl, sig, args)
+    innersig = sig.replace(args=sig.args[:1])
+    innerargs = args[:1]
+    return context.compile_internal(builder, array_argsort_impl,
+                                    innersig, innerargs)
 
 
 # -----------------------------------------------------------------------------

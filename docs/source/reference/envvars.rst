@@ -133,6 +133,11 @@ Compilation options
    by default on Sandy Bridge and Ivy Bridge architectures as it can sometimes
    result in slower code on those platforms.
 
+.. envvar:: NUMBA_DISABLE_INTEL_SVML
+
+    If set to non-zero and Intel SVML is available, the use of SVML will be
+    disabled.
+
 .. envvar:: NUMBA_COMPATIBILITY_MODE
 
    If set to non-zero, compilation of JIT functions will never entirely

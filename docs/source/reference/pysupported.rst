@@ -35,16 +35,11 @@ The ``raise`` statement is supported in several forms:
 Similarly, the ``assert`` statement is supported with or without an error
 message.
 
-Inner function and closure
---------------------------
-
-Numba now supports inner functions as long as they are non-recursive
-and only called locally, but not passed as argument or returned as
-result. The use of closure variables (variables defined in outer scopes)
-within an inner function is also supported.
+Functions
+---------
 
 Function calls
---------------
+''''''''''''''
 
 Numba supports function calls using positional and named arguments, as well
 as arguments with default values and ``*args`` (note the argument for
@@ -53,6 +48,46 @@ not supported.
 
 Function calls to locally defined inner functions are supported as long as
 they can be fully inlined.
+
+Functions as arguments
+''''''''''''''''''''''
+
+Functions can be passed as argument into another function.  But, they cannot
+be returned. For example:
+
+.. code-block:: python
+
+  from numba import jit
+
+  @jit
+  def add1(x):
+      return x + 1
+
+  @jit
+  def bar(fn, x):
+      return fn(x)
+
+  @jit
+  def foo(x):
+      return bar(add1, x)
+
+  # Passing add1 within numba compiled code.
+  print(foo(1))
+  # Passing add1 into bar from interpreted code
+  print(bar(add1, 1))
+
+.. note:: Numba does not handle function objects as real objects.  Once a
+          function is assigned to a variable, the variable cannot be
+          re-assigned to a different function.
+
+
+Inner function and closure
+'''''''''''''''''''''''''''
+
+Numba now supports inner functions as long as they are non-recursive
+and only called locally, but not passed as argument or returned as
+result. The use of closure variables (variables defined in outer scopes)
+within an inner function is also supported.
 
 Recursive calls
 '''''''''''''''
@@ -114,6 +149,7 @@ The following operations are supported:
 * iteration and indexing over homogenous tuples
 * addition (concatenation) between tuples
 * slicing tuples with a constant slice
+* the index method on tuples
 
 list
 ----
@@ -426,13 +462,8 @@ startup with entropy drawn from the operating system.
    code) will seed the Python random generator, not the Numba random generator.
 
 .. note::
-   The generator is not thread-safe when :ref:`releasing the GIL <jit-nogil>`.
-
-   Also, under Unix, if creating a child process using :func:`os.fork` or the
-   :mod:`multiprocessing` module, the child's random generator will inherit
-   the parent's state and will therefore produce the same sequence of
-   numbers (except when using the "forkserver" start method under Python 3.4
-   and later).
+   Since version 0.28.0, the generator is thread-safe and fork-safe.  Each
+   thread and each process will produce independent streams of random numbers.
 
 .. seealso::
    Numba also supports most additional distributions from the :ref:`Numpy

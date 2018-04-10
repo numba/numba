@@ -13,6 +13,7 @@ from .targets.imputils import (
     lower_setattr, lower_setattr_generic, lower_cast)
 from .datamodel import models, register_default as register_model
 from .pythonapi import box, unbox, reflect, NativeValue
+from ._helperlib import _import_cython_function
 
 def type_callable(func):
     """
@@ -349,3 +350,22 @@ def intrinsic(*args, **kwargs):
         def wrapper(func):
             return _intrinsic(func)
         return wrapper
+
+
+def get_cython_function_address(module_name, function_name):
+    """
+    Get the address of a Cython function.
+
+    Args
+    ----
+    module_name:
+        Name of the Cython module
+    function_name:
+        Name of the Cython function
+
+    Returns
+    -------
+    A Python int containing the address of the function
+
+    """
+    return _import_cython_function(module_name, function_name)

@@ -172,7 +172,7 @@ The following methods of Numpy arrays are supported:
   * If the ``axis`` argument is not a compile-time constant, only values from 0 to 3 are supported.
     An out-of-range value will result in a runtime exception.
 
-* :meth:`~numpy.ndarray.transpose` (without arguments, and without copying)
+* :meth:`~numpy.ndarray.transpose`
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
 
 
@@ -253,7 +253,9 @@ The following top-level functions are supported:
 * :func:`numpy.bincount` (only the 2 first arguments)
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate`
+* :func:`numpy.convolve` (only the 2 first arguments)
 * :func:`numpy.copy` (only the first argument)
+* :func:`numpy.correlate` (only the 2 first arguments)
 * :func:`numpy.diag`
 * :func:`numpy.digitize`
 * :func:`numpy.dstack`
@@ -277,7 +279,7 @@ The following top-level functions are supported:
 * :func:`numpy.ravel` (no order argument; 'C' order only)
 * :func:`numpy.roots`
 * :func:`numpy.round_`
-* :func:`numpy.searchsorted` (only the 2 first arguments)
+* :func:`numpy.searchsorted` (only the 3 first arguments)
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
 * :func:`numpy.stack`
@@ -368,7 +370,7 @@ Permutations
 
 * :func:`numpy.random.choice`: the optional *p* argument (probabilities
   array) is not supported
-
+* :func:`numpy.random.permutation`
 * :func:`numpy.random.shuffle`: the sequence argument must be a one-dimension
   Numpy array or buffer-providing object (such as a :class:`bytearray`
   or :class:`array.array`)

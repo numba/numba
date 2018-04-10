@@ -16,6 +16,7 @@ from numba import unittest_support as unittest
 from numba import utils, jit, generated_jit, types, typeof
 from numba import config
 from numba import _dispatcher
+from numba.compiler import compile_isolated
 from numba.errors import NumbaWarning
 from .support import (TestCase, tag, temp_directory, import_dynamic,
                       override_env_config, capture_cache_log)
@@ -75,6 +76,42 @@ class BaseTest(TestCase):
             self.assertPreciseEqual(result, expected)
         f = jit(**self.jit_args)(pyfunc)
         return f, check
+
+def check_access_is_preventable():
+    # This exists to check whether it is possible to prevent access to
+    # a file/directory through the use of `chmod 500`. If a user has
+    # elevated rights (e.g. root) then writes are likely to be possible
+    # anyway. Tests that require functioning access prevention are
+    # therefore skipped based on the result of this check.
+    tempdir = temp_directory('test_cache')
+    test_dir = (os.path.join(tempdir, 'writable_test'))
+    os.mkdir(test_dir)
+    # assume access prevention is not possible
+    ret = False
+    # check a write is possible
+    with open(os.path.join(test_dir, 'write_ok'), 'wt') as f:
+        f.write('check1')
+    # now forbid access
+    os.chmod(test_dir, 0o500)
+    try:
+        with open(os.path.join(test_dir, 'write_forbidden'), 'wt') as f:
+            f.write('check2')
+    except (OSError, IOError) as e:
+        # Check that the cause of the exception is due to access/permission
+        # as per https://github.com/conda/conda/blob/4.5.0/conda/gateways/disk/permissions.py#L35-L37
+        eno = getattr(e, 'errno', None)
+        if eno in (errno.EACCES, errno.EPERM):
+            # errno reports access/perm fail so access prevention via
+            # `chmod 500` works for this user.
+            ret = True
+    finally:
+        os.chmod(test_dir, 0o775)
+        shutil.rmtree(test_dir)
+    return ret
+
+_access_preventable = check_access_is_preventable()
+_access_msg = "Cannot create a directory to which writes are preventable"
+skip_bad_access = unittest.skipUnless(_access_preventable, _access_msg)
 
 
 class TestDispatcher(BaseTest):
@@ -994,6 +1031,7 @@ class TestCache(BaseCacheUsecasesTest):
         # wouldn't be met)
         self.check_pycache(0)
 
+    @skip_bad_access
     @unittest.skipIf(os.name == "nt",
                      "cannot easily make a directory read-only on Windows")
     def test_non_creatable_pycache(self):
@@ -1004,6 +1042,7 @@ class TestCache(BaseCacheUsecasesTest):
 
         self._test_pycache_fallback()
 
+    @skip_bad_access
     @unittest.skipIf(os.name == "nt",
                      "cannot easily make a directory read-only on Windows")
     def test_non_writable_pycache(self):
@@ -1304,6 +1343,111 @@ def cache_file_collision_tester(q, tempdir, modname_bar1, modname_bar2):
         r2 = bar2()
     q.put(buf.getvalue())
     q.put(r2)
+
+
+class TestDispatcherFunctionBoundaries(TestCase):
+    def test_pass_dispatcher_as_arg(self):
+        # Test that a Dispatcher object can be pass as argument
+        @jit(nopython=True)
+        def add1(x):
+            return x + 1
+
+        @jit(nopython=True)
+        def bar(fn, x):
+            return fn(x)
+
+        @jit(nopython=True)
+        def foo(x):
+            return bar(add1, x)
+
+        # Check dispatcher as argument inside NPM
+        inputs = [1, 11.1, np.arange(10)]
+        expected_results = [x + 1 for x in inputs]
+
+        for arg, expect in zip(inputs, expected_results):
+            self.assertPreciseEqual(foo(arg), expect)
+
+        # Check dispatcher as argument from python
+        for arg, expect in zip(inputs, expected_results):
+            self.assertPreciseEqual(bar(add1, arg), expect)
+
+    def test_dispatcher_as_arg_usecase(self):
+        @jit(nopython=True)
+        def maximum(seq, cmpfn):
+            tmp = seq[0]
+            for each in seq[1:]:
+                cmpval = cmpfn(tmp, each)
+                if cmpval < 0:
+                    tmp = each
+            return tmp
+
+        got = maximum([1, 2, 3, 4], cmpfn=jit(lambda x, y: x - y))
+        self.assertEqual(got, 4)
+        got = maximum(list(zip(range(5), range(5)[::-1])),
+                      cmpfn=jit(lambda x, y: x[0] - y[0]))
+        self.assertEqual(got, (4, 0))
+        got = maximum(list(zip(range(5), range(5)[::-1])),
+                      cmpfn=jit(lambda x, y: x[1] - y[1]))
+        self.assertEqual(got, (0, 4))
+
+    def test_dispatcher_cannot_return_to_python(self):
+        @jit(nopython=True)
+        def foo(fn):
+            return fn
+
+        fn = jit(lambda x: x)
+
+        with self.assertRaises(TypeError) as raises:
+            foo(fn)
+        self.assertRegexpMatches(str(raises.exception),
+                                 "cannot convert native .* to Python object")
+
+    def test_dispatcher_in_sequence_arg(self):
+        @jit(nopython=True)
+        def one(x):
+            return x + 1
+
+        @jit(nopython=True)
+        def two(x):
+            return one(one(x))
+
+        @jit(nopython=True)
+        def three(x):
+            return one(one(one(x)))
+
+        @jit(nopython=True)
+        def choose(fns, x):
+            return fns[0](x), fns[1](x), fns[2](x)
+
+        # Tuple case
+        self.assertEqual(choose((one, two, three), 1), (2, 3, 4))
+        # List case
+        self.assertEqual(choose([one, one, one], 1), (2, 2, 2))
+
+
+class TestBoxingDefaultError(unittest.TestCase):
+    # Testing default error at boxing/unboxing
+    def test_unbox_runtime_error(self):
+        # Dummy type has no unbox support
+        def foo(x):
+            pass
+        cres = compile_isolated(foo, (types.Dummy("dummy_type"),))
+        with self.assertRaises(TypeError) as raises:
+            # Can pass in whatever and the unbox logic will always raise
+            # without checking the input value.
+            cres.entry_point(None)
+        self.assertEqual(str(raises.exception), "can't unbox dummy_type type")
+
+    def test_box_runtime_error(self):
+        def foo():
+            return unittest  # Module type has no boxing logic
+        cres = compile_isolated(foo, ())
+        with self.assertRaises(TypeError) as raises:
+            # Can pass in whatever and the unbox logic will always raise
+            # without checking the input value.
+            cres.entry_point()
+        pat = "cannot convert native Module.* to Python object"
+        self.assertRegexpMatches(str(raises.exception), pat)
 
 
 if __name__ == '__main__':

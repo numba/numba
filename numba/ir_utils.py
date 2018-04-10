@@ -5,6 +5,7 @@
 import numpy
 
 import types as pytypes
+import collections
 
 from llvmlite import ir as lir
 
@@ -574,7 +575,7 @@ remove_call_handlers = []
 
 def remove_dead_random_call(rhs, lives, call_list):
     if len(call_list) == 3 and call_list[1:] == ['random', numpy]:
-        return True
+        return call_list[0] != 'seed'
     return False
 
 remove_call_handlers.append(remove_dead_random_call)
@@ -843,7 +844,6 @@ apply_copy_propagate_extensions = {}
 
 
 def apply_copy_propagate(blocks, in_copies, name_var_table, typemap, calltypes,
-                         ext_func=lambda a, b, c, d:None, ext_data=None,
                          save_copies=None):
     """apply copy propagation to IR: replace variables when copies available"""
     # save_copies keeps an approximation of the copies that were applied, so
@@ -856,10 +856,9 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, typemap, calltypes,
         var_dict = {l: name_var_table[r] for l, r in in_copies[label]}
         # assignments as dict to replace with latest value
         for stmt in block.body:
-            ext_func(label, stmt, var_dict, ext_data)
             if type(stmt) in apply_copy_propagate_extensions:
                 f = apply_copy_propagate_extensions[type(stmt)]
-                f(stmt, var_dict, name_var_table, ext_func, ext_data,
+                f(stmt, var_dict, name_var_table,
                     typemap, calltypes, save_copies)
             # only rhs of assignments should be replaced
             # e.g. if x=y is available, x in x=z shouldn't be replaced
@@ -1318,34 +1317,30 @@ def get_definition(func_ir, name, **kwargs):
     except KeyError:
         raise GuardException
 
-def build_definitions(blocks=None, func_ir=None):
+def build_definitions(blocks, definitions=None):
     """Build the definitions table of the given blocks by scanning
     through all blocks and instructions, useful when the definitions
     table is out-of-sync.
-    Must give at least one argument, and the new definitions table is
-    returned. If func_ir is not None, func_ir._definitions will be
-    updated with new entries. So If we also want to get rid of old
-    definitions table, we must do:
-      func_ir._definitions = build_definitions(blocks=func_ir.blocks)
+    Will return a new definition table if one is not passed.
     """
-    if func_ir == None:
-        definitions = dict()
-    else:
-        definitions = func_ir._definitions
-
-    if blocks == None:
-        assert(func_ir != None)
-        blocks = func_ir.blocks
+    if definitions is None:
+        definitions = collections.defaultdict(list)
 
     for block in blocks.values():
-        for inst in block.find_insts(ir.Assign):
-            name = inst.target.name
-            definition = definitions.get(name, [])
-            if definition == []:
-                definitions[name] = definition
-            definition.append(inst.value)
+        for inst in block.body:
+            if isinstance(inst, ir.Assign):
+                name = inst.target.name
+                definition = definitions.get(name, [])
+                if definition == []:
+                    definitions[name] = definition
+                definition.append(inst.value)
+            if type(inst) in build_defs_extensions:
+                f = build_defs_extensions[type(inst)]
+                f(inst, definitions)
 
     return definitions
+
+build_defs_extensions = {}
 
 def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition):
     """Check if a call expression is calling a numpy function, and
@@ -1358,6 +1353,7 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
     callee = expr.func
     callee_def = definition_finder(func_ir, callee)
     attrs = []
+    obj = None
     while True:
         if isinstance(callee_def, (ir.Global, ir.FreeVar)):
             # require(callee_def.value == numpy)
@@ -1400,6 +1396,9 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
                     return attrs[0], obj
             callee_def = definition_finder(func_ir, obj)
         else:
+            # obj.func calls where obj is not np array
+            if obj is not None:
+                return '.'.join(reversed(attrs)), obj
             raise GuardException
     return attrs[0], '.'.join(reversed(attrs[1:]))
 
@@ -1585,3 +1584,49 @@ def dump_blocks(blocks):
         print(label, ":")
         for stmt in block.body:
             print("    ", stmt)
+
+def is_get_setitem(stmt):
+    """stmt is getitem assignment or setitem (and static cases)"""
+    return is_getitem(stmt) or is_setitem(stmt)
+
+
+def is_getitem(stmt):
+    """true if stmt is a getitem or static_getitem assignment"""
+    return (isinstance(stmt, ir.Assign)
+            and isinstance(stmt.value, ir.Expr)
+            and stmt.value.op in ['getitem', 'static_getitem'])
+
+def is_setitem(stmt):
+    """true if stmt is a SetItem or StaticSetItem node"""
+    return isinstance(stmt, (ir.SetItem, ir.StaticSetItem))
+
+def index_var_of_get_setitem(stmt):
+    """get index variable for getitem/setitem nodes (and static cases)"""
+    if is_getitem(stmt):
+        if stmt.value.op == 'getitem':
+            return stmt.value.index
+        else:
+            return stmt.value.index_var
+
+    if is_setitem(stmt):
+        if isinstance(stmt, ir.SetItem):
+            return stmt.index
+        else:
+            return stmt.index_var
+
+    return None
+
+def set_index_var_of_get_setitem(stmt, new_index):
+    if is_getitem(stmt):
+        if stmt.value.op == 'getitem':
+            stmt.value.index = new_index
+        else:
+            stmt.value.index_var = new_index
+    elif is_setitem(stmt):
+        if isinstance(stmt, ir.SetItem):
+            stmt.index = new_index
+        else:
+            stmt.index_var = new_index
+    else:
+        raise ValueError("getitem or setitem node expected but received {}".format(
+                     stmt))
