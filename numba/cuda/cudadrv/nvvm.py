@@ -541,6 +541,7 @@ re_getelementptr = re.compile(r"\bgetelementptr\s(?:inbounds )?\(?")
 re_load = re.compile(r"=\s*\bload\s(?:\bvolatile\s)?")
 
 re_call = re.compile(r"(call\s[^@]+\))(\s@)")
+re_range = re.compile(r"\s*!range\s+!\d+")
 
 re_type_tok = re.compile(r"[,{}()[\]]")
 
@@ -631,6 +632,9 @@ def llvm39_to_34_ir(ir):
             # Rewrite "call ty (...) @foo"
             # to "call ty (...)* @foo"
             line = re_call.sub(r"\1*\2", line)
+
+            # no !range metadata on calls
+            line = re_range.sub('', line).rstrip(',')
 
         # Remove unknown annotations
         line = re_annotations.sub('', line)

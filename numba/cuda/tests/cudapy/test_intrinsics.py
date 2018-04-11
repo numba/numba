@@ -60,6 +60,22 @@ def intrinsic_forloop_step(c):
             c[y, x] = x + y
 
 
+def simple_popc(ary, c):
+    ary[0] = cuda.popc(c)
+
+
+def simple_brev(ary, c):
+    ary[0] = cuda.brev(c)
+
+
+def simple_clz(ary, c):
+    ary[0] = cuda.clz(c)
+
+
+def simple_ffs(ary, c):
+    ary[0] = cuda.ffs(c)
+
+
 def branching_with_ifs(a, b, c):
     i = cuda.grid(1)
 
@@ -227,6 +243,99 @@ class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
 
         self.assertTrue(np.all(arr))
 
+    def test_popc_u4(self):
+        compiled = cuda.jit("void(int32[:], uint32)")(simple_popc)
+        ary = np.zeros(1, dtype=np.int32)
+        compiled(ary, 0xF0)
+        self.assertEquals(ary[0], 4)
+
+    def test_popc_u8(self):
+        compiled = cuda.jit("void(int32[:], uint64)")(simple_popc)
+        ary = np.zeros(1, dtype=np.int32)
+        compiled(ary, 0xF00000000000)
+        self.assertEquals(ary[0], 4)
+
+    def test_brev_u4(self):
+        compiled = cuda.jit("void(uint32[:], uint32)")(simple_brev)
+        ary = np.zeros(1, dtype=np.uint32)
+        compiled(ary, 0x000030F0)
+        self.assertEquals(ary[0], 0x0F0C0000)
+
+    @skip_on_cudasim('only get given a Python "int", assumes 32 bits')
+    def test_brev_u8(self):
+        compiled = cuda.jit("void(uint64[:], uint64)")(simple_brev)
+        ary = np.zeros(1, dtype=np.uint64)
+        compiled(ary, 0x000030F0000030F0)
+        self.assertEquals(ary[0], 0x0F0C00000F0C0000)
+
+    def test_clz_i4(self):
+        compiled = cuda.jit("void(int32[:], int32)")(simple_clz)
+        ary = np.zeros(1, dtype=np.int32)
+        compiled(ary, 0x00100000)
+        self.assertEquals(ary[0], 11)
+
+    def test_clz_u4(self):
+        """
+        Although the CUDA Math API (http://docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__INTRINSIC__INT.html)
+        only says int32 & int64 arguments are supported in C code, the LLVM
+        IR input supports i8, i16, i32 & i64 (LLVM doesn't have a concept of
+        unsigned integers, just unsigned operations on integers).
+        http://docs.nvidia.com/cuda/nvvm-ir-spec/index.html#bit-manipulations-intrinics
+        """
+        compiled = cuda.jit("void(int32[:], uint32)")(simple_clz)
+        ary = np.zeros(1, dtype=np.uint32)
+        compiled(ary, 0x00100000)
+        self.assertEquals(ary[0], 11)
+
+    def test_clz_i4_1s(self):
+        compiled = cuda.jit("void(int32[:], int32)")(simple_clz)
+        ary = np.zeros(1, dtype=np.int32)
+        compiled(ary, 0xFFFFFFFF)
+        self.assertEquals(ary[0], 0)
+
+    def test_clz_i4_0s(self):
+        compiled = cuda.jit("void(int32[:], int32)")(simple_clz)
+        ary = np.zeros(1, dtype=np.int32)
+        compiled(ary, 0x0)
+        self.assertEquals(ary[0], 32, "CUDA semantics")
+
+    @skip_on_cudasim('only get given a Python "int", assumes 32 bits')
+    def test_clz_i8(self):
+        compiled = cuda.jit("void(int32[:], int64)")(simple_clz)
+        ary = np.zeros(1, dtype=np.int32)
+        compiled(ary, 0x000000000010000)
+        self.assertEquals(ary[0], 47)
+
+    def test_ffs_i4(self):
+        compiled = cuda.jit("void(int32[:], int32)")(simple_ffs)
+        ary = np.zeros(1, dtype=np.int32)
+        compiled(ary, 0x00100000)
+        self.assertEquals(ary[0], 20)
+
+    def test_ffs_u4(self):
+        compiled = cuda.jit("void(int32[:], uint32)")(simple_ffs)
+        ary = np.zeros(1, dtype=np.uint32)
+        compiled(ary, 0x00100000)
+        self.assertEquals(ary[0], 20)
+
+    def test_ffs_i4_1s(self):
+        compiled = cuda.jit("void(int32[:], int32)")(simple_ffs)
+        ary = np.zeros(1, dtype=np.int32)
+        compiled(ary, 0xFFFFFFFF)
+        self.assertEquals(ary[0], 0)
+
+    def test_ffs_i4_0s(self):
+        compiled = cuda.jit("void(int32[:], int32)")(simple_ffs)
+        ary = np.zeros(1, dtype=np.int32)
+        compiled(ary, 0x0)
+        self.assertEquals(ary[0], 32, "CUDA semantics")
+
+    @skip_on_cudasim('only get given a Python "int", assumes 32 bits')
+    def test_ffs_i8(self):
+        compiled = cuda.jit("void(int32[:], int64)")(simple_ffs)
+        ary = np.zeros(1, dtype=np.int32)
+        compiled(ary, 0x000000000010000)
+        self.assertEquals(ary[0], 16)
 
 if __name__ == '__main__':
     unittest.main()
