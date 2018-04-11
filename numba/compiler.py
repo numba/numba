@@ -700,7 +700,7 @@ class BasePipeline(object):
         raise NotImplementedError()
 
     def add_preprocessing_stage(self, pm):
-        """Add the preprocessing stage that analyze the bytecode to prepare
+        """Add the preprocessing stage that analyzes the bytecode to prepare
         the Numba IR.
         """
         if self.func_ir is None:
@@ -708,8 +708,8 @@ class BasePipeline(object):
         pm.add_stage(self.stage_process_ir, "processing IR")
 
     def add_pre_typing_stage(self, pm):
-        """Add any stages that goes before type-inference.
-        The current stages contains type-agnostic rewrite passes.
+        """Add any stages that go before type-inference.
+        The current stages contain type-agnostic rewrite passes.
         """
         if not self.flags.no_rewrites:
             if self.status.can_fallback:
@@ -858,6 +858,8 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
     flags : numba.compiler.Flags
         compiler flags
     library : numba.codegen.CodeLibrary
+        Used to store the compiled code.
+        If it is ``None``, a new CodeLibrary is used.
     pipeline_class : type like numba.compiler.BasePipeline
         compiler pipeline
     """

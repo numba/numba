@@ -1,10 +1,10 @@
 .. _arch-pipeline:
 
-========================
-Notes on Custom Pipeline
-========================
+=========================
+Notes on Custom Pipelines
+=========================
 
-.. warning:: The custom pipeline feature is regard as expert only.  Modifying
+.. warning:: The custom pipeline feature is for expert use only.  Modifying
              the compiler behavior can invalidate internal assumptions in the
              numba source code.
 
@@ -12,11 +12,11 @@ Notes on Custom Pipeline
 For library developers looking for a way to extend or modify the compiler
 behavior, you can do so by defining a custom compiler pipeline by inheriting
 from ``numba.compiler.BasePipeline``.  The default numba pipeline is defined
-as ``numba.compiler.Pipeline``.  It implements the ``.define_pipelines()``
+as ``numba.compiler.Pipeline``, implementing the ``.define_pipelines()``
 method, which adds the *nopython-mode*, *object-mode* and *interpreted-mode*
-pipelines.  These three pipelines are defined by ``.define_nopython_pipeline``,
-``.define_objectmode_pipeline`` and ``.define_interpreted_pipeline``,
-respectively, in ``BasePipeline``.
+pipelines.  These three pipelines are defined in ``BasePipeline`` by the
+methods ``.define_nopython_pipeline``, ``.define_objectmode_pipeline``
+and ``.define_interpreted_pipeline``, respectively..
 
 To use a custom subclass of ``BasePipeline``, supply it as the
 ``pipeline_class`` keyword argument to the ``@jit`` and ``@generated_jit``
