@@ -8,7 +8,7 @@ import ctypes
 
 from llvmlite import ir
 
-from . import config, sigutils, utils, compiler
+from . import utils, compiler
 from .caching import NullCache, FunctionCache
 from .dispatcher import _FunctionCompiler
 from .targets import registry
@@ -37,7 +37,8 @@ class CFunc(object):
     """
     _targetdescr = registry.cpu_target
 
-    def __init__(self, pyfunc, sig, locals, options):
+    def __init__(self, pyfunc, sig, locals, options,
+                 pipeline_class=compiler.Pipeline):
         args, return_type = sig
         if return_type is None:
             raise TypeError("C callback needs an explicit return type")
@@ -48,7 +49,8 @@ class CFunc(object):
         self._pyfunc = pyfunc
         self._sig = signature(return_type, *args)
         self._compiler = _CFuncCompiler(pyfunc, self._targetdescr,
-                                        options, locals)
+                                        options, locals,
+                                        pipeline_class=pipeline_class)
 
         self._wrapper_name = None
         self._wrapper_address = None
