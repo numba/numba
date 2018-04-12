@@ -9,6 +9,7 @@ from collections import namedtuple
 from numba.analysis import compute_cfg_from_blocks, find_top_level_loops
 from numba import ir
 from numba.interpreter import Interpreter
+from numba.analysis import compute_use_defs
 
 
 def _extract_loop_lifting_candidates(cfg, blocks):
@@ -68,11 +69,13 @@ def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
         # saves having to create something valid to run through postproc
         # to achieve similar
         local_block_ids = set(loop.body) | set(loop.entries) | set(loop.exits)
+        loopblocks = {}
+        for k in local_block_ids:
+            loopblocks[k] = blocks[k]
+
         used_vars = set()
-        for blk_id in local_block_ids:
-            blk = blocks[blk_id]
-            for inst in blk.body:
-                used_vars |= set([x.name for x in inst.list_vars()])
+        for vs in compute_use_defs(loopblocks).usemap.values():
+            used_vars |= vs
 
         # note: sorted for stable ordering
         inputs = sorted(set(inputs) & used_vars)
