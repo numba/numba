@@ -14,7 +14,6 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import utils, jit, generated_jit, types, typeof
-from numba import config
 from numba import _dispatcher
 from numba.compiler import compile_isolated
 from numba.errors import NumbaWarning
@@ -548,8 +547,6 @@ class TestDispatcherMethods(TestCase):
         # just test for the attribute without running it.
         self.assertTrue(callable(cfg.display))
 
-    @unittest.skipIf(config.IS_WIN32 and not config.IS_32BITS, "access violation on 64-bit windows")
-    @unittest.skipIf(config.IS_OSX, "segfault on OSX")
     def test_inspect_cfg(self):
         # Exercise the .inspect_cfg(). These are minimal tests and do not fully
         # check the correctness of the function.
@@ -584,8 +581,6 @@ class TestDispatcherMethods(TestCase):
         cfg = foo.inspect_cfg(signature=foo.signatures[0])
         self._check_cfg_display(cfg)
 
-    @unittest.skipIf(config.IS_WIN32 and not config.IS_32BITS, "access violation on 64-bit windows")
-    @unittest.skipIf(config.IS_OSX, "segfault on OSX")
     def test_inspect_cfg_with_python_wrapper(self):
         # Exercise the .inspect_cfg() including the python wrapper.
         # These are minimal tests and do not fully check the correctness of
