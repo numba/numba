@@ -2921,6 +2921,12 @@ def repr_arrayexpr(arrayexpr):
     """
     if isinstance(arrayexpr, tuple):
         opr = arrayexpr[0]
+        # sometimes opr is not string like '+', but is a ufunc object
+        if not isinstance(opr, str):
+            if hasattr(opr, '__name__'):
+                opr = opr.__name__
+            else:
+                opr = '_'  # can return dummy since repr is not critical
         args = arrayexpr[1]
         if len(args) == 1:
             return '({}{})'.format(opr, repr_arrayexpr(args[0]))
