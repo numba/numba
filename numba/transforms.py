@@ -61,12 +61,27 @@ def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
         [callfrom] = loop.entries   # requirement checked earlier
         an_exit = next(iter(loop.exits))  # anyone of the exit block
         [(returnto, _)] = cfg.successors(an_exit)  # requirement checked earlier
+        inputs = livemap[callfrom]
+        outputs = livemap[returnto]
+
+        # ensure live variables are actually used in the blocks, else remove,
+        # saves having to create something valid to run through postproc
+        # to achieve similar
+        local_block_ids = set(loop.body) | set(loop.entries) | set(loop.exits)
+        used_vars = set()
+        for blk_id in local_block_ids:
+            blk = blocks[blk_id]
+            for inst in blk.body:
+                used_vars |= set([x.name for x in inst.list_vars()])
+
         # note: sorted for stable ordering
-        inputs = sorted(livemap[callfrom])
-        outputs = sorted(livemap[returnto])
+        inputs = sorted(set(inputs) & used_vars)
+        outputs = sorted(set(outputs) & used_vars)
+
         lli = _loop_lift_info(loop=loop, inputs=inputs, outputs=outputs,
                               callfrom=callfrom, returnto=returnto)
         loopinfos.append(lli)
+
     return loopinfos
 
 
