@@ -81,11 +81,6 @@ try:
     import colorama
 except ImportError:
 
-    msg = ("Colorama package not found, terminal highlighting disabled.\n"
-           "Try `conda install colorama` or `pip install colorama` for an "
-           "improved user experience.\n\n")
-    warnings.warn(msg, NumbaWarning)
-
     class NOPColorScheme(_DummyColorScheme):
         def __init__(self, theme=None):
             if theme is not None:
