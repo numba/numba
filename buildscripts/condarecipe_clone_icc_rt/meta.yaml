@@ -1,0 +1,34 @@
+{% set version = "2018.0.2" %} # this is the intel version to get
+{% set build_number = "0" %}   # and the build number from the intel version
+
+package:
+  name: icc_rt
+  version: {{ version }}
+
+build:
+  number: {{ build_number }}
+
+source:
+    - url: https://anaconda.org/intel/icc_rt/{{ version }}/download/win-64/icc_rt-{{version}}-intel_{{build_number}}.tar.bz2 # [win]
+    - md5: 8ba0b0d3fbffdb0cd9febbf90752c4ad # [win]
+    - sha256: e2fbb6452d6544325fa2548c11c7a0989083ce6240c64e83963cf44e564a10dc # [win]
+
+    - url: https://anaconda.org/intel/icc_rt/{{ version }}/download/osx-64/icc_rt-{{version}}-intel_{{build_number}}.tar.bz2 # [osx]
+    - md5: 6c6c59bd819785dfd281f3107ad39ad0 # [osx]
+    - sha256: 292334590092c973737eabf138dd28f75542054cef7ce04d762de4087504b8c2 # [osx]
+
+    - url: https://anaconda.org/intel/icc_rt/{{ version }}/download/linux-64/icc_rt-{{version}}-intel_{{build_number}}.tar.bz2 # [linux]
+    - md5: b814ae46604a6ef3f140f00c3f0b9d25 # [linux]
+    - sha256: 68d8097b340ed8c876101590a5c1b69beb302491439b9771bedeed3c8012a520 # [linux]
+
+    - path: scripts
+
+requirements:
+  build:
+    - python>=3.6
+
+about:
+  license: "Intel"
+  license_family: "Proprietary"
+  license_file: LICENSE.txt
+summary: Intel ICC runtime.
