@@ -619,6 +619,59 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(tc.a, x * y)
         self.assertEqual(tc.b, z)
 
+    def test_default_args(self):
+        spec = [('x', int32),
+                ('y', int32),
+                ('z', int32)]
+
+        @jitclass(spec)
+        class TestClass(object):
+            def __init__(self, x, y, z=1):
+                self.x = x
+                self.y = y
+                self.z = z
+
+        tc = TestClass(1, 2, 3)
+        self.assertEqual(tc.x, 1)
+        self.assertEqual(tc.y, 2)
+        self.assertEqual(tc.z, 3)
+
+        tc = TestClass(1, 2)
+        self.assertEqual(tc.x, 1)
+        self.assertEqual(tc.y, 2)
+        self.assertEqual(tc.z, 1)
+
+        tc = TestClass(y=2, z=5, x=1)
+        self.assertEqual(tc.x, 1)
+        self.assertEqual(tc.y, 2)
+        self.assertEqual(tc.z, 5)
+
+    @unittest.skipIf(sys.version_info < (3,), "Python 3-specific test")
+    def test_default_args_keyonly(self):
+        spec = [('x', int32),
+                ('y', int32),
+                ('z', int32),
+                ('a', int32)]
+
+        @jitclass(spec)
+        class TestClass(object):
+            def __init__(self, x, y, z=1, *, a=5):
+                self.x = x
+                self.y = y
+                self.z = z
+                self.a = a
+        
+        tc = TestClass(2, 3)
+        self.assertEqual(tc.x, 2)
+        self.assertEqual(tc.y, 3)
+        self.assertEqual(tc.z, 1)
+        self.assertEqual(tc.a, 5)
+
+        tc = TestClass(y=4, x=2, a=42, z=100)
+        self.assertEqual(tc.x, 2)
+        self.assertEqual(tc.y, 4)
+        self.assertEqual(tc.z, 100)
+        self.assertEqual(tc.a, 42)
 
 if __name__ == '__main__':
     unittest.main()
