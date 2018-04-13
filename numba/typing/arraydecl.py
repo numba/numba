@@ -416,8 +416,8 @@ class ArrayAttribute(AttributeTemplate):
         kwargs = dict(kws)
         kind = kwargs.pop('kind', types.Const('quicksort'))
         if kwargs:
-            msg = "usupported keywords: {!r}"
-            raise TypingError(msg.format(kwargs.keys()))
+            msg = "Unsupported keywords: {!r}"
+            raise TypingError(msg.format([k for k in kwargs.keys()]))
         if ary.ndim == 1:
             def argsort_stub(kind='quicksort'):
                 pass

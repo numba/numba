@@ -546,7 +546,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(expected, got)
 
     def test_squeeze_array_npm(self):
-        with self.assertRaises(errors.UntypedAttributeError) as raises:
+        with self.assertRaises(errors.TypingError) as raises:
             self.test_squeeze_array(flags=no_pyobj_flags)
 
         self.assertIn("squeeze", str(raises.exception))

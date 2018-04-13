@@ -17,7 +17,7 @@ from numba import sigutils, serialize, typing
 from numba.typing.templates import fold_arguments
 from numba.typing.typeof import Purpose, typeof, typeof_impl
 from numba.bytecode import get_code_object
-from numba.six import create_bound_method, next
+from numba.six import create_bound_method, next, reraise
 from .caching import NullCache, FunctionCache
 
 
@@ -331,6 +331,32 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                     % "\n".join("- argument %d: %s" % (i, err)
                                 for i, err in failed_args))
                 e.patch_message(msg)
+
+            # add in help info
+            if config.SHOW_HELP:
+                help_msg = errors.error_extras['typing']
+                e.patch_message(''.join(e.args) + help_msg)
+
+            # raise
+            if config.FULL_TRACEBACKS:
+                raise e
+            else:
+                reraise(type(e), e, None)
+        except errors.UnsupportedError as e:
+            # Something unsupported is present in the user code, add help info
+            if config.SHOW_HELP:
+                help_msg = errors.error_extras['unsupported_error']
+                e.patch_message(''.join(e.args) + help_msg)
+            if config.FULL_TRACEBACKS:
+                raise e
+            else:
+                reraise(type(e), e, None)
+        except Exception as e:
+            if config.SHOW_HELP:
+                if hasattr(e, 'patch_message'):
+                    help_msg = errors.error_extras['reportable']
+                    e.patch_message(''.join(e.args) + help_msg)
+            # ignore the FULL_TRACEBACKS config, this needs reporting!
             raise e
 
     def inspect_llvm(self, signature=None):

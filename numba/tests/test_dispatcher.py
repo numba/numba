@@ -1102,7 +1102,7 @@ class TestCache(BaseCacheUsecasesTest):
         execute_with_input()
         # Run a second time and check caching
         err = execute_with_input()
-        self.assertEqual(err.strip(), "cache hits = 1")
+        self.assertIn("cache hits = 1", err.strip())
 
 
 class TestCacheWithCpuSetting(BaseCacheUsecasesTest):

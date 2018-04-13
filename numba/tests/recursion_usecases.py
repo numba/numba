@@ -103,7 +103,7 @@ def runaway_mutual_inner(x):
     return runaway_mutual(x)
 
 
-# Mutual type changing reursion
+# Mutual type changing recursion
 
 def make_type_change_mutual(jit=lambda x: x):
     @jit

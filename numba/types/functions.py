@@ -6,6 +6,7 @@ import sys
 
 from .abstract import *
 from .common import *
+from numba.ir import Loc
 from numba import errors
 
 
@@ -44,7 +45,8 @@ class _ResolutionFailures(object):
         msgbuf.append(explain)
         for i, (temp, error) in enumerate(self._failures):
             msgbuf.append("In definition {}:".format(i))
-            msgbuf.append('{}{}'.format(indent, self.format_error(error)))
+            msgbuf.append(errors.termcolor.highlight('{}{}'.format(
+                indent, self.format_error(error))))
             loc = self.get_loc(temp, error)
             if loc:
                 msgbuf.append('{}raised from {}'.format(indent, loc))
@@ -128,12 +130,13 @@ class BaseFunction(Callable):
                     self._impl_keys[sig.args] = temp.get_impl_key(sig)
                     return sig
                 else:
-                    failures.add_error(temp_cls, "rejected")
+                    failures.add_error(temp_cls, "All templates rejected")
 
         if len(failures) == 0:
             raise AssertionError("Internal Error. "
                                  "Function resolution ended with no failures "
                                  "or successfull signature")
+
         raise errors.TypingError(failures.format())
 
     def get_call_signatures(self):

@@ -34,45 +34,133 @@ Please see the list of :ref:`pysupported`.  If you find something that
 is listed there and still fails compiling, please
 :ref:`report a bug <report-numba-bugs>`.
 
-The other reason is that you asked for :term:`nopython mode`, and type
-inference has failed on some piece of your code.  For example, let's
-consider this trivial function::
+When Numba tries to compile your code it first tries to work out the types of
+all the variables in use, this is so it can generate a type specific
+implementation of your code that can be compiled down to machine code. A common
+reason for Numba failing to compile (especially in :term:`nopython mode`) is a
+type inference failure, essentially Numba cannot work out what the type of all
+the variables in your code should be. 
 
-   @jit(nopython=True)
-   def f(x, y):
-       return x + y
+For example, let's consider this trivial function::
+
+    @jit(nopython=True)
+    def f(x, y):
+        return x + y
 
 If you call it with two numbers, Numba is able to infer the types properly::
 
-   >>> f(1, 2)
-   3
+    >>> f(1, 2)
+        3
 
 If however you call it with a tuple and a number, Numba is unable to say
 what the result of adding a tuple and number is, and therefore compilation
 errors out::
 
-   >>> f(1, (2,))
-   Traceback (most recent call last):
-     File "<stdin>", line 1, in <module>
-       [...]
-     File "/home/antoine/numba/numba/typeinfer.py", line 242, in resolve
-       raise TypingError(msg, loc=self.loc)
-   numba.typeinfer.TypingError: Failed at nopython frontend
-   Undeclared +(int64, (int32 x 1))
-   File "<stdin>", line 2
+    >>> f(1, (2,))
+    Traceback (most recent call last):
+    File "<stdin>", line 1, in <module>
+    File "<path>/numba/numba/dispatcher.py", line 339, in _compile_for_args
+        reraise(type(e), e, None)
+    File "<path>/numba/numba/six.py", line 658, in reraise
+        raise value.with_traceback(tb)
+    numba.errors.TypingError: Failed at nopython (nopython frontend)
+    Invalid usage of + with parameters (int64, tuple(int64 x 1))
+    Known signatures:
+    * (int64, int64) -> int64
+    * (int64, uint64) -> int64
+    * (uint64, int64) -> int64
+    * (uint64, uint64) -> uint64
+    * (float32, float32) -> float32
+    * (float64, float64) -> float64
+    * (complex64, complex64) -> complex64
+    * (complex128, complex128) -> complex128
+    * (uint16,) -> uint64
+    * (uint8,) -> uint64
+    * (uint64,) -> uint64
+    * (uint32,) -> uint64
+    * (int16,) -> int64
+    * (int64,) -> int64
+    * (int8,) -> int64
+    * (int32,) -> int64
+    * (float32,) -> float32
+    * (float64,) -> float64
+    * (complex64,) -> complex64
+    * (complex128,) -> complex128
+    * parameterized
+    [1] During: typing of intrinsic-call at <stdin> (3)
+
+    File "<stdin>", line 3:
 
 The error message helps you find out what went wrong:
-"Undeclared +(int64, (int32 x 1))" is to be interpreted as "Numba encountered
-an addition of variables typed as integer and 1-tuple of integer, respectively,
-and doesn't know about any such operation".
+"Invalid usage of + with parameters (int64, tuple(int64 x 1))" is to be
+interpreted as "Numba encountered an addition of variables typed as integer
+and 1-tuple of integer, respectively, and doesn't know about any such
+operation".
 
-Note that if you allow object mode, compilation will succeed and the
-compiled function will raise at runtime as Python would do::
+Note that if you allow object mode::
+
+    @jit
+    def g(x, y):
+        return x + y
+
+compilation will succeed and the compiled function will raise at runtime as
+Python would do::
 
    >>> g(1, (2,))
    Traceback (most recent call last):
      File "<stdin>", line 1, in <module>
    TypeError: unsupported operand type(s) for +: 'int' and 'tuple'
+
+
+My code has a type unification problem
+======================================
+
+Another common reason for Numba not being able to compile your code is that it
+cannot statically determine the return type of a function. The most likely
+cause of this is the return type depending on a value that is available only at
+runtime. Again, this is most often problematic when using
+:term:`nopython mode`. The concept of type unification is simply trying to find
+a type in which two variables could safely be represented. For example a 64 bit
+float and a 64 bit complex number could both be represented in a 128 bit complex
+number.
+
+As an example of type unification failure, this function has a return type that
+is determined at runtime based on the value of `x`::
+
+    In [1]: from numba import jit
+
+    In [2]: @jit(nopython=True)
+    ...: def f(x):
+    ...:     if x > 10:
+    ...:         return (1,)
+    ...:     else:
+    ...:         return 1
+    ...:     
+
+    In [3]: f(10)
+
+Trying to execute this function, errors out as follows:: 
+
+    TypingError: Failed at nopython (nopython frontend)
+    Can't unify return type from the following types: tuple(int64 x 1), int64
+    Return of: IR name '$8.2', type '(int64 x 1)', location: 
+    File "<ipython-input-2-51ef1cc64bea>", line 4:
+    def f(x):
+        <source elided>
+        if x > 10:
+            return (1,)
+            ^
+    Return of: IR name '$12.2', type 'int64', location: 
+    File "<ipython-input-2-51ef1cc64bea>", line 6:
+    def f(x):
+        <source elided>
+        else:
+            return 1
+
+The error message "Can't unify return type from the following types:
+tuple(int64 x 1), int64" should be read as "Numba cannot find a type that
+can safely represent a 1-tuple of integer and an integer".
+
 
 The compiled code is too slow
 =============================

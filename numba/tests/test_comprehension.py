@@ -230,7 +230,7 @@ class TestListComprehension(unittest.TestCase):
             with self.assertRaises(TypingError) as raises:
                 cfunc = jit(nopython=True)(list22)
                 cfunc(var)
-            msg = "cannot unify reflected list(int%d) and int%d" % (bits, bits)
+            msg = "Cannot unify reflected list(int%d) and int%d" % (bits, bits)
             self.assertIn(msg, str(raises.exception))
 
 class TestArrayComprehension(unittest.TestCase):
@@ -367,7 +367,7 @@ class TestArrayComprehension(unittest.TestCase):
         # test is expected to fail
         with self.assertRaises(TypingError) as raises:
             self.check(comp_nest_with_dependency, 5)
-        self.assertIn('Failed', str(raises.exception))
+        self.assertIn('Cannot resolve setitem', str(raises.exception))
 
     @tag('important')
     def test_no_array_comp(self):
