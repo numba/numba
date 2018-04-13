@@ -48,7 +48,7 @@ test:
     - cffi
     - scipy
     - ipython
-    - cudatoolkit {{ environ.get('CUDATOOLKIT_VERSION', '7.5') }} # default to 7.5
+    - cudatoolkit {{ environ.get('CUDATOOLKIT_VERSION', '8.0') }} # default to 8.0
     - setuptools
     # Need these for AOT. Do not init msvc as it may not be present
     - {{ compiler('c') }}      # [not win]

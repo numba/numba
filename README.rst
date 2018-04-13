@@ -62,7 +62,7 @@ If you need CUDA support, you should also install the CUDA toolkit::
 
    $ conda install cudatoolkit
 
-This installs the CUDA Toolkit version 7.5, which requires driver version 352.79
+This installs the CUDA Toolkit version 8.0, which requires driver version 375.x
 or later to be installed.
 
 Custom Python Environments
@@ -99,7 +99,7 @@ or simply
 
    $ pip install numba
 
-If you want to enable CUDA support, you will need to install CUDA Toolkit 7.5.
+If you want to enable CUDA support, you will need to install CUDA Toolkit 8.0.
 After installing the toolkit, you might have to specify environment variables
 in order to override the standard search paths:
 
