@@ -81,5 +81,5 @@ class TestNdarrayIntrinsic(TestCase):
 
         with self.assertRaises(TypingError) as raises:
             tuple_with_length(np.random.random(3), 1)
-        expectmsg = "RequireConstValue: *length* argument must be a constant"
+        expectmsg = "*length* argument must be a constant"
         self.assertIn(expectmsg, str(raises.exception))

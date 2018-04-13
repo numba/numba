@@ -160,11 +160,12 @@ class TestArgumentTypingError(unittest.TestCase):
         foo = Foo()
         with self.assertRaises(TypingError) as raises:
             cfunc(1, foo, 1)
-        expected = textwrap.dedent("""\
-            This error may have been caused by the following argument(s):
-            - argument 1: cannot determine Numba type of <class 'numba.tests.test_typingerror.Foo'>"""
-            )
-        self.assertIn(expected, str(raises.exception))
+
+        expected=re.compile(("This error may have been caused by the following "
+                             "argument\(s\):\\n- argument 1:.*cannot determine "
+                             "Numba type of "
+                             "<class \'numba.tests.test_typingerror.Foo\'>"))
+        self.assertTrue(expected.search(str(raises.exception)) is not None)
 
 
 class TestCallError(unittest.TestCase):

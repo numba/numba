@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import, division
 
 
+import re
 import types
 
 import numpy as np
@@ -85,8 +86,9 @@ class TestDeviceFunc(SerialMixin, unittest.TestCase):
         # Check that the right error message is provided.
         with self.assertRaises(TypingError) as raises:
             self._check_cpu_dispatcher(add)
-        msg = "Untyped global name 'add': using cpu function on device"
-        self.assertIn(msg, str(raises.exception))
+        msg = "Untyped global name 'add':.*using cpu function on device"
+        expected = re.compile(msg)
+        self.assertTrue(expected.search(str(raises.exception)) is not None)
 
     def test_cpu_dispatcher_other_module(self):
         @jit
