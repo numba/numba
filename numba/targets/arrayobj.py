@@ -1944,10 +1944,12 @@ def array_ctypes(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
     # Create new ArrayCType structure
-    ctinfo = context.make_helper(builder, types.ArrayCTypes(typ))
+    act = types.ArrayCTypes(typ)
+    ctinfo = context.make_helper(builder, act)
     ctinfo.data = array.data
+    ctinfo.meminfo = array.meminfo
     res = ctinfo._getvalue()
-    return impl_ret_untracked(context, builder, typ, res)
+    return impl_ret_borrowed(context, builder, act, res)
 
 @lower_getattr(types.ArrayCTypes, "data")
 def array_ctypes_data(context, builder, typ, value):
