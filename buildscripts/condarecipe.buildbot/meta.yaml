@@ -55,16 +55,6 @@ test:
     - {{ compiler('cxx') }}    # [not win]
   files:
     - mandel.py
-  commands:
-    # Check Numba executables are there
-    - pycc -h
-    - numba -h
-    # run system info tool
-    - numba -s
-    # Check test discovery works
-    - NUMBA_DEVELOPER_MODE=1 NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING=1 python -m numba.tests.test_runtests
-    # Run the CUDA test suite
-    - NUMBA_DEVELOPER_MODE=1 NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING=1 python -m numba.runtests -v -m -b numba.cuda.tests
 
 about:
   home: http://numba.pydata.org/
