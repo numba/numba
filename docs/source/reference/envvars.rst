@@ -36,6 +36,10 @@ These variables influence what is printed out during compilation of
     If not set or set to zero, show user level help information.
     Defaults to the negation of the value set by `NUMBA_DEVELOPER_MODE`.
 
+.. envvar:: NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING
+    If set to non-zero error message highlighting is disabled. This is useful
+    for running the test suite on CI systems.
+
 .. envvar:: NUMBA_DEBUG
 
    If set to non-zero, print out all possible debugging information during

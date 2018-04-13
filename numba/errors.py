@@ -4,13 +4,14 @@ Numba-specific errors and warnings.
 
 from __future__ import print_function, division, absolute_import
 
-import sys
+import abc
 import contextlib
-from collections import defaultdict
+import os
+import sys
 import warnings
+from collections import defaultdict
 from numba import six
 from functools import wraps
-import abc
 from abc import abstractmethod
 
 # Filled at the end
@@ -79,6 +80,13 @@ class _DummyColorScheme(_ColorScheme):
 
 try:
     import colorama
+
+    # If Numba is running in testsuite mode then do not use error message
+    # coloring so CI system output is consistently readable without having
+    # to read between shell escape characters.
+    if os.environ.get('NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING', None):
+        raise ImportError # just to trigger the exception handler below
+
 except ImportError:
 
     class NOPColorScheme(_DummyColorScheme):
