@@ -870,6 +870,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check(np.array([[1, 1, 3], [3, 4, 5]]))
         check(np.array(np.zeros(5)))
         check(np.array([[3.1, 3.1], [1.7, 2.29], [3.3, 1.7]]))
+        check(np.array([]))
 
 
 class TestArrayComparisons(TestCase):
