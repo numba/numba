@@ -177,6 +177,9 @@ def array_real(a):
 def array_imag(a):
     return np.imag(a)
 
+def np_unique(a):
+    return np.unique(a)
+
 
 class TestArrayMethods(MemoryLeakMixin, TestCase):
     """
@@ -856,6 +859,17 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         x, y = np.meshgrid(x, x)
         z = x + 1j*y
         np.testing.assert_equal(pyfunc(z), cfunc(z))
+
+    def test_unique(self):
+        pyfunc = np_unique
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a):
+            np.testing.assert_equal(pyfunc(a), cfunc(a))
+
+        check(np.array([[1, 1, 3], [3, 4, 5]]))
+        check(np.array(np.zeros(5)))
+        check(np.array([[3.1, 3.1], [1.7, 2.29], [3.3, 1.7]]))
 
 
 class TestArrayComparisons(TestCase):
