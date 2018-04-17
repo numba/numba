@@ -244,6 +244,47 @@ def ptx_threadfence_device(context, builder, sig, args):
     return context.get_dummy_value()
 
 
+@lower(stubs.popc, types.Any)
+def ptx_popc(context, builder, sig, args):
+    return builder.ctpop(args[0])
+
+
+@lower(stubs.brev, types.u4)
+def ptx_brev_u4(context, builder, sig, args):
+    # FIXME the llvm.bitreverse.i32 intrinsic isn't supported by nvcc
+    # return builder.bitreverse(args[0])
+
+    fn = builder.module.get_or_insert_function(
+        lc.Type.function(lc.Type.int(32), (lc.Type.int(32),)),
+        '__nv_brev')
+    return builder.call(fn, args)
+
+
+@lower(stubs.brev, types.u8)
+def ptx_brev_u8(context, builder, sig, args):
+    # FIXME the llvm.bitreverse.i64 intrinsic isn't supported by nvcc
+    # return builder.bitreverse(args[0])
+
+    fn = builder.module.get_or_insert_function(
+        lc.Type.function(lc.Type.int(64), (lc.Type.int(64),)),
+        '__nv_brevll')
+    return builder.call(fn, args)
+
+
+@lower(stubs.clz, types.Any)
+def ptx_clz(context, builder, sig, args):
+    return builder.ctlz(
+        args[0],
+        context.get_constant(types.boolean, 0))
+
+
+@lower(stubs.ffs, types.Any)
+def ptx_ffs(context, builder, sig, args):
+    return builder.cttz(
+        args[0],
+        context.get_constant(types.boolean, 0))
+
+
 @lower(stubs.selp, types.Any, types.Any, types.Any)
 def ptx_selp(context, builder, sig, args):
     test, a, b = args

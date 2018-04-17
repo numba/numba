@@ -1131,6 +1131,17 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countArrayAllocs(test_impl, (types.intp, types.intp)), 4)
         self.assertEqual(countParfors(test_impl, (types.intp, types.intp)), 4)
 
+    @skip_unsupported
+    def test_ufunc_expr(self):
+        # issue #2885
+        def test_impl(A, B):
+            return np.bitwise_and(A, B)
+
+        A = np.ones(3, np.uint8)
+        B = np.ones(3, np.uint8)
+        B[1] = 0
+        self.check(test_impl, A, B)
+
 
 class TestPrangeBase(TestParforsBase):
 

@@ -454,7 +454,7 @@ class BaseContext(object):
             impl = self._get_constants.find((ty,))
             return impl(self, builder, ty, val)
         except NotImplementedError:
-            raise NotImplementedError("cannot lower constant of type '%s'" % (ty,))
+            raise NotImplementedError("Cannot lower constant of type '%s'" % (ty,))
 
     def get_constant(self, ty, val):
         """

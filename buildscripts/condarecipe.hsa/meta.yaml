@@ -45,7 +45,7 @@ test:
     # run system info tool
     - numba -s
     # Check test discovery works
-    - python -m numba.tests.test_runtests
+    - NUMBA_DEVELOPER_MODE=1 NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING=1 python -m numba.tests.test_runtests
 about:
   home: http://numba.pydata.org/
   license: BSD

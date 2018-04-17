@@ -25,7 +25,7 @@ from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     iternext_impl, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
-from numba.extending import register_jitable
+from numba.extending import register_jitable, overload
 from . import quicksort, mergesort, slicing
 
 
@@ -1481,6 +1481,19 @@ def array_transpose_vararg(context, builder, sig, args):
     return array_transpose_tuple(context, builder, new_sig, new_args)
 
 
+@overload(np.transpose)
+def numpy_transpose(a, axes=None):
+
+    if axes is None:
+        def np_transpose_impl(arr):
+            return arr.transpose()
+    else:
+        def np_transpose_impl(arr, axes=None):
+            return arr.transpose(axes)
+
+    return np_transpose_impl
+
+
 @lower_getattr(types.Array, 'T')
 def array_T(context, builder, typ, value):
     if typ.ndim <= 1:
@@ -1931,10 +1944,12 @@ def array_ctypes(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
     # Create new ArrayCType structure
-    ctinfo = context.make_helper(builder, types.ArrayCTypes(typ))
+    act = types.ArrayCTypes(typ)
+    ctinfo = context.make_helper(builder, act)
     ctinfo.data = array.data
+    ctinfo.meminfo = array.meminfo
     res = ctinfo._getvalue()
-    return impl_ret_untracked(context, builder, typ, res)
+    return impl_ret_borrowed(context, builder, act, res)
 
 @lower_getattr(types.ArrayCTypes, "data")
 def array_ctypes_data(context, builder, typ, value):

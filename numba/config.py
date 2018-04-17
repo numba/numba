@@ -108,6 +108,15 @@ class _EnvReloader(object):
         if WARNINGS == 0:
             warnings.simplefilter('ignore', NumbaWarning)
 
+        # developer mode produces full tracebacks, disables help instructions
+        DEVELOPER_MODE = _readenv("NUMBA_DEVELOPER_MODE", int, 0)
+
+        # Flag to enable full exception reporting
+        FULL_TRACEBACKS = _readenv("NUMBA_FULL_TRACEBACKS", int, DEVELOPER_MODE)
+
+        # Show help text when an error occurs
+        SHOW_HELP = _readenv("NUMBA_SHOW_HELP", int, not DEVELOPER_MODE)
+
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)
 

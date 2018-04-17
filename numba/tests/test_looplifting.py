@@ -343,6 +343,31 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         x = np.array([1., 4, 2, -3, 5, 2, 10, 5, 2, 6])
         np.testing.assert_equal(test.py_func(x), test(x))
 
+    def test_issue_2368(self):
+        from numba import jit
+
+        def lift_issue2368(a, b):
+            s = 0
+            for e in a:
+                s += e
+            h = b.__hash__()
+            return s, h
+
+        a = np.ones(10)
+        b = object()
+        jitted = jit(lift_issue2368)
+
+        expected = lift_issue2368(a, b)
+        got = jitted(a, b)
+
+        self.assertEqual(expected[0], got[0])
+        self.assertEqual(expected[1], got[1])
+
+        jitloop = jitted.overloads[jitted.signatures[0]].lifted[0]
+        [loopcres] = jitloop.overloads.values()
+        # assert lifted function is native
+        self.assertTrue(loopcres.fndesc.native)
+
     def test_no_iteration(self):
         from numba import jit
 

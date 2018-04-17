@@ -11,7 +11,7 @@ from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags, utils
 from numba import jit, typeof, types
 from numba.numpy_support import version as np_version
-from numba.errors import UntypedAttributeError, TypingError
+from numba.errors import TypingError
 from .support import TestCase, CompilationCache
 
 no_pyobj_flags = Flags()
@@ -568,7 +568,7 @@ def foo():
             self.check(hc_func, attrs)
 
         # check unsupported attr raises
-        with self.assertRaises(UntypedAttributeError) as raises:
+        with self.assertRaises(TypingError) as raises:
             cfunc = jit(nopython=True)(finfo_machar)
             cfunc(7.)
         msg = "Unknown attribute 'machar' of type finfo"

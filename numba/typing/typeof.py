@@ -8,6 +8,7 @@ import sys
 import numpy as np
 
 from numba import numpy_support, types, utils, smartarray
+from numba import ir, errors
 
 
 class Purpose(enum.Enum):
@@ -27,7 +28,8 @@ def typeof(val, purpose=Purpose.argument):
     c = _TypeofContext(purpose)
     ty = typeof_impl(val, c)
     if ty is None:
-        msg = "cannot determine Numba type of %r" % (type(val),)
+        msg = errors.termcolor.errmsg(
+            "cannot determine Numba type of %r") % (type(val),)
         raise ValueError(msg)
     return ty
 

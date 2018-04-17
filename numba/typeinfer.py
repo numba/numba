@@ -21,7 +21,8 @@ import traceback
 from collections import OrderedDict
 
 from numba import ir, types, utils, config, six, typing
-from .errors import TypingError, UntypedAttributeError, new_error_context
+from .errors import (TypingError, UntypedAttributeError, new_error_context,
+                     termcolor, UnsupportedError)
 from .funcdesc import qualifying_prefix
 
 
@@ -54,10 +55,10 @@ class TypeVar(object):
             if self.type is not None:
                 unified = self.context.unify_pairs(self.type, tp)
                 if unified is None:
-                    msg = "cannot unify %s and %s for '%s', defined at %s"
+                    msg = "Cannot unify %s and %s for '%s', defined at %s"
                     raise TypingError(msg % (self.type, tp, self.var,
                                              self.define_loc),
-                                      loc=loc)
+                                      loc=self.define_loc)
             else:
                 # First time definition
                 unified = tp
@@ -76,7 +77,7 @@ class TypeVar(object):
         if (self.type is not None and
             self.context.can_convert(self.type, tp) is None):
             raise TypingError("No conversion from %s to %s for "
-                              "'%s'" % (tp, self.type, self.var))
+                              "'%s'" % (tp, self.type, self.var), loc=loc)
 
         self.type = tp
         self.locked = True
@@ -136,13 +137,17 @@ class ConstraintNetwork(object):
                 try:
                     constraint(typeinfer)
                 except TypingError as e:
+                    e = TypingError(str(e),
+                                    loc=constraint.loc,
+                                    highlighting=False)
                     errors.append(e)
                 except Exception:
                     msg = "Internal error at {con}:\n{sep}\n{err}{sep}\n"
                     e = TypingError(msg.format(con=constraint,
                                                err=traceback.format_exc(),
-                                               sep='--%<' +'-' * 65),
-                                    loc=constraint.loc)
+                                               sep='--%<' + '-' * 76),
+                                    loc=constraint.loc,
+                                    highlighting=False)
                     errors.append(e)
         return errors
 
@@ -158,7 +163,7 @@ class Propagate(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of assignment at {0}", self.loc):
+        with new_error_context("typing of assignment at {0}", self.loc, loc=self.loc):
             typeinfer.copy_type(self.src, self.dst, loc=self.loc)
             # If `dst` is refined, notify us
             typeinfer.refine_map[self.dst] = self
@@ -408,7 +413,8 @@ class CallConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of call at {0}", self.loc):
+        msg = "typing of call at {0}\n".format(self.loc)
+        with new_error_context(msg):
             typevars = typeinfer.typevars
             fnty = typevars[self.func].getone()
             with new_error_context("resolving callee type: {0}", fnty):
@@ -449,7 +455,7 @@ class CallConstraint(object):
             head = headtemp.format(fnty, ', '.join(map(str, args)))
             desc = context.explain_function_type(fnty)
             msg = '\n'.join([head, desc])
-            raise TypingError(msg, loc=self.loc)
+            raise TypingError(msg)
 
         typeinfer.add_type(self.target, sig.return_type, loc=self.loc)
 
@@ -890,7 +896,7 @@ class TypeInferer(object):
                 val = getattr(offender, 'value', 'unknown operation')
                 loc = getattr(offender, 'loc', 'unknown location')
                 msg = "Undefined variable '%s', operation: %s, location: %s"
-                raise TypingError(msg % (var, val, loc))
+                raise TypingError(msg % (var, val, loc), loc)
             tp = tv.getone()
             if not tp.is_precise():
                 raise TypingError("Can't infer type of variable '%s': %s" % (var, tp))
@@ -944,9 +950,38 @@ class TypeInferer(object):
         if rettypes:
             unified = self.context.unify_types(*rettypes)
             if unified is None or not unified.is_precise():
+                def check_type(atype):
+                    l = []
+                    for k, v in self.typevars.items():
+                        if atype == v.type:
+                            l.append(k)
+                    returns = {}
+                    for x in reversed(l):
+                        for block in self.func_ir.blocks.values():
+                            for instr in block.find_insts(ir.Return):
+                                value = instr.value
+                                if isinstance(value, ir.Var):
+                                    name = value.name
+                                else:
+                                    pass
+                                if x == name:
+                                    returns[x] = instr
+                                    break
+
+                    for name, offender in returns.items():
+                        loc = getattr(offender, 'loc', 'unknown location')
+                        msg = "Return of: IR name '%s', type '%s', location: %s"
+                        interped = msg % (name, atype, loc.strformat())
+                    return interped
+
+                problem_str = []
+                for xtype in rettypes:
+                    problem_str.append(termcolor.errmsg(check_type(xtype)))
+
                 raise TypingError("Can't unify return type from the "
                                   "following types: %s"
-                                  % ", ".join(sorted(map(str, rettypes))))
+                                  % ", ".join(sorted(map(str, rettypes))) +
+                                  "\n" + "\n".join(problem_str))
             return unified
         else:
             # Function without a successful return path
@@ -986,7 +1021,8 @@ class TypeInferer(object):
             f = typeinfer_extensions[type(inst)]
             f(inst, self)
         else:
-            raise NotImplementedError(inst)
+            msg = "Unsupported constraint encountered: %s" % inst
+            raise UnsupportedError(msg, loc=inst.loc)
 
     def typeof_setitem(self, inst):
         constraint = SetItemConstraint(target=inst.target, index=inst.index,
@@ -1036,7 +1072,9 @@ class TypeInferer(object):
         elif isinstance(value, ir.Yield):
             self.typeof_yield(inst, inst.target, value)
         else:
-            raise NotImplementedError(type(value), str(value))
+            msg = ("Unsupported assignment encountered: %s %s" %
+                   (type(value), str(value)))
+            raise UnsupportedError(msg, loc=inst.loc)
 
     def resolve_value_type(self, inst, val):
         """
@@ -1132,8 +1170,8 @@ class TypeInferer(object):
                 # as a global variable
                 typ = types.Dispatcher(_temporary_dispatcher_map[gvar.name])
             else:
-                e.patch_message("Untyped global name '%s': %s"
-                                % (gvar.name, e))
+                msg = termcolor.errmsg("Untyped global name '%s':") + " %s"
+                e.patch_message(msg % (gvar.name, e))
                 raise
 
         if isinstance(typ, types.Dispatcher) and typ.dispatcher.is_compiling:
@@ -1220,7 +1258,8 @@ class TypeInferer(object):
         elif expr.op == 'make_function':
             self.lock_type(target.name, types.pyfunc_type, loc=inst.loc)
         else:
-            raise NotImplementedError(type(expr), expr)
+            msg = "Unsupported op-code encountered: %s" % expr
+            raise UnsupportedError(msg, loc=inst.loc)
 
     def typeof_call(self, inst, target, call):
         constraint = CallConstraint(target.name, call.func.name, call.args,
