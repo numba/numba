@@ -3277,7 +3277,7 @@ if numpy_version >= (1, 8):
     def numpy_full_nd(context, builder, sig, args):
 
         def full(shape, value):
-            arr = np.empty(shape)
+            arr = np.empty(shape, type(value))
             for idx in np.ndindex(arr.shape):
                 arr[idx] = value
             return arr
