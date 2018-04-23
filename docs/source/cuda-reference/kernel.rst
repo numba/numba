@@ -48,7 +48,7 @@ Thread Indexing
 
 .. attribute:: numba.cuda.gridDim
 
-    The shape of the grid of blocks, accressed through the attributes ``x``,
+    The shape of the grid of blocks, accessed through the attributes ``x``,
     ``y``, and ``z``.
 
 .. function:: numba.cuda.grid(ndim)
