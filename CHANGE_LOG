@@ -33,8 +33,9 @@ Other highlights include:
    functions) as arguments to other jitted functions.
  * The CUDA functionality has gained support for a larger selection of bit
    manipulation intrinsics, also SELP, and has had a number of bugs fixed.
- * Initial work to support the PPC64LE platform has been added. It should be
-   noted that this platform is not yet supported and some problems still exist.
+ * Initial work to support the PPC64LE platform has been added, full support is
+   however waiting on the LLVM 6.0.1 release as it contains critical patches
+   not present in 6.0.0.
    It is hoped that any remaining issues will be fixed in the next release.
  * The capacity for advanced users/compiler engineers to define their own
    compilation pipelines.
