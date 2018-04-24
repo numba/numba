@@ -956,11 +956,15 @@ class TestRandom(BaseTest):
             # Sanity check
             arrs = [np.arange(20), np.arange(20).reshape(5, 2, 2)]
             for a in arrs:
-                for i in range(3):
+                checked = 0
+                while checked < 3:
                     b = func(a)
-                    self.assertFalse(np.array_equal(a, b))
-                    self.assertTrue(np.array_equal(np.sort(a, axis=0),
-                                                   np.sort(b, axis=0)))
+                    # check that permuted arrays are equal when sorted
+                    # account for the possibility of the identity permutation
+                    if not np.array_equal(a, b):
+                        self.assertTrue(np.array_equal(np.sort(a, axis=0),
+                                                       np.sort(b, axis=0)))
+                        checked += 1
 
 
 class TestRandomArrays(BaseTest):
