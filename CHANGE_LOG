@@ -85,6 +85,10 @@ Fixes:
 * PR #2889: Attempt to fix #2386.
 * PR #2891: Removed test skipping for inspect_cfg
 * PR #2898: Add guard to parallel test on unsupported platforms
+* PR #2907: Update change log for PPC64LE LLVM dependency.
+* PR #2911: Move build requirement to llvmlite>=0.23.0dev0
+* PR #2912: Fix random permutation test.
+* PR #2914: Fix MD list syntax in issue template.
 
 Documentation Updates:
 
@@ -94,6 +98,8 @@ Documentation Updates:
 * PR #2838: Use automatic numbering syntax in list.
 * PR #2877: Add performance tips documentation.
 * PR #2883: Fix #2872: update rng doc about thread/fork-safety
+* PR #2908: Add missing link and ref to docs.
+* PR #2909: Tiny typo correction
 
 ParallelAccelerator enhancements/fixes:
 
@@ -133,6 +139,7 @@ The following people contributed to this release.
 * Siu Kwan Lam (core dev)
 * Stan Seibert (core dev)
 * Stuart Archibald (core dev)
+* Thomas Arildsen
 * Todd A. Anderson (core dev)
 
 
