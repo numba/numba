@@ -956,9 +956,10 @@ def list_pop(context, builder, sig, args):
                        (IndexError, "pop from empty list"))
     n = builder.sub(n, ir.Constant(n.type, 1))
     res = inst.getitem(n)
-    inst.clear_value(n)
+    inst.incref_value(res)  # incref the pop'ed element
+    inst.clear_value(n)     # clear the storage space
     inst.resize(n)
-    return res
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @lower_builtin("list.pop", types.List, types.Integer)
 def list_pop(context, builder, sig, args):
@@ -976,7 +977,7 @@ def list_pop(context, builder, sig, args):
     n = builder.sub(n, ir.Constant(n.type, 1))
     inst.move(idx, builder.add(idx, one), builder.sub(n, idx))
     inst.resize(n)
-    return res
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @lower_builtin("list.remove", types.List, types.Any)
 def list_remove(context, builder, sig, args):
