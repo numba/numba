@@ -27,6 +27,99 @@ def math_sin_loop(n):
     return ret
 
 
+vlen2cpu = {2: 'sandybridge', 4: 'haswell', 8: 'skylake-avx512'}
+
+# K: SVML functions, V: python functions which are expected to be SIMD vectorized using SVML, TODO: [] means unused
+# explicit references to Python functions here is mostly for sake of static compilation checks.
+svml_funcs = {
+    "sin":     [np.sin, math.sin],
+    "cos":     [np.cos, math.cos],
+    "pow":     [pow, math.pow],
+    "exp":     [np.exp, math.exp],
+    "log":     [np.log, math.log],
+    "acos":    [math.acos],
+    "acosh":   [math.acosh],
+    "asin":    [math.asin],
+    "asinh":   [math.asinh],
+    "atan2":   [math.atan2],
+    "atan":    [math.atan],
+    "atanh":   [math.atanh],
+    "cbrt":    [np.cbrt],
+    "cdfnorm":    [],
+    "cdfnorminv": [],
+    "ceil":    [np.ceil, math.ceil],
+    "cosd":       [],
+    "cosh":    [np.cosh, math.cosh],
+    "erf":     [math.erf], # np.erf is available in Intel Distribution
+    "erfc":    [math.erfc],
+    "erfcinv":    [],
+    "erfinv":     [],
+    "exp10":      [],
+    "exp2":    [np.exp2],
+    "expm1":   [np.expm1, math.expm1],
+    "floor":   [np.floor, math.floor],
+    "fmod":    [np.fmod, math.fmod],
+    "hypot":   [np.hypot, math.hypot],
+    "invsqrt":    [],  # available in Intel Distribution
+    "log10":   [np.log10, math.log10],
+    "log1p":   [np.log1p, math.log1p],
+    "log2":    [np.log2],
+    "logb":       [],
+    "nearbyint":  [],
+    "rint":    [np.rint],
+    "round":   [round],
+    "sind":       [],
+    "sinh":    [np.sinh, math.sinh],
+    "sqrt":    [np.sqrt, math.sqrt],
+    "tan":     [np.tan, math.tan],
+    "tanh":    [np.tanh, math.tanh],
+    "trunc":   [np.trunc, math.trunc],
+    }
+
+# the logic should be modified if there is an SVML function being used under different name from Python
+numpy_funcs = [f for f, v in svml_funcs if "numpy" in [p.__module__ for p in v]]
+other_funcs = [f for f, v in svml_funcs if not "numpy" in [p.__module__ for p in v]]
+
+def simd_patterns(func, args, res, mode, vlen, flags):
+    if mode == "scalar":
+       arg_list = ','.join([a+'[0]' for a in args])
+       body = '%s[0] += %s(%s)'%(res, func, arg_list)
+    elif mode == "numpy":
+       body = '%s += numpy.%s(%s)'%(res, func, ','.join(args))
+    else:
+       assert mode == "range" or mode == "prange"
+       arg_list = ','.join([a+'[i]' for a in args])
+       body = 'for i in {mode}({res}.size):\n\t{res}[i] += {func}({arg_list})'.format(**locals())
+    scalar_func = '$_'+func if numba.config.IS_OSX else '$'+func
+    if mode == "scalar":
+       avoids   = ['__svml']
+       contains = [scalar_func]
+    else: # will vectorize
+       contains = ['__svml%s%d%s,'%(func, vlen, '' if flags['fastmath'] else '_ha')]
+       avoids   = [scalar_func]
+    return body, contains, avoids
+
+
+def combo_svml_func(dtype, mode, vlen, flags):
+    name = hash((dtype, mode, vlen, flags))
+    body = """def {name}(n):
+        ret = np.empty(n, dtype=np.{dtype})
+        x   = np.empty(n, dtype=np.{dtype})""".format(**locals())
+    funcs = numpy_funcs if mode == "numpy" else other_funcs
+    contains = []
+    avoids = []
+    for f in funcs:
+        b, c, a = simd_patterns(f, ['x'], 'ret', mode, vlen, flags)
+        body += " "*8 + b
+        contains += c
+        avoids += a
+    body += " "*8 + "return ret"
+    ldict = {}
+    print(body)
+    exec_(body, globals(), ldict)
+    return ldict[name], contains, avoids
+
+
 @needs_svml
 class TestSVML(TestCase):
     """ Tests SVML behaves as expected """
