@@ -46,10 +46,11 @@ class FakeCUDAKernel(object):
     Wraps a @cuda.jit-ed function.
     '''
 
-    def __init__(self, fn, device, fastmath=False):
+    def __init__(self, fn, device, fastmath=False, retrieve_autoconverted_arrays=True):
         self.fn = fn
         self._device = device
         self._fastmath = fastmath
+        self._retrieve_autoconverted_arrays = retrieve_autoconverted_arrays
         # Initial configuration: 1 block, 1 thread, stream 0, no dynamic shared
         # memory.
         self[1, 1, 0, 0]
@@ -69,7 +70,7 @@ class FakeCUDAKernel(object):
             def fake_arg(arg):
                 if isinstance(arg, np.ndarray) and arg.ndim > 0:
                     devary, conv = auto_device(arg)
-                    if conv:
+                    if conv and self._retrieve_autoconverted_arrays:
                         retr.append(lambda: devary.copy_to_host(arg))
                     return devary
                 return arg

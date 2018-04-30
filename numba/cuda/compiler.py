@@ -71,7 +71,7 @@ def compile_cuda(pyfunc, return_type, args, debug, inline):
 
 @nonthreadsafe
 def compile_kernel(pyfunc, args, link, debug=False, inline=False,
-                   fastmath=False):
+                   fastmath=False, retrieve_autoconverted_arrays=True):
     cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=inline)
     fname = cres.fndesc.llvm_func_name
     lib, kernel = cres.target_context.prepare_cuda_kernel(cres.library, fname,
@@ -86,7 +86,8 @@ def compile_kernel(pyfunc, args, link, debug=False, inline=False,
                         link=link,
                         debug=debug,
                         call_helper=cres.call_helper,
-                        fastmath=fastmath)
+                        fastmath=fastmath,
+                        retrieve_autoconverted_arrays=retrieve_autoconverted_arrays)
     return cukern
 
 
@@ -420,7 +421,8 @@ class CUDAKernel(CUDAKernelBase):
     specialized, and then launch the kernel on the device.
     '''
     def __init__(self, llvm_module, name, pretty_name, argtypes, call_helper,
-                 link=(), debug=False, fastmath=False, type_annotation=None):
+                 link=(), debug=False, fastmath=False, type_annotation=None,
+                 retrieve_autoconverted_arrays=True):
         super(CUDAKernel, self).__init__()
         # initialize CUfunction
         options = {'debug': debug}
@@ -440,9 +442,10 @@ class CUDAKernel(CUDAKernelBase):
         self._func = cufunc
         self.debug = debug
         self.call_helper = call_helper
+        self._retrieve_autoconverted_arrays = retrieve_autoconverted_arrays
 
     @classmethod
-    def _rebuild(cls, name, argtypes, cufunc, link, debug, call_helper, config):
+    def _rebuild(cls, name, argtypes, cufunc, link, debug, call_helper, retrieve_autoconverted_arrays, config):
         """
         Rebuild an instance.
         """
@@ -457,6 +460,7 @@ class CUDAKernel(CUDAKernelBase):
         instance._func = cufunc
         instance.debug = debug
         instance.call_helper = call_helper
+        instance._retrieve_autoconverted_arrays = retrieve_autoconverted_arrays
         # update config
         instance._deserialize_config(config)
         return instance
@@ -472,7 +476,7 @@ class CUDAKernel(CUDAKernelBase):
         config = self._serialize_config()
         args = (self.__class__, self.entry_name, self.argument_types,
                 self._func, self.linking, self.debug, self.call_helper,
-                config)
+                self._retrieve_autoconverted_arrays, config)
         return (serialize._rebuild_reduction, args)
 
     def __call__(self, *args, **kwargs):
@@ -597,7 +601,7 @@ class CUDAKernel(CUDAKernelBase):
                 kernelargs.append(outer_parent)
             else:
                 devary, conv = devicearray.auto_device(val, stream=stream)
-                if conv:
+                if conv and self._retrieve_autoconverted_arrays:
                     retr.append(lambda: devary.copy_to_host(val, stream=stream))
 
             c_intp = ctypes.c_ssize_t
@@ -643,7 +647,7 @@ class CUDAKernel(CUDAKernelBase):
 
         elif isinstance(ty, types.Record):
             devrec, conv = devicearray.auto_device(val, stream=stream)
-            if conv:
+            if conv and self._retrieve_autoconverted_arrays:
                 retr.append(lambda: devrec.copy_to_host(val, stream=stream))
 
             kernelargs.append(devrec)
