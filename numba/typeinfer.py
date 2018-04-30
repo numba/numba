@@ -92,7 +92,7 @@ class TypeVar(object):
         return self.type
 
     def __repr__(self):
-        return '%s := %s' % (self.var, self.type)
+        return '%s := %s' % (self.var, self.type or "<undecided>")
 
     @property
     def defined(self):
@@ -102,7 +102,8 @@ class TypeVar(object):
         return (self.type,) if self.type is not None else ()
 
     def getone(self, get_literals=False):
-        assert self.type is not None
+        if self.type is None:
+            raise TypingError("Undecided type {}".format(self))
         if self.literal_value is not NOTSET and get_literals:
             return types.Const(self.literal_value)
         return self.type
@@ -416,7 +417,9 @@ class CallConstraint(object):
         msg = "typing of call at {0}\n".format(self.loc)
         with new_error_context(msg):
             typevars = typeinfer.typevars
-            fnty = typevars[self.func].getone()
+            with new_error_context(
+                    "resolving caller type: {}".format(self.func)):
+                fnty = typevars[self.func].getone()
             with new_error_context("resolving callee type: {0}", fnty):
                 self.resolve(typeinfer, typevars, fnty)
 
