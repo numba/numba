@@ -545,6 +545,16 @@ class Print(Stmt):
         return 'print(%s)' % ', '.join(str(v) for v in self.args)
 
 
+class Metadata(Stmt):
+    def __init__(self, name, loc, **kwargs):
+        self.name = name
+        self.loc = loc
+        self.data = kwargs.copy()
+
+    def __repr__(self):
+        return "metadata {} {}".format(self.name, self.data)
+
+
 class Yield(Inst):
     def __init__(self, value, loc, index):
         self.value = value
@@ -877,6 +887,18 @@ class Loop(object):
     def __repr__(self):
         args = self.entry, self.exit
         return "Loop(entry=%s, exit=%s)" % args
+
+
+class With(object):
+    __slots__ = "entry", "exit"
+
+    def __init__(self, entry, exit):
+        self.entry = entry
+        self.exit = exit
+
+    def __repr__(self):
+        args = self.entry, self.exit
+        return "With(entry=%s, exit=%s)" % args
 
 
 class FunctionIR(object):

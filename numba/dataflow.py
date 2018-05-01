@@ -668,6 +668,21 @@ class DataFlowAnalysis(object):
         self.add_syntax_block(info, LoopBlock())
         info.append(inst)
 
+    def op_SETUP_WITH(self, info, inst):
+        self.add_syntax_block(info, WithBlock())
+        yielded = info.make_temp()
+        info.push(yielded)
+        info.append(inst)
+
+    def op_WITH_CLEANUP_START(self, info, inst):
+        info.append(inst)
+
+    def op_WITH_CLEANUP_FINISH(self, info, inst):
+        info.append(inst)
+
+    def op_END_FINALLY(self, info, inst):
+        info.append(inst)
+
     def op_POP_BLOCK(self, info, inst):
         block = self.pop_syntax_block(info)
         info.append(inst)
@@ -704,7 +719,7 @@ class DataFlowAnalysis(object):
             if MAKE_CLOSURE:
                 closure = info.pop()
             if num_annotations > 0:
-                annotations = info.pop() 
+                annotations = info.pop()
             if num_kwdefaults > 0:
                 kwdefaults = []
                 for i in range(num_kwdefaults):
@@ -727,7 +742,7 @@ class DataFlowAnalysis(object):
             if inst.arg & 0x1:
                 defaults = info.pop()
         res = info.make_temp()
-        info.append(inst, name=name, code=code, closure=closure, annotations=annotations, 
+        info.append(inst, name=name, code=code, closure=closure, annotations=annotations,
                     kwdefaults=kwdefaults, defaults=defaults, res=res)
         info.push(res)
 
@@ -744,6 +759,13 @@ class DataFlowAnalysis(object):
 
 
 class LoopBlock(object):
+    __slots__ = ('stack_offset',)
+
+    def __init__(self):
+        self.stack_offset = None
+
+
+class WithBlock(object):
     __slots__ = ('stack_offset',)
 
     def __init__(self):

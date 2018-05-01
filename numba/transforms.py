@@ -8,7 +8,6 @@ from collections import namedtuple
 
 from numba.analysis import compute_cfg_from_blocks, find_top_level_loops
 from numba import ir
-from numba.interpreter import Interpreter
 from numba.analysis import compute_use_defs
 
 
@@ -299,3 +298,43 @@ def canonicalize_cfg(blocks):
     Returns a new dictionary of blocks.
     """
     return canonicalize_cfg_single_backedge(blocks)
+
+
+def with_lifting(func_ir):
+    """With-lifting transformation
+
+    Rewrite the IR to extract all withs.
+    Only the top-level withs are extracted.
+    """
+    blocks = func_ir.blocks.copy()
+    withs = find_setupwiths(blocks)
+    print(withs)
+    raise RuntimeError
+
+
+def find_setupwiths(blocks):
+    """Find all top-level with
+    """
+    def find_ranges(blocks):
+        for blk in blocks.values():
+            for md in blk.find_insts(ir.Metadata):
+                if md.name == 'setupwith':
+                    begin = md.data['begin']
+                    end = md.data['end']
+                    yield begin, end
+
+    def previously_occurred(start, known_ranges):
+        for a, b in known_ranges:
+            if s >= a and s < b:
+                return True
+        return False
+
+    known_ranges = []
+    for s, e in find_ranges(blocks):
+        if not previously_occurred(s, known_ranges):
+            assert s in blocks, 'starting offset is not a label'
+            assert e in blocks, 'ending offset is not a label'
+            known_ranges.append((s, e))
+
+    return known_ranges
+

@@ -1016,6 +1016,8 @@ class TypeInferer(object):
             pass
         elif isinstance(inst, ir.StaticRaise):
             pass
+        elif isinstance(inst, ir.Metadata):
+            pass
         elif type(inst) in typeinfer_extensions:
             # let external calls handle stmt if type matches
             f = typeinfer_extensions[type(inst)]

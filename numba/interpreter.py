@@ -217,7 +217,7 @@ class Interpreter(object):
 
     @property
     def code_cellvars(self):
-        return self.bytecode.co_cellvars 
+        return self.bytecode.co_cellvars
 
     @property
     def code_freevars(self):
@@ -265,7 +265,7 @@ class Interpreter(object):
         # See Parameter class in inspect.py (from Python source)
         if name[0] == '.' and name[1:].isdigit():
             name = 'implicit{}'.format(name[1:])
- 
+
         # Try to simplify the variable lookup by returning an earlier
         # variable assigned to *name*.
         var = self.assigner.get_assignment_source(name)
@@ -604,6 +604,23 @@ class Interpreter(object):
         assert self.blocks[inst.offset] is self.current_block
         loop = ir.Loop(inst.offset, exit=(inst.next + inst.arg))
         self.syntax_blocks.append(loop)
+
+    def op_SETUP_WITH(self, inst):
+        assert self.blocks[inst.offset] is self.current_block
+        exitpt = inst.next + inst.arg
+        wth = ir.With(inst.offset, exit=exitpt)
+        self.syntax_blocks.append(wth)
+        self.current_block.append(ir.Metadata('setupwith', loc=self.loc,
+                                              begin=inst.offset, end=exitpt))
+
+    def op_WITH_CLEANUP_START(self, inst):
+        self.current_block.append(ir.Metadata('teardownwith', loc=self.loc))
+
+    def op_WITH_CLEANUP_FINISH(self, inst):
+        "no-op"
+
+    def op_END_FINALLY(self, inst):
+        "no-op"
 
     if PYVERSION < (3, 6):
 
@@ -962,7 +979,7 @@ class Interpreter(object):
 
     def op_MAKE_CLOSURE(self, inst, name, code, closure, annotations, kwdefaults, defaults, res):
         self.op_MAKE_FUNCTION(inst, name, code, closure, annotations, kwdefaults, defaults, res)
-    
+
     def op_LOAD_CLOSURE(self, inst, res):
         n_cellvars = len(self.code_cellvars)
         if inst.arg < n_cellvars:

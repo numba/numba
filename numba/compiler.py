@@ -426,6 +426,13 @@ class BasePipeline(object):
                               lifted=tuple(loops), lifted_from=None)
             return cres
 
+    def frontend_withlift(self):
+        """
+        Extract with-contexts
+        """
+        transforms.with_lifting(self.func_ir)
+        raise NotImplementedError
+
     def stage_objectmode_frontend(self):
         """
         Front-end: Analyze bytecode, generate Numba IR, infer types
@@ -446,6 +453,7 @@ class BasePipeline(object):
         """
         Type inference and legalization
         """
+        # self.frontend_withlift()
         with self.fallback_context('Function "%s" failed type inference'
                                    % (self.func_id.func_name,)):
             # Type inference

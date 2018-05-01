@@ -183,7 +183,6 @@ class ByteCode(object):
 
     def __init__(self, func_id):
         code = func_id.code
-
         labels = set(dis.findlabels(code.co_code))
         labels.add(0)
 
