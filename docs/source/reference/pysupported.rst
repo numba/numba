@@ -124,6 +124,24 @@ Numba will reject any list containing objects of different types, even if
 the types are compatible (for example, ``[1, 2.5]`` is rejected as it
 contains a :class:`int` and a :class:`float`).
 
+For example, to create a list of arrays::
+
+  In [1]: from numba import njit
+
+  In [2]: import numpy as np
+
+  In [3]: @njit
+    ...: def foo(x):
+    ...:     lst = []
+    ...:     for i in range(x):
+    ...:         lst.append(np.arange(i))
+    ...:     return lst
+    ...:
+
+  In [4]: foo(4)
+  Out[4]: [array([], dtype=int64), array([0]), array([0, 1]), array([0, 1, 2])]
+
+
 .. note::
    When passing a list into a JIT-compiled function, any modifications
    made to the list will not be visible to the Python interpreter until
@@ -137,7 +155,23 @@ contains a :class:`int` and a :class:`float`).
 
 List comprehension
 ''''''''''''''''''
-Numba supports list comprehension, but not the creation of nested list.
+
+Numba supports list comprehension.  For example::
+
+
+  In [1]: from numba import njit
+
+  In [2]: @njit
+    ...: def foo(x):
+    ...:     return [[i for i in range(n)] for n in range(x)]
+    ...:
+
+  In [3]: foo(3)
+  Out[3]: [[], [0], [0, 1]]
+
+
+.. note::
+  Prior to version 0.38.0, numba does not support the creation of nested list.
 
 
 Numba also supports "array comprehension" that is a list comprehension
