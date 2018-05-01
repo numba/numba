@@ -88,6 +88,10 @@ class Loc(object):
             spaces = count_spaces(selected[-1])
             ret.append(' '*(spaces) + errors.termcolor.indicate("^"))
 
+        # if in the REPL source may not be available
+        if not ret:
+            ret = "<source missing, REPL in use?>"
+
         err = errors.termcolor.filename('\nFile "%s", line %d:')+'\n%s'
         tmp = err % (path, self.line, errors.termcolor.code(''.join(ret)))
         return tmp

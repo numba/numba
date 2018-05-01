@@ -10,7 +10,7 @@ import os
 import sys
 import warnings
 from collections import defaultdict
-from numba import six
+from numba import six, config
 from functools import wraps
 from abc import abstractmethod
 
@@ -142,20 +142,48 @@ else:
         def __exit__(self, *exc_detail):
             self._buf += bytearray(Style.RESET_ALL.encode('utf-8'))
 
-    light = {'code': Fore.BLUE,
-             'errmsg': Fore.YELLOW,
-             'filename': Fore.WHITE,
-             'indicate': Fore.GREEN,
-             'highlight': Fore.RED, }
+    # define some default themes
+    themes = {}
 
-    dark = {'code': Fore.BLUE,
-            'errmsg': Fore.BLACK,
-            'filename': Fore.YELLOW,
-            'indicate': Fore.GREEN,
-            'highlight': Fore.RED, }
+    # No color added, just bold weighting
+    themes['no_color'] = {'code': None,
+                         'errmsg': None,
+                         'filename': None,
+                         'indicate': None,
+                         'highlight': None, }
+
+    # suitable for terminals with a dark background
+    themes['dark_bg'] = {'code': Fore.BLUE,
+                         'errmsg': Fore.YELLOW,
+                         'filename': Fore.WHITE,
+                         'indicate': Fore.GREEN,
+                         'highlight': Fore.RED, }
+
+    # suitable for terminals with a light background
+    themes['light_bg'] = {'code': Fore.BLUE,
+                          'errmsg': Fore.BLACK,
+                          'filename': Fore.MAGENTA,
+                          'indicate': Fore.BLACK,
+                          'highlight': Fore.RED, }
+
+    # suitable for terminals with a blue background
+    themes['blue_bg'] = {'code': Fore.WHITE,
+                         'errmsg': Fore.YELLOW,
+                         'filename': Fore.MAGENTA,
+                         'indicate': Fore.CYAN,
+                         'highlight': Fore.RED, }
+
+    # suitable for use in jupyter
+    themes['jupyter'] = {'code': Fore.BLACK,
+                         'errmsg': Fore.BLACK,
+                         'filename': Fore.GREEN,
+                         'indicate': Fore.CYAN,
+                         'highlight': Fore.RED, }
+
+    default_theme = themes['no_color']
 
     class HighlightColorScheme(_DummyColorScheme):
-        def __init__(self, theme=light):
+        def __init__(self, theme=default_theme):
             self._code = theme['code']
             self._errmsg = theme['errmsg']
             self._filename = theme['filename']
@@ -190,8 +218,7 @@ else:
         def highlight(self, msg):
             return self._markup(msg, self._highlight)
 
-    # TODO: setup theme config
-    termcolor = HighlightColorScheme(theme=light)
+    termcolor = HighlightColorScheme(theme=themes[config.COLOR_SCHEME])
 
 
 unsupported_error_info = """
