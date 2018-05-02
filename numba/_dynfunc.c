@@ -347,7 +347,11 @@ generator_dealloc(GeneratorObject *gen)
     /* XXX The finalizer may be called after the LLVM module has been
        destroyed (typically at interpreter shutdown) */
 #if PY_MAJOR_VERSION >= 3
+#if PY_MINOR_VERSION >= 7
+    if (!_Py_IsFinalizing())
+#else
     if (!_Py_Finalizing)
+#endif
 #endif
         if (gen->finalizer != NULL)
             gen->finalizer(gen->state);
