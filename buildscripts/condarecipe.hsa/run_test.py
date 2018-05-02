@@ -1,5 +1,9 @@
 import sys
+import os
 import numba
+
+os.environ['NUMBA_DEVELOPER_MODE'] = "1"
+os.environ['NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING'] = "1"
 
 args = []
 if sys.platform.startswith('win32'):

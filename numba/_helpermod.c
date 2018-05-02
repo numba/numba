@@ -167,6 +167,7 @@ static PyMethodDef ext_methods[] = {
     { "rnd_seed", (PyCFunction) _numba_rnd_seed, METH_VARARGS, NULL },
     { "rnd_set_state", (PyCFunction) _numba_rnd_set_state, METH_VARARGS, NULL },
     { "rnd_shuffle", (PyCFunction) _numba_rnd_shuffle, METH_O, NULL },
+    { "_import_cython_function", (PyCFunction) _numba_import_cython_function, METH_VARARGS, NULL },
     { NULL },
 };
 
@@ -180,7 +181,7 @@ PyAPI_FUNC(double) _numba_test_cos(double x);
 PyAPI_FUNC(double) _numba_test_exp(double x);
 PyAPI_FUNC(void) _numba_test_vsquare(int n, double *x, double *out);
 PyAPI_FUNC(double) _numba_test_funcptr(double (*func)(double));
-PyAPI_FUNC(bool) _numba_test_boolean();
+PyAPI_FUNC(bool) _numba_test_boolean(void);
 
 double _numba_test_sin(double x)
 {

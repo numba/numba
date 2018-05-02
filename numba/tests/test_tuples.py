@@ -92,6 +92,9 @@ def type_usecase(tup, *args):
 def identity(tup):
     return tup
 
+def index_method_usecase(tup, value):
+    return tup.index(value)
+
 
 class TestTupleReturn(TestCase):
 
@@ -480,8 +483,21 @@ class TestConversions(TestCase):
 
         with self.assertRaises(errors.TypingError) as raises:
             check(fromty, types.Tuple((types.float32,)), (4, 5))
-        self.assertIn("No conversion from (int32 x 2) to (float32 x 1)",
-                      str(raises.exception))
+        msg = "No conversion from tuple(int32 x 2) to tuple(float32 x 1)"
+        self.assertIn(msg, str(raises.exception))
+
+
+class TestMethods(TestCase):
+
+    def test_index(self):
+        pyfunc = index_method_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertEqual(cfunc((1, 2, 3), 2), 1)
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc((1, 2, 3), 4)
+        msg = 'tuple.index(x): x not in tuple'
+        self.assertEqual(msg, str(raises.exception))
 
 
 if __name__ == '__main__':

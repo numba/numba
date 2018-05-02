@@ -102,21 +102,31 @@ struct isf_range_by_dim {
     }
 };
 
+/*
+ * m_a is the current start of the partition.
+ * m_b is the current end of the partition.
+ * m_c is the start of the next partition.
+ */
 class chunk_info {
 public:
     intp m_a, m_b, m_c;
     chunk_info(intp a, intp b, intp c) : m_a(a), m_b(b), m_c(c) {}
 };
 
+/*
+ * Split a space starting at rs and ending at re into "divisions" parts.
+ */
 chunk_info chunk(intp rs, intp re, intp divisions) {
     assert(divisions >= 1);
     intp total = (re - rs) + 1;
+    // If only one division then everything goes into that division.
     if( divisions == 1) {
         return chunk_info(rs, re, re + 1);
     } else {
         intp len = total / divisions;
-        //intp rem = total % divisions;
         intp res_end = rs + len - 1;
+        // Return the first division by starting at the beginning (rs) and going to
+        // the remaining length divided by the number of divisions.
         return chunk_info(rs, res_end, res_end + 1);
     }
 }
@@ -128,7 +138,6 @@ chunk_info equalizing_chunk(intp rs, intp re, intp divisions, float thread_perce
         return chunk_info(rs, re, re + 1);
     }
     else {
-        //intp len = total / divisions;
         intp len = total * thread_percent;
         intp res_end = rs + len - 1;
         return chunk_info(rs, res_end, res_end + 1);
@@ -146,6 +155,12 @@ RangeActual isfRangeToActual(const std::vector<isf_range> &build) {
     return RangeActual(lower_bounds, upper_bounds);
 }
 
+/*
+ * Does the main work of splitting the iteration space between threads.
+ * In general, we start by allocating a number of threads to handle the largest dimension
+ * then call the routine recursively to allocate threads to the next largest dimension
+ * and so one.
+ */
 void divide_work(const RangeActual &full_iteration_space,
                  std::vector<RangeActual> &assignments,
                  std::vector<isf_range> &build,
@@ -153,50 +168,74 @@ void divide_work(const RangeActual &full_iteration_space,
                  uintp end_thread,
                  const std::vector<dimlength> &dims,
                  uintp index) {
+    // Number of threads used for this dimension.
     uintp num_threads = (end_thread - start_thread) + 1;
 
     assert(num_threads >= 1);
+    // If there is only one thread left then it gets all the remaining work.
     if(num_threads == 1) {
         assert(build.size() <= dims.size());
 
+        // build holds the ongoing constructed range of iterations in each dimension.
+        // If the length of build is the number of dims then we have a complete allocation
+        // so store it in assignments.
         if(build.size() == dims.size()) {
             assignments[start_thread] = isfRangeToActual(build);
         } else {
+            // There are still more dimenions to add.
+            // Create a copy of the incoming build.
             std::vector<isf_range> new_build(build.begin()+0, build.begin()+index);
+            // Add an entry to new_build for this thread to handle the entire current dimension.
             new_build.push_back(isf_range(dims[index].dim, full_iteration_space.start[dims[index].dim], full_iteration_space.end[dims[index].dim]));
+            // Recursively process.
             divide_work(full_iteration_space, assignments, new_build, start_thread, end_thread, dims, index+1);
         }
     } else {
+        // There is more than 1 thread for handling this dimension so need to split the dimension between the threads.
         assert(index < dims.size());
         intp total_len = 0;
+        // Compute the total number of iterations in the remaining dimensions to be processed, including the current one.
         for(uintp i = index; i < dims.size(); ++i) total_len += dims[i].length > 1 ? dims[i].length : 0;
         uintp divisions_for_this_dim;
         if(total_len == 0) {
             divisions_for_this_dim = num_threads;
         } else {
+            // We allocate the remaining threads proportionally to the ratio of the current dimension length to the total.
             divisions_for_this_dim = intp(guround(num_threads * ((float)dims[index].length / total_len)));
         }
 
+        // These are used to divide the iteration space.
         intp chunkstart = full_iteration_space.start[dims[index].dim];
         intp chunkend   = full_iteration_space.end[dims[index].dim];
 
+        // These are used to divide threads.
         intp threadstart = start_thread;
         intp threadend   = end_thread;
 
+        // for each division of the current dimension...
         for(uintp i = 0; i < divisions_for_this_dim; ++i) {
             chunk_info chunk_thread = chunk(threadstart, threadend, divisions_for_this_dim - i);
+            // Number of threads used for this division.
             uintp threads_used_here = (1 + (chunk_thread.m_b - chunk_thread.m_a));
             chunk_info chunk_index = equalizing_chunk(chunkstart, chunkend, divisions_for_this_dim - i, threads_used_here / (float)num_threads);
+            // Remember that the next division has threads_used_here fewer threads to allocate.
             num_threads -= threads_used_here;
+            // m_c contains the next start value so update the iteration space and thread space in preparation for next iteration of this loop.
             chunkstart = chunk_index.m_c;
             threadstart = chunk_thread.m_c;
+            // Copy the incoming build to new_build.
             std::vector<isf_range> new_build(build.begin()+0, build.begin()+index);
+            // Add this dimension to new_build to handle start=m_a to end=m_b.
             new_build.push_back(isf_range(dims[index].dim, chunk_index.m_a, chunk_index.m_b));
+            // Recursively process the next dimension.
             divide_work(full_iteration_space, assignments, new_build, chunk_thread.m_a, chunk_thread.m_b, dims, index+1);
         }
     }
 }
 
+/*
+ * Convert from internal format of vector of ranges to a flattened 2D-array usable by Python.
+ */
 template<class T>
 void flatten_schedule(const std::vector<RangeActual> &sched, T *out_sched) {
     uintp outer = sched.size();
@@ -211,44 +250,68 @@ void flatten_schedule(const std::vector<RangeActual> &sched, T *out_sched) {
     }
 }
 
+/*
+ * Main routine that computes a static schedule.
+ * full_space is the iteration space in each dimension.
+ * num_sched is the number of worker threads.
+ */
 std::vector<RangeActual> create_schedule(const RangeActual &full_space, uintp num_sched) {
+    // Compute the number of iterations to be run for each dimension.
     std::vector<intp> ipd = full_space.iters_per_dim();
+
+    // We special-case one dimensional.
     if(full_space.ndim() == 1) {
+        // Get the number of iterations for the single dimension.
         intp ra_len = ipd[0];
-        if(ra_len <= num_sched) {
+        // If there are fewer iterations for the single dimension than there are threads...
+        if(ra_len < 0 || (uintp)ra_len <= num_sched) {
             std::vector<RangeActual> ret;
             for(uintp i = 0; i < num_sched; ++i) {
-                if(i < ra_len) {
-                    ret.push_back(RangeActual(full_space.start[0] + i, full_space.start[0] + i));
-                } else {
+                // If the amount of iterations is less than the current thread then give it no work,
+                // signified by start of 1 and end of 0.
+                if(ra_len < 0 || (uintp)ra_len <= i) {
                     ret.push_back(RangeActual((intp)1, (intp)0));
+                } else {
+                    // Give just i'th iteration to thread i.
+                    ret.push_back(RangeActual(full_space.start[0] + i, full_space.start[0] + i));
                 }
             }
             return ret;
         } else {
+            // There are more iterations than threads.
+            // Compute the modal number of iterations to assign to each thread.
             intp ilen = ra_len / num_sched;
-            //uintp imod = ra_len % num_sched;
 
             std::vector<RangeActual> ret;
+            // For each thread...
             for(uintp i = 0; i < num_sched; ++i) {
+                // Compute the start iteration number for that thread as the start iteration
+                // plus the modal number of iterations times the thread number.
                 intp start = full_space.start[0] + (ilen * i);
                 intp end;
+                // If this isn't the last thread then the end iteration number is one less
+                // than the start iteration number of the next thread.  If it is the last
+                // thread then assign all remaining iterations to it.
                 if(i < num_sched-1) {
                     end = full_space.start[0] + (ilen * (i+1)) - 1;
                 } else {
                     end = full_space.end[0];
                 }
+                // Record the iteration start and end in the schedule.
                 ret.push_back(RangeActual(start, end));
             }
             return ret;
         }
     } else {
+        // Two or more dimensions are handled generically here.
         std::vector<dimlength> dims;
+        // Create a vector of objects associating dimensional index to length.
         for(uintp i = 0; i < ipd.size(); ++i) dims.push_back(dimlength(i, ipd[i]));
-
+        // Sort the dimensions in the reverse order of their length.
         std::sort(dims.begin(), dims.end(), dimlength_by_length_reverse());
         std::vector<RangeActual> assignments(num_sched, RangeActual((intp)1,(intp)0));
         std::vector<isf_range> build;
+        // Compute the division of work across dimensinos and threads.
         divide_work(full_space, assignments, build, 0, num_sched-1, dims, 0);
         return assignments;
     }

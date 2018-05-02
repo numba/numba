@@ -12,6 +12,7 @@ from numba.annotations import type_annotations
 from numba.ir_utils import copy_propagate, apply_copy_propagate, get_name_var_table, remove_dels, remove_dead
 from numba import ir
 from numba import unittest_support as unittest
+import numpy as np
 
 def test_will_propagate(b, z, w):
     x = 3
@@ -58,15 +59,27 @@ class TestRemoveDead(unittest.TestCase):
                 html_output=config.HTML)
             remove_dels(test_ir.blocks)
             in_cps, out_cps = copy_propagate(test_ir.blocks, typemap)
-            #print("in_cps = ", in_cps)
-            #print("out_cps = ", out_cps)
-            apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(test_ir.blocks), typemap, calltypes, null_func, None)
-            #print(test_ir.dump())
+            apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(test_ir.blocks), typemap, calltypes)
 
-            #print("findAssign = ", findAssign(test_ir, "x"))
             remove_dead(test_ir.blocks, test_ir.arg_names)
-            #print(test_ir.dump())
             self.assertFalse(findLhsAssign(test_ir, "x"))
+
+    def test2(self):
+        def call_np_random_seed():
+            np.random.seed(2)
+
+        def seed_call_exists(func_ir):
+            for inst in func_ir.blocks[0].body:
+                if (isinstance(inst, ir.Assign) and
+                    isinstance(inst.value, ir.Expr) and
+                    inst.value.op == 'call' and
+                    func_ir.get_definition(inst.value.func).attr == 'seed'):
+                    return True
+            return False
+
+        test_ir = compiler.run_frontend(call_np_random_seed)
+        remove_dead(test_ir.blocks, test_ir.arg_names)
+        self.assertTrue(seed_call_exists(test_ir))
 
 if __name__ == "__main__":
     unittest.main()

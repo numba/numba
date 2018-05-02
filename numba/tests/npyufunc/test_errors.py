@@ -94,10 +94,13 @@ class TestFloatingPointExceptions(TestCase):
             warnings.simplefilter("always")
             yield
         # Check warnings for 1/0 and 0/0
-        self.assertEqual(len(catch), len(messages))
-        for w, m in zip(catch, messages):
-            self.assertEqual(w.category, category)
-            self.assertIn(m, str(w.message))
+        found = 0
+        for w in catch:
+            for m in messages:
+                if m in str(w.message):
+                    self.assertEqual(w.category, category)
+                    found += 1
+        self.assertEqual(found, len(messages))
 
     @skipIfFPStatusBug
     def check_truediv_real(self, dtype):

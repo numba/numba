@@ -3,6 +3,7 @@ Expose top-level symbols that are safe for import *
 """
 from __future__ import print_function, division, absolute_import
 
+import platform
 import re
 import sys
 
@@ -51,8 +52,8 @@ __all__ = """
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 22, 0)
-_min_llvm_version = (5, 0, 0)
+_min_llvmlite_version = (0, 23, 0)
+_min_llvm_version = (6, 0, 0)
 
 def _ensure_llvm():
     """
@@ -88,7 +89,6 @@ def _ensure_llvm():
 
     check_jit_execution()
 
-
 def _ensure_pynumpy():
     """
     Make sure Python and Numpy have supported versions.
@@ -104,10 +104,38 @@ def _ensure_pynumpy():
     if np_version < (1, 7):
         raise ImportError("Numba needs Numpy 1.7 or greater")
 
+def _try_enable_svml():
+    """
+    Tries to enable SVML if configuration permits use and the library is found.
+    """
+    if not config.DISABLE_INTEL_SVML:
+        try:
+            if sys.platform.startswith('linux'):
+                llvmlite.binding.load_library_permanently("libsvml.so")
+            elif sys.platform.startswith('darwin'):
+                llvmlite.binding.load_library_permanently("libsvml.dylib")
+            elif sys.platform.startswith('win'):
+                llvmlite.binding.load_library_permanently("svml_dispmd")
+            else:
+                return False
+            llvmlite.binding.set_option('SVML', '-vector-library=SVML')
+            return True
+        except:
+            if platform.machine == 'x86_64' and config.DEBUG:
+                warnings.warn("SVML was not found/could not be loaded.")
+    return False
 
 _ensure_llvm()
 _ensure_pynumpy()
 
+# we know llvmlite is working as the above tests passed, import it now as SVML
+# needs to mutate runtime options (sets the `-vector-library`).
+import llvmlite
+
+"""
+Is set to True if Intel SVML is in use.
+"""
+config.USING_SVML = _try_enable_svml()
 
 from ._version import get_versions
 __version__ = get_versions()['version']

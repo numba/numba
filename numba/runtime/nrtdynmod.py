@@ -6,7 +6,7 @@ from __future__ import print_function, absolute_import, division
 
 from numba.config import MACHINE_BITS
 from numba import cgutils, types
-from llvmlite import ir
+from llvmlite import ir, binding
 
 # Flag to enable debug print in NRT_incref and NRT_decref
 _debug_print = False
@@ -82,12 +82,16 @@ def _define_nrt_decref(module, atomic_decr):
     if _debug_print:
         cgutils.printf(builder, "*** NRT_Decref %zu [%p]\n", builder.load(ptr),
                        ptr)
+    if binding.get_process_triple().startswith("powerpc"):
+        builder.fence("release")
     newrefct = builder.call(atomic_decr,
                             [builder.bitcast(ptr, atomic_decr.args[0].type)])
 
     refct_eq_0 = builder.icmp_unsigned("==", newrefct,
                                        ir.Constant(newrefct.type, 0))
     with cgutils.if_unlikely(builder, refct_eq_0):
+        if binding.get_process_triple().startswith("powerpc"):
+            builder.fence("acquire")
         builder.call(calldtor, [ptr])
     builder.ret_void()
 

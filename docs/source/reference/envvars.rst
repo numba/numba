@@ -24,6 +24,22 @@ Debugging
 These variables influence what is printed out during compilation of
 :term:`JIT functions <JIT function>`.
 
+.. envvar:: NUMBA_DEVELOPER_MODE
+    If set to non-zero, developer mode produces full tracebacks and disables
+    help instructions. Default is zero.
+
+.. envvar:: NUMBA_FULL_TRACEBACKS
+    If set to non-zero, enable full tracebacks when an exception occurs.
+    Defaults to the value set by `NUMBA_DEVELOPER_MODE`.
+
+.. envvar:: NUMBA_SHOW_HELP
+    If not set or set to zero, show user level help information.
+    Defaults to the negation of the value set by `NUMBA_DEVELOPER_MODE`.
+
+.. envvar:: NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING
+    If set to non-zero error message highlighting is disabled. This is useful
+    for running the test suite on CI systems.
+
 .. envvar:: NUMBA_DEBUG
 
    If set to non-zero, print out all possible debugging information during
@@ -132,6 +148,11 @@ Compilation options
    If set to non-zero, enable AVX optimizations in LLVM.  This is disabled
    by default on Sandy Bridge and Ivy Bridge architectures as it can sometimes
    result in slower code on those platforms.
+
+.. envvar:: NUMBA_DISABLE_INTEL_SVML
+
+    If set to non-zero and Intel SVML is available, the use of SVML will be
+    disabled.
 
 .. envvar:: NUMBA_COMPATIBILITY_MODE
 
