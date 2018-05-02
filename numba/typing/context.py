@@ -291,7 +291,7 @@ class BaseContext(object):
         try:
             return typeof(val, Purpose.argument)
         except ValueError:
-            if hasattr(val, '__cuda_array_interface__'):
+            if numba.cuda.is_cuda_array(val):
                 return typeof(numba.cuda.as_cuda_array(val), Purpose.argument)
             else:
                 raise

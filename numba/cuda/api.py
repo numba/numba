@@ -26,6 +26,8 @@ gpus = devices.gpus
 
 @require_context
 def from_cuda_array_interface(desc):
+    """Create a DeviceNDArray from a cuda-array-interface description.
+    """
     shape = desc['shape']
     strides = desc.get('strides')
     dtype = np.dtype(desc['typestr'])
@@ -42,6 +44,9 @@ def from_cuda_array_interface(desc):
 
 
 def as_cuda_array(obj):
+    """Create a DeviceNDArray from any object that implements
+    the cuda-array-interface.
+    """
     if not is_cuda_array(obj):
         raise TypeError("*obj* doesn't implement the cuda array interface.")
     else:
@@ -49,6 +54,9 @@ def as_cuda_array(obj):
 
 
 def is_cuda_array(obj):
+    """Test if the object can be converted to a DeviceNDArray using
+    as_cuda_array().
+    """
     return hasattr(obj, '__cuda_array_interface__')
 
 

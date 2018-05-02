@@ -12,7 +12,7 @@ class MyArray(object):
         self.__cuda_array_interface__ = arr.__cuda_array_interface__
 
 
-@skip_on_cudasim('CUDA Memory API unsupported in the simulator')
+@skip_on_cudasim('CUDA Array Interface is not supported in the simulator')
 class TestCudaArrayInterface(CUDATestCase):
     def test_as_cuda_array(self):
         h_arr = np.arange(10)
