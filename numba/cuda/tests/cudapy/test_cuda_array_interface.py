@@ -1,5 +1,6 @@
 import numpy as np
 
+from numba import vectorize, guvectorize
 from numba import cuda
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import skip_on_cudasim
@@ -37,6 +38,30 @@ class TestCudaArrayInterface(CUDATestCase):
 
         np.testing.assert_array_equal(wrapped.copy_to_host(), h_arr + val)
         np.testing.assert_array_equal(d_arr.copy_to_host(), h_arr + val)
+
+    def test_ufunc_arg(self):
+        @vectorize(['f8(f8, f8)'], target='cuda')
+        def vadd(a, b):
+            return a + b
+
+        h_arr = np.random.random(10)
+        arr = MyArray(cuda.to_device(h_arr))
+        val = 6
+        out = vadd(arr, val)
+
+        np.testing.assert_array_equal(out.copy_to_host(), h_arr + val)
+
+    def test_gufunc_arg(self):
+        @guvectorize(['(f8[:], f8[:])'], '(x)->(x)', target='cuda')
+        def copy(inp, out):
+            for i in range(out.size):
+                out[i] = inp[i]
+
+        h_arr = np.random.random(10).reshape(2, 5)
+        arr = MyArray(cuda.to_device(h_arr))
+        out = copy(arr)
+
+        np.testing.assert_array_equal(out.copy_to_host(), h_arr)
 
 
 if __name__ == '__main__':

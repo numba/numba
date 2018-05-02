@@ -42,11 +42,14 @@ def from_cuda_array_interface(desc):
 
 
 def as_cuda_array(obj):
-    desc = getattr(obj, '__cuda_array_interface__', None)
-    if desc is None:
+    if not is_cuda_array(obj):
         raise TypeError("*obj* doesn't implement the cuda array interface.")
     else:
-        return from_cuda_array_interface(desc)
+        return from_cuda_array_interface(obj.__cuda_array_interface__)
+
+
+def is_cuda_array(obj):
+    return hasattr(obj, '__cuda_array_interface__')
 
 
 @require_context
