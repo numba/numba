@@ -258,6 +258,10 @@ class UFuncMechanism(object):
 
         outshape = args[0].shape
 
+        # Adjust output value
+        if out is not None and cr.is_device_array(out):
+            out = cr.as_device_array(out)
+
         def attempt_ravel(a):
             if cr.SUPPORT_DEVICE_SLICING:
                 raise NotImplementedError
@@ -743,9 +747,15 @@ class GUFuncCallSteps(object):
         self.args = args
         self.kwargs = kwargs
 
+        user_output_is_device = False
         self.output = self.kwargs.get('out')
+        if self.output is not None:
+            user_output_is_device = self.is_device_array(self.output)
+            if user_output_is_device:
+                self.output = self.as_device_array(self.output)
         self._is_device_array = [self.is_device_array(a) for a in self.args]
-        self._need_device_conversion = not any(self._is_device_array)
+        self._need_device_conversion = (not any(self._is_device_array) and
+                                        not user_output_is_device)
 
         # Normalize inputs
         inputs = []
