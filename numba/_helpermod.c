@@ -176,12 +176,29 @@ static PyMethodDef ext_methods[] = {
  * without relying on libc availability (see https://bugs.python.org/issue23606)
  */
 
-PyAPI_FUNC(double) _numba_test_sin(double x);
-PyAPI_FUNC(double) _numba_test_cos(double x);
-PyAPI_FUNC(double) _numba_test_exp(double x);
-PyAPI_FUNC(void) _numba_test_vsquare(int n, double *x, double *out);
-PyAPI_FUNC(double) _numba_test_funcptr(double (*func)(double));
-PyAPI_FUNC(bool) _numba_test_boolean(void);
+#ifdef _WIN32
+/* PyAPI_FUNC is not appropriate here as that should only be used to annotate the
+ * linkage nature of a function coming from the python shared library and so at
+ * the point of consumption is always __declspec(dllimport) because Py_BUILD_CORE
+ * is not defined when building extension modules which results in a warning:
+ * numba/_helpermod.c(179): warning C4273: '_numba_test_sin': inconsistent dll linkage
+ * numba/_helpermod.c(172): note: see previous definition of '_numba_test_sin'
+ * .. and slower calls to these functions and a risk they will not be exported at all.
+ */
+#define DLL_EXPORT(RTYPE) __declspec(dllexport) RTYPE
+#else
+#define DLL_EXPORT(RTYPE) RTYPE
+#endif
+
+DLL_EXPORT(double) _numba_test_sin(double x);
+DLL_EXPORT(double) _numba_test_cos(double x);
+DLL_EXPORT(double) _numba_test_exp(double x);
+DLL_EXPORT(void) _numba_test_vsquare(int n, double *x, double *out);
+DLL_EXPORT(double) _numba_test_funcptr(double (*func)(double));
+DLL_EXPORT(bool) _numba_test_boolean(void);
+
+/* As close as C gets to hygenic macros. */
+#undef DLL_EXPORT
 
 double _numba_test_sin(double x)
 {
