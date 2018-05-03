@@ -335,9 +335,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         self.check_median_basic(pyfunc, variations)
 
-    def check_percentile_basic(self, pyfunc, array_variations, percentile_variations):
+    def check_percentile_basic(self, pyfunc, array_variations, percentile_variations, abs_tol=1e-12):
         cfunc = jit(nopython=True)(pyfunc)
-        def check(a, q, abs_tol=1e-12):
+        def check(a, q):
             expected = pyfunc(a, q)
             got = cfunc(a, q)
             self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
@@ -362,6 +362,17 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             for q in percentile_variations():
                 check_even(a, q)
 
+    def check_percentile_basic_special_cases(self, a, pyfunc, special_cases, abs_tol=1e-12):
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(a, q):
+            expected = pyfunc(a, q)
+            got = cfunc(a, q)
+            self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
+
+        for q, np_equivalent in special_cases:
+            check(a, q)
+            self.assertPreciseEqual(cfunc(a, q), np_equivalent(a), abs_tol=abs_tol)
+
     @tag('important')
     def test_percentile_basic(self):
         pyfunc = array_percentile_global
@@ -383,6 +394,16 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             yield np.array([5, 100], dtype=np.int32)
 
         self.check_percentile_basic(pyfunc, variations, percentile_variations)
+
+        # some special cases
+        special_cases = (
+            (0, np.min),        # quantile of 0 is equivalent to np.min
+            (50, np.median),    # quantile of 50 is equivalent to np.median
+            (100, np.max)       # quantile of 100 is equivalent to np.max
+        )
+
+        a = np.array([20.3, 49.2, 2, 39.1, 22.2, 17.0, 2.0])
+        self.check_percentile_basic_special_cases(a, pyfunc, special_cases)
 
     @unittest.skipUnless(np_version >= (1, 9), "nanmedian needs Numpy 1.9+")
     def test_nanmedian_basic(self):
@@ -427,6 +448,16 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             yield np.array([5, 100], dtype=np.int32)
 
         self.check_percentile_basic(pyfunc, variations, percentile_variations)
+
+        # some special cases
+        special_cases = (
+            (0, np.nanmin),        # quantile of 0 is equivalent to np.nanmin
+            (50, np.nanmedian),    # quantile of 50 is equivalent to np.nanmedian
+            (100, np.nanmax)       # quantile of 100 is equivalent to np.nanmax
+        )
+
+        a = np.array([20.3, np.nan, 2, 39.1, 22.2, np.nan, 2.0])
+        self.check_percentile_basic_special_cases(a, pyfunc, special_cases)
 
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)
