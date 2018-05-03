@@ -23,7 +23,6 @@ current_context = devices.get_context
 gpus = devices.gpus
 
 
-
 @require_context
 def from_cuda_array_interface(desc):
     """Create a DeviceNDArray from a cuda-array-interface description.
@@ -46,6 +45,9 @@ def from_cuda_array_interface(desc):
 def as_cuda_array(obj):
     """Create a DeviceNDArray from any object that implements
     the cuda-array-interface.
+
+    A view of the underlying GPU buffer is created.  No copying of the data
+    is done.
     """
     if not is_cuda_array(obj):
         raise TypeError("*obj* doesn't implement the cuda array interface.")
@@ -54,8 +56,9 @@ def as_cuda_array(obj):
 
 
 def is_cuda_array(obj):
-    """Test if the object can be converted to a DeviceNDArray using
-    as_cuda_array().
+    """Test if the object has defined the `__cuda_array_interface__`.
+
+    Does not verify the validity of the interface.
     """
     return hasattr(obj, '__cuda_array_interface__')
 
