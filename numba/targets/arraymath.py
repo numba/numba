@@ -772,21 +772,21 @@ def _collect_percentiles(a, q, skip_nan=False):
     assert np.all(q >= 0) and np.all(q <= 100), 'Percentiles must be in the range [0,100]'
 
     a_sorted = np.sort(a.flatten())
+    num_percentiles = len(q)
 
     if skip_nan:
         nan_mask = np.isnan(a_sorted)
         a_sorted = a_sorted[~nan_mask]
         if len(a_sorted) == 0:
-            return np.full(len(q), np.nan)
+            return np.full(num_percentiles, np.nan)
     else:
         if np.any(np.isnan(a_sorted)):
-            return np.full(len(q), np.nan)
+            return np.full(num_percentiles, np.nan)
 
-    out = np.empty(len(q))
-    i = 0
+    out = np.empty(num_percentiles)
 
-    for v in np.nditer(q):
-        percentile = v.item()
+    for i in range(num_percentiles):
+        percentile = q[i]
 
         if percentile == 0:
             val = a_sorted[0]
@@ -797,9 +797,9 @@ def _collect_percentiles(a, q, skip_nan=False):
             f = math.floor(rank)
             m = rank - f
             prior_val = a_sorted[f - 1]
-            val = prior_val + m * (a_sorted[f] - prior_val)
+            next_val = a_sorted[f]
+            val = prior_val + m * (next_val - prior_val)
         out[i] = val
-        i += 1
 
     return out
 
