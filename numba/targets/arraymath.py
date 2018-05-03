@@ -767,6 +767,10 @@ def np_median(a):
 
 @register_jitable
 def _collect_percentiles(a, q, skip_nan=False):
+
+    assert len(q[np.isnan(q)]) == 0, 'Percentiles must be in the range [0,100]'
+    assert np.all(q >= 0) and np.all(q <= 100), 'Percentiles must be in the range [0,100]'
+
     a_sorted = np.sort(a.flatten())
 
     if skip_nan:
@@ -783,8 +787,6 @@ def _collect_percentiles(a, q, skip_nan=False):
 
     for v in np.nditer(q):
         percentile = v.item()
-        if percentile < 0 or percentile > 100 or np.isnan(percentile):
-            raise ValueError("Percentiles must be in the range [0,100]")
 
         if percentile == 0:
             val = a_sorted[0]
