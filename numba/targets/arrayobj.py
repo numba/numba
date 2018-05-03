@@ -1828,8 +1828,10 @@ def _change_dtype(context, builder, oldty, newty, ary):
 @overload(np.unique)
 def np_unique(a):
     def np_unique_impl(a):
-        b = np.sort(a.flatten())
-        return np.array([x for x in b[:1]] + [x for i, x in enumerate(b[1:]) if b[i] != x])
+        b = np.sort(a.ravel())
+        head = list(b[:1])
+        tail = [x for i, x in enumerate(b[1:]) if b[i] != x]
+        return np.array(head + tail)
     return np_unique_impl
 
 
