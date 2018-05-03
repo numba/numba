@@ -116,6 +116,11 @@ def array_nanvar(arr):
 def array_nanmedian_global(arr):
     return np.nanmedian(arr)
 
+def array_percentile_global(arr, q):
+    return np.percentile(arr, q)
+
+def array_nanpercentile_global(arr, q):
+    return np.nanpercentile(arr, q)
 
 def base_test_arrays(dtype):
     if dtype == np.bool_:
@@ -330,6 +335,55 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         self.check_median_basic(pyfunc, variations)
 
+    def check_percentile_basic(self, pyfunc, array_variations, percentile_variations):
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(a, q, abs_tol=1e-12):
+            expected = pyfunc(a, q)
+            got = cfunc(a, q)
+            self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
+
+        # Odd sizes
+        def check_odd(a, q):
+            check(a, q)
+            a = a.reshape((9, 7))
+            check(a, q)
+            check(a.T, q)
+        for a in array_variations(np.arange(63) + 10.5):
+            for q in percentile_variations():
+                check_odd(a, q)
+
+        # Even sizes
+        def check_even(a, q):
+            check(a, q)
+            a = a.reshape((4, 16))
+            check(a, q)
+            check(a.T, q)
+        for a in array_variations(np.arange(64) + 10.5):
+            for q in percentile_variations():
+                check_even(a, q)
+
+    @tag('important')
+    def test_percentile_basic(self):
+        pyfunc = array_percentile_global
+
+        def variations(a):
+            # Sorted, reversed, random, many duplicates
+            yield a
+            a = a[::-1].copy()
+            yield a
+            np.random.shuffle(a)
+            yield a
+            a[a % 4 >= 1] = 3.5
+            yield a
+
+        def percentile_variations():
+            yield 0
+            yield 23.4
+            yield np.array([23.4, 32.1], dtype=np.float32)
+            yield np.array([5, 100], dtype=np.int32)
+
+        self.check_percentile_basic(pyfunc, variations, percentile_variations)
+
     @unittest.skipUnless(np_version >= (1, 9), "nanmedian needs Numpy 1.9+")
     def test_nanmedian_basic(self):
         pyfunc = array_nanmedian_global
@@ -349,6 +403,30 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             yield a
 
         self.check_median_basic(pyfunc, variations)
+
+    @unittest.skipUnless(np_version >= (1, 9), "nanmedian needs Numpy 1.9+")
+    def test_nanpercentile_basic(self):
+        pyfunc = array_nanpercentile_global
+
+        def variations(a):
+            # Sorted, reversed, random, many duplicates, many NaNs
+            yield a
+            a = a[::-1].copy()
+            yield a
+            np.random.shuffle(a)
+            yield a
+            a[a % 4 >= 1] = np.nan
+            yield a
+            a[:] = float('nan')
+            yield a
+
+        def percentile_variations():
+            yield 0
+            yield 23.4
+            yield np.array([23.4, 32.1], dtype=np.float32)
+            yield np.array([5, 100], dtype=np.int32)
+
+        self.check_percentile_basic(pyfunc, variations, percentile_variations)
 
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)
@@ -559,6 +637,95 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
                 # Install it into the class
                 setattr(cls, test_name, new_test_function)
+
+#
+# class PercentileTestMixin:
+#
+#     def check(self, a, q, abs_tol=1e-12):
+#         self.assertPreciseEqual(self.pyfunc(a, q), self.cfunc(a, q), abs_tol=abs_tol)
+#
+#     def test_scalar_percentile(self):
+#         a = self.array
+#         q = 40
+#         self.check(a, q)
+#
+#     def test_tuple_of_percentiles(self):
+#         a = self.array
+#         q = (2.2, 34, 4)
+#         self.check(a, q)
+#
+#     def test_array_of_percentiles(self):
+#         a = self.array
+#         q = np.array([0, 2.8, 67, 4])
+#         self.check(a, q)
+#
+#
+#
+# #
+# class TestArrayPercentile(MemoryLeakMixin, PercentileTestMixin, TestCase):
+#
+#
+#     def setUp(self):
+#         super().setUp()
+#         self.pyfunc = array_percentile_global
+#         self.cfunc = jit(nopython=True)(self.pyfunc)
+#
+#         rng = np.random.RandomState(0)
+#         self.array = rng.randn(125)
+#
+#     def test_scalar_percentile(self):
+#         a = np.array([1, 2, 3, 5])
+#         q = tuple([3, 100])
+#         self.check(a, q)
+# #
+#     # def test_raise_if_percentile_contains_nan(self):
+#     #     a = self.array()
+#     #     q = np.array([0, 2.2, np.nan, 100])
+#     #
+#     #     # with self.assertRaises(ValueError):
+#     #     #     _ = self.pyfunc(a, q)
+#     #
+#     #     with self.assertRaises(ValueError) as ctx:
+#     #         _ = self.cfunc(a, q)
+#     #         self.assertTrue('Percentiles must be in the range [0,100]' in ctx.exception)
+#     # #
+#     # def test_array_arr_contains_nan(self):
+#     #     arr = np.array([1, 4, 3, 3.3, 6, np.nan, 2.2])
+#     #     q = np.array([0, 2.2, 100])
+#     #
+#     #     output = np.percentile(arr, q)
+#     #     assert len(output) == 3
+#     #     assert np.all(np.isnan(output))
+#     #
+#     #     output = np_percentile_jit(arr, q)
+#     #     assert len(output) == 3
+#     #     assert np.all(np.isnan(output))
+#     #
+#     # def test_multi_dimensional_array(self):
+#     #     arr = np.array([1, 4, 3, 3.3, 6, 5, 2.2, 2.3, 0]).reshape(3, 3)
+#     #     q = np.array([0, 2.2, 34, 100])
+#     #
+#     #     output = np_percentile_jit(arr, q)
+#     #     expected = np.percentile(arr, q)
+#     #
+#     #     assert_allclose(output, expected)
+#
+# class TestArrayNanPercentile(MemoryLeakMixin, PercentileTestMixin, TestCase):
+#
+#     def setUp(self):
+#         super().setUp()
+#         self.pyfunc = array_nanpercentile_global
+#         self.cfunc = jit(nopython=True)(self.pyfunc)
+#
+#     def test_a_contains_nans(self):
+#         a = np.array([np.nan, 4, 3, 3.3, 6, np.nan, 2.2])
+#         q = np.array([0, 2.2, 100])
+#         self.check(a, q)
+#
+#     def test_multi_dimensional_array(self):
+#         a = np.array([1, 4, np.nan, 3.3, 6, 5, 2.2, 2.3, 0]).reshape(3, 3)
+#         q = np.array([0, 2.2, 34, 100])
+#         self.check(a, q)
 
 
 TestArrayReductions.install_generated_tests()

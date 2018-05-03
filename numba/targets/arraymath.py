@@ -765,6 +765,63 @@ def np_median(a):
 
     return median_impl
 
+@register_jitable
+def _collect_percentiles(a, q, skip_nan=False):
+    a_sorted = np.sort(a.flatten())
+
+    if skip_nan:
+        nan_mask = np.isnan(a_sorted)
+        a_sorted = a_sorted[~nan_mask]
+        if len(a_sorted) == 0:
+            return np.full(len(q), np.nan)
+    else:
+        if np.any(np.isnan(a_sorted)):
+            return np.full(len(q), np.nan)
+
+    out = np.empty(len(q))
+    i = 0
+
+    for v in np.nditer(q):
+        percentile = v.item()
+        if percentile < 0 or percentile > 100 or np.isnan(percentile):
+            raise ValueError("Percentiles must be in the range [0,100]")
+
+        if percentile == 0:
+            val = a_sorted[0]
+        elif percentile == 100:
+            val = a_sorted[-1]
+        else:
+            rank = 1 + (len(a_sorted) - 1) * percentile / 100
+            f = math.floor(rank)
+            m = rank - f
+            prior_val = a_sorted[f - 1]
+            val = prior_val + m * (a_sorted[f] - prior_val)
+        out[i] = val
+        i += 1
+
+    return out
+
+@overload(np.percentile)
+def np_percentile(a, q):
+
+    def np_percentile_q_scalar_impl(a, q):
+        q = np.array([q])
+        return _collect_percentiles(a, q)[0]
+
+    def np_percentile_q_array_impl(a, q):
+        return _collect_percentiles(a, q)
+
+    if isinstance(q, (types.Float, types.Integer)):
+        fn = np_percentile_q_scalar_impl
+
+    elif isinstance(q, types.Array):
+        fn = np_percentile_q_array_impl
+
+    else:
+        raise ValueError('q must be scalar or np.array')
+
+    return fn
+
 if numpy_version >= (1, 9):
     @overload(np.nanmedian)
     def np_nanmedian(a):
@@ -790,6 +847,26 @@ if numpy_version >= (1, 9):
 
         return nanmedian_impl
 
+    @overload(np.nanpercentile)
+    def np_nanpercentile(a, q):
+
+        def np_nanpercentile_q_scalar_impl(a, q):
+            q = np.array([q])
+            return _collect_percentiles(a, q, skip_nan=True)[0]
+
+        def np_nanpercentile_q_array_impl(a, q):
+            return _collect_percentiles(a, q, skip_nan=True)
+
+        if isinstance(q, (types.Float, types.Integer)):
+            fn = np_nanpercentile_q_scalar_impl
+
+        elif isinstance(q, types.Array):
+            fn = np_nanpercentile_q_array_impl
+
+        else:
+            raise ValueError('q must be scalar or np.array')
+
+        return fn
 
 #----------------------------------------------------------------------------
 # Element-wise computations
