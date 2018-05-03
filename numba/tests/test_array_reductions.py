@@ -404,7 +404,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         self.check_median_basic(pyfunc, variations)
 
-    @unittest.skipUnless(np_version >= (1, 9), "nanmedian needs Numpy 1.9+")
+    @unittest.skipUnless(np_version >= (1, 9), "nanpercentile needs Numpy 1.9+")
     def test_nanpercentile_basic(self):
         pyfunc = array_nanpercentile_global
 
