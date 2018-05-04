@@ -142,7 +142,7 @@ else:
         def __exit__(self, *exc_detail):
             self._buf += bytearray(Style.RESET_ALL.encode('utf-8'))
 
-    # define some default themes
+    # define some default themes, if more are added, update the envvars docs!
     themes = {}
 
     # No color added, just bold weighting
@@ -173,8 +173,8 @@ else:
                          'indicate': Fore.CYAN,
                          'highlight': Fore.RED, }
 
-    # suitable for use in jupyter
-    themes['jupyter'] = {'code': Fore.BLACK,
+    # suitable for use in jupyter notebooks
+    themes['jupyter_nb'] = {'code': Fore.BLACK,
                          'errmsg': Fore.BLACK,
                          'filename': Fore.GREEN,
                          'indicate': Fore.CYAN,
