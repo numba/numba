@@ -82,7 +82,7 @@ class _EnvReloader(object):
     def update(self, force=False):
         new_environ = {}
 
-        # first check of a .numba_config.yaml and use values from that
+        # first check if there's a .numba_config.yaml and use values from that
         if os.path.exists(_config_fname) and os.path.isfile(_config_fname):
             if not _HAVE_YAML:
                 msg = ("A Numba config file if found but YAML parsing "
@@ -93,8 +93,9 @@ class _EnvReloader(object):
             else:
                 with open(_config_fname, 'rt') as f:
                     y_conf = yaml.load(f)
-                for k, v in y_conf.items():
-                    new_environ['NUMBA_' + k.upper()] = v
+                if y_conf is not None:
+                    for k, v in y_conf.items():
+                        new_environ['NUMBA_' + k.upper()] = v
 
         # clobber file based config with any locally defined env vars
         for name, value in os.environ.items():
