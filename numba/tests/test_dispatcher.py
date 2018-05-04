@@ -389,6 +389,41 @@ class TestDispatcher(BaseTest):
         newer_foo = pickle.loads(serialized_foo)
         self.assertIs(ref(), None)
 
+    def test_misaligned_array_dispatch(self):
+        # for context see issue #2937
+        def foo(a):
+            return np.linalg.matrix_power(a, 1)
+
+        jitfoo = jit(nopython=True)(foo)
+
+        n = 64
+        r = int(np.sqrt(n))
+        dt = np.int8
+        count = np.complex128().itemsize // dt().itemsize
+
+        tmp = np.arange(n * count + 1, dtype=dt)
+
+        # create some arrays as Cartesian production of:
+        # [F/C] x [aligned/misaligned]
+        C_contig_aligned = tmp[:-1].view(np.complex128).reshape(r, r)
+        C_contig_misaligned = tmp[1:].view(np.complex128).reshape(r, r)
+        F_contig_aligned = C_contig_aligned.T
+        F_contig_misaligned = C_contig_misaligned.T
+
+        # checking routine
+        def check(name, a):
+            a[:, :] = np.arange(n, dtype=np.complex128).reshape(r, r)
+            expected = foo(a)
+            got = jitfoo(a)
+            np.testing.assert_allclose(expected, got)
+
+        # the checks must be run in this order to create the dispatch key
+        # sequence that causes invalid dispatch noted in #2937
+        check("C_contig_aligned", C_contig_aligned)
+        check("F_contig_aligned", F_contig_aligned)
+        check("C_contig_misaligned", C_contig_misaligned)
+        check("F_contig_misaligned", F_contig_misaligned)
+
 
 class TestSignatureHandling(BaseTest):
     """

@@ -687,10 +687,12 @@ int typecode_ndarray(PyObject *dispatcher, PyArrayObject *ary) {
 
     /* The order in which we check for the right contiguous-ness is important.
        The order must match the order by numba.numpy_support.map_layout.
+       Further, only *contiguous-ness* is checked, not alignment, byte order or
+       write permissions.
     */
-    if (PyArray_ISCARRAY(ary)){
+    if (PyArray_IS_C_CONTIGUOUS(ary)){
         layout = 1;
-    } else if (PyArray_ISFARRAY(ary)) {
+    } else if (PyArray_IS_F_CONTIGUOUS(ary)) {
         layout = 2;
     }
 
