@@ -873,6 +873,13 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check(np.array([]))
 
 
+    def test_2862(self):
+        def pyfunc(shape, value):
+            return np.full(shape, value)
+        cfunc = jit(nopython=True)(pyfunc)
+        np.testing.assert_equal(pyfunc((1, 10), 1), cfunc((1, 10), 1))
+
+
 class TestArrayComparisons(TestCase):
 
     def test_identity(self):
