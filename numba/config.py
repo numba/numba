@@ -85,8 +85,8 @@ class _EnvReloader(object):
         # first check if there's a .numba_config.yaml and use values from that
         if os.path.exists(_config_fname) and os.path.isfile(_config_fname):
             if not _HAVE_YAML:
-                msg = ("A Numba config file if found but YAML parsing "
-                       "capabilities appear to be missing."
+                msg = ("A Numba config file is found but YAML parsing "
+                       "capabilities appear to be missing. "
                        "To use this feature please install `pyyaml`. e.g. "
                        "`conda install pyyaml`.")
                 warnings.warn(msg)

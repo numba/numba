@@ -17,6 +17,8 @@ from numba.parfor import PreParforPass, ParforPass, Parfor
 from numba.inline_closurecall import InlineClosureCallPass
 from numba.errors import CompilerError
 
+# terminal color markup
+_termcolor = errors.termcolor()
 
 # Lock for the preventing multiple compiler execution
 lock_compiler = threading.RLock()
@@ -225,7 +227,7 @@ class _PipelineManager(object):
         if not utils.IS_PY3 and config.FULL_TRACEBACKS:
             # strip the new message to just print the error string and not
             # the marked up source etc (this is handled already).
-            stripped = errors.termcolor.errmsg(newmsg.split('\n')[1])
+            stripped = _termcolor.errmsg(newmsg.split('\n')[1])
             fmt = "Caused By:\n{tb}\n{newmsg}"
             newmsg = fmt.format(tb=traceback.format_exc(), newmsg=stripped)
 

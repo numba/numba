@@ -9,15 +9,14 @@ import contextlib
 import os
 import sys
 import warnings
+import numba
 from collections import defaultdict
-from numba import six, config
+from numba import six
 from functools import wraps
 from abc import abstractmethod
 
 # Filled at the end
 __all__ = []
-
-# These are needed in the color formatting of errors setup
 
 
 class NumbaWarning(Warning):
@@ -32,6 +31,8 @@ class PerformanceWarning(NumbaWarning):
     as fast as expected.
     """
 
+
+# These are needed in the color formatting of errors setup
 
 @six.add_metaclass(abc.ABCMeta)
 class _ColorScheme(object):
@@ -78,6 +79,9 @@ class _DummyColorScheme(_ColorScheme):
         pass
 
 
+# holds reference to the instance of the terminal color scheme in use
+_termcolor_inst = None
+
 try:
     import colorama
 
@@ -110,7 +114,11 @@ except ImportError:
         def highlight(self, msg):
             return msg
 
-    termcolor = NOPColorScheme()
+    def termcolor():
+        global _termcolor_inst
+        if _termcolor_inst is None:
+            _termcolor_inst = NOPColorScheme()
+        return _termcolor_inst
 
 else:
 
@@ -218,7 +226,12 @@ else:
         def highlight(self, msg):
             return self._markup(msg, self._highlight)
 
-    termcolor = HighlightColorScheme(theme=themes[config.COLOR_SCHEME])
+    def termcolor():
+        global _termcolor_inst
+        if _termcolor_inst is None:
+            scheme = themes[numba.config.COLOR_SCHEME]
+            _termcolor_inst = HighlightColorScheme(scheme)
+        return _termcolor_inst
 
 
 unsupported_error_info = """
@@ -346,7 +359,7 @@ class NumbaError(Exception):
         self.msg = msg
         self.loc = loc
         if highlighting:
-            highlight = termcolor.errmsg
+            highlight = termcolor().errmsg
         else:
             def highlight(x): return x
         if loc:
@@ -369,7 +382,8 @@ class NumbaError(Exception):
         contextual information.
         """
         self.contexts.append(msg)
-        f = termcolor.errmsg('{0}\n') + termcolor.filename('[{1}] During: {2}')
+        f = termcolor().errmsg('{0}\n') + termcolor().filename(
+            '[{1}] During: {2}')
         newmsg = f.format(self, len(self.contexts), msg)
         self.args = (newmsg,)
         return self
