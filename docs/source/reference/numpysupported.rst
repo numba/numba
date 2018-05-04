@@ -159,6 +159,7 @@ The following methods of Numpy arrays are supported:
 * :meth:`~numpy.ndarray.argsort` (without arguments)
 * :meth:`~numpy.ndarray.astype` (only the 1-argument form)
 * :meth:`~numpy.ndarray.copy` (without arguments)
+* :meth:`~numpy.ndarray.dot` (only the 1-argument form)
 * :meth:`~numpy.ndarray.flatten` (no order argument; 'C' order only)
 * :meth:`~numpy.ndarray.item` (without arguments)
 * :meth:`~numpy.ndarray.itemset` (only the 1-argument form)

@@ -3565,7 +3565,6 @@ def numpy_take_3(context, builder, sig, args):
     res = context.compile_internal(builder, take_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-
 @lower_builtin(np.arange, types.Number)
 def numpy_arange_1(context, builder, sig, args):
     dtype = as_dtype(sig.return_type.dtype)
@@ -4569,6 +4568,7 @@ def np_dstack(context, builder, sig, args):
 
         return context.compile_internal(builder, np_vstack_impl, sig, args)
 
+
 @extending.overload_method(types.Array, 'fill')
 def arr_fill(arr, val):
 
@@ -4577,6 +4577,14 @@ def arr_fill(arr, val):
         return None
 
     return fill_impl
+
+
+@extending.overload_method(types.Array, 'dot')
+def array_dot(arr, other):
+    def dot_impl(arr, other):
+        return np.dot(arr, other)
+
+    return dot_impl
 
 # -----------------------------------------------------------------------------
 # Sorting
