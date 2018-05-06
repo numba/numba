@@ -379,7 +379,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     @staticmethod
     def _percentile_variations():
-        yield 23.4
+        yield np.float32(23.4)
+        yield np.int32(25)
         yield np.array([0, 32.1], dtype=np.float32)
         yield np.array([10, 100, 5], dtype=np.int32)
 

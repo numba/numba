@@ -768,17 +768,21 @@ def np_median(a):
 @register_jitable
 def _collect_percentiles(a, q, skip_nan=False):
 
+    # check all requested percentiles, q, are in required range
     assert len(q[np.isnan(q)]) == 0, 'Percentiles must be in the range [0,100]'
     assert np.all(q >= 0) and np.all(q <= 100), 'Percentiles must be in the range [0,100]'
 
-    temp_arry = a.flatten()
+    temp_arry = a.flatten()  # use as temp workspace; may mutate
     nan_mask = np.isnan(temp_arry)
 
+    # checl supplied features, a
     if skip_nan:
+        # if we're told to skip NaNs, but there are no data points left, exit quietly
         temp_arry = temp_arry[~nan_mask]
         if len(temp_arry) == 0:
             return np.full(len(q), np.nan)
     else:
+        # if we're told to not skip NaNs, but we find one, exit quietly
         if np.any(nan_mask):
             return np.full(len(q), np.nan)
 
@@ -786,13 +790,13 @@ def _collect_percentiles(a, q, skip_nan=False):
     out = np.empty((len(q)), dtype=np.float64)
 
     for i in range(len(q)):
-        p = q[i]
-        if p == 100:
-            val = np.max(temp_arry)
-        elif p == 0:
-            val = np.min(temp_arry)
+        percentile = q[i]
+        if percentile == 100:
+            val = np.max(temp_arry)  # bypass pivoting
+        elif percentile == 0:
+            val = np.min(temp_arry)  # bypass pivoting
         else:
-            rank = 1 + (n - 1) * p / 100
+            rank = 1 + (n - 1) * percentile / 100  # use linear interp between closest ranks
             f = math.floor(rank)
             m = rank - f
             lower, upper = _select_two(temp_arry, f - 1, 0, n - 1)
