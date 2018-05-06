@@ -775,7 +775,7 @@ def _collect_percentiles(a, q, skip_nan=False):
     temp_arry = a.flatten()  # use as temp workspace; may mutate
     nan_mask = np.isnan(temp_arry)
 
-    # checl supplied features, a
+    # check supplied features, a
     if skip_nan:
         # if we're told to skip NaNs, but there are no data points left, exit quietly
         temp_arry = temp_arry[~nan_mask]
