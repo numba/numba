@@ -772,14 +772,14 @@ def _collect_percentiles(a, q, skip_nan=False):
     assert np.all(q >= 0) and np.all(q <= 100), 'Percentiles must be in the range [0,100]'
 
     temp_arry = a.flatten()
+    nan_mask = np.isnan(temp_arry)
 
     if skip_nan:
-        nan_mask = np.isnan(temp_arry)
         temp_arry = temp_arry[~nan_mask]
         if len(temp_arry) == 0:
             return np.full(len(q), np.nan)
     else:
-        if np.any(np.isnan(temp_arry)):
+        if np.any(nan_mask):
             return np.full(len(q), np.nan)
 
     n = len(temp_arry)
