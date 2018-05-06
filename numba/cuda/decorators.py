@@ -44,12 +44,6 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
        disables precise division and square root. This parameter has no effect
        on device function, whose fastmath setting depends on the kernel function
        from which they are called.
-    :param retrieve_autoconverted_arrays: When you pass raw numpy arrays as a
-       kernel's argument, they get copied to the device, and after the kernel
-       is run the device memory for that argument is copied back into the host's
-       numpy array. If False, the device memory the second step isn't performed,
-       which is useful if you are just passing information into a kernel and
-       don't care about the output.
     """
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
 
@@ -57,23 +51,23 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
         raise NotImplementedError('Cannot link PTX in the simulator')
 
     fastmath = kws.get('fastmath', False)
-    retrieve_autoconverted_arrays = kws.get('retrieve_autoconverted_arrays', True)
     if argtypes is None and not sigutils.is_signature(func_or_sig):
         if func_or_sig is None:
             if config.ENABLE_CUDASIM:
                 def autojitwrapper(func):
-                    return FakeCUDAKernel(func, device=device, fastmath=fastmath, debug=debug,
-                                          retrieve_autoconverted_arrays=retrieve_autoconverted_arrays)
+                    return FakeCUDAKernel(func, device=device, fastmath=fastmath,
+                                          debug=debug)
             else:
                 def autojitwrapper(func):
-                    return jit(func, device=device, bind=bind, debug=debug, **kws)
+                    return jit(func, device=device, bind=bind, debug=debug,
+                               **kws)
 
             return autojitwrapper
         # func_or_sig is a function
         else:
             if config.ENABLE_CUDASIM:
-                return FakeCUDAKernel(func_or_sig, device=device, fastmath=fastmath, debug=debug,
-                                      retrieve_autoconverted_arrays=retrieve_autoconverted_arrays)
+                return FakeCUDAKernel(func_or_sig, device=device, fastmath=fastmath,
+                                      debug=debug)
             elif device:
                 return jitdevice(func_or_sig, debug=debug, **kws)
             else:
@@ -84,8 +78,8 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
     else:
         if config.ENABLE_CUDASIM:
             def jitwrapper(func):
-                return FakeCUDAKernel(func, device=device, fastmath=fastmath, debug=debug,
-                                      retrieve_autoconverted_arrays=retrieve_autoconverted_arrays)
+                return FakeCUDAKernel(func, device=device, fastmath=fastmath,
+                                      debug=debug)
             return jitwrapper
 
         restype, argtypes = convert_types(func_or_sig, argtypes)
@@ -95,8 +89,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
 
         def kernel_jit(func):
             kernel = compile_kernel(func, argtypes, link=link, debug=debug,
-                                    inline=inline, fastmath=fastmath,
-                                    retrieve_autoconverted_arrays=retrieve_autoconverted_arrays)
+                                    inline=inline, fastmath=fastmath)
 
             # Force compilation for the current context
             if bind:

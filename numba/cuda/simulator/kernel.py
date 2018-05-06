@@ -10,6 +10,7 @@ from numba.six import reraise
 from .cudadrv.devicearray import to_device, auto_device
 from .kernelapi import Dim3, FakeCUDAModule, swapped_cuda_module
 from ..errors import normalize_kernel_dimensions
+from ..args import wrap_arg, ArgHint
 
 
 """
@@ -46,11 +47,10 @@ class FakeCUDAKernel(object):
     Wraps a @cuda.jit-ed function.
     '''
 
-    def __init__(self, fn, device, fastmath=False, retrieve_autoconverted_arrays=True):
+    def __init__(self, fn, device, fastmath=False):
         self.fn = fn
         self._device = device
         self._fastmath = fastmath
-        self._retrieve_autoconverted_arrays = retrieve_autoconverted_arrays
         # Initial configuration: 1 block, 1 thread, stream 0, no dynamic shared
         # memory.
         self[1, 1, 0, 0]
@@ -69,11 +69,11 @@ class FakeCUDAKernel(object):
 
             def fake_arg(arg):
                 if isinstance(arg, np.ndarray) and arg.ndim > 0:
-                    devary, conv = auto_device(arg)
-                    if conv and self._retrieve_autoconverted_arrays:
-                        retr.append(lambda: devary.copy_to_host(arg))
-                    return devary
-                return arg
+                    return wrap_arg(arg).to_device(retr)
+                elif isinstance(arg, ArgHint):
+                    return arg.to_device(retr)
+                else:
+                    return arg
 
             fake_args = [fake_arg(arg) for arg in args]
 

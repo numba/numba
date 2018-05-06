@@ -8,6 +8,7 @@ from .cudadrv.devices import require_context, reset, gpus
 from .kernel import FakeCUDAKernel
 from numba.typing import Signature
 from warnings import warn
+from ..args import In, Out, InOut
 
 
 def select_device(dev=0):
@@ -72,7 +73,7 @@ event = Event
 
 
 def jit(fn_or_sig=None, device=False, debug=False, argtypes=None, inline=False, restype=None,
-        fastmath=False, retrieve_autoconverted_arrays=True, link=None):
+        fastmath=False, link=None):
     if link is not None:
         raise NotImplementedError('Cannot link PTX in the simulator')
     # Check for first argument specifying types - in that case the
@@ -81,8 +82,7 @@ def jit(fn_or_sig=None, device=False, debug=False, argtypes=None, inline=False, 
         def jitwrapper(fn):
             return FakeCUDAKernel(fn,
                                   device=device,
-                                  fastmath=fastmath,
-                                  retrieve_autoconverted_arrays=retrieve_autoconverted_arrays)
+                                  fastmath=fastmath)
         return jitwrapper
     return FakeCUDAKernel(fn_or_sig, device=device)
 
