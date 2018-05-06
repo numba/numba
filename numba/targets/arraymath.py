@@ -799,7 +799,7 @@ def _collect_percentiles(a, q, skip_nan=False):
             rank = 1 + (n - 1) * percentile / 100  # linear interp between closest ranks
             f = math.floor(rank)
             m = rank - f
-            lower, upper = _select_two(temp_arry, f - 1, 0, n - 1)
+            lower, upper = _select_two(temp_arry, k=(f - 1), low=0, high=(n - 1))
             val = lower + m * (upper - lower)
         out[i] = val
 
