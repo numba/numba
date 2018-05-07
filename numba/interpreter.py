@@ -985,3 +985,9 @@ class Interpreter(object):
         self.store(value=appendattr, name=appendvar)
         appendinst = ir.Expr.call(self.get(appendvar), (value,), (), loc=self.loc)
         self.store(value=appendinst, name=res)
+
+    def op_LOAD_METHOD(self, *args, **kws):
+        self.op_LOAD_ATTR(*args, **kws)
+
+    def op_CALL_METHOD(self, *args, **kws):
+        self.op_CALL_FUNCTION(*args, **kws)

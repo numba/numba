@@ -739,6 +739,12 @@ class DataFlowAnalysis(object):
         info.append(inst, res=res)
         info.push(res)
 
+    def op_LOAD_METHOD(self, *args, **kws):
+        self.op_LOAD_ATTR(*args, **kws)
+
+    def op_CALL_METHOD(self, *args, **kws):
+        self.op_CALL_FUNCTION(*args, **kws)
+
     def _ignored(self, info, inst):
         pass
 
