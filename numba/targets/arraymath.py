@@ -809,22 +809,24 @@ def _collect_percentiles(a, q, skip_nan=False):
 def np_percentile(a, q):
 
     def np_percentile_q_scalar_impl(a, q):
-        q = np.array([q])
-        return _collect_percentiles(a, q)[0]
+        percentiles = np.array([q])
+        return _collect_percentiles(a, percentiles)[0]
+
+    def np_percentile_q_seq_impl(a, q):
+        percentiles = np.array(q)
+        return _collect_percentiles(a, percentiles)
 
     def np_percentile_q_array_impl(a, q):
         return _collect_percentiles(a, q)
 
     if isinstance(q, (types.Float, types.Integer)):
-        fn = np_percentile_q_scalar_impl
+        return np_percentile_q_scalar_impl
+
+    elif isinstance(q, (types.Tuple, types.Sequence)):
+        return np_percentile_q_seq_impl
 
     elif isinstance(q, types.Array):
-        fn = np_percentile_q_array_impl
-
-    else:
-        raise ValueError('q must be scalar or np.array')
-
-    return fn
+        return np_percentile_q_array_impl
 
 if numpy_version >= (1, 9):
     @overload(np.nanmedian)
@@ -851,26 +853,35 @@ if numpy_version >= (1, 9):
 
         return nanmedian_impl
 
+if numpy_version >= (1, 11):
     @overload(np.nanpercentile)
     def np_nanpercentile(a, q):
 
+        # Note: nanpercentile was implemented in 1.9, but the return type in the
+        # case of an all-NaN slice was np.nan until 1.11 when it was changed to
+        # be an array of np.NaN of length equal to q.  The 1.9 / 1.10 behaviour
+        # is problematic from a return type unification perspective, so for now
+        # using a 1.11 feature guard, pending review.
+
         def np_nanpercentile_q_scalar_impl(a, q):
-            q = np.array([q])
-            return _collect_percentiles(a, q, skip_nan=True)[0]
+            percentiles = np.array([q])
+            return _collect_percentiles(a, percentiles, skip_nan=True)[0]
+
+        def np_nanpercentile_q_seq_impl(a, q):
+            percentiles = np.array(q)
+            return _collect_percentiles(a, percentiles, skip_nan=True)
 
         def np_nanpercentile_q_array_impl(a, q):
             return _collect_percentiles(a, q, skip_nan=True)
 
         if isinstance(q, (types.Float, types.Integer)):
-            fn = np_nanpercentile_q_scalar_impl
+            return np_nanpercentile_q_scalar_impl
+
+        elif isinstance(q, (types.Tuple, types.Sequence)):
+            return np_nanpercentile_q_seq_impl
 
         elif isinstance(q, types.Array):
-            fn = np_nanpercentile_q_array_impl
-
-        else:
-            raise ValueError('q must be scalar or np.array')
-
-        return fn
+            return np_nanpercentile_q_array_impl
 
 #----------------------------------------------------------------------------
 # Element-wise computations
