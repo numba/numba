@@ -24,8 +24,10 @@ gpus = devices.gpus
 
 
 @require_context
-def from_cuda_array_interface(desc):
+def from_cuda_array_interface(desc, owner=None):
     """Create a DeviceNDArray from a cuda-array-interface description.
+    The *owner* is the owner of the underlying memory.
+    The resulting DeviceNDArray will acquire a reference from it.
     """
     shape = desc['shape']
     strides = desc.get('strides')
@@ -36,7 +38,8 @@ def from_cuda_array_interface(desc):
 
     devptr = driver.get_devptr_for_active_ctx(desc['data'][0])
     data = driver.MemoryPointer(
-        current_context(), devptr, size=np.prod(shape) * dtype.itemsize)
+        current_context(), devptr, size=np.prod(shape) * dtype.itemsize,
+        owner=owner)
     da = devicearray.DeviceNDArray(shape=shape, strides=strides,
                                    dtype=dtype, gpu_data=data)
     return da
@@ -47,12 +50,13 @@ def as_cuda_array(obj):
     the cuda-array-interface.
 
     A view of the underlying GPU buffer is created.  No copying of the data
-    is done.
+    is done.  The resulting DeviceNDArray will acquire a reference from `obj`.
     """
     if not is_cuda_array(obj):
         raise TypeError("*obj* doesn't implement the cuda array interface.")
     else:
-        return from_cuda_array_interface(obj.__cuda_array_interface__)
+        return from_cuda_array_interface(obj.__cuda_array_interface__,
+                                         owner=obj)
 
 
 def is_cuda_array(obj):

@@ -30,6 +30,30 @@ class TestCudaArrayInterface(CUDATestCase):
         self.assertEqual(wrapped.device_ctypes_pointer.value,
                          d_arr.device_ctypes_pointer.value)
 
+    def test_ownership(self):
+        # Get the deallocation queue
+        ctx = cuda.current_context()
+        deallocs = ctx.deallocations
+        # Flush all deallocations
+        deallocs.clear()
+        self.assertEqual(len(deallocs), 0)
+        # Make new device array
+        d_arr = cuda.to_device(np.arange(100))
+        # Convert it
+        cvted = cuda.as_cuda_array(d_arr)
+        # Drop reference to the original object such that
+        # only `cvted` has a reference to it.
+        del d_arr
+        # There shouldn't be any new deallocations
+        self.assertEqual(len(deallocs), 0)
+        # Try to access the memory and verify its content
+        np.testing.assert_equal(cvted.copy_to_host(), np.arange(100))
+        # Drop last reference to the memory
+        del cvted
+        self.assertEqual(len(deallocs), 1)
+        # Flush
+        deallocs.clear()
+
     def test_kernel_arg(self):
         h_arr = np.arange(10)
         d_arr = cuda.to_device(h_arr)
