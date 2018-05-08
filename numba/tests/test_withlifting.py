@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from numba import unittest_support as unittest
-from numba.transforms import find_setupwiths
+from numba.transforms import find_setupwiths, with_lifting
 from numba.compiler import BasePipeline
 from numba.bytecode import FunctionIdentity, ByteCode
 from numba.interpreter import Interpreter
@@ -68,6 +68,17 @@ class TestWithFinding(TestCase):
 
     def test_lift5(self):
         self.check_num_of_with(lift5, expect_count=0)
+
+
+class TestWithLifting(TestCase):
+    def test_lift1(self):
+        func = lift1
+        the_ir = get_func_ir(func)
+        the_ir.dump()
+        where = with_lifting(the_ir)
+        print(where)
+        self.fail()
+
 
 
 if __name__ == '__main__':

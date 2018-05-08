@@ -7,7 +7,7 @@ from __future__ import absolute_import, print_function
 from collections import namedtuple
 
 from numba.analysis import compute_cfg_from_blocks, find_top_level_loops
-from numba import ir
+from numba import ir, errors
 from numba.analysis import compute_use_defs
 
 
@@ -308,8 +308,49 @@ def with_lifting(func_ir):
     """
     blocks = func_ir.blocks.copy()
     withs = find_setupwiths(blocks)
-    print(withs)
-    raise RuntimeError
+    cfg = compute_cfg_from_blocks(blocks)
+    _legalize_withs_cfg(withs, cfg)
+    # Remove the with blocks that are in the with-body
+    for (blk_start, blk_end) in withs:
+        for node in _cfg_nodes_in_region(cfg, blk_start, blk_end):
+            del blocks[node]
+    # Make the with-head jump to the with-end
+    # TODO: check that the with-head doesn't do anything else
+
+    print('blk_end', blk_end)
+
+
+def _cfg_nodes_in_region(cfg, region_begin, region_end):
+    """Find the set of CFG nodes that are in the given region
+    """
+    region_nodes = set()
+    stack = [region_begin]
+    while stack:
+        tos = stack.pop()
+        succs, _ = zip(*cfg.successors(tos))
+        nodes = set([node for node in succs
+                     if node not in region_nodes and
+                     node != region_end])
+        stack.extend(nodes)
+        region_nodes |= nodes
+
+    return region_nodes
+
+
+def _legalize_withs_cfg(withs, cfg):
+    """Verify the CFG of the with-context(s).
+    """
+    doms = cfg.dominators()
+    postdoms = cfg.post_dominators()
+
+    # Verify that the with-context has no side-exits
+    for s, e in withs:
+        if s not in doms[e]:
+            msg = "Entry of with-context not dominating the exit."
+            raise errors.CompilerError(msg)
+        if e not in postdoms[s]:
+            msg = "Exit of with-context not post-dominating the entry."
+            raise errors.CompilerError(msg)
 
 
 def find_setupwiths(blocks):
