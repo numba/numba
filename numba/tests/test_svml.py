@@ -9,11 +9,11 @@ import sys
 import re
 from itertools import chain, combinations
 
-from .support import TestCase, tag, override_env_config
 import numba
-from numba.compiler import compile_isolated, Flags
 from numba import prange, unittest_support as unittest
+from numba.compiler import compile_isolated, Flags
 from numba.six import exec_
+from .support import TestCase, tag, override_env_config
 
 needs_svml = unittest.skipUnless(numba.config.USING_SVML,
                                  "SVML tests need SVML to be present")
@@ -22,60 +22,65 @@ needs_svml = unittest.skipUnless(numba.config.USING_SVML,
 vlen2cpu = {2: 'nehalem', 4: 'haswell', 8: 'skylake-avx512'}
 
 # K: SVML functions, V: python functions which are expected to be SIMD vectorized using SVML,
-# TODO: [] means unused/untested SVML function
-# explicit references to Python functions here is mostly for sake of instant import checks.
+# explicit references to Python functions here are mostly for sake of instant import checks.
+# TODO: [] and comments below mean unused/untested SVML function, it's to be either enabled or
+#       to be replaced with the explanation why the function cannot be used in Numba
+# TODO: this test does not supprt functions with more than 1 arguments yet
 svml_funcs = {
     "sin":     [np.sin, math.sin],
     "cos":     [np.cos, math.cos],
-    "pow":        [],  # TODO: pow, math.pow],
+    "pow":        [],  # pow, math.pow],
     "exp":     [np.exp, math.exp],
     "log":     [np.log, math.log],
     "acos":    [math.acos],
     "acosh":   [math.acosh],
     "asin":    [math.asin],
     "asinh":   [math.asinh],
-    "atan2":      [],  # TODO: math.atan2],
+    "atan2":      [],  # math.atan2],
     "atan":    [math.atan],
     "atanh":   [math.atanh],
-    "cbrt":       [],  # TODO: np.cbrt],
+    "cbrt":       [],  # np.cbrt],
     "cdfnorm":    [],
     "cdfnorminv": [],
-    "ceil":       [],  # TODO: np.ceil, math.ceil],
+    "ceil":       [],  # np.ceil, math.ceil],
     "cosd":       [],
     "cosh":    [np.cosh, math.cosh],
-    "erf":     [math.erf],  # TODO: np.erf is available in Intel Distribution
+    "erf":     [math.erf],  # np.erf is available in Intel Distribution
     "erfc":    [math.erfc],
     "erfcinv":    [],
     "erfinv":     [],
     "exp10":      [],
-    "exp2":       [],  # TODO: np.exp2],
+    "exp2":       [],  # np.exp2],
     "expm1":   [np.expm1, math.expm1],
-    "floor":      [],  # TODO: np.floor, math.floor],
-    "fmod":       [],  # TODO: np.fmod, math.fmod],
-    "hypot":      [],  # TODO: np.hypot, math.hypot],
-    "invsqrt":    [],  # TODO: available in Intel Distribution
+    "floor":      [],  # np.floor, math.floor],
+    "fmod":       [],  # np.fmod, math.fmod],
+    "hypot":      [],  # np.hypot, math.hypot],
+    "invsqrt":    [],  # available in Intel Distribution
     "log10":   [np.log10, math.log10],
     "log1p":   [np.log1p, math.log1p],
-    "log2":       [],  # TODO: np.log2],
+    "log2":       [],  # np.log2],
     "logb":       [],
     "nearbyint":  [],
-    "rint":       [],  # TODO: np.rint],
-    "round":      [],  # TODO: round],
+    "rint":       [],  # np.rint],
+    "round":      [],  # round],
     "sind":       [],
     "sinh":    [np.sinh, math.sinh],
-    "sqrt":       [],  # TODO: np.sqrt, math.sqrt],
+    "sqrt":    [np.sqrt, math.sqrt],
     "tan":     [np.tan, math.tan],
     "tanh":    [np.tanh, math.tanh],
-    "trunc":      [],  # TODO: np.trunc, math.trunc],
-    }
+    "trunc":      [],  # np.trunc, math.trunc],
+}
+
+svml_funcs = {k: v for k, v in svml_funcs.items() if len(v) > 0}
 
 # the logic should be modified if there is an SVML function being used under different name from Python
 numpy_funcs = [f for f, v in svml_funcs.items() if "<ufunc" in [str(p).split(' ')[0] for p in v]]
 other_funcs = [f for f, v in svml_funcs.items() if "<built-in" in [str(p).split(' ')[0] for p in v]]
 
 
-def func_patterns(func, args, res, mode, vlen, flags, pad=' '*8):
+def func_patterns(func, args, res, dtype, mode, vlen, flags, pad=' '*8):
     """ For a given function and modes, it returns python code with patterns it should and should not generate """
+
     if mode == "scalar":
        arg_list = ','.join([a+'[0]' for a in args])
        body = '%s%s[0] += math.%s(%s)\n'%(pad, res, func, arg_list)
@@ -87,13 +92,28 @@ def func_patterns(func, args, res, mode, vlen, flags, pad=' '*8):
        body = '{pad}for i in {mode}({res}.size):\n{pad}{pad}{res}[i] += math.{func}({arg_list})\n'.format(**locals())
     # TODO: refactor that for-loop goes into umbrella function, 'mode' can be 'numpy', '0', 'i' instead
     # TODO: that will enable mixed usecases like prange + numpy
-    scalar_func = '$_'+func if numba.config.IS_OSX else '$'+func
+
+    # type specialization
+    f = func+'f' if dtype == 'float32' else func
+    v = vlen*2 if dtype == 'float32' else vlen
+    # general expectations
+    scalar_func = '$_'+f if numba.config.IS_OSX else '$'+f
+    svml_func = '__svml_%s%d%s,'%(f, v, '' if getattr(flags, 'fastmath', False) else '_ha')
     if mode == "scalar":
-       avoids   = ['__svml']
        contains = [scalar_func]
+       avoids   = [svml_func]
     else: # will vectorize
-       contains = ['__svml_%s%d%s,'%(func, vlen, '' if getattr(flags, 'fastmath', False) else '_ha')]
-       avoids   = []  # TODO: [scalar_func] - if possible, force LLVM to prevent generating the failsafe scalar paths
+       contains = [svml_func]
+       avoids   = []  # [scalar_func] - TODO: if possible, force LLVM to prevent generating the failsafe scalar paths
+    # special handling
+    if func == 'sqrt':
+       if mode == "scalar":
+          avoids   = [scalar_func, svml_func] # LLVM uses CPU instruction instead
+          contains = ['sqrts']
+       elif vlen == 8:
+          avoids = [scalar_func, svml_func] # LLVM uses CPU instruction instead
+          contains  = ['vsqrtp' ]
+       # else expect use of SVML for older architectures
     return body, contains, avoids
 
 
@@ -114,7 +134,7 @@ def combo_svml_usecase(dtype, mode, vlen, flags):
     contains = []
     avoids = []
     for f in funcs:
-        b, c, a = func_patterns(f, ['x'], 'ret', mode, vlen, flags)
+        b, c, a = func_patterns(f, ['x'], 'ret', dtype, mode, vlen, flags)
         avoids += a
         body += b
         contains += c
@@ -131,6 +151,7 @@ class TestSVMLGeneration(TestCase):
 
     # env mutating, must not run in parallel
     _numba_parallel_test_ = False
+    asm_filter = re.compile('|'.join(['\$[a-z_]\w+,']+list(svml_funcs)))
 
     @classmethod
     def _inject_test(cls, dtype, mode, vlen, flags):
@@ -141,18 +162,19 @@ class TestSVMLGeneration(TestCase):
             with override_env_config('NUMBA_CPU_NAME', vlen2cpu[vlen]), \
                  override_env_config('NUMBA_CPU_FEATURES', ''):
                 # recompile for overridden CPU
-                jit = compile_isolated(fn, (numba.int64,), flags=flags)
+                jit = compile_isolated(fn, (numba.int64, ), flags=flags)
             asm = jit.library.get_asm_str()
             missed = [pattern for pattern in contains if not pattern in asm]
             found  = [pattern for pattern in avoids if pattern in asm]
-            assert not missed and not found, "While expecting %s,\n\tit contains %s:\n%s\nwhen compiling %s" % \
-                (str(missed), str(found), '\n'.join(
-                [line for line in asm.split('\n') if re.search('\$[a-z_]\w+,', line)]), fn.__doc__)
+            self.assertTrue(not missed and not found,
+                "While expecting %s and no %s,\nit contains:\n%s\nwhen compiling %s" %
+                (str(missed), str(found), '\n'.join([line for line in asm.split('\n')
+                 if cls.asm_filter.search(line) and not '"' in line]), fn.__doc__))
         setattr(cls, "test_"+usecase_name(*args), test_template)
 
     @classmethod
     def autogenerate(cls):
-        test_flags = ['fastmath',]  # TODO: , 'auto_parallel'), ?
+        test_flags = ['fastmath',]  # TODO: add 'auto_parallel' ?
         test_flags = sum([list(combinations(test_flags, x)) for x in range(len(test_flags)+1)], [])
         flag_list = []
         for ft in test_flags:
@@ -163,7 +185,7 @@ class TestSVMLGeneration(TestCase):
             for f in ft:
                 flags.set(f)
             flag_list.append(flags)
-        for dtype in ('float64',):
+        for dtype in ('float64', 'float32'):
             for vlen in vlen2cpu:
                 for flags in flag_list:
                     for mode in "scalar", "range", "prange", "numpy":
