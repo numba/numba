@@ -26,6 +26,8 @@ vlen2cpu = {2: 'nehalem', 4: 'haswell', 8: 'skylake-avx512'}
 # TODO: [] and comments below mean unused/untested SVML function, it's to be either enabled or
 #       to be replaced with the explanation why the function cannot be used in Numba
 # TODO: this test does not supprt functions with more than 1 arguments yet
+# the test logic should be modified if there is an SVML function being used under different name
+# or module from Python
 svml_funcs = {
     "sin":     [np.sin, math.sin],
     "cos":     [np.cos, math.cos],
@@ -71,16 +73,20 @@ svml_funcs = {
     "trunc":      [],  # np.trunc, math.trunc],
 }
 
+# remove untested entries
 svml_funcs = {k: v for k, v in svml_funcs.items() if len(v) > 0}
-
-# the logic should be modified if there is an SVML function being used under different name from Python
+# generate lists for functions which belong to numpy and math modules correpondently
 numpy_funcs = [f for f, v in svml_funcs.items() if "<ufunc" in [str(p).split(' ')[0] for p in v]]
 other_funcs = [f for f, v in svml_funcs.items() if "<built-in" in [str(p).split(' ')[0] for p in v]]
 
 
 def func_patterns(func, args, res, dtype, mode, vlen, flags, pad=' '*8):
-    """ For a given function and modes, it returns python code with patterns it should and should not generate """
+    """
+    For a given function and its usage modes,
+    returns python code and assembly patterns it should and should not generate
+    """
 
+    # generate a function call according to the usecase
     if mode == "scalar":
         arg_list = ','.join([a+'[0]' for a in args])
         body = '%s%s[0] += math.%s(%s)\n' % (pad, res, func, arg_list)
@@ -91,8 +97,8 @@ def func_patterns(func, args, res, dtype, mode, vlen, flags, pad=' '*8):
         arg_list = ','.join([a+'[i]' for a in args])
         body = '{pad}for i in {mode}({res}.size):\n{pad}{pad}{res}[i] += math.{func}({arg_list})\n'. \
                format(**locals())
-    # TODO: refactor that for-loop goes into umbrella function, 'mode' can be 'numpy', '0', 'i' instead
-    # TODO: that will enable mixed usecases like prange + numpy
+    # TODO: refactor so this for-loop goes into umbrella function, 'mode' can be 'numpy', '0', 'i' instead
+    # TODO: it will enable mixed usecases like prange + numpy
 
     # type specialization
     f = func+'f' if dtype == 'float32' else func
@@ -134,12 +140,14 @@ def combo_svml_usecase(dtype, mode, vlen, flags):
     funcs = numpy_funcs if mode == "numpy" else other_funcs
     contains = []
     avoids = []
+    # fill body and expectatation patterns
     for f in funcs:
         b, c, a = func_patterns(f, ['x'], 'ret', dtype, mode, vlen, flags)
         avoids += a
         body += b
         contains += c
     body += " "*8 + "return ret"
+    # now compile and return it along with its body in __doc__  and patterns
     ldict = {}
     exec_(body, globals(), ldict)
     ldict[name].__doc__ = body
@@ -152,12 +160,14 @@ class TestSVMLGeneration(TestCase):
 
     # env mutating, must not run in parallel
     _numba_parallel_test_ = False
+    # RE for a generic symbol reference and for each particular SVML function
     asm_filter = re.compile('|'.join(['\$[a-z_]\w+,']+list(svml_funcs)))
 
     @classmethod
     def _inject_test(cls, dtype, mode, vlen, flags):
         args = (dtype, mode, vlen, flags)
 
+        # unit test body template
         def test_template(self):
             fn, contains, avoids = combo_svml_usecase(*args)
             # look for specific patters in the asm for a given target
@@ -172,13 +182,15 @@ class TestSVMLGeneration(TestCase):
                 "While expecting %s and no %s,\nit contains:\n%s\nwhen compiling %s" %
                 (str(missed), str(found), '\n'.join([line for line in asm.split('\n')
                     if cls.asm_filter.search(line) and not '"' in line]), fn.__doc__))
+        # inject it into the class
         setattr(cls, "test_"+usecase_name(*args), test_template)
 
     @classmethod
     def autogenerate(cls):
         test_flags = ['fastmath', ]  # TODO: add 'auto_parallel' ?
+        # generate all the combinations of the flags
         test_flags = sum([list(combinations(test_flags, x)) for x in range(len(test_flags)+1)], [])
-        flag_list = []
+        flag_list = []  # create Flag class instances
         for ft in test_flags:
             flags = Flags()
             flags.set('nrt')
@@ -187,6 +199,7 @@ class TestSVMLGeneration(TestCase):
             for f in ft:
                 flags.set(f)
             flag_list.append(flags)
+        # main loop covering all the modes and use-cases
         for dtype in ('float64', 'float32'):
             for vlen in vlen2cpu:
                 for flags in flag_list:
