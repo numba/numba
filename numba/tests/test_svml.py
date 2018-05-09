@@ -82,14 +82,15 @@ def func_patterns(func, args, res, dtype, mode, vlen, flags, pad=' '*8):
     """ For a given function and modes, it returns python code with patterns it should and should not generate """
 
     if mode == "scalar":
-       arg_list = ','.join([a+'[0]' for a in args])
-       body = '%s%s[0] += math.%s(%s)\n'%(pad, res, func, arg_list)
+        arg_list = ','.join([a+'[0]' for a in args])
+        body = '%s%s[0] += math.%s(%s)\n' % (pad, res, func, arg_list)
     elif mode == "numpy":
-       body = '%s%s += np.%s(%s)\n'%(pad, res, func, ','.join(args))
+        body = '%s%s += np.%s(%s)\n' % (pad, res, func, ','.join(args))
     else:
-       assert mode == "range" or mode == "prange"
-       arg_list = ','.join([a+'[i]' for a in args])
-       body = '{pad}for i in {mode}({res}.size):\n{pad}{pad}{res}[i] += math.{func}({arg_list})\n'.format(**locals())
+        assert mode == "range" or mode == "prange"
+        arg_list = ','.join([a+'[i]' for a in args])
+        body = '{pad}for i in {mode}({res}.size):\n{pad}{pad}{res}[i] += math.{func}({arg_list})\n'. \
+               format(**locals())
     # TODO: refactor that for-loop goes into umbrella function, 'mode' can be 'numpy', '0', 'i' instead
     # TODO: that will enable mixed usecases like prange + numpy
 
@@ -98,22 +99,22 @@ def func_patterns(func, args, res, dtype, mode, vlen, flags, pad=' '*8):
     v = vlen*2 if dtype == 'float32' else vlen
     # general expectations
     scalar_func = '$_'+f if numba.config.IS_OSX else '$'+f
-    svml_func = '__svml_%s%d%s,'%(f, v, '' if getattr(flags, 'fastmath', False) else '_ha')
+    svml_func = '__svml_%s%d%s,' % (f, v, '' if getattr(flags, 'fastmath', False) else '_ha')
     if mode == "scalar":
-       contains = [scalar_func]
-       avoids   = [svml_func]
-    else: # will vectorize
-       contains = [svml_func]
-       avoids   = []  # [scalar_func] - TODO: if possible, force LLVM to prevent generating the failsafe scalar paths
+        contains = [scalar_func]
+        avoids = [svml_func]
+    else:  # will vectorize
+        contains = [svml_func]
+        avoids = []  # [scalar_func] - TODO: if possible, force LLVM to prevent generating the failsafe scalar paths
     # special handling
     if func == 'sqrt':
-       if mode == "scalar":
-          avoids   = [scalar_func, svml_func] # LLVM uses CPU instruction instead
-          contains = ['sqrts']
-       elif vlen == 8:
-          avoids = [scalar_func, svml_func] # LLVM uses CPU instruction instead
-          contains  = ['vsqrtp' ]
-       # else expect use of SVML for older architectures
+        if mode == "scalar":
+            contains = ['sqrts']
+            avoids = [scalar_func, svml_func]  # LLVM uses CPU instruction instead
+        elif vlen == 8:
+            contains = ['vsqrtp']
+            avoids = [scalar_func, svml_func]  # LLVM uses CPU instruction instead
+        # else expect use of SVML for older architectures
     return body, contains, avoids
 
 
@@ -156,6 +157,7 @@ class TestSVMLGeneration(TestCase):
     @classmethod
     def _inject_test(cls, dtype, mode, vlen, flags):
         args = (dtype, mode, vlen, flags)
+
         def test_template(self):
             fn, contains, avoids = combo_svml_usecase(*args)
             # look for specific patters in the asm for a given target
@@ -165,16 +167,16 @@ class TestSVMLGeneration(TestCase):
                 jit = compile_isolated(fn, (numba.int64, ), flags=flags)
             asm = jit.library.get_asm_str()
             missed = [pattern for pattern in contains if not pattern in asm]
-            found  = [pattern for pattern in avoids if pattern in asm]
+            found = [pattern for pattern in avoids if pattern in asm]
             self.assertTrue(not missed and not found,
                 "While expecting %s and no %s,\nit contains:\n%s\nwhen compiling %s" %
                 (str(missed), str(found), '\n'.join([line for line in asm.split('\n')
-                 if cls.asm_filter.search(line) and not '"' in line]), fn.__doc__))
+                    if cls.asm_filter.search(line) and not '"' in line]), fn.__doc__))
         setattr(cls, "test_"+usecase_name(*args), test_template)
 
     @classmethod
     def autogenerate(cls):
-        test_flags = ['fastmath',]  # TODO: add 'auto_parallel' ?
+        test_flags = ['fastmath', ]  # TODO: add 'auto_parallel' ?
         test_flags = sum([list(combinations(test_flags, x)) for x in range(len(test_flags)+1)], [])
         flag_list = []
         for ft in test_flags:
@@ -350,6 +352,7 @@ class TestSVML(TestCase):
             raise AssertionError(
                 "process failed with code %s: stderr follows\n%s\n" %
                 (popen.returncode, err.decode()))
+
 
 if __name__ == '__main__':
     unittest.main()
