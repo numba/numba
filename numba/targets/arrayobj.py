@@ -1826,13 +1826,29 @@ def _change_dtype(context, builder, oldty, newty, ary):
 
 
 @overload(np.unique)
-def np_unique(a):
+def np_unique(a, return_counts=False):
     def np_unique_impl(a):
         b = np.sort(a.ravel())
         head = list(b[:1])
         tail = [x for i, x in enumerate(b[1:]) if b[i] != x]
         return np.array(head + tail)
-    return np_unique_impl
+
+    def np_unique_wcounts_impl(a):
+        b = np.sort(a.ravel())
+        unique = list(b[:1])
+        counts = [1 for _ in unique]
+        for x in b[1:]:
+            if x != unique[-1]:
+                unique.append(x)
+                counts.append(1)
+            else:
+                counts[-1] += 1
+        return unique, counts
+
+    if not return_counts:
+        return np_unique_impl
+    else:
+        return np_unique_wcounts_impl
 
 
 @lower_builtin('array.view', types.Array, types.DTypeSpec)

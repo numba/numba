@@ -179,8 +179,8 @@ def array_imag(a):
     return np.imag(a)
 
 
-def np_unique(a):
-    return np.unique(a)
+def np_unique(a, return_counts=False):
+    return np.unique(a, return_counts=return_counts)
 
 
 def array_dot(a, b):
@@ -875,10 +875,15 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         def check(a):
             np.testing.assert_equal(pyfunc(a), cfunc(a))
 
-        check(np.array([[1, 1, 3], [3, 4, 5]]))
-        check(np.array(np.zeros(5)))
-        check(np.array([[3.1, 3.1], [1.7, 2.29], [3.3, 1.7]]))
-        check(np.array([]))
+        def check_w_counts(a):
+            np.testing.assert_equal(
+                pyfunc(a, return_counts=True), cfunc(a, return_counts=True))
+
+        for check_ in [check, check_w_counts]:
+            check_(np.array([[1, 1, 3], [3, 4, 5]]))
+            check_(np.array(np.zeros(5)))
+            check_(np.array([[3.1, 3.1], [1.7, 2.29], [3.3, 1.7]]))
+            check_(np.array([]))
 
     def test_array_dot(self):
         # just ensure that the dot impl dispatches correctly, do
