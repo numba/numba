@@ -805,28 +805,65 @@ def _collect_percentiles(a, q, skip_nan=False):
 
     return out
 
-@overload(np.percentile)
-def np_percentile(a, q):
+if numpy_version >= (1, 10):
+    @overload(np.percentile)
+    def np_percentile(a, q):
 
-    def np_percentile_q_scalar_impl(a, q):
-        percentiles = np.array([q])
-        return _collect_percentiles(a, percentiles)[0]
+        # Note: np.percentile behaviour in the case of an array containing one or
+        # more NaNs was changed in numpy 1.10 to return an array of np.NaN of
+        # length equal to q.  It might be possible to branch logic based on numpy
+        # version and replicate the 1.9 behaviour, but for now using a 1.10 feature
+        # guard, pending review.
 
-    def np_percentile_q_seq_impl(a, q):
-        percentiles = np.array(q)
-        return _collect_percentiles(a, percentiles)
+        def np_percentile_q_scalar_impl(a, q):
+            percentiles = np.array([q])
+            return _collect_percentiles(a, percentiles)[0]
 
-    def np_percentile_q_array_impl(a, q):
-        return _collect_percentiles(a, q)
+        def np_percentile_q_seq_impl(a, q):
+            percentiles = np.array(q)
+            return _collect_percentiles(a, percentiles)
 
-    if isinstance(q, (types.Float, types.Integer)):
-        return np_percentile_q_scalar_impl
+        def np_percentile_q_array_impl(a, q):
+            return _collect_percentiles(a, q)
 
-    elif isinstance(q, (types.Tuple, types.Sequence)):
-        return np_percentile_q_seq_impl
+        if isinstance(q, (types.Float, types.Integer)):
+            return np_percentile_q_scalar_impl
 
-    elif isinstance(q, types.Array):
-        return np_percentile_q_array_impl
+        elif isinstance(q, (types.Tuple, types.Sequence)):
+            return np_percentile_q_seq_impl
+
+        elif isinstance(q, types.Array):
+            return np_percentile_q_array_impl
+
+if numpy_version >= (1, 11):
+    @overload(np.nanpercentile)
+    def np_nanpercentile(a, q):
+
+        # Note: np.nanpercentile was implemented in 1.9, but the return type in the
+        # case of an all-NaN slice was np.nan until 1.11 when it was changed to be
+        # an array of np.NaN of length equal to q.  The 1.9 / 1.10 behaviour is
+        # problematic from a return type unification perspective, so for now using
+        # a 1.11 feature guard, pending review.
+
+        def np_nanpercentile_q_scalar_impl(a, q):
+            percentiles = np.array([q])
+            return _collect_percentiles(a, percentiles, skip_nan=True)[0]
+
+        def np_nanpercentile_q_seq_impl(a, q):
+            percentiles = np.array(q)
+            return _collect_percentiles(a, percentiles, skip_nan=True)
+
+        def np_nanpercentile_q_array_impl(a, q):
+            return _collect_percentiles(a, q, skip_nan=True)
+
+        if isinstance(q, (types.Float, types.Integer)):
+            return np_nanpercentile_q_scalar_impl
+
+        elif isinstance(q, (types.Tuple, types.Sequence)):
+            return np_nanpercentile_q_seq_impl
+
+        elif isinstance(q, types.Array):
+            return np_nanpercentile_q_array_impl
 
 if numpy_version >= (1, 9):
     @overload(np.nanmedian)
@@ -852,36 +889,6 @@ if numpy_version >= (1, 9):
             return _median_inner(temp_arry, n)
 
         return nanmedian_impl
-
-if numpy_version >= (1, 11):
-    @overload(np.nanpercentile)
-    def np_nanpercentile(a, q):
-
-        # Note: nanpercentile was implemented in 1.9, but the return type in the
-        # case of an all-NaN slice was np.nan until 1.11 when it was changed to
-        # be an array of np.NaN of length equal to q.  The 1.9 / 1.10 behaviour
-        # is problematic from a return type unification perspective, so for now
-        # using a 1.11 feature guard, pending review.
-
-        def np_nanpercentile_q_scalar_impl(a, q):
-            percentiles = np.array([q])
-            return _collect_percentiles(a, percentiles, skip_nan=True)[0]
-
-        def np_nanpercentile_q_seq_impl(a, q):
-            percentiles = np.array(q)
-            return _collect_percentiles(a, percentiles, skip_nan=True)
-
-        def np_nanpercentile_q_array_impl(a, q):
-            return _collect_percentiles(a, q, skip_nan=True)
-
-        if isinstance(q, (types.Float, types.Integer)):
-            return np_nanpercentile_q_scalar_impl
-
-        elif isinstance(q, (types.Tuple, types.Sequence)):
-            return np_nanpercentile_q_seq_impl
-
-        elif isinstance(q, types.Array):
-            return np_nanpercentile_q_array_impl
 
 #----------------------------------------------------------------------------
 # Element-wise computations

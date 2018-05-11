@@ -388,20 +388,20 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         yield p[2:].astype(np.int32)
         yield tuple(p.tolist()[::-1])
 
-    @tag('important')
+    @unittest.skipUnless(np_version >= (1, 10), "percentile needs Numpy 1.10+")
     def test_percentile_basic(self):
         pyfunc = array_percentile_global
+        self.check_percentile_basic(pyfunc, self._array_variations, self._percentile_variations)
+
+    @unittest.skipUnless(np_version >= (1, 11), "nanpercentile needs Numpy 1.11+")
+    def test_nanpercentile_basic(self):
+        pyfunc = array_nanpercentile_global
         self.check_percentile_basic(pyfunc, self._array_variations, self._percentile_variations)
 
     @unittest.skipUnless(np_version >= (1, 9), "nanmedian needs Numpy 1.9+")
     def test_nanmedian_basic(self):
         pyfunc = array_nanmedian_global
         self.check_median_basic(pyfunc, self._array_variations)
-
-    @unittest.skipUnless(np_version >= (1, 11), "nanpercentile needs Numpy 1.11+")
-    def test_nanpercentile_basic(self):
-        pyfunc = array_nanpercentile_global
-        self.check_percentile_basic(pyfunc, self._array_variations, self._percentile_variations)
 
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)
