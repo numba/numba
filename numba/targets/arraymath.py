@@ -777,12 +777,12 @@ def _collect_percentiles(a, q, skip_nan=False):
 
     # check supplied features, a
     if skip_nan:
-        # if we're told to skip NaNs, but there are no data points left, exit quietly
+        # if we're told to skip NaNs, but there are no data points left, exit
         temp_arry = temp_arry[~nan_mask]
         if len(temp_arry) == 0:
             return np.full(len(q), np.nan)
     else:
-        # if we're told to not skip NaNs, but we find one, exit quietly
+        # if we're told to not skip NaNs, but we find one, exit
         if np.any(nan_mask):
             return np.full(len(q), np.nan)
 
