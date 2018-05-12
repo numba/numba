@@ -337,30 +337,21 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def check_percentile_basic(self, pyfunc, array_variations, percentile_variations, abs_tol=1e-12):
         cfunc = jit(nopython=True)(pyfunc)
+
         def check(a, q):
             expected = pyfunc(a, q)
             got = cfunc(a, q)
             self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
 
-        # Odd sizes
-        def check_odd(a, q):
+        def perform_checks(a, q):
             check(a, q)
-            a = a.reshape((9, 7))
+            a = a.reshape((3, 3, 7))
             check(a, q)
-            check(a.T, q)
-        for a in array_variations(np.arange(63) + 10.5):
-            for q in percentile_variations():
-                check_odd(a, q)
+            check(a.astype(np.int32), q)
 
-        # Even sizes
-        def check_even(a, q):
-            check(a, q)
-            a = a.reshape((4, 16))
-            check(a, q)
-            check(a.T, q)
-        for a in array_variations(np.arange(64) + 10.5):
-            for q in percentile_variations():
-                check_even(a, q)
+        for a in array_variations(np.arange(63) - 10.5):
+            for q in percentile_variations(np.array([0, 50, 100, 66.6])):
+                perform_checks(a, q)
 
     @staticmethod
     def _array_variations(a):
@@ -378,15 +369,12 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         yield a
 
     @staticmethod
-    def _percentile_variations():
-        p = np.array([0, 22.2, 100, 88.6], dtype=np.float32)
-        yield p
-        yield p.tolist()
-        yield p[2]
-        yield p[1]
-        yield int(p[1])
-        yield p[2:].astype(np.int32)
-        yield tuple(p.tolist()[::-1])
+    def _percentile_variations(q):
+        # array, list of reversed values, one value, one value as int
+        yield q
+        yield q[::-1].astype(np.int32).tolist()
+        yield q[-1]
+        yield int(q[-1])
 
     @unittest.skipUnless(np_version >= (1, 10), "percentile needs Numpy 1.10+")
     def test_percentile_basic(self):
