@@ -56,7 +56,8 @@ def _lower_parfor_parallel(lowerer, parfor):
 
     alias_map = {}
     arg_aliases = {}
-    numba.parfor.find_potential_aliases_parfor(parfor, parfor.params, typemap, alias_map, arg_aliases)
+    numba.parfor.find_potential_aliases_parfor(parfor, parfor.params, typemap,
+                                               {}, alias_map, arg_aliases)
     if config.DEBUG_ARRAY_OPT:
         print("alias_map", alias_map)
         print("arg_aliases", arg_aliases)

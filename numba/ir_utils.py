@@ -489,13 +489,14 @@ def remove_dead(blocks, args, typemap=None, alias_map=None, arg_aliases=None):
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
+    call_table, _ = get_call_table(blocks)
     if alias_map is None or arg_aliases is None:
-        alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap)
+        alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap,
+                                                        call_table)
     if config.DEBUG_ARRAY_OPT == 1:
         print("alias map:", alias_map)
     # keep set for easier search
     alias_set = set(alias_map.keys())
-    call_table, _ = get_call_table(blocks)
 
     removed = False
     for label, block in blocks.items():
@@ -643,7 +644,8 @@ def is_pure(rhs, lives, call_table):
 
 alias_analysis_extensions = {}
 
-def find_potential_aliases(blocks, args, typemap, alias_map=None, arg_aliases=None):
+def find_potential_aliases(blocks, args, typemap, call_table, alias_map=None,
+                                                            arg_aliases=None):
     "find all array aliases and argument aliases to avoid remove as dead"
     if alias_map is None:
         alias_map = {}
@@ -654,7 +656,7 @@ def find_potential_aliases(blocks, args, typemap, alias_map=None, arg_aliases=No
         for instr in bl.body:
             if type(instr) in alias_analysis_extensions:
                 f = alias_analysis_extensions[type(instr)]
-                f(instr, args, typemap, alias_map, arg_aliases)
+                f(instr, args, typemap, call_table, alias_map, arg_aliases)
             if isinstance(instr, ir.Assign):
                 expr = instr.value
                 lhs = instr.target.name
