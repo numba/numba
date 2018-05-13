@@ -669,6 +669,13 @@ def find_potential_aliases(blocks, args, typemap, call_table, alias_map=None,
                 if (isinstance(expr, ir.Expr) and (expr.op == 'cast' or
                     expr.op in ['getitem', 'static_getitem'])):
                     _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
+                # calls that can create aliases such as B = A.ravel()
+                if (isinstance(expr, ir.Expr) and expr.op == 'call'
+                        and expr.func.name in call_table):
+                    f_list = call_table[expr.func.name]
+                    if (len(f_list) == 2 and f_list[1] == numpy
+                            and f_list[0] in ['ravel', 'transpose']):
+                        _add_alias(lhs, expr.args[0].name, alias_map, arg_aliases)
 
     # copy to avoid changing size during iteration
     old_alias_map = copy.deepcopy(alias_map)
