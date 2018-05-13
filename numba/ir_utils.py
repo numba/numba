@@ -669,6 +669,10 @@ def find_potential_aliases(blocks, args, typemap, call_table, alias_map=None,
                 if (isinstance(expr, ir.Expr) and (expr.op == 'cast' or
                     expr.op in ['getitem', 'static_getitem'])):
                     _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
+                # array attributes like A.T
+                if (isinstance(expr, ir.Expr) and expr.op == 'getattr'
+                        and expr.attr in ['T', 'ctypes', 'flat']):
+                    _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
                 # calls that can create aliases such as B = A.ravel()
                 if (isinstance(expr, ir.Expr) and expr.op == 'call'
                         and expr.func.name in call_table):
