@@ -532,6 +532,7 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_se
         init_alias_lives = lives & alias_set
         for v in init_alias_lives:
             alias_lives |= alias_map[v]
+        lives_n_aliases = lives | alias_lives | arg_aliases
         # let external calls handle stmt if type matches
         if type(stmt) in remove_dead_extensions:
             f = remove_dead_extensions[type(stmt)]
@@ -544,7 +545,7 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_se
             lhs = stmt.target
             rhs = stmt.value
             if lhs.name not in lives and has_no_side_effect(
-                    rhs, lives, call_table):
+                    rhs, lives_n_aliases, call_table):
                 removed = True
                 continue
             if isinstance(rhs, ir.Var) and lhs.name == rhs.name:
@@ -553,7 +554,7 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_se
             # TODO: remove other nodes like SetItem etc.
         if isinstance(stmt, ir.SetItem):
             name = stmt.target.name
-            if not (name in lives or name in alias_lives or name in arg_aliases):
+            if name not in lives_n_aliases:
                 continue
 
         if type(stmt) in analysis.ir_extension_usedefs:
