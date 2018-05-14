@@ -482,7 +482,7 @@ def remove_args(blocks):
     return
 
 
-def remove_dead(blocks, args, typemap=None, alias_map=None, arg_aliases=None):
+def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases=None):
     """dead code elimination using liveness and CFG info.
     Returns True if something has been removed, or False if nothing is removed.
     """
@@ -505,7 +505,8 @@ def remove_dead(blocks, args, typemap=None, alias_map=None, arg_aliases=None):
         # find live variables at the end of block
         for out_blk, _data in cfg.successors(label):
             lives |= live_map[out_blk]
-        removed |= remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_set, typemap)
+        removed |= remove_dead_block(block, lives, call_table, arg_aliases,
+                                     alias_map, alias_set, func_ir, typemap)
     return removed
 
 
@@ -514,7 +515,8 @@ def remove_dead(blocks, args, typemap=None, alias_map=None, arg_aliases=None):
 remove_dead_extensions = {}
 
 
-def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_set, typemap):
+def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
+                                                  alias_set, func_ir, typemap):
     """remove dead code using liveness info.
     Mutable arguments (e.g. arrays) that are not definitely assigned are live
     after return of function.
@@ -536,7 +538,7 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_se
         # let external calls handle stmt if type matches
         if type(stmt) in remove_dead_extensions:
             f = remove_dead_extensions[type(stmt)]
-            stmt = f(stmt, lives, arg_aliases, alias_map, typemap)
+            stmt = f(stmt, lives, arg_aliases, alias_map, func_ir, typemap)
             if stmt is None:
                 removed = True
                 continue
@@ -1295,7 +1297,7 @@ def simplify(func_ir, typemap, calltypes):
         calltypes)
     restore_copy_var_names(func_ir.blocks, save_copies, typemap)
     # remove dead code to enable fusion
-    remove_dead(func_ir.blocks, func_ir.arg_names, typemap)
+    remove_dead(func_ir.blocks, func_ir.arg_names, func_ir, typemap)
     func_ir.blocks = simplify_CFG(func_ir.blocks)
     if config.DEBUG_ARRAY_OPT == 1:
         dprint_func_ir(func_ir, "after simplify")

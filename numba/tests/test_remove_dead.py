@@ -83,7 +83,7 @@ class TestRemoveDead(unittest.TestCase):
             in_cps, out_cps = copy_propagate(test_ir.blocks, typemap)
             apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(test_ir.blocks), typemap, calltypes)
 
-            remove_dead(test_ir.blocks, test_ir.arg_names)
+            remove_dead(test_ir.blocks, test_ir.arg_names, test_ir)
             self.assertFalse(findLhsAssign(test_ir, "x"))
 
     def test2(self):
@@ -100,7 +100,7 @@ class TestRemoveDead(unittest.TestCase):
             return False
 
         test_ir = compiler.run_frontend(call_np_random_seed)
-        remove_dead(test_ir.blocks, test_ir.arg_names)
+        remove_dead(test_ir.blocks, test_ir.arg_names, test_ir)
         self.assertTrue(seed_call_exists(test_ir))
 
     def test_alias_ravel(self):

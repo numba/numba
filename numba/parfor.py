@@ -2551,7 +2551,7 @@ def get_parfor_pattern_vars(parfor):
                     out.add(v.name)
     return out
 
-def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, typemap):
+def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, func_ir, typemap):
     """ remove dead code inside parfor including get/sets
     """
 
@@ -2636,7 +2636,7 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, typemap):
 
     # process parfor body recursively
     remove_dead_parfor_recursive(
-        parfor, lives, arg_aliases, alias_map, typemap)
+        parfor, lives, arg_aliases, alias_map, func_ir, typemap)
 
     # remove parfor if empty
     is_empty = len(parfor.init_block.body) == 0
@@ -2681,7 +2681,8 @@ def _update_parfor_get_setitems(block_body, index_var, alias_map,
 ir_utils.remove_dead_extensions[Parfor] = remove_dead_parfor
 
 
-def remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map, typemap):
+def remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map,
+                                                             func_ir, typemap):
     """create a dummy function from parfor and call remove dead recursively
     """
     blocks = parfor.loop_body.copy()  # shallow copy is enough
@@ -2700,7 +2701,7 @@ def remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map, typemap)
     blocks[0].body.append(ir.Jump(first_body_block, ir.Loc("parfors_dummy", -1)))
 
     # args var including aliases is ok
-    remove_dead(blocks, arg_aliases, typemap, alias_map, arg_aliases)
+    remove_dead(blocks, arg_aliases, func_ir, typemap, alias_map, arg_aliases)
     typemap.pop(tuple_var.name)  # remove dummy tuple type
     blocks[0].body.pop()  # remove dummy jump
     blocks[last_label].body.pop()  # remove branch
