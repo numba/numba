@@ -492,7 +492,7 @@ def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases
     call_table, _ = get_call_table(blocks)
     if alias_map is None or arg_aliases is None:
         alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap,
-                                                        call_table)
+                                                        func_ir)
     if config.DEBUG_ARRAY_OPT == 1:
         print("alias map:", alias_map)
     # keep set for easier search
@@ -647,7 +647,7 @@ def is_pure(rhs, lives, call_table):
 
 alias_analysis_extensions = {}
 
-def find_potential_aliases(blocks, args, typemap, call_table, alias_map=None,
+def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                                                             arg_aliases=None):
     "find all array aliases and argument aliases to avoid remove as dead"
     if alias_map is None:
@@ -655,11 +655,15 @@ def find_potential_aliases(blocks, args, typemap, call_table, alias_map=None,
     if arg_aliases is None:
         arg_aliases = set(a for a in args if not is_immutable_type(a, typemap))
 
+    # update definitions since they are not guaranteed to be up-to-date
+    # FIXME keep definitions up-to-date to avoid the need for rebuilding
+    func_ir._definitions = build_definitions(func_ir.blocks)
+
     for bl in blocks.values():
         for instr in bl.body:
             if type(instr) in alias_analysis_extensions:
                 f = alias_analysis_extensions[type(instr)]
-                f(instr, args, typemap, call_table, alias_map, arg_aliases)
+                f(instr, args, typemap, func_ir, alias_map, arg_aliases)
             if isinstance(instr, ir.Assign):
                 expr = instr.value
                 lhs = instr.target.name
@@ -677,11 +681,16 @@ def find_potential_aliases(blocks, args, typemap, call_table, alias_map=None,
                         and expr.attr in ['T', 'ctypes', 'flat']):
                     _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
                 # calls that can create aliases such as B = A.ravel()
-                if (isinstance(expr, ir.Expr) and expr.op == 'call'
-                        and expr.func.name in call_table):
-                    f_list = call_table[expr.func.name]
-                    if (len(f_list) == 2 and f_list[1] == numpy
-                            and f_list[0] in ['ravel', 'transpose']):
+                if isinstance(expr, ir.Expr) and expr.op == 'call':
+                    fdef = guard(find_callname, func_ir, expr, typemap)
+                    # TODO: sometimes gufunc backend creates duplicate code
+                    # causing find_callname to fail. Example: test_argmax
+                    # ignored here since those cases don't create aliases
+                    # but should be fixed in general
+                    if fdef is None:
+                        continue
+                    fname, fmod = fdef
+                    if fmod == 'numpy' and fname in ['ravel', 'transpose']:
                         _add_alias(lhs, expr.args[0].name, alias_map, arg_aliases)
 
     # copy to avoid changing size during iteration

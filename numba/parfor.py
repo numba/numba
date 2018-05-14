@@ -2727,10 +2727,10 @@ def _add_liveness_return_block(blocks, lives, typemap):
     return return_label, tuple_var
 
 
-def find_potential_aliases_parfor(parfor, args, typemap, call_table, alias_map, arg_aliases):
+def find_potential_aliases_parfor(parfor, args, typemap, func_ir, alias_map, arg_aliases):
     blocks = wrap_parfor_blocks(parfor)
     ir_utils.find_potential_aliases(
-        blocks, args, typemap, call_table, alias_map, arg_aliases)
+        blocks, args, typemap, func_ir, alias_map, arg_aliases)
     unwrap_parfor_blocks(parfor)
     return
 
