@@ -3031,7 +3031,7 @@ typeinfer.typeinfer_extensions[Parfor] = parfor_typeinfer
 def build_parfor_definitions(parfor, definitions=None):
     """get variable definition table for parfors"""
     if definitions is None:
-        definitions = dict()
+        definitions = defaultdict(list)
 
     # avoid wrap_parfor_blocks() since build_definitions is called inside
     # find_potential_aliases_parfor where the parfor is already wrapped
