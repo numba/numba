@@ -3033,9 +3033,10 @@ def build_parfor_definitions(parfor, definitions=None):
     if definitions is None:
         definitions = dict()
 
-    blocks = wrap_parfor_blocks(parfor)
-    build_definitions(blocks, definitions)
-    unwrap_parfor_blocks(parfor)
+    # avoid wrap_parfor_blocks() since build_definitions is called inside
+    # find_potential_aliases_parfor where the parfor is already wrapped
+    build_definitions(parfor.loop_body, definitions)
+    build_definitions({0: parfor.init_block}, definitions)
     return definitions
 
 ir_utils.build_defs_extensions[Parfor] = build_parfor_definitions
