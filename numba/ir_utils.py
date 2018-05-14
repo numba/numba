@@ -693,6 +693,8 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                     fname, fmod = fdef
                     if fmod == 'numpy' and fname in np_alias_funcs:
                         _add_alias(lhs, expr.args[0].name, alias_map, arg_aliases)
+                    if isinstance(fmod, ir.Var) and fname in np_alias_funcs:
+                        _add_alias(lhs, fmod.name, alias_map, arg_aliases)
 
     # copy to avoid changing size during iteration
     old_alias_map = copy.deepcopy(alias_map)
