@@ -3,7 +3,9 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
+import numba
 from numba import compiler, typing
+from numba.compiler import compile_isolated, Flags
 from numba.targets import cpu
 from numba import types
 from numba.targets.registry import cpu_target
@@ -35,6 +37,13 @@ def findLhsAssign(func_ir, var):
     return False
 
 class TestRemoveDead(unittest.TestCase):
+    def compile_parallel(self, func, arg_types):
+        fast_pflags = Flags()
+        fast_pflags.set('auto_parallel', cpu.ParallelOptions(True))
+        fast_pflags.set('nrt')
+        fast_pflags.set('fastmath')
+        return compile_isolated(func, arg_types, flags=fast_pflags).entry_point
+
     def test1(self):
         typingctx = typing.Context()
         targetctx = cpu.CPUContext(typingctx)
@@ -80,6 +89,20 @@ class TestRemoveDead(unittest.TestCase):
         test_ir = compiler.run_frontend(call_np_random_seed)
         remove_dead(test_ir.blocks, test_ir.arg_names)
         self.assertTrue(seed_call_exists(test_ir))
+
+    def test_alias_ravel(self):
+        def func(A, i):
+            B = A.ravel()
+            B[i] = 3
+
+        A1 = np.arange(6).reshape(2,3)
+        A2 = A1.copy()
+        i = 0
+        pfunc = self.compile_parallel(func, (numba.typeof(A1), numba.typeof(i)))
+
+        func(A1, i)
+        pfunc(A2, i)
+        np.testing.assert_array_equal(A1, A2)
 
 if __name__ == "__main__":
     unittest.main()
