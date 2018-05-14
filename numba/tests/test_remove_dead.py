@@ -104,5 +104,19 @@ class TestRemoveDead(unittest.TestCase):
         pfunc(A2, i)
         np.testing.assert_array_equal(A1, A2)
 
+    def test_alias_transpose1(self):
+        def func(A, i):
+            B = A.T
+            B[i,0] = 3
+
+        A1 = np.arange(6).reshape(2,3)
+        A2 = A1.copy()
+        i = 0
+        pfunc = self.compile_parallel(func, (numba.typeof(A1), numba.typeof(i)))
+
+        func(A1, i)
+        pfunc(A2, i)
+        np.testing.assert_array_equal(A1, A2)
+
 if __name__ == "__main__":
     unittest.main()
