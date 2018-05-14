@@ -11,10 +11,23 @@ from numba import types
 from numba.targets.registry import cpu_target
 from numba import config
 from numba.annotations import type_annotations
-from numba.ir_utils import copy_propagate, apply_copy_propagate, get_name_var_table, remove_dels, remove_dead
+from numba.ir_utils import (copy_propagate, apply_copy_propagate,
+                            get_name_var_table, remove_dels, remove_dead,
+                            remove_call_handlers)
 from numba import ir
 from numba import unittest_support as unittest
 import numpy as np
+
+# use xxnrm2 to test call a C function with ctypes
+from numba.targets.linalg import _BLAS
+xxnrm2 = _BLAS().numba_xxnrm2(types.float64)
+
+def remove_dead_xxnrm2(rhs, lives, call_list):
+    if call_list == [xxnrm2]:
+        return rhs.args[4].name not in lives
+    return False
+
+remove_call_handlers.append(remove_dead_xxnrm2)
 
 def test_will_propagate(b, z, w):
     x = 3
@@ -131,6 +144,19 @@ class TestRemoveDead(unittest.TestCase):
         func(A1, i)
         pfunc(A2, i)
         np.testing.assert_array_equal(A1, A2)
+
+    def test_alias_ctypes(self):
+        def func(ret):
+            a = np.ones(4)
+            xxnrm2(100, 4, a.ctypes, 1, ret.ctypes)
+
+        A1 = np.zeros(1)
+        A2 = A1.copy()
+        pfunc = self.compile_parallel(func, (numba.typeof(A1),))
+
+        numba.njit(func)(A1)
+        pfunc(A2)
+        self.assertEqual(A1[0], A2[0])
 
 if __name__ == "__main__":
     unittest.main()
