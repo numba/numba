@@ -529,7 +529,7 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_se
     for stmt in reversed(block.body[:-1]):
         # aliases of lives are also live
         alias_lives = set()
-        init_alias_lives = (lives | arg_aliases) & alias_set
+        init_alias_lives = lives & alias_set
         for v in init_alias_lives:
             alias_lives |= alias_map[v]
         # let external calls handle stmt if type matches
