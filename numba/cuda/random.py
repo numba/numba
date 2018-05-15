@@ -127,7 +127,7 @@ def uint64_to_unit_float64(x):
 
 @jit
 def uint64_to_unit_float32(x):
-    '''Convert uint64 to float64 value in the range [0.0, 1.0)'''
+    '''Convert uint64 to float32 value in the range [0.0, 1.0)'''
     x = uint64(x)
     return float32(uint64_to_unit_float64(x))
 
