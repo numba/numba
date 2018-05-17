@@ -13,8 +13,7 @@ from ..numpy_support import (ufunc_find_matching_loop,
                              from_dtype, as_dtype, resolve_output_type,
                              carray, farray)
 from ..numpy_support import version as numpy_version
-from ..errors import TypingError
-from ..config import PerformanceWarning
+from ..errors import TypingError, PerformanceWarning
 from numba import pndindex
 
 registry = Registry()

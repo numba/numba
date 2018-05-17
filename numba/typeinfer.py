@@ -28,6 +28,8 @@ from .funcdesc import qualifying_prefix
 
 class NOTSET: pass
 
+# terminal color markup
+_termcolor = termcolor()
 
 class TypeVar(object):
     def __init__(self, context, var):
@@ -976,7 +978,7 @@ class TypeInferer(object):
 
                 problem_str = []
                 for xtype in rettypes:
-                    problem_str.append(termcolor.errmsg(check_type(xtype)))
+                    problem_str.append(_termcolor.errmsg(check_type(xtype)))
 
                 raise TypingError("Can't unify return type from the "
                                   "following types: %s"
@@ -1170,7 +1172,7 @@ class TypeInferer(object):
                 # as a global variable
                 typ = types.Dispatcher(_temporary_dispatcher_map[gvar.name])
             else:
-                msg = termcolor.errmsg("Untyped global name '%s':") + " %s"
+                msg = _termcolor.errmsg("Untyped global name '%s':") + " %s"
                 e.patch_message(msg % (gvar.name, e))
                 raise
 
