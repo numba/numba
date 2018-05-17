@@ -20,10 +20,10 @@ transfer:
 .. autofunction:: numba.cuda.to_device
    :noindex:
 
-In addition to the device arrays, numba can consume any object that implements
-:ref:`cuda array interface <cuda-array-interface>`.  These objects can be
-converted into a device array by creating a view of the GPU buffer using the
-following APIs:
+In addition to the device arrays, Numba can consume any object that implements
+:ref:`cuda array interface <cuda-array-interface>`.  These objects also can be
+manually converted into a Numba device array by creating a view of the GPU
+buffer using the following APIs:
 
 .. autofunction:: numba.cuda.as_cuda_array
   :noindex:
