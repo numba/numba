@@ -666,6 +666,12 @@ class TestNdFull(ConstructorBaseTest, TestCase):
             return np.full((m, n), 1 + 4.5j, dtype=np.complex64)
         self.check_2d(func)
 
+    def test_2d_dtype_from_type(self):
+        # tests issue #2862
+        def func(m, n):
+            return np.full((m, n), np.int32(1))
+        self.check_2d(func)
+
 
 class ConstructorLikeBaseTest(object):
 
