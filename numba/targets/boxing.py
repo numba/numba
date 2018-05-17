@@ -395,6 +395,9 @@ def unbox_array(typ, obj, c):
     else:
         errcode = c.pyapi.numba_array_adaptor(obj, ptr)
     failed = cgutils.is_not_null(c.builder, errcode)
+    # Handle error
+    with c.builder.if_then(failed, likely=False):
+        c.pyapi.err_set_string("PyExc_TypeError", "can't unbox array")
     return NativeValue(c.builder.load(aryptr), is_error=failed)
 
 
@@ -575,6 +578,7 @@ def _python_list_to_native(typ, obj, c, size, listptr, errorptr):
                     native = c.unbox(typ.dtype, itemobj)
                     with c.builder.if_then(native.is_error, likely=False):
                         c.builder.store(cgutils.true_bit, errorptr)
+                        loop.do_break()
                     # The reference is borrowed so incref=False
                     list.setitem(loop.index, native.value, incref=False)
 

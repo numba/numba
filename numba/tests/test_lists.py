@@ -1085,6 +1085,46 @@ class TestListManagedElements(MemoryLeakMixin, TestCase):
         cfunc(*got)
         self.assertEqual(expect, got)
 
+    def test_heterogenous_list(self):
+        def pyfunc(x):
+            return x[1]
+
+        l1 = [[np.zeros(i) for i in range(5)], [np.ones(i) for i in range(5)]]
+        l2 = [[np.zeros(i) for i in range(5)], [np.ones(i)+1j for i in range(5)]]
+
+        cfunc = jit(nopython=True)(pyfunc)
+        l1_got = cfunc(l1)
+        self.assertPreciseEqual(pyfunc(l1), l1_got)
+        l2_got = cfunc(l2)
+        self.assertPreciseEqual(pyfunc(l2), l2_got)
+
+    def test_heterogeneous_list_error(self):
+        def pyfunc(x):
+            return x[1]
+
+        cfunc = jit(nopython=True)(pyfunc)
+        l3 = [[np.zeros(i) for i in range(5)], [(1,),]]
+        l4 = [[1], [{1}]]
+        l5 = [[1], [{'a':1}]]
+
+        # TODO:
+        # working_cases = [l1, l2]
+
+        # error_cases
+        with self.assertRaises(TypeError) as raises:
+            cfunc(l3)
+        self.assertIn("can't unbox array", str(raises.exception))
+
+        int_error = ("int() argument must be a string, a bytes-like object or "
+                     "a number")
+        with self.assertRaises(TypeError) as raises:
+            cfunc(l4)
+        self.assertIn(int_error, str(raises.exception))
+
+        with self.assertRaises(TypeError) as raises:
+            cfunc(l5)
+        self.assertIn(int_error, str(raises.exception))
+
 
 if __name__ == '__main__':
     unittest.main()
