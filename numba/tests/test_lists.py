@@ -875,7 +875,7 @@ class TestListManagedElements(MemoryLeakMixin, TestCase):
 
     def test_reflect_passthru(self):
         def pyfunc(con):
-            pass #con.append(np.arange(10))
+            pass
 
         cfunc = jit(nopython=True)(pyfunc)
         con = [np.arange(3), np.arange(5)]
