@@ -43,7 +43,7 @@ print(g(xnd([[2, 3, 4], [5, 6, 7]]), xnd(4)))
 
 # using notation from https://en.wikipedia.org/wiki/Matrix_multiplication#Definition
 @jit_xnd(
-    'N * M * int64, N * P * int64 -> N * P * int64',
+    'N * M * int64, M * P * int64 -> N * P * int64',
     '(int64[:, :], int64[:, :], int64[:, :])',
     [2, 2, 2],
 )
@@ -60,4 +60,9 @@ def matrix_multiply(a, b, c):
 print(matrix_multiply(
     xnd([[0, 1], [0, 0]]),
     xnd([[0, 0], [1, 0]]) 
+))
+
+print(matrix_multiply(
+    xnd([[-2, 5], [1, 6], [-4, -1]]),
+    xnd([[2, 7], [8, -3]]) 
 ))
