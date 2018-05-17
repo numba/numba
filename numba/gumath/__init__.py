@@ -1,8 +1,7 @@
 from gumath import unsafe_add_kernel
 from llvmlite import ir
 from llvmlite.ir import PointerType as ptr, LiteralStructType as struct
-from toolz.functoolz import thread_first as tf
-from toolz import curry
+from functools import partial
 
 from .. import jit
 from .xnd_types import *
@@ -10,6 +9,9 @@ from .xnd_types import *
 
 # global counter for gumath kernel functions
 i = 0
+
+def curry(f):
+    return partial(partial, f)
 
 @curry
 def jit_xnd(gumath_sig, numba_sig, ndims, fn):
