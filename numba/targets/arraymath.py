@@ -151,16 +151,68 @@ def _gen_index_tuple(tyctx, shape_tuple, value, axis):
 #----------------------------------------------------------------------------
 # Basic stats and aggregates
 
+def _get_flat(contig):
+    """
+    returns a specialized implementation of array flattening, specialize at compile time
+    so that vectorization has the best chance of working
+    """
+    if contig:
+        @register_jitable
+        def contig_flat(arr):
+            return arr.ravel()
+        return contig_flat
+    else:
+        @register_jitable
+        def non_contig_flat(arr):
+            n = arr.size
+            return np.lib.stride_tricks.as_strided(arr, shape=(n,), strides=arr.strides[-1:])
+        return non_contig_flat
+
 @lower_builtin(np.sum, types.Array)
 @lower_builtin("array.sum", types.Array)
 def array_sum(context, builder, sig, args):
     zero = sig.return_type(0)
+    IS_CONTIG = sig.args[0].is_contig
+    flatten = _get_flat(IS_CONTIG)
 
     def array_sum_impl(arr):
-        c = zero
-        for v in np.nditer(arr):
-            c += v.item()
-        return c
+        n = arr.size
+        flatarr = flatten(arr)
+        base_N = 128
+        tile_n = n // base_N
+        acc = zero
+        if tile_n > 0:
+            # there is at least 1 base_N length tile
+            # trivial tree reduction needs a 2**n space
+            npwr2 = int(2 ** np.ceil(np.log2(tile_n)))
+            acc_vec = np.zeros(npwr2, dtype=arr.dtype)
+
+            # accumulate the sum of adjacent base_N chunks into a vector
+            for i in range(tile_n):
+                # inner loop
+                inner_acc = zero
+                start = i * base_N
+                stop = start + base_N
+                for j in range(start, stop):
+                    inner_acc += flatarr[j]
+                acc_vec[i] = inner_acc
+
+            # tree reduction vector sum
+            jmp = 2
+            while jmp <= npwr2:
+                hjmp = jmp >> 1
+                for x in range(0, tile_n, jmp):
+                    acc_vec[x] += acc_vec[x + hjmp]
+                jmp  = jmp << 1
+
+            acc += acc_vec[0]
+
+        # clean up remaining
+        rem = n % base_N
+        for i in range(n - rem, n):
+            acc += flatarr[i]
+
+        return acc
 
     res = context.compile_internal(builder, array_sum_impl, sig, args,
                                     locals=dict(c=sig.return_type))
