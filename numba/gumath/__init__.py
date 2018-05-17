@@ -1,42 +1,26 @@
 from gumath import unsafe_add_kernel
-from .. import jit
 from llvmlite import ir
 from llvmlite.ir import PointerType as ptr, LiteralStructType as struct
 from toolz.functoolz import thread_first as tf
+from toolz import curry
 
+from .. import jit
 from .xnd_types import *
 
-def jit_to_kernel(gumath_sig, numba_sig):
-    """
-    JIT compiles a function and returns a 0D XND kernel for it.
-    Call with the ndtype function signature and the numba signature of the inner function.
-    >>> import math
-    >>> import numpy as np
-    >>> from xnd import xnd
-    >>> @jit_to_kernel('... * float64 -> ... * float64', 'float64(float64)')
-    ... def f(x):
-    ...     return math.sin(x)
-    <_gumath.gufunc at 0x10e3d5f90>
-    >>> f(xnd.from_buffer(np.arange(20).astype('float64')))
-    xnd([0.0,
-         0.8414709848078965,
-         0.9092974268256817,
-         0.1411200080598672,
-         -0.7568024953079282,
-         -0.9589242746631385,
-         -0.27941549819892586,
-         0.6569865987187891,
-         0.9893582466233818,
-         ...],
-        type='20 * float64')
-    """
-    return lambda fn: _gu_vectorize(fn, gumath_sig, numba_sig)
 
 # global counter for gumath kernel functions
-
 i = 0
 
-def _gu_vectorize(fn, gumath_sig, numba_sig):
+@curry
+def jit_xnd(gumath_sig, numba_sig, ndims, fn):
+    """
+    JIT compiles a function and returns a XND kernel for it.
+
+    Call with the ndtype function signature, the numba signature, and the number of dimensions
+    in each argument and the return value. If the return value as more than 0 dimensions,
+    it will be allocated and passed into your function, so you can fill it up. In this
+    case, the value you return will be ignored.
+    """
     global i
     # JIT right now by passing in numba signature
     dispatcher = jit(numba_sig, nopython=True)(fn)
@@ -47,10 +31,11 @@ def _gu_vectorize(fn, gumath_sig, numba_sig):
     ctx = cres.target_context
     func_ptr = build_kernel_wrapper(
         library=cres.library,
-        context=ctx,
+        ctx=ctx,
         fname=llvm_name,
         signature=cres.signature,
-        envptr=cres.environment.as_pointer(ctx)
+        envptr=cres.environment.as_pointer(ctx),
+        ndims=ndims
     )
 
     # gumath kernel name needs to be unique
@@ -60,67 +45,105 @@ def _gu_vectorize(fn, gumath_sig, numba_sig):
         name=kernel_name,
         sig=gumath_sig,
         ptr=func_ptr,
-        vectorize=False,
         tag='Xnd'
     )
 
 
 
-def build_kernel_wrapper(library, context, fname, signature, envptr):
+def build_kernel_wrapper(library, ctx, fname, signature, envptr, ndims):
     """
     Returns a pointer to a llvm function that can be used as an xnd kernel.
     Like build_ufunc_wrapper
     """
 
     # setup the module and jitted function
-    wrapperlib = context.codegen().create_library('gumath_wrapper')
+    wrapperlib = ctx.codegen().create_library('gumath_wrapper')
     wrapper_module = wrapperlib.create_ir_module('')
 
-    func_type = context.call_conv.get_function_type(
+    func_type = ctx.call_conv.get_function_type(
         signature.return_type, signature.args)
     func = wrapper_module.add_function(func_type, name=fname)
     func.attributes.add("alwaysinline")
 
-    # create 0D xnd kernel function
-    # like https://github.com/plures/gumath/blob/2eba3ba8cc7d4828232138f9805bcd9bb99248ae/libgumath/kernels.c#L135
-    fnty = ir.FunctionType(
+    # create xnd kernel function
+    # we will return a pointer to this function
+    wrapper = wrapper_module.add_function(ir.FunctionType(
         i32,
         (
             ptr(xnd_t),
             ptr(ndt_context_t),
         )
-    )
-
-    # we will return a pointer to this function
-    wrapper = wrapper_module.add_function(fnty, "__gumath__." + func.name)
-    stack, ndt_context = wrapper.args
+    ), "__gumath__." + func.name)
+    stack, _ = wrapper.args
     builder = ir.IRBuilder(wrapper.append_basic_block("entry"))
 
-    inputs = []
-    for i, typ in enumerate(signature.args):
-        llvm_type = context.get_data_type(typ)
-        inputs.append(tf(
-            stack,
-            # get ith input from stack and get ptr to data from xnd object
-            (builder.gep, [index(i), index(3)], True),
-            (builder.bitcast, ptr(ptr(llvm_type))),
-            # gep returns a pointer, so we need to load twice
-            builder.load,
-            builder.load
-        ))
+    return_output = ndims[-1] == 0
+    in_and_outs = []
+    in_and_out_types = list(signature.args)
+    if return_output:
+        in_and_out_types.append(signature.return_type)
+    for i, typ in enumerate(in_and_out_types):
+        llvm_type = ctx.get_data_type(typ)
+        ndim = ndims[i]
+    
+        if ndim == 0:
+            val = builder.load(
+                builder.bitcast(
+                    builder.gep(stack, [index(i), index(3)], True),
+                    ptr(ptr(llvm_type))
+                )
+            )
+            processing_return_value = return_output and i == (len(in_and_out_types) - 1)
+            if not processing_return_value:
+                val = builder.load(val)
+            in_and_outs.append(val)
+            continue
+        
+        t = builder.load(
+            builder.gep(stack, [index(i), index(2)], True),
+        )
+        # transform xnd_t into a struct that numba wants when passing arrays to jitted function
+        # inspured by gm_as_ndarray
+        meminfo = ir.Constant(ptr(i8), None)
+        parent = ir.Constant(ptr(i8), None)
+        datasize = builder.load(builder.gep(t, [index(0), index(4)], True))
+        item_ptr_type = llvm_type.elements[4]
+        itemsize = ir.Constant(i64, ctx.get_abi_sizeof(item_ptr_type.pointee))
+        nitems = builder.sdiv(datasize, itemsize)
+        data = builder.load(
+            builder.bitcast(
+                builder.gep(stack, [index(i), index(3)], True),
+                ptr(item_ptr_type)
+            )
+        )
+        shape = builder.load(builder.alloca(ir.ArrayType(i64, ndim)))
+        strides = builder.load(builder.alloca(ir.ArrayType(i64, ndim)))
+        for j in range(ndim):
+            # a->shape[j] = t->FixedDim.shape;
+            shape = builder.insert_value(shape, builder.load(
+                builder.gep(t, [index(0), index(6), index(0), index(0)], True)
+            ), j)
 
+            # a->strides[j] = t->Concrete.FixedDim.step * a->itemsize;
+            strides = builder.insert_value(strides, builder.mul(itemsize, builder.load(
+                builder.gep(t, [index(0), index(7), index(0), index(0), index(1)], True), 
+            )), j)
+            # t=t->FixedDim.type
+            t = builder.load(builder.bitcast(
+                builder.gep(t, [index(0), index(6), index(0), index(1)], True),
+                ptr(ptr(ndt_t))
+            ))
+        in_and_outs.append(create_literal_struct(builder, llvm_type, [
+            meminfo, parent, nitems, itemsize, data, shape, strides
+        ]))
 
-    llvm_return_type = context.get_data_type(signature.return_type)
-    # pointer to output
-    out = tf(
-        stack,
-        (builder.gep, [index(len(signature.args)), index(3)], True),
-        (builder.bitcast, ptr(ptr(llvm_return_type))),
-        builder.load
-    )
+    if return_output:
+        *inputs, output = in_and_outs
+    else:
+        inputs = in_and_outs
 
     # called numba jitted function on inputs
-    status, retval = context.call_conv.call_function(builder, func,
+    status, retval = ctx.call_conv.call_function(builder, func,
                                                      signature.return_type,
                                                      signature.args, inputs, env=envptr)
 
@@ -128,14 +151,21 @@ def build_kernel_wrapper(library, context, fname, signature, envptr):
         # return -1 on failure
         builder.ret(ir.Constant(i32, -1))
 
-    builder.store(retval, out)
+    if return_output:
+        builder.store(retval, output)
     # return 0 on success
     builder.ret(ir.Constant(i32, 0))
 
-    # cleanup and return pointer
-    del builder
-
-    # print(wrapper_module)
     wrapperlib.add_ir_module(wrapper_module)
     wrapperlib.add_linking_library(library)
     return wrapperlib.get_pointer_to_function(wrapper.name)
+
+
+def create_literal_struct(builder, struct_type, values):
+    """
+    Takes a list of value and creates a literal struct and fill it with those fields
+    """
+    s = builder.load(builder.alloca(struct_type))
+    for i, v in enumerate(values):
+        s = builder.insert_value(s, v, i)
+    return s
