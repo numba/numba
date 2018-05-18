@@ -17,17 +17,8 @@ from numba.ir_utils import (copy_propagate, apply_copy_propagate,
 from numba import ir
 from numba import unittest_support as unittest
 import numpy as np
+from .matmul_usecase import needs_blas
 
-# use xxnrm2 to test call a C function with ctypes
-from numba.targets.linalg import _BLAS
-xxnrm2 = _BLAS().numba_xxnrm2(types.float64)
-
-def remove_dead_xxnrm2(rhs, lives, call_list):
-    if call_list == [xxnrm2]:
-        return rhs.args[4].name not in lives
-    return False
-
-remove_call_handlers.append(remove_dead_xxnrm2)
 
 def test_will_propagate(b, z, w):
     x = 3
@@ -145,7 +136,19 @@ class TestRemoveDead(unittest.TestCase):
         pfunc(A2, i)
         np.testing.assert_array_equal(A1, A2)
 
+    @needs_blas
     def test_alias_ctypes(self):
+        # use xxnrm2 to test call a C function with ctypes
+        from numba.targets.linalg import _BLAS
+        xxnrm2 = _BLAS().numba_xxnrm2(types.float64)
+
+        def remove_dead_xxnrm2(rhs, lives, call_list):
+            if call_list == [xxnrm2]:
+                return rhs.args[4].name not in lives
+            return False
+
+        remove_call_handlers.append(remove_dead_xxnrm2)
+
         def func(ret):
             a = np.ones(4)
             xxnrm2(100, 4, a.ctypes, 1, ret.ctypes)
