@@ -147,6 +147,9 @@ class TestRemoveDead(unittest.TestCase):
                 return rhs.args[4].name not in lives
             return False
 
+        # adding this handler has no-op effect since this function won't match
+        # anything else but it's a bit cleaner to save the state and recover
+        old_remove_handlers = remove_call_handlers[:]
         remove_call_handlers.append(remove_dead_xxnrm2)
 
         def func(ret):
@@ -159,6 +162,8 @@ class TestRemoveDead(unittest.TestCase):
 
         numba.njit(func)(A1)
         pfunc(A2)
+        # recover global state
+        remove_call_handlers[:] = old_remove_handlers
         self.assertEqual(A1[0], A2[0])
 
     def test_alias_reshape1(self):
