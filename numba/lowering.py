@@ -77,6 +77,7 @@ class BaseLower(object):
     """
     Lower IR to LLVM
     """
+
     def __init__(self, context, library, fndesc, func_ir):
         self.library = library
         self.fndesc = fndesc
