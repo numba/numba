@@ -207,7 +207,6 @@ maximum readability with all existing tools (such as code review UIs).
 In addition:
 
 * Docstrings should adhere to the [NumPy docstring convention](http://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_numpy.html).
-* Lines are terminated with \r\n (Windows style).
 
 Stability
 '''''''''
