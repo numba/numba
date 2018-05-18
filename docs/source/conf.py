@@ -41,6 +41,7 @@ extensions = [
     'sphinx.ext.todo',
     #'sphinx.ext.mathjax',
     'sphinx.ext.autodoc',
+    'sphinxcontrib.napoleon',
     'sphinx.ext.graphviz',
     'sphinxcontrib.plantuml',
 ]

@@ -24,3 +24,4 @@ with Numba, we suggest you start with the :doc:`User manual <user/index>`.
    proposals/index.rst
    glossary.rst
    release-notes.rst
+   src/modules.rst
