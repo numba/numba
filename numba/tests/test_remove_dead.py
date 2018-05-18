@@ -94,11 +94,7 @@ class TestRemoveDead(unittest.TestCase):
         remove_dead(test_ir.blocks, test_ir.arg_names, test_ir)
         self.assertTrue(seed_call_exists(test_ir))
 
-    def test_alias_ravel(self):
-        def func(A, i):
-            B = A.ravel()
-            B[i] = 3
-
+    def run_array_index_test(self, func):
         A1 = np.arange(6).reshape(2,3)
         A2 = A1.copy()
         i = 0
@@ -107,34 +103,27 @@ class TestRemoveDead(unittest.TestCase):
         func(A1, i)
         pfunc(A2, i)
         np.testing.assert_array_equal(A1, A2)
+
+    def test_alias_ravel(self):
+        def func(A, i):
+            B = A.ravel()
+            B[i] = 3
+
+        self.run_array_index_test(func)
 
     def test_alias_flat(self):
         def func(A, i):
             B = A.flat
             B[i] = 3
 
-        A1 = np.arange(6).reshape(2,3)
-        A2 = A1.copy()
-        i = 0
-        pfunc = self.compile_parallel(func, (numba.typeof(A1), numba.typeof(i)))
-
-        func(A1, i)
-        pfunc(A2, i)
-        np.testing.assert_array_equal(A1, A2)
+        self.run_array_index_test(func)
 
     def test_alias_transpose1(self):
         def func(A, i):
             B = A.T
             B[i,0] = 3
 
-        A1 = np.arange(6).reshape(2,3)
-        A2 = A1.copy()
-        i = 0
-        pfunc = self.compile_parallel(func, (numba.typeof(A1), numba.typeof(i)))
-
-        func(A1, i)
-        pfunc(A2, i)
-        np.testing.assert_array_equal(A1, A2)
+        self.run_array_index_test(func)
 
     @needs_blas
     def test_alias_ctypes(self):
@@ -171,28 +160,14 @@ class TestRemoveDead(unittest.TestCase):
             B = np.reshape(A, (3,2))
             B[i,0] = 3
 
-        A1 = np.arange(6).reshape(2,3)
-        A2 = A1.copy()
-        i = 0
-        pfunc = self.compile_parallel(func, (numba.typeof(A1), numba.typeof(i)))
-
-        func(A1, i)
-        pfunc(A2, i)
-        np.testing.assert_array_equal(A1, A2)
+        self.run_array_index_test(func)
 
     def test_alias_reshape2(self):
         def func(A, i):
             B = A.reshape(3,2)
             B[i,0] = 3
 
-        A1 = np.arange(6).reshape(2,3)
-        A2 = A1.copy()
-        i = 0
-        pfunc = self.compile_parallel(func, (numba.typeof(A1), numba.typeof(i)))
-
-        func(A1, i)
-        pfunc(A2, i)
-        np.testing.assert_array_equal(A1, A2)
+        self.run_array_index_test(func)
 
 if __name__ == "__main__":
     unittest.main()
