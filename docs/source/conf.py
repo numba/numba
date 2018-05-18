@@ -41,7 +41,8 @@ extensions = [
     'sphinx.ext.todo',
     #'sphinx.ext.mathjax',
     'sphinx.ext.autodoc',
-    #'sphinx.ext.graphviz',
+    'sphinx.ext.graphviz',
+    'sphinxcontrib.plantuml',
 ]
 
 todo_include_todos = True

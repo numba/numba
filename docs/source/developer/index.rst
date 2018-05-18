@@ -17,3 +17,5 @@ Developer Manual
    listings.rst
    stencil.rst
    custom_pipeline.rst
+   directory.rst
+   interaction-overview.rst
