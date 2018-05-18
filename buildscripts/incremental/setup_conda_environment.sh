@@ -39,8 +39,8 @@ if [ $PYTHON \< "3.4" ]; then $PIP_INSTALL singledispatch; fi
 # Install funcsigs for Python < 3.3
 if [ $PYTHON \< "3.3" ]; then $CONDA_INSTALL -c numba funcsigs; fi
 # Install dependencies for building the documentation
-if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx pygments; fi
-if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL sphinx_bootstrap_theme; fi
+if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx pygments graphviz; fi
+if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL sphinx_bootstrap_theme sphinxcontrib-plantuml; fi
 # Install dependencies for code coverage (codecov.io)
 if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi
 # Install SVML
