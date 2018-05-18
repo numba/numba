@@ -125,6 +125,20 @@ class TestRemoveDead(unittest.TestCase):
 
         self.run_array_index_test(func)
 
+    def test_alias_transpose2(self):
+        def func(A, i):
+            B = A.transpose()
+            B[i,0] = 3
+
+        self.run_array_index_test(func)
+
+    def test_alias_transpose3(self):
+        def func(A, i):
+            B = np.transpose(A)
+            B[i,0] = 3
+
+        self.run_array_index_test(func)
+
     @needs_blas
     def test_alias_ctypes(self):
         # use xxnrm2 to test call a C function with ctypes
