@@ -323,3 +323,8 @@ class FunctionIdentity(object):
         self.unique_name = '{}${}'.format(self.func_qualname, uid)
 
         return self
+
+    def derive(self):
+        """Copy the object and increment the unique counter.
+        """
+        return self.from_function(self.func)

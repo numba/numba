@@ -111,6 +111,8 @@ class EnvironmentManager(object):
         """
         Add a constant to the environment, return its index.
         """
+        # print(self.pyapi.builder.function.name)
+        # print('WRITE', self.env, 'const', const)
         # All constants are frozen inside the environment
         if isinstance(const, str):
             const = utils.intern(const)
@@ -128,6 +130,8 @@ class EnvironmentManager(object):
         A borrowed reference is returned.
         """
         assert index < len(self.env.consts)
+        # print('READ', self.env, self.env.consts[index])
+        # cgutils.printf(self.pyapi.builder, "READ from {} but got %p\n".format(hex(id(self.env))), self.env_ptr)
         return self.pyapi.list_getitem(self.env_body.consts, index)
 
 

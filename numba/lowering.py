@@ -4,6 +4,7 @@ from collections import namedtuple
 from functools import partial
 
 from llvmlite.llvmpy.core import Constant, Type, Builder
+from llvmlite import ir as llvmir
 
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
@@ -49,6 +50,7 @@ class BaseLower(object):
     """
     Lower IR to LLVM
     """
+
     def __init__(self, context, library, fndesc, func_ir):
         self.library = library
         self.fndesc = fndesc
@@ -129,7 +131,24 @@ class BaseLower(object):
     def return_exception(self, exc_class, exc_args=None):
         self.call_conv.return_user_exc(self.builder, exc_class, exc_args)
 
+    def emit_environment_object(self):
+        # Define global for the environment and initialize it to NULL
+        envname = self.context.get_env_name(self.fndesc)
+        gvenv = llvmir.GlobalVariable(self.module, cgutils.voidptr_t,
+                                      name=envname)
+        gvenv.linkage = 'weak_odr'  # Ensure single definition
+        gvenv.initializer = cgutils.get_null_value(gvenv.type.pointee)
+
+        # Make Getter function
+        fnty = llvmir.FunctionType(cgutils.voidptr_t, ())
+        getter = llvmir.Function(self.module, fnty, name='get_numba_env')
+        if getter.is_declaration:
+            getter.linkage = 'internal'
+            builder = llvmir.IRBuilder(getter.append_basic_block())
+            builder.ret(builder.load(gvenv))
+
     def lower(self):
+        self.emit_environment_object()
         if self.generator_info is None:
             self.genlower = None
             self.lower_normal_function(self.fndesc)
@@ -457,7 +476,7 @@ class Lower(BaseLower):
 
         # get the return repr of yielded value
         retval = self.context.get_return_value(self.builder, typ, yret)
-        
+
         # return
         self.call_conv.return_value(self.builder, retval)
 

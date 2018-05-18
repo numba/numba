@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import
 
 import sys
+import ctypes
 
 import llvmlite.llvmpy.core as lc
 
@@ -101,6 +102,8 @@ class CPUContext(BaseContext):
 
     def get_env_manager(self, builder, envarg=None):
         envarg = envarg or self.call_conv.get_env_argument(builder.function)
+        env_getter = builder.module.globals['get_numba_env']
+        envarg = builder.call(env_getter, [])
         pyapi = self.get_python_api(builder)
         pyapi.emit_environment_sentry(envarg)
         env_body = self.get_env_body(builder, envarg)
@@ -176,6 +179,10 @@ class CPUContext(BaseContext):
                                        (library,)
                                        )
 
+        ee = library.codegen._engine._ee
+        gvaddr = ee.get_global_value_address(self.get_env_name(fndesc))
+        envptr = (ctypes.c_void_p * 1).from_address(gvaddr)
+        envptr[0] = ctypes.c_void_p(id(env))
         return cfunc
 
     def calc_array_sizeof(self, ndim):
@@ -184,6 +191,7 @@ class CPUContext(BaseContext):
         '''
         aryty = types.Array(types.int32, ndim, 'A')
         return self.get_abi_sizeof(self.get_value_type(aryty))
+
 
 class ParallelOptions(object):
     """

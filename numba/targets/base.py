@@ -278,6 +278,11 @@ class BaseContext(object):
         """
         return funcdesc.default_mangler(name, types)
 
+    def get_env_name(self, fndesc):
+        """Get the environment name given a FunctionDescriptior
+        """
+        return 'NumbaEnv.' + fndesc.mangled_name.lstrip('_Z')
+
     def get_arg_packer(self, fe_args):
         return datamodel.ArgPacker(self.data_model_manager, fe_args)
 

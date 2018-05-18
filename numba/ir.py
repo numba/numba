@@ -932,7 +932,8 @@ class FunctionIR(object):
         if arg_names is not None:
             new_ir.arg_names = arg_names
         new_ir._reset_analysis_variables()
-
+        # Make fresh func_id
+        new_ir.func_id = new_ir.func_id.derive()
         return new_ir
 
     def copy(self):

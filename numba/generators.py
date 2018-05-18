@@ -80,6 +80,7 @@ class BaseGeneratorLower(object):
         the passed-by-reference generator structure).
         """
         lower.setup_function(self.fndesc)
+
         builder = lower.builder
 
         # Insert the generator into the target context in order to allow
