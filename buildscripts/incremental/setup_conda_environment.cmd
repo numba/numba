@@ -23,6 +23,6 @@ if %PYTHON% LSS 3.4 (%PIP_INSTALL% singledispatch)
 if %PYTHON% LSS 3.3 (%CONDA_INSTALL% -c numba funcsigs)
 @rem Install dependencies for building the documentation
 if "%BUILD_DOC%" == "yes" (%CONDA_INSTALL% sphinx pygments graphviz)
-if "%BUILD_DOC%" == "yes" (%PIP_INSTALL% sphinx_bootstrap_theme sphinxcontrib-plantuml sphinxcontrib-napoleon)
+if "%BUILD_DOC%" == "yes" (%PIP_INSTALL% sphinx_bootstrap_theme sphinxcontrib-plantuml sphinxcontrib-napoleon matplotlib)
 @rem Install dependencies for code coverage (codecov.io)
 if "%RUN_COVERAGE%" == "yes" (%PIP_INSTALL% codecov)
