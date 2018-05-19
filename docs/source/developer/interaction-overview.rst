@@ -6,7 +6,9 @@ This is a conceptual representation of the relationship of different elements in
 This is not meant to be an explicit class diagram.
 
 .. uml::
+
   @startuml
+
   namespace Python {
     namespace built_in {
       class PyObject {
@@ -51,4 +53,5 @@ This is not meant to be an explicit class diagram.
   Numba.LLVMlite.DoubleType <-- Numba.Models.PrimitiveModel
   Numba.LLVMlite.FloatType <-- Numba.Models.PrimitiveModel
   Numba.LLVMlite.IntType <-- Numba.Models.PrimitiveModel
+
   @enduml
