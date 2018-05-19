@@ -768,9 +768,8 @@ def np_median(a):
 @register_jitable
 def _collect_percentiles(a, q, skip_nan=False):
 
-    # check all requested percentiles, q, are in required range
-    assert len(q[np.isnan(q)]) == 0, 'Percentiles must be in the range [0,100]'
-    assert np.all(q >= 0) and np.all(q <= 100), 'Percentiles must be in the range [0,100]'
+    if np.any(np.isnan(q)) or np.any(q < 0) or np.any(q > 100):
+        raise ValueError('Percentiles must be in the range [0,100]')
 
     temp_arry = a.flatten()  # use as temp workspace; may mutate
     nan_mask = np.isnan(temp_arry)
@@ -787,21 +786,29 @@ def _collect_percentiles(a, q, skip_nan=False):
             return np.full(len(q), np.nan)
 
     n = len(temp_arry)
-    out = np.empty((len(q)), dtype=np.float64)
-
-    for i in range(len(q)):
-        percentile = q[i]
-        if percentile == 100:
-            val = np.max(temp_arry)  # bypass pivoting
-        elif percentile == 0:
-            val = np.min(temp_arry)  # bypass pivoting
+    if n == 1:
+        val = temp_arry[0]
+        if np.isfinite(val):
+            fill_value = val
         else:
-            rank = 1 + (n - 1) * percentile / 100  # linear interp between closest ranks
-            f = math.floor(rank)
-            m = rank - f
-            lower, upper = _select_two(temp_arry, k=int(f - 1), low=0, high=(n - 1))
-            val = lower + m * (upper - lower)
-        out[i] = val
+            fill_value = np.nan
+        out = np.full(len(q), fill_value, dtype=np.float64)
+    else:
+        out = np.empty(len(q), dtype=np.float64)
+
+        for i in range(len(q)):
+            percentile = q[i]
+            if percentile == 100:
+                val = np.max(temp_arry)  # bypass pivoting
+            elif percentile == 0:
+                val = np.min(temp_arry)  # bypass pivoting
+            else:
+                rank = 1 + (n - 1) * percentile / 100  # linear interp between closest ranks
+                f = math.floor(rank)
+                m = rank - f
+                lower, upper = _select_two(temp_arry, k=int(f - 1), low=0, high=(n - 1))
+                val = lower + m * (upper - lower)
+            out[i] = val
 
     return out
 
@@ -811,9 +818,7 @@ if numpy_version >= (1, 10):
 
         # Note: np.percentile behaviour in the case of an array containing one or
         # more NaNs was changed in numpy 1.10 to return an array of np.NaN of
-        # length equal to q.  It might be possible to branch logic based on numpy
-        # version and replicate the 1.9 behaviour, but for now using a 1.10 feature
-        # guard, pending review.
+        # length equal to q.
 
         def np_percentile_q_scalar_impl(a, q):
             percentiles = np.array([q])
@@ -826,7 +831,7 @@ if numpy_version >= (1, 10):
         def np_percentile_q_array_impl(a, q):
             return _collect_percentiles(a, q)
 
-        if isinstance(q, (types.Float, types.Integer)):
+        if isinstance(q, (types.Float, types.Integer, types.Boolean)):
             return np_percentile_q_scalar_impl
 
         elif isinstance(q, (types.Tuple, types.Sequence)):
@@ -839,11 +844,8 @@ if numpy_version >= (1, 11):
     @overload(np.nanpercentile)
     def np_nanpercentile(a, q):
 
-        # Note: np.nanpercentile was implemented in 1.9, but the return type in the
-        # case of an all-NaN slice was np.nan until 1.11 when it was changed to be
-        # an array of np.NaN of length equal to q.  The 1.9 / 1.10 behaviour is
-        # problematic from a return type unification perspective, so for now using
-        # a 1.11 feature guard, pending review.
+        # Note: np.nanpercentile return type in the case of an all-NaN slice
+        # was changed in 1.11 to be an array of np.NaN of length equal to q.
 
         def np_nanpercentile_q_scalar_impl(a, q):
             percentiles = np.array([q])
@@ -856,7 +858,7 @@ if numpy_version >= (1, 11):
         def np_nanpercentile_q_array_impl(a, q):
             return _collect_percentiles(a, q, skip_nan=True)
 
-        if isinstance(q, (types.Float, types.Integer)):
+        if isinstance(q, (types.Float, types.Integer, types.Boolean)):
             return np_nanpercentile_q_scalar_impl
 
         elif isinstance(q, (types.Tuple, types.Sequence)):

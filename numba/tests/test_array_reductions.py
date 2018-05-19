@@ -343,6 +343,11 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             got = cfunc(a, q)
             self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
 
+        def check_err(a, q):
+            with self.assertRaises(ValueError) as raises:
+                cfunc(a, q)
+            self.assertIn("Percentiles must be in the range [0,100]", str(raises.exception))
+
         def perform_checks(a, q):
             check(a, q)
             a = a.reshape((3, 3, 7))
@@ -352,6 +357,13 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         for a in array_variations(np.arange(63) - 10.5):
             for q in percentile_variations(np.array([0, 50, 100, 66.6])):
                 perform_checks(a, q)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        check_err(np.arange(5), -5)  # q less than 0
+        check_err(np.arange(5), (1, 10, 105))  # q contains value greater than 100
+        check_err(np.arange(5), (1, 10, np.nan))  # q contains nan
 
     @staticmethod
     def _array_variations(a):
@@ -375,16 +387,42 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         yield q[::-1].astype(np.int32).tolist()
         yield q[-1]
         yield int(q[-1])
+        yield tuple(q)
+
+    def check_percentile_edge_cases(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a, q):
+            expected = pyfunc(a, q)
+            got = cfunc(a, q)
+            self.assertPreciseEqual(got, expected, abs_tol='eps')
+
+        cases = (
+            (np.array([1]), 66.6),
+            (np.array([True, False, True]), True),
+            (np.array([-np.inf]), (5, 6)),
+            # FIXME: the following are problematic..
+            # (np.array([1.1, np.inf]), [0, 2.2]),  # -> [nan, inf])
+            # (np.array([1.1, -np.inf, -np.inf]), [100, 10, 0]),  # ->  [1.1, -inf,  nan]
+            # (np.array([1.1, -np.inf, -np.inf, np.inf]), [100, 10, 0]),  # -> [nan, -inf,  nan])
+            # (np.array([1.1, -np.inf, np.inf]), [100, 10, 0]),  # -> [nan, -inf, -inf]
+            # (np.array([1.1, 2.2, np.inf, np.inf]), [100, 10, 0]),  # -> [nan, 1.43, 1.1 ]
+        )
+
+        for a, q in cases:
+            check(a, q)
 
     @unittest.skipUnless(np_version >= (1, 10), "percentile needs Numpy 1.10+")
     def test_percentile_basic(self):
         pyfunc = array_percentile_global
         self.check_percentile_basic(pyfunc, self._array_variations, self._percentile_variations)
+        self.check_percentile_edge_cases(pyfunc)
 
     @unittest.skipUnless(np_version >= (1, 11), "nanpercentile needs Numpy 1.11+")
     def test_nanpercentile_basic(self):
         pyfunc = array_nanpercentile_global
         self.check_percentile_basic(pyfunc, self._array_variations, self._percentile_variations)
+        self.check_percentile_edge_cases(pyfunc)
 
     @unittest.skipUnless(np_version >= (1, 9), "nanmedian needs Numpy 1.9+")
     def test_nanmedian_basic(self):
