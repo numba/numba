@@ -196,8 +196,9 @@ def array_sum(context, builder, sig, args):
         else:
             n2 = n // 2
             n2 -= n2 % 8
-            return (pairwise_sum(arr, n2, 0, n2)
-                    + pairwise_sum(arr, n - n2, n2, n))
+            middle = start + n2
+            return (pairwise_sum(arr, n2, start, middle)
+                    + pairwise_sum(arr, n - n2, middle, stop))
 
     def array_sum_impl(arr):
         n = arr.size
