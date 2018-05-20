@@ -40,7 +40,7 @@ class GumathDispatcher:
         # so we search for it
         entry_point = self.dispatcher.compile(numba_sig)
         cres = [cres for cres in self.dispatcher.overloads.values() if cres.entry_point == entry_point][0]
-        print(cres)
+
         # gumath kernel name needs to be unique
         kernel = unsafe_add_kernel(
             name= f'numba.{self.i}',

@@ -5,6 +5,16 @@ import numpy as np
 from numba import *
 
 
+
+@jit_xnd('... * D, ... * D -> ... * D')
+def add_two(a, b):
+    return a + b
+
+print(add_two(xnd([2, 1, 1]), xnd([4, 5, 6])))
+
+print(add_two(xnd([2.3, 1.3, 1.3]), xnd([4.33, 5.3, 6.3])))
+
+
 @jit_xnd('... * float64 -> ... * float64')
 def sin_thing(a):
     return np.sin(a)
