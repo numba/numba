@@ -2,69 +2,128 @@ from gumath import unsafe_add_kernel
 from llvmlite import ir
 from llvmlite.ir import PointerType as ptr, LiteralStructType as struct
 from functools import partial
+from ndtypes import ndt
 
 from .. import jit
+from .. import types as numba_types
+
 from .xnd_types import *
 
 
-# global counter for gumath kernel functions
-i = 0
+def jit_xnd(ndt_sig):
+    return lambda fn: GumathDispatcher(ndt_sig, fn)
 
-def curry(f):
-    return partial(partial, f)
 
-@curry
-def jit_xnd(gumath_sig, numba_sig, ndims, fn):
+class GumathDispatcher:
     """
-    JIT compiles a function and returns a XND kernel for it.
-
-    Call with the ndtype function signature, the numba signature, and the number of dimensions
-    in each argument and the return value. If the return value as more than 0 dimensions,
-    it will be allocated and passed into your function, so you can fill it up. In this
-    case, the value you return will be ignored.
+    Add gumath kernels based on Python functions.
     """
-    global i
-    # JIT right now by passing in numba signature
-    dispatcher = jit(numba_sig, nopython=True)(fn)
-    # grab the first jitted function, since we are only doing one
-    cres = list(dispatcher.overloads.values())[0]
-    llvm_name = cres.fndesc.llvm_func_name
+    i = 0
 
-    ctx = cres.target_context
-    func_ptr = build_kernel_wrapper(
-        library=cres.library,
-        ctx=ctx,
-        fname=llvm_name,
-        signature=cres.signature,
-        envptr=cres.environment.as_pointer(ctx),
-        ndims=ndims
-    )
+    def __init__(self, ndt_sig, fn):
+        self.cache = {}
+        self.ndt_sig = ndt_sig
+        self.dimensions = list(dimensions_from_ndt(ndt_sig))
+        self.returns_scalar = self.dimensions[-1] == 0
+        self.dispatcher =  jit(nopython=True)(fn)
+    
+    def __call__(self, *args):
+        dtypes = tuple(a.type.hidden_dtype for a in args)
+        return self.get_or_create_kernel(dtypes)(*args)
 
-    # gumath kernel name needs to be unique
-    kernel_name = 'numba' + str(i)
-    i += 1
-    return unsafe_add_kernel(
-        name=kernel_name,
-        sig=gumath_sig,
-        ptr=func_ptr,
-        tag='Xnd'
-    )
+    def get_or_create_kernel(self, dtypes):
+        if dtypes in self.cache:
+            return self.cache[dtypes]
+        numba_sig = self.generate_numba_sig(dtypes)
+
+        # numba gives us back the function, but we want the compile result
+        # so we search for it
+        entry_point = self.dispatcher.compile(numba_sig)
+        cres = [cres for cres in self.dispatcher.overloads.values() if cres.entry_point == entry_point][0]
+        print(cres)
+        # gumath kernel name needs to be unique
+        kernel = unsafe_add_kernel(
+            name= f'numba.{self.i}',
+            sig=self.ndt_sig,
+            ptr=build_kernel_wrapper(cres, self.dimensions),
+            tag='Xnd'
+        )
+        self.i += 1
+        self.cache[dtypes] = kernel
+        return kernel
+
+    def generate_numba_sig(self, dtypes):
+        if not self.returns_scalar:
+            dtypes = list(dtypes) + [infer_return_dtype(self.ndt_sig, dtypes)]
+    
+        return tuple(numba_argument(dtype, ndim) for dtype, ndim in zip(dtypes, self.dimensions))
+
+def ndt_fn_to_dims(ndt_sig):
+    """
+    Returns the inputs and return value of the ndt signature, split by dimension
+
+        >>> ndt_fn_to_dims("... * float64, ... * D -> D")
+        (('... float64', '... D'), ('D'))
+    """
+    for args in ndt_sig.split(" -> "):
+        yield [arg for arg in args.split(", ")]
 
 
+def dimensions_from_ndt(ndt_sig):
+    inputs, returns = ndt_fn_to_dims(ndt_sig)
+    if len(returns) != 1:
+        raise NotImplementedError("Only supports one return vale in gumath signature")
+    for arg in inputs + returns:
+        yield len([None for dim in arg.split(' * ') if '...' not in dim]) - 1
 
-def build_kernel_wrapper(library, ctx, fname, signature, envptr, ndims):
+
+NDT_TO_NUMBA = {
+    ndt("int64"): numba_types.int64,
+    ndt("float64"): numba_types.float64
+}
+
+def numba_argument(ndt_dtype, ndim):
+    numba_type = NDT_TO_NUMBA[ndt_dtype]
+    if ndim == 0:
+        return numba_type
+    return numba_types.npytypes.Array(numba_type, ndim, 'A')
+
+def infer_return_dtype(ndt_sig, input_dtypes):
+    """
+    Determines the return dtype based on the input dtypes.
+
+        >>> infer_return_dtype('... * D, ... * K -> ... * D', ('float64', 'int32'))
+        float64
+    """
+    inputs, returns = ndt_fn_to_dims(ndt_sig)
+    *input_types, return_type = [ndt(arg).hidden_dtype for arg in inputs + returns]
+    if return_type.isconcrete():
+        return return_type
+
+
+    for i, input_type in enumerate(input_types):
+        if input_type == return_type:
+            return input_dtypes[i]
+    
+    raise NotImplementedError(f'Cannot infer return dtype for {ndt_sig} based on inputs {input_dtypes}')
+
+
+def build_kernel_wrapper(cres, ndims):
     """
     Returns a pointer to a llvm function that can be used as an xnd kernel.
     Like build_ufunc_wrapper
     """
-
+    ctx = cres.target_context
+    library = cres.library
+    signature = cres.signature
+    envptr = cres.environment.as_pointer(ctx)
     # setup the module and jitted function
     wrapperlib = ctx.codegen().create_library('gumath_wrapper')
     wrapper_module = wrapperlib.create_ir_module('')
 
     func_type = ctx.call_conv.get_function_type(
         signature.return_type, signature.args)
-    func = wrapper_module.add_function(func_type, name=fname)
+    func = wrapper_module.add_function(func_type, name=cres.fndesc.llvm_func_name)
     func.attributes.add("alwaysinline")
 
     # create xnd kernel function
@@ -171,3 +230,6 @@ def create_literal_struct(builder, struct_type, values):
     for i, v in enumerate(values):
         s = builder.insert_value(s, v, i)
     return s
+
+def curry(f):
+    return partial(partial, f)
