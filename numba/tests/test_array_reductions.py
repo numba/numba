@@ -346,7 +346,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         def check_err(a, q):
             with self.assertRaises(ValueError) as raises:
                 cfunc(a, q)
-            self.assertIn("Percentiles must be in the range [0,100]", str(raises.exception))
+            self.assertEqual("Percentiles must be in the range [0,100]", str(raises.exception))
 
         def perform_checks(a, q):
             check(a, q)
@@ -401,12 +401,13 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             (np.array([1]), 66.6),
             (np.array([True, False, True]), True),
             (np.array([-np.inf]), (5, 6)),
-            # FIXME: the following are problematic..
+
             # (np.array([1.1, np.inf]), [0, 2.2]),  # -> [nan, inf])
             # (np.array([1.1, -np.inf, -np.inf]), [100, 10, 0]),  # ->  [1.1, -inf,  nan]
             # (np.array([1.1, -np.inf, -np.inf, np.inf]), [100, 10, 0]),  # -> [nan, -inf,  nan])
             # (np.array([1.1, -np.inf, np.inf]), [100, 10, 0]),  # -> [nan, -inf, -inf]
             # (np.array([1.1, 2.2, np.inf, np.inf]), [100, 10, 0]),  # -> [nan, 1.43, 1.1 ]
+            # (np.array([1.1, 2.2, np.inf, np.inf, np.inf]), [100, 10, 0]),  # -> [ nan, 1.54, 1.1 ]
         )
 
         for a, q in cases:
