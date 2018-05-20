@@ -111,6 +111,10 @@ pygments_style = 'sphinx'
 #keep_warnings = False
 
 
+# -- Options for autodoc --------------------------------------------------
+
+autodoc_mock_imports = ['matplotlib', 'examples']
+
 # -- Options for HTML output ----------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
