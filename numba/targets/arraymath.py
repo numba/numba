@@ -774,7 +774,7 @@ def _collect_percentiles(a, q, skip_nan=False):
     temp_arry = a.flatten()  # use as temp workspace; may mutate
     nan_mask = np.isnan(temp_arry)
 
-    # check supplied features, a
+    # check elements of supplied array, a
     if skip_nan:
         # if we're told to skip NaNs, but there are no data points left, exit
         temp_arry = temp_arry[~nan_mask]
@@ -787,6 +787,7 @@ def _collect_percentiles(a, q, skip_nan=False):
 
     n = len(temp_arry)
     if n == 1:
+        # single element array - return value same for all q
         val = temp_arry[0]
         if np.isfinite(val):
             fill_value = val

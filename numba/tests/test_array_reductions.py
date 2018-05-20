@@ -398,17 +398,17 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(got, expected, abs_tol='eps')
 
         cases = (
-            (np.array([1]), 66.6),
+            (np.array([1]), (66.6, 33.3)),
             (np.array([True, False, True]), True),
             (np.array([-np.inf]), (5, 6)),
+            (np.array([1, np.nan]), [1]),
 
             # the following cases would fail; numpy behaviour is a little hard to reason about...
+            # (np.array([1, -np.inf]), 1),  # -> [-inf]
             # (np.array([1.1, np.inf]), [0, 2.2]),  # -> [nan, inf])
             # (np.array([1.1, -np.inf, -np.inf]), [100, 10, 0]),  # ->  [1.1, -inf,  nan]
             # (np.array([1.1, -np.inf, -np.inf, np.inf]), [100, 10, 0]),  # -> [nan, -inf,  nan])
             # (np.array([1.1, -np.inf, np.inf]), [100, 10, 0]),  # -> [nan, -inf, -inf]
-            # (np.array([1.1, 2.2, np.inf, np.inf]), [100, 10, 0]),  # -> [nan, 1.43, 1.1 ]
-            # (np.array([1.1, 2.2, np.inf, np.inf, np.inf]), [100, 10, 0]),  # -> [ nan, 1.54, 1.1 ]
         )
 
         for a, q in cases:
