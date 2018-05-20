@@ -402,6 +402,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             (np.array([True, False, True]), True),
             (np.array([-np.inf]), (5, 6)),
 
+            # the following cases would fail; numpy behaviour is a little hard to reason about...
             # (np.array([1.1, np.inf]), [0, 2.2]),  # -> [nan, inf])
             # (np.array([1.1, -np.inf, -np.inf]), [100, 10, 0]),  # ->  [1.1, -inf,  nan]
             # (np.array([1.1, -np.inf, -np.inf, np.inf]), [100, 10, 0]),  # -> [nan, -inf,  nan])
