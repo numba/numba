@@ -162,6 +162,20 @@ class TestPrint(TestCase):
             cfunc(1, (2, 3), (4, 5j))
             self.assertEqual(sys.stdout.getvalue(), '1 hop! (2, 3) 4 5j\n')
 
+    def test_inner_fn_print(self):
+        @jit(nopython=True)
+        def foo(x):
+            print(x)
+
+        @jit(nopython=True)
+        def bar(x):
+            foo(x)
+            foo('hello')
+
+        with captured_stdout():
+            bar(94872)
+            self.assertEqual(sys.stdout.getvalue(), '94872\nhello\n')
+
 
 if __name__ == '__main__':
     unittest.main()
