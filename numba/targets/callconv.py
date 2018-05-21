@@ -254,11 +254,10 @@ class MinimalCallConv(BaseCallConv):
         """
         return func.args[1:]
 
-    def call_function(self, builder, callee, resty, argtys, args, env=None):
+    def call_function(self, builder, callee, resty, argtys, args):
         """
         Call the Numba-compiled *callee*.
         """
-        assert env is None
         retty = callee.args[0].type.pointee
         retvaltmp = cgutils.alloca_once(builder, retty)
         # initialize return value
@@ -437,15 +436,12 @@ class CPUCallConv(BaseCallConv):
     def _get_excinfo_argument(self, func):
         return func.args[1]
 
-    def call_function(self, builder, callee, resty, argtys, args, env=None):
+    def call_function(self, builder, callee, resty, argtys, args):
         """
         Call the Numba-compiled *callee*.
         """
-        if env is None:
-            # This only works with functions that don't use the environment
-            # (nopython functions).
-            env = cgutils.get_null_value(PYOBJECT)
-        is_generator_function = isinstance(resty, types.Generator)
+        # XXX remove this
+        env = cgutils.get_null_value(PYOBJECT)
 
         # XXX better fix for callees that are not function values
         #     (pointers to function; thus have no `.args` attribute)
