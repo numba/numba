@@ -21,13 +21,15 @@ needs_svml = unittest.skipUnless(numba.config.USING_SVML,
 # a map of vector lenghs with corresponding CPU architecture
 vlen2cpu = {2: 'nehalem', 4: 'haswell', 8: 'skylake-avx512'}
 
-# K: SVML functions, V: python functions which are expected to be SIMD vectorized using SVML,
-# explicit references to Python functions here are mostly for sake of instant import checks.
-# TODO: [] and comments below mean unused/untested SVML function, it's to be either enabled or
-#       to be replaced with the explanation why the function cannot be used in Numba
-# TODO: this test does not supprt functions with more than 1 arguments yet
-# the test logic should be modified if there is an SVML function being used under different name
-# or module from Python
+# K: SVML functions, V: python functions which are expected to be SIMD-vectorized
+# using SVML, explicit references to Python functions here are mostly for sake of
+# instant import checks.
+# TODO: [] and comments below mean unused/untested SVML function, it's to be
+#       either enabled or to be replaced with the explanation why the function
+#       cannot be used in Numba
+# TODO: this test does not support functions with more than 1 arguments yet
+# The test logic should be modified if there is an SVML function being used under
+# different name or module from Python
 svml_funcs = {
     "sin":     [np.sin, math.sin],
     "cos":     [np.cos, math.cos],
@@ -75,9 +77,11 @@ svml_funcs = {
 
 # remove untested entries
 svml_funcs = {k: v for k, v in svml_funcs.items() if len(v) > 0}
-# generate lists for functions which belong to numpy and math modules correpondently
-numpy_funcs = [f for f, v in svml_funcs.items() if "<ufunc" in [str(p).split(' ')[0] for p in v]]
-other_funcs = [f for f, v in svml_funcs.items() if "<built-in" in [str(p).split(' ')[0] for p in v]]
+# lists for functions which belong to numpy and math modules correpondently
+numpy_funcs = [f for f, v in svml_funcs.items() if "<ufunc" in \
+                  [str(p).split(' ')[0] for p in v]]
+other_funcs = [f for f, v in svml_funcs.items() if "<built-in" in \
+                  [str(p).split(' ')[0] for p in v]]
 
 
 def func_patterns(func, args, res, dtype, mode, vlen, flags, pad=' '*8):
@@ -95,9 +99,11 @@ def func_patterns(func, args, res, dtype, mode, vlen, flags, pad=' '*8):
     else:
         assert mode == "range" or mode == "prange"
         arg_list = ','.join([a+'[i]' for a in args])
-        body = '{pad}for i in {mode}({res}.size):\n{pad}{pad}{res}[i] += math.{func}({arg_list})\n'. \
+        body = '{pad}for i in {mode}({res}.size):\n' \
+               '{pad}{pad}{res}[i] += math.{func}({arg_list})\n'. \
                format(**locals())
-    # TODO: refactor so this for-loop goes into umbrella function, 'mode' can be 'numpy', '0', 'i' instead
+    # TODO: refactor so this for-loop goes into umbrella function,
+    #       'mode' can be 'numpy', '0', 'i' instead
     # TODO: it will enable mixed usecases like prange + numpy
 
     # type specialization
@@ -105,21 +111,23 @@ def func_patterns(func, args, res, dtype, mode, vlen, flags, pad=' '*8):
     v = vlen*2 if dtype == 'float32' else vlen
     # general expectations
     scalar_func = '$_'+f if numba.config.IS_OSX else '$'+f
-    svml_func = '__svml_%s%d%s,' % (f, v, '' if getattr(flags, 'fastmath', False) else '_ha')
+    svml_func = '__svml_%s%d%s,' % (
+                f, v, '' if getattr(flags, 'fastmath', False) else '_ha')
     if mode == "scalar":
         contains = [scalar_func]
         avoids = [svml_func]
     else:  # will vectorize
         contains = [svml_func]
-        avoids = []  # [scalar_func] - TODO: if possible, force LLVM to prevent generating the failsafe scalar paths
+        avoids = []  # [scalar_func] - TODO: if possible, force LLVM to prevent
+                   #                       generating the failsafe scalar paths
     # special handling
     if func == 'sqrt':
         if mode == "scalar":
             contains = ['sqrts']
-            avoids = [scalar_func, svml_func]  # LLVM uses CPU instruction instead
+            avoids = [scalar_func, svml_func]  # LLVM uses CPU instruction
         elif vlen == 8:
             contains = ['vsqrtp']
-            avoids = [scalar_func, svml_func]  # LLVM uses CPU instruction instead
+            avoids = [scalar_func, svml_func]  # LLVM uses CPU instruction
         # else expect use of SVML for older architectures
     return body, contains, avoids
 
@@ -179,9 +187,12 @@ class TestSVMLGeneration(TestCase):
             missed = [pattern for pattern in contains if not pattern in asm]
             found = [pattern for pattern in avoids if pattern in asm]
             self.assertTrue(not missed and not found,
-                "While expecting %s and no %s,\nit contains:\n%s\nwhen compiling %s" %
-                (str(missed), str(found), '\n'.join([line for line in asm.split('\n')
-                    if cls.asm_filter.search(line) and not '"' in line]), fn.__doc__))
+                "While expecting %s and no %s,\n"
+                "it contains:\n%s\n"
+                "when compiling %s" % (str(missed), str(found), '\n'.join(
+                    [line for line in asm.split('\n')
+                     if cls.asm_filter.search(line) and not '"' in line]),
+                     fn.__doc__))
         # inject it into the class
         setattr(cls, "test_"+usecase_name(*args), test_template)
 
@@ -189,7 +200,8 @@ class TestSVMLGeneration(TestCase):
     def autogenerate(cls):
         test_flags = ['fastmath', ]  # TODO: add 'auto_parallel' ?
         # generate all the combinations of the flags
-        test_flags = sum([list(combinations(test_flags, x)) for x in range(len(test_flags)+1)], [])
+        test_flags = sum([list(combinations(test_flags, x)) for x in range( \
+                                                    len(test_flags)+1)], [])
         flag_list = []  # create Flag class instances
         for ft in test_flags:
             flags = Flags()
