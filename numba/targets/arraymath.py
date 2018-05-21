@@ -804,7 +804,7 @@ def _collect_percentiles(a, q, skip_nan=False):
             elif percentile == 0:
                 val = np.min(temp_arry)  # bypass pivoting
             else:
-                rank = 1 + (n - 1) * percentile / 100  # linear interp between closest ranks
+                rank = 1 + (n - 1) * np.true_divide(percentile, 100.0)  # linear interp between closest ranks
                 f = math.floor(rank)
                 m = rank - f
                 lower, upper = _select_two(temp_arry, k=int(f - 1), low=0, high=(n - 1))

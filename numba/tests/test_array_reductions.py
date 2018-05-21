@@ -335,13 +335,13 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         self.check_median_basic(pyfunc, variations)
 
-    def check_percentile_basic(self, pyfunc, array_variations, percentile_variations, abs_tol=1e-12):
+    def check_percentile_basic(self, pyfunc, array_variations, percentile_variations):
         cfunc = jit(nopython=True)(pyfunc)
 
         def check(a, q):
             expected = pyfunc(a, q)
             got = cfunc(a, q)
-            self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
+            self.assertPreciseEqual(got, expected, abs_tol='eps')
 
         def check_err(a, q):
             with self.assertRaises(ValueError) as raises:
@@ -402,13 +402,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             (np.array([True, False, True]), True),
             (np.array([-np.inf]), (5, 6)),
             (np.array([1, np.nan]), [1]),
-
-            # the following cases would fail; numpy behaviour is a little hard to reason about...
-            # (np.array([1, -np.inf]), 1),  # -> [-inf]
-            # (np.array([1.1, np.inf]), [0, 2.2]),  # -> [nan, inf])
-            # (np.array([1.1, -np.inf, -np.inf]), [100, 10, 0]),  # ->  [1.1, -inf,  nan]
-            # (np.array([1.1, -np.inf, -np.inf, np.inf]), [100, 10, 0]),  # -> [nan, -inf,  nan])
-            # (np.array([1.1, -np.inf, np.inf]), [100, 10, 0]),  # -> [nan, -inf, -inf]
         )
 
         for a, q in cases:
