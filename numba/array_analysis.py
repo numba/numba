@@ -1260,8 +1260,8 @@ class ArrayAnalysis(object):
         if (isinstance(callee_def, (ir.Global, ir.FreeVar))
                 and is_namedtuple_class(callee_def.value)):
             return tuple(expr.args), []
-        if ((isinstance(callee_def, ir.Global) or isinstance(callee_def, ir.FreeVar))
-            and isinstance(callee_def.value, StencilFunc)):
+        if (isinstance(callee_def, (ir.Global, ir.FreeVar))
+                and isinstance(callee_def.value, StencilFunc)):
             args = expr.args
             return self._analyze_stencil(scope, equiv_set, callee_def.value,
                                          expr.loc, args, dict(expr.kws))
