@@ -100,8 +100,7 @@ class CPUContext(BaseContext):
             builder, envptr, _dynfunc._impl_info['offsetof_env_body'])
         return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
 
-    def get_env_manager(self, builder, envarg=None):
-        envarg = envarg or self.call_conv.get_env_argument(builder.function)
+    def get_env_manager(self, builder):
         env_getter = builder.module.globals['get_numba_env']
         envarg = builder.call(env_getter, [])
         pyapi = self.get_python_api(builder)

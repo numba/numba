@@ -405,10 +405,6 @@ class CPUCallConv(BaseCallConv):
         excarg.name = "excinfo"
         excarg.add_attribute("nocapture")
         excarg.add_attribute("noalias")
-        envarg = self.get_env_argument(fn)
-        envarg.name = "env"
-        envarg.add_attribute("nocapture")
-        envarg.add_attribute("noalias")
 
         if noalias:
             args = self.get_arguments(fn)
@@ -423,12 +419,6 @@ class CPUCallConv(BaseCallConv):
         Get the Python-level arguments of LLVM *func*.
         """
         return func.args[3:]
-
-    def get_env_argument(self, func):
-        """
-        Get the environment argument of LLVM *func*.
-        """
-        return func.args[2]
 
     def _get_return_argument(self, func):
         return func.args[0]
