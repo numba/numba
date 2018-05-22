@@ -1633,6 +1633,8 @@ def set_index_var_of_get_setitem(stmt, new_index):
 
 def is_namedtuple_class(c):
     """check if c is a namedtuple class"""
+    if not isinstance(c, type):
+        return False
     # should have only tuple as superclass
     bases = c.__bases__
     if len(bases) != 1 or bases[0] != tuple:
