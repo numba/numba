@@ -4,6 +4,7 @@ import sys
 import ctypes
 
 import llvmlite.llvmpy.core as lc
+from llvmlite import ir as llvmir
 
 from numba import _dynfunc, config
 from numba.callwrapper import PyCallWrapper

@@ -128,7 +128,7 @@ def build_fast_loop_body(context, func, builder, arrays, out, offsets,
                                   env=env)
 
 
-def build_ufunc_wrapper(library, context, fname, signature, objmode, envptr, env):
+def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
     """
     Wrap the scalar function with a loop that iterates over the arguments
     """
@@ -144,6 +144,7 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, envptr, env
 
     wrapperlib = context.codegen().create_library('ufunc_wrapper')
     wrapper_module = wrapperlib.create_ir_module('')
+
     if objmode:
         func_type = context.call_conv.get_function_type(
             types.pyobject, [types.pyobject] * len(signature.args))
@@ -163,6 +164,12 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, envptr, env
 
     builder = Builder(wrapper.append_basic_block("entry"))
 
+    # Prepare Environment
+    envname = context.get_env_name(cres.fndesc)
+    env = cres.environment
+    envptr = builder.load(context.declare_env_global(builder.module, envname))
+
+    # Emit loop
     loopcount = builder.load(arg_dims, name="loopcount")
 
     # Prepare inputs
@@ -305,10 +312,6 @@ class _GufuncWrapper(object):
     def env(self):
         return self.cres.environment
 
-    @property
-    def envptr(self):
-        return self.env.as_pointer(self.context)
-
     def _build_wrapper(self, library, name):
         """
         The LLVM IRBuilder code to create the gufunc wrapper.
@@ -438,7 +441,7 @@ class _GufuncObjectWrapper(_GufuncWrapper):
         innercall, error = _prepare_call_to_object_mode(self.context,
                                                         builder, pyapi, func,
                                                         self.signature,
-                                                        args, env=self.envptr)
+                                                        args)
         return innercall, error
 
     def gen_prologue(self, builder, pyapi):
@@ -459,7 +462,7 @@ def build_gufunc_wrapper(py_func, cres, sin, sout, cache):
 
 
 def _prepare_call_to_object_mode(context, builder, pyapi, func,
-                                 signature, args, env):
+                                 signature, args):
     mod = builder.module
 
     bb_core_return = builder.append_basic_block('ufunc.core.return')

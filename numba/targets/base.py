@@ -283,6 +283,23 @@ class BaseContext(object):
         """
         return 'NumbaEnv.' + fndesc.mangled_name.lstrip('_Z')
 
+    def declare_env_global(self, module, envname):
+        """Declare the Environment pointer as a global of the module.
+
+        Parameters
+        ----------
+        module :
+            The LLVM Module
+        envname : str
+            The name of the global variable.
+        """
+        if envname not in module.globals:
+            gv = llvmir.GlobalVariable(module, cgutils.voidptr_t, name=envname)
+            gv.linkage = 'common'
+            gv.initializer = cgutils.get_null_value(gv.type.pointee)
+
+        return module.globals[envname]
+
     def get_arg_packer(self, fe_args):
         return datamodel.ArgPacker(self.data_model_manager, fe_args)
 
