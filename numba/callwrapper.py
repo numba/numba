@@ -140,7 +140,7 @@ class PyCallWrapper(object):
             builder.ret(api.get_null_object())
 
         # Extract the Environment object from the Closure
-        envptr, env_manager = self.get_env(api, builder, closure)
+        env_manager = self.get_env(api, builder, closure)
 
         cleanup_manager = _ArgManager(self.context, builder, api,
                                       env_manager, endblk, nargs)
@@ -185,7 +185,7 @@ class PyCallWrapper(object):
         env_body = self.context.get_env_body(builder, envptr)
         api.emit_environment_sentry(envptr, return_pyobject=True)
         env_manager = api.get_env_manager(self.env, env_body, envptr)
-        return envptr, env_manager
+        return env_manager
 
     def _simplified_return_type(self):
         """

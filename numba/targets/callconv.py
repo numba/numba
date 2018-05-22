@@ -305,7 +305,7 @@ class CPUCallConv(BaseCallConv):
     The calling convention for CPU targets.
     The implemented function signature is:
 
-        retcode_t (<Python return type>*, excinfo **, env *, ... <Python arguments>)
+        retcode_t (<Python return type>*, excinfo **, ... <Python arguments>)
 
     The return code will be one of the RETCODE_* constants.
     If RETCODE_USEREXC, the exception info pointer will be filled with
@@ -314,9 +314,6 @@ class CPUCallConv(BaseCallConv):
     Caller is responsible for allocating slots for the return value
     and the exception info pointer (passed as first and second arguments,
     respectively).
-
-    The third argument (env *) is a _dynfunc.Environment object, used
-    only for object mode functions.
     """
     _status_ids = itertools.count(1)
 
@@ -386,7 +383,7 @@ class CPUCallConv(BaseCallConv):
         argtypes = list(arginfo.argument_types)
         resptr = self.get_return_type(restype)
         fnty = ir.FunctionType(errcode_t,
-                               [resptr, ir.PointerType(excinfo_ptr_t), PYOBJECT]
+                               [resptr, ir.PointerType(excinfo_ptr_t)]
                                + argtypes)
         return fnty
 
@@ -418,7 +415,7 @@ class CPUCallConv(BaseCallConv):
         """
         Get the Python-level arguments of LLVM *func*.
         """
-        return func.args[3:]
+        return func.args[2:]
 
     def _get_return_argument(self, func):
         return func.args[0]
@@ -430,9 +427,6 @@ class CPUCallConv(BaseCallConv):
         """
         Call the Numba-compiled *callee*.
         """
-        # XXX remove this
-        env = cgutils.get_null_value(PYOBJECT)
-
         # XXX better fix for callees that are not function values
         #     (pointers to function; thus have no `.args` attribute)
         retty = self._get_return_argument(callee.function_type).pointee
@@ -446,7 +440,7 @@ class CPUCallConv(BaseCallConv):
 
         arginfo = self._get_arg_packer(argtys)
         args = list(arginfo.as_arguments(builder, args))
-        realargs = [retvaltmp, excinfoptr, env] + args
+        realargs = [retvaltmp, excinfoptr] + args
         code = builder.call(callee, realargs)
         status = self._get_return_status(builder, code,
                                          builder.load(excinfoptr))
