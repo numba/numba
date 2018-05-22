@@ -281,7 +281,7 @@ class BaseContext(object):
     def get_env_name(self, fndesc):
         """Get the environment name given a FunctionDescriptior
         """
-        return 'NumbaEnv.' + fndesc.mangled_name.lstrip('_Z')
+        return fndesc.env_name
 
     def declare_env_global(self, module, envname):
         """Declare the Environment pointer as a global of the module.

@@ -30,7 +30,7 @@ class GeneratorDescriptor(FunctionDescriptor):
         self = cls(fndesc.native, fndesc.modname, qualname, unique_name,
                    fndesc.doc, fndesc.typemap, restype, fndesc.calltypes,
                    args, fndesc.kws, argtypes=argtypes, mangler=mangler,
-                   inline=True)
+                   inline=True, env_name=fndesc.env_name)
         return self
 
     @property
