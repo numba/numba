@@ -181,13 +181,12 @@ class PyCallWrapper(object):
         builder.ret(api.get_null_object())
 
     def get_env(self, api, builder, closure):
-        # envptr = self.context.get_env_from_closure(builder, closure)
-
         envname = self.context.get_env_name(self.fndesc)
-        envptr = builder.load(self.context.declare_env_global(builder.module,
-                                                              envname))
+        gvptr = self.context.declare_env_global(builder.module, envname)
+        envptr = builder.load(gvptr)
 
         env_body = self.context.get_env_body(builder, envptr)
+
         api.emit_environment_sentry(envptr, return_pyobject=True)
         env_manager = api.get_env_manager(self.env, env_body, envptr)
         return env_manager

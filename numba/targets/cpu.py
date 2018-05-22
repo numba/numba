@@ -173,6 +173,7 @@ class CPUContext(BaseContext):
         # Code generation
         baseptr = library.get_pointer_to_function(fndesc.llvm_func_name)
         fnptr = library.get_pointer_to_function(fndesc.llvm_cpython_wrapper_name)
+        envsetter = library.get_pointer_to_function(self.get_env_name(fndesc) + '.setter')
 
         # Note: we avoid reusing the original docstring to avoid encoding
         # issues on Python 2, see issue #1908
@@ -183,7 +184,7 @@ class CPUContext(BaseContext):
                                        # objects to keepalive with the function
                                        (library,)
                                        )
-
+        # TODO: make this part of codegen/engine
         ee = library.codegen._engine._ee
         gvaddr = ee.get_global_value_address(self.get_env_name(fndesc))
         envptr = (ctypes.c_void_p * 1).from_address(gvaddr)
