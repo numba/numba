@@ -4,6 +4,7 @@ import itertools
 
 import numpy as np
 import sys
+from collections import namedtuple
 
 from numba import unittest_support as unittest
 from numba import njit, typeof, types, typing, typeof, ir, utils, bytecode
@@ -325,6 +326,13 @@ class TestArrayAnalysis(TestCase):
         self._compile_and_test(test_10, (types.intp,types.intp,),
                                asserts=[self.with_assert('A', 'B'),
                                         self.without_assert('C', 'D')])
+
+        T = namedtuple("T", ['a','b'])
+        def test_namedtuple(n):
+            r = T(n, n)
+            return r[0]
+        self._compile_and_test(test_namedtuple, (types.intp,),
+                                equivs=[self.with_equiv('r', ('n', 'n'))],)
 
         def test_shape(A):
             (m, n) = A.shape
