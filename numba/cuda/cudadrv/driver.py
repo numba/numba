@@ -1465,6 +1465,16 @@ def device_pointer_type(devmem):
     return map[ptrtype.value]
 
 
+def get_devptr_for_active_ctx(ptr):
+    """Query the device pointer usable in the current context from an arbitrary
+    pointer.
+    """
+    devptr = c_void_p(0)
+    attr = enums.CU_POINTER_ATTRIBUTE_DEVICE_POINTER
+    driver.cuPointerGetAttribute(byref(devptr), attr, ptr)
+    return devptr
+
+
 def device_extents(devmem):
     """Find the extents (half open begin and end pointer) of the underlying
     device memory allocation.
