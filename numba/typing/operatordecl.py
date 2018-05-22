@@ -5,13 +5,13 @@ Typing declarations for the operator module.
 import operator
 
 from numba import types
-from numba import utils
-from numba.typing.templates import (ConcreteTemplate, AbstractTemplate,
+from numba import utils, jit
+from numba.typing.templates import (CallableTemplate, AbstractTemplate,
                                     signature, Registry)
 
 registry = Registry()
 infer_getattr = registry.register_attr
-infer_global = registry.register_global
+infer = registry.register
 
 
 class MappedOperator(AbstractTemplate):
@@ -21,6 +21,8 @@ class MappedOperator(AbstractTemplate):
 
     def generic(self, args, kws):
         assert not kws
+        if len(args) != self.nargs:
+            return
         args = args[::-1] if self.reverse_args else args
         sig = self.context.resolve_function_type(self.op, args, kws)
         if self.reverse_args and sig is not None:
@@ -28,31 +30,36 @@ class MappedOperator(AbstractTemplate):
         return sig
 
 
-class MappedInplaceOperator(AbstractTemplate):
+# class MappedInplaceOperator(AbstractTemplate):
+#
+#     def generic(self, args, kws):
+#         assert not kws
+#         if len(args) != self.nargs:
+#             return
+#         first = args[0]
+#         op = self.mutable_op if first.mutable else self.immutable_op
+#         return self.context.resolve_function_type(op, args, kws)
 
-    def generic(self, args, kws):
-        assert not kws
-        if not args:
-            return
-        first = args[0]
-        op = self.mutable_op if first.mutable else self.immutable_op
-        return self.context.resolve_function_type(op, args, kws)
 
-
-# Redirect all functions in the operator module to the corresponding
-# built-in operators.
+# Redirect all built-in operators to the corresponding functions in the operator module.
+#
 
 for name, inplace_name, op in utils.operator_map:
     op_func = getattr(operator, name)
+    nargs = (name not in ('pos', 'neg', 'invert', 'not_')) + 1
+
     op_type = type('Operator_' + name, (MappedOperator,),
-                   {'key': op_func, 'op': op,
-                    'reverse_args': op == 'in'})
-    infer_global(op_func, types.Function(op_type))
+                   {'key': op, 'op': op_func,
+                    'reverse_args': op == 'in',
+                    'nargs': nargs})
+    infer(op_type)
 
     if inplace_name:
         op_func = getattr(operator, inplace_name)
-        op_type = type('Operator_' + inplace_name, (MappedInplaceOperator,),
-                       {'key': op_func,
-                        'mutable_op': op + '=',
-                        'immutable_op': op})
-        infer_global(op_func, types.Function(op_type))
+        nargs = (name not in ('pos', 'neg', 'invert', 'not_')) + 1
+
+        op_type = type('Operator_' + inplace_name, (MappedOperator,),
+                       {'key': op + '=', 'op': op_func,
+                        'reverse_args': op == 'in',
+                        'nargs': nargs})
+        infer(op_type)

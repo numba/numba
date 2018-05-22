@@ -93,7 +93,7 @@ class TestTypingError(unittest.TestCase):
             compile_isolated(issue_868, (types.Array(types.int32, 1, 'C'),))
 
         expected = (
-            "Invalid usage of * with parameters (tuple({0} x 1), {0})"
+            "Invalid usage of Function(<built-in function mul>) with parameters (tuple({0} x 1), {0})"
             .format(str(types.intp)))
         self.assertIn(expected, str(raises.exception))
         self.assertIn("[1] During: typing of", str(raises.exception))

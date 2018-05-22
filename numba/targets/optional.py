@@ -1,5 +1,7 @@
 from __future__ import print_function, absolute_import, division
 
+import operator
+
 from numba import types, cgutils, typing
 
 from .imputils import (lower_cast, lower_builtin, lower_getattr_generic,
@@ -35,11 +37,11 @@ def optional_is_none(context, builder, sig, args):
 
 
 # None is/not None
-lower_builtin('is', types.none, types.none)(always_return_true_impl)
+lower_builtin(operator.is_, types.none, types.none)(always_return_true_impl)
 
 # Optional is None
-lower_builtin('is', types.Optional, types.none)(optional_is_none)
-lower_builtin('is', types.none, types.Optional)(optional_is_none)
+lower_builtin(operator.is_, types.Optional, types.none)(optional_is_none)
+lower_builtin(operator.is_, types.none, types.Optional)(optional_is_none)
 
 
 @lower_getattr_generic(types.Optional)

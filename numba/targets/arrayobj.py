@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import, division
 
 import functools
 import math
+import operator
 
 from llvmlite import ir
 import llvmlite.llvmpy.core as lc
@@ -2287,7 +2288,7 @@ def constant_record(context, builder, ty, pyval):
 #-------------------------------------------------------------------------------
 # Comparisons
 
-@lower_builtin('is', types.Array, types.Array)
+@lower_builtin(operator.is_, types.Array, types.Array)
 def array_is(context, builder, sig, args):
     aty, bty = sig.args
     if aty != bty:

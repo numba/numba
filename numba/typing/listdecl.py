@@ -1,5 +1,6 @@
 from __future__ import absolute_import, print_function
 
+import operator
 from .. import types
 from .templates import (ConcreteTemplate, AbstractTemplate, AttributeTemplate,
                         CallableTemplate,  Registry, signature, bound_function,
@@ -148,9 +149,9 @@ class ListAttribute(AttributeTemplate):
                                    list)
 
 
-@infer
+@infer_global(operator.add)
 class AddList(AbstractTemplate):
-    key = "+"
+    #key = operator.add
 
     def generic(self, args, kws):
         if len(args) == 2:
@@ -161,9 +162,9 @@ class AddList(AbstractTemplate):
                     return signature(unified, a, b)
 
 
-@infer
+@infer_global(operator.iadd)
 class InplaceAddList(AbstractTemplate):
-    key = "+="
+    #key = operator.iadd
 
     def generic(self, args, kws):
         if len(args) == 2:
@@ -173,9 +174,9 @@ class InplaceAddList(AbstractTemplate):
                     return signature(a, a, b)
 
 
-@infer
+@infer_global(operator.mul)
 class MulList(AbstractTemplate):
-    key = "*"
+    #key = operator.mul
 
     def generic(self, args, kws):
         a, b = args
@@ -183,9 +184,9 @@ class MulList(AbstractTemplate):
             return signature(a, a, types.intp)
 
 
-@infer
-class InplaceMulList(MulList):
-    key = "*="
+@infer_global(operator.imul)
+class InplaceMulList(MulList): pass
+    #key = operator.imul
 
 
 class ListCompare(AbstractTemplate):
@@ -199,26 +200,26 @@ class ListCompare(AbstractTemplate):
             if res is not None:
                 return signature(types.boolean, lhs, rhs)
 
-@infer
-class ListEq(ListCompare):
-    key = '=='
+@infer_global(operator.eq)
+class ListEq(ListCompare): pass
+    #key = operator.eq
 
-@infer
-class ListNe(ListCompare):
-    key = '!='
+@infer_global(operator.ne)
+class ListNe(ListCompare): pass
+    #key = operator.ne
 
-@infer
-class ListLt(ListCompare):
-    key = '<'
+@infer_global(operator.lt)
+class ListLt(ListCompare): pass
+    #key = operator.lt
 
-@infer
-class ListLe(ListCompare):
-    key = '<='
+@infer_global(operator.le)
+class ListLe(ListCompare): pass
+    #key = operator.le
 
-@infer
-class ListGt(ListCompare):
-    key = '>'
+@infer_global(operator.gt)
+class ListGt(ListCompare): pass
+    #key = operator.gt
 
-@infer
-class ListGe(ListCompare):
-    key = '>='
+@infer_global(operator.ge)
+class ListGe(ListCompare): pass
+    #key = operator.ge

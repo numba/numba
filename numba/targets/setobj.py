@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import, division
 import collections
 import contextlib
 import math
+import operator
 
 from llvmlite import ir
 from numba import types, cgutils, typing
@@ -1151,10 +1152,10 @@ def set_len(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     return inst.get_size()
 
-@lower_builtin("in", types.Any, types.Set)
+@lower_builtin(operator.contains, types.Set, types.Any)
 def in_set(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[1], args[1])
-    return inst.contains(args[0])
+    inst = SetInstance(context, builder, sig.args[0], args[0])
+    return inst.contains(args[1])
 
 @lower_builtin('getiter', types.Set)
 def getiter_set(context, builder, sig, args):
@@ -1274,13 +1275,13 @@ def set_update(context, builder, sig, args):
 
     return context.get_dummy_value()
 
-for op, op_impl in [
-    ('&=', set_intersection_update),
-    ('|=', set_update),
-    ('-=', set_difference_update),
-    ('^=', set_symmetric_difference_update),
+for op_, op_impl in [
+    (operator.iand, set_intersection_update),
+    (operator.ior, set_update),
+    (operator.isub, set_difference_update),
+    (operator.ixor, set_symmetric_difference_update),
     ]:
-    @lower_builtin(op, types.Set, types.Set)
+    @lower_builtin(op_, types.Set, types.Set)
     def set_inplace(context, builder, sig, args, op_impl=op_impl):
         assert sig.return_type == sig.args[0]
         op_impl(context, builder, sig, args)
@@ -1289,7 +1290,7 @@ for op, op_impl in [
 
 # Set operations creating a new set
 
-@lower_builtin("-", types.Set, types.Set)
+@lower_builtin(operator.sub, types.Set, types.Set)
 @lower_builtin("set.difference", types.Set, types.Set)
 def set_difference(context, builder, sig, args):
     def difference_impl(a, b):
@@ -1299,7 +1300,7 @@ def set_difference(context, builder, sig, args):
 
     return context.compile_internal(builder, difference_impl, sig, args)
 
-@lower_builtin("&", types.Set, types.Set)
+@lower_builtin(operator.and_, types.Set, types.Set)
 @lower_builtin("set.intersection", types.Set, types.Set)
 def set_intersection(context, builder, sig, args):
     def intersection_impl(a, b):
@@ -1314,7 +1315,7 @@ def set_intersection(context, builder, sig, args):
 
     return context.compile_internal(builder, intersection_impl, sig, args)
 
-@lower_builtin("^", types.Set, types.Set)
+@lower_builtin(operator.xor, types.Set, types.Set)
 @lower_builtin("set.symmetric_difference", types.Set, types.Set)
 def set_symmetric_difference(context, builder, sig, args):
     def symmetric_difference_impl(a, b):
@@ -1330,7 +1331,7 @@ def set_symmetric_difference(context, builder, sig, args):
     return context.compile_internal(builder, symmetric_difference_impl,
                                     sig, args)
 
-@lower_builtin("|", types.Set, types.Set)
+@lower_builtin(operator.or_, types.Set, types.Set)
 @lower_builtin("set.union", types.Set, types.Set)
 def set_union(context, builder, sig, args):
     def union_impl(a, b):
@@ -1355,7 +1356,7 @@ def set_isdisjoint(context, builder, sig, args):
 
     return inst.isdisjoint(other)
 
-@lower_builtin("<=", types.Set, types.Set)
+@lower_builtin(operator.le, types.Set, types.Set)
 @lower_builtin("set.issubset", types.Set, types.Set)
 def set_issubset(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
@@ -1363,7 +1364,7 @@ def set_issubset(context, builder, sig, args):
 
     return inst.issubset(other)
 
-@lower_builtin(">=", types.Set, types.Set)
+@lower_builtin(operator.ge, types.Set, types.Set)
 @lower_builtin("set.issuperset", types.Set, types.Set)
 def set_issuperset(context, builder, sig, args):
     def superset_impl(a, b):
@@ -1371,35 +1372,35 @@ def set_issuperset(context, builder, sig, args):
 
     return context.compile_internal(builder, superset_impl, sig, args)
 
-@lower_builtin("==", types.Set, types.Set)
+@lower_builtin(operator.eq, types.Set, types.Set)
 def set_isdisjoint(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     other = SetInstance(context, builder, sig.args[1], args[1])
 
     return inst.equals(other)
 
-@lower_builtin("!=", types.Set, types.Set)
+@lower_builtin(operator.ne, types.Set, types.Set)
 def set_ne(context, builder, sig, args):
     def ne_impl(a, b):
         return not a == b
 
     return context.compile_internal(builder, ne_impl, sig, args)
 
-@lower_builtin("<", types.Set, types.Set)
+@lower_builtin(operator.lt, types.Set, types.Set)
 def set_lt(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     other = SetInstance(context, builder, sig.args[1], args[1])
 
     return inst.issubset(other, strict=True)
 
-@lower_builtin(">", types.Set, types.Set)
+@lower_builtin(operator.gt, types.Set, types.Set)
 def set_gt(context, builder, sig, args):
     def gt_impl(a, b):
         return b < a
 
     return context.compile_internal(builder, gt_impl, sig, args)
 
-@lower_builtin('is', types.Set, types.Set)
+@lower_builtin(operator.is_, types.Set, types.Set)
 def set_is(context, builder, sig, args):
     a = SetInstance(context, builder, sig.args[0], args[0])
     b = SetInstance(context, builder, sig.args[1], args[1])

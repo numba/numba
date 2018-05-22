@@ -3,6 +3,7 @@ from __future__ import absolute_import, print_function
 import warnings
 
 import numpy as np
+import operator
 
 from .. import types, utils
 from .templates import (AttributeTemplate, AbstractTemplate, CallableTemplate,
@@ -141,14 +142,14 @@ class Numpy_rules_ufunc(AbstractTemplate):
         return signature(*out)
 
 
-@infer
+@infer_global(operator.pos)
 class UnaryPositiveArray(AbstractTemplate):
     '''Typing template class for +(array) expressions.  This operator is
     special because there is no Numpy ufunc associated with it; we
     include typing for it here (numba.typing.npydecl) because this is
     where the remaining array operators are defined.
     '''
-    key = "+"
+    key = operator.pos
 
     def generic(self, args, kws):
         assert not kws
@@ -159,25 +160,25 @@ class UnaryPositiveArray(AbstractTemplate):
 
 class NumpyRulesArrayOperator(Numpy_rules_ufunc):
     _op_map = {
-         '+': "add",
-         '-': "subtract",
-         '*': "multiply",
-        '/?': "divide",
-         '/': "true_divide",
-        '//': "floor_divide",
-         '%': "remainder",
-        '**': "power",
-        '<<': "left_shift",
-        '>>': "right_shift",
-         '&': "bitwise_and",
-         '|': "bitwise_or",
-         '^': "bitwise_xor",
-        '==': "equal",
-         '>': "greater",
-        '>=': "greater_equal",
-         '<': "less",
-        '<=': "less_equal",
-        '!=': "not_equal",
+        operator.add: "add",
+        operator.sub: "subtract",
+        operator.mul: "multiply",
+        #'/?': "divide",
+        operator.truediv: "true_divide",
+        operator.floordiv: "floor_divide",
+        operator.mod: "remainder",
+        operator.pow: "power",
+        operator.lshift: "left_shift",
+        operator.rshift: "right_shift",
+        operator.and_: "bitwise_and",
+        operator.or_: "bitwise_or",
+        operator.xor: "bitwise_xor",
+        operator.eq: "equal",
+        operator.gt: "greater",
+        operator.ge: "greater_equal",
+        operator.lt: "less",
+        operator.le: "less_equal",
+        operator.ne: "not_equal",
     }
 
     @property
@@ -187,8 +188,9 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
     @classmethod
     def install_operations(cls):
         for op, ufunc_name in cls._op_map.items():
-            infer(type("NumpyRulesArrayOperator_" + ufunc_name, (cls,),
-                         dict(key=op)))
+            infer_global(op)(
+                type("NumpyRulesArrayOperator_" + ufunc_name, (cls,), dict(key=op))
+            )
 
     def generic(self, args, kws):
         '''Overloads and calls base class generic() method, returning
@@ -217,9 +219,21 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
 _binop_map = NumpyRulesArrayOperator._op_map
 
 class NumpyRulesInplaceArrayOperator(NumpyRulesArrayOperator):
-    _op_map = dict((inp, _binop_map[binop])
-                   for (inp, binop) in utils.inplace_map.items()
-                   if binop in _binop_map)
+    _op_map = {
+        operator.iadd: "add",
+        operator.isub: "subtract",
+        operator.imul: "multiply",
+        #'/?=': "divide",
+        operator.itruediv: "true_divide",
+        operator.ifloordiv: "floor_divide",
+        operator.imod: "remainder",
+        operator.ipow: "power",
+        operator.ilshift: "left_shift",
+        operator.irshift: "right_shift",
+        operator.iand: "bitwise_and",
+        operator.ior: "bitwise_or",
+        operator.ixor: "bitwise_xor",
+    }
 
     def generic(self, args, kws):
         # Type the inplace operator as if an explicit output was passed,
@@ -242,8 +256,8 @@ class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
         # Positive is a special case since there is no Numpy ufunc
         # corresponding to it (it's essentially an identity operator).
         # See UnaryPositiveArray, above.
-        '-': "negative",
-        '~': "invert",
+        operator.neg: "negative",
+        operator.invert: "invert",
     }
 
     def generic(self, args, kws):
@@ -1007,9 +1021,9 @@ class VDot(CallableTemplate):
         return typer
 
 
-@infer
+@infer_global(operator.matmul)
 class MatMul(MatMulTyperMixin, AbstractTemplate):
-    key = "@"
+    key = operator.matmul
     func_name = "'@'"
 
     def generic(self, args, kws):

@@ -4,6 +4,7 @@ import math
 import numbers
 
 import numpy as np
+import operator
 
 from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant
@@ -166,15 +167,16 @@ def int_divmod_impl(context, builder, sig, args):
                               (builder.load(quot), builder.load(rem)))
 
 
-@lower_builtin('/?', types.Integer, types.Integer)
-@lower_builtin('//', types.Integer, types.Integer)
+@lower_builtin(operator.floordiv, types.Integer, types.Integer)
+@lower_builtin(operator.ifloordiv, types.Integer, types.Integer)
 def int_floordiv_impl(context, builder, sig, args):
     quot, rem = _int_divmod_impl(context, builder, sig, args,
                                  "integer division by zero")
     return builder.load(quot)
 
 
-@lower_builtin('/', types.Integer, types.Integer)
+@lower_builtin(operator.truediv, types.Integer, types.Integer)
+@lower_builtin(operator.itruediv, types.Integer, types.Integer)
 def int_truediv_impl(context, builder, sig, args):
     [va, vb] = args
     [ta, tb] = sig.args
@@ -186,7 +188,8 @@ def int_truediv_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin('%', types.Integer, types.Integer)
+@lower_builtin(operator.mod, types.Integer, types.Integer)
+@lower_builtin(operator.imod, types.Integer, types.Integer)
 def int_rem_impl(context, builder, sig, args):
     quot, rem = _int_divmod_impl(context, builder, sig, args,
                                  "integer modulo by zero")
@@ -245,8 +248,10 @@ def int_power_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin('**', types.Integer, types.Const)
-@lower_builtin('**', types.Float, types.Const)
+@lower_builtin(operator.pow, types.Integer, types.Const)
+@lower_builtin(operator.ipow, types.Integer, types.Const)
+@lower_builtin(operator.pow, types.Float, types.Const)
+@lower_builtin(operator.ipow, types.Float, types.Const)
 def static_power_impl(context, builder, sig, args):
     """
     a ^ b, where a is an integer or real, and b a constant integer
@@ -502,18 +507,15 @@ def bool_unary_positive_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-lower_builtin('==', types.boolean, types.boolean)(int_eq_impl)
-lower_builtin('!=', types.boolean, types.boolean)(int_ne_impl)
-lower_builtin('<', types.boolean, types.boolean)(int_ult_impl)
-lower_builtin('<=', types.boolean, types.boolean)(int_ule_impl)
-lower_builtin('>', types.boolean, types.boolean)(int_ugt_impl)
-lower_builtin('>=', types.boolean, types.boolean)(int_uge_impl)
-lower_builtin('-', types.boolean)(bool_negate_impl)
-lower_builtin('+', types.boolean)(bool_unary_positive_impl)
+lower_builtin(operator.eq, types.boolean, types.boolean)(int_eq_impl)
+lower_builtin(operator.ne, types.boolean, types.boolean)(int_ne_impl)
+lower_builtin(operator.lt, types.boolean, types.boolean)(int_ult_impl)
+lower_builtin(operator.le, types.boolean, types.boolean)(int_ule_impl)
+lower_builtin(operator.gt, types.boolean, types.boolean)(int_ugt_impl)
+lower_builtin(operator.ge, types.boolean, types.boolean)(int_uge_impl)lower_builtin(operator.neg, types.boolean)(bool_negate_impl)
+lower_builtin(operator.pos, types.boolean)(bool_unary_positive_impl)
 
-
-@lower_builtin('==', types.Const, types.Const)
-def const_eq_impl(context, builder, sig, args):
+@lower_builtin('==', types.Const, types.Const)def const_eq_impl(context, builder, sig, args):
     arg1, arg2 = sig.args
     val = 0
     if arg1.value==arg2.value:
@@ -521,7 +523,7 @@ def const_eq_impl(context, builder, sig, args):
     res = ir.Constant(ir.IntType(1), val)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin('!=', types.Const, types.Const)
+@lower_builtin(operator.ne, types.Const, types.Const)
 def const_eq_impl(context, builder, sig, args):
     arg1, arg2 = sig.args
     val = 0
@@ -533,46 +535,57 @@ def const_eq_impl(context, builder, sig, args):
 def _implement_integer_operators():
     ty = types.Integer
 
-    lower_builtin('+', ty, ty)(int_add_impl)
-    lower_builtin('-', ty, ty)(int_sub_impl)
-    lower_builtin('*', ty, ty)(int_mul_impl)
-    lower_builtin('==', ty, ty)(int_eq_impl)
-    lower_builtin('!=', ty, ty)(int_ne_impl)
+    lower_builtin(operator.add, ty, ty)(int_add_impl)
+    lower_builtin(operator.iadd, ty, ty)(int_add_impl)
+    lower_builtin(operator.sub, ty, ty)(int_sub_impl)
+    lower_builtin(operator.isub, ty, ty)(int_sub_impl)
+    lower_builtin(operator.mul, ty, ty)(int_mul_impl)
+    lower_builtin(operator.imul, ty, ty)(int_mul_impl)
+    lower_builtin(operator.eq, ty, ty)(int_eq_impl)
+    lower_builtin(operator.ne, ty, ty)(int_ne_impl)
 
-    lower_builtin('<<', ty, ty)(int_shl_impl)
-    lower_builtin('>>', ty, ty)(int_shr_impl)
+    lower_builtin(operator.lshift, ty, ty)(int_shl_impl)
+    lower_builtin(operator.ilshift, ty, ty)(int_shl_impl)
+    lower_builtin(operator.rshift, ty, ty)(int_shr_impl)
+    lower_builtin(operator.irshift, ty, ty)(int_shr_impl)
 
-    lower_builtin('-', ty)(int_negate_impl)
-    lower_builtin('+', ty)(int_positive_impl)
+    lower_builtin(operator.neg, ty)(int_negate_impl)
+    lower_builtin(operator.pos, ty)(int_positive_impl)
 
-    lower_builtin('**', ty, ty)(int_power_impl)
+    lower_builtin(operator.pow, ty, ty)(int_power_impl)
+    lower_builtin(operator.ipow, ty, ty)(int_power_impl)
     lower_builtin(pow, ty, ty)(int_power_impl)
 
     for ty in types.unsigned_domain:
-        lower_builtin('<', ty, ty)(int_ult_impl)
-        lower_builtin('<=', ty, ty)(int_ule_impl)
-        lower_builtin('>', ty, ty)(int_ugt_impl)
-        lower_builtin('>=', ty, ty)(int_uge_impl)
-        lower_builtin('**', types.Float, ty)(int_power_impl)
+        lower_builtin(operator.lt, ty, ty)(int_ult_impl)
+        lower_builtin(operator.le, ty, ty)(int_ule_impl)
+        lower_builtin(operator.gt, ty, ty)(int_ugt_impl)
+        lower_builtin(operator.ge, ty, ty)(int_uge_impl)
+        lower_builtin(operator.pow, types.Float, ty)(int_power_impl)
+        lower_builtin(operator.ipow, types.Float, ty)(int_power_impl)
         lower_builtin(pow, types.Float, ty)(int_power_impl)
         lower_builtin(abs, ty)(uint_abs_impl)
 
     for ty in types.signed_domain:
-        lower_builtin('<', ty, ty)(int_slt_impl)
-        lower_builtin('<=', ty, ty)(int_sle_impl)
-        lower_builtin('>', ty, ty)(int_sgt_impl)
-        lower_builtin('>=', ty, ty)(int_sge_impl)
-        lower_builtin('**', types.Float, ty)(int_power_impl)
+        lower_builtin(operator.lt, ty, ty)(int_slt_impl)
+        lower_builtin(operator.le, ty, ty)(int_sle_impl)
+        lower_builtin(operator.gt, ty, ty)(int_sgt_impl)
+        lower_builtin(operator.ge, ty, ty)(int_sge_impl)
+        lower_builtin(operator.pow, types.Float, ty)(int_power_impl)
+        lower_builtin(operator.ipow, types.Float, ty)(int_power_impl)
         lower_builtin(pow, types.Float, ty)(int_power_impl)
         lower_builtin(abs, ty)(int_abs_impl)
 
 def _implement_bitwise_operators():
     for ty in (types.Boolean, types.Integer):
-        lower_builtin('&', ty, ty)(int_and_impl)
-        lower_builtin('|', ty, ty)(int_or_impl)
-        lower_builtin('^', ty, ty)(int_xor_impl)
+        lower_builtin(operator.and_, ty, ty)(int_and_impl)
+        lower_builtin(operator.iand, ty, ty)(int_and_impl)
+        lower_builtin(operator.or_, ty, ty)(int_or_impl)
+        lower_builtin(operator.ior, ty, ty)(int_or_impl)
+        lower_builtin(operator.xor, ty, ty)(int_xor_impl)
+        lower_builtin(operator.ixor, ty, ty)(int_xor_impl)
 
-        lower_builtin('~', ty)(int_invert_impl)
+        lower_builtin(operator.invert, ty)(int_invert_impl)
 
 _implement_integer_operators()
 
@@ -889,27 +902,33 @@ def real_sign_impl(context, builder, sig, args):
 
 ty = types.Float
 
-lower_builtin('+', ty, ty)(real_add_impl)
-lower_builtin('-', ty, ty)(real_sub_impl)
-lower_builtin('*', ty, ty)(real_mul_impl)
-lower_builtin('/?', ty, ty)(real_div_impl)
-lower_builtin('//', ty, ty)(real_floordiv_impl)
-lower_builtin('/', ty, ty)(real_div_impl)
-lower_builtin('%', ty, ty)(real_mod_impl)
-lower_builtin('**', ty, ty)(real_power_impl)
+lower_builtin(operator.add, ty, ty)(real_add_impl)
+lower_builtin(operator.iadd, ty, ty)(real_add_impl)
+lower_builtin(operator.sub, ty, ty)(real_sub_impl)
+lower_builtin(operator.isub, ty, ty)(real_sub_impl)
+lower_builtin(operator.mul, ty, ty)(real_mul_impl)
+lower_builtin(operator.imul, ty, ty)(real_mul_impl)
+lower_builtin(operator.floordiv, ty, ty)(real_floordiv_impl)
+lower_builtin(operator.ifloordiv, ty, ty)(real_floordiv_impl)
+lower_builtin(operator.truediv, ty, ty)(real_div_impl)
+lower_builtin(operator.itruediv, ty, ty)(real_div_impl)
+lower_builtin(operator.mod, ty, ty)(real_mod_impl)
+lower_builtin(operator.imod, ty, ty)(real_mod_impl)
+lower_builtin(operator.pow, ty, ty)(real_power_impl)
+lower_builtin(operator.ipow, ty, ty)(real_power_impl)
 lower_builtin(pow, ty, ty)(real_power_impl)
 
-lower_builtin('==', ty, ty)(real_eq_impl)
-lower_builtin('!=', ty, ty)(real_ne_impl)
-lower_builtin('<', ty, ty)(real_lt_impl)
-lower_builtin('<=', ty, ty)(real_le_impl)
-lower_builtin('>', ty, ty)(real_gt_impl)
-lower_builtin('>=', ty, ty)(real_ge_impl)
+lower_builtin(operator.eq, ty, ty)(real_eq_impl)
+lower_builtin(operator.ne, ty, ty)(real_ne_impl)
+lower_builtin(operator.lt, ty, ty)(real_lt_impl)
+lower_builtin(operator.le, ty, ty)(real_le_impl)
+lower_builtin(operator.gt, ty, ty)(real_gt_impl)
+lower_builtin(operator.ge, ty, ty)(real_ge_impl)
 
 lower_builtin(abs, ty)(real_abs_impl)
 
-lower_builtin('-', ty)(real_negate_impl)
-lower_builtin('+', ty)(real_positive_impl)
+lower_builtin(operator.neg, ty)(real_negate_impl)
+lower_builtin(operator.pos, ty)(real_positive_impl)
 
 del ty
 
@@ -950,7 +969,8 @@ for cls in (types.Float, types.Integer):
     lower_builtin("complex.conjugate", cls)(real_conjugate_impl)
 
 
-@lower_builtin("**", types.Complex, types.Complex)
+@lower_builtin(operator.pow, types.Complex, types.Complex)
+@lower_builtin(operator.ipow, types.Complex, types.Complex)
 @lower_builtin(pow, types.Complex, types.Complex)
 def complex_power_impl(context, builder, sig, args):
     [ca, cb] = args
@@ -1136,17 +1156,20 @@ def complex_abs_impl(context, builder, sig, args):
 
 ty = types.Complex
 
-lower_builtin("+", ty, ty)(complex_add_impl)
-lower_builtin("-", ty, ty)(complex_sub_impl)
-lower_builtin("*", ty, ty)(complex_mul_impl)
-lower_builtin("/?", ty, ty)(complex_div_impl)
-lower_builtin("/", ty, ty)(complex_div_impl)
-lower_builtin("-", ty)(complex_negate_impl)
-lower_builtin("+", ty)(complex_positive_impl)
+lower_builtin(operator.add, ty, ty)(complex_add_impl)
+lower_builtin(operator.iadd, ty, ty)(complex_add_impl)
+lower_builtin(operator.sub, ty, ty)(complex_sub_impl)
+lower_builtin(operator.isub, ty, ty)(complex_sub_impl)
+lower_builtin(operator.mul, ty, ty)(complex_mul_impl)
+lower_builtin(operator.imul, ty, ty)(complex_mul_impl)
+lower_builtin(operator.truediv, ty, ty)(complex_div_impl)
+lower_builtin(operator.itruediv, ty, ty)(complex_div_impl)
+lower_builtin(operator.neg, ty)(complex_negate_impl)
+lower_builtin(operator.pos, ty)(complex_positive_impl)
 # Complex modulo is deprecated in python3
 
-lower_builtin('==', ty, ty)(complex_eq_impl)
-lower_builtin('!=', ty, ty)(complex_ne_impl)
+lower_builtin(operator.eq, ty, ty)(complex_eq_impl)
+lower_builtin(operator.ne, ty, ty)(complex_ne_impl)
 
 lower_builtin(abs, ty)(complex_abs_impl)
 
@@ -1201,9 +1224,9 @@ def complex_as_bool(context, builder, sig, args):
 
 
 for ty in (types.Integer, types.Float, types.Complex):
-    lower_builtin('not', ty)(number_not_impl)
+    lower_builtin(operator.not_, ty)(number_not_impl)
 
-lower_builtin('not', types.boolean)(number_not_impl)
+lower_builtin(operator.not_, types.boolean)(number_not_impl)
 
 
 #------------------------------------------------------------------------------

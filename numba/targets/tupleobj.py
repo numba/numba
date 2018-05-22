@@ -4,6 +4,7 @@ Implementation of tuple objects
 
 from llvmlite import ir
 import llvmlite.llvmpy.core as lc
+import operator
 
 from .imputils import (lower_builtin, lower_getattr_generic, lower_cast,
                        lower_constant,
@@ -19,7 +20,7 @@ def namedtuple_constructor(context, builder, sig, args):
     # The tuple's contents are borrowed
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
-@lower_builtin('+', types.BaseTuple, types.BaseTuple)
+@lower_builtin(operator.add, types.BaseTuple, types.BaseTuple)
 def tuple_add(context, builder, sig, args):
     left, right = [cgutils.unpack_tuple(builder, x) for x in args]
     res = context.make_tuple(builder, sig.return_type, left + right)
@@ -47,7 +48,7 @@ def tuple_cmp_ordered(context, builder, op, sig, args):
     builder.position_at_end(bbend)
     return builder.load(res)
 
-@lower_builtin('==', types.BaseTuple, types.BaseTuple)
+@lower_builtin(operator.eq, types.BaseTuple, types.BaseTuple)
 def tuple_eq(context, builder, sig, args):
     tu, tv = sig.args
     u, v = args
@@ -62,27 +63,27 @@ def tuple_eq(context, builder, sig, args):
         res = builder.and_(res, pred)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin('!=', types.BaseTuple, types.BaseTuple)
+@lower_builtin(operator.ne, types.BaseTuple, types.BaseTuple)
 def tuple_ne(context, builder, sig, args):
     res = builder.not_(tuple_eq(context, builder, sig, args))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin('<', types.BaseTuple, types.BaseTuple)
+@lower_builtin(operator.lt, types.BaseTuple, types.BaseTuple)
 def tuple_lt(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, '<', sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin('<=', types.BaseTuple, types.BaseTuple)
+@lower_builtin(operator.le, types.BaseTuple, types.BaseTuple)
 def tuple_le(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, '<=', sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin('>', types.BaseTuple, types.BaseTuple)
+@lower_builtin(operator.gt, types.BaseTuple, types.BaseTuple)
 def tuple_gt(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, '>', sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin('>=', types.BaseTuple, types.BaseTuple)
+@lower_builtin(operator.ge, types.BaseTuple, types.BaseTuple)
 def tuple_ge(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, '>=', sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)

@@ -145,6 +145,9 @@ operator_map = [
     ('le', '', '<='),
     ('gt', '', '>'),
     ('ge', '', '>='),
+    ('is_', '', 'is'),
+    ('is_not', '', 'is not'),
+    ('matmul', 'imatmul', '@'),
     # This one has its args reversed!
     ('contains', '', 'in'),
     # Unary
@@ -152,6 +155,7 @@ operator_map = [
     ('neg', '', '-'),
     ('invert', '', '~'),
     ('not_', '', 'not'),
+    ('truth', '', 'is_true'),
     ]
 
 if not IS_PY3:
@@ -159,8 +163,13 @@ if not IS_PY3:
 if sys.version_info >= (3, 5):
     operator_map.append(('matmul', 'imatmul', '@'))
 
-# Map of known in-place operators to their corresponding copying operators
+# Map of known in-place builtin operators to their corresponding copying operators
 inplace_map = dict((op + '=', op)
+                   for (_bin, _inp, op) in operator_map
+                   if _inp)
+
+# Map of known copying operators from the operator module to their corresponding in-place operators
+inplace_operator_map = dict((_bin, _inp)
                    for (_bin, _inp, op) in operator_map
                    if _inp)
 

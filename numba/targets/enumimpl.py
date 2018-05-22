@@ -1,14 +1,14 @@
 """
 Implementation of enums.
 """
-
+import operator
 
 from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
                        lower_cast, lower_constant, impl_ret_untracked)
 from .. import types
 
 
-@lower_builtin('==', types.EnumMember, types.EnumMember)
+@lower_builtin(operator.eq, types.EnumMember, types.EnumMember)
 def enum_eq(context, builder, sig, args):
     tu, tv = sig.args
     u, v = args
@@ -17,7 +17,7 @@ def enum_eq(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin('is', types.EnumMember, types.EnumMember)
+@lower_builtin(operator.is_, types.EnumMember, types.EnumMember)
 def enum_is(context, builder, sig, args):
     tu, tv = sig.args
     u, v = args
@@ -29,7 +29,7 @@ def enum_is(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin('!=', types.EnumMember, types.EnumMember)
+@lower_builtin(operator.ne, types.EnumMember, types.EnumMember)
 def enum_ne(context, builder, sig, args):
     tu, tv = sig.args
     u, v = args

@@ -379,18 +379,32 @@ class TestOperators(TestCase):
     op = LiteralOperatorImpl
 
     _bitwise_opnames = {
-        'bitshift_left_usecase': '<<',
-        'bitshift_ileft_usecase': '<<',
-        'bitshift_right_usecase': '>>',
-        'bitshift_iright_usecase': '>>',
-        'bitwise_and_usecase': '&',
-        'bitwise_iand_usecase': '&',
-        'bitwise_or_usecase': '|',
-        'bitwise_ior_usecase': '|',
-        'bitwise_xor_usecase': '^',
-        'bitwise_ixor_usecase': '^',
-        'bitwise_not_usecase_binary': '~',
+        'bitshift_left_usecase': operator.lshift,
+        'bitshift_ileft_usecase': operator.ilshift,
+        'bitshift_right_usecase': operator.rshift,
+        'bitshift_iright_usecase': operator.irshift,
+        'bitwise_and_usecase': operator.and_,
+        'bitwise_iand_usecase': operator.iand,
+        'bitwise_or_usecase': operator.or_,
+        'bitwise_ior_usecase': operator.ior,
+        'bitwise_xor_usecase': operator.xor,
+        'bitwise_ixor_usecase': operator.ixor,
+        'bitwise_not_usecase_binary': operator.invert,
     }
+
+    # _bitwise_opnames = {
+    #     'bitshift_left_usecase': '<<',
+    #     'bitshift_ileft_usecase': '<<',
+    #     'bitshift_right_usecase': '>>',
+    #     'bitshift_iright_usecase': '>>',
+    #     'bitwise_and_usecase': '&',
+    #     'bitwise_iand_usecase': '&',
+    #     'bitwise_or_usecase': '|',
+    #     'bitwise_ior_usecase': '|',
+    #     'bitwise_xor_usecase': '^',
+    #     'bitwise_ixor_usecase': '^',
+    #     'bitwise_not_usecase_binary': '~',
+    # }
 
     def run_test_ints(self, pyfunc, x_operands, y_operands, types_list,
                       flags=force_pyobj_flags):

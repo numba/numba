@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import itertools
 
 import numpy as np
+import operator
 
 from numba import types, prange
 from numba.parfor import internal_prange
@@ -165,19 +166,34 @@ class BinOp(ConcreteTemplate):
     cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
 
 
-@infer
+@infer_global(operator.add)
 class BinOpAdd(BinOp):
-    key = "+"
+    key = operator.add
 
 
-@infer
+@infer_global(operator.iadd)
+class BinOpAdd(BinOp):
+    key = operator.iadd
+
+
+@infer_global(operator.sub)
 class BinOpSub(BinOp):
-    key = "-"
+    key = operator.sub
 
 
-@infer
+@infer_global(operator.isub)
+class BinOpSub(BinOp):
+    key = operator.isub
+
+
+@infer_global(operator.mul)
 class BinOpMul(BinOp):
-    key = "*"
+    key = operator.mul
+
+
+@infer_global(operator.imul)
+class BinOpMul(BinOp):
+    key = operator.imul
 
 
 @infer
@@ -185,25 +201,54 @@ class BinOpDiv(BinOp):
     key = "/?"
 
 
-@infer
+@infer_global(operator.mod)
 class BinOpMod(ConcreteTemplate):
-    key = "%"
+    key = operator.mod
+
     cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
 
-@infer
+@infer_global(operator.imod)
+class BinOpMod(ConcreteTemplate):
+    key = operator.imod
+
+    cases = list(integer_binop_cases)
+    cases += [signature(op, op, op) for op in sorted(types.real_domain)]
+
+
+@infer_global(operator.truediv)
 class BinOpTrueDiv(ConcreteTemplate):
-    key = "/"
+    key = operator.truediv
+
     cases = [signature(types.float64, op1, op2)
              for op1, op2 in itertools.product(machine_ints, machine_ints)]
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
     cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
 
 
-@infer
+@infer_global(operator.itruediv)
+class BinOpTrueDiv(ConcreteTemplate):
+    key = operator.itruediv
+
+    cases = [signature(types.float64, op1, op2)
+             for op1, op2 in itertools.product(machine_ints, machine_ints)]
+    cases += [signature(op, op, op) for op in sorted(types.real_domain)]
+    cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
+
+
+@infer_global(operator.floordiv)
 class BinOpFloorDiv(ConcreteTemplate):
-    key = "//"
+    key = operator.floordiv
+
+    cases = list(integer_binop_cases)
+    cases += [signature(op, op, op) for op in sorted(types.real_domain)]
+
+
+@infer_global(operator.ifloordiv)
+class BinOpFloorDiv(ConcreteTemplate):
+    key = operator.ifloordiv
+
     cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
@@ -214,9 +259,26 @@ class DivMod(ConcreteTemplate):
     cases = [signature(types.UniTuple(ty, 2), ty, ty) for ty in _tys]
 
 
-@infer
+@infer_global(operator.pow)
 class BinOpPower(ConcreteTemplate):
-    key = "**"
+    key = operator.pow
+
+    cases = list(integer_binop_cases)
+    # Ensure that float32 ** int doesn't go through DP computations
+    cases += [signature(types.float32, types.float32, op)
+              for op in (types.int32, types.int64, types.uint64)]
+    cases += [signature(types.float64, types.float64, op)
+              for op in (types.int32, types.int64, types.uint64)]
+    cases += [signature(op, op, op)
+              for op in sorted(types.real_domain)]
+    cases += [signature(op, op, op)
+              for op in sorted(types.complex_domain)]
+
+
+@infer_global(operator.ipow)
+class BinOpPower(ConcreteTemplate):
+    key = operator.ipow
+
     cases = list(integer_binop_cases)
     # Ensure that float32 ** int doesn't go through DP computations
     cases += [signature(types.float32, types.float32, op)
@@ -254,15 +316,21 @@ class BitwiseShiftOperation(ConcreteTemplate):
     unsafe_casting = False
 
 
-@infer
+@infer_global(operator.lshift)
 class BitwiseLeftShift(BitwiseShiftOperation):
-    key = "<<"
+    key = operator.lshift
 
 
-@infer
+@infer_global(operator.ilshift)
+class BitwiseLeftShift(BitwiseShiftOperation): pass
+
+
+@infer_global(operator.rshift)
 class BitwiseRightShift(BitwiseShiftOperation):
-    key = ">>"
+    key = operator.rshift
 
+
+infer_global(operator.irshift)(BitwiseLeftShift)
 
 class BitwiseLogicOperation(BinOp):
     cases = [signature(types.boolean, types.boolean, types.boolean)]
@@ -270,28 +338,40 @@ class BitwiseLogicOperation(BinOp):
     unsafe_casting = False
 
 
-@infer
-class BitwiseAnd(BitwiseLogicOperation):
-    key = "&"
+@infer_global(operator.and_)
+class BitwiseAnd(BitwiseLogicOperation): pass
+    #key = operator.and_
 
 
-@infer
-class BitwiseOr(BitwiseLogicOperation):
-    key = "|"
+@infer_global(operator.iand)
+class BitwiseAnd(BitwiseLogicOperation): pass
 
 
-@infer
-class BitwiseXor(BitwiseLogicOperation):
-    key = "^"
+@infer_global(operator.or_)
+class BitwiseOr(BitwiseLogicOperation): pass
+    #key = operator.or_
+
+
+@infer_global(operator.ior)
+class BitwiseOr(BitwiseLogicOperation): pass
+
+
+@infer_global(operator.xor)
+class BitwiseXor(BitwiseLogicOperation): pass
+    #key = operator.xor
+
+
+@infer_global(operator.ixor)
+class BitwiseXor(BitwiseLogicOperation): pass
 
 
 # Bitwise invert and negate are special: we must not upcast the operand
 # for unsigned numbers, as that would change the result.
 # (i.e. ~np.int8(0) == 255 but ~np.int32(0) == 4294967295).
 
-@infer
+@infer_global(operator.invert)
 class BitwiseInvert(ConcreteTemplate):
-    key = "~"
+    #key = operator.invert
 
     # Note Numba follows the Numpy semantics of returning a bool,
     # while Python returns an int.  This makes it consistent with
@@ -310,19 +390,19 @@ class UnaryOp(ConcreteTemplate):
     cases += [signature(types.intp, types.boolean)]
 
 
-@infer
-class UnaryNegate(UnaryOp):
-    key = "-"
+@infer_global(operator.neg)
+class UnaryNegate(UnaryOp): pass
+    #key = operator.neg
 
 
-@infer
-class UnaryPositive(UnaryOp):
-    key = "+"
+@infer_global(operator.pos)
+class UnaryPositive(UnaryOp): pass
+   # key = operator.pos
 
 
-@infer
+@infer_global(operator.not_)
 class UnaryNot(ConcreteTemplate):
-    key = "not"
+    #key = operator.not_
     cases = [signature(types.boolean, types.boolean)]
     cases += [signature(types.boolean, op) for op in sorted(types.signed_domain)]
     cases += [signature(types.boolean, op) for op in sorted(types.unsigned_domain)]
@@ -342,42 +422,42 @@ class UnorderedCmpOp(ConcreteTemplate):
         signature(types.boolean, op, op) for op in sorted(types.complex_domain)]
 
 
-@infer
-class CmpOpLt(OrderedCmpOp):
-    key = '<'
+@infer_global(operator.lt)
+class CmpOpLt(OrderedCmpOp): pass
+    #key = operator.lt
 
-@infer
-class CmpOpLe(OrderedCmpOp):
-    key = '<='
+@infer_global(operator.le)
+class CmpOpLe(OrderedCmpOp): pass
+    #key = operator.le
 
-@infer
-class CmpOpGt(OrderedCmpOp):
-    key = '>'
+@infer_global(operator.gt)
+class CmpOpGt(OrderedCmpOp): pass
+    #key = operator.gt
 
-@infer
-class CmpOpGe(OrderedCmpOp):
-    key = '>='
+@infer_global(operator.ge)
+class CmpOpGe(OrderedCmpOp): pass
+    #key = operator.ge
 
-@infer
-class CmpOpEq(UnorderedCmpOp):
-    key = '=='
+@infer_global(operator.eq)
+class CmpOpEq(UnorderedCmpOp): pass
+    #key = operator.eq
 
-@infer
+@infer_global(operator.eq)
 class ConstOpEq(AbstractTemplate):
-    key = '=='
+    #key = operator.eq
     def generic(self, args, kws):
         assert not kws
         (arg1, arg2) = args
         if isinstance(arg1, types.Const) and isinstance(arg2, types.Const):
             return signature(types.boolean, arg1, arg2)
 
-@infer
-class ConstOpNotEq(ConstOpEq):
-    key = '!='
+@infer_global(operator.ne)
+class ConstOpNotEq(ConstOpEq): pass
+    #key = operator.ne
 
-@infer
-class CmpOpNe(UnorderedCmpOp):
-    key = '!='
+@infer_global(operator.ne)
+class CmpOpNe(UnorderedCmpOp): pass
+    #key = operator.ne
 
 
 class TupleCompare(AbstractTemplate):
@@ -392,33 +472,33 @@ class TupleCompare(AbstractTemplate):
             else:
                 return signature(types.boolean, lhs, rhs)
 
-@infer
-class TupleEq(TupleCompare):
-    key = '=='
+@infer_global(operator.eq)
+class TupleEq(TupleCompare): pass
+    #key = operator.eq
 
-@infer
-class TupleNe(TupleCompare):
-    key = '!='
+@infer_global(operator.ne)
+class TupleNe(TupleCompare): pass
+    #key = operator.ne
 
-@infer
-class TupleGe(TupleCompare):
-    key = '>='
+@infer_global(operator.ge)
+class TupleGe(TupleCompare): pass
+    #key = operator.ge
 
-@infer
-class TupleGt(TupleCompare):
-    key = '>'
+@infer_global(operator.gt)
+class TupleGt(TupleCompare): pass
+    #key = operator.gt
 
-@infer
-class TupleLe(TupleCompare):
-    key = '<='
+@infer_global(operator.le)
+class TupleLe(TupleCompare): pass
+    #key = operator.le
 
-@infer
-class TupleLt(TupleCompare):
-    key = '<'
+@infer_global(operator.lt)
+class TupleLt(TupleCompare): pass
+    #key = operator.lt
 
-@infer
+@infer_global(operator.add)
 class TupleAdd(AbstractTemplate):
-    key = '+'
+    #key = operator.add
 
     def generic(self, args, kws):
         if len(args) == 2:
@@ -433,19 +513,22 @@ class TupleAdd(AbstractTemplate):
 # Register default implementations of binary inplace operators for
 # immutable types.
 
-class InplaceImmutable(AbstractTemplate):
-    def generic(self, args, kws):
-        lhs, rhs = args
-        if not lhs.mutable:
-            return self.context.resolve_function_type(self.key[:-1], args, kws)
-        # Inplace ops on mutable arguments must be typed explicitly
-
-for _binop, _inp, op in operator_map:
-    if _inp:
-        template = type('InplaceImmutable_%s' % _binop,
-                        (InplaceImmutable,),
-                        dict(key=op + '='))
-        infer(template)
+# class InplaceImmutable(AbstractTemplate):
+#     def generic(self, args, kws):
+#         lhs, rhs = args
+#         if not lhs.mutable:
+#             return self.context.resolve_function_type(self.immutable_func, args, kws)
+#         # Inplace ops on mutable arguments must be typed explicitly
+#
+# for _binop, _inp, op in operator_map:
+#     if _inp:
+#         mutable_func = getattr(operator, _inp)
+#         immutable_func = getattr(operator, _binop)
+#
+#         template = type('InplaceImmutable_%s' % _binop,
+#                         (InplaceImmutable,),
+#                         dict(key=mutable_func, immutable_func=immutable_func))
+#         infer(template)
 
 
 class CmpOpIdentity(AbstractTemplate):
@@ -454,14 +537,14 @@ class CmpOpIdentity(AbstractTemplate):
         return signature(types.boolean, lhs, rhs)
 
 
-@infer
-class CmpOpIs(CmpOpIdentity):
-    key = 'is'
+@infer_global(operator.is_)
+class CmpOpIs(CmpOpIdentity): pass
+    #key = operator.is_
 
 
-@infer
-class CmpOpIsNot(CmpOpIdentity):
-    key = 'is not'
+@infer_global(operator.is_not)
+class CmpOpIsNot(CmpOpIdentity): pass
+    #key = operator.is_not
 
 
 def normalize_1d_index(index):
@@ -511,9 +594,20 @@ class Len(AbstractTemplate):
             return signature(val.dtype, val)
 
 
-@infer
+@infer_global(operator.contains)
+class Contains(AbstractTemplate):
+    key = operator.contains
+
+    def generic(self, args, kws):
+        assert not kws
+        (seq, val) = args
+
+        if isinstance(seq, (types.Sequence)):
+            return signature(types.boolean, seq, val)
+
+@infer_global(operator.truth)
 class TupleBool(AbstractTemplate):
-    key = "is_true"
+    key = operator.truth
 
     def generic(self, args, kws):
         assert not kws
@@ -543,7 +637,9 @@ class GenericNotIn(AbstractTemplate):
     key = "not in"
 
     def generic(self, args, kws):
-        return self.context.resolve_function_type("in", args, kws)
+        args = args[::-1]
+        sig =  self.context.resolve_function_type(operator.contains, args, kws)
+        return signature(sig.return_type, *sig.args[::-1])
 
 
 #-------------------------------------------------------------------------------
@@ -761,9 +857,9 @@ class Bool(AbstractTemplate):
         if isinstance(arg, (types.Boolean, types.Number)):
             return signature(types.boolean, arg)
         # XXX typing for bool cannot be polymorphic because of the
-        # types.Function thing, so we redirect to the "is_true"
+        # types.Function thing, so we redirect to the operator.truth
         # intrinsic.
-        return self.context.resolve_function_type("is_true", args, kws)
+        return self.context.resolve_function_type(operator.truth, args, kws)
 
 
 @infer_global(int)

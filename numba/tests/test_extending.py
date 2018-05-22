@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import math
+import operator
 import sys
 import pickle
 import multiprocessing
@@ -50,7 +51,6 @@ class MyDummy(object):
     pass
 
 class MyDummyType(types.Opaque):
-
     def can_convert_to(self, context, toty):
         if isinstance(toty, types.Number):
             from numba.typeconv import Conversion
@@ -220,6 +220,23 @@ def overload_len_dummy(arg):
             return 13
 
         return len_impl
+
+
+# @overload(operator.add)
+# def overload_add_dummy(arg1, arg2):
+#     if isinstance(arg1, MyDummyType) and isinstance(arg2, MyDummyType):
+#         def dummy_add_impl(arg1, arg2):
+#             return 42
+#
+#         return dummy_add_impl
+
+
+def call_add_operator(arg1, arg2):
+    return operator.add(arg1, arg2)
+
+
+def call_add_binop(arg1, arg2):
+    return arg1 + arg2
 
 
 @overload_method(MyDummyType, 'length')
@@ -465,6 +482,25 @@ class TestHighLevelExtending(TestCase):
         with captured_stdout():
             cfunc(MyDummy())
             self.assertEqual(sys.stdout.getvalue(), "hello!\n")
+
+    # def test_add_operator(self):
+    #     """
+    #     Test re-implementing operator.add() for a custom type with @overload.
+    #     """
+    #     pyfunc = call_add_operator
+    #     cfunc = jit(nopython=True)(pyfunc)
+    #
+    #     self.assertPreciseEqual(cfunc(1, 2), 3)
+    #     self.assertPreciseEqual(cfunc(MyDummy(), MyDummy()), 42)
+    #
+    # def test_add_binop(self):
+    #     """
+    #     Test re-implementing '+' for a custom type via @overload(operator.add).
+    #     """
+    #     pyfunc = call_add_binop
+    #     cfunc = jit(nopython=True)(pyfunc)
+    #
+    #     self.assertPreciseEqual(cfunc(MyDummy(), MyDummy()), 42)
 
     def test_no_cpython_wrapper(self):
         """

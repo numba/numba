@@ -5,6 +5,7 @@ Support for native homogeneous lists.
 from __future__ import print_function, absolute_import, division
 
 import math
+import operator
 
 from llvmlite import ir
 from numba import types, cgutils, typing
@@ -645,9 +646,9 @@ def delitem_list(context, builder, sig, args):
 
 # XXX should there be a specific module for Sequence or collection base classes?
 
-@lower_builtin("in", types.Any, types.Sequence)
+@lower_builtin(operator.contains, types.Sequence, types.Any)
 def in_seq(context, builder, sig, args):
-    def seq_contains_impl(value, lst):
+    def seq_contains_impl(lst, value):
         for elem in lst:
             if elem == value:
                 return True
@@ -663,7 +664,7 @@ def sequence_bool(context, builder, sig, args):
     return context.compile_internal(builder, sequence_bool_impl, sig, args)
 
 
-@lower_builtin("+", types.List, types.List)
+@lower_builtin(operator.add, types.List, types.List)
 def list_add(context, builder, sig, args):
     a = ListInstance(context, builder, sig.args[0], args[0])
     b = ListInstance(context, builder, sig.args[1], args[1])
@@ -685,7 +686,7 @@ def list_add(context, builder, sig, args):
 
     return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
 
-@lower_builtin("+=", types.List, types.List)
+@lower_builtin(operator.iadd, types.List, types.List)
 def list_add_inplace(context, builder, sig, args):
     assert sig.args[0].dtype == sig.return_type.dtype
     dest = _list_extend_list(context, builder, sig, args)
@@ -693,7 +694,7 @@ def list_add_inplace(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, dest.value)
 
 
-@lower_builtin("*", types.List, types.Integer)
+@lower_builtin(operator.mul, types.List, types.Integer)
 def list_mul(context, builder, sig, args):
     src = ListInstance(context, builder, sig.args[0], args[0])
     src_size = src.size
@@ -713,7 +714,7 @@ def list_mul(context, builder, sig, args):
 
     return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
 
-@lower_builtin("*=", types.List, types.Integer)
+@lower_builtin(operator.imul, types.List, types.Integer)
 def list_mul_inplace(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     src_size = inst.size
@@ -736,7 +737,7 @@ def list_mul_inplace(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # Comparisons
 
-@lower_builtin('is', types.List, types.List)
+@lower_builtin(operator.is_, types.List, types.List)
 def list_is(context, builder, sig, args):
     a = ListInstance(context, builder, sig.args[0], args[0])
     b = ListInstance(context, builder, sig.args[1], args[1])
@@ -744,7 +745,7 @@ def list_is(context, builder, sig, args):
     mb = builder.ptrtoint(b.meminfo, cgutils.intp_t)
     return builder.icmp_signed('==', ma, mb)
 
-@lower_builtin('==', types.List, types.List)
+@lower_builtin(operator.eq, types.List, types.List)
 def list_eq(context, builder, sig, args):
     aty, bty = sig.args
     a = ListInstance(context, builder, aty, args[0])
@@ -768,7 +769,7 @@ def list_eq(context, builder, sig, args):
 
     return builder.load(res)
 
-@lower_builtin('!=', types.List, types.List)
+@lower_builtin(operator.ne, types.List, types.List)
 def list_ne(context, builder, sig, args):
 
     def list_ne_impl(a, b):
@@ -776,7 +777,7 @@ def list_ne(context, builder, sig, args):
 
     return context.compile_internal(builder, list_ne_impl, sig, args)
 
-@lower_builtin('<=', types.List, types.List)
+@lower_builtin(operator.le, types.List, types.List)
 def list_le(context, builder, sig, args):
 
     def list_le_impl(a, b):
@@ -791,7 +792,7 @@ def list_le(context, builder, sig, args):
 
     return context.compile_internal(builder, list_le_impl, sig, args)
 
-@lower_builtin('<', types.List, types.List)
+@lower_builtin(operator.lt, types.List, types.List)
 def list_lt(context, builder, sig, args):
 
     def list_lt_impl(a, b):
@@ -806,7 +807,7 @@ def list_lt(context, builder, sig, args):
 
     return context.compile_internal(builder, list_lt_impl, sig, args)
 
-@lower_builtin('>=', types.List, types.List)
+@lower_builtin(operator.ge, types.List, types.List)
 def list_ge(context, builder, sig, args):
 
     def list_ge_impl(a, b):
@@ -814,7 +815,7 @@ def list_ge(context, builder, sig, args):
 
     return context.compile_internal(builder, list_ge_impl, sig, args)
 
-@lower_builtin('>', types.List, types.List)
+@lower_builtin(operator.gt, types.List, types.List)
 def list_gt(context, builder, sig, args):
 
     def list_gt_impl(a, b):

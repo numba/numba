@@ -1,18 +1,19 @@
 from __future__ import print_function, division, absolute_import
 
 from .. import types, utils, errors
+import operator
 from .templates import (AttributeTemplate, ConcreteTemplate, AbstractTemplate,
                         infer_global, infer, infer_getattr,
                         signature, bound_function, make_callable_template)
 from .builtins import normalize_1d_index
 
 
-@infer
+@infer_global(operator.contains)
 class InContainer(AbstractTemplate):
-    key = "in"
+    key = operator.contains
 
     def generic(self, args, kws):
-        item, cont = args
+        cont, item = args
         if isinstance(cont, types.Container):
             return signature(types.boolean, cont.dtype, cont)
 
@@ -26,9 +27,9 @@ class ContainerLen(AbstractTemplate):
             return signature(types.intp, val)
 
 
-@infer
+@infer_global(operator.truth)
 class SequenceBool(AbstractTemplate):
-    key = "is_true"
+    key = operator.truth
 
     def generic(self, args, kws):
         assert not kws

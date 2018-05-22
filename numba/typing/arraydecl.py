@@ -1,12 +1,12 @@
 from __future__ import print_function, division, absolute_import
 
 import numpy as np
-
+import operator
 from collections import namedtuple
 
 from numba import types, utils
-from numba.typing.templates import (AttributeTemplate, AbstractTemplate,
-                                    infer, infer_getattr, signature,
+from numba.typing.templates import (AttributeTemplate, AbstractTemplate, infer,
+                                    infer_global, infer_getattr, signature,
                                     bound_function)
 # import time side effect: array operations requires typing support of sequence
 # defined in collections: e.g. array.shape[i]
@@ -697,9 +697,9 @@ install_array_method("argmin", generic_index)
 install_array_method("argmax", generic_index)
 
 
-@infer
+@infer_global(operator.eq)
 class CmpOpEqArray(AbstractTemplate):
-    key = '=='
+    #key = operator.eq
 
     def generic(self, args, kws):
         assert not kws

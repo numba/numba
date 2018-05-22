@@ -9,6 +9,7 @@ import contextlib
 from llvmlite import ir
 
 import numpy as np
+import operator
 
 from numba import types, cgutils
 
@@ -518,7 +519,7 @@ def dot_2_vv(context, builder, sig, args, conjugate=False):
 
 
 @lower_builtin(np.dot, types.Array, types.Array)
-@lower_builtin('@', types.Array, types.Array)
+@lower_builtin(operator.matmul, types.Array, types.Array)
 def dot_2(context, builder, sig, args):
     """
     np.dot(a, b)
