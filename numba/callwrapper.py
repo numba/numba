@@ -181,6 +181,8 @@ class PyCallWrapper(object):
         builder.ret(api.get_null_object())
 
     def get_env(self, api, builder, closure):
+        # We extract the Environment object from the closure,
+        # because we are in a different module than the compilation unit.
         envptr = self.context.get_env_from_closure(builder, closure)
         env_body = self.context.get_env_body(builder, envptr)
         api.emit_environment_sentry(envptr, return_pyobject=True)

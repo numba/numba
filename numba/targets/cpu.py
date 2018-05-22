@@ -81,6 +81,9 @@ class CPUContext(BaseContext):
         """
         From the pointer *clo* to a _dynfunc.Closure, get a pointer
         to the enclosed _dynfunc.Environment.
+
+        WARNING: The Environment is also stored as a global per compiliation-unit.
+        Use .get_env_manager() to receive it.
         """
         with cgutils.if_unlikely(builder, cgutils.is_null(builder, clo)):
             self.debug_print(builder, "Fatal error: missing _dynfunc.Closure")
@@ -101,6 +104,8 @@ class CPUContext(BaseContext):
         return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
 
     def get_env_manager(self, builder):
+        # Each compilation unit must have a "get_numba_env()" defined
+        # to receive the Environment object.
         env_getter = builder.module.globals['get_numba_env']
         envarg = builder.call(env_getter, [])
         pyapi = self.get_python_api(builder)
