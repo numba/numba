@@ -172,9 +172,12 @@ class TestPrint(TestCase):
             foo(x)
             foo('hello')
 
+        # Printing an array requires the Env.
+        # We need to make sure the inner function can obtain the Env.
+        x = np.arange(5)
         with captured_stdout():
-            bar(94872)
-            self.assertEqual(sys.stdout.getvalue(), '94872\nhello\n')
+            bar(x)
+            self.assertEqual(sys.stdout.getvalue(), '[0 1 2 3 4]\nhello\n')
 
 
 if __name__ == '__main__':

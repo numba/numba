@@ -42,7 +42,8 @@ def make_dufunc_kernel(_dufunc):
             entry_point.attributes.add("alwaysinline")
 
             _, res = self.context.call_conv.call_function(
-                self.builder, entry_point, isig.return_type, isig.args, cast_args)
+                self.builder, entry_point, isig.return_type, isig.args,
+                cast_args)
             return self.cast(res, isig.return_type, osig.return_type)
 
     DUFuncKernel.__name__ += _dufunc.ufunc.__name__

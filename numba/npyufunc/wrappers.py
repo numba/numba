@@ -46,7 +46,8 @@ def _build_ufunc_loop_body_objmode(load, store, context, func, builder,
     # the ufunc's execution.  We restore it unless the ufunc raised
     # a new error.
     with pyapi.err_push(keep_new=True):
-        status, retval = context.call_conv.call_function(builder, func, types.pyobject,
+        status, retval = context.call_conv.call_function(builder, func,
+                                                         types.pyobject,
                                                          _objargs, elems)
         # Release owned reference to arguments
         for elem in elems:
@@ -144,7 +145,6 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
 
     wrapperlib = context.codegen().create_library('ufunc_wrapper')
     wrapper_module = wrapperlib.create_ir_module('')
-
     if objmode:
         func_type = context.call_conv.get_function_type(
             types.pyobject, [types.pyobject] * len(signature.args))
@@ -418,9 +418,9 @@ class _GufuncWrapper(object):
             return ptr, self.env, wrapper_name
 
     def gen_loop_body(self, builder, pyapi, func, args):
-        status, retval = self.call_conv.call_function(builder, func,
-                                                      self.signature.return_type,
-                                                      self.signature.args, args)
+        status, retval = self.call_conv.call_function(
+            builder, func, self.signature.return_type, self.signature.args,
+            args)
 
         with builder.if_then(status.is_error, likely=False):
             gil = pyapi.gil_ensure()

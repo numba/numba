@@ -166,7 +166,6 @@ class _ModuleCompiler(object):
                     cres.fndesc.restype, cres.fndesc.argtypes)
                 self.exported_function_types[entry] = fnty
                 self.function_environments[entry] = cres.environment
-
                 self.environment_gvs[entry] = cres.fndesc.env_name
             else:
                 llvm_func.name = entry.symbol
@@ -288,7 +287,8 @@ class _ModuleCompiler(object):
                                    [modobj.type, self.method_def_ptr,
                                     self.env_def_ptr, envgv_array.type])
             fn = llvm_module.add_function(fnty, self.external_init_function)
-            return builder.call(fn, [modobj, method_array, env_array, envgv_array])
+            return builder.call(fn, [modobj, method_array, env_array,
+                                     envgv_array])
         else:
             return None
 

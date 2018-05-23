@@ -20,6 +20,9 @@ class GeneratorDescriptor(FunctionDescriptor):
         """
         Build a GeneratorDescriptor for the generator returned by the
         function described by *fndesc*, with type *gentype*.
+
+        The generator inherits the env_name from the *fndesc*.
+        All emitted functions for the generator shares the same Env.
         """
         assert isinstance(gentype, types.Generator)
         restype = gentype.yield_type

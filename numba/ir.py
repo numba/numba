@@ -920,7 +920,6 @@ class FunctionIR(object):
         Post-processing will have to be run again on the new IR.
         """
         firstblock = blocks[min(blocks)]
-        is_generator = self.is_generator and not force_non_generator
 
         new_ir = copy.copy(self)
         new_ir.blocks = blocks
