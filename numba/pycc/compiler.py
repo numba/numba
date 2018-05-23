@@ -347,9 +347,10 @@ class ModuleCompilerPy2(_ModuleCompiler):
                             lc.Constant.int(lt._int32, sys.api_version)))
 
         env_array = self._emit_environment_array(llvm_module, builder, pyapi)
+        envgv_array = self._emit_envgvs_array(llvm_module, builder, pyapi)
 
         self._emit_module_init_code(llvm_module, builder, mod,
-                                    method_array, env_array)
+                                    method_array, env_array, envgv_array)
         # XXX No way to notify failure to caller...
 
         builder.ret_void()
