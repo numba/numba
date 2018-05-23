@@ -78,23 +78,6 @@ class CPUContext(BaseContext):
     def call_conv(self):
         return callconv.CPUCallConv(self)
 
-    def get_env_from_closure(self, builder, clo):
-        """
-        From the pointer *clo* to a _dynfunc.Closure, get a pointer
-        to the enclosed _dynfunc.Environment.
-
-        WARNING: The Environment is also stored as a global per compiliation-unit.
-        Use .get_env_manager() to receive it.
-        """
-        with cgutils.if_unlikely(builder, cgutils.is_null(builder, clo)):
-            self.debug_print(builder, "Fatal error: missing _dynfunc.Closure")
-            builder.unreachable()
-
-        clo_body_ptr = cgutils.pointer_add(
-            builder, clo, _dynfunc._impl_info['offsetof_closure_body'])
-        clo_body = ClosureBody(self, builder, ref=clo_body_ptr, cast_ref=True)
-        return clo_body.env
-
     def get_env_body(self, builder, envptr):
         """
         From the given *envptr* (a pointer to a _dynfunc.Environment object),
