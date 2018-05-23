@@ -69,7 +69,8 @@ class BaseLower(object):
         # Specializes the target context as seen inside the Lowerer
         # This adds:
         #  - environment: the python exceution environment
-        self.context = context.subtarget(environment=self.env)
+        self.context = context.subtarget(environment=self.env,
+                                         fndesc=self.fndesc)
 
         # Debuginfo
         dibuildercls = (self.context.DIBuilder
@@ -127,22 +128,10 @@ class BaseLower(object):
 
     def emit_environment_object(self):
         """Emit a pointer to hold the Environment object.
-        And, a "get_numba_env()" to help the rest of codegen find the local
-        Environment without knowing the FunctionDescriptior.
         """
         # Define global for the environment and initialize it to NULL
         envname = self.context.get_env_name(self.fndesc)
         gvenv = self.context.declare_env_global(self.module, envname)
-
-        # Make Getter function
-        fnty = llvmir.FunctionType(cgutils.voidptr_t, ())
-        getter = llvmir.Function(self.module, fnty, name='get_numba_env')
-        if getter.is_declaration:
-            # Mark the linkage as internal as the getter can't be used
-            # from another module.
-            getter.linkage = 'internal'
-            builder = llvmir.IRBuilder(getter.append_basic_block())
-            builder.ret(builder.load(gvenv))
 
     def lower(self):
         # Emit the Env into the module

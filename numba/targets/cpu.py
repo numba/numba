@@ -86,10 +86,9 @@ class CPUContext(BaseContext):
         return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
 
     def get_env_manager(self, builder):
-        # Each compilation unit must have a "get_numba_env()" defined
-        # to receive the Environment object.
-        env_getter = builder.module.globals['get_numba_env']
-        envarg = builder.call(env_getter, [])
+        envgv = self.declare_env_global(builder.module,
+                                        self.get_env_name(self.fndesc))
+        envarg = builder.load(envgv)
         pyapi = self.get_python_api(builder)
         pyapi.emit_environment_sentry(envarg)
         env_body = self.get_env_body(builder, envarg)

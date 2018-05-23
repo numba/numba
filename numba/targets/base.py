@@ -218,6 +218,9 @@ class BaseContext(object):
     # python exceution environment
     environment = None
 
+    # the function descriptor
+    fndesc = None
+
     def __init__(self, typing_context):
         _load_global_helpers()
 
