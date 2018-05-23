@@ -1,3 +1,12 @@
+"""
+Implements a Python representation of ndt function types.
+
+The intent is to be able to:
+    1. Parse an existing NDT function signature info a `Function` object
+    2. Optionally transform that object, by filling in it's return dtype
+    3. Convert back into an ndt function signature and a numba function signature.
+"""
+
 from typing import NamedTuple, Tuple, Union
 from .. import types as numba_types
 
