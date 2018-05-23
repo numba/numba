@@ -1,10 +1,8 @@
 from __future__ import print_function, absolute_import
 
 import sys
-import ctypes
 
 import llvmlite.llvmpy.core as lc
-from llvmlite import ir as llvmir
 
 from numba import _dynfunc, config
 from numba.callwrapper import PyCallWrapper
@@ -166,11 +164,7 @@ class CPUContext(BaseContext):
                                        # objects to keepalive with the function
                                        (library,)
                                        )
-        # TODO: make this part of codegen/engine
-        ee = library.codegen._engine._ee
-        gvaddr = ee.get_global_value_address(self.get_env_name(fndesc))
-        envptr = (ctypes.c_void_p * 1).from_address(gvaddr)
-        envptr[0] = ctypes.c_void_p(id(env))
+        library.codegen.set_env(self.get_env_name(fndesc), env)
         return cfunc
 
     def calc_array_sizeof(self, ndim):
