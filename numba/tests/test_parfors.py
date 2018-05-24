@@ -386,7 +386,9 @@ def _count_array_allocs_inner(func_ir, block):
 
         if (isinstance(inst, ir.Assign) and isinstance(inst.value, ir.Expr)
                 and inst.value.op == 'call'
-                and guard(find_callname, func_ir, inst.value) == ('empty', 'numpy')):
+                and (guard(find_callname, func_ir, inst.value) == ('empty', 'numpy')
+                or guard(find_callname, func_ir, inst.value)
+                    == ('empty_inferred', 'numba.unsafe.ndarray'))):
             ret_count += 1
 
     return ret_count
@@ -1141,6 +1143,19 @@ class TestParfors(TestParforsBase):
         B = np.ones(3, np.uint8)
         B[1] = 0
         self.check(test_impl, A, B)
+
+    @skip_unsupported
+    def test_find_callname_intrinsic(self):
+        from numba.unsafe.ndarray import empty_inferred as unsafe_empty
+        def test_impl(n):
+            A = unsafe_empty((n,))
+            for i in range(n):
+                A[i] = 2.0+i
+            return A
+
+        # the unsafe allocation should be found even though it is imported
+        # as a different name
+        self.assertEqual(countArrayAllocs(test_impl, (types.intp,)), 1)
 
 
 class TestPrangeBase(TestParforsBase):
