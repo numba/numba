@@ -35,8 +35,6 @@ def jit_xnd(fn_or_types=None, *, types=None, **kwargs):
         # passed in the types kwarg
         assert types is None
         return functools.partial(jit_xnd, types=fn_or_types, **kwargs)
-    if not fn_or_types:
-        print(fn_or_types, types, kwargs)
     fn = fn_or_types
     g = GuFunc(fn, **kwargs)
 
