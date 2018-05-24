@@ -84,7 +84,10 @@ def build_kernel_wrapper(cres, ndims):
     if return_output:
         in_and_out_types.append(signature.return_type)
     for i, typ in enumerate(in_and_out_types):
-        llvm_type = ctx.get_data_type(typ)
+        # this bool special case was copied from parfor.pu
+        # otherwise a bool will have the data type i8, which won't
+        # match what the llvm function returns
+        llvm_type = ctx.get_data_type(typ) if typ.name != 'bool' else ir.IntType(1)
         ndim = ndims[i]
     
         if ndim == 0:

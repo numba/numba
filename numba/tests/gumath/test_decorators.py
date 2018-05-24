@@ -71,12 +71,12 @@ inffered_compilation_cases = {
             [np.arange(12, dtype='complex64') + 1j] * 2,
         ]
     ],
-    # equals: [
-    #     [
-    #         [xnd_range(10, 'int32'), xnd_range(10, 'int32')],
-    #         [np.arange(10, dtype='int32'), np.arange(10, dtype='int32')]
-    #     ]
-    # ]
+    equals: [
+        [
+            [xnd_range(10, 'int32')] * 2,
+            [np.arange(10, dtype='int32')] * 2
+        ]
+    ]
 }
 
 

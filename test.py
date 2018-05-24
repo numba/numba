@@ -19,6 +19,11 @@ from numba import *
 # print(f(np.arange(10)))
 
 @jit_xnd
+def eql(a, b):
+    return a  == b
+eql(xnd(1), xnd(1))
+
+@jit_xnd
 def add_two(a, b):
     return a + b
 
