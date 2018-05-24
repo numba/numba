@@ -12,7 +12,7 @@ from .. import types
 def enum_eq(context, builder, sig, args):
     tu, tv = sig.args
     u, v = args
-    res = context.generic_compare(builder, "==",
+    res = context.generic_compare(builder, operator.eq,
                                   (tu.dtype, tv.dtype), (u, v))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -22,7 +22,7 @@ def enum_is(context, builder, sig, args):
     tu, tv = sig.args
     u, v = args
     if tu == tv:
-        res = context.generic_compare(builder, "==",
+        res = context.generic_compare(builder, operator.eq,
                                       (tu.dtype, tv.dtype), (u, v))
     else:
         res = context.get_constant(sig.return_type, False)
@@ -33,7 +33,7 @@ def enum_is(context, builder, sig, args):
 def enum_ne(context, builder, sig, args):
     tu, tv = sig.args
     u, v = args
-    res = context.generic_compare(builder, "!=",
+    res = context.generic_compare(builder, operator.ne,
                                   (tu.dtype, tv.dtype), (u, v))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 

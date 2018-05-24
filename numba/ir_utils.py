@@ -6,6 +6,7 @@ import numpy
 
 import types as pytypes
 import collections
+import operator
 
 from llvmlite import ir as lir
 
@@ -263,6 +264,12 @@ def find_op_typ(op, arg_typs):
                 func_typ = None
             if func_typ is not None:
                 return func_typ
+    else:
+        for f, ft in typing.templates.builtin_registry.globals:
+            if f == op:
+                return ft.get_call_type(typing.Context(),
+                                                    arg_typs, {})
+
     raise RuntimeError("unknown array operation")
 
 

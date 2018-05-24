@@ -9,8 +9,8 @@ from numba import typing, types, cgutils, debuginfo, dispatcher
 from numba.utils import cached_property
 from numba.targets.base import BaseContext
 from numba.targets.callconv import MinimalCallConv
-from numba.targets import cmathimpl, operatorimpl
-from numba.typing import cmathdecl, operatordecl
+from numba.targets import cmathimpl
+from numba.typing import cmathdecl
 
 from numba import itanium_mangler
 from .cudadrv import nvvm
@@ -29,7 +29,6 @@ class CUDATypingContext(typing.BaseContext):
         self.install_registry(cudadecl.registry)
         self.install_registry(cudamath.registry)
         self.install_registry(cmathdecl.registry)
-        self.install_registry(operatordecl.registry)
 
     def resolve_value_type(self, val):
         # treat dispatcher object as another device function
@@ -75,7 +74,6 @@ class CUDATargetContext(BaseContext):
         self.install_registry(printimpl.registry)
         self.install_registry(libdevice.registry)
         self.install_registry(cmathimpl.registry)
-        self.install_registry(operatorimpl.registry)
 
     def codegen(self):
         return self._internal_codegen

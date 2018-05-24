@@ -15,7 +15,7 @@ class InContainer(AbstractTemplate):
     def generic(self, args, kws):
         cont, item = args
         if isinstance(cont, types.Container):
-            return signature(types.boolean, cont.dtype, cont)
+            return signature(types.boolean, cont, cont.dtype)
 
 @infer_global(len)
 class ContainerLen(AbstractTemplate):

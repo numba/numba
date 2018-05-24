@@ -185,7 +185,7 @@ class _SetPayload(object):
 
         mask = self.mask
         dtype = self._ty.dtype
-        eqfn = context.get_function('==',
+        eqfn = context.get_function(operator.eq,
                                     typing.signature(types.boolean, dtype, dtype))
 
         one = ir.Constant(intp_t, 1)

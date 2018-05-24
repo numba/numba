@@ -6,8 +6,9 @@ import contextlib
 import sys
 
 import numpy as np
+import operator
 
-from .. import compiler, ir, types, rewrites, six
+from .. import compiler, ir, types, rewrites, six, utils
 from ..typing import npydecl
 from .dufunc import DUFunc
 
@@ -229,34 +230,34 @@ class RewriteArrayExprs(rewrites.Rewrite):
 
 
 _unaryops = {
-    '+' : ast.UAdd,
-    '-' : ast.USub,
-    '~' : ast.Invert,
+    operator.pos: ast.UAdd,
+    operator.neg: ast.USub,
+    operator.invert: ast.Invert,
 }
 
 _binops = {
-    '+' : ast.Add,
-    '-' : ast.Sub,
-    '*' : ast.Mult,
-    '/' : ast.Div,
+    operator.add: ast.Add,
+    operator.sub: ast.Sub,
+    operator.mul: ast.Mult,
+    operator.truediv: ast.Div,
     '/?' : ast.Div,
-    '%' : ast.Mod,
-    '|' : ast.BitOr,
-    '>>' : ast.RShift,
-    '^' : ast.BitXor,
-    '<<' : ast.LShift,
-    '&' : ast.BitAnd,
-    '**' : ast.Pow,
-    '//' : ast.FloorDiv,
+    operator.mod: ast.Mod,
+    operator.or_: ast.BitOr,
+    operator.rshift: ast.RShift,
+    operator.xor: ast.BitXor,
+    operator.lshift: ast.LShift,
+    operator.and_: ast.BitAnd,
+    operator.pow: ast.Pow,
+    operator.floordiv: ast.FloorDiv,
 }
 
 _cmpops = {
-    '==' : ast.Eq,
-    '!=' : ast.NotEq,
-    '<' : ast.Lt,
-    '<=' : ast.LtE,
-    '>' : ast.Gt,
-    '>=' : ast.GtE,
+    operator.eq: ast.Eq,
+    operator.ne: ast.NotEq,
+    operator.lt: ast.Lt,
+    operator.le: ast.LtE,
+    operator.gt: ast.Gt,
+    operator.ge: ast.GtE,
 }
 
 

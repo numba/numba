@@ -6,11 +6,12 @@ from __future__ import print_function, division, absolute_import
 
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
+import operator
 
 from . import cgutils, generators, ir, types, utils
 from .errors import ForbiddenConstruct
 from .lowering import BaseLower
-from .utils import builtins, intern
+from .utils import builtins
 
 
 # Issue #475: locals() is unsupported as calling it naively would give
@@ -18,23 +19,49 @@ from .utils import builtins, intern
 _unsupported_builtins = set([locals])
 
 # Map operators to methods on the PythonAPI class
-PYTHON_OPMAP = {
-     '+': "number_add",
-     '-': "number_subtract",
-     '*': "number_multiply",
-    '/?': "number_divide",
-     '/': "number_truedivide",
-    '//': "number_floordivide",
-     '%': "number_remainder",
-    '**': "number_power",
-     '@': "number_matrix_multiply",
-    '<<': "number_lshift",
-    '>>': "number_rshift",
-     '&': "number_and",
-     '|': "number_or",
-     '^': "number_xor",
+PYTHON_BINOPMAP = {
+    operator.add: ("number_add", False),
+    operator.sub: ("number_subtract", False),
+    operator.mul: ("number_multiply", False),
+    '/?': ("number_divide", False),
+    operator.truediv: ("number_truedivide", False),
+    operator.floordiv: ("number_floordivide", False),
+    operator.mod: ("number_remainder", False),
+    operator.pow: ("number_power", False),
+    operator.matmul: ("number_matrix_multiply", False),
+    operator.lshift: ("number_lshift", False),
+    operator.rshift: ("number_rshift", False),
+    operator.and_: ("number_and", False),
+    operator.or_: ("number_or", False),
+    operator.xor: ("number_xor", False),
+    # inplace operators
+    operator.iadd: ("number_add", True),
+    operator.isub: ("number_subtract", True),
+    operator.imul: ("number_multiply", True),
+    '/?=': ("number_divide", True),
+    operator.itruediv: ("number_truedivide", True),
+    operator.ifloordiv: ("number_floordivide", True),
+    operator.imod: ("number_remainder", True),
+    operator.ipow: ("number_power", True),
+    operator.imatmul: ("number_matrix_multiply", True),
+    operator.ilshift: ("number_lshift", True),
+    operator.irshift: ("number_rshift", True),
+    operator.iand: ("number_and", True),
+    operator.ior: ("number_or", True),
+    operator.ixor: ("number_xor", True),
 }
 
+PYTHON_COMPAREOPMAP = {
+    operator.eq: '==',
+    operator.ne: '!=',
+    operator.lt: '<',
+    operator.le: '<=',
+    operator.gt: '>',
+    operator.ge: '>=',
+    operator.is_: 'is',
+    operator.is_not: 'is not',
+    operator.contains: 'in'
+}
 
 class PyLower(BaseLower):
 
@@ -205,13 +232,16 @@ class PyLower(BaseLower):
     def lower_binop(self, expr, op, inplace=False):
         lhs = self.loadvar(expr.lhs.name)
         rhs = self.loadvar(expr.rhs.name)
-        if op in PYTHON_OPMAP:
-            fname = PYTHON_OPMAP[op]
+        if op in PYTHON_BINOPMAP:
+            fname, inplace = PYTHON_BINOPMAP[op]
             fn = getattr(self.pyapi, fname)
             res = fn(lhs, rhs, inplace=inplace)
         else:
             # Assumed to be rich comparison
-            res = self.pyapi.object_richcompare(lhs, rhs, expr.fn)
+            fn = PYTHON_COMPAREOPMAP.get(expr.fn, expr.fn)
+            if fn == 'in':      # 'in' and operator.contains have args reversed
+                lhs, rhs = rhs, lhs
+            res = self.pyapi.object_richcompare(lhs, rhs, fn)
         self.check_error(res)
         return res
 
@@ -222,17 +252,17 @@ class PyLower(BaseLower):
             return self.lower_binop(expr, expr.immutable_fn, inplace=True)
         elif expr.op == 'unary':
             value = self.loadvar(expr.value.name)
-            if expr.fn == '-':
+            if expr.fn == operator.neg:
                 res = self.pyapi.number_negative(value)
-            elif expr.fn == '+':
+            elif expr.fn == operator.pos:
                 res = self.pyapi.number_positive(value)
-            elif expr.fn == 'not':
+            elif expr.fn == operator.not_:
                 res = self.pyapi.object_not(value)
                 self.check_int_status(res)
 
                 longval = self.builder.zext(res, self.pyapi.long)
                 res = self.pyapi.bool_from_long(longval)
-            elif expr.fn == '~':
+            elif expr.fn == operator.invert:
                 res = self.pyapi.number_invert(value)
             else:
                 raise NotImplementedError(expr)

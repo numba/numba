@@ -7,6 +7,7 @@ import numbers
 import copy
 import types as pytypes
 from operator import add
+import operator
 
 import numpy as np
 
@@ -543,7 +544,7 @@ class StencilPass(object):
             self.typemap[index_var.name] = types.intp
             index_call = ir.Expr.binop('+', old_index_var,
                                                 offset_var, loc)
-            self.calltypes[index_call] = ir_utils.find_op_typ('+',
+            self.calltypes[index_call] = ir_utils.find_op_typ(operator.add,
                                         [types.intp, types.intp])
             index_assign = ir.Assign(index_call, index_var, loc)
             out_nodes.append(index_assign)

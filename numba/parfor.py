@@ -18,6 +18,7 @@ import sys, math
 from functools import reduce
 from collections import defaultdict
 from contextlib import contextmanager
+import operator
 
 import numba
 from numba import ir, ir_utils, types, typing, rewrites, config, analysis, prange, pndindex
@@ -1708,7 +1709,7 @@ def _arrayexpr_tree_to_ir(
                 el_typ2 = typemap[arg_vars[1].name]
                 func_typ = find_op_typ(op, [el_typ1, el_typ2])
                 ir_expr = ir.Expr.binop(op, arg_vars[0], arg_vars[1], loc)
-                if op == '/':
+                if op == operator.truediv:
                     func_typ, ir_expr = _gen_np_divide(
                         arg_vars[0], arg_vars[1], out_ir, typemap)
             else:
@@ -2134,9 +2135,9 @@ def get_reduction_init(nodes):
     require(nodes[-2].target.name == nodes[-1].value.name)
     acc_expr = nodes[-2].value
     require(isinstance(acc_expr, ir.Expr) and acc_expr.op=='inplace_binop')
-    if acc_expr.fn == '+=':
+    if acc_expr.fn == operator.iadd:
         return 0
-    if acc_expr.fn == '*=':
+    if acc_expr.fn == operator.imul:
         return 1
     return None
 

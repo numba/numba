@@ -9,13 +9,15 @@ import pprint
 import sys
 import warnings
 from numba import config, errors
+import operator
 
-from . import utils
+from .utils import BINOPS_TO_OPERATORS, INPLACE_BINOPS_TO_OPERATORS, UNARY_BUITINS_TO_OPERATORS, OPERATORS_TO_BUILTINS
 from .errors import (NotDefinedError, RedefinedError, VerificationError,
                      ConstantInferenceError)
 
 # terminal color markup
 _termcolor = errors.termcolor()
+
 
 class Loc(object):
     """Source location
@@ -226,12 +228,20 @@ class Expr(Inst):
     @classmethod
     def binop(cls, fn, lhs, rhs, loc):
         op = 'binop'
+        if fn in ('in', 'not_in'):
+            lhs, rhs = rhs, lhs
+
+        fn = BINOPS_TO_OPERATORS.get(fn, fn)
+
         return cls(op=op, loc=loc, fn=fn, lhs=lhs, rhs=rhs,
                    static_lhs=UNDEFINED, static_rhs=UNDEFINED)
 
     @classmethod
     def inplace_binop(cls, fn, immutable_fn, lhs, rhs, loc):
         op = 'inplace_binop'
+        fn = INPLACE_BINOPS_TO_OPERATORS.get(fn, fn)
+        immutable_fn = fn   # TODO: this looks dodgy
+
         return cls(op=op, loc=loc, fn=fn, immutable_fn=immutable_fn,
                    lhs=lhs, rhs=rhs,
                    static_lhs=UNDEFINED, static_rhs=UNDEFINED)
@@ -239,6 +249,8 @@ class Expr(Inst):
     @classmethod
     def unary(cls, fn, value, loc):
         op = 'unary'
+        fn = UNARY_BUITINS_TO_OPERATORS.get(fn, fn)
+
         return cls(op=op, loc=loc, fn=fn, value=value)
 
     @classmethod
@@ -333,7 +345,11 @@ class Expr(Inst):
             arglist = ', '.join(filter(None, [args, vararg, kws]))
             return 'call %s(%s)' % (self.func, arglist)
         elif self.op == 'binop':
-            return '%s %s %s' % (self.lhs, self.fn, self.rhs)
+            lhs, rhs = self.lhs, self.rhs
+            if self.fn == operator.contains:
+                lhs, rhs = rhs, lhs
+            fn = OPERATORS_TO_BUILTINS.get(self.fn, self.fn)
+            return '%s %s %s' % (lhs, fn, rhs)
         else:
             pres_order = self._kws.items() if config.DIFF_IR == 0 else sorted(self._kws.items())
             args = ('%s=%s' % (k, v) for k, v in pres_order)

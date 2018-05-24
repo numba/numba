@@ -6,6 +6,7 @@
 from __future__ import print_function, division, absolute_import
 import types as pytypes  # avoid confusion with numba.types
 import numpy
+import operator
 from numba import ir, analysis, types, config, cgutils, typing
 from numba.ir_utils import (
     mk_unique_var,
@@ -698,9 +699,9 @@ class SymbolicEquivSet(ShapeEquivSet):
                 elif expr.op == 'binop':
                     lhs = self._get_or_set_rel(expr.lhs, func_ir)
                     rhs = self._get_or_set_rel(expr.rhs, func_ir)
-                    if expr.fn == '+':
+                    if expr.fn == operator.add:
                         value = plus(lhs, rhs)
-                    elif expr.fn == '-':
+                    elif expr.fn == operator.sub:
                         value = minus(lhs, rhs)
             elif isinstance(expr, ir.Const) and isinstance(expr.value, int):
                 value = expr.value
@@ -1038,11 +1039,11 @@ class ArrayAnalysis(object):
                                      list(defvars)[0])
             if isinstance(cond_def, ir.Expr) and cond_def.op == 'binop':
                 br = None
-                if cond_def.fn == '==':
+                if cond_def.fn == operator.eq:
                     br = inst.truebr
                     otherbr = inst.falsebr
                     cond_val = 1
-                elif cond_def.fn == '!=':
+                elif cond_def.fn == operator.ne:
                     br = inst.falsebr
                     otherbr = inst.truebr
                     cond_val = 0
@@ -1234,7 +1235,7 @@ class ArrayAnalysis(object):
         require(expr.fn in UNARY_MAP_OP)
         # for scalars, only + operator results in equivalence
         # for example, if "m = -n", m and n are not equivalent
-        if self._isarray(expr.value.name) or expr.fn == '+':
+        if self._isarray(expr.value.name) or expr.fn == operator.add:
             return expr.value, []
         return None
 
@@ -1243,7 +1244,7 @@ class ArrayAnalysis(object):
         return self._analyze_broadcast(scope, equiv_set, expr.loc, [expr.lhs, expr.rhs])
 
     def _analyze_op_inplace_binop(self, scope, equiv_set, expr):
-        require(expr.immutable_fn in BINARY_MAP_OP)
+        require(expr.immutable_fn in INPLACE_BINARY_MAP_OP)
         return self._analyze_broadcast(scope, equiv_set, expr.loc, [expr.lhs, expr.rhs])
 
     def _analyze_op_arrayexpr(self, scope, equiv_set, expr):
@@ -1890,6 +1891,7 @@ class ArrayAnalysis(object):
         return s
 
 UNARY_MAP_OP = list(
-    npydecl.NumpyRulesUnaryArrayOperator._op_map.keys()) + ['+']
+    npydecl.NumpyRulesUnaryArrayOperator._op_map.keys()) + [operator.pos]
 BINARY_MAP_OP = npydecl.NumpyRulesArrayOperator._op_map.keys()
+INPLACE_BINARY_MAP_OP = npydecl.NumpyRulesInplaceArrayOperator._op_map.keys()
 UFUNC_MAP_OP = [f.__name__ for f in npydecl.supported_ufuncs]

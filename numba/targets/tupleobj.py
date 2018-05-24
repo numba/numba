@@ -35,13 +35,13 @@ def tuple_cmp_ordered(context, builder, op, sig, args):
     for i, (ta, tb) in enumerate(zip(tu.types, tv.types)):
         a = builder.extract_value(u, i)
         b = builder.extract_value(v, i)
-        not_equal = context.generic_compare(builder, '!=', (ta, tb), (a, b))
+        not_equal = context.generic_compare(builder, operator.ne, (ta, tb), (a, b))
         with builder.if_then(not_equal):
             pred = context.generic_compare(builder, op, (ta, tb), (a, b))
             builder.store(pred, res)
             builder.branch(bbend)
     # Everything matched equal => compare lengths
-    len_compare = eval("%d %s %d" % (len(tu.types), op, len(tv.types)))
+    len_compare = op(len(tu.types), len(tv.types))
     pred = context.get_constant(types.boolean, len_compare)
     builder.store(pred, res)
     builder.branch(bbend)
@@ -59,7 +59,7 @@ def tuple_eq(context, builder, sig, args):
     for i, (ta, tb) in enumerate(zip(tu.types, tv.types)):
         a = builder.extract_value(u, i)
         b = builder.extract_value(v, i)
-        pred = context.generic_compare(builder, "==", (ta, tb), (a, b))
+        pred = context.generic_compare(builder, operator.eq, (ta, tb), (a, b))
         res = builder.and_(res, pred)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -70,22 +70,22 @@ def tuple_ne(context, builder, sig, args):
 
 @lower_builtin(operator.lt, types.BaseTuple, types.BaseTuple)
 def tuple_lt(context, builder, sig, args):
-    res = tuple_cmp_ordered(context, builder, '<', sig, args)
+    res = tuple_cmp_ordered(context, builder, operator.lt, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @lower_builtin(operator.le, types.BaseTuple, types.BaseTuple)
 def tuple_le(context, builder, sig, args):
-    res = tuple_cmp_ordered(context, builder, '<=', sig, args)
+    res = tuple_cmp_ordered(context, builder, operator.le, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @lower_builtin(operator.gt, types.BaseTuple, types.BaseTuple)
 def tuple_gt(context, builder, sig, args):
-    res = tuple_cmp_ordered(context, builder, '>', sig, args)
+    res = tuple_cmp_ordered(context, builder, operator.gt, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @lower_builtin(operator.ge, types.BaseTuple, types.BaseTuple)
 def tuple_ge(context, builder, sig, args):
-    res = tuple_cmp_ordered(context, builder, '>=', sig, args)
+    res = tuple_cmp_ordered(context, builder, operator.ge, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @lower_builtin(hash, types.BaseTuple)

@@ -760,7 +760,7 @@ def list_eq(context, builder, sig, args):
         with cgutils.for_range(builder, a_size) as loop:
             v = a.getitem(loop.index)
             w = b.getitem(loop.index)
-            itemres = context.generic_compare(builder, '==',
+            itemres = context.generic_compare(builder, operator.eq,
                                               (aty.dtype, bty.dtype), (v, w))
             with builder.if_then(builder.not_(itemres)):
                 # Exit early

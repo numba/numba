@@ -603,13 +603,12 @@ class Context(BaseContext):
 
     def load_additional_registries(self):
         from . import (cffi_utils, cmathdecl, enumdecl, listdecl, mathdecl,
-                       npydecl, operatordecl, randomdecl, setdecl)
+                       npydecl, randomdecl, setdecl)
         self.install_registry(cffi_utils.registry)
         self.install_registry(cmathdecl.registry)
         self.install_registry(enumdecl.registry)
         self.install_registry(listdecl.registry)
         self.install_registry(mathdecl.registry)
         self.install_registry(npydecl.registry)
-        self.install_registry(operatordecl.registry)
         self.install_registry(randomdecl.registry)
         self.install_registry(setdecl.registry)

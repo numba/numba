@@ -8,7 +8,7 @@ import operator
 from numba import types, prange
 from numba.parfor import internal_prange
 
-from numba.utils import PYVERSION, RANGE_ITER_OBJECTS, operator_map
+from numba.utils import PYVERSION, RANGE_ITER_OBJECTS
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, infer_global, infer,
                                     infer_getattr, signature, bound_function,
@@ -322,7 +322,8 @@ class BitwiseLeftShift(BitwiseShiftOperation):
 
 
 @infer_global(operator.ilshift)
-class BitwiseLeftShift(BitwiseShiftOperation): pass
+class BitwiseLeftShift(BitwiseShiftOperation):
+    key = operator.ilshift
 
 
 @infer_global(operator.rshift)
@@ -339,30 +340,33 @@ class BitwiseLogicOperation(BinOp):
 
 
 @infer_global(operator.and_)
-class BitwiseAnd(BitwiseLogicOperation): pass
-    #key = operator.and_
+class BitwiseAnd(BitwiseLogicOperation):
+    key = operator.and_
 
 
 @infer_global(operator.iand)
-class BitwiseAnd(BitwiseLogicOperation): pass
+class BitwiseAnd(BitwiseLogicOperation):
+    key = operator.iand
 
 
 @infer_global(operator.or_)
-class BitwiseOr(BitwiseLogicOperation): pass
-    #key = operator.or_
+class BitwiseOr(BitwiseLogicOperation):
+    key = operator.or_
 
 
 @infer_global(operator.ior)
-class BitwiseOr(BitwiseLogicOperation): pass
+class BitwiseOr(BitwiseLogicOperation):
+    key = operator.ior
 
 
 @infer_global(operator.xor)
-class BitwiseXor(BitwiseLogicOperation): pass
-    #key = operator.xor
+class BitwiseXor(BitwiseLogicOperation):
+    key = operator.xor
 
 
 @infer_global(operator.ixor)
-class BitwiseXor(BitwiseLogicOperation): pass
+class BitwiseXor(BitwiseLogicOperation):
+    key = operator.ixor
 
 
 # Bitwise invert and negate are special: we must not upcast the operand
@@ -371,7 +375,7 @@ class BitwiseXor(BitwiseLogicOperation): pass
 
 @infer_global(operator.invert)
 class BitwiseInvert(ConcreteTemplate):
-    #key = operator.invert
+    key = operator.invert
 
     # Note Numba follows the Numpy semantics of returning a bool,
     # while Python returns an int.  This makes it consistent with
@@ -391,18 +395,18 @@ class UnaryOp(ConcreteTemplate):
 
 
 @infer_global(operator.neg)
-class UnaryNegate(UnaryOp): pass
-    #key = operator.neg
+class UnaryNegate(UnaryOp):
+    key = operator.neg
 
 
 @infer_global(operator.pos)
-class UnaryPositive(UnaryOp): pass
-   # key = operator.pos
+class UnaryPositive(UnaryOp):
+   key = operator.pos
 
 
 @infer_global(operator.not_)
 class UnaryNot(ConcreteTemplate):
-    #key = operator.not_
+    key = operator.not_
     cases = [signature(types.boolean, types.boolean)]
     cases += [signature(types.boolean, op) for op in sorted(types.signed_domain)]
     cases += [signature(types.boolean, op) for op in sorted(types.unsigned_domain)]
@@ -423,28 +427,28 @@ class UnorderedCmpOp(ConcreteTemplate):
 
 
 @infer_global(operator.lt)
-class CmpOpLt(OrderedCmpOp): pass
-    #key = operator.lt
+class CmpOpLt(OrderedCmpOp):
+    key = operator.lt
 
 @infer_global(operator.le)
-class CmpOpLe(OrderedCmpOp): pass
-    #key = operator.le
+class CmpOpLe(OrderedCmpOp):
+    key = operator.le
 
 @infer_global(operator.gt)
-class CmpOpGt(OrderedCmpOp): pass
-    #key = operator.gt
+class CmpOpGt(OrderedCmpOp):
+    key = operator.gt
 
 @infer_global(operator.ge)
-class CmpOpGe(OrderedCmpOp): pass
-    #key = operator.ge
+class CmpOpGe(OrderedCmpOp):
+    key = operator.ge
 
 @infer_global(operator.eq)
-class CmpOpEq(UnorderedCmpOp): pass
-    #key = operator.eq
+class CmpOpEq(UnorderedCmpOp):
+    key = operator.eq
 
 @infer_global(operator.eq)
 class ConstOpEq(AbstractTemplate):
-    #key = operator.eq
+    key = operator.eq
     def generic(self, args, kws):
         assert not kws
         (arg1, arg2) = args
@@ -452,12 +456,12 @@ class ConstOpEq(AbstractTemplate):
             return signature(types.boolean, arg1, arg2)
 
 @infer_global(operator.ne)
-class ConstOpNotEq(ConstOpEq): pass
-    #key = operator.ne
+class ConstOpNotEq(ConstOpEq):
+    key = operator.ne
 
 @infer_global(operator.ne)
-class CmpOpNe(UnorderedCmpOp): pass
-    #key = operator.ne
+class CmpOpNe(UnorderedCmpOp):
+    key = operator.ne
 
 
 class TupleCompare(AbstractTemplate):
@@ -473,32 +477,32 @@ class TupleCompare(AbstractTemplate):
                 return signature(types.boolean, lhs, rhs)
 
 @infer_global(operator.eq)
-class TupleEq(TupleCompare): pass
-    #key = operator.eq
+class TupleEq(TupleCompare):
+    key = operator.eq
 
 @infer_global(operator.ne)
-class TupleNe(TupleCompare): pass
-    #key = operator.ne
+class TupleNe(TupleCompare):
+    key = operator.ne
 
 @infer_global(operator.ge)
-class TupleGe(TupleCompare): pass
-    #key = operator.ge
+class TupleGe(TupleCompare):
+    key = operator.ge
 
 @infer_global(operator.gt)
-class TupleGt(TupleCompare): pass
-    #key = operator.gt
+class TupleGt(TupleCompare):
+    key = operator.gt
 
 @infer_global(operator.le)
-class TupleLe(TupleCompare): pass
-    #key = operator.le
+class TupleLe(TupleCompare):
+    key = operator.le
 
 @infer_global(operator.lt)
-class TupleLt(TupleCompare): pass
-    #key = operator.lt
+class TupleLt(TupleCompare):
+    key = operator.lt
 
 @infer_global(operator.add)
 class TupleAdd(AbstractTemplate):
-    #key = operator.add
+    key = operator.add
 
     def generic(self, args, kws):
         if len(args) == 2:
@@ -538,13 +542,13 @@ class CmpOpIdentity(AbstractTemplate):
 
 
 @infer_global(operator.is_)
-class CmpOpIs(CmpOpIdentity): pass
-    #key = operator.is_
+class CmpOpIs(CmpOpIdentity):
+    key = operator.is_
 
 
 @infer_global(operator.is_not)
-class CmpOpIsNot(CmpOpIdentity): pass
-    #key = operator.is_not
+class CmpOpIsNot(CmpOpIdentity):
+    key = operator.is_not
 
 
 def normalize_1d_index(index):
