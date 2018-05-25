@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import weakref
 from collections import namedtuple
 from functools import partial
 
@@ -19,18 +20,35 @@ class Environment(_dynfunc.Environment):
 
     It is often needed to convert b/w nopython objects and pyobjects.
     """
-    __slots__ = ()
+    __slots__ = ('env_name', '__weakref__')
+    # A weak-value dictionary to store live environment with env_name as the
+    # key.
+    _memo = weakref.WeakValueDictionary()
 
     @classmethod
     def from_fndesc(cls, fndesc):
         mod = fndesc.lookup_module()
-        return cls(mod.__dict__)
+        try:
+            # Avoid creating new Env
+            return cls._memo[fndesc.env_name]
+        except KeyError:
+            inst = cls(mod.__dict__)
+            inst.env_name = fndesc.env_name
+            cls._memo[fndesc.env_name] = inst
+            return inst
+
 
     def __reduce__(self):
-        return _rebuild_env, (self.globals['__name__'], self.consts)
+        return _rebuild_env, (
+            self.globals['__name__'],
+            self.consts,
+            self.env_name
+            )
 
 
-def _rebuild_env(modname, consts):
+def _rebuild_env(modname, consts, env_name):
+    if env_name in Environment._memo:
+        return Environment._memo[env_name]
     from . import serialize
     mod = serialize._rebuild_module(modname)
     env = Environment(mod.__dict__)
