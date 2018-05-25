@@ -599,6 +599,7 @@ class BaseCPUCodegen(object):
         self._llvm_module.name = "global_codegen_module"
         self._rtlinker = RuntimeLinker()
         self._init(self._llvm_module)
+        self._live_envs = {}
 
     def _init(self, llvm_module):
         assert list(llvm_module.global_variables) == [], "Module isn't empty"
@@ -814,6 +815,8 @@ class JITCPUCodegen(BaseCPUCodegen):
         gvaddr = self._engine.get_global_value_address(env_name)
         envptr = (ctypes.c_void_p * 1).from_address(gvaddr)
         envptr[0] = ctypes.c_void_p(id(env))
+        # Keep env alive for the lifetime of the codegen object.
+        self._live_envs[env_name] = env
 
 
 def initialize_llvm():
