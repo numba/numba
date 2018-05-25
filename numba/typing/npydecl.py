@@ -237,7 +237,7 @@ class NumpyRulesInplaceArrayOperator(NumpyRulesArrayOperator):
     }
 
     if not utils.IS_PY3:
-        _op_map[operator.idiv] = "divide"
+        _op_map[operator.div] = "divide"
 
     def generic(self, args, kws):
         # Type the inplace operator as if an explicit output was passed,
