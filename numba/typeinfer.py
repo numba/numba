@@ -19,6 +19,7 @@ import itertools
 from pprint import pprint
 import traceback
 from collections import OrderedDict
+from types import BuiltinFunctionType
 
 from numba import ir, types, utils, config, typing
 from .errors import (TypingError, UntypedAttributeError, new_error_context,
@@ -510,7 +511,10 @@ class CallConstraint(object):
 class IntrinsicCallConstraint(CallConstraint):
     def __call__(self, typeinfer):
         with new_error_context("typing of intrinsic-call at {0}", self.loc):
-            self.resolve(typeinfer, typeinfer.typevars, fnty=self.func)
+            fnty = self.func
+            if fnty in utils.OPERATORS_TO_BUILTINS:
+                fnty = typeinfer.resolve_value_type(None, fnty)
+            self.resolve(typeinfer, typeinfer.typevars, fnty=fnty)
 
 
 class GetAttrConstraint(object):

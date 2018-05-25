@@ -11,7 +11,7 @@ import operator
 from . import cgutils, generators, ir, types, utils
 from .errors import ForbiddenConstruct
 from .lowering import BaseLower
-from .utils import builtins
+from .utils import builtins, HAS_MATMUL_OPERATOR, IS_PY3
 
 
 # Issue #475: locals() is unsupported as calling it naively would give
@@ -23,12 +23,10 @@ PYTHON_BINOPMAP = {
     operator.add: ("number_add", False),
     operator.sub: ("number_subtract", False),
     operator.mul: ("number_multiply", False),
-    '/?': ("number_divide", False),
     operator.truediv: ("number_truedivide", False),
     operator.floordiv: ("number_floordivide", False),
     operator.mod: ("number_remainder", False),
     operator.pow: ("number_power", False),
-    operator.matmul: ("number_matrix_multiply", False),
     operator.lshift: ("number_lshift", False),
     operator.rshift: ("number_rshift", False),
     operator.and_: ("number_and", False),
@@ -38,7 +36,6 @@ PYTHON_BINOPMAP = {
     operator.iadd: ("number_add", True),
     operator.isub: ("number_subtract", True),
     operator.imul: ("number_multiply", True),
-    '/?=': ("number_divide", True),
     operator.itruediv: ("number_truedivide", True),
     operator.ifloordiv: ("number_floordivide", True),
     operator.imod: ("number_remainder", True),
@@ -50,6 +47,13 @@ PYTHON_BINOPMAP = {
     operator.ior: ("number_or", True),
     operator.ixor: ("number_xor", True),
 }
+
+if not IS_PY3:
+    PYTHON_BINOPMAP[operator.div] = ("number_divide", False)
+    PYTHON_BINOPMAP[operator.idiv] = ("number_divide", True)
+
+if HAS_MATMUL_OPERATOR:
+    PYTHON_BINOPMAP[operator.matmul] = ("number_matrix_multiply", False)
 
 PYTHON_COMPAREOPMAP = {
     operator.eq: '==',

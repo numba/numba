@@ -15,6 +15,7 @@ import warnings
 from functools import reduce
 import numpy as np
 from numpy.random import randn
+import operator
 
 import numba
 from numba import unittest_support as unittest
@@ -734,6 +735,28 @@ class TestParfors(TestParforsBase):
             b = np.arange(n)
             return np.sum(A[:, b])
         self.check(test_impl)
+
+    @test_disabled
+    def test_simple_operator_15(self):
+        """same as corresponding test_simple_<n> case but using operator.add"""
+        def test_impl(v1, v2, m1, m2):
+            return operator.add(v1, v1)
+
+        self.check(test_impl, *self.simple_args)
+
+    @test_disabled
+    def test_simple_operator_16(self):
+        def test_impl(v1, v2, m1, m2):
+            return operator.add(m1, m1)
+
+        self.check(test_impl, *self.simple_args)
+
+    @test_disabled
+    def test_simple_operator_17(self):
+        def test_impl(v1, v2, m1, m2):
+            return operator.add(m2, v1)
+
+        self.check(test_impl, *self.simple_args)
 
     @skip_unsupported
     def test_np_func_direct_import(self):

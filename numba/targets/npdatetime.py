@@ -10,6 +10,7 @@ import llvmlite.llvmpy.core as lc
 
 from numba import npdatetime, types, cgutils
 from .imputils import lower_builtin, lower_constant, impl_ret_untracked
+from ..utils import IS_PY3
 
 
 # datetime64 and timedelta64 use the same internal representation
@@ -228,12 +229,10 @@ def number_times_timedelta(context, builder, sig, args):
 @lower_builtin(operator.itruediv, types.NPTimedelta, types.Integer)
 @lower_builtin(operator.floordiv, types.NPTimedelta, types.Integer)
 @lower_builtin(operator.ifloordiv, types.NPTimedelta, types.Integer)
-#@lower_builtin('/?', types.NPTimedelta, types.Integer)
 @lower_builtin(operator.truediv, types.NPTimedelta, types.Float)
 @lower_builtin(operator.itruediv, types.NPTimedelta, types.Float)
 @lower_builtin(operator.floordiv, types.NPTimedelta, types.Float)
 @lower_builtin(operator.ifloordiv, types.NPTimedelta, types.Float)
-#@lower_builtin('/?', types.NPTimedelta, types.Float)
 def timedelta_over_number(context, builder, sig, args):
     td_arg, number_arg = args
     number_type = sig.args[1]
@@ -255,9 +254,16 @@ def timedelta_over_number(context, builder, sig, args):
     res = builder.load(ret)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
+if not IS_PY3:
+    lower_builtin(operator.div, types.NPTimedelta, types.Integer)(timedelta_over_number)
+    lower_builtin(operator.idiv, types.NPTimedelta, types.Integer)(timedelta_over_number)
+    lower_builtin(operator.div, types.NPTimedelta, types.Float)(timedelta_over_number)
+    lower_builtin(operator.idiv, types.NPTimedelta, types.Float)(timedelta_over_number)
+
+
 @lower_builtin(operator.truediv, *TIMEDELTA_BINOP_SIG)
 @lower_builtin(operator.itruediv, *TIMEDELTA_BINOP_SIG)
-#@lower_builtin('/?', *TIMEDELTA_BINOP_SIG)
 def timedelta_over_timedelta(context, builder, sig, args):
     [va, vb] = args
     [ta, tb] = sig.args
@@ -273,6 +279,10 @@ def timedelta_over_timedelta(context, builder, sig, args):
     res = builder.load(ret)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
+if not IS_PY3:
+    lower_builtin(operator.div, *TIMEDELTA_BINOP_SIG)(timedelta_over_timedelta)
+    lower_builtin(operator.idiv, *TIMEDELTA_BINOP_SIG)(timedelta_over_timedelta)
 
 # Comparison operators on timedelta64
 

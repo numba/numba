@@ -22,6 +22,7 @@ from numba import types
 from numba import numpy_support as np_support
 from .arrayobj import make_array, _empty_nd_impl, array_copy
 from ..errors import TypingError
+from ..utils import HAS_MATMUL_OPERATOR
 
 ll_char = ir.IntType(8)
 ll_char_p = ll_char.as_pointer()
@@ -519,7 +520,6 @@ def dot_2_vv(context, builder, sig, args, conjugate=False):
 
 
 @lower_builtin(np.dot, types.Array, types.Array)
-@lower_builtin(operator.matmul, types.Array, types.Array)
 def dot_2(context, builder, sig, args):
     """
     np.dot(a, b)
@@ -539,6 +539,9 @@ def dot_2(context, builder, sig, args):
             return dot_2_vv(context, builder, sig, args)
         else:
             assert 0
+
+if HAS_MATMUL_OPERATOR:
+    lower_builtin(operator.matmul, types.Array, types.Array)(dot_2)
 
 
 @lower_builtin(np.vdot, types.Array, types.Array)

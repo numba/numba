@@ -216,13 +216,14 @@ OPERATORS_TO_BUILTINS = {
     operator.truth: 'is_true',
 }
 
+HAS_MATMUL_OPERATOR = sys.version_info >= (3, 5)
 
 if not IS_PY3:
     BINOPS_TO_OPERATORS['/?'] = operator.div
     INPLACE_BINOPS_TO_OPERATORS['/?='] = operator.idiv
     OPERATORS_TO_BUILTINS[operator.div] = '/?'
     OPERATORS_TO_BUILTINS[operator.idiv] = '/?'
-if sys.version_info >= (3, 5):
+if HAS_MATMUL_OPERATOR:
     BINOPS_TO_OPERATORS['@'] = operator.matmul
     INPLACE_BINOPS_TO_OPERATORS['@='] = operator.imatmul
 

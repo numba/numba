@@ -8,7 +8,7 @@ import operator
 from numba import types, prange
 from numba.parfor import internal_prange
 
-from numba.utils import PYVERSION, RANGE_ITER_OBJECTS
+from numba.utils import PYVERSION, RANGE_ITER_OBJECTS, IS_PY3
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, infer_global, infer,
                                     infer_getattr, signature, bound_function,
@@ -195,10 +195,15 @@ class BinOpMul(BinOp):
 class BinOpMul(BinOp):
     key = operator.imul
 
+if not IS_PY3:
+    @infer_global(operator.div)
+    class BinOpDiv(BinOp):
+        key = operator.div
 
-@infer
-class BinOpDiv(BinOp):
-    key = "/?"
+
+    @infer_global(operator.idiv)
+    class BinOpDiv(BinOp):
+        key = operator.idiv
 
 
 @infer_global(operator.mod)

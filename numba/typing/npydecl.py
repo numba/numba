@@ -163,7 +163,6 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
         operator.add: "add",
         operator.sub: "subtract",
         operator.mul: "multiply",
-        #'/?': "divide",
         operator.truediv: "true_divide",
         operator.floordiv: "floor_divide",
         operator.mod: "remainder",
@@ -180,6 +179,9 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
         operator.le: "less_equal",
         operator.ne: "not_equal",
     }
+
+    if not utils.IS_PY3:
+        _op_map[operator.div] = "divide"
 
     @property
     def ufunc(self):
@@ -223,7 +225,6 @@ class NumpyRulesInplaceArrayOperator(NumpyRulesArrayOperator):
         operator.iadd: "add",
         operator.isub: "subtract",
         operator.imul: "multiply",
-        #'/?=': "divide",
         operator.itruediv: "true_divide",
         operator.ifloordiv: "floor_divide",
         operator.imod: "remainder",
@@ -234,6 +235,9 @@ class NumpyRulesInplaceArrayOperator(NumpyRulesArrayOperator):
         operator.ior: "bitwise_or",
         operator.ixor: "bitwise_xor",
     }
+
+    if not utils.IS_PY3:
+        _op_map[operator.div] = "divide"
 
     def generic(self, args, kws):
         # Type the inplace operator as if an explicit output was passed,
@@ -1020,17 +1024,17 @@ class VDot(CallableTemplate):
 
         return typer
 
+if utils.HAS_MATMUL_OPERATOR:
+    @infer_global(operator.matmul)
+    class MatMul(MatMulTyperMixin, AbstractTemplate):
+        key = operator.matmul
+        func_name = "'@'"
 
-@infer_global(operator.matmul)
-class MatMul(MatMulTyperMixin, AbstractTemplate):
-    key = operator.matmul
-    func_name = "'@'"
-
-    def generic(self, args, kws):
-        assert not kws
-        restype = self.matmul_typer(*args)
-        if restype is not None:
-            return signature(restype, *args)
+        def generic(self, args, kws):
+            assert not kws
+            restype = self.matmul_typer(*args)
+            if restype is not None:
+                return signature(restype, *args)
 
 
 def _check_linalg_matrix(a, func_name):

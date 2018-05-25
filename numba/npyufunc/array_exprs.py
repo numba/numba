@@ -240,7 +240,6 @@ _binops = {
     operator.sub: ast.Sub,
     operator.mul: ast.Mult,
     operator.truediv: ast.Div,
-    '/?' : ast.Div,
     operator.mod: ast.Mod,
     operator.or_: ast.BitOr,
     operator.rshift: ast.RShift,
@@ -250,6 +249,10 @@ _binops = {
     operator.pow: ast.Pow,
     operator.floordiv: ast.FloorDiv,
 }
+
+if not utils.IS_PY3:
+    _binops[operator.div] = ast.Div
+
 
 _cmpops = {
     operator.eq: ast.Eq,

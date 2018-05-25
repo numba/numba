@@ -8,7 +8,7 @@ from itertools import product
 import operator
 
 from numba import npdatetime, types
-from numba.utils import PYVERSION
+from numba.utils import IS_PY3
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, infer_global, infer,
                                     infer_getattr, signature)
@@ -145,9 +145,17 @@ class TimedeltaTrueDiv(TimedeltaDivOp):
 class TimedeltaFloorDiv(TimedeltaDivOp):
     key = operator.floordiv
 
-@infer
-class TimedeltaLegacyDiv(TimedeltaDivOp):
-    key = "/?"
+
+if not IS_PY3:
+    @infer_global(operator.div)
+    class TimedeltaLegacyDiv(TimedeltaDivOp):
+        key = operator.div
+
+
+    @infer_global(operator.idiv)
+    class TimedeltaLegacyDiv(TimedeltaDivOp):
+        key = operator.idiv
+
 
 @infer_global(operator.eq)
 class TimedeltaCmpEq(TimedeltaCmpOp):

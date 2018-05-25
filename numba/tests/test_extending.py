@@ -81,6 +81,33 @@ def unbox_index(typ, obj, c):
 
 
 # -----------------------------------------------------------------------
+# Define a second custom type but w/o implicit cast to Number
+
+class MyDummy2(object):
+    pass
+
+class MyDummyType2(types.Opaque):
+    pass
+
+mydummy_type_2 = MyDummyType2('mydummy_2')
+mydummy_2 = MyDummy2()
+
+@typeof_impl.register(MyDummy2)
+def typeof_mydummy(val, c):
+    return mydummy_type_2
+
+
+def get_dummy_2():
+    return mydummy_2
+
+register_model(MyDummyType2)(models.OpaqueModel)
+
+@unbox(MyDummyType2)
+def unbox_index(typ, obj, c):
+    return NativeValue(c.context.get_dummy_value())
+
+
+# -----------------------------------------------------------------------
 # Define a function's typing and implementation using the classical
 # two-step API
 
@@ -222,13 +249,13 @@ def overload_len_dummy(arg):
         return len_impl
 
 
-# @overload(operator.add)
-# def overload_add_dummy(arg1, arg2):
-#     if isinstance(arg1, MyDummyType) and isinstance(arg2, MyDummyType):
-#         def dummy_add_impl(arg1, arg2):
-#             return 42
-#
-#         return dummy_add_impl
+@overload(operator.add)
+def overload_add_dummy(arg1, arg2):
+    if isinstance(arg1, (MyDummyType, MyDummyType2)) and isinstance(arg2, (MyDummyType, MyDummyType2)):
+        def dummy_add_impl(arg1, arg2):
+            return 42
+
+        return dummy_add_impl
 
 
 def call_add_operator(arg1, arg2):
@@ -237,6 +264,25 @@ def call_add_operator(arg1, arg2):
 
 def call_add_binop(arg1, arg2):
     return arg1 + arg2
+
+
+@overload(operator.iadd)
+def overload_iadd_dummy(arg1, arg2):
+    if isinstance(arg1, (MyDummyType, MyDummyType2)) and isinstance(arg2, (MyDummyType, MyDummyType2)):
+        def dummy_iadd_impl(arg1, arg2):
+            return 42
+
+        return dummy_iadd_impl
+
+
+def call_iadd_operator(arg1, arg2):
+    return operator.add(arg1, arg2)
+
+
+def call_iadd_binop(arg1, arg2):
+    arg1 += arg2
+
+    return arg1
 
 
 @overload_method(MyDummyType, 'length')
@@ -483,24 +529,58 @@ class TestHighLevelExtending(TestCase):
             cfunc(MyDummy())
             self.assertEqual(sys.stdout.getvalue(), "hello!\n")
 
-    # def test_add_operator(self):
-    #     """
-    #     Test re-implementing operator.add() for a custom type with @overload.
-    #     """
-    #     pyfunc = call_add_operator
-    #     cfunc = jit(nopython=True)(pyfunc)
-    #
-    #     self.assertPreciseEqual(cfunc(1, 2), 3)
-    #     self.assertPreciseEqual(cfunc(MyDummy(), MyDummy()), 42)
-    #
-    # def test_add_binop(self):
-    #     """
-    #     Test re-implementing '+' for a custom type via @overload(operator.add).
-    #     """
-    #     pyfunc = call_add_binop
-    #     cfunc = jit(nopython=True)(pyfunc)
-    #
-    #     self.assertPreciseEqual(cfunc(MyDummy(), MyDummy()), 42)
+    def test_add_operator(self):
+        """
+        Test re-implementing operator.add() for a custom type with @overload.
+        """
+        pyfunc = call_add_operator
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self.assertPreciseEqual(cfunc(1, 2), 3)
+        self.assertPreciseEqual(cfunc(MyDummy2(), MyDummy2()), 42)
+
+        # this will call add(Number, Number) as MyDummy implicitly casts to Number
+        self.assertPreciseEqual(cfunc(MyDummy(), MyDummy()), 84)
+
+    def test_add_binop(self):
+        """
+        Test re-implementing '+' for a custom type via @overload(operator.add).
+        """
+        pyfunc = call_add_binop
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self.assertPreciseEqual(cfunc(1, 2), 3)
+        self.assertPreciseEqual(cfunc(MyDummy2(), MyDummy2()), 42)
+
+        # this will call add(Number, Number) as MyDummy implicitly casts to Number
+        self.assertPreciseEqual(cfunc(MyDummy(), MyDummy()), 84)
+
+    def test_iadd_operator(self):
+        """
+        Test re-implementing operator.add() for a custom type with @overload.
+        """
+        pyfunc = call_iadd_operator
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self.assertPreciseEqual(cfunc(1, 2), 3)
+        self.assertPreciseEqual(cfunc(MyDummy2(), MyDummy2()), 42)
+
+        # this will call add(Number, Number) as MyDummy implicitly casts to Number
+        self.assertPreciseEqual(cfunc(MyDummy(), MyDummy()), 84)
+
+    def test_iadd_binop(self):
+        """
+        Test re-implementing '+' for a custom type via @overload(operator.add).
+        """
+        pyfunc = call_iadd_binop
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self.assertPreciseEqual(cfunc(1, 2), 3)
+        self.assertPreciseEqual(cfunc(MyDummy2(), MyDummy2()), 42)
+
+        # this will call add(Number, Number) as MyDummy implicitly casts to Number
+        self.assertPreciseEqual(cfunc(MyDummy(), MyDummy()), 84)
+
 
     def test_no_cpython_wrapper(self):
         """
