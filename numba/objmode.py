@@ -40,7 +40,6 @@ PYTHON_BINOPMAP = {
     operator.ifloordiv: ("number_floordivide", True),
     operator.imod: ("number_remainder", True),
     operator.ipow: ("number_power", True),
-    operator.imatmul: ("number_matrix_multiply", True),
     operator.ilshift: ("number_lshift", True),
     operator.irshift: ("number_rshift", True),
     operator.iand: ("number_and", True),
@@ -54,6 +53,7 @@ if not IS_PY3:
 
 if HAS_MATMUL_OPERATOR:
     PYTHON_BINOPMAP[operator.matmul] = ("number_matrix_multiply", False)
+    PYTHON_BINOPMAP[operator.imatmul] = ("number_matrix_multiply", True)
 
 PYTHON_COMPAREOPMAP = {
     operator.eq: '==',
