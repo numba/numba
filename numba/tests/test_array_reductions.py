@@ -400,7 +400,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         # high number of combinations, many including non-finite values
         elements = [1, -1, np.nan, np.inf, -np.inf]
         arrays = []
-        for i in range(1, 6):
+        for i in range(1, 10):
             arrays.extend(np.array(list(combinations_with_replacement(elements, i))))
 
         for arr in arrays:
