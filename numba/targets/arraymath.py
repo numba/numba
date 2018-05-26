@@ -766,10 +766,10 @@ def np_median(a):
     return median_impl
 
 @register_jitable
-def _collect_percentiles_inner(a, q, all_finite):
-    n = len(a)
+def _collect_percentiles_inner(a, q):
     out = np.empty(len(q), dtype=np.float64)
 
+    n = len(a)
     num_pos_inf = np.sum(a == np.inf)
     num_neg_inf = np.sum(a == -np.inf)
     num_finite = n - (num_neg_inf + num_pos_inf)
@@ -777,17 +777,19 @@ def _collect_percentiles_inner(a, q, all_finite):
     for i in range(len(q)):
         percentile = q[i]
 
-        # bypass pivoting - handle case where not all elements are finite
+        # bypass pivoting where requested percentile is 100
         if percentile == 100:
             val = np.max(a)
-            if not all_finite:
+            # heuristics to handle non-finite values a la NumPy
+            if num_finite < n:
                 if ~np.isfinite(val):
                     val = np.nan
 
-        # bypass pivoting - handle case where not all elements are finite
+        # bypass pivoting where requested percentile is 100
         elif percentile == 0:
             val = np.min(a)
-            if not all_finite:
+            # convoluted heuristics to handle non-finite values a la NumPy
+            if num_finite < n:
                 if num_finite == 0:
                     val = np.nan
                 if num_pos_inf == 1 and n == 2:
@@ -843,8 +845,7 @@ def _collect_percentiles(a, q, skip_nan=False):
             fill_value = np.nan
         out = np.full(len(q), fill_value, dtype=np.float64)
     else:
-        all_finite = np.all(np.isfinite(temp_arry))
-        out = _collect_percentiles_inner(temp_arry, q, all_finite=all_finite)
+        out = _collect_percentiles_inner(temp_arry, q)
 
     return out
 

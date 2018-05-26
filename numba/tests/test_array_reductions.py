@@ -382,12 +382,12 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     @staticmethod
     def _percentile_variations(q):
-        # array, list of reversed values, one value, one value as int
         yield q
         yield q[::-1].astype(np.int32).tolist()
         yield q[-1]
         yield int(q[-1])
         yield tuple(q)
+        yield False
 
     def check_percentile_edge_cases(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
@@ -397,17 +397,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             got = cfunc(a, q)
             self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
 
-        cases = (
-            (np.array([1]), (66.6, 33.3)),
-            (np.array([True, False, True]), True),
-            (np.array([-np.inf]), (5, 6)),
-            (np.array([1, np.nan]), [1]),
-        )
-
-        for a, q in cases:
-            check(a, q, abs_tol='eps')
-
-        # high number of combinatorics, many including non-finite values
+        # high number of combinations, many including non-finite values
         elements = [1, -1, np.nan, np.inf, -np.inf]
         arrays = []
         for i in range(1, 6):
