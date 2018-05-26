@@ -766,6 +766,54 @@ def np_median(a):
     return median_impl
 
 @register_jitable
+def _collect_percentiles_inner(a, q, all_finite):
+    n = len(a)
+    out = np.empty(len(q), dtype=np.float64)
+
+    num_pos_inf = np.sum(a == np.inf)
+    num_neg_inf = np.sum(a == -np.inf)
+    num_finite = n - (num_neg_inf + num_pos_inf)
+
+    for i in range(len(q)):
+        percentile = q[i]
+
+        # bypass pivoting - handle case where not all elements are finite
+        if percentile == 100:
+            val = np.max(a)
+            if not all_finite:
+                if ~np.isfinite(val):
+                    val = np.nan
+
+        # bypass pivoting - handle case where not all elements are finite
+        elif percentile == 0:
+            val = np.min(a)
+            if not all_finite:
+                if num_finite == 0:
+                    val = np.nan
+                if num_pos_inf == 1 and n == 2:
+                    val = np.nan
+                if num_neg_inf > 1:
+                    if num_pos_inf < 2:
+                        val = np.nan
+                if num_finite == 1:
+                    if num_pos_inf > 1:
+                        if num_neg_inf == 0:
+                            val = np.nan
+                        elif num_neg_inf > 1:
+                            val = np.nan
+
+        else:
+            # linear interp between closest ranks
+            rank = 1 + (n - 1) * np.true_divide(percentile, 100.0)
+            f = math.floor(rank)
+            m = rank - f
+            lower, upper = _select_two(a, k=int(f - 1), low=0, high=(n - 1))
+            val = lower * (1 - m) + upper * m
+        out[i] = val
+
+    return out
+
+@register_jitable
 def _collect_percentiles(a, q, skip_nan=False):
 
     if np.any(np.isnan(q)) or np.any(q < 0) or np.any(q > 100):
@@ -795,21 +843,8 @@ def _collect_percentiles(a, q, skip_nan=False):
             fill_value = np.nan
         out = np.full(len(q), fill_value, dtype=np.float64)
     else:
-        out = np.empty(len(q), dtype=np.float64)
-
-        for i in range(len(q)):
-            percentile = q[i]
-            if percentile == 100:
-                val = np.max(temp_arry)  # bypass pivoting
-            elif percentile == 0:
-                val = np.min(temp_arry)  # bypass pivoting
-            else:
-                rank = 1 + (n - 1) * np.true_divide(percentile, 100.0)  # linear interp between closest ranks
-                f = math.floor(rank)
-                m = rank - f
-                lower, upper = _select_two(temp_arry, k=int(f - 1), low=0, high=(n - 1))
-                val = lower + m * (upper - lower)
-            out[i] = val
+        all_finite = np.all(np.isfinite(temp_arry))
+        out = _collect_percentiles_inner(temp_arry, q, all_finite=all_finite)
 
     return out
 

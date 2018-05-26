@@ -1,6 +1,6 @@
 from __future__ import division
 
-from itertools import product
+from itertools import product, combinations_with_replacement
 
 import numpy as np
 
@@ -392,10 +392,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def check_percentile_edge_cases(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
 
-        def check(a, q):
+        def check(a, q, abs_tol):
             expected = pyfunc(a, q)
             got = cfunc(a, q)
-            self.assertPreciseEqual(got, expected, abs_tol='eps')
+            self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
 
         cases = (
             (np.array([1]), (66.6, 33.3)),
@@ -405,7 +405,17 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         )
 
         for a, q in cases:
-            check(a, q)
+            check(a, q, abs_tol='eps')
+
+        # high number of combinatorics, many including non-finite values
+        elements = [1, -1, np.nan, np.inf, -np.inf]
+        arrays = []
+        for i in range(1, 6):
+            arrays.extend(np.array(list(combinations_with_replacement(elements, i))))
+
+        for arr in arrays:
+            q = (0, 10, 20, 100)
+            check(arr, q, abs_tol=1e-12)  # 'eps' fails, tbd...
 
     @unittest.skipUnless(np_version >= (1, 10), "percentile needs Numpy 1.10+")
     def test_percentile_basic(self):
