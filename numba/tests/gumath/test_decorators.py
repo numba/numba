@@ -46,6 +46,16 @@ def equals(a, b):
 def add_multiple_args(a, b, c, d):
     return a + b + c + d
 
+a = np.arange(80, dtype='float64').reshape(8, 10)
+b = a.copy()
+c = a.copy(order='F')
+d = np.arange(16 * 20, dtype='float64').reshape(16, 20)[::2, ::2]
+
+a_xnd = xnd.from_buffer(a)
+b_xnd = xnd.from_buffer(b)
+c_xnd = xnd.from_buffer(c)
+d_xnd = xnd.from_buffer(np.arange(16 * 20, dtype='float64').reshape(16, 20))[::2, ::2]
+
 inffered_compilation_cases = {
     # from test_vectorize_decor.py
     sinc: [
@@ -75,6 +85,16 @@ inffered_compilation_cases = {
         [
             [xnd_range(10, 'int32')] * 2,
             [np.arange(10, dtype='int32')] * 2
+        ]
+    ],
+    add_multiple_args: [
+        [
+            [a_xnd[0], b_xnd[0], c_xnd[0], d_xnd[0]],
+            [a[0], b[0], c[0], d[0]],
+        ],
+        [
+            [a_xnd, b_xnd, c_xnd, d_xnd],
+            [a, b, c, d],
         ]
     ]
 }
