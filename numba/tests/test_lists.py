@@ -8,7 +8,7 @@ import sys
 import numpy as np
 
 from numba.compiler import compile_isolated, Flags
-from numba import jit, types
+from numba import jit, types, utils
 import numba.unittest_support as unittest
 from numba import testing
 from .support import TestCase, MemoryLeakMixin, tag
@@ -1115,15 +1115,19 @@ class TestListManagedElements(MemoryLeakMixin, TestCase):
             cfunc(l3)
         self.assertIn("can't unbox array", str(raises.exception))
 
-        int_error = ("int() argument must be a string, a bytes-like object or "
-                     "a number")
+        if utils.PY2:
+            int_error = "long() argument must be a string"
+        else:
+            int_error = "int() argument must be a string"
         with self.assertRaises(TypeError) as raises:
             cfunc(l4)
         self.assertIn(int_error, str(raises.exception))
+        self.assertIn("not 'set'", str(raises.exception))
 
         with self.assertRaises(TypeError) as raises:
             cfunc(l5)
         self.assertIn(int_error, str(raises.exception))
+        self.assertIn("not 'dict'", str(raises.exception))
 
 
 if __name__ == '__main__':
