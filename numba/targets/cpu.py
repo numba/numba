@@ -50,7 +50,7 @@ class CPUContext(BaseContext):
     def load_additional_registries(self):
         # Add target specific implementations
         from . import (cffiimpl, cmathimpl, mathimpl, npyimpl, operatorimpl,
-                       printimpl, randomimpl)
+                       printimpl, randomimpl, scipyimpl)
         self.install_registry(cmathimpl.registry)
         self.install_registry(cffiimpl.registry)
         self.install_registry(mathimpl.registry)
@@ -58,7 +58,7 @@ class CPUContext(BaseContext):
         self.install_registry(operatorimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(randomimpl.registry)
-        self.install_registry(randomimpl.registry)
+        self.install_registry(scipyimpl.registry)
 
     @property
     def target_data(self):

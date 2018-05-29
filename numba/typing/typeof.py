@@ -2,10 +2,14 @@ from __future__ import print_function, absolute_import
 
 from collections import namedtuple
 import ctypes
+import _ctypes
 import enum
-import sys
 
 import numpy as np
+try:
+    import scipy
+except ImportError:
+    scipy = None
 
 from numba import numpy_support, types, utils, smartarray
 from numba import ir, errors
@@ -79,6 +83,13 @@ def typeof_ctypes_function(val, c):
     from .ctypes_utils import is_ctypes_funcptr, make_function_type
     if is_ctypes_funcptr(val):
         return make_function_type(val)
+
+
+# @typeof_impl.register(_ctypes._SimpleCData)
+# def typeof_ctypes_function(val, c):
+#     from .ctypes_utils import from_ctypes
+#     return from_ctypes(type(val))
+
 
 @typeof_impl.register(type)
 def typeof_type(val, c):
@@ -209,3 +220,10 @@ def _typeof_ndarray(val, c):
 def typeof_array(val, c):
     arrty = typeof_impl(val.get('host'), c)
     return types.SmartArrayType(arrty.dtype, arrty.ndim, arrty.layout, type(val))
+
+
+if scipy:
+
+    @typeof_impl.register(scipy.LowLevelCallable)
+    def typeof_scipy_lowlevelcallable(val, c):
+        return types.LowLevelCallable(val)

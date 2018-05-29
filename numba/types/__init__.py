@@ -11,6 +11,7 @@ from .iterators import *
 from .misc import *
 from .npytypes import *
 from .scalars import *
+from .scipytypes import *
 
 
 # Short names

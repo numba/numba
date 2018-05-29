@@ -330,7 +330,7 @@ class BaseContext(object):
 
     def _load_builtins(self):
         # Initialize declarations
-        from . import builtins, arraydecl, npdatetime
+        from . import builtins, arraydecl, scipydecl, npdatetime
         from . import ctypes_utils, bufproto
         self.install_registry(templates.builtin_registry)
 

@@ -1,7 +1,6 @@
 """
 Boxing and unboxing of native Numba values to / from CPython objects.
 """
-
 from llvmlite import ir
 
 from .. import cgutils, numpy_support, types

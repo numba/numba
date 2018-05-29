@@ -1313,3 +1313,14 @@ class DeferredStructModel(CompositeModel):
     def traverse(self, builder):
         return [(self.actual_fe_type,
                  lambda value: builder.extract_value(value, [0]))]
+
+
+@register_default(types.LowLevelCallable)
+class LowLevelCallable(StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [
+            ('pycapsule', fe_type[0]),
+            ('function', fe_type[1]),
+            ('user_data', fe_type[2]),
+            ]
+        super(LowLevelCallable, self).__init__(dmm, fe_type, members)
