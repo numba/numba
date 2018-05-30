@@ -543,7 +543,10 @@ if numpy_version >= (1, 8):
         def generic(self):
             def typer(shape, fill_value, dtype=None):
                 if dtype is None:
-                    nb_dtype = fill_value
+                    if numpy_version < (1, 12):
+                        nb_dtype = types.float64
+                    else:
+                        nb_dtype = fill_value
                 else:
                     nb_dtype = _parse_dtype(dtype)
 
