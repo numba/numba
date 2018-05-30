@@ -161,12 +161,15 @@ class TestRemoveDead(unittest.TestCase):
 
         A1 = np.zeros(1)
         A2 = A1.copy()
-        pfunc = self.compile_parallel(func, (numba.typeof(A1),))
 
-        numba.njit(func)(A1)
-        pfunc(A2)
-        # recover global state
-        remove_call_handlers[:] = old_remove_handlers
+        try:
+            pfunc = self.compile_parallel(func, (numba.typeof(A1),))
+            numba.njit(func)(A1)
+            pfunc(A2)
+        finally:
+            # recover global state
+            remove_call_handlers[:] = old_remove_handlers
+
         self.assertEqual(A1[0], A2[0])
 
     def test_alias_reshape1(self):
