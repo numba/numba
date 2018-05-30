@@ -305,19 +305,46 @@ def with_lifting(func_ir):
 
     Rewrite the IR to extract all withs.
     Only the top-level withs are extracted.
+    Returns the (the_new_ir, the_extracted_blocks)
     """
     blocks = func_ir.blocks.copy()
     withs = find_setupwiths(blocks)
     cfg = compute_cfg_from_blocks(blocks)
     _legalize_withs_cfg(withs, cfg)
     # Remove the with blocks that are in the with-body
+    extracted = {}
     for (blk_start, blk_end) in withs:
+        cur_with = []
         for node in _cfg_nodes_in_region(cfg, blk_start, blk_end):
+            cur_with.append(blocks[node])
             del blocks[node]
-    # Make the with-head jump to the with-end
-    # TODO: check that the with-head doesn't do anything else
+        extracted[(blk_start, blk_end)] = cur_with
 
-    print('blk_end', blk_end)
+        _legalize_with_head(blocks[blk_start])
+        _bypass_with_context(blocks, blk_start, blk_end)
+
+    new_ir = func_ir.derive(blocks)
+    return new_ir, extracted
+
+
+def _bypass_with_context(blocks, blk_start, blk_end):
+    """Given the starting and ending block of the with-context,
+    replaces a new head block that jumps to the end.
+
+    *blocks* is modified inplace.
+    """
+    sblk = blocks[blk_start]
+    newblk = ir.Block(scope=sblk.scope, loc=sblk.loc)
+    newblk.append(ir.Jump(target=blk_end, loc=sblk.loc))
+    newblk.dump()
+    blocks[blk_start] = newblk
+
+
+def _legalize_with_head(blk):
+    """Given *blk*, the head block of the with-context, check that it doesn't
+    do anything else.
+    """
+    # TODO: check that the with-head doesn't do anything else
 
 
 def _cfg_nodes_in_region(cfg, region_begin, region_end):

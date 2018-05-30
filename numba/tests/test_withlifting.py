@@ -71,14 +71,25 @@ class TestWithFinding(TestCase):
 
 
 class TestWithLifting(TestCase):
-    def test_lift1(self):
-        func = lift1
+    def check_extracted_with(self, func, expect_count):
         the_ir = get_func_ir(func)
-        the_ir.dump()
-        where = with_lifting(the_ir)
-        print(where)
-        self.fail()
+        new_ir, extracted = with_lifting(the_ir)
+        self.assertEqual(len(extracted), expect_count)
 
+    def test_lift1(self):
+        self.check_extracted_with(lift1, expect_count=1)
+
+    def test_lift2(self):
+        self.check_extracted_with(lift2, expect_count=2)
+
+    def test_lift3(self):
+        self.check_extracted_with(lift3, expect_count=1)
+
+    def test_lift4(self):
+        self.check_extracted_with(lift4, expect_count=2)
+
+    def test_lift5(self):
+        self.check_extracted_with(lift5, expect_count=0)
 
 
 if __name__ == '__main__':
