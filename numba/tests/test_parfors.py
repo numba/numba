@@ -30,6 +30,7 @@ from numba.ir_utils import (find_callname, guard, build_definitions,
                             get_definition, is_getitem, is_setitem,
                             index_var_of_get_setitem)
 from numba import ir
+from numba.unsafe.ndarray import empty_inferred as unsafe_empty
 from numba.compiler import compile_isolated, Flags
 from numba.bytecode import ByteCodeIter
 from .support import tag, override_env_config
@@ -1146,11 +1147,10 @@ class TestParfors(TestParforsBase):
 
     @skip_unsupported
     def test_find_callname_intrinsic(self):
-        from numba.unsafe.ndarray import empty_inferred as unsafe_empty
         def test_impl(n):
             A = unsafe_empty((n,))
             for i in range(n):
-                A[i] = 2.0+i
+                A[i] = i + 2.0
             return A
 
         # the unsafe allocation should be found even though it is imported
