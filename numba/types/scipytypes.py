@@ -1,10 +1,10 @@
 """
 Typing for scipy specific features
 """
-from numba import types
+from .containers import _HeterogenousTuple
 
 
-class LowLevelCallable(types.containers._HeterogenousTuple):
+class LowLevelCallable(_HeterogenousTuple):
     """
     Items:
         0: pycapsule
@@ -12,7 +12,7 @@ class LowLevelCallable(types.containers._HeterogenousTuple):
         2: user_data
     """
     def __init__(self, llc):
-        from numba import typeof
+        from numba import typeof, types
 
         pycap, function, user_data = llc
         sig = llc.signature
