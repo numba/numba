@@ -814,9 +814,6 @@ class JITCPUCodegen(BaseCPUCodegen):
         gvaddr = self._engine.get_global_value_address(env_name)
         envptr = (ctypes.c_void_p * 1).from_address(gvaddr)
         envptr[0] = ctypes.c_void_p(id(env))
-        _keepalive.append(env)
-
-_keepalive = []
 
 
 def initialize_llvm():
