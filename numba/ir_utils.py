@@ -1639,6 +1639,9 @@ def is_namedtuple_class(c):
     bases = c.__bases__
     if len(bases) != 1 or bases[0] != tuple:
         return False
+    # should have _make method
+    if not hasattr(c, '_make'):
+        return False
     # should have _fields that is all string
     fields = getattr(c, '_fields', None)
     if not isinstance(fields, tuple):
