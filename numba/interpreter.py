@@ -5,7 +5,7 @@ import dis
 import sys
 from copy import copy
 
-from . import config, ir, controlflow, dataflow, utils, errors
+from . import config, ir, controlflow, dataflow, utils, errors, six
 from .utils import builtins, PYVERSION
 from .errors import NotDefinedError
 
@@ -235,8 +235,15 @@ class Interpreter(object):
                 return fn(inst, **kws)
             except errors.NotDefinedError as e:
                 if e.loc is None:
-                    e.loc = self.loc
-                raise e
+                    loc = self.loc
+                else:
+                    loc = e.loc
+
+                err = errors.NotDefinedError(e.name, loc=loc)
+                if not config.FULL_TRACEBACKS:
+                    six.raise_from(err, None)
+                else:
+                    raise err
 
 
     # --- Scope operations ---
