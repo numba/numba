@@ -18,7 +18,8 @@ from numba.ir_utils import (
     get_definition,
     find_callname,
     find_build_sequence,
-    find_const)
+    find_const,
+    is_namedtuple_class)
 from numba.analysis import (compute_cfg_from_blocks)
 from numba.typing import npydecl, signature
 import collections
@@ -1256,8 +1257,11 @@ class ArrayAnalysis(object):
 
         callee = expr.func
         callee_def = get_definition(self.func_ir, callee)
-        if ((isinstance(callee_def, ir.Global) or isinstance(callee_def, ir.FreeVar))
-            and isinstance(callee_def.value, StencilFunc)):
+        if (isinstance(callee_def, (ir.Global, ir.FreeVar))
+                and is_namedtuple_class(callee_def.value)):
+            return tuple(expr.args), []
+        if (isinstance(callee_def, (ir.Global, ir.FreeVar))
+                and isinstance(callee_def.value, StencilFunc)):
             args = expr.args
             return self._analyze_stencil(scope, equiv_set, callee_def.value,
                                          expr.loc, args, dict(expr.kws))
