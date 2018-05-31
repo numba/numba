@@ -1,5 +1,5 @@
 """
-This module implement code highlighting of numba annotated fucntiona annotation.
+This module implement code highlighting of numba annotated function annotation.
 
 Example:
 
@@ -15,8 +15,16 @@ Example:
     ... test(10)
     ... Annotate(test)
 
-The last line will return an Html and/or Ansi representation.
+The last line will return an Html and/or Ansi representation that will be
+displayed accordingly in IPython/Jupyter. 
+
 """
+
+from warnings import warnings
+
+warnings("The pretty_annotate functionality is experimental and might change API",
+         FutureWarning)
+
 from jinja2 import Template
 from pygments import highlight
 
@@ -28,14 +36,14 @@ from typing import List
 
 pylex = PythonLexer()
 
-def hllines(code:str, style)->List[str]:
+def hllines(code:str, style):
     "Given a code string, return a list of html-highlighted lines"
     hf = HtmlFormatter(noclasses=True, style=style, nowrap=True)
     res = highlight(code, pylex, hf)
     return res.splitlines()
 
 
-def htlines(code, style)-> List[str]:
+def htlines(code, style):
     "Given a code string, return a list of ANSI-highlighted lines"
     hf = TerminalFormatter(style=style)
     res = highlight(code, pylex, hf)
@@ -217,17 +225,34 @@ def reform_code(annotation):
 
 class Annotate:
     """
-    Issues:
+    Construct syntax highlighted annotation for a given jitted function:
+
+    Example:
+
+    >>> import numba 
+    ... from numba_annotate import Annotate
+    ... @numba.jit
+    ... def test(q):
+    ...     res = 0
+    ...     for i in range(q):
+    ...         res += i
+    ...     return res
+    ...     
+    ... test(10)
+    ... Annotate(test)
+
+
+    Known issues:
     
-    function annotation seem to persist across multiple function re-definition. 
-    So this make Annotate and iterative code refinment more difficult.
+    Function annotation seem to persist across multiple function re-definition. 
+
+    It is not yet possible to show annotation only for a single signature.
     
-    We also need to figure out how to show annotated code only for a given signature
     """
-    def __init__(self, function, *, style='default'):
-        """
-        Todo, process all annotation and not only the first, and pick one.
-        """
+    def __init__(self, function, **kwargs):
+
+        style = kwargs.get('style', 'default')
+
         for sig in function.signatures:
             ann = function.get_annotation_info(sig)
         self.ann = ann
