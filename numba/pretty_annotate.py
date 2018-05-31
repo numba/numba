@@ -159,7 +159,7 @@ html_template = Template("""
         <div class="metadata">
         Function name: {{func_data[func_key]['funcname']}}<br />
         {% if func_data[func_key]['filename'] %}
-            in file: {{func_data[func_key]['filename']}}<br />
+            in file: {{func_data[func_key]['filename']|escape}}<br />
         {% endif %}
         with signature: {{func_key[1]|e}}
         </div>
