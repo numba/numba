@@ -1397,20 +1397,26 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
             if not value:
                 raise GuardException
             attrs.append(value)
-            if hasattr(callee_def.value, '__module__'):
-                mod_name = callee_def.value.__module__
+            def_val = callee_def.value
+            # get the underlying definition of Intrinsic object to be able to
+            # find the module effectively.
+            # Otherwise, it will return numba.extending
+            if isinstance(def_val, numba.extending._Intrinsic):
+                def_val = def_val._defn
+            if hasattr(def_val, '__module__'):
+                mod_name = def_val.__module__
                 # it might be a numpy function imported directly
                 if (hasattr(numpy, value)
-                        and callee_def.value == getattr(numpy, value)):
+                        and def_val == getattr(numpy, value)):
                     attrs += ['numpy']
                 # it might be a np.random function imported directly
                 elif (hasattr(numpy.random, value)
-                        and callee_def.value == getattr(numpy.random, value)):
+                        and def_val == getattr(numpy.random, value)):
                     attrs += ['random', 'numpy']
                 elif mod_name is not None:
                     attrs.append(mod_name)
             else:
-                class_name = callee_def.value.__class__.__name__
+                class_name = def_val.__class__.__name__
                 if class_name == 'builtin_function_or_method':
                     class_name = 'builtin'
                 if class_name != 'module':

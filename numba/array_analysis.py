@@ -685,7 +685,7 @@ class SymbolicEquivSet(ShapeEquivSet):
                 if expr.op == 'call':
                     fname, mod_name = find_callname(
                             func_ir, expr, typemap=self.typemap)
-                    if fname == 'wrap_index' and mod_name == 'numba.extending':
+                    if fname == 'wrap_index' and mod_name == 'numba.array_analysis':
                         index = tuple(self.obj_to_ind.get(x.name, -1)
                                       for x in expr.args)
                         if -1 in index:
@@ -1302,7 +1302,8 @@ class ArrayAnalysis(object):
             return shape[0], [], shape[0]
         return None
 
-    def _analyze_op_call_numba_extending_assert_equiv(self, scope, equiv_set, args, kws):
+    def _analyze_op_call_numba_array_analysis_assert_equiv(self, scope,
+                                                        equiv_set, args, kws):
         equiv_set.insert_equiv(*args[1:])
         return None
 
@@ -1319,8 +1320,8 @@ class ArrayAnalysis(object):
     def _analyze_op_call_numpy_empty(self, scope, equiv_set, args, kws):
         return self._analyze_numpy_create_array(scope, equiv_set, args, kws)
 
-    def _analyze_op_call_numba_extending_empty_inferred(self, scope, equiv_set,
-                                                                    args, kws):
+    def _analyze_op_call_numba_unsafe_ndarray_empty_inferred(self, scope,
+                                                         equiv_set, args, kws):
         return self._analyze_numpy_create_array(scope, equiv_set, args, kws)
 
     def _analyze_op_call_numpy_zeros(self, scope, equiv_set, args, kws):
