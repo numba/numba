@@ -20,9 +20,9 @@ displayed accordingly in IPython/Jupyter.
 
 """
 
-from warnings import warnings
+from warnings import warn
 
-warnings("The pretty_annotate functionality is experimental and might change API",
+warn("The pretty_annotate functionality is experimental and might change API",
          FutureWarning)
 
 from jinja2 import Template
@@ -241,7 +241,6 @@ class Annotate:
     ... test(10)
     ... Annotate(test)
 
-
     Known issues:
     
     Function annotation seem to persist across multiple function re-definition. 
@@ -252,7 +251,8 @@ class Annotate:
     def __init__(self, function, **kwargs):
 
         style = kwargs.get('style', 'default')
-
+        if not function.signatures:
+            raise ValueError('function need to be jitted for at least one signature')
         for sig in function.signatures:
             ann = function.get_annotation_info(sig)
         self.ann = ann

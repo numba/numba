@@ -373,15 +373,28 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
         return dict((sig, self.inspect_asm(sig)) for sig in self.signatures)
 
-    def inspect_types(self, file=None):
-        if file is None:
-            file = sys.stdout
+    def inspect_types(self, file=None, **kwargs):
+        """
+        print or return annotated source with Numba intermediate IR
 
-        for ver, res in utils.iteritems(self.overloads):
-            print("%s %s" % (self.py_func.__name__, ver), file=file)
-            print('-' * 80, file=file)
-            print(res.type_annotation, file=file)
-            print('=' * 80, file=file)
+        Pass `pretty=True` to attempt color highlighting, and HTML rendering in
+        Jupyter and IPython by returning an Annotate Object. Pygments 
+        """
+        pretty = kwargs.get('pretty', False)
+        style = kwargs.get('style', 'default')
+
+        if not pretty:
+            if file is None:
+                file = sys.stdout
+
+            for ver, res in utils.iteritems(self.overloads):
+                print("%s %s" % (self.py_func.__name__, ver), file=file)
+                print('-' * 80, file=file)
+                print(res.type_annotation, file=file)
+                print('=' * 80, file=file)
+        else:
+            from .pretty_annotate import Annotate
+            return Annotate(self, style=style)
 
     def inspect_cfg(self, signature=None, show_wrapper=None):
         """
