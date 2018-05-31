@@ -135,7 +135,7 @@ class TestArrayAnalysis(TestCase):
     def compare_ir(self, ir_list):
         outputs = []
         for func_ir in ir_list:
-            remove_dead(func_ir.blocks, func_ir.arg_names)
+            remove_dead(func_ir.blocks, func_ir.arg_names, func_ir)
             output = utils.StringIO()
             func_ir.dump(file=output)
             outputs.append(output.getvalue())
