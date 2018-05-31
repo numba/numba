@@ -635,7 +635,8 @@ def is_pure(rhs, lives, call_table):
             return False
         call_list = call_table[func_name]
         if (call_list == [slice] or
-            call_list == ['log', numpy]):
+            call_list == ['log', numpy] or
+            call_list == ['empty', numpy]):
             return True
         for f in is_pure_extensions:
             if f(rhs, lives, call_list):
