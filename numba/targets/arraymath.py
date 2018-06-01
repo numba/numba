@@ -780,7 +780,7 @@ def _collect_percentiles_inner(a, q):
             # bypass pivoting where requested percentile is 100
             if percentile == 100:
                 val = np.max(a)
-                # heuristics to handle non-finite values a la NumPy
+                # heuristics to handle infinite values a la NumPy
                 if ~np.all(np.isfinite(a)):
                     if ~np.isfinite(val):
                         val = np.nan
@@ -788,7 +788,7 @@ def _collect_percentiles_inner(a, q):
             # bypass pivoting where requested percentile is 0
             elif percentile == 0:
                 val = np.min(a)
-                # convoluted heuristics to handle non-finite values a la NumPy
+                # convoluted heuristics to handle infinite values a la NumPy
                 if ~np.all(np.isfinite(a)):
                     num_pos_inf = np.sum(a == np.inf)
                     num_neg_inf = np.sum(a == -np.inf)

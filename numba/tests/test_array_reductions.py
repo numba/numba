@@ -361,9 +361,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         # Exceptions leak references
         self.disable_leak_check()
 
-        check_err(np.arange(5), -5)  # q less than 0
-        check_err(np.arange(5), (1, 10, 105))  # q contains value greater than 100
-        check_err(np.arange(5), (1, 10, np.nan))  # q contains nan
+        a = np.arange(5)
+        check_err(a, -5)  # q less than 0
+        check_err(a, (1, 10, 105))  # q contains value greater than 100
+        check_err(a, (1, 10, np.nan))  # q contains nan
 
     @staticmethod
     def _array_variations(a):
