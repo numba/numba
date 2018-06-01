@@ -49,6 +49,12 @@ class TestSelfRecursion(TestCase):
 
         self.assertEqual(str(raises.exception), "raise_self")
 
+    def test_optional_return(self):
+        pfunc = self.mod.make_optional_return_case()
+        cfunc = self.mod.make_optional_return_case(jit(nopython=True))
+        for arg in (0, 5, 10, 15):
+            self.assertEqual(pfunc(arg), cfunc(arg))
+
 
 class TestMutualRecursion(TestCase):
 
