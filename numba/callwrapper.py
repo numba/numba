@@ -141,7 +141,6 @@ class PyCallWrapper(object):
 
         # Get the Environment object
         env_manager = self.get_env(api, builder)
-        api.incref(env_manager.env_ptr)
 
         cleanup_manager = _ArgManager(self.context, builder, api,
                                       env_manager, endblk, nargs)
@@ -171,12 +170,10 @@ class PyCallWrapper(object):
         with builder.if_then(status.is_ok, likely=True):
             # Ok => return boxed Python value
             with builder.if_then(status.is_none):
-                api.decref(env_manager.env_ptr)
                 api.return_none()
 
             retty = self._simplified_return_type()
             obj = api.from_native_return(retty, retval, env_manager)
-            api.decref(env_manager.env_ptr)
             builder.ret(obj)
 
         # Error out
