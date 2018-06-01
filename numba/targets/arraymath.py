@@ -768,11 +768,7 @@ def np_median(a):
 @register_jitable
 def _collect_percentiles_inner(a, q):
     out = np.empty(len(q), dtype=np.float64)
-
     n = len(a)
-    num_pos_inf = np.sum(a == np.inf)
-    num_neg_inf = np.sum(a == -np.inf)
-    num_finite = n - (num_neg_inf + num_pos_inf)
 
     for i in range(len(q)):
         percentile = q[i]
@@ -781,7 +777,7 @@ def _collect_percentiles_inner(a, q):
         if percentile == 100:
             val = np.max(a)
             # heuristics to handle non-finite values a la NumPy
-            if num_finite < n:
+            if ~np.all(np.isfinite(a)):
                 if ~np.isfinite(val):
                     val = np.nan
 
@@ -789,7 +785,10 @@ def _collect_percentiles_inner(a, q):
         elif percentile == 0:
             val = np.min(a)
             # convoluted heuristics to handle non-finite values a la NumPy
-            if num_finite < n:
+            if ~np.all(np.isfinite(a)):
+                num_pos_inf = np.sum(a == np.inf)
+                num_neg_inf = np.sum(a == -np.inf)
+                num_finite = n - (num_neg_inf + num_pos_inf)
                 if num_finite == 0:
                     val = np.nan
                 if num_pos_inf == 1 and n == 2:
@@ -798,9 +797,7 @@ def _collect_percentiles_inner(a, q):
                     val = np.nan
                 if num_finite == 1:
                     if num_pos_inf > 1:
-                        if num_neg_inf == 0:
-                            val = np.nan
-                        elif num_neg_inf > 1:
+                        if num_neg_inf != 1:
                             val = np.nan
 
         else:
@@ -816,7 +813,6 @@ def _collect_percentiles_inner(a, q):
 
 @register_jitable
 def _collect_percentiles(a, q, skip_nan=False):
-
     if np.any(np.isnan(q)) or np.any(q < 0) or np.any(q > 100):
         raise ValueError('Percentiles must be in the range [0,100]')
 
@@ -834,74 +830,52 @@ def _collect_percentiles(a, q, skip_nan=False):
         if np.any(nan_mask):
             return np.full(len(q), np.nan)
 
-    n = len(temp_arry)
-    if n == 1:
+    if len(temp_arry) == 1:
         # single element array - return value same for all q
         val = temp_arry[0]
-        if np.isfinite(val):
-            fill_value = val
-        else:
-            fill_value = np.nan
+        fill_value = val if np.isfinite(val) else np.nan
         out = np.full(len(q), fill_value, dtype=np.float64)
     else:
         out = _collect_percentiles_inner(temp_arry, q)
 
     return out
 
+def _np_percentile_impl(a, q, skip_nan):
+    def np_percentile_q_scalar_impl(a, q):
+        percentiles = np.array([q])
+        return _collect_percentiles(a, percentiles, skip_nan=skip_nan)[0]
+
+    def np_percentile_q_sequence_impl(a, q):
+        percentiles = np.array(q)
+        return _collect_percentiles(a, percentiles, skip_nan=skip_nan)
+
+    def np_percentile_q_array_impl(a, q):
+        return _collect_percentiles(a, q, skip_nan=skip_nan)
+
+    if isinstance(q, (types.Float, types.Integer, types.Boolean)):
+        return np_percentile_q_scalar_impl
+
+    elif isinstance(q, (types.Tuple, types.Sequence)):
+        return np_percentile_q_sequence_impl
+
+    elif isinstance(q, types.Array):
+        return np_percentile_q_array_impl
+
 if numpy_version >= (1, 10):
     @overload(np.percentile)
     def np_percentile(a, q):
-
         # Note: np.percentile behaviour in the case of an array containing one or
         # more NaNs was changed in numpy 1.10 to return an array of np.NaN of
-        # length equal to q.
-
-        def np_percentile_q_scalar_impl(a, q):
-            percentiles = np.array([q])
-            return _collect_percentiles(a, percentiles)[0]
-
-        def np_percentile_q_seq_impl(a, q):
-            percentiles = np.array(q)
-            return _collect_percentiles(a, percentiles)
-
-        def np_percentile_q_array_impl(a, q):
-            return _collect_percentiles(a, q)
-
-        if isinstance(q, (types.Float, types.Integer, types.Boolean)):
-            return np_percentile_q_scalar_impl
-
-        elif isinstance(q, (types.Tuple, types.Sequence)):
-            return np_percentile_q_seq_impl
-
-        elif isinstance(q, types.Array):
-            return np_percentile_q_array_impl
+        # length equal to q, hence version guard.
+        return _np_percentile_impl(a, q, skip_nan=False)
 
 if numpy_version >= (1, 11):
     @overload(np.nanpercentile)
     def np_nanpercentile(a, q):
-
         # Note: np.nanpercentile return type in the case of an all-NaN slice
-        # was changed in 1.11 to be an array of np.NaN of length equal to q.
-
-        def np_nanpercentile_q_scalar_impl(a, q):
-            percentiles = np.array([q])
-            return _collect_percentiles(a, percentiles, skip_nan=True)[0]
-
-        def np_nanpercentile_q_seq_impl(a, q):
-            percentiles = np.array(q)
-            return _collect_percentiles(a, percentiles, skip_nan=True)
-
-        def np_nanpercentile_q_array_impl(a, q):
-            return _collect_percentiles(a, q, skip_nan=True)
-
-        if isinstance(q, (types.Float, types.Integer, types.Boolean)):
-            return np_nanpercentile_q_scalar_impl
-
-        elif isinstance(q, (types.Tuple, types.Sequence)):
-            return np_nanpercentile_q_seq_impl
-
-        elif isinstance(q, types.Array):
-            return np_nanpercentile_q_array_impl
+        # was changed in 1.11 to be an array of np.NaN of length equal to q,
+        # hence version guard.
+        return _np_percentile_impl(a, q, skip_nan=True)
 
 if numpy_version >= (1, 9):
     @overload(np.nanmedian)

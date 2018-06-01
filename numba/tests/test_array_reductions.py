@@ -397,15 +397,16 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             got = cfunc(a, q)
             self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
 
-        # high number of combinations, many including non-finite values
-        elements = [1, -1, np.nan, np.inf, -np.inf]
-        arrays = []
-        for i in range(1, 10):
-            arrays.extend(np.array(list(combinations_with_replacement(elements, i))))
+        def _array_combinations(elements):
+            for i in range(1, 10):
+                for comb in combinations_with_replacement(elements, i):
+                    yield np.array(comb)
 
-        for arr in arrays:
-            q = (0, 10, 20, 100)
-            check(arr, q, abs_tol=1e-12)  # 'eps' fails, tbd...
+        # high number of combinations, many including non-finite values
+        q = (0, 10, 20, 100)
+        elements = [1, -1, np.nan, np.inf, -np.inf]
+        for a in _array_combinations(elements):
+            check(a, q, abs_tol=1e-14)  # 'eps' fails, tbd...
 
     @unittest.skipUnless(np_version >= (1, 10), "percentile needs Numpy 1.10+")
     def test_percentile_basic(self):
