@@ -568,6 +568,18 @@ class Yield(Inst):
         return [self.value]
 
 
+class EnterWith(Stmt):
+    def __init__(self, contextmanager, loc):
+        self.contextmanager = contextmanager
+        self.loc = loc
+
+    def __str__(self):
+        return 'enter_with {}'.format(self.contextmanager)
+
+    def list_vars(self):
+        return [self.contextmanager]
+
+
 class Arg(object):
     def __init__(self, name, index, loc):
         self.name = name

@@ -398,11 +398,12 @@ def find_setupwiths(blocks):
         return False
 
     known_ranges = []
-    for s, e in find_ranges(blocks):
+    for s, e in sorted(find_ranges(blocks)):
         if not previously_occurred(s, known_ranges):
             assert s in blocks, 'starting offset is not a label'
             assert e in blocks, 'ending offset is not a label'
             known_ranges.append((s, e))
 
+    print(known_ranges)
     return known_ranges
 

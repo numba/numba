@@ -669,10 +669,11 @@ class DataFlowAnalysis(object):
         info.append(inst)
 
     def op_SETUP_WITH(self, info, inst):
+        cm = info.pop()    # the context-manager
         self.add_syntax_block(info, WithBlock())
         yielded = info.make_temp()
         info.push(yielded)
-        info.append(inst)
+        info.append(inst, contextmanager=cm)
 
     def op_WITH_CLEANUP_START(self, info, inst):
         info.append(inst)

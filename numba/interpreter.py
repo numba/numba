@@ -605,13 +605,15 @@ class Interpreter(object):
         loop = ir.Loop(inst.offset, exit=(inst.next + inst.arg))
         self.syntax_blocks.append(loop)
 
-    def op_SETUP_WITH(self, inst):
+    def op_SETUP_WITH(self, inst, contextmanager):
         assert self.blocks[inst.offset] is self.current_block
         exitpt = inst.next + inst.arg
         wth = ir.With(inst.offset, exit=exitpt)
         self.syntax_blocks.append(wth)
         self.current_block.append(ir.Metadata('setupwith', loc=self.loc,
                                               begin=inst.offset, end=exitpt))
+        self.current_block.append(ir.EnterWith(contextmanager=contextmanager,
+                                               loc=self.loc))
 
     def op_WITH_CLEANUP_START(self, inst):
         self.current_block.append(ir.Metadata('teardownwith', loc=self.loc))
