@@ -4,8 +4,9 @@ Version 0.38.1
 This is a critical bug fix release addressing:
 https://github.com/numba/numba/issues/3006
 
-The bug does not impact users who install Numba using conda or pip (using
-wheels from PyPI).
+The bug does not impact users using conda packages from Anaconda or Intel Python
+Distribution (but it does impact conda-forge). It does not impact users of pip
+using wheels from PyPI.
 
 This only impacts a small number of users where:
 
