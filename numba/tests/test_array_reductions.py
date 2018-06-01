@@ -404,8 +404,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         # high number of combinations, many including non-finite values
         q = (0, 10, 20, 100)
-        elements = [1, -1, np.nan, np.inf, -np.inf]
-        for a in _array_combinations(elements):
+        element_pool = (1, -1, np.nan, np.inf, -np.inf)
+        for a in _array_combinations(element_pool):
             check(a, q, abs_tol=1e-14)  # 'eps' fails, tbd...
 
     @unittest.skipUnless(np_version >= (1, 10), "percentile needs Numpy 1.10+")
