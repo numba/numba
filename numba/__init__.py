@@ -6,6 +6,7 @@ from __future__ import print_function, division, absolute_import
 import platform
 import re
 import sys
+import warnings
 
 from . import config, errors, runtests, types
 
@@ -118,10 +119,36 @@ def _try_enable_svml():
                 llvmlite.binding.load_library_permanently("svml_dispmd")
             else:
                 return False
+            # The SVML library is loaded, therefore SVML *could* be supported.
+            # Now see if LLVM has been compiled with the SVML support patch.
+            # If llvmlite has the checking function `has_svml` and it returns
+            # True, then LLVM was compiled with SVML support and the the setup
+            # for SVML can proceed. We err on the side of caution and if the
+            # checking function is missing, regardless of that being fine for
+            # most 0.23.{0,1} llvmlite instances (i.e. conda or pip installed),
+            # we assume that SVML was not compiled in. llvmlite 0.23.2 is a
+            # bugfix release with the checking function present that will always
+            # produce correct behaviour. For context see: #3006.
+            try:
+                if not getattr(llvmlite.binding.targets, "has_svml")():
+                    # has detection function, but no svml compiled in, therefore
+                    # disable SVML
+                    return False
+            except AttributeError:
+                if platform.machine() == 'x86_64' and config.DEBUG:
+                    msg = ("SVML was found but llvmlite >= 0.23.2 is "
+                           "needed to support it.")
+                    warnings.warn(msg)
+                # does not have detection function, cannot detect reliably,
+                # disable SVML.
+                return False
+
+            # All is well, detection function present and reports SVML is
+            # compiled in, set the vector library to SVML.
             llvmlite.binding.set_option('SVML', '-vector-library=SVML')
             return True
         except:
-            if platform.machine == 'x86_64' and config.DEBUG:
+            if platform.machine() == 'x86_64' and config.DEBUG:
                 warnings.warn("SVML was not found/could not be loaded.")
     return False
 
