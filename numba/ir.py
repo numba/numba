@@ -343,7 +343,7 @@ class Expr(Inst):
         return self._rec_list_vars(self._kws)
 
     def infer_constant(self):
-        raise ConstantInferenceError("cannot make a constant of %s" % (self,))
+        raise ConstantInferenceError('%s' % self, loc=self.loc)
 
 
 class SetItem(Stmt):
@@ -574,7 +574,7 @@ class Arg(object):
         return 'arg(%d, name=%s)' % (self.index, self.name)
 
     def infer_constant(self):
-        raise ConstantInferenceError("cannot make a constant of %s" % (self,))
+        raise ConstantInferenceError('%s' % self, loc=self.loc)
 
 
 class Const(object):

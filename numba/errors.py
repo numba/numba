@@ -241,6 +241,28 @@ If this functionality is important to you please file a feature request at:
 https://github.com/numba/numba/issues/new
 """
 
+interpreter_error_info = """
+Unsupported Python functionality was found in the code Numba was trying to
+compile. This error could be due to invalid code, does the code work
+without Numba? (To temporarily disable Numba JIT, set the `NUMBA_DISABLE_JIT`
+environment variable to non-zero, and then rerun the code).
+
+If the code is valid and the unsupported functionality is important to you
+please file a feature request at: https://github.com/numba/numba/issues/new
+
+To see Python/NumPy features supported by the latest release of Numba visit:
+http://numba.pydata.org/numba-doc/dev/reference/pysupported.html
+and
+http://numba.pydata.org/numba-doc/dev/reference/numpysupported.html
+"""
+
+constant_inference_info = """
+Numba could not make a constant out of something that it decided should be
+a constant. This could well be a current limitation in Numba's internals,
+please either raise a bug report along with a minimal reproducer at:
+https://github.com/numba/numba/issues/new
+"""
+
 typing_error_info = """
 This is not usually a problem with Numba itself but instead often caused by
 the use of unsupported features or an issue in resolving types.
@@ -265,9 +287,6 @@ This should not have happened, a problem has occurred in Numba's internals.
 Please report the error message and traceback, along with a minimal reproducer
 at: https://github.com/numba/numba/issues/new
 
-If you need help writing a minimal reproducer please see:
-http://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports
-
 If more help is needed please feel free to speak to the Numba core developers
 directly at: https://gitter.im/numba/numba
 
@@ -278,6 +297,8 @@ error_extras = dict()
 error_extras['unsupported_error'] = unsupported_error_info
 error_extras['typing'] = typing_error_info
 error_extras['reportable'] = reportable_issue_info
+error_extras['interpreter'] = interpreter_error_info
+error_extras['constant_inference'] = constant_inference_info
 
 
 def deprecated(arg):
@@ -399,30 +420,41 @@ class UnsupportedError(NumbaError):
     """
     Numba does not have an implementation for this functionality.
     """
+    pass
 
 
 class IRError(NumbaError):
     """
     An error occurred during Numba IR generation.
     """
+    pass
 
 
 class RedefinedError(IRError):
+    """
+    An error occurred during interpretation of IR due to variable redefinition.
+    """
     pass
 
 
 class NotDefinedError(IRError):
+    """
+    An undefined variable is encountered during interpretation of IR.
+    """
     def __init__(self, name, loc=None):
         self.name = name
-        self.loc = loc
-
-    def __str__(self):
-        loc = "?" if self.loc is None else self.loc
-        return "{name!r} is not defined in {loc}".format(name=self.name,
-                                                         loc=self.loc)
+        msg = "Variable '%s' is not defined." % name
+        super(NotDefinedError, self).__init__(msg, loc=loc)
 
 
 class VerificationError(IRError):
+    """
+    An error occurred during IR verification. Once Numba's internal
+    representation (IR) is constructed it is then verified to ensure that
+    terminators are both present and in the correct places within the IR. If
+    it is the case that this condition is not met, a VerificationError is
+    raised.
+    """
     pass
 
 
@@ -430,9 +462,13 @@ class MacroError(NumbaError):
     """
     An error occurred during macro expansion.
     """
+    pass
 
 
 class DeprecationError(NumbaError):
+    """
+    Functionality is deprecated.
+    """
     pass
 
 
@@ -440,7 +476,6 @@ class LoweringError(NumbaError):
     """
     An error occurred during lowering.
     """
-
     def __init__(self, msg, loc):
         self.msg = msg
         self.loc = loc
@@ -451,12 +486,14 @@ class ForbiddenConstruct(LoweringError):
     """
     A forbidden Python construct was encountered (e.g. use of locals()).
     """
+    pass
 
 
 class TypingError(NumbaError):
     """
     A type inference failure.
     """
+    pass
 
 
 class UntypedAttributeError(TypingError):
@@ -470,18 +507,25 @@ class ByteCodeSupportError(NumbaError):
     """
     Failure to extract the bytecode of the user's function.
     """
+    def __init__(self, msg, loc=None):
+        super(ByteCodeSupportError, self).__init__(msg, loc=loc)
 
 
 class CompilerError(NumbaError):
     """
     Some high-level error in the compiler.
     """
+    pass
 
 
 class ConstantInferenceError(NumbaError):
     """
     Failure during constant inference.
     """
+    def __init__(self, value, loc=None):
+        self.value = value
+        msg = "Cannot make a constant from: %s" % value
+        super(ConstantInferenceError, self).__init__(msg, loc=loc)
 
 
 class InternalError(NumbaError):
@@ -498,6 +542,7 @@ class RequireConstValue(TypingError):
     """For signaling a function typing require constant value for some of
     its arguments.
     """
+    pass
 
 
 def _format_msg(fmt, args, kwargs):
