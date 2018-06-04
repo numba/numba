@@ -992,7 +992,7 @@ class Interpreter(object):
     # created. Conversely, using a pure LOAD_METHOD no intermediary is present
     # and it is essentially like a pointer grab and forward to CALL_METHOD. The
     # net outcome is that the implementation in Numba produces the same result,
-    # but in object mode it may be that it runs mode slowly than it would if
+    # but in object mode it may be that it runs more slowly than it would if
     # run in CPython.
 
     def op_LOAD_METHOD(self, *args, **kws):
