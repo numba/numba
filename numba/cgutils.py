@@ -1012,3 +1012,26 @@ else:
         No-op for python2. Assume there won't be unicode names.
         """
         return text
+
+
+def hexdump(builder, ptr, nbytes):
+    """Debug print the memory region in *ptr* to *ptr + nbytes*
+    as hex.
+    """
+    bytes_per_line = 16
+    nbytes = builder.zext(nbytes, intp_t)
+    printf(builder, "hexdump p=%p n=%zu",
+           ptr, nbytes)
+    byte_t = ir.IntType(8)
+    ptr = builder.bitcast(ptr, byte_t.as_pointer())
+    # Loop to print the bytes in *ptr* as hex
+    with for_range(builder, nbytes) as idx:
+        div_by = builder.urem(idx.index, intp_t(bytes_per_line))
+        do_new_line = builder.icmp_unsigned("==", div_by, intp_t(0))
+        with builder.if_then(do_new_line):
+            printf(builder, "\n")
+
+        offset = builder.gep(ptr, [idx.index])
+        val = builder.load(offset)
+        printf(builder, " %02x", val)
+    printf(builder, "\n")
