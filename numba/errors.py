@@ -244,9 +244,8 @@ https://github.com/numba/numba/issues/new
 interpreter_error_info = """
 Unsupported Python functionality was found in the code Numba was trying to
 compile. This error could be due to invalid code, does the code work
-without Numba? (A quick way to check is to temporarily disable Numba JIT by
-setting the `NUMBA_DISABLE_JIT` environment variable to non-zero and then
-rerunning the code).
+without Numba? (To temporarily disable Numba JIT, set the `NUMBA_DISABLE_JIT`
+environment variable to non-zero, and then rerun the code).
 
 If the code is valid and the unsupported functionality is important to you
 please file a feature request at: https://github.com/numba/numba/issues/new
@@ -262,12 +261,6 @@ Numba could not make a constant out of something that it decided should be
 a constant. This could well be a current limitation in Numba's internals,
 please either raise a bug report along with a minimal reproducer at:
 https://github.com/numba/numba/issues/new
-
-(if you need help writing a minimal reproducer please see)
-http://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports
-
-Or, alternatively please feel free to speak to the Numba core developers
-directly at: https://gitter.im/numba/numba
 """
 
 typing_error_info = """
@@ -293,9 +286,6 @@ This should not have happened, a problem has occurred in Numba's internals.
 
 Please report the error message and traceback, along with a minimal reproducer
 at: https://github.com/numba/numba/issues/new
-
-If you need help writing a minimal reproducer please see:
-http://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports
 
 If more help is needed please feel free to speak to the Numba core developers
 directly at: https://gitter.im/numba/numba
@@ -459,7 +449,11 @@ class NotDefinedError(IRError):
 
 class VerificationError(IRError):
     """
-    An error occurred during IR verification.
+    An error occurred during IR verification. Once Numba's internal
+    representation (IR) is constructed it is then verified to ensure that
+    terminators are both present and in the correct places within the IR. If
+    it is the case that this condition is not met, a VerificationError is
+    raised.
     """
     pass
 
