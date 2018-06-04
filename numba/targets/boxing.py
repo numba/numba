@@ -397,7 +397,10 @@ def unbox_array(typ, obj, c):
     failed = cgutils.is_not_null(c.builder, errcode)
     # Handle error
     with c.builder.if_then(failed, likely=False):
-        c.pyapi.err_set_string("PyExc_TypeError", "can't unbox array")
+        c.pyapi.err_set_string("PyExc_TypeError",
+                               "can't unbox array from PyObject into "
+                               "native value.  The object maybe of a "
+                               "different type")
     return NativeValue(c.builder.load(aryptr), is_error=failed)
 
 

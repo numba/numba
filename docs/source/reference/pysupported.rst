@@ -171,7 +171,7 @@ Numba supports list comprehension.  For example::
 
 
 .. note::
-  Prior to version 0.38.0, Numba did not support the creation of nested lists.
+  Prior to version 0.39.0, Numba did not support the creation of nested lists.
 
 
 Numba also supports "array comprehension" that is a list comprehension

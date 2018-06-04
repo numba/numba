@@ -873,10 +873,7 @@ class TestListManagedElements(MemoryLeakMixin, TestCase):
         for a, b in zip(expect, got):
             self.assertPreciseEqual(a, b)
 
-    def test_reflect_passthru(self):
-        def pyfunc(con):
-            pass
-
+    def _check_element_equal(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
         con = [np.arange(3), np.arange(5)]
         expect = list(con)
@@ -886,48 +883,30 @@ class TestListManagedElements(MemoryLeakMixin, TestCase):
         self.assert_list_element_precise_equal(
             expect=expect, got=got
             )
+
+
+    def test_reflect_passthru(self):
+        def pyfunc(con):
+            pass
+        self._check_element_equal(pyfunc)
 
     def test_reflect_appended(self):
         def pyfunc(con):
             con.append(np.arange(10))
 
-        cfunc = jit(nopython=True)(pyfunc)
-        con = [np.arange(3), np.arange(5)]
-        expect = list(con)
-        pyfunc(expect)
-        got = list(con)
-        cfunc(got)
-        self.assert_list_element_precise_equal(
-            expect=expect, got=got
-            )
+        self._check_element_equal(pyfunc)
 
     def test_reflect_setitem(self):
         def pyfunc(con):
             con[1] = np.arange(10)
 
-        cfunc = jit(nopython=True)(pyfunc)
-        con = [np.arange(3), np.arange(5)]
-        expect = list(con)
-        pyfunc(expect)
-        got = list(con)
-        cfunc(got)
-        self.assert_list_element_precise_equal(
-            expect=expect, got=got
-            )
+        self._check_element_equal(pyfunc)
 
     def test_reflect_popped(self):
         def pyfunc(con):
             con.pop()
 
-        cfunc = jit(nopython=True)(pyfunc)
-        con = [np.arange(3), np.arange(5)]
-        expect = list(con)
-        pyfunc(expect)
-        got = list(con)
-        cfunc(got)
-        self.assert_list_element_precise_equal(
-            expect=expect, got=got
-            )
+        self._check_element_equal(pyfunc)
 
     def test_append(self):
         def pyfunc():
@@ -1106,9 +1085,6 @@ class TestListManagedElements(MemoryLeakMixin, TestCase):
         l3 = [[np.zeros(i) for i in range(5)], [(1,),]]
         l4 = [[1], [{1}]]
         l5 = [[1], [{'a':1}]]
-
-        # TODO:
-        # working_cases = [l1, l2]
 
         # error_cases
         with self.assertRaises(TypeError) as raises:

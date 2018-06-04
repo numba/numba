@@ -124,6 +124,10 @@ class _ListPayloadMixin(object):
 
 
 class ListPayloadAccessor(_ListPayloadMixin):
+    """
+    A helper object to access the list attributes given the pointer to the
+    payload pointer.
+    """
     def __init__(self, context, builder, list_type, payload_ptr):
         self._context = context
         self._builder = builder
@@ -204,7 +208,7 @@ class ListInstance(_ListPayloadMixin):
     def zfill(self, start, stop):
         """Zero-fill the memory at index *start* to *stop*
 
-        *stop* MUST not be small than *start*.
+        *stop* MUST not be smaller than *start*.
         """
         builder = self._builder
         base = self._gep(start)
