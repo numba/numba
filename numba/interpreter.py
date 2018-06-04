@@ -610,9 +610,10 @@ class Interpreter(object):
         exitpt = inst.next + inst.arg
         wth = ir.With(inst.offset, exit=exitpt)
         self.syntax_blocks.append(wth)
-        self.current_block.append(ir.EnterWith(contextmanager=contextmanager,
-                                               begin=inst.offset, end=exitpt,
-                                               loc=self.loc))
+        self.current_block.append(ir.EnterWith(
+            contextmanager=self.get(contextmanager),
+            begin=inst.offset, end=exitpt, loc=self.loc,
+            ))
 
     def op_WITH_CLEANUP(self, inst):
         "no-op"

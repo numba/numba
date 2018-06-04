@@ -7,7 +7,7 @@ import sys
 
 import numpy as np
 
-from numba import numpy_support, types, utils, smartarray
+from numba import numpy_support, types, utils, smartarray, withcontexts
 from numba import ir, errors, transforms
 
 
@@ -209,6 +209,6 @@ def typeof_array(val, c):
     return types.SmartArrayType(arrty.dtype, arrty.ndim, arrty.layout, type(val))
 
 
-@typeof_impl.register(transforms.BaseContextManager)
+@typeof_impl.register(withcontexts.WithContext)
 def typeof_contextmanager(val, c):
     return types.ContextManager(val)

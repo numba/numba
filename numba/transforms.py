@@ -7,20 +7,8 @@ from __future__ import absolute_import, print_function
 from collections import namedtuple
 
 from numba.analysis import compute_cfg_from_blocks, find_top_level_loops
-from numba import ir, errors
+from numba import ir, errors, postproc
 from numba.analysis import compute_use_defs
-
-
-class BaseContextManager(object):
-    pass
-
-
-class ByPassContext(BaseContextManager):
-    def mutate_with_body(self, func_ir, blk_start, blk_end):
-        _bypass_with_context(func_ir, blk_start, blk_end)
-
-
-ByPassContext = ByPassContext()
 
 
 def _extract_loop_lifting_candidates(cfg, blocks):
@@ -317,31 +305,34 @@ def with_lifting(func_ir):
 
     Rewrite the IR to extract all withs.
     Only the top-level withs are extracted.
-    Returns the (the_new_ir, the_extracted_blocks)
+    Returns the (the_new_ir, the_lifted_with_ir)
     """
+    postproc.PostProcessor(func_ir).run()
+    assert func_ir.variable_lifetime
+    vlt = func_ir.variable_lifetime
     blocks = func_ir.blocks.copy()
     withs = find_setupwiths(blocks)
-    cfg = compute_cfg_from_blocks(blocks)
+    cfg = vlt.cfg
     _legalize_withs_cfg(withs, cfg)
     # Remove the with blocks that are in the with-body
-    extracted = {}
+    sub_irs = []
     for (blk_start, blk_end) in withs:
-        cur_with = []
+        body_blocks = []
         for node in _cfg_nodes_in_region(cfg, blk_start, blk_end):
-            cur_with.append(blocks[node])
-            del blocks[node]
-        extracted[(blk_start, blk_end)] = cur_with
+            body_blocks.append(node)
 
         _legalize_with_head(blocks[blk_start])
         cmkind = _get_with_contextmanager(func_ir, blocks, blk_start)
-        cmkind.mutate_with_body(blocks, blk_start, blk_end)
+        sub = cmkind.mutate_with_body(func_ir, blocks, blk_start, blk_end,
+                                      body_blocks)
+        sub_irs.append(sub)
 
-    if not extracted:
+    if not sub_irs:
         # Unchanged
         new_ir = func_ir
     else:
         new_ir = func_ir.derive(blocks)
-    return new_ir, extracted
+    return new_ir, sub_irs
 
 
 def _get_with_contextmanager(func_ir, blocks, blk_start):
@@ -356,18 +347,6 @@ def _get_with_contextmanager(func_ir, blocks, blk_start):
             return dfn.value
     # No
     raise errors.CompilerError("malformed with-context usage")
-
-
-def _bypass_with_context(blocks, blk_start, blk_end):
-    """Given the starting and ending block of the with-context,
-    replaces a new head block that jumps to the end.
-
-    *blocks* is modified inplace.
-    """
-    sblk = blocks[blk_start]
-    newblk = ir.Block(scope=sblk.scope, loc=sblk.loc)
-    newblk.append(ir.Jump(target=blk_end, loc=sblk.loc))
-    blocks[blk_start] = newblk
 
 
 def _legalize_with_head(blk):

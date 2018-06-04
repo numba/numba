@@ -430,7 +430,9 @@ class BasePipeline(object):
         """
         Extract with-contexts
         """
-        self.func_ir, _ = transforms.with_lifting(self.func_ir)
+        main, subs = transforms.with_lifting(self.func_ir)
+        self.func_ir = main
+        assert not subs
 
     def stage_objectmode_frontend(self):
         """
