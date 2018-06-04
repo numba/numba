@@ -11,6 +11,18 @@ from numba import ir, errors
 from numba.analysis import compute_use_defs
 
 
+class BaseContextManager(object):
+    pass
+
+
+class ByPassContext(BaseContextManager):
+    def mutate_with_body(self, func_ir, blk_start, blk_end):
+        _bypass_with_context(func_ir, blk_start, blk_end)
+
+
+ByPassContext = ByPassContext()
+
+
 def _extract_loop_lifting_candidates(cfg, blocks):
     """
     Returns a list of loops that are candidate for loop lifting
@@ -321,10 +333,29 @@ def with_lifting(func_ir):
         extracted[(blk_start, blk_end)] = cur_with
 
         _legalize_with_head(blocks[blk_start])
-        _bypass_with_context(blocks, blk_start, blk_end)
+        cmkind = _get_with_contextmanager(func_ir, blocks, blk_start)
+        cmkind.mutate_with_body(blocks, blk_start, blk_end)
 
-    new_ir = func_ir.derive(blocks)
+    if not extracted:
+        # Unchanged
+        new_ir = func_ir
+    else:
+        new_ir = func_ir.derive(blocks)
     return new_ir, extracted
+
+
+def _get_with_contextmanager(func_ir, blocks, blk_start):
+    """Get the global object used for as the context manager
+    """
+    for stmt in blocks[blk_start].body:
+        if isinstance(stmt, ir.EnterWith):
+            var_ref = stmt.contextmanager
+            dfn = func_ir.get_definition(var_ref)
+            if not isinstance(dfn, ir.Global):
+                raise errors.CompilerError("Illegal use of context-manager. ")
+            return dfn.value
+    # No
+    raise errors.CompilerError("malformed with-context usage")
 
 
 def _bypass_with_context(blocks, blk_start, blk_end):
@@ -336,7 +367,6 @@ def _bypass_with_context(blocks, blk_start, blk_end):
     sblk = blocks[blk_start]
     newblk = ir.Block(scope=sblk.scope, loc=sblk.loc)
     newblk.append(ir.Jump(target=blk_end, loc=sblk.loc))
-    newblk.dump()
     blocks[blk_start] = newblk
 
 
@@ -404,6 +434,5 @@ def find_setupwiths(blocks):
             assert e in blocks, 'ending offset is not a label'
             known_ranges.append((s, e))
 
-    print(known_ranges)
     return known_ranges
 

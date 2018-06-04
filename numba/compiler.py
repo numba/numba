@@ -430,8 +430,7 @@ class BasePipeline(object):
         """
         Extract with-contexts
         """
-        transforms.with_lifting(self.func_ir)
-        raise NotImplementedError
+        self.func_ir, _ = transforms.with_lifting(self.func_ir)
 
     def stage_objectmode_frontend(self):
         """
@@ -453,7 +452,7 @@ class BasePipeline(object):
         """
         Type inference and legalization
         """
-        # self.frontend_withlift()
+        self.frontend_withlift()
         with self.fallback_context('Function "%s" failed type inference'
                                    % (self.func_id.func_name,)):
             # Type inference

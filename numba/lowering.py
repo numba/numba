@@ -359,6 +359,9 @@ class Lower(BaseLower):
         elif isinstance(inst, ir.StaticRaise):
             self.lower_static_raise(inst)
 
+        elif isinstance(inst, ir.Metadata):
+            pass
+
         else:
             for _class, func in lower_extensions.items():
                 if isinstance(inst, _class):
@@ -457,7 +460,7 @@ class Lower(BaseLower):
 
         # get the return repr of yielded value
         retval = self.context.get_return_value(self.builder, typ, yret)
-        
+
         # return
         self.call_conv.return_value(self.builder, retval)
 
