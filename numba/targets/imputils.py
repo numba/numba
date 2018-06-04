@@ -166,6 +166,20 @@ def _decorate_setattr(impl, ty, attr):
     return res
 
 
+def fix_returning_optional(context, builder, sig, status, retval):
+    # Reconstruct optional return type
+    if isinstance(sig.return_type, types.Optional):
+        value_type = sig.return_type.type
+        optional_none = context.make_optional_none(builder, value_type)
+        retvalptr = cgutils.alloca_once_value(builder, optional_none)
+        with builder.if_then(builder.not_(status.is_none)):
+            optional_value = context.make_optional_value(
+                builder, value_type, retval,
+                )
+            builder.store(optional_value, retvalptr)
+        retval = builder.load(retvalptr)
+    return retval
+
 def user_function(fndesc, libs):
     """
     A wrapper inserting code calling Numba-compiled *fndesc*.
@@ -180,16 +194,7 @@ def user_function(fndesc, libs):
             context.call_conv.return_status_propagate(builder, status)
         assert sig.return_type == fndesc.restype
         # Reconstruct optional return type
-        if isinstance(sig.return_type, types.Optional):
-            value_type = sig.return_type.type
-            optional_none = context.make_optional_none(builder, value_type)
-            retvalptr = cgutils.alloca_once_value(builder, optional_none)
-            with builder.if_then(builder.not_(status.is_none)):
-                optional_value = context.make_optional_value(builder,
-                                                             value_type,
-                                                             retval)
-                builder.store(optional_value, retvalptr)
-            retval = builder.load(retvalptr)
+        retval = fix_returning_optional(context, builder, sig, status, retval)
         # If the data representations don't match up
         if retval.type != context.get_value_type(sig.return_type):
             msg = "function returned {0} but expect {1}"
