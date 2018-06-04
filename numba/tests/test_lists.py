@@ -1106,5 +1106,135 @@ class TestListManagedElements(MemoryLeakMixin, TestCase):
         self.assertIn("not 'dict'", str(raises.exception))
 
 
+    def compile_and_test(self, pyfunc, *args):
+        from copy import deepcopy
+        expect_args = deepcopy(args)
+        expect = pyfunc(*expect_args)
+
+        njit_args = deepcopy(args)
+        cfunc = jit(nopython=True)(pyfunc)
+        got = cfunc(*njit_args)
+
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
+        self.assert_list_element_precise_equal(
+            expect=expect_args, got=njit_args
+            )
+
+    #returns, sometimes segfaults
+    #[<NULL>]
+    #[[array([], dtype=float64)]]
+    def test_c01(self):
+        def bar(x):
+            return x.pop()
+
+        r = [[np.zeros(0)], [np.zeros(10)*1j]]
+        self.compile_and_test(bar, r)
+
+    #This fails, but the reasons seem valid
+    def test_c02(self):
+        def bar(x):
+            x.append(x)
+            return x
+
+        r = [[np.zeros(0)]]
+        self.compile_and_test(bar, r)
+
+    #This fails in lowering
+    def test_c03(self):
+        def bar(x):
+            f = x
+            f[0] = 1
+            return f
+
+        r = [[np.arange(3)]]
+        self.compile_and_test(bar, r)
+
+    #This fails in lowering
+    def test_c04(self):
+        def bar(x):
+            f = x
+            f[0][0] = 10
+            return f
+
+        r = [[np.arange(3)]]
+        self.compile_and_test(bar, r)
+
+    # This compiles and runs fine, just produces the wrong answer:
+    def test_c05(self):
+        def bar(x):
+            f = x
+            f[0][0] = np.array([x for x in np.arange(10)])
+            return f
+
+        r = [[np.arange(3)]]
+        self.compile_and_test(bar, r)
+
+    # This gives a lowering error, mutability of types is the root cause:
+    def test_c06(self):
+        def bar(x):
+            f = x
+            f[0][0] = np.array([x + 1j for x in np.arange(10)])
+            return f
+
+        r = [[np.arange(3)]]
+        self.compile_and_test(bar, r)
+
+
+    # This segfaults (+ or - 7), I assume OOB access is cause
+    def test_c07(self):
+        def bar(x):
+            return x[-7]
+
+        r = [[np.arange(3)]]
+        self.compile_and_test(bar, r)
+
+    # This sometimes runs and gives the wrong answer, and sometimes segfaults, OOB as a guess
+    def test_c08(self):
+        def bar(x):
+            x[5] = 7
+            return x
+
+        r = [1, 2, 3]
+        self.compile_and_test(bar, r)
+
+    #This gives a lowering error (probably valid):
+    def test_c09(self):
+        def bar(x):
+            x[-2] = 7j
+            return x
+
+        r = [1, 2, 3]
+        self.compile_and_test(bar, r)
+
+    # This causes a `PyFatal`:
+    def test_10(self):
+        def bar(x):
+            x[0], x[1] = x[1], x[0]
+            return x
+
+        r = [[1, 2, 3], [4, 5, 6]]
+        self.compile_and_test(bar, r)
+
+    # This also causes a `PyFatal`, assume it is the same problem as above:
+    def test_c11(self):
+        def bar(x):
+            x[:] = x[::-1]
+            return x
+
+        r = [[1, 2, 3], [4, 5, 6]]
+        self.compile_and_test(bar, r)
+
+    # This causes a lowering error:
+    def test_c12(self):
+        def bar(x):
+            del x[-1]
+            return x
+
+        r = [x for x in range(10)]
+        self.compile_and_test(bar, r)
+
+
 if __name__ == '__main__':
     unittest.main()
