@@ -3285,12 +3285,20 @@ def numpy_zeros_like_nd(context, builder, sig, args):
 if numpy_version >= (1, 8):
     @lower_builtin(np.full, types.Any, types.Any)
     def numpy_full_nd(context, builder, sig, args):
-
-        def full(shape, value):
-            arr = np.empty(shape)
-            for idx in np.ndindex(arr.shape):
-                arr[idx] = value
-            return arr
+        if numpy_version < (1, 12):
+            # np < 1.12 returns float64 full regardless of value type
+            def full(shape, value):
+                arr = np.empty(shape)
+                val = np.float64(value.real)
+                for idx in np.ndindex(arr.shape):
+                    arr[idx] = val
+                return arr
+        else:
+            def full(shape, value):
+                arr = np.empty(shape, type(value))
+                for idx in np.ndindex(arr.shape):
+                    arr[idx] = value
+                return arr
 
         res = context.compile_internal(builder, full, sig, args)
         return impl_ret_new_ref(context, builder, sig.return_type, res)
