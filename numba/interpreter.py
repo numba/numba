@@ -992,3 +992,18 @@ class Interpreter(object):
         self.store(value=appendattr, name=appendvar)
         appendinst = ir.Expr.call(self.get(appendvar), (value,), (), loc=self.loc)
         self.store(value=appendinst, name=res)
+
+
+    # NOTE: The LOAD_METHOD opcode is implemented as a LOAD_ATTR for ease,
+    # however this means a new object (the bound-method instance) could be
+    # created. Conversely, using a pure LOAD_METHOD no intermediary is present
+    # and it is essentially like a pointer grab and forward to CALL_METHOD. The
+    # net outcome is that the implementation in Numba produces the same result,
+    # but in object mode it may be that it runs more slowly than it would if
+    # run in CPython.
+
+    def op_LOAD_METHOD(self, *args, **kws):
+        self.op_LOAD_ATTR(*args, **kws)
+
+    def op_CALL_METHOD(self, *args, **kws):
+        self.op_CALL_FUNCTION(*args, **kws)

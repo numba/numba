@@ -5,6 +5,13 @@ set -v
 CONDA_INSTALL="conda install -q -y"
 PIP_INSTALL="pip install -q"
 
+
+EXTRA_CHANNELS=""
+if [ "${USE_C3I_TEST_CHANNEL}" == "yes" ]; then
+    EXTRA_CHANNELS="${EXTRA_CHANNELS} -c c3i_test"
+fi
+
+
 # Deactivate any environment
 source deactivate
 # Display root environment (for debugging)
@@ -14,7 +21,7 @@ conda list
 #  `conda env remove` issue)
 conda remove --all -q -y -n $CONDA_ENV
 # Scipy, CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
-conda create -n $CONDA_ENV -q -y python=$PYTHON numpy=$NUMPY cffi pip scipy jinja2 ipython
+conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY cffi pip scipy jinja2 ipython
 
 set +v
 source activate $CONDA_ENV

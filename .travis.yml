@@ -18,6 +18,7 @@ matrix:
         - env: PYTHON=3.5 NUMPY=1.10 CONDA_ENV=travisci
         - env: PYTHON=2.7 NUMPY=1.9 CONDA_ENV=travisci
         - env: PYTHON=2.7 NUMPY=1.14 CONDA_ENV=travisci
+        - env: PYTHON=3.7 NUMPY=1.14 CONDA_ENV=travisci USE_C3I_TEST_CHANNEL=yes
 
 branches:
     only:
