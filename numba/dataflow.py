@@ -675,6 +675,12 @@ class DataFlowAnalysis(object):
         info.push(yielded)
         info.append(inst, contextmanager=cm)
 
+    def op_WITH_CLEANUP(self, info, inst):
+        """
+        Note: py2 only opcode
+        """
+        info.append(inst)
+
     def op_WITH_CLEANUP_START(self, info, inst):
         info.append(inst)
 

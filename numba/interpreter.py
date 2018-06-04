@@ -614,6 +614,9 @@ class Interpreter(object):
                                                begin=inst.offset, end=exitpt,
                                                loc=self.loc))
 
+    def op_WITH_CLEANUP(self, inst):
+        "no-op"
+
     def op_WITH_CLEANUP_START(self, inst):
         "no-op"
 
