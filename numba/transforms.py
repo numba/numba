@@ -415,11 +415,8 @@ def find_setupwiths(blocks):
     """
     def find_ranges(blocks):
         for blk in blocks.values():
-            for md in blk.find_insts(ir.Metadata):
-                if md.name == 'setupwith':
-                    begin = md.data['begin']
-                    end = md.data['end']
-                    yield begin, end
+            for ew in blk.find_insts(ir.EnterWith):
+                yield ew.begin, ew.end
 
     def previously_occurred(start, known_ranges):
         for a, b in known_ranges:

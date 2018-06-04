@@ -545,16 +545,6 @@ class Print(Stmt):
         return 'print(%s)' % ', '.join(str(v) for v in self.args)
 
 
-class Metadata(Stmt):
-    def __init__(self, name, loc, **kwargs):
-        self.name = name
-        self.loc = loc
-        self.data = kwargs.copy()
-
-    def __repr__(self):
-        return "metadata {} {}".format(self.name, self.data)
-
-
 class Yield(Inst):
     def __init__(self, value, loc, index):
         self.value = value
@@ -569,8 +559,10 @@ class Yield(Inst):
 
 
 class EnterWith(Stmt):
-    def __init__(self, contextmanager, loc):
+    def __init__(self, contextmanager, begin, end, loc):
         self.contextmanager = contextmanager
+        self.begin = begin
+        self.end = end
         self.loc = loc
 
     def __str__(self):

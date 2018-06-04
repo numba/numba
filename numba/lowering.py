@@ -359,9 +359,6 @@ class Lower(BaseLower):
         elif isinstance(inst, ir.StaticRaise):
             self.lower_static_raise(inst)
 
-        elif isinstance(inst, ir.Metadata):
-            pass
-
         else:
             for _class, func in lower_extensions.items():
                 if isinstance(inst, _class):

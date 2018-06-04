@@ -610,13 +610,12 @@ class Interpreter(object):
         exitpt = inst.next + inst.arg
         wth = ir.With(inst.offset, exit=exitpt)
         self.syntax_blocks.append(wth)
-        self.current_block.append(ir.Metadata('setupwith', loc=self.loc,
-                                              begin=inst.offset, end=exitpt))
         self.current_block.append(ir.EnterWith(contextmanager=contextmanager,
+                                               begin=inst.offset, end=exitpt,
                                                loc=self.loc))
 
     def op_WITH_CLEANUP_START(self, inst):
-        self.current_block.append(ir.Metadata('teardownwith', loc=self.loc))
+        "no-op"
 
     def op_WITH_CLEANUP_FINISH(self, inst):
         "no-op"
