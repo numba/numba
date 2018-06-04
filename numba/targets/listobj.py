@@ -1,5 +1,5 @@
 """
-Support for native homogenous lists.
+Support for native homogeneous lists.
 """
 
 from __future__ import print_function, absolute_import, division

@@ -237,9 +237,9 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertEqual(tp_404, typeof(RequestError.internal_error))
 
         with self.assertRaises(ValueError) as raises:
-            typeof(HeterogenousEnum.red)
+            typeof(HeterogeneousEnum.red)
         self.assertEqual(str(raises.exception),
-                         "Cannot type heterogenous enum: got value types complex128, float64")
+                         "Cannot type heterogeneous enum: got value types complex128, float64")
 
     @tag('important')
     def test_enum_class(self):
@@ -256,9 +256,9 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertNotEqual(tp_error, tp_shape)
 
         with self.assertRaises(ValueError) as raises:
-            typeof(HeterogenousEnum)
+            typeof(HeterogeneousEnum)
         self.assertEqual(str(raises.exception),
-                         "Cannot type heterogenous enum: got value types complex128, float64")
+                         "Cannot type heterogeneous enum: got value types complex128, float64")
 
     @tag('important')
     def test_dtype(self):

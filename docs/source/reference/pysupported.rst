@@ -146,7 +146,7 @@ The following operations are supported:
 * tuple construction
 * tuple unpacking
 * comparison between tuples
-* iteration and indexing over homogenous tuples
+* iteration and indexing over homogeneous tuples
 * addition (concatenation) between tuples
 * slicing tuples with a constant slice
 * the index method on tuples
@@ -155,7 +155,7 @@ list
 ----
 
 Creating and returning lists from JIT-compiled functions is supported,
-as well as all methods and operations.  Lists must be strictly homogenous:
+as well as all methods and operations.  Lists must be strictly homogeneous:
 Numba will reject any list containing objects of different types, even if
 the types are compatible (for example, ``[1, 2.5]`` is rejected as it
 contains a :class:`int` and a :class:`float`).
@@ -248,7 +248,7 @@ set
 
 All methods and operations on sets are supported in JIT-compiled functions.
 
-Sets must be strictly homogenous: Numba will reject any set containing
+Sets must be strictly homogeneous: Numba will reject any set containing
 objects of different types, even if the types are compatible (for example,
 ``{1, 2.5}`` is rejected as it contains a :class:`int` and a :class:`float`).
 

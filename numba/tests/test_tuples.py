@@ -317,9 +317,9 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
                 cfunc = jit(nopython=True)(pyfunc)
                 self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
-        # Homogenous
+        # Homogeneous
         check(Rect(4, 5))
-        # Heterogenous
+        # Heterogeneous
         check(Rect(4, 5.5))
 
     def test_len(self):
@@ -328,10 +328,10 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
             cfunc = jit(nopython=True)(pyfunc)
             self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
-        # Homogenous
+        # Homogeneous
         check(Rect(4, 5))
         check(Point(4, 5, 6))
-        # Heterogenous
+        # Heterogeneous
         check(Rect(4, 5.5))
         check(Point(4, 5.5, 6j))
 
@@ -349,9 +349,9 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
             cfunc = jit(nopython=True)(pyfunc)
             self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
-        # Homogenous
+        # Homogeneous
         check(Rect(4, 5))
-        # Heterogenous
+        # Heterogeneous
         check(Rect(4, 5.5))
         check(Empty())
 

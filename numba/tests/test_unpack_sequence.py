@@ -57,22 +57,22 @@ def unpack_tuple_too_large():
     return a + b + c
 
 
-def unpack_heterogenous_tuple_too_small():
+def unpack_heterogeneous_tuple_too_small():
     a, b, c = (1, 2.5j)
     return a + b + c
 
 
-def unpack_heterogenous_tuple_too_large():
+def unpack_heterogeneous_tuple_too_large():
     a, b, c = (1, 2.5, 3j, 4)
     return a + b + c
 
 
-def unpack_heterogenous_tuple():
+def unpack_heterogeneous_tuple():
     a, b, c = (1, 2.5, 3j)
     return a + b + c
 
 
-def unpack_nested_heterogenous_tuple():
+def unpack_nested_heterogeneous_tuple():
     a, (b, c) = (1, (2.5, 3j))
     return a + b + c
 
@@ -141,18 +141,18 @@ class TestUnpack(MemoryLeakMixin, TestCase):
     def test_unpack_tuple_npm(self):
         self.test_unpack_tuple(flags=no_pyobj_flags)
 
-    def test_unpack_heterogenous_tuple(self, flags=force_pyobj_flags):
-        self.run_nullary_func(unpack_heterogenous_tuple, flags)
+    def test_unpack_heterogeneous_tuple(self, flags=force_pyobj_flags):
+        self.run_nullary_func(unpack_heterogeneous_tuple, flags)
 
-    def test_unpack_heterogenous_tuple_npm(self):
-        self.test_unpack_heterogenous_tuple(flags=no_pyobj_flags)
+    def test_unpack_heterogeneous_tuple_npm(self):
+        self.test_unpack_heterogeneous_tuple(flags=no_pyobj_flags)
 
-    def test_unpack_nested_heterogenous_tuple(self, flags=force_pyobj_flags):
-        self.run_nullary_func(unpack_nested_heterogenous_tuple, flags)
+    def test_unpack_nested_heterogeneous_tuple(self, flags=force_pyobj_flags):
+        self.run_nullary_func(unpack_nested_heterogeneous_tuple, flags)
 
     @tag('important')
-    def test_unpack_nested_heterogenous_tuple_npm(self):
-        self.test_unpack_nested_heterogenous_tuple(flags=no_pyobj_flags)
+    def test_unpack_nested_heterogeneous_tuple_npm(self):
+        self.test_unpack_nested_heterogeneous_tuple(flags=no_pyobj_flags)
 
     def test_chained_unpack_assign(self, flags=force_pyobj_flags):
         pyfunc = chained_unpack_assign1
@@ -173,22 +173,22 @@ class TestUnpack(MemoryLeakMixin, TestCase):
 
     def test_unpack_tuple_too_small(self):
         self.check_unpack_error(unpack_tuple_too_small)
-        self.check_unpack_error(unpack_heterogenous_tuple_too_small)
+        self.check_unpack_error(unpack_heterogeneous_tuple_too_small)
 
     def test_unpack_tuple_too_small_npm(self):
         self.check_unpack_error(unpack_tuple_too_small, no_pyobj_flags,
                                 errors.TypingError)
-        self.check_unpack_error(unpack_heterogenous_tuple_too_small,
+        self.check_unpack_error(unpack_heterogeneous_tuple_too_small,
                                 no_pyobj_flags, errors.TypingError)
 
     def test_unpack_tuple_too_large(self):
         self.check_unpack_error(unpack_tuple_too_large)
-        self.check_unpack_error(unpack_heterogenous_tuple_too_large)
+        self.check_unpack_error(unpack_heterogeneous_tuple_too_large)
 
     def test_unpack_tuple_too_large_npm(self):
         self.check_unpack_error(unpack_tuple_too_large, no_pyobj_flags,
                                 errors.TypingError)
-        self.check_unpack_error(unpack_heterogenous_tuple_too_large,
+        self.check_unpack_error(unpack_heterogeneous_tuple_too_large,
                                 no_pyobj_flags, errors.TypingError)
 
     def test_unpack_range_too_small(self):

@@ -185,7 +185,7 @@ def _typeof_enum_class(val, c):
         raise ValueError("Cannot type enum with no members")
     dtypes = {typeof_impl(mem.value, c) for mem in members}
     if len(dtypes) > 1:
-        raise ValueError("Cannot type heterogenous enum: "
+        raise ValueError("Cannot type heterogeneous enum: "
                          "got value types %s"
                          % ", ".join(sorted(str(ty) for ty in dtypes)))
     if issubclass(val, enum.IntEnum):

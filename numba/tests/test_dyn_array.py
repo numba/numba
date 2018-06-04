@@ -1062,7 +1062,7 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
         # A list
         got = cfunc([2, 3, 42])
         self.assertPreciseEqual(got, np.intp([2, 3, 42]))
-        # A heterogenous tuple
+        # A heterogeneous tuple
         got = cfunc((1.0, 2.5j, 42))
         self.assertPreciseEqual(got, np.array([1.0, 2.5j, 42]))
         # An empty tuple
@@ -1124,7 +1124,7 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
             self.assertIn(msg, str(raises.exception))
 
         with check_raises(('array(float64, 1d, C) not allowed in a '
-                           'homogenous sequence')):
+                           'homogeneous sequence')):
             cfunc(np.array([1.]))
 
         with check_raises(('type (int64, reflected list(int64)) does '
@@ -1132,7 +1132,7 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
             cfunc((np.int64(1), [np.int64(2)]))
 
         with check_raises(("cannot convert (int64, Record([('a', '<i4'), "
-                           "('b', '<f4')])) to a homogenous type")):
+                           "('b', '<f4')])) to a homogeneous type")):
             st = np.dtype([('a', 'i4'), ('b', 'f4')])
             val = np.zeros(1, dtype=st)[0]
             cfunc(((1, 2), (np.int64(1), val)))

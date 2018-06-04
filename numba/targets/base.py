@@ -651,14 +651,14 @@ class BaseContext(object):
 
     def pair_first(self, builder, val, ty):
         """
-        Extract the first element of a heterogenous pair.
+        Extract the first element of a heterogeneous pair.
         """
         pair = self.make_helper(builder, ty, val)
         return pair.first
 
     def pair_second(self, builder, val, ty):
         """
-        Extract the second element of a heterogenous pair.
+        Extract the second element of a heterogeneous pair.
         """
         pair = self.make_helper(builder, ty, val)
         return pair.second
