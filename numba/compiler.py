@@ -430,9 +430,17 @@ class BasePipeline(object):
         """
         Extract with-contexts
         """
-        main, subs = transforms.with_lifting(self.func_ir)
+        main, subs = transforms.with_lifting(
+            func_ir=self.func_ir,
+            typingctx=self.typingctx,
+            targetctx=self.targetctx,
+            flags=self.flags,
+            locals=self.locals,
+            )
         self.func_ir = main
-        assert not subs
+        # XXX: do sth about the subs
+        # print('!!SUBS', subs)
+        # assert not subs
 
     def stage_objectmode_frontend(self):
         """

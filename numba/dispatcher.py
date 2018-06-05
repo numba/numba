@@ -687,7 +687,7 @@ class LiftedLoop(_DispatcherBase):
                 if existing is not None:
                     return existing.entry_point
 
-                assert not flags.enable_looplift, "Enable looplift flags is on"
+                # assert not flags.enable_looplift, "Enable looplift flags is on"
                 # Clone IR to avoid mutation in rewrite pass
                 cloned_func_ir = self.func_ir.copy()
                 cres = compiler.compile_ir(typingctx=self.typingctx,
@@ -704,6 +704,40 @@ class LiftedLoop(_DispatcherBase):
 
                 self.add_overload(cres)
                 return cres.entry_point
+
+
+class LiftedWith(LiftedLoop):
+    @property
+    def _numba_type_(self):
+        return types.Dispatcher(self)
+
+    def get_call_template(self, args, kws):
+        """
+        Get a typing.ConcreteTemplate for this dispatcher and the given
+        *args* and *kws* types.  This allows to resolve the return type.
+
+        A (template, pysig, args, kws) tuple is returned.
+        """
+        # XXX how about a dispatcher template class automating the
+        # following?
+
+        # Fold keyword arguments and resolve default values
+        # print('self._compiler', self._compiler)
+        # pysig, args = self._compiler.fold_argument_types(args, kws)
+        # kws = {}
+        # Ensure an overload is available
+        if self._can_compile:
+            self.compile(tuple(args))
+
+        pysig = None
+        # Create function type for typing
+        func_name = self.py_func.__name__
+        name = "CallTemplate({0})".format(func_name)
+        # The `key` isn't really used except for diagnosis here,
+        # so avoid keeping a reference to `cfunc`.
+        call_template = typing.make_concrete_template(
+            name, key=func_name, signatures=self.nopython_signatures)
+        return call_template, pysig, args, kws
 
 
 # Initialize typeof machinery

@@ -300,7 +300,7 @@ def canonicalize_cfg(blocks):
     return canonicalize_cfg_single_backedge(blocks)
 
 
-def with_lifting(func_ir):
+def with_lifting(func_ir, typingctx, targetctx, flags, locals):
     """With-lifting transformation
 
     Rewrite the IR to extract all withs.
@@ -308,8 +308,10 @@ def with_lifting(func_ir):
     Returns the (the_new_ir, the_lifted_with_ir)
     """
     def dispatcher_factory(func_ir):
-        # TODO complete this
-        return func_ir
+        from numba.dispatcher import LiftedWith
+
+        return LiftedWith(func_ir, typingctx, targetctx, flags, locals)
+
     postproc.PostProcessor(func_ir).run()
     assert func_ir.variable_lifetime
     vlt = func_ir.variable_lifetime
@@ -329,6 +331,7 @@ def with_lifting(func_ir):
         sub = cmkind.mutate_with_body(func_ir, blocks, blk_start, blk_end,
                                       body_blocks, dispatcher_factory)
         sub_irs.append(sub)
+    # print("???", sub_irs)
 
     if not sub_irs:
         # Unchanged

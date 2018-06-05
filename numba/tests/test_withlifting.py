@@ -92,9 +92,9 @@ def liftcall1():
     x = 1
     print("A", x)
     with call_context:
-        print("B", x)
+        # print("B", x)  # pending env patch
         x += 1
-        print("C", x)
+        # print("C", x)  # pending env patch
     print("D", x)
     return x
 
@@ -122,9 +122,17 @@ class TestWithFinding(TestCase):
 
 
 class BaseTestWithLifting(TestCase):
+    def setUp(self):
+        super(BaseTestWithLifting, self).setUp()
+        self.typingctx = typing.Context()
+        self.targetctx = cpu.CPUContext(self.typingctx)
+        self.flags = DEFAULT_FLAGS
+
     def check_extracted_with(self, func, expect_count, expected_stdout):
         the_ir = get_func_ir(func)
-        new_ir, extracted = with_lifting(the_ir)
+        new_ir, extracted = with_lifting(
+            the_ir, self.typingctx, self.targetctx, self.flags, locals={},
+        )
         self.assertEqual(len(extracted), expect_count)
         cres = self.compile_ir(new_ir)
 
@@ -134,9 +142,9 @@ class BaseTestWithLifting(TestCase):
         self.assertEqual(out.getvalue(), expected_stdout)
 
     def compile_ir(self, the_ir, args=(), return_type=None):
-        typingctx = typing.Context()
-        targetctx = cpu.CPUContext(typingctx)
-        flags = DEFAULT_FLAGS
+        typingctx = self.typingctx
+        targetctx = self.targetctx
+        flags = self.flags
         # Register the contexts in case for nested @jit or @overload calls
         with cpu_target.nested_context(typingctx, targetctx):
             return compile_ir(typingctx, targetctx, the_ir, args,
@@ -168,9 +176,18 @@ class TestLiftByPass(BaseTestWithLifting):
 
 class TestLiftCall(BaseTestWithLifting):
 
+    def check_extracted_with(self, func, expect_count, expected_stdout):
+        from numba import njit
+
+        jitted = njit(func)
+        with captured_stdout() as out:
+            jitted()
+
+        self.assertEqual(out.getvalue(), expected_stdout)
+
     def test_liftcall1(self):
         self.check_extracted_with(liftcall1, expect_count=1,
-                                  expected_stdout="A\nC\n")
+                                  expected_stdout="A 1\nD 2\n")
 
 
 if __name__ == '__main__':
