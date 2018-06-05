@@ -5,11 +5,12 @@ from numba.transforms import find_setupwiths, with_lifting
 from numba.withcontexts import bypass_context, call_context
 from numba.bytecode import FunctionIdentity, ByteCode
 from numba.interpreter import Interpreter
-from numba import typing
+from numba import typing, errors
 from numba.targets.registry import cpu_target
 from numba.targets import cpu
 from numba.compiler import compile_ir, DEFAULT_FLAGS
-from .support import TestCase, MemoryLeakMixin, captured_stdout
+from numba import njit
+from .support import TestCase, captured_stdout
 
 
 def get_func_ir(func):
@@ -92,11 +93,41 @@ def liftcall1():
     x = 1
     print("A", x)
     with call_context:
-        # print("B", x)  # pending env patch
         x += 1
-        # print("C", x)  # pending env patch
-    print("D", x)
+    print("B", x)
     return x
+
+
+def liftcall2():
+    x = 1
+    print("A", x)
+    with call_context:
+        x += 1
+    print("B", x)
+    with call_context:
+        x += 10
+    print("C", x)
+    return x
+
+
+def liftcall3():
+    x = 1
+    print("A", x)
+    with call_context:
+        if x > 0:
+            x += 1
+    print("B", x)
+    with call_context:
+        for i in range(10):
+            x += i
+    print("C", x)
+    return x
+
+
+def liftcall4():
+    with call_context:
+        with call_context:
+            pass
 
 
 class TestWithFinding(TestCase):
@@ -176,18 +207,39 @@ class TestLiftByPass(BaseTestWithLifting):
 
 class TestLiftCall(BaseTestWithLifting):
 
-    def check_extracted_with(self, func, expect_count, expected_stdout):
-        from numba import njit
-
+    def check_same_semantic(self, func):
+        """Ensure same semantic with non-jitted code
+        """
         jitted = njit(func)
-        with captured_stdout() as out:
+        with captured_stdout() as got:
             jitted()
 
-        self.assertEqual(out.getvalue(), expected_stdout)
+        with captured_stdout() as expect:
+            func()
+
+        self.assertEqual(got.getvalue(), expect.getvalue())
 
     def test_liftcall1(self):
         self.check_extracted_with(liftcall1, expect_count=1,
-                                  expected_stdout="A 1\nD 2\n")
+                                  expected_stdout="A 1\nB 2\n")
+        self.check_same_semantic(liftcall1)
+
+    def test_liftcall2(self):
+        self.check_extracted_with(liftcall2, expect_count=2,
+                                  expected_stdout="A 1\nB 2\nC 12\n")
+        self.check_same_semantic(liftcall2)
+
+    def test_liftcall3(self):
+        self.check_extracted_with(liftcall3, expect_count=2,
+                                  expected_stdout="A 1\nB 2\nC 47\n")
+        self.check_same_semantic(liftcall3)
+
+    def test_liftcall4(self):
+        with self.assertRaises(errors.TypingError) as raises:
+            njit(liftcall4)()
+        # Known error.  We only support one context manager per function
+        # for body that are lifted.
+        self.assertIn("re-entrant", str(raises.exception))
 
 
 if __name__ == '__main__':

@@ -5,7 +5,11 @@ from numba import transforms
 
 
 class WithContext(object):
-    pass
+    def __enter__(self):
+        pass
+
+    def __exit__(self, typ, val, tb):
+        pass
 
 
 def _get_var_parent(name):
@@ -66,6 +70,7 @@ class _CallContextType(WithContext):
             )
 
         blocks[blk_start] = newblk
+        _clear_blocks(blocks, body_blocks)
         return dispatcher
 
 

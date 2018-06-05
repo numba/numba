@@ -322,3 +322,6 @@ class FunctionIdentity(object):
         self.unique_name = '{}${}'.format(self.func_qualname, uid)
 
         return self
+
+    def derive(self):
+        return self.from_function(self.func)
