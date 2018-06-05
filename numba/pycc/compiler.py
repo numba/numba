@@ -130,6 +130,7 @@ class _ModuleCompiler(object):
         """
         self.exported_function_types = {}
         self.function_environments = {}
+        self.environment_gvs = {}
 
         codegen = self.context.codegen()
         library = codegen.create_library(self.module_name)
@@ -165,6 +166,7 @@ class _ModuleCompiler(object):
                     cres.fndesc.restype, cres.fndesc.argtypes)
                 self.exported_function_types[entry] = fnty
                 self.function_environments[entry] = cres.environment
+                self.environment_gvs[entry] = cres.fndesc.env_name
             else:
                 llvm_func.name = entry.symbol
                 self.dll_exports.append(entry.symbol)
@@ -261,17 +263,32 @@ class _ModuleCompiler(object):
                                               env_defs_init)
         return gv.gep([ZERO, ZERO])
 
+    def _emit_envgvs_array(self, llvm_module, builder, pyapi):
+        env_setters = []
+        for entry in self.export_entries:
+            envgv_name = self.environment_gvs[entry]
+            gv = self.context.declare_env_global(llvm_module, envgv_name)
+            envgv = gv.bitcast(lt._void_star)
+            env_setters.append(envgv)
+
+        env_setters_init = lc.Constant.array(lt._void_star, env_setters)
+        gv = self.context.insert_unique_const(llvm_module,
+                                              '.module_envgvs',
+                                              env_setters_init)
+        return gv.gep([ZERO, ZERO])
+
     def _emit_module_init_code(self, llvm_module, builder, modobj,
-                               method_array, env_array):
+                               method_array, env_array, envgv_array):
         """
         Emit call to "external" init function, if any.
         """
         if self.external_init_function:
             fnty = ir.FunctionType(lt._int32,
                                    [modobj.type, self.method_def_ptr,
-                                    self.env_def_ptr])
+                                    self.env_def_ptr, envgv_array.type])
             fn = llvm_module.add_function(fnty, self.external_init_function)
-            return builder.call(fn, [modobj, method_array, env_array])
+            return builder.call(fn, [modobj, method_array, env_array,
+                                     envgv_array])
         else:
             return None
 
@@ -330,8 +347,10 @@ class ModuleCompilerPy2(_ModuleCompiler):
                             lc.Constant.int(lt._int32, sys.api_version)))
 
         env_array = self._emit_environment_array(llvm_module, builder, pyapi)
+        envgv_array = self._emit_envgvs_array(llvm_module, builder, pyapi)
+
         self._emit_module_init_code(llvm_module, builder, mod,
-                                    method_array, env_array)
+                                    method_array, env_array, envgv_array)
         # XXX No way to notify failure to caller...
 
         builder.ret_void()
@@ -484,8 +503,9 @@ class ModuleCompilerPy3(_ModuleCompiler):
             builder.ret(NULL.bitcast(mod_init_fn.type.pointee.return_type))
 
         env_array = self._emit_environment_array(llvm_module, builder, pyapi)
+        envgv_array = self._emit_envgvs_array(llvm_module, builder, pyapi)
         ret = self._emit_module_init_code(llvm_module, builder, mod,
-                                          method_array, env_array)
+                                          method_array, env_array, envgv_array)
         if ret is not None:
             with builder.if_then(cgutils.is_not_null(builder, ret)):
                 # Init function errored out

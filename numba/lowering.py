@@ -1,9 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
+import weakref
 from collections import namedtuple
 from functools import partial
 
 from llvmlite.llvmpy.core import Constant, Type, Builder
+from llvmlite import ir as llvmir
 
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
@@ -14,27 +16,39 @@ from . import debuginfo
 
 
 class Environment(_dynfunc.Environment):
-    __slots__ = ()
+    """Stores globals and constants pyobjects for runtime.
+
+    It is often needed to convert b/w nopython objects and pyobjects.
+    """
+    __slots__ = ('env_name', '__weakref__')
+    # A weak-value dictionary to store live environment with env_name as the
+    # key.
+    _memo = weakref.WeakValueDictionary()
 
     @classmethod
     def from_fndesc(cls, fndesc):
         mod = fndesc.lookup_module()
-        return cls(mod.__dict__)
+        try:
+            # Avoid creating new Env
+            return cls._memo[fndesc.env_name]
+        except KeyError:
+            inst = cls(mod.__dict__)
+            inst.env_name = fndesc.env_name
+            cls._memo[fndesc.env_name] = inst
+            return inst
+
 
     def __reduce__(self):
-        return _rebuild_env, (self.globals['__name__'], self.consts)
-
-    def as_pointer(self, targetctx, ptrty=types.pyobject):
-        """
-        Return a constant pointer for the environment object.
-        """
-        ll_addr = targetctx.get_value_type(types.intp)
-        ll_ptr = targetctx.get_value_type(ptrty)
-        envptr = ll_addr(id(self)).inttoptr(ll_ptr)
-        return envptr
+        return _rebuild_env, (
+            self.globals['__name__'],
+            self.consts,
+            self.env_name
+            )
 
 
-def _rebuild_env(modname, consts):
+def _rebuild_env(modname, consts, env_name):
+    if env_name in Environment._memo:
+        return Environment._memo[env_name]
     from . import serialize
     mod = serialize._rebuild_module(modname)
     env = Environment(mod.__dict__)
@@ -73,7 +87,8 @@ class BaseLower(object):
         # Specializes the target context as seen inside the Lowerer
         # This adds:
         #  - environment: the python exceution environment
-        self.context = context.subtarget(environment=self.env)
+        self.context = context.subtarget(environment=self.env,
+                                         fndesc=self.fndesc)
 
         # Debuginfo
         dibuildercls = (self.context.DIBuilder
@@ -129,7 +144,16 @@ class BaseLower(object):
     def return_exception(self, exc_class, exc_args=None):
         self.call_conv.return_user_exc(self.builder, exc_class, exc_args)
 
+    def emit_environment_object(self):
+        """Emit a pointer to hold the Environment object.
+        """
+        # Define global for the environment and initialize it to NULL
+        envname = self.context.get_env_name(self.fndesc)
+        gvenv = self.context.declare_env_global(self.module, envname)
+
     def lower(self):
+        # Emit the Env into the module
+        self.emit_environment_object()
         if self.generator_info is None:
             self.genlower = None
             self.lower_normal_function(self.fndesc)
@@ -457,7 +481,7 @@ class Lower(BaseLower):
 
         # get the return repr of yielded value
         retval = self.context.get_return_value(self.builder, typ, yret)
-        
+
         # return
         self.call_conv.return_value(self.builder, retval)
 

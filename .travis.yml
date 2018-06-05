@@ -8,13 +8,13 @@ matrix:
         # Longest build first
         # Parametrize the conda env name so multiple builds can
         # work with multiple environments on the same machine in parallel.
-        - os: osx
-          env: PYTHON=3.6 NUMPY=1.12 BUILD_DOC=yes CONDA_ENV=travisci
-        - env: PYTHON=3.5 NUMPY=1.11 RUN_COVERAGE=yes CONDA_ENV=travisci
-        - env: PYTHON=3.6 NUMPY=1.12 BUILD_DOC=yes CONDA_ENV=travisci
-        - env: PYTHON=3.6 NUMPY=1.13 CONDA_ENV=travisci
-        - env: PYTHON=3.6 NUMPY=1.14 CONDA_ENV=travisci
-        - env: PYTHON=3.6 NUMPY=1.14 CONDA_ENV=travisci TEST_SVML=yes
+        # - os: osx
+        #   env: PYTHON=3.6 NUMPY=1.12 BUILD_DOC=yes CONDA_ENV=travisci
+        # - env: PYTHON=3.5 NUMPY=1.11 RUN_COVERAGE=yes CONDA_ENV=travisci
+        # - env: PYTHON=3.6 NUMPY=1.12 BUILD_DOC=yes CONDA_ENV=travisci
+        # - env: PYTHON=3.6 NUMPY=1.13 CONDA_ENV=travisci
+        # - env: PYTHON=3.6 NUMPY=1.14 CONDA_ENV=travisci
+        # - env: PYTHON=3.6 NUMPY=1.14 CONDA_ENV=travisci TEST_SVML=yes
         - env: PYTHON=3.5 NUMPY=1.10 CONDA_ENV=travisci
         - env: PYTHON=2.7 NUMPY=1.9 CONDA_ENV=travisci
         - env: PYTHON=2.7 NUMPY=1.14 CONDA_ENV=travisci

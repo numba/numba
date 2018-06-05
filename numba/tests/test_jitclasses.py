@@ -619,6 +619,26 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(tc.a, x * y)
         self.assertEqual(tc.b, z)
 
+    def test_generator_method(self):
+        spec = []
+
+        @jitclass(spec)
+        class TestClass(object):
+            def __init__(self):
+                pass
+
+            def gen(self, niter):
+                for i in range(niter):
+                    yield np.arange(i)
+
+        def expected_gen(niter):
+            for i in range(niter):
+                yield np.arange(i)
+
+        for niter in range(10):
+            for expect, got in zip(expected_gen(niter), TestClass().gen(niter)):
+                self.assertPreciseEqual(expect, got)
+
 
 if __name__ == '__main__':
     unittest.main()
