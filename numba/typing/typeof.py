@@ -3,12 +3,11 @@ from __future__ import print_function, absolute_import
 from collections import namedtuple
 import ctypes
 import enum
-import sys
 
 import numpy as np
 
 from numba import numpy_support, types, utils, smartarray, withcontexts
-from numba import ir, errors, transforms
+from numba import errors
 
 
 class Purpose(enum.Enum):

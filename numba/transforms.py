@@ -7,7 +7,7 @@ from __future__ import absolute_import, print_function
 from collections import namedtuple
 
 from numba.analysis import compute_cfg_from_blocks, find_top_level_loops
-from numba import ir, errors, postproc
+from numba import ir, errors
 from numba.analysis import compute_use_defs
 
 
@@ -307,6 +307,8 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
     Only the top-level withs are extracted.
     Returns the (the_new_ir, the_lifted_with_ir)
     """
+    from numba import postproc
+
     def dispatcher_factory(func_ir):
         from numba.dispatcher import LiftedWith
 

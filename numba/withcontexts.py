@@ -1,7 +1,4 @@
-from pprint import pprint
-
 from numba import ir
-from numba import transforms
 
 
 class WithContext(object):
