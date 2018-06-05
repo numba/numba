@@ -307,6 +307,9 @@ def with_lifting(func_ir):
     Only the top-level withs are extracted.
     Returns the (the_new_ir, the_lifted_with_ir)
     """
+    def dispatcher_factory(func_ir):
+        # TODO complete this
+        return func_ir
     postproc.PostProcessor(func_ir).run()
     assert func_ir.variable_lifetime
     vlt = func_ir.variable_lifetime
@@ -324,7 +327,7 @@ def with_lifting(func_ir):
         _legalize_with_head(blocks[blk_start])
         cmkind = _get_with_contextmanager(func_ir, blocks, blk_start)
         sub = cmkind.mutate_with_body(func_ir, blocks, blk_start, blk_end,
-                                      body_blocks)
+                                      body_blocks, dispatcher_factory)
         sub_irs.append(sub)
 
     if not sub_irs:
