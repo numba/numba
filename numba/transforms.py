@@ -4,7 +4,7 @@ Implement transformation on Numba IR
 
 from __future__ import absolute_import, print_function
 
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 
 from numba.analysis import compute_cfg_from_blocks, find_top_level_loops
 from numba import ir, errors, ir_utils
@@ -340,7 +340,25 @@ def _legalize_with_head(blk):
     """Given *blk*, the head block of the with-context, check that it doesn't
     do anything else.
     """
-    # TODO: check that the with-head doesn't do anything else
+    counters = defaultdict(int)
+    for stmt in blk.body:
+        counters[type(stmt)] += 1
+
+    if counters.pop(ir.EnterWith) != 1:
+        raise errors.CompilerError(
+            "with's head-block must have exactly 1 ENTER_WITH"
+            )
+    if counters.pop(ir.Jump) != 1:
+        raise errors.CompilerError(
+            "with's head-block must have exactly 1 JUMP"
+            )
+    # Can have any number of del
+    counters.pop(ir.Del, None)
+    # There MUST NOT be any other statements
+    if counters:
+        raise errors.CompilerError(
+            "illegal statements in with's head-block"
+            )
 
 
 def _cfg_nodes_in_region(cfg, region_begin, region_end):
