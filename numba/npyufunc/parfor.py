@@ -1,9 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
 import ast
-from collections import defaultdict, OrderedDict
-import sys
 import copy
+from collections import defaultdict, OrderedDict
+import linecache
+import os
+import sys
 import numpy as np
 
 import llvmlite.llvmpy.core as lc
@@ -23,7 +25,7 @@ from ..typing import signature
 from numba import config
 from numba.targets.cpu import ParallelOptions
 from numba.six import exec_
-
+from numba.parfor import print_wrapped
 
 def _lower_parfor_parallel(lowerer, parfor):
     """Lowerer that handles LLVM code generation for parfor.
@@ -292,7 +294,8 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
             if isinstance(inst, ir.Assign) and inst.target.name in def_once:
                 if _hoist_internal(inst, dep_on_param, call_table,
                                    hoisted, typemap):
-                    # don't add this instuction to the block since it is hoisted
+                    # don't add this instruction to the block since it is
+                    # hoisted
                     continue
             elif isinstance(inst, parfor.Parfor):
                 new_init_block = []
@@ -597,6 +600,9 @@ def _create_gufunc_for_parfor_body(
     start_block = gufunc_ir.blocks[min(gufunc_ir.blocks.keys())]
     start_block.body = start_block.body[:-1] + hoisted + [start_block.body[-1]]
     unwrap_loop_body(loop_body)
+
+    # store hoisted into diagnostics
+    lowerer.diagnostics.hoist_info[parfor.id] = hoisted
 
     if config.DEBUG_ARRAY_OPT:
         print("After hoisting")

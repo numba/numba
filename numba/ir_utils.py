@@ -1008,7 +1008,7 @@ def find_topo_order(blocks, cfg = None):
 call_table_extensions = {}
 
 
-def get_call_table(blocks, call_table=None, reverse_call_table=None):
+def get_call_table(blocks, call_table=None, reverse_call_table=None, topological_ordering=True):
     """returns a dictionary of call variables and their references.
     """
     # call_table example: c = np.zeros becomes c:["zeroes", np]
@@ -1018,8 +1018,12 @@ def get_call_table(blocks, call_table=None, reverse_call_table=None):
     if reverse_call_table is None:
         reverse_call_table = {}
 
-    topo_order = find_topo_order(blocks)
-    for label in reversed(topo_order):
+    if topological_ordering:
+        order = find_topo_order(blocks)
+    else:
+        order = list(blocks.keys())
+    
+    for label in reversed(order):
         for inst in reversed(blocks[label].body):
             if isinstance(inst, ir.Assign):
                 lhs = inst.target.name

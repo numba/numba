@@ -193,6 +193,9 @@ class _EnvReloader(object):
 
         # print stats about parallel for-loops
         DEBUG_ARRAY_OPT_STATS = _readenv("NUMBA_DEBUG_ARRAY_OPT_STATS", int, 0)
+        
+        # prints user friendly information about parllel
+        PARALLEL_DIAGNOSTICS =  _readenv("NUMBA_PARALLEL_DIAGNOSTICS", int, 0)
 
         # print debug info of inline closure pass
         DEBUG_INLINE_CLOSURE = _readenv("NUMBA_DEBUG_INLINE_CLOSURE", int, 0)
