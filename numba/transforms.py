@@ -7,7 +7,7 @@ from __future__ import absolute_import, print_function
 from collections import namedtuple
 
 from numba.analysis import compute_cfg_from_blocks, find_top_level_loops
-from numba import ir, errors
+from numba import ir, errors, ir_utils
 from numba.analysis import compute_use_defs
 
 
@@ -94,24 +94,14 @@ def _loop_lift_modify_call_block(liftedloop, block, inputs, outputs, returnto):
     scope = block.scope
     loc = block.loc
     blk = ir.Block(scope=scope, loc=loc)
-    # load loop
-    fn = ir.Const(value=liftedloop, loc=loc)
-    fnvar = scope.make_temp(loc=loc)
-    blk.append(ir.Assign(target=fnvar, value=fn, loc=loc))
-    # call loop
-    args = [scope.get_exact(name) for name in inputs]
-    callexpr = ir.Expr.call(func=fnvar, args=args, kws=(), loc=loc)
-    # temp variable for the return value
-    callres = scope.make_temp(loc=loc)
-    blk.append(ir.Assign(target=callres, value=callexpr, loc=loc))
-    # unpack return value
-    for i, out in enumerate(outputs):
-        target = scope.get_exact(out)
-        getitem = ir.Expr.static_getitem(value=callres, index=i,
-                                         index_var=None, loc=loc)
-        blk.append(ir.Assign(target=target, value=getitem, loc=loc))
-    # jump to next block
-    blk.append(ir.Jump(target=returnto, loc=loc))
+
+    ir_utils.fill_block_with_call(
+        newblock=blk,
+        callee=liftedloop,
+        label_next=returnto,
+        inputs=inputs,
+        outputs=outputs,
+    )
     return blk
 
 
@@ -119,25 +109,9 @@ def _loop_lift_prepare_loop_func(loopinfo, blocks):
     """
     Inplace transform loop blocks for use as lifted loop.
     """
-    def make_prologue():
-        """
-        Make a new block that unwraps the argument and jump to the loop entry.
-        This block is the entry block of the function.
-        """
-        entry_block = blocks[loopinfo.callfrom]
-        scope = entry_block.scope
-        loc = entry_block.loc
-
-        block = ir.Block(scope=scope, loc=loc)
-        # load args
-        args = [ir.Arg(name=k, index=i, loc=loc)
-                for i, k in enumerate(loopinfo.inputs)]
-        for aname, aval in zip(loopinfo.inputs, args):
-            tmp = ir.Var(scope=scope, name=aname, loc=loc)
-            block.append(ir.Assign(target=tmp, value=aval, loc=loc))
-        # jump to loop entry
-        block.append(ir.Jump(target=loopinfo.callfrom, loc=loc))
-        return block
+    entry_block = blocks[loopinfo.callfrom]
+    scope = entry_block.scope
+    loc = entry_block.loc
 
     def make_epilogue():
         """
@@ -160,8 +134,15 @@ def _loop_lift_prepare_loop_func(loopinfo, blocks):
 
     # Lowering assumes the first block to be the one with the smallest offset
     firstblk = min(blocks) - 1
-    blocks[firstblk] = make_prologue()
-    blocks[loopinfo.returnto] = make_epilogue()
+    blocks[firstblk] = ir_utils.fill_callee_prologue(
+        block=ir.Block(scope=scope, loc=loc),
+        inputs=loopinfo.inputs,
+        label_next=loopinfo.callfrom,
+    )
+    blocks[loopinfo.returnto] = ir_utils.fill_callee_epilogue(
+        block=ir.Block(scope=scope, loc=loc),
+        outputs=loopinfo.outputs,
+    )
 
 
 def _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
