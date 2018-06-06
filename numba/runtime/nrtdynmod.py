@@ -82,16 +82,21 @@ def _define_nrt_decref(module, atomic_decr):
     if _debug_print:
         cgutils.printf(builder, "*** NRT_Decref %zu [%p]\n", builder.load(ptr),
                        ptr)
-    if binding.get_process_triple().startswith("powerpc"):
-        builder.fence("release")
+
+    # For memory fence usage, see https://llvm.org/docs/Atomics.html
+
+    # A release fence is used before the relevant write operation.
+    # No-op on x86.  On POWER, it lowers to lwsync.
+    builder.fence("release")
     newrefct = builder.call(atomic_decr,
                             [builder.bitcast(ptr, atomic_decr.args[0].type)])
 
     refct_eq_0 = builder.icmp_unsigned("==", newrefct,
                                        ir.Constant(newrefct.type, 0))
     with cgutils.if_unlikely(builder, refct_eq_0):
-        if binding.get_process_triple().startswith("powerpc"):
-            builder.fence("acquire")
+        # An acquire fence is used after the relevant read operation.
+        # No-op on x86.  On POWER, it lowers to lwsync.
+        builder.fence("acquire")
         builder.call(calldtor, [ptr])
     builder.ret_void()
 

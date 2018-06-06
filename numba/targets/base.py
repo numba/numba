@@ -810,6 +810,8 @@ class BaseContext(object):
 
         with cgutils.if_unlikely(builder, status.is_error):
             self.call_conv.return_status_propagate(builder, status)
+
+        res = imputils.fix_returning_optional(self, builder, sig, status, res)
         return res
 
     def call_unresolved(self, builder, name, sig, args):
@@ -852,6 +854,8 @@ class BaseContext(object):
                                                    sig.args, args)
         with cgutils.if_unlikely(builder, status.is_error):
             self.call_conv.return_status_propagate(builder, status)
+
+        res = imputils.fix_returning_optional(self, builder, sig, status, res)
         return res
 
     def get_executable(self, func, fndesc):

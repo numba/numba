@@ -77,13 +77,13 @@ class StencilPass(object):
 
                     # Get the StencilFunc object corresponding to this call.
                     sf = stencil_dict[stmt.value.func.name]
-                    stencil_blocks, rt, arg_to_arr_dict = get_stencil_blocks(sf,
+                    stencil_ir, rt, arg_to_arr_dict = get_stencil_ir(sf,
                             self.typingctx, arg_typemap,
                             block.scope, block.loc, input_dict,
                             self.typemap, self.calltypes)
                     index_offsets = sf.options.get('index_offsets', None)
                     gen_nodes = self._mk_stencil_parfor(label, in_args, out_arr,
-                            stencil_blocks, index_offsets, stmt.target, rt, sf,
+                            stencil_ir, index_offsets, stmt.target, rt, sf,
                             arg_to_arr_dict)
                     block.body = block.body[:i] + gen_nodes + block.body[i+1:]
                 # Found a call to a stencil via numba.stencil().
@@ -120,12 +120,13 @@ class StencilPass(object):
                     new_body.append(stmt)
             block.body = new_body
 
-    def _mk_stencil_parfor(self, label, in_args, out_arr, stencil_blocks,
+    def _mk_stencil_parfor(self, label, in_args, out_arr, stencil_ir,
                            index_offsets, target, return_type, stencil_func,
                            arg_to_arr_dict):
         """ Converts a set of stencil kernel blocks to a parfor.
         """
         gen_nodes = []
+        stencil_blocks = stencil_ir.blocks
 
         if config.DEBUG_ARRAY_OPT == 1:
             print("_mk_stencil_parfor", label, in_args, out_arr, index_offsets,
@@ -147,7 +148,7 @@ class StencilPass(object):
         if config.DEBUG_ARRAY_OPT == 1:
             print("stencil_blocks after copy_propagate")
             ir_utils.dump_blocks(stencil_blocks)
-        ir_utils.remove_dead(stencil_blocks, self.func_ir.arg_names,
+        ir_utils.remove_dead(stencil_blocks, self.func_ir.arg_names, stencil_ir,
                              self.typemap)
         if config.DEBUG_ARRAY_OPT == 1:
             print("stencil_blocks after removing dead code")
@@ -577,7 +578,7 @@ class StencilPass(object):
         out_nodes.extend(block.body[:-2])  # ignore return nodes
         return new_index
 
-def get_stencil_blocks(sf, typingctx, args, scope, loc, input_dict, typemap,
+def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
                                                                     calltypes):
     """get typed IR from stencil bytecode
     """
@@ -661,7 +662,8 @@ def get_stencil_blocks(sf, typingctx, args, scope, loc, input_dict, typemap,
         ir_utils.dump_blocks(stencil_blocks)
 
     ir_utils.remove_dels(stencil_blocks)
-    return stencil_blocks, sf.get_return_type(args)[0], arg_to_arr_dict
+    stencil_func_ir.blocks = stencil_blocks
+    return stencil_func_ir, sf.get_return_type(args)[0], arg_to_arr_dict
 
 class DummyPipeline(object):
     def __init__(self, typingctx, targetctx, args, f_ir):

@@ -9,6 +9,7 @@ import contextlib
 import os
 import sys
 import warnings
+import numba
 from collections import defaultdict
 from numba import six
 from functools import wraps
@@ -16,8 +17,6 @@ from abc import abstractmethod
 
 # Filled at the end
 __all__ = []
-
-# These are needed in the color formatting of errors setup
 
 
 class NumbaWarning(Warning):
@@ -32,6 +31,8 @@ class PerformanceWarning(NumbaWarning):
     as fast as expected.
     """
 
+
+# These are needed in the color formatting of errors setup
 
 @six.add_metaclass(abc.ABCMeta)
 class _ColorScheme(object):
@@ -78,6 +79,9 @@ class _DummyColorScheme(_ColorScheme):
         pass
 
 
+# holds reference to the instance of the terminal color scheme in use
+_termcolor_inst = None
+
 try:
     import colorama
 
@@ -110,7 +114,11 @@ except ImportError:
         def highlight(self, msg):
             return msg
 
-    termcolor = NOPColorScheme()
+    def termcolor():
+        global _termcolor_inst
+        if _termcolor_inst is None:
+            _termcolor_inst = NOPColorScheme()
+        return _termcolor_inst
 
 else:
 
@@ -142,20 +150,48 @@ else:
         def __exit__(self, *exc_detail):
             self._buf += bytearray(Style.RESET_ALL.encode('utf-8'))
 
-    light = {'code': Fore.BLUE,
-             'errmsg': Fore.YELLOW,
-             'filename': Fore.WHITE,
-             'indicate': Fore.GREEN,
-             'highlight': Fore.RED, }
+    # define some default themes, if more are added, update the envvars docs!
+    themes = {}
 
-    dark = {'code': Fore.BLUE,
-            'errmsg': Fore.BLACK,
-            'filename': Fore.YELLOW,
-            'indicate': Fore.GREEN,
-            'highlight': Fore.RED, }
+    # No color added, just bold weighting
+    themes['no_color'] = {'code': None,
+                         'errmsg': None,
+                         'filename': None,
+                         'indicate': None,
+                         'highlight': None, }
+
+    # suitable for terminals with a dark background
+    themes['dark_bg'] = {'code': Fore.BLUE,
+                         'errmsg': Fore.YELLOW,
+                         'filename': Fore.WHITE,
+                         'indicate': Fore.GREEN,
+                         'highlight': Fore.RED, }
+
+    # suitable for terminals with a light background
+    themes['light_bg'] = {'code': Fore.BLUE,
+                          'errmsg': Fore.BLACK,
+                          'filename': Fore.MAGENTA,
+                          'indicate': Fore.BLACK,
+                          'highlight': Fore.RED, }
+
+    # suitable for terminals with a blue background
+    themes['blue_bg'] = {'code': Fore.WHITE,
+                         'errmsg': Fore.YELLOW,
+                         'filename': Fore.MAGENTA,
+                         'indicate': Fore.CYAN,
+                         'highlight': Fore.RED, }
+
+    # suitable for use in jupyter notebooks
+    themes['jupyter_nb'] = {'code': Fore.BLACK,
+                         'errmsg': Fore.BLACK,
+                         'filename': Fore.GREEN,
+                         'indicate': Fore.CYAN,
+                         'highlight': Fore.RED, }
+
+    default_theme = themes['no_color']
 
     class HighlightColorScheme(_DummyColorScheme):
-        def __init__(self, theme=light):
+        def __init__(self, theme=default_theme):
             self._code = theme['code']
             self._errmsg = theme['errmsg']
             self._filename = theme['filename']
@@ -190,14 +226,40 @@ else:
         def highlight(self, msg):
             return self._markup(msg, self._highlight)
 
-    # TODO: setup theme config
-    termcolor = HighlightColorScheme(theme=light)
+    def termcolor():
+        global _termcolor_inst
+        if _termcolor_inst is None:
+            scheme = themes[numba.config.COLOR_SCHEME]
+            _termcolor_inst = HighlightColorScheme(scheme)
+        return _termcolor_inst
 
 
 unsupported_error_info = """
 Unsupported functionality was found in the code Numba was trying to compile.
 
 If this functionality is important to you please file a feature request at:
+https://github.com/numba/numba/issues/new
+"""
+
+interpreter_error_info = """
+Unsupported Python functionality was found in the code Numba was trying to
+compile. This error could be due to invalid code, does the code work
+without Numba? (To temporarily disable Numba JIT, set the `NUMBA_DISABLE_JIT`
+environment variable to non-zero, and then rerun the code).
+
+If the code is valid and the unsupported functionality is important to you
+please file a feature request at: https://github.com/numba/numba/issues/new
+
+To see Python/NumPy features supported by the latest release of Numba visit:
+http://numba.pydata.org/numba-doc/dev/reference/pysupported.html
+and
+http://numba.pydata.org/numba-doc/dev/reference/numpysupported.html
+"""
+
+constant_inference_info = """
+Numba could not make a constant out of something that it decided should be
+a constant. This could well be a current limitation in Numba's internals,
+please either raise a bug report along with a minimal reproducer at:
 https://github.com/numba/numba/issues/new
 """
 
@@ -225,9 +287,6 @@ This should not have happened, a problem has occurred in Numba's internals.
 Please report the error message and traceback, along with a minimal reproducer
 at: https://github.com/numba/numba/issues/new
 
-If you need help writing a minimal reproducer please see:
-http://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports
-
 If more help is needed please feel free to speak to the Numba core developers
 directly at: https://gitter.im/numba/numba
 
@@ -238,6 +297,8 @@ error_extras = dict()
 error_extras['unsupported_error'] = unsupported_error_info
 error_extras['typing'] = typing_error_info
 error_extras['reportable'] = reportable_issue_info
+error_extras['interpreter'] = interpreter_error_info
+error_extras['constant_inference'] = constant_inference_info
 
 
 def deprecated(arg):
@@ -319,7 +380,7 @@ class NumbaError(Exception):
         self.msg = msg
         self.loc = loc
         if highlighting:
-            highlight = termcolor.errmsg
+            highlight = termcolor().errmsg
         else:
             def highlight(x): return x
         if loc:
@@ -342,7 +403,8 @@ class NumbaError(Exception):
         contextual information.
         """
         self.contexts.append(msg)
-        f = termcolor.errmsg('{0}\n') + termcolor.filename('[{1}] During: {2}')
+        f = termcolor().errmsg('{0}\n') + termcolor().filename(
+            '[{1}] During: {2}')
         newmsg = f.format(self, len(self.contexts), msg)
         self.args = (newmsg,)
         return self
@@ -358,30 +420,41 @@ class UnsupportedError(NumbaError):
     """
     Numba does not have an implementation for this functionality.
     """
+    pass
 
 
 class IRError(NumbaError):
     """
     An error occurred during Numba IR generation.
     """
+    pass
 
 
 class RedefinedError(IRError):
+    """
+    An error occurred during interpretation of IR due to variable redefinition.
+    """
     pass
 
 
 class NotDefinedError(IRError):
+    """
+    An undefined variable is encountered during interpretation of IR.
+    """
     def __init__(self, name, loc=None):
         self.name = name
-        self.loc = loc
-
-    def __str__(self):
-        loc = "?" if self.loc is None else self.loc
-        return "{name!r} is not defined in {loc}".format(name=self.name,
-                                                         loc=self.loc)
+        msg = "Variable '%s' is not defined." % name
+        super(NotDefinedError, self).__init__(msg, loc=loc)
 
 
 class VerificationError(IRError):
+    """
+    An error occurred during IR verification. Once Numba's internal
+    representation (IR) is constructed it is then verified to ensure that
+    terminators are both present and in the correct places within the IR. If
+    it is the case that this condition is not met, a VerificationError is
+    raised.
+    """
     pass
 
 
@@ -389,9 +462,13 @@ class MacroError(NumbaError):
     """
     An error occurred during macro expansion.
     """
+    pass
 
 
 class DeprecationError(NumbaError):
+    """
+    Functionality is deprecated.
+    """
     pass
 
 
@@ -399,7 +476,6 @@ class LoweringError(NumbaError):
     """
     An error occurred during lowering.
     """
-
     def __init__(self, msg, loc):
         self.msg = msg
         self.loc = loc
@@ -410,12 +486,14 @@ class ForbiddenConstruct(LoweringError):
     """
     A forbidden Python construct was encountered (e.g. use of locals()).
     """
+    pass
 
 
 class TypingError(NumbaError):
     """
     A type inference failure.
     """
+    pass
 
 
 class UntypedAttributeError(TypingError):
@@ -429,18 +507,25 @@ class ByteCodeSupportError(NumbaError):
     """
     Failure to extract the bytecode of the user's function.
     """
+    def __init__(self, msg, loc=None):
+        super(ByteCodeSupportError, self).__init__(msg, loc=loc)
 
 
 class CompilerError(NumbaError):
     """
     Some high-level error in the compiler.
     """
+    pass
 
 
 class ConstantInferenceError(NumbaError):
     """
     Failure during constant inference.
     """
+    def __init__(self, value, loc=None):
+        self.value = value
+        msg = "Cannot make a constant from: %s" % value
+        super(ConstantInferenceError, self).__init__(msg, loc=loc)
 
 
 class InternalError(NumbaError):
@@ -457,6 +542,7 @@ class RequireConstValue(TypingError):
     """For signaling a function typing require constant value for some of
     its arguments.
     """
+    pass
 
 
 def _format_msg(fmt, args, kwargs):

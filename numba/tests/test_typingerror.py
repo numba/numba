@@ -38,6 +38,10 @@ def imprecise_list():
     l = []
     return len(l)
 
+def using_imprecise_list():
+    a = np.array([])
+    return a.astype(np.int32)
+
 def unknown_module():
     return numpyz.int32(0)
 
@@ -109,7 +113,7 @@ class TestTypingError(unittest.TestCase):
         # This is sensitive to the formatting of the error message.
         self.assertIn(" * (float64, float64) -> float64", errmsg)
 
-        # find the context lines 
+        # find the context lines
         ctx_lines = [x for x in errmsg.splitlines() if "] During" in x ]
 
         # Check contextual msg
@@ -128,6 +132,17 @@ class TestTypingError(unittest.TestCase):
         errmsg = str(raises.exception)
         self.assertIn("Can't infer type of variable 'l': list(undefined)",
                       errmsg)
+
+    def test_using_imprecise_list(self):
+        """
+        Type inference should report informative error about untyped list.
+        TODO: #2931
+        """
+        with self.assertRaises(TypingError) as raises:
+            compile_isolated(using_imprecise_list, ())
+
+        errmsg = str(raises.exception)
+        self.assertIn("Undecided type $0.6 := <undecided>", errmsg)
 
     def test_array_setitem_invalid_cast(self):
         with self.assertRaises(TypingError) as raises:

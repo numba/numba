@@ -300,6 +300,20 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         for the given *args* and *kws*, and return the resulting callable.
         """
         assert not kws
+
+        def error_rewrite(e, issue_type):
+            """
+            Rewrite and raise Exception `e` with help supplied based on the
+            specified issue_type.
+            """
+            if config.SHOW_HELP:
+                help_msg = errors.error_extras[issue_type]
+                e.patch_message(''.join(e.args) + help_msg)
+            if config.FULL_TRACEBACKS:
+                raise e
+            else:
+                reraise(type(e), e, None)
+
         argtypes = []
         for a in args:
             if isinstance(a, OmittedArg):
@@ -331,25 +345,19 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                                 for i, err in failed_args))
                 e.patch_message(msg)
 
-            # add in help info
-            if config.SHOW_HELP:
-                help_msg = errors.error_extras['typing']
-                e.patch_message(''.join(e.args) + help_msg)
-
-            # raise
-            if config.FULL_TRACEBACKS:
-                raise e
-            else:
-                reraise(type(e), e, None)
+            error_rewrite(e, 'typing')
         except errors.UnsupportedError as e:
             # Something unsupported is present in the user code, add help info
-            if config.SHOW_HELP:
-                help_msg = errors.error_extras['unsupported_error']
-                e.patch_message(''.join(e.args) + help_msg)
-            if config.FULL_TRACEBACKS:
-                raise e
-            else:
-                reraise(type(e), e, None)
+            error_rewrite(e, 'unsupported_error')
+        except (errors.NotDefinedError, errors.RedefinedError,
+                errors.VerificationError) as e:
+            # These errors are probably from an issue with either the code supplied
+            # being syntactically or otherwise invalid
+            error_rewrite(e, 'interpreter')
+        except errors.ConstantInferenceError as e:
+            # this is from trying to infer something as constant when it isn't
+            # or isn't supported as a constant
+            error_rewrite(e, 'constant_inference')
         except Exception as e:
             if config.SHOW_HELP:
                 if hasattr(e, 'patch_message'):

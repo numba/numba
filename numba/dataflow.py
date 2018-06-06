@@ -761,6 +761,15 @@ class DataFlowAnalysis(object):
         info.append(inst, res=res)
         info.push(res)
 
+    #NOTE: Please see notes in `interpreter.py` surrounding the implementation
+    # of LOAD_METHOD and CALL_METHOD.
+
+    def op_LOAD_METHOD(self, *args, **kws):
+        self.op_LOAD_ATTR(*args, **kws)
+
+    def op_CALL_METHOD(self, *args, **kws):
+        self.op_CALL_FUNCTION(*args, **kws)
+
     def _ignored(self, info, inst):
         pass
 

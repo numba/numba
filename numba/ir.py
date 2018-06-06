@@ -14,6 +14,8 @@ from . import utils
 from .errors import (NotDefinedError, RedefinedError, VerificationError,
                      ConstantInferenceError)
 
+# terminal color markup
+_termcolor = errors.termcolor()
 
 class Loc(object):
     """Source location
@@ -82,14 +84,18 @@ class Loc(object):
                     ret.append(' '*(4 + spaces) + '<source elided>\n')
 
             ret.extend(selected[:-1])
-            ret.append(errors.termcolor.highlight(selected[-1]))
+            ret.append(_termcolor.highlight(selected[-1]))
 
             # point at the problem with a caret
             spaces = count_spaces(selected[-1])
-            ret.append(' '*(spaces) + errors.termcolor.indicate("^"))
+            ret.append(' '*(spaces) + _termcolor.indicate("^"))
 
-        err = errors.termcolor.filename('\nFile "%s", line %d:')+'\n%s'
-        tmp = err % (path, self.line, errors.termcolor.code(''.join(ret)))
+        # if in the REPL source may not be available
+        if not ret:
+            ret = "<source missing, REPL in use?>"
+
+        err = _termcolor.filename('\nFile "%s", line %d:')+'\n%s'
+        tmp = err % (path, self.line, _termcolor.code(''.join(ret)))
         return tmp
 
     def with_lineno(self, line, col=None):
@@ -337,7 +343,7 @@ class Expr(Inst):
         return self._rec_list_vars(self._kws)
 
     def infer_constant(self):
-        raise ConstantInferenceError("cannot make a constant of %s" % (self,))
+        raise ConstantInferenceError('%s' % self, loc=self.loc)
 
 
 class SetItem(Stmt):
@@ -593,7 +599,7 @@ class Arg(object):
         return 'arg(%d, name=%s)' % (self.index, self.name)
 
     def infer_constant(self):
-        raise ConstantInferenceError("cannot make a constant of %s" % (self,))
+        raise ConstantInferenceError('%s' % self, loc=self.loc)
 
 
 class Const(object):

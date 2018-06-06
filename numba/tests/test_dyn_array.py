@@ -666,6 +666,23 @@ class TestNdFull(ConstructorBaseTest, TestCase):
             return np.full((m, n), 1 + 4.5j, dtype=np.complex64)
         self.check_2d(func)
 
+    def test_2d_dtype_from_type(self):
+        # tests issue #2862
+        def func(m, n):
+            return np.full((m, n), np.int32(1))
+        self.check_2d(func)
+
+        # tests meta issues from #2862, that np < 1.12 always
+        # returns float64. Complex uses `.real`, imaginary part dropped
+        def func(m, n):
+            return np.full((m, n), np.complex128(1))
+        self.check_2d(func)
+
+        # and that if a dtype is specified, this influences the return type
+        def func(m, n):
+            return np.full((m, n), 1, dtype=np.int8)
+        self.check_2d(func)
+
 
 class ConstructorLikeBaseTest(object):
 

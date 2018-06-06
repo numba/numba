@@ -1825,6 +1825,16 @@ def _change_dtype(context, builder, oldty, newty, ary):
     return res
 
 
+@overload(np.unique)
+def np_unique(a):
+    def np_unique_impl(a):
+        b = np.sort(a.ravel())
+        head = list(b[:1])
+        tail = [x for i, x in enumerate(b[1:]) if b[i] != x]
+        return np.array(head + tail)
+    return np_unique_impl
+
+
 @lower_builtin('array.view', types.Array, types.DTypeSpec)
 def array_view(context, builder, sig, args):
     aryty = sig.args[0]
@@ -3275,12 +3285,20 @@ def numpy_zeros_like_nd(context, builder, sig, args):
 if numpy_version >= (1, 8):
     @lower_builtin(np.full, types.Any, types.Any)
     def numpy_full_nd(context, builder, sig, args):
-
-        def full(shape, value):
-            arr = np.empty(shape)
-            for idx in np.ndindex(arr.shape):
-                arr[idx] = value
-            return arr
+        if numpy_version < (1, 12):
+            # np < 1.12 returns float64 full regardless of value type
+            def full(shape, value):
+                arr = np.empty(shape)
+                val = np.float64(value.real)
+                for idx in np.ndindex(arr.shape):
+                    arr[idx] = val
+                return arr
+        else:
+            def full(shape, value):
+                arr = np.empty(shape, type(value))
+                for idx in np.ndindex(arr.shape):
+                    arr[idx] = value
+                return arr
 
         res = context.compile_internal(builder, full, sig, args)
         return impl_ret_new_ref(context, builder, sig.return_type, res)
@@ -3554,7 +3572,6 @@ def numpy_take_3(context, builder, sig, args):
 
     res = context.compile_internal(builder, take_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
-
 
 @lower_builtin(np.arange, types.Number)
 def numpy_arange_1(context, builder, sig, args):
@@ -4559,6 +4576,7 @@ def np_dstack(context, builder, sig, args):
 
         return context.compile_internal(builder, np_vstack_impl, sig, args)
 
+
 @extending.overload_method(types.Array, 'fill')
 def arr_fill(arr, val):
 
@@ -4567,6 +4585,14 @@ def arr_fill(arr, val):
         return None
 
     return fill_impl
+
+
+@extending.overload_method(types.Array, 'dot')
+def array_dot(arr, other):
+    def dot_impl(arr, other):
+        return np.dot(arr, other)
+
+    return dot_impl
 
 # -----------------------------------------------------------------------------
 # Sorting

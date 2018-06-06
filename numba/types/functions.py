@@ -9,6 +9,8 @@ from .common import *
 from numba.ir import Loc
 from numba import errors
 
+# terminal color markup
+_termcolor = errors.termcolor()
 
 class _ResolutionFailures(object):
     """Collect and format function resolution failures.
@@ -45,7 +47,7 @@ class _ResolutionFailures(object):
         msgbuf.append(explain)
         for i, (temp, error) in enumerate(self._failures):
             msgbuf.append("In definition {}:".format(i))
-            msgbuf.append(errors.termcolor.highlight('{}{}'.format(
+            msgbuf.append(_termcolor.highlight('{}{}'.format(
                 indent, self.format_error(error))))
             loc = self.get_loc(temp, error)
             if loc:

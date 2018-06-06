@@ -24,6 +24,50 @@ gpus = devices.gpus
 
 
 @require_context
+def from_cuda_array_interface(desc, owner=None):
+    """Create a DeviceNDArray from a cuda-array-interface description.
+    The *owner* is the owner of the underlying memory.
+    The resulting DeviceNDArray will acquire a reference from it.
+    """
+    shape = desc['shape']
+    strides = desc.get('strides')
+    dtype = np.dtype(desc['typestr'])
+
+    shape, strides, dtype = _prepare_shape_strides_dtype(
+        shape, strides, dtype, order='C')
+
+    devptr = driver.get_devptr_for_active_ctx(desc['data'][0])
+    data = driver.MemoryPointer(
+        current_context(), devptr, size=np.prod(shape) * dtype.itemsize,
+        owner=owner)
+    da = devicearray.DeviceNDArray(shape=shape, strides=strides,
+                                   dtype=dtype, gpu_data=data)
+    return da
+
+
+def as_cuda_array(obj):
+    """Create a DeviceNDArray from any object that implements
+    the cuda-array-interface.
+
+    A view of the underlying GPU buffer is created.  No copying of the data
+    is done.  The resulting DeviceNDArray will acquire a reference from `obj`.
+    """
+    if not is_cuda_array(obj):
+        raise TypeError("*obj* doesn't implement the cuda array interface.")
+    else:
+        return from_cuda_array_interface(obj.__cuda_array_interface__,
+                                         owner=obj)
+
+
+def is_cuda_array(obj):
+    """Test if the object has defined the `__cuda_array_interface__`.
+
+    Does not verify the validity of the interface.
+    """
+    return hasattr(obj, '__cuda_array_interface__')
+
+
+@require_context
 def to_device(obj, stream=0, copy=True, to=None):
     """to_device(obj, stream=0, copy=True, to=None)
 
