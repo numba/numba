@@ -559,7 +559,18 @@ class Yield(Inst):
 
 
 class EnterWith(Stmt):
+    """Enter a "with" context
+    """
     def __init__(self, contextmanager, begin, end, loc):
+        """
+        Parameters
+        ----------
+        contextmanager : IR value
+        begin, end : int
+            The beginning and the ending offset of the with-body.
+        loc : int
+            Source location
+        """
         self.contextmanager = contextmanager
         self.begin = begin
         self.end = end
@@ -882,6 +893,8 @@ class Block(object):
 
 
 class Loop(object):
+    """Describes a loop-block
+    """
     __slots__ = "entry", "exit"
 
     def __init__(self, entry, exit):
@@ -894,6 +907,8 @@ class Loop(object):
 
 
 class With(object):
+    """Describes a with-block
+    """
     __slots__ = "entry", "exit"
 
     def __init__(self, entry, exit):

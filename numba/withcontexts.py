@@ -2,19 +2,45 @@ from numba import ir
 
 
 class WithContext(object):
+    """A dummy object for use as contextmanager.
+    This can be used as a contextmanager.
+    """
     def __enter__(self):
         pass
 
     def __exit__(self, typ, val, tb):
         pass
 
+    def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
+                         body_blocks, dispatcher_factory):
+        """Mutate the *blocks* to implement this contextmanager.
+
+        Parameters
+        ----------
+        func_ir : FunctionIR
+        blocks : dict[ir.Block]
+        blk_start, blk_end : int
+            labels of the starting and ending block of the context-maanger.
+        body_block: sequence[int]
+            A sequence of ìnt`s representing labels of the with-body
+        dispatcher_factory : callable
+            A callable that takes a `FunctionIR` and returns a `Dispatcher`.
+        """
+        raise NotImplementedError
+
 
 def _get_var_parent(name):
+    """Get parent of the variable given its name
+    """
+    # If not a temprary variable
     if not name.startswith('$'):
+        # Return the base component of the name
         return name.split('.', )[0]
 
 
 def _clear_blocks(blocks, to_clear):
+    """Remove keys in *to_clear* from *blocks*.
+    """
     for b in to_clear:
         del blocks[b]
 
@@ -94,6 +120,19 @@ def _bypass_with_context(blocks, blk_start, blk_end, forwardvars):
 
 def _mutate_with_block_caller(dispatcher, blocks, blk_start, blk_end,
                               inputs, outputs):
+    """Mutate *blocks* for the caller of a with-context.
+
+    Parameters
+    ----------
+    dispatcher : Dispatcher
+    blocks : dict[ir.Block]
+    blk_start, blk_end : int
+        labels of the starting and ending block of the context-maanger.
+    inputs: sequence[str]
+        Input argument names
+    outputs: sequence[str]
+        Output argument names
+    """
     sblk = blocks[blk_start]
     scope = sblk.scope
     loc = sblk.loc
@@ -119,7 +158,19 @@ def _mutate_with_block_caller(dispatcher, blocks, blk_start, blk_end,
     return newblk
 
 
-def _mutate_with_block_callee(blocks, firstblk, lastblk, inputs, outputs):
+def _mutate_with_block_callee(blocks, blk_start, blk_end, inputs, outputs):
+    """Mutate *blocks* for the callee of a with-context.
+
+    Parameters
+    ----------
+    blocks : dict[ir.Block]
+    blk_start, blk_end : int
+        labels of the starting and ending block of the context-maanger.
+    inputs: sequence[str]
+        Input argument names
+    outputs: sequence[str]
+        Output argument names
+    """
     head_blk = min(blocks)
     temp_blk = blocks[head_blk]
     scope = temp_blk.scope
@@ -156,5 +207,5 @@ def _mutate_with_block_callee(blocks, firstblk, lastblk, inputs, outputs):
         block.append(ir.Return(value=tup, loc=loc))
         return block
 
-    blocks[firstblk] = make_prologue()
-    blocks[lastblk] = make_epilogue()
+    blocks[blk_start] = make_prologue()
+    blocks[blk_end] = make_epilogue()

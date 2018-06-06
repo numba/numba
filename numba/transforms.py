@@ -333,8 +333,6 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
         sub = cmkind.mutate_with_body(func_ir, blocks, blk_start, blk_end,
                                       body_blocks, dispatcher_factory)
         sub_irs.append(sub)
-    # print("???", sub_irs)
-
     if not sub_irs:
         # Unchanged
         new_ir = func_ir

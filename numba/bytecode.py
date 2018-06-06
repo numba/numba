@@ -183,6 +183,7 @@ class ByteCode(object):
 
     def __init__(self, func_id):
         code = func_id.code
+
         labels = set(dis.findlabels(code.co_code))
         labels.add(0)
 
@@ -324,4 +325,6 @@ class FunctionIdentity(object):
         return self
 
     def derive(self):
+        """Copy the object and increment the unique counter.
+        """
         return self.from_function(self.func)

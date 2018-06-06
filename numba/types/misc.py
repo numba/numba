@@ -421,6 +421,9 @@ class ClassDataType(Type):
 
 
 class ContextManager(Phantom):
+    """
+    An overly-simple ContextManager type that cannot be materialized.
+    """
     def __init__(self, cm):
         self.cm = cm
         super(ContextManager, self).__init__("ContextManager({})".format(cm))
