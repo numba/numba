@@ -1,4 +1,5 @@
-from numba import ir, ir_utils
+from numba import ir, ir_utils, types
+from numba.typing.typeof import typeof_impl
 
 
 class WithContext(object):
@@ -27,6 +28,11 @@ class WithContext(object):
             A callable that takes a `FunctionIR` and returns a `Dispatcher`.
         """
         raise NotImplementedError
+
+
+@typeof_impl.register(WithContext)
+def typeof_contextmanager(val, c):
+    return types.ContextManager(val)
 
 
 def _get_var_parent(name):

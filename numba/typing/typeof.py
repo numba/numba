@@ -6,7 +6,7 @@ import enum
 
 import numpy as np
 
-from numba import numpy_support, types, utils, smartarray, withcontexts
+from numba import numpy_support, types, utils, smartarray
 from numba import errors
 
 # terminal color markup
@@ -209,7 +209,3 @@ def typeof_array(val, c):
     arrty = typeof_impl(val.get('host'), c)
     return types.SmartArrayType(arrty.dtype, arrty.ndim, arrty.layout, type(val))
 
-
-@typeof_impl.register(withcontexts.WithContext)
-def typeof_contextmanager(val, c):
-    return types.ContextManager(val)
