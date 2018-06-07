@@ -225,6 +225,10 @@ class TestSVMLGeneration(TestCase):
                 for flags in flag_list:
                     for mode in "scalar", "range", "prange", "numpy":
                         cls._inject_test(dtype, mode, vlen, flags)
+        # mark important
+        for n in ( "test_int32_range4_usecase",  # issue #3016
+                  ):
+            setattr(cls, n, tag("important")(getattr(cls, n)))
 
 
 TestSVMLGeneration.autogenerate()
