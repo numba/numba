@@ -137,7 +137,7 @@ class TestCudaSync(SerialMixin, unittest.TestCase):
         compiled = cuda.jit("void(int32[:], int32[:])")(use_syncthreads_count)
         ary_in = np.ones(72, dtype=np.int32)
         ary_out = np.zeros(72, dtype=np.int32)
-        ary_in[7] = 0
+        ary_in[31] = 0
         ary_in[42] = 0
         compiled[1, 72](ary_in, ary_out)
         self.assertTrue(np.all(ary_out == 70))
@@ -149,7 +149,7 @@ class TestCudaSync(SerialMixin, unittest.TestCase):
         ary_out = np.zeros(nelem, dtype=np.int32)
         compiled[1, nelem](ary_in, ary_out)
         self.assertTrue(np.all(ary_out == 1))
-        ary_in[7] = 0
+        ary_in[31] = 0
         compiled[1, nelem](ary_in, ary_out)
         self.assertTrue(np.all(ary_out == 0))
 
@@ -160,7 +160,7 @@ class TestCudaSync(SerialMixin, unittest.TestCase):
         ary_out = np.zeros(nelem, dtype=np.int32)
         compiled[1, nelem](ary_in, ary_out)
         self.assertTrue(np.all(ary_out == 0))
-        ary_in[7] = 1
+        ary_in[31] = 1
         compiled[1, nelem](ary_in, ary_out)
         self.assertTrue(np.all(ary_out == 1))
 

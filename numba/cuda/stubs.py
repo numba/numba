@@ -226,7 +226,7 @@ class vote_sync_intrinsic(Stub):
     '''
     vote_sync_intrinsic(mask, mode, predictate)
 
-    Nvvm intrinsic for broadcasting across a warp
+    Nvvm intrinsic for performing a reduce and broadcast across a warp
     docs.nvidia.com/cuda/nvvm-ir-spec/index.html#nvvm-intrin-warp-level-vote
     '''
     _description_ = '<vote_sync()>'
@@ -236,6 +236,7 @@ class match_any_sync(Stub):
     '''
     match_any_sync(mask, value)
 
+    Nvvm intrinsic for performing a compare and broadcast across a warp.
     Returns a mask of threads that have same value as the given value from within the masked warp.
     '''
     _description_ = '<match_any_sync()>'
@@ -245,9 +246,10 @@ class match_all_sync(Stub):
     '''
     match_all_sync(mask, value)
 
+    Nvvm intrinsic for performing a compare and broadcast across a warp.
     Returns a tuple of (mask, pred), where mask is a mask of threads that have
     same value as the given value from within the masked warp, if they
-    all have the same value, otherwise it is 0. And pred is a boolean of whether
+    all have the same value, otherwise it is 0. Pred is a boolean of whether
     or not all threads in the mask warp have the same warp.
     '''
     _description_ = '<match_all_sync()>'

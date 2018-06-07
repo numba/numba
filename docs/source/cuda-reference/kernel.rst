@@ -58,7 +58,7 @@ Thread Indexing
 
 .. attribute:: numba.cuda.warpsize
 
-    The size in threads of a warp on the gpu. Currently this is always 32.
+    The size in threads of a warp on the GPU. Currently this is always 32.
 
 .. function:: numba.cuda.grid(ndim)
 
@@ -165,7 +165,7 @@ Synchronization and Atomic Operations
     An extension to :attr:`numba.cuda.syncthreads` where 1 is returned if ``predicate`` is
     true for any thread or 0 otherwise.
 
-    .. warning:: Syncthreads functions must be called by every thread in the
+    .. warning:: All syncthreads functions must be called by every thread in the
                  thread-block. Falling to do so may result in undefined behavior.
 
 Memory Fences
@@ -197,8 +197,10 @@ are guaranteed to not move across the memory fences by optimization passes.
 Warp Intrinsics
 ~~~~~~~~~~~~~~~~~~
 
-All warp level operations require at least CUDA 9. If the gpu compute capability
-is below 7.x, then all calls to the warp intrinsics must be warp convergent.
+All warp level operations require at least CUDA 9. The argument ``membermask`` is
+a 32 bit integer mask with each bit corresponding to a thread in the warp, with 1
+meaning the thread is in the subset of threads within the function call. The
+``membermask`` must be all 1 if the GPU compute capability is below 7.x.
 
 .. function:: numba.cuda.syncwarp(membermask)
 
@@ -206,17 +208,17 @@ is below 7.x, then all calls to the warp intrinsics must be warp convergent.
 
 .. function:: numba.cuda.all_sync(membermask, predicate)
 
-    If for all threads in the masked warp the ``predicate`` is true, then
+    If the ``predicate`` is true for all threads in the masked warp, then
     a non-zero value is returned, otherwise 0 is returned.
 
 .. function:: numba.cuda.any_sync(membermask, predicate)
 
-    If for any thread in the masked warp the ``predicate`` is true, then
+    If the ``predicate`` is true for any thread in the masked warp, then
     a non-zero value is returned, otherwise 0 is returned.
 
 .. function:: numba.cuda.eq_sync(membermask, predicate)
 
-    If for all threads in the masked warp the boolean ``predicate`` is the same,
+    If the boolean ``predicate`` is the same for all threads in the masked warp,
     then a non-zero value is returned, otherwise 0 is returned.
 
 .. function:: numba.cuda.ballot_sync(membermask, predicate)

@@ -286,6 +286,12 @@ def ptx_warp_sync(context, builder, sig, args):
 @lower(stubs.shfl_sync_intrinsic, types.i4, types.i4, types.f4, types.i4, types.i4)
 @lower(stubs.shfl_sync_intrinsic, types.i4, types.i4, types.f8, types.i4, types.i4)
 def ptx_shfl_sync_i32(context, builder, sig, args):
+    """
+    The NVVM intrinsic for shfl only supports i32, but the cuda intrinsic function supports
+    both 32 and 64 bit ints and floats, so for feature parity, i64, f32, and f64 are implemented.
+    Floats by way of bitcasting the float to an int, then shuffling, then bitcasting back.
+    And 64-bit values by packing them into 2 32bit values, shuffling thoose, and then packing back together.
+    """
     mask, mode, value, index, clamp = args
     value_type = sig.args[2]
     if value_type in types.real_domain:

@@ -1,13 +1,15 @@
 from __future__ import print_function, absolute_import
 import numpy as np
-from numba import cuda, config
+from numba import cuda, config, int32, int64, float32, float64
 from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
 
 
-def useless_syncwarp(ary):
+def useful_syncwarp(ary):
     i = cuda.grid(1)
+    if i == 0:
+        ary[0] = 42
     cuda.syncwarp(0xffffffff)
-    ary[i] = i
+    ary[i] = ary[0]
 
 
 def use_shfl_sync_idx(ary, idx):
@@ -103,15 +105,16 @@ def _safe_cc_check(cc):
         return cuda.get_current_device().compute_capability >= cc
 
 
-@unittest.skipUnless(_safe_skip(), "Warp Operations require at least CUDA 9 and are not yet implemented for the CudaSim")
+@unittest.skipUnless(_safe_skip(),
+                     "Warp Operations require at least CUDA 9"
+                     "and are not yet implemented for the CudaSim")
 class TestCudaWarpOperations(SerialMixin, unittest.TestCase):
-    def test_useless_syncwarp(self):
-        compiled = cuda.jit("void(int32[:])")(useless_syncwarp)
+    def test_useful_syncwarp(self):
+        compiled = cuda.jit("void(int32[:])")(useful_syncwarp)
         nelem = 32
         ary = np.empty(nelem, dtype=np.int32)
-        exp = np.arange(nelem, dtype=np.int32)
         compiled[1, nelem](ary)
-        self.assertTrue(np.all(ary == exp))
+        self.assertTrue(np.all(ary == 42))
 
     def test_shfl_sync_idx(self):
         compiled = cuda.jit("void(int32[:], int32)")(use_shfl_sync_idx)
@@ -150,29 +153,15 @@ class TestCudaWarpOperations(SerialMixin, unittest.TestCase):
         compiled[1, nelem](ary, xor)
         self.assertTrue(np.all(ary == exp))
 
-    def test_shfl_sync_i64(self):
-        compiled = cuda.jit("void(int64[:], int64)")(use_shfl_sync_with_val)
-        nelem = 32
-        val = np.int64(1 << 42)
-        ary = np.empty(nelem, dtype=np.int64)
-        compiled[1, nelem](ary, val)
-        self.assertTrue(np.all(ary == val))
-
-    def test_shfl_sync_f32(self):
-        compiled = cuda.jit("void(float32[:], float32)")(use_shfl_sync_with_val)
-        nelem = 32
-        val = np.float32(np.pi)
-        ary = np.empty(nelem, dtype=np.float32)
-        compiled[1, nelem](ary, val)
-        self.assertTrue(np.all(ary == val))
-
-    def test_shfl_sync_f64(self):
-        compiled = cuda.jit("void(float64[:], float64)")(use_shfl_sync_with_val)
-        nelem = 32
-        val = np.float64(np.pi)
-        ary = np.empty(nelem, dtype=np.float64)
-        compiled[1, nelem](ary, val)
-        self.assertTrue(np.all(ary == val))
+    def test_shfl_sync_types(self):
+        types = int32, int64, float32, float64
+        values = np.int32(-1), np.int64(1 << 42), np.float32(np.pi), np.float64(np.pi)
+        for typ, val in zip(types, values):
+            compiled = cuda.jit((typ[:], typ))(use_shfl_sync_with_val)
+            nelem = 32
+            ary = np.empty(nelem, dtype=val.dtype)
+            compiled[1, nelem](ary, val)
+            self.assertTrue(np.all(ary == val))
 
     def test_vote_sync_all(self):
         compiled = cuda.jit("void(int32[:], int32[:])")(use_vote_sync_all)
@@ -218,7 +207,8 @@ class TestCudaWarpOperations(SerialMixin, unittest.TestCase):
         compiled[1, nelem](ary)
         self.assertTrue(np.all(ary == np.int32(0xffffffff)))
 
-    @unittest.skipUnless(_safe_cc_check((7, 0)), "Matching requires at least Volta Architecture")
+    @unittest.skipUnless(_safe_cc_check((7, 0)),
+                         "Matching requires at least Volta Architecture")
     def test_match_any_sync(self):
         compiled = cuda.jit("void(int32[:], int32[:])")(use_match_any_sync)
         nelem = 10
@@ -228,7 +218,8 @@ class TestCudaWarpOperations(SerialMixin, unittest.TestCase):
         compiled[1, nelem](ary_in, ary_out)
         self.assertTrue(np.all(ary_out == exp))
 
-    @unittest.skipUnless(_safe_cc_check((7, 0)), "Matching requires at least Volta Architecture")
+    @unittest.skipUnless(_safe_cc_check((7, 0)),
+                         "Matching requires at least Volta Architecture")
     def test_match_all_sync(self):
         compiled = cuda.jit("void(int32[:], int32[:])")(use_match_all_sync)
         nelem = 10
@@ -240,7 +231,8 @@ class TestCudaWarpOperations(SerialMixin, unittest.TestCase):
         compiled[1, nelem](ary_in, ary_out)
         self.assertTrue(np.all(ary_out == 0))
 
-    @unittest.skipUnless(_safe_cc_check((7, 0)), "Independent scheduling requires at least Volta Architecture")
+    @unittest.skipUnless(_safe_cc_check((7, 0)),
+                         "Independent scheduling requires at least Volta Architecture")
     def test_independent_scheduling(self):
         compiled = cuda.jit("void(int32[:])")(use_independent_scheduling)
         arr = np.empty(32, dtype=np.int32)
