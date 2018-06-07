@@ -108,6 +108,33 @@ def unbox_index(typ, obj, c):
 
 
 # -----------------------------------------------------------------------
+# Define another custom type w/o implicit cast to Number
+
+class MyDummy3(object):
+    pass
+
+class MyDummyType3(types.Opaque):
+    pass
+
+mydummy_type_3 = MyDummyType3('mydummy_3')
+mydummy_3 = MyDummy3()
+
+@typeof_impl.register(MyDummy3)
+def typeof_mydummy(val, c):
+    return mydummy_type_3
+
+
+def get_dummy_3():
+    return mydummy_3
+
+register_model(MyDummyType3)(models.OpaqueModel)
+
+@unbox(MyDummyType3)
+def unbox_index(typ, obj, c):
+    return NativeValue(c.context.get_dummy_value())
+
+
+# -----------------------------------------------------------------------
 # Define a function's typing and implementation using the classical
 # two-step API
 
@@ -258,6 +285,23 @@ def overload_add_dummy(arg1, arg2):
         return dummy_add_impl
 
 
+# -----------------------------------------------------------------------
+# Overload operator add for MyDummyType3 using the low-level interface
+
+@type_callable(operator.add)
+def type_add(context):
+    def typer(x, y):
+        if isinstance(x, MyDummyType3) and isinstance(y, MyDummyType3):
+            return types.int32
+
+    return typer
+
+
+@lower_builtin(operator.add, MyDummyType3, MyDummyType3)
+def add_mydummy_type_3(context, builder, sig, args):
+    return context.get_constant(sig.return_type, 43)
+
+
 def call_add_operator(arg1, arg2):
     return operator.add(arg1, arg2)
 
@@ -381,6 +425,32 @@ class TestLowLevelExtending(TestCase):
         pyfunc = get_dummy
         cr = compile_isolated(pyfunc, (), types.float64)
         self.assertPreciseEqual(cr.entry_point(), 42.0)
+
+    def test_add_operator(self):
+        """
+        Test re-implementing operator.add() for a custom type with @overload.
+        """
+        pyfunc = call_add_operator
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self.assertPreciseEqual(cfunc(1, 2), 3)
+        self.assertPreciseEqual(cfunc(MyDummy3(), MyDummy3()), 43)
+
+        # this will call add(Number, Number) as MyDummy implicitly casts to Number
+        self.assertPreciseEqual(cfunc(MyDummy(), MyDummy()), 84)
+
+    def test_add_binop(self):
+        """
+        Test re-implementing '+' for a custom type via @overload(operator.add).
+        """
+        pyfunc = call_add_binop
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self.assertPreciseEqual(cfunc(1, 2), 3)
+        self.assertPreciseEqual(cfunc(MyDummy3(), MyDummy3()), 43)
+
+        # this will call add(Number, Number) as MyDummy implicitly casts to Number
+        self.assertPreciseEqual(cfunc(MyDummy(), MyDummy()), 84)
 
 
 class TestPandasLike(TestCase):
