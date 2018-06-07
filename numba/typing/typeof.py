@@ -149,6 +149,10 @@ def _typeof_list(val, c):
     if len(val) == 0:
         raise ValueError("Cannot type empty list")
     ty = typeof_impl(val[0], c)
+    if ty is None:
+        raise ValueError(
+            "Cannot type list element of {!r}".format(type(val[0])),
+            )
     return types.List(ty, reflected=True)
 
 @typeof_impl.register(set)

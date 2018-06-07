@@ -773,7 +773,7 @@ class TestUnboxing(MemoryLeakMixin, TestCase):
     def test_errors(self):
         # See #1545 and #1594: error checking should ensure the list is
         # homogenous
-        msg = "can't unbox heterogenous list"
+        msg = "can't unbox heterogeneous list"
         pyfunc = noop
         cfunc = jit(nopython=True)(pyfunc)
         lst = [1, 2.5]
@@ -791,10 +791,12 @@ class TestUnboxing(MemoryLeakMixin, TestCase):
         # Issue #1638: tuples of different size.
         # Note the check is really on the tuple side.
         lst = [(1,), (2, 3)]
-        with self.assertRaises(ValueError) as raises:
+        with self.assertRaises(TypeError) as raises:
             cfunc(lst)
-        self.assertEqual(str(raises.exception),
-                         "size mismatch for tuple, expected 1 element(s) but got 2")
+        self.assertEqual(
+            str(raises.exception),
+            "can't unbox heterogeneous list: (int64 x 1) != (int64 x 2)"
+            )
 
 
 class TestListReflection(MemoryLeakMixin, TestCase):
@@ -1069,42 +1071,54 @@ class TestListManagedElements(MemoryLeakMixin, TestCase):
             return x[1]
 
         l1 = [[np.zeros(i) for i in range(5)], [np.ones(i) for i in range(5)]]
-        l2 = [[np.zeros(i) for i in range(5)], [np.ones(i)+1j for i in range(5)]]
 
         cfunc = jit(nopython=True)(pyfunc)
         l1_got = cfunc(l1)
         self.assertPreciseEqual(pyfunc(l1), l1_got)
-        l2_got = cfunc(l2)
-        self.assertPreciseEqual(pyfunc(l2), l2_got)
 
     def test_heterogeneous_list_error(self):
         def pyfunc(x):
             return x[1]
 
         cfunc = jit(nopython=True)(pyfunc)
-        l3 = [[np.zeros(i) for i in range(5)], [(1,),]]
+        l2 = [[np.zeros(i) for i in range(5)],
+              [np.ones(i)+1j for i in range(5)]]
+        l3 = [[np.zeros(i) for i in range(5)], [(1,)]]
         l4 = [[1], [{1}]]
-        l5 = [[1], [{'a':1}]]
+        l5 = [[1], [{'a': 1}]]
 
         # error_cases
         with self.assertRaises(TypeError) as raises:
-            cfunc(l3)
-        self.assertIn("can't unbox array", str(raises.exception))
+            cfunc(l2)
 
-        if utils.PY2:
-            int_error = "long() argument must be a string"
-        else:
-            int_error = "int() argument must be a string"
+        self.assertIn(
+            ("reflected list(array(float64, 1d, C)) != "
+             "reflected list(array(complex128, 1d, C))"),
+            str(raises.exception)
+            )
+
+        with self.assertRaises(TypeError) as raises:
+            cfunc(l3)
+
+        self.assertIn(
+            ("reflected list(array(float64, 1d, C)) != "
+             "reflected list((int64 x 1))"),
+            str(raises.exception)
+            )
+
         with self.assertRaises(TypeError) as raises:
             cfunc(l4)
-        self.assertIn(int_error, str(raises.exception))
-        self.assertIn("not 'set'", str(raises.exception))
+        self.assertIn(
+            "reflected list(int64) != reflected list(reflected set(int64))",
+            str(raises.exception)
+            )
 
-        with self.assertRaises(TypeError) as raises:
+        with self.assertRaises(ValueError) as raises:
             cfunc(l5)
-        self.assertIn(int_error, str(raises.exception))
-        self.assertIn("not 'dict'", str(raises.exception))
-
+        self.assertIn(
+            "Cannot type list element of <class 'dict'>",
+            str(raises.exception)
+            )
 
     def compile_and_test(self, pyfunc, *args):
         from copy import deepcopy
