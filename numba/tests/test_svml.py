@@ -95,7 +95,8 @@ def func_patterns(func, args, res, dtype, mode, vlen, flags, pad=' '*8):
         arg_list = ','.join([a+'[0]' for a in args])
         body = '%s%s[0] += math.%s(%s)\n' % (pad, res, func, arg_list)
     elif mode == "numpy":
-        body = '%s%s += np.%s(%s)\n' % (pad, res, func, ','.join(args))
+        body = '%s%s += np.%s(%s)' % (pad, res, func, ','.join(args))
+        body += '.astype(np.%s)\n' % dtype if dtype.startswith('int') else '\n'
     else:
         assert mode == "range" or mode == "prange"
         arg_list = ','.join([a+'[i]' for a in args])
@@ -110,16 +111,18 @@ def func_patterns(func, args, res, dtype, mode, vlen, flags, pad=' '*8):
     f = func+'f' if dtype == 'float32' else func
     v = vlen*2 if dtype == 'float32' else vlen
     # general expectations
+    prec_suff = '' if getattr(flags, 'fastmath', False) else '_ha'
     scalar_func = '$_'+f if numba.config.IS_OSX else '$'+f
-    svml_func = '__svml_%s%d%s,' % (
-                f, v, '' if getattr(flags, 'fastmath', False) else '_ha')
+    svml_func = '__svml_%s%d%s,' % (f, v, prec_suff)
     if mode == "scalar":
         contains = [scalar_func]
         avoids = [svml_func]
-    else:  # will vectorize
+    else:            # will vectorize
         contains = [svml_func]
         avoids = []  # [scalar_func] - TODO: if possible, force LLVM to prevent
-                   #                       generating the failsafe scalar paths
+                     #                     generating the failsafe scalar paths
+        if vlen == 4:  # Issue #3016
+            avoids += ['%zmm', '__svml_%s%d%s,' % (f, v*2, prec_suff)]
     # special handling
     if func == 'sqrt':
         if mode == "scalar":
@@ -143,8 +146,8 @@ def combo_svml_usecase(dtype, mode, vlen, flags):
 
     name = usecase_name(dtype, mode, vlen, flags)
     body = """def {name}(n):
-        ret = np.empty(n*8, dtype=np.{dtype})
-        x   = np.empty(n*8, dtype=np.{dtype})\n""".format(**locals())
+        x   = np.empty(n*8, dtype=np.{dtype})
+        ret = np.empty_like(x)\n""".format(**locals())
     funcs = numpy_funcs if mode == "numpy" else other_funcs
     contains = []
     avoids = []
@@ -174,15 +177,20 @@ class TestSVMLGeneration(TestCase):
     @classmethod
     def _inject_test(cls, dtype, mode, vlen, flags):
         args = (dtype, mode, vlen, flags)
+        implemented = not dtype.startswith('int') or not vlen == 2
 
         # unit test body template
+        @unittest.skipUnless(implemented, "Not implemented")
         def test_template(self):
             fn, contains, avoids = combo_svml_usecase(*args)
             # look for specific patters in the asm for a given target
             with override_env_config('NUMBA_CPU_NAME', vlen2cpu[vlen]), \
                  override_env_config('NUMBA_CPU_FEATURES', ''):
                 # recompile for overridden CPU
-                jit = compile_isolated(fn, (numba.int64, ), flags=flags)
+                try:
+                    jit = compile_isolated(fn, (numba.int64, ), flags=flags)
+                except:
+                    raise Exception("raised while compiling "+fn.__doc__)
             asm = jit.library.get_asm_str()
             missed = [pattern for pattern in contains if not pattern in asm]
             found = [pattern for pattern in avoids if pattern in asm]
@@ -212,7 +220,7 @@ class TestSVMLGeneration(TestCase):
                 flags.set(f)
             flag_list.append(flags)
         # main loop covering all the modes and use-cases
-        for dtype in ('float64', 'float32'):
+        for dtype in ('float64', 'float32', 'int32'):
             for vlen in vlen2cpu:
                 for flags in flag_list:
                     for mode in "scalar", "range", "prange", "numpy":
