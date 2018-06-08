@@ -4,12 +4,13 @@ import numpy as np
 try:
     from xnd import xnd
 except ImportError:
-    pass
+    xnd = None
 
 class TestCase(unittest.TestCase):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
-        self.addTypeEqualityFunc(xnd, self.assertXndEqual)
+        if xnd:
+            self.addTypeEqualityFunc(xnd, self.assertXndEqual)
         self.addTypeEqualityFunc(np.ndarray, self.assertNDArrayEqual)
 
     def assertXndEqual(self, x1, x2, msg=None):
