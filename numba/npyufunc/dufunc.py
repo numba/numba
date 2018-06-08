@@ -202,11 +202,9 @@ class DUFunc(_internal._DUFunc):
         """
         if typingctx is None:
             typingctx = self._dispatcher.targetdescr.typing_context
-            print(typingctx)
         _ty_cls = type('DUFuncTyping_' + self.ufunc.__name__,
                        (AbstractTemplate,),
                        dict(key=self, generic=self._type_me))
-        print(_ty_cls)
         typingctx.insert_user_function(self, _ty_cls)
 
     def find_ewise_function(self, ewise_types):
@@ -237,7 +235,6 @@ class DUFunc(_internal._DUFunc):
         Return the call-site signature after either validating the
         element-wise signature or compiling for it.
         """
-        print(argtys)
         assert not kwtys
         ufunc = self.ufunc
         _handle_inputs_result = npydecl.Numpy_rules_ufunc._handle_inputs(
@@ -268,7 +265,6 @@ class DUFunc(_internal._DUFunc):
         else:
             raise NotImplementedError("typing gufuncs (nout > 1)")
         outtys.extend(argtys)
-        print(outtys)
         return signature(*outtys)
 
     def _install_cg(self, targetctx=None):
