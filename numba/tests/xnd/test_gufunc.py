@@ -1,13 +1,19 @@
 import math
 from typing import NamedTuple, Tuple, Union
+from numba import unittest_support as unittest
+
+try:
+    from xnd import xnd
+    # raise ImportError
+except ImportError:
+    raise unittest.SkipTest('XND is not installed')
+
+from numba import int32, uint32, float32, float64, jit
+from numba.xnd import vectorize as xnd_vectorize
+from numba import vectorize
 
 import numpy as np
-from xnd import xnd
 
-from numba import unittest_support as unittest
-from numba import int32, uint32, float32, float64, jit
-from numba.gumath import jit_xnd
-from numba import vectorize
 
 pi = math.pi
 
@@ -29,7 +35,7 @@ def vector_add(a, b):
 def xnd_range(n, dtype):
     return xnd(list(range(n)), type=f'{n} * {dtype}')
 
-@jit_xnd([
+@vectorize([
     'N * K * int32, N * K * int32 -> N * K * int32',
     'N * K * complex64, N * K * complex64 -> N * K * complex64',
 ])
@@ -103,7 +109,7 @@ inffered_compilation_cases = {
 class TestJITXnd(unittest.TestCase):
     def test_inferred_compilation(self):
         for fn, possible_args in inffered_compilation_cases.items():
-            gu_func = jit_xnd(fn)
+            gu_func = vectorize(fn)
             numpy_func = np.vectorize(fn)
             for (xnd_args, np_args) in possible_args:
                 result = gu_func(*xnd_args)
@@ -111,7 +117,7 @@ class TestJITXnd(unittest.TestCase):
                 np.testing.assert_allclose(result, gold, atol=1e-8)
 
     def test_object_mode(self):
-        @jit_xnd(forceobj=True)
+        @vectorize(forceobj=True)
         def t(a):
             return a
         with self.assertRaises(NotImplementedError):
@@ -143,7 +149,7 @@ class TestJITXnd(unittest.TestCase):
         np.testing.assert_allclose(result, gold)
 
     def test_only_kwargs(self):
-        f = jit_xnd(nopython=True)(lambda a: a)
+        f = vectorize(nopython=True)(lambda a: a)
         np.testing.assert_allclose(f(xnd(0)), xnd(0))
 
     # def test_broadcasting(self):

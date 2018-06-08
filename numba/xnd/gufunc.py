@@ -17,8 +17,8 @@ class GuFunc:
     """
     i = 0
 
-    def __init__(self, fn, **kwargs):
-        self.dispatcher =  jit(**kwargs)(fn)
+    def __init__(self, fn):
+        self.dispatcher =  jit(fn)
 
         # name must be unique
         self.name = f'numba.{GuFunc.i}'
