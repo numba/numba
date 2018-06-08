@@ -8,9 +8,10 @@ try:
     from numba.xnd import vectorize
     from numba.xnd.gufunc import GuFunc
 except ImportError:
-    pass
+    xnd = None
 
 
+@unittest.skipUnless(xnd, "requires xnd")
 class TestVectorize(TestCase):
     def setUp(self):
         self.fn = lambda a: a

@@ -4,10 +4,8 @@ import numpy as np
 try:
     from xnd import xnd
 except ImportError:
-    xnd = None
+    pass
 
-
-@unittest.skipUnless(xnd, "requires xnd")
 class TestCase(unittest.TestCase):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)

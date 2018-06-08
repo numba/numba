@@ -12,9 +12,10 @@ try:
     from numba.xnd.gufunc import GuFunc
     from numba.xnd.ndtypes import Function
 except ImportError:
-    pass
+    xnd = None
 
 
+@unittest.skipUnless(xnd, "requires xnd")
 class TestGuFunc(TestCase):
     def test_reuses_existing(self):
         f = GuFunc(lambda a: a)
@@ -38,6 +39,7 @@ class TestGuFunc(TestCase):
         })
 
 
+@unittest.skipUnless(xnd, "requires xnd")
 class TestGuFuncInferred(TestCase):
     @staticmethod
     def sinc(x):
@@ -144,6 +146,7 @@ class TestGuFuncInferred(TestCase):
             '(8, 1, 6, 1) * (7, 1, 5) -> (8, 7, 6, 5)'
         )
 
+@unittest.skipUnless(xnd, "requires xnd")
 class TestGuFuncExplicit(TestCase):
 
     @staticmethod
