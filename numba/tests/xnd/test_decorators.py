@@ -1,3 +1,4 @@
+from numba import unittest_support as unittest
 from .base import TestCase
 
 try:
@@ -8,6 +9,7 @@ try:
     from numba.xnd.gufunc import GuFunc
 except ImportError:
     pass
+
 
 class TestVectorize(TestCase):
     def setUp(self):
@@ -47,6 +49,4 @@ class TestVectorize(TestCase):
         self.assertEquals(gufunc(self.x2), self.x2)
 
 if __name__ == '__main__':
-    from numba import unittest_support as unittest
-
     unittest.main()

@@ -18,7 +18,7 @@ class GuFunc:
     i = 0
 
     def __init__(self, fn):
-        self.dispatcher =  jit(fn)
+        self.dispatcher =  jit(fn, nopython=True)
 
         # name must be unique
         self.name = f'numba.{GuFunc.i}'
@@ -30,20 +30,18 @@ class GuFunc:
     def compile(self, f: Function):
         if f in self.already_compiled:
             return
-        
+
         # numba gives us back the function, but we want the compile result
         # so we search for it
         entry_point = self.dispatcher.compile(f.as_numba)
         cres = [cres for cres in self.dispatcher.overloads.values() if cres.entry_point == entry_point][0]
-        if cres.objectmode:
-            raise NotImplementedError('Python/object mode not supported')
 
         # replace the return value with the numba jitted one, if we can
         if f.returns_scalar:
             f_new = f.make_output_concrete(DType(str(cres.signature.return_type)))
         else:
             f_new = f
-        
+
         # gumath passes back the function after adding the kernel
         func = unsafe_add_kernel(
             name=self.name,

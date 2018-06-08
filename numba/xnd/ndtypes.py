@@ -35,7 +35,7 @@ class DType(NamedTuple):
     @property
     def as_ndt(self):
         return self.dtype
-    
+
     @property
     def as_numba(self):
         return getattr(numba_types, self.dtype)
@@ -76,7 +76,7 @@ class Array(NamedTuple):
         if self.ellipsis is not None:
             all_dims = [self.ellipsis] + all_dims
         return ' * '.join(i.as_ndt for i in all_dims)
-    
+
     @property
     def ndim(self):
         return len(self.dims)
@@ -84,7 +84,7 @@ class Array(NamedTuple):
     @classmethod
     def from_ndt(cls, ndt: str):
         *dims_str, dtype_str = ndt.split(' * ')
-        
+
         if len(dims_str) > 0:
             possible_ellipsis, *dims_str = dims_str
             if '...' == possible_ellipsis:
@@ -95,7 +95,7 @@ class Array(NamedTuple):
                 ellipsis = NamedEllipsis.from_ndt(possible_ellipsis)
             else:
                 ellipsis = None
-                dims_str = list(possible_ellipsis) + dims_str
+                dims_str = [possible_ellipsis] + dims_str
         else:
             ellipsis = None
 
@@ -106,7 +106,7 @@ class Array(NamedTuple):
             except ValueError:
                 dim = SymbolicDimension(dim_str)
             dims.append(dim)
-    
+
         if dtype_str.islower():
             dtype = DType(dtype_str)
         else:
