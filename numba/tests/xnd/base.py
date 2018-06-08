@@ -8,7 +8,7 @@ except ImportError:
 
 class TestCase(unittest.TestCase):
     def __init__(self, *args, **kw):
-        super().__init__(*args, **kw)
+        super(TestCase, self).__init__(*args, **kw)
         if xnd:
             self.addTypeEqualityFunc(xnd, self.assertXndEqual)
         self.addTypeEqualityFunc(np.ndarray, self.assertNDArrayEqual)
