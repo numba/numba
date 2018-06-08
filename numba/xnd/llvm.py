@@ -84,12 +84,12 @@ def build_kernel_wrapper(cres, ndims):
     if return_output:
         in_and_out_types.append(signature.return_type)
     for i, typ in enumerate(in_and_out_types):
-        # this bool special case was copied from parfor.pu
+        # this bool special case was copied from parfor.py
         # otherwise a bool will have the data type i8, which won't
         # match what the llvm function returns
         llvm_type = ctx.get_data_type(typ) if typ.name != 'bool' else ir.IntType(1)
         ndim = ndims[i]
-    
+
         if ndim == 0:
             val = builder.load(
                 builder.bitcast(
@@ -102,24 +102,33 @@ def build_kernel_wrapper(cres, ndims):
                 val = builder.load(val)
             in_and_outs.append(val)
             continue
-        
+
         t = builder.load(
             builder.gep(stack, [index(i), index(2)], True),
         )
         # transform xnd_t into a struct that numba wants when passing arrays to jitted function
-        # inspured by gm_as_ndarray
+        # inspired by gm_as_ndarray
         meminfo = ir.Constant(ptr(i8), None)
         parent = ir.Constant(ptr(i8), None)
+
+        # a->nelem (aka nitems) = t->datasize / t->Concrete.FixedDim.itemsize;
         datasize = builder.load(builder.gep(t, [index(0), index(4)], True))
         item_ptr_type = llvm_type.elements[4]
         itemsize = ir.Constant(i64, ctx.get_abi_sizeof(item_ptr_type.pointee))
         nitems = builder.sdiv(datasize, itemsize)
-        data = builder.load(
-            builder.bitcast(
-                builder.gep(stack, [index(i), index(3)], True),
-                ptr(item_ptr_type)
-            )
+
+        # a->ptr (aka data) = x->ptr + x->index * a->itemsize;
+        orig_index = builder.load(builder.gep(stack, [index(i), index(1)], True))
+        orig_ptr = builder.ptrtoint(
+            builder.load(builder.gep(stack, [index(i), index(3)], True)),
+            i64
         )
+        offset = builder.mul(orig_index, itemsize)
+        data = builder.inttoptr(
+            builder.add(orig_ptr, offset),
+            item_ptr_type
+        )
+
         shape = builder.load(builder.alloca(ir.ArrayType(i64, ndim)))
         strides = builder.load(builder.alloca(ir.ArrayType(i64, ndim)))
         for j in range(ndim):
@@ -130,7 +139,7 @@ def build_kernel_wrapper(cres, ndims):
 
             # a->strides[j] = t->Concrete.FixedDim.step * a->itemsize;
             strides = builder.insert_value(strides, builder.mul(itemsize, builder.load(
-                builder.gep(t, [index(0), index(7), index(0), index(0), index(1)], True), 
+                builder.gep(t, [index(0), index(7), index(0), index(0), index(1)], True),
             )), j)
             # t=t->FixedDim.type
             t = builder.load(builder.bitcast(

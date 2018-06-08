@@ -193,7 +193,6 @@ class TestGuFuncExplicit(TestCase):
         Gold = ut.matrix_multiply(A, B)
         self.assertEqual(C, xnd.from_buffer(Gold))
 
-    @unittest.skip('Broadcasting gufuncs are not working yet')
     def test_matmul_broadcasting(self):
         f = GuFunc(self.matmulcore)
         sig = '... * M * N * float32, ... * N * P * float32 -> ... * M * P * float32'
@@ -203,6 +202,10 @@ class TestGuFuncExplicit(TestCase):
         matrix_ct = 1001
         A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2, 4)
         B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4, 5)
+        A_xnd, B_xnd = xnd.from_buffer(A), xnd.from_buffer(B)
+        self.assertEqual(A, np.asanyarray(A_xnd))
+        self.assertEqual(B, np.asanyarray(B_xnd))
+
         C = f.func(xnd.from_buffer(A), xnd.from_buffer(B))
 
         Gold = ut.matrix_multiply(A, B)
