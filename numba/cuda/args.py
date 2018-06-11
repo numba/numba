@@ -4,8 +4,8 @@ memory transfers before & after the kernel call.
 """
 import abc
 
-from numba import config
 from six import add_metaclass
+
 from numba.typing.typeof import typeof, Purpose
 
 
@@ -63,19 +63,8 @@ class InOut(ArgHint):
         return devary
 
 
-# whitelist the values that we recognise, as the config strings come from
-# the process' environment!
-WHITELISTED_ARGHINTS = dict(
-    In=In,
-    Out=Out,
-    InOut=InOut)
-
-
-def wrap_arg(value):
-    if isinstance(value, ArgHint):
-        return value
-    else:
-        return WHITELISTED_ARGHINTS[config.CUDA_DEFAULT_ARGHINT](value)
+def wrap_arg(value, default=InOut):
+    return value if isinstance(value, ArgHint) else default(value)
 
 
 __all__ = [

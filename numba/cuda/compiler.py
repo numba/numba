@@ -3,6 +3,7 @@ from __future__ import absolute_import, print_function
 
 from functools import reduce, wraps
 import operator
+import six
 import sys
 import threading
 import warnings
@@ -72,7 +73,7 @@ def compile_cuda(pyfunc, return_type, args, debug, inline):
 
 @nonthreadsafe
 def compile_kernel(pyfunc, args, link, debug=False, inline=False,
-                   fastmath=False):
+                   fastmath=False, extensions=[]):
     cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=inline)
     fname = cres.fndesc.llvm_func_name
     lib, kernel = cres.target_context.prepare_cuda_kernel(cres.library, fname,
@@ -87,7 +88,8 @@ def compile_kernel(pyfunc, args, link, debug=False, inline=False,
                         link=link,
                         debug=debug,
                         call_helper=cres.call_helper,
-                        fastmath=fastmath)
+                        fastmath=fastmath,
+                        extensions=extensions)
     return cukern
 
 
@@ -421,7 +423,8 @@ class CUDAKernel(CUDAKernelBase):
     specialized, and then launch the kernel on the device.
     '''
     def __init__(self, llvm_module, name, pretty_name, argtypes, call_helper,
-                 link=(), debug=False, fastmath=False, type_annotation=None):
+                 link=(), debug=False, fastmath=False, type_annotation=None,
+                 extensions=[]):
         super(CUDAKernel, self).__init__()
         # initialize CUfunction
         options = {'debug': debug}
@@ -441,9 +444,10 @@ class CUDAKernel(CUDAKernelBase):
         self._func = cufunc
         self.debug = debug
         self.call_helper = call_helper
+        self.extensions = list(extensions)
 
     @classmethod
-    def _rebuild(cls, name, argtypes, cufunc, link, debug, call_helper, config):
+    def _rebuild(cls, name, argtypes, cufunc, link, debug, call_helper, extensions, config):
         """
         Rebuild an instance.
         """
@@ -458,6 +462,7 @@ class CUDAKernel(CUDAKernelBase):
         instance._func = cufunc
         instance.debug = debug
         instance.call_helper = call_helper
+        instance.extensions = extensions
         # update config
         instance._deserialize_config(config)
         return instance
@@ -473,7 +478,7 @@ class CUDAKernel(CUDAKernelBase):
         config = self._serialize_config()
         args = (self.__class__, self.entry_name, self.argument_types,
                 self._func, self.linking, self.debug, self.call_helper,
-                config)
+                self.extensions, config)
         return (serialize._rebuild_reduction, args)
 
     def __call__(self, *args, **kwargs):
@@ -590,6 +595,17 @@ class CUDAKernel(CUDAKernelBase):
         """
         Convert arguments to ctypes and append to kernelargs
         """
+
+        # map the arguments using any extension you've registered
+        ty, val = six.moves.reduce(
+            lambda ty_val, extension: extension.prepare_args(
+                *ty_val,
+                stream=stream,
+                retr=retr),
+            self.extensions,
+            (ty, val)
+        )
+
         if isinstance(ty, types.Array):
             if isinstance(ty, types.SmartArrayType):
                 devary = val.get('gpu')
@@ -687,9 +703,17 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         self.definitions = {}
         self.targetoptions = targetoptions
 
+        # defensive copy
+        self.targetoptions['extensions'] = \
+            list(self.targetoptions.get('extensions', []))
+
         from .descriptor import CUDATargetDesc
 
         self.typingctx = CUDATargetDesc.typingctx
+
+    @property
+    def extensions(self):
+        return self.targetoptions['extensions']
 
     def __call__(self, *args):
         '''

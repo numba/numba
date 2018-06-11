@@ -283,9 +283,6 @@ class _EnvReloader(object):
         CUDA_DEALLOCS_RATIO = _readenv("NUMBA_CUDA_MAX_PENDING_DEALLOCS_RATIO",
                                        float, 0.2)
 
-        # One of In, Out or InOut: how to pass Numpy arrays to kernels
-        CUDA_DEFAULT_ARGHINT = _readenv("NUMBA_CUDA_DEFAULT_ARGHINT", str, 'InOut')
-
         # HSA Configs
 
         # Disable HSA support
