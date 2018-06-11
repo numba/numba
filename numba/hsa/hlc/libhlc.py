@@ -10,6 +10,7 @@ import tempfile
 import os
 import re
 from numba import utils, config
+from numba.hsa.hsadrv import devices
 from .common import AMDGCNModule
 
 from numba.hsa.hlc.hlc import CmdLine
@@ -54,6 +55,9 @@ class HLC(object):
         bitcode_path = os.path.join(sys.prefix, 'bitcode')
         assert os.path.exists(bitcode_path) and os.path.isdir(bitcode_path)
         self.bitcode_path = bitcode_path
+        dev_ctx = devices.get_context()
+        target_cpu = dev_ctx.agent.name
+        self.target_cpu = target_cpu
 
         if self.hlc is None:
             try:
@@ -94,7 +98,8 @@ class HLC(object):
         return mod
 
     def optimize(self, mod, opt=3, size=0, verify=1):
-        if not self.hlc.ROC_ModuleOptimize(mod, int(opt), int(size), int(verify)):
+        if not self.hlc.ROC_ModuleOptimize(mod, int(opt), int(size),
+                int(verify), c_char_p(self.target_cpu)):
             raise Error("Failed to optimize module")
 
     def link(self, dst, src):
@@ -103,7 +108,8 @@ class HLC(object):
 
     def to_hsail(self, mod, opt=2):
         buf = c_char_p(0)
-        if not self.hlc.ROC_ModuleEmitHSAIL(mod, int(opt), byref(buf)):
+        if not self.hlc.ROC_ModuleEmitHSAIL(mod, int(opt),
+                c_char_p(self.target_cpu), byref(buf)):
             raise Error("Failed to emit HSAIL")
         ret = buf.value.decode("latin1")
         self.hlc.ROC_DisposeString(buf)
@@ -114,7 +120,8 @@ class HLC(object):
 
     def to_brig(self, mod, opt=2):
         bufptr = c_void_p(0)
-        size = self.hlc.ROC_ModuleEmitBRIG(mod, int(opt), byref(bufptr))
+        size = self.hlc.ROC_ModuleEmitBRIG(mod, int(opt),
+                c_char_p(self.target_cpu), byref(bufptr))
         if not size:
             raise Error("Failed to emit BRIG")
         buf = (c_byte * size).from_address(bufptr.value)

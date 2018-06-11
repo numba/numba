@@ -8,8 +8,8 @@ import tempfile
 import os
 import re
 from collections import namedtuple
-
 from numba import config
+from numba.hsa.hsadrv import devices
 from .common import AMDGCNModule
 from .config import ROCM_BC_PATH
 from . import TRIPLE
@@ -52,7 +52,9 @@ class CmdLine(object):
         self.llvm_link = _setup_path("llvm-link")
         self.ld_lld = _setup_path("ld.lld")
         self.triple_flag = "-mtriple %s" % self._triple
-        self.target_cpu = "-mcpu=fiji"
+        dev_ctx = devices.get_context()
+        target_cpu = dev_ctx.agent.name.decode('UTF-8')
+        self.target_cpu = "-mcpu %s" % target_cpu
 
         self.CMD_OPT = ' '.join([
                 self.opt,
