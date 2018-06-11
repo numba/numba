@@ -2,6 +2,7 @@
 Module that deals with HSA in a high level way
 """
 from __future__ import print_function, absolute_import, division
+import os
 import numba.testing
 from .api import *
 from .stubs import atomic
@@ -12,10 +13,25 @@ def is_available():
     """Returns a boolean to indicate the availability of a HSA runtime.
 
     This will force initialization of the driver if it hasn't been
-    initialized.
+    initialized. It also checks that a toolchain is present.
     """
     from .hsadrv.driver import hsa
-    return hsa.is_available
+
+    from .hlc import hlc, libhlc
+    has_a_toolchain = False
+
+    try:
+       libhlc.HLC()
+       has_a_toolchain = True
+    except:
+        try:
+           cmd = hlc.CmdLine()
+           assert os.path.isfile(cmd.opt)
+           has_a_toolchain = True
+        except:
+            pass
+
+    return hsa.is_available and has_a_toolchain
 
 
 def test(*args, **kwargs):

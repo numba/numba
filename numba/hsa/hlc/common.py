@@ -158,3 +158,4 @@ class AMDGCNModule(object):
 
     def generateGCN(self):
         pass
+

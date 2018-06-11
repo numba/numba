@@ -44,7 +44,8 @@ class CmdLine(object):
             if self._binary_path is not None:
                 return os.path.join(self._binary_path, tool)
             else:
-                return tool
+                binpath = os.path.join(sys.prefix, 'bin', tool)
+                return binpath
         self._triple = TRIPLE
 
         self.opt = _setup_path("opt")
