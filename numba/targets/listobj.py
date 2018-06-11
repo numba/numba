@@ -499,6 +499,7 @@ def getitem_list(context, builder, sig, args):
     index = args[1]
 
     index = inst.fix_index(index)
+    inst.guard_index(index, msg="getitem out of range")
     result = inst.getitem(index)
 
     return impl_ret_borrowed(context, builder, sig.return_type, result)
@@ -510,6 +511,7 @@ def setitem_list(context, builder, sig, args):
     value = args[2]
 
     index = inst.fix_index(index)
+    inst.guard_index(index, msg="setitem out of range")
     inst.setitem(index, value, incref=True)
     return context.get_dummy_value()
 
