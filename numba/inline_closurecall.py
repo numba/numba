@@ -104,7 +104,8 @@ class InlineClosureCallPass(object):
             remove_dels(self.func_ir.blocks)
             # repeat dead code elimintation until nothing can be further
             # removed
-            while (remove_dead(self.func_ir.blocks, self.func_ir.arg_names)):
+            while (remove_dead(self.func_ir.blocks, self.func_ir.arg_names,
+                                                                self.func_ir)):
                 pass
             self.func_ir.blocks = rename_labels(self.func_ir.blocks)
         debug_print("END")

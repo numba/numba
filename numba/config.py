@@ -8,10 +8,15 @@ import re
 import warnings
 import multiprocessing
 
+# YAML needed to use file based Numba config
+try:
+    import yaml
+    _HAVE_YAML = True
+except ImportError:
+    _HAVE_YAML = False
+
+
 import llvmlite.binding as ll
-
-from .errors import NumbaWarning, PerformanceWarning
-
 
 IS_WIN32 = sys.platform.startswith('win32')
 IS_OSX = sys.platform.startswith('darwin')
@@ -20,6 +25,8 @@ IS_32BITS = MACHINE_BITS == 32
 # Python version in (major, minor) tuple
 PYVERSION = sys.version_info[:2]
 
+# this is the name of the user supplied configuration file
+_config_fname = '.numba_config.yaml'
 
 def _parse_cc(text):
     """
@@ -74,6 +81,23 @@ class _EnvReloader(object):
 
     def update(self, force=False):
         new_environ = {}
+
+        # first check if there's a .numba_config.yaml and use values from that
+        if os.path.exists(_config_fname) and os.path.isfile(_config_fname):
+            if not _HAVE_YAML:
+                msg = ("A Numba config file is found but YAML parsing "
+                       "capabilities appear to be missing. "
+                       "To use this feature please install `pyyaml`. e.g. "
+                       "`conda install pyyaml`.")
+                warnings.warn(msg)
+            else:
+                with open(_config_fname, 'rt') as f:
+                    y_conf = yaml.load(f)
+                if y_conf is not None:
+                    for k, v in y_conf.items():
+                        new_environ['NUMBA_' + k.upper()] = v
+
+        # clobber file based config with any locally defined env vars
         for name, value in os.environ.items():
             if name.startswith('NUMBA_'):
                 new_environ[name] = value
@@ -105,8 +129,6 @@ class _EnvReloader(object):
         #   0 = Numba warnings suppressed (default)
         #   1 = All Numba warnings shown
         WARNINGS = _readenv("NUMBA_WARNINGS", int, 0)
-        if WARNINGS == 0:
-            warnings.simplefilter('ignore', NumbaWarning)
 
         # developer mode produces full tracebacks, disables help instructions
         DEVELOPER_MODE = _readenv("NUMBA_DEVELOPER_MODE", int, 0)
@@ -116,6 +138,10 @@ class _EnvReloader(object):
 
         # Show help text when an error occurs
         SHOW_HELP = _readenv("NUMBA_SHOW_HELP", int, not DEVELOPER_MODE)
+
+        # The color scheme to use for error messages, default is no color
+        # just bold fonts in use.
+        COLOR_SCHEME = _readenv("NUMBA_COLOR_SCHEME", str, "no_color")
 
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)
@@ -212,9 +238,6 @@ class _EnvReloader(object):
         # Enable AVX on supported platforms where it won't degrade performance.
         def avx_default():
             if not _os_supports_avx():
-                warnings.warn("your operating system doesn't support "
-                              "AVX, this may degrade performance on "
-                              "some numerical code", PerformanceWarning)
                 return False
             else:
                 # There are various performance issues with AVX and LLVM
@@ -286,6 +309,16 @@ class _EnvReloader(object):
             if name.isupper():
                 globals()[name] = value
 
+        # delay this until now, let the globals for the module be updated
+        # prior to loading numba.errors as it needs to use the config
+        if WARNINGS == 0:
+            from numba.errors import NumbaWarning
+            warnings.simplefilter('ignore', NumbaWarning)
+        if not _os_supports_avx():
+            from numba.errors import PerformanceWarning
+            warnings.warn("your operating system doesn't support "
+                            "AVX, this may degrade performance on "
+                            "some numerical code", PerformanceWarning)
 
 _env_reloader = _EnvReloader()
 

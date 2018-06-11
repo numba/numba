@@ -18,7 +18,8 @@ from numba.ir_utils import (
     get_definition,
     find_callname,
     find_build_sequence,
-    find_const)
+    find_const,
+    is_namedtuple_class)
 from numba.analysis import (compute_cfg_from_blocks)
 from numba.typing import npydecl, signature
 import collections
@@ -684,7 +685,7 @@ class SymbolicEquivSet(ShapeEquivSet):
                 if expr.op == 'call':
                     fname, mod_name = find_callname(
                             func_ir, expr, typemap=self.typemap)
-                    if fname == 'wrap_index' and mod_name == 'numba.extending':
+                    if fname == 'wrap_index' and mod_name == 'numba.array_analysis':
                         index = tuple(self.obj_to_ind.get(x.name, -1)
                                       for x in expr.args)
                         if -1 in index:
@@ -1256,8 +1257,11 @@ class ArrayAnalysis(object):
 
         callee = expr.func
         callee_def = get_definition(self.func_ir, callee)
-        if ((isinstance(callee_def, ir.Global) or isinstance(callee_def, ir.FreeVar))
-            and isinstance(callee_def.value, StencilFunc)):
+        if (isinstance(callee_def, (ir.Global, ir.FreeVar))
+                and is_namedtuple_class(callee_def.value)):
+            return tuple(expr.args), []
+        if (isinstance(callee_def, (ir.Global, ir.FreeVar))
+                and isinstance(callee_def.value, StencilFunc)):
             args = expr.args
             return self._analyze_stencil(scope, equiv_set, callee_def.value,
                                          expr.loc, args, dict(expr.kws))
@@ -1298,7 +1302,8 @@ class ArrayAnalysis(object):
             return shape[0], [], shape[0]
         return None
 
-    def _analyze_op_call_numba_extending_assert_equiv(self, scope, equiv_set, args, kws):
+    def _analyze_op_call_numba_array_analysis_assert_equiv(self, scope,
+                                                        equiv_set, args, kws):
         equiv_set.insert_equiv(*args[1:])
         return None
 
@@ -1315,8 +1320,8 @@ class ArrayAnalysis(object):
     def _analyze_op_call_numpy_empty(self, scope, equiv_set, args, kws):
         return self._analyze_numpy_create_array(scope, equiv_set, args, kws)
 
-    def _analyze_op_call_numba_extending_empty_inferred(self, scope, equiv_set,
-                                                                    args, kws):
+    def _analyze_op_call_numba_unsafe_ndarray_empty_inferred(self, scope,
+                                                         equiv_set, args, kws):
         return self._analyze_numpy_create_array(scope, equiv_set, args, kws)
 
     def _analyze_op_call_numpy_zeros(self, scope, equiv_set, args, kws):

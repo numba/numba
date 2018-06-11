@@ -6,6 +6,7 @@ import weakref
 import threading
 import contextlib
 
+import numba
 from numba import types, errors
 from numba.typeconv import Conversion, rules
 from . import templates
@@ -287,7 +288,13 @@ class BaseContext(object):
 
         ValueError is raised for unsupported types.
         """
-        return typeof(val, Purpose.argument)
+        try:
+            return typeof(val, Purpose.argument)
+        except ValueError:
+            if numba.cuda.is_cuda_array(val):
+                return typeof(numba.cuda.as_cuda_array(val), Purpose.argument)
+            else:
+                raise
 
     def resolve_value_type(self, val):
         """

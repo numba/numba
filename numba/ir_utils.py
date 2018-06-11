@@ -482,20 +482,21 @@ def remove_args(blocks):
     return
 
 
-def remove_dead(blocks, args, typemap=None, alias_map=None, arg_aliases=None):
+def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases=None):
     """dead code elimination using liveness and CFG info.
     Returns True if something has been removed, or False if nothing is removed.
     """
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
+    call_table, _ = get_call_table(blocks)
     if alias_map is None or arg_aliases is None:
-        alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap)
+        alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap,
+                                                        func_ir)
     if config.DEBUG_ARRAY_OPT == 1:
         print("alias map:", alias_map)
     # keep set for easier search
     alias_set = set(alias_map.keys())
-    call_table, _ = get_call_table(blocks)
 
     removed = False
     for label, block in blocks.items():
@@ -504,7 +505,8 @@ def remove_dead(blocks, args, typemap=None, alias_map=None, arg_aliases=None):
         # find live variables at the end of block
         for out_blk, _data in cfg.successors(label):
             lives |= live_map[out_blk]
-        removed |= remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_set, typemap)
+        removed |= remove_dead_block(block, lives, call_table, arg_aliases,
+                                     alias_map, alias_set, func_ir, typemap)
     return removed
 
 
@@ -513,7 +515,8 @@ def remove_dead(blocks, args, typemap=None, alias_map=None, arg_aliases=None):
 remove_dead_extensions = {}
 
 
-def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_set, typemap):
+def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
+                                                  alias_set, func_ir, typemap):
     """remove dead code using liveness info.
     Mutable arguments (e.g. arrays) that are not definitely assigned are live
     after return of function.
@@ -528,13 +531,14 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_se
     for stmt in reversed(block.body[:-1]):
         # aliases of lives are also live
         alias_lives = set()
-        init_alias_lives = (lives | arg_aliases) & alias_set
+        init_alias_lives = lives & alias_set
         for v in init_alias_lives:
             alias_lives |= alias_map[v]
+        lives_n_aliases = lives | alias_lives | arg_aliases
         # let external calls handle stmt if type matches
         if type(stmt) in remove_dead_extensions:
             f = remove_dead_extensions[type(stmt)]
-            stmt = f(stmt, lives, arg_aliases, alias_map, typemap)
+            stmt = f(stmt, lives, arg_aliases, alias_map, func_ir, typemap)
             if stmt is None:
                 removed = True
                 continue
@@ -543,7 +547,7 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_se
             lhs = stmt.target
             rhs = stmt.value
             if lhs.name not in lives and has_no_side_effect(
-                    rhs, lives, call_table):
+                    rhs, lives_n_aliases, call_table):
                 removed = True
                 continue
             if isinstance(rhs, ir.Var) and lhs.name == rhs.name:
@@ -552,7 +556,7 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_se
             # TODO: remove other nodes like SetItem etc.
         if isinstance(stmt, ir.SetItem):
             name = stmt.target.name
-            if not (name in lives or name in alias_lives or name in arg_aliases):
+            if name not in lives_n_aliases:
                 continue
 
         if type(stmt) in analysis.ir_extension_usedefs:
@@ -631,7 +635,8 @@ def is_pure(rhs, lives, call_table):
             return False
         call_list = call_table[func_name]
         if (call_list == [slice] or
-            call_list == ['log', numpy]):
+            call_list == ['log', numpy] or
+            call_list == ['empty', numpy]):
             return True
         for f in is_pure_extensions:
             if f(rhs, lives, call_list):
@@ -643,18 +648,24 @@ def is_pure(rhs, lives, call_table):
 
 alias_analysis_extensions = {}
 
-def find_potential_aliases(blocks, args, typemap, alias_map=None, arg_aliases=None):
+def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
+                                                            arg_aliases=None):
     "find all array aliases and argument aliases to avoid remove as dead"
     if alias_map is None:
         alias_map = {}
     if arg_aliases is None:
         arg_aliases = set(a for a in args if not is_immutable_type(a, typemap))
 
+    # update definitions since they are not guaranteed to be up-to-date
+    # FIXME keep definitions up-to-date to avoid the need for rebuilding
+    func_ir._definitions = build_definitions(func_ir.blocks)
+    np_alias_funcs = ['ravel', 'transpose', 'reshape']
+
     for bl in blocks.values():
         for instr in bl.body:
             if type(instr) in alias_analysis_extensions:
                 f = alias_analysis_extensions[type(instr)]
-                f(instr, args, typemap, alias_map, arg_aliases)
+                f(instr, args, typemap, func_ir, alias_map, arg_aliases)
             if isinstance(instr, ir.Assign):
                 expr = instr.value
                 lhs = instr.target.name
@@ -667,6 +678,24 @@ def find_potential_aliases(blocks, args, typemap, alias_map=None, arg_aliases=No
                 if (isinstance(expr, ir.Expr) and (expr.op == 'cast' or
                     expr.op in ['getitem', 'static_getitem'])):
                     _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
+                # array attributes like A.T
+                if (isinstance(expr, ir.Expr) and expr.op == 'getattr'
+                        and expr.attr in ['T', 'ctypes', 'flat']):
+                    _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
+                # calls that can create aliases such as B = A.ravel()
+                if isinstance(expr, ir.Expr) and expr.op == 'call':
+                    fdef = guard(find_callname, func_ir, expr, typemap)
+                    # TODO: sometimes gufunc backend creates duplicate code
+                    # causing find_callname to fail. Example: test_argmax
+                    # ignored here since those cases don't create aliases
+                    # but should be fixed in general
+                    if fdef is None:
+                        continue
+                    fname, fmod = fdef
+                    if fmod == 'numpy' and fname in np_alias_funcs:
+                        _add_alias(lhs, expr.args[0].name, alias_map, arg_aliases)
+                    if isinstance(fmod, ir.Var) and fname in np_alias_funcs:
+                        _add_alias(lhs, fmod.name, alias_map, arg_aliases)
 
     # copy to avoid changing size during iteration
     old_alias_map = copy.deepcopy(alias_map)
@@ -1281,7 +1310,7 @@ def simplify(func_ir, typemap, calltypes):
         calltypes)
     restore_copy_var_names(func_ir.blocks, save_copies, typemap)
     # remove dead code to enable fusion
-    remove_dead(func_ir.blocks, func_ir.arg_names, typemap)
+    remove_dead(func_ir.blocks, func_ir.arg_names, func_ir, typemap)
     func_ir.blocks = simplify_CFG(func_ir.blocks)
     if config.DEBUG_ARRAY_OPT == 1:
         dprint_func_ir(func_ir, "after simplify")
@@ -1368,20 +1397,26 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
             if not value:
                 raise GuardException
             attrs.append(value)
-            if hasattr(callee_def.value, '__module__'):
-                mod_name = callee_def.value.__module__
+            def_val = callee_def.value
+            # get the underlying definition of Intrinsic object to be able to
+            # find the module effectively.
+            # Otherwise, it will return numba.extending
+            if isinstance(def_val, numba.extending._Intrinsic):
+                def_val = def_val._defn
+            if hasattr(def_val, '__module__'):
+                mod_name = def_val.__module__
                 # it might be a numpy function imported directly
                 if (hasattr(numpy, value)
-                        and callee_def.value == getattr(numpy, value)):
+                        and def_val == getattr(numpy, value)):
                     attrs += ['numpy']
                 # it might be a np.random function imported directly
                 elif (hasattr(numpy.random, value)
-                        and callee_def.value == getattr(numpy.random, value)):
+                        and def_val == getattr(numpy.random, value)):
                     attrs += ['random', 'numpy']
                 elif mod_name is not None:
                     attrs.append(mod_name)
             else:
-                class_name = callee_def.value.__class__.__name__
+                class_name = def_val.__class__.__name__
                 if class_name == 'builtin_function_or_method':
                     class_name = 'builtin'
                 if class_name != 'module':
@@ -1630,3 +1665,20 @@ def set_index_var_of_get_setitem(stmt, new_index):
     else:
         raise ValueError("getitem or setitem node expected but received {}".format(
                      stmt))
+
+def is_namedtuple_class(c):
+    """check if c is a namedtuple class"""
+    if not isinstance(c, type):
+        return False
+    # should have only tuple as superclass
+    bases = c.__bases__
+    if len(bases) != 1 or bases[0] != tuple:
+        return False
+    # should have _make method
+    if not hasattr(c, '_make'):
+        return False
+    # should have _fields that is all string
+    fields = getattr(c, '_fields', None)
+    if not isinstance(fields, tuple):
+        return False
+    return all(isinstance(f, str) for f in fields)

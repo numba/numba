@@ -1,3 +1,34 @@
+Version 0.38.1
+--------------
+
+This is a critical bug fix release addressing:
+https://github.com/numba/numba/issues/3006
+
+The bug does not impact users using conda packages from Anaconda or Intel Python
+Distribution (but it does impact conda-forge). It does not impact users of pip
+using wheels from PyPI.
+
+This only impacts a small number of users where:
+
+ * The ICC runtime (specifically libsvml) is present in the user's environment.
+ * The user is using an llvmlite statically linked against a version of LLVM
+   that has not been patched with SVML support.
+ * The platform is 64-bit.
+
+The release fixes a code generation path that could lead to the production of
+incorrect results under the above situation.
+
+Fixes:
+
+* PR #3007: Augment SVML detection with llvmlite SVML patch detection.
+
+Contributors:
+
+The following people contributed to this release.
+
+* Stuart Archibald (core dev)
+
+
 Version 0.38.0
 --------------
 

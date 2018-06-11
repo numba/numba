@@ -11,7 +11,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import config, jit
+from numba import errors, jit
 from .support import TestCase, tag
 
 
@@ -172,9 +172,9 @@ class TestGILRelease(TestCase):
         printed out.
         """
         with warnings.catch_warnings(record=True) as wlist:
-            warnings.simplefilter('always', config.NumbaWarning)
+            warnings.simplefilter('always', errors.NumbaWarning)
             cfunc = jit(f_sig, nogil=True)(object_f)
-        self.assertTrue(any(w.category is config.NumbaWarning
+        self.assertTrue(any(w.category is errors.NumbaWarning
                             and "Code running in object mode won't allow parallel execution" in str(w.message)
                             for w in wlist), wlist)
         # Just check it doesn't crash.

@@ -20,6 +20,17 @@ transfer:
 .. autofunction:: numba.cuda.to_device
    :noindex:
 
+In addition to the device arrays, Numba can consume any object that implements
+:ref:`cuda array interface <cuda-array-interface>`.  These objects also can be
+manually converted into a Numba device array by creating a view of the GPU
+buffer using the following APIs:
+
+.. autofunction:: numba.cuda.as_cuda_array
+  :noindex:
+.. autofunction:: numba.cuda.is_cuda_array
+  :noindex:
+
+
 Device arrays
 -------------
 
@@ -29,6 +40,10 @@ called in host code, not within CUDA-jitted functions.
 .. autoclass:: numba.cuda.cudadrv.devicearray.DeviceNDArray
     :members: copy_to_host, is_c_contiguous, is_f_contiguous, ravel, reshape
     :noindex:
+
+
+.. note:: DeviceNDArray defines the :ref:`cuda array interface <cuda-array-interface>`.
+
 
 Pinned memory
 =============
@@ -124,7 +139,7 @@ creating an array in constant memory is through the use of:
 
 .. function:: numba.cuda.const.array_like(arr)
    :noindex:
-   
+
    Allocate and make accessible an array in constant memory based on array-like
    *arr*.
 

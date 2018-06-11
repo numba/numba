@@ -1,6 +1,6 @@
 from __future__ import division
 
-from itertools import product
+from itertools import product, combinations_with_replacement
 
 import numpy as np
 
@@ -116,6 +116,11 @@ def array_nanvar(arr):
 def array_nanmedian_global(arr):
     return np.nanmedian(arr)
 
+def array_percentile_global(arr, q):
+    return np.percentile(arr, q)
+
+def array_nanpercentile_global(arr, q):
+    return np.nanpercentile(arr, q)
 
 def base_test_arrays(dtype):
     if dtype == np.bool_:
@@ -330,25 +335,96 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         self.check_median_basic(pyfunc, variations)
 
+    def check_percentile_basic(self, pyfunc, array_variations, percentile_variations):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a, q):
+            expected = pyfunc(a, q)
+            got = cfunc(a, q)
+            self.assertPreciseEqual(got, expected, abs_tol='eps')
+
+        def check_err(a, q):
+            with self.assertRaises(ValueError) as raises:
+                cfunc(a, q)
+            self.assertEqual("Percentiles must be in the range [0,100]", str(raises.exception))
+
+        def perform_checks(a, q):
+            check(a, q)
+            a = a.reshape((3, 3, 7))
+            check(a, q)
+            check(a.astype(np.int32), q)
+
+        for a in array_variations(np.arange(63) - 10.5):
+            for q in percentile_variations(np.array([0, 50, 100, 66.6])):
+                perform_checks(a, q)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        a = np.arange(5)
+        check_err(a, -5)  # q less than 0
+        check_err(a, (1, 10, 105))  # q contains value greater than 100
+        check_err(a, (1, 10, np.nan))  # q contains nan
+
+    @staticmethod
+    def _array_variations(a):
+        # Sorted, reversed, random, many duplicates, many NaNs, all NaNs
+        yield a
+        a = a[::-1].copy()
+        yield a
+        np.random.shuffle(a)
+        yield a
+        a[a % 4 >= 1] = 3.5
+        yield a
+        a[a % 4 >= 2] = np.nan
+        yield a
+        a[:] = np.nan
+        yield a
+
+    @staticmethod
+    def _percentile_variations(q):
+        yield q
+        yield q[::-1].astype(np.int32).tolist()
+        yield q[-1]
+        yield int(q[-1])
+        yield tuple(q)
+        yield False
+
+    def check_percentile_edge_cases(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a, q, abs_tol):
+            expected = pyfunc(a, q)
+            got = cfunc(a, q)
+            self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
+
+        def _array_combinations(elements):
+            for i in range(1, 10):
+                for comb in combinations_with_replacement(elements, i):
+                    yield np.array(comb)
+
+        # high number of combinations, many including non-finite values
+        q = (0, 10, 20, 100)
+        element_pool = (1, -1, np.nan, np.inf, -np.inf)
+        for a in _array_combinations(element_pool):
+            check(a, q, abs_tol=1e-14)  # 'eps' fails, tbd...
+
+    @unittest.skipUnless(np_version >= (1, 10), "percentile needs Numpy 1.10+")
+    def test_percentile_basic(self):
+        pyfunc = array_percentile_global
+        self.check_percentile_basic(pyfunc, self._array_variations, self._percentile_variations)
+        self.check_percentile_edge_cases(pyfunc)
+
+    @unittest.skipUnless(np_version >= (1, 11), "nanpercentile needs Numpy 1.11+")
+    def test_nanpercentile_basic(self):
+        pyfunc = array_nanpercentile_global
+        self.check_percentile_basic(pyfunc, self._array_variations, self._percentile_variations)
+        self.check_percentile_edge_cases(pyfunc)
+
     @unittest.skipUnless(np_version >= (1, 9), "nanmedian needs Numpy 1.9+")
     def test_nanmedian_basic(self):
         pyfunc = array_nanmedian_global
-
-        def variations(a):
-            # Sorted, reversed, random, many duplicates, many NaNs
-            yield a
-            a = a[::-1].copy()
-            yield a
-            np.random.shuffle(a)
-            yield a
-            a[a % 4 <= 1] = 3.5
-            yield a
-            a[a % 4 >= 2] = float('nan')
-            yield a
-            a[:] = float('nan')
-            yield a
-
-        self.check_median_basic(pyfunc, variations)
+        self.check_median_basic(pyfunc, self._array_variations)
 
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)

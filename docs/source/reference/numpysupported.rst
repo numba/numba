@@ -159,6 +159,7 @@ The following methods of Numpy arrays are supported:
 * :meth:`~numpy.ndarray.argsort` (without arguments)
 * :meth:`~numpy.ndarray.astype` (only the 1-argument form)
 * :meth:`~numpy.ndarray.copy` (without arguments)
+* :meth:`~numpy.ndarray.dot` (only the 1-argument form)
 * :meth:`~numpy.ndarray.flatten` (no order argument; 'C' order only)
 * :meth:`~numpy.ndarray.item` (without arguments)
 * :meth:`~numpy.ndarray.itemset` (only the 1-argument form)
@@ -237,6 +238,8 @@ The following reduction functions are supported:
 * :func:`numpy.nanstd` (only the first argument)
 * :func:`numpy.nansum` (only the first argument)
 * :func:`numpy.nanvar` (only the first argument)
+* :func:`numpy.percentile` (only the 2 first arguments, requires NumPy >= 1.10)
+* :func:`numpy.nanpercentile` (only the 2 first arguments, requires NumPy >= 1.11)
 
 Other functions
 ---------------
@@ -286,6 +289,7 @@ The following top-level functions are supported:
 * :func:`numpy.stack`
 * :func:`numpy.take` (only the 2 first arguments)
 * :func:`numpy.transpose`
+* :func:`numpy.unique` (only the first argument)
 * :func:`numpy.vstack`
 * :func:`numpy.where`
 * :func:`numpy.zeros` (only the 2 first arguments)
