@@ -5,7 +5,6 @@ import subprocess
 
 from numba import unittest_support as unittest
 from numba import cuda
-from numba import hsa
 
 
 class TestCase(unittest.TestCase):
