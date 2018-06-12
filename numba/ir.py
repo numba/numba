@@ -920,7 +920,6 @@ class FunctionIR(object):
         Post-processing will have to be run again on the new IR.
         """
         firstblock = blocks[min(blocks)]
-        is_generator = self.is_generator and not force_non_generator
 
         new_ir = copy.copy(self)
         new_ir.blocks = blocks
@@ -932,7 +931,8 @@ class FunctionIR(object):
         if arg_names is not None:
             new_ir.arg_names = arg_names
         new_ir._reset_analysis_variables()
-
+        # Make fresh func_id
+        new_ir.func_id = new_ir.func_id.derive()
         return new_ir
 
     def copy(self):

@@ -13,7 +13,7 @@ environment:
     # and a subset of the test suite (see test_script below)
     - PYTHON: "3.6"
       ARCH: "64"
-      NUMPY: "1.13"
+      NUMPY: "1.14"
       CONDA_ENV: testenv
 
 init:
@@ -23,9 +23,8 @@ init:
   - set PATH=%MINICONDA%;%MINICONDA%/Scripts;%MINICONDA%/Library/bin;%PATH%
 
 install:
-  # Update to a known good conda
-  # (to workaround http://help.appveyor.com/discussions/problems/4910)
-  - conda install -q -y conda=4.1.4
+  # Update conda
+  - conda update -q -y conda
   - buildscripts\\incremental\\setup_conda_environment.cmd
   # Build the package
   - buildscripts\\incremental\\build.cmd

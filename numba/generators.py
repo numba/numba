@@ -20,6 +20,9 @@ class GeneratorDescriptor(FunctionDescriptor):
         """
         Build a GeneratorDescriptor for the generator returned by the
         function described by *fndesc*, with type *gentype*.
+
+        The generator inherits the env_name from the *fndesc*.
+        All emitted functions for the generator shares the same Env.
         """
         assert isinstance(gentype, types.Generator)
         restype = gentype.yield_type
@@ -30,7 +33,7 @@ class GeneratorDescriptor(FunctionDescriptor):
         self = cls(fndesc.native, fndesc.modname, qualname, unique_name,
                    fndesc.doc, fndesc.typemap, restype, fndesc.calltypes,
                    args, fndesc.kws, argtypes=argtypes, mangler=mangler,
-                   inline=True)
+                   inline=True, env_name=fndesc.env_name)
         return self
 
     @property
@@ -80,6 +83,7 @@ class BaseGeneratorLower(object):
         the passed-by-reference generator structure).
         """
         lower.setup_function(self.fndesc)
+
         builder = lower.builder
 
         # Insert the generator into the target context in order to allow

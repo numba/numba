@@ -583,7 +583,9 @@ class JitEngine(object):
     set_object_cache = _proxy(ll.ExecutionEngine.set_object_cache)
     finalize_object = _proxy(ll.ExecutionEngine.finalize_object)
     get_function_address = _proxy(ll.ExecutionEngine.get_function_address)
-
+    get_global_value_address = _proxy(
+        ll.ExecutionEngine.get_global_value_address
+        )
 
 class BaseCPUCodegen(object):
 
@@ -803,6 +805,15 @@ class JITCPUCodegen(BaseCPUCodegen):
         #      violation with certain test combinations.
         # # Early bind the engine method to avoid keeping a reference to self.
         # return functools.partial(self._engine.remove_module, module)
+
+    def set_env(self, env_name, env):
+        """Set the environment address.
+
+        Update the GlobalVariable named *env_name* to the address of *env*.
+        """
+        gvaddr = self._engine.get_global_value_address(env_name)
+        envptr = (ctypes.c_void_p * 1).from_address(gvaddr)
+        envptr[0] = ctypes.c_void_p(id(env))
 
 
 def initialize_llvm():

@@ -76,20 +76,6 @@ class CPUContext(BaseContext):
     def call_conv(self):
         return callconv.CPUCallConv(self)
 
-    def get_env_from_closure(self, builder, clo):
-        """
-        From the pointer *clo* to a _dynfunc.Closure, get a pointer
-        to the enclosed _dynfunc.Environment.
-        """
-        with cgutils.if_unlikely(builder, cgutils.is_null(builder, clo)):
-            self.debug_print(builder, "Fatal error: missing _dynfunc.Closure")
-            builder.unreachable()
-
-        clo_body_ptr = cgutils.pointer_add(
-            builder, clo, _dynfunc._impl_info['offsetof_closure_body'])
-        clo_body = ClosureBody(self, builder, ref=clo_body_ptr, cast_ref=True)
-        return clo_body.env
-
     def get_env_body(self, builder, envptr):
         """
         From the given *envptr* (a pointer to a _dynfunc.Environment object),
@@ -99,8 +85,10 @@ class CPUContext(BaseContext):
             builder, envptr, _dynfunc._impl_info['offsetof_env_body'])
         return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
 
-    def get_env_manager(self, builder, envarg=None):
-        envarg = envarg or self.call_conv.get_env_argument(builder.function)
+    def get_env_manager(self, builder):
+        envgv = self.declare_env_global(builder.module,
+                                        self.get_env_name(self.fndesc))
+        envarg = builder.load(envgv)
         pyapi = self.get_python_api(builder)
         pyapi.emit_environment_sentry(envarg)
         env_body = self.get_env_body(builder, envarg)
@@ -175,7 +163,7 @@ class CPUContext(BaseContext):
                                        # objects to keepalive with the function
                                        (library,)
                                        )
-
+        library.codegen.set_env(self.get_env_name(fndesc), env)
         return cfunc
 
     def calc_array_sizeof(self, ndim):
