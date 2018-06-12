@@ -292,6 +292,10 @@ class BaseContext(object):
     def declare_env_global(self, module, envname):
         """Declare the Environment pointer as a global of the module.
 
+        The pointer is initialized to NULL.  It must be filled by the runtime
+        with the actual address of the Env before the associated function
+        can be executed.
+
         Parameters
         ----------
         module :

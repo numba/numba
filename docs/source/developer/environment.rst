@@ -11,7 +11,7 @@ In nopython-mode, the Env is used for:
 
 * Storing pyobjects for reconstruction from native values,
   such as:
-  * for printing native values of numpy arrays;
+  * for printing native values of NumPy arrays;
   * for returning or yielding native values back to the interpreter.
 
 In object-mode, the Env is used for:
@@ -50,9 +50,9 @@ global variable is computed from the name of the function
 (see ``FunctionDescriptor.env_name`` and ``.get_env_name()`` of the target
 context).
 
-The Env initialized when the compiled-function is loaded. The JIT engine finds
-the address of the associated global variable for the Env and stores the
+The Env is initialized when the compiled-function is loaded. The JIT engine
+finds the address of the associated global variable for the Env and stores the
 address of the Env into it.  For cached functions, the same process applies.
-For ahead-of-time compiled function, the module initializer in the generated
+For ahead-of-time compiled functions, the module initializer in the generated
 library is responsible for initializing the global variables of all the Envs
 in the module.

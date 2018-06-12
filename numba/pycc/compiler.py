@@ -264,6 +264,10 @@ class _ModuleCompiler(object):
         return gv.gep([ZERO, ZERO])
 
     def _emit_envgvs_array(self, llvm_module, builder, pyapi):
+        """
+        Emit an array of Environment pointers that needs to be filled at
+        initialization.
+        """
         env_setters = []
         for entry in self.export_entries:
             envgv_name = self.environment_gvs[entry]

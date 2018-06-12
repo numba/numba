@@ -16,7 +16,7 @@ from . import debuginfo
 
 
 class Environment(_dynfunc.Environment):
-    """Stores globals and constants pyobjects for runtime.
+    """Stores globals and constant pyobjects for runtime.
 
     It is often needed to convert b/w nopython objects and pyobjects.
     """

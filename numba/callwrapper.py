@@ -182,7 +182,7 @@ class PyCallWrapper(object):
 
     def get_env(self, api, builder):
         """Get the Environment object which is declared as a global
-        is the module of the wrapped function.
+        in the module of the wrapped function.
         """
         envname = self.context.get_env_name(self.fndesc)
         gvptr = self.context.declare_env_global(builder.module, envname)
