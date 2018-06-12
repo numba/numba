@@ -8,7 +8,6 @@ import threading
 import numpy as np
 
 from numba.six import reraise
-from numba.typing.typeof import typeof, Purpose
 from .cudadrv.devicearray import to_device, auto_device
 from .kernelapi import Dim3, FakeCUDAModule, swapped_cuda_module
 from ..errors import normalize_kernel_dimensions
@@ -78,7 +77,7 @@ class FakeCUDAKernel(object):
                         stream=0,
                         retr=retr),
                     self.extensions,
-                    (typeof(arg, Purpose.argument), arg)
+                    (None, arg)
                 )
 
                 if isinstance(arg, np.ndarray) and arg.ndim > 0:
