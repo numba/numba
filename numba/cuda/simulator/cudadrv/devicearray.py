@@ -7,7 +7,7 @@ from warnings import warn
 
 import numpy as np
 
-from numba import six
+from numba import six, types, numpy_support
 
 DeviceRecord = None
 from_record_like = None
@@ -47,6 +47,15 @@ class FakeCUDAArray(object):
     def __init__(self, ary, stream=0):
         self._ary = ary.reshape(1) if ary.ndim == 0 else ary
         self.stream = stream
+
+    @property
+    def _numba_type_(self):
+        """
+        Magic attribute expected by Numba to get the numba type that
+        represents this object.
+        """
+        dtype = numpy_support.from_dtype(self.dtype)
+        return types.Array(dtype, self.ndim, 'A')
 
     @property
     def alloc_size(self):
