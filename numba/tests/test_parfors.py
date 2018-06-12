@@ -1686,9 +1686,10 @@ class TestPrange(TestPrangeBase):
             for line in v.splitlines():
                 # get the fn definition line
                 if 'define' in line and k in line:
-                    # there should only be 3x noalias, one on each of the first
-                    # 3 args (retptr, excinfo, env).
-                    self.assertEqual(line.count('noalias'), 3)
+                    # there should only be 2x noalias, one on each of the first
+                    # 2 args (retptr, excinfo).
+                    # Note: used to be 3x no noalias, but env arg is dropped.
+                    self.assertEqual(line.count('noalias'), 2)
                     break
 
     @skip_unsupported

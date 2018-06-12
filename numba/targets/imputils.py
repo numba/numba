@@ -189,7 +189,7 @@ def user_function(fndesc, libs):
         func = context.declare_function(builder.module, fndesc)
         # env=None assumes this is a nopython function
         status, retval = context.call_conv.call_function(
-            builder, func, fndesc.restype, fndesc.argtypes, args, env=None)
+            builder, func, fndesc.restype, fndesc.argtypes, args)
         with cgutils.if_unlikely(builder, status.is_error):
             context.call_conv.return_status_propagate(builder, status)
         assert sig.return_type == fndesc.restype
@@ -216,7 +216,7 @@ def user_generator(gendesc, libs):
         func = context.declare_function(builder.module, gendesc)
         # env=None assumes this is a nopython function
         status, retval = context.call_conv.call_function(
-            builder, func, gendesc.restype, gendesc.argtypes, args, env=None)
+            builder, func, gendesc.restype, gendesc.argtypes, args)
         # Return raw status for caller to process StopIteration
         return status, retval
 
