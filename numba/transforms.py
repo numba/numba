@@ -113,25 +113,6 @@ def _loop_lift_prepare_loop_func(loopinfo, blocks):
     scope = entry_block.scope
     loc = entry_block.loc
 
-    def make_epilogue():
-        """
-        Make a new block to prepare the return values.
-        This block is the last block of the function.
-        """
-        entry_block = blocks[loopinfo.callfrom]
-        scope = entry_block.scope
-        loc = entry_block.loc
-
-        block = ir.Block(scope=scope, loc=loc)
-        # prepare tuples to return
-        vals = [scope.get_exact(name=name) for name in loopinfo.outputs]
-        tupexpr = ir.Expr.build_tuple(items=vals, loc=loc)
-        tup = scope.make_temp(loc=loc)
-        block.append(ir.Assign(target=tup, value=tupexpr, loc=loc))
-        # return
-        block.append(ir.Return(value=tup, loc=loc))
-        return block
-
     # Lowering assumes the first block to be the one with the smallest offset
     firstblk = min(blocks) - 1
     blocks[firstblk] = ir_utils.fill_callee_prologue(
@@ -323,7 +304,7 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
 
 
 def _get_with_contextmanager(func_ir, blocks, blk_start):
-    """Get the global object used for as the context manager
+    """Get the global object used for the context manager
     """
     for stmt in blocks[blk_start].body:
         if isinstance(stmt, ir.EnterWith):

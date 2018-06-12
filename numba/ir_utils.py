@@ -1714,8 +1714,8 @@ def fill_block_with_call(newblock, callee, label_next, inputs, outputs):
 
 def fill_callee_prologue(block, inputs, label_next):
     """
-    Fill a new block *block* that unwraps argument using names in *inputs* and
-    then jump to *label_next*.
+    Fill a new block *block* that unwraps arguments using names in *inputs* and
+    then jumps to *label_next*.
 
     Expected to use with *fill_block_with_call()*
     """

@@ -732,7 +732,7 @@ class LiftedWith(LiftedCode):
     def get_call_template(self, args, kws):
         """
         Get a typing.ConcreteTemplate for this dispatcher and the given
-        *args* and *kws* types.  This allows to resolve the return type.
+        *args* and *kws* types.  This enables the resolving of the return type.
 
         A (template, pysig, args, kws) tuple is returned.
         """

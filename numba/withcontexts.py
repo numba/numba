@@ -71,7 +71,7 @@ bypass_context = _ByPassContextType()
 
 
 class _CallContextType(WithContext):
-    """A simple context-manager that tells the compiler lift the body of the
+    """A simple context-manager that tells the compiler to lift the body of the
     with-block as another function.
     """
     def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
@@ -108,7 +108,7 @@ call_context = _CallContextType()
 
 def _bypass_with_context(blocks, blk_start, blk_end, forwardvars):
     """Given the starting and ending block of the with-context,
-    replaces a new head block that jumps to the end.
+    replaces the head block with a new block that jumps to the end.
 
     *blocks* is modified inplace.
     """
