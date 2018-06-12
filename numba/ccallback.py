@@ -112,7 +112,7 @@ class CFunc(object):
 
         # XXX no obvious way to freeze an environment
         status, out = context.call_conv.call_function(
-            builder, fn, sig.return_type, sig.args, c_args, env=None)
+            builder, fn, sig.return_type, sig.args, c_args)
 
         with builder.if_then(status.is_error, likely=False):
             # If (and only if) an error occurred, acquire the GIL

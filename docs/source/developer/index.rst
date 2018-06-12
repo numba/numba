@@ -17,3 +17,4 @@ Developer Manual
    listings.rst
    stencil.rst
    custom_pipeline.rst
+   environment.rst

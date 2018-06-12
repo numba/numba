@@ -73,6 +73,9 @@ typedef struct {
     int len;
 } env_def_t;
 
+/* Environment GlobalVariable address type */
+typedef void **env_gv_t;
+
 /*
  * Recreate an environment object from a env_def_t structure.
  */
@@ -115,7 +118,8 @@ recreate_environment(PyObject *module, env_def_t env)
 
 int
 PYCC(pycc_init_) (PyObject *module, PyMethodDef *defs,
-                                    env_def_t *envs)
+                                    env_def_t *envs,
+                                    env_gv_t *envgvs)
 {
     PyMethodDef *fdef;
     PyObject *modname = NULL;
@@ -168,6 +172,9 @@ PYCC(pycc_init_) (PyObject *module, PyMethodDef *defs,
             Py_DECREF(envobj);
             goto error;
         }
+        // Store the environment pointer into the global
+        *envgvs[i] = envobj;
+
         func = pycfunction_new(module, nameobj, docobj,
                                fdef->ml_meth, envobj, NULL);
         Py_DECREF(envobj);
