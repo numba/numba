@@ -378,7 +378,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         print or return annotated source with Numba intermediate IR
 
         Pass `pretty=True` to attempt color highlighting, and HTML rendering in
-        Jupyter and IPython by returning an Annotate Object. Pygments 
+        Jupyter and IPython by returning an Annotate Object. `file` must be
+        None if used in conjunction with `pretty=True`.
         """
         pretty = kwargs.get('pretty', False)
         style = kwargs.get('style', 'default')
@@ -393,6 +394,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 print(res.type_annotation, file=file)
                 print('=' * 80, file=file)
         else:
+            if file is not None:
+                raise ValueError("`file` must be None if `pretty=True`")
             from .pretty_annotate import Annotate
             return Annotate(self, style=style)
 

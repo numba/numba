@@ -1,5 +1,5 @@
 """
-This module implement code highlighting of numba annotated function annotation.
+This module implements code highlighting of numba function annotations.
 
 Example:
 
@@ -15,7 +15,7 @@ Example:
     ... test(10)
     ... Annotate(test)
 
-The last line will return an Html and/or Ansi representation that will be
+The last line will return an HTML and/or ANSI representation that will be
 displayed accordingly in IPython/Jupyter. 
 
 """
@@ -211,9 +211,9 @@ html_template = Template("""
 
 def reform_code(annotation):
     """
-    Extract the code from the numba annotation datastructure. 
-    
-    Pygments can only highlight full multiline string, the numba
+    Extract the code from the Numba annotation datastructure. 
+
+    Pygments can only highlight full multi-line strings, the Numba
     annotation is list of single lines, with indentation removed.
     """
     ident_dict = annotation['python_indent']
@@ -241,12 +241,9 @@ class Annotate:
     ... test(10)
     ... Annotate(test)
 
-    Known issues:
-    
-    Function annotation seem to persist across multiple function re-definition. 
+    Function annotations persist across compilation for newly encountered
+    type signatures and as a result annotations are shown for all signatures.
 
-    It is not yet possible to show annotation only for a single signature.
-    
     """
     def __init__(self, function, **kwargs):
 
@@ -256,15 +253,14 @@ class Annotate:
         for sig in function.signatures:
             ann = function.get_annotation_info(sig)
         self.ann = ann
-        
-        
+
         for k,v in ann.items():
             res = hllines(reform_code(v), style)
             rest = htlines(reform_code(v), style)
             v['pygments_lines'] = [(a,b,c, d) for (a,b),c, d in zip(v['python_lines'], res, rest)]
-        
+
     def _repr_html_(self):
         return html_template.render(func_data=self.ann)
-    
+
     def __repr__(self):
         return ansi_template.render(func_data=self.ann)

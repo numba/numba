@@ -108,7 +108,8 @@ class TestAnnotation(unittest.TestCase):
         sigfmt = "with signature: {} -&gt; pyobject"
         self.assertEqual(output.count(sigfmt.format(sig_i64)), 1)
         # Ensure the loop is tagged
-        self.assertEqual(len(re.findall(re_lifted_tag, output)), 1, msg='%s not found in %s' % (re_lifted_tag, output))
+        self.assertEqual(len(re.findall(re_lifted_tag, output)), 1,
+                         msg='%s not found in %s' % (re_lifted_tag, output))
 
         # Compile float64 version
         sig_f64 = (types.float64,)
@@ -127,6 +128,21 @@ class TestAnnotation(unittest.TestCase):
         self.assertEqual(output.count(sigfmt.format(sig_f64)), 1)
         # Ensure the loop is tagged in both output
         self.assertEqual(len(re.findall(re_lifted_tag, output)), 2)
+
+    def test_pretty_print(self):
+
+        @numba.njit
+        def foo(x, y):
+            return x, y
+
+        foo(1, 2)
+        # Exercise the method
+        obj = foo.inspect_types(pretty=True)
+
+        # Excerise but supply a not None file kwarg, this is invalid
+        with self.assertRaises(ValueError) as raises:
+            obj = foo.inspect_types(pretty=True, file='should be None')
+        self.assertIn('`file` must be None if `pretty=True`', str(raises.exception))
 
 
 class TestTypeAnnotation(unittest.TestCase):
