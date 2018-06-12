@@ -599,6 +599,16 @@ def setitem_list(context, builder, sig, args):
     return context.get_dummy_value()
 
 
+
+@lower_builtin('delitem', types.List, types.Integer)
+def delitem_list_index(context, builder, sig, args):
+
+    def list_delitem_impl(lst, i):
+        lst.pop(i)
+
+    return context.compile_internal(builder, list_delitem_impl, sig, args)
+
+
 @lower_builtin('delitem', types.List, types.SliceType)
 def delitem_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])

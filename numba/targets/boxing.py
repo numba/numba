@@ -702,6 +702,10 @@ def reflect_list(typ, val, c):
     """
     if not typ.reflected:
         return
+    if typ.dtype.reflected:
+        msg = "cannot reflect element of reflected container: {}\n".format(typ)
+        raise TypeError(msg)
+
     list = listobj.ListInstance(c.context, c.builder, typ, val)
     with c.builder.if_then(list.dirty, likely=False):
         obj = list.parent

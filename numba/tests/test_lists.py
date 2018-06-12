@@ -1051,30 +1051,44 @@ class TestListManagedElements(MemoryLeakMixin, TestCase):
 
         self.assertEqual(expect, got)
 
-    def test_list_of_list_reflected(self):
-        def pyfunc(l1, l2):
-            l1.append(l2)
-            l1[-1].append(123)
 
+
+def expect_reflection_failure(fn):
+    def wrapped(self, *args, **kwargs):
+        self.disable_leak_check()
+        with self.assertRaises(TypeError) as raises:
+            fn(self, *args, **kwargs)
+        expect_msg = 'cannot reflect element of reflected container'
+        self.assertIn(expect_msg, str(raises.exception))
+
+    return wrapped
+
+
+class TestListOfList(MemoryLeakMixin, TestCase):
+
+    def assert_list_element_precise_equal(self, expect, got):
+        self.assertEqual(len(expect), len(got))
+        for a, b in zip(expect, got):
+            self.assertPreciseEqual(a, b)
+
+    def compile_and_test(self, pyfunc, *args):
+        from copy import deepcopy
+        expect_args = deepcopy(args)
+        expect = pyfunc(*expect_args)
+
+        njit_args = deepcopy(args)
         cfunc = jit(nopython=True)(pyfunc)
-        l1 = [[0, 1], [2, 3]]
-        l2 = [4, 5]
-        expect = list(l1), list(l2)
-        got = list(l1), list(l2)
-        pyfunc(*expect)
-        cfunc(*got)
-        self.assertEqual(expect, got)
+        got = cfunc(*njit_args)
 
-    def test_heterogenous_list(self):
-        def pyfunc(x):
-            return x[1]
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
+        # Check reflection
+        self.assert_list_element_precise_equal(
+            expect=expect_args, got=njit_args
+            )
 
-        l1 = [[np.zeros(i) for i in range(5)], [np.ones(i) for i in range(5)]]
-
-        cfunc = jit(nopython=True)(pyfunc)
-        l1_got = cfunc(l1)
-        self.assertPreciseEqual(pyfunc(l1), l1_got)
-
+    @expect_reflection_failure
     def test_heterogeneous_list_error(self):
         def pyfunc(x):
             return x[1]
@@ -1085,6 +1099,10 @@ class TestListManagedElements(MemoryLeakMixin, TestCase):
         l3 = [[np.zeros(i) for i in range(5)], [(1,)]]
         l4 = [[1], [{1}]]
         l5 = [[1], [{'a': 1}]]
+
+        # TODO: this triggers a reflection error.
+        # Remove this line when nested reflection is supported
+        cfunc(l2)
 
         # error_cases
         with self.assertRaises(TypeError) as raises:
@@ -1119,28 +1137,42 @@ class TestListManagedElements(MemoryLeakMixin, TestCase):
             str(raises.exception)
             )
 
-    def compile_and_test(self, pyfunc, *args):
-        from copy import deepcopy
-        expect_args = deepcopy(args)
-        expect = pyfunc(*expect_args)
+    @expect_reflection_failure
+    def test_list_of_list_reflected(self):
+        def pyfunc(l1, l2):
+            l1.append(l2)
+            l1[-1].append(123)
 
-        njit_args = deepcopy(args)
         cfunc = jit(nopython=True)(pyfunc)
-        got = cfunc(*njit_args)
+        l1 = [[0, 1], [2, 3]]
+        l2 = [4, 5]
+        expect = list(l1), list(l2)
+        got = list(l1), list(l2)
+        pyfunc(*expect)
+        cfunc(*got)
+        self.assertEqual(expect, got)
 
-        self.assert_list_element_precise_equal(
-            expect=expect, got=got
-            )
-        # Check reflection
-        # self.assert_list_element_precise_equal(
-        #     expect=expect_args, got=njit_args
-        #     )
+    @expect_reflection_failure
+    def test_heterogenous_list(self):
+        def pyfunc(x):
+            return x[1]
 
+        l1 = [[np.zeros(i) for i in range(5)], [np.ones(i) for i in range(5)]]
+
+        cfunc = jit(nopython=True)(pyfunc)
+        l1_got = cfunc(l1)
+        self.assertPreciseEqual(pyfunc(l1), l1_got)
+
+    @expect_reflection_failure
     def test_c01(self):
         def bar(x):
             return x.pop()
 
         r = [[np.zeros(0)], [np.zeros(10)*1j]]
+        # TODO: this triggers a reflection error.
+        # Remove this line when nested reflection is supported
+        self.compile_and_test(bar, r)
+
         with self.assertRaises(TypeError) as raises:
             self.compile_and_test(bar, r)
         self.assertIn(
@@ -1198,9 +1230,8 @@ class TestListManagedElements(MemoryLeakMixin, TestCase):
             str(raises.exception),
             )
 
-    @unittest.expectedFailure
+    @expect_reflection_failure
     def test_c05(self):
-        raise AssertionError("XXX: nested reflection error")
         def bar(x):
             f = x
             f[0][0] = np.array([x for x in np.arange(10)])
@@ -1220,6 +1251,7 @@ class TestListManagedElements(MemoryLeakMixin, TestCase):
             self.compile_and_test(bar, r)
         self.assertIn("invalid setitem with value", str(raises.exception))
 
+    @expect_reflection_failure
     def test_c07(self):
         self.disable_leak_check()
 
@@ -1255,7 +1287,7 @@ class TestListManagedElements(MemoryLeakMixin, TestCase):
             self.compile_and_test(bar, r)
         self.assertIn("invalid setitem with value", str(raises.exception))
 
-    # This causes a `PyFatal`:
+    @expect_reflection_failure
     def test_c10(self):
         def bar(x):
             x[0], x[1] = x[1], x[0]
@@ -1264,23 +1296,22 @@ class TestListManagedElements(MemoryLeakMixin, TestCase):
         r = [[1, 2, 3], [4, 5, 6]]
         self.compile_and_test(bar, r)
 
-    # # This also causes a `PyFatal`, assume it is the same problem as above:
-    # def test_c11(self):
-    #     def bar(x):
-    #         x[:] = x[::-1]
-    #         return x
+    @expect_reflection_failure
+    def test_c11(self):
+        def bar(x):
+            x[:] = x[::-1]
+            return x
 
-    #     r = [[1, 2, 3], [4, 5, 6]]
-    #     self.compile_and_test(bar, r)
+        r = [[1, 2, 3], [4, 5, 6]]
+        self.compile_and_test(bar, r)
 
-    # # This causes a lowering error:
-    # def test_c12(self):
-    #     def bar(x):
-    #         del x[-1]
-    #         return x
+    def test_c12(self):
+        def bar(x):
+            del x[-1]
+            return x
 
-    #     r = [x for x in range(10)]
-    #     self.compile_and_test(bar, r)
+        r = [x for x in range(10)]
+        self.compile_and_test(bar, r)
 
 
 if __name__ == '__main__':
