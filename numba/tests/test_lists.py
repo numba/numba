@@ -8,7 +8,7 @@ import sys
 import numpy as np
 
 from numba.compiler import compile_isolated, Flags
-from numba import jit, types, utils, typeof
+from numba import jit, types, utils, typeof, jitclass
 import numba.unittest_support as unittest
 from numba import testing, errors
 from .support import TestCase, MemoryLeakMixin, tag
@@ -867,13 +867,16 @@ class TestListReflection(MemoryLeakMixin, TestCase):
         self.assertEqual([id(x) for x in l], ids)
 
 
-class TestListManagedElements(MemoryLeakMixin, TestCase):
-    "Test list containing objects that need refct"
+class ManagedListTestCase(MemoryLeakMixin, TestCase):
 
     def assert_list_element_precise_equal(self, expect, got):
         self.assertEqual(len(expect), len(got))
         for a, b in zip(expect, got):
             self.assertPreciseEqual(a, b)
+
+
+class TestListManagedElements(ManagedListTestCase):
+    "Test list containing objects that need refct"
 
     def _check_element_equal(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
@@ -1064,12 +1067,7 @@ def expect_reflection_failure(fn):
     return wrapped
 
 
-class TestListOfList(MemoryLeakMixin, TestCase):
-
-    def assert_list_element_precise_equal(self, expect, got):
-        self.assertEqual(len(expect), len(got))
-        for a, b in zip(expect, got):
-            self.assertPreciseEqual(a, b)
+class TestListOfList(ManagedListTestCase):
 
     def compile_and_test(self, pyfunc, *args):
         from copy import deepcopy
@@ -1087,6 +1085,13 @@ class TestListOfList(MemoryLeakMixin, TestCase):
         self.assert_list_element_precise_equal(
             expect=expect_args, got=njit_args
             )
+
+    def test_returning_list_of_list(self):
+        def pyfunc():
+            a = [[np.arange(i)] for i in range(4)]
+            return a
+
+        self.compile_and_test(pyfunc)
 
     @expect_reflection_failure
     def test_heterogeneous_list_error(self):
@@ -1312,6 +1317,77 @@ class TestListOfList(MemoryLeakMixin, TestCase):
 
         r = [x for x in range(10)]
         self.compile_and_test(bar, r)
+
+
+class Item(object):
+    def __init__(self, many, scalar):
+        self.many = many
+        self.scalar = scalar
+
+
+class Container(object):
+    def __init__(self, n):
+        self.data = [[np.arange(i).astype(np.float64)] for i in range(n)]
+
+    def more(self, n):
+        for i in range(n):
+            self.data.append([np.arange(i).astype(np.float64)])
+
+
+class TestListAndJitClasses(ManagedListTestCase):
+    def make_jitclass_element(self):
+        spec = [
+            ('many', types.float64[:]),
+            ('scalar', types.float64),
+        ]
+        JCItem = jitclass(spec)(Item)
+        return JCItem
+
+    def make_jitclass_container(self):
+        spec = {
+            'data': types.List(dtype=types.List(types.float64[::1])),
+        }
+        JCContainer = jitclass(spec)(Container)
+        return JCContainer
+
+    def assert_list_element_with_tester(self, tester, expect, got):
+        for x, y in zip(expect, got):
+            tester(x, y)
+
+    def test_jitclass_instance_elements(self):
+        JCItem = self.make_jitclass_element()
+
+        def pyfunc(xs):
+            xs[1], xs[0] = xs[0], xs[1]
+            return xs
+
+        def eq(x, y):
+            self.assertPreciseEqual(x.many, y.many)
+            self.assertPreciseEqual(x.scalar, y.scalar)
+
+        cfunc = jit(nopython=True)(pyfunc)
+
+        arg = [JCItem(many=np.random.random(n + 1), scalar=n * 1.2)
+               for n in range(5)]
+
+        expect_arg = list(arg)
+        got_arg = list(arg)
+
+        expect_res = pyfunc(expect_arg)
+        got_res = cfunc(got_arg)
+
+        self.assert_list_element_with_tester(eq, expect_arg, got_arg)
+        self.assert_list_element_with_tester(eq, expect_res, got_res)
+
+    def test_jitclass_containing_list(self):
+        JCContainer = self.make_jitclass_container()
+
+        expect = Container(n=4)
+        got = JCContainer(n=4)
+        self.assert_list_element_precise_equal(got.data, expect.data)
+        expect.more(3)
+        got.more(3)
+        self.assert_list_element_precise_equal(got.data, expect.data)
 
 
 if __name__ == '__main__':
