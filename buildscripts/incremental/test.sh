@@ -19,6 +19,8 @@ export NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING=1
 # switch on developer mode
 export NUMBA_DEVELOPER_MODE=1
 
+export PYTHONFAULTHANDLER=1
+
 # First check that the test discovery works
 python -m numba.tests.test_runtests
 # Now run the Numba test suite
