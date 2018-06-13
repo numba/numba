@@ -64,9 +64,6 @@ def array_T(arr):
 def array_transpose(arr):
     return arr.transpose()
 
-def array_transpose_axes(arr, axes):
-    return arr.transpose(axes)
-
 def array_copy(arr):
     return arr.copy()
 
@@ -173,12 +170,25 @@ def array_cumsum(a, *args):
 def array_cumsum_kws(a, axis):
     return a.cumsum(axis=axis)
 
+
 def array_real(a):
     return np.real(a)
 
 
 def array_imag(a):
     return np.imag(a)
+
+
+def np_unique(a):
+    return np.unique(a)
+
+
+def array_dot(a, b):
+    return a.dot(b)
+
+
+def array_dot_chain(a, b):
+    return a.dot(b).dot(b)
 
 
 class TestArrayMethods(MemoryLeakMixin, TestCase):
@@ -466,68 +476,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         arr = np.array([0]).reshape(())
         check_arr(arr)
 
-    def test_array_transpose_axes(self):
-        pyfunc = array_transpose_axes
-        def run(arr, axes):
-            cres = self.ccache.compile(pyfunc, (typeof(arr), typeof(axes)))
-            return cres.entry_point(arr, axes)
-        def check(arr, axes):
-            expected = pyfunc(arr, axes)
-            got = run(arr, axes)
-            self.assertPreciseEqual(got, expected)
-            self.assertEqual(got.flags.f_contiguous,
-                             expected.flags.f_contiguous)
-            self.assertEqual(got.flags.c_contiguous,
-                             expected.flags.c_contiguous)
-        def check_err_axis_repeated(arr, axes):
-            with self.assertRaises(ValueError) as raises:
-                run(arr, axes)
-            self.assertEqual(str(raises.exception),
-                             "repeated axis in transpose")
-        def check_err_axis_oob(arr, axes):
-            with self.assertRaises(ValueError) as raises:
-                run(arr, axes)
-            self.assertEqual(str(raises.exception),
-                             "axis is out of bounds for array of given dimension")
-        def check_err_invalid_args(arr, axes):
-            with self.assertRaises((TypeError, TypingError)):
-                run(arr, axes)
-
-        arrs = [np.arange(24),
-                np.arange(24).reshape(4, 6),
-                np.arange(24).reshape(2, 3, 4),
-                np.arange(24).reshape(1, 2, 3, 4),
-                np.arange(64).reshape(8, 4, 2)[::3,::2,:]]
-
-        for i in range(len(arrs)):
-            for axes in permutations(tuple(range(arrs[i].ndim))):
-                ndim = len(axes)
-                neg_axes = tuple([x - ndim for x in axes])
-                check(arrs[i], axes)
-                check(arrs[i], neg_axes)
-
-        # Exceptions leak references
-        self.disable_leak_check()
-
-        check_err_invalid_args(arrs[1], "foo")
-        check_err_invalid_args(arrs[1], ("foo",))
-        check_err_invalid_args(arrs[1], 5.3)
-        check_err_invalid_args(arrs[2], (1.2, 5))
-
-        check_err_axis_repeated(arrs[1], (0,0))
-        check_err_axis_repeated(arrs[2], (2,0,0))
-        check_err_axis_repeated(arrs[3], (3,2,1,1))
-
-        check_err_axis_oob(arrs[0], (1,))
-        check_err_axis_oob(arrs[0], (-2,))
-        check_err_axis_oob(arrs[1], (0,2))
-        check_err_axis_oob(arrs[1], (-3,2))
-        check_err_axis_oob(arrs[1], (0,-3))
-        check_err_axis_oob(arrs[2], (3,1,2))
-        check_err_axis_oob(arrs[2], (-4,1,2))
-        check_err_axis_oob(arrs[3], (3,1,2,5))
-        check_err_axis_oob(arrs[3], (3,1,2,-5))
-
 
     def test_array_transpose(self):
         self.check_layout_dependent_func(array_transpose)
@@ -805,7 +753,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError):
             cfunc(a, axis=1)
 
-
     def test_take(self):
         pyfunc = array_take
         cfunc = jit(nopython=True)(pyfunc)
@@ -871,7 +818,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         #exceptions leak refs
         self.disable_leak_check()
 
-
     def test_fill(self):
         pyfunc = array_fill
         cfunc = jit(nopython=True)(pyfunc)
@@ -921,6 +867,33 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         x, y = np.meshgrid(x, x)
         z = x + 1j*y
         np.testing.assert_equal(pyfunc(z), cfunc(z))
+
+    def test_unique(self):
+        pyfunc = np_unique
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a):
+            np.testing.assert_equal(pyfunc(a), cfunc(a))
+
+        check(np.array([[1, 1, 3], [3, 4, 5]]))
+        check(np.array(np.zeros(5)))
+        check(np.array([[3.1, 3.1], [1.7, 2.29], [3.3, 1.7]]))
+        check(np.array([]))
+
+    def test_array_dot(self):
+        # just ensure that the dot impl dispatches correctly, do
+        # not test dot itself, this is done in test_linalg.
+        pyfunc = array_dot
+        cfunc = jit(nopython=True)(pyfunc)
+        a = np.arange(20.).reshape(4, 5)
+        b = np.arange(5.)
+        np.testing.assert_equal(pyfunc(a, b), cfunc(a, b))
+
+        # check that chaining works
+        pyfunc = array_dot_chain
+        cfunc = jit(nopython=True)(pyfunc)
+        a = np.arange(16.).reshape(4, 4)
+        np.testing.assert_equal(pyfunc(a, a), cfunc(a, a))
 
 
 class TestArrayComparisons(TestCase):

@@ -17,7 +17,7 @@ from numba import sigutils, serialize, typing
 from numba.typing.templates import fold_arguments
 from numba.typing.typeof import Purpose, typeof, typeof_impl
 from numba.bytecode import get_code_object
-from numba.six import create_bound_method, next
+from numba.six import create_bound_method, next, reraise
 from .caching import NullCache, FunctionCache
 
 
@@ -39,12 +39,14 @@ class OmittedArg(object):
 
 class _FunctionCompiler(object):
 
-    def __init__(self, py_func, targetdescr, targetoptions, locals):
+    def __init__(self, py_func, targetdescr, targetoptions, locals,
+                 pipeline_class):
         self.py_func = py_func
         self.targetdescr = targetdescr
         self.targetoptions = targetoptions
         self.locals = locals
         self.pysig = utils.pysignature(self.py_func)
+        self.pipeline_class = pipeline_class
 
     def fold_argument_types(self, args, kws):
         """
@@ -77,7 +79,8 @@ class _FunctionCompiler(object):
                                       self.targetdescr.target_context,
                                       impl,
                                       args=args, return_type=return_type,
-                                      flags=flags, locals=self.locals)
+                                      flags=flags, locals=self.locals,
+                                      pipeline_class=self.pipeline_class)
         # Check typing error if object mode is used
         if cres.typing_error is not None and not flags.enable_pyobject:
             raise cres.typing_error
@@ -95,9 +98,10 @@ class _FunctionCompiler(object):
 
 class _GeneratedFunctionCompiler(_FunctionCompiler):
 
-    def __init__(self, py_func, targetdescr, targetoptions, locals):
+    def __init__(self, py_func, targetdescr, targetoptions, locals,
+                 pipeline_class):
         super(_GeneratedFunctionCompiler, self).__init__(
-            py_func, targetdescr, targetoptions, locals)
+            py_func, targetdescr, targetoptions, locals, pipeline_class)
         self.impls = set()
 
     def get_globals_for_reduction(self):
@@ -297,6 +301,20 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         for the given *args* and *kws*, and return the resulting callable.
         """
         assert not kws
+
+        def error_rewrite(e, issue_type):
+            """
+            Rewrite and raise Exception `e` with help supplied based on the
+            specified issue_type.
+            """
+            if config.SHOW_HELP:
+                help_msg = errors.error_extras[issue_type]
+                e.patch_message(''.join(e.args) + help_msg)
+            if config.FULL_TRACEBACKS:
+                raise e
+            else:
+                reraise(type(e), e, None)
+
         argtypes = []
         for a in args:
             if isinstance(a, OmittedArg):
@@ -327,6 +345,26 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                     % "\n".join("- argument %d: %s" % (i, err)
                                 for i, err in failed_args))
                 e.patch_message(msg)
+
+            error_rewrite(e, 'typing')
+        except errors.UnsupportedError as e:
+            # Something unsupported is present in the user code, add help info
+            error_rewrite(e, 'unsupported_error')
+        except (errors.NotDefinedError, errors.RedefinedError,
+                errors.VerificationError) as e:
+            # These errors are probably from an issue with either the code supplied
+            # being syntactically or otherwise invalid
+            error_rewrite(e, 'interpreter')
+        except errors.ConstantInferenceError as e:
+            # this is from trying to infer something as constant when it isn't
+            # or isn't supported as a constant
+            error_rewrite(e, 'constant_inference')
+        except Exception as e:
+            if config.SHOW_HELP:
+                if hasattr(e, 'patch_message'):
+                    help_msg = errors.error_extras['reportable']
+                    e.patch_message(''.join(e.args) + help_msg)
+            # ignore the FULL_TRACEBACKS config, this needs reporting!
             raise e
 
     def inspect_llvm(self, signature=None):
@@ -452,7 +490,8 @@ class Dispatcher(_DispatcherBase):
     __uuid = None
     __numba__ = 'py_func'
 
-    def __init__(self, py_func, locals={}, targetoptions={}, impl_kind='direct'):
+    def __init__(self, py_func, locals={}, targetoptions={},
+                 impl_kind='direct', pipeline_class=compiler.Pipeline):
         """
         Parameters
         ----------
@@ -462,6 +501,10 @@ class Dispatcher(_DispatcherBase):
             the types deduced by the type inference engine.
         targetoptions: dict, optional
             Target-specific config options.
+        impl_kind: str
+            Select the compiler mode for `@jit` and `@generated_jit`
+        pipeline_class: type numba.compiler.BasePipeline
+            The compiler pipeline type.
         """
         self.typingctx = self.targetdescr.typing_context
         self.targetctx = self.targetdescr.target_context
@@ -479,12 +522,16 @@ class Dispatcher(_DispatcherBase):
         compiler_class = self._impl_kinds[impl_kind]
         self._impl_kind = impl_kind
         self._compiler = compiler_class(py_func, self.targetdescr,
-                                        targetoptions, locals)
+                                        targetoptions, locals, pipeline_class)
         self._cache_hits = collections.Counter()
         self._cache_misses = collections.Counter()
 
         self._type = types.Dispatcher(self)
         self.typingctx.insert_global(self, self._type)
+
+    @property
+    def _numba_type_(self):
+        return types.Dispatcher(self)
 
     def enable_caching(self):
         self._cache = FunctionCache(self.py_func)

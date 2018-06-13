@@ -981,8 +981,30 @@ def box_deferred(typ, val, c):
 
 @unbox(types.DeferredType)
 def unbox_deferred(typ, obj, c):
-    native_value= c.pyapi.to_native_value(typ.get(), obj)
+    native_value = c.pyapi.to_native_value(typ.get(), obj)
     model = c.context.data_model_manager[typ]
     res = model.set(c.builder, model.make_uninitialized(), native_value.value)
     return NativeValue(res, is_error=native_value.is_error,
                        cleanup=native_value.cleanup)
+
+
+@unbox(types.Dispatcher)
+def unbox_dispatcher(typ, obj, c):
+    # A dispatcher object has no meaningful value in native code
+    res = c.context.get_constant_undef(typ)
+    return NativeValue(res)
+
+
+def unbox_unsupported(typ, obj, c):
+    c.pyapi.err_set_string("PyExc_TypeError",
+                           "can't unbox {!r} type".format(typ))
+    res = c.pyapi.get_null_object()
+    return NativeValue(res, is_error=cgutils.true_bit)
+
+
+def box_unsupported(typ, val, c):
+    msg = "cannot convert native %s to Python object" % (typ,)
+    c.pyapi.err_set_string("PyExc_TypeError", msg)
+    res = c.pyapi.get_null_object()
+    return res
+

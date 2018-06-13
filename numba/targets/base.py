@@ -218,6 +218,9 @@ class BaseContext(object):
     # python exceution environment
     environment = None
 
+    # the function descriptor
+    fndesc = None
+
     def __init__(self, typing_context):
         _load_global_helpers()
 
@@ -277,6 +280,35 @@ class BaseContext(object):
         Perform name mangling.
         """
         return funcdesc.default_mangler(name, types)
+
+    def get_env_name(self, fndesc):
+        """Get the environment name given a FunctionDescriptior.
+
+        Use this instead of the ``fndesc.env_name`` so that the target-context
+        can provide necessary mangling of the symbol to meet ABI requirements.
+        """
+        return fndesc.env_name
+
+    def declare_env_global(self, module, envname):
+        """Declare the Environment pointer as a global of the module.
+
+        The pointer is initialized to NULL.  It must be filled by the runtime
+        with the actual address of the Env before the associated function
+        can be executed.
+
+        Parameters
+        ----------
+        module :
+            The LLVM Module
+        envname : str
+            The name of the global variable.
+        """
+        if envname not in module.globals:
+            gv = llvmir.GlobalVariable(module, cgutils.voidptr_t, name=envname)
+            gv.linkage = 'common'
+            gv.initializer = cgutils.get_null_value(gv.type.pointee)
+
+        return module.globals[envname]
 
     def get_arg_packer(self, fe_args):
         return datamodel.ArgPacker(self.data_model_manager, fe_args)
@@ -454,7 +486,7 @@ class BaseContext(object):
             impl = self._get_constants.find((ty,))
             return impl(self, builder, ty, val)
         except NotImplementedError:
-            raise NotImplementedError("cannot lower constant of type '%s'" % (ty,))
+            raise NotImplementedError("Cannot lower constant of type '%s'" % (ty,))
 
     def get_constant(self, ty, val):
         """
@@ -810,6 +842,8 @@ class BaseContext(object):
 
         with cgutils.if_unlikely(builder, status.is_error):
             self.call_conv.return_status_propagate(builder, status)
+
+        res = imputils.fix_returning_optional(self, builder, sig, status, res)
         return res
 
     def call_unresolved(self, builder, name, sig, args):
@@ -852,6 +886,8 @@ class BaseContext(object):
                                                    sig.args, args)
         with cgutils.if_unlikely(builder, status.is_error):
             self.call_conv.return_status_propagate(builder, status)
+
+        res = imputils.fix_returning_optional(self, builder, sig, status, res)
         return res
 
     def get_executable(self, func, fndesc):

@@ -1147,7 +1147,8 @@ class GeneratorModel(CompositeModel):
 class ArrayCTypesModel(StructModel):
     def __init__(self, dmm, fe_type):
         # ndim = fe_type.ndim
-        members = [('data', types.CPointer(fe_type.dtype))]
+        members = [('data', types.CPointer(fe_type.dtype)),
+                   ('meminfo', types.MemInfoPointer(fe_type.dtype))]
         super(ArrayCTypesModel, self).__init__(dmm, fe_type, members)
 
 

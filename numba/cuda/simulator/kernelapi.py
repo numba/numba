@@ -196,6 +196,23 @@ class FakeCUDAModule(object):
         # No-op
         pass
 
+    def popc(self, val):
+        return bin(val).count("1")
+
+    def brev(self, val):
+        return int('{:032b}'.format(val)[::-1], 2)
+
+    def clz(self, val):
+        s = '{:032b}'.format(val)
+        return len(s) - len(s.lstrip('0'))
+
+    def ffs(self, val):
+        s = '{:032b}'.format(val)
+        return len(s) - len(s.rstrip('0'))
+
+    def selp(self, a, b, c):
+        return b if a else c
+
     def grid(self, n):
         bdim = self.blockDim
         bid = self.blockIdx

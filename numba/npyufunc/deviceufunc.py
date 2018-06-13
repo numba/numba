@@ -97,7 +97,7 @@ class UFuncMechanism(object):
             if isinstance(arg, np.ndarray):
                 self.arrays[i] = arg
             elif self.is_device_array(arg):
-                self.arrays[i] = arg
+                self.arrays[i] = self.as_device_array(arg)
             elif isinstance(arg, (int, longint, float, complex, np.number)):
                 # Is scalar
                 self.scalarpos.append(i)
@@ -218,6 +218,14 @@ class UFuncMechanism(object):
         """
         return False
 
+    def as_device_array(self, obj):
+        """Convert the `obj` to a device array
+        Override in subclass
+
+        Default implementation is an identity function
+        """
+        return obj
+
     def broadcast_device(self, ary, shape):
         """Handles ondevice broadcasting
 
@@ -249,6 +257,10 @@ class UFuncMechanism(object):
         resty, func = cr.get_function()
 
         outshape = args[0].shape
+
+        # Adjust output value
+        if out is not None and cr.is_device_array(out):
+            out = cr.as_device_array(out)
 
         def attempt_ravel(a):
             if cr.SUPPORT_DEVICE_SLICING:
@@ -498,7 +510,7 @@ def expand_gufunc_template(template, indims, outdims, funcname, argtypes):
               for aref, adims, atype in zip(argnames, indims, argtypes)]
     outputs = [_gen_src_for_indexing(aref, adims, atype)
                for aref, adims, atype in zip(argnames[len(indims):], outdims,
-                                             argtypes)]
+                                             argtypes[len(indims):])]
     argitems = inputs + outputs
     src = template.format(name=funcname, args=', '.join(argnames),
                           checkedarg=checkedarg,
@@ -735,15 +747,21 @@ class GUFuncCallSteps(object):
         self.args = args
         self.kwargs = kwargs
 
+        user_output_is_device = False
         self.output = self.kwargs.get('out')
+        if self.output is not None:
+            user_output_is_device = self.is_device_array(self.output)
+            if user_output_is_device:
+                self.output = self.as_device_array(self.output)
         self._is_device_array = [self.is_device_array(a) for a in self.args]
-        self._need_device_conversion = not any(self._is_device_array)
+        self._need_device_conversion = (not any(self._is_device_array) and
+                                        not user_output_is_device)
 
         # Normalize inputs
         inputs = []
         for a, isdev in zip(self.args, self._is_device_array):
             if isdev:
-                inputs.append(a)
+                inputs.append(self.as_device_array(a))
             else:
                 inputs.append(np.asarray(a))
         self.norm_inputs = inputs[:nin]
@@ -809,6 +827,9 @@ class GUFuncCallSteps(object):
 
     def is_device_array(self, obj):
         raise NotImplementedError
+
+    def as_device_array(self, obj):
+        return obj
 
     def to_device(self, hostary):
         raise NotImplementedError

@@ -8,7 +8,10 @@ import sys
 import numpy as np
 
 from numba import numpy_support, types, utils, smartarray
+from numba import ir, errors
 
+# terminal color markup
+_termcolor = errors.termcolor()
 
 class Purpose(enum.Enum):
     # Value being typed is used as an argument
@@ -27,7 +30,8 @@ def typeof(val, purpose=Purpose.argument):
     c = _TypeofContext(purpose)
     ty = typeof_impl(val, c)
     if ty is None:
-        msg = "cannot determine Numba type of %r" % (type(val),)
+        msg = _termcolor.errmsg(
+            "cannot determine Numba type of %r") % (type(val),)
         raise ValueError(msg)
     return ty
 

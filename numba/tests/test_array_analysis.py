@@ -4,6 +4,7 @@ import itertools
 
 import numpy as np
 import sys
+from collections import namedtuple
 
 from numba import unittest_support as unittest
 from numba import njit, typeof, types, typing, typeof, ir, utils, bytecode
@@ -135,7 +136,7 @@ class TestArrayAnalysis(TestCase):
     def compare_ir(self, ir_list):
         outputs = []
         for func_ir in ir_list:
-            remove_dead(func_ir.blocks, func_ir.arg_names)
+            remove_dead(func_ir.blocks, func_ir.arg_names, func_ir)
             output = utils.StringIO()
             func_ir.dump(file=output)
             outputs.append(output.getvalue())
@@ -325,6 +326,13 @@ class TestArrayAnalysis(TestCase):
         self._compile_and_test(test_10, (types.intp,types.intp,),
                                asserts=[self.with_assert('A', 'B'),
                                         self.without_assert('C', 'D')])
+
+        T = namedtuple("T", ['a','b'])
+        def test_namedtuple(n):
+            r = T(n, n)
+            return r[0]
+        self._compile_and_test(test_namedtuple, (types.intp,),
+                                equivs=[self.with_equiv('r', ('n', 'n'))],)
 
         def test_shape(A):
             (m, n) = A.shape
@@ -597,14 +605,37 @@ class TestArrayAnalysis(TestCase):
                                equivs=[self.with_equiv('b', ('n', 'n'))],
                                asserts=[self.without_shapecall('b')])
 
+
         def test_transpose(m, n):
             a = np.ones((m, n))
             b = a.T
+            c = a.transpose()
             # Numba njit cannot compile explicit transpose call!
             # c = np.transpose(b)
         self._compile_and_test(test_transpose, (types.intp, types.intp),
                                equivs=[self.with_equiv('a', ('m', 'n')),
-                                       self.with_equiv('b', ('n', 'm'))])
+                                       self.with_equiv('b', ('n', 'm')),
+                                       self.with_equiv('c', ('n', 'm'))])
+
+
+        def test_transpose_3d(m, n, k):
+            a = np.ones((m, n, k))
+            b = a.T
+            c = a.transpose()
+            d = a.transpose(2,0,1)
+            dt = a.transpose((2,0,1))
+            e = a.transpose(0,2,1)
+            et = a.transpose((0,2,1))
+            # Numba njit cannot compile explicit transpose call!
+            # c = np.transpose(b)
+        self._compile_and_test(test_transpose_3d, (types.intp, types.intp, types.intp),
+                               equivs=[self.with_equiv('a', ('m', 'n', 'k')),
+                                       self.with_equiv('b', ('k', 'n', 'm')),
+                                       self.with_equiv('c', ('k', 'n', 'm')),
+                                       self.with_equiv('d', ('k', 'm', 'n')),
+                                       self.with_equiv('dt', ('k', 'm', 'n')),
+                                       self.with_equiv('e', ('m', 'k', 'n')),
+                                       self.with_equiv('et', ('m', 'k', 'n'))])
 
         def test_random(n):
             a0 = np.random.rand(n)

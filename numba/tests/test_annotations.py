@@ -5,7 +5,7 @@ import re
 import numba
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types
+from numba import types, utils
 from numba.io_support import StringIO
 
 try:
@@ -123,6 +123,35 @@ class TestAnnotation(unittest.TestCase):
         self.assertEqual(output.count(sigfmt.format(sig_f64)), 1)
         # Ensure the loop is tagged in both output
         self.assertEqual(len(re.findall(re_lifted_tag, output)), 2)
+
+
+class TestTypeAnnotation(unittest.TestCase):
+    def test_delete(self):
+        @numba.njit
+        def foo(appleorange, berrycherry):
+            return appleorange + berrycherry
+
+        foo(1, 2)
+        # Exercise the method
+        strbuf = utils.StringIO()
+        foo.inspect_types(strbuf)
+        # Ensure deletion show up after their use
+        lines = strbuf.getvalue().splitlines()
+
+        def findpatloc(pat):
+            for i, ln in enumerate(lines):
+                if pat in ln:
+                    return i
+            raise ValueError("can't find {!r}".format(pat))
+
+        sa = findpatloc('appleorange = arg(0, name=appleorange)')
+        sb = findpatloc('berrycherry = arg(1, name=berrycherry)')
+
+        ea = findpatloc('del appleorange')
+        eb = findpatloc('del berrycherry')
+
+        self.assertLess(sa, ea)
+        self.assertLess(sb, eb)
 
 
 if __name__ == '__main__':

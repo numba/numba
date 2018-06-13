@@ -106,6 +106,94 @@ class Cuda_threadfence_system(ConcreteTemplate):
 
 
 @intrinsic
+class Cuda_popc(ConcreteTemplate):
+    """
+    Supported types from `llvm.popc`
+    [here](http://docs.nvidia.com/cuda/nvvm-ir-spec/index.html#bit-manipulations-intrinics)
+    """
+    key = cuda.popc
+    cases = [
+        signature(types.int8, types.int8),
+        signature(types.int16, types.int16),
+        signature(types.int32, types.int32),
+        signature(types.int64, types.int64),
+        signature(types.uint8, types.uint8),
+        signature(types.uint16, types.uint16),
+        signature(types.uint32, types.uint32),
+        signature(types.uint64, types.uint64),
+    ]
+
+
+@intrinsic
+class Cuda_brev(ConcreteTemplate):
+    key = cuda.brev
+    cases = [
+        signature(types.uint32, types.uint32),
+        signature(types.uint64, types.uint64),
+    ]
+
+
+@intrinsic
+class Cuda_clz(ConcreteTemplate):
+    """
+    Supported types from `llvm.ctlz`
+    [here](http://docs.nvidia.com/cuda/nvvm-ir-spec/index.html#bit-manipulations-intrinics)
+    """
+    key = cuda.clz
+    cases = [
+        signature(types.int8, types.int8),
+        signature(types.int16, types.int16),
+        signature(types.int32, types.int32),
+        signature(types.int64, types.int64),
+        signature(types.uint8, types.uint8),
+        signature(types.uint16, types.uint16),
+        signature(types.uint32, types.uint32),
+        signature(types.uint64, types.uint64),
+    ]
+
+
+@intrinsic
+class Cuda_ffs(ConcreteTemplate):
+    """
+    Supported types from `llvm.cttz`
+    [here](http://docs.nvidia.com/cuda/nvvm-ir-spec/index.html#bit-manipulations-intrinics)
+    """
+    key = cuda.ffs
+    cases = [
+        signature(types.int8, types.int8),
+        signature(types.int16, types.int16),
+        signature(types.int32, types.int32),
+        signature(types.int64, types.int64),
+        signature(types.uint8, types.uint8),
+        signature(types.uint16, types.uint16),
+        signature(types.uint32, types.uint32),
+        signature(types.uint64, types.uint64),
+    ]
+
+
+@intrinsic
+class Cuda_selp(AbstractTemplate):
+    key = cuda.selp
+
+    def generic(self, args, kws):
+        assert not kws
+        test, a, b = args
+
+
+        # per docs
+        # http://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions-selp
+        supported_types = (types.float64, types.float32,
+                           types.int16, types.uint16,
+                           types.int32, types.uint32,
+                           types.int64, types.uint64)
+
+        if a != b or a not in supported_types:
+            return
+
+        return signature(a, test, a, a)
+
+
+@intrinsic
 class Cuda_atomic_add(AbstractTemplate):
     key = cuda.atomic.add
 
@@ -283,6 +371,18 @@ class CudaModuleTemplate(AttributeTemplate):
     def resolve_shared(self, mod):
         return types.Module(cuda.shared)
 
+    def resolve_popc(self, mod):
+        return types.Function(Cuda_popc)
+
+    def resolve_brev(self, mod):
+        return types.Function(Cuda_brev)
+
+    def resolve_clz(self, mod):
+        return types.Function(Cuda_clz)
+
+    def resolve_ffs(self, mod):
+        return types.Function(Cuda_ffs)
+
     def resolve_syncthreads(self, mod):
         return types.Function(Cuda_syncthreads)
 
@@ -294,6 +394,9 @@ class CudaModuleTemplate(AttributeTemplate):
 
     def resolve_threadfence_system(self, mod):
         return types.Function(Cuda_threadfence_system)
+
+    def resolve_selp(self, mod):
+        return types.Function(Cuda_selp)
 
     def resolve_atomic(self, mod):
         return types.Module(cuda.atomic)

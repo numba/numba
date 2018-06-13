@@ -3,9 +3,37 @@
 Environment variables
 =====================
 
-Numba allows its behaviour to be changed by using environment variables.
-Unless otherwise mentioned, those variables have integer values and
+Numba allows its behaviour to be changed through the use of environment
+variables. Unless otherwise mentioned, those variables have integer values and
 default to zero.
+
+For convenience, Numba also supports the use of a configuration file to persist
+configuration settings. Note: To use this feature ``pyyaml`` must be installed.
+
+The configuration file must be named ``.numba_config.yaml`` and be present in
+the directory from which the Python interpreter is invoked. The configuration
+file, if present, is read for configuration settings before the environment
+variables are searched. This means that the environment variable settings will
+override the settings obtained from a configuration file (the configuration file
+is for setting permanent preferences whereas the environment variables are for
+ephemeral preferences).
+
+The format of the configuration file is a dictionary in ``YAML`` format that
+maps the environment variables below (without the ``NUMBA_`` prefix) to a
+desired value. For example, to permanently switch on developer mode
+(``NUMBA_DEVELOPER_MODE`` environment variable) and control flow graph printing
+(``NUMBA_DUMP_CFG`` environment variable), create a configuration file with the
+contents::
+
+    developer_mode: 1
+    dump_cfg: 1
+
+This can be especially useful in the case of wanting to use a set color scheme
+based on terminal background color. For example, if the terminal background
+color is black, the ``dark_bg`` color scheme would be well suited and can be set
+for permanent use by adding::
+
+    color_scheme: dark_bg
 
 
 Errors and warnings display
@@ -23,6 +51,39 @@ Debugging
 
 These variables influence what is printed out during compilation of
 :term:`JIT functions <JIT function>`.
+
+.. envvar:: NUMBA_DEVELOPER_MODE
+
+    If set to non-zero, developer mode produces full tracebacks and disables
+    help instructions. Default is zero.
+
+.. envvar:: NUMBA_FULL_TRACEBACKS
+
+    If set to non-zero, enable full tracebacks when an exception occurs.
+    Defaults to the value set by `NUMBA_DEVELOPER_MODE`.
+
+.. envvar:: NUMBA_SHOW_HELP
+
+    If not set or set to zero, show user level help information.
+    Defaults to the negation of the value set by `NUMBA_DEVELOPER_MODE`.
+
+.. envvar:: NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING
+
+    If set to non-zero error message highlighting is disabled. This is useful
+    for running the test suite on CI systems.
+
+.. envvar:: NUMBA_COLOR_SCHEME
+
+   Alters the color scheme used in error reporting (requires the ``colorama``
+   package to be installed to work). Valid values are:
+
+   - ``no_color`` No color added, just bold font weighting.
+   - ``dark_bg`` Suitable for terminals with a dark background.
+   - ``light_bg`` Suitable for terminals with a light background.
+   - ``blue_bg`` Suitable for terminals with a blue background.
+   - ``jupyter_nb`` Suitable for use in Jupyter Notebooks.
+
+   *Default value:* ``no_color``. The type of the value is ``string``.
 
 .. envvar:: NUMBA_DEBUG
 
@@ -132,6 +193,11 @@ Compilation options
    If set to non-zero, enable AVX optimizations in LLVM.  This is disabled
    by default on Sandy Bridge and Ivy Bridge architectures as it can sometimes
    result in slower code on those platforms.
+
+.. envvar:: NUMBA_DISABLE_INTEL_SVML
+
+    If set to non-zero and Intel SVML is available, the use of SVML will be
+    disabled.
 
 .. envvar:: NUMBA_COMPATIBILITY_MODE
 

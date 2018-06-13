@@ -17,4 +17,5 @@ Numba for CUDA GPUs
    reduction.rst
    ufunc.rst
    ipc.rst
+   cuda_array_interface.rst
    faq.rst

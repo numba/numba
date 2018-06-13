@@ -48,7 +48,7 @@ Thread Indexing
 
 .. attribute:: numba.cuda.gridDim
 
-    The shape of the grid of blocks, accressed through the attributes ``x``,
+    The shape of the grid of blocks, accessed through the attributes ``x``,
     ``y``, and ``z``.
 
 .. function:: numba.cuda.grid(ndim)
@@ -145,7 +145,7 @@ Synchronization and Atomic Operations
                  do so may result in undefined behavior.
 
 Memory Fences
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~
 
 The memory fences are used to guarantee the effect of memory operations
 are visible by other threads within the same thread-block, the same GPU device,
@@ -167,4 +167,47 @@ are guaranteed to not move across the memory fences by optimization passes.
 
 .. function:: numba.cuda.threadfence_system
 
-   A memory fence at system level (across GPUs)
+
+   A memory fence at system level (across GPUs).
+
+Integer Intrinsics
+~~~~~~~~~~~~~~~~~~
+
+A subset of the CUDA Math API's integer intrisics are available. For further
+documentation, including semantics, please refer to the `CUDA Toolkit
+documentation
+<docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__INTRINSIC__INT.html>`_.
+
+
+.. function:: numba.cuda.popc
+
+   Returns the number of set bits in the given value.
+
+.. function:: numba.cuda.brev
+
+   Reverses the bit pattern of an integer value, for example 0b10110110
+   becomes 0b01101101.
+
+.. function:: numba.cuda.clz
+
+   Counts the number of leading zeros in a value.
+
+.. function:: numba.cuda.ffs
+
+   Find the position of the least significant bit set to 1 in an integer.
+
+Control Flow Instructions
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A subset of the CUDA's control flow instructions are directly available as
+intrinsics. Avoiding branches is a key way to improve CUDA performance, and
+using these intrinsics mean you don't have to rely on the ``nvcc`` optimizer
+identifying and removing branches. For further documentation, including
+semantics, please refer to the `relevant CUDA Toolkit documentation
+<docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions>`_.
+
+
+.. function:: numba.cuda.selp
+
+    Select between two expressions, depending on the value of the first
+    argument. Similar to LLVM's ``select`` instruction.

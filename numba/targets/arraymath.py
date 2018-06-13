@@ -6,6 +6,7 @@ from __future__ import print_function, absolute_import, division
 
 import math
 from collections import namedtuple
+from enum import IntEnum
 
 import numpy as np
 
@@ -21,10 +22,20 @@ from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
 from .arrayobj import make_array, load_item, store_item, _empty_nd_impl
+from .linalg import ensure_blas
 
 from numba.extending import intrinsic
 from numba.errors import RequireConstValue, TypingError
 
+def _check_blas():
+    # Checks if a BLAS is available so e.g. dot will work
+    try:
+        ensure_blas()
+    except ImportError:
+        return False
+    return True
+
+_HAVE_BLAS = _check_blas()
 
 @intrinsic
 def _create_tuple_result_shape(tyctx, shape_list, shape_tuple):
@@ -754,6 +765,125 @@ def np_median(a):
 
     return median_impl
 
+@register_jitable
+def _collect_percentiles_inner(a, q):
+    n = len(a)
+
+    if n == 1:
+        # single element array; output same for all percentiles
+        out = np.full(len(q), a[0], dtype=np.float64)
+    else:
+        out = np.empty(len(q), dtype=np.float64)
+        for i in range(len(q)):
+            percentile = q[i]
+
+            # bypass pivoting where requested percentile is 100
+            if percentile == 100:
+                val = np.max(a)
+                # heuristics to handle infinite values a la NumPy
+                if ~np.all(np.isfinite(a)):
+                    if ~np.isfinite(val):
+                        val = np.nan
+
+            # bypass pivoting where requested percentile is 0
+            elif percentile == 0:
+                val = np.min(a)
+                # convoluted heuristics to handle infinite values a la NumPy
+                if ~np.all(np.isfinite(a)):
+                    num_pos_inf = np.sum(a == np.inf)
+                    num_neg_inf = np.sum(a == -np.inf)
+                    num_finite = n - (num_neg_inf + num_pos_inf)
+                    if num_finite == 0:
+                        val = np.nan
+                    if num_pos_inf == 1 and n == 2:
+                        val = np.nan
+                    if num_neg_inf > 1:
+                        val = np.nan
+                    if num_finite == 1:
+                        if num_pos_inf > 1:
+                            if num_neg_inf != 1:
+                                val = np.nan
+
+            else:
+                # linear interp between closest ranks
+                rank = 1 + (n - 1) * np.true_divide(percentile, 100.0)
+                f = math.floor(rank)
+                m = rank - f
+                lower, upper = _select_two(a, k=int(f - 1), low=0, high=(n - 1))
+                val = lower * (1 - m) + upper * m
+            out[i] = val
+
+    return out
+
+@register_jitable
+def _can_collect_percentiles(a, nan_mask, skip_nan):
+    if skip_nan:
+        a = a[~nan_mask]
+        if len(a) == 0:
+            return False  # told to skip nan, but no elements remain
+    else:
+        if np.any(nan_mask):
+            return False  # told *not* to skip nan, but nan encountered
+
+    if len(a) == 1:  # single element array
+        val = a[0]
+        return np.isfinite(val)  # can collect percentiles if element is finite
+    else:
+        return True
+
+@register_jitable
+def _collect_percentiles(a, q, skip_nan=False):
+    if np.any(np.isnan(q)) or np.any(q < 0) or np.any(q > 100):
+        raise ValueError('Percentiles must be in the range [0,100]')
+
+    temp_arry = a.flatten()
+    nan_mask = np.isnan(temp_arry)
+
+    if _can_collect_percentiles(temp_arry, nan_mask, skip_nan):
+        temp_arry = temp_arry[~nan_mask]
+        out = _collect_percentiles_inner(temp_arry, q)
+    else:
+        out = np.full(len(q), np.nan)
+
+    return out
+
+def _np_percentile_impl(a, q, skip_nan):
+    def np_percentile_q_scalar_impl(a, q):
+        percentiles = np.array([q])
+        return _collect_percentiles(a, percentiles, skip_nan=skip_nan)[0]
+
+    def np_percentile_q_sequence_impl(a, q):
+        percentiles = np.array(q)
+        return _collect_percentiles(a, percentiles, skip_nan=skip_nan)
+
+    def np_percentile_q_array_impl(a, q):
+        return _collect_percentiles(a, q, skip_nan=skip_nan)
+
+    if isinstance(q, (types.Float, types.Integer, types.Boolean)):
+        return np_percentile_q_scalar_impl
+
+    elif isinstance(q, (types.Tuple, types.Sequence)):
+        return np_percentile_q_sequence_impl
+
+    elif isinstance(q, types.Array):
+        return np_percentile_q_array_impl
+
+if numpy_version >= (1, 10):
+    @overload(np.percentile)
+    def np_percentile(a, q):
+        # Note: np.percentile behaviour in the case of an array containing one or
+        # more NaNs was changed in numpy 1.10 to return an array of np.NaN of
+        # length equal to q, hence version guard.
+        return _np_percentile_impl(a, q, skip_nan=False)
+
+if numpy_version >= (1, 11):
+    @overload(np.nanpercentile)
+    def np_nanpercentile(a, q):
+        # Note: np.nanpercentile return type in the case of an all-NaN slice
+        # was changed in 1.11 to be an array of np.NaN of length equal to q,
+        # hence version guard.
+        return _np_percentile_impl(a, q, skip_nan=True)
+
 if numpy_version >= (1, 9):
     @overload(np.nanmedian)
     def np_nanmedian(a):
@@ -778,7 +908,6 @@ if numpy_version >= (1, 9):
             return _median_inner(temp_arry, n)
 
         return nanmedian_impl
-
 
 #----------------------------------------------------------------------------
 # Element-wise computations
@@ -1474,3 +1603,175 @@ def generate_xinfo(np_func, container, attr):
 
 generate_xinfo(np.finfo, finfo, _finfo_supported)
 generate_xinfo(np.iinfo, iinfo, _iinfo_supported)
+
+def _get_inner_prod(dta, dtb):
+    # gets an inner product implementation, if both types are float then
+    # BLAS is used else a local function
+
+    @register_jitable
+    def _innerprod(a, b):
+        acc = 0
+        for i in range(len(a)):
+            acc = acc + a[i] * b[i]
+        return acc
+
+    # no BLAS... use local function regardless
+    if not _HAVE_BLAS:
+        return _innerprod
+
+    flty = types.real_domain | types.complex_domain
+    floats = dta in flty and dtb in flty
+    if not floats:
+        return _innerprod
+    else:
+        a_dt = as_dtype(dta)
+        b_dt = as_dtype(dtb)
+        dt = np.promote_types(a_dt, b_dt)
+
+        @register_jitable
+        def _dot_wrap(a, b):
+            return np.dot(a.astype(dt), b.astype(dt))
+        return _dot_wrap
+
+def _assert_1d(a, func_name):
+    if isinstance(a, types.Array):
+        if not a.ndim <= 1:
+            raise TypingError("%s() only supported on 1D arrays " % func_name)
+
+def _np_correlate_core(ap1, ap2, mode, direction):
+    pass
+
+
+class _corr_conv_Mode(IntEnum):
+    """
+    Enumerated modes for correlate/convolve as per:
+    https://github.com/numpy/numpy/blob/ac6b1a902b99e340cf7eeeeb7392c91e38db9dd8/numpy/core/numeric.py#L862-L870
+    """
+    VALID = 0
+    SAME = 1
+    FULL = 2
+
+
+@overload(_np_correlate_core)
+def _np_correlate_core_impl(ap1, ap2, mode, direction):
+    a_dt = as_dtype(ap1.dtype)
+    b_dt = as_dtype(ap2.dtype)
+    dt = np.promote_types(a_dt, b_dt)
+    innerprod = _get_inner_prod(ap1.dtype, ap2.dtype)
+
+    Mode = _corr_conv_Mode
+
+    def impl(ap1, ap2, mode, direction):
+        # Implementation loosely based on `_pyarray_correlate` from
+        # https://github.com/numpy/numpy/blob/3bce2be74f228684ca2895ad02b63953f37e2a9d/numpy/core/src/multiarray/multiarraymodule.c#L1191
+        # For "Mode":
+        # Convolve uses 'full' by default, this is denoted by the number 2
+        # Correlate uses 'valid' by default, this is denoted by the number 0
+        # For "direction", +1 to write the return values out in order 0->N
+        # -1 to write them out N->0.
+
+        if not (mode == Mode.VALID or mode == Mode.FULL):
+            raise ValueError("Invalid mode")
+
+        n1 = len(ap1)
+        n2 = len(ap2)
+        length = n1
+        n = n2
+        if mode == Mode.VALID: # mode == valid == 0, correlate default
+            length = length - n + 1
+            n_left = 0
+            n_right = 0
+        elif mode == Mode.FULL: # mode == full == 2, convolve default
+            n_right = n - 1
+            n_left = n - 1
+            length = length + n - 1
+        else:
+            raise ValueError("Invalid mode")
+
+        ret = np.zeros(length, dt)
+        n = n - n_left
+
+        if direction == 1:
+            idx = 0
+            inc = 1
+        elif direction == -1:
+            idx = length - 1
+            inc = -1
+        else:
+            raise ValueError("Invalid direction")
+
+        for i in range(n_left):
+            ret[idx] = innerprod(ap1[:idx + 1], ap2[-(idx + 1):])
+            idx = idx + inc
+
+        for i in range(n1 - n2 + 1):
+            ret[idx] = innerprod(ap1[i : i + n2], ap2)
+            idx = idx + inc
+
+        for i in range(n_right, 0, -1):
+            ret[idx] = innerprod(ap1[-i:], ap2[:i])
+            idx = idx + inc
+        return ret
+
+    return impl
+
+@overload(np.correlate)
+def _np_correlate(a, v):
+    _assert_1d(a, 'np.correlate')
+    _assert_1d(v, 'np.correlate')
+
+    @register_jitable
+    def op_conj(x):
+        return np.conj(x)
+
+    @register_jitable
+    def op_nop(x):
+        return x
+
+    Mode = _corr_conv_Mode
+
+    if a.dtype in types.complex_domain:
+        if v.dtype in types.complex_domain:
+            a_op = op_nop
+            b_op = op_conj
+        else:
+            a_op = op_nop
+            b_op = op_nop
+    else:
+        if v.dtype in types.complex_domain:
+            a_op = op_nop
+            b_op = op_conj
+        else:
+            a_op = op_conj
+            b_op = op_nop
+
+    def impl(a, v):
+        if len(a) < len(v):
+            return _np_correlate_core(b_op(v), a_op(a), Mode.VALID, -1)
+        else:
+            return _np_correlate_core(a_op(a), b_op(v), Mode.VALID, 1)
+
+    return impl
+
+@overload(np.convolve)
+def np_convolve(a, v):
+    _assert_1d(a, 'np.convolve')
+    _assert_1d(v, 'np.convolve')
+
+    Mode = _corr_conv_Mode
+
+    def impl(a, v):
+        la = len(a)
+        lv = len(v)
+
+        if la == 0:
+            raise ValueError("'a' cannot be empty")
+        if lv == 0:
+            raise ValueError("'v' cannot be empty")
+
+        if la < lv:
+            return _np_correlate_core(v, a[::-1], Mode.FULL, 1)
+        else:
+            return _np_correlate_core(a, v[::-1], Mode.FULL, 1)
+
+    return impl
