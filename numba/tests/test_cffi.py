@@ -144,6 +144,22 @@ class TestCFFI(TestCase):
         self.assertIn("from_buffer() unsupported on non-contiguous buffers",
                       str(raises.exception))
 
+    def test_from_buffer_numpy_multi_array(self):
+        c1 = np.array([1, 2], order='C', dtype=np.float32)
+        c2 = np.array([[1, 2], [3, 4]], order='C', dtype=np.float32)
+        f1 = np.array([1, 2], order='F', dtype=np.float32)
+        f2 = np.array([[1, 2], [3, 4]], order='F', dtype=np.float32)
+        pyfunc = mod.vector_sin_float32
+        cfunc = jit(nopython=True)(pyfunc)
+        cfunc(c1, c1)   # No exception because of C layout and single dimension
+        cfunc(c2, c2)   # No exception because of C layout
+        cfunc(f1, f1)   # No exception because of single dimension
+        # Exception because multi-dimensional with F layout
+        with self.assertRaises(errors.TypingError) as raises:
+            cfunc(f2, f2)
+        self.assertIn("from_buffer() only supports multidimensional arrays with C layout",
+                      str(raises.exception))
+
     def test_indirect_multiple_use(self):
         """
         Issue #2263
