@@ -795,7 +795,8 @@ class TestUnboxing(MemoryLeakMixin, TestCase):
             cfunc(lst)
         self.assertEqual(
             str(raises.exception),
-            "can't unbox heterogeneous list: (int64 x 1) != (int64 x 2)"
+            ("can't unbox heterogeneous list: "
+             "tuple(int64 x 1) != tuple(int64 x 2)"),
             )
 
 
