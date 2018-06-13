@@ -1,5 +1,6 @@
 set NUMBA_DEVELOPER_MODE=1
 set NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING=1
+set PYTHONFAULTHANDLER=1
 
 @rem Check Numba executables are there
 pycc -h
