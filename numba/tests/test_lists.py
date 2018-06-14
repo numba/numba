@@ -1242,7 +1242,7 @@ class TestListOfList(ManagedListTestCase):
             str(raises.exception),
             )
 
-    # @unittest.skipUnless(utils.IS_PY3, "Py3 only")
+    @unittest.skipUnless(utils.IS_PY3, "Py3 only due to ordering of error")
     @expect_reflection_failure
     def test_c05(self):
         def bar(x):
@@ -1253,7 +1253,7 @@ class TestListOfList(ManagedListTestCase):
         r = [[np.arange(3)]]
         self.compile_and_test(bar, r)
 
-    # @unittest.skipUnless(utils.IS_PY3, "Py3 only")
+    @unittest.skipUnless(utils.IS_PY3, "Py3 only due to ordering of error")
     def test_c06(self):
         def bar(x):
             f = x
