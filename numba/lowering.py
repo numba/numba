@@ -1,7 +1,8 @@
 from __future__ import print_function, division, absolute_import
 
 import weakref
-from collections import namedtuple
+import time
+from collections import namedtuple, deque
 from functools import partial
 
 from llvmlite.llvmpy.core import Constant, Type, Builder
@@ -12,7 +13,7 @@ from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
 from .errors import LoweringError, new_error_context
 from .targets import removerefctpass
 from .funcdesc import default_mangler
-from . import debuginfo
+from . import debuginfo, utils
 
 
 class Environment(_dynfunc.Environment):
@@ -37,13 +38,26 @@ class Environment(_dynfunc.Environment):
             cls._memo[fndesc.env_name] = inst
             return inst
 
-
     def __reduce__(self):
         return _rebuild_env, (
             self.globals['__name__'],
             self.consts,
             self.env_name
             )
+
+    def __del__(self):
+        if utils.IS_PY3:
+            return
+        if _keepalive is None:
+            return
+        _keepalive.append((time.time(), self))
+        if len(_keepalive) > 10:
+            cur = time.time()
+            while _keepalive and cur - _keepalive[0][0] > 1:
+                _keepalive.popleft()
+
+
+_keepalive = deque()
 
 
 def _rebuild_env(modname, consts, env_name):
