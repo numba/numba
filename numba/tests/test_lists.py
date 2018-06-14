@@ -793,11 +793,17 @@ class TestUnboxing(MemoryLeakMixin, TestCase):
         lst = [(1,), (2, 3)]
         with self.assertRaises(TypeError) as raises:
             cfunc(lst)
-        self.assertEqual(
-            str(raises.exception),
-            ("can't unbox heterogeneous list: "
-             "tuple(int64 x 1) != tuple(int64 x 2)"),
-            )
+        if utils.IS_PY3:
+            self.assertEqual(
+                str(raises.exception),
+                ("can't unbox heterogeneous list: "
+                "tuple(int64 x 1) != tuple(int64 x 2)"),
+                )
+        else:
+            self.assertEqual(
+                str(raises.exception),
+                "can't unbox heterogeneous list",
+                )
 
 
 class TestListReflection(MemoryLeakMixin, TestCase):
@@ -1236,6 +1242,7 @@ class TestListOfList(ManagedListTestCase):
             str(raises.exception),
             )
 
+    # @unittest.skipUnless(utils.IS_PY3, "Py3 only")
     @expect_reflection_failure
     def test_c05(self):
         def bar(x):
@@ -1246,6 +1253,7 @@ class TestListOfList(ManagedListTestCase):
         r = [[np.arange(3)]]
         self.compile_and_test(bar, r)
 
+    # @unittest.skipUnless(utils.IS_PY3, "Py3 only")
     def test_c06(self):
         def bar(x):
             f = x

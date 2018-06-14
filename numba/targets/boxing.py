@@ -8,6 +8,7 @@ from .. import cgutils, numpy_support, types
 from ..pythonapi import box, unbox, reflect, NativeValue
 
 from . import listobj, setobj
+from ..utils import IS_PY3
 
 
 #
@@ -604,10 +605,17 @@ def _python_list_to_native(typ, obj, c, size, listptr, errorptr):
 
         with c.builder.if_then(type_mismatch, likely=False):
             c.builder.store(cgutils.true_bit, errorptr)
-            c.pyapi.err_format(
-                "PyExc_TypeError",
-                "can't unbox heterogeneous list: %S != %S",
-                expected_typobj, typobj,
+            if IS_PY3:
+                c.pyapi.err_format(
+                    "PyExc_TypeError",
+                    "can't unbox heterogeneous list: %S != %S",
+                    expected_typobj, typobj,
+                    )
+            else:
+                # Python2 doesn't have "%S" format string.
+                c.pyapi.err_set_string(
+                    "PyExc_TypeError",
+                    "can't unbox heterogeneous list",
                 )
             c.pyapi.decref(typobj)
             loop.do_break()
