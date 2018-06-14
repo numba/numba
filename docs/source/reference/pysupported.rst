@@ -179,7 +179,7 @@ For example, to create a list of arrays::
 
 
 List Reflection
-~~~~~~~~~~~~~~~
+'''''''''''''''
 
 In nopython mode, Numba does not operate on Python objects.  ``list`` are
 compiled into an internal representation.  Any ``list`` arguments must be
