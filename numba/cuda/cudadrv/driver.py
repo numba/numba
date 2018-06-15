@@ -1067,7 +1067,7 @@ class IpcHandle(object):
         return context.can_access_peer(source_device.id)
 
     def open_staged(self, context):
-        """Open the IPC by staging on the host memory first.
+        """Open the IPC by allowing staging on the host memory first.
         """
         self._sentry_source_info()
 
@@ -1077,7 +1077,7 @@ class IpcHandle(object):
         self._impl = _StagedIpcImpl(self, self.source_info)
         return self._impl.open(context)
 
-    def open(self, context):
+    def open_direct(self, context):
         """
         Import the IPC memory and returns a raw CUDA memory pointer object
         """
@@ -1086,6 +1086,21 @@ class IpcHandle(object):
 
         self._impl = _CudaIpcImpl(self)
         return self._impl.open(context)
+
+    def open(self, context):
+        """Open the IPC handle and import the memory for usage in the given
+        context.  Returns a raw CUDA memory pointer object.
+
+        This is enhanced over CUDA IPC that it will work regardless of whether
+        the source device is peer-accessible by the destination device.
+        If the devices are peer-accessible, it uses .open_direct().
+        If the devices are not peer-accessible, it uses .open_staged().
+        """
+        if self.source_info is None or self.can_access_peer(context):
+            fn = self.open_direct
+        else:
+            fn = self.open_staged
+        return fn(context)
 
     def open_array(self, context, shape, dtype, strides=None):
         """
