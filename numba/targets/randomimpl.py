@@ -140,7 +140,7 @@ def get_next_double(context, builder, state_ptr):
         builder.fadd(b, builder.fmul(a, ir.Constant(double, 67108864.0))),
         ir.Constant(double, 9007199254740992.0))
 
-def get_next_int(context, builder, state_ptr, nbits):
+def get_next_int(context, builder, state_ptr, nbits, is_numpy):
     """
     Get the next integer with width *nbits*.
     """
@@ -148,7 +148,12 @@ def get_next_int(context, builder, state_ptr, nbits):
     def get_shifted_int(nbits):
         shift = builder.sub(c32, nbits)
         y = get_next_int32(context, builder, state_ptr)
-        return builder.lshr(y, builder.zext(shift, y.type))
+        if is_numpy:
+            mask = builder.not_(ir.Constant(y.type, 0))
+            mask = builder.lshr(mask, builder.zext(shift, y.type))
+            return builder.and_(y, mask)
+        else:
+            return builder.lshr(y, builder.zext(shift, y.type))
 
     ret = cgutils.alloca_once_value(builder, ir.Constant(int64_t, 0))
 
@@ -159,8 +164,11 @@ def get_next_int(context, builder, state_ptr, nbits):
             builder.store(builder.zext(low, int64_t), ret)
         with iflarge:
             # XXX This assumes nbits <= 64
+            if is_numpy:
+                high = get_shifted_int(builder.sub(nbits, c32))
             low = get_next_int32(context, builder, state_ptr)
-            high = get_shifted_int(builder.sub(nbits, c32))
+            if not is_numpy:
+                high = get_shifted_int(builder.sub(nbits, c32))
             total = builder.add(
                 builder.zext(low, int64_t),
                 builder.shl(builder.zext(high, int64_t), ir.Constant(int64_t, 32)))
@@ -292,7 +300,7 @@ def getrandbits_impl(context, builder, sig, args):
         msg = "getrandbits() limited to 64 bits"
         context.call_conv.return_user_exc(builder, OverflowError, (msg,))
     state_ptr = get_state_ptr(context, builder, "py")
-    res = get_next_int(context, builder, state_ptr, nbits)
+    res = get_next_int(context, builder, state_ptr, nbits, False)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
@@ -327,18 +335,41 @@ def _randrange_impl(context, builder, start, stop, step, state):
     nbits = builder.trunc(builder.call(fn, [n, cgutils.true_bit]), int32_t)
     nbits = builder.sub(ir.Constant(int32_t, ty.width), nbits)
 
-    bbwhile = builder.append_basic_block("while")
-    bbend = builder.append_basic_block("while.end")
-    builder.branch(bbwhile)
+    if state == "np":
+        # Counting leading number of zeros above results in one too many bits
+        # when `n` is a power of two. Here, we correct that.
+        # This check incorrectly treats 1 as a power of two, but this special
+        # case is handled separately towards the end of this function.
+        pow_two = builder.shl(one, builder.sub(builder.sext(nbits, ty), one))
+        pow_two = builder.zext(builder.icmp_signed('==', pow_two, n), int32_t)
+        nbits = builder.sub(nbits, pow_two)
 
-    builder.position_at_end(bbwhile)
-    r = get_next_int(context, builder, state_ptr, nbits)
-    r = builder.trunc(r, ty)
-    too_large = builder.icmp_signed('>=', r, n)
-    builder.cbranch(too_large, bbwhile, bbend)
+    rptr = cgutils.alloca_once(builder, ty, name="r")
 
-    builder.position_at_end(bbend)
-    return builder.add(start, builder.mul(r, step))
+    def get_num():
+        bbwhile = builder.append_basic_block("while")
+        bbend = builder.append_basic_block("while.end")
+        builder.branch(bbwhile)
+
+        builder.position_at_end(bbwhile)
+        r = get_next_int(context, builder, state_ptr, nbits, state == "np")
+        r = builder.trunc(r, ty)
+        too_large = builder.icmp_signed('>=', r, n)
+        builder.cbranch(too_large, bbwhile, bbend)
+
+        builder.position_at_end(bbend)
+        builder.store(r, rptr)
+
+    if state == "np":
+        with builder.if_else(builder.icmp_signed('==', n, one)) as (is_one, is_not_one):
+            with is_one:
+                builder.store(zero, rptr)
+            with is_not_one:
+                get_num()
+    else:
+        get_num()
+
+    return builder.add(start, builder.mul(builder.load(rptr), step))
 
 
 @lower("random.randrange", types.Integer)
