@@ -1064,6 +1064,7 @@ class TestParfors(TestParforsBase):
         self.assertIn("Overwrite of parallel loop index", str(raises.exception))
 
     @skip_unsupported
+    @needs_blas
     def test_parfor_array_access4(self):
         # in this test, one index of a multi-dim access should be replaced
         # np.dot parallel implementation produces this case
@@ -1117,6 +1118,7 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countNonParforArrayAccesses(test_impl, (types.intp,)), 0)
 
     @skip_unsupported
+    @needs_blas
     def test_parfor_generate_fuse(self):
         # issue #2857
         def test_impl(N, D):
