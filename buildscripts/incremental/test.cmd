@@ -12,6 +12,8 @@ popd
 set NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING=1
 @rem switch on developer mode
 set NUMBA_DEVELOPER_MODE=1
+@rem enable the faulthandler
+set PYTHONFAULTHANDLER=1
 
 @rem First check that the test discovery works
 python -m numba.tests.test_runtests
