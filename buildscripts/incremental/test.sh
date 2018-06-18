@@ -21,6 +21,15 @@ export NUMBA_DEVELOPER_MODE=1
 # enable the fault handler
 export PYTHONFAULTHANDLER=1
 
+unamestr=`uname`
+if [[ "$unamestr" == 'Linux' ]]; then
+  SEGVCATCH=catchsegv
+elif [[ "$unamestr" == 'Darwin' ]]; then
+  SEGVCATCH=""
+else
+  echo Error
+fi
+
 # First check that the test discovery works
 python -m numba.tests.test_runtests
 # Now run the Numba test suite
@@ -29,7 +38,7 @@ python -m numba.tests.test_runtests
 if [ "$RUN_COVERAGE" == "yes" ]; then
     export PYTHONPATH=.
     coverage erase
-    coverage run runtests.py -b -m numba.tests
+    $SEGVCATCH coverage run runtests.py -b -m numba.tests
 else
-    NUMBA_ENABLE_CUDASIM=1 python -m numba.runtests -b -m numba.tests
+    NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -m numba.tests
 fi
