@@ -999,7 +999,7 @@ class _CudaIpcImpl(object):
 
 class _StagedIpcImpl(object):
     """Implementation of GPU IPC using custom staging logic to workaround
-    CUDA IPC limiation on peer accessibility between devices.
+    CUDA IPC limitation on peer accessibility between devices.
     """
     def __init__(self, parent, source_info):
         self.parent = parent

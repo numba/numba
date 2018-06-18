@@ -217,6 +217,8 @@ def staged_ipc_array_test(ipcarr, device_num, result_queue):
     result_queue.put((succ, out))
 
 
+@unittest.skipIf(not_linux, "IPC only supported on Linux")
+@skip_on_cudasim('Ipc not available in CUDASIM')
 class TestIpcStaged(CUDATestCase):
     def test_staged(self):
         # prepare data for IPC
