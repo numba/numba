@@ -18,7 +18,7 @@ from numba import _dispatcher
 from numba.compiler import compile_isolated
 from numba.errors import NumbaWarning
 from .support import (TestCase, tag, temp_directory, import_dynamic,
-                      override_env_config, capture_cache_log)
+                      override_env_config, capture_cache_log, captured_stdout)
 from numba.targets import codegen
 from numba.caching import _UserWideCacheLocator
 
@@ -610,6 +610,32 @@ class TestDispatcherMethods(TestCase):
         foo(1, 2)
         # Exercise the method
         foo.inspect_types(utils.StringIO())
+
+    def test_inspect_types_pretty(self):
+        @jit
+        def foo(a, b):
+            return a + b
+
+        foo(1, 2)
+
+        # Exercise the method, dump the output
+        with captured_stdout():
+            ann = foo.inspect_types(pretty=True)
+
+        # ensure HTML <span> is found in the annotation output
+        for k, v in ann.ann.items():
+            span_found = False
+            for line in v['pygments_lines']:
+                if 'span' in line[2]:
+                    span_found = True
+            self.assertTrue(span_found)
+
+        # check that file+pretty kwarg combo raises
+        with self.assertRaises(ValueError) as raises:
+            foo.inspect_types(file=utils.StringIO(), pretty=True)
+
+        self.assertIn("`file` must be None if `pretty=True`",
+                      str(raises.exception))
 
     def test_issue_with_array_layout_conflict(self):
         """

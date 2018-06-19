@@ -152,7 +152,7 @@ class TypeAnnotation(object):
         self.annotate_raw()
         # make a deep copy ahead of the pending mutations
         func_data = copy.deepcopy(self.func_data)
-        #def add_in_nbsp(key):
+
         key = 'python_indent'
         for this_func in func_data.values():
             if key in this_func:

@@ -32,11 +32,10 @@ from pygments.lexers import PythonLexer
 from pygments.formatters import HtmlFormatter
 # TerminalFormatter does not support themes, Terminal256 should, but seem to not work.
 from pygments.formatters import TerminalFormatter
-from typing import List
 
 pylex = PythonLexer()
 
-def hllines(code:str, style):
+def hllines(code, style):
     "Given a code string, return a list of html-highlighted lines"
     hf = HtmlFormatter(noclasses=True, style=style, nowrap=True)
     res = highlight(code, pylex, hf)
