@@ -3,7 +3,6 @@ from __future__ import absolute_import, print_function
 
 from functools import reduce, wraps
 import operator
-import six
 import sys
 import threading
 import warnings
@@ -597,14 +596,12 @@ class CUDAKernel(CUDAKernelBase):
         """
 
         # map the arguments using any extension you've registered
-        ty, val = six.moves.reduce(
-            lambda ty_val, extension: extension.prepare_args(
-                *ty_val,
+        for extension in reversed(self.extensions):
+            ty, val = extension.prepare_args(
+                ty,
+                val,
                 stream=stream,
-                retr=retr),
-            self.extensions,
-            (ty, val)
-        )
+                retr=retr)
 
         if isinstance(ty, types.Array):
             if isinstance(ty, types.SmartArrayType):
@@ -713,6 +710,22 @@ class AutoJitCUDAKernel(CUDAKernelBase):
 
     @property
     def extensions(self):
+        """
+        A list of objects that must have a `prepare_args` function. When a
+        specialized kernel is called, each argument will be passed through
+        to the `prepare_args` (from the last object in this list to the
+        first). The arguments to `prepare_args` are:
+        - `ty` the numba type of the argument
+        - `val` the argument value itself
+        - `stream` the CUDA stream used for the current call to the kernel
+        - `retr` a list of zero-arg functions that you may want to append
+            post-call cleanup work to.
+
+        The `prepare_args` function must return a tuple `(ty, val)`, which
+        will be passed in turn to the next right-most `extension`. After all
+        the extensions have been called, the resulting `(ty, val)` will be
+        passed into Numba's default argument marshalling logic.
+        """
         return self.targetoptions['extensions']
 
     def __call__(self, *args):
