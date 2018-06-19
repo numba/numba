@@ -1,9 +1,9 @@
 from __future__ import print_function, absolute_import
 
-from numba import hsa
+from numba import roc
 from numba.npyufunc import deviceufunc
 
-from numba.hsa import dispatch
+from numba.roc import dispatch
 
 vectorizer_stager_source = '''
 def __vectorized_{name}({args}, __out__):
@@ -74,17 +74,17 @@ def __vectorized_{name}({args}, __out__):
 
 class HsaVectorize(deviceufunc.DeviceVectorize):
     def _compile_core(self, sig):
-        hsadevfn = hsa.jit(sig, device=True)(self.pyfunc)
+        hsadevfn = roc.jit(sig, device=True)(self.pyfunc)
         return hsadevfn, hsadevfn.cres.signature.return_type
 
     def _get_globals(self, corefn):
         glbl = self.pyfunc.__globals__
-        glbl.update({'__hsa__': hsa,
+        glbl.update({'__hsa__': roc,
                      '__core__': corefn})
         return glbl
 
     def _compile_kernel(self, fnobj, sig):
-        return hsa.jit(sig)(fnobj)
+        return roc.jit(sig)(fnobj)
 
     def _get_kernel_source(self, template, sig, funcname):
         args = ['a%d' % i for i in range(len(sig.args))]
@@ -134,16 +134,16 @@ class HsaGUFuncVectorize(deviceufunc.DeviceGUFuncVectorize):
                                              engine=engine)
 
     def _compile_kernel(self, fnobj, sig):
-        return hsa.jit(sig)(fnobj)
+        return roc.jit(sig)(fnobj)
 
     @property
     def _kernel_template(self):
         return _gufunc_stager_source
 
     def _get_globals(self, sig):
-        corefn = hsa.jit(sig, device=True)(self.pyfunc)
+        corefn = roc.jit(sig, device=True)(self.pyfunc)
         glbls = self.py_func.__globals__.copy()
-        glbls.update({'__hsa__': hsa,
+        glbls.update({'__hsa__': roc,
                       '__core__': corefn})
         return glbls
 

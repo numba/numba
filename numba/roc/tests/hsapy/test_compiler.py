@@ -5,11 +5,11 @@ import os
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import hsa
+from numba import roc
 from numba import types
-from numba.hsa import compiler
-from numba.hsa.hsadrv.driver import hsa as hsart
-from numba.hsa.hsadrv.driver import BrigModule, Executable, Program
+from numba.roc import compiler
+from numba.roc.hsadrv.driver import hsa as hsart
+from numba.roc.hsadrv.driver import BrigModule, Executable, Program
 
 
 def copy_kernel(out, inp):
@@ -17,13 +17,13 @@ def copy_kernel(out, inp):
 
 
 def copy_kernel_1d(out, inp):
-    i = hsa.get_global_id(0)
+    i = roc.get_global_id(0)
     if i < out.size:
         out[i] = inp[i]
 
 
 def assign_value(out, inp):
-    i = hsa.get_global_id(0)
+    i = roc.get_global_id(0)
     if i < out.size:
         out[i] = inp
 
@@ -155,7 +155,7 @@ class TestDeviceFunction(unittest.TestCase):
                                         [arytype, types.intp])
 
         def udt_devfunc_caller(dst, src):
-            i = hsa.get_global_id(0)
+            i = roc.get_global_id(0)
             if i < dst.size:
                 dst[i] = devfn(src, i)
 

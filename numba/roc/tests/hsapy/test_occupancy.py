@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from numba import unittest_support as unittest
-from numba.hsa.gcn_occupancy import get_limiting_factors
+from numba.roc.gcn_occupancy import get_limiting_factors
 
 
 class TestOccupancy(unittest.TestCase):

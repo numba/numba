@@ -9,7 +9,7 @@ import math
 import copy
 from ctypes import c_void_p
 import numpy as np
-from numba.hsa.hsadrv import driver as _driver
+from numba.roc.hsadrv import driver as _driver
 from numba.cuda.cudadrv.driver import memory_size_from_info as \
 agnostic_memory_size_from_info
 from . import devices

@@ -10,10 +10,10 @@ import tempfile
 import os
 import re
 from numba import utils, config
-from numba.hsa.hsadrv import devices
+from numba.roc.hsadrv import devices
 from .common import AMDGCNModule
 
-from numba.hsa.hlc.hlc import CmdLine
+from numba.roc.hlc.hlc import CmdLine
 
 # the CLI tooling is needed for the linking phase at present
 cli = CmdLine()

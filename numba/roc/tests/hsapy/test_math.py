@@ -4,7 +4,7 @@ import numpy as np
 import math
 
 import numba.unittest_support as unittest
-from numba import hsa
+from numba import roc
 from numba import utils
 
 
@@ -27,9 +27,9 @@ class TestMath(unittest.TestCase):
                             span=(-1., 1.), count=128,
                             types=(np.float32, np.float64)):
 
-        @hsa.jit
+        @roc.jit
         def fn(dst, src):
-            i = hsa.get_global_id(0)
+            i = roc.get_global_id(0)
             if i < dst.size:
                 dst[i] = math_fn(src[i])
 
@@ -52,9 +52,9 @@ class TestMath(unittest.TestCase):
                              span=(-1., 1., 1., -1.), count=128,
                              types=(np.float32, np.float64)):
 
-        @hsa.jit
+        @roc.jit
         def fn(dst, src1, src2):
-            i = hsa.get_global_id(0)
+            i = roc.get_global_id(0)
             if i < dst.size:
                 dst[i] = math_fn(src1[i], src2[i])
 

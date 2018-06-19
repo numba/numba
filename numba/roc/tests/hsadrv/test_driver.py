@@ -10,15 +10,16 @@ except ImportError:
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba.hsa.hsadrv.driver import hsa, Queue, Program, Executable,\
+from numba.roc.hsadrv.driver import hsa, Queue, Program, Executable,\
                                     BrigModule, Context, dgpu_present
 
-import numba.hsa.api as hsaapi
+from numba.roc.hsadrv.driver import hsa as roc
+import numba.roc.api as hsaapi
 from numba import float32, float64, vectorize
 
-from numba.hsa.hsadrv import drvapi
-from numba.hsa.hsadrv import enums
-from numba.hsa.hsadrv import enums_ext
+from numba.roc.hsadrv import drvapi
+from numba.roc.hsadrv import enums
+from numba.roc.hsadrv import enums_ext
 
 from numba import config
 
@@ -40,16 +41,16 @@ class TestLowLevelApi(unittest.TestCase):
 
 class TestAgents(unittest.TestCase):
     def test_agents_init(self):
-        self.assertGreater(len(hsa.agents), 0)
+        self.assertGreater(len(roc.agents), 0)
 
     def test_agents_create_queue_single(self):
-        for agent in hsa.agents:
+        for agent in roc.agents:
             if agent.is_component:
                 queue = agent.create_queue_single(2 ** 5)
                 self.assertIsInstance(queue, Queue)
 
     def test_agents_create_queue_multi(self):
-        for agent in hsa.agents:
+        for agent in roc.agents:
             if agent.is_component:
                 queue = agent.create_queue_multi(2 ** 5)
                 self.assertIsInstance(queue, Queue)
@@ -57,8 +58,8 @@ class TestAgents(unittest.TestCase):
 
 class _TestBase(unittest.TestCase):
     def setUp(self):
-        self.gpu = [a for a in hsa.agents if a.is_component][0]
-        self.cpu = [a for a in hsa.agents if not a.is_component][0]
+        self.gpu = [a for a in roc.agents if a.is_component][0]
+        self.cpu = [a for a in roc.agents if not a.is_component][0]
         self.queue = self.gpu.create_queue_multi(self.gpu.queue_max_size)
 
     def tearDown(self):
@@ -109,8 +110,8 @@ class TestMemory(_TestBase):
 
     def test_register(self):
         src = np.random.random(1024).astype(np.float32)
-        hsa.hsa_memory_register(src.ctypes.data, src.nbytes)
-        hsa.hsa_memory_deregister(src.ctypes.data, src.nbytes)
+        roc.hsa_memory_register(src.ctypes.data, src.nbytes)
+        roc.hsa_memory_deregister(src.ctypes.data, src.nbytes)
 
     def test_allocate(self):
         regions = self.gpu.regions
@@ -136,7 +137,7 @@ class TestMemory(_TestBase):
         ref = (ctypes.c_float * nelem).from_address(ptr.value)
         for i in range(src.size):
             self.assertEqual(ref[i], src[i])
-        hsa.hsa_memory_free(ptr)
+        roc.hsa_memory_free(ptr)
 
     @unittest.skipUnless(dgpu_present, "dGPU only")
     def test_coarse_grained_allocate(self):
@@ -196,9 +197,9 @@ class TestMemory(_TestBase):
 
         # Test writing to allocated area
         src = np.random.random(nelem).astype(np.float32)
-        hsa.hsa_memory_copy(cpu_ptr, src.ctypes.data, src.nbytes)
-        hsa.hsa_memory_copy(gpu_host_accessible_ptr, cpu_ptr, src.nbytes)
-        hsa.hsa_memory_copy(gpu_only_ptr, gpu_host_accessible_ptr, src.nbytes)
+        roc.hsa_memory_copy(cpu_ptr, src.ctypes.data, src.nbytes)
+        roc.hsa_memory_copy(gpu_host_accessible_ptr, cpu_ptr, src.nbytes)
+        roc.hsa_memory_copy(gpu_only_ptr, gpu_host_accessible_ptr, src.nbytes)
 
         # check write is correct
         cpu_ref = (ctypes.c_float * nelem).from_address(cpu_ptr.value)
@@ -212,8 +213,8 @@ class TestMemory(_TestBase):
 
         # zero out host accessible GPU memory and CPU memory
         z0 = np.zeros(nelem).astype(np.float32)
-        hsa.hsa_memory_copy(cpu_ptr, z0.ctypes.data, z0.nbytes)
-        hsa.hsa_memory_copy(gpu_host_accessible_ptr, cpu_ptr, z0.nbytes)
+        roc.hsa_memory_copy(cpu_ptr, z0.ctypes.data, z0.nbytes)
+        roc.hsa_memory_copy(gpu_host_accessible_ptr, cpu_ptr, z0.nbytes)
 
         # check zeroing is correct
         for i in range(z0.size):
@@ -223,16 +224,16 @@ class TestMemory(_TestBase):
             self.assertEqual(gpu_ha_ref[i], z0[i])
 
         # copy back the data from the GPU
-        hsa.hsa_memory_copy(gpu_host_accessible_ptr, gpu_only_ptr, src.nbytes)
+        roc.hsa_memory_copy(gpu_host_accessible_ptr, gpu_only_ptr, src.nbytes)
 
         # check the copy back is ok
         for i in range(src.size):
             self.assertEqual(gpu_ha_ref[i], src[i])
 
         # free
-        hsa.hsa_memory_free(cpu_ptr)
-        hsa.hsa_memory_free(gpu_only_ptr)
-        hsa.hsa_memory_free(gpu_host_accessible_ptr)
+        roc.hsa_memory_free(cpu_ptr)
+        roc.hsa_memory_free(gpu_only_ptr)
+        roc.hsa_memory_free(gpu_host_accessible_ptr)
 
     @unittest.skip("BRIG format unsupported.")
     def test_coarse_grained_kernel_execution(self):
@@ -243,7 +244,7 @@ class TestMemory(_TestBase):
         for kernargs, this is a performance hack.
         """
 
-        from numba.hsa.hsadrv.driver import BrigModule, Program, hsa,\
+        from numba.roc.hsadrv.driver import BrigModule, Program, roc,\
                 Executable
 
         def get_brig_file(basedir=None):
@@ -276,7 +277,7 @@ class TestMemory(_TestBase):
         # Compilation phase:
 
         # FIXME: this is dubious, assume launching agent is indexed first
-        agent = hsa.components[0]
+        agent = roc.components[0]
 
         # dGPU needs base profile, not full
         prog = Program(profile=enums.HSA_PROFILE_BASE)
@@ -317,8 +318,8 @@ class TestMemory(_TestBase):
                 "pointer must not be NULL")
 
         # init mem with data
-        hsa.hsa_memory_copy(host_in_ptr, src.ctypes.data, src.nbytes)
-        hsa.hsa_memory_copy(host_out_ptr, z0.ctypes.data, z0.nbytes)
+        roc.hsa_memory_copy(host_in_ptr, src.ctypes.data, src.nbytes)
+        roc.hsa_memory_copy(host_out_ptr, z0.ctypes.data, z0.nbytes)
 
         # alloc gpu only memory
         gpu_only_region = gpu_only_coarse_regions[0]
@@ -329,7 +330,7 @@ class TestMemory(_TestBase):
             "pointer must not be NULL")
 
         # copy memory from host accessible location to gpu only
-        hsa.hsa_memory_copy(gpu_in_ptr, host_in_ptr, src.nbytes)
+        roc.hsa_memory_copy(gpu_in_ptr, host_in_ptr, src.nbytes)
 
         # Do kernargs
 
@@ -356,7 +357,7 @@ class TestMemory(_TestBase):
         argref[1] = gpu_out_ptr.value
 
         # signal
-        sig = hsa.create_signal(1)
+        sig = roc.create_signal(1)
 
         # create queue and dispatch job
 
@@ -365,17 +366,17 @@ class TestMemory(_TestBase):
                            grid_size=(nelem, 1, 1),signal=None)
 
         # copy result back to host accessible memory to check
-        hsa.hsa_memory_copy(host_out_ptr, gpu_out_ptr, src.nbytes)
+        roc.hsa_memory_copy(host_out_ptr, gpu_out_ptr, src.nbytes)
 
         # check the data is recovered
         ref = (nelem * ctypes.c_float).from_address(host_out_ptr.value)
         np.testing.assert_equal(ref, src)
 
         # free
-        hsa.hsa_memory_free(host_in_ptr)
-        hsa.hsa_memory_free(host_out_ptr)
-        hsa.hsa_memory_free(gpu_in_ptr)
-        hsa.hsa_memory_free(gpu_out_ptr)
+        roc.hsa_memory_free(host_in_ptr)
+        roc.hsa_memory_free(host_out_ptr)
+        roc.hsa_memory_free(gpu_in_ptr)
+        roc.hsa_memory_free(gpu_out_ptr)
 
 
 class TestContext(_TestBase):
@@ -405,19 +406,19 @@ class TestContext(_TestBase):
 
             # Test writing to allocated area
             src = np.random.random(n).astype(np.float64)
-            hsa.hsa_memory_copy(cpu_mem.device_pointer, src.ctypes.data, src.nbytes)
-            hsa.hsa_memory_copy(ha_mem.device_pointer, cpu_mem.device_pointer, src.nbytes)
-            hsa.hsa_memory_copy(gpu_only_mem.device_pointer, ha_mem.device_pointer, src.nbytes)
+            roc.hsa_memory_copy(cpu_mem.device_pointer, src.ctypes.data, src.nbytes)
+            roc.hsa_memory_copy(ha_mem.device_pointer, cpu_mem.device_pointer, src.nbytes)
+            roc.hsa_memory_copy(gpu_only_mem.device_pointer, ha_mem.device_pointer, src.nbytes)
 
             # clear
             z0 = np.zeros_like(src)
-            hsa.hsa_memory_copy(ha_mem.device_pointer, z0.ctypes.data, z0.nbytes)
+            roc.hsa_memory_copy(ha_mem.device_pointer, z0.ctypes.data, z0.nbytes)
             ref = (n * ctypes.c_double).from_address(ha_mem.device_pointer.value)
             for k in range(n):
                 self.assertEqual(ref[k], 0)
 
             # copy back from dGPU
-            hsa.hsa_memory_copy(ha_mem.device_pointer, gpu_only_mem.device_pointer, src.nbytes)
+            roc.hsa_memory_copy(ha_mem.device_pointer, gpu_only_mem.device_pointer, src.nbytes)
             for k in range(n):
                 self.assertEqual(ref[k], src[k])
 
@@ -485,19 +486,19 @@ class TestContext(_TestBase):
 
         ## Test writing to allocated area
         src = np.random.random(n).astype(np.float64)
-        hsa.hsa_memory_copy(cpu_mem.device_pointer, src.ctypes.data, src.nbytes)
-        hsa.hsa_memory_copy(gpu_only_mem.device_pointer, cpu_mem.device_pointer, src.nbytes)
+        roc.hsa_memory_copy(cpu_mem.device_pointer, src.ctypes.data, src.nbytes)
+        roc.hsa_memory_copy(gpu_only_mem.device_pointer, cpu_mem.device_pointer, src.nbytes)
 
 
         # clear
         z0 = np.zeros_like(src)
-        hsa.hsa_memory_copy(cpu_mem.device_pointer, z0.ctypes.data, z0.nbytes)
+        roc.hsa_memory_copy(cpu_mem.device_pointer, z0.ctypes.data, z0.nbytes)
         ref = (n * ctypes.c_double).from_address(cpu_mem.device_pointer.value)
         for k in range(n):
             self.assertEqual(ref[k], 0)
 
         # copy back from dGPU
-        hsa.hsa_memory_copy(cpu_mem.device_pointer, gpu_only_mem.device_pointer, src.nbytes)
+        roc.hsa_memory_copy(cpu_mem.device_pointer, gpu_only_mem.device_pointer, src.nbytes)
         for k in range(n):
             self.assertEqual(ref[k], src[k])
 
@@ -529,8 +530,8 @@ class TestContext(_TestBase):
         kNumInt = 1024
         kSize = kNumInt * ctypes.sizeof(ctypes.c_int)
 
-        dependent_signal = hsa.create_signal(0)
-        completion_signal = hsa.create_signal(0)
+        dependent_signal = roc.create_signal(0)
+        completion_signal = roc.create_signal(0)
 
         ## allocate host src and dst, allow gpu access
         flags = dict(allow_access_to=[gpu_ctx.agent], finegrain=False)
@@ -552,13 +553,13 @@ class TestContext(_TestBase):
         # print("GPU: %s"%gpu_ctx._agent.name)
         # print("CPU: %s"%cpu_ctx._agent.name)
 
-        hsa.hsa_signal_store_relaxed(completion_signal, 1);
+        roc.hsa_signal_store_relaxed(completion_signal, 1);
 
         q = queue.Queue()
 
         class validatorThread(threading.Thread):
             def run(self):
-                val = hsa.hsa_signal_wait_acquire(
+                val = roc.hsa_signal_wait_acquire(
                     completion_signal,
                     enums.HSA_SIGNAL_CONDITION_EQ,
                     0,
@@ -568,14 +569,14 @@ class TestContext(_TestBase):
                 q.put(val)  # wait_res
 
         # this could be a call on the signal itself dependent_signal.store_relaxed(1)
-        hsa.hsa_signal_store_relaxed(dependent_signal, 1);
+        roc.hsa_signal_store_relaxed(dependent_signal, 1);
 
         h2l_start = threading.Semaphore(value=0)
 
         class l2hThread(threading.Thread):
             def run(self):
                 dep_signal = drvapi.hsa_signal_t(dependent_signal._id)
-                hsa.hsa_amd_memory_async_copy(host_dst.device_pointer.value,
+                roc.hsa_amd_memory_async_copy(host_dst.device_pointer.value,
                                         cpu_ctx._agent._id,
                                         local_memory.device_pointer.value,
                                         gpu_ctx._agent._id, kSize, 1,
@@ -586,7 +587,7 @@ class TestContext(_TestBase):
         class h2lThread(threading.Thread):
             def run(self):
                 h2l_start.acquire()  # to wait until l2h thread has started
-                hsa.hsa_amd_memory_async_copy(local_memory.device_pointer.value,
+                roc.hsa_amd_memory_async_copy(local_memory.device_pointer.value,
                                             gpu_ctx._agent._id,
                                             host_src.device_pointer.value,
                                             cpu_ctx._agent._id, kSize, 0,

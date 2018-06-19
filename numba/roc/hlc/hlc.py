@@ -9,7 +9,7 @@ import os
 import re
 from collections import namedtuple
 from numba import config
-from numba.hsa.hsadrv import devices
+from numba.roc.hsadrv import devices
 from .common import AMDGCNModule
 from .config import ROCM_BC_PATH
 from . import TRIPLE

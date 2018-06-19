@@ -12,7 +12,7 @@ def run_far_jump():
     gt_as_str = 'float32'
     R_EARTH = 6371.0  # km
 
-    @numba.hsa.jit(device=True)
+    @numba.roc.jit(device=True)
     def deg2rad(deg):
         return math.pi * deg / 180.0
 

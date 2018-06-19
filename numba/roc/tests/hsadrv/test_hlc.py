@@ -1,9 +1,9 @@
 from __future__ import print_function, absolute_import
 
 import numba.unittest_support as unittest
-from numba.hsa.hlc import hlc
-from numba.hsa.hsadrv import enums
-from numba.hsa.hsadrv.driver import dgpu_count
+from numba.roc.hlc import hlc
+from numba.roc.hsadrv import enums
+from numba.roc.hsadrv.driver import dgpu_count
 
 SPIR_SAMPLE = """
 ; ModuleID = 'kernel.out.bc'
@@ -57,9 +57,9 @@ class TestHLC(unittest.TestCase):
         self.assertEqual(brig[:8].decode('latin1'), 'HSA BRIG')
 
         # Compile
-        from numba.hsa.hsadrv.driver import BrigModule, Program, hsa, Executable
+        from numba.roc.hsadrv.driver import BrigModule, Program, hsa, Executable
 
-        agent = hsa.components[0]
+        agent = roc.components[0]
         brigmod = BrigModule(brig)
         prog = Program()
         prog.add_module(brigmod)
@@ -77,15 +77,15 @@ class TestHLC(unittest.TestCase):
 
         nelem = 1
 
-        sig = hsa.create_signal(nelem)
+        sig = roc.create_signal(nelem)
 
         src = np.random.random(nelem).astype(np.float32)
         dst = np.zeros_like(src)
 
 
         if(dgpu_count() > 0):
-            gpu = [a for a in hsa.agents if a.is_component][0]
-            cpu = [a for a in hsa.agents if not a.is_component][0]
+            gpu = [a for a in roc.agents if a.is_component][0]
+            cpu = [a for a in roc.agents if not a.is_component][0]
 
             gpu_regions = gpu.regions
             gpu_only_coarse_regions = list()
@@ -113,8 +113,8 @@ class TestHLC(unittest.TestCase):
                     "pointer must not be NULL")
 
             # init mem with data
-            hsa.hsa_memory_copy(host_in_ptr, src.ctypes.data, src.nbytes)
-            hsa.hsa_memory_copy(host_out_ptr, dst.ctypes.data, dst.nbytes)
+            roc.hsa_memory_copy(host_in_ptr, src.ctypes.data, src.nbytes)
+            roc.hsa_memory_copy(host_out_ptr, dst.ctypes.data, dst.nbytes)
 
             # alloc gpu only memory
             gpu_only_region = gpu_only_coarse_regions[0]
@@ -126,7 +126,7 @@ class TestHLC(unittest.TestCase):
                     "pointer must not be NULL")
 
             # copy memory from host accessible location to gpu only
-            hsa.hsa_memory_copy(gpu_in_ptr, host_in_ptr, src.nbytes)
+            roc.hsa_memory_copy(gpu_in_ptr, host_in_ptr, src.nbytes)
 
              # Do kernargs
 
@@ -166,9 +166,9 @@ class TestHLC(unittest.TestCase):
             argref[0] = src.ctypes.data
             argref[1] = dst.ctypes.data
 
-            hsa.hsa_memory_register(src.ctypes.data, src.nbytes)
-            hsa.hsa_memory_register(dst.ctypes.data, dst.nbytes)
-            hsa.hsa_memory_register(ctypes.byref(argref),
+            roc.hsa_memory_register(src.ctypes.data, src.nbytes)
+            roc.hsa_memory_register(dst.ctypes.data, dst.nbytes)
+            roc.hsa_memory_register(ctypes.byref(argref),
                                 ctypes.sizeof(argref))
 
             kernargs = argref
@@ -179,17 +179,17 @@ class TestHLC(unittest.TestCase):
 
         if(dgpu_count() > 0):
             # copy result back to host accessible memory to check
-            hsa.hsa_memory_copy(host_out_ptr, gpu_out_ptr, src.nbytes)
-            hsa.hsa_memory_copy(dst.ctypes.data, host_out_ptr, src.nbytes)
+            roc.hsa_memory_copy(host_out_ptr, gpu_out_ptr, src.nbytes)
+            roc.hsa_memory_copy(dst.ctypes.data, host_out_ptr, src.nbytes)
 
         np.testing.assert_equal(dst, src)
 
         if(dgpu_count() > 0):
             # free
-            hsa.hsa_memory_free(host_in_ptr)
-            hsa.hsa_memory_free(host_out_ptr)
-            hsa.hsa_memory_free(gpu_in_ptr)
-            hsa.hsa_memory_free(gpu_out_ptr)
+            roc.hsa_memory_free(host_in_ptr)
+            roc.hsa_memory_free(host_out_ptr)
+            roc.hsa_memory_free(gpu_in_ptr)
+            roc.hsa_memory_free(gpu_out_ptr)
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,25 +1,25 @@
 from __future__ import print_function, absolute_import
 
 import numba.unittest_support as unittest
-from numba import hsa
+from numba import roc
 
 
 class TestLinkage(unittest.TestCase):
     def test_indirection(self):
-        @hsa.jit(device=True)
+        @roc.jit(device=True)
         def base():
             pass
 
-        @hsa.jit(device=True)
+        @roc.jit(device=True)
         def layer1():
             base()
 
-        @hsa.jit(device=True)
+        @roc.jit(device=True)
         def layer2():
             layer1()
             base()
 
-        @hsa.jit
+        @roc.jit
         def kernel(a):
             layer2()
 

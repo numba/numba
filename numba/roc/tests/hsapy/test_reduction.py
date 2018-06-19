@@ -3,34 +3,34 @@ from __future__ import print_function, absolute_import, division
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import hsa, intp
+from numba import roc, intp
 
 WAVESIZE = 64
 
-@hsa.jit(device=True)
+@roc.jit(device=True)
 def wave_reduce(val):
-    tid = hsa.get_local_id(0)
+    tid = roc.get_local_id(0)
     laneid = tid % WAVESIZE
-    
+
     width = WAVESIZE // 2
     while width:
         if laneid < width:
             val[laneid] += val[laneid + width]
             val[laneid + width] = -1 # debug
-        hsa.wavebarrier()
+        roc.wavebarrier()
         width = width // 2
 
     # First thread has the result
-    hsa.wavebarrier()
+    roc.wavebarrier()
     return val[0]
 
-@hsa.jit
+@roc.jit
 def kernel_warp_reduce(inp, out):
-    idx = hsa.get_group_id(0)
+    idx = roc.get_group_id(0)
     val = inp[idx]
     out[idx] = wave_reduce(val)
 
-@hsa.jit
+@roc.jit
 def kernel_flat_reduce(inp, out):
     out[0] = wave_reduce(inp)
 

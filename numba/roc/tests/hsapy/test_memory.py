@@ -6,16 +6,16 @@ import logging
 
 import numpy as np
 
-from numba import hsa
+from numba import roc
 import numba.unittest_support as unittest
-from numba.hsa.hsadrv.driver import dgpu_present
+from numba.roc.hsadrv.driver import dgpu_present
 
 logger = logging.getLogger()
 
 
-@hsa.jit
+@roc.jit
 def copy_kernel(dst, src):
-    i = hsa.get_global_id(0)
+    i = roc.get_global_id(0)
     if i < dst.size:
         dst[i] = src[i]
 
@@ -37,9 +37,9 @@ class TestMemory(unittest.TestCase):
         nelem = blkct * blksz
         expect = np.arange(nelem) + 1
         logger.info('device array like')
-        darr = hsa.device_array_like(expect)
+        darr = roc.device_array_like(expect)
         logger.info('pre launch')
-        copy_kernel[blkct, blksz](darr, hsa.to_device(expect))
+        copy_kernel[blkct, blksz](darr, roc.to_device(expect))
         logger.info('post launch')
         got = darr.copy_to_host()
         np.testing.assert_equal(got, expect)
@@ -50,7 +50,7 @@ class TestMemory(unittest.TestCase):
         nelem = blkct * blksz
         expect = np.arange(nelem) + 1
         logger.info('coarsegrain array')
-        got = hsa.coarsegrain_array(shape=expect.shape, dtype=expect.dtype)
+        got = roc.coarsegrain_array(shape=expect.shape, dtype=expect.dtype)
         got.fill(0)
         logger.info('pre launch')
         copy_kernel[blkct, blksz](got, expect.copy())
@@ -63,7 +63,7 @@ class TestMemory(unittest.TestCase):
         nelem = blkct * blksz
         expect = np.arange(nelem) + 1
         logger.info('finegrain array')
-        got = hsa.finegrain_array(shape=expect.shape, dtype=expect.dtype)
+        got = roc.finegrain_array(shape=expect.shape, dtype=expect.dtype)
         got.fill(0)
         logger.info('pre launch')
         copy_kernel[blkct, blksz](got, expect.copy())
@@ -74,10 +74,10 @@ class TestMemory(unittest.TestCase):
         nelem = 1000
         expect = np.arange(nelem, dtype=np.int32) + 1
         logger.info('device array like')
-        darr = hsa.device_array_like(expect)
+        darr = roc.device_array_like(expect)
         self.assertTrue(np.all(expect != darr.copy_to_host()))
         logger.info('to_device')
-        stage = hsa.to_device(expect)
+        stage = roc.to_device(expect)
         logger.info('device -> device')
         darr.copy_to_device(stage)
         np.testing.assert_equal(expect, darr.copy_to_host())

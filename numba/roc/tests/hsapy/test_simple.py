@@ -1,8 +1,8 @@
 from __future__ import print_function, absolute_import
 
 import numpy as np
-from numba import hsa
-from numba.hsa.hsadrv.error import HsaKernelLaunchError
+from numba import roc
+from numba.roc.hsadrv.error import HsaKernelLaunchError
 import numba.unittest_support as unittest
 
 
@@ -11,7 +11,7 @@ class TestSimple(unittest.TestCase):
     def test_array_access(self):
         magic_token = 123
 
-        @hsa.jit
+        @roc.jit
         def udt(output):
             output[0] = magic_token
 
@@ -23,7 +23,7 @@ class TestSimple(unittest.TestCase):
     def test_array_access_2d(self):
         magic_token = 123
 
-        @hsa.jit
+        @roc.jit
         def udt(output):
             for i in range(output.shape[0]):
                 for j in range(output.shape[1]):
@@ -36,7 +36,7 @@ class TestSimple(unittest.TestCase):
     def test_array_access_3d(self):
         magic_token = 123
 
-        @hsa.jit
+        @roc.jit
         def udt(output):
             for i in range(output.shape[0]):
                 for j in range(output.shape[1]):
@@ -48,9 +48,9 @@ class TestSimple(unittest.TestCase):
         np.testing.assert_equal(out, magic_token)
 
     def test_global_id(self):
-        @hsa.jit
+        @roc.jit
         def udt(output):
-            global_id = hsa.get_global_id(0)
+            global_id = roc.get_global_id(0)
             output[global_id] = global_id
 
         # Allocate extra space to track bad indexing
@@ -63,10 +63,10 @@ class TestSimple(unittest.TestCase):
         self.assertEqual(out[-1], 0)
 
     def test_local_id(self):
-        @hsa.jit
+        @roc.jit
         def udt(output):
-            global_id = hsa.get_global_id(0)
-            local_id = hsa.get_local_id(0)
+            global_id = roc.get_global_id(0)
+            local_id = roc.get_local_id(0)
             output[global_id] = local_id
 
         # Allocate extra space to track bad indexing
@@ -82,10 +82,10 @@ class TestSimple(unittest.TestCase):
         self.assertEqual(out[-1], 0)
 
     def test_group_id(self):
-        @hsa.jit
+        @roc.jit
         def udt(output):
-            global_id = hsa.get_global_id(0)
-            group_id = hsa.get_group_id(0)
+            global_id = roc.get_global_id(0)
+            group_id = roc.get_group_id(0)
             output[global_id] = group_id + 1
 
         # Allocate extra space to track bad indexing
@@ -102,35 +102,35 @@ class TestSimple(unittest.TestCase):
 
 
     def test_workdim(self):
-        @hsa.jit
+        @roc.jit
         def udt(output):
-            global_id = hsa.get_global_id(0)
-            workdim = hsa.get_work_dim()
+            global_id = roc.get_global_id(0)
+            workdim = roc.get_work_dim()
             output[global_id] = workdim
 
         out = np.zeros(10, dtype=np.intp)
         udt[1, 10](out)
         np.testing.assert_equal(out, 1)
 
-        @hsa.jit
+        @roc.jit
         def udt2(output):
-            g0 = hsa.get_global_id(0)
-            g1 = hsa.get_global_id(1)
-            output[g0, g1] = hsa.get_work_dim()
+            g0 = roc.get_global_id(0)
+            g1 = roc.get_global_id(1)
+            output[g0, g1] = roc.get_work_dim()
 
         out = np.zeros((2, 5), dtype=np.intp)
         udt2[(1, 1), (2, 5)](out)
         np.testing.assert_equal(out, 2)
 
     def test_empty_kernel(self):
-        @hsa.jit
+        @roc.jit
         def udt():
             pass
 
         udt[1, 1]()
 
     def test_workgroup_oversize(self):
-        @hsa.jit
+        @roc.jit
         def udt():
             pass
 

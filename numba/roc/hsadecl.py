@@ -3,7 +3,7 @@ from numba import types
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate,
                                     MacroTemplate, signature, Registry)
-from numba import hsa
+from numba import roc
 
 registry = Registry()
 intrinsic = registry.register
@@ -20,91 +20,91 @@ intrinsic_global = registry.register_global
 
 @intrinsic
 class Hsa_get_global_id(ConcreteTemplate):
-    key = hsa.get_global_id
+    key = roc.get_global_id
     cases = [signature(types.intp, types.uint32)]
 
 
 @intrinsic
 class Hsa_get_local_id(ConcreteTemplate):
-    key = hsa.get_local_id
+    key = roc.get_local_id
     cases = [signature(types.intp, types.uint32)]
 
 
 @intrinsic
 class Hsa_get_group_id(ConcreteTemplate):
-    key = hsa.get_group_id
+    key = roc.get_group_id
     cases = [signature(types.intp, types.uint32)]
 
 
 @intrinsic
 class Hsa_get_num_groups(ConcreteTemplate):
-    key = hsa.get_num_groups
+    key = roc.get_num_groups
     cases = [signature(types.intp, types.uint32)]
 
 
 @intrinsic
 class Hsa_get_work_dim(ConcreteTemplate):
-    key = hsa.get_work_dim
+    key = roc.get_work_dim
     cases = [signature(types.uint32)]
 
 
 @intrinsic
 class Hsa_get_global_size(ConcreteTemplate):
-    key = hsa.get_global_size
+    key = roc.get_global_size
     cases = [signature(types.intp, types.uint32)]
 
 
 @intrinsic
 class Hsa_get_local_size(ConcreteTemplate):
-    key = hsa.get_local_size
+    key = roc.get_local_size
     cases = [signature(types.intp, types.uint32)]
 
 
 @intrinsic
 class Hsa_barrier(ConcreteTemplate):
-    key = hsa.barrier
+    key = roc.barrier
     cases = [signature(types.void, types.uint32),
              signature(types.void)]
 
 
 @intrinsic
 class Hsa_mem_fence(ConcreteTemplate):
-    key = hsa.mem_fence
+    key = roc.mem_fence
     cases = [signature(types.void, types.uint32)]
 
 
 @intrinsic
 class Hsa_wavebarrier(ConcreteTemplate):
-    key = hsa.wavebarrier
+    key = roc.wavebarrier
     cases = [signature(types.void)]
 
 
 @intrinsic
 class Hsa_activelanepermute_wavewidth(ConcreteTemplate):
-    key = hsa.activelanepermute_wavewidth
+    key = roc.activelanepermute_wavewidth
     # parameter: src, laneid, identity, useidentity
     cases = [signature(ty, ty, types.uint32, ty, types.bool_)
              for ty in (types.integer_domain|types.real_domain)]
 
 @intrinsic
 class Hsa_ds_permute(ConcreteTemplate):
-    key = hsa.ds_permute
+    key = roc.ds_permute
     cases = [signature(types.int32, types.int32, types.int32)]
 
 @intrinsic
 class Hsa_ds_bpermute(ConcreteTemplate):
-    key = hsa.ds_bpermute
+    key = roc.ds_bpermute
     cases = [signature(types.int32, types.int32, types.int32)]
 
 # hsa.shared submodule -------------------------------------------------------
 
 class Hsa_shared_array(MacroTemplate):
-    key = hsa.shared.array
+    key = roc.shared.array
 
 
 @intrinsic_attr
 class HsaSharedTemplate(AttributeTemplate):
-    key = types.Module(hsa.shared)
+    key = types.Module(roc.shared)
 
     def resolve_array(self, mod):
         return types.Macro(Hsa_shared_array)
@@ -114,7 +114,7 @@ class HsaSharedTemplate(AttributeTemplate):
 
 @intrinsic
 class Hsa_atomic_add(AbstractTemplate):
-    key = hsa.atomic.add
+    key = roc.atomic.add
 
     def generic(self, args, kws):
         assert not kws
@@ -128,7 +128,7 @@ class Hsa_atomic_add(AbstractTemplate):
 
 @intrinsic_attr
 class HsaAtomicTemplate(AttributeTemplate):
-    key = types.Module(hsa.atomic)
+    key = types.Module(roc.atomic)
 
     def resolve_add(self, mod):
         return types.Function(Hsa_atomic_add)
@@ -138,7 +138,7 @@ class HsaAtomicTemplate(AttributeTemplate):
 
 @intrinsic_attr
 class HsaModuleTemplate(AttributeTemplate):
-    key = types.Module(hsa)
+    key = types.Module(roc)
 
     def resolve_get_global_id(self, mod):
         return types.Function(Hsa_get_global_id)
@@ -180,12 +180,12 @@ class HsaModuleTemplate(AttributeTemplate):
         return types.Function(Hsa_ds_bpermute)
 
     def resolve_shared(self, mod):
-        return types.Module(hsa.shared)
+        return types.Module(roc.shared)
 
     def resolve_atomic(self, mod):
-        return types.Module(hsa.atomic)
+        return types.Module(roc.atomic)
 
 
 # intrinsic
 
-intrinsic_global(hsa, types.Module(hsa))
+intrinsic_global(roc, types.Module(roc))

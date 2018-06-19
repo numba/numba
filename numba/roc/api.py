@@ -5,7 +5,7 @@ import numpy as np
 from numba.cuda.api import _prepare_shape_strides_dtype
 from numba.cuda.cudadrv.driver import memory_size_from_info as \
 agnostic_memory_size_from_info
-from numba.hsa.hsadrv.devices import get_context
+from numba.roc.hsadrv.devices import get_context
 
 from .stubs import (
     get_global_id,

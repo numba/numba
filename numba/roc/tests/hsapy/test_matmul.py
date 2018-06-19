@@ -4,16 +4,16 @@ from timeit import default_timer as timer
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import hsa, float32
-from numba.hsa.hsadrv.error import HsaKernelLaunchError
+from numba import roc, float32
+from numba.roc.hsadrv.error import HsaKernelLaunchError
 
 
 class TestMatMul(unittest.TestCase):
     def test_matmul_naive(self):
-        @hsa.jit
+        @roc.jit
         def matmul(A, B, C):
-            i = hsa.get_global_id(0)
-            j = hsa.get_global_id(1)
+            i = roc.get_global_id(0)
+            j = roc.get_global_id(1)
 
             if i >= C.shape[0] or j >= C.shape[1]:
                 return
@@ -30,13 +30,13 @@ class TestMatMul(unittest.TestCase):
         B = np.random.random((N, N)).astype(np.float32)
         C = np.zeros_like(A)
 
-        with hsa.register(A, B, C):
+        with roc.register(A, B, C):
             ts = timer()
             matmul[(N // 16, N // 16), (16, 16)](A, B, C)
             te = timer()
             print("1st GPU time:", te - ts)
 
-        with hsa.register(A, B, C):
+        with roc.register(A, B, C):
             ts = timer()
             matmul[(N // 16, N // 16), (16, 16)](A, B, C)
             te = timer()
@@ -50,16 +50,16 @@ class TestMatMul(unittest.TestCase):
 
     def check_matmul_fast(self, gridsize, blocksize):
 
-        @hsa.jit
+        @roc.jit
         def matmulfast(A, B, C):
-            x = hsa.get_global_id(0)
-            y = hsa.get_global_id(1)
+            x = roc.get_global_id(0)
+            y = roc.get_global_id(1)
 
-            tx = hsa.get_local_id(0)
-            ty = hsa.get_local_id(1)
+            tx = roc.get_local_id(0)
+            ty = roc.get_local_id(1)
 
-            sA = hsa.shared.array(shape=(blocksize, blocksize), dtype=float32)
-            sB = hsa.shared.array(shape=(blocksize, blocksize), dtype=float32)
+            sA = roc.shared.array(shape=(blocksize, blocksize), dtype=float32)
+            sB = roc.shared.array(shape=(blocksize, blocksize), dtype=float32)
 
             if x >= C.shape[0] or y >= C.shape[1]:
                 return
@@ -71,12 +71,12 @@ class TestMatMul(unittest.TestCase):
                 sA[tx, ty] = A[x, ty + i * blocksize]
                 sB[tx, ty] = B[tx + i * blocksize, y]
                 # wait for preload to end
-                hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
+                roc.barrier(roc.CLK_GLOBAL_MEM_FENCE)
                 # compute loop
                 for j in range(blocksize):
                     tmp += sA[tx, j] * sB[j, ty]
                 # wait for compute to end
-                hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
+                roc.barrier(roc.CLK_GLOBAL_MEM_FENCE)
 
             C[x, y] = tmp
 
@@ -88,13 +88,13 @@ class TestMatMul(unittest.TestCase):
         griddim = gridsize, gridsize
         blockdim = blocksize, blocksize
 
-        with hsa.register(A, B, C):
+        with roc.register(A, B, C):
             ts = timer()
             matmulfast[griddim, blockdim](A, B, C)
             te = timer()
             print("1st GPU time:", te - ts)
 
-        with hsa.register(A, B, C):
+        with roc.register(A, B, C):
             ts = timer()
             matmulfast[griddim, blockdim](A, B, C)
             te = timer()

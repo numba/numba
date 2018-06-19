@@ -4,9 +4,9 @@ import numpy as np
 
 from numba.npyufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
                                         GUFuncCallSteps)
-from numba.hsa.hsadrv.driver import dgpu_present
-import numba.hsa.hsadrv.devicearray as devicearray
-import numba.hsa.api as api
+from numba.roc.hsadrv.driver import dgpu_present
+import numba.roc.hsadrv.devicearray as devicearray
+import numba.roc.api as api
 
 class HsaUFuncDispatcher(object):
     """

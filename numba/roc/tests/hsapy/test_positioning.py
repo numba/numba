@@ -1,22 +1,22 @@
 from __future__ import print_function, absolute_import
 
 import numpy as np
-from numba import hsa
+from numba import roc
 import numba.unittest_support as unittest
 
 
 class TestPositioning(unittest.TestCase):
 
     def test_kernel_jit(self):
-        @hsa.jit
+        @roc.jit
         def udt(output):
-            global_id = hsa.get_global_id(0)
-            global_size = hsa.get_global_size(0)
-            local_id = hsa.get_local_id(0)
-            group_id = hsa.get_group_id(0)
-            num_groups = hsa.get_num_groups(0)
-            workdim = hsa.get_work_dim()
-            local_size = hsa.get_local_size(0)
+            global_id = roc.get_global_id(0)
+            global_size = roc.get_global_size(0)
+            local_id = roc.get_local_id(0)
+            group_id = roc.get_group_id(0)
+            num_groups = roc.get_num_groups(0)
+            workdim = roc.get_work_dim()
+            local_size = roc.get_local_size(0)
 
             output[0, group_id, local_id] = global_id
             output[1, group_id, local_id] = global_size
