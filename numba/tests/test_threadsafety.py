@@ -4,7 +4,7 @@ These tests will cause segfault if fail.
 """
 import threading
 import random
-
+import traceback
 import numpy as np
 
 from numba import config
@@ -26,7 +26,6 @@ def gufunc_foo(a, b, out):
     out[0] = a + b
 
 
-
 class TestThreadSafety(unittest.TestCase):
 
     def run_jit(self, **options):
@@ -40,10 +39,16 @@ class TestThreadSafety(unittest.TestCase):
     def run_compile(self, fnlist):
         self._cache_dir = temp_directory(self.__class__.__name__)
         with override_config('CACHE_DIR', self._cache_dir):
+            exceptions = []
+
             def chooser():
-                for _ in range(10):
-                    fn = random.choice(fnlist)
-                    fn()
+                try:
+                    for _ in range(10):
+                        fn = random.choice(fnlist)
+                        fn()
+                except Exception as e:
+                    exceptions.append(e)
+                    raise
 
             ths = [threading.Thread(target=chooser)
                    for i in range(4)]
@@ -51,6 +56,7 @@ class TestThreadSafety(unittest.TestCase):
                 th.start()
             for th in ths:
                 th.join()
+        self.assertFalse(exceptions)
 
     def test_concurrent_jit(self):
         self.run_compile([self.run_jit(nopython=True)])
