@@ -27,16 +27,17 @@ class Environment(_dynfunc.Environment):
 
     @classmethod
     def from_fndesc(cls, fndesc):
-        mod = fndesc.lookup_module()
-        try:
-            # Avoid creating new Env
-            return cls._memo[fndesc.env_name]
-        except KeyError:
-            inst = cls(mod.__dict__)
-            inst.env_name = fndesc.env_name
-            cls._memo[fndesc.env_name] = inst
-            return inst
-
+        from .compiler import lock_compiler
+        with lock_compiler:
+            mod = fndesc.lookup_module()
+            try:
+                # Avoid creating new Env
+                return cls._memo[fndesc.env_name]
+            except KeyError:
+                inst = cls(mod.__dict__)
+                inst.env_name = fndesc.env_name
+                cls._memo[fndesc.env_name] = inst
+                return inst
 
     def __reduce__(self):
         return _rebuild_env, (
@@ -47,13 +48,15 @@ class Environment(_dynfunc.Environment):
 
 
 def _rebuild_env(modname, consts, env_name):
-    if env_name in Environment._memo:
-        return Environment._memo[env_name]
-    from . import serialize
-    mod = serialize._rebuild_module(modname)
-    env = Environment(mod.__dict__)
-    env.consts[:] = consts
-    return env
+    from .compiler import lock_compiler
+    with lock_compiler:
+        if env_name in Environment._memo:
+            return Environment._memo[env_name]
+        from . import serialize
+        mod = serialize._rebuild_module(modname)
+        env = Environment(mod.__dict__)
+        env.consts[:] = consts
+        return env
 
 
 _VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
