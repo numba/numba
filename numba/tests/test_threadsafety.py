@@ -31,6 +31,7 @@ class TestThreadSafety(unittest.TestCase):
 
     def run_jit(self, **options):
         def runner():
+            options['debug'] = True
             cfunc = jit(**options)(foo)
 
             return cfunc(4, 10)
