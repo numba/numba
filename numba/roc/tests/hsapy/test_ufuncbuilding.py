@@ -45,9 +45,10 @@ class TestVectorizeDecor(unittest.TestCase):
     def test_vectorize_decor(self):
         @vectorize(["float32(float32, float32, float32)",
                     "intp(intp, intp, intp)"],
-                   target='hsa')
+                   target='roc')
         def axpy(a, x, y):
             return a * x + y
+
 
         self.assertIsInstance(axpy, HsaUFuncDispatcher)
         # Test integer version
@@ -77,7 +78,7 @@ class TestVectorizeScalar(unittest.TestCase):
     def test_scalar_input(self):
         @vectorize(["float32(float32, float32, float32)",
                     "intp(intp, intp, intp)"],
-                   target='hsa')
+                   target='roc')
         def axpy(a, x, y):
             return a * x + y
 

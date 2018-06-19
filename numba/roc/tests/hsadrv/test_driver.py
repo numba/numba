@@ -620,7 +620,7 @@ class TestContext(_TestBase):
         n  = 10
         data = np.zeros(n)
         output = np.zeros(n)
-        @vectorize("float64(float64)", target='hsa')
+        @vectorize("float64(float64)", target='roc')
         def func(x):
             return x + 1
 

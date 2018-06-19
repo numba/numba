@@ -129,7 +129,7 @@ class TestGUFuncBuilding(unittest.TestCase):
 class TestGUFuncDecor(unittest.TestCase):
     def test_gufunc_decorator(self):
         @guvectorize(["void(float32, float32[:], float32[:], float32[:])"],
-                     '(),(t),(t)->(t)', target='hsa')
+                     '(),(t),(t)->(t)', target='roc')
         def saxpy(a, x, y, out):
             for i in range(out.shape[0]):
                 out[i] = a * x[i] + y[i]

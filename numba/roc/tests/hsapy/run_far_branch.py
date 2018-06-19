@@ -18,7 +18,7 @@ def run_far_jump():
 
     sig = '%s(%s, %s, %s, %s)' % ((gt_as_str,) * 5)
 
-    @numba.vectorize(sig, target='hsa')
+    @numba.vectorize(sig, target='roc')
     def gpu_great_circle_distance(lat1, lng1, lat2, lng2):
         '''Return the great-circle distance in km between (lat1, lng1) and (lat2, lng2)
         on the surface of the Earth.'''

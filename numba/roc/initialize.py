@@ -9,7 +9,7 @@ def _initialize_ufunc():
 
         return HsaVectorize
 
-    Vectorize.target_registry.ondemand['hsa'] = init_vectorize
+    Vectorize.target_registry.ondemand['roc'] = init_vectorize
 
 
 def _initialize_gufunc():
@@ -20,7 +20,7 @@ def _initialize_gufunc():
 
         return HsaGUFuncVectorize
 
-    GUVectorize.target_registry.ondemand['hsa'] = init_guvectorize
+    GUVectorize.target_registry.ondemand['roc'] = init_guvectorize
 
 
 _initialize_ufunc()
