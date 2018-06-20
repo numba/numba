@@ -299,11 +299,12 @@ class TestRandom(BaseTest):
     # On some distributions, the errors seem to accumulate dramatically.
 
     def _check_dist(self, func, pyfunc, argslist, niters=3,
-                    prec='double', ulps=12):
+                    prec='double', ulps=12, pydtype=None):
         assert len(argslist)
         for args in argslist:
             results = [func(*args) for i in range(niters)]
-            pyresults = [pyfunc(*args) for i in range(niters)]
+            pyresults = [(pyfunc(*args, dtype=pydtype) if pydtype else pyfunc(*args))
+                         for i in range(niters)]
             self.assertPreciseEqual(results, pyresults, prec=prec, ulps=ulps,
                                     msg="for arguments %s" % (args,))
 
@@ -374,7 +375,7 @@ class TestRandom(BaseTest):
                                    jit_nullary("np.random.lognormal"),
                                    get_np_state_ptr())
 
-    def _check_randrange(self, func1, func2, func3, ptr, max_width, is_numpy):
+    def _check_randrange(self, func1, func2, func3, ptr, max_width, is_numpy, tp=None):
         """
         Check a randrange()-like function.
         """
@@ -394,8 +395,10 @@ class TestRandom(BaseTest):
                 rr = self._follow_cpython(ptr).randrange
             widths = [w for w in [1, 5, 8, 5000, 2**40, 2**62 + 2**61] if w < max_width]
             for width in widths:
-                self._check_dist(func1, rr, [(width,)], niters=10)
-                self._check_dist(func2, rr, [(-2, 2 +width)], niters=10)
+                self._check_dist(func1, rr, [(width,)], niters=10,
+                                 pydtype=(tp if is_numpy else None))
+                self._check_dist(func2, rr, [(-2, 2 +width)], niters=10,
+                                 pydtype=(tp if is_numpy else None))
                 if func3 is not None:
                     self.assertPreciseEqual(func3(-2, 2 + width, 6),
                                             rr(-2, 2 + width, 6))
@@ -422,11 +425,12 @@ class TestRandom(BaseTest):
 
     @tag('important')
     def test_numpy_randint(self):
-        for tp, max_width in [(types.int64, 2**63), (types.int32, 2**31)]:
+        for tp, np_tp, max_width in [(types.int64, np.int64, 2**63),
+                                     (types.int32, np.int32, 2**31)]:
             cr1 = compile_isolated(numpy_randint1, (tp,))
             cr2 = compile_isolated(numpy_randint2, (tp, tp))
             self._check_randrange(cr1.entry_point, cr2.entry_point,
-                                  None, get_np_state_ptr(), max_width, True)
+                                  None, get_np_state_ptr(), max_width, True, np_tp)
 
     def _check_randint(self, func, ptr, max_width):
         """
