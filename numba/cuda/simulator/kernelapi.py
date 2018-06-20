@@ -181,6 +181,14 @@ class FakeCUDAModule(object):
     def blockIdx(self):
         return threading.current_thread().blockIdx
 
+    @property
+    def warpsize(self):
+        return 32
+
+    @property
+    def laneid(self):
+        return threading.current_thread().thread_id % 32
+
     def syncthreads(self):
         threading.current_thread().syncthreads()
 
@@ -195,6 +203,15 @@ class FakeCUDAModule(object):
     def threadfence_system(self):
         # No-op
         pass
+
+    def syncthreads_count(self, val):
+        return threading.current_thread().syncthreads_count(val)
+
+    def syncthreads_and(self, val):
+        return threading.current_thread().syncthreads_and(val)
+
+    def syncthreads_or(self, val):
+        return threading.current_thread().syncthreads_or(val)
 
     def popc(self, val):
         return bin(val).count("1")

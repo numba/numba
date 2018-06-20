@@ -113,6 +113,9 @@ SREG_MAPPING = {
     'nctaid.x': 'llvm.nvvm.read.ptx.sreg.nctaid.x',
     'nctaid.y': 'llvm.nvvm.read.ptx.sreg.nctaid.y',
     'nctaid.z': 'llvm.nvvm.read.ptx.sreg.nctaid.z',
+
+    'warpsize': 'llvm.nvvm.read.ptx.sreg.warpsize',
+    'laneid': 'llvm.nvvm.read.ptx.sreg.laneid',
 }
 
 
