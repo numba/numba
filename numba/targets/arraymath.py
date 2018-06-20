@@ -9,6 +9,7 @@ from collections import namedtuple
 from enum import IntEnum
 
 import numpy as np
+from numpy.lib.stride_tricks import as_strided
 
 from llvmlite import ir
 import llvmlite.llvmpy.core as lc
@@ -154,17 +155,59 @@ def _gen_index_tuple(tyctx, shape_tuple, value, axis):
 @lower_builtin(np.sum, types.Array)
 @lower_builtin("array.sum", types.Array)
 def array_sum(context, builder, sig, args):
+    # Use njit since register_jitable doesn't support recursion
+    from numba import njit
+
     zero = sig.return_type(0)
 
-    def array_sum_impl(arr):
-        c = zero
-        for v in np.nditer(arr):
-            c += v.item()
-        return c
+    @njit
+    def pairwise_sum(arr, n, start, stop):
+        if n < 8:
+            res = zero
+            for i in range(start, stop):
+                res += arr[i]
+            return res
+        elif n <= 128:
+            r0 = arr[start+0]
+            r1 = arr[start+1]
+            r2 = arr[start+2]
+            r3 = arr[start+3]
+            r4 = arr[start+4]
+            r5 = arr[start+5]
+            r6 = arr[start+6]
+            r7 = arr[start+7]
 
-    res = context.compile_internal(builder, array_sum_impl, sig, args,
-                                    locals=dict(c=sig.return_type))
+            m = stop - (stop % 8)
+            for i in range(start + 8, m, 8):
+                r0 += arr[i]
+                r1 += arr[i+1]
+                r2 += arr[i+2]
+                r3 += arr[i+3]
+                r4 += arr[i+4]
+                r5 += arr[i+5]
+                r6 += arr[i+6]
+                r7 += arr[i+7]
+            res = ((r0 + r1) + (r2 + r3)) + ((r4 + r5) + (r6 + r7))
+
+            for i in range(m, stop):
+                res += arr[i]
+
+            return res
+        else:
+            n2 = n // 2
+            n2 -= n2 % 8
+            middle = start + n2
+            return (pairwise_sum(arr, n2, start, middle)
+                    + pairwise_sum(arr, n - n2, middle, stop))
+
+    def array_sum_impl(arr):
+        n = arr.size
+        flatarr = as_strided(arr, shape=(n,), strides=arr.strides[-1:])
+        return pairwise_sum(flatarr, n, 0, n)
+
+    res = context.compile_internal(builder, array_sum_impl, sig, args)
     return impl_ret_borrowed(context, builder, sig.return_type, res)
+
 
 @lower_builtin(np.sum, types.Array, types.intp)
 @lower_builtin(np.sum, types.Array, types.Const)
