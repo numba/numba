@@ -201,11 +201,11 @@ class TestCudaWarpOperations(SerialMixin, unittest.TestCase):
         self.assertTrue(np.all(ary_out == 1))
 
     def test_vote_sync_ballot(self):
-        compiled = cuda.jit("void(int32[:])")(use_vote_sync_ballot)
+        compiled = cuda.jit("void(uint32[:])")(use_vote_sync_ballot)
         nelem = 32
-        ary = np.empty(nelem, dtype=np.int32)
+        ary = np.empty(nelem, dtype=np.uint32)
         compiled[1, nelem](ary)
-        self.assertTrue(np.all(ary == np.int32(0xffffffff)))
+        self.assertTrue(np.all(ary == np.uint32(0xffffffff)))
 
     @unittest.skipUnless(_safe_cc_check((7, 0)),
                          "Matching requires at least Volta Architecture")
