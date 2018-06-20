@@ -394,11 +394,12 @@ class TestRandom(BaseTest):
             else:
                 rr = self._follow_cpython(ptr).randrange
             widths = [w for w in [1, 5, 8, 5000, 2**40, 2**62 + 2**61] if w < max_width]
+            pydtype = tp if is_numpy and np.__version__ >= '1.11.0' else None
             for width in widths:
                 self._check_dist(func1, rr, [(width,)], niters=10,
-                                 pydtype=(tp if is_numpy else None))
+                                 pydtype=pydtype)
                 self._check_dist(func2, rr, [(-2, 2 +width)], niters=10,
-                                 pydtype=(tp if is_numpy else None))
+                                 pydtype=pydtype)
                 if func3 is not None:
                     self.assertPreciseEqual(func3(-2, 2 + width, 6),
                                             rr(-2, 2 + width, 6))
