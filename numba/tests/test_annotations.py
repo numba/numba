@@ -84,8 +84,12 @@ class TestAnnotation(unittest.TestCase):
         # Regex pattern to check for the "lifted_tag" in the line of the loop
         re_lifted_tag = re.compile(
             r'<td class="lifted_tag">\s*'
-            r'[&nbsp;]+for i in range\(x\):  # this line is tagged\s*'
-            r'</td>', re.MULTILINE)
+            r'\s*<details>'
+            r'\s*<summary>'
+            r'\s*<code>'
+            r'\s*[0-9]+:'
+            r'\s*[&nbsp;]+for i in range\(x\):  # this line is tagged\s*',
+            re.MULTILINE)
 
         # Compile int64 version
         sig_i64 = (types.int64,)
@@ -104,7 +108,8 @@ class TestAnnotation(unittest.TestCase):
         sigfmt = "with signature: {} -&gt; pyobject"
         self.assertEqual(output.count(sigfmt.format(sig_i64)), 1)
         # Ensure the loop is tagged
-        self.assertEqual(len(re.findall(re_lifted_tag, output)), 1)
+        self.assertEqual(len(re.findall(re_lifted_tag, output)), 1,
+                         msg='%s not found in %s' % (re_lifted_tag, output))
 
         # Compile float64 version
         sig_f64 = (types.float64,)
@@ -123,6 +128,21 @@ class TestAnnotation(unittest.TestCase):
         self.assertEqual(output.count(sigfmt.format(sig_f64)), 1)
         # Ensure the loop is tagged in both output
         self.assertEqual(len(re.findall(re_lifted_tag, output)), 2)
+
+    def test_pretty_print(self):
+
+        @numba.njit
+        def foo(x, y):
+            return x, y
+
+        foo(1, 2)
+        # Exercise the method
+        obj = foo.inspect_types(pretty=True)
+
+        # Excerise but supply a not None file kwarg, this is invalid
+        with self.assertRaises(ValueError) as raises:
+            obj = foo.inspect_types(pretty=True, file='should be None')
+        self.assertIn('`file` must be None if `pretty=True`', str(raises.exception))
 
 
 class TestTypeAnnotation(unittest.TestCase):
