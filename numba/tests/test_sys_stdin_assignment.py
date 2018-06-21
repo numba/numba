@@ -1,8 +1,7 @@
 import sys
 
+import unittest
 from numba import njit
-
-from .support import TestCase
 
 
 @njit
@@ -27,7 +26,7 @@ def f1_2(begin1, end1, begin2, end2):
     return end1 + 1 >= begin2
 
 
-class TestSysStdinAssignment(TestCase):
+class TestSysStdinAssignment(unittest.TestCase):
 
     def test_no_reassignment_of_stdout(self):
         """
@@ -55,4 +54,3 @@ class TestSysStdinAssignment(TestCase):
 
         self.assertNotEqual(sys.stderr, None)
         self.assertNotEqual(sys.stdout, None)
-
