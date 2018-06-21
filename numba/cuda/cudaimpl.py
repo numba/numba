@@ -211,6 +211,33 @@ def ptx_syncthreads(context, builder, sig, args):
     return context.get_dummy_value()
 
 
+@lower(stubs.syncthreads_count, types.i4)
+def ptx_syncthreads_count(context, builder, sig, args):
+    fname = 'llvm.nvvm.barrier0.popc'
+    lmod = builder.module
+    fnty = Type.function(Type.int(32), (Type.int(32),))
+    sync = lmod.get_or_insert_function(fnty, name=fname)
+    return builder.call(sync, args)
+
+
+@lower(stubs.syncthreads_and, types.i4)
+def ptx_syncthreads_and(context, builder, sig, args):
+    fname = 'llvm.nvvm.barrier0.and'
+    lmod = builder.module
+    fnty = Type.function(Type.int(32), (Type.int(32),))
+    sync = lmod.get_or_insert_function(fnty, name=fname)
+    return builder.call(sync, args)
+
+
+@lower(stubs.syncthreads_or, types.i4)
+def ptx_syncthreads_or(context, builder, sig, args):
+    fname = 'llvm.nvvm.barrier0.or'
+    lmod = builder.module
+    fnty = Type.function(Type.int(32), (Type.int(32),))
+    sync = lmod.get_or_insert_function(fnty, name=fname)
+    return builder.call(sync, args)
+
+
 @lower(stubs.threadfence_block)
 def ptx_threadfence_block(context, builder, sig, args):
     assert not args
@@ -242,6 +269,107 @@ def ptx_threadfence_device(context, builder, sig, args):
     sync = lmod.get_or_insert_function(fnty, name=fname)
     builder.call(sync, ())
     return context.get_dummy_value()
+
+
+@lower(stubs.syncwarp, types.i4)
+def ptx_warp_sync(context, builder, sig, args):
+    fname = 'llvm.nvvm.bar.warp.sync'
+    lmod = builder.module
+    fnty = Type.function(Type.void(), (Type.int(32),))
+    sync = lmod.get_or_insert_function(fnty, name=fname)
+    builder.call(sync, args)
+    return context.get_dummy_value()
+
+
+@lower(stubs.shfl_sync_intrinsic, types.i4, types.i4, types.i4, types.i4, types.i4)
+@lower(stubs.shfl_sync_intrinsic, types.i4, types.i4, types.i8, types.i4, types.i4)
+@lower(stubs.shfl_sync_intrinsic, types.i4, types.i4, types.f4, types.i4, types.i4)
+@lower(stubs.shfl_sync_intrinsic, types.i4, types.i4, types.f8, types.i4, types.i4)
+def ptx_shfl_sync_i32(context, builder, sig, args):
+    """
+    The NVVM intrinsic for shfl only supports i32, but the cuda intrinsic function supports
+    both 32 and 64 bit ints and floats, so for feature parity, i64, f32, and f64 are implemented.
+    Floats by way of bitcasting the float to an int, then shuffling, then bitcasting back.
+    And 64-bit values by packing them into 2 32bit values, shuffling thoose, and then packing back together.
+    """
+    mask, mode, value, index, clamp = args
+    value_type = sig.args[2]
+    if value_type in types.real_domain:
+        value = builder.bitcast(value, Type.int(value_type.bitwidth))
+    fname = 'llvm.nvvm.shfl.sync.i32'
+    lmod = builder.module
+    fnty = Type.function(
+        Type.struct((Type.int(32), Type.int(1))),
+        (Type.int(32), Type.int(32), Type.int(32), Type.int(32), Type.int(32))
+    )
+    func = lmod.get_or_insert_function(fnty, name=fname)
+    if value_type.bitwidth == 32:
+        ret = builder.call(func, (mask, mode, value, index, clamp))
+        if value_type == types.float32:
+            rv = builder.extract_value(ret, 0)
+            pred = builder.extract_value(ret, 1)
+            fv = builder.bitcast(rv, Type.float())
+            ret = cgutils.make_anonymous_struct(builder, (fv, pred))
+    else:
+        value1 = builder.trunc(value, Type.int(32))
+        value_lshr = builder.lshr(value, context.get_constant(types.i8, 32))
+        value2 = builder.trunc(value_lshr, Type.int(32))
+        ret1 = builder.call(func, (mask, mode, value1, index, clamp))
+        ret2 = builder.call(func, (mask, mode, value2, index, clamp))
+        rv1 = builder.extract_value(ret1, 0)
+        rv2 = builder.extract_value(ret2, 0)
+        pred = builder.extract_value(ret1, 1)
+        rv1_64 = builder.zext(rv1, Type.int(64))
+        rv2_64 = builder.zext(rv2, Type.int(64))
+        rv_shl = builder.shl(rv2_64, context.get_constant(types.i8, 32))
+        rv = builder.or_(rv_shl, rv1_64)
+        if value_type == types.float64:
+            rv = builder.bitcast(rv, Type.double())
+        ret = cgutils.make_anonymous_struct(builder, (rv, pred))
+    return ret
+
+
+@lower(stubs.vote_sync_intrinsic, types.i4, types.i4, types.boolean)
+def ptx_vote_sync(context, builder, sig, args):
+    fname = 'llvm.nvvm.vote.sync'
+    lmod = builder.module
+    fnty = Type.function(Type.struct((Type.int(32), Type.int(1))),
+                         (Type.int(32), Type.int(32), Type.int(1)))
+    func = lmod.get_or_insert_function(fnty, name=fname)
+    return builder.call(func, args)
+
+
+@lower(stubs.match_any_sync, types.i4, types.i4)
+@lower(stubs.match_any_sync, types.i4, types.i8)
+@lower(stubs.match_any_sync, types.i4, types.f4)
+@lower(stubs.match_any_sync, types.i4, types.f8)
+def ptx_match_any_sync(context, builder, sig, args):
+    mask, value = args
+    width = sig.args[1].bitwidth
+    if sig.args[1] in types.real_domain:
+        value = builder.bitcast(value, Type.int(width))
+    fname = 'llvm.nvvm.match.any.sync.i{}'.format(width)
+    lmod = builder.module
+    fnty = Type.function(Type.int(32), (Type.int(32), Type.int(width)))
+    func = lmod.get_or_insert_function(fnty, name=fname)
+    return builder.call(func, (mask, value))
+
+
+@lower(stubs.match_all_sync, types.i4, types.i4)
+@lower(stubs.match_all_sync, types.i4, types.i8)
+@lower(stubs.match_all_sync, types.i4, types.f4)
+@lower(stubs.match_all_sync, types.i4, types.f8)
+def ptx_match_all_sync(context, builder, sig, args):
+    mask, value = args
+    width = sig.args[1].bitwidth
+    if sig.args[1] in types.real_domain:
+        value = builder.bitcast(value, Type.int(width))
+    fname = 'llvm.nvvm.match.all.sync.i{}'.format(width)
+    lmod = builder.module
+    fnty = Type.function(Type.struct((Type.int(32), Type.int(1))),
+                         (Type.int(32), Type.int(width)))
+    func = lmod.get_or_insert_function(fnty, name=fname)
+    return builder.call(func, (mask, value))
 
 
 @lower(stubs.popc, types.Any)

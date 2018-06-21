@@ -95,6 +95,15 @@ def branching_with_selps(a, b, c):
     a[i] = cuda.selp(a[i] > 4, inner, 3)
 
 
+def simple_laneid(ary):
+    i = cuda.grid(1)
+    ary[i] = cuda.laneid
+
+
+def simple_warpsize(ary):
+    ary[0] = cuda.warpsize
+
+
 class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
     def test_simple_threadidx(self):
         compiled = cuda.jit("void(int32[:])")(simple_threadidx)
@@ -336,6 +345,21 @@ class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
         ary = np.zeros(1, dtype=np.int32)
         compiled(ary, 0x000000000010000)
         self.assertEquals(ary[0], 16)
+
+    def test_simple_laneid(self):
+        compiled = cuda.jit("void(int32[:])")(simple_laneid)
+        count = 2
+        ary = np.zeros(count*32, dtype=np.int32)
+        exp = np.tile(np.arange(32, dtype=np.int32), count)
+        compiled[1, count*32](ary)
+        self.assertTrue(np.all(ary == exp))
+
+    def test_simple_warpsize(self):
+        compiled = cuda.jit("void(int32[:])")(simple_warpsize)
+        ary = np.zeros(1, dtype=np.int32)
+        compiled(ary)
+        self.assertEquals(ary[0], 32, "CUDA semantics")
+
 
 if __name__ == '__main__':
     unittest.main()
