@@ -75,7 +75,7 @@ svml_funcs = {
     "trunc":      [],  # np.trunc, math.trunc],
 }
 # TODO: these functions are not vectorizable with complex types
-complex_funcs_exclude = ["sqrt", "tan", "log10", "expm1", "log1p", "tanh"]
+complex_funcs_exclude = ["sqrt", "tan", "log10", "expm1", "log1p", "tanh", "log"]
 
 # remove untested entries
 svml_funcs = {k: v for k, v in svml_funcs.items() if len(v) > 0}
