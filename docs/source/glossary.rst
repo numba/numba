@@ -87,9 +87,9 @@ Glossary
       In numba, when a mutable container is passed as argument to a nopython
       function from the Python interpreter, the container object and all its
       contained elements are converted into nopython values.  To match the
-      semantic of Python, any mutation on the container inside the nopython
+      semantics of Python, any mutation on the container inside the nopython
       function must be visible in the Python interpreter.  To do so, Numba
-      must update the container and its element and convert them back into
+      must update the container and its elements and convert them back into
       Python objects during the transition back into the interpreter.
 
       Not to be confused with Python's "reflection" in the context of binary
