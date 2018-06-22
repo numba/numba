@@ -87,20 +87,20 @@ class TestLegacyAPI(BasePYCCTest):
 
         main(args=['--debug', '-o', cdll_path, source])
         lib = CDLL(cdll_path)
-        lib.mult.argtypes = [POINTER(c_double), c_void_p, c_void_p,
+        lib.mult.argtypes = [POINTER(c_double), c_void_p,
                              c_double, c_double]
         lib.mult.restype = c_int
 
-        lib.multf.argtypes = [POINTER(c_float), c_void_p, c_void_p,
+        lib.multf.argtypes = [POINTER(c_float), c_void_p,
                               c_float, c_float]
         lib.multf.restype = c_int
 
         res = c_double()
-        lib.mult(byref(res), None, None, 123, 321)
+        lib.mult(byref(res), None, 123, 321)
         self.assertEqual(res.value, 123 * 321)
 
         res = c_float()
-        lib.multf(byref(res), None, None, 987, 321)
+        lib.multf(byref(res), None, 987, 321)
         self.assertEqual(res.value, 987 * 321)
 
     def test_pycc_pymodule(self):

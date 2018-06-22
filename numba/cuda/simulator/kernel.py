@@ -143,6 +143,8 @@ class BlockThread(threading.Thread):
         self.blockIdx = Dim3(*blockIdx)
         self.threadIdx = Dim3(*threadIdx)
         self.exception = None
+        blockDim = Dim3(*self._manager._block_dim)
+        self.thread_id = self.threadIdx.x + blockDim.x * (self.threadIdx.y + blockDim.y * self.threadIdx.z)
 
     def run(self):
         try:
@@ -161,6 +163,27 @@ class BlockThread(threading.Thread):
         self.syncthreads_blocked = True
         self.syncthreads_event.wait()
         self.syncthreads_event.clear()
+
+    def syncthreads_count(self, value):
+        self._manager.block_state[self.threadIdx.x, self.threadIdx.y, self.threadIdx.z] = value
+        self.syncthreads()
+        count = np.count_nonzero(self._manager.block_state)
+        self.syncthreads()
+        return count
+
+    def syncthreads_and(self, value):
+        self._manager.block_state[self.threadIdx.x, self.threadIdx.y, self.threadIdx.z] = value
+        self.syncthreads()
+        test = np.all(self._manager.block_state)
+        self.syncthreads()
+        return 1 if test else 0
+
+    def syncthreads_or(self, value):
+        self._manager.block_state[self.threadIdx.x, self.threadIdx.y, self.threadIdx.z] = value
+        self.syncthreads()
+        test = np.any(self._manager.block_state)
+        self.syncthreads()
+        return 1 if test else 0
 
     def __str__(self):
         return 'Thread <<<%s, %s>>>' % (self.blockIdx, self.threadIdx)
@@ -188,6 +211,7 @@ class BlockManager(object):
         self._grid_dim = grid_dim
         self._block_dim = block_dim
         self._f = f
+        self.block_state = np.zeros(block_dim, dtype=np.bool)
 
     def run(self, grid_point, *args):
         # Create all threads

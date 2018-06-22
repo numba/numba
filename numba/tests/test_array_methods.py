@@ -12,6 +12,7 @@ from numba.errors import TypingError, LoweringError
 from numba.numpy_support import (as_dtype, strict_ufunc_typing,
                                  version as numpy_version)
 from .support import TestCase, CompilationCache, MemoryLeak, MemoryLeakMixin, tag
+from .matmul_usecase import needs_blas
 
 
 def np_around_array(arr, decimals, out):
@@ -880,6 +881,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check(np.array([[3.1, 3.1], [1.7, 2.29], [3.3, 1.7]]))
         check(np.array([]))
 
+    @needs_blas
     def test_array_dot(self):
         # just ensure that the dot impl dispatches correctly, do
         # not test dot itself, this is done in test_linalg.
