@@ -591,7 +591,7 @@ def _python_list_to_native(typ, obj, c, size, listptr, errorptr):
     """
     Construct a new native list from a Python list.
     """
-    def check_element_type(nth, itemobj):
+    def check_element_type(nth, itemobj, expected_typobj):
         typobj = nth.typeof(itemobj)
         # Check if *typobj* is NULL
         with c.builder.if_then(
@@ -635,7 +635,7 @@ def _python_list_to_native(typ, obj, c, size, listptr, errorptr):
                     expected_typobj = nth.typeof(c.pyapi.list_getitem(obj, zero))
                     with cgutils.for_range(c.builder, size) as loop:
                         itemobj = c.pyapi.list_getitem(obj, loop.index)
-                        check_element_type(nth, itemobj)
+                        check_element_type(nth, itemobj, expected_typobj)
                         # XXX we don't call native cleanup for each
                         # list element, since that would require keeping
                         # of which unboxings have been successful.

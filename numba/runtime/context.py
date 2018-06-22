@@ -105,11 +105,10 @@ class NRTContext(object):
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [size])
 
-
     def meminfo_new_varsize_dtor(self, builder, size, dtor):
         """
         Like meminfo_new_varsize() but also set the destructor for
-        clearing objects inside the allocation.
+        cleaning up references to objects inside the allocation.
         """
         self._require_nrt()
 

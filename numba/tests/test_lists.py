@@ -1165,7 +1165,7 @@ class TestListOfList(ManagedListTestCase):
         self.assertEqual(expect, got)
 
     @expect_reflection_failure
-    def test_heterogenous_list(self):
+    def test_heterogeneous_list(self):
         def pyfunc(x):
             return x[1]
 

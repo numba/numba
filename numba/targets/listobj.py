@@ -126,7 +126,7 @@ class _ListPayloadMixin(object):
 class ListPayloadAccessor(_ListPayloadMixin):
     """
     A helper object to access the list attributes given the pointer to the
-    payload pointer.
+    payload type.
     """
     def __init__(self, context, builder, list_type, payload_ptr):
         self._context = context
@@ -184,6 +184,7 @@ class ListInstance(_ListPayloadMixin):
         """Remove the value at the location
         """
         self.decref_value(self.getitem(idx))
+        # it's necessary for the dtor which just decref every slot on it.
         self.zfill(idx, self._builder.add(idx, idx.type(1)))
 
     def setitem(self, idx, val, incref):

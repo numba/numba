@@ -183,12 +183,13 @@ List Reflection
 
 In nopython mode, Numba does not operate on Python objects.  ``list`` are
 compiled into an internal representation.  Any ``list`` arguments must be
-converted into this representation on the way in and their contained elements
-must be restored in the original Python objects via a process called
-*reflection*.  Reflection is required to maintain the same semantic as regular
-Python code.  However, the reflection process can be expensive for large list
-and it is not supported for lists that contain reflected data types.  Users
-cannot use list-of-list as argument because of this limitation.
+converted into this representation on the way in to nopython mode and their
+contained elements must be restored in the original Python objects via a
+process called :term:`reflection`.  Reflection is required to maintain the same
+semantic as regular Python code.  However, the reflection process can be
+expensive for large list and it is not supported for lists that contain
+reflected data types.  Users cannot use list-of-list as argument because of
+this limitation.
 
 .. note::
    When passing a list into a JIT-compiled function, any modifications
