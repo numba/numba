@@ -18,25 +18,11 @@ def nocopy(kernel):
     return kernel
 
 
-@cuda.jit
 def set_array_to_three(arr):
     arr[0] = 3
 
 
-@cuda.jit
 def set_record_to_three(rec):
-    rec[0]['b'] = 3
-
-
-@nocopy
-@cuda.jit
-def set_array_to_three_nocopy(arr):
-    arr[0] = 3
-
-
-@nocopy
-@cuda.jit
-def set_record_to_three_nocopy(rec):
     rec[0]['b'] = 3
 
 
@@ -47,44 +33,50 @@ recordtype = np.dtype(
 
 
 class TestRetrieveAutoconvertedArrays(SerialMixin, unittest.TestCase):
+    def setUp(self):
+        self.set_array_to_three = cuda.jit(set_array_to_three)
+        self.set_array_to_three_nocopy = nocopy(cuda.jit(set_array_to_three))
+        self.set_record_to_three = cuda.jit(set_record_to_three)
+        self.set_record_to_three_nocopy = nocopy(cuda.jit(set_record_to_three))
+
     def test_array_inout(self):
         host_arr = np.zeros(1, dtype=np.int64)
-        set_array_to_three(cuda.InOut(host_arr))
+        self.set_array_to_three(cuda.InOut(host_arr))
         self.assertEqual(3, host_arr[0])
 
     def test_array_in(self):
         host_arr = np.zeros(1, dtype=np.int64)
-        set_array_to_three(cuda.In(host_arr))
+        self.set_array_to_three(cuda.In(host_arr))
         self.assertEqual(0, host_arr[0])
 
     def test_array_in_from_config(self):
         host_arr = np.zeros(1, dtype=np.int64)
-        set_array_to_three_nocopy(host_arr)
+        self.set_array_to_three_nocopy(host_arr)
         self.assertEqual(0, host_arr[0])
 
     def test_array_default(self):
         host_arr = np.zeros(1, dtype=np.int64)
-        set_array_to_three(host_arr)
+        self.set_array_to_three(host_arr)
         self.assertEqual(3, host_arr[0])
 
     def test_record_in(self):
         host_rec = np.zeros(1, dtype=recordtype)
-        set_record_to_three(cuda.In(host_rec))
+        self.set_record_to_three(cuda.In(host_rec))
         self.assertEqual(0, host_rec[0]['b'])
 
     def test_record_inout(self):
         host_rec = np.zeros(1, dtype=recordtype)
-        set_record_to_three(cuda.InOut(host_rec))
+        self.set_record_to_three(cuda.InOut(host_rec))
         self.assertEqual(3, host_rec[0]['b'])
 
     def test_record_default(self):
         host_rec = np.zeros(1, dtype=recordtype)
-        set_record_to_three(host_rec)
+        self.set_record_to_three(host_rec)
         self.assertEqual(3, host_rec[0]['b'])
 
     def test_record_in_from_config(self):
         host_rec = np.zeros(1, dtype=recordtype)
-        set_record_to_three_nocopy(host_rec)
+        self.set_record_to_three_nocopy(host_rec)
         self.assertEqual(0, host_rec[0]['b'])
 
 
