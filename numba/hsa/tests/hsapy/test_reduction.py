@@ -47,9 +47,13 @@ class TestReduction(unittest.TestCase):
         np.testing.assert_equal(out[:WAVESIZE], inp[:WAVESIZE].sum())
         np.testing.assert_equal(out[WAVESIZE:], inp[WAVESIZE:].sum())
 
+    @unittest.skip("Missing impl __hsail_wavebarrier and "
+            "__hsail_activelanepermute_wavewidth_b64")
     def test_wave_reduce_intp(self):
         self.template_wave_reduce_int(np.intp)
 
+    @unittest.skip("Missing impl __hsail_wavebarrier and "
+            "__hsail_activelanepermute_wavewidth_b64")
     def test_wave_reduce_int32(self):
         self.template_wave_reduce_int(np.int32)
 
@@ -62,9 +66,13 @@ class TestReduction(unittest.TestCase):
         np.testing.assert_allclose(out[:WAVESIZE], inp[:WAVESIZE].sum())
         np.testing.assert_allclose(out[WAVESIZE:], inp[WAVESIZE:].sum())
 
+    @unittest.skip("Missing impl __hsail_wavebarrier and "
+            "__hsail_activelanepermute_wavewidth_b64")
     def test_wave_reduce_float64(self):
         self.template_wave_reduce_real(np.float64)
 
+    @unittest.skip("Missing impl __hsail_wavebarrier and "
+            "__hsail_activelanepermute_wavewidth_b64")
     def test_wave_reduce_float32(self):
         self.template_wave_reduce_real(np.float32)
 

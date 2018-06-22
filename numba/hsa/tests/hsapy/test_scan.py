@@ -314,6 +314,8 @@ class TestScan(unittest.TestCase):
 
 
 class TestFasterScan(unittest.TestCase):
+
+    @unittest.skip("Missing impl __hsail_wavebarrier")
     def test_single_block(self):
         @hsa.jit
         def scan_block(data, sums):
@@ -337,6 +339,8 @@ class TestFasterScan(unittest.TestCase):
         self.assertEqual(expected[-1], sums[0])
         self.assertEqual(0, data[0])
 
+
+    @unittest.skip("Missing impl __hsail_wavebarrier")
     def test_single_larger_block(self):
         @hsa.jit
         def scan_block(data, sums):
@@ -361,6 +365,7 @@ class TestFasterScan(unittest.TestCase):
         self.assertEqual(expected[-1], sums[0])
         self.assertEqual(0, data[0])
 
+    @unittest.skip("Missing impl __hsail_wavebarrier")
     def test_multi_large_block(self):
         @hsa.jit
         def scan_block(data, sums):
@@ -390,6 +395,9 @@ class TestFasterScan(unittest.TestCase):
 
 
 class TestShuffleScan(unittest.TestCase):
+
+    @unittest.skip("Missing impl __hsail_wavebarrier and "
+            "__hsail_activelanepermute_wavewidth_b64")
     def test_shuffle(self):
         @hsa.jit
         def foo(inp, mask, out):
@@ -404,6 +412,8 @@ class TestShuffleScan(unittest.TestCase):
             foo[1, 64](inp, mask, out)
             np.testing.assert_equal(inp[mask], out)
 
+    @unittest.skip("Missing impl __hsail_wavebarrier and "
+            "__hsail_activelanepermute_wavewidth_b64")
     def test_shuffle_up(self):
         @hsa.jit
         def foo(inp, out):
@@ -421,6 +431,8 @@ class TestShuffleScan(unittest.TestCase):
             np.testing.assert_equal(inp[0, :-1], out[0, 1:])
             np.testing.assert_equal(inp[0, -1], out[0, 0])
 
+    @unittest.skip("Missing impl __hsail_wavebarrier and "
+            "__hsail_activelanepermute_wavewidth_b64")
     def test_shuf_wave_inclusive_scan(self):
         @hsa.jit
         def foo(inp, out):
@@ -432,6 +444,8 @@ class TestShuffleScan(unittest.TestCase):
         foo[1, 64](inp, out)
         np.testing.assert_equal(out, inp.cumsum())
 
+    @unittest.skip("Missing impl __hsail_wavebarrier and "
+            "__hsail_activelanepermute_wavewidth_b64")
     def test_shuf_device_inclusive_scan(self):
         @hsa.jit
         def foo(inp, out):

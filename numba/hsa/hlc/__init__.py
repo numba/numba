@@ -7,7 +7,7 @@ DATALAYOUT = {
          "-v512:512-v1024:1024-n32"),
 }
 
-TRIPLE = "hsail64-pc-unknown-amdopencl"
+TRIPLE = "amdgcn--amdhsa"
 
 # Allow user to use "NUMBA_USE_LIBHLC" env-var to use cmdline HLC.
 if os.environ.get('NUMBA_USE_LIBHLC', '').lower() not in ['0', 'no', 'false']:

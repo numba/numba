@@ -6,6 +6,8 @@ import numba.unittest_support as unittest
 
 
 class TestPositioning(unittest.TestCase):
+
+    @unittest.skip("Missing impl __hsail_get_work_dim")
     def test_kernel_jit(self):
         @hsa.jit
         def udt(output):

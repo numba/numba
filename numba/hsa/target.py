@@ -68,7 +68,7 @@ class HSATargetContext(BaseContext):
 
     def init(self):
         self._internal_codegen = codegen.JITHSACodegen("numba.hsa.jit")
-        self._target_data = DATALAYOUT[utils.MACHINE_BITS]
+        self._target_data = ll.create_target_data(DATALAYOUT[utils.MACHINE_BITS])
         # Override data model manager
         self.data_model_manager = hsa_data_model_manager
 
@@ -84,6 +84,10 @@ class HSATargetContext(BaseContext):
 
     def codegen(self):
         return self._internal_codegen
+
+    @property
+    def target_data(self):
+        return self._target_data
 
     def mangler(self, name, argtypes):
         def repl(m):

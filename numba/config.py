@@ -295,6 +295,9 @@ class _EnvReloader(object):
         NUMBA_NUM_THREADS = _readenv("NUMBA_NUM_THREADS", int,
                                      NUMBA_DEFAULT_NUM_THREADS)
 
+        # Declare a dGPU is present
+        NUMBA_HSA_DGPU_PRESENT = _readenv("NUMBA_HSA_DGPU_PRESENT", int, 0)
+
         # Debug Info
 
         # The default value for the `debug` flag

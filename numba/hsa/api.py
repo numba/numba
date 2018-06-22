@@ -28,6 +28,9 @@ from .enums import (
 
 from .hsadrv.driver import hsa as _hsadrv
 
+from numba.cuda.cudadrv.driver import memory_size_from_info as \
+agnostic_memory_size_from_info
+
 
 class _AutoDeregister(object):
     def __init__(self, args):
@@ -67,3 +70,92 @@ def deregister(*args):
             _hsadrv.hsa_memory_deregister(data.ctypes.data, data.nbytes)
         else:
             raise TypeError(type(data))
+
+from .hsadrv import devicearray
+from numba.cuda.api import _prepare_shape_strides_dtype
+
+
+def device_array(shape, dtype=np.float, strides=None, order='C'):
+    """device_array(shape, dtype=np.float, strides=None, order='C')
+
+    Allocate an empty device ndarray. Similar to :meth:`numpy.empty`.
+    """
+    shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
+                                                         order)
+    return devicearray.DeviceNDArray(shape=shape, strides=strides, dtype=dtype)
+
+
+def device_array_like(ary):
+    """Call hsa.devicearray() with information from the array.
+    """
+    return device_array(shape=ary.shape, dtype=ary.dtype, strides=ary.strides)
+
+
+from numba.hsa.hsadrv.devices import get_context
+
+def to_device(obj, stream=None, context=None, copy=True, to=None):
+    """to_device(obj, context, copy=True, to=None)
+
+    Allocate and transfer a numpy ndarray or structured scalar to the device.
+
+    To copy host->device a numpy array::
+
+        ary = numpy.arange(10)
+        d_ary = hsa.to_device(ary)
+
+    The resulting ``d_ary`` is a ``DeviceNDArray``.
+
+    To copy device->host::
+
+        hary = d_ary.copy_to_host()
+
+    To copy device->host to an existing array::
+
+        ary = numpy.empty(shape=d_ary.shape, dtype=d_ary.dtype)
+        d_ary.copy_to_host(ary)
+
+    """
+    context = context or get_context()
+
+    if to is None:
+        to = devicearray.from_array_like(obj)
+
+    if copy:
+        to.copy_to_device(obj, stream=stream, context=context)
+    return to
+
+
+def stream():
+    from .hsadrv.driver import hsa
+    return hsa.create_stream()
+
+
+def _host_array(finegrain, shape, dtype, strides, order):
+    from .hsadrv import devices
+    shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
+                                                         order)
+    bytesize = agnostic_memory_size_from_info(shape, strides, dtype.itemsize)
+    # TODO does allowing access by all dGPUs really work in a multiGPU system?
+    agents = [c._agent for c in devices.get_all_contexts()]
+    buf = devices.get_cpu_context().memhostalloc(bytesize, finegrain=finegrain,
+                                                 allow_access_to=agents)
+    arr = np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
+                     buffer=buf)
+    return arr.view(type=devicearray.HostArray)
+
+
+def coarsegrain_array(shape, dtype=np.float, strides=None, order='C'):
+    """coarsegrain_array(shape, dtype=np.float, strides=None, order='C')
+    Similar to np.empty().
+    """
+    return _host_array(finegrain=False, shape=shape, dtype=dtype,
+                       strides=strides, order=order)
+
+
+def finegrain_array(shape, dtype=np.float, strides=None, order='C'):
+    """finegrain_array(shape, dtype=np.float, strides=None, order='C')
+
+    Similar to np.empty().
+    """
+    return _host_array(finegrain=False, shape=shape, dtype=dtype,
+                       strides=strides, order=order)

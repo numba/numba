@@ -2,7 +2,8 @@ from __future__ import print_function, absolute_import
 
 import re
 
-re_regname = re.compile(r"%\.([0-9a-z_]+)", re.I)
+re_labelname = re.compile(r"\n\.([0-9a-z_\.]+):", re.I) # label: .<stuff>:
+re_regname = re.compile(r"%\.([0-9a-z_]+)", re.I) # register: %.<stuff>
 re_metadata_def = re.compile(r"\!\d+\s*=")
 re_metadata_correct_usage = re.compile(r"metadata\s*\![{'\"]")
 re_metadata_ref = re.compile(r"\!\d+")
@@ -41,9 +42,21 @@ def rename_register(llvmir):
     return re_regname.sub(repl, llvmir)
 
 
+def rename_label(llvmir):
+    """
+    HLC does not like a label with '.' prefix.
+    """
+    def repl(mat):
+        return '_dot_.{0}:'.format(mat.group(1))
+
+    return re_labelname.sub(repl, llvmir)
+
+
 def adapt_llvm_version(llvmir):
     """
     Adapt the LLVM IR to match the syntax required by HLC.
     """
     llvmir = rename_register(llvmir)
-    return add_metadata_type(llvmir)
+    llvmir = rename_label(llvmir)
+    #   return add_metadata_type(llvmir)
+    return llvmir

@@ -2,6 +2,8 @@ from __future__ import print_function, absolute_import
 
 import numba.unittest_support as unittest
 from numba.hsa.hlc import hlc
+from numba.hsa.hsadrv import enums
+from numba.hsa.hsadrv.driver import dgpu_count
 
 SPIR_SAMPLE = """
 ; ModuleID = 'kernel.out.bc'
@@ -35,16 +37,19 @@ float addrspace(1)* nocapture %output) {
 !10 = metadata !{metadata !"Simple C/C++ TBAA"}
 """
 
-
 class TestHLC(unittest.TestCase):
+
+    # skip these, not compatible IR for LLVM 3.7
+    @unittest.skip("Incompatible IR")
     def test_hsail(self):
         hlcmod = hlc.Module()
         hlcmod.load_llvm(SPIR_SAMPLE)
         hsail = hlcmod.finalize().hsail
         self.assertIn("prog kernel &copy", hsail)
 
+    @unittest.skip("Incompatible IR")
     def test_brig(self):
-        # Genreate BRIG
+        # Generate BRIG
         hlcmod = hlc.Module()
         hlcmod.load_llvm(SPIR_SAMPLE)
         brig = hlcmod.finalize().brig
@@ -70,30 +75,121 @@ class TestHLC(unittest.TestCase):
         import ctypes
         import numpy as np
 
-        sig = hsa.create_signal(1)
+        nelem = 1
 
-        kernarg_region = [r for r in agent.regions if r.supports_kernargs][0]
+        sig = hsa.create_signal(nelem)
 
-        kernarg_types = (ctypes.c_void_p * 2)
-        kernargs = kernarg_region.allocate(kernarg_types)
-
-        src = np.random.random(1).astype(np.float32)
+        src = np.random.random(nelem).astype(np.float32)
         dst = np.zeros_like(src)
 
-        kernargs[0] = src.ctypes.data
-        kernargs[1] = dst.ctypes.data
 
-        hsa.hsa_memory_register(src.ctypes.data, src.nbytes)
-        hsa.hsa_memory_register(dst.ctypes.data, dst.nbytes)
-        hsa.hsa_memory_register(ctypes.byref(kernargs),
-                                ctypes.sizeof(kernargs))
+        if(dgpu_count() > 0):
+            gpu = [a for a in hsa.agents if a.is_component][0]
+            cpu = [a for a in hsa.agents if not a.is_component][0]
+
+            gpu_regions = gpu.regions
+            gpu_only_coarse_regions = list()
+            gpu_host_accessible_coarse_regions = list()
+            for r in gpu_regions:
+                if r.supports(enums.HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED):
+                    if r.host_accessible:
+                        gpu_host_accessible_coarse_regions.append(r)
+                    else:
+                        gpu_only_coarse_regions.append(r)
+            # check we have 1+ coarse gpu region(s) of each type
+            self.assertGreater(len(gpu_only_coarse_regions), 0)
+            self.assertGreater(len(gpu_host_accessible_coarse_regions), 0)
+
+            # data size
+            nbytes = ctypes.sizeof(ctypes.c_float) * nelem
+
+            # alloc host accessible memory
+            gpu_host_accessible_region = gpu_host_accessible_coarse_regions[0]
+            host_in_ptr = gpu_host_accessible_region.allocate(nbytes)
+            self.assertNotEqual(host_in_ptr.value, None,
+                    "pointer must not be NULL")
+            host_out_ptr = gpu_host_accessible_region.allocate(nbytes)
+            self.assertNotEqual(host_out_ptr.value, None,
+                    "pointer must not be NULL")
+
+            # init mem with data
+            hsa.hsa_memory_copy(host_in_ptr, src.ctypes.data, src.nbytes)
+            hsa.hsa_memory_copy(host_out_ptr, dst.ctypes.data, dst.nbytes)
+
+            # alloc gpu only memory
+            gpu_only_region = gpu_only_coarse_regions[0]
+            gpu_in_ptr = gpu_only_region.allocate(nbytes)
+            self.assertNotEqual(gpu_in_ptr.value, None,
+                    "pointer must not be NULL")
+            gpu_out_ptr = gpu_only_region.allocate(nbytes)
+            self.assertNotEqual(gpu_out_ptr.value, None,
+                    "pointer must not be NULL")
+
+            # copy memory from host accessible location to gpu only
+            hsa.hsa_memory_copy(gpu_in_ptr, host_in_ptr, src.nbytes)
+
+             # Do kernargs
+
+            # Find a coarse region (for better performance on dGPU) in which
+            # to place kernargs. NOTE: This violates the HSA spec
+            kernarg_regions = list()
+            for r in gpu_host_accessible_coarse_regions:
+               # NOTE: VIOLATION
+               # if r.supports(enums.HSA_REGION_GLOBAL_FLAG_KERNARG):
+               kernarg_regions.append(r)
+            self.assertGreater(len(kernarg_regions), 0)
+
+            kernarg_region = kernarg_regions[0]
+
+            kernarg_ptr = kernarg_region.allocate(
+                    2 * ctypes.sizeof(ctypes.c_void_p))
+
+            self.assertNotEqual(ctypes.addressof(kernarg_ptr), 0,
+                    "pointer must not be NULL")
+
+            # wire in gpu memory
+            argref = (2 * ctypes.c_size_t).from_address(kernarg_ptr.value)
+            argref[0] = gpu_in_ptr.value
+            argref[1] = gpu_out_ptr.value
+
+            kernargs = kernarg_ptr
+
+        else:
+            kernarg_region = [r for r in agent.regions
+                    if r.supports(enums.HSA_REGION_GLOBAL_FLAG_KERNARG)][0]
+
+
+            kernarg_ptr = kernarg_region.allocate(
+                    2 * ctypes.sizeof(ctypes.c_void_p))
+
+            argref = (2 * ctypes.c_size_t).from_address(kernarg_ptr.value)
+            argref[0] = src.ctypes.data
+            argref[1] = dst.ctypes.data
+
+            hsa.hsa_memory_register(src.ctypes.data, src.nbytes)
+            hsa.hsa_memory_register(dst.ctypes.data, dst.nbytes)
+            hsa.hsa_memory_register(ctypes.byref(argref),
+                                ctypes.sizeof(argref))
+
+            kernargs = argref
 
         queue = agent.create_queue_single(32)
         queue.dispatch(sym, kernargs, workgroup_size=(1,),
                        grid_size=(1,))
 
+        if(dgpu_count() > 0):
+            # copy result back to host accessible memory to check
+            hsa.hsa_memory_copy(host_out_ptr, gpu_out_ptr, src.nbytes)
+            hsa.hsa_memory_copy(dst.ctypes.data, host_out_ptr, src.nbytes)
+
         np.testing.assert_equal(dst, src)
 
+        if(dgpu_count() > 0):
+            # free
+            hsa.hsa_memory_free(host_in_ptr)
+            hsa.hsa_memory_free(host_out_ptr)
+            hsa.hsa_memory_free(gpu_in_ptr)
+            hsa.hsa_memory_free(gpu_out_ptr)
 
 if __name__ == '__main__':
     unittest.main()
