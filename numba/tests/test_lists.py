@@ -885,7 +885,7 @@ class TestListManagedElements(ManagedListTestCase):
 
     def _check_element_equal(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
-        con = [np.arange(3), np.arange(5)]
+        con = [np.arange(3).astype(np.intp), np.arange(5).astype(np.intp)]
         expect = list(con)
         pyfunc(expect)
         got = list(con)
