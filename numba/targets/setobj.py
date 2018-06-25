@@ -1,5 +1,5 @@
 """
-Support for native homogenous sets.
+Support for native homogeneous sets.
 """
 
 from __future__ import print_function, absolute_import, division

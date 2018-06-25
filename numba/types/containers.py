@@ -8,7 +8,7 @@ from ..typeconv import Conversion
 
 class Pair(Type):
     """
-    A heterogenous pair.
+    A heterogeneous pair.
     """
 
     def __init__(self, first_type, second_type):
@@ -112,24 +112,24 @@ class BaseTuple(ConstSized, Hashable):
         """
         Instantiate the right tuple type for the given element types.
         """
-        homogenous = False
+        homogeneous = False
         if tys:
             first = tys[0]
             for ty in tys[1:]:
                 if ty != first:
                     break
             else:
-                homogenous = True
+                homogeneous = True
 
         if pyclass is not None and pyclass is not tuple:
             # A subclass => is it a namedtuple?
             assert issubclass(pyclass, tuple)
             if hasattr(pyclass, "_asdict"):
-                if homogenous:
+                if homogeneous:
                     return NamedUniTuple(first, len(tys), pyclass)
                 else:
                     return NamedTuple(tys, pyclass)
-        if homogenous:
+        if homogeneous:
             return UniTuple(first, len(tys))
         else:
             return Tuple(tys)
@@ -158,7 +158,7 @@ class BaseAnonymousTuple(BaseTuple):
             return max(kinds)
 
 
-class _HomogenousTuple(Sequence, BaseTuple):
+class _HomogeneousTuple(Sequence, BaseTuple):
 
     @property
     def iterator_type(self):
@@ -184,9 +184,9 @@ class _HomogenousTuple(Sequence, BaseTuple):
         return (self.dtype,) * self.count
 
 
-class UniTuple(BaseAnonymousTuple, _HomogenousTuple, Sequence):
+class UniTuple(BaseAnonymousTuple, _HomogeneousTuple, Sequence):
     """
-    Type class for homogenous tuples.
+    Type class for homogeneous tuples.
     """
 
     def __init__(self, dtype, count):
@@ -215,12 +215,12 @@ class UniTuple(BaseAnonymousTuple, _HomogenousTuple, Sequence):
 
 class UniTupleIter(BaseContainerIterator):
     """
-    Type class for homogenous tuple iterators.
+    Type class for homogeneous tuple iterators.
     """
-    container_class = _HomogenousTuple
+    container_class = _HomogeneousTuple
 
 
-class _HeterogenousTuple(BaseTuple):
+class _HeterogeneousTuple(BaseTuple):
 
     def __getitem__(self, i):
         """
@@ -236,7 +236,7 @@ class _HeterogenousTuple(BaseTuple):
         return iter(self.types)
 
 
-class Tuple(BaseAnonymousTuple, _HeterogenousTuple):
+class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
 
     def __new__(cls, types):
         if types and all(t == types[0] for t in types[1:]):
@@ -275,7 +275,7 @@ class BaseNamedTuple(BaseTuple):
     pass
 
 
-class NamedUniTuple(_HomogenousTuple, BaseNamedTuple):
+class NamedUniTuple(_HomogeneousTuple, BaseNamedTuple):
 
     def __init__(self, dtype, count, cls):
         self.dtype = dtype
@@ -294,7 +294,7 @@ class NamedUniTuple(_HomogenousTuple, BaseNamedTuple):
         return self.instance_class, self.dtype, self.count
 
 
-class NamedTuple(_HeterogenousTuple, BaseNamedTuple):
+class NamedTuple(_HeterogeneousTuple, BaseNamedTuple):
 
     def __init__(self, types, cls):
         self.types = tuple(types)
@@ -311,7 +311,7 @@ class NamedTuple(_HeterogenousTuple, BaseNamedTuple):
 
 class List(MutableSequence):
     """
-    Type class for (arbitrary-sized) homogenous lists.
+    Type class for (arbitrary-sized) homogeneous lists.
     """
     mutable = True
 
@@ -364,7 +364,7 @@ class ListPayload(BaseContainerPayload):
 
 class Set(Container):
     """
-    Type class for homogenous sets.
+    Type class for homogeneous sets.
     """
     mutable = True
 

@@ -100,7 +100,7 @@ def list_append(n):
         l.append(i)
     return l
 
-def list_append_heterogenous(n):
+def list_append_heterogeneous(n):
     l = []
     l.append(42.0)
     for i in range(n):
@@ -115,7 +115,7 @@ def list_extend(n):
     l.extend(range(n, 0, -1))
     return l
 
-def list_extend_heterogenous(n):
+def list_extend_heterogeneous(n):
     l = []
     # Extend with various iterables, including lists, with different types
     l.extend(range(n))
@@ -272,7 +272,7 @@ def list_add(m, n):
     res.append(42)   # check result is a copy
     return a, b, res
 
-def list_add_heterogenous():
+def list_add_heterogeneous():
     a = [1]
     b = [2.0]
     c = a + b
@@ -288,7 +288,7 @@ def list_add_inplace(m, n):
     a += b
     return a, b
 
-def list_add_inplace_heterogenous():
+def list_add_inplace_heterogeneous():
     a = [1]
     b = [2.0]
     a += b
@@ -411,15 +411,15 @@ class TestLists(MemoryLeakMixin, TestCase):
         self.check_unary_with_size(list_append)
 
     @tag('important')
-    def test_append_heterogenous(self):
-        self.check_unary_with_size(list_append_heterogenous, precise=False)
+    def test_append_heterogeneous(self):
+        self.check_unary_with_size(list_append_heterogeneous, precise=False)
 
     def test_extend(self):
         self.check_unary_with_size(list_extend)
 
     @tag('important')
-    def test_extend_heterogenous(self):
-        self.check_unary_with_size(list_extend_heterogenous, precise=False)
+    def test_extend_heterogeneous(self):
+        self.check_unary_with_size(list_extend_heterogeneous, precise=False)
 
     def test_pop0(self):
         self.check_unary_with_size(list_pop0)
@@ -626,8 +626,8 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_add(self):
         self.check_add(list_add)
 
-    def test_add_heterogenous(self):
-        pyfunc = list_add_heterogenous
+    def test_add_heterogeneous(self):
+        pyfunc = list_add_heterogeneous
         cfunc = jit(nopython=True)(pyfunc)
         expected = pyfunc()
         self.assertEqual(cfunc(), expected)
@@ -635,8 +635,8 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_add_inplace(self):
         self.check_add(list_add_inplace)
 
-    def test_add_inplace_heterogenous(self):
-        pyfunc = list_add_inplace_heterogenous
+    def test_add_inplace_heterogeneous(self):
+        pyfunc = list_add_inplace_heterogeneous
         cfunc = jit(nopython=True)(pyfunc)
         expected = pyfunc()
         self.assertEqual(cfunc(), expected)
@@ -772,7 +772,7 @@ class TestUnboxing(MemoryLeakMixin, TestCase):
 
     def test_errors(self):
         # See #1545 and #1594: error checking should ensure the list is
-        # homogenous
+        # homogeneous
         msg = "can't unbox heterogeneous list"
         pyfunc = noop
         cfunc = jit(nopython=True)(pyfunc)

@@ -171,7 +171,7 @@ def get_next_int(context, builder, state_ptr, nbits):
 
 def _fill_defaults(context, builder, sig, args, defaults):
     """
-    Assuming a homogenous signature (same type for result and all arguments),
+    Assuming a homogeneous signature (same type for result and all arguments),
     fill in the *defaults* if missing from the arguments.
     """
     ty = sig.return_type

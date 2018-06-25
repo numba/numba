@@ -782,7 +782,7 @@ Improvements:
 * PR #1987: Implement ``np.linalg.det`` and ``np.linalg.slogdet``.
 * Issue #1979: Document integer width inference and how to workaround.
 * PR #1938: Numba is now compatible with LLVM 3.8.
-* PR #1967: Restrict ``np.linalg`` functions to homogenous dtypes.  Users
+* PR #1967: Restrict ``np.linalg`` functions to homogeneous dtypes.  Users
   wanting to pass mixed-typed inputs have to convert explicitly, which
   makes the performance implications more obvious.
 
@@ -908,7 +908,7 @@ Improvements:
 * PR #1749: Remove Numpy 1.6 compatibility.
 * PR #1748: Remove Python 2.6 and 3.3 compatibility.
 * PR #1735: Support the ``not in`` operator as well as operator.contains().
-* PR #1724: Support homogenous sets in nopython mode.
+* PR #1724: Support homogeneous sets in nopython mode.
 * Issue #875: make compilation of array constants faster.
 
 Fixes:
@@ -1035,7 +1035,7 @@ Improvements:
 Fixes:
 
 * Issue #1603: Fix calling a non-cached function from a cached function
-* Issue #1594: Ensure a list is homogenous when unboxing
+* Issue #1594: Ensure a list is homogeneous when unboxing
 * Issue #1595: Replace deprecated use of get_pointer_to_function()
 * Issue #1586: Allow tests to be run by different users on the same machine
 * Issue #1587: Make CudaAPIError picklable

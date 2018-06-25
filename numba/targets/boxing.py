@@ -468,7 +468,7 @@ def box_namedtuple(typ, val, c):
 @unbox(types.BaseTuple)
 def unbox_tuple(typ, obj, c):
     """
-    Convert tuple *obj* to a native array (if homogenous) or structure.
+    Convert tuple *obj* to a native array (if homogeneous) or structure.
     """
     n = len(typ)
     values = []
@@ -785,7 +785,7 @@ def _python_set_to_native(typ, obj, c, size, setptr, errorptr):
                         with c.builder.if_then(type_mismatch, likely=False):
                             c.builder.store(cgutils.true_bit, errorptr)
                             c.pyapi.err_set_string("PyExc_TypeError",
-                                                   "can't unbox heterogenous set")
+                                                   "can't unbox heterogeneous set")
                             loop.do_break()
 
                 # XXX we don't call native cleanup for each set element,
