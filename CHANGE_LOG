@@ -1,3 +1,92 @@
+Version 0.39.0
+--------------
+
+Here are the highlights for the Numba 0.39.0 release.
+
+* This is the first version that supports Python 3.7.
+* With help from Intel, we have added fixed the SVML support (related issues
+  #2938, #2998, #3006).
+* List has gained support for containing reference-counted types like NumPy
+  arrays and `list`.  Note, list still can't hold heterogeneous types.
+* We have done a significant change to the internal calling-convention,
+  which should be transparent to most users, to allow for a future feature to
+  jump back into python-mode from a nopython-mode function.  This also fixed
+  limitation to `print` that disables it usage from nopython functions that
+  are deep in the callstack.
+* For CUDA GPUs support, we added a `__cuda_array_interface__` following the
+  NumPy array interface specification to allow Numba to consume externally
+  defined device array.  We have opened a corresponding pull request to CuPy to
+  test out the concept and be able to use a CuPy GPU array.
+
+Enhancements:
+
+* PR #3041: This adds @needs_blas to tests that use BLAS
+* PR #3039: Add SVML detection to Numba environment diagnostic tool.
+* PR #3032: Fix pycc ctypes test due to mismatch in calling-convention
+* PR #3012: Make use of the common spelling of heterogeneous/homogeneous.
+* PR #3008: Augment SVML detection with llvmlite SVML patch detection.
+* PR #3007: Augment SVML detection with llvmlite SVML patch detection.
+* PR #3004: Add numpy.empty to the list of pure functions.
+* PR #3002: Second pass at error rewrites (interpreter errors).
+* PR #2990: Improve function call matching for intrinsics
+* PR #2986: Fix environment propagation
+* PR #2984: Support for namedtuples in array analysis
+* PR #2963: Improve alias analysis to be more comprehensive
+* PR #2957: Add new 3.7 opcode support.
+* PR #2953: percentile and nanpercentile
+* PR #2946: Add support for `ndarray.dot` method and tests.
+* PR #2939: Comprehensive SVML unit test
+* PR #2938: Python 3.7 compat: _Py_Finalizing becomes _Py_IsFinalizing()
+* PR #2930: Add configuration file and color schemes.
+* PR #2928: Making error about untyped list more informative.
+* PR #2926: Enable fence for all architecture and add developer notes
+* PR #2902: Support for np.unique
+* PR #2840: Support list of refcounted types
+* PR #2793: Simplify and remove javascript from html_annotate templates.
+
+CUDA Enhancements:
+
+* PR #3037: Add CUDA IPC support on non-peer-accessible devices
+* PR #2860: __cuda_array_interface__
+* PR #2929: Add Flag To Prevent Unneccessary D->H Copies
+* PR #2910: More CUDA intrinsics
+
+CI Enhancements:
+
+* PR #3021: Update appveyor config.
+* PR #3042: Add catchsegv
+* PR #3040: Add fault handler to all builds
+
+Fixes:
+
+* PR #3048: [WIP] Fix cuda tests failure on buildfarm
+* PR #3035: [TESTING] Attempt delayed removal of Env
+* PR #3009: Fix optional type returning in recursive call
+* PR #3019: workaround and unittest for issue #3016
+* PR #2970: Fix docstring copy paste error.
+* PR #2967: Fix typo in CUDA kernel layout example.
+* PR #2966: Fix syntax in env var docs.
+* PR #2905: Fix for #2862
+* PR #2897: Fix line position of delete statement in numba ir
+
+Contributors:
+
+The following people contributed to this release.
+
+Anton Malakhov
+Ehsan Totoni  (core dev)
+Julia Tatz
+Matthias Bussonnier
+Nick White
+Ray Donnelly
+Siu Kwan Lam  (core dev)
+Stan Seibert  (core dev)
+Stuart Archibald  (core dev)
+Todd A. Anderson  (core dev)
+rik-de-kort
+rjenc29
+
+
 Version 0.38.1
 --------------
 
