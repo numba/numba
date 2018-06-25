@@ -105,6 +105,20 @@ class NRTContext(object):
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [size])
 
+    def meminfo_new_varsize_dtor(self, builder, size, dtor):
+        """
+        Like meminfo_new_varsize() but also set the destructor for
+        cleaning up references to objects inside the allocation.
+        """
+        self._require_nrt()
+
+        mod = builder.module
+        fnty = ir.FunctionType(cgutils.voidptr_t,
+                               [cgutils.intp_t, cgutils.voidptr_t])
+        fn = mod.get_or_insert_function(
+            fnty, name="NRT_MemInfo_new_varsize_dtor")
+        return builder.call(fn, [size, dtor])
+
     def meminfo_varsize_alloc(self, builder, meminfo, size):
         """
         Allocate a new data area for a MemInfo created by meminfo_new_varsize().

@@ -8,6 +8,7 @@ from .. import cgutils, numpy_support, types
 from ..pythonapi import box, unbox, reflect, NativeValue
 
 from . import listobj, setobj
+from ..utils import IS_PY3
 
 
 #
@@ -395,6 +396,12 @@ def unbox_array(typ, obj, c):
     else:
         errcode = c.pyapi.numba_array_adaptor(obj, ptr)
     failed = cgutils.is_not_null(c.builder, errcode)
+    # Handle error
+    with c.builder.if_then(failed, likely=False):
+        c.pyapi.err_set_string("PyExc_TypeError",
+                               "can't unbox array from PyObject into "
+                               "native value.  The object maybe of a "
+                               "different type")
     return NativeValue(c.builder.load(aryptr), is_error=failed)
 
 
@@ -531,6 +538,7 @@ def box_list(typ, val, c):
                                    likely=True):
                 with cgutils.for_range(c.builder, nitems) as loop:
                     item = list.getitem(loop.index)
+                    list.incref_value(item)
                     itemobj = c.box(typ.dtype, item)
                     c.pyapi.list_setitem(obj, loop.index, itemobj)
 
@@ -541,10 +549,78 @@ def box_list(typ, val, c):
     return c.builder.load(res)
 
 
+class _NumbaTypeHelper(object):
+    """A helper for acquiring `numba.typeof` for type checking.
+
+    Usage
+    -----
+
+        # `c` is the boxing context.
+        with _NumbaTypeHelper(c) as nth:
+            # This contextmanager maintains the lifetime of the `numba.typeof`
+            # function.
+            the_numba_type = nth.typeof(some_object)
+            # Do work on the type object
+            do_checks(the_numba_type)
+            # Cleanup
+            c.pyapi.decref(the_numba_type)
+        # At this point *nth* should not be used.
+    """
+    def __init__(self, c):
+        self.c = c
+
+    def __enter__(self):
+        c = self.c
+        numba_name = c.context.insert_const_string(c.builder.module, 'numba')
+        numba_mod = c.pyapi.import_module_noblock(numba_name)
+        typeof_fn = c.pyapi.object_getattr_string(numba_mod, 'typeof')
+        self.typeof_fn = typeof_fn
+        c.pyapi.decref(numba_mod)
+        return self
+
+    def __exit__(self, *args, **kwargs):
+        c = self.c
+        c.pyapi.decref(self.typeof_fn)
+
+    def typeof(self, obj):
+        res = self.c.pyapi.call_function_objargs(self.typeof_fn, [obj])
+        return res
+
+
 def _python_list_to_native(typ, obj, c, size, listptr, errorptr):
     """
     Construct a new native list from a Python list.
     """
+    def check_element_type(nth, itemobj, expected_typobj):
+        typobj = nth.typeof(itemobj)
+        # Check if *typobj* is NULL
+        with c.builder.if_then(
+                cgutils.is_null(c.builder, typobj),
+                likely=False,
+                ):
+            c.builder.store(cgutils.true_bit, errorptr)
+            loop.do_break()
+        # Mandate that objects all have the same exact type
+        type_mismatch = c.builder.icmp_signed('!=', typobj, expected_typobj)
+
+        with c.builder.if_then(type_mismatch, likely=False):
+            c.builder.store(cgutils.true_bit, errorptr)
+            if IS_PY3:
+                c.pyapi.err_format(
+                    "PyExc_TypeError",
+                    "can't unbox heterogeneous list: %S != %S",
+                    expected_typobj, typobj,
+                    )
+            else:
+                # Python2 doesn't have "%S" format string.
+                c.pyapi.err_set_string(
+                    "PyExc_TypeError",
+                    "can't unbox heterogeneous list",
+                )
+            c.pyapi.decref(typobj)
+            loop.do_break()
+        c.pyapi.decref(typobj)
+
     # Allocate a new native list
     ok, list = listobj.ListInstance.allocate_ex(c.context, c.builder, typ, size)
     with c.builder.if_else(ok, likely=True) as (if_ok, if_not_ok):
@@ -554,28 +630,22 @@ def _python_list_to_native(typ, obj, c, size, listptr, errorptr):
             with c.builder.if_then(c.builder.icmp_signed('>', size, zero),
                                    likely=True):
                 # Traverse Python list and unbox objects into native list
-                expected_typobj = c.pyapi.get_type(c.pyapi.list_getitem(obj, zero))
-                with cgutils.for_range(c.builder, size) as loop:
-                    itemobj = c.pyapi.list_getitem(obj, loop.index)
-                    typobj = c.pyapi.get_type(itemobj)
-
-                    # Mandate that objects all have the same exact type
-                    type_mismatch = c.builder.icmp_signed('!=', typobj,
-                                                          expected_typobj)
-                    with c.builder.if_then(type_mismatch, likely=False):
-                        c.builder.store(cgutils.true_bit, errorptr)
-                        c.pyapi.err_set_string("PyExc_TypeError",
-                                               "can't unbox heterogenous list")
-                        loop.do_break()
-
-                    # XXX we don't call native cleanup for each
-                    # list element, since that would require keeping
-                    # of which unboxings have been successful.
-                    native = c.unbox(typ.dtype, itemobj)
-                    with c.builder.if_then(native.is_error, likely=False):
-                        c.builder.store(cgutils.true_bit, errorptr)
-                    list.setitem(loop.index, native.value)
-
+                with _NumbaTypeHelper(c) as nth:
+                    # Note: *expected_typobj* can't be NULL
+                    expected_typobj = nth.typeof(c.pyapi.list_getitem(obj, zero))
+                    with cgutils.for_range(c.builder, size) as loop:
+                        itemobj = c.pyapi.list_getitem(obj, loop.index)
+                        check_element_type(nth, itemobj, expected_typobj)
+                        # XXX we don't call native cleanup for each
+                        # list element, since that would require keeping
+                        # of which unboxings have been successful.
+                        native = c.unbox(typ.dtype, itemobj)
+                        with c.builder.if_then(native.is_error, likely=False):
+                            c.builder.store(cgutils.true_bit, errorptr)
+                            loop.do_break()
+                        # The reference is borrowed so incref=False
+                        list.setitem(loop.index, native.value, incref=False)
+                    c.pyapi.decref(expected_typobj)
             if typ.reflected:
                 list.parent = obj
             # Stuff meminfo pointer into the Python object for
@@ -640,6 +710,10 @@ def reflect_list(typ, val, c):
     """
     if not typ.reflected:
         return
+    if typ.dtype.reflected:
+        msg = "cannot reflect element of reflected container: {}\n".format(typ)
+        raise TypeError(msg)
+
     list = listobj.ListInstance(c.context, c.builder, typ, val)
     with c.builder.if_then(list.dirty, likely=False):
         obj = list.parent
@@ -654,12 +728,14 @@ def reflect_list(typ, val, c):
                 # First overwrite existing items
                 with cgutils.for_range(c.builder, size) as loop:
                     item = list.getitem(loop.index)
+                    list.incref_value(item)
                     itemobj = c.box(typ.dtype, item)
                     c.pyapi.list_setitem(obj, loop.index, itemobj)
                 # Then add missing items
                 with cgutils.for_range(c.builder, diff) as loop:
                     idx = c.builder.add(size, loop.index)
                     item = list.getitem(idx)
+                    list.incref_value(item)
                     itemobj = c.box(typ.dtype, item)
                     c.pyapi.list_append(obj, itemobj)
                     c.pyapi.decref(itemobj)
@@ -670,6 +746,7 @@ def reflect_list(typ, val, c):
                 # Then overwrite remaining items
                 with cgutils.for_range(c.builder, new_size) as loop:
                     item = list.getitem(loop.index)
+                    list.incref_value(item)
                     itemobj = c.box(typ.dtype, item)
                     c.pyapi.list_setitem(obj, loop.index, itemobj)
 

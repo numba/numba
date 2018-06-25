@@ -3952,8 +3952,9 @@ def compute_sequence_shape(context, builder, ndim, seqty, seq):
     innerty, inner = seqty, seq
 
     for i in range(ndim):
+        if i > 0:
+            innerty, inner = get_first_item(innerty, inner)
         shapes.append(_get_seq_size(context, builder, innerty, inner))
-        innerty, inner = get_first_item(innerty, inner)
 
     return tuple(shapes)
 

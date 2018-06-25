@@ -5,11 +5,12 @@ import contextlib
 import itertools
 import math
 import sys
+import numpy as np
 
 from numba.compiler import compile_isolated, Flags
-from numba import jit, types
+from numba import jit, types, utils, typeof, jitclass
 import numba.unittest_support as unittest
-from numba import testing
+from numba import testing, errors
 from .support import TestCase, MemoryLeakMixin, tag
 
 
@@ -376,11 +377,10 @@ class TestLists(MemoryLeakMixin, TestCase):
 
     def test_create_nested_list(self):
         pyfunc = create_nested_list
-        with self.assertTypingError():
-            cr = compile_isolated(pyfunc, (types.int32, types.int32, types.int32,
-                types.int32, types.int32, types.int32))
-            cfunc = cr.entry_point
-            self.assertEqual(cfunc(1, 2, 3, 4, 5, 6), pyfunc(1, 2, 3, 4, 5, 6))
+        cr = compile_isolated(pyfunc, (types.int32, types.int32, types.int32,
+                                       types.int32, types.int32, types.int32))
+        cfunc = cr.entry_point
+        self.assertEqual(cfunc(1, 2, 3, 4, 5, 6), pyfunc(1, 2, 3, 4, 5, 6))
 
     @testing.allow_interpreter_mode
     def test_list_comprehension(self):
@@ -448,7 +448,7 @@ class TestLists(MemoryLeakMixin, TestCase):
         pyfunc = list_insert
         cfunc = jit(nopython=True)(pyfunc)
         for n in [5, 40]:
-            indices = [0, 1, n - 2, n - 1, n + 1, -1, -2, -n + 3, -n - 1] 
+            indices = [0, 1, n - 2, n - 1, n + 1, -1, -2, -n + 3, -n - 1]
             for i in indices:
                 expected = pyfunc(n, i, 42)
                 self.assertPreciseEqual(cfunc(n, i, 42), expected)
@@ -773,7 +773,7 @@ class TestUnboxing(MemoryLeakMixin, TestCase):
     def test_errors(self):
         # See #1545 and #1594: error checking should ensure the list is
         # homogenous
-        msg = "can't unbox heterogenous list"
+        msg = "can't unbox heterogeneous list"
         pyfunc = noop
         cfunc = jit(nopython=True)(pyfunc)
         lst = [1, 2.5]
@@ -791,10 +791,19 @@ class TestUnboxing(MemoryLeakMixin, TestCase):
         # Issue #1638: tuples of different size.
         # Note the check is really on the tuple side.
         lst = [(1,), (2, 3)]
-        with self.assertRaises(ValueError) as raises:
+        with self.assertRaises(TypeError) as raises:
             cfunc(lst)
-        self.assertEqual(str(raises.exception),
-                         "size mismatch for tuple, expected 1 element(s) but got 2")
+        if utils.IS_PY3:
+            self.assertEqual(
+                str(raises.exception),
+                ("can't unbox heterogeneous list: "
+                "tuple(int64 x 1) != tuple(int64 x 2)"),
+                )
+        else:
+            self.assertEqual(
+                str(raises.exception),
+                "can't unbox heterogeneous list",
+                )
 
 
 class TestListReflection(MemoryLeakMixin, TestCase):
@@ -863,6 +872,531 @@ class TestListReflection(MemoryLeakMixin, TestCase):
         ids = [id(x) for x in l]
         cfunc(l)
         self.assertEqual([id(x) for x in l], ids)
+
+
+class ManagedListTestCase(MemoryLeakMixin, TestCase):
+
+    def assert_list_element_precise_equal(self, expect, got):
+        self.assertEqual(len(expect), len(got))
+        for a, b in zip(expect, got):
+            self.assertPreciseEqual(a, b)
+
+
+class TestListManagedElements(ManagedListTestCase):
+    "Test list containing objects that need refct"
+
+    def _check_element_equal(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+        con = [np.arange(3), np.arange(5)]
+        expect = list(con)
+        pyfunc(expect)
+        got = list(con)
+        cfunc(got)
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
+
+    def test_reflect_passthru(self):
+        def pyfunc(con):
+            pass
+        self._check_element_equal(pyfunc)
+
+    def test_reflect_appended(self):
+        def pyfunc(con):
+            con.append(np.arange(10))
+
+        self._check_element_equal(pyfunc)
+
+    def test_reflect_setitem(self):
+        def pyfunc(con):
+            con[1] = np.arange(10)
+
+        self._check_element_equal(pyfunc)
+
+    def test_reflect_popped(self):
+        def pyfunc(con):
+            con.pop()
+
+        self._check_element_equal(pyfunc)
+
+    def test_append(self):
+        def pyfunc():
+            con = []
+            for i in range(300):
+                con.append(np.arange(i))
+            return con
+
+        cfunc = jit(nopython=True)(pyfunc)
+        expect = pyfunc()
+        got = cfunc()
+
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
+
+    def test_append_noret(self):
+        # This test make sure local dtor works
+        def pyfunc():
+            con = []
+            for i in range(300):
+                con.append(np.arange(i))
+            c = 0.0
+            for arr in con:
+                c += arr.sum() / (1 + arr.size)
+            return c
+
+        cfunc = jit(nopython=True)(pyfunc)
+        expect = pyfunc()
+        got = cfunc()
+
+        self.assertEqual(expect, got)
+
+    def test_reassign_refct(self):
+        def pyfunc():
+            con = []
+            for i in range(5):
+                con.append(np.arange(2))
+            con[0] = np.arange(4)
+            return con
+
+        cfunc = jit(nopython=True)(pyfunc)
+        expect = pyfunc()
+        got = cfunc()
+
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
+
+    def test_get_slice(self):
+        def pyfunc():
+            con = []
+            for i in range(5):
+                con.append(np.arange(2))
+            return con[2:4]
+
+        cfunc = jit(nopython=True)(pyfunc)
+        expect = pyfunc()
+        got = cfunc()
+
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
+
+    def test_set_slice(self):
+        def pyfunc():
+            con = []
+            for i in range(5):
+                con.append(np.arange(2))
+            con[1:3] = con[2:4]
+            return con
+
+        cfunc = jit(nopython=True)(pyfunc)
+        expect = pyfunc()
+        got = cfunc()
+
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
+
+    def test_pop(self):
+        def pyfunc():
+            con = []
+            for i in range(20):
+                con.append(np.arange(i + 1))
+            while len(con) > 2:
+                con.pop()
+            return con
+
+        cfunc = jit(nopython=True)(pyfunc)
+        expect = pyfunc()
+        got = cfunc()
+
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
+
+    def test_pop_loc(self):
+        def pyfunc():
+            con = []
+            for i in range(1000):
+                con.append(np.arange(i + 1))
+            while len(con) > 2:
+                con.pop(1)
+            return con
+
+        cfunc = jit(nopython=True)(pyfunc)
+        expect = pyfunc()
+        got = cfunc()
+
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
+
+    def test_del_range(self):
+        def pyfunc():
+            con = []
+            for i in range(20):
+                con.append(np.arange(i + 1))
+            del con[3:10]
+            return con
+
+        cfunc = jit(nopython=True)(pyfunc)
+        expect = pyfunc()
+        got = cfunc()
+
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
+
+    def test_list_of_list(self):
+        def pyfunc():
+            con = []
+            for i in range(10):
+                con.append([0] * i)
+            return con
+
+        cfunc = jit(nopython=True)(pyfunc)
+        expect = pyfunc()
+        got = cfunc()
+
+        self.assertEqual(expect, got)
+
+
+
+def expect_reflection_failure(fn):
+    def wrapped(self, *args, **kwargs):
+        self.disable_leak_check()
+        with self.assertRaises(TypeError) as raises:
+            fn(self, *args, **kwargs)
+        expect_msg = 'cannot reflect element of reflected container'
+        self.assertIn(expect_msg, str(raises.exception))
+
+    return wrapped
+
+
+class TestListOfList(ManagedListTestCase):
+
+    def compile_and_test(self, pyfunc, *args):
+        from copy import deepcopy
+        expect_args = deepcopy(args)
+        expect = pyfunc(*expect_args)
+
+        njit_args = deepcopy(args)
+        cfunc = jit(nopython=True)(pyfunc)
+        got = cfunc(*njit_args)
+
+        self.assert_list_element_precise_equal(
+            expect=expect, got=got
+            )
+        # Check reflection
+        self.assert_list_element_precise_equal(
+            expect=expect_args, got=njit_args
+            )
+
+    def test_returning_list_of_list(self):
+        def pyfunc():
+            a = [[np.arange(i)] for i in range(4)]
+            return a
+
+        self.compile_and_test(pyfunc)
+
+    @expect_reflection_failure
+    def test_heterogeneous_list_error(self):
+        def pyfunc(x):
+            return x[1]
+
+        cfunc = jit(nopython=True)(pyfunc)
+        l2 = [[np.zeros(i) for i in range(5)],
+              [np.ones(i)+1j for i in range(5)]]
+        l3 = [[np.zeros(i) for i in range(5)], [(1,)]]
+        l4 = [[1], [{1}]]
+        l5 = [[1], [{'a': 1}]]
+
+        # TODO: this triggers a reflection error.
+        # Remove this line when nested reflection is supported
+        cfunc(l2)
+
+        # error_cases
+        with self.assertRaises(TypeError) as raises:
+            cfunc(l2)
+
+        self.assertIn(
+            ("reflected list(array(float64, 1d, C)) != "
+             "reflected list(array(complex128, 1d, C))"),
+            str(raises.exception)
+            )
+
+        with self.assertRaises(TypeError) as raises:
+            cfunc(l3)
+
+        self.assertIn(
+            ("reflected list(array(float64, 1d, C)) != "
+             "reflected list((int64 x 1))"),
+            str(raises.exception)
+            )
+
+        with self.assertRaises(TypeError) as raises:
+            cfunc(l4)
+        self.assertIn(
+            "reflected list(int64) != reflected list(reflected set(int64))",
+            str(raises.exception)
+            )
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(l5)
+        self.assertIn(
+            "Cannot type list element of <class 'dict'>",
+            str(raises.exception)
+            )
+
+    @expect_reflection_failure
+    def test_list_of_list_reflected(self):
+        def pyfunc(l1, l2):
+            l1.append(l2)
+            l1[-1].append(123)
+
+        cfunc = jit(nopython=True)(pyfunc)
+        l1 = [[0, 1], [2, 3]]
+        l2 = [4, 5]
+        expect = list(l1), list(l2)
+        got = list(l1), list(l2)
+        pyfunc(*expect)
+        cfunc(*got)
+        self.assertEqual(expect, got)
+
+    @expect_reflection_failure
+    def test_heterogeneous_list(self):
+        def pyfunc(x):
+            return x[1]
+
+        l1 = [[np.zeros(i) for i in range(5)], [np.ones(i) for i in range(5)]]
+
+        cfunc = jit(nopython=True)(pyfunc)
+        l1_got = cfunc(l1)
+        self.assertPreciseEqual(pyfunc(l1), l1_got)
+
+    @expect_reflection_failure
+    def test_c01(self):
+        def bar(x):
+            return x.pop()
+
+        r = [[np.zeros(0)], [np.zeros(10)*1j]]
+        # TODO: this triggers a reflection error.
+        # Remove this line when nested reflection is supported
+        self.compile_and_test(bar, r)
+
+        with self.assertRaises(TypeError) as raises:
+            self.compile_and_test(bar, r)
+        self.assertIn(
+            ("reflected list(array(float64, 1d, C)) != "
+             "reflected list(array(complex128, 1d, C))"),
+            str(raises.exception),
+            )
+
+    def test_c02(self):
+        def bar(x):
+            x.append(x)
+            return x
+
+        r = [[np.zeros(0)]]
+
+        with self.assertRaises(errors.TypingError) as raises:
+            self.compile_and_test(bar, r)
+        self.assertIn(
+            "Invalid usage of BoundFunction(list.append",
+            str(raises.exception),
+            )
+
+    def test_c03(self):
+        def bar(x):
+            f = x
+            f[0] = 1
+            return f
+
+        r = [[np.arange(3)]]
+
+        with self.assertRaises(errors.TypingError) as raises:
+            self.compile_and_test(bar, r)
+        self.assertIn(
+            "invalid setitem with value of {} to element of {}".format(
+                typeof(1),
+                typeof(r[0]),
+                ),
+            str(raises.exception),
+        )
+
+    def test_c04(self):
+        def bar(x):
+            f = x
+            f[0][0] = 10
+            return f
+
+        r = [[np.arange(3)]]
+        with self.assertRaises(errors.TypingError) as raises:
+            self.compile_and_test(bar, r)
+        self.assertIn(
+            "invalid setitem with value of {} to element of {}".format(
+                typeof(10),
+                typeof(r[0][0]),
+                ),
+            str(raises.exception),
+            )
+
+    @unittest.skipUnless(utils.IS_PY3, "Py3 only due to ordering of error")
+    @expect_reflection_failure
+    def test_c05(self):
+        def bar(x):
+            f = x
+            f[0][0] = np.array([x for x in np.arange(10)])
+            return f
+
+        r = [[np.arange(3)]]
+        self.compile_and_test(bar, r)
+
+    @unittest.skipUnless(utils.IS_PY3, "Py3 only due to ordering of error")
+    def test_c06(self):
+        def bar(x):
+            f = x
+            f[0][0] = np.array([x + 1j for x in np.arange(10)])
+            return f
+
+        r = [[np.arange(3)]]
+        with self.assertRaises(errors.TypingError) as raises:
+            self.compile_and_test(bar, r)
+        self.assertIn("invalid setitem with value", str(raises.exception))
+
+    @expect_reflection_failure
+    def test_c07(self):
+        self.disable_leak_check()
+
+        def bar(x):
+            return x[-7]
+
+        r = [[np.arange(3)]]
+        cfunc = jit(nopython=True)(bar)
+        with self.assertRaises(IndexError) as raises:
+            cfunc(r)
+        self.assertIn("getitem out of range", str(raises.exception))
+
+    def test_c08(self):
+        self.disable_leak_check()
+
+        def bar(x):
+            x[5] = 7
+            return x
+
+        r = [1, 2, 3]
+        cfunc = jit(nopython=True)(bar)
+        with self.assertRaises(IndexError) as raises:
+            cfunc(r)
+        self.assertIn("setitem out of range", str(raises.exception))
+
+    def test_c09(self):
+        def bar(x):
+            x[-2] = 7j
+            return x
+
+        r = [1, 2, 3]
+        with self.assertRaises(errors.TypingError) as raises:
+            self.compile_and_test(bar, r)
+        self.assertIn("invalid setitem with value", str(raises.exception))
+
+    @expect_reflection_failure
+    def test_c10(self):
+        def bar(x):
+            x[0], x[1] = x[1], x[0]
+            return x
+
+        r = [[1, 2, 3], [4, 5, 6]]
+        self.compile_and_test(bar, r)
+
+    @expect_reflection_failure
+    def test_c11(self):
+        def bar(x):
+            x[:] = x[::-1]
+            return x
+
+        r = [[1, 2, 3], [4, 5, 6]]
+        self.compile_and_test(bar, r)
+
+    def test_c12(self):
+        def bar(x):
+            del x[-1]
+            return x
+
+        r = [x for x in range(10)]
+        self.compile_and_test(bar, r)
+
+
+class Item(object):
+    def __init__(self, many, scalar):
+        self.many = many
+        self.scalar = scalar
+
+
+class Container(object):
+    def __init__(self, n):
+        self.data = [[np.arange(i).astype(np.float64)] for i in range(n)]
+
+    def more(self, n):
+        for i in range(n):
+            self.data.append([np.arange(i).astype(np.float64)])
+
+
+class TestListAndJitClasses(ManagedListTestCase):
+    def make_jitclass_element(self):
+        spec = [
+            ('many', types.float64[:]),
+            ('scalar', types.float64),
+        ]
+        JCItem = jitclass(spec)(Item)
+        return JCItem
+
+    def make_jitclass_container(self):
+        spec = {
+            'data': types.List(dtype=types.List(types.float64[::1])),
+        }
+        JCContainer = jitclass(spec)(Container)
+        return JCContainer
+
+    def assert_list_element_with_tester(self, tester, expect, got):
+        for x, y in zip(expect, got):
+            tester(x, y)
+
+    def test_jitclass_instance_elements(self):
+        JCItem = self.make_jitclass_element()
+
+        def pyfunc(xs):
+            xs[1], xs[0] = xs[0], xs[1]
+            return xs
+
+        def eq(x, y):
+            self.assertPreciseEqual(x.many, y.many)
+            self.assertPreciseEqual(x.scalar, y.scalar)
+
+        cfunc = jit(nopython=True)(pyfunc)
+
+        arg = [JCItem(many=np.random.random(n + 1), scalar=n * 1.2)
+               for n in range(5)]
+
+        expect_arg = list(arg)
+        got_arg = list(arg)
+
+        expect_res = pyfunc(expect_arg)
+        got_res = cfunc(got_arg)
+
+        self.assert_list_element_with_tester(eq, expect_arg, got_arg)
+        self.assert_list_element_with_tester(eq, expect_res, got_res)
+
+    def test_jitclass_containing_list(self):
+        JCContainer = self.make_jitclass_container()
+
+        expect = Container(n=4)
+        got = JCContainer(n=4)
+        self.assert_list_element_precise_equal(got.data, expect.data)
+        expect.more(3)
+        got.more(3)
+        self.assert_list_element_precise_equal(got.data, expect.data)
 
 
 if __name__ == '__main__':
