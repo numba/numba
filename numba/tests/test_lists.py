@@ -1248,7 +1248,7 @@ class TestListOfList(ManagedListTestCase):
             f[0][0] = np.array([x for x in np.arange(10).astype(np.intp)])
             return f
 
-        r = [[np.arange(3)]]
+        r = [[np.arange(3).astype(np.intp)]]
         self.compile_and_test(bar, r)
 
     @unittest.skipUnless(utils.IS_PY3, "Py3 only due to ordering of error")
