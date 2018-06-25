@@ -172,8 +172,11 @@ def _get_flat(contig):
 @lower_builtin("array.sum", types.Array)
 def array_sum(context, builder, sig, args):
     zero = sig.return_type(0)
-    IS_CONTIG = sig.args[0].is_contig
+    ary = sig.args[0]
+    IS_CONTIG = ary.is_contig
     flatten = _get_flat(IS_CONTIG)
+    # do not do partial sums using a bool array!
+    dt = ary.dtype if ary.dtype is not types.boolean else np.float64
 
     def array_sum_impl(arr):
         n = arr.size
@@ -185,7 +188,7 @@ def array_sum(context, builder, sig, args):
             # there is at least 1 base_N length tile
             # trivial tree reduction needs a 2**n space
             npwr2 = int(2 ** np.ceil(np.log2(tile_n)))
-            acc_vec = np.zeros(npwr2, dtype=arr.dtype)
+            acc_vec = np.zeros(npwr2, dtype=dt)
 
             # accumulate the sum of adjacent base_N chunks into a vector
             for i in range(tile_n):
@@ -208,8 +211,7 @@ def array_sum(context, builder, sig, args):
             acc += acc_vec[0]
 
         # clean up remaining
-        rem = n % base_N
-        for i in range(n - rem, n):
+        for i in range(tile_n * base_N, n):
             acc += flatarr[i]
 
         return acc
