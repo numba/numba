@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 from contextlib import contextmanager
+import six
 import sys
 import threading
 
@@ -10,6 +11,7 @@ from numba.six import reraise
 from .cudadrv.devicearray import to_device, auto_device
 from .kernelapi import Dim3, FakeCUDAModule, swapped_cuda_module
 from ..errors import normalize_kernel_dimensions
+from ..args import wrap_arg, ArgHint
 
 
 """
@@ -46,10 +48,11 @@ class FakeCUDAKernel(object):
     Wraps a @cuda.jit-ed function.
     '''
 
-    def __init__(self, fn, device, fastmath=False):
+    def __init__(self, fn, device, fastmath=False, extensions=[]):
         self.fn = fn
         self._device = device
         self._fastmath = fastmath
+        self.extensions = list(extensions) # defensive copy
         # Initial configuration: 1 block, 1 thread, stream 0, no dynamic shared
         # memory.
         self[1, 1, 0, 0]
@@ -67,15 +70,24 @@ class FakeCUDAKernel(object):
             retr = []
 
             def fake_arg(arg):
+                # map the arguments using any extension you've registered
+                _, arg = six.moves.reduce(
+                    lambda ty_val, extension: extension.prepare_args(
+                        *ty_val,
+                        stream=0,
+                        retr=retr),
+                    self.extensions,
+                    (None, arg)
+                )
+
                 if isinstance(arg, np.ndarray) and arg.ndim > 0:
-                    devary, conv = auto_device(arg)
-                    if conv:
-                        retr.append(lambda: devary.copy_to_host(arg))
-                    return devary
-                return arg
+                    return wrap_arg(arg).to_device(retr)
+                elif isinstance(arg, ArgHint):
+                    return arg.to_device(retr)
+                else:
+                    return arg
 
             fake_args = [fake_arg(arg) for arg in args]
-
             with swapped_cuda_module(self.fn, fake_cuda_module):
                 # Execute one block at a time
                 for grid_point in np.ndindex(*self.grid_dim):
@@ -84,6 +96,7 @@ class FakeCUDAKernel(object):
 
             for wb in retr:
                 wb()
+
 
     def __getitem__(self, configuration):
         self.grid_dim, self.block_dim = \

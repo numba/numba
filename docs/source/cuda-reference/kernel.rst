@@ -9,7 +9,7 @@ The ``@cuda.jit`` decorator is used to create a CUDA kernel:
 .. autofunction:: numba.cuda.jit
 
 .. autoclass:: numba.cuda.compiler.AutoJitCUDAKernel
-   :members: inspect_asm, inspect_llvm, inspect_types, specialize
+   :members: inspect_asm, inspect_llvm, inspect_types, specialize, extensions
 
 Individual specialized kernels are instances of
 :class:`numba.cuda.compiler.CUDAKernel`:
