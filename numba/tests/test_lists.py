@@ -794,11 +794,9 @@ class TestUnboxing(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypeError) as raises:
             cfunc(lst)
         if utils.IS_PY3:
-            self.assertEqual(
-                str(raises.exception),
-                ("can't unbox heterogeneous list: "
-                "tuple(int64 x 1) != tuple(int64 x 2)"),
-                )
+            msg = ("can't unbox heterogeneous list: "
+                   "tuple({0} x 1) != tuple({0} x 2)")
+            self.assertEqual(str(raises.exception), msg.format(types.intp))
         else:
             self.assertEqual(
                 str(raises.exception),
@@ -903,7 +901,7 @@ class TestListManagedElements(ManagedListTestCase):
 
     def test_reflect_appended(self):
         def pyfunc(con):
-            con.append(np.arange(10))
+            con.append(np.arange(10).astype(np.intp))
 
         self._check_element_equal(pyfunc)
 
@@ -923,7 +921,7 @@ class TestListManagedElements(ManagedListTestCase):
         def pyfunc():
             con = []
             for i in range(300):
-                con.append(np.arange(i))
+                con.append(np.arange(i, ).astype(np.intp))
             return con
 
         cfunc = jit(nopython=True)(pyfunc)
@@ -1247,7 +1245,7 @@ class TestListOfList(ManagedListTestCase):
     def test_c05(self):
         def bar(x):
             f = x
-            f[0][0] = np.array([x for x in np.arange(10)])
+            f[0][0] = np.array([x for x in np.arange(10).astype(np.intp)])
             return f
 
         r = [[np.arange(3)]]
