@@ -38,24 +38,12 @@ def check_call(*args, **kwargs):
 
 
 class CmdLine(object):
-    def __init__(self):
-        self._binary_path = os.environ.get('HSAILBIN', None)
-        def _setup_path(tool):
-            if self._binary_path is not None:
-                return os.path.join(self._binary_path, tool)
-            else:
-                binpath = os.path.join(sys.prefix, 'bin', tool)
-                return binpath
-        self._triple = TRIPLE
 
-        self.opt = _setup_path("opt")
-        self.llc = _setup_path("llc")
-        self.llvm_link = _setup_path("llvm-link")
-        self.ld_lld = _setup_path("ld.lld")
-        self.triple_flag = "-mtriple %s" % self._triple
-        dev_ctx = devices.get_context()
-        target_cpu = dev_ctx.agent.name.decode('UTF-8')
-        self.target_cpu = "-mcpu %s" % target_cpu
+    def _initialize(self):
+        if not self.initialized:
+            dev_ctx = devices.get_context()
+            target_cpu = dev_ctx.agent.name.decode('UTF-8')
+            self.target_cpu = "-mcpu %s" % target_cpu
 
         self.CMD_OPT = ' '.join([
                 self.opt,
@@ -111,24 +99,54 @@ class CmdLine(object):
                         "{fin}"])
 
 
+
+    def __init__(self):
+        self._binary_path = os.environ.get('HSAILBIN', None)
+        def _setup_path(tool):
+            if self._binary_path is not None:
+                return os.path.join(self._binary_path, tool)
+            else:
+                binpath = os.path.join(sys.prefix, 'bin', tool)
+                return binpath
+        self._triple = TRIPLE
+
+        self.opt = _setup_path("opt")
+        self.llc = _setup_path("llc")
+        self.llvm_link = _setup_path("llvm-link")
+        self.ld_lld = _setup_path("ld.lld")
+        self.triple_flag = "-mtriple %s" % self._triple
+        self.initialized = False
+
     def verify(self, ipath, opath):
+        if not self.initialized:
+            self._initialize()
         check_call(self.CMD_VERIFY.format(fout=opath, fin=ipath), shell=True)
 
     def optimize(self, ipath, opath):
+        if not self.initialized:
+            self._initialize()
         check_call(self.CMD_OPT.format(fout=opath, fin=ipath), shell=True)
 
     def generate_hsail(self, ipath, opath):
+        if not self.initialized:
+            self._initialize()
         check_call(self.CMD_GEN_HSAIL.format(fout=opath, fin=ipath), shell=True)
 
     def generate_brig(self, ipath, opath):
+        if not self.initialized:
+            self._initialize()
         check_call(self.CMD_GEN_BRIG.format(fout=opath, fin=ipath), shell=True)
 
     def link_libs(self, ipath, libpaths, opath):
+        if not self.initialized:
+            self._initialize()
         cmdline = self.CMD_LINK_LIBS.format(fout=opath, fin=ipath)
         cmdline += ' '.join(["{0}".format(lib) for lib in libpaths])
         check_call(cmdline, shell=True)
 
     def link_brig(self, ipath, opath):
+        if not self.initialized:
+            self._initialize()
         check_call(self.CMD_LINK_BRIG.format(fout=opath, fin=ipath), shell=True)
 
 

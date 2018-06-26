@@ -63,10 +63,10 @@ def _find_driver():
         try:
             envpath = os.path.abspath(envpath)
         except ValueError:
-            raise ValueError("NUMBA_HSA_DRIVER %s is not a valid path" %
+            raise HsaSupportError("NUMBA_HSA_DRIVER %s is not a valid path" %
                              envpath)
         if not os.path.isfile(envpath):
-            raise ValueError("NUMBA_HSA_DRIVER %s is not a valid file "
+            raise HsaSupportError("NUMBA_HSA_DRIVER %s is not a valid file "
                              "path.  Note it must be a filepath of the .so/"
                              ".dll/.dylib or the driver" % envpath)
         candidates = [envpath]
@@ -1571,9 +1571,12 @@ def dgpu_count():
         return config.NUMBA_HSA_DGPUS_PRESENT
     else:
         ngpus = 0
-        for a in hsa.agents:
-            if a.is_component and a.device == 'GPU':
-                ngpus += 1
+        try:
+            for a in hsa.agents:
+                if a.is_component and a.device == 'GPU':
+                    ngpus += 1
+        except:
+            pass
         return ngpus
 
 """
