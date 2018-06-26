@@ -50,6 +50,7 @@ Enhancements:
 * PR #3032: Fix pycc ctypes test due to mismatch in calling-convention
 * PR #3039: Add SVML detection to Numba environment diagnostic tool.
 * PR #3041: This adds @needs_blas to tests that use BLAS
+* PR #3056: Require llvmlite>=0.24.0
 
 CUDA Enhancements:
 
@@ -72,6 +73,7 @@ Fixes:
 * PR #3019: workaround and unittest for issue #3016
 * PR #3035: [TESTING] Attempt delayed removal of Env
 * PR #3048: [WIP] Fix cuda tests failure on buildfarm
+* PR #3054: Make test work on 32-bit
 
 Documentation Updates:
 * PR #2966: Fix syntax in env var docs.
