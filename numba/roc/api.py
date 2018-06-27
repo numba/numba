@@ -33,6 +33,10 @@ from .enums import (
 from .hsadrv.driver import hsa as _hsadrv
 from .hsadrv import devicearray
 
+try:
+    long
+except NameError:
+    long = int
 
 class _AutoDeregister(object):
     def __init__(self, args):
@@ -123,6 +127,22 @@ def to_device(obj, stream=None, context=None, copy=True, to=None):
 
 def stream():
     return _hsadrv.create_stream()
+
+def _fill_stride_by_order(shape, dtype, order):
+    nd = len(shape)
+    strides = [0] * nd
+    if order == 'C':
+        strides[-1] = dtype.itemsize
+        for d in reversed(range(nd - 1)):
+            strides[d] = strides[d + 1] * shape[d + 1]
+    elif order == 'F':
+        strides[0] = dtype.itemsize
+        for d in range(1, nd):
+            strides[d] = strides[d - 1] * shape[d - 1]
+    else:
+        raise ValueError('must be either C/F order')
+    return tuple(strides)
+
 
 def _prepare_shape_strides_dtype(shape, strides, dtype, order):
     dtype = np.dtype(dtype)
