@@ -1,10 +1,7 @@
 from __future__ import absolute_import, print_function
 
 import numpy as np
-
-from numba.cuda.api import _prepare_shape_strides_dtype
-from numba.cuda.cudadrv.driver import memory_size_from_info as \
-agnostic_memory_size_from_info
+from numba import mviewbuf
 from numba.roc.hsadrv.devices import get_context
 
 from .stubs import (
@@ -127,12 +124,32 @@ def to_device(obj, stream=None, context=None, copy=True, to=None):
 def stream():
     return _hsadrv.create_stream()
 
+def _prepare_shape_strides_dtype(shape, strides, dtype, order):
+    dtype = np.dtype(dtype)
+    if isinstance(shape, (int, long)):
+        shape = (shape,)
+    if isinstance(strides, (int, long)):
+        strides = (strides,)
+    else:
+        if shape == ():
+            shape = (1,)
+        strides = strides or _fill_stride_by_order(shape, dtype, order)
+    return shape, strides, dtype
+
+def _memory_size_from_info(shape, strides, itemsize):
+    """Get the byte size of a contiguous memory buffer given the shape, strides
+    and itemsize.
+    """
+    assert len(shape) == len(strides), "# dim mismatch"
+    ndim = len(shape)
+    s, e = mviewbuf.memoryview_get_extents_info(shape, strides, ndim, itemsize)
+    return e - s
 
 def _host_array(finegrain, shape, dtype, strides, order):
     from .hsadrv import devices
     shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
                                                          order)
-    bytesize = agnostic_memory_size_from_info(shape, strides, dtype.itemsize)
+    bytesize = _memory_size_from_info(shape, strides, dtype.itemsize)
     # TODO does allowing access by all dGPUs really work in a multiGPU system?
     agents = [c._agent for c in devices.get_all_contexts()]
     buf = devices.get_cpu_context().memhostalloc(bytesize, finegrain=finegrain,

@@ -1683,7 +1683,7 @@ def host_memory_extents(obj):
 
 
 def memory_size_from_info(shape, strides, itemsize):
-    """et the byte size of a contiguous memory buffer given the shape, strides
+    """Get the byte size of a contiguous memory buffer given the shape, strides
     and itemsize.
     """
     assert len(shape) == len(strides), "# dim mismatch"

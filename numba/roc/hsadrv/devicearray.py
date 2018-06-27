@@ -10,8 +10,6 @@ import copy
 from ctypes import c_void_p
 import numpy as np
 from numba.roc.hsadrv import driver as _driver
-from numba.cuda.cudadrv.driver import memory_size_from_info as \
-agnostic_memory_size_from_info
 from . import devices
 from numba import dummyarray, types, numpy_support
 from .error import HsaContextMismatchError
@@ -85,7 +83,8 @@ class DeviceNDArrayBase(object):
         # prepare dgpu memory
         if self.size > 0:
             if dgpu_data is None:
-                self.alloc_size = agnostic_memory_size_from_info(self.shape,
+                from numba.roc.api import _memory_size_from_info
+                self.alloc_size = _memory_size_from_info(self.shape,
                                           self.strides, self.dtype.itemsize)
                 # find a coarse region on the dGPU
                 dgpu_data = devices.get_context().mempoolalloc(self.alloc_size)
