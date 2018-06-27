@@ -31,6 +31,10 @@ def get_limiting_factors(group_size, vgpr_per_workitem, sgpr_per_wave):
     def _ceil(x):
         return int(math.ceil(x))
 
+    # these might be zero, for resource limit treat as 1
+    vgpr_per_workitem =  vgpr_per_workitem if vgpr_per_workitem > 0 else 1
+    sgpr_per_wave = sgpr_per_wave if sgpr_per_wave > 0 else 1
+
     workitem_per_simd = group_size / simd_per_cu
     required_wave_count_per_simd = _ceil(workitem_per_simd / wave_size)
     required_vgpr_per_wave = vgpr_per_workitem * wave_size

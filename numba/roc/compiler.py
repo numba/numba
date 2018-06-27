@@ -282,16 +282,16 @@ class HSAKernel(HSAKernelBase):
 
     def _sentry_resource_limit(self):
         # only check resource factprs if either sgpr or vgpr is non-zero
-        if (self._wavefront_sgpr_count > 0 or self._workitem_vgpr_count > 0):
-            group_size = np.prod(self.local_size)
-            limits = gcn_occupancy.get_limiting_factors(
-                group_size=group_size,
-                vgpr_per_workitem=self._workitem_vgpr_count,
-                sgpr_per_wave=self._wavefront_sgpr_count)
-            if limits.reasons:
-                fmt = 'insufficient resources to launch kernel due to:\n{}'
-                msg = fmt.format('\n'.join(limits.suggestions))
-                raise HsaKernelLaunchError(msg)
+        #if (self._wavefront_sgpr_count > 0 or self._workitem_vgpr_count > 0):
+        group_size = np.prod(self.local_size)
+        limits = gcn_occupancy.get_limiting_factors(
+            group_size=group_size,
+            vgpr_per_workitem=self._workitem_vgpr_count,
+            sgpr_per_wave=self._wavefront_sgpr_count)
+        if limits.reasons:
+            fmt = 'insufficient resources to launch kernel due to:\n{}'
+            msg = fmt.format('\n'.join(limits.suggestions))
+            raise HsaKernelLaunchError(msg)
 
     def _generateGCN(self):
         hlcmod = hlc.Module()

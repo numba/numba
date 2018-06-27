@@ -70,7 +70,11 @@ class TestMemory(unittest.TestCase):
         logger.info('post launch')
         np.testing.assert_equal(got, expect)
 
+@unittest.skipUnless(dgpu_present, 'test only on dGPU system')
+class TestDeviceMemorye(unittest.TestCase):
     def test_device_device_transfer(self):
+        # This has to be run in isolation and before the above
+        # TODO: investigate why?!
         nelem = 1000
         expect = np.arange(nelem, dtype=np.int32) + 1
         logger.info('device array like')
