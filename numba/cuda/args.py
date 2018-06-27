@@ -37,6 +37,9 @@ class In(ArgHint):
         devary, _ = auto_device(
             self.value,
             stream=stream)
+        # A dummy writeback functor to keep devary alive until the kernel
+        # is called.
+        retr.append(lambda: devary)
         return devary
 
 
