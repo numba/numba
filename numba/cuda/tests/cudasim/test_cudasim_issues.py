@@ -33,10 +33,17 @@ class TestCudaSimIssues(SerialMixin, unittest.TestCase):
 
     def test_deadlock_on_exception(self):
         def assert_no_blockthreads():
-            blockthreads = [
-                t for t in threading.enumerate()
-                if isinstance(t, simulator.kernel.BlockThread)
-            ]
+            blockthreads = []
+            for t in threading.enumerate():
+                if not isinstance(t, simulator.kernel.BlockThread):
+                    continue
+
+                # join blockthreads with a short timeout to allow aborted threads
+                # to exit
+                if t.abort:
+                    t.join(1)
+                if t.is_alive():
+                    blockthreads.append(t)
 
             self.assertListEqual(blockthreads, [])
 
