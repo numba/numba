@@ -281,10 +281,7 @@ except:
     NVVM_VERSION = (0, 0)
 
 # List of supported compute capability in sorted order
-if NVVM_VERSION < (1, 3):
-    # CUDA 7.5 and earlier
-    SUPPORTED_CC = (2, 0), (2, 1), (3, 0), (3, 5), (5, 0), (5, 2)
-elif NVVM_VERSION < (1, 4):
+if NVVM_VERSION < (1, 4):
     # CUDA 8.0
     SUPPORTED_CC = (2, 0), (2, 1), (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2)
 else:
@@ -324,14 +321,14 @@ def get_arch_option(major, minor):
 MISSING_LIBDEVICE_MSG = '''
 Please define environment variable NUMBAPRO_LIBDEVICE=/path/to/libdevice
 /path/to/libdevice -- is the path to the directory containing the libdevice.*.bc
-files in the installation of CUDA.  (requires CUDA >=7.5)
+files in the installation of CUDA.  (requires CUDA >=8.0)
 '''
 
 MISSING_LIBDEVICE_FILE_MSG = '''Missing libdevice file for {arch}.
-Please ensure you have package cudatoolkit 7.5.
+Please ensure you have package cudatoolkit 8.0.
 Install package by:
 
-    conda install cudatoolkit=7.5
+    conda install cudatoolkit=8.0
 '''
 
 
@@ -541,6 +538,7 @@ re_getelementptr = re.compile(r"\bgetelementptr\s(?:inbounds )?\(?")
 re_load = re.compile(r"=\s*\bload\s(?:\bvolatile\s)?")
 
 re_call = re.compile(r"(call\s[^@]+\))(\s@)")
+re_range = re.compile(r"\s*!range\s+!\d+")
 
 re_type_tok = re.compile(r"[,{}()[\]]")
 
@@ -631,6 +629,9 @@ def llvm39_to_34_ir(ir):
             # Rewrite "call ty (...) @foo"
             # to "call ty (...)* @foo"
             line = re_call.sub(r"\1*\2", line)
+
+            # no !range metadata on calls
+            line = re_range.sub('', line).rstrip(',')
 
         # Remove unknown annotations
         line = re_annotations.sub('', line)

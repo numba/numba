@@ -8,7 +8,10 @@ import sys
 import numpy as np
 
 from numba import numpy_support, types, utils, smartarray
+from numba import ir, errors
 
+# terminal color markup
+_termcolor = errors.termcolor()
 
 class Purpose(enum.Enum):
     # Value being typed is used as an argument
@@ -27,7 +30,8 @@ def typeof(val, purpose=Purpose.argument):
     c = _TypeofContext(purpose)
     ty = typeof_impl(val, c)
     if ty is None:
-        msg = "cannot determine Numba type of %r" % (type(val),)
+        msg = _termcolor.errmsg(
+            "cannot determine Numba type of %r") % (type(val),)
         raise ValueError(msg)
     return ty
 
@@ -149,6 +153,10 @@ def _typeof_list(val, c):
     if len(val) == 0:
         raise ValueError("Cannot type empty list")
     ty = typeof_impl(val[0], c)
+    if ty is None:
+        raise ValueError(
+            "Cannot type list element of {!r}".format(type(val[0])),
+            )
     return types.List(ty, reflected=True)
 
 @typeof_impl.register(set)
@@ -177,7 +185,7 @@ def _typeof_enum_class(val, c):
         raise ValueError("Cannot type enum with no members")
     dtypes = {typeof_impl(mem.value, c) for mem in members}
     if len(dtypes) > 1:
-        raise ValueError("Cannot type heterogenous enum: "
+        raise ValueError("Cannot type heterogeneous enum: "
                          "got value types %s"
                          % ", ".join(sorted(str(ty) for ty in dtypes)))
     if issubclass(val, enum.IntEnum):

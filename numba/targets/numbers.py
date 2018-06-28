@@ -1215,7 +1215,7 @@ def hash_float(context, builder, sig, args):
     # NOTE: CPython's algorithm is more involved as it seeks to maintain
     # the invariant that hash(float(x)) == hash(x) for every integer x
     # exactly representable as a float.
-    # Numba doesn't care as it doesn't support heterogenous associative
+    # Numba doesn't care as it doesn't support heterogeneous associative
     # containers.
 
     intty = types.Integer("int%d" % ty.bitwidth)

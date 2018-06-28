@@ -834,10 +834,15 @@ numba_do_raise(PyObject *exc)
         /* Reraise */
         PyThreadState *tstate = PyThreadState_GET();
         PyObject *tb;
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 7)
+        _PyErr_StackItem *tstate_exc = tstate->exc_info;
+#else
+        PyThreadState *tstate_exc = tstate;
+#endif
         Py_DECREF(exc);
-        type = tstate->exc_type;
-        value = tstate->exc_value;
-        tb = tstate->exc_traceback;
+        type = tstate_exc->exc_type;
+        value = tstate_exc->exc_value;
+        tb = tstate_exc->exc_traceback;
         if (type == Py_None) {
             PyErr_SetString(PyExc_RuntimeError,
                             "No active exception to reraise");

@@ -51,7 +51,7 @@ def scale_timedelta(context, builder, val, srcty, destty):
 def normalize_timedeltas(context, builder, left, right, leftty, rightty):
     """
     Scale either *left* or *right* to the other's unit, in order to have
-    homogenous units.
+    homogeneous units.
     """
     factor = npdatetime.get_timedelta_conversion_factor(leftty.unit, rightty.unit)
     if factor is not None:

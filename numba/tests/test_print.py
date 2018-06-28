@@ -162,6 +162,23 @@ class TestPrint(TestCase):
             cfunc(1, (2, 3), (4, 5j))
             self.assertEqual(sys.stdout.getvalue(), '1 hop! (2, 3) 4 5j\n')
 
+    def test_inner_fn_print(self):
+        @jit(nopython=True)
+        def foo(x):
+            print(x)
+
+        @jit(nopython=True)
+        def bar(x):
+            foo(x)
+            foo('hello')
+
+        # Printing an array requires the Env.
+        # We need to make sure the inner function can obtain the Env.
+        x = np.arange(5)
+        with captured_stdout():
+            bar(x)
+            self.assertEqual(sys.stdout.getvalue(), '[0 1 2 3 4]\nhello\n')
+
 
 if __name__ == '__main__':
     unittest.main()

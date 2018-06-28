@@ -317,9 +317,9 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
                 cfunc = jit(nopython=True)(pyfunc)
                 self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
-        # Homogenous
+        # Homogeneous
         check(Rect(4, 5))
-        # Heterogenous
+        # Heterogeneous
         check(Rect(4, 5.5))
 
     def test_len(self):
@@ -328,10 +328,10 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
             cfunc = jit(nopython=True)(pyfunc)
             self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
-        # Homogenous
+        # Homogeneous
         check(Rect(4, 5))
         check(Point(4, 5, 6))
-        # Heterogenous
+        # Heterogeneous
         check(Rect(4, 5.5))
         check(Point(4, 5.5, 6j))
 
@@ -349,9 +349,9 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
             cfunc = jit(nopython=True)(pyfunc)
             self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
-        # Homogenous
+        # Homogeneous
         check(Rect(4, 5))
-        # Heterogenous
+        # Heterogeneous
         check(Rect(4, 5.5))
         check(Empty())
 
@@ -483,8 +483,8 @@ class TestConversions(TestCase):
 
         with self.assertRaises(errors.TypingError) as raises:
             check(fromty, types.Tuple((types.float32,)), (4, 5))
-        self.assertIn("No conversion from (int32 x 2) to (float32 x 1)",
-                      str(raises.exception))
+        msg = "No conversion from tuple(int32 x 2) to tuple(float32 x 1)"
+        self.assertIn(msg, str(raises.exception))
 
 
 class TestMethods(TestCase):

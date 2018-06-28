@@ -1711,13 +1711,13 @@ class TestLoopTypesDatetimeNoPython(_LoopTypesTester):
     def test_add(self):
         ufunc = np.add
         fn = _make_ufunc_usecase(ufunc)
-        # heterogenous inputs
+        # heterogeneous inputs
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'm8[m]', 'm8[s]'])
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', 'm8[s]'])
         if not numpy_support.strict_ufunc_typing:
             self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8', 'm8[m]'])
             self._check_ufunc_with_dtypes(fn, ufunc, ['m8', 'm8[m]', 'm8[m]'])
-        # heterogenous inputs, scaled output
+        # heterogeneous inputs, scaled output
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'm8[m]', 'm8[ms]'])
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', 'm8[ms]'])
         # Cannot upscale result (Numpy would accept this)
@@ -1727,10 +1727,10 @@ class TestLoopTypesDatetimeNoPython(_LoopTypesTester):
     def test_subtract(self):
         ufunc = np.subtract
         fn = _make_ufunc_usecase(ufunc)
-        # heterogenous inputs
+        # heterogeneous inputs
         self._check_ufunc_with_dtypes(fn, ufunc, ['M8[s]', 'M8[m]', 'm8[s]'])
         self._check_ufunc_with_dtypes(fn, ufunc, ['M8[m]', 'M8[s]', 'm8[s]'])
-        # heterogenous inputs, scaled output
+        # heterogeneous inputs, scaled output
         self._check_ufunc_with_dtypes(fn, ufunc, ['M8[s]', 'M8[m]', 'm8[ms]'])
         self._check_ufunc_with_dtypes(fn, ufunc, ['M8[m]', 'M8[s]', 'm8[ms]'])
         # Cannot upscale result (Numpy would accept this)
@@ -1750,7 +1750,7 @@ class TestLoopTypesDatetimeNoPython(_LoopTypesTester):
     def test_true_divide(self):
         ufunc = np.true_divide
         fn = _make_ufunc_usecase(ufunc)
-        # heterogenous inputs
+        # heterogeneous inputs
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', 'd'])
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'm8[m]', 'd'])
         # scaled output

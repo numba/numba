@@ -11,7 +11,7 @@ from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags, utils
 from numba import jit, typeof, types
 from numba.numpy_support import version as np_version
-from numba.errors import UntypedAttributeError
+from numba.errors import TypingError
 from .support import TestCase, CompilationCache
 
 no_pyobj_flags = Flags()
@@ -65,6 +65,12 @@ def finfo(*args):
 
 def finfo_machar(*args):
     return np.finfo(*args).machar
+
+def correlate(a, v):
+    return np.correlate(a, v)
+
+def convolve(a, v):
+    return np.convolve(a, v)
 
 
 class TestNPFunctions(TestCase):
@@ -458,6 +464,61 @@ class TestNPFunctions(TestCase):
 
         check_values(values)
 
+    def _test_correlate_convolve(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+        # only 1d arrays are accepted, test varying lengths 
+        # and varying dtype
+        lengths = (1, 2, 3, 7)
+        dts = [np.int8, np.int32, np.int64, np.float32, np.float64,
+               np.complex64, np.complex128]
+
+        for dt1, dt2, n, m in itertools.product(dts, dts, lengths, lengths):
+            a = np.arange(n, dtype=dt1)
+            v = np.arange(m, dtype=dt2)
+
+            if np.issubdtype(dt1, np.complexfloating):
+                a = (a + 1j * a).astype(dt1)
+            if np.issubdtype(dt2, np.complexfloating):
+                v = (v + 1j * v).astype(dt2)
+
+            expected = pyfunc(a, v)
+            got = cfunc(a, v)
+            self.assertPreciseEqual(expected, got)
+
+        _a = np.arange(12).reshape(4, 3)
+        _b = np.arange(12)
+        for x, y in [(_a, _b), (_b, _a)]:
+            with self.assertRaises(TypingError) as raises:
+                cfunc(x, y)
+            msg = 'only supported on 1D arrays'
+            self.assertIn(msg, str(raises.exception))
+
+    def test_correlate(self):
+        self._test_correlate_convolve(correlate)
+        # correlate supports 0 dimension arrays
+        _a = np.ones(shape=(0,))
+        _b = np.arange(5)
+        cfunc = jit(nopython=True)(correlate)
+        for x, y in [(_a, _b), (_b, _a), (_a, _a)]:
+            expected = correlate(x, y)
+            got = cfunc(x, y)
+            self.assertPreciseEqual(expected, got)
+
+    def test_convolve(self):
+        self._test_correlate_convolve(convolve)
+        # convolve raises if either array has a 0 dimension
+        _a = np.ones(shape=(0,))
+        _b = np.arange(5)
+        cfunc = jit(nopython=True)(convolve)
+        for x, y in [(_a, _b), (_b, _a)]:
+            with self.assertRaises(ValueError) as raises:
+                cfunc(x, y)
+            if len(x) == 0:
+                self.assertIn("'a' cannot be empty", str(raises.exception))
+            else:
+                self.assertIn("'v' cannot be empty", str(raises.exception))
+
+
 class TestNPMachineParameters(TestCase):
     # tests np.finfo, np.iinfo, np.MachAr
 
@@ -507,7 +568,7 @@ def foo():
             self.check(hc_func, attrs)
 
         # check unsupported attr raises
-        with self.assertRaises(UntypedAttributeError) as raises:
+        with self.assertRaises(TypingError) as raises:
             cfunc = jit(nopython=True)(finfo_machar)
             cfunc(7.)
         msg = "Unknown attribute 'machar' of type finfo"

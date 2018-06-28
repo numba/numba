@@ -171,7 +171,7 @@ def get_next_int(context, builder, state_ptr, nbits):
 
 def _fill_defaults(context, builder, sig, args, defaults):
     """
-    Assuming a homogenous signature (same type for result and all arguments),
+    Assuming a homogeneous signature (same type for result and all arguments),
     fill in the *defaults* if missing from the arguments.
     """
     ty = sig.return_type
@@ -1145,26 +1145,56 @@ def zipf_impl(context, builder, sig, args):
     res = context.compile_internal(builder, zipf_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+def do_shuffle_impl(arr, rng):
 
-@lower("random.shuffle", types.Buffer)
-def shuffle_impl(context, builder, sig, args):
-    res = _shuffle_impl(context, builder, sig, args, random.randrange)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+    if not isinstance(arr, types.Buffer):
+        raise TypeError("The argument to shuffle() should be a buffer type")
 
-@lower("np.random.shuffle", types.Buffer)
-def shuffle_impl(context, builder, sig, args):
-    res = _shuffle_impl(context, builder, sig, args, np.random.randint)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+    if rng == "np":
+        rand = np.random.randint
+    elif rng == "py":
+        rand = random.randrange
 
-def _shuffle_impl(context, builder, sig, args, _randrange):
-    def shuffle_impl(arr):
-        i = arr.shape[0] - 1
-        while i > 0:
-            j = _randrange(i + 1)
-            arr[i], arr[j] = arr[j], arr[i]
-            i -= 1
+    if arr.ndim == 1:
+        def impl(arr):
+            i = arr.shape[0] - 1
+            while i > 0:
+                j = rand(i + 1)
+                arr[i], arr[j] = arr[j], arr[i]
+                i -= 1
+    else:
+        def impl(arr):
+            i = arr.shape[0] - 1
+            while i > 0:
+                j = rand(i + 1)
+                arr[i], arr[j] = np.copy(arr[j]), np.copy(arr[i])
+                i -= 1
 
-    return context.compile_internal(builder, shuffle_impl, sig, args)
+    return impl
+
+@overload(random.shuffle)
+def shuffle_impl(arr):
+    return do_shuffle_impl(arr, "py")
+
+@overload(np.random.shuffle)
+def shuffle_impl(arr):
+    return do_shuffle_impl(arr, "np")
+
+@overload(np.random.permutation)
+def permutation_impl(arr):
+    if isinstance(arr, types.Integer):
+        def permutation_impl(n):
+            arr = np.arange(n)
+            np.random.shuffle(arr)
+            return arr
+    elif isinstance(arr, types.Array):
+        def permutation_impl(arr):
+            arr_copy = arr.copy()
+            np.random.shuffle(arr_copy)
+            return arr_copy
+    else:
+        permutation_impl = None
+    return permutation_impl
 
 
 # ------------------------------------------------------------------------

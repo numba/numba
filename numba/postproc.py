@@ -194,18 +194,20 @@ class PostProcessor(object):
 
             # rewrite body and insert dels
             body = []
+            lastloc = ir_block.loc
             for stmt, delete_set in reversed(delete_pts):
+                lastloc = stmt.loc
                 # Ignore dels (assuming no user inserted deletes)
                 if not isinstance(stmt, ir.Del):
                     body.append(stmt)
                 # note: the reverse sort is not necessary for correctness
                 #       it is just to minimize changes to test for now
                 for var_name in sorted(delete_set, reverse=True):
-                    body.append(ir.Del(var_name, loc=ir_block.loc))
+                    body.append(ir.Del(var_name, loc=lastloc))
             body.append(ir_block.body[-1])  # terminator
             ir_block.body = body
 
             # vars to delete at the start
             escape_dead_set = escaping_dead_map[offset]
             for var_name in sorted(escape_dead_set):
-                ir_block.prepend(ir.Del(var_name, loc=ir_block.loc))
+                ir_block.prepend(ir.Del(var_name, loc=ir_block.body[0].loc))

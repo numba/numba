@@ -126,7 +126,7 @@ def namedtuple_getattr(context, builder, typ, value, attr):
 @lower_constant(types.NamedUniTuple)
 def unituple_constant(context, builder, ty, pyval):
     """
-    Create a homogenous tuple constant.
+    Create a homogeneous tuple constant.
     """
     consts = [context.get_constant_generic(builder, ty.dtype, v)
               for v in pyval]
@@ -136,7 +136,7 @@ def unituple_constant(context, builder, ty, pyval):
 @lower_constant(types.NamedTuple)
 def unituple_constant(context, builder, ty, pyval):
     """
-    Create a heterogenous tuple constant.
+    Create a heterogeneous tuple constant.
     """
     consts = [context.get_constant_generic(builder, ty.types[i], v)
               for i, v in enumerate(pyval)]

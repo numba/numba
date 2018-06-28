@@ -6,7 +6,7 @@ from __future__ import print_function, absolute_import, division
 
 from numba.config import MACHINE_BITS
 from numba import cgutils, types
-from llvmlite import ir
+from llvmlite import ir, binding
 
 # Flag to enable debug print in NRT_incref and NRT_decref
 _debug_print = False
@@ -82,12 +82,21 @@ def _define_nrt_decref(module, atomic_decr):
     if _debug_print:
         cgutils.printf(builder, "*** NRT_Decref %zu [%p]\n", builder.load(ptr),
                        ptr)
+
+    # For memory fence usage, see https://llvm.org/docs/Atomics.html
+
+    # A release fence is used before the relevant write operation.
+    # No-op on x86.  On POWER, it lowers to lwsync.
+    builder.fence("release")
     newrefct = builder.call(atomic_decr,
                             [builder.bitcast(ptr, atomic_decr.args[0].type)])
 
     refct_eq_0 = builder.icmp_unsigned("==", newrefct,
                                        ir.Constant(newrefct.type, 0))
     with cgutils.if_unlikely(builder, refct_eq_0):
+        # An acquire fence is used after the relevant read operation.
+        # No-op on x86.  On POWER, it lowers to lwsync.
+        builder.fence("acquire")
         builder.call(calldtor, [ptr])
     builder.ret_void()
 

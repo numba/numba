@@ -14,12 +14,11 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import utils, jit, generated_jit, types, typeof
-from numba import config
 from numba import _dispatcher
 from numba.compiler import compile_isolated
 from numba.errors import NumbaWarning
 from .support import (TestCase, tag, temp_directory, import_dynamic,
-                      override_env_config, capture_cache_log)
+                      override_env_config, capture_cache_log, captured_stdout)
 from numba.targets import codegen
 from numba.caching import _UserWideCacheLocator
 
@@ -548,8 +547,6 @@ class TestDispatcherMethods(TestCase):
         # just test for the attribute without running it.
         self.assertTrue(callable(cfg.display))
 
-    @unittest.skipIf(config.IS_WIN32 and not config.IS_32BITS, "access violation on 64-bit windows")
-    @unittest.skipIf(config.IS_OSX, "segfault on OSX")
     def test_inspect_cfg(self):
         # Exercise the .inspect_cfg(). These are minimal tests and do not fully
         # check the correctness of the function.
@@ -584,8 +581,6 @@ class TestDispatcherMethods(TestCase):
         cfg = foo.inspect_cfg(signature=foo.signatures[0])
         self._check_cfg_display(cfg)
 
-    @unittest.skipIf(config.IS_WIN32 and not config.IS_32BITS, "access violation on 64-bit windows")
-    @unittest.skipIf(config.IS_OSX, "segfault on OSX")
     def test_inspect_cfg_with_python_wrapper(self):
         # Exercise the .inspect_cfg() including the python wrapper.
         # These are minimal tests and do not fully check the correctness of
@@ -615,6 +610,32 @@ class TestDispatcherMethods(TestCase):
         foo(1, 2)
         # Exercise the method
         foo.inspect_types(utils.StringIO())
+
+    def test_inspect_types_pretty(self):
+        @jit
+        def foo(a, b):
+            return a + b
+
+        foo(1, 2)
+
+        # Exercise the method, dump the output
+        with captured_stdout():
+            ann = foo.inspect_types(pretty=True)
+
+        # ensure HTML <span> is found in the annotation output
+        for k, v in ann.ann.items():
+            span_found = False
+            for line in v['pygments_lines']:
+                if 'span' in line[2]:
+                    span_found = True
+            self.assertTrue(span_found)
+
+        # check that file+pretty kwarg combo raises
+        with self.assertRaises(ValueError) as raises:
+            foo.inspect_types(file=utils.StringIO(), pretty=True)
+
+        self.assertIn("`file` must be None if `pretty=True`",
+                      str(raises.exception))
 
     def test_issue_with_array_layout_conflict(self):
         """
@@ -1107,7 +1128,7 @@ class TestCache(BaseCacheUsecasesTest):
         execute_with_input()
         # Run a second time and check caching
         err = execute_with_input()
-        self.assertEqual(err.strip(), "cache hits = 1")
+        self.assertIn("cache hits = 1", err.strip())
 
 
 class TestCacheWithCpuSetting(BaseCacheUsecasesTest):

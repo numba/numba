@@ -14,7 +14,7 @@ class TestCase(unittest.TestCase):
 
     def get_testsuite_listing(self, args):
         cmd = ['python', '-m', 'numba.runtests', '-l'] + list(args)
-        lines = subprocess.check_output(cmd).decode().splitlines()
+        lines = subprocess.check_output(cmd).decode('UTF-8').splitlines()
         lines = [line for line in lines if line.strip()]
         return lines
 
@@ -54,7 +54,7 @@ class TestCase(unittest.TestCase):
                 msg = ("Test discovery has failed, the reported cause of the "
                        " failure is:\n\n:")
                 indented  = '\n'.join(['\t' + x for x in
-                                       e.output.decode().splitlines()])
+                                       e.output.decode('UTF-8').splitlines()])
                 raise RuntimeError(msg + indented)
         return lines
 
@@ -74,7 +74,7 @@ class TestCase(unittest.TestCase):
     def test_cuda(self):
         # Even without CUDA enabled, there is at least one test
         # (in numba.cuda.tests.nocuda)
-        self.check_testsuite_size(['numba.cuda.tests'], 1, 450)
+        self.check_testsuite_size(['numba.cuda.tests'], 1, 470)
 
     @unittest.skipIf(not cuda.is_available(), "NO CUDA")
     def test_cuda_submodules(self):

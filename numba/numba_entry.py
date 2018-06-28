@@ -11,6 +11,7 @@ def get_sys_info():
     # function which then exits.
     import platform
     import json
+    from numba import config
     from numba import cuda as cu
     from numba.cuda import cudadrv
     from numba.cuda.cudadrv.driver import driver as cudriver
@@ -23,7 +24,7 @@ def get_sys_info():
     from subprocess import check_output, CalledProcessError
 
     try:
-        fmt = "%-21s : %-s"
+        fmt = "%-35s : %-s"
         print("-" * 80)
         print("__Time Stamp__")
         print(datetime.utcnow())
@@ -122,6 +123,32 @@ def get_sys_info():
             except:
                 print(
                     "Error: Probing CUDA failed (device and driver present, runtime problem?)\n")
+
+        print("")
+        print("__SVML Information__")
+        # replicate some SVML detection logic from numba.__init__ here.
+        # if SVML load fails in numba.__init__ the splitting of the logic
+        # here will help diagnosis of the underlying issue
+        have_svml_library = True
+        try:
+            if sys.platform.startswith('linux'):
+                llvmbind.load_library_permanently("libsvml.so")
+            elif sys.platform.startswith('darwin'):
+                llvmbind.load_library_permanently("libsvml.dylib")
+            elif sys.platform.startswith('win'):
+                llvmbind.load_library_permanently("svml_dispmd")
+            else:
+                have_svml_library = False
+        except:
+            have_svml_library = False
+        func = getattr(llvmbind.targets, "has_svml", None)
+        llvm_svml_patched = func() if func is not None else False
+        svml_operational = (config.USING_SVML and llvm_svml_patched \
+                            and have_svml_library)
+        print(fmt % ("SVML state, config.USING_SVML", config.USING_SVML))
+        print(fmt % ("SVML library found and loaded", have_svml_library))
+        print(fmt % ("llvmlite using SVML patched LLVM", llvm_svml_patched))
+        print(fmt % ("SVML operational:", svml_operational))
 
         # Look for conda and conda information
         print("")

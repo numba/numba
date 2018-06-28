@@ -353,7 +353,7 @@ class TestTimedeltaArithmetic(TestCase):
         check(TD(3, 'ps'), float('nan'), TD('NaT', 'ps'))
         check(TD('NaT', 'ps'), float('nan'), TD('NaT', 'ps'))
 
-    def test_homogenous_div(self):
+    def test_homogeneous_div(self):
         div = self.jit(div_usecase)
         def check(a, b, expected):
             self.assertPreciseEqual(div(a, b), expected)

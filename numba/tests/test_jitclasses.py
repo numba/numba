@@ -557,7 +557,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         def access_dunder(inst):
             return inst.__value
 
-        with self.assertRaises(errors.UntypedAttributeError) as raises:
+        with self.assertRaises(errors.TypingError) as raises:
             access_dunder(inst)
         # It will appear as "_TestJitClass__value" because the `access_dunder`
         # is under the scope of 'TestJitClass'.
@@ -618,6 +618,26 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         tc = TestClass(x=2, **kwargs)
         self.assertEqual(tc.a, x * y)
         self.assertEqual(tc.b, z)
+
+    def test_generator_method(self):
+        spec = []
+
+        @jitclass(spec)
+        class TestClass(object):
+            def __init__(self):
+                pass
+
+            def gen(self, niter):
+                for i in range(niter):
+                    yield np.arange(i)
+
+        def expected_gen(niter):
+            for i in range(niter):
+                yield np.arange(i)
+
+        for niter in range(10):
+            for expect, got in zip(expected_gen(niter), TestClass().gen(niter)):
+                self.assertPreciseEqual(expect, got)
 
 
 if __name__ == '__main__':

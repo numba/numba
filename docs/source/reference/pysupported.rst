@@ -146,7 +146,7 @@ The following operations are supported:
 * tuple construction
 * tuple unpacking
 * comparison between tuples
-* iteration and indexing over homogenous tuples
+* iteration and indexing over homogeneous tuples
 * addition (concatenation) between tuples
 * slicing tuples with a constant slice
 * the index method on tuples
@@ -155,15 +155,46 @@ list
 ----
 
 Creating and returning lists from JIT-compiled functions is supported,
-as well as all methods and operations.  Lists must be strictly homogenous:
+as well as all methods and operations.  Lists must be strictly homogeneous:
 Numba will reject any list containing objects of different types, even if
 the types are compatible (for example, ``[1, 2.5]`` is rejected as it
 contains a :class:`int` and a :class:`float`).
 
+For example, to create a list of arrays::
+
+  In [1]: from numba import njit
+
+  In [2]: import numpy as np
+
+  In [3]: @njit
+    ...: def foo(x):
+    ...:     lst = []
+    ...:     for i in range(x):
+    ...:         lst.append(np.arange(i))
+    ...:     return lst
+    ...:
+
+  In [4]: foo(4)
+  Out[4]: [array([], dtype=int64), array([0]), array([0, 1]), array([0, 1, 2])]
+
+
+List Reflection
+'''''''''''''''
+
+In nopython mode, Numba does not operate on Python objects.  ``list`` are
+compiled into an internal representation.  Any ``list`` arguments must be
+converted into this representation on the way in to nopython mode and their
+contained elements must be restored in the original Python objects via a
+process called :term:`reflection`.  Reflection is required to maintain the same
+semantics as found in regular Python code.  However, the reflection process
+can be expensive for large lists and it is not supported for lists that contain
+reflected data types.  Users cannot use list-of-list as an argument because
+of this limitation.
+
 .. note::
    When passing a list into a JIT-compiled function, any modifications
    made to the list will not be visible to the Python interpreter until
-   the function returns.
+   the function returns.  (A limitation of the reflection process.)
 
 .. warning::
    List sorting currently uses a quicksort algorithm, which has different
@@ -173,7 +204,23 @@ contains a :class:`int` and a :class:`float`).
 
 List comprehension
 ''''''''''''''''''
-Numba supports list comprehension, but not the creation of nested list.
+
+Numba supports list comprehension.  For example::
+
+
+  In [1]: from numba import njit
+
+  In [2]: @njit
+    ...: def foo(x):
+    ...:     return [[i for i in range(n)] for n in range(x)]
+    ...:
+
+  In [3]: foo(3)
+  Out[3]: [[], [0], [0, 1]]
+
+
+.. note::
+  Prior to version 0.39.0, Numba did not support the creation of nested lists.
 
 
 Numba also supports "array comprehension" that is a list comprehension
@@ -201,7 +248,7 @@ set
 
 All methods and operations on sets are supported in JIT-compiled functions.
 
-Sets must be strictly homogenous: Numba will reject any set containing
+Sets must be strictly homogeneous: Numba will reject any set containing
 objects of different types, even if the types are compatible (for example,
 ``{1, 2.5}`` is rejected as it contains a :class:`int` and a :class:`float`).
 
@@ -462,13 +509,8 @@ startup with entropy drawn from the operating system.
    code) will seed the Python random generator, not the Numba random generator.
 
 .. note::
-   The generator is not thread-safe when :ref:`releasing the GIL <jit-nogil>`.
-
-   Also, under Unix, if creating a child process using :func:`os.fork` or the
-   :mod:`multiprocessing` module, the child's random generator will inherit
-   the parent's state and will therefore produce the same sequence of
-   numbers (except when using the "forkserver" start method under Python 3.4
-   and later).
+   Since version 0.28.0, the generator is thread-safe and fork-safe.  Each
+   thread and each process will produce independent streams of random numbers.
 
 .. seealso::
    Numba also supports most additional distributions from the :ref:`Numpy

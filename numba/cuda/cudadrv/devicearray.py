@@ -14,6 +14,7 @@ from ctypes import c_void_p
 
 import numpy as np
 
+import numba
 from . import driver as _driver
 from . import devices
 from numba import dummyarray, types, numpy_support
@@ -111,6 +112,16 @@ class DeviceNDArrayBase(object):
 
         self.__writeback = writeback    # should deprecate the use of this
         self.stream = stream
+
+    @property
+    def __cuda_array_interface__(self):
+        return {
+            'shape': tuple(self.shape),
+            'strides': tuple(self.strides),
+            'data': (self.device_ctypes_pointer.value, False),
+            'typestr': self.dtype.str,
+            'version': 0,
+        }
 
     def bind(self, stream=0):
         """Bind a CUDA stream to this object so that all subsequent operation
@@ -617,6 +628,8 @@ def auto_device(obj, stream=0, copy=True):
     """
     if _driver.is_device_memory(obj):
         return obj, False
+    elif hasattr(obj, '__cuda_array_interface__'):
+        return numba.cuda.as_cuda_array(obj), False
     else:
         if isinstance(obj, np.void):
             devobj = from_record_like(obj, stream=stream)

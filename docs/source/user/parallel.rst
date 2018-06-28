@@ -24,6 +24,7 @@ which is in contrast to Numba's :func:`~numba.vectorize` or
 :func:`~numba.guvectorize` mechanism, where manual effort is required
 to create parallel kernels.
 
+.. _numba-parallel-supported:
 
 Supported Operations
 ====================

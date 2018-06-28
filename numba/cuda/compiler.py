@@ -17,6 +17,7 @@ from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
 from .errors import normalize_kernel_dimensions
 from .api import get_current_device
+from .args import wrap_arg
 
 
 _cuda_compiler_lock = threading.RLock()
@@ -71,7 +72,7 @@ def compile_cuda(pyfunc, return_type, args, debug, inline):
 
 @nonthreadsafe
 def compile_kernel(pyfunc, args, link, debug=False, inline=False,
-                   fastmath=False):
+                   fastmath=False, extensions=[]):
     cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=inline)
     fname = cres.fndesc.llvm_func_name
     lib, kernel = cres.target_context.prepare_cuda_kernel(cres.library, fname,
@@ -86,7 +87,8 @@ def compile_kernel(pyfunc, args, link, debug=False, inline=False,
                         link=link,
                         debug=debug,
                         call_helper=cres.call_helper,
-                        fastmath=fastmath)
+                        fastmath=fastmath,
+                        extensions=extensions)
     return cukern
 
 
@@ -420,7 +422,8 @@ class CUDAKernel(CUDAKernelBase):
     specialized, and then launch the kernel on the device.
     '''
     def __init__(self, llvm_module, name, pretty_name, argtypes, call_helper,
-                 link=(), debug=False, fastmath=False, type_annotation=None):
+                 link=(), debug=False, fastmath=False, type_annotation=None,
+                 extensions=[]):
         super(CUDAKernel, self).__init__()
         # initialize CUfunction
         options = {'debug': debug}
@@ -440,9 +443,10 @@ class CUDAKernel(CUDAKernelBase):
         self._func = cufunc
         self.debug = debug
         self.call_helper = call_helper
+        self.extensions = list(extensions)
 
     @classmethod
-    def _rebuild(cls, name, argtypes, cufunc, link, debug, call_helper, config):
+    def _rebuild(cls, name, argtypes, cufunc, link, debug, call_helper, extensions, config):
         """
         Rebuild an instance.
         """
@@ -457,6 +461,7 @@ class CUDAKernel(CUDAKernelBase):
         instance._func = cufunc
         instance.debug = debug
         instance.call_helper = call_helper
+        instance.extensions = extensions
         # update config
         instance._deserialize_config(config)
         return instance
@@ -472,7 +477,7 @@ class CUDAKernel(CUDAKernelBase):
         config = self._serialize_config()
         args = (self.__class__, self.entry_name, self.argument_types,
                 self._func, self.linking, self.debug, self.call_helper,
-                config)
+                self.extensions, config)
         return (serialize._rebuild_reduction, args)
 
     def __call__(self, *args, **kwargs):
@@ -589,6 +594,15 @@ class CUDAKernel(CUDAKernelBase):
         """
         Convert arguments to ctypes and append to kernelargs
         """
+
+        # map the arguments using any extension you've registered
+        for extension in reversed(self.extensions):
+            ty, val = extension.prepare_args(
+                ty,
+                val,
+                stream=stream,
+                retr=retr)
+
         if isinstance(ty, types.Array):
             if isinstance(ty, types.SmartArrayType):
                 devary = val.get('gpu')
@@ -596,9 +610,7 @@ class CUDAKernel(CUDAKernelBase):
                 outer_parent = ctypes.c_void_p(0)
                 kernelargs.append(outer_parent)
             else:
-                devary, conv = devicearray.auto_device(val, stream=stream)
-                if conv:
-                    retr.append(lambda: devary.copy_to_host(val, stream=stream))
+                devary = wrap_arg(val).to_device(retr, stream)
 
             c_intp = ctypes.c_ssize_t
 
@@ -642,10 +654,7 @@ class CUDAKernel(CUDAKernelBase):
             kernelargs.append(ctypes.c_double(val.imag))
 
         elif isinstance(ty, types.Record):
-            devrec, conv = devicearray.auto_device(val, stream=stream)
-            if conv:
-                retr.append(lambda: devrec.copy_to_host(val, stream=stream))
-
+            devrec = wrap_arg(val).to_device(retr, stream)
             kernelargs.append(devrec)
 
         else:
@@ -691,9 +700,34 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         self.definitions = {}
         self.targetoptions = targetoptions
 
+        # defensive copy
+        self.targetoptions['extensions'] = \
+            list(self.targetoptions.get('extensions', []))
+
         from .descriptor import CUDATargetDesc
 
         self.typingctx = CUDATargetDesc.typingctx
+
+    @property
+    def extensions(self):
+        '''
+        A list of objects that must have a `prepare_args` function. When a
+        specialized kernel is called, each argument will be passed through
+        to the `prepare_args` (from the last object in this list to the
+        first). The arguments to `prepare_args` are:
+
+        - `ty` the numba type of the argument
+        - `val` the argument value itself
+        - `stream` the CUDA stream used for the current call to the kernel
+        - `retr` a list of zero-arg functions that you may want to append
+          post-call cleanup work to.
+
+        The `prepare_args` function must return a tuple `(ty, val)`, which
+        will be passed in turn to the next right-most `extension`. After all
+        the extensions have been called, the resulting `(ty, val)` will be
+        passed into Numba's default argument marshalling logic.
+        '''
+        return self.targetoptions['extensions']
 
     def __call__(self, *args):
         '''

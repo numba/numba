@@ -81,6 +81,8 @@ class Type(object):
     """
 
     mutable = False
+    # Rather the type is reflected at the python<->nopython boundary
+    reflected = False
 
     def __init__(self, name):
         self.name = name

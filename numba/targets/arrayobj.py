@@ -25,7 +25,7 @@ from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     iternext_impl, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
-from numba.extending import register_jitable
+from numba.extending import register_jitable, overload
 from . import quicksort, mergesort, slicing
 
 
@@ -1481,6 +1481,19 @@ def array_transpose_vararg(context, builder, sig, args):
     return array_transpose_tuple(context, builder, new_sig, new_args)
 
 
+@overload(np.transpose)
+def numpy_transpose(a, axes=None):
+
+    if axes is None:
+        def np_transpose_impl(arr):
+            return arr.transpose()
+    else:
+        def np_transpose_impl(arr, axes=None):
+            return arr.transpose(axes)
+
+    return np_transpose_impl
+
+
 @lower_getattr(types.Array, 'T')
 def array_T(context, builder, typ, value):
     if typ.ndim <= 1:
@@ -1635,6 +1648,13 @@ def array_reshape(context, builder, sig, args):
 def array_reshape_vararg(context, builder, sig, args):
     new_sig, new_args = vararg_to_tuple(context, builder, sig, args)
     return array_reshape(context, builder, new_sig, new_args)
+
+
+@overload(np.reshape)
+def np_reshape(a, shape):
+    def np_reshape_impl(a, shape):
+        return a.reshape(shape)
+    return np_reshape_impl
 
 
 @lower_builtin('array.ravel', types.Array)
@@ -1805,6 +1825,16 @@ def _change_dtype(context, builder, oldty, newty, ary):
     return res
 
 
+@overload(np.unique)
+def np_unique(a):
+    def np_unique_impl(a):
+        b = np.sort(a.ravel())
+        head = list(b[:1])
+        tail = [x for i, x in enumerate(b[1:]) if b[i] != x]
+        return np.array(head + tail)
+    return np_unique_impl
+
+
 @lower_builtin('array.view', types.Array, types.DTypeSpec)
 def array_view(context, builder, sig, args):
     aryty = sig.args[0]
@@ -1924,10 +1954,12 @@ def array_ctypes(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
     # Create new ArrayCType structure
-    ctinfo = context.make_helper(builder, types.ArrayCTypes(typ))
+    act = types.ArrayCTypes(typ)
+    ctinfo = context.make_helper(builder, act)
     ctinfo.data = array.data
+    ctinfo.meminfo = array.meminfo
     res = ctinfo._getvalue()
-    return impl_ret_untracked(context, builder, typ, res)
+    return impl_ret_borrowed(context, builder, act, res)
 
 @lower_getattr(types.ArrayCTypes, "data")
 def array_ctypes_data(context, builder, typ, value):
@@ -3253,12 +3285,20 @@ def numpy_zeros_like_nd(context, builder, sig, args):
 if numpy_version >= (1, 8):
     @lower_builtin(np.full, types.Any, types.Any)
     def numpy_full_nd(context, builder, sig, args):
-
-        def full(shape, value):
-            arr = np.empty(shape)
-            for idx in np.ndindex(arr.shape):
-                arr[idx] = value
-            return arr
+        if numpy_version < (1, 12):
+            # np < 1.12 returns float64 full regardless of value type
+            def full(shape, value):
+                arr = np.empty(shape)
+                val = np.float64(value.real)
+                for idx in np.ndindex(arr.shape):
+                    arr[idx] = val
+                return arr
+        else:
+            def full(shape, value):
+                arr = np.empty(shape, type(value))
+                for idx in np.ndindex(arr.shape):
+                    arr[idx] = value
+                return arr
 
         res = context.compile_internal(builder, full, sig, args)
         return impl_ret_new_ref(context, builder, sig.return_type, res)
@@ -3532,7 +3572,6 @@ def numpy_take_3(context, builder, sig, args):
 
     res = context.compile_internal(builder, take_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
-
 
 @lower_builtin(np.arange, types.Number)
 def numpy_arange_1(context, builder, sig, args):
@@ -3913,8 +3952,9 @@ def compute_sequence_shape(context, builder, ndim, seqty, seq):
     innerty, inner = seqty, seq
 
     for i in range(ndim):
+        if i > 0:
+            innerty, inner = get_first_item(innerty, inner)
         shapes.append(_get_seq_size(context, builder, innerty, inner))
-        innerty, inner = get_first_item(innerty, inner)
 
     return tuple(shapes)
 
@@ -4537,6 +4577,7 @@ def np_dstack(context, builder, sig, args):
 
         return context.compile_internal(builder, np_vstack_impl, sig, args)
 
+
 @extending.overload_method(types.Array, 'fill')
 def arr_fill(arr, val):
 
@@ -4545,6 +4586,14 @@ def arr_fill(arr, val):
         return None
 
     return fill_impl
+
+
+@extending.overload_method(types.Array, 'dot')
+def array_dot(arr, other):
+    def dot_impl(arr, other):
+        return np.dot(arr, other)
+
+    return dot_impl
 
 # -----------------------------------------------------------------------------
 # Sorting
