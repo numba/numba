@@ -136,13 +136,14 @@ class BlockThread(threading.Thread):
     Manages the execution of a function for a single CUDA thread.
     '''
     def __init__(self, f, manager, blockIdx, threadIdx):
-        super(BlockThread, self).__init__(target=f, daemon=True)
+        super(BlockThread, self).__init__(target=f)
         self.syncthreads_event = threading.Event()
         self.syncthreads_blocked = False
         self._manager = manager
         self.blockIdx = Dim3(*blockIdx)
         self.threadIdx = Dim3(*threadIdx)
         self.exception = None
+        self.daemon = True
         self.abort = False
         blockDim = Dim3(*self._manager._block_dim)
         self.thread_id = self.threadIdx.x + blockDim.x * (self.threadIdx.y + blockDim.y * self.threadIdx.z)
