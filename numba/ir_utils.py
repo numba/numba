@@ -1692,34 +1692,33 @@ def raise_on_unsupported_feature(func_ir):
     unsupported features.
     """
     for blk in func_ir.blocks.values():
-        for stmt in blk.body:
+        for stmt in blk.find_insts(ir.Assign):
             # This raises on finding `make_function`
-            if isinstance(stmt, ir.Assign):
-                if isinstance(stmt.value, ir.Expr):
-                    if stmt.value.op == 'make_function':
-                        val = stmt.value
+            if isinstance(stmt.value, ir.Expr):
+                if stmt.value.op == 'make_function':
+                    val = stmt.value
 
-                        # See if the construct name can be refined
-                        code = getattr(val, 'code', None)
-                        if code is not None:
-                            # check if this is a closure, the co_name will
-                            # be the captured function name which is not
-                            # useful so be explicit
-                            if getattr(val, 'closure', None) is not None:
-                                use = '<creating a function from a closure>'
-                                expr = ''
-                            else:
-                                use = code.co_name
-                                expr = '(%s) ' % use
-                        else:
-                            use = '<could not ascertain use case>'
+                    # See if the construct name can be refined
+                    code = getattr(val, 'code', None)
+                    if code is not None:
+                        # check if this is a closure, the co_name will
+                        # be the captured function name which is not
+                        # useful so be explicit
+                        if getattr(val, 'closure', None) is not None:
+                            use = '<creating a function from a closure>'
                             expr = ''
+                        else:
+                            use = code.co_name
+                            expr = '(%s) ' % use
+                    else:
+                        use = '<could not ascertain use case>'
+                        expr = ''
 
-                        msg = ("Numba encountered the use of a language "
-                               "feature it does not support in this context: "
-                               "%s (op code: make_function not supported). If "
-                               "the feature is explicitly supported it is "
-                               "likely that the result of the expression %s"
-                               "is being used in an unsupported manner.") % \
-                                (use, expr)
-                        raise UnsupportedError(msg, stmt.value.loc)
+                    msg = ("Numba encountered the use of a language "
+                            "feature it does not support in this context: "
+                            "%s (op code: make_function not supported). If "
+                            "the feature is explicitly supported it is "
+                            "likely that the result of the expression %s"
+                            "is being used in an unsupported manner.") % \
+                            (use, expr)
+                    raise UnsupportedError(msg, stmt.value.loc)
