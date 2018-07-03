@@ -15,6 +15,13 @@ else
   echo Error
 fi
 
+# limit CPUs in use on PPC64LE, fork() issues
+# occur on high core count systems
+archstr=`uname -m`
+if [[ "$archstr" == 'ppc64le' ]]; then
+    TEST_NPROCS=16
+fi
+
 # Check Numba executables are there
 pycc -h
 numba -h
@@ -26,4 +33,4 @@ numba -s
 python -m numba.tests.test_runtests
 
 # Run the whole test suite
-$SEGVCATCH python -m numba.runtests -m -b
+$SEGVCATCH python -m numba.runtests -b -m $TEST_NPROCS
