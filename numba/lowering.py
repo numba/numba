@@ -46,7 +46,7 @@ class Environment(_dynfunc.Environment):
             )
 
     def __del__(self):
-        if utils.IS_PY3:
+        if utils is None or utils.IS_PY3:
             return
         if _keepalive is None:
             return
