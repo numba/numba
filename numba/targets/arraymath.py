@@ -342,7 +342,8 @@ def array_var(context, builder, sig, args):
         # Compute the sum of square diffs
         ssd = 0
         for v in np.nditer(arr):
-            ssd += (v.item() - m) ** 2
+            val = (v.item() - m)
+            ssd +=  np.real(val * np.conj(val))
         return ssd / arr.size
 
     res = context.compile_internal(builder, array_var_impl, sig, args)
@@ -599,7 +600,8 @@ if numpy_version >= (1, 8):
             for view in np.nditer(arr):
                 v = view.item()
                 if not isnan(v):
-                    ssd += (v.item() - m) ** 2
+                    val = (v.item() - m)
+                    ssd +=  np.real(val * np.conj(val))
                     count += 1
             # np.divide() doesn't raise ZeroDivisionError
             return np.divide(ssd, count)
