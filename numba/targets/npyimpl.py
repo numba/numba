@@ -17,8 +17,9 @@ from . import builtins, callconv, ufunc_db, arrayobj
 from .imputils import Registry, impl_ret_new_ref, force_error_model
 from .. import typing, types, cgutils, numpy_support, utils
 from ..config import PYVERSION
-from ..numpy_support import ufunc_find_matching_loop, select_array_wrapper
+from ..numpy_support import ufunc_find_matching_loop, select_array_wrapper, from_dtype
 from ..typing import npydecl
+from ..extending import overload, intrinsic
 
 from .. import errors
 
@@ -540,3 +541,47 @@ for _op_map in (npydecl.NumpyRulesUnaryArrayOperator._op_map,
 
 
 del _kernels
+
+@intrinsic
+def _make_dtype_object(typingctx, desc):
+    """Given a string description *desc*, returns the dtype object.
+    """
+    if isinstance(desc, types.Const):
+        # Convert the str description into np.dtype then to numba type.
+        nb_type = from_dtype(np.dtype(desc.value))
+        return_type = types.DType(nb_type)
+        sig = return_type(desc)
+
+        def codegen(context, builder, signature, args):
+            # All dtype objects are dummy values in LLVM.
+            # They only exist in the type level.
+            return context.get_dummy_value()
+
+        return sig, codegen
+    elif isinstance(desc, types.functions.NumberClass):
+        thestr = str(desc.dtype)
+        # Convert the str description into np.dtype then to numba type.
+        nb_type = from_dtype(np.dtype(thestr))
+        #nb_type = from_dtype(np.dtype(desc.value))
+        return_type = types.DType(nb_type)
+        sig = return_type(desc)
+
+        def codegen(context, builder, signature, args):
+            # All dtype objects are dummy values in LLVM.
+            # They only exist in the type level.
+            return context.get_dummy_value()
+
+        return sig, codegen
+
+@overload(np.dtype)
+def numpy_dtype(desc):
+    if isinstance(desc, types.Const):
+        def imp(desc):
+            return _make_dtype_object(desc)
+        return imp
+    elif isinstance(desc, types.functions.NumberClass):
+        def imp(desc):
+            return _make_dtype_object(desc)
+        return imp
+    else:
+        raise TypeError('unknown dtype descriptor: {}'.format(desc))
