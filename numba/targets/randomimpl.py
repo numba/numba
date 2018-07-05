@@ -149,10 +149,12 @@ def get_next_int(context, builder, state_ptr, nbits, is_numpy):
         shift = builder.sub(c32, nbits)
         y = get_next_int32(context, builder, state_ptr)
         if is_numpy:
+            # Use the last N bits, to match np.random
             mask = builder.not_(ir.Constant(y.type, 0))
             mask = builder.lshr(mask, builder.zext(shift, y.type))
             return builder.and_(y, mask)
         else:
+            # Use the first N bits, to match CPython random
             return builder.lshr(y, builder.zext(shift, y.type))
 
     ret = cgutils.alloca_once_value(builder, ir.Constant(int64_t, 0))
@@ -165,9 +167,11 @@ def get_next_int(context, builder, state_ptr, nbits, is_numpy):
         with iflarge:
             # XXX This assumes nbits <= 64
             if is_numpy:
+                # Get the high bits first to match np.random
                 high = get_shifted_int(builder.sub(nbits, c32))
             low = get_next_int32(context, builder, state_ptr)
             if not is_numpy:
+                # Get the high bits second to match CPython random
                 high = get_shifted_int(builder.sub(nbits, c32))
             total = builder.add(
                 builder.zext(low, int64_t),
@@ -337,7 +341,13 @@ def _randrange_impl(context, builder, start, stop, step, state):
 
     if state == "np":
         # Counting leading number of zeros above results in one too many bits
-        # when `n` is a power of two. Here, we correct that.
+        # when `n` is a power of two, since the upper bound is exclusive.
+        # Here, we correct that. CPython's implementation is simpler and just
+        # runs another iteration of the while loop when the resulting number
+        # is too large instead of masking based on the correct number of bits
+        # as NumPy does (CPython while loop uses >=, while NumPy loop uses >).
+        # Thus, we only perform this correction in the NumPy case.
+        #
         # This check incorrectly treats 1 as a power of two, but this special
         # case is handled separately towards the end of this function.
         pow_two = builder.shl(one, builder.sub(builder.sext(nbits, ty), one))
@@ -361,6 +371,7 @@ def _randrange_impl(context, builder, start, stop, step, state):
         builder.store(r, rptr)
 
     if state == "np":
+        # Handle n == 1 case, per previous comment.
         with builder.if_else(builder.icmp_signed('==', n, one)) as (is_one, is_not_one):
             with is_one:
                 builder.store(zero, rptr)
