@@ -1104,6 +1104,17 @@ class TestParfors(TestParforsBase):
         self.assertTrue(build_tuple_found)
 
     @skip_unsupported
+    def test_parfor_dtype_type(self):
+        # test array type replacement creates proper type
+        def test_impl(a):
+            for i in numba.prange(len(a)):
+                a[i] = a.dtype.type(0)
+
+        a = np.ones(10)
+        self.check(test_impl, a)
+        self.assertEqual(a[4], 0.0)
+
+    @skip_unsupported
     def test_parfor_array_access5(self):
         # one dim is slice in multi-dim access
         def test_impl(n):
