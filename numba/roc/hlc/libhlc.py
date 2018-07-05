@@ -52,7 +52,7 @@ class HLC(object):
 
     def __init__(self):
         # Lazily load the libHLC library
-        bitcode_path = os.path.join(sys.prefix, 'bitcode')
+        bitcode_path = os.path.join(sys.prefix, 'share', 'rocmtools')
         assert os.path.exists(bitcode_path) and os.path.isdir(bitcode_path)
         self.bitcode_path = bitcode_path
         dev_ctx = devices.get_context()
@@ -63,8 +63,8 @@ class HLC(object):
             try:
                 hlc = CDLL(os.path.join(sys.prefix, 'lib', 'librocmlite.so'))
             except OSError:
-                raise ImportError("librocmlite.so cannot be found.  Please install the"
-                                  "roctools package by: "
+                raise ImportError("librocmlite.so cannot be found.  Please "
+                                  "install the roctools package by: "
                                   "conda install -c numba roctools")
 
             else:
