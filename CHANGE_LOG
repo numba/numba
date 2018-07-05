@@ -24,6 +24,7 @@ Here are the highlights for the Numba 0.39.0 release.
   `np.unique` are now supported.
 * Numba now supports the use of a per-project configuration file to permanently
   set behaviours typically set via `NUMBA_*` family environment variables.
+* Support for the `ppc64le` architecture has been added.
 
 Enhancements:
 
@@ -64,6 +65,7 @@ CI Enhancements:
 * PR #3021: Update appveyor config.
 * PR #3040: Add fault handler to all builds
 * PR #3042: Add catchsegv
+* PR #3077: Adds optional number of processes for `-m` in testing
 
 Fixes:
 
@@ -74,6 +76,9 @@ Fixes:
 * PR #3035: [TESTING] Attempt delayed removal of Env
 * PR #3048: [WIP] Fix cuda tests failure on buildfarm
 * PR #3054: Make test work on 32-bit
+* PR #3062: Fix cuda.In freeing devary before the kernel launch
+* PR #3073: Workaround #3072
+* PR #3076: Avoid ignored exception due to missing globals at interpreter teardown
 
 Documentation Updates:
 * PR #2966: Fix syntax in env var docs.
