@@ -136,7 +136,9 @@ class NumbaTestProgram(unittest.main):
                                 action='store_true',
                                 help='Detect reference / memory leaks')
         parser.add_argument('-m', '--multiprocess', dest='multiprocess',
-                            action='store_true',
+                            nargs='?',
+                            type=int,
+                            const=multiprocessing.cpu_count(),
                             help='Parallelize tests')
         parser.add_argument('-l', '--list', dest='list',
                             action='store_true',
@@ -157,8 +159,32 @@ class NumbaTestProgram(unittest.main):
             self.list = True
         if PYVERSION < (3, 4) and '-m' in argv:
             # We want '-m' to work on all versions, emulate this option.
+            dashm_posn = argv.index('-m')
+            # the default number of processes to use
+            nprocs = multiprocessing.cpu_count()
+            # see what else is in argv
+            # ensure next position is safe for access
+            try:
+                m_option = argv[dashm_posn + 1]
+                # see if next arg is "end options"
+                if m_option != '--':
+                    #try and parse the next arg as an int
+                    try:
+                        nprocs = int(m_option)
+                    except BaseException:
+                        msg = ('Expected an integer argument to '
+                               'option `-m`, found "%s"')
+                        raise ValueError(msg % m_option)
+                    # remove the value of the option
+                    argv.remove(m_option)
+                # else end options, use defaults
+            except IndexError:
+                # at end of arg list, use defaults
+                pass
+
+            self.multiprocess = nprocs
             argv.remove('-m')
-            self.multiprocess = True
+
         super(NumbaTestProgram, self).parseArgs(argv)
 
         # If at this point self.test doesn't exist, it is because
@@ -202,7 +228,12 @@ class NumbaTestProgram(unittest.main):
             self.testRunner = unittest.TextTestRunner
 
         if self.multiprocess and not self.nomultiproc:
+            if self.multiprocess < 1:
+                msg = ("Value specified for the number of processes to use in "
+                    "running the suite must be > 0")
+                raise ValueError(msg)
             self.testRunner = ParallelTestRunner(self.testRunner,
+                                                 self.multiprocess,
                                                  verbosity=self.verbosity,
                                                  failfast=self.failfast,
                                                  buffer=self.buffer)
@@ -539,9 +570,10 @@ class ParallelTestRunner(runner.TextTestRunner):
     # A test can't run longer than 2 minutes
     timeout = 120
 
-    def __init__(self, runner_cls, **kwargs):
+    def __init__(self, runner_cls, nprocs, **kwargs):
         runner.TextTestRunner.__init__(self, **kwargs)
         self.runner_cls = runner_cls
+        self.nprocs = nprocs
         self.runner_args = kwargs
 
     def _run_inner(self, result):
@@ -555,7 +587,7 @@ class ParallelTestRunner(runner.TextTestRunner):
                           for i in range(0, len(self._ptests), chunk_size)]
 
         for tests in splitted_tests:
-            pool = multiprocessing.Pool()
+            pool = multiprocessing.Pool(self.nprocs)
             try:
                 self._run_parallel_tests(result, pool, child_runner, tests)
             except:
