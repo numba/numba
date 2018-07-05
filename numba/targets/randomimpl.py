@@ -336,23 +336,17 @@ def _randrange_impl(context, builder, start, stop, step, state):
 
     fnty = ir.FunctionType(ty, [ty, cgutils.true_bit.type])
     fn = builder.function.module.get_or_insert_function(fnty, "llvm.ctlz.%s" % ty)
-    nbits = builder.trunc(builder.call(fn, [n, cgutils.true_bit]), int32_t)
+    # Since the upper bound is exclusive, we need to subtract one before
+    # calculating the number of bits. This leads to a special case when
+    # n == 1; there's only one possible result, so we don't need bits from
+    # the PRNG. This case is handled separately towards the end of this
+    # function. CPython's implementation is simpler and just runs another
+    # iteration of the while loop when the resulting number is too large
+    # instead of subtracting one, to avoid needing to handle a special
+    # case. Thus, we only perform this subtraction for the NumPy case.
+    nm1 = builder.sub(n, one) if state == "np" else n
+    nbits = builder.trunc(builder.call(fn, [nm1, cgutils.true_bit]), int32_t)
     nbits = builder.sub(ir.Constant(int32_t, ty.width), nbits)
-
-    if state == "np":
-        # Counting leading number of zeros above results in one too many bits
-        # when `n` is a power of two, since the upper bound is exclusive.
-        # Here, we correct that. CPython's implementation is simpler and just
-        # runs another iteration of the while loop when the resulting number
-        # is too large instead of masking based on the correct number of bits
-        # as NumPy does (CPython while loop uses >=, while NumPy loop uses >).
-        # Thus, we only perform this correction in the NumPy case.
-        #
-        # This check incorrectly treats 1 as a power of two, but this special
-        # case is handled separately towards the end of this function.
-        pow_two = builder.shl(one, builder.sub(builder.sext(nbits, ty), one))
-        pow_two = builder.zext(builder.icmp_signed('==', pow_two, n), int32_t)
-        nbits = builder.sub(nbits, pow_two)
 
     rptr = cgutils.alloca_once(builder, ty, name="r")
 
