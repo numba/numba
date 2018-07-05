@@ -4,7 +4,7 @@ memory transfers before & after the kernel call.
 """
 import abc
 
-from six import add_metaclass
+from numba.six import add_metaclass
 
 from numba.typing.typeof import typeof, Purpose
 
@@ -37,6 +37,9 @@ class In(ArgHint):
         devary, _ = auto_device(
             self.value,
             stream=stream)
+        # A dummy writeback functor to keep devary alive until the kernel
+        # is called.
+        retr.append(lambda: devary)
         return devary
 
 
