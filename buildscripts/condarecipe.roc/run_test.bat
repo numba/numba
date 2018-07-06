@@ -12,6 +12,6 @@ numba -s
 python -m numba.tests.test_runtests
 
 @rem Run the ROC test suite
-python -m numba.runtests -v -m -b numba.hsa.tests
+python -m numba.runtests -v -m -b numba.roc.tests
 
 if errorlevel 1 exit 1
