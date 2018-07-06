@@ -23,7 +23,7 @@ import numba
 from numba import ir, ir_utils, types, typing, rewrites, config, analysis, prange, pndindex
 from numba import array_analysis, postproc, typeinfer
 from numba.numpy_support import as_dtype
-from numba.typing.templates import infer_global, AbstractTemplate
+from numba.typing.templates import infer_global, AbstractTemplate, make_concrete_template
 from numba import stencilparfor
 from numba.stencilparfor import StencilPass
 
@@ -574,10 +574,34 @@ class PreParforPass(object):
                             return True
                         if guard(replace_func):
                             break
+#                    elif (isinstance(expr, ir.Expr) and expr.op == 'getattr' and
+#                          expr.attr == 'dtype'):
+#                        # Replace getattr call "A.dtype" with the actual type itself.
+#                        # This helps remove superfulous dependencies from parfor.
+#                        typ = self.typemap[expr.value.name]
+#                        if isinstance(typ, types.npytypes.Array):
+#                            dtype = typ.dtype
+#                            scope = block.scope
+#                            loc = instr.loc
+#                            g_np_var = ir.Var(scope, mk_unique_var("$np_g_var"), loc)
+#                            self.typemap[g_np_var.name] = types.misc.Module(numpy)
+#                            g_np = ir.Global('np', numpy, loc)
+#                            g_np_assign = ir.Assign(g_np, g_np_var, loc)
+#                            typ_var = ir.Var(scope, mk_unique_var("$np_typ_var"), loc)
+#                            self.typemap[typ_var.name] = types.DType(dtype)
+#                            dtype_str = str(dtype)
+#                            if dtype_str == 'bool':
+#                                dtype_str = 'bool_'
+#                            np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
+#                            typ_var_assign = ir.Assign(np_typ_getattr, typ_var, loc)
+#                            instr.value = typ_var
+#                            block.body.insert(0, typ_var_assign)
+#                            block.body.insert(0, g_np_assign)
+#                            break
                     elif (isinstance(expr, ir.Expr) and expr.op == 'getattr' and
                           expr.attr == 'dtype'):
                         # Replace getattr call "A.dtype" with the actual type itself.
-                        # This helps remove superfulous dependencies from parfor.
+                        # This helps remove superfluous dependencies from parfor.
                         typ = self.typemap[expr.value.name]
                         if isinstance(typ, types.npytypes.Array):
                             dtype = typ.dtype
@@ -587,17 +611,43 @@ class PreParforPass(object):
                             self.typemap[g_np_var.name] = types.misc.Module(numpy)
                             g_np = ir.Global('np', numpy, loc)
                             g_np_assign = ir.Assign(g_np, g_np_var, loc)
+
                             typ_var = ir.Var(scope, mk_unique_var("$np_typ_var"), loc)
-                            self.typemap[typ_var.name] = types.DType(dtype)
+                            self.typemap[typ_var.name] = types.functions.NumberClass(dtype)
                             dtype_str = str(dtype)
                             if dtype_str == 'bool':
                                 dtype_str = 'bool_'
                             np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
                             typ_var_assign = ir.Assign(np_typ_getattr, typ_var, loc)
-                            instr.value = typ_var
+
+                            dtype_attr_var = ir.Var(scope, mk_unique_var("$dtype_attr_var"), loc)
+                            temp = find_template(numpy.dtype)
+                            print("temp", temp, type(temp))
+                            self.typemap[dtype_attr_var.name] = types.functions.Function(temp)
+                            #self.typemap[dtype_attr_var.name] = types.functions.Function(numba.typing.templates.OverloadTemplate_dtype())
+                            #self.typemap[dtype_attr_var.name] = types.functions.Function(make_concrete_template('dtype','dtype',[types.npytypes.DType(dtype)]))
+                            dtype_attr_getattr = ir.Expr.getattr(g_np_var, 'dtype', loc)
+                            dtype_attr_assign = ir.Assign(dtype_attr_getattr, dtype_attr_var, loc)
+
+                            dtype_var = ir.Var(scope, mk_unique_var("$dtype_var"), loc)
+                            self.typemap[dtype_var.name] = types.npytypes.DType(dtype)
+                            dtype_getattr = ir.Expr.call(dtype_attr_var, [typ_var], (), loc)
+                            dtype_assign = ir.Assign(dtype_getattr, dtype_var, loc)
+                            self.calltypes[dtype_getattr] = signature(
+                                self.typemap[dtype_var.name], self.typemap[typ_var.name])
+
+                            instr.value = dtype_var
+                            block.body.insert(0, dtype_assign)
+                            block.body.insert(0, dtype_attr_assign)
                             block.body.insert(0, typ_var_assign)
                             block.body.insert(0, g_np_assign)
                             break
+
+def find_template(op):
+    for ft in numba.typing.templates.builtin_registry.functions:
+        print("find_op_typ", ft, ft.key, op)
+        if ft.key == op:
+            return ft
 
 
 class ParforPass(object):
