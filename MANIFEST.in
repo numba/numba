@@ -9,4 +9,3 @@ prune docs/_build
 prune docs/gh-pages
 include numba/_version.py
 
-include numba/roc/tests/hsadrv/vector_copy.brig

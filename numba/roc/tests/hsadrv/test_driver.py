@@ -69,12 +69,21 @@ class _TestBase(unittest.TestCase):
 
 
 def get_brig_file():
-    basedir = os.path.dirname(__file__)
-    path = os.path.join(basedir, 'vector_copy.brig')
+    path = os.path.join('/opt/rocm/hsa/sample/vector_copy_full.brig')
     assert os.path.isfile(path)
     return path
 
+def _check_example_file():
+    try:
+        get_brig_file()
+    except BaseException:
+        return False
+    return True
 
+has_brig_example = _check_example_file()
+
+
+@unittest.skipUnless(has_brig_example, "Brig example not found")
 class TestBrigModule(unittest.TestCase):
     def test_from_file(self):
         brig_file = get_brig_file()
@@ -82,12 +91,12 @@ class TestBrigModule(unittest.TestCase):
         self.assertGreater(len(brig_module), 0)
 
 
+@unittest.skipUnless(has_brig_example, "Brig example not found")
 class TestProgram(_TestBase):
     def test_create_program(self):
         brig_file = get_brig_file()
         symbol = '&__vector_copy_kernel'
         brig_module = BrigModule.from_file(brig_file)
-
         program = Program()
         program.add_module(brig_module)
         code = program.finalize(self.gpu.isa)
@@ -235,7 +244,9 @@ class TestMemory(_TestBase):
         roc.hsa_memory_free(gpu_only_ptr)
         roc.hsa_memory_free(gpu_host_accessible_ptr)
 
-    @unittest.skip("BRIG format unsupported.")
+    @unittest.skipUnless(has_brig_example, "Brig example not found")
+    @unittest.skipUnless(dgpu_present, "dGPU only")
+    @unittest.skip("Permanently skip? HSA spec violation causes corruption")
     def test_coarse_grained_kernel_execution(self):
         """
         This tests the execution of a kernel on a dGPU using coarse memory
@@ -244,18 +255,11 @@ class TestMemory(_TestBase):
         for kernargs, this is a performance hack.
         """
 
-        from numba.roc.hsadrv.driver import BrigModule, Program, roc,\
+        from numba.roc.hsadrv.driver import BrigModule, Program, hsa,\
                 Executable
 
-        def get_brig_file(basedir=None):
-            if basedir is None:
-                basedir = os.path.dirname(__file__)
-            path = os.path.join(basedir, 'vector_copy_dgpu_example.brig')
-            assert os.path.isfile(path)
-            return path
-
         # get a brig file
-        brig_file = get_brig_file('/srv/data/hsa')
+        brig_file = get_brig_file()
         brig_module = BrigModule.from_file(brig_file)
         self.assertGreater(len(brig_module), 0)
 
@@ -279,8 +283,7 @@ class TestMemory(_TestBase):
         # FIXME: this is dubious, assume launching agent is indexed first
         agent = roc.components[0]
 
-        # dGPU needs base profile, not full
-        prog = Program(profile=enums.HSA_PROFILE_BASE)
+        prog = Program()
         prog.add_module(brig_module)
 
         # get kernel and load
@@ -339,8 +342,8 @@ class TestMemory(_TestBase):
         kernarg_regions = list()
         for r in gpu_host_accessible_coarse_regions:
            # NOTE: VIOLATION
-           # if r.supports(enums.HSA_REGION_GLOBAL_FLAG_KERNARG):
-           kernarg_regions.append(r)
+            if r.supports(enums.HSA_REGION_GLOBAL_FLAG_KERNARG):
+                kernarg_regions.append(r)
         self.assertGreater(len(kernarg_regions), 0)
 
         # use first region for args

@@ -54,49 +54,6 @@ class _TestBase(unittest.TestCase):
         del self.cpu
 
 
-@unittest.skip("Test uses invalid BRIG based execution path.")
-class TestCodeLoading(_TestBase):
-    def _check(self, brig_module, symbol):
-        prog = Program()
-        prog.add_module(brig_module)
-        code = prog.finalize(self.gpu.isa)
-
-        ex = Executable()
-        ex.load(self.gpu, code)
-        ex.freeze()
-
-        sym = ex.get_symbol(self.gpu, symbol)
-        self.assertTrue(sym.kernel_object)
-        self.assertGreater(sym.kernarg_segment_size, 0)
-
-    def test_loading_from_file(self):
-        arytype = types.float32[:]
-        kernel = compiler.compile_kernel(copy_kernel_1d, [arytype] * 2)
-
-        # Write the brig file out
-        brig_file = tempfile.NamedTemporaryFile(delete=False)
-        with brig_file:
-            brig_file.write(kernel.binary)
-
-        # Load BRIG file
-        symbol = '&{0}'.format(kernel.entry_name)
-        brig_module = BrigModule.from_file(brig_file.name)
-        # Cleanup
-        os.unlink(brig_file.name)
-
-        self._check(brig_module, symbol)
-
-    def test_loading_from_memory(self):
-        arytype = types.float32[:]
-        kernel = compiler.compile_kernel(copy_kernel_1d, [arytype] * 2)
-
-        # Load BRIG memory
-        symbol = '&{0}'.format(kernel.entry_name)
-        brig_module = BrigModule(kernel.binary)
-
-        self._check(brig_module, symbol)
-
-
 class TestExecution(unittest.TestCase):
     def test_hsa_kernel(self):
         src = np.arange(1024, dtype=np.float32)
