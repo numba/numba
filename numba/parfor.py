@@ -622,10 +622,9 @@ class PreParforPass(object):
 
                             dtype_attr_var = ir.Var(scope, mk_unique_var("$dtype_attr_var"), loc)
                             temp = find_template(numpy.dtype)
-                            print("temp", temp, type(temp))
+                            tfunc = numba.types.Function(temp)
+                            tfunc.get_call_type(self.typingctx, (self.typemap[typ_var.name],), {})
                             self.typemap[dtype_attr_var.name] = types.functions.Function(temp)
-                            #self.typemap[dtype_attr_var.name] = types.functions.Function(numba.typing.templates.OverloadTemplate_dtype())
-                            #self.typemap[dtype_attr_var.name] = types.functions.Function(make_concrete_template('dtype','dtype',[types.npytypes.DType(dtype)]))
                             dtype_attr_getattr = ir.Expr.getattr(g_np_var, 'dtype', loc)
                             dtype_attr_assign = ir.Assign(dtype_attr_getattr, dtype_attr_var, loc)
 
@@ -645,10 +644,8 @@ class PreParforPass(object):
 
 def find_template(op):
     for ft in numba.typing.templates.builtin_registry.functions:
-        print("find_op_typ", ft, ft.key, op)
         if ft.key == op:
             return ft
-
 
 class ParforPass(object):
 
