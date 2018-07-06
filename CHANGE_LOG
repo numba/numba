@@ -81,6 +81,7 @@ Fixes:
 * PR #3076: Avoid ignored exception due to missing globals at interpreter teardown
 
 Documentation Updates:
+
 * PR #2966: Fix syntax in env var docs.
 * PR #2967: Fix typo in CUDA kernel layout example.
 * PR #2970: Fix docstring copy paste error.
@@ -89,18 +90,18 @@ Contributors:
 
 The following people contributed to this release.
 
-Anton Malakhov
-Ehsan Totoni  (core dev)
-Julia Tatz
-Matthias Bussonnier
-Nick White
-Ray Donnelly
-Siu Kwan Lam  (core dev)
-Stan Seibert  (core dev)
-Stuart Archibald  (core dev)
-Todd A. Anderson  (core dev)
-Rik-de-Kort
-rjenc29
+* Anton Malakhov
+* Ehsan Totoni  (core dev)
+* Julia Tatz
+* Matthias Bussonnier
+* Nick White
+* Ray Donnelly
+* Siu Kwan Lam  (core dev)
+* Stan Seibert  (core dev)
+* Stuart Archibald  (core dev)
+* Todd A. Anderson  (core dev)
+* Rik-de-Kort
+* rjenc29
 
 
 Version 0.38.1
