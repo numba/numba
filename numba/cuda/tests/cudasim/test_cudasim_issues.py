@@ -40,10 +40,9 @@ class TestCudaSimIssues(SerialMixin, unittest.TestCase):
 
                 # join blockthreads with a short timeout to allow aborted threads
                 # to exit
-                if t.abort:
-                    t.join(1)
+                t.join(1)
                 if t.is_alive():
-                    blockthreads.append(t)
+                    self.fail("Blocked kernel thread: %s" % t)
 
             self.assertListEqual(blockthreads, [])
 
@@ -53,16 +52,17 @@ class TestCudaSimIssues(SerialMixin, unittest.TestCase):
             y[i] = x[i]
 
             cuda.syncthreads()
+            cuda.syncthreads()
 
-        x = np.arange(20)
-        y = np.empty(20)
-        assign_with_sync[1, 20](x, y)
+        x = np.arange(3)
+        y = np.empty(3)
+        assign_with_sync[1, 3](x, y)
         np.testing.assert_array_equal(x, y)
         assert_no_blockthreads()
 
 
         with self.assertRaises(IndexError):
-            assign_with_sync[1, 30](x, y)
+            assign_with_sync[1, 6](x, y)
         assert_no_blockthreads()
 
 
