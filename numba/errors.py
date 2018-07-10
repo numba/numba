@@ -85,6 +85,17 @@ _termcolor_inst = None
 try:
     import colorama
 
+    # If the colorama version is < 0.3.9 it can break stdout/stderr in some
+    # situations, as a result if this condition is met colorama is disabled and
+    # the user is warned.
+    if tuple([int(x) for x in colorama.__version__.split('.')]) < (0, 3, 9):
+        msg = ("Insufficiently recent colorama version found. "
+               "Numba requires colorama >= 0.3.9")
+        # warn the user
+        warnings.warn(msg)
+        # trip the exception to disable color errors
+        raise ImportError
+
     # If Numba is running in testsuite mode then do not use error message
     # coloring so CI system output is consistently readable without having
     # to read between shell escape characters.
