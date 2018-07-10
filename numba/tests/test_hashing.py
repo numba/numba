@@ -138,7 +138,7 @@ class TestTupleHashing(BaseTest):
             tuples = [split(a) for a in values]
             self.check_collection(tuples)
 
-    def test_homogenous_tuples(self):
+    def test_homogeneous_tuples(self):
         typ = np.uint64
         def split2(i):
             """
@@ -163,7 +163,7 @@ class TestTupleHashing(BaseTest):
         self.check_tuples(self.int_samples(), split3)
 
     @tag('important')
-    def test_heterogenous_tuples(self):
+    def test_heterogeneous_tuples(self):
         modulo = 2**63
 
         def split(i):

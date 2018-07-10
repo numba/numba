@@ -106,7 +106,7 @@ class IterNext(AbstractTemplate):
 @infer
 class PairFirst(AbstractTemplate):
     """
-    Given a heterogenous pair, return the first element.
+    Given a heterogeneous pair, return the first element.
     """
     key = "pair_first"
 
@@ -120,7 +120,7 @@ class PairFirst(AbstractTemplate):
 @infer
 class PairSecond(AbstractTemplate):
     """
-    Given a heterogenous pair, return the second element.
+    Given a heterogeneous pair, return the second element.
     """
     key = "pair_second"
 

@@ -13,6 +13,6 @@ numba -s
 python -m numba.tests.test_runtests
 
 @rem Run the CUDA test suite
-python -m numba.runtests -v -m -b numba.cuda.tests
+python -m numba.runtests -v -b -m -- numba.cuda.tests
 
 if errorlevel 1 exit 1

@@ -431,10 +431,10 @@ def _parse_nested_sequence(context, typ):
     """
     Parse a (possibly 0d) nested sequence type.
     A (ndim, dtype) tuple is returned.  Note the sequence may still be
-    heterogenous, as long as it converts to the given dtype.
+    heterogeneous, as long as it converts to the given dtype.
     """
     if isinstance(typ, (types.Buffer,)):
-        raise TypingError("%r not allowed in a homogenous sequence" % typ)
+        raise TypingError("%r not allowed in a homogeneous sequence" % typ)
     elif isinstance(typ, (types.Sequence,)):
         n, dtype = _parse_nested_sequence(context, typ.dtype)
         return n + 1, dtype
@@ -452,7 +452,7 @@ def _parse_nested_sequence(context, typ):
             dtypes.append(dtype)
         dtype = context.unify_types(*dtypes)
         if dtype is None:
-            raise TypingError("cannot convert %r to a homogenous type" % typ)
+            raise TypingError("cannot convert %r to a homogeneous type" % typ)
         return n + 1, dtype
     else:
         # Scalar type => check it's valid as a Numpy array dtype
@@ -777,7 +777,7 @@ class NdAtLeast3d(BaseAtLeastNdTemplate):
         return a.copy(ndim=max(a.ndim, 3))
 
 
-def _homogenous_dims(context, func_name, arrays):
+def _homogeneous_dims(context, func_name, arrays):
     ndim = arrays[0].ndim
     for a in arrays:
         if a.ndim != ndim:
@@ -787,7 +787,7 @@ def _homogenous_dims(context, func_name, arrays):
     return ndim
 
 def _sequence_of_arrays(context, func_name, arrays,
-                        dim_chooser=_homogenous_dims):
+                        dim_chooser=_homogeneous_dims):
     if (not isinstance(arrays, types.BaseTuple)
         or not len(arrays)
         or not all(isinstance(a, types.Array) for a in arrays)):
@@ -1074,7 +1074,7 @@ class NdIndex(AbstractTemplate):
         if len(args) == 1 and isinstance(args[0], types.BaseTuple):
             tup = args[0]
             if tup.count > 0 and not isinstance(tup, types.UniTuple):
-                # Heterogenous tuple
+                # Heterogeneous tuple
                 return
             shape = list(tup)
         else:
@@ -1133,7 +1133,7 @@ class Where(AbstractTemplate):
             return signature(retty, ary)
 
         elif len(args) == 3:
-            # NOTE: contrary to Numpy, we only support homogenous arguments
+            # NOTE: contrary to Numpy, we only support homogeneous arguments
             cond, x, y = args
             if isinstance(cond, types.Array):
                 # array where()

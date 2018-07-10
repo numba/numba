@@ -9,6 +9,7 @@ import contextlib
 import numpy as np
 
 from .cudadrv import devicearray, devices, driver
+from .args import In, Out, InOut
 
 
 try:

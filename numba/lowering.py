@@ -46,7 +46,7 @@ class Environment(_dynfunc.Environment):
             )
 
     def __del__(self):
-        if utils.IS_PY3:
+        if utils is None or utils.IS_PY3:
             return
         if _keepalive is None:
             return
@@ -816,7 +816,7 @@ class Lower(BaseLower):
                 ty = ty.type
 
             # If we have a tuple, we needn't do anything
-            # (and we can't iterate over the heterogenous ones).
+            # (and we can't iterate over the heterogeneous ones).
             if isinstance(ty, types.BaseTuple):
                 assert ty == resty
                 self.incref(ty, val)
