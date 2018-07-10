@@ -16,6 +16,7 @@ from numba.annotations import type_annotations
 from numba.parfor import PreParforPass, ParforPass, Parfor
 from numba.inline_closurecall import InlineClosureCallPass
 from numba.errors import CompilerError
+from numba.ir_utils import raise_on_unsupported_feature
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -694,6 +695,9 @@ class BasePipeline(object):
                                  lifted=(),
                                  fndesc=None,)
 
+    def stage_ir_legalization(self):
+        raise_on_unsupported_feature(self.func_ir)
+
     def stage_cleanup(self):
         """
         Cleanup intermediate results to release resources.
@@ -759,6 +763,8 @@ class BasePipeline(object):
         self.add_pre_typing_stage(pm)
         self.add_typing_stage(pm)
         self.add_optimization_stage(pm)
+        pm.add_stage(self.stage_ir_legalization,
+                     "ensure IR is legal prior to lowering")
         self.add_lowering_stage(pm)
         self.add_cleanup_stage(pm)
 
@@ -770,6 +776,8 @@ class BasePipeline(object):
         pm.add_stage(self.stage_objectmode_frontend,
                      "object mode frontend")
         pm.add_stage(self.stage_annotate_type, "annotate type")
+        pm.add_stage(self.stage_ir_legalization,
+                     "ensure IR is legal prior to lowering")
         pm.add_stage(self.stage_objectmode_backend, "object mode backend")
         self.add_cleanup_stage(pm)
 

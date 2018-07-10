@@ -197,7 +197,7 @@ class TestDataFlow(TestCase):
 
     def test_unsupported_op_code(self, flags=force_pyobj_flags):
         pyfunc = unsupported_op_code
-        with self.assertRaises(errors.LoweringError) as raises:
+        with self.assertRaises(errors.UnsupportedError) as raises:
             cr = compile_isolated(pyfunc, (), flags=flags)
         msg="make_function"
         self.assertIn(msg, str(raises.exception))
