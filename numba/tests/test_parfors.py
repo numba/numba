@@ -1125,7 +1125,7 @@ class TestParfors(TestParforsBase):
                 out[0] = 2 * out[0] 
             return out[0]
 
-        out = np.arange(1, dtype=np.double) + 1.0
+        out = np.ones(1)
         self.check(test_impl, out)
         
     @skip_unsupported
