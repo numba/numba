@@ -814,8 +814,10 @@ class TestParfors(TestParforsBase):
         N = 100
         A = np.random.ranf(N)
         B = np.random.randint(10, size=(N, 3))
+        C = A + 1j * A
         self.check(test_impl, A)
         self.check(test_impl, B)
+        self.check(test_impl, C)
         self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'), )) == 2)
         self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )) == 2)
 
@@ -826,8 +828,10 @@ class TestParfors(TestParforsBase):
         N = 100
         A = np.random.ranf(N)
         B = np.random.randint(10, size=(N, 3))
+        C = A + 1j * A
         self.check(test_impl, A)
         self.check(test_impl, B)
+        self.check(test_impl, C)
         self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'), )) == 2)
         self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )) == 2)
 

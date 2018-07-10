@@ -646,6 +646,15 @@ def generic_hetero_real(self, args, kws):
         return signature(types.float64, recvr=self.this)
     return signature(self.this.dtype, recvr=self.this)
 
+def generic_hetero_always_real(self, args, kws):
+    assert not args
+    assert not kws
+    if isinstance(self.this.dtype, (types.Integer, types.Boolean)):
+        return signature(types.float64, recvr=self.this)
+    if isinstance(self.this.dtype, types.Complex):
+        return signature(self.this.dtype.underlying_float, recvr=self.this)
+    return signature(self.this.dtype, recvr=self.this)
+
 def generic_index(self, args, kws):
     assert not args
     assert not kws
@@ -674,8 +683,14 @@ for fname in ["cumsum", "cumprod"]:
     install_array_method(fname, generic_expand_cumulative)
 
 # Functions that require integer arrays get promoted to float64 return
-for fName in ["mean", "var", "std"]:
+for fName in ["mean"]:
     install_array_method(fName, generic_hetero_real)
+
+# var and std by definition return in real space and int arrays
+# get promoted to float64 return
+for fName in ["var", "std"]:
+    install_array_method(fName, generic_hetero_always_real)
+
 
 # Functions that return an index (intp)
 install_array_method("argmin", generic_index)
