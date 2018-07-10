@@ -544,11 +544,9 @@ del _kernels
 
 @intrinsic
 def _make_dtype_object(typingctx, desc):
-    """Given a string description *desc*, returns the dtype object.
+    """Given a string or NumberClass description *desc*, returns the dtype object.
     """
-    if isinstance(desc, types.Const):
-        # Convert the str description into np.dtype then to numba type.
-        nb_type = from_dtype(np.dtype(desc.value))
+    def from_nb_type(nb_type):
         return_type = types.DType(nb_type)
         sig = return_type(desc)
 
@@ -558,28 +556,22 @@ def _make_dtype_object(typingctx, desc):
             return context.get_dummy_value()
 
         return sig, codegen
+
+    if isinstance(desc, types.Const):
+        # Convert the str description into np.dtype then to numba type.
+        nb_type = from_dtype(np.dtype(desc.value))
+        return from_nb_type(nb_type)
     elif isinstance(desc, types.functions.NumberClass):
         thestr = str(desc.dtype)
         # Convert the str description into np.dtype then to numba type.
         nb_type = from_dtype(np.dtype(thestr))
-        #nb_type = from_dtype(np.dtype(desc.value))
-        return_type = types.DType(nb_type)
-        sig = return_type(desc)
-
-        def codegen(context, builder, signature, args):
-            # All dtype objects are dummy values in LLVM.
-            # They only exist in the type level.
-            return context.get_dummy_value()
-
-        return sig, codegen
+        return from_nb_type(nb_type)
 
 @overload(np.dtype)
 def numpy_dtype(desc):
-    if isinstance(desc, types.Const):
-        def imp(desc):
-            return _make_dtype_object(desc)
-        return imp
-    elif isinstance(desc, types.functions.NumberClass):
+    """Provide an implementation so that numpy.dtype function can be lowered.
+    """
+    if isinstance(desc, (types.Const, types.functions.NumberClass)):
         def imp(desc):
             return _make_dtype_object(desc)
         return imp
