@@ -1,3 +1,5 @@
+from __future__ import print_function, absolute_import, division
+
 import sys
 
 import unittest
@@ -31,7 +33,13 @@ class TestSysStdinAssignment(unittest.TestCase):
     def test_no_reassignment_of_stdout(self):
         """
         https://github.com/numba/numba/issues/3027
-        Older versions of colorama break stdout/err when recursive functions are compiled.
+        Older versions of colorama break stdout/err when recursive functions
+        are compiled.
+
+        This test should work irrespective of colorama version, or indeed its
+        presence. If the version is too low, it should be disabled and the test
+        should work anyway, if it is a sufficiently high version or it is not
+        present, it should work anyway.
         """
 
         originally = sys.stdout, sys.stderr
@@ -54,3 +62,8 @@ class TestSysStdinAssignment(unittest.TestCase):
 
         self.assertNotEqual(sys.stderr, None)
         self.assertNotEqual(sys.stdout, None)
+
+
+if __name__ == '__main__':
+    unittest.main()
+
