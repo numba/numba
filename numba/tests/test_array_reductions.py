@@ -650,15 +650,21 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                     def new_test_function(self, redFunc=red_func,
                                           testArray=test_array,
                                           testName=test_name):
+                        ulps = 1
+                        if 'prod' in red_func.__name__ and \
+                            np.iscomplexobj(testArray):
+                            # prod family accumulate slightly more error on
+                            # some architectures (power, 32bit) for complex input
+                            ulps = 2
                         npr, nbr = run_comparative(redFunc, testArray)
                         self.assertPreciseEqual(npr, nbr, msg=test_name,
-                                                prec="single")
+                                                prec="single", ulps=ulps)
 
                     # Install it into the class
                     setattr(cls, test_name, new_test_function)
 
         # install tests for reduction functions that only work in real space
-        install_tests(dtypes_to_test[:-1], reduction_funcs)
+        install_tests(dtypes_to_test[:-1], reduction_funcs_rspace)
 
         # install tests for reduction functions
         install_tests(dtypes_to_test, reduction_funcs)
