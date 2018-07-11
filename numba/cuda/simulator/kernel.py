@@ -143,6 +143,8 @@ class BlockThread(threading.Thread):
         self.blockIdx = Dim3(*blockIdx)
         self.threadIdx = Dim3(*threadIdx)
         self.exception = None
+        self.daemon = True
+        self.abort = False
         blockDim = Dim3(*self._manager._block_dim)
         self.thread_id = self.threadIdx.x + blockDim.x * (self.threadIdx.y + blockDim.y * self.threadIdx.z)
 
@@ -160,9 +162,16 @@ class BlockThread(threading.Thread):
             self.exception = (type(e), type(e)(msg), tb)
 
     def syncthreads(self):
+
+        if self.abort:
+            raise RuntimeError("abort flag set on syncthreads call")
+
         self.syncthreads_blocked = True
         self.syncthreads_event.wait()
         self.syncthreads_event.clear()
+
+        if self.abort:
+            raise RuntimeError("abort flag set on syncthreads clear")
 
     def syncthreads_count(self, value):
         self._manager.block_state[self.threadIdx.x, self.threadIdx.y, self.threadIdx.z] = value
@@ -234,6 +243,14 @@ class BlockManager(object):
                 if t.syncthreads_blocked:
                     blockedthreads.add(t)
                 elif t.exception:
+
+                    # Abort all other simulator threads on exception,
+                    # do *not* join immediately to facilitate debugging.
+                    for t_other in threads:
+                        t_other.abort = True
+                        t_other.syncthreads_blocked = False
+                        t_other.syncthreads_event.set()
+
                     reraise(*(t.exception))
             if livethreads == blockedthreads:
                 for t in blockedthreads:
