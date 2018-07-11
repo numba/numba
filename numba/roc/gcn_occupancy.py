@@ -4,7 +4,7 @@ import math
 from collections import namedtuple
 
 
-# GCN architecutre specific info
+# GCN architecture specific info
 simd_per_cu = 4
 wave_size = 64
 vector_register_file_size = 64 * 2**10  # 64 kB

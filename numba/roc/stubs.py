@@ -101,14 +101,14 @@ def activelanepermute_wavewidth(src, laneid, identity, useidentity):
 
 def ds_permute(src_lane, dest_lane):
     """
-    AMDGCN forwards permute (push semantics)
+    AMDGCN Data Share intrinsic forwards permute (push semantics)
     """
     raise _stub_error
 
 
 def ds_bpermute(src_lane, dest_lane):
     """
-    AMDGCN backwards permute (pull semantics)
+    AMDGCN Data Share intrinsic backwards permute (pull semantics)
     """
     raise _stub_error
 

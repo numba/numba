@@ -38,7 +38,7 @@ def run_far_jump():
 
     arr = np.random.random(10).astype(np.float32)
 
-    print(gpu_great_circle_distance(arr, arr, arr, arr))
+    gpu_great_circle_distance(arr, arr, arr, arr)
 
 
 

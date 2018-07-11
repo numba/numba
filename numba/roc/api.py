@@ -69,7 +69,7 @@ def register(*args):
 
 
 def deregister(*args):
-    """Deregister data form the HSA system
+    """Deregister data from the HSA system
     """
     for data in args:
         if isinstance(data, np.ndarray):
@@ -88,7 +88,7 @@ def device_array(shape, dtype=np.float, strides=None, order='C'):
 
 
 def device_array_like(ary):
-    """Call hsa.devicearray() with information from the array.
+    """Call roc.devicearray() with information from the array.
     """
     return device_array(shape=ary.shape, dtype=ary.dtype, strides=ary.strides)
 
@@ -101,7 +101,7 @@ def to_device(obj, stream=None, context=None, copy=True, to=None):
     To copy host->device a numpy array::
 
         ary = numpy.arange(10)
-        d_ary = hsa.to_device(ary)
+        d_ary = roc.to_device(ary)
 
     The resulting ``d_ary`` is a ``DeviceNDArray``.
 

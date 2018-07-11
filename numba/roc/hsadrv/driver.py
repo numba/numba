@@ -275,27 +275,6 @@ class Driver(object):
                                ctypes.byref(result))
         return Signal(result.value)
 
-    # def load_code_unit(self, code_binary, agents=None):
-    # # not sure of the purpose of caller...
-    #     caller = drvapi.hsa_runtime_caller_t()
-    #     caller.caller = 0
-    #
-    #     if agents is not None:
-    #         agent_count = len(agents)
-    #         agents = (drvapi.hsa_agent_t * agent_count)(*agents)
-    #     else:
-    #         agent_count = 0
-    #
-    #     # callback not yet supported, always use NULL
-    #     cb = ctypes.cast(None, drvapi.hsa_ext_symbol_value_callback_t)
-    #
-    #     result = drvapi.hsa_code_unit_t()
-    #     self.hsa_ext_code_unit_load(caller, agents, agent_count, code_binary,
-    #                                 len(code_binary), options, cb,
-    #                                 ctypes.byref(result))
-    #
-    #     return CodeUnit(result)
-
     def __getattr__(self, fname):
         # Initialize driver
         self._initialize_api()
@@ -653,7 +632,6 @@ class MemPool(HsaWrapper):
 
     def allocate(self, nbytes):
         assert self.alloc_allowed
-        #assert nbytes <= self.alloc_max_size this appears to not exist
         assert nbytes >= 0
         buff = ctypes.c_void_p()
         flags = ctypes.c_uint32(0) # From API docs "Must be 0"!
@@ -1542,42 +1520,18 @@ def async_copy_dgpu(dst_ctx, src_ctx, dst, src, size, stream):
     stream._add_signal(completion_signal)
 
 
-# Known Hardware
-known_dgpus = frozenset([b'Fiji'])
-known_apus = frozenset([b'Spectre'])
-known_cpus = frozenset([b'Kaveri'])
-
-def apu_present():
-    """
-    Returns true if an APU is present on the current machine.
-    """
-    # Find the nodes to which the agents claim to belong.
-    # If the number of nodes is different to the number of
-    # agents then some agents must share a node -> APU!
-    nodes = set()
-    for a in hsa.agents:
-        nodes.add(getattr(a, "node"))
-    return len(hsa.agents) != len(nodes)
-
-
 def dgpu_count():
     """
     Returns the number of discrete GPUs present on the current machine.
-
-    This can be overridden by setting the environment variable
-    `NUMBA_HSA_DGPUS_PRESENT` to a positive integer.
     """
-    if config.NUMBA_HSA_DGPUS_PRESENT > 0:
-        return config.NUMBA_HSA_DGPUS_PRESENT
-    else:
-        ngpus = 0
-        try:
-            for a in hsa.agents:
-                if a.is_component and a.device == 'GPU':
-                    ngpus += 1
-        except:
-            pass
-        return ngpus
+    ngpus = 0
+    try:
+        for a in hsa.agents:
+            if a.is_component and a.device == 'GPU':
+                ngpus += 1
+    except:
+        pass
+    return ngpus
 
 """
 True if a dGPU is present in the current machine.
