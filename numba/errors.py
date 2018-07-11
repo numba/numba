@@ -10,7 +10,6 @@ import os
 import sys
 import warnings
 import numba
-import numpy as np
 from collections import defaultdict
 from numba import six
 from functools import wraps
@@ -510,14 +509,8 @@ class TypingError(NumbaError):
 
 class UntypedAttributeError(TypingError):
     def __init__(self, value, attr, loc=None):
-        module = getattr(value, 'pymod', None)
-        if module is not None and module == np:
-            # unsupported numpy feature.
-            msg = ("Use of unsupported NumPy function 'numpy.%s' "
-                   "or unsupported use of the function.") % attr
-        else:
-            msg = "Unknown attribute '{attr}' of type {type}"
-            msg = msg.format(type=value, attr=attr)
+        msg = "Unknown attribute '{attr}' of type {type}".format(type=value,
+                                                                 attr=attr)
         super(UntypedAttributeError, self).__init__(msg, loc=loc)
 
 

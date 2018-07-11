@@ -6,7 +6,6 @@ from __future__ import division
 from numba import jit, njit
 from numba import unittest_support as unittest
 from numba import errors, utils
-import numpy as np
 
 
 class TestErrorHandlingBeforeLowering(unittest.TestCase):
@@ -68,20 +67,6 @@ class TestErrorHandlingBeforeLowering(unittest.TestCase):
                 "<creating a function from a closure>"
             self.assertIn(expected, str(raises.exception))
 
-
-class TestUnsupportedReporting(unittest.TestCase):
-
-    def test_unsupported_numpy_function(self):
-        # np.asarray(list) currently unsupported
-        @njit
-        def func():
-            np.asarray([1,2,3])
-
-        with self.assertRaises(errors.TypingError) as raises:
-            func()
-
-        expected = "Use of unsupported NumPy function 'numpy.asarray'"
-        self.assertIn(expected, str(raises.exception))
 
 if __name__ == '__main__':
     unittest.main()
