@@ -39,17 +39,6 @@ class TestErrorHandlingBeforeLowering(unittest.TestCase):
         except NameError: #py27 cannot handle the undefined global
             self.assertTrue(utils.PY2)
 
-    def test_unsupported_make_function_dictcomp(self):
-        @jit
-        def func():
-            return {i:0 for i in range(1)}
-
-        with self.assertRaises(errors.UnsupportedError) as raises:
-            func()
-
-        expected = self.expected_msg % "<dictcomp>"
-        self.assertIn(expected, str(raises.exception))
-
     def test_unsupported_make_function_return_inner_func(self):
         def func(x):
             """ return the closure """
