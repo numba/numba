@@ -5,7 +5,7 @@ from __future__ import division
 
 from numba import jit, njit
 from numba import unittest_support as unittest
-from numba import errors, utils
+from numba import errors
 
 
 class TestErrorHandlingBeforeLowering(unittest.TestCase):
@@ -25,19 +25,16 @@ class TestErrorHandlingBeforeLowering(unittest.TestCase):
             self.assertIn(expected, str(raises.exception))
 
     def test_unsupported_make_function_listcomp(self):
-        try:
-            @jit
-            def func(x):
-                a = [i for i in x]
-                return undefined_global  # force error
+        @jit
+        def func(x):
+            a = [i for i in x]
+            return undefined_global  # force error
 
-            with self.assertRaises(errors.UnsupportedError) as raises:
-                func([1])
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            func([1])
 
-            expected = self.expected_msg % "<listcomp>"
-            self.assertIn(expected, str(raises.exception))
-        except NameError: #py27 cannot handle the undefined global
-            self.assertTrue(utils.PY2)
+        expected = self.expected_msg % "<listcomp>"
+        self.assertIn(expected, str(raises.exception))
 
     def test_unsupported_make_function_return_inner_func(self):
         def func(x):
