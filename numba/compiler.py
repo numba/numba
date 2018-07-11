@@ -695,7 +695,7 @@ class BasePipeline(object):
                                  lifted=(),
                                  fndesc=None,)
 
-    def stage_ir_legalization(self):
+    def stage_catch_errors_before_lowering(self):
         raise_on_unsupported_feature(self.func_ir)
 
     def stage_cleanup(self):
@@ -763,8 +763,8 @@ class BasePipeline(object):
         self.add_pre_typing_stage(pm)
         self.add_typing_stage(pm)
         self.add_optimization_stage(pm)
-        pm.add_stage(self.stage_ir_legalization,
-                     "ensure IR is legal prior to lowering")
+        pm.add_stage(self.stage_catch_errors_before_lowering,
+                     "handle known issues before lowering")
         self.add_lowering_stage(pm)
         self.add_cleanup_stage(pm)
 
@@ -776,8 +776,8 @@ class BasePipeline(object):
         pm.add_stage(self.stage_objectmode_frontend,
                      "object mode frontend")
         pm.add_stage(self.stage_annotate_type, "annotate type")
-        pm.add_stage(self.stage_ir_legalization,
-                     "ensure IR is legal prior to lowering")
+        pm.add_stage(self.stage_catch_errors_before_lowering,
+                     "handle known issues before lowering")
         pm.add_stage(self.stage_objectmode_backend, "object mode backend")
         self.add_cleanup_stage(pm)
 
