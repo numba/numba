@@ -655,7 +655,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                             np.iscomplexobj(testArray):
                             # prod family accumulate slightly more error on
                             # some architectures (power, 32bit) for complex input
-                            ulps = 2
+                            ulps = 3
                         npr, nbr = run_comparative(redFunc, testArray)
                         self.assertPreciseEqual(npr, nbr, msg=test_name,
                                                 prec="single", ulps=ulps)
