@@ -1201,6 +1201,14 @@ class Context(object):
         sys.exit(1)
 
     @property
+    def unproxy(self):
+        # This is a trick to help handle weakproxy comparison with actual
+        # instance.
+        # See https://stackoverflow.com/a/49319989 for inspiration and the
+        # whole page for more general discussion.
+        return self
+
+    @property
     def default_queue(self):
         return self._defaultqueue
 

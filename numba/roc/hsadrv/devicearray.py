@@ -138,10 +138,8 @@ class DeviceNDArrayBase(object):
         if context is not None:
             if self.dgpu_data is not None:
                 expect, got = self._context, context
-                if expect != got:
-                    # might be a weakproxy
-                    if expect not in weakref.getweakrefs(got):
-                        raise HsaContextMismatchError(expect=expect, got=got)
+                if expect.unproxy != got.unproxy:
+                    raise HsaContextMismatchError(expect=expect, got=got)
         else:
             context = self._context
 
