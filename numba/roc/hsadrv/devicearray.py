@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import, division
 import warnings
 import math
 import copy
+import weakref
 from ctypes import c_void_p
 import numpy as np
 from numba.roc.hsadrv import driver as _driver
@@ -138,7 +139,9 @@ class DeviceNDArrayBase(object):
             if self.dgpu_data is not None:
                 expect, got = self._context, context
                 if expect != got:
-                    raise HsaContextMismatchError(expect=expect, got=got)
+                    # might be a weakproxy
+                    if expect not in weakref.getweakrefs(got):
+                        raise HsaContextMismatchError(expect=expect, got=got)
         else:
             context = self._context
 

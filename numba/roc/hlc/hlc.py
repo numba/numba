@@ -14,23 +14,38 @@ from .common import AMDGCNModule
 from .config import ROCM_BC_PATH
 from . import TRIPLE
 from datetime import datetime
+from contextlib import contextmanager
+from numba import utils
 
 _real_check_call = check_call
 
 NOISY_CMDLINE = False
 
+@contextmanager
+def error_pipe():
+    if NOISY_CMDLINE:
+       yield subprocess.STDOUT
+    else:
+        if utils.IS_PY3:
+           yield subprocess.DEVNULL
+        else:
+           with open(os.devnull, 'wb') as devnull:
+               yield devnull
+
+
 def check_call(*args, **kwargs):
     # This is so that time is stamped against invocation
     # such that correlations can be looked for against messages in the
     # sys and kernel logs.
-    if NOISY_CMDLINE:
-        print(datetime.now().strftime("%b %d %H:%M:%S") ,file=sys.stdout )
-        print('CMD: ' + ';'.join(args), file=sys.stdout)
-        pipe = subprocess.STDOUT
-    else:
-        pipe = subprocess.DEVNULL
     try:
-        ret = _real_check_call(*args, stderr=pipe, **kwargs)
+        with error_pipe() as stderr:
+            if NOISY_CMDLINE:
+                print(datetime.now().strftime("%b %d %H:%M:%S"),
+                      file=sys.stdout)
+                print('CMD: ' + ';'.join(args), file=sys.stdout)
+
+            ret = _real_check_call(*args, stderr=stderr, **kwargs)
+
     except subprocess.CalledProcessError as e:
         print(e)
         raise(e)
