@@ -2,7 +2,7 @@
 # Currently, connect to commandline interface.
 from __future__ import print_function, absolute_import
 import sys
-from subprocess import check_call
+from subprocess import check_call, check_output
 import subprocess
 import tempfile
 import os
@@ -16,6 +16,7 @@ from . import TRIPLE
 from datetime import datetime
 from contextlib import contextmanager
 from numba import utils
+from numba.roc.hsadrv.error import HsaSupportError
 
 _real_check_call = check_call
 
@@ -113,8 +114,6 @@ class CmdLine(object):
                         "-o {fout}",
                         "{fin}"])
 
-
-
     def __init__(self):
         self._binary_path = os.environ.get('HSAILBIN', None)
         def _setup_path(tool):
@@ -131,6 +130,27 @@ class CmdLine(object):
         self.ld_lld = _setup_path("ld.lld")
         self.triple_flag = "-mtriple %s" % self._triple
         self.initialized = False
+
+    def check_tooling(self):
+        # make sure the llc can actually target amdgcn, ideally all tooling
+        # should be checked but most don't print anything useful and so
+        # compilation for AMDGCN would have to be tested instead. This is a
+        # smoke test like check.
+        try:
+            if not os.path.isfile(self.llc):
+                raise HsaSupportError('llc not found')
+            output = check_output([self.llc, '--version'])
+            olines = [x.strip() for x in output.splitlines()]
+            tgtidx = olines.index('Registered Targets:')
+            targets = olines[tgtidx + 1:]
+            for tgt in targets:
+                if 'amdgcn' in tgt:
+                    break
+            else:
+                msg = 'Command line tooling does not support "amdgcn" target'
+                raise HsaSupportError(msg)
+        except BaseException as e:
+            raise
 
     def verify(self, ipath, opath):
         if not self.initialized:

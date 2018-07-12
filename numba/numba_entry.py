@@ -15,6 +15,8 @@ def get_sys_info():
     from numba import cuda as cu
     from numba.cuda import cudadrv
     from numba.cuda.cudadrv.driver import driver as cudriver
+    from numba import roc
+    from numba.roc.hlc import hlc, libhlc
     import textwrap as tw
     import ctypes as ct
     import llvmlite.binding as llvmbind
@@ -123,6 +125,60 @@ def get_sys_info():
             except:
                 print(
                     "Error: Probing CUDA failed (device and driver present, runtime problem?)\n")
+
+        print("")
+        print("__ROC Information__")
+        roc_is_available = roc.is_available()
+        print(fmt % ("ROC available", roc_is_available))
+
+        toolchains = []
+        try:
+            libhlc.HLC()
+            toolchains.append('librocmlite library')
+        except:
+            pass
+        try:
+            cmd = hlc.CmdLine().check_tooling()
+            toolchains.append('ROC command line tools')
+        except:
+            pass
+
+        # if no ROC try and report why
+        if not roc_is_available:
+            from numba.roc.hsadrv.driver import hsa
+            try:
+                hsa.is_available
+            except BaseException as e:
+                msg = str(e)
+            else:
+               msg = 'No ROC toolchains found.'
+            print(fmt % ("Error initialising ROC due to", msg))
+
+        if toolchains:
+            print(fmt % ("Available Toolchains", ', '.join(toolchains)))
+
+        try:
+            # ROC might not be available due to lack of tool chain, but HSA
+            # agents may be listed
+            from numba.roc.hsadrv.driver import hsa, dgpu_count
+            print("\nFound %s HSA Agents:" % len(hsa.agents))
+            for i, agent in enumerate(hsa.agents):
+                print('Agent id  : %s' % i)
+                print('    vendor: %s' % agent.vendor_name)
+                print('      name: %s' % agent.name)
+                print('      type: %s' % agent.device)
+                print("")
+
+            _dgpus = []
+            for a in hsa.agents:
+                if a.is_component and a.device == 'GPU':
+                   _dgpus.append(a.name)
+            print(fmt % ("Found %s discrete GPU(s)" % dgpu_count(), \
+                  ', '.join(_dgpus)))
+        except Exception as e:
+            print("No HSA Agents found, encountered exception when searching:")
+            print(e)
+
 
         print("")
         print("__SVML Information__")
