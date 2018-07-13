@@ -233,7 +233,7 @@ class BaseLower(object):
         self.debug_print("# function begin: {0}".format(
             self.fndesc.unique_name))
         # Lower all blocks
-        for offset, block in self.blocks.items():
+        for offset, block in sorted(self.blocks.items()):
             bb = self.blkmap[offset]
             self.builder.position_at_end(bb)
             self.lower_block(block)
