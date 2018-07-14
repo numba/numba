@@ -45,6 +45,8 @@ if [ $PYTHON \< "3.4" ]; then $CONDA_INSTALL enum34; fi
 if [ $PYTHON \< "3.4" ]; then $PIP_INSTALL singledispatch; fi
 # Install funcsigs for Python < 3.3
 if [ $PYTHON \< "3.3" ]; then $CONDA_INSTALL -c numba funcsigs; fi
+# Install gumath for Python > 3.5
+if [ $PYTHON \> "3.5" ]; then $CONDA_INSTALL -c xnd/label/dev gumath; fi
 # Install dependencies for building the documentation
 if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx pygments; fi
 if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL sphinx_bootstrap_theme; fi
