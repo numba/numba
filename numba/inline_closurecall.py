@@ -958,16 +958,32 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
         stmts.append(_new_definition(func_ir, size_tuple_var,
                  ir.Expr.build_tuple(items=[size_var], loc=loc), loc))
 
+        nptype = types.DType(dtype)
+
         empty_func = ir.Var(scope, mk_unique_var("empty_func"), loc)
         fnty = get_np_ufunc_typ(np.empty)
-        sig = context.resolve_function_type(fnty, (size_typ,), {})
-        typemap[empty_func.name] = fnty #
+        sig = context.resolve_function_type(fnty, (size_typ,), {'dtype':nptype})
+
+        typemap[empty_func.name] = fnty
 
         stmts.append(_new_definition(func_ir, empty_func,
                          ir.Global('empty', np.empty, loc=loc), loc))
 
-        empty_call = ir.Expr.call(empty_func, [size_var], {}, loc=loc)
-        calltypes[empty_call] = typing.signature(array_typ, size_typ)
+        g_np_var = ir.Var(scope, mk_unique_var("$np_g_var"), loc)
+        typemap[g_np_var.name] = types.misc.Module(np)
+        g_np = ir.Global('np', np, loc)
+        stmts.append(_new_definition(func_ir, g_np_var, g_np, loc))
+
+        typ_var = ir.Var(scope, mk_unique_var("$np_typ_var"), loc)
+        typemap[typ_var.name] = nptype
+        dtype_str = str(dtype)
+        if dtype_str == 'bool':
+            dtype_str = 'bool_'
+        np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
+        stmts.append(_new_definition(func_ir, typ_var, np_typ_getattr, loc))
+
+        empty_call = ir.Expr.call(empty_func, [size_var, typ_var], {}, loc=loc)
+        calltypes[empty_call] = typing.signature(array_typ, size_typ, nptype)
         stmts.append(_new_definition(func_ir, array_var, empty_call, loc))
 
         for i in range(size):
