@@ -6,7 +6,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import cuda
-from numba.cuda.testing import SerialMixin
+from numba.cuda.testing import SerialMixin, skip_unless_cudasim
 import numba.cuda.simulator as simulator
 
 
@@ -31,6 +31,7 @@ class TestCudaSimIssues(SerialMixin, unittest.TestCase):
         expected = np.arange(arr.size, dtype=np.int32)
         np.testing.assert_equal(expected, arr)
 
+    @skip_unless_cudasim('Only works on CUDASIM')
     def test_deadlock_on_exception(self):
         def assert_no_blockthreads():
             blockthreads = []
