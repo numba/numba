@@ -20,6 +20,10 @@ def skip_on_cudasim(reason):
     return unittest.skipIf(config.ENABLE_CUDASIM, reason)
 
 
+def skip_unless_cudasim(reason):
+    return unittest.skipUnless(config.ENABLE_CUDASIM, reason)
+
+
 @contextlib.contextmanager
 def redirect_fd(fd):
     """
