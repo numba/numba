@@ -775,6 +775,8 @@ class BasePipeline(object):
         self.add_preprocessing_stage(pm)
         pm.add_stage(self.stage_objectmode_frontend,
                      "object mode frontend")
+        pm.add_stage(self.stage_inline_pass,
+                     "inline calls to locally defined closures")
         pm.add_stage(self.stage_annotate_type, "annotate type")
         pm.add_stage(self.stage_ir_legalization,
                      "ensure IR is legal prior to lowering")
