@@ -369,6 +369,9 @@ def array_min(context, builder, sig, args):
         nat = ty('NaT')
 
         def array_min_impl(arry):
+            if arry.size == 0:
+                raise ValueError(("zero-size array to reduction operation "
+                                  "minimum which has no identity"))
             min_value = nat
             it = np.nditer(arry)
             for view in it:
@@ -385,6 +388,9 @@ def array_min(context, builder, sig, args):
 
     else:
         def array_min_impl(arry):
+            if arry.size == 0:
+                raise ValueError(("zero-size array to reduction operation "
+                                  "minimum which has no identity"))
             it = np.nditer(arry)
             for view in it:
                 min_value = view.item()
@@ -403,6 +409,9 @@ def array_min(context, builder, sig, args):
 @lower_builtin("array.max", types.Array)
 def array_max(context, builder, sig, args):
     def array_max_impl(arry):
+        if arry.size == 0:
+            raise ValueError(("zero-size array to reduction operation "
+                                "maximum which has no identity"))
         it = np.nditer(arry)
         for view in it:
             max_value = view.item()
@@ -431,6 +440,8 @@ def array_argmin(context, builder, sig, args):
         nat = ty('NaT')
 
         def array_argmin_impl(arry):
+            if arry.size == 0:
+                raise ValueError("attempt to get argmin of an empty sequence")
             min_value = nat
             min_idx = 0
             it = arry.flat
@@ -452,6 +463,8 @@ def array_argmin(context, builder, sig, args):
 
     else:
         def array_argmin_impl(arry):
+            if arry.size == 0:
+                raise ValueError("attempt to get argmin of an empty sequence")
             for v in arry.flat:
                 min_value = v
                 min_idx = 0
@@ -472,6 +485,8 @@ def array_argmin(context, builder, sig, args):
 @lower_builtin("array.argmax", types.Array)
 def array_argmax(context, builder, sig, args):
     def array_argmax_impl(arry):
+        if arry.size == 0:
+            raise ValueError("attempt to get argmax of an empty sequence")
         for v in arry.flat:
             max_value = v
             max_idx = 0

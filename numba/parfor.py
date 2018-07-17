@@ -111,6 +111,9 @@ def min_parallel_impl(return_type, arg):
     if arg.ndim == 1:
         def min_1(in_arr):
             numba.parfor.init_prange()
+            if in_arr.size == 0:
+                raise ValueError(("zero-size array to reduction operation "
+                                  "minimum which has no identity"))
             val = numba.targets.builtins.get_type_max_value(in_arr.dtype)
             for i in numba.parfor.internal_prange(len(in_arr)):
                 val = min(val, in_arr[i])
@@ -118,6 +121,9 @@ def min_parallel_impl(return_type, arg):
     else:
         def min_1(in_arr):
             numba.parfor.init_prange()
+            if in_arr.size == 0:
+                raise ValueError(("zero-size array to reduction operation "
+                                  "minimum which has no identity"))
             val = numba.targets.builtins.get_type_max_value(in_arr.dtype)
             for i in numba.pndindex(in_arr.shape):
                 val = min(val, in_arr[i])
@@ -128,6 +134,9 @@ def max_parallel_impl(return_type, arg):
     if arg.ndim == 1:
         def max_1(in_arr):
             numba.parfor.init_prange()
+            if in_arr.size == 0:
+                raise ValueError(("zero-size array to reduction operation "
+                                  "maximum which has no identity"))
             val = numba.targets.builtins.get_type_min_value(in_arr.dtype)
             for i in numba.parfor.internal_prange(len(in_arr)):
                 val = max(val, in_arr[i])
@@ -135,6 +144,9 @@ def max_parallel_impl(return_type, arg):
     else:
         def max_1(in_arr):
             numba.parfor.init_prange()
+            if in_arr.size == 0:
+                raise ValueError(("zero-size array to reduction operation "
+                                  "maximum which has no identity"))
             val = numba.targets.builtins.get_type_min_value(in_arr.dtype)
             for i in numba.pndindex(in_arr.shape):
                 val = max(val, in_arr[i])
@@ -143,6 +155,8 @@ def max_parallel_impl(return_type, arg):
 
 def argmin_parallel_impl(in_arr):
     numba.parfor.init_prange()
+    if in_arr.size == 0:
+        raise ValueError("attempt to get argmin of an empty sequence")
     A = in_arr.ravel()
     init_val = numba.targets.builtins.get_type_max_value(A.dtype)
     ival = numba.typing.builtins.IndexValue(0, init_val)
@@ -153,6 +167,8 @@ def argmin_parallel_impl(in_arr):
 
 def argmax_parallel_impl(in_arr):
     numba.parfor.init_prange()
+    if in_arr.size == 0:
+        raise ValueError("attempt to get argmax of an empty sequence")
     A = in_arr.ravel()
     init_val = numba.targets.builtins.get_type_min_value(A.dtype)
     ival = numba.typing.builtins.IndexValue(0, init_val)
