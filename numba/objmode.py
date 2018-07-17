@@ -236,6 +236,7 @@ class PyLower(BaseLower):
     def lower_binop(self, expr, op, inplace=False):
         lhs = self.loadvar(expr.lhs.name)
         rhs = self.loadvar(expr.rhs.name)
+        assert not isinstance(op, str)
         if op in PYTHON_BINOPMAP:
             fname, inplace = PYTHON_BINOPMAP[op]
             fn = getattr(self.pyapi, fname)
@@ -253,7 +254,7 @@ class PyLower(BaseLower):
         if expr.op == 'binop':
             return self.lower_binop(expr, expr.fn, inplace=False)
         elif expr.op == 'inplace_binop':
-            return self.lower_binop(expr, expr.immutable_fn, inplace=True)
+            return self.lower_binop(expr, expr.fn, inplace=True)
         elif expr.op == 'unary':
             value = self.loadvar(expr.value.name)
             if expr.fn == operator.neg:

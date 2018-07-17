@@ -505,10 +505,6 @@ class Lower(BaseLower):
         return self.context.get_constant_generic(self.builder, retty, None)
 
     def lower_binop(self, resty, expr, op):
-        if op in utils.OPERATORS_TO_BUILTINS:
-            # map operator.the_op => the corresponding types.Function() TODO: is this looks dodgy ...
-            op = self.context.typing_context.resolve_value_type(op)
-
         lhs = expr.lhs
         rhs = expr.rhs
         static_lhs = expr.static_lhs
@@ -772,7 +768,7 @@ class Lower(BaseLower):
                 return self.lower_binop(resty, expr, expr.fn)
             else:
                 # inplace operators on non-mutable types reuse the same
-                # definition as the corresponding copying operators.
+                # definition as the corresponding copying operators.)
                 return self.lower_binop(resty, expr, expr.immutable_fn)
         elif expr.op == 'unary':
             val = self.loadvar(expr.value.name)

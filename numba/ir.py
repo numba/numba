@@ -227,21 +227,16 @@ class Expr(Inst):
 
     @classmethod
     def binop(cls, fn, lhs, rhs, loc):
+        assert not isinstance(fn, str)
         op = 'binop'
-        if fn in ('in', 'not_in'):
-            lhs, rhs = rhs, lhs
-
-        fn = BINOPS_TO_OPERATORS.get(fn, fn)
-
         return cls(op=op, loc=loc, fn=fn, lhs=lhs, rhs=rhs,
                    static_lhs=UNDEFINED, static_rhs=UNDEFINED)
 
     @classmethod
     def inplace_binop(cls, fn, immutable_fn, lhs, rhs, loc):
+        assert not isinstance(fn, str)
+        assert not isinstance(immutable_fn, str)
         op = 'inplace_binop'
-        fn = INPLACE_BINOPS_TO_OPERATORS.get(fn, fn)
-        immutable_fn = fn   # TODO: this looks dodgy
-
         return cls(op=op, loc=loc, fn=fn, immutable_fn=immutable_fn,
                    lhs=lhs, rhs=rhs,
                    static_lhs=UNDEFINED, static_rhs=UNDEFINED)
@@ -250,7 +245,6 @@ class Expr(Inst):
     def unary(cls, fn, value, loc):
         op = 'unary'
         fn = UNARY_BUITINS_TO_OPERATORS.get(fn, fn)
-
         return cls(op=op, loc=loc, fn=fn, value=value)
 
     @classmethod
