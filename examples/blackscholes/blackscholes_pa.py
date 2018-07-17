@@ -32,28 +32,28 @@ def blackscholes(sptprice, strike, rate, volatility, timev):
     return put
 
 
-def run(iterations):
-    sptprice   = np.full((iterations,), 42.0)
-    initStrike = 40 + (np.arange(iterations) + 1.0) / iterations
-    rate       = np.full((iterations,), 0.5)
-    volatility = np.full((iterations,), 0.2)
-    timev      = np.full((iterations,), 0.5)
+def run(OPT_N, iterations):
+    sptprice   = np.full((OPT_N,), 42.0)
+    initStrike = 40 + (np.arange(OPT_N) + 1.0) / OPT_N
+    rate       = np.full((OPT_N,), 0.5)
+    volatility = np.full((OPT_N,), 0.2)
+    timev      = np.full((OPT_N,), 0.5)
 
     t1 = time.time()
-    put = blackscholes(sptprice, initStrike, rate, volatility, timev)
+    for i in range(iterations):
+        put = blackscholes(sptprice, initStrike, rate, volatility, timev)
     t = time.time()-t1
-    print("checksum: ", sum(put))
+    return 1000 * (t / iterations)
+
+def main(*args):
+    OPT_N = 4000000
+    iterations = 10
+    if len(args) >= 2:
+        iterations = int(args[0])
+    
+    run(1, 1)
+    t = run(OPT_N, iterations)
     print("SELFTIMED ", t)
-
-def main():
-    parser = argparse.ArgumentParser(description='Black-Scholes')
-    parser.add_argument('--options', dest='options', type=int, default=10000000)
-    args = parser.parse_args()
-    options = args.options
-
-    run(10)
-    print("options = ", options)
-    run(options)
 
 if __name__ == '__main__':
     main()

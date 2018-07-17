@@ -196,7 +196,7 @@ void divide_work(const RangeActual &full_iteration_space,
         intp total_len = 0;
         // Compute the total number of iterations in the remaining dimensions to be processed, including the current one.
         for(uintp i = index; i < dims.size(); ++i) total_len += dims[i].length > 1 ? dims[i].length : 0;
-        uintp divisions_for_this_dim;
+        intp divisions_for_this_dim;
         if(total_len == 0) {
             divisions_for_this_dim = num_threads;
         } else {
