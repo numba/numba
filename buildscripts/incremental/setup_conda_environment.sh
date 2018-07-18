@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -v
+set -v -e
 
 CONDA_INSTALL="conda install -q -y"
 PIP_INSTALL="pip install -q"

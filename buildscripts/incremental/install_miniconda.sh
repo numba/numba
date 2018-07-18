@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -v -e
+
 # Install Miniconda
 unamestr=`uname`
 if [[ "$unamestr" == 'Linux' ]]; then
