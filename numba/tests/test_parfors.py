@@ -1122,6 +1122,17 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countNonParforArrayAccesses(test_impl, (types.intp,)), 0)
 
     @skip_unsupported
+    def test_parfor_hoist_setitem(self):
+        # Make sure that read of out is not hoisted.
+        def test_impl(out):
+            for i in prange(10):
+                out[0] = 2 * out[0] 
+            return out[0]
+
+        out = np.ones(1)
+        self.check(test_impl, out)
+        
+    @skip_unsupported
     @needs_blas
     def test_parfor_generate_fuse(self):
         # issue #2857
