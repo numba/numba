@@ -40,11 +40,17 @@ def _lower_parfor_parallel(lowerer, parfor):
     """
     typingctx = lowerer.context.typing_context
     targetctx = lowerer.context
-    typemap = lowerer.fndesc.typemap
+    # We copy the typemap here because for race condition variable we'll
+    # update their type to array so they can be updated by the gufunc.
+    typemap = copy.copy(lowerer.fndesc.typemap)
+    varmap = lowerer.varmap
 
     if config.DEBUG_ARRAY_OPT:
         print("_lower_parfor_parallel")
         parfor.dump()
+
+    loc = parfor.init_block.loc
+    scope = parfor.init_block.scope
 
     # produce instructions for init_block
     if config.DEBUG_ARRAY_OPT:
@@ -53,6 +59,12 @@ def _lower_parfor_parallel(lowerer, parfor):
         if config.DEBUG_ARRAY_OPT:
             print("lower init_block instr = ", instr)
         lowerer.lower_inst(instr)
+
+    for racevar in parfor.races:
+        if racevar not in varmap:
+            rvtyp = typemap[racevar]
+            rv = ir.Var(scope, racevar, loc)
+            lowerer._alloca_var(rv.name, rvtyp)
 
     alias_map = {}
     arg_aliases = {}
@@ -81,11 +93,10 @@ def _lower_parfor_parallel(lowerer, parfor):
     numba.parfor.sequential_parfor_lowering = True
     func, func_args, func_sig = _create_gufunc_for_parfor_body(
         lowerer, parfor, typemap, typingctx, targetctx, flags, {},
-        bool(alias_map), index_var_typ)
+        bool(alias_map), index_var_typ, parfor.races)
     numba.parfor.sequential_parfor_lowering = False
 
     # get the shape signature
-    get_shape_classes = parfor.get_shape_classes
     func_args = ['sched'] + func_args
     num_reductions = len(parfor_redvars)
     num_inputs = len(func_args) - len(parfor_output_arrays) - num_reductions
@@ -94,11 +105,12 @@ def _lower_parfor_parallel(lowerer, parfor):
         print("parfor_outputs = ", parfor_output_arrays)
         print("parfor_redvars = ", parfor_redvars)
     gu_signature = _create_shape_signature(
-        get_shape_classes,
+        parfor.get_shape_classes,
         num_inputs,
         num_reductions,
         func_args,
-        func_sig)
+        func_sig,
+        parfor.races)
     if config.DEBUG_ARRAY_OPT:
         print("gu_signature = ", gu_signature)
 
@@ -117,7 +129,8 @@ def _lower_parfor_parallel(lowerer, parfor):
         parfor_redvars,
         parfor_reddict,
         parfor.init_block,
-        index_var_typ)
+        index_var_typ,
+        parfor.races)
     if config.DEBUG_ARRAY_OPT:
         sys.stdout.flush()
 
@@ -131,7 +144,8 @@ def _create_shape_signature(
         num_inputs,
         num_reductions,
         args,
-        func_sig):
+        func_sig,
+        races):
     '''Create shape signature for GUFunc
     '''
     if config.DEBUG_ARRAY_OPT:
@@ -141,7 +155,7 @@ def _create_shape_signature(
 
     num_inouts = len(args) - num_reductions
     # maximum class number for array shapes
-    classes = [get_shape_classes(var) for var in args[1:]]
+    classes = [get_shape_classes(var) if var not in races else (-1,) for var in args[1:]]
     class_set = set()
     for _class in classes:
         if _class:
@@ -322,7 +336,8 @@ def _create_gufunc_for_parfor_body(
         flags,
         locals,
         has_aliases,
-        index_var_typ):
+        index_var_typ,
+        races):
     '''
     Takes a parfor and creates a gufunc function for its body.
     There are two parts to this function.
@@ -341,6 +356,7 @@ def _create_gufunc_for_parfor_body(
     # would incorrectly change their name.
     loop_body = copy.copy(parfor.loop_body)
     remove_dels(loop_body)
+    replace_var_with_array(races, loop_body, typemap, lowerer.fndesc.calltypes)
 
     parfor_dim = len(parfor.loop_nests)
     loop_indices = [l.index_variable.name for l in parfor.loop_nests]
@@ -675,9 +691,41 @@ def _create_gufunc_for_parfor_body(
 
     return kernel_func, parfor_args, kernel_sig
 
+def replace_var_with_array_in_block(vars, block, typemap, calltypes):
+    new_block = []
+    for inst in block.body:
+        if isinstance(inst, ir.Assign) and inst.target.name in vars:
+            const_node = ir.Const(0, inst.loc)
+            const_var = ir.Var(inst.target.scope, mk_unique_var("$const_ind_0"), inst.loc)
+            typemap[const_var.name] = types.uintp
+            const_assign = ir.Assign(const_node, const_var, inst.loc)
+            new_block.append(const_assign)
+
+            setitem_node = ir.SetItem(inst.target, const_var, inst.value, inst.loc)
+            calltypes[setitem_node] = signature(
+                types.none, types.npytypes.Array(typemap[inst.target.name], 1, "C"), types.intp, typemap[inst.target.name])
+            new_block.append(setitem_node)
+            continue
+        elif isinstance(inst, parfor.Parfor):
+            replace_var_with_array_internal(vars, {0: inst.init_block}, typemap, calltypes)
+            replace_var_with_array_internal(vars, inst.loop_body, typemap, calltypes)
+
+        new_block.append(inst)
+    return new_block
+
+def replace_var_with_array_internal(vars, loop_body, typemap, calltypes):
+    for label, block in loop_body.items():
+        block.body = replace_var_with_array_in_block(vars, block, typemap, calltypes)
+
+def replace_var_with_array(vars, loop_body, typemap, calltypes):
+    replace_var_with_array_internal(vars, loop_body, typemap, calltypes)
+    for v in vars:
+        el_typ = typemap[v]
+        typemap.pop(v, None)
+        typemap[v] = types.npytypes.Array(el_typ, 1, "C")
 
 def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
-                         loop_ranges, redvars, reddict, init_block, index_var_typ):
+                         loop_ranges, redvars, reddict, init_block, index_var_typ, races):
     '''
     Adds the call to the gufunc function from the main function.
     '''
@@ -856,19 +904,32 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
     # sched goes first
     builder.store(builder.bitcast(sched, byte_ptr_t), args)
     array_strides.append(context.get_constant(types.intp, sizeof_intp))
+    rv_to_arg_dict = {}
     # followed by other arguments
     for i in range(num_args):
         arg = all_args[i]
+        var = expr_args[i]
         aty = outer_sig.args[i + 1]  # skip first argument sched
         dst = builder.gep(args, [context.get_constant(types.intp, i + 1)])
         if i >= ninouts:  # reduction variables
             builder.store(builder.bitcast(arg, byte_ptr_t), dst)
         elif isinstance(aty, types.ArrayCompatible):
-            ary = context.make_array(aty)(context, builder, arg)
-            strides = cgutils.unpack_tuple(builder, ary.strides, aty.ndim)
-            for j in range(len(strides)):
-                array_strides.append(strides[j])
-            builder.store(builder.bitcast(ary.data, byte_ptr_t), dst)
+            if var in races:
+                typ = context.get_data_type(
+                    aty.dtype) if aty.dtype != types.boolean else lc.Type.int(1)
+
+                rv_arg = cgutils.alloca_once(builder, typ)
+                builder.store(arg, rv_arg)
+                builder.store(builder.bitcast(rv_arg, byte_ptr_t), dst)
+                rv_to_arg_dict[var] = (arg, rv_arg)
+
+                array_strides.append(context.get_constant(types.intp, context.get_abi_sizeof(typ)))
+            else:
+                ary = context.make_array(aty)(context, builder, arg)
+                strides = cgutils.unpack_tuple(builder, ary.strides, aty.ndim)
+                for j in range(len(strides)):
+                    array_strides.append(strides[j])
+                builder.store(builder.bitcast(ary.data, byte_ptr_t), dst)
         else:
             if i < num_inps:
                 # Scalar input, need to store the value in an array of size 1
@@ -896,13 +957,17 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
         for dim_sym in gu_sig:
             if config.DEBUG_ARRAY_OPT:
                 print("var = ", var, " type = ", aty)
-            ary = context.make_array(aty)(context, builder, arg)
-            shapes = cgutils.unpack_tuple(builder, ary.shape, aty.ndim)
-            sig_dim_dict[dim_sym] = shapes[i]
+            if var in races:
+                sig_dim_dict[dim_sym] = context.get_constant(types.intp, 1)
+            else:
+                ary = context.make_array(aty)(context, builder, arg)
+                shapes = cgutils.unpack_tuple(builder, ary.shape, aty.ndim)
+                sig_dim_dict[dim_sym] = shapes[i]
+
             if not (dim_sym in occurances):
                 if config.DEBUG_ARRAY_OPT:
                     print("dim_sym = ", dim_sym, ", i = ", i)
-                    cgutils.printf(builder, dim_sym + " = %d\n", shapes[i])
+                    cgutils.printf(builder, dim_sym + " = %d\n", sig_dim_dict[dim_sym])
                 occurances.append(dim_sym)
             i = i + 1
 
@@ -933,7 +998,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
     # First goes the step size for sched, which is 2 * num_dim
     builder.store(context.get_constant(types.intp, 2 * num_dim * sizeof_intp),
                   steps)
-    # The steps for all others are 0. (TODO: except reduction results)
+    # The steps for all others are 0, except for reduction results.
     for i in range(num_args):
         if i >= ninouts:  # steps for reduction vars are abi_sizeof(typ)
             j = i - ninouts
@@ -963,6 +1028,11 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args,
     result = builder.call(fn, [args, shapes, steps, data])
     if config.DEBUG_ARRAY_OPT:
         cgutils.printf(builder, "after calling kernel %p\n", fn)
+
+    for k, v in rv_to_arg_dict.items():
+        arg, rv_arg = v
+        only_elem_ptr = builder.gep(rv_arg, [context.get_constant(types.intp, 0)])
+        builder.store(builder.load(only_elem_ptr), lowerer.getvar(k))
 
     scope = init_block.scope
     loc = init_block.loc
