@@ -40,7 +40,7 @@ test:
     # Required to test optional Numba features
     - cffi
     - scipy
-    - ipython
+    - ipython                  # [not (win or armv6l or armv7l or aarch64)]
     - setuptools
     - faulthandler             # [py27]
     # Need these for AOT. Do not init msvc as it may not be present
