@@ -39,7 +39,8 @@ test:
     - jinja2
     # Required to test optional Numba features
     - cffi
-    - scipy
+    # temporarily disable scipy testing on ARM, need to build out more packages
+    - scipy                    # [not (win or armv6l or armv7l or aarch64)]
     - ipython                  # [not (win or armv6l or armv7l or aarch64)]
     - setuptools
     - faulthandler             # [py27]
