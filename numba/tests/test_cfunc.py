@@ -12,8 +12,11 @@ import sys
 import numpy as np
 
 from numba import unittest_support as unittest
+from numba.types import int8, float32, int32, int16, int64, Vector, float64, \
+    char, double, CVoid
 from numba import cfunc, carray, farray, types, typing, utils
 from numba import cffi_support
+from numba.ccallback import CFunc, make_tuple
 from .support import TestCase, tag, captured_stderr
 from .test_dispatcher import BaseCacheTest
 
@@ -364,6 +367,496 @@ class TestCArray(TestCase):
         Test Numba-compiled farray() against pure Python farray()
         """
         self.check_numba_carray_farray(farray_usecase, farray_dtype_usecase)
+
+# amd64 ABI tests
+
+class TestPass(unittest.TestCase):
+
+    def test_1_float(self):
+        retty = int8
+        args = [float32]
+        res = CFunc(lambda a: 42, (args, retty), {}, {})
+
+        expected_args = args
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_1_int(self):
+        retty = int8
+        args = [int32]
+        res = CFunc(lambda a: 42, (args, retty), {}, {})
+
+        expected_args = args
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_2_floats(self):
+        retty = int8
+        args = [float32, float32]
+        res = CFunc(lambda a, b: 42, (args, retty), {}, {})
+
+        expected_args = args
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_2_ints(self):
+        retty = int8
+        args = [int32, int32]
+        res = CFunc(lambda a, b: 42, (args, retty), {}, {})
+
+        expected_args = args
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_6_ints_char(self):
+        retty = int8
+        args = [int32, int32, int32, int32, int32, int32, int8]
+        res = CFunc(lambda a1, a2, a3, a4, a5, a6, a7: 42, (args, retty),
+                        {}, {})
+
+        expected_args = args
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_6_ints_ptr(self):
+        retty = int8
+        args = [int32, int32, int32, int32, int32, int32, types.CPointer(int8)]
+        res = CFunc(lambda a1, a2, a3, a4, a5, a6, a7: 42, (args, retty),
+                        {}, {})
+
+        expected_args = args
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_9_floats(self):
+        retty = int8
+        args = [float32, float32, float32, float32, float32, float32, float32,
+                float32, float32]
+        res = CFunc(lambda a1, a2, a3, a4, a5, a6, a7, a8, a9: 42,
+                        (args, retty),
+                        {}, {})
+
+        expected_args = args
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_char_short_int_long_ptr(self):
+        retty = int8
+        args = [int8, int16, int32, int64, types.CPointer(int8)]
+        res = CFunc(lambda a1, a2, a3, a4, a5: 42,
+                        (args, retty),
+                        {}, {})
+
+        expected_args = args
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_int_struct_int(self):
+        retty = int8
+        args = [int32, make_tuple([int32])]
+        res = CFunc(lambda a1, a2: 42, (args, retty), {}, {})
+
+        expected_args = [int32, int32]
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_int_struct_short_int_int(self):
+        retty = int8
+        args = [int32, make_tuple([int16, int32, int32])]
+        res = CFunc(lambda a1, a2: 42, (args, retty), {}, {})
+
+        expected_args = [int32, int64, int32]
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_struct_1_float(self):
+        retty = int8
+        args = [make_tuple([float32])]
+        res = CFunc(lambda a1: 42, (args, retty), {}, {})
+
+        expected_args = [float32]
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_struct_1_int(self):
+        retty = int8
+        args = [make_tuple([int32])]
+        res = CFunc(lambda a1: 42, (args, retty), {}, {})
+
+        expected_args = [int32]
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_struct_2_floats(self):
+        retty = int8
+        args = [make_tuple([float32, float32])]
+        res = CFunc(lambda a1: 42, (args, retty), {}, {})
+
+        expected_args = [Vector(float32, 2)]
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_struct_4_floats(self):
+        retty = int8
+        args = [make_tuple([float32, float32, float32, float32])]
+        res = CFunc(lambda a1: 42, (args, retty), {}, {})
+
+        expected_args = [Vector(float32, 2), Vector(float32, 2)]
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_struct_2_ints(self):
+        retty = int8
+        args = [make_tuple([int32, int32])]
+        res = CFunc(lambda a1: 42, (args, retty), {}, {})
+
+        expected_args = [int64]
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_struct_3_ints(self):
+        retty = int8
+        args = [make_tuple([int32, int32, int32])]
+        res = CFunc(lambda a1: 42, (args, retty), {}, {})
+
+        expected_args = [int64, int32]
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_struct_double_int(self):
+        retty = int8
+        args = [make_tuple([float64, int32])]
+        res = CFunc(lambda a1: 42, (args, retty), {}, {})
+
+        expected_args = [float64, int32]
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_struct_long_ptr(self):
+        retty = int8
+        args = [make_tuple([int64, types.CPointer(int8)])]
+        res = CFunc(lambda a1: 42, (args, retty), {}, {})
+
+        expected_args = [int64, types.CPointer(int8)]
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_struct_struct_2_int_2_int(self):
+        retty = int8
+        args = [make_tuple([make_tuple([int32, int32]), int8, int16])]
+        res = CFunc(lambda a1: 42, (args, retty), {}, {})
+
+        expected_args = [int64, int32]
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_struct_array_8_char_3chars(self):
+        retty = int8
+        args = [make_tuple([types.UniTuple(int8, 8), int8, int8, int8])]
+        res = CFunc(lambda a1: 42, (args, retty), {}, {})
+
+        expected_args = [int64, types.Integer("int24")]
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_float_struct_pointer_array_1_long(self):
+        retty = int8
+        args = [float32, make_tuple(
+            [types.CPointer(int8), types.UniTuple(int64, 1)])]
+        res = CFunc(lambda a1, a2: 42, (args, retty), {}, {})
+
+        expected_args = [float32, types.CPointer(int8), types.int64]
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_float_struct_pointer_array_2_long(self):
+        retty = int8
+        args = [float32, make_tuple(
+            [types.CPointer(int8), types.UniTuple(int64, 2)])]
+        res = CFunc(lambda a1, a2: 42, (args, retty), {}, {})
+
+        expected_args = [float32, types.CPointer(args[1])]
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+
+class TestPassReturn(unittest.TestCase):
+
+    def test_struct_long_ptr_r_ptr(self):
+        retty = types.CPointer(int8)
+        args = [make_tuple([int64, types.CPointer(int8)])]
+        res = CFunc(lambda a1: a1[1], (args, retty), {}, {})
+
+        expected_args = [int64, types.CPointer(int8)]
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+
+class TestReturn(unittest.TestCase):
+
+    def test_char(self):
+        retty = char
+        args = []
+        res = CFunc(lambda: 42, (args, retty), {}, {})
+
+        expected_args = []
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_double(self):
+        retty = double
+        args = []
+        res = CFunc(lambda: 42, (args, retty), {}, {})
+
+        expected_args = []
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_float(self):
+        retty = float32
+        args = []
+        res = CFunc(lambda: 42, (args, retty), {}, {})
+
+        expected_args = []
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_int(self):
+        retty = int32
+        args = []
+        res = CFunc(lambda: 42, (args, retty), {}, {})
+
+        expected_args = []
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_1_short(self):
+        retty = int16
+        args = []
+        res = CFunc(lambda: 42, (args, retty), {}, {})
+
+        expected_args = []
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_struct_1_float(self):
+        retty = make_tuple([float32])
+        args = []
+        res = CFunc(lambda: (42,), (args, retty), {}, {})
+
+        expected_args = []
+        expected_return = float32
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_struct_1_int(self):
+        retty = make_tuple([int32])
+        args = []
+        res = CFunc(lambda: (42,), (args, retty), {}, {})
+
+        expected_args = []
+        expected_return = int32
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_struct_2_floats(self):
+        retty = make_tuple([float32, float32])
+        args = []
+        res = CFunc(lambda: (21, 21), (args, retty), {}, {})
+
+        expected_args = []
+        expected_return = Vector(float32, 2)
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_struct_2_ints(self):
+        retty = make_tuple([int32, int32])
+        args = []
+        res = CFunc(lambda: (21, 21), (args, retty), {}, {})
+
+        expected_args = []
+        expected_return = int64
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_struct_3_ints(self):
+        retty = make_tuple([int32, int32, int32])
+        args = []
+        res = CFunc(lambda: (14, 14, 14), (args, retty), {}, {})
+
+        expected_args = []
+        expected_return = make_tuple([int64, int32])
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_struct_4_ints(self):
+        retty = make_tuple([int32, int32, int32, int32])
+        args = []
+        res = CFunc(lambda: (14, 14, 14, 14), (args, retty), {}, {})
+
+        expected_args = []
+        expected_return = make_tuple([int64, int64])
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_struct_5_ints(self):
+        retty = make_tuple([int32, int32, int32, int32, int32])
+        args = []
+        res = CFunc(lambda: (14, 14, 14, 14, 14), (args, retty), {}, {})
+
+        expected_args = [types.CPointer(retty)]
+        expected_return = CVoid()
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+    def test_struct_long_int(self):
+        retty = make_tuple([int64, int32])
+        args = []
+        res = CFunc(lambda: (21, 21), (args, retty), {}, {})
+
+        expected_args = []
+        expected_return = retty
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+
+
+class TestBoolean(unittest.TestCase):
+
+    def test_single(self):
+        tuple_type = make_tuple(
+            [types.boolean])
+        sig = ([tuple_type], tuple_type)
+        res = CFunc(lambda t1: t1, sig, {}, {})
+
+        expected_args = [types.int8, ]
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+
+    def test_tuple(self):
+        sig = ([make_tuple(
+            [types.boolean, types.boolean, types.boolean, types.boolean])],
+               types.int32)
+        res = CFunc(lambda t1: 42, sig, {}, {})
+
+        expected_args = [types.int32]
+        res.compile()
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+
+    def test_big_struct_arg(self):
+        retty = types.int32
+        tuple_type = make_tuple(
+            [types.boolean, types.int64, types.boolean])
+        sig = ([tuple_type], retty)
+        res = CFunc(lambda t: 2, sig, {}, {})
+
+        expected_return = retty
+        expected_args = [types.CPointer(make_tuple(
+            [types.int8, types.int64, types.int8]))]
+        res.compile()
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+
+    def test_big_struct_return(self):
+        tuple_type = make_tuple(
+            [types.boolean, types.int64, types.boolean])
+        sig = ([], tuple_type)
+        res = CFunc(lambda: (False, 3, True), sig, {}, {})
+
+        expected_return = CVoid()
+        expected_args = [types.CPointer(make_tuple(
+            [types.int8, types.int64, types.int8])), ]
+        res.compile()
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+        self.assertEqual(expected_args, res.wrapper_sig.args)
+
+    def test_bool1(self):
+        retty = types.int32
+        sig = ([types.boolean], retty)
+
+        res = CFunc(lambda x: 42, sig, {}, {})
+
+        expected_return = retty
+        expected_arg = [types.boolean]
+        res.compile()
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+        self.assertEqual(expected_arg, res.wrapper_sig.args)
+
+    def test_bool2(self):
+        retty = types.int32
+        sig = ([types.boolean, types.boolean], retty)
+
+        res = CFunc(lambda b1, b2: 42, sig, {}, {})
+
+        expected_return = retty
+        expected_arg = [types.boolean, types.boolean]
+        res.compile()
+        self.assertEqual(expected_return, res.wrapper_sig.return_type)
+        self.assertEqual(expected_arg, res.wrapper_sig.args)
+
 
 
 if __name__ == "__main__":
