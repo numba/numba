@@ -370,6 +370,13 @@ class EphemeralPointerModel(PointerModel):
         return builder.bitcast(ptr, self.get_value_type())
 
 
+@register_default(types.CVoid)
+class CVoidModel(PrimitiveModel):
+    def __init__(self, dmm, fe_type):
+        be_type = ir.VoidType()
+        super(CVoidModel, self).__init__(dmm, fe_type, be_type)
+
+
 @register_default(types.EphemeralArray)
 class EphemeralArrayModel(PointerModel):
 

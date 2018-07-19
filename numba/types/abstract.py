@@ -218,6 +218,14 @@ class Dummy(Type):
     """
 
 
+class CVoid(Type):
+    """
+     This type should be mapped to void in LLVM IR
+    """
+    def __init__(self):
+        super(CVoid, self).__init__("cvoid")
+
+
 class Hashable(Type):
     """
     Base class for hashable types.
