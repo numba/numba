@@ -271,6 +271,35 @@ class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
                 return Tuple(unified)
 
 
+class Vector(BaseAnonymousTuple, _HomogenousTuple, Sequence):
+    """
+    This type should be mapped to a vector in LLVM IR
+    """
+
+    def __init__(self, dtype, count):
+        self.dtype = dtype
+        self.count = count
+        name = "<%d x %s>" % (count, dtype)
+        super(Vector, self).__init__(name)
+
+    @property
+    def mangling_args(self):
+        return self.__class__.__name__, (self.dtype, self.count)
+
+    @property
+    def key(self):
+        return self.dtype, self.count
+
+    def unify(self, typingctx, other):
+        """
+        Unify Vector with their dtype
+        """
+        if isinstance(other, Vector) and len(self) == len(other):
+            dtype = typingctx.unify_pairs(self.dtype, other.dtype)
+            if dtype is not None:
+                return Vector(dtype=dtype, count=self.count)
+
+
 class BaseNamedTuple(BaseTuple):
     pass
 

@@ -377,6 +377,46 @@ class CVoidModel(PrimitiveModel):
         super(CVoidModel, self).__init__(dmm, fe_type, be_type)
 
 
+@register_default(types.Vector)
+class VectorModel(PrimitiveModel):
+
+    def __init__(self, dmm, fe_type):
+        dtype_model = dmm.lookup(fe_type.dtype)
+        count = fe_type.count
+        be_type = VectorType(count, dtype_model.get_value_type())
+        super(VectorModel, self).__init__(dmm, fe_type, be_type)
+
+
+#  XXX: this should be part of llvmlite
+class VectorType(ir.Type):
+
+    def __init__(self, count, typ):
+        assert isinstance(count, int) and count >= 0
+        assert isinstance(typ, ir.Type)
+        super(VectorType, self).__init__()
+        self.count = count
+        self.type = typ
+
+    def __copy__(self):
+        return self
+
+    def _to_string(self):
+        return '<%u' % self.count + ' x ' + str(self.type) + '>'
+
+    def __eq__(self, other):
+        if isinstance(other, VectorType):
+            return self.count == other.count and self.type == other.type
+        else:
+            return False
+
+    def __hash__(self):
+        return hash(VectorType)
+
+    @property
+    def intrinsic_name(self):
+        return str(self)
+
+
 @register_default(types.EphemeralArray)
 class EphemeralArrayModel(PointerModel):
 
