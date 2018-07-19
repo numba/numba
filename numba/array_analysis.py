@@ -1174,7 +1174,7 @@ class ArrayAnalysis(object):
                 return dsize
 
             size_var = ir.Var(scope, mk_unique_var("slice_size"), loc)
-            size_val = ir.Expr.binop('-', rhs, lhs, loc=loc)
+            size_val = ir.Expr.binop(operator.sub, rhs, lhs, loc=loc)
             self.calltypes[size_val] = signature(size_typ, lhs_typ, rhs_typ)
             self._define(equiv_set, size_var, size_typ, size_val)
 
