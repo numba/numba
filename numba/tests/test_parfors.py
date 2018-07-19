@@ -1807,6 +1807,14 @@ class TestPrange(TestPrangeBase):
             return b.sum()
         self.prange_tester(test_impl, 4)
 
+    @skip_unsupported
+    def test_parfor_race_1(self):
+        def test_impl(x, y):
+            for j in range(y):
+                k = x
+            return k
+        self.prange_tester(test_impl, 10, 20)
+
 
 @x86_only
 class TestParforsVectorizer(TestPrangeBase):
