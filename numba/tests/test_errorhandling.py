@@ -83,5 +83,21 @@ class TestUnsupportedReporting(unittest.TestCase):
         expected = "Use of unsupported NumPy function 'numpy.asarray'"
         self.assertIn(expected, str(raises.exception))
 
+
+class TestMiscErrorHandling(unittest.TestCase):
+
+    def test_use_of_exception_for_flow_control(self):
+        # constant inference uses exceptions with no Loc specified to determine
+        # flow control, this asserts that the construction of the lowering
+        # error context handler works in the case of an exception with no Loc
+        # specified. See issue #3135.
+        @njit
+        def fn(x):
+            return 10**x
+
+        a = np.array([1.0],dtype=np.float64)
+        fn(a) # should not raise
+
+
 if __name__ == '__main__':
     unittest.main()
