@@ -940,7 +940,7 @@ class TestListManagedElements(ManagedListTestCase):
                 con.append(np.arange(i))
             c = 0.0
             for arr in con:
-                c = c + arr.sum() / (1 + arr.size)     # TODO: fails with inplace +=
+                c += arr.sum() / (1 + arr.size)
             return c
 
         cfunc = jit(nopython=True)(pyfunc)

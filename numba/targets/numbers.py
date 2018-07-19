@@ -244,7 +244,7 @@ def int_power_impl(context, builder, sig, args):
         while exp != 0:
             if exp & 1:
                 r *= a
-            exp = operator.rshift(exp, 1)   # TODO: buildin operators vs compile_internal
+            exp >>= 1
             a *= a
 
         return 1.0 / r if invert else r

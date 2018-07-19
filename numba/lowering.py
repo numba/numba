@@ -774,7 +774,7 @@ class Lower(BaseLower):
             else:
                 # inplace operators on non-mutable types reuse the same
                 # definition as the corresponding copying operators.)
-                return self.lower_binop(resty, expr, expr.immutable_fn)
+                return self.lower_binop(resty, expr, expr.fn)
         elif expr.op == 'unary':
             val = self.loadvar(expr.value.name)
             typ = self.typeof(expr.value.name)
