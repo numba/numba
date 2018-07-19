@@ -542,7 +542,7 @@ class StencilPass(object):
             index_var = ir.Var(scope,
                             mk_unique_var("offset_stencil_index"), loc)
             self.typemap[index_var.name] = types.intp
-            index_call = ir.Expr.binop('+', old_index_var,
+            index_call = ir.Expr.binop(operator.add, old_index_var,
                                                 offset_var, loc)
             self.calltypes[index_call] = ir_utils.find_op_typ(operator.add,
                                         [types.intp, types.intp])

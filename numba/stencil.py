@@ -17,6 +17,7 @@ from numba.targets.imputils import lower_builtin
 from numba.extending import register_jitable
 from numba.six import exec_
 
+import operator
 
 class StencilFuncLowerer(object):
     '''Callable class responsible for lowering calls to a specific StencilFunc.
@@ -193,7 +194,7 @@ class StencilFunc(object):
                         index_var = ir.Var(scope, index_names[0], loc)
                         tmpname = ir_utils.mk_unique_var("stencil_index")
                         tmpvar  = ir.Var(scope, tmpname, loc)
-                        acc_call = ir.Expr.binop('+', stmt_index_var,
+                        acc_call = ir.Expr.binop(operator.add, stmt_index_var,
                                                  index_var, loc)
                         new_body.append(ir.Assign(acc_call, tmpvar, loc))
                         new_body.append(ir.Assign(
@@ -229,7 +230,7 @@ class StencilFunc(object):
                             getitemcall = ir.Expr.getitem(stmt_index_var,
                                                        const_index_vars[dim], loc)
                             new_body.append(ir.Assign(getitemcall, getitemvar, loc))
-                            acc_call = ir.Expr.binop('+', getitemvar,
+                            acc_call = ir.Expr.binop(operator.add, getitemvar,
                                                      index_vars[dim], loc)
                             new_body.append(ir.Assign(acc_call, tmpvar, loc))
 

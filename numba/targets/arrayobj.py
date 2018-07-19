@@ -3620,7 +3620,7 @@ def numpy_arange_4(context, builder, sig, args):
             val = start
             for i in range(nitems):
                 arr[i] = val
-                val += step
+                val = operator.add(val, step)  # TODO: buildin operators vs compile_internal
             return arr
     else:
         def arange(start, stop, step, dtype):
@@ -3630,7 +3630,7 @@ def numpy_arange_4(context, builder, sig, args):
             val = start
             for i in range(nitems):
                 arr[i] = val
-                val += step
+                val = operator.add(val, step)         # TODO: buildin operators vs compile_internal
             return arr
 
     res = context.compile_internal(builder, arange, sig, args,

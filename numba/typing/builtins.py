@@ -336,7 +336,10 @@ class BitwiseRightShift(BitwiseShiftOperation):
     key = operator.rshift
 
 
-infer_global(operator.irshift)(BitwiseLeftShift)
+@infer_global(operator.irshift)
+class BitwiseRightShift(BitwiseShiftOperation):
+    key = operator.ilshift
+
 
 class BitwiseLogicOperation(BinOp):
     cases = [signature(types.boolean, types.boolean, types.boolean)]
