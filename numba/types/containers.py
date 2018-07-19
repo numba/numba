@@ -271,7 +271,7 @@ class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
                 return Tuple(unified)
 
 
-class Vector(BaseAnonymousTuple, _HomogenousTuple, Sequence):
+class Vector(BaseAnonymousTuple, _HomogeneousTuple, Sequence):
     """
     This type should be mapped to a vector in LLVM IR
     """
