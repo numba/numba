@@ -517,13 +517,15 @@ lower_builtin(operator.ne, types.boolean, types.boolean)(int_ne_impl)
 lower_builtin(operator.lt, types.boolean, types.boolean)(int_ult_impl)
 lower_builtin(operator.le, types.boolean, types.boolean)(int_ule_impl)
 lower_builtin(operator.gt, types.boolean, types.boolean)(int_ugt_impl)
-lower_builtin(operator.ge, types.boolean, types.boolean)(int_uge_impl)lower_builtin(operator.neg, types.boolean)(bool_negate_impl)
+lower_builtin(operator.ge, types.boolean, types.boolean)(int_uge_impl)
+lower_builtin(operator.neg, types.boolean)(bool_negate_impl)
 lower_builtin(operator.pos, types.boolean)(bool_unary_positive_impl)
 
-@lower_builtin('==', types.Const, types.Const)def const_eq_impl(context, builder, sig, args):
+@lower_builtin(operator.eq, types.Const, types.Const)
+def const_eq_impl(context, builder, sig, args):
     arg1, arg2 = sig.args
     val = 0
-    if arg1.value==arg2.value:
+    if arg1.value == arg2.value:
         val = 1
     res = ir.Constant(ir.IntType(1), val)
     return impl_ret_untracked(context, builder, sig.return_type, res)
