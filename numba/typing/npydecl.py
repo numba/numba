@@ -237,7 +237,7 @@ class NumpyRulesInplaceArrayOperator(NumpyRulesArrayOperator):
     }
 
     if not utils.IS_PY3:
-        _op_map[operator.div] = "divide"
+        _op_map[operator.idiv] = "divide"
 
     def generic(self, args, kws):
         # Type the inplace operator as if an explicit output was passed,
@@ -349,8 +349,12 @@ NumpyRulesArrayOperator.install_operations()
 NumpyRulesInplaceArrayOperator.install_operations()
 
 supported_array_operators = set(
-    NumpyRulesUnaryArrayOperator._op_map.keys()).union(
-        NumpyRulesArrayOperator._op_map.keys())
+    NumpyRulesUnaryArrayOperator._op_map.keys()
+).union(
+    NumpyRulesArrayOperator._op_map.keys()
+).union(
+    NumpyRulesInplaceArrayOperator._op_map.keys()
+)
 
 del _math_operations, _trigonometric_functions, _bit_twiddling_functions
 del _comparison_functions, _floating_functions, _unsupported
