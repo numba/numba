@@ -371,7 +371,10 @@ def _create_gufunc_for_parfor_body(
     for var in parfor_redvars:
         arr = var + "_arr"
         parfor_redarrs.append(arr)
-        typemap[arr] = types.npytypes.Array(typemap[var], 1, "C")
+        if arr in typemap:
+            assert(typemap[arr] == types.npytypes.Array(typemap[var], 1, "C"))
+        else:
+            typemap[arr] = types.npytypes.Array(typemap[var], 1, "C")
 
     # Reorder all the params so that inputs go first then outputs.
     parfor_params = parfor_inputs + parfor_outputs + parfor_redarrs
