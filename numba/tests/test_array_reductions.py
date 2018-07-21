@@ -438,7 +438,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         pyfunc = array_nanmedian_global
         self.check_median_basic(pyfunc, self._array_variations)
 
-    def test_fill_diagonal_2d(self):
+    def test_fill_diagonal(self):
         pyfunc = fill_diagonal_global
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -447,27 +447,32 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             yield (2 * n, n)
             yield (n, 2 * n)
             yield ((2 * n + 1), (2 * n - 1))
+            yield (n, n, n, n)
 
         def _array_variations(n):
             for shape in _shape_variations(n):
-                yield np.full(shape, fill_value=3.142)
-                # issue: if val dtype needs downcasting
+                yield np.zeros(shape, dtype=np.float64)
 
         def _val_variations():
-            yield 1
+            return 0, 3.142, np.nan, -np.inf
+
+        def _wrap_variations():
+            return None, False, True
 
         for arr in _array_variations(3):
             for val in _val_variations():
-                a = arr.copy()
-                pyfunc(a, val)
+                for wrap in _wrap_variations():
+                    a = arr.copy()
+                    b = arr.copy()
+                    if wrap is None:
+                        pyfunc(a, val)
+                        cfunc(b, val)
+                    else:
+                        pyfunc(a, val, wrap)
+                        cfunc(b, val, wrap)
+                    self.assertPreciseEqual(a, b)
 
-                b = arr.copy()
-                cfunc(b, val)
-
-                self.assertPreciseEqual(a, b)
-
-
-
+    # check type casting where array is dtype int
 
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)
