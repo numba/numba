@@ -122,6 +122,9 @@ def array_percentile_global(arr, q):
 def array_nanpercentile_global(arr, q):
     return np.nanpercentile(arr, q)
 
+def fill_diagonal_global(arr, val, wrap=True):
+    return np.fill_diagonal(arr, val, wrap)
+
 def base_test_arrays(dtype):
     if dtype == np.bool_:
         def factory(n):
@@ -434,6 +437,37 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_nanmedian_basic(self):
         pyfunc = array_nanmedian_global
         self.check_median_basic(pyfunc, self._array_variations)
+
+    def test_fill_diagonal_2d(self):
+        pyfunc = fill_diagonal_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def _shape_variations(n):
+            yield (n, n)
+            yield (2 * n, n)
+            yield (n, 2 * n)
+            yield ((2 * n + 1), (2 * n - 1))
+
+        def _array_variations(n):
+            for shape in _shape_variations(n):
+                yield np.full(shape, fill_value=3.142)
+                # issue: if val dtype needs downcasting
+
+        def _val_variations():
+            yield 1
+
+        for arr in _array_variations(3):
+            for val in _val_variations():
+                a = arr.copy()
+                pyfunc(a, val)
+
+                b = arr.copy()
+                cfunc(b, val)
+
+                self.assertPreciseEqual(a, b)
+
+
+
 
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)

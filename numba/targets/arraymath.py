@@ -914,6 +914,33 @@ if numpy_version >= (1, 9):
 #----------------------------------------------------------------------------
 # Element-wise computations
 
+@register_jitable
+def _fill_diagonal(a, val, wrap):
+    if a.ndim < 2:
+        raise ValueError("array must be at least 2-d")
+
+    if a.ndim == 2:
+        n = a.shape[1]
+        step = n + 1
+        end = n * a.shape[0] if wrap else n * n
+    else:
+        if not np.all(np.diff(np.array(a.shape)) == 0):
+            raise ValueError("All dimensions of input must be of equal length")
+
+        shape = np.array(a.shape)
+        step = 1 + (np.cumprod(shape[:-1])).sum()
+        end = shape.prod()
+
+    for i in range(0, end, step):
+        a.flat[i] = val
+
+@overload(np.fill_diagonal)
+def np_fill_diagonal(a, val, wrap=False):
+    def fill_diagonal_impl(a, val, wrap):
+        _fill_diagonal(a, val, wrap)
+
+    return fill_diagonal_impl
+
 def _np_round_intrinsic(tp):
     # np.round() always rounds half to even
     return "llvm.rint.f%d" % (tp.bitwidth,)
