@@ -438,7 +438,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         pyfunc = array_nanmedian_global
         self.check_median_basic(pyfunc, self._array_variations)
 
-    def test_fill_diagonal(self):
+    def test_fill_diagonal_basic(self):
         pyfunc = fill_diagonal_global
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -472,7 +472,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                         cfunc(b, val, wrap)
                     self.assertPreciseEqual(a, b)
 
-    # check type casting where array is dtype int
+    # TODO: check type casting where array is dtype int
+    # TODO: test exceptions
 
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)
