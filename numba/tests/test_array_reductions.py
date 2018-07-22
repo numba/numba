@@ -512,7 +512,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         # this should raise but it doesn't as np.nan gets int-ified with no error
         # (but with a nonsensical output).
         #
-        # Crude attempts at handling it like are not successful
+        # Crude attempts at handling it like so are not successful
         #
         # @njit
         # def _coerce_val(a, val):
