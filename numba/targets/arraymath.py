@@ -915,31 +915,47 @@ if numpy_version >= (1, 9):
 # Element-wise computations
 
 @register_jitable
-def _fill_diagonal(a, val, wrap):
-    if a.ndim < 2:
-        raise ValueError("array must be at least 2-d")
+def _fill_diagonal_2d(a, val, wrap):
+    m, n = a.shape
+    step = n + 1
+    end = n * m if wrap else n * n
 
-    if a.ndim == 2:
-        n = a.shape[1]
-        step = n + 1
-        end = n * a.shape[0] if wrap else n * n
-    else:
-        if not np.all(np.diff(np.array(a.shape)) == 0):
-            raise ValueError("All dimensions of input must be of equal length")
+    for i in range(0, end, step):
+        a.flat[i] = val
 
-        shape = np.array(a.shape)
-        step = 1 + (np.cumprod(shape[:-1])).sum()
-        end = shape.prod()
+@register_jitable
+def _fill_diagonal(a, val):
+    shape = np.array(a.shape)
+
+    if not np.all(np.diff(shape) == 0):
+        raise ValueError("All dimensions of input must be of equal length")
+
+    step = 1 + (np.cumprod(shape[:-1])).sum()
+    end = shape.prod()
 
     for i in range(0, end, step):
         a.flat[i] = val
 
 @overload(np.fill_diagonal)
 def np_fill_diagonal(a, val, wrap=False):
-    def fill_diagonal_impl(a, val, wrap):
-        _fill_diagonal(a, val, wrap)
 
-    return fill_diagonal_impl
+    def _abort_mission(a, val, wrap):
+        raise ValueError("array must be at least 2-d")
+
+    def fill_diagonal_impl_2d(a, val, wrap):
+        _fill_diagonal_2d(a, val, wrap)
+
+    def fill_diagonal_impl(a, val, wrap):
+        _fill_diagonal(a, val)
+
+    if a.ndim < 2:
+        fn = _abort_mission
+    elif a.ndim == 2:
+        fn = fill_diagonal_impl_2d
+    else:
+        fn = fill_diagonal_impl
+
+    return fn
 
 def _np_round_intrinsic(tp):
     # np.round() always rounds half to even

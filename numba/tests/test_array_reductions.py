@@ -443,10 +443,15 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         def _shape_variations(n):
+            # square
             yield (n, n)
+            # tall and thin
             yield (2 * n, n)
+            # short and fat
             yield (n, 2 * n)
+            # a bit taller than wide; odd numbers of rows and cols
             yield ((2 * n + 1), (2 * n - 1))
+            # 4d, all dimensions same
             yield (n, n, n, n)
 
         def _array_variations(n):
@@ -465,15 +470,56 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                     a = arr.copy()
                     b = arr.copy()
                     if wrap is None:
+                        # case where optional arg isn't passed
                         pyfunc(a, val)
                         cfunc(b, val)
                     else:
+                        # case where optional arg is passed explicitly
                         pyfunc(a, val, wrap)
                         cfunc(b, val, wrap)
                     self.assertPreciseEqual(a, b)
 
-    # TODO: check type casting where array is dtype int
-    # TODO: test exceptions
+    def test_fill_diagonal_exception_cases(self):
+        pyfunc = fill_diagonal_global
+        cfunc = jit(nopython=True)(pyfunc)
+        val = 1
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertRaises(ValueError) as raises:
+            a = np.zeros(9)
+            cfunc(a, val)
+        self.assertEqual("array must be at least 2-d", str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            a = np.zeros((3, 3, 4))
+            cfunc(a, val)
+        self.assertEqual("All dimensions of input must be of equal length", str(raises.exception))
+
+    @unittest.skip('TODO: figure out how to handle type mismatch')
+    def test_fill_diagonal_edge_cases(self):
+        pyfunc = fill_diagonal_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        arr = np.zeros((3, 3), dtype=np.int32)
+        val = np.nan
+
+        with self.assertRaises(ValueError):
+            cfunc(arr, val)
+
+        # Note:
+        # this should raise but it doesn't as np.nan gets int-ified with no error
+        # (but with a nonsensical output).
+        #
+        # Crude attempts at handling it like are not successful
+        #
+        # @njit
+        # def _coerce_val(a, val):
+        #     retty = a.dtype.type
+        #     return retty(val)
+        #
+        # _coerce_val(np.array([], dtype=np.int32), np.nan) -> -2147483648
 
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)
