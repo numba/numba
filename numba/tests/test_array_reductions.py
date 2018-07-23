@@ -438,45 +438,54 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         pyfunc = array_nanmedian_global
         self.check_median_basic(pyfunc, self._array_variations)
 
+    @staticmethod
+    def _shape_variations(n):
+        # square
+        yield (n, n)
+        # tall and thin
+        yield (2 * n, n)
+        # short and fat
+        yield (n, 2 * n)
+        # a bit taller than wide; odd numbers of rows and cols
+        yield ((2 * n + 1), (2 * n - 1))
+        # 4d, all dimensions same
+        yield (n, n, n, n)
+
+    @staticmethod
+    def _val_variations():
+        yield 1
+        yield 3.142
+        yield np.nan
+        yield -np.inf
+        yield True
+
+    def _multi_dimensional_array_variations(self, n):
+        for shape in self._shape_variations(n):
+            yield np.zeros(shape, dtype=np.float64)
+
     def test_fill_diagonal_basic(self):
         pyfunc = fill_diagonal_global
         cfunc = jit(nopython=True)(pyfunc)
 
-        def _shape_variations(n):
-            # square
-            yield (n, n)
-            # tall and thin
-            yield (2 * n, n)
-            # short and fat
-            yield (n, 2 * n)
-            # a bit taller than wide; odd numbers of rows and cols
-            yield ((2 * n + 1), (2 * n - 1))
-            # 4d, all dimensions same
-            yield (n, n, n, n)
+        for arr in self._multi_dimensional_array_variations(3):
+            a = arr.copy()
+            b = arr.copy()
+            for val in self._val_variations():
+                pyfunc(a, val)
+                cfunc(b, val)
+                self.assertPreciseEqual(a, b)
 
-        def _array_variations(n):
-            for shape in _shape_variations(n):
-                yield np.zeros(shape, dtype=np.float64)
+    def test_fill_diagonal_basic_wrap(self):
+        pyfunc = fill_diagonal_global
+        cfunc = jit(nopython=True)(pyfunc)
 
-        def _val_variations():
-            return 0, 3.142, np.nan, -np.inf
-
-        def _wrap_variations():
-            return None, False, True
-
-        for arr in _array_variations(3):
-            for val in _val_variations():
-                for wrap in _wrap_variations():
-                    a = arr.copy()
-                    b = arr.copy()
-                    if wrap is None:
-                        # case where optional arg isn't passed
-                        pyfunc(a, val)
-                        cfunc(b, val)
-                    else:
-                        # case where optional arg is passed explicitly
-                        pyfunc(a, val, wrap)
-                        cfunc(b, val, wrap)
+        for arr in self._multi_dimensional_array_variations(3):
+            a = arr.copy()
+            b = arr.copy()
+            for val in self._val_variations():
+                for wrap in (True, False):
+                    pyfunc(a, val, wrap)
+                    cfunc(b, val, wrap)
                     self.assertPreciseEqual(a, b)
 
     def test_fill_diagonal_exception_cases(self):
