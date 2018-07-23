@@ -53,8 +53,8 @@ class _ResolutionFailures(object):
             if loc:
                 msgbuf.append('{}raised from {}'.format(indent, loc))
 
-        likely_cause = ("This error is usually caused by passing an "
-                        "unsupported argument type to the named function.")
+        likely_cause = ("This error is usually caused by passing an argument "
+                        "of a type that is unsupported by the named function.")
         msgbuf += [_termcolor.errmsg(likely_cause)]
         return '\n'.join(msgbuf)
 
