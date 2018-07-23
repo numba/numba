@@ -356,7 +356,6 @@ def _create_gufunc_for_parfor_body(
     # would incorrectly change their name.
     loop_body = copy.copy(parfor.loop_body)
     remove_dels(loop_body)
-    replace_var_with_array(races, loop_body, typemap, lowerer.fndesc.calltypes)
 
     parfor_dim = len(parfor.loop_nests)
     loop_indices = [l.index_variable.name for l in parfor.loop_nests]
@@ -374,6 +373,9 @@ def _create_gufunc_for_parfor_body(
             set(parfor_params) -
             set(parfor_outputs) -
             set(parfor_redvars)))
+
+    races = races.difference(set(parfor_redvars))
+    replace_var_with_array(races, loop_body, typemap, lowerer.fndesc.calltypes)
 
     if config.DEBUG_ARRAY_OPT == 1:
         print("parfor_params = ", parfor_params, " ", type(parfor_params))
