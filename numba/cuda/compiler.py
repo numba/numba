@@ -225,18 +225,6 @@ class ExternFunction(object):
         self.sig = sig
 
 
-def _compute_thread_per_block(kernel, tpb):
-    if tpb != 0:
-        return tpb
-
-    else:
-        try:
-            tpb = kernel.autotune.best()
-        except ValueError:
-            warnings.warn('Could not autotune, using default tpb of 128')
-            tpb = 128
-
-        return tpb
 
 class ForAll(object):
     def __init__(self, kernel, ntasks, tpb, stream, sharedmem):
@@ -252,12 +240,40 @@ class ForAll(object):
         else:
             kernel = self.kernel
 
-        tpb = _compute_thread_per_block(kernel, self.thread_per_block)
+        tpb = self._compute_thread_per_block(kernel)
         tpbm1 = tpb - 1
         blkct = (self.ntasks + tpbm1) // tpb
 
         return kernel.configure(blkct, tpb, stream=self.stream,
                                 sharedmem=self.sharedmem)(*args)
+
+    def _compute_thread_per_block(self, kernel):
+        tpb = self.thread_per_block
+        if tpb != 0:
+            return tpb
+
+        else:
+            ctx = get_context()
+            try:
+                _, tpb = ctx.get_max_potential_block_size(
+                    kernel._func.get(),
+                    b2d_func=lambda tpb: 0,
+                    memsize=self.sharedmem,
+                    blocksizelimit=1024,
+                    )
+            except AttributeError:
+                tpb = self._fallback_autotune_best(kernel)
+                raise
+            return tpb
+
+    def _fallback_autotune_best(self, kernel):
+        try:
+            tpb = kernel.autotune.best()
+        except ValueError:
+            warnings.warn('Could not autotune, using default tpb of 128')
+            tpb = 128
+
+        return tpb
 
 
 class CUDAKernelBase(object):
