@@ -93,7 +93,7 @@ class TestTypingError(unittest.TestCase):
             compile_isolated(issue_868, (types.Array(types.int32, 1, 'C'),))
 
         expected = (
-            "Invalid usage of * with parameters (tuple({0} x 1), {0})"
+            "Invalid use of * with parameters (tuple({0} x 1), {0})"
             .format(str(types.intp)))
         self.assertIn(expected, str(raises.exception))
         self.assertIn("[1] During: typing of", str(raises.exception))
@@ -199,7 +199,7 @@ class TestCallError(unittest.TestCase):
             outer()
 
         got = str(raises.exception)
-        pat = r"Invalid usage of.*readonly array\(float64, 1d, C\)"
+        pat = r"Invalid use of.*readonly array\(float64, 1d, C\)"
         self.assertIsNotNone(re.search(pat, got))
 
 

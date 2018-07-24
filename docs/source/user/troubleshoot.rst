@@ -64,7 +64,7 @@ errors out::
     File "<path>/numba/numba/six.py", line 658, in reraise
         raise value.with_traceback(tb)
     numba.errors.TypingError: Failed at nopython (nopython frontend)
-    Invalid usage of + with parameters (int64, tuple(int64 x 1))
+    Invalid use of + with parameters (int64, tuple(int64 x 1))
     Known signatures:
     * (int64, int64) -> int64
     * (int64, uint64) -> int64
@@ -92,7 +92,7 @@ errors out::
     File "<stdin>", line 3:
 
 The error message helps you find out what went wrong:
-"Invalid usage of + with parameters (int64, tuple(int64 x 1))" is to be
+"Invalid use of + with parameters (int64, tuple(int64 x 1))" is to be
 interpreted as "Numba encountered an addition of variables typed as integer
 and 1-tuple of integer, respectively, and doesn't know about any such
 operation".
