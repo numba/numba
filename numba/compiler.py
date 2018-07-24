@@ -247,7 +247,8 @@ class _PipelineManager(object):
                 except _EarlyPipelineCompletion as e:
                     return e.result
                 except BaseException as e:
-                    msg = "Failed at %s (%s)" % (pipeline_name, stage_name)
+                    msg = "Failed in %s mode pipeline (step: %s)" % \
+                        (pipeline_name, stage_name)
                     patched_exception = self._patch_error(msg, e)
                     # No more fallback pipelines?
                     if is_final_pipeline:

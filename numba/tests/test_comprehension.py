@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import numba.unittest_support as unittest
+from .support import TestCase
 
 import sys
 
@@ -25,7 +26,7 @@ def comp_list(n):
     return s
 
 
-class TestListComprehension(unittest.TestCase):
+class TestListComprehension(TestCase):
 
     @tag('important')
     def test_comp_list(self):
@@ -107,7 +108,6 @@ class TestListComprehension(unittest.TestCase):
                 return [y + l[0] for y in x]
             return inner(l)
 
-        # expected fail, nested mem managed object
         def list11(x):
             """ Test scalar array construction in list comprehension """
             l = [np.array(z) for z in x]
@@ -226,6 +226,19 @@ class TestListComprehension(unittest.TestCase):
                 cfunc(var)
             msg = "Cannot unify reflected list(int%d) and int%d" % (bits, bits)
             self.assertIn(msg, str(raises.exception))
+
+    def test_objmode_inlining(self):
+        def objmode_func(y):
+            z = object()
+            inlined = [x for x in y]
+            return inlined
+
+        cfunc = jit(forceobj=True)(objmode_func)
+        t = [1, 2, 3]
+        expected = objmode_func(t)
+        got = cfunc(t)
+        self.assertPreciseEqual(expected, got)
+
 
 class TestArrayComprehension(unittest.TestCase):
 
