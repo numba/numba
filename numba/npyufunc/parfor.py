@@ -140,10 +140,6 @@ def _lower_parfor_parallel(lowerer, parfor):
             size_assign = ir.Assign(size_call, size_var, loc)
             lowerer.lower_inst(size_assign)
 
-            #size_print = ir.Print(args=[size_var], vararg=None, loc=loc)
-            #lowerer.fndesc.calltypes[size_print] = signature(types.none, typemap[size_var.name])
-            #lowerer.lower_inst(size_print)
-
             # Add call to empty passing the size var tuple.
             full_call = ir.Expr.call(empty_func, [size_var], {}, loc=loc)
             redarr_var = ir.Var(scope, mk_unique_var("redarr"), loc)
@@ -243,18 +239,19 @@ def _lower_parfor_parallel(lowerer, parfor):
             redarr = redarrs[name]
             redvar_typ = lowerer.fndesc.typemap[name]
 
-            #res_print_str = "res_print"
-            #strconsttyp = types.Const(res_print_str)
-            #lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
-            #assign_lhs = ir.Assign(value=ir.Const(value=res_print_str, loc=loc),
-            #                               target=lhs, loc=loc)
-            #typemap[lhs.name] = strconsttyp
-            #lowerer.lower_inst(assign_lhs)
+            if config.DEBUG_ARRAY_OPT_RUNTIME:
+                res_print_str = "res_print"
+                strconsttyp = types.Const(res_print_str)
+                lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
+                assign_lhs = ir.Assign(value=ir.Const(value=res_print_str, loc=loc),
+                                               target=lhs, loc=loc)
+                typemap[lhs.name] = strconsttyp
+                lowerer.lower_inst(assign_lhs)
 
-            #res_print = ir.Print(args=[lhs, redarr], vararg=None, loc=loc)
-            #lowerer.fndesc.calltypes[res_print] = signature(types.none, typemap[lhs.name], typemap[redarr.name])
-            #print("res_print", res_print)
-            #lowerer.lower_inst(res_print)
+                res_print = ir.Print(args=[lhs, redarr], vararg=None, loc=loc)
+                lowerer.fndesc.calltypes[res_print] = signature(types.none, typemap[lhs.name], typemap[redarr.name])
+                print("res_print", res_print)
+                lowerer.lower_inst(res_print)
 
             # For each element in the reduction array created above.
             for j in range(get_thread_count()):
