@@ -452,7 +452,7 @@ class CallConstraint(object):
             # Note: duplicated error checking.
             #       See types.BaseFunction.get_call_type
             # Arguments are invalid => explain why
-            headtemp = "Invalid usage of {0} with parameters ({1})"
+            headtemp = "Invalid use of {0} with parameters ({1})"
             args = [str(a) for a in pos_args]
             args += ["%s=%s" % (k, v) for k, v in sorted(kw_args.items())]
             head = headtemp.format(fnty, ', '.join(map(str, args)))

@@ -1201,7 +1201,7 @@ class TestListOfList(ManagedListTestCase):
         with self.assertRaises(errors.TypingError) as raises:
             self.compile_and_test(bar, r)
         self.assertIn(
-            "Invalid usage of BoundFunction(list.append",
+            "Invalid use of BoundFunction(list.append",
             str(raises.exception),
             )
 
