@@ -916,11 +916,11 @@ if numpy_version >= (1, 9):
 
 @register_jitable
 def _fill_diagonal_2d(a, val, wrap):
-    m, n = a.shape
+    n = a.shape[1]
     step = n + 1
 
     if wrap is True:
-        end = n * m
+        end = n * a.shape[0]
     else:
         end = n * n
 
