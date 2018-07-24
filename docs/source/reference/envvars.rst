@@ -246,7 +246,7 @@ Compilation options
     implementation of this is not a true LRU, but the large size of the cache
     should be sufficient for most situations.
 
-    *Default value:* 1000
+    *Default value:* 100
 
 
 GPU support
