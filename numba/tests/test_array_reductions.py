@@ -475,7 +475,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                 cfunc(b, val)
                 self.assertPreciseEqual(a, b)
 
-    def test_fill_diagonal_basic_wrap(self):
+    def test_fill_diagonal_basic_wrap_true(self):
         pyfunc = fill_diagonal_global
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -483,10 +483,21 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             a = arr.copy()
             b = arr.copy()
             for val in self._val_variations():
-                for wrap in (True, False):
-                    pyfunc(a, val, wrap)
-                    cfunc(b, val, wrap)
-                    self.assertPreciseEqual(a, b)
+                pyfunc(a, val, True)
+                cfunc(b, val, True)
+                self.assertPreciseEqual(a, b)
+
+    def test_fill_diagonal_basic_wrap_false(self):
+        pyfunc = fill_diagonal_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr in self._multi_dimensional_array_variations(3):
+            a = arr.copy()
+            b = arr.copy()
+            for val in self._val_variations():
+                pyfunc(a, val, False)
+                cfunc(b, val, False)
+                self.assertPreciseEqual(a, b)
 
     def test_fill_diagonal_exception_cases(self):
         pyfunc = fill_diagonal_global

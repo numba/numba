@@ -918,7 +918,11 @@ if numpy_version >= (1, 9):
 def _fill_diagonal_2d(a, val, wrap):
     m, n = a.shape
     step = n + 1
-    end = n * m if wrap else n * n
+
+    if wrap is True:
+        end = n * m
+    else:
+        end = n * n
 
     for i in range(0, end, step):
         a.flat[i] = val
