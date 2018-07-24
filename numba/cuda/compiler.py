@@ -683,7 +683,7 @@ class CUDAKernel(CUDAKernelBase):
     @property
     def autotune(self):
         """Return the autotuner object associated with this kernel."""
-        warnings.warn(_deprec_warn_msg, DeprecationWarning)
+        warnings.warn(_deprec_warn_msg.format('autotune'), DeprecationWarning)
         has_autotune = hasattr(self, '_autotune')
         if has_autotune and self._autotune.dynsmem == self.sharedmem:
             return self._autotune
@@ -700,11 +700,12 @@ class CUDAKernel(CUDAKernelBase):
         number of warps that can be active on the multiprocessor at once.
         Calculate the theoretical occupancy of the kernel given the
         current configuration."""
+        warnings.warn(_deprec_warn_msg.format('occupancy'), DeprecationWarning)
         thread_per_block = reduce(operator.mul, self.blockdim, 1)
         return self.autotune.closest(thread_per_block)
 
 
-_deprec_warn_msg = ("The *autotune* feature is is deprecated and will be "
+_deprec_warn_msg = ("The .{} attribute is is deprecated and will be "
                     "removed in a future release")
 
 
