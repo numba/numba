@@ -15,6 +15,11 @@ try:
 except ImportError:
     jinja2 = None
 
+try:
+    import pygments
+except ImportError:
+    pygments = None
+
 import numpy as np
 
 from numba import unittest_support as unittest
@@ -617,6 +622,7 @@ class TestDispatcherMethods(TestCase):
         foo.inspect_types(utils.StringIO())
 
     @unittest.skipIf(jinja2 is None, "please install the 'jinja2' package")
+    @unittest.skipIf(pygments is None, "please install the 'pygments' package")
     def test_inspect_types_pretty(self):
         @jit
         def foo(a, b):
