@@ -1174,6 +1174,16 @@ class TestParfors(TestParforsBase):
         # as a different name
         self.assertEqual(countArrayAllocs(test_impl, (types.intp,)), 1)
 
+    @skip_unsupported
+    def test_preparfor_canonicalize_kws(self):
+        # test canonicalize_array_math typing for calls with kw args
+        def test_impl(A):
+            return A.argsort()
+
+        n = 211
+        A = np.arange(n)
+        self.check(test_impl, A)
+
 
 class TestPrangeBase(TestParforsBase):
 
