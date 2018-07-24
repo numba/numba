@@ -249,19 +249,23 @@ class ForAll(object):
 
     def _compute_thread_per_block(self, kernel):
         tpb = self.thread_per_block
+        # Prefer user-specified config
         if tpb != 0:
             return tpb
-
+        # Else, ask the driver to give a good cofnig
         else:
             ctx = get_context()
+            kwargs = dict(
+                func=kernel._func.get(),
+                b2d_func=lambda tpb: 0,
+                memsize=self.sharedmem,
+                blocksizelimit=1024,
+            )
             try:
-                _, tpb = ctx.get_max_potential_block_size(
-                    kernel._func.get(),
-                    b2d_func=lambda tpb: 0,
-                    memsize=self.sharedmem,
-                    blocksizelimit=1024,
-                    )
+                # Raises from the driver if the feature is unavailable
+                _, tpb = ctx.get_max_potential_block_size(**kwargs)
             except AttributeError:
+                # Fallback to table-based approach.
                 tpb = self._fallback_autotune_best(kernel)
                 raise
             return tpb
@@ -676,10 +680,10 @@ class CUDAKernel(CUDAKernelBase):
         else:
             raise NotImplementedError(ty, val)
 
-
     @property
     def autotune(self):
         """Return the autotuner object associated with this kernel."""
+        warnings.warn(_deprec_warn_msg, DeprecationWarning)
         has_autotune = hasattr(self, '_autotune')
         if has_autotune and self._autotune.dynsmem == self.sharedmem:
             return self._autotune
@@ -698,6 +702,10 @@ class CUDAKernel(CUDAKernelBase):
         current configuration."""
         thread_per_block = reduce(operator.mul, self.blockdim, 1)
         return self.autotune.closest(thread_per_block)
+
+
+_deprec_warn_msg = ("The *autotune* feature is is deprecated and will be "
+                    "removed in a future release")
 
 
 class AutoJitCUDAKernel(CUDAKernelBase):
