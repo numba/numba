@@ -915,14 +915,19 @@ if numpy_version >= (1, 9):
 # Element-wise computations
 
 @register_jitable
-def _fill_diagonal_2d(a, val, wrap):
+def _fill_diagonal_2d(a, val):
     n = a.shape[1]
     step = n + 1
+    end = n * n
 
-    if wrap is True:
-        end = n * a.shape[0]
-    else:
-        end = n * n
+    for i in range(0, end, step):
+        a.flat[i] = val
+
+@register_jitable
+def _fill_diagonal_2d_wrap(a, val):
+    m, n = a.shape
+    step = n + 1
+    end = m * n
 
     for i in range(0, end, step):
         a.flat[i] = val
@@ -943,13 +948,16 @@ def _fill_diagonal(a, val):
 @overload(np.fill_diagonal)
 def np_fill_diagonal(a, val, wrap=False):
 
-    def _abort_mission(a, val, wrap):
+    def _abort_mission(a, val, wrap=False):
         raise ValueError("array must be at least 2-d")
 
-    def fill_diagonal_impl_2d(a, val, wrap):
-        _fill_diagonal_2d(a, val, wrap)
+    def fill_diagonal_impl_2d(a, val, wrap=False):
+        if wrap:
+            _fill_diagonal_2d_wrap(a, val)
+        else:
+            _fill_diagonal_2d(a, val)
 
-    def fill_diagonal_impl(a, val, wrap):
+    def fill_diagonal_impl(a, val, wrap=False):
         _fill_diagonal(a, val)
 
     if a.ndim < 2:
