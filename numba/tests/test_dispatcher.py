@@ -10,6 +10,7 @@ import threading
 import warnings
 import inspect
 import pickle
+import weakref
 
 try:
     import jinja2
@@ -370,14 +371,18 @@ class TestDispatcher(BaseTest):
         del foo
         del foo_rebuilt
         self.assertEqual(memo_size + 1, len(memo))
-        self.assertEqual(id_orig, id(pickle.loads(serialized_foo)))
+        new_foo = pickle.loads(serialized_foo)
+        self.assertEqual(id_orig, id(new_foo))
 
         # now clear the recent cache
+        ref = weakref.ref(new_foo)
+        del new_foo
         Dispatcher._recent.clear()
         self.assertEqual(memo_size, len(memo))
 
-        # and deserializing the Dispatcher creates a new object
-        self.assertNotEqual(id_orig, id(pickle.loads(serialized_foo)))
+        # show that deserializing creates a new object
+        newer_foo = pickle.loads(serialized_foo)
+        self.assertIs(ref(), None)
 
 
 class TestSignatureHandling(BaseTest):
