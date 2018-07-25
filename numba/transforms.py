@@ -274,7 +274,10 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
     def dispatcher_factory(func_ir):
         from numba.dispatcher import LiftedWith
 
-        return LiftedWith(func_ir, typingctx, targetctx, flags, locals)
+        myflags = flags.copy()
+        myflags.enable_looplift = False
+        myflags.enable_pyobject = True
+        return LiftedWith(func_ir, typingctx, targetctx, myflags, locals)
 
     postproc.PostProcessor(func_ir).run()
     assert func_ir.variable_lifetime

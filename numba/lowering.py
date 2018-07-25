@@ -662,6 +662,30 @@ class Lower(BaseLower):
             argvals = expr.func.args
         else:
             fnty = self.typeof(expr.func.name)
+            if isinstance(fnty, types.Dispatcher):
+                print(fnty)
+                self.init_pyapi()
+                # Acquire the GIL
+                gil_state = self.pyapi.gil_ensure()
+                # Fix types
+                argnames = [a.name for a in expr.args]
+                argtypes = [self.typeof(a) for a in argnames]
+                argvalues = [self.loadvar(a) for a in argnames]
+                argobjs = [self.pyapi.from_native_value(atyp, aval,
+                                                        self.env_manager)
+                           for atyp, aval in zip(argtypes, argvalues)]
+                # Make Call
+                entry_pt = fnty.dispatcher.compile(tuple(argtypes))
+                callee = self.context.add_dynamic_addr(self.builder, id(entry_pt), info="with_objectmode")
+                self.pyapi.call_function_objargs(callee, argobjs)
+
+                # Release objs
+                for obj in argobjs:
+                    self.pyapi.decref(obj)
+
+                # Release the GIL
+                self.pyapi.gil_release(gil_state)
+                return self.context.get_dummy_value()
             argvals = self.fold_call_args(fnty, signature,
                                           expr.args, expr.vararg, expr.kws)
 

@@ -763,6 +763,22 @@ class LiftedWith(LiftedCode):
 
         A (template, pysig, args, kws) tuple is returned.
         """
+        if self.flags.enable_pyobject:
+            assert not kws
+            args = [types.ffi_forced_object] * len(args)
+
+            if self._can_compile:
+                self.compile(tuple(args))
+
+            signatures = [typing.signature(types.none, *args)]
+            pysig = None
+            func_name = self.py_func.__name__
+            name = "CallTemplate({0})".format(func_name)
+            call_template = typing.make_concrete_template(
+                name, key=func_name, signatures=signatures)
+
+            return call_template, pysig, args, kws
+
         # Ensure an overload is available
         if self._can_compile:
             self.compile(tuple(args))

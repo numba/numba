@@ -106,6 +106,43 @@ class _CallContextType(WithContext):
 call_context = _CallContextType()
 
 
+class _ObjModeContextType(WithContext):
+    def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
+                         body_blocks, dispatcher_factory):
+        vlt = func_ir.variable_lifetime
+        inputs = vlt.livemap[blk_start]
+        outputs = vlt.livemap[blk_end]
+
+        print('inputs', inputs)
+        print('outputs', outputs)
+        outputs = [] # XXX: no outputs hacks
+
+        lifted_blks = {k: blocks[k] for k in body_blocks}
+        _mutate_with_block_callee(lifted_blks, blk_start, blk_end,
+                                  inputs, outputs)
+
+        # XXX: transform body-blocks to return the output variables
+        lifted_ir = func_ir.derive(
+            blocks=lifted_blks,
+            arg_names=tuple(inputs),
+            arg_count=len(inputs),
+            force_non_generator=True,
+            )
+
+        dispatcher = dispatcher_factory(lifted_ir)
+
+        newblk = _mutate_with_block_caller(
+            dispatcher, blocks, blk_start, blk_end, inputs, outputs,
+            )
+
+        blocks[blk_start] = newblk
+        _clear_blocks(blocks, body_blocks)
+        return dispatcher
+
+
+objmode_context = _ObjModeContextType()
+
+
 def _bypass_with_context(blocks, blk_start, blk_end, forwardvars):
     """Given the starting and ending block of the with-context,
     replaces the head block with a new block that jumps to the end.

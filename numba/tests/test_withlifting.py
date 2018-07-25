@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from numba import unittest_support as unittest
 from numba.transforms import find_setupwiths, with_lifting
-from numba.withcontexts import bypass_context, call_context
+from numba.withcontexts import bypass_context, call_context, objmode_context
 from numba.bytecode import FunctionIdentity, ByteCode
 from numba.interpreter import Interpreter
 from numba import typing, errors
@@ -162,7 +162,8 @@ class BaseTestWithLifting(TestCase):
     def check_extracted_with(self, func, expect_count, expected_stdout):
         the_ir = get_func_ir(func)
         new_ir, extracted = with_lifting(
-            the_ir, self.typingctx, self.targetctx, self.flags, locals={},
+            the_ir, self.typingctx, self.targetctx, self.flags,
+            locals={},
         )
         self.assertEqual(len(extracted), expect_count)
         cres = self.compile_ir(new_ir)
@@ -240,6 +241,23 @@ class TestLiftCall(BaseTestWithLifting):
         # Known error.  We only support one context manager per function
         # for body that are lifted.
         self.assertIn("re-entrant", str(raises.exception))
+
+
+class TestLiftObj(TestCase):
+    def test_lift_objmode(self):
+        def bar(ival):
+            print("ival =", {'ival': ival // 2})
+
+        @njit
+        def foo(ival):
+            ival += 1
+            with objmode_context:
+                bar(ival)
+            return ival
+
+        r = foo(123)
+        print(r)
+
 
 
 if __name__ == '__main__':
