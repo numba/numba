@@ -102,7 +102,8 @@ class UFuncMechanism(object):
                 # Is scalar
                 self.scalarpos.append(i)
             else:
-                raise TypeError("argument #%d has invalid type" % (i + 1,))
+                raise TypeError("argument #%d has invalid type of %s" \
+                % (i + 1, type(arg) ))
 
     def _fill_argtypes(self):
         """

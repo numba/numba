@@ -814,8 +814,10 @@ class TestParfors(TestParforsBase):
         N = 100
         A = np.random.ranf(N)
         B = np.random.randint(10, size=(N, 3))
+        C = A + 1j * A
         self.check(test_impl, A)
         self.check(test_impl, B)
+        self.check(test_impl, C)
         self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'), )) == 2)
         self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )) == 2)
 
@@ -826,8 +828,10 @@ class TestParfors(TestParforsBase):
         N = 100
         A = np.random.ranf(N)
         B = np.random.randint(10, size=(N, 3))
+        C = A + 1j * A
         self.check(test_impl, A)
         self.check(test_impl, B)
+        self.check(test_impl, C)
         self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'), )) == 2)
         self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )) == 2)
 
@@ -1064,6 +1068,7 @@ class TestParfors(TestParforsBase):
         self.assertIn("Overwrite of parallel loop index", str(raises.exception))
 
     @skip_unsupported
+    @needs_blas
     def test_parfor_array_access4(self):
         # in this test, one index of a multi-dim access should be replaced
         # np.dot parallel implementation produces this case
@@ -1117,6 +1122,18 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countNonParforArrayAccesses(test_impl, (types.intp,)), 0)
 
     @skip_unsupported
+    def test_parfor_hoist_setitem(self):
+        # Make sure that read of out is not hoisted.
+        def test_impl(out):
+            for i in prange(10):
+                out[0] = 2 * out[0] 
+            return out[0]
+
+        out = np.ones(1)
+        self.check(test_impl, out)
+        
+    @skip_unsupported
+    @needs_blas
     def test_parfor_generate_fuse(self):
         # issue #2857
         def test_impl(N, D):
@@ -1686,9 +1703,10 @@ class TestPrange(TestPrangeBase):
             for line in v.splitlines():
                 # get the fn definition line
                 if 'define' in line and k in line:
-                    # there should only be 3x noalias, one on each of the first
-                    # 3 args (retptr, excinfo, env).
-                    self.assertEqual(line.count('noalias'), 3)
+                    # there should only be 2x noalias, one on each of the first
+                    # 2 args (retptr, excinfo).
+                    # Note: used to be 3x no noalias, but env arg is dropped.
+                    self.assertEqual(line.count('noalias'), 2)
                     break
 
     @skip_unsupported

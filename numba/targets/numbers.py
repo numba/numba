@@ -487,12 +487,30 @@ def int_sign_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+def bool_negate_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [val] = args
+    res = context.cast(builder, val, typ, sig.return_type)
+    res = builder.neg(res)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+def bool_unary_positive_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [val] = args
+    res = context.cast(builder, val, typ, sig.return_type)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
 lower_builtin('==', types.boolean, types.boolean)(int_eq_impl)
 lower_builtin('!=', types.boolean, types.boolean)(int_ne_impl)
 lower_builtin('<', types.boolean, types.boolean)(int_ult_impl)
 lower_builtin('<=', types.boolean, types.boolean)(int_ule_impl)
 lower_builtin('>', types.boolean, types.boolean)(int_ugt_impl)
 lower_builtin('>=', types.boolean, types.boolean)(int_uge_impl)
+lower_builtin('-', types.boolean)(bool_negate_impl)
+lower_builtin('+', types.boolean)(bool_unary_positive_impl)
+
 
 @lower_builtin('==', types.Const, types.Const)
 def const_eq_impl(context, builder, sig, args):
@@ -1215,7 +1233,7 @@ def hash_float(context, builder, sig, args):
     # NOTE: CPython's algorithm is more involved as it seeks to maintain
     # the invariant that hash(float(x)) == hash(x) for every integer x
     # exactly representable as a float.
-    # Numba doesn't care as it doesn't support heterogenous associative
+    # Numba doesn't care as it doesn't support heterogeneous associative
     # containers.
 
     intty = types.Integer("int%d" % ty.bitwidth)

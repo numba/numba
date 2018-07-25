@@ -1,5 +1,6 @@
 set NUMBA_DEVELOPER_MODE=1
 set NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING=1
+set PYTHONFAULTHANDLER=1
 
 @rem Check Numba executables are there
 pycc -h
@@ -12,6 +13,6 @@ numba -s
 python -m numba.tests.test_runtests
 
 @rem Run the whole test suite
-python -m numba.runtests -m -b
+python -m numba.runtests -b -m -- %TESTS_TO_RUN%
 
 if errorlevel 1 exit 1

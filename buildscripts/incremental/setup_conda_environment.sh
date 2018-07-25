@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -v
+set -v -e
 
 CONDA_INSTALL="conda install -q -y"
 PIP_INSTALL="pip install -q"
@@ -20,8 +20,18 @@ conda list
 # (note workaround for https://github.com/conda/conda/issues/2679:
 #  `conda env remove` issue)
 conda remove --all -q -y -n $CONDA_ENV
-# Scipy, CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
-conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY cffi pip scipy jinja2 ipython
+
+# If VANILLA_INSTALL is yes, then only Python, NumPy and pip are installed, this
+# is to catch tests/code paths that require an optional package and are not
+# guarding against the possibility that it does not exist in the environment.
+# Create a base env first and then add to it...
+
+conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip
+
+if [ "${VANILLA_INSTALL}" != "yes" ]; then
+    # Scipy, CFFI, jinja2, IPython and pygments are optional dependencies, but exercised in the test suite
+    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi scipy jinja2 ipython pygments
+fi
 
 set +v
 source activate $CONDA_ENV
@@ -52,3 +62,5 @@ if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL sphinx_bootstrap_theme; fi
 if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi
 # Install SVML
 if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
+
+if [ $PYTHON \< "3.0" ]; then $CONDA_INSTALL faulthandler; fi

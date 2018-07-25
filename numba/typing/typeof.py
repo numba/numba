@@ -152,6 +152,10 @@ def _typeof_list(val, c):
     if len(val) == 0:
         raise ValueError("Cannot type empty list")
     ty = typeof_impl(val[0], c)
+    if ty is None:
+        raise ValueError(
+            "Cannot type list element of {!r}".format(type(val[0])),
+            )
     return types.List(ty, reflected=True)
 
 @typeof_impl.register(set)
@@ -180,7 +184,7 @@ def _typeof_enum_class(val, c):
         raise ValueError("Cannot type enum with no members")
     dtypes = {typeof_impl(mem.value, c) for mem in members}
     if len(dtypes) > 1:
-        raise ValueError("Cannot type heterogenous enum: "
+        raise ValueError("Cannot type heterogeneous enum: "
                          "got value types %s"
                          % ", ".join(sorted(str(ty) for ty in dtypes)))
     if issubclass(val, enum.IntEnum):

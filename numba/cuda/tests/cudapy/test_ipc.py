@@ -172,5 +172,106 @@ class TestIpcNotSupported(CUDATestCase):
         self.assertIn('OS does not support CUDA IPC', errmsg)
 
 
+def staged_ipc_handle_test(handle, device_num, result_queue):
+    def the_work():
+        with cuda.gpus[device_num]:
+            this_ctx = cuda.devices.get_context()
+            can_access = handle.can_access_peer(this_ctx)
+            print('can_access_peer {} {}'.format(this_ctx, can_access))
+            deviceptr = handle.open_staged(this_ctx)
+            arrsize = handle.size // np.dtype(np.intp).itemsize
+            hostarray = np.zeros(arrsize, dtype=np.intp)
+            cuda.driver.device_to_host(
+                hostarray, deviceptr,  size=handle.size,
+                )
+            handle.close()
+        return hostarray
+
+    core_ipc_handle_test(the_work, result_queue)
+
+
+def staged_ipc_array_test(ipcarr, device_num, result_queue):
+    try:
+        with cuda.gpus[device_num]:
+            this_ctx = cuda.devices.get_context()
+            print(this_ctx.device)
+            with ipcarr as darr:
+                arr = darr.copy_to_host()
+                try:
+                    # should fail to reopen
+                    with ipcarr:
+                        pass
+                except ValueError as e:
+                    if str(e) != 'IpcHandle is already opened':
+                        raise AssertionError('invalid exception message')
+                else:
+                    raise AssertionError('did not raise on reopen')
+    except:
+        # FAILED. propagate the exception as a string
+        succ = False
+        out = traceback.format_exc()
+    else:
+        # OK. send the ndarray back
+        succ = True
+        out = arr
+    result_queue.put((succ, out))
+
+
+@unittest.skipIf(not_linux, "IPC only supported on Linux")
+@unittest.skipUnless(has_mp_get_context, "requires multiprocessing.get_context")
+@skip_on_cudasim('Ipc not available in CUDASIM')
+class TestIpcStaged(CUDATestCase):
+    def test_staged(self):
+        # prepare data for IPC
+        arr = np.arange(10, dtype=np.intp)
+        devarr = cuda.to_device(arr)
+
+        # spawn new process for testing
+        mpctx = mp.get_context('spawn')
+        result_queue = mpctx.Queue()
+
+        # create IPC handle
+        ctx = cuda.current_context()
+        ipch = ctx.get_ipc_handle(devarr.gpu_data)
+        # pickle
+        buf = pickle.dumps(ipch)
+        ipch_recon = pickle.loads(buf)
+        self.assertIs(ipch_recon.base, None)
+        self.assertEqual(tuple(ipch_recon.handle), tuple(ipch.handle))
+        self.assertEqual(ipch_recon.size, ipch.size)
+
+        # Test on every CUDA devices
+        for device_num in range(len(cuda.gpus)):
+            args = (ipch, device_num, result_queue)
+            proc = mpctx.Process(target=staged_ipc_handle_test, args=args)
+            proc.start()
+            succ, out = result_queue.get()
+            proc.join(3)
+            if not succ:
+                self.fail(out)
+            else:
+                np.testing.assert_equal(arr, out)
+
+    def test_ipc_array(self):
+        for device_num in range(len(cuda.gpus)):
+            # prepare data for IPC
+            arr = np.random.random(10)
+            devarr = cuda.to_device(arr)
+            ipch = devarr.get_ipc_handle()
+
+            # spawn new process for testing
+            ctx = mp.get_context('spawn')
+            result_queue = ctx.Queue()
+            args = (ipch, device_num, result_queue)
+            proc = ctx.Process(target=staged_ipc_array_test, args=args)
+            proc.start()
+            succ, out = result_queue.get()
+            proc.join(3)
+            if not succ:
+                self.fail(out)
+            else:
+                np.testing.assert_equal(arr, out)
+
+
 if __name__ == '__main__':
     unittest.main()

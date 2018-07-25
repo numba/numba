@@ -106,7 +106,7 @@ class IterNext(AbstractTemplate):
 @infer
 class PairFirst(AbstractTemplate):
     """
-    Given a heterogenous pair, return the first element.
+    Given a heterogeneous pair, return the first element.
     """
     key = "pair_first"
 
@@ -120,7 +120,7 @@ class PairFirst(AbstractTemplate):
 @infer
 class PairSecond(AbstractTemplate):
     """
-    Given a heterogenous pair, return the second element.
+    Given a heterogeneous pair, return the second element.
     """
     key = "pair_second"
 
@@ -297,16 +297,17 @@ class BitwiseInvert(ConcreteTemplate):
     # while Python returns an int.  This makes it consistent with
     # np.invert() and makes array expressions correct.
     cases = [signature(types.boolean, types.boolean)]
-    cases += [signature(choose_result_int(op), op) for op in types.unsigned_domain]
-    cases += [signature(choose_result_int(op), op) for op in types.signed_domain]
+    cases += [signature(choose_result_int(op), op) for op in sorted(types.unsigned_domain)]
+    cases += [signature(choose_result_int(op), op) for op in sorted(types.signed_domain)]
 
     unsafe_casting = False
 
 class UnaryOp(ConcreteTemplate):
-    cases = [signature(choose_result_int(op), op) for op in types.unsigned_domain]
-    cases += [signature(choose_result_int(op), op) for op in types.signed_domain]
+    cases = [signature(choose_result_int(op), op) for op in sorted(types.unsigned_domain)]
+    cases += [signature(choose_result_int(op), op) for op in sorted(types.signed_domain)]
     cases += [signature(op, op) for op in sorted(types.real_domain)]
     cases += [signature(op, op) for op in sorted(types.complex_domain)]
+    cases += [signature(types.intp, types.boolean)]
 
 
 @infer

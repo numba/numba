@@ -146,6 +146,15 @@ def full_test_arrays(dtype):
     if dtype == np.float32:
         array_list += [a / 10 for a in array_list]
 
+    # add imaginary part
+    if dtype == np.complex64:
+        acc = []
+        for a in array_list:
+            tmp = a / 10 + 1j * a / 11
+            tmp[::2] = np.conj(tmp[::2])
+            acc.append(tmp)
+        array_list.extend(acc)
+
     for a in array_list:
         assert a.dtype == np.dtype(dtype)
     return array_list
@@ -600,41 +609,65 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     @classmethod
     def install_generated_tests(cls):
         # These form a testing product where each of the combinations are tested
+
+        # these function are tested in real and complex space
         reduction_funcs = [array_sum, array_sum_global,
                            array_prod, array_prod_global,
                            array_mean, array_mean_global,
                            array_var, array_var_global,
                            array_std, array_std_global,
-                           array_min, array_min_global,
-                           array_max, array_max_global,
-                           array_argmin, array_argmin_global,
-                           array_argmax, array_argmax_global,
                            array_all, array_all_global,
                            array_any, array_any_global,
-                           array_nanmax,
-                           array_nanmin,
                            array_nansum,
                            ]
+
+        # these functions only work in real space as no complex comparison
+        # operator is implemented
+        reduction_funcs_rspace = [array_min, array_min_global,
+                                  array_max, array_max_global,
+                                  array_argmin, array_argmin_global,
+                                  array_argmax, array_argmax_global,
+                                  array_nanmax, array_nanmin]
+
         if np_version >= (1, 8):
             reduction_funcs += [array_nanmean, array_nanstd, array_nanvar]
         if np_version >= (1, 10):
             reduction_funcs += [array_nanprod]
 
-        dtypes_to_test = [np.int32, np.float32, np.bool_]
+        dtypes_to_test = [np.int32, np.float32, np.bool_, np.complex64]
 
-        # Install tests on class
-        for dt in dtypes_to_test:
-            test_arrays = full_test_arrays(dt)
-            for red_func, test_array in product(reduction_funcs, test_arrays):
-                # Create the name for the test function
-                test_name = "test_{0}_{1}_{2}d".format(red_func.__name__, test_array.dtype.name, test_array.ndim)
+        def install_tests(dtypes, funcs):
+            # Install tests on class
+            for dt in dtypes:
+                test_arrays = full_test_arrays(dt)
+                for red_func, test_array in product(funcs, test_arrays):
+                    # Create the name for the test function
+                    test_name = "test_{0}_{1}_{2}d"
+                    test_name = test_name.format(red_func.__name__,
+                                                 test_array.dtype.name,
+                                                 test_array.ndim)
 
-                def new_test_function(self, redFunc=red_func, testArray=test_array, testName=test_name):
-                    npr, nbr = run_comparative(redFunc, testArray)
-                    self.assertPreciseEqual(npr, nbr, msg=test_name, prec="single")
+                    def new_test_function(self, redFunc=red_func,
+                                          testArray=test_array,
+                                          testName=test_name):
+                        ulps = 1
+                        if 'prod' in red_func.__name__ and \
+                            np.iscomplexobj(testArray):
+                            # prod family accumulate slightly more error on
+                            # some architectures (power, 32bit) for complex input
+                            ulps = 3
+                        npr, nbr = run_comparative(redFunc, testArray)
+                        self.assertPreciseEqual(npr, nbr, msg=test_name,
+                                                prec="single", ulps=ulps)
 
-                # Install it into the class
-                setattr(cls, test_name, new_test_function)
+                    # Install it into the class
+                    setattr(cls, test_name, new_test_function)
+
+        # install tests for reduction functions that only work in real space
+        install_tests(dtypes_to_test[:-1], reduction_funcs_rspace)
+
+        # install tests for reduction functions
+        install_tests(dtypes_to_test, reduction_funcs)
 
 
 TestArrayReductions.install_generated_tests()

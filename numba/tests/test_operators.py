@@ -1045,7 +1045,7 @@ class TestOperators(TestCase):
             with self.assertRaises(errors.TypingError, msg=msg) as raises:
                 compile_isolated(pyfunc, argtypes)
             # check error message
-            fmt = 'Invalid usage of {}'
+            fmt = 'Invalid use of {}'
             expecting = fmt.format(opname
                                    if isinstance(opname, str)
                                    else 'Function({})'.format(opname))
@@ -1110,7 +1110,7 @@ class TestOperators(TestCase):
             cfunc = cres.entry_point
             self.assertEqual(pyfunc(val), cfunc(val))
 
-    # XXX test_negate should check for negative and positive zeros and infinites
+    # XXX test_negate should check for negative and positive zeros and infinities
 
     @tag('important')
     def test_negate_npm(self):
@@ -1123,6 +1123,8 @@ class TestOperators(TestCase):
             types.float32,
             types.float64,
             types.complex128,
+            types.boolean,
+            types.boolean,
         ]
         values = [
             1,
@@ -1131,11 +1133,14 @@ class TestOperators(TestCase):
             1.2,
             2.4,
             3.4j,
+            True,
+            False,
         ]
         for ty, val in zip(argtys, values):
             cres = compile_isolated(pyfunc, [ty])
             cfunc = cres.entry_point
             self.assertAlmostEqual(pyfunc(val), cfunc(val))
+
 
     def test_negate(self):
         pyfunc = self.op.negate_usecase
@@ -1145,6 +1150,8 @@ class TestOperators(TestCase):
             3,
             1.2,
             3.4j,
+            True,
+            False,
         ]
         cres = compile_isolated(pyfunc, (), flags=force_pyobj_flags)
         cfunc = cres.entry_point
@@ -1161,6 +1168,8 @@ class TestOperators(TestCase):
             types.float32,
             types.float64,
             types.complex128,
+            types.boolean,
+            types.boolean,
         ]
         values = [
             1,
@@ -1169,6 +1178,8 @@ class TestOperators(TestCase):
             1.2,
             2.4,
             3.4j,
+            True,
+            False
         ]
         for ty, val in zip(argtys, values):
             cres = compile_isolated(pyfunc, [ty])
@@ -1183,6 +1194,8 @@ class TestOperators(TestCase):
             3,
             1.2,
             3.4j,
+            True,
+            False,
         ]
         cres = compile_isolated(pyfunc, (), flags=force_pyobj_flags)
         cfunc = cres.entry_point

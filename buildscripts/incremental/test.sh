@@ -18,6 +18,24 @@ popd
 export NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING=1
 # switch on developer mode
 export NUMBA_DEVELOPER_MODE=1
+# enable the fault handler
+export PYTHONFAULTHANDLER=1
+
+unamestr=`uname`
+if [[ "$unamestr" == 'Linux' ]]; then
+  SEGVCATCH=catchsegv
+elif [[ "$unamestr" == 'Darwin' ]]; then
+  SEGVCATCH=""
+else
+  echo Error
+fi
+
+# limit CPUs in use on PPC64LE, fork() issues
+# occur on high core count systems
+archstr=`uname -m`
+if [[ "$archstr" == 'ppc64le' ]]; then
+    TEST_NPROCS=16
+fi
 
 # First check that the test discovery works
 python -m numba.tests.test_runtests
@@ -27,7 +45,7 @@ python -m numba.tests.test_runtests
 if [ "$RUN_COVERAGE" == "yes" ]; then
     export PYTHONPATH=.
     coverage erase
-    coverage run runtests.py -b -m numba.tests
+    $SEGVCATCH coverage run runtests.py -b -m $TEST_NPROCS -- numba.tests
 else
-    NUMBA_ENABLE_CUDASIM=1 python -m numba.runtests -b -m numba.tests
+    NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -m $TEST_NPROCS -- numba.tests
 fi

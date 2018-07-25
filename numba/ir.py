@@ -63,7 +63,12 @@ class Loc(object):
                     spaces += 1
                 return spaces
 
-            selected = lines[self.line - nlines_up:self.line]
+            # A few places in the code still use no `loc` or default to line 1
+            # this is often in places where exceptions are used for the purposes
+            # of flow control. As a result max is in use to prevent slice from
+            # `[negative: positive]`
+            selected = lines[max(0, self.line - nlines_up):self.line]
+
             # see if selected contains a definition
             def_found = False
             for x in selected:
@@ -83,12 +88,13 @@ class Loc(object):
                     spaces = count_spaces(x)
                     ret.append(' '*(4 + spaces) + '<source elided>\n')
 
-            ret.extend(selected[:-1])
-            ret.append(_termcolor.highlight(selected[-1]))
+            if selected:
+                ret.extend(selected[:-1])
+                ret.append(_termcolor.highlight(selected[-1]))
 
-            # point at the problem with a caret
-            spaces = count_spaces(selected[-1])
-            ret.append(' '*(spaces) + _termcolor.indicate("^"))
+                # point at the problem with a caret
+                spaces = count_spaces(selected[-1])
+                ret.append(' '*(spaces) + _termcolor.indicate("^"))
 
         # if in the REPL source may not be available
         if not ret:
@@ -961,7 +967,6 @@ class FunctionIR(object):
         Post-processing will have to be run again on the new IR.
         """
         firstblock = blocks[min(blocks)]
-        is_generator = self.is_generator and not force_non_generator
 
         new_ir = copy.copy(self)
         new_ir.blocks = blocks
@@ -973,6 +978,7 @@ class FunctionIR(object):
         if arg_names is not None:
             new_ir.arg_names = arg_names
         new_ir._reset_analysis_variables()
+        # Make fresh func_id
         new_ir.func_id = new_ir.func_id.derive()
         return new_ir
 

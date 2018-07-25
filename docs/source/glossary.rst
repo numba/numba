@@ -37,8 +37,8 @@ Glossary
    loop-jitting
       A feature of compilation in :term:`object mode` where a loop can be
       automatically extracted and compiled in :term:`nopython mode`.  This
-      allows functions with operations unsupported in nopython mode to see 
-      significant performance improvements if they contain loops with only 
+      allows functions with operations unsupported in nopython mode to see
+      significant performance improvements if they contain loops with only
       nopython-supported operations.
 
    lowering
@@ -82,3 +82,15 @@ Glossary
       A NumPy `universal function <http://docs.scipy.org/doc/numpy/reference/ufuncs.html>`_.
       Numba can create new compiled ufuncs with
       the :ref:`@vectorize <vectorize>` decorator.
+
+   reflection
+      In numba, when a mutable container is passed as argument to a nopython
+      function from the Python interpreter, the container object and all its
+      contained elements are converted into nopython values.  To match the
+      semantics of Python, any mutation on the container inside the nopython
+      function must be visible in the Python interpreter.  To do so, Numba
+      must update the container and its elements and convert them back into
+      Python objects during the transition back into the interpreter.
+
+      Not to be confused with Python's "reflection" in the context of binary
+      operators (see https://docs.python.org/3.5/reference/datamodel.html).

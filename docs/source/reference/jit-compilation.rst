@@ -143,12 +143,13 @@ Dispatcher objects
 
       The pure Python function which was compiled.
 
-   .. method:: inspect_types(file=None)
+   .. method:: inspect_types(file=None, pretty=False)
 
       Print out a listing of the function source code annotated line-by-line
       with the corresponding Numba IR, and the inferred types of the various
       variables.  If *file* is specified, printing is done to that file
-      object, otherwise to sys.stdout.
+      object, otherwise to sys.stdout. If *pretty* is set to True then colored
+      ANSI will be produced in a terminal and HTML in a notebook.
 
       .. seealso:: :ref:`architecture`
 

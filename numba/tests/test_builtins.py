@@ -695,7 +695,7 @@ class TestBuiltins(TestCase):
         cfunc(1, [1])
 
     def test_max_1_invalid_types(self):
-        # Heterogenous ordering is valid in Python 2
+        # Heterogeneous ordering is valid in Python 2
         if utils.IS_PY3:
             with self.assertRaises(TypeError):
                 self.check_min_max_invalid_types(max_usecase1)
@@ -707,7 +707,7 @@ class TestBuiltins(TestCase):
             self.check_min_max_invalid_types(max_usecase1, flags=no_pyobj_flags)
 
     def test_min_1_invalid_types(self):
-        # Heterogenous ordering is valid in Python 2
+        # Heterogeneous ordering is valid in Python 2
         if utils.IS_PY3:
             with self.assertRaises(TypeError):
                 self.check_min_max_invalid_types(min_usecase1)

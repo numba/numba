@@ -10,6 +10,7 @@ import os
 import sys
 import warnings
 import numba
+import numpy as np
 from collections import defaultdict
 from numba import six
 from functools import wraps
@@ -84,6 +85,17 @@ _termcolor_inst = None
 
 try:
     import colorama
+
+    # If the colorama version is < 0.3.9 it can break stdout/stderr in some
+    # situations, as a result if this condition is met colorama is disabled and
+    # the user is warned.
+    if tuple([int(x) for x in colorama.__version__.split('.')]) < (0, 3, 9):
+        msg = ("Insufficiently recent colorama version found. "
+               "Numba requires colorama >= 0.3.9")
+        # warn the user
+        warnings.warn(msg)
+        # trip the exception to disable color errors
+        raise ImportError
 
     # If Numba is running in testsuite mode then do not use error message
     # coloring so CI system output is consistently readable without having
@@ -498,8 +510,14 @@ class TypingError(NumbaError):
 
 class UntypedAttributeError(TypingError):
     def __init__(self, value, attr, loc=None):
-        msg = "Unknown attribute '{attr}' of type {type}".format(type=value,
-                                                                 attr=attr)
+        module = getattr(value, 'pymod', None)
+        if module is not None and module == np:
+            # unsupported numpy feature.
+            msg = ("Use of unsupported NumPy function 'numpy.%s' "
+                   "or unsupported use of the function.") % attr
+        else:
+            msg = "Unknown attribute '{attr}' of type {type}"
+            msg = msg.format(type=value, attr=attr)
         super(UntypedAttributeError, self).__init__(msg, loc=loc)
 
 

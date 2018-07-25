@@ -1,40 +1,68 @@
 from __future__ import print_function, division, absolute_import
 
-from collections import namedtuple
+import weakref
+import time
+from collections import namedtuple, deque
 from functools import partial
 
 from llvmlite.llvmpy.core import Constant, Type, Builder
+from llvmlite import ir as llvmir
 
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
 from .errors import LoweringError, new_error_context
 from .targets import removerefctpass
 from .funcdesc import default_mangler
-from . import debuginfo
+from . import debuginfo, utils
 
 
 class Environment(_dynfunc.Environment):
-    __slots__ = ()
+    """Stores globals and constant pyobjects for runtime.
+
+    It is often needed to convert b/w nopython objects and pyobjects.
+    """
+    __slots__ = ('env_name', '__weakref__')
+    # A weak-value dictionary to store live environment with env_name as the
+    # key.
+    _memo = weakref.WeakValueDictionary()
 
     @classmethod
     def from_fndesc(cls, fndesc):
         mod = fndesc.lookup_module()
-        return cls(mod.__dict__)
+        try:
+            # Avoid creating new Env
+            return cls._memo[fndesc.env_name]
+        except KeyError:
+            inst = cls(mod.__dict__)
+            inst.env_name = fndesc.env_name
+            cls._memo[fndesc.env_name] = inst
+            return inst
 
     def __reduce__(self):
-        return _rebuild_env, (self.globals['__name__'], self.consts)
+        return _rebuild_env, (
+            self.globals['__name__'],
+            self.consts,
+            self.env_name
+            )
 
-    def as_pointer(self, targetctx, ptrty=types.pyobject):
-        """
-        Return a constant pointer for the environment object.
-        """
-        ll_addr = targetctx.get_value_type(types.intp)
-        ll_ptr = targetctx.get_value_type(ptrty)
-        envptr = ll_addr(id(self)).inttoptr(ll_ptr)
-        return envptr
+    def __del__(self):
+        if utils is None or utils.IS_PY3:
+            return
+        if _keepalive is None:
+            return
+        _keepalive.append((time.time(), self))
+        if len(_keepalive) > 10:
+            cur = time.time()
+            while _keepalive and cur - _keepalive[0][0] > 1:
+                _keepalive.popleft()
 
 
-def _rebuild_env(modname, consts):
+_keepalive = deque()
+
+
+def _rebuild_env(modname, consts, env_name):
+    if env_name in Environment._memo:
+        return Environment._memo[env_name]
     from . import serialize
     mod = serialize._rebuild_module(modname)
     env = Environment(mod.__dict__)
@@ -73,7 +101,8 @@ class BaseLower(object):
         # Specializes the target context as seen inside the Lowerer
         # This adds:
         #  - environment: the python exceution environment
-        self.context = context.subtarget(environment=self.env)
+        self.context = context.subtarget(environment=self.env,
+                                         fndesc=self.fndesc)
 
         # Debuginfo
         dibuildercls = (self.context.DIBuilder
@@ -129,7 +158,16 @@ class BaseLower(object):
     def return_exception(self, exc_class, exc_args=None):
         self.call_conv.return_user_exc(self.builder, exc_class, exc_args)
 
+    def emit_environment_object(self):
+        """Emit a pointer to hold the Environment object.
+        """
+        # Define global for the environment and initialize it to NULL
+        envname = self.context.get_env_name(self.fndesc)
+        gvenv = self.context.declare_env_global(self.module, envname)
+
     def lower(self):
+        # Emit the Env into the module
+        self.emit_environment_object()
         if self.generator_info is None:
             self.genlower = None
             self.lower_normal_function(self.fndesc)
@@ -195,7 +233,7 @@ class BaseLower(object):
         self.debug_print("# function begin: {0}".format(
             self.fndesc.unique_name))
         # Lower all blocks
-        for offset, block in self.blocks.items():
+        for offset, block in sorted(self.blocks.items()):
             bb = self.blkmap[offset]
             self.builder.position_at_end(bb)
             self.lower_block(block)
@@ -778,7 +816,7 @@ class Lower(BaseLower):
                 ty = ty.type
 
             # If we have a tuple, we needn't do anything
-            # (and we can't iterate over the heterogenous ones).
+            # (and we can't iterate over the heterogeneous ones).
             if isinstance(ty, types.BaseTuple):
                 assert ty == resty
                 self.incref(ty, val)

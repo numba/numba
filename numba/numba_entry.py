@@ -11,9 +11,12 @@ def get_sys_info():
     # function which then exits.
     import platform
     import json
+    from numba import config
     from numba import cuda as cu
     from numba.cuda import cudadrv
     from numba.cuda.cudadrv.driver import driver as cudriver
+    from numba import roc
+    from numba.roc.hlc import hlc, libhlc
     import textwrap as tw
     import ctypes as ct
     import llvmlite.binding as llvmbind
@@ -23,7 +26,7 @@ def get_sys_info():
     from subprocess import check_output, CalledProcessError
 
     try:
-        fmt = "%-21s : %-s"
+        fmt = "%-35s : %-s"
         print("-" * 80)
         print("__Time Stamp__")
         print(datetime.utcnow())
@@ -122,6 +125,86 @@ def get_sys_info():
             except:
                 print(
                     "Error: Probing CUDA failed (device and driver present, runtime problem?)\n")
+
+        print("")
+        print("__ROC Information__")
+        roc_is_available = roc.is_available()
+        print(fmt % ("ROC available", roc_is_available))
+
+        toolchains = []
+        try:
+            libhlc.HLC()
+            toolchains.append('librocmlite library')
+        except:
+            pass
+        try:
+            cmd = hlc.CmdLine().check_tooling()
+            toolchains.append('ROC command line tools')
+        except:
+            pass
+
+        # if no ROC try and report why
+        if not roc_is_available:
+            from numba.roc.hsadrv.driver import hsa
+            try:
+                hsa.is_available
+            except BaseException as e:
+                msg = str(e)
+            else:
+               msg = 'No ROC toolchains found.'
+            print(fmt % ("Error initialising ROC due to", msg))
+
+        if toolchains:
+            print(fmt % ("Available Toolchains", ', '.join(toolchains)))
+
+        try:
+            # ROC might not be available due to lack of tool chain, but HSA
+            # agents may be listed
+            from numba.roc.hsadrv.driver import hsa, dgpu_count
+            print("\nFound %s HSA Agents:" % len(hsa.agents))
+            for i, agent in enumerate(hsa.agents):
+                print('Agent id  : %s' % i)
+                print('    vendor: %s' % agent.vendor_name)
+                print('      name: %s' % agent.name)
+                print('      type: %s' % agent.device)
+                print("")
+
+            _dgpus = []
+            for a in hsa.agents:
+                if a.is_component and a.device == 'GPU':
+                   _dgpus.append(a.name)
+            print(fmt % ("Found %s discrete GPU(s)" % dgpu_count(), \
+                  ', '.join(_dgpus)))
+        except Exception as e:
+            print("No HSA Agents found, encountered exception when searching:")
+            print(e)
+
+
+        print("")
+        print("__SVML Information__")
+        # replicate some SVML detection logic from numba.__init__ here.
+        # if SVML load fails in numba.__init__ the splitting of the logic
+        # here will help diagnosis of the underlying issue
+        have_svml_library = True
+        try:
+            if sys.platform.startswith('linux'):
+                llvmbind.load_library_permanently("libsvml.so")
+            elif sys.platform.startswith('darwin'):
+                llvmbind.load_library_permanently("libsvml.dylib")
+            elif sys.platform.startswith('win'):
+                llvmbind.load_library_permanently("svml_dispmd")
+            else:
+                have_svml_library = False
+        except:
+            have_svml_library = False
+        func = getattr(llvmbind.targets, "has_svml", None)
+        llvm_svml_patched = func() if func is not None else False
+        svml_operational = (config.USING_SVML and llvm_svml_patched \
+                            and have_svml_library)
+        print(fmt % ("SVML state, config.USING_SVML", config.USING_SVML))
+        print(fmt % ("SVML library found and loaded", have_svml_library))
+        print(fmt % ("llvmlite using SVML patched LLVM", llvm_svml_patched))
+        print(fmt % ("SVML operational:", svml_operational))
 
         # Look for conda and conda information
         print("")

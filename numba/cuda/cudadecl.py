@@ -71,6 +71,14 @@ class Cuda_gridDim_z(MacroTemplate):
     key = cuda.gridDim.z
 
 
+class Cuda_warpsize(MacroTemplate):
+    key = cuda.warpsize
+
+
+class Cuda_laneid(MacroTemplate):
+    key = cuda.laneid
+
+
 class Cuda_shared_array(MacroTemplate):
     key = cuda.shared.array
 
@@ -90,19 +98,84 @@ class Cuda_syncthreads(ConcreteTemplate):
 
 
 @intrinsic
+class Cuda_syncthreads_count(ConcreteTemplate):
+    key = cuda.syncthreads_count
+    cases = [signature(types.i4, types.i4)]
+
+
+@intrinsic
+class Cuda_syncthreads_and(ConcreteTemplate):
+    key = cuda.syncthreads_and
+    cases = [signature(types.i4, types.i4)]
+
+
+@intrinsic
+class Cuda_syncthreads_or(ConcreteTemplate):
+    key = cuda.syncthreads_or
+    cases = [signature(types.i4, types.i4)]
+
+
+@intrinsic
 class Cuda_threadfence_device(ConcreteTemplate):
     key = cuda.threadfence
     cases = [signature(types.none)]
+
 
 @intrinsic
 class Cuda_threadfence_block(ConcreteTemplate):
     key = cuda.threadfence_block
     cases = [signature(types.none)]
 
+
 @intrinsic
 class Cuda_threadfence_system(ConcreteTemplate):
     key = cuda.threadfence_system
     cases = [signature(types.none)]
+
+
+@intrinsic
+class Cuda_syncwarp(ConcreteTemplate):
+    key = cuda.syncwarp
+    cases = [signature(types.none, types.i4)]
+
+
+@intrinsic
+class Cuda_shfl_sync_intrinsic(ConcreteTemplate):
+    key = cuda.shfl_sync_intrinsic
+    cases = [
+        signature(types.Tuple((types.i4, types.b1)), types.i4, types.i4, types.i4, types.i4, types.i4),
+        signature(types.Tuple((types.i8, types.b1)), types.i4, types.i4, types.i8, types.i4, types.i4),
+        signature(types.Tuple((types.f4, types.b1)), types.i4, types.i4, types.f4, types.i4, types.i4),
+        signature(types.Tuple((types.f8, types.b1)), types.i4, types.i4, types.f8, types.i4, types.i4),
+    ]
+
+
+@intrinsic
+class Cuda_vote_sync_intrinsic(ConcreteTemplate):
+    key = cuda.vote_sync_intrinsic
+    cases = [signature(types.Tuple((types.i4, types.b1)), types.i4, types.i4, types.b1)]
+
+
+@intrinsic
+class Cuda_match_any_sync(ConcreteTemplate):
+    key = cuda.match_any_sync
+    cases = [
+        signature(types.i4, types.i4, types.i4),
+        signature(types.i4, types.i4, types.i8),
+        signature(types.i4, types.i4, types.f4),
+        signature(types.i4, types.i4, types.f8),
+    ]
+
+
+@intrinsic
+class Cuda_match_all_sync(ConcreteTemplate):
+    key = cuda.match_all_sync
+    cases = [
+        signature(types.Tuple((types.i4, types.b1)), types.i4, types.i4),
+        signature(types.Tuple((types.i4, types.b1)), types.i4, types.i8),
+        signature(types.Tuple((types.i4, types.b1)), types.i4, types.f4),
+        signature(types.Tuple((types.i4, types.b1)), types.i4, types.f8),
+    ]
 
 
 @intrinsic
@@ -368,6 +441,12 @@ class CudaModuleTemplate(AttributeTemplate):
     def resolve_gridDim(self, mod):
         return types.Module(cuda.gridDim)
 
+    def resolve_warpsize(self, mod):
+        return types.Macro(Cuda_warpsize)
+
+    def resolve_laneid(self, mod):
+        return types.Macro(Cuda_laneid)
+
     def resolve_shared(self, mod):
         return types.Module(cuda.shared)
 
@@ -386,6 +465,15 @@ class CudaModuleTemplate(AttributeTemplate):
     def resolve_syncthreads(self, mod):
         return types.Function(Cuda_syncthreads)
 
+    def resolve_syncthreads_count(self, mod):
+        return types.Function(Cuda_syncthreads_count)
+
+    def resolve_syncthreads_and(self, mod):
+        return types.Function(Cuda_syncthreads_and)
+
+    def resolve_syncthreads_or(self, mod):
+        return types.Function(Cuda_syncthreads_or)
+
     def resolve_threadfence(self, mod):
         return types.Function(Cuda_threadfence_device)
 
@@ -394,6 +482,21 @@ class CudaModuleTemplate(AttributeTemplate):
 
     def resolve_threadfence_system(self, mod):
         return types.Function(Cuda_threadfence_system)
+
+    def resolve_syncwarp(self, mod):
+        return types.Function(Cuda_syncwarp)
+
+    def resolve_shfl_sync_intrinsic(self, mod):
+        return types.Function(Cuda_shfl_sync_intrinsic)
+
+    def resolve_vote_sync_intrinsic(self, mod):
+        return types.Function(Cuda_vote_sync_intrinsic)
+
+    def resolve_match_any_sync(self, mod):
+        return types.Function(Cuda_match_any_sync)
+
+    def resolve_match_all_sync(self, mod):
+        return types.Function(Cuda_match_all_sync)
 
     def resolve_selp(self, mod):
         return types.Function(Cuda_selp)

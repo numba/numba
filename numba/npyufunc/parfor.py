@@ -263,12 +263,28 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, typemap):
             print("Instruction", inst, " could not be hoisted because it isn't pure.")
     return False
 
+def find_setitems_block(setitems, block):
+    for inst in block.body:
+        if isinstance(inst, ir.StaticSetItem) or isinstance(inst, ir.SetItem):
+            setitems.add(inst.target.name)
+        elif isinstance(inst, parfor.Parfor):
+            find_setitems_block(setitems, inst.init_block)
+            find_setitems_body(setitems, inst.loop_body)
+
+def find_setitems_body(setitems, loop_body):
+    for label, block in loop_body.items():
+        find_setitems_block(setitems, block)
+
 def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     dep_on_param = copy.copy(parfor_params)
     hoisted = []
 
     def_once = compute_def_once(loop_body)
     (call_table, reverse_call_table) = get_call_table(wrapped_blocks)
+
+    setitems = set()
+    find_setitems_body(setitems, loop_body)
+    dep_on_param = list(set(dep_on_param).difference(setitems))
 
     for label, block in loop_body.items():
         new_block = []

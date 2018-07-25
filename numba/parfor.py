@@ -284,7 +284,8 @@ def var_parallel_impl(return_type, arg):
             numba.parfor.init_prange()
             ssd = 0
             for i in numba.parfor.internal_prange(len(in_arr)):
-                ssd += (in_arr[i] - m) ** 2
+                val = in_arr[i] - m
+                ssd += np.real(val * np.conj(val))
             return ssd / len(in_arr)
     else:
         def var_1(in_arr):
@@ -294,7 +295,8 @@ def var_parallel_impl(return_type, arg):
             numba.parfor.init_prange()
             ssd = 0
             for i in numba.pndindex(in_arr.shape):
-                ssd += (in_arr[i] - m) ** 2
+                val = in_arr[i] - m
+                ssd += np.real(val * np.conj(val))
             return ssd / in_arr.size
     return var_1
 

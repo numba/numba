@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from .. import types, utils
+from .. import types, utils, errors
 from .templates import (AttributeTemplate, ConcreteTemplate, AbstractTemplate,
                         infer_global, infer, infer_getattr,
                         signature, bound_function, make_callable_template)
@@ -62,7 +62,11 @@ class SetItemSequence(AbstractTemplate):
             if isinstance(idx, types.SliceType):
                 return signature(types.none, seq, idx, seq)
             elif isinstance(idx, types.Integer):
+                if not self.context.can_convert(value, seq.dtype):
+                    msg = "invalid setitem with value of {} to element of {}"
+                    raise errors.TypingError(msg.format(value, seq.dtype))
                 return signature(types.none, seq, idx, seq.dtype)
+
 
 @infer
 class DelItemSequence(AbstractTemplate):

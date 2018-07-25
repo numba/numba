@@ -8,6 +8,7 @@ from .cudadrv.devices import require_context, reset, gpus
 from .kernel import FakeCUDAKernel
 from numba.typing import Signature
 from warnings import warn
+from ..args import In, Out, InOut
 
 
 def select_device(dev=0):

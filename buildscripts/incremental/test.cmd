@@ -12,6 +12,8 @@ popd
 set NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING=1
 @rem switch on developer mode
 set NUMBA_DEVELOPER_MODE=1
+@rem enable the faulthandler
+set PYTHONFAULTHANDLER=1
 
 @rem First check that the test discovery works
 python -m numba.tests.test_runtests
@@ -21,8 +23,10 @@ python -m numba.tests.test_runtests
 if "%RUN_COVERAGE%" == "yes" (
     set PYTHONPATH=.
     coverage erase
-    coverage run runtests.py -b -m numba.tests
+    coverage run runtests.py -b -m -- numba.tests
 ) else (
     set NUMBA_ENABLE_CUDASIM=1
-    python -m numba.runtests -b -m numba.tests
+    python -m numba.runtests -b -m -- numba.tests
 )
+
+if %errorlevel% neq 0 exit /b %errorlevel%
