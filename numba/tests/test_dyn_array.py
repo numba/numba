@@ -1035,6 +1035,33 @@ class TestNpyEmptyKeyword(TestCase):
         with self.assertRaises(TypingError):
             cfunc()
 
+class TestNpyEmptyConstStrDtype(TestCase):
+    def test_with_const_int(self):
+        def pyfunc():
+            return np.empty(1, dtype='int32')
+
+        cfunc = nrtjit(pyfunc)
+        expected = pyfunc()
+        got = cfunc()
+        self.assertEqual(expected.dtype, got.dtype)
+
+    def test_with_const_float(self):
+        def pyfunc():
+            return np.empty(1, dtype='float32')
+
+        cfunc = nrtjit(pyfunc)
+        expected = pyfunc()
+        got = cfunc()
+        self.assertEqual(expected.dtype, got.dtype)
+
+    def test_with_const_datetime64(self):
+        def pyfunc():
+            return np.empty(1, dtype='datetime64[ns]')
+
+        cfunc = nrtjit(pyfunc)
+        expected = pyfunc()
+        got = cfunc()
+        self.assertEqual(expected.dtype, got.dtype)
 
 class TestNpArray(MemoryLeakMixin, BaseTest):
 

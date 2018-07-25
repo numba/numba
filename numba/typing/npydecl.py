@@ -426,6 +426,9 @@ def _parse_shape(shape):
 def _parse_dtype(dtype):
     if isinstance(dtype, types.DTypeSpec):
         return dtype.dtype
+    if isinstance(dtype, types.misc.Const):
+        if isinstance(dtype.value, str):
+            return from_dtype(np.dtype(dtype.value))
 
 def _parse_nested_sequence(context, typ):
     """
