@@ -974,12 +974,12 @@ class ParforDiagnostics(object):
                         for k in nadj_[nroot]:
                             if nadj_[k] == []:
                                 msg = []
+                                msg.append(fac * (depth + 1) * ' ' + '%s%s %s' % (sword, k, '(parallel)'))
                                 if fadj_[k] != [] and k not in reported:
                                     fused = self.reachable_nodes(fadj_, k)
-                                    reported.append(k)
-                                    msg.append(fac * (depth + 1) * ' ' + '%s%s %s' % (sword, k, '(parallel)'))
                                     for i in fused:
                                         msg.append(fac * (depth + 1) * ' ' + '%s%s %s' % (sword, i, '(parallel)'))
+                                reported.append(k)
                                 print_wrapped('\n'.join(msg))
                             else:
                                 print_g(fadj_, nadj_, k, depth + 1)
@@ -1033,10 +1033,10 @@ class ParforDiagnostics(object):
                                 fused = []
                                 if fadj_[k] != [] and k not in reported:
                                     fused = sorted(self.reachable_nodes(fadj_, k))
-                                    reported.append(k)
                                     msg += ", fused with loop(s): "
                                     msg += ', '.join([str(x) for x in fused])
                                 msg += ')'
+                                reported.append(k)
                                 print_wrapped(msg)
                                 summary[region_id]['fused'] += len(fused)
                             else:
