@@ -238,6 +238,22 @@ class TestCudaAtomics(SerialMixin, unittest.TestCase):
 
         self.assertTrue(np.all(ary == orig + 1))
 
+    def assertCorrectFloat64Atomics(self, kernel, shared=True):
+        if config.ENABLE_CUDASIM:
+            return
+
+        asm = kernel.inspect_asm()
+        if cc_X_or_above(6, 0):
+            if shared:
+                self.assertIn('atom.shared.add.f64', asm)
+            else:
+                self.assertIn('atom.add.f64', asm)
+        else:
+            if shared:
+                self.assertIn('atom.shared.cas.f64', asm)
+            else:
+                self.assertIn('atom.cas.f64', asm)
+
     @skip_unless_cc_50
     def test_atomic_add_double(self):
         idx = np.random.randint(0, 32, size=32)
@@ -250,6 +266,7 @@ class TestCudaAtomics(SerialMixin, unittest.TestCase):
             gold[idx[i]] += 1.0
 
         np.testing.assert_equal(ary, gold)
+        self.assertCorrectFloat64Atomics(cuda_func)
 
     def test_atomic_add_double_2(self):
         ary = np.random.randint(0, 32, size=32).astype(np.float64).reshape(4, 8)
@@ -257,6 +274,7 @@ class TestCudaAtomics(SerialMixin, unittest.TestCase):
         cuda_func = cuda.jit('void(float64[:,:])')(atomic_add_double_2)
         cuda_func[1, (4, 8)](ary)
         np.testing.assert_equal(ary, orig + 1)
+        self.assertCorrectFloat64Atomics(cuda_func)
 
     def test_atomic_add_double_3(self):
         ary = np.random.randint(0, 32, size=32).astype(np.float64).reshape(4, 8)
@@ -265,6 +283,7 @@ class TestCudaAtomics(SerialMixin, unittest.TestCase):
         cuda_func[1, (4, 8)](ary)
 
         np.testing.assert_equal(ary, orig + 1)
+        self.assertCorrectFloat64Atomics(cuda_func)
 
     @skip_unless_cc_50
     def test_atomic_add_double_global(self):
@@ -278,6 +297,7 @@ class TestCudaAtomics(SerialMixin, unittest.TestCase):
             gold[idx[i]] += 1.0
 
         np.testing.assert_equal(ary, gold)
+        self.assertCorrectFloat64Atomics(cuda_func, shared=False)
 
     def test_atomic_add_double_global_2(self):
         ary = np.random.randint(0, 32, size=32).astype(np.float64).reshape(4, 8)
@@ -285,6 +305,7 @@ class TestCudaAtomics(SerialMixin, unittest.TestCase):
         cuda_func = cuda.jit('void(float64[:,:])')(atomic_add_double_global_2)
         cuda_func[1, (4, 8)](ary)
         np.testing.assert_equal(ary, orig + 1)
+        self.assertCorrectFloat64Atomics(cuda_func, shared=False)
 
     def test_atomic_add_double_global_3(self):
         ary = np.random.randint(0, 32, size=32).astype(np.float64).reshape(4, 8)
@@ -293,6 +314,7 @@ class TestCudaAtomics(SerialMixin, unittest.TestCase):
         cuda_func[1, (4, 8)](ary)
 
         np.testing.assert_equal(ary, orig + 1)
+        self.assertCorrectFloat64Atomics(cuda_func, shared=False)
 
     def check_atomic_max(self, dtype, lo, hi):
         vals = np.random.randint(lo, hi, size=(32, 32)).astype(dtype)
