@@ -161,18 +161,19 @@ def get_sys_info():
             # ROC might not be available due to lack of tool chain, but HSA
             # agents may be listed
             from numba.roc.hsadrv.driver import hsa, dgpu_count
+            decode = lambda x: x.decode('utf-8') if isinstance(x, bytes) else x
             print("\nFound %s HSA Agents:" % len(hsa.agents))
             for i, agent in enumerate(hsa.agents):
                 print('Agent id  : %s' % i)
-                print('    vendor: %s' % agent.vendor_name)
-                print('      name: %s' % agent.name)
+                print('    vendor: %s' % decode(agent.vendor_name))
+                print('      name: %s' % decode(agent.name))
                 print('      type: %s' % agent.device)
                 print("")
 
             _dgpus = []
             for a in hsa.agents:
                 if a.is_component and a.device == 'GPU':
-                   _dgpus.append(a.name)
+                   _dgpus.append(decode(a.name))
             print(fmt % ("Found %s discrete GPU(s)" % dgpu_count(), \
                   ', '.join(_dgpus)))
         except Exception as e:
