@@ -8,7 +8,6 @@ from .api import *
 from .stubs import atomic
 from . import initialize
 
-
 def is_available():
     """Returns a boolean to indicate the availability of a HSA runtime.
 
@@ -32,6 +31,11 @@ def is_available():
 
     return hsa.is_available and has_a_toolchain
 
+if is_available():
+    from .hsadrv.driver import hsa
+    agents = list(hsa.agents)
+else:
+    agents = []
 
 def test(*args, **kwargs):
     if not is_available():
