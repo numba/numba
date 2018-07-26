@@ -1370,6 +1370,14 @@ def boolean_to_any(context, builder, fromty, toty, val):
     asint = builder.zext(val, Type.int())
     return context.cast(builder, asint, types.int32, toty)
 
+#-------------------------------------------------------------------------------
+# Implicit cast from void pointer to numbers
+
+@lower_cast(types.voidptr, types.Integer)
+def voidptr_to_int(context, builder, fromty, toty, val):
+    llty = context.get_value_type(toty)
+    return builder.ptrtoint(val, llty)
+
 
 #-------------------------------------------------------------------------------
 # Constants
