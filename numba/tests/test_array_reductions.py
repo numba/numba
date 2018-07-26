@@ -475,77 +475,39 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                 cfunc(b, val)
                 self.assertPreciseEqual(a, b)
 
-    def test_fill_diagonal_basic_wrap_true(self):
+    def test_fill_diagonal_basic_wrap(self):
         pyfunc = fill_diagonal_global
         cfunc = jit(nopython=True)(pyfunc)
 
-        for arr in self._multi_dimensional_array_variations(3):
-            a = arr.copy()
-            b = arr.copy()
-            for val in self._val_variations():
-                pyfunc(a, val, True)
-                cfunc(b, val, True)
+        # cases where wrap is explicitly provided
+        def _check(arr, val):
+            for wrap in True, False:
+                a = arr.copy()
+                b = arr.copy()
+                pyfunc(a, val, wrap=wrap)
+                cfunc(b, val, wrap=wrap)
                 self.assertPreciseEqual(a, b)
 
-    # def test_fill_diagonal_basic_wrap_false(self):
-    #     pyfunc = fill_diagonal_global
-    #     cfunc = jit(nopython=True)(pyfunc)
-    #
-    #     for arr in self._multi_dimensional_array_variations(3):
-    #         a = arr.copy()
-    #         b = arr.copy()
-    #         for val in self._val_variations():
-    #             pyfunc(a, val, False)
-    #             cfunc(b, val, False)
-    #             self.assertPreciseEqual(a, b)
+        # some safe type coercions
+        arr = np.ones((3, 3), dtype=np.int32)
+        _check(arr, 6)
+        _check(arr, False)
+        _check(arr, 6.1)
 
-    def test_fill_diagonal_basic_wrap_false_0(self):
-        pyfunc = fill_diagonal_global
-        cfunc = jit(nopython=True)(pyfunc)
+        # ditto
+        arr = np.full((11, 3), fill_value=3.142, dtype=np.float32)
+        _check(arr, 1.1)
+        _check(arr, True)
+        _check(arr, 6)
 
-        arr = np.zeros((3, 3), dtype=np.float64)
-        a = arr.copy()
-        b = arr.copy()
-        for val in self._val_variations():
-            pyfunc(a, val, False)
-            cfunc(b, val, False)
-            self.assertPreciseEqual(a, b)
+        # a basic multi-dimensional case
+        arr = np.zeros((5, 5, 5))
+        _check(arr, 9)
 
-    def test_fill_diagonal_basic_wrap_false_1(self):
-        pyfunc = fill_diagonal_global
-        cfunc = jit(nopython=True)(pyfunc)
-
-        arr = np.zeros((6, 3), dtype=np.float64)
-        a = arr.copy()
-        b = arr.copy()
-        for val in self._val_variations():
-            pyfunc(a, val, False)
-            cfunc(b, val, False)
-            self.assertPreciseEqual(a, b)
-
-    def test_fill_diagonal_basic_wrap_false_2(self):
-        pyfunc = fill_diagonal_global
-        cfunc = jit(nopython=True)(pyfunc)
-
-        arr = np.zeros((7, 5), dtype=np.float64)
-        a = arr.copy()
-        b = arr.copy()
-        for val in self._val_variations():
-            pyfunc(a, val, False)
-            cfunc(b, val, False)
-            self.assertPreciseEqual(a, b)
-
-    def test_fill_diagonal_basic_wrap_false_3(self):
-        pyfunc = fill_diagonal_global
-        cfunc = jit(nopython=True)(pyfunc)
-
-        arr = np.zeros((3, 3, 3, 3), dtype=np.float64)
-        a = arr.copy()
-        b = arr.copy()
-        for val in self._val_variations():
-            pyfunc(a, val, False)
-            cfunc(b, val, False)
-            self.assertPreciseEqual(a, b)
+        # a permitted, but unusual, multi-dimensional case
+        arr = np.zeros((1, 1, 1, 1))
+        _check(arr, True)
+        _check(arr, 5)
 
     def test_fill_diagonal_exception_cases(self):
         pyfunc = fill_diagonal_global
@@ -571,7 +533,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         arr = np.zeros((3, 3), dtype=np.int32)
-        val = np.nan
+        val = np.nan  # or pick a huge int; same outcome
 
         with self.assertRaises(ValueError):
             cfunc(arr, val)
@@ -588,6 +550,43 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         #     return retty(val)
         #
         # _coerce_val(np.array([], dtype=np.int32), np.nan) -> -2147483648
+
+    @unittest.skip('TODO: not sure how to bool(wrap) before types analysed')
+    def test_fill_diagonal_non_bool_wrap(self):
+        pyfunc = fill_diagonal_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def _check(arr, val, wrap):
+            a = arr.copy()
+            b = arr.copy()
+            pyfunc(a, val, wrap)
+            cfunc(b, val, wrap)
+            self.assertPreciseEqual(a, b)
+
+        arr = np.ones((4, 4))
+
+        _check(arr, 5, wrap='badger')
+
+    #@unittest.skip('TODO: not sure yet')
+    def test_fill_diagonal_non_scalar_val(self):
+        pyfunc = fill_diagonal_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def _check(arr, val, wrap):
+            a = arr.copy()
+            b = arr.copy()
+            pyfunc(a, val, wrap)
+            cfunc(b, val, wrap)
+            self.assertPreciseEqual(a, b)
+
+        arr = np.ones((4, 4))
+        val = np.arange(1, 5)
+
+        _check(arr, val, wrap='badger')
+
+
+
+
 
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)
