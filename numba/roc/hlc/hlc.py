@@ -139,7 +139,8 @@ class CmdLine(object):
         try:
             if not os.path.isfile(self.llc):
                 raise HsaSupportError('llc not found')
-            output = check_output([self.llc, '--version'])
+            output = check_output([self.llc, '--version'],
+                                  universal_newlines=True)
             olines = [x.strip() for x in output.splitlines()]
             tgtidx = olines.index('Registered Targets:')
             targets = olines[tgtidx + 1:]
