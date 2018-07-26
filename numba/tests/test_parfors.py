@@ -1178,7 +1178,7 @@ class TestParfors(TestParforsBase):
     def test_preparfor_canonicalize_kws(self):
         # test canonicalize_array_math typing for calls with kw args
         def test_impl(A):
-            return A.argsort()
+            return A.argsort() + 1
 
         n = 211
         A = np.arange(n)
