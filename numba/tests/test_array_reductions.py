@@ -551,22 +551,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         #
         # _coerce_val(np.array([], dtype=np.int32), np.nan) -> -2147483648
 
-    @unittest.skip('TODO: not sure how to bool(wrap) before types analysed')
-    def test_fill_diagonal_non_bool_wrap(self):
-        pyfunc = fill_diagonal_global
-        cfunc = jit(nopython=True)(pyfunc)
-
-        def _check(arr, val, wrap):
-            a = arr.copy()
-            b = arr.copy()
-            pyfunc(a, val, wrap)
-            cfunc(b, val, wrap)
-            self.assertPreciseEqual(a, b)
-
-        arr = np.ones((4, 4))
-
-        _check(arr, 5, wrap='badger')
-
     def test_fill_diagonal_non_scalar_val(self):
         pyfunc = fill_diagonal_global
         cfunc = jit(nopython=True)(pyfunc)
@@ -627,6 +611,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         arr = np.ones((5, 5, 5))
         val = (True, False, True)
+        _check(arr, val)
+
+        arr = np.ones((5, 5, 5, 5, 5))
+        val = np.arange(100)
         _check(arr, val)
 
     def test_array_sum_global(self):

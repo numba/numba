@@ -942,19 +942,6 @@ def _fill_diagonal(a, val, wrap):
         ctr += 1
         ctr = ctr % v_len
 
-# @register_jitable
-# def _fill_diagonal(a, val):
-#     shape = np.array(a.shape)
-#
-#     if not np.all(np.diff(shape) == 0):
-#         raise ValueError("All dimensions of input must be of equal length")
-#
-#     step = 1 + (np.cumprod(shape[:-1])).sum()
-#     end = shape.prod()
-#
-#     for i in range(0, end, step):
-#         a.flat[i] = val
-
 @overload(np.fill_diagonal)
 def np_fill_diagonal(a, val, wrap=False):
 
@@ -982,8 +969,6 @@ def np_fill_diagonal(a, val, wrap=False):
         return fill_diagonal_impl_seq_val
     elif isinstance(val, types.Array):
         return fill_diagonal_impl_array_val
-    else:
-        raise ValueError('Boom')
 
 def _np_round_intrinsic(tp):
     # np.round() always rounds half to even
