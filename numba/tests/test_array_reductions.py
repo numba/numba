@@ -567,24 +567,65 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         _check(arr, 5, wrap='badger')
 
-    #@unittest.skip('TODO: not sure yet')
     def test_fill_diagonal_non_scalar_val(self):
         pyfunc = fill_diagonal_global
         cfunc = jit(nopython=True)(pyfunc)
 
-        def _check(arr, val, wrap):
-            a = arr.copy()
-            b = arr.copy()
-            pyfunc(a, val, wrap)
-            cfunc(b, val, wrap)
-            self.assertPreciseEqual(a, b)
+        def _check(arr, val):
+            for wrap in True, False:
+                a = arr.copy()
+                b = arr.copy()
+                pyfunc(a, val, wrap)
+                cfunc(b, val, wrap)
+                self.assertPreciseEqual(a, b)
 
+        # basic case - shape of val 'fits' diagonal
         arr = np.ones((4, 4))
         val = np.arange(1, 5)
+        _check(arr, val)
 
-        _check(arr, val, wrap='badger')
+        # val is shorter than diagonal
+        arr = np.ones((7, 4))
+        val = np.arange(1, 3)
+        _check(arr, val)
 
+        # val is longer than diagonal
+        arr = np.ones((4, 3))
+        val = np.arange(100)
+        _check(arr, val)
 
+        # weird cases where val is multi-dimensional
+        arr = np.ones((5, 5))
+        val = np.arange(1, 10).reshape(3, 3)
+        _check(arr, val)
+
+        arr = np.ones((3, 5))
+        val = np.arange(16).reshape(2, 8)
+        _check(arr, val)
+
+        arr = np.ones((4, 4))
+        val = np.arange(16).reshape(2, 4, 2)
+        _check(arr, val)
+
+        # val expressed in tuples
+        arr = np.ones((10, 5))
+        val = (1, 2, 3)
+        _check(arr, val)
+
+        arr = np.ones((10, 5))
+        val = ((1, 2), (3, 4))
+        _check(arr, val)
+
+        arr = np.ones((3, 5))
+        val = (8,)
+        _check(arr, val)
+
+        # Fails - need to replicate the magic
+
+        #arr = np.ones((4, 4, 4))
+        #val = np.arange(27).reshape(3, 3, 3)
+        #val = 8
+        #_check(arr, val)
 
 
 

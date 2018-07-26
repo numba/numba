@@ -924,8 +924,14 @@ def _fill_diagonal_2d(a, val, wrap):
     else:
         end = n * n
 
+    ctr = 0
+
+    v_len = len(val)
+
     for i in range(0, end, step):
-        a.flat[i] = val
+        a.flat[i] = val[ctr]
+        ctr += 1
+        ctr = ctr % v_len
 
 @register_jitable
 def _fill_diagonal(a, val):
@@ -946,7 +952,16 @@ def np_fill_diagonal(a, val, wrap=False):
     def _abort_mission(a, val, wrap=False):
         raise ValueError("array must be at least 2-d")
 
-    def fill_diagonal_impl_2d(a, val, wrap=False):
+    def fill_diagonal_impl_2d_scalar_val(a, val, wrap=False):
+        val = np.array([val])
+        _fill_diagonal_2d(a, val, wrap)
+
+    def fill_diagonal_impl_2d_seq_val(a, val, wrap=False):
+        val = np.array(val).flatten()
+        _fill_diagonal_2d(a, val, wrap)
+
+    def fill_diagonal_impl_2d_array_val(a, val, wrap=False):
+        val = val.flatten()
         _fill_diagonal_2d(a, val, wrap)
 
     def fill_diagonal_impl(a, val, wrap=False):
@@ -955,7 +970,12 @@ def np_fill_diagonal(a, val, wrap=False):
     if a.ndim < 2:
         fn = _abort_mission
     elif a.ndim == 2:
-        fn = fill_diagonal_impl_2d
+        if isinstance(val, (types.Float, types.Integer, types.Boolean)):
+            fn = fill_diagonal_impl_2d_scalar_val
+        elif isinstance(val, (types.Tuple, types.Sequence)):
+            fn = fill_diagonal_impl_2d_seq_val
+        elif isinstance(val, types.Array):
+            fn = fill_diagonal_impl_2d_array_val
     else:
         fn = fill_diagonal_impl
 
