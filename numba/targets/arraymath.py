@@ -915,17 +915,26 @@ if numpy_version >= (1, 9):
 # Element-wise computations
 
 @register_jitable
-def _fill_diagonal_2d(a, val, wrap):
-    n = a.shape[1]
-    step = n + 1
+def _fill_diagonal(a, val, wrap):
 
-    if wrap:
-        end = n * a.shape[0]
+    if a.ndim == 2:
+        n = a.shape[1]
+        step = n + 1
+
+        if wrap:
+            end = n * a.shape[0]
+        else:
+            end = n * n
     else:
-        end = n * n
+        shape = np.array(a.shape)
+
+        if not np.all(np.diff(shape) == 0):
+            raise ValueError("All dimensions of input must be of equal length")
+
+        step = 1 + (np.cumprod(shape[:-1])).sum()
+        end = shape.prod()
 
     ctr = 0
-
     v_len = len(val)
 
     for i in range(0, end, step):
@@ -933,18 +942,18 @@ def _fill_diagonal_2d(a, val, wrap):
         ctr += 1
         ctr = ctr % v_len
 
-@register_jitable
-def _fill_diagonal(a, val):
-    shape = np.array(a.shape)
-
-    if not np.all(np.diff(shape) == 0):
-        raise ValueError("All dimensions of input must be of equal length")
-
-    step = 1 + (np.cumprod(shape[:-1])).sum()
-    end = shape.prod()
-
-    for i in range(0, end, step):
-        a.flat[i] = val
+# @register_jitable
+# def _fill_diagonal(a, val):
+#     shape = np.array(a.shape)
+#
+#     if not np.all(np.diff(shape) == 0):
+#         raise ValueError("All dimensions of input must be of equal length")
+#
+#     step = 1 + (np.cumprod(shape[:-1])).sum()
+#     end = shape.prod()
+#
+#     for i in range(0, end, step):
+#         a.flat[i] = val
 
 @overload(np.fill_diagonal)
 def np_fill_diagonal(a, val, wrap=False):
@@ -952,34 +961,29 @@ def np_fill_diagonal(a, val, wrap=False):
     def _abort_mission(a, val, wrap=False):
         raise ValueError("array must be at least 2-d")
 
-    def fill_diagonal_impl_2d_scalar_val(a, val, wrap=False):
+    def fill_diagonal_impl_scalar_val(a, val, wrap=False):
         val = np.array([val])
-        _fill_diagonal_2d(a, val, wrap)
+        _fill_diagonal(a, val, wrap)
 
-    def fill_diagonal_impl_2d_seq_val(a, val, wrap=False):
+    def fill_diagonal_impl_seq_val(a, val, wrap=False):
         val = np.array(val).flatten()
-        _fill_diagonal_2d(a, val, wrap)
+        _fill_diagonal(a, val, wrap)
 
-    def fill_diagonal_impl_2d_array_val(a, val, wrap=False):
+    def fill_diagonal_impl_array_val(a, val, wrap=False):
         val = val.flatten()
-        _fill_diagonal_2d(a, val, wrap)
-
-    def fill_diagonal_impl(a, val, wrap=False):
-        _fill_diagonal(a, val)
+        _fill_diagonal(a, val, wrap)
 
     if a.ndim < 2:
-        fn = _abort_mission
-    elif a.ndim == 2:
-        if isinstance(val, (types.Float, types.Integer, types.Boolean)):
-            fn = fill_diagonal_impl_2d_scalar_val
-        elif isinstance(val, (types.Tuple, types.Sequence)):
-            fn = fill_diagonal_impl_2d_seq_val
-        elif isinstance(val, types.Array):
-            fn = fill_diagonal_impl_2d_array_val
-    else:
-        fn = fill_diagonal_impl
+        return _abort_mission
 
-    return fn
+    if isinstance(val, (types.Float, types.Integer, types.Boolean)):
+        return fill_diagonal_impl_scalar_val
+    elif isinstance(val, (types.Tuple, types.Sequence)):
+        return fill_diagonal_impl_seq_val
+    elif isinstance(val, types.Array):
+        return fill_diagonal_impl_array_val
+    else:
+        raise ValueError('Boom')
 
 def _np_round_intrinsic(tp):
     # np.round() always rounds half to even

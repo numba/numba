@@ -620,14 +620,14 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         val = (8,)
         _check(arr, val)
 
-        # Fails - need to replicate the magic
+        # a smattering of multi-dimensional test cases
+        arr = np.ones((4, 4, 4))
+        val = np.arange(27).reshape(3, 3, 3)
+        _check(arr, val)
 
-        #arr = np.ones((4, 4, 4))
-        #val = np.arange(27).reshape(3, 3, 3)
-        #val = 8
-        #_check(arr, val)
-
-
+        arr = np.ones((5, 5, 5))
+        val = (True, False, True)
+        _check(arr, val)
 
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)
