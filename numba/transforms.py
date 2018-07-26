@@ -311,10 +311,16 @@ def _get_with_contextmanager(func_ir, blocks, blk_start):
             var_ref = stmt.contextmanager
             dfn = func_ir.get_definition(var_ref)
             if not isinstance(dfn, ir.Global):
-                raise errors.CompilerError("Illegal use of context-manager. ")
+                raise errors.CompilerError(
+                    "Illegal use of context-manager. ",
+                    loc=stmt.loc,
+                    )
             return dfn.value
     # No
-    raise errors.CompilerError("malformed with-context usage")
+    raise errors.CompilerError(
+        "malformed with-context usage",
+        loc=blocks[blk_start],
+        )
 
 
 def _legalize_with_head(blk):
@@ -327,11 +333,13 @@ def _legalize_with_head(blk):
 
     if counters.pop(ir.EnterWith) != 1:
         raise errors.CompilerError(
-            "with's head-block must have exactly 1 ENTER_WITH"
+            "with's head-block must have exactly 1 ENTER_WITH",
+            loc=blk.loc,
             )
     if counters.pop(ir.Jump) != 1:
         raise errors.CompilerError(
-            "with's head-block must have exactly 1 JUMP"
+            "with's head-block must have exactly 1 JUMP",
+            loc=blk.loc,
             )
     # Can have any number of del
     counters.pop(ir.Del, None)
