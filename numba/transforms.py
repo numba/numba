@@ -282,7 +282,7 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
     blocks = func_ir.blocks.copy()
     withs = find_setupwiths(blocks)
     cfg = vlt.cfg
-    _legalize_withs_cfg(withs, cfg)
+    _legalize_withs_cfg(withs, cfg, blocks)
     # Remove the with blocks that are in the with-body
     sub_irs = []
     for (blk_start, blk_end) in withs:
@@ -338,7 +338,8 @@ def _legalize_with_head(blk):
     # There MUST NOT be any other statements
     if counters:
         raise errors.CompilerError(
-            "illegal statements in with's head-block"
+            "illegal statements in with's head-block",
+            loc=blk.loc,
             )
 
 
@@ -359,7 +360,7 @@ def _cfg_nodes_in_region(cfg, region_begin, region_end):
     return region_nodes
 
 
-def _legalize_withs_cfg(withs, cfg):
+def _legalize_withs_cfg(withs, cfg, blocks):
     """Verify the CFG of the with-context(s).
     """
     doms = cfg.dominators()
@@ -367,12 +368,13 @@ def _legalize_withs_cfg(withs, cfg):
 
     # Verify that the with-context has no side-exits
     for s, e in withs:
+        loc = blocks[s]
         if s not in doms[e]:
             msg = "Entry of with-context not dominating the exit."
-            raise errors.CompilerError(msg)
+            raise errors.CompilerError(msg, loc=loc)
         if e not in postdoms[s]:
             msg = "Exit of with-context not post-dominating the entry."
-            raise errors.CompilerError(msg)
+            raise errors.CompilerError(msg, loc=loc)
 
 
 def find_setupwiths(blocks):
