@@ -19,6 +19,7 @@ matrix:
         - env: PYTHON=2.7 NUMPY=1.9 CONDA_ENV=travisci
         - env: PYTHON=2.7 NUMPY=1.14 CONDA_ENV=travisci
         - env: PYTHON=3.7 NUMPY=1.14 CONDA_ENV=travisci USE_C3I_TEST_CHANNEL=yes
+        - env: PYTHON=3.6 NUMPY=1.14 CONDA_ENV=travisci VANILLA_INSTALL=yes
 
 branches:
     only:
@@ -40,9 +41,10 @@ after_success:
 
 notifications:
     email: false
-    flowdock: "cb7bc57e58b3d42f77685f93211c03ab"
     on_success: "change"
     on_failure: "always" # "change"
+    slack:
+        secure: SGgsT4DevPiF/u4y3HBorUYCVWan7EjSnEBmuGPnGkepv8JxfOnbbeM3ca2TSWa601J4OP2K2JhehUGZSn6YkTx5XKOzqF2pddZQX8j0B4htDgV2qvcY/aIUFz8UW2uQAuguP6OlHPmAj5KgF5raJ34rkmTd8UgObL6jAan2Kzg=
     webhooks:
         urls:
             - https://webhooks.gitter.im/e/bd67cc227432d99bf1f1

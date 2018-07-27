@@ -435,7 +435,7 @@ class TestInlinedClosure(TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc = jit(nopython=True)(outer16)
             cfunc(var)
-        msg = "with parameters (none)"
+        msg = "with argument(s) of type(s): (none)"
         self.assertIn(msg, str(raises.exception))
 
         with self.assertRaises(LoweringError) as raises:
@@ -447,7 +447,7 @@ class TestInlinedClosure(TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc = jit(nopython=True)(outer18)
             cfunc(var)
-        msg = "Invalid usage of getiter with parameters (none)"
+        msg = "Invalid use of getiter with parameters (none)"
         self.assertIn(msg, str(raises.exception))
 
 

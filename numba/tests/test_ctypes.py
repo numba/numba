@@ -217,7 +217,7 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
         self.check_array_ctypes(use_c_vsquare)
 
     @tag('important')
-    def test_passing_array_ctypes_voidptr(self):
+    def test_passing_array_ctypes_voidptr_pass_ptr(self):
         """
         Test the ".ctypes" attribute of an array can be passed
         as a pointer parameter of the right type.
@@ -227,7 +227,7 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
         # Non-compatible pointers are not accepted (here float32* vs. float64*)
         with self.assertRaises(errors.TypingError) as raises:
             cfunc(np.float32([0.0]))
-        self.assertIn("Invalid usage of ExternalFunctionPointer",
+        self.assertIn("Invalid use of ExternalFunctionPointer",
                       str(raises.exception))
 
 

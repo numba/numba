@@ -25,9 +25,8 @@ def is_available():
        has_a_toolchain = True
     except:
         try:
-           cmd = hlc.CmdLine()
-           assert os.path.isfile(cmd.opt)
-           has_a_toolchain = True
+            cmd = hlc.CmdLine().check_tooling()
+            has_a_toolchain = True
         except:
             pass
 
