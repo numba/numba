@@ -9,6 +9,8 @@ import sys
 import threading
 import warnings
 import inspect
+import pickle
+import weakref
 
 try:
     import jinja2
@@ -31,6 +33,7 @@ from .support import (TestCase, tag, temp_directory, import_dynamic,
                       override_env_config, capture_cache_log, captured_stdout)
 from numba.targets import codegen
 from numba.caching import _UserWideCacheLocator
+from numba.dispatcher import Dispatcher
 
 import llvmlite.binding as ll
 
@@ -341,6 +344,50 @@ class TestDispatcher(BaseTest):
         # Make sure it was looplifted
         [cr] = bar.overloads.values()
         self.assertEqual(len(cr.lifted), 1)
+
+    def test_serialization(self):
+        """
+        Test serialization of Dispatcher objects
+        """
+        @jit(nopython=True)
+        def foo(x):
+            return x + 1
+
+        self.assertEqual(foo(1), 2)
+
+        # get serialization memo
+        memo = Dispatcher._memo
+        Dispatcher._recent.clear()
+        memo_size = len(memo)
+
+        # pickle foo and check memo size
+        serialized_foo = pickle.dumps(foo)
+        # increases the memo size
+        self.assertEqual(memo_size + 1, len(memo))
+
+        # unpickle
+        foo_rebuilt = pickle.loads(serialized_foo)
+        self.assertEqual(memo_size + 1, len(memo))
+
+        self.assertIs(foo, foo_rebuilt)
+
+        # do we get the same object even if we delete all the explict references?
+        id_orig = id(foo_rebuilt)
+        del foo
+        del foo_rebuilt
+        self.assertEqual(memo_size + 1, len(memo))
+        new_foo = pickle.loads(serialized_foo)
+        self.assertEqual(id_orig, id(new_foo))
+
+        # now clear the recent cache
+        ref = weakref.ref(new_foo)
+        del new_foo
+        Dispatcher._recent.clear()
+        self.assertEqual(memo_size, len(memo))
+
+        # show that deserializing creates a new object
+        newer_foo = pickle.loads(serialized_foo)
+        self.assertIs(ref(), None)
 
 
 class TestSignatureHandling(BaseTest):
