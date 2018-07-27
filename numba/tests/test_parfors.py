@@ -143,6 +143,8 @@ class TestParforsBase(TestCase):
         np.testing.assert_almost_equal(njit_output, py_expected, **kwargs)
         np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
 
+        self.assertEqual(type(njit_output), type(parfor_output))
+
         self.check_scheduling(cpfunc, scheduler_type)
 
         # if requested check fastmath variant
