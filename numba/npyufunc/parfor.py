@@ -23,6 +23,8 @@ from ..typing import signature
 from numba import config
 from numba.targets.cpu import ParallelOptions
 from numba.six import exec_
+import warnings
+from ..errors import ParallelSafetyWarning
 
 
 def _lower_parfor_parallel(lowerer, parfor):
@@ -350,6 +352,8 @@ def _create_gufunc_for_parfor_body(
     for the parfor body inserted.
     '''
 
+    loc = parfor.init_block.loc
+
     # The parfor body and the main function body share ir.Var nodes.
     # We have to do some replacements of Var names in the parfor body to make them
     # legal parameter names.  If we don't copy then the Vars in the main function also
@@ -375,6 +379,13 @@ def _create_gufunc_for_parfor_body(
             set(parfor_redvars)))
 
     races = races.difference(set(parfor_redvars))
+    for race in races:
+        warnings.warn_explicit("Variable %s used in parallel loop may be written "
+                      "to simulatenously by multiple workers and may result "
+                      "in non-deterministic or unintended results." % race,
+                      ParallelSafetyWarning,
+                      loc.filename,
+                      loc.line)
     replace_var_with_array(races, loop_body, typemap, lowerer.fndesc.calltypes)
 
     if config.DEBUG_ARRAY_OPT == 1:
