@@ -588,26 +588,26 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         val = np.arange(16).reshape(2, 4, 2)
         self._check_fill_diagonal(arr, val)
 
-        # temporarily evicting test cases involving tuples for time being
-
-        # # val expressed in tuples
-        # arr = np.ones((10, 5))
-        # val = (1, 2, 3)
-        # self._check_fill_diagonal(arr, val)
-        #
-        # arr = np.ones((10, 5))
-        # val = ((1, 2), (3, 4))
-        # self._check_fill_diagonal(arr, val)
-        #
-        # arr = np.ones((3, 5))
-        # val = (8,)
-        # self._check_fill_diagonal(arr, val)
-        #
-        # arr = np.ones((5, 5, 5))
-        # val = (True, False, True)
-        # self._check_fill_diagonal(arr, val)
-
     def test_fill_diagonal_oddballs_non_scalar_val_2(self):
+
+        # val expressed in tuples
+        arr = np.ones((10, 5))
+        val = (1, 2, 3)
+        self._check_fill_diagonal(arr, val)
+
+        arr = np.ones((10, 5))
+        val = ((1, 2), (3, 4))
+        self._check_fill_diagonal(arr, val)
+
+        arr = np.ones((3, 5))
+        val = (8,)
+        self._check_fill_diagonal(arr, val)
+
+        arr = np.ones((5, 5, 5))
+        val = (True, False, True)
+        self._check_fill_diagonal(arr, val)
+
+    def test_fill_diagonal_oddballs_non_scalar_val_3(self):
 
         # a smattering of multi-dimensional test cases
         arr = np.ones((4, 4, 4))
