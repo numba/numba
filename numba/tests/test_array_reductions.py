@@ -556,7 +556,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         #
         # _coerce_val(np.array([], dtype=np.int32), np.nan) -> -2147483648
 
-    def test_fill_diagonal_oddballs_non_scalar_val(self):
+    def test_fill_diagonal_oddballs_non_scalar_val_0(self):
 
         # basic case - shape of val 'fits' diagonal
         arr = np.ones((4, 4))
@@ -572,6 +572,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         arr = np.ones((4, 3))
         val = np.arange(100)
         self._check_fill_diagonal(arr, val)
+
+    def test_fill_diagonal_oddballs_non_scalar_val_1(self):
 
         # weird cases where val is multi-dimensional
         arr = np.ones((5, 5))
@@ -604,6 +606,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         # arr = np.ones((5, 5, 5))
         # val = (True, False, True)
         # self._check_fill_diagonal(arr, val)
+
+    def test_fill_diagonal_oddballs_non_scalar_val_2(self):
 
         # a smattering of multi-dimensional test cases
         arr = np.ones((4, 4, 4))
