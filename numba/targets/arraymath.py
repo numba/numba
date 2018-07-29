@@ -945,7 +945,7 @@ def _fill_diagonal(a, val, wrap):
 @overload(np.fill_diagonal)
 def np_fill_diagonal(a, val, wrap=False):
 
-    def _abort_mission(a, val, wrap=False):
+    def _abort_mission(*args):
         raise ValueError("array must be at least 2-d")
 
     def fill_diagonal_impl_scalar_val(a, val, wrap=False):
