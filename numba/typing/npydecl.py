@@ -479,9 +479,7 @@ class NpArray(CallableTemplate):
                 dtype = _parse_dtype(dtype)
                 if dtype is None:
                     return
-            cls = types.Array(dtype, ndim, 'C')
-            cls.support_literals = True
-            return cls
+            return types.Array(dtype, ndim, 'C')
 
         return typer
 
@@ -503,9 +501,7 @@ class NdConstructor(CallableTemplate):
 
             ndim = _parse_shape(shape)
             if nb_dtype is not None and ndim is not None:
-                cls = types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
-                cls.support_literals = True
-                return cls
+                return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
 
         return typer
 
@@ -532,13 +528,9 @@ class NdConstructorLike(CallableTemplate):
             if nb_dtype is not None:
                 if isinstance(arg, types.Array):
                     layout = arg.layout if arg.layout != 'A' else 'C'
-                    cls = arg.copy(dtype=nb_dtype, layout=layout, readonly=False)
-                    cls.support_literals = True
-                    return cls
+                    return arg.copy(dtype=nb_dtype, layout=layout, readonly=False)
                 else:
-                    cls = types.Array(nb_dtype, 0, 'C')
-                    cls.support_literals = True
-                    return cls
+                    return types.Array(nb_dtype, 0, 'C')
 
         return typer
 
@@ -562,9 +554,7 @@ if numpy_version >= (1, 8):
 
                 ndim = _parse_shape(shape)
                 if nb_dtype is not None and ndim is not None:
-                    cls = types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
-                    cls.support_literals = True
-                    return cls
+                    return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
 
             return typer
 
@@ -585,13 +575,9 @@ if numpy_version >= (1, 8):
                     nb_dtype = arg
                 if nb_dtype is not None:
                     if isinstance(arg, types.Array):
-                        cls = arg.copy(dtype=nb_dtype, readonly=False)
-                        cls.support_literals = True
-                        return cls
+                        return arg.copy(dtype=nb_dtype, readonly=False)
                     else:
-                        cls = types.Array(dtype=nb_dtype, ndim=0, layout='C')
-                        cls.support_literals = True
-                        return cls
+                        return types.Array(dtype=nb_dtype, ndim=0, layout='C')
 
             return typer
 
@@ -610,9 +596,8 @@ class NdIdentity(AbstractTemplate):
             nb_dtype = types.float64
 
         if nb_dtype is not None:
-            cls = types.Array(ndim=2, dtype=nb_dtype, layout='C')
-            cls.support_literals = True
-            return signature(cls, *args)
+            return_type = types.Array(ndim=2, dtype=nb_dtype, layout='C')
+            return signature(return_type, *args)
 
 
 def _infer_dtype_from_inputs(inputs):
@@ -629,9 +614,7 @@ class NdEye(CallableTemplate):
             else:
                 nb_dtype = _parse_dtype(dtype)
             if nb_dtype is not None:
-                cls = types.Array(ndim=2, dtype=nb_dtype, layout='C')
-                cls.support_literals = True
-                return cls
+                return types.Array(ndim=2, dtype=nb_dtype, layout='C')
 
         return typer
 
@@ -654,9 +637,8 @@ class NdArange(AbstractTemplate):
                 dtype = max(bounds)
         if not all(isinstance(arg, types.Number) for arg in bounds):
             return
-        cls = types.Array(ndim=1, dtype=dtype, layout='C')
-        cls.support_literals = True
-        return signature(cls, *args)
+        return_type = types.Array(ndim=1, dtype=dtype, layout='C')
+        return signature(return_type, *args)
 
 
 @infer_global(np.linspace)
@@ -696,10 +678,8 @@ class NdFromBuffer(CallableTemplate):
                 nb_dtype = _parse_dtype(dtype)
 
             if nb_dtype is not None:
-                cls = types.Array(dtype=nb_dtype, ndim=1, layout='C',
-                                  readonly=not buffer.mutable)
-                cls.support_literals = True
-                return cls
+                return types.Array(dtype=nb_dtype, ndim=1, layout='C',
+                                   readonly=not buffer.mutable)
 
         return typer
 
