@@ -91,7 +91,8 @@ def _lower_parfor_parallel(lowerer, parfor):
             if config.DEBUG_ARRAY_OPT:
                 print("redvar_typ", redvar_typ, redarrvar_typ, reddtype, types.DType(reddtype))
 
-            # If this is reduction over an array, the reduction array has just one added per-worker dimension.
+            # If this is reduction over an array,
+            # the reduction array has just one added per-worker dimension.
             if isinstance(redvar_typ, types.npytypes.Array):
                 redarrdim = redvar_typ.ndim + 1
             else:
@@ -102,7 +103,9 @@ def _lower_parfor_parallel(lowerer, parfor):
             # First create a var for the numpy empty ufunc.
             empty_func = ir.Var(scope, mk_unique_var("empty_func"), loc)
             ff_fnty = get_np_ufunc_typ(np.empty)
-            ff_sig = typingctx.resolve_function_type(ff_fnty, (types.UniTuple(types.intp, redarrdim), types.DType(reddtype)), {})
+            ff_sig = typingctx.resolve_function_type(ff_fnty,
+                                            (types.UniTuple(types.intp, redarrdim),
+                                             types.DType(reddtype)), {})
             typemap[empty_func.name] = ff_fnty
             empty_assign = ir.Assign(ir.Global("empty", np.empty, loc=loc), empty_func, loc)
             lowerer.lower_inst(empty_assign)
@@ -141,22 +144,49 @@ def _lower_parfor_parallel(lowerer, parfor):
             lowerer.lower_inst(size_assign)
 
             # Add call to empty passing the size var tuple.
-            full_call = ir.Expr.call(empty_func, [size_var], {}, loc=loc)
+            empty_call = ir.Expr.call(empty_func, [size_var], {}, loc=loc)
             redarr_var = ir.Var(scope, mk_unique_var("redarr"), loc)
             typemap[redarr_var.name] = redarrvar_typ
-            full_call_assign = ir.Assign(full_call, redarr_var, loc)
-            lowerer.fndesc.calltypes[full_call] = ff_sig
-            lowerer.lower_inst(full_call_assign)
+            empty_call_assign = ir.Assign(empty_call, redarr_var, loc)
+            lowerer.fndesc.calltypes[empty_call] = ff_sig
+            lowerer.lower_inst(empty_call_assign)
 
             # Remember mapping of original reduction array to the newly created per-worker reduction array.
             redarrs[redvar.name] = redarr_var
 
             init_val = parfor_reddict[parfor_redvars[i]][0]
-            if init_val != None and not isinstance(redvar_typ, types.npytypes.Array):
-                redtoset = ir.Var(scope, mk_unique_var("redtoset"), loc)
-                redtoset_assign = ir.Assign(ir.Const(init_val, loc), redtoset, loc)
-                typemap[redtoset.name] = reddtype
-                lowerer.lower_inst(redtoset_assign)
+            if init_val != None:
+                if isinstance(redvar_typ, types.npytypes.Array):
+                    # Create an array of identity values for the reduction.
+                    # First, create a variable for np.full.
+                    full_func = ir.Var(scope, mk_unique_var("full_func"), loc)
+                    full_fnty = get_np_ufunc_typ(np.full)
+                    full_sig = typingctx.resolve_function_type(full_fnty,
+                               (types.UniTuple(types.intp, redvar_typ.ndim),
+                                reddtype,
+                                types.DType(reddtype)), {})
+                    typemap[full_func.name] = full_fnty
+                    full_assign = ir.Assign(ir.Global("full", np.full, loc=loc), full_func, loc)
+                    lowerer.lower_inst(full_assign)
+
+                    # Then create a var with the identify value.
+                    init_val_var = ir.Var(scope, mk_unique_var("init_val"), loc)
+                    init_val_assign = ir.Assign(ir.Const(init_val, loc), init_val_var, loc)
+                    typemap[init_val_var.name] = reddtype
+                    lowerer.lower_inst(init_val_assign)
+
+                    # Then, call np.full with the shape of the reduction array and the identity value.
+                    full_call = ir.Expr.call(full_func, [redshape_var, init_val_var], {}, loc=loc)
+                    lowerer.fndesc.calltypes[full_call] = full_sig
+                    redtoset = ir.Var(scope, mk_unique_var("redtoset"), loc)
+                    redtoset_assign = ir.Assign(full_call, redtoset, loc)
+                    typemap[redtoset.name] = redvar_typ
+                    lowerer.lower_inst(redtoset_assign)
+                else:
+                    redtoset = ir.Var(scope, mk_unique_var("redtoset"), loc)
+                    redtoset_assign = ir.Assign(ir.Const(init_val, loc), redtoset, loc)
+                    typemap[redtoset.name] = reddtype
+                    lowerer.lower_inst(redtoset_assign)
             else:
                 redtoset = redvar
 
@@ -249,7 +279,9 @@ def _lower_parfor_parallel(lowerer, parfor):
                 lowerer.lower_inst(assign_lhs)
 
                 res_print = ir.Print(args=[lhs, redarr], vararg=None, loc=loc)
-                lowerer.fndesc.calltypes[res_print] = signature(types.none, typemap[lhs.name], typemap[redarr.name])
+                lowerer.fndesc.calltypes[res_print] = signature(types.none,
+                                                         typemap[lhs.name],
+                                                         typemap[redarr.name])
                 print("res_print", res_print)
                 lowerer.lower_inst(res_print)
 
@@ -270,10 +302,30 @@ def _lower_parfor_parallel(lowerer, parfor):
                 oneelemassign = ir.Assign(oneelemgetitem, oneelem, loc)
                 lowerer.lower_inst(oneelemassign)
 
-                init_assign = ir.Assign(oneelem, ir.Var(scope, name+"#init", loc), loc)
+                init_var = ir.Var(scope, name+"#init", loc)
+                init_assign = ir.Assign(oneelem, init_var, loc)
                 if name+"#init" not in typemap:
-                    typemap[name+"#init"] = redvar_typ
+                    typemap[init_var.name] = redvar_typ
                 lowerer.lower_inst(init_assign)
+
+                if config.DEBUG_ARRAY_OPT_RUNTIME:
+                    res_print_str = "one_res_print"
+                    strconsttyp = types.Const(res_print_str)
+                    lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
+                    assign_lhs = ir.Assign(value=ir.Const(value=res_print_str, loc=loc),
+                                               target=lhs, loc=loc)
+                    typemap[lhs.name] = strconsttyp
+                    lowerer.lower_inst(assign_lhs)
+
+                    res_print = ir.Print(args=[lhs, index_var, oneelem, init_var],
+                                         vararg=None, loc=loc)
+                    lowerer.fndesc.calltypes[res_print] = signature(types.none,
+                                                             typemap[lhs.name],
+                                                             typemap[index_var.name],
+                                                             typemap[oneelem.name],
+                                                             typemap[init_var.name])
+                    print("res_print", res_print)
+                    lowerer.lower_inst(res_print)
 
                 # generate code for combining reduction variable with thread output
                 for inst in parfor_reddict[name][1]:
@@ -608,7 +660,9 @@ def _create_gufunc_for_parfor_body(
     parfor_params = []
     ascontig = False
     for pindex in range(len(parfor_params_orig)):
-        if ascontig and pindex < len(parfor_inputs) and isinstance(param_types[pindex], types.npytypes.Array):
+        if (ascontig and
+            pindex < len(parfor_inputs) and
+            isinstance(param_types[pindex], types.npytypes.Array)):
             parfor_params.append(parfor_params_orig[pindex]+"param")
         else:
             parfor_params.append(parfor_params_orig[pindex])
@@ -1041,6 +1095,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     # sched goes first
     builder.store(builder.bitcast(sched, byte_ptr_t), args)
     array_strides.append(context.get_constant(types.intp, sizeof_intp))
+    red_shapes = {}
     # followed by other arguments
     for i in range(num_args):
         arg = all_args[i]
@@ -1049,9 +1104,11 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         if i >= ninouts:  # reduction variables
             ary = context.make_array(aty)(context, builder, arg)
             strides = cgutils.unpack_tuple(builder, ary.strides, aty.ndim)
+            ary_shapes = cgutils.unpack_tuple(builder, ary.shape, aty.ndim)
             # Start from 1 because we skip the first dimension of length num_threads just like sched.
             for j in range(1, len(strides)):
                 array_strides.append(strides[j])
+            red_shapes[i] = ary_shapes[1:]
             builder.store(builder.bitcast(ary.data, byte_ptr_t), dst)
         elif isinstance(aty, types.ArrayCompatible):
             ary = context.make_array(aty)(context, builder, arg)
@@ -1140,12 +1197,17 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
             j = i - ninouts
             # Get the base dtype of the reduction array.
             redtyp = lowerer.fndesc.typemap[redvars[j]]
+            red_stride = None
             if isinstance(redtyp, types.npytypes.Array):
                 redtyp = redtyp.dtype
+                red_stride = red_shapes[i]
             typ = context.get_value_type(redtyp)
             sizeof = context.get_abi_sizeof(typ)
             # Set stepsize to the size of that dtype.
             stepsize = context.get_constant(types.intp, sizeof)
+            if red_stride != None:
+                for rs in red_stride:
+                    stepsize = builder.mul(stepsize, rs)
         else:
             # steps are strides
             stepsize = zero

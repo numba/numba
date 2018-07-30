@@ -1186,6 +1186,49 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, 100)
 
+    @skip_unsupported
+    def test_two_d_array_reduction(self):
+        def test_impl(n):
+            shp = (13, 17)
+            size = shp[0] * shp[1]
+            result1 = np.zeros(shp, np.int_)
+            tmp = np.arange(size).reshape(shp)
+
+            for i in numba.prange(n):
+                result1 += tmp
+
+            return result1
+
+        self.check(test_impl, 100)
+
+    @skip_unsupported
+    def test_two_d_array_reduction_prod(self):
+        def test_impl(n):
+            shp = (13, 17)
+            size = shp[0] * shp[1]
+            result1 = 2 * np.ones(shp, np.int_)
+            tmp = 2 * np.ones_like(result1)
+
+            for i in numba.prange(n):
+                result1 += tmp
+
+            return result1
+
+        self.check(test_impl, 100)
+
+    @skip_unsupported
+    def test_three_d_array_reduction(self):
+        def test_impl(n):
+            shp = (3, 2, 7)
+            result1 = np.zeros(shp, np.int_)
+
+            for i in numba.prange(n):
+                result1 += np.ones(shp, np.int_)
+
+            return result1
+
+        self.check(test_impl, 100)
+
 class TestPrangeBase(TestParforsBase):
 
     def __init__(self, *args):
