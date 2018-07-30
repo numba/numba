@@ -38,6 +38,10 @@ class Environment(_dynfunc.Environment):
             cls._memo[fndesc.env_name] = inst
             return inst
 
+    @classmethod
+    def from_mod(cls, mod):
+        return cls(mod.__dict__)
+
     def __reduce__(self):
         return _rebuild_env, (
             self.globals['__name__'],

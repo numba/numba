@@ -235,6 +235,7 @@ class ParallelOptions(object):
             self.stencil = value
             self.fusion = value
             self.prange = value
+            self.csa = False
         elif isinstance(value, dict):
             self.enabled = True
             self.comprehension = value.pop('comprehension', True)
@@ -244,6 +245,7 @@ class ParallelOptions(object):
             self.stencil = value.pop('stencil', True)
             self.fusion = value.pop('fusion', True)
             self.prange = value.pop('prange', True)
+            self.csa = value.pop('csa', False)
             if value:
                 raise NameError("Unrecognized parallel options: %s" % value.keys())
         else:
@@ -266,7 +268,7 @@ class CPUTargetOptions(TargetOptions):
         "no_cpython_wrapper": bool,
         "fastmath": FastMathOptions,
         "error_model": str,
-        "parallel": ParallelOptions,
+        "parallel": ParallelOptions
     }
 
 
