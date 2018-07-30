@@ -421,6 +421,11 @@ def _parse_shape(shape):
     elif isinstance(shape, (types.Tuple, types.UniTuple)):
         if all(isinstance(s, types.Integer) for s in shape):
             ndim = len(shape)
+    elif isinstance(shape, types.Const):
+        if isinstance(shape.value, int):
+            ndim = 1
+        elif isinstance(shape.value, tuple) and all(isinstance(s, int) for s in shape.value):
+            ndim = len(shape.value)
     return ndim
 
 def _parse_dtype(dtype):
