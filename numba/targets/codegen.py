@@ -16,7 +16,6 @@ from numba.runtime.nrtopt import remove_redundant_nrt_refct
 from numba.runtime import rtsys
 from numba.compiler_lock import require_global_compiler_lock
 
-import pdb
 import sys
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',

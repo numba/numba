@@ -180,7 +180,6 @@ def _lower_parallel_section_end(lowerer, pre):
 
 lowering.lower_extensions[parallel_section_start] = _lower_parallel_section_start
 lowering.lower_extensions[parallel_section_end] = _lower_parallel_section_end
->>>>>>> CSA changes.
 
 #----------------------------------------------------------------------------------------------
 
@@ -1123,9 +1122,9 @@ def _create_gufunc_for_parfor_body(
         if config.DEBUG_CSA:
             print("eachdim", eachdim)
         if targetctx.auto_parallel.csa:
-#            for indent in range(eachdim + 1):
-#                gufunc_txt += "    "
-#            gufunc_txt += "numba.npyufunc.parfor.par_start_spmd(" + str(eachdim) + ", 4)\n"
+            for indent in range(eachdim + 1):
+                gufunc_txt += "    "
+            gufunc_txt += "numba.npyufunc.parfor.par_start_spmd(" + str(eachdim) + ", 4)\n"
             for indent in range(eachdim + 1):
                 gufunc_txt += "    "
             gufunc_txt += "numba.npyufunc.parfor.par_start_region(" + str(eachdim) + ")\n"
@@ -1169,7 +1168,6 @@ def _create_gufunc_for_parfor_body(
     for indent in range(parfor_dim + 1):
         gufunc_txt += "    "
     gufunc_txt += sentinel_name + " = 0\n"
-
     
     if targetctx.auto_parallel.csa:
         for eachdim in reversed(range(parfor_dim)):
@@ -1179,11 +1177,10 @@ def _create_gufunc_for_parfor_body(
             for indent in range(eachdim + 1):
                 gufunc_txt += "    "
             gufunc_txt += "numba.npyufunc.parfor.par_end_region(" + str(eachdim) + ")\n"
-#            for indent in range(eachdim + 1):
-#                gufunc_txt += "    "
-#            gufunc_txt += "numba.npyufunc.parfor.par_end_spmd(" + str(eachdim) + ")\n"
+            for indent in range(eachdim + 1):
+                gufunc_txt += "    "
+            gufunc_txt += "numba.npyufunc.parfor.par_end_spmd(" + str(eachdim) + ")\n"
             
-
     # Add assignments of reduction variables (for returning the value)
     redargstartdim = {}
     for arr, var in zip(parfor_redarrs, parfor_redvars):
@@ -1285,7 +1282,7 @@ def _create_gufunc_for_parfor_body(
                             elif callname[0] == 'par_start_spmd':
                                 pss_loc = gufunc_ir._definitions[rhs.args[0].name][0].value
                                 pnum_threads = gufunc_ir._definitions[rhs.args[1].name][0].value
-                                pspmd_dict[pss_loc] = parallel_spmd_start(pnum_threads, loc)
+                                pspmd_dict[pss_loc] = parallel_spmd_start(loc, pnum_threads)
                                 new_block.append(pspmd_dict[pss_loc])
                                 continue
                             elif callname[0] == 'par_end_spmd':
