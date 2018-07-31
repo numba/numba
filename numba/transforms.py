@@ -271,12 +271,13 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
     """
     from numba import postproc
 
-    def dispatcher_factory(func_ir):
+    def dispatcher_factory(func_ir, objectmode=False):
         from numba.dispatcher import LiftedWith
 
         myflags = flags.copy()
-        myflags.enable_looplift = False
-        myflags.enable_pyobject = True
+        if objectmode:
+            myflags.enable_looplift = False
+            myflags.enable_pyobject = True
         return LiftedWith(func_ir, typingctx, targetctx, myflags, locals)
 
     postproc.PostProcessor(func_ir).run()

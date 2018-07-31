@@ -129,7 +129,7 @@ class _ObjModeContextType(WithContext):
             force_non_generator=True,
             )
 
-        dispatcher = dispatcher_factory(lifted_ir)
+        dispatcher = dispatcher_factory(lifted_ir, objectmode=True)
 
         newblk = _mutate_with_block_caller(
             dispatcher, blocks, blk_start, blk_end, inputs, outputs,
