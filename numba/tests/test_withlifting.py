@@ -248,16 +248,24 @@ class TestLiftObj(TestCase):
         def bar(ival):
             print("ival =", {'ival': ival // 2})
 
+
         @njit
         def foo(ival):
             ival += 1
             with objmode_context:
                 bar(ival)
-            return ival
+            return ival + 1
 
-        r = foo(123)
-        print(r)
+        with captured_stdout() as stream:
+            r = foo(123)
+            printed = stream.getvalue()
 
+        with captured_stdout() as stream:
+            bar(124)
+            expect_printed = stream.getvalue()
+
+        self.assertEqual(expect_printed, printed)
+        self.assertEqual(r, 123 + 2)
 
 
 if __name__ == '__main__':
