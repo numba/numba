@@ -76,13 +76,14 @@ Explicit Parallel Loops
 Another experimental feature of this module is support for explicit parallel
 loops. One can use Numba's ``prange`` instead of ``range`` to specify that a
 loop can be parallelized. The user is required to make sure that the loop does
-not have cross iteration dependencies except the supported reductions.
+not have cross iteration dependencies except for supported reductions.
 
-A reductions is inferred automatically if a variable is updated by a binary
+A reduction is inferred automatically if a variable is updated by a binary
 function/operator using its previous value in the loop body. The initial value
 of the reduction is inferred automatically for ``+=`` and ``*=`` operators.
-For other functions/operators, the reduction variable should hold the initial
-value right before entering the ``prange`` loop.
+For other functions/operators, the reduction variable should hold the identity
+value right before entering the ``prange`` loop.  Reductions in this manner
+are supported for scalars and for arrays of arbitrary dimensions.
 
 The example below demonstrates a parallel loop with a
 reduction (``A`` is a one-dimensional Numpy array)::
@@ -94,6 +95,21 @@ reduction (``A`` is a one-dimensional Numpy array)::
         for i in prange(A.shape[0]):
             s += A[i]
         return s
+
+The following example demonstrates a product reduction on a two-dimensional array::
+
+    from numba import njit, prange
+    @njit(parallel=True)
+    def two_d_array_reduction_prod(n):
+        shp = (13, 17)
+        size = shp[0] * shp[1]
+        result1 = 2 * np.ones(shp, np.int_)
+        tmp = 2 * np.ones_like(result1)
+
+        for i in numba.prange(n):
+            result1 *= tmp
+
+        return result1
 
 Examples
 ========
