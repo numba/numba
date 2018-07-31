@@ -1210,7 +1210,7 @@ class TestParfors(TestParforsBase):
             tmp = 2 * np.ones_like(result1)
 
             for i in numba.prange(n):
-                result1 += tmp
+                result1 *= tmp
 
             return result1
 
