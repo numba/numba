@@ -1,4 +1,6 @@
 
+.. _cuda-index:
+
 Numba for CUDA GPUs
 ===================
 

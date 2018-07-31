@@ -5,7 +5,9 @@ Just-in-Time compilation
 JIT functions
 -------------
 
-.. decorator:: numba.jit(signature=None, nopython=False, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', locals={})
+.. _jit-decorator:
+
+.. decorator:: numba.jit(signature=None, nopython=False, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', fastmath=False, locals={})
 
    Compile the decorated function on-the-fly to produce efficient machine
    code.  All parameters all optional.
@@ -59,6 +61,8 @@ JIT functions
    compile the function in :term:`nopython mode`, otherwise a compilation
    warning will be printed.
 
+.. _jit-decorator-cache:
+
    If true, *cache* enables a file-based cache to shorten compilation times
    when the function was already compiled in a previous invocation.
    The cache is maintained in the ``__pycache__`` subdirectory of
@@ -66,6 +70,8 @@ JIT functions
    allowed to write to it, though, it falls back to a platform-specific
    user-wide cache directory (such as ``$HOME/.cache/numba`` on Unix
    platforms).
+
+.. _jit-decorator-parallel:
 
    If true, *parallel* enables the automatic parallelization of a number of
    common Numpy constructs as well as the fusion of adjacent parallel 
@@ -79,6 +85,15 @@ JIT functions
    Not all functions can be cached, since some functionality cannot be
    always persisted to disk.  When a function cannot be cached, a
    warning is emitted; use :envvar:`NUMBA_WARNINGS` to see it.
+
+.. _jit-decorator-fastmath:
+
+   If true, *fastmath* enables the use of otherwise unsafe floating point
+   transforms as described in the
+   `LLVM documentation <https://llvm.org/docs/LangRef.html#fast-math-flags>`_.
+   Further, if :ref:`Intel SVML <intel-svml>` is installed faster but less
+   accurate versions of some math intrinsics are used (answers to within
+   ``4 ULP``).
 
    The *locals* dictionary may be used to force the :ref:`numba-types`
    of particular local variables, for example if you want to force the

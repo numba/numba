@@ -29,36 +29,39 @@ Numba also has wheels available::
 
   $ pip install numba
 
-Numba can also be compiled from source (`instructions <LINK>`_)
+Numba can also be
+:ref:`compiled from source <numba-source-install-instructions>`, although we do
+not recommend it for first-time Numba users.
 
 Numba is often used as a core package so its dependencies are kept to an
 absolute minimum, however, extra packages can be installed as follows to provide
 additional functionality:
 
-* ``scipy`` - enables support for compiling ``numpy.linalg`` functions
+* ``scipy`` - enables support for compiling ``numpy.linalg`` functions.
 * ``colorama`` - enables support for color highlighting in backtraces/error
-  messages
+  messages.
 * ``pyyaml`` - enables configuration of Numba via a YAML config file.
 * ``icc_rt`` - allows the use of the Intel SVML (high performance short vector
-  math library, x86_64 only).
+  math library, x86_64 only). Installation instructions are in the
+  :ref:`performance tips <intel-svml>`.
 
 Will Numba work for my code?
 ----------------------------
-This depends on what your code "looks like", if your code is numerically
+This depends on what your code looks like, if your code is numerically
 orientated (does a lot of math), uses NumPy a lot and/or has a lot of loops,
 then Numba is often a good choice. In these examples we'll apply the most
 fundamental of Numba's JIT decorators, ``@jit``, to try and speed up some
 functions to demonstrate what works well and what does not.
 
-Numba works well on code that "looks like" this::
+Numba works well on code that looks like this::
 
     from numba import jit
     import numpy as np
 
     x = np.arange(100).reshape(10, 10)
 
-    @jit
-    def go_fast(a): # Function is compiled and runs in machine code
+    @jit(nopython=True) # Set "nopython" mode for best performance
+    def go_fast(a): # Function is compiled to machine code when called the first time
         trace = 0
         for i in range(a.shape[0]):   # Numba likes loops
             trace += np.tanh(a[i, i]) # Numba likes NumPy functions
@@ -67,27 +70,7 @@ Numba works well on code that "looks like" this::
     print(go_fast(x))
 
 
-It works reasonably well on code with well defined numerically orientated loops
-(it will "lift" out the loops and compile those to machine code and run the rest
-in the Python interpreter)::
-
-    from numba import jit
-    import numpy as np
-
-    x = np.arange(20)
-
-    @jit
-    def loop_lift(x):
-        a = object() # Numba runs this in the interpreter
-        acc = 0
-        for i in x:  # Numba will compile this loop to machine code!
-            acc +=i
-        return a, acc
-
-    print(loop_lift(x))
-
-
-It won't work very well, if at all, on code that "looks like" this::
+It won't work very well, if at all, on code that looks like this::
 
     from numba import jit
     import pandas as pd
@@ -106,33 +89,23 @@ Note that Pandas is not understood by Numba and as a result Numba would simply
 run this code via the interpreter but with the added cost of the Numba internal
 overheads!
 
-The ``nopython`` mode *gotcha*.
--------------------------------
-Pretty much all first time users are caught by this so it deserves a mention...
-The Numba ``@jit`` decorator operates in two modes, ``nopython`` mode and
-``object mode``. When a ``@jit`` decorated function is called, Numba will first
-try and compile the function so that it will run entirely without the
-involvement of the Python interpreter (like the ``go_fast`` example above).
-If this succeed the function is compiled in so called ``nopython`` mode, this
-gives the best performance.
+What is ``nopython`` mode?
+--------------------------
+The Numba ``@jit`` decorator fundamentally operates in two compilation modes,
+``nopython`` mode and ``object`` mode. In the ``go_fast`` example above,
+``nopython=True`` is set in the ``@jit`` decorator, this is instructing Numba to
+operate in ``nopython`` mode. The behaviour of the ``nopython`` compilation mode
+is to essentially compile the decorated function so that it will run entirely
+without the involvement of the Python interpreter. This is the recommended and
+best-practice way to use the Numba ``jit`` decorator as it leads to the best
+performance.
 
-Should the compilation in ``nopython`` mode fail, all is not lost, Numba will
-try again at compilation in ``object mode``. In this mode Numba will identify
-loops that it can compile and compile those into functions that run in machine
-code, and it will run the rest of the code in the interpreter (like in the
-``loop_lift`` example above). As users often want to ensure that ``nopython``
-is in use, it can be supplied as a ``kwarg`` to the ``jit`` decorator
-(``@jit(nopython=True)``), alternatively, for convenience, ``@njit`` obtained
-via ``from numba import njit`` is a alias of this.
-
-To help find if loops have been lifted, the numba executable ``numba`` has the
-``--annotated`` option which will print diagnostic information about lifted
-loops. Further, the compiled function has a method ``inspect_types()`` which if
-supplied the ``kwarg`` ``pretty=True`` will produce an annotated digest if run
-from a terminal or notebook. Using the above ``loop_lift`` function, try::
-
-    print(loop_lift.inspect_types(pretty=True))
-
+Should the compilation in ``nopython`` mode fail, Numba can compile using
+``object mode``, this is a fall back mode for the ``@jit`` decorator if
+``nopython=True`` is not set (as seen in the ``use_pandas`` example above). In
+this mode Numba will identify loops that it can compile and compile those into
+functions that run in machine code, and it will run the rest of the code in the
+interpreter. For best performance avoid using this mode!
 
 How to measure the performance of Numba?
 ----------------------------------------
@@ -155,7 +128,7 @@ For example::
 
     x = np.arange(100).reshape(10, 10)
 
-    @jit
+    @jit(nopython=True)
     def go_fast(a): # Function is compiled and runs in machine code
         trace = 0
         for i in range(a.shape[0]):
@@ -184,27 +157,25 @@ using the `timeit <https://docs.python.org/3/library/timeit.html>`_ module
 functions, these measure multiple iterations of execution and, as a result,
 can be made to accommodate for the compilation time in the first execution.
 
-As a side note, if compilation time is an issue, Numba JIT supports `on-disk
-caching <LINK>`_ of compiled functions and also has an `Ahead-Of-Time <LINK>`_
-compilation mode.
+As a side note, if compilation time is an issue, Numba JIT supports 
+:ref:`on-disk caching <jit-decorator-cache>` of compiled functions and also has
+an :ref:`Ahead-Of-Time <aot-compilation>` compilation mode.
 
 How fast is it?
 ---------------
 Assuming Numba can operate in ``nopython`` mode, or at least compile some loops,
 it will target compilation to your specific CPU. Speed up varies depending on
 application but can be one to two orders of magnitude. Numba has a
-`performance guide <LINK>`_ that covers common options for gaining extra
-performance.
+:ref:`performance guide <performance-tips>` that covers common options for
+gaining extra performance.
 
 How does Numba work?
 --------------------
-Glossing over a huge amount of detail, Numba reads the Python bytecode for a
-decorated function and combines this with information about the types of the
-input arguments to the function. It then forms a Numba specific internal
-representation(IR) of the function and translates this to LLVM IR, it then
-invokes the `LLVM compiler <https://llvm.org/>`_ machinery on the LLVM IR to
-compile a machine code version of your function. This compiled version is then
-used every time your function is called.
+Numba reads the Python bytecode for a decorated function and combines this with
+information about the types of the input arguments to the function. It analyzes
+and optimizes your code, and finally uses the LLVM compiler library to generate
+a machine code version of your function, tailored to your CPU capabilities. This
+compiled version is then used every time your function is called.
 
 Other things of interest:
 -------------------------
@@ -212,30 +183,33 @@ Numba has quite a few decorators, we've seen ``@jit`` and ``@njit``, but there's
 also:
 
 * ``@vectorize`` - produces NumPy ``ufunc`` s (with all the ``ufunc`` methods
-  supported). `Docs are here <LINK>`_.
+  supported). :ref:`Docs are here <vectorize>`.
 * ``@guvectorize`` - produces NumPy generalized ``ufunc`` s.
-  `Docs are here <LINK>`_.
+  :ref:`Docs are here <guvectorize>`.
 * ``@stencil`` - declare a function as a kernel for a stencil like operation.
-  `Docs are here <LINK>`_.
-* ``@jitclass`` - for jit aware classes. `Docs are here <LINK>`_.
-* ``@cfunc`` - declare a function for use as a native call back (to be called from
-  C/C++ etc). `Docs are here <LINK>`_.
+  :ref:`Docs are here <numba-stencil>`.
+* ``@jitclass`` - for jit aware classes. :ref:`Docs are here <jitclass>`.
+* ``@cfunc`` - declare a function for use as a native call back (to be called
+  from C/C++ etc). :ref:`Docs are here <cfunc>`.
 * ``@overload`` - register your own implementation of a function for use in
-  nopython mode, e.g. ``@overload(scipy.special.j0)``. `Docs are here <LINK>`_.
+  nopython mode, e.g. ``@overload(scipy.special.j0)``.
+  :ref:`Docs are here <high-level-extending>`.
 
 Extra options available in some decorators:
 
-* ``parallel = True`` - enable `automatic parallelization <LINK NB PARFORS>`_ of
-  the function.
-* ``fastmath = True`` - enable `fast-math <LINK NB fast-math>`_ behaviour for
-  the function.
+* ``parallel = True`` - :ref:`enable <jit-decorator-parallel>` the 
+  :ref:`automatic parallelization <numba-parallel>` of the function.
+* ``fastmath = True`` - enable `fast-math <jit-decorator-fastmath>`_ behaviour
+  for the function.
 
 ctypes/cffi/cython interoperability:
 
-* ``cffi`` - `CFFI  <LINK NB CFFI DOCS>`_ functions are supported.
-* ``ctypes`` - `ctypes  <LINK NB ctypes DOCS>`_  wrapped functions are supported
+* ``cffi`` - The calling of :ref:`CFFI  <cffi-support>` functions is supported
+  in ``nopython`` mode.
+* ``ctypes`` - The calling of :ref:`ctypes  <ctypes-support>` wrapped
+  functions is supported in ``nopython`` mode.
   .
-* Cython exported functions `are callable <LINK NB Cython ext DOCS>`_.
+* Cython exported functions :ref:`are callable <cython-support>`.
 
 GPU targets:
 ~~~~~~~~~~~~
@@ -243,5 +217,5 @@ GPU targets:
 Numba can target `Nvidia CUDA <https://developer.nvidia.com/cuda-zone>`_ and
 (experimentally) `AMD ROC <https://rocm.github.io/>`_ GPUs. You can write a
 kernel in pure Python and have Numba handle the computation and data movement
-(or do this explicitly). Click for Numba documentation on `CUDA <LINK>`_ or
-`ROC <LINK>`_.
+(or do this explicitly). Click for Numba documentation on
+:ref:`CUDA <cuda-index>` or `ROC <LINK>`_.

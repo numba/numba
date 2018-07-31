@@ -358,6 +358,8 @@ and named parameters in the constructor are also supported.
 Creating a named tuple class inside Numba code is *not* supported; the class
 must be created at the global level.
 
+.. _ctypes-support:
+
 ``ctypes``
 ----------
 
@@ -522,6 +524,8 @@ Third-party modules
 
 .. I put this here as there's only one module (apart from Numpy), otherwise
    it should be a separate page.
+
+.. _cffi-support:
 
 ``cffi``
 --------
