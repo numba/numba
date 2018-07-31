@@ -143,6 +143,8 @@ class TestParforsBase(TestCase):
         np.testing.assert_almost_equal(njit_output, py_expected, **kwargs)
         np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
 
+        self.assertEqual(type(njit_output), type(parfor_output))
+
         self.check_scheduling(cpfunc, scheduler_type)
 
         # if requested check fastmath variant
@@ -1106,6 +1108,17 @@ class TestParfors(TestParforsBase):
                     self.assertTrue(parfor.index_var in stmt.value.items)
 
         self.assertTrue(build_tuple_found)
+
+    @skip_unsupported
+    def test_parfor_dtype_type(self):
+        # test array type replacement creates proper type
+        def test_impl(a):
+            for i in numba.prange(len(a)):
+                a[i] = a.dtype.type(0)
+            return a[4]
+
+        a = np.ones(10)
+        self.check(test_impl, a)
 
     @skip_unsupported
     def test_parfor_array_access5(self):
