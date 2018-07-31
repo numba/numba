@@ -279,6 +279,36 @@ def tuple_to_tuple(context, builder, fromty, toty, val):
              for v, f, t in zip(olditems, fromty, toty)]
     return context.make_tuple(builder, toty, items)
 
+@lower_cast(types.BaseTuple, types.Const)
+@lower_cast(types.Const, types.BaseTuple)
+def tuple_to_const(context, builder, fromty, toty, val):
+    if (isinstance(fromty, types.BaseNamedTuple)
+        or isinstance(toty, types.BaseNamedTuple)):
+        # Disallowed by typing layer
+        raise NotImplementedError
+
+    l_fromty = (len(fromty) if isinstance(fromty, types.BaseTuple)
+                else len(fromty.value))
+    l_toty = (len(toty) if isinstance(toty, types.BaseTuple)
+                else len(toty.value))
+
+    if l_fromty != l_toty:
+        # Disallowed by typing layer
+        raise NotImplementedError
+
+    fromty_types = (fromty.types if isinstance(fromty, types.BaseTuple)
+                else [typing.typeof.typeof(a) for a in fromty.value])
+
+    toty_types = (toty.types if isinstance(toty, types.BaseTuple)
+                else [typing.typeof.typeof(a) for a in toty.value])
+
+    target_typ = (toty if isinstance(toty, types.BaseTuple)
+                  else typing.typeof.typeof(toty.value))
+
+    olditems = cgutils.unpack_tuple(builder, val, l_toty)
+    items = [context.cast(builder, v, f, t)
+             for v, f, t in zip(olditems, fromty_types, toty_types)]
+    return context.make_tuple(builder, target_typ, items)
 
 #------------------------------------------------------------------------------
 # Methods
