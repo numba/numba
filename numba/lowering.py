@@ -652,6 +652,8 @@ class Lower(BaseLower):
         impl(self.builder, argvals)
 
     def lower_call(self, resty, expr):
+        from . import dispatcher
+
         signature = self.fndesc.calltypes[expr]
         self.debug_print("# lower_call: expr = {0}".format(expr))
         if isinstance(signature.return_type, types.Phantom):
@@ -662,8 +664,9 @@ class Lower(BaseLower):
             argvals = expr.func.args
         else:
             fnty = self.typeof(expr.func.name)
-            if isinstance(fnty, types.Dispatcher):
-                print(fnty)
+            if (isinstance(fnty, types.Dispatcher) and
+                    isinstance(fnty.dispatcher, dispatcher.LiftedWith) and
+                    fnty.dispatcher.flags.enable_pyobject):
                 self.init_pyapi()
                 # Acquire the GIL
                 gil_state = self.pyapi.gil_ensure()
