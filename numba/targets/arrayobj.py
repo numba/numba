@@ -3205,12 +3205,14 @@ def _parse_shape(context, builder, ty, val):
     """
     Parse the shape argument to an array constructor.
     """
-    if isinstance(ty, types.Integer):
+    if (isinstance(ty, types.Integer)
+            or (isinstance(ty, types.Const) and isinstance(ty.value, int))):
         ndim = 1
         shapes = [context.cast(builder, val, ty, types.intp)]
     else:
-        assert isinstance(ty, types.BaseTuple)
-        ndim = ty.count
+        assert (isinstance(ty, types.BaseTuple)
+            or (isinstance(ty, types.Const) and isinstance(ty.value, tuple)))
+        ndim = ty.count if isinstance(ty, types.BaseTuple) else len(ty.value)
         arrshape = context.cast(builder, val, ty,
                                 types.UniTuple(types.intp, ndim))
         shapes = cgutils.unpack_tuple(builder, val, count=ndim)
