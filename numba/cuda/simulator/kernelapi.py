@@ -216,6 +216,9 @@ class FakeCUDAModule(object):
     def popc(self, val):
         return bin(val).count("1")
 
+    def fma(self, a, b, c):
+        return a * b + c
+
     def brev(self, val):
         return int('{:032b}'.format(val)[::-1], 2)
 
