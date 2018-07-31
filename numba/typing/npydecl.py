@@ -488,6 +488,7 @@ class NpArray(CallableTemplate):
 
         return typer
 
+NpArray.support_literals = True
 
 @infer_global(np.empty)
 @infer_global(np.zeros)
@@ -510,6 +511,7 @@ class NdConstructor(CallableTemplate):
 
         return typer
 
+NdConstructor.support_literals = True
 
 @infer_global(np.empty_like)
 @infer_global(np.zeros_like)
@@ -539,7 +541,7 @@ class NdConstructorLike(CallableTemplate):
 
         return typer
 
-
+NdConstructorLike.support_literals = True
 infer_global(np.ones_like)(NdConstructorLike)
 
 
@@ -562,6 +564,8 @@ if numpy_version >= (1, 8):
                     return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
 
             return typer
+
+    NdFull.support_literals = True
 
     @infer_global(np.full_like)
     class NdFullLike(CallableTemplate):
@@ -586,6 +590,8 @@ if numpy_version >= (1, 8):
 
             return typer
 
+    NdFullLike.support_literals = True
+
 
 @infer_global(np.identity)
 class NdIdentity(AbstractTemplate):
@@ -604,6 +610,7 @@ class NdIdentity(AbstractTemplate):
             return_type = types.Array(ndim=2, dtype=nb_dtype, layout='C')
             return signature(return_type, *args)
 
+NdIdentity.support_literals = True
 
 def _infer_dtype_from_inputs(inputs):
     return dtype
@@ -623,6 +630,7 @@ class NdEye(CallableTemplate):
 
         return typer
 
+NdEye.support_literals = True
 
 @infer_global(np.arange)
 class NdArange(AbstractTemplate):
@@ -645,6 +653,7 @@ class NdArange(AbstractTemplate):
         return_type = types.Array(ndim=1, dtype=dtype, layout='C')
         return signature(return_type, *args)
 
+NdArange.support_literals = True
 
 @infer_global(np.linspace)
 class NdLinspace(AbstractTemplate):
@@ -688,6 +697,7 @@ class NdFromBuffer(CallableTemplate):
 
         return typer
 
+NdFromBuffer.support_literals = True
 
 @infer_global(np.sort)
 class NdSort(CallableTemplate):
