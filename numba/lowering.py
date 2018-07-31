@@ -674,6 +674,10 @@ class Lower(BaseLower):
                 argnames = [a.name for a in expr.args]
                 argtypes = [self.typeof(a) for a in argnames]
                 argvalues = [self.loadvar(a) for a in argnames]
+                for v, ty in zip(argvalues, argtypes):
+                    # Because .from_native_value steal the reference
+                    self.incref(ty, v)
+
                 argobjs = [self.pyapi.from_native_value(atyp, aval,
                                                         self.env_manager)
                            for atyp, aval in zip(argtypes, argvalues)]

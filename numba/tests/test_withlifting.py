@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
+import numpy as np
+
 from numba import unittest_support as unittest
 from numba.transforms import find_setupwiths, with_lifting
 from numba.withcontexts import bypass_context, call_context, objmode_context
@@ -244,10 +246,9 @@ class TestLiftCall(BaseTestWithLifting):
 
 
 class TestLiftObj(TestCase):
-    def test_lift_objmode(self):
+    def test_lift_objmode_basic(self):
         def bar(ival):
             print("ival =", {'ival': ival // 2})
-
 
         @njit
         def foo(ival):
@@ -257,7 +258,7 @@ class TestLiftObj(TestCase):
             return ival + 1
 
         with captured_stdout() as stream:
-            r = foo(123)
+            res = foo(123)
             printed = stream.getvalue()
 
         with captured_stdout() as stream:
@@ -265,7 +266,31 @@ class TestLiftObj(TestCase):
             expect_printed = stream.getvalue()
 
         self.assertEqual(expect_printed, printed)
-        self.assertEqual(r, 123 + 2)
+        self.assertEqual(res, 123 + 2)
+
+    def test_lift_objmode_array_in(self):
+        def bar(arr):
+            print({'arr': arr // 2})
+            arr *= 2
+
+        @njit
+        def foo(nelem):
+            arr = np.arange(nelem)
+            with objmode_context:
+                bar(arr)
+            return arr + 1
+
+        nelem = 10
+        with captured_stdout() as stream:
+            res = foo(nelem)
+            printed = stream.getvalue()
+
+        with captured_stdout() as stream:
+            bar(np.arange(nelem))
+            expect_printed = stream.getvalue()
+
+        self.assertEqual(expect_printed, printed)
+        self.assertPreciseEqual(res, np.arange(nelem) * 2 + 1)
 
 
 if __name__ == '__main__':
