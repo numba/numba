@@ -5,15 +5,25 @@ import numpy as np
 from numba import cuda
 from numba.cuda.testing import unittest, SerialMixin
 
-
 CONST1D = np.arange(10, dtype=np.float64) / 2.
 CONST2D = np.asfortranarray(
-                np.arange(100, dtype=np.int32).reshape(10, 10))
-CONST3D = ((np.arange(5*5*5, dtype=np.complex64).reshape(5, 5, 5) + 1j) /
-            2j)
+    np.arange(100, dtype=np.int32).reshape(10, 10))
+CONST3D = ((np.arange(5 * 5 * 5, dtype=np.complex64).reshape(5, 5, 5) + 1j) /
+           2j)
 CONST_RECORD = np.array(
     [(1.0, 2), (3.0, 4)],
     dtype=[('x', float), ('y', int)])
+CONST_RECORD_ALIGN = np.array(
+    [(1, 2, 3, 0xDEADBEEF, 8), (4, 5, 6, 0xBEEFDEAD, 10)],
+    dtype=np.dtype(
+        dtype=[
+            ('a', np.uint8),
+            ('b', np.uint8),
+            ('x', np.uint8),
+            ('y', np.uint32),
+            ('z', np.uint8),
+        ],
+        align=True))
 
 
 def cuconst(A):
@@ -43,6 +53,16 @@ def cuconstRec(A, B):
     B[i] = C[i]['y']
 
 
+def cuconstRecAlign(A, B, C, D, E):
+    Z = cuda.const.array_like(CONST_RECORD_ALIGN)
+    i = cuda.grid(1)
+    A[i] = Z[i]['a']
+    B[i] = Z[i]['b']
+    C[i] = Z[i]['x']
+    D[i] = Z[i]['y']
+    E[i] = Z[i]['z']
+
+
 class TestCudaConstantMemory(SerialMixin, unittest.TestCase):
     def test_const_array(self):
         jcuconst = cuda.jit('void(float64[:])')(cuconst)
@@ -55,7 +75,7 @@ class TestCudaConstantMemory(SerialMixin, unittest.TestCase):
         jcuconst2d = cuda.jit('void(int32[:,:])')(cuconst2d)
         self.assertTrue('.const' in jcuconst2d.ptx)
         A = np.zeros_like(CONST2D, order='C')
-        jcuconst2d[(2,2), (5,5)](A)
+        jcuconst2d[(2, 2), (5, 5)](A)
         self.assertTrue(np.all(A == CONST2D))
 
     def test_const_array_3d(self):
@@ -73,6 +93,21 @@ class TestCudaConstantMemory(SerialMixin, unittest.TestCase):
         jcuconst[2, 1](A, B)
         np.testing.assert_allclose(A, CONST_RECORD['x'])
         np.testing.assert_allclose(B, CONST_RECORD['y'])
+
+    def test_const_record_align(self):
+        A = np.zeros(2, dtype=np.float64)
+        B = np.zeros(2, dtype=np.float64)
+        C = np.zeros(2, dtype=np.float64)
+        D = np.zeros(2, dtype=np.float64)
+        E = np.zeros(2, dtype=np.float64)
+        jcuconst = cuda.jit(cuconstRecAlign).specialize(A, B, C, D, E)
+        self.assertTrue('.const' in jcuconst.ptx)
+        jcuconst[2, 1](A, B, C, D, E)
+        np.testing.assert_allclose(A, CONST_RECORD_ALIGN['a'])
+        np.testing.assert_allclose(B, CONST_RECORD_ALIGN['b'])
+        np.testing.assert_allclose(C, CONST_RECORD_ALIGN['x'])
+        np.testing.assert_allclose(D, CONST_RECORD_ALIGN['y'])
+        np.testing.assert_allclose(E, CONST_RECORD_ALIGN['z'])
 
 
 if __name__ == '__main__':

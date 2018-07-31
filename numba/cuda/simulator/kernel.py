@@ -110,6 +110,10 @@ class FakeCUDAKernel(object):
     def bind(self):
         pass
 
+
+    def specialize(self, *args):
+        return self
+
     def forall(self, ntasks, tpb=0, stream=0, sharedmem=0):
         return self[ntasks, 1, stream, sharedmem]
 
