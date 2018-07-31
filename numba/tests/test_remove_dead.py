@@ -201,8 +201,8 @@ class TestRemoveDead(unittest.TestCase):
         # save global state
         old_ext_handlers = alias_func_extensions.copy()
         try:
-            alias_func_extensions[
-            ('dummy_aliased_func', '__main__')] = alias_ext_dummy_func
+            alias_func_extensions[('dummy_aliased_func',
+                'numba.tests.test_remove_dead')] = alias_ext_dummy_func
             self.run_array_index_test(func)
         finally:
             # recover global state
