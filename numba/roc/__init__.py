@@ -6,7 +6,6 @@ import os
 import numba.testing
 from .api import *
 from .stubs import atomic
-from . import initialize
 
 
 def is_available():
