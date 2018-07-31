@@ -33,7 +33,7 @@ class PerformanceWarning(NumbaWarning):
     """
 
 
-class ParallelSafetyWarning(NumbaWarning):
+class ParallelSafetyWarning(RuntimeWarning):
     """
     Warning category for when an operation in a prange
     might not have parallel semantics.

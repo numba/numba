@@ -381,7 +381,7 @@ def _create_gufunc_for_parfor_body(
     races = races.difference(set(parfor_redvars))
     for race in races:
         warnings.warn_explicit("Variable %s used in parallel loop may be written "
-                      "to simulatenously by multiple workers and may result "
+                      "to simultaneously by multiple workers and may result "
                       "in non-deterministic or unintended results." % race,
                       ParallelSafetyWarning,
                       loc.filename,
