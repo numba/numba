@@ -111,11 +111,11 @@ class _ObjModeContextType(WithContext):
                          body_blocks, dispatcher_factory):
         vlt = func_ir.variable_lifetime
         inputs = vlt.livemap[blk_start]
-        outputs = vlt.livemap[blk_end]
-
-        print('inputs', inputs)
-        print('outputs', outputs)
-        outputs = [] # XXX: no outputs hacks
+        # Note on subtract inputs:
+        # Since variables are versioned to unique name at each definition,
+        # any output vars that are also in the inputs are not newly created.
+        # Thus, we can simply remove them from consideration for outputs.
+        outputs = vlt.livemap[blk_end] - inputs
 
         lifted_blks = {k: blocks[k] for k in body_blocks}
         _mutate_with_block_callee(lifted_blks, blk_start, blk_end,
