@@ -102,7 +102,6 @@ The following example demonstrates a product reduction on a two-dimensional arra
     @njit(parallel=True)
     def two_d_array_reduction_prod(n):
         shp = (13, 17)
-        size = shp[0] * shp[1]
         result1 = 2 * np.ones(shp, np.int_)
         tmp = 2 * np.ones_like(result1)
 
