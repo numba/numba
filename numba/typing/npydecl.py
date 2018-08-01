@@ -437,6 +437,11 @@ def _parse_dtype(dtype):
         elif isinstance(dtype.value, np.dtype):
             return from_dtype(dtype.value)
 
+def _fix_const_type(typ):
+    if isinstance(typ, types.Const) and not isinstance(typ.value, str):
+        return typeof(typ.value)
+    return typ
+
 def _parse_nested_sequence(context, typ):
     """
     Parse a (possibly 0d) nested sequence type.
@@ -600,6 +605,7 @@ class NdIdentity(AbstractTemplate):
 
     def generic(self, args, kws):
         assert not kws
+        args = [_fix_const_type(a) for a in args]
         n = args[0]
         if not isinstance(n, types.Integer):
             return
@@ -639,6 +645,7 @@ class NdArange(AbstractTemplate):
 
     def generic(self, args, kws):
         assert not kws
+        args = [_fix_const_type(a) for a in args]
         if len(args) >= 4:
             dtype = _parse_dtype(args[3])
             bounds = args[:3]
