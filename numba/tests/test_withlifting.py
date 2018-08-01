@@ -246,51 +246,62 @@ class TestLiftCall(BaseTestWithLifting):
 
 
 class TestLiftObj(TestCase):
+
+    def assert_equal_return_and_stdout(self, pyfunc, *args):
+        cfunc = njit(pyfunc)
+
+        with captured_stdout() as stream:
+            expect_res = pyfunc(*args)
+            expect_out = stream.getvalue()
+
+        with captured_stdout() as stream:
+            got_res = cfunc(*args)
+            got_out = stream.getvalue()
+
+        self.assertEqual(expect_out, got_out)
+        self.assertPreciseEqual(expect_res, got_res)
+
     def test_lift_objmode_basic(self):
         def bar(ival):
             print("ival =", {'ival': ival // 2})
 
-        @njit
         def foo(ival):
             ival += 1
             with objmode_context:
                 bar(ival)
             return ival + 1
 
-        with captured_stdout() as stream:
-            res = foo(123)
-            printed = stream.getvalue()
-
-        with captured_stdout() as stream:
-            bar(124)
-            expect_printed = stream.getvalue()
-
-        self.assertEqual(expect_printed, printed)
-        self.assertEqual(res, 123 + 2)
+        self.assert_equal_return_and_stdout(foo, 123)
 
     def test_lift_objmode_array_in(self):
         def bar(arr):
             print({'arr': arr // 2})
+            # arr is modified. the effect is visible outside.
             arr *= 2
 
-        @njit
         def foo(nelem):
             arr = np.arange(nelem)
             with objmode_context:
+                # arr is modified inplace inside bar()
                 bar(arr)
             return arr + 1
 
         nelem = 10
-        with captured_stdout() as stream:
-            res = foo(nelem)
-            printed = stream.getvalue()
+        self.assert_equal_return_and_stdout(foo, nelem)
 
-        with captured_stdout() as stream:
-            bar(np.arange(nelem))
-            expect_printed = stream.getvalue()
+    def test_lift_objmode_define_new_unused(self):
+        def bar(y):
+            print(y)
 
-        self.assertEqual(expect_printed, printed)
-        self.assertPreciseEqual(res, np.arange(nelem) * 2 + 1)
+        def foo(x):
+            with objmode_context:
+                y = 2 + x           # defined but unused outside
+                a = np.arange(y)    # defined but unused outside
+                bar(a)
+            return x
+
+        arg = 123
+        self.assert_equal_return_and_stdout(foo, arg)
 
 
 if __name__ == '__main__':
