@@ -3408,6 +3408,7 @@ def numpy_identity(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @lower_builtin(np.identity, types.Integer, types.DTypeSpec)
+@lower_builtin(np.identity, types.Integer, types.Const)
 def numpy_identity(context, builder, sig, args):
 
     def identity(n, dtype):
@@ -3609,6 +3610,8 @@ def numpy_arange_3(context, builder, sig, args):
 
 @lower_builtin(np.arange, types.Number, types.Number,
            types.Number, types.DTypeSpec)
+@lower_builtin(np.arange, types.Number, types.Number,
+           types.Number, types.Const)
 def numpy_arange_4(context, builder, sig, args):
 
     if any(isinstance(a, types.Complex) for a in sig.args):
