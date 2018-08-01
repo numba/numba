@@ -14,7 +14,7 @@ from ..numpy_support import (ufunc_find_matching_loop,
                              carray, farray)
 from ..numpy_support import version as numpy_version
 from ..errors import TypingError, PerformanceWarning
-from numba import pndindex
+from numba import pndindex, typeof
 
 registry = Registry()
 infer = registry.register
@@ -434,6 +434,8 @@ def _parse_dtype(dtype):
     if isinstance(dtype, types.misc.Const):
         if isinstance(dtype.value, str):
             return from_dtype(np.dtype(dtype.value))
+        elif isinstance(dtype.value, np.dtype):
+            return from_dtype(dtype.value)
 
 def _parse_nested_sequence(context, typ):
     """
