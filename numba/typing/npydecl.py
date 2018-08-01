@@ -558,6 +558,7 @@ if numpy_version >= (1, 8):
 
         def generic(self):
             def typer(shape, fill_value, dtype=None):
+                fill_value = _fix_const_type(fill_value)
                 if dtype is None:
                     if numpy_version < (1, 12):
                         nb_dtype = types.float64

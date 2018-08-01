@@ -3306,6 +3306,7 @@ if numpy_version >= (1, 8):
         return impl_ret_new_ref(context, builder, sig.return_type, res)
 
     @lower_builtin(np.full, types.Any, types.Any, types.DTypeSpec)
+    @lower_builtin(np.full, types.Any, types.Any, types.Const)
     def numpy_full_dtype_nd(context, builder, sig, args):
 
         def full(shape, value, dtype):
