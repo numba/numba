@@ -218,4 +218,4 @@ Numba can target `Nvidia CUDA <https://developer.nvidia.com/cuda-zone>`_ and
 (experimentally) `AMD ROC <https://rocm.github.io/>`_ GPUs. You can write a
 kernel in pure Python and have Numba handle the computation and data movement
 (or do this explicitly). Click for Numba documentation on
-:ref:`CUDA <cuda-index>` or `ROC <LINK>`_.
+:ref:`CUDA <cuda-index>` or :ref:`ROC <roc-index>`.
