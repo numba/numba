@@ -1,3 +1,5 @@
+.. _aot-compilation:
+
 Ahead-of-Time compilation
 =========================
 

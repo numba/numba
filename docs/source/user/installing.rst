@@ -34,6 +34,8 @@ or::
 
    $ conda update numba
 
+.. _numba-source-install-instructions:
+
 Installing from source
 ----------------------
 

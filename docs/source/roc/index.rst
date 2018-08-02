@@ -1,4 +1,6 @@
 
+.. _roc-index:
+
 Numba for AMD ROC GPUs
 ======================
 
