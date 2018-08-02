@@ -506,9 +506,9 @@ class Lower(BaseLower):
         return self.context.get_constant_generic(self.builder, retty, None)
 
     def lower_binop(self, resty, expr, op):
-        if op in utils.OPERATORS_TO_BUILTINS:
-            # map operator.the_op => the corresponding types.Function() TODO: is this looks dodgy ...
-            op = self.context.typing_context.resolve_value_type(op)
+        # if op in utils.OPERATORS_TO_BUILTINS:
+        # map operator.the_op => the corresponding types.Function() TODO: is this looks dodgy ...
+        op = self.context.typing_context.resolve_value_type(op)
 
         lhs = expr.lhs
         rhs = expr.rhs
@@ -561,7 +561,9 @@ class Lower(BaseLower):
             return cast_result(res)
 
         # Normal implementation for generic arguments
-        impl = self.context.get_function(op, signature)
+
+        sig = op.get_call_type(self.context.typing_context, signature.args, {})
+        impl = self.context.get_function(op, sig)
         res = impl(self.builder, (lhs, rhs))
         return cast_result(res)
 
@@ -774,7 +776,7 @@ class Lower(BaseLower):
             else:
                 # inplace operators on non-mutable types reuse the same
                 # definition as the corresponding copying operators.)
-                return self.lower_binop(resty, expr, expr.fn)
+                return self.lower_binop(resty, expr, expr.immutable_fn)
         elif expr.op == 'unary':
             val = self.loadvar(expr.value.name)
             typ = self.typeof(expr.value.name)
