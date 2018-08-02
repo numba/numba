@@ -19,6 +19,7 @@ matrix:
         - env: PYTHON=2.7 NUMPY=1.9 CONDA_ENV=travisci
         - env: PYTHON=2.7 NUMPY=1.14 CONDA_ENV=travisci
         - env: PYTHON=3.7 NUMPY=1.14 CONDA_ENV=travisci USE_C3I_TEST_CHANNEL=yes
+        - env: PYTHON=3.6 NUMPY=1.14 CONDA_ENV=travisci VANILLA_INSTALL=yes
 
 branches:
     only:

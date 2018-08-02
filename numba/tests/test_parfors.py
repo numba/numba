@@ -143,6 +143,8 @@ class TestParforsBase(TestCase):
         np.testing.assert_almost_equal(njit_output, py_expected, **kwargs)
         np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
 
+        self.assertEqual(type(njit_output), type(parfor_output))
+
         self.check_scheduling(cpfunc, scheduler_type)
 
         # if requested check fastmath variant
@@ -1108,6 +1110,17 @@ class TestParfors(TestParforsBase):
         self.assertTrue(build_tuple_found)
 
     @skip_unsupported
+    def test_parfor_dtype_type(self):
+        # test array type replacement creates proper type
+        def test_impl(a):
+            for i in numba.prange(len(a)):
+                a[i] = a.dtype.type(0)
+            return a[4]
+
+        a = np.ones(10)
+        self.check(test_impl, a)
+
+    @skip_unsupported
     def test_parfor_array_access5(self):
         # one dim is slice in multi-dim access
         def test_impl(n):
@@ -1121,6 +1134,18 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, n)
         self.assertEqual(countNonParforArrayAccesses(test_impl, (types.intp,)), 0)
 
+    @skip_unsupported
+    @test_disabled # Test itself is problematic, see #3155
+    def test_parfor_hoist_setitem(self):
+        # Make sure that read of out is not hoisted.
+        def test_impl(out):
+            for i in prange(10):
+                out[0] = 2 * out[0] 
+            return out[0]
+
+        out = np.ones(1)
+        self.check(test_impl, out)
+        
     @skip_unsupported
     @needs_blas
     def test_parfor_generate_fuse(self):

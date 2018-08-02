@@ -1045,7 +1045,7 @@ class TestOperators(TestCase):
             with self.assertRaises(errors.TypingError, msg=msg) as raises:
                 compile_isolated(pyfunc, argtypes)
             # check error message
-            fmt = 'Invalid usage of {}'
+            fmt = 'Invalid use of {}'
             expecting = fmt.format(opname
                                    if isinstance(opname, str)
                                    else 'Function({})'.format(opname))

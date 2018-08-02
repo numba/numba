@@ -6,8 +6,6 @@ import os
 import numba.testing
 from .api import *
 from .stubs import atomic
-from . import initialize
-
 
 def is_available():
     """Returns a boolean to indicate the availability of a HSA runtime.
@@ -25,14 +23,18 @@ def is_available():
        has_a_toolchain = True
     except:
         try:
-           cmd = hlc.CmdLine()
-           assert os.path.isfile(cmd.opt)
-           has_a_toolchain = True
+            cmd = hlc.CmdLine().check_tooling()
+            has_a_toolchain = True
         except:
             pass
 
     return hsa.is_available and has_a_toolchain
 
+if is_available():
+    from .hsadrv.driver import hsa
+    agents = list(hsa.agents)
+else:
+    agents = []
 
 def test(*args, **kwargs):
     if not is_available():
