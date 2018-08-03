@@ -919,7 +919,6 @@ def _fill_diagonal_params(a, wrap):
     if a.ndim == 2:
         n = a.shape[1]
         step = 1 + n
-
         end = n * a.shape[0] if wrap else n * n
     else:
         shape = np.array(a.shape)
@@ -929,6 +928,9 @@ def _fill_diagonal_params(a, wrap):
 
         step = 1 + (np.cumprod(shape[:-1])).sum()
         end = shape.prod()
+
+    # this might have been an omission for short and fat 2d use cases...we will see...
+    end = min(end, len(a.flat))
 
     return end, step
 
@@ -945,7 +947,15 @@ def _fill_diagonal(a, val, wrap):
     ctr = 0
     v_len = len(val)
 
+    # for debugging
+    assert end <= len(a.flat)
+
     for i in range(0, end, step):
+
+        # for debugging
+        assert ctr < v_len
+        assert i < len(a.flat)
+
         a.flat[i] = val[ctr]
         ctr += 1
         ctr = ctr % v_len
