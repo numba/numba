@@ -21,8 +21,11 @@ race condition.
     #define NUMBA_PTHREAD
 #endif
 
+#include <alloca.h>
 #include <string.h>
+#include <stddef.h>
 #include <stdio.h>
+#include <stdint.h>
 #include "workqueue.h"
 #include "../_pymodule.h"
 #include "gufunc_scheduler.h"
@@ -216,6 +219,132 @@ queue_state_wait(Queue *queue, int old, int repl)
     queue_condition_unlock(cond);
 }
 
+// break on this for debug
+void debug_marker() {};
+
+// this complies to a launchable function from `add_task` like:
+// add_task(nopfn, NULL, NULL, NULL, NULL)
+// useful if you want to limit the number of threads locally
+void nopfn(void *args, void *dims, void *steps, void *data){};
+
+#define _DEBUG 0
+
+static void
+parallel_for_1d(void *fn, void *args, void *dimensions, void *steps, void *data,
+                size_t inner_ndim, size_t array_count, size_t NUM_THREADS) {
+
+    //     args = <ir.Argument '.1' of type i8**>,
+    //     dimensions = <ir.Argument '.2' of type i64*>
+    //     steps = <ir.Argument '.3' of type i64*>
+    //     data = <ir.Argument '.4' of type i8*>
+
+    debug_marker();
+    size_t * count_space = NULL;
+    char ** array_arg_space = NULL;
+    const size_t arg_len = (inner_ndim + 1);
+    size_t i, j, count, remain, total;
+
+    // args are char**
+    char ** gep_args = NULL;
+    ptrdiff_t offset, addr;
+    char * base;
+
+    // steps are intp *
+    size_t * gep_steps;
+    size_t step;
+
+
+    total = *((size_t *)dimensions);
+    count = total / NUM_THREADS;
+    remain = total;
+
+    gep_args = (char **)(args);
+    gep_steps = (size_t *)(steps);
+
+    if(_DEBUG) {
+        printf("inner_ndim: %ld\n",inner_ndim);
+        printf("arg_len: %ld\n", arg_len);
+        printf("total: %ld\n", total);
+        printf("count: %ld\n", count);
+
+        printf("dimensions: ");
+        for(j = 0; j < arg_len; j++)
+        {
+            printf("%ld, ", ((size_t *)dimensions)[j]);
+        }
+        printf("\n");
+
+        printf("steps: ");
+        for(j = 0; j < array_count; j++)
+        {
+            printf("%ld, ", gep_steps[j]);
+        }
+        printf("\n");
+
+        printf("*args: ");
+        for(j = 0; j < array_count; j++)
+        {
+            printf("%p, ", (void *)gep_args[j]);
+        }
+    }
+
+
+    for (i = 0; i < NUM_THREADS; i++) {
+        count_space = (size_t *)alloca(sizeof(size_t) * arg_len);
+        memcpy(count_space, dimensions, arg_len * sizeof(size_t));
+        if(i == NUM_THREADS - 1)
+        {
+            // Last thread takes all leftover
+            count_space[0] = remain;
+        }
+        else
+        {
+            count_space[0] = count;
+            remain = remain - count;
+        }
+
+        if(_DEBUG) {
+            printf("\n=================== THREAD %ld ===================\n", i);
+            printf("\ncount_space: ");
+            for(j = 0; j < arg_len; j++)
+            {
+                printf("%ld, ", count_space[j]);
+            }
+            printf("\n");
+        }
+
+        array_arg_space = alloca(sizeof(char*) * array_count);
+
+        for(j = 0; j < array_count; j++)
+        {
+            base = gep_args[j];
+            step = gep_steps[j];
+            offset = step * count * i;
+            array_arg_space[j] = (char *)(base + offset);
+
+            if(_DEBUG) {
+                printf("Index %ld\n", j);
+                printf("-->Got base %p\n", (void *)base);
+                printf("-->Got step %ld\n", step);
+                printf("-->Got offset %ld\n", offset);
+                printf("-->Got addr %p\n", (void *)addr);
+            }
+        }
+
+        if(_DEBUG) {
+            printf("\narray_arg_space: ");
+            for(j = 0; j < array_count; j++)
+            {
+                printf("%p, ", (void *)array_arg_space[j]);
+            }
+        }
+        add_task(fn, (void *)array_arg_space, (void *)count_space, steps, data);
+    }
+
+    ready();
+    synchronize();
+}
+
 static void
 add_task(void *fn, void *args, void *dims, void *steps, void *data) {
     void (*func)(void *args, void *dims, void *steps, void *data) = fn;
@@ -307,6 +436,8 @@ MOD_INIT(workqueue) {
                            PyLong_FromVoidPtr(&ready));
     PyObject_SetAttrString(m, "add_task",
                            PyLong_FromVoidPtr(&add_task));
+    PyObject_SetAttrString(m, "parallel_for_1d",
+                           PyLong_FromVoidPtr(&parallel_for_1d));
     PyObject_SetAttrString(m, "do_scheduling_signed",
                            PyLong_FromVoidPtr(&do_scheduling_signed));
     PyObject_SetAttrString(m, "do_scheduling_unsigned",

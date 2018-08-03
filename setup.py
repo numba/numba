@@ -42,7 +42,7 @@ GCCFLAGS = ["-std=c89", "-Wdeclaration-after-statement", "-Werror"]
 if os.environ.get("NUMBA_GCC_FLAGS"):
     CFLAGS = GCCFLAGS
 else:
-    CFLAGS = []
+    CFLAGS = ['-g']
 
 install_name_tool_fixer = []
 if sys.platform == 'darwin':

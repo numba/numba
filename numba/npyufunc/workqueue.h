@@ -36,3 +36,8 @@ void synchronize(void);
 /* Signal worker threads that tasks are added and it is ready to run */
 static
 void ready(void);
+
+/* parallel for loop with 1d tiling. */
+static void
+parallel_for_1d(void *fn, void *args, void *dims, void *steps, void *data,\
+                size_t inner_ndim, size_t array_count, size_t NUM_THREADS);
