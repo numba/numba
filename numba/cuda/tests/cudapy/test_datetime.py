@@ -2,11 +2,11 @@ from __future__ import print_function
 
 import numpy as np
 
-from numba import cuda, vectorize, guvectorize, typeof
+from numba import cuda, vectorize, guvectorize
 from numba import unittest_support as unittest
 from numba.numpy_support import from_dtype
 from numba.tests.support import TestCase
-from numba.cuda.testing import SerialMixin
+from numba.cuda.testing import SerialMixin, skip_on_cudasim
 
 
 class TestCudaDateTime(SerialMixin, TestCase):
@@ -24,6 +24,7 @@ class TestCudaDateTime(SerialMixin, TestCase):
 
         self.assertPreciseEqual(delta, arr2 - arr1)
 
+    @skip_on_cudasim('ufunc API unsupported in the simulator')
     def test_ufunc(self):
         datetime_t = from_dtype(np.dtype('datetime64[D]'))
 
@@ -38,6 +39,7 @@ class TestCudaDateTime(SerialMixin, TestCase):
 
         self.assertPreciseEqual(delta, arr2 - arr1)
 
+    @skip_on_cudasim('ufunc API unsupported in the simulator')
     def test_gufunc(self):
         datetime_t = from_dtype(np.dtype('datetime64[D]'))
         timedelta_t = from_dtype(np.dtype('timedelta64[D]'))
@@ -53,6 +55,7 @@ class TestCudaDateTime(SerialMixin, TestCase):
         delta = timediff(arr1, arr2)
 
         self.assertPreciseEqual(delta, arr2 - arr1)
+
 
 if __name__ == '__main__':
     unittest.main()
