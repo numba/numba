@@ -1,6 +1,7 @@
 typedef struct opaque_thread * thread_pointer;
 
-enum QUEUE_STATE {
+enum QUEUE_STATE
+{
     /*
     The queue has 4 states:
 
@@ -37,7 +38,25 @@ void synchronize(void);
 static
 void ready(void);
 
-/* parallel for loop with 1d tiling. */
+/* parallel for loop with 1d tiling. 
+
+ Args:
+
+ fn - function pointer to the gufunc
+
+ These are from the Python: args, dimensions, steps, data = lfunc.args
+ args - gufunc args 
+ dims - gufunc dims
+ steps - gufunc steps
+ data - gufunc data
+
+ inner_ndim - inner dimension of the gufunc
+ array_count - the number of arrays in the signature (Python: len(sig.args) + 1)
+ the +1 is for the output array.
+ 
+ NUM_THREADS - the number of threads to use
+
+ */
 static void
 parallel_for_1d(void *fn, void *args, void *dims, void *steps, void *data,\
                 size_t inner_ndim, size_t array_count, size_t NUM_THREADS);
