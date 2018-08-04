@@ -1022,7 +1022,9 @@ def np_fill_diagonal(a, val, wrap=False):
     if a.ndim < 2:
         return _abort_mission
 
-    # the following will be massively simplified after #3088
+    # the following can be simplified after #3088; until then, employ
+    # a basic mechanism for catching cases where val is of a type/value
+    # which cannot safely be cast to a.dtype
 
     if isinstance(val, (types.Float, types.Integer, types.Boolean)):
         if isinstance(a.dtype, types.Integer):
@@ -1039,6 +1041,7 @@ def np_fill_diagonal(a, val, wrap=False):
             return fill_diagonal_impl_seq_val_a_float
         else:
             return fill_diagonal_impl_seq_val
+
     elif isinstance(val, types.Array):
         if isinstance(a.dtype, types.Integer):
             return fill_diagonal_impl_array_val_check_a_int

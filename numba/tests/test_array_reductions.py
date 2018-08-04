@@ -441,7 +441,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_fill_diagonal(self):
         self._fill_diagonal_basic()
         self._fill_diagonal_exception_cases()
-        self._fill_diagnonal_handle_unsafe_type_coercion()
+        self._fill_diagonal_handle_unsafe_type_coercion()
 
     def _fill_diagonal_basic(self):
         pyfunc = fill_diagonal_global
@@ -494,7 +494,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             for val in _val_variations():
                 _check_fill_diagonal(arr, val)
 
-    def _fill_diagnonal_handle_unsafe_type_coercion(self):
+    def _fill_diagonal_handle_unsafe_type_coercion(self):
         pyfunc = fill_diagonal_global
         cfunc = jit(nopython=True)(pyfunc)
 
