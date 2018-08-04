@@ -917,9 +917,13 @@ if numpy_version >= (1, 9):
 @register_jitable
 def _fill_diagonal_params(a, wrap):
     if a.ndim == 2:
+        m = a.shape[0]
         n = a.shape[1]
         step = 1 + n
-        end = n * a.shape[0] if wrap else n * n
+        if wrap:
+            end = n * m
+        else:
+            end = n * min(m, n)
     else:
         shape = np.array(a.shape)
 
@@ -928,9 +932,6 @@ def _fill_diagonal_params(a, wrap):
 
         step = 1 + (np.cumprod(shape[:-1])).sum()
         end = shape.prod()
-
-    # this might have been an omission for short and fat 2d use cases...we will see...
-    end = min(end, len(a.flat))
 
     return end, step
 
