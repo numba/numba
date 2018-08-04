@@ -236,7 +236,7 @@ void nopfn(void *args, void *dims, void *steps, void *data) {};
 #define _DEBUG 0
 
 static void
-parallel_for_1d(void *fn, void *args, void *dimensions, void *steps, void *data,
+parallel_for_1d(void *fn, char **args, size_t *dimensions, size_t *steps, void *data,
                 size_t inner_ndim, size_t array_count, size_t NUM_THREADS)
 {
 
@@ -251,22 +251,15 @@ parallel_for_1d(void *fn, void *args, void *dimensions, void *steps, void *data,
     const size_t arg_len = (inner_ndim + 1);
     size_t i, j, count, remain, total;
 
-    // args are char**
-    char ** gep_args = NULL;
     ptrdiff_t offset, addr;
     char * base;
 
-    // steps are intp *
-    size_t * gep_steps;
     size_t step;
 
 
     total = *((size_t *)dimensions);
     count = total / NUM_THREADS;
     remain = total;
-
-    gep_args = (char **)(args);
-    gep_steps = (size_t *)(steps);
 
     if(_DEBUG)
     {
@@ -285,14 +278,14 @@ parallel_for_1d(void *fn, void *args, void *dimensions, void *steps, void *data,
         printf("steps: ");
         for(j = 0; j < array_count; j++)
         {
-            printf("%ld, ", gep_steps[j]);
+            printf("%ld, ", steps[j]);
         }
         printf("\n");
 
         printf("*args: ");
         for(j = 0; j < array_count; j++)
         {
-            printf("%p, ", (void *)gep_args[j]);
+            printf("%p, ", (void *)args[j]);
         }
     }
 
@@ -327,8 +320,8 @@ parallel_for_1d(void *fn, void *args, void *dimensions, void *steps, void *data,
 
         for(j = 0; j < array_count; j++)
         {
-            base = gep_args[j];
-            step = gep_steps[j];
+            base = args[j];
+            step = steps[j];
             offset = step * count * i;
             array_arg_space[j] = (char *)(base + offset);
 

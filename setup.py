@@ -136,6 +136,14 @@ def get_ext_modules():
                                    **np_compile_args)
 
     tbb_root = os.getenv('TBBROOT')
+    if not tbb_root:
+        path2check = [os.path.join(*sys.executable.split(os.sep)[:-2])]
+        path2check += [os.getenv(n) for n in ['CONDA_PREFIX', 'PREFIX']]
+        if sys.platform.startswith('win'):
+            path2check += [os.path.join(p, 'Library') for p in path2check]
+        for p in path2check:
+            if p and os.path.isfile(os.path.join(p, 'include', 'tbb', 'tbb.h')):
+                tbb_root = p  # the latest is used
 
     if tbb_root:
         print("Using TBBROOT=", tbb_root)
