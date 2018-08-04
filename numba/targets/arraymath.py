@@ -948,18 +948,31 @@ def _fill_diagonal(a, val, wrap):
     ctr = 0
     v_len = len(val)
 
-    # for debugging
-    assert end <= len(a.flat)
-
     for i in range(0, end, step):
-
-        # for debugging
-        assert ctr < v_len
-        assert i < len(a.flat)
-
         a.flat[i] = val[ctr]
         ctr += 1
         ctr = ctr % v_len
+
+@register_jitable
+def _check_val_int(a, val):
+    iinfo = np.iinfo(a.dtype)
+    v_min = iinfo.min
+    v_max = iinfo.max
+
+    # check finite values are within bounds
+    if np.any(~np.isfinite(val)) or np.any(val < v_min) or np.any(val > v_max):
+        raise ValueError('unable to safely conform val to a.dtype')
+
+@register_jitable
+def _check_val_float(a, val):
+    finfo = np.finfo(a.dtype)
+    v_min = finfo.min
+    v_max = finfo.max
+
+    # check finite values are within bounds
+    finite_vals = val[np.isfinite(val)]
+    if np.any(finite_vals < v_min) or np.any(finite_vals > v_max):
+        raise ValueError('unable to safely conform val to a.dtype')
 
 @overload(np.fill_diagonal)
 def np_fill_diagonal(a, val, wrap=False):
@@ -970,23 +983,69 @@ def np_fill_diagonal(a, val, wrap=False):
     def fill_diagonal_impl_scalar_val(a, val, wrap=False):
         _fill_diagonal_scalar(a, val, wrap)
 
+    def fill_diagonal_impl_scalar_val_a_int(a, val, wrap=False):
+        _check_val_int(a, np.array([val]))
+        _fill_diagonal_scalar(a, val, wrap)
+
+    def fill_diagonal_impl_scalar_val_a_float(a, val, wrap=False):
+        _check_val_float(a, np.array([val]))
+        _fill_diagonal_scalar(a, val, wrap)
+
     def fill_diagonal_impl_seq_val(a, val, wrap=False):
         val = np.array(val).flatten()
+        _fill_diagonal(a, val, wrap)
+
+    def fill_diagonal_impl_seq_val_a_int(a, val, wrap=False):
+        val = np.array(val).flatten()
+        _check_val_int(a, val)
+        _fill_diagonal(a, val, wrap)
+
+    def fill_diagonal_impl_seq_val_a_float(a, val, wrap=False):
+        val = np.array(val).flatten()
+        _check_val_float(a, val)
         _fill_diagonal(a, val, wrap)
 
     def fill_diagonal_impl_array_val(a, val, wrap=False):
         val = val.flatten()
         _fill_diagonal(a, val, wrap)
 
+    def fill_diagonal_impl_array_val_check_a_int(a, val, wrap=False):
+        val = val.flatten()
+        _check_val_int(a, val)
+        _fill_diagonal(a, val, wrap)
+
+    def fill_diagonal_impl_array_val_check_a_float(a, val, wrap=False):
+        val = val.flatten()
+        _check_val_float(a, val)
+        _fill_diagonal(a, val, wrap)
+
     if a.ndim < 2:
         return _abort_mission
 
+    # the following will be massively simplified after #3088
+
     if isinstance(val, (types.Float, types.Integer, types.Boolean)):
-        return fill_diagonal_impl_scalar_val
+        if isinstance(a.dtype, types.Integer):
+            return fill_diagonal_impl_scalar_val_a_int
+        elif isinstance(a.dtype, types.Float):
+            return fill_diagonal_impl_scalar_val_a_float
+        else:
+            return fill_diagonal_impl_scalar_val
+
     elif isinstance(val, (types.Tuple, types.Sequence)):
-        return fill_diagonal_impl_seq_val
+        if isinstance(a.dtype, types.Integer):
+            return fill_diagonal_impl_seq_val_a_int
+        elif isinstance(a.dtype, types.Float):
+            return fill_diagonal_impl_seq_val_a_float
+        else:
+            return fill_diagonal_impl_seq_val
     elif isinstance(val, types.Array):
-        return fill_diagonal_impl_array_val
+        if isinstance(a.dtype, types.Integer):
+            return fill_diagonal_impl_array_val_check_a_int
+        elif isinstance(a.dtype, types.Float):
+            return fill_diagonal_impl_array_val_check_a_float
+        else:
+            return fill_diagonal_impl_array_val
 
 def _np_round_intrinsic(tp):
     # np.round() always rounds half to even

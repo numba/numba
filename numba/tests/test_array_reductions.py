@@ -441,6 +441,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_fill_diagonal(self):
         self._fill_diagonal_basic()
         self._fill_diagonal_exception_cases()
+        self._fill_diagnonal_handle_unsafe_type_coercion()
 
     def _fill_diagonal_basic(self):
         pyfunc = fill_diagonal_global
@@ -493,6 +494,38 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             for val in _val_variations():
                 _check_fill_diagonal(arr, val)
 
+    def _fill_diagnonal_handle_unsafe_type_coercion(self):
+        pyfunc = fill_diagonal_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        def _assert_raises(arr, val):
+            with self.assertRaises(ValueError) as raises:
+                cfunc(arr, val)
+            self.assertEqual("unable to safely conform val to a.dtype", str(raises.exception))
+
+        arr = np.zeros((3, 3), dtype=np.int32)
+        val = np.nan
+        _assert_raises(arr, val)
+
+        val = [3.3, np.inf]
+        _assert_raises(arr, val)
+
+        val = np.array([1, 2, 1e10], dtype=np.int64)
+        _assert_raises(arr, val)
+
+        arr = np.zeros((3, 3), dtype=np.float32)
+        val = [1.4, 2.6, -1e100]
+        _assert_raises(arr, val)
+
+        val = 1.1e100
+        _assert_raises(arr, val)
+
+        val = np.array([-1e100])
+        _assert_raises(arr, val)
+
     def _fill_diagonal_exception_cases(self):
         pyfunc = fill_diagonal_global
         cfunc = jit(nopython=True)(pyfunc)
@@ -510,30 +543,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             a = np.zeros((3, 3, 4))
             cfunc(a, val)
         self.assertEqual("All dimensions of input must be of equal length", str(raises.exception))
-
-    @unittest.skip('TODO: figure out how to handle type mismatch')
-    def test_fill_diagonal_edge_cases(self):
-        pyfunc = fill_diagonal_global
-        cfunc = jit(nopython=True)(pyfunc)
-
-        arr = np.zeros((3, 3), dtype=np.int32)
-        val = np.nan  # or pick a huge int; same outcome
-
-        with self.assertRaises(ValueError):
-            cfunc(arr, val)
-
-        # Note:
-        # this should raise but it doesn't as np.nan gets int-ified with no error
-        # (but with a nonsensical output).
-        #
-        # For example:
-        #
-        # @njit
-        # def _coerce_val(a, val):
-        #     retty = a.dtype.type
-        #     return retty(val)
-        #
-        # _coerce_val(np.array([], dtype=np.int32), np.nan) -> -2147483648
 
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)
