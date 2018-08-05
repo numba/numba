@@ -266,6 +266,7 @@ The following top-level functions are supported:
 * :func:`numpy.empty_like` (only the 2 first arguments)
 * :func:`numpy.expand_dims`
 * :func:`numpy.eye`
+* :func:`numpy.fill_diagonal`
 * :func:`numpy.flatten` (no order argument; 'C' order only)
 * :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full` (only the 3 first arguments)
