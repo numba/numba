@@ -429,6 +429,37 @@ class TestStencil(TestStencilBase):
 
     @skip_unsupported
     @tag('important')
+    def test_stencil_call_const(self):
+        """Tests numba.stencil call that has an index that can be inferred as
+        constant from a unary expr. Otherwise, this would raise an error since
+        neighborhood length is not specified.
+        """
+        def test_impl(n):
+            A = np.arange(n)
+            B = np.zeros(n)
+            c = 1
+            numba.stencil(lambda a,c : 0.3 * (a[-c] + a[0] + a[c]))(
+                                                                   A, c, out=B)
+            return B
+
+        def test_impl_seq(n):
+            A = np.arange(n)
+            B = np.zeros(n)
+            c = 1
+            for i in range(1, n - 1):
+                B[i] = 0.3 * (A[i - c] + A[i] + A[i + c])
+            return B
+
+        n = 100
+        # constant inference is only possible in parallel path
+        cpfunc = self.compile_parallel(test_impl, (types.intp,))
+        expected = test_impl_seq(n)
+        # parfor result
+        parfor_output = cpfunc.entry_point(n)
+        np.testing.assert_almost_equal(parfor_output, expected, decimal=3)
+
+    @skip_unsupported
+    @tag('important')
     def test_stencil_parallel_off(self):
         """Tests 1D numba.stencil calls without parallel translation
            turned off.
