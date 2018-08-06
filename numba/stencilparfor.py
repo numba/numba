@@ -688,6 +688,7 @@ def _get_const_index_expr(kernel_defs, func_ir, index_var):
     in the outer function. index_var is assumed to be inside stencil kernel
     """
     try:
+        require(isinstance(index_var, ir.Var))
         # match definition inner_var = unary(index_var)
         var_def_list = kernel_defs[index_var.name]
         require(len(var_def_list) == 1)
