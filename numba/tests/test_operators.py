@@ -392,20 +392,6 @@ class TestOperators(TestCase):
         'bitwise_not_usecase_binary': operator.invert,
     }
 
-    # _bitwise_opnames = {
-    #     'bitshift_left_usecase': '<<',
-    #     'bitshift_ileft_usecase': '<<',
-    #     'bitshift_right_usecase': '>>',
-    #     'bitshift_iright_usecase': '>>',
-    #     'bitwise_and_usecase': '&',
-    #     'bitwise_iand_usecase': '&',
-    #     'bitwise_or_usecase': '|',
-    #     'bitwise_ior_usecase': '|',
-    #     'bitwise_xor_usecase': '^',
-    #     'bitwise_ixor_usecase': '^',
-    #     'bitwise_not_usecase_binary': '~',
-    # }
-
     def run_test_ints(self, pyfunc, x_operands, y_operands, types_list,
                       flags=force_pyobj_flags):
         if pyfunc is NotImplemented:

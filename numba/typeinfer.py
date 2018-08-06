@@ -19,7 +19,6 @@ import itertools
 from pprint import pprint
 import traceback
 from collections import OrderedDict
-from types import BuiltinFunctionType
 
 from numba import ir, types, utils, config, typing
 from .errors import (TypingError, UntypedAttributeError, new_error_context,
