@@ -869,7 +869,7 @@ def load_module_image(context, image):
     """
     image must be a pointer
     """
-    logsz = os.environ.get('NUMBAPRO_CUDA_LOG_SIZE', 1024)
+    logsz = int(os.environ.get('NUMBAPRO_CUDA_LOG_SIZE', 1024))
 
     jitinfo = (c_char * logsz)()
     jiterrors = (c_char * logsz)()

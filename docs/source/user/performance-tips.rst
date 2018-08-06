@@ -1,3 +1,5 @@
+.. _performance-tips:
+
 Performance Tips
 ================
 
@@ -169,6 +171,8 @@ Execution times are as follows, ``fastmath`` again improves performance.
 +-------------------------+-----------------+
 | ``do_sum_parallel_fast``|      5.37 ms    |
 +-------------------------+-----------------+
+
+.. _intel-svml:
 
 Intel SVML
 ----------

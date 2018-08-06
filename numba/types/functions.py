@@ -41,7 +41,7 @@ class _ResolutionFailures(object):
         indent = ' ' * 4
         args = [str(a) for a in self._args]
         args += ["%s=%s" % (k, v) for k, v in sorted(self._kwargs.items())]
-        headtmp = 'Invalid usage of {} with parameters ({})'
+        headtmp = 'Invalid use of {} with argument(s) of type(s): ({})'
         msgbuf = [headtmp.format(self._function_type, ', '.join(args))]
         explain = self._context.explain_function_type(self._function_type)
         msgbuf.append(explain)
@@ -53,6 +53,9 @@ class _ResolutionFailures(object):
             if loc:
                 msgbuf.append('{}raised from {}'.format(indent, loc))
 
+        likely_cause = ("This error is usually caused by passing an argument "
+                        "of a type that is unsupported by the named function.")
+        msgbuf.append(_termcolor.errmsg(likely_cause))
         return '\n'.join(msgbuf)
 
     def format_error(self, error):

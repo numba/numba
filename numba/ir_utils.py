@@ -604,6 +604,7 @@ def has_no_side_effect(rhs, lives, call_table):
             call_list == [slice] or
             call_list == ['stencil', numba] or
             call_list == ['log', numpy] or
+            call_list == ['dtype', numpy] or
             call_list == [numba.array_analysis.wrap_index]):
             return True
         elif (isinstance(call_list[0], numba.extending._Intrinsic) and

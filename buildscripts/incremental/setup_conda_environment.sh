@@ -20,12 +20,24 @@ conda list
 # (note workaround for https://github.com/conda/conda/issues/2679:
 #  `conda env remove` issue)
 conda remove --all -q -y -n $CONDA_ENV
-# Scipy, CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
-conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY cffi pip scipy jinja2 ipython
 
+# If VANILLA_INSTALL is yes, then only Python, NumPy and pip are installed, this
+# is to catch tests/code paths that require an optional package and are not
+# guarding against the possibility that it does not exist in the environment.
+# Create a base env first and then add to it...
+
+conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip
+
+# Activate first
 set +v
 source activate $CONDA_ENV
 set -v
+
+# Install optional packages into activated env
+if [ "${VANILLA_INSTALL}" != "yes" ]; then
+    # Scipy, CFFI, jinja2, IPython and pygments are optional dependencies, but exercised in the test suite
+    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi scipy jinja2 ipython pygments
+fi
 
 # Install the compiler toolchain
 if [[ $(uname) == Linux ]]; then

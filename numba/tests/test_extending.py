@@ -792,7 +792,13 @@ class TestIntrinsic(TestCase):
         memo_size += 1
         self.assertEqual(memo_size, len(memo))
         del original  # remove original before unpickling
-        # by deleting, the memo entry is removed
+
+        # by deleting, the memo entry is NOT removed due to recent
+        # function queue
+        self.assertEqual(memo_size, len(memo))
+
+        # Manually force clear of _recent queue
+        _Intrinsic._recent.clear()
         memo_size -= 1
         self.assertEqual(memo_size, len(memo))
 
