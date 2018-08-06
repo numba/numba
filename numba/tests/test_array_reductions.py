@@ -125,6 +125,12 @@ def array_nanpercentile_global(arr, q):
 def array_tri_global(m, n=None, k=0, dtype=np.float):
     return np.tri(m, n, k, dtype)
 
+def array_tril_global(m, k=0):
+    return np.tril(m, k)
+
+def array_triu_global(m, k=0):
+    return np.triu(m, k)
+
 
 def base_test_arrays(dtype):
     if dtype == np.bool_:
@@ -438,6 +444,26 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         # expected = pyfunc(7, k=3)
         # got = cfunc(7, k=3)
         # self.assertPreciseEqual(expected, got)
+
+    def _triangular_matrix_test(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def _check(a):
+            for k in range(-20, 20):
+                expected = pyfunc(a, k)
+                got = cfunc(a, k)
+                self.assertPreciseEqual(expected, got)
+
+        _check(np.ones((5, 6)))
+        _check(np.ones((3, 4, 5, 6)))
+        #_check(np.ones(1))
+
+    def test_tril(self):
+        self._triangular_matrix_test(array_tril_global)
+
+    def test_triu(self):
+        self._triangular_matrix_test(array_triu_global)
+
 
 
 

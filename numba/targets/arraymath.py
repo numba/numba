@@ -936,6 +936,66 @@ def np_tri(m, n=None, k=0, dtype=np.float64):
     return np_tri_impl
 
 
+@overload(np.tril)
+def my_tril(m, k=0):
+
+    def np_tril_impl(m, k=0):
+        mask = np.tri(m.shape[-2], n=m.shape[-1], k=k).astype(np.uint)
+        return np.where(mask, m, np.zeros_like(m, dtype=m.dtype))
+
+    def np_tril_multi_impl(m, k=0):
+        mask = np.tri(m.shape[-2], n=m.shape[-1], k=k).astype(np.uint)
+
+        multiple = np.prod(np.array(m.shape[:-2]))
+
+        out = np.empty(multiple * len(mask.flat))
+
+        for i in range(multiple):
+            out[i * len(mask.flat): (i + 1) * len(mask.flat)] = mask.flat
+
+        mask_ = out.reshape(m.shape)
+
+        return np.where(mask_, m, np.zeros_like(m, dtype=m.dtype))
+
+    if m.ndim == 2:
+        return np_tril_impl
+
+    if m.ndim > 2:
+        return np_tril_multi_impl
+
+
+@overload(np.triu)
+def my_triu(m, k=0):
+
+    def np_triu_impl(m, k=0):
+        mask = np.tri(m.shape[-2], n=m.shape[-1], k=k-1).astype(np.uint)
+        return np.where(mask, np.zeros_like(m, dtype=m.dtype), m)
+
+    def np_triu_multi_impl(m, k=0):
+        mask = np.tri(m.shape[-2], n=m.shape[-1], k=k-1).astype(np.uint)
+
+        multiple = np.prod(np.array(m.shape[:-2]))
+
+        out = np.empty(multiple * len(mask.flat))
+
+        for i in range(multiple):
+            out[i * len(mask.flat): (i + 1) * len(mask.flat)] = mask.flat
+
+        mask_ = out.reshape(m.shape)
+
+        return np.where(mask_, np.zeros_like(m, dtype=m.dtype), m)
+
+    if m.ndim == 2:
+        return np_triu_impl
+
+    if m.ndim > 2:
+        return np_triu_multi_impl
+
+
+
+
+
+
 def _np_round_intrinsic(tp):
     # np.round() always rounds half to even
     return "llvm.rint.f%d" % (tp.bitwidth,)
