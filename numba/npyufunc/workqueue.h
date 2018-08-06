@@ -13,10 +13,6 @@ enum QUEUE_STATE
     IDLE = 0, READY, RUNNING, DONE
 };
 
-/* Launch new thread */
-static
-thread_pointer numba_new_thread(void *worker, void *arg);
-
 /* Launch `count` number of threads and create the associated thread queue.
 Must invoke once before each add_task() is used.
 *Warning* queues memory are leaked at interpreter tear down!
@@ -58,5 +54,5 @@ void ready(void);
 
  */
 static void
-parallel_for_1d(void *fn, void *args, void *dims, void *steps, void *data,\
+parallel_for_1d(void *fn, char **args, size_t *dims, size_t *steps, void *data,\
                 size_t inner_ndim, size_t array_count, size_t NUM_THREADS);

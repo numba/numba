@@ -317,7 +317,7 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
     # Array count is input signature plus 1 (due to output array)
     array_count = len(sig.args) + 1
 
-    _PARALLEL_FOR = True
+    _PARALLEL_FOR = os.getenv('NUMBA_USE_PARFOR', False)
     if(_PARALLEL_FOR):
         parallel_for_1d_ty = lc.Type.function(lc.Type.void(),
                                               [byte_ptr_t] * 5 + [intp_t,] * 3)
