@@ -109,14 +109,15 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
                 printf("%p, ", (void *)array_arg_space[j]);
             printf("\n");
         }
-        auto func = reinterpret_cast<void (*)(void *args, void *dims, void *steps, void *data)>(fn);
-        func((void *)array_arg_space, (void *)count_space, steps, data);
+        auto func = reinterpret_cast<void (*)(char **args, size_t *dims, size_t *steps, void *data)>(fn);
+        func(array_arg_space, count_space, steps, data);
     });
 }
 
 void ignore_blocking_terminate_assertion( const char*, int, const char*, const char * ) {
     tbb::internal::runtime_warning("Unable to wait for threads to shut down before fork(). It can break multithreading in child process\n");
 }
+
 void ignore_assertion( const char*, int, const char*, const char * ) {}
 
 static void prepare_fork(void) {
@@ -140,7 +141,7 @@ static void unload_tbb(void) {
         tg = NULL;
         puts("Unloading TBB");
         assertion_handler_type orig = tbb::set_assertion_handler(ignore_assertion);
-        TSI_TERMINATE(tsi);
+        tsi->terminate(); // no blocking terminate is needed here
         tbb::set_assertion_handler(orig);
         delete tsi;
         tsi = NULL;
@@ -148,9 +149,9 @@ static void unload_tbb(void) {
 }
 
 static void launch_threads(int count) {
-    puts("Using TBB");
     if(tsi)
         return;
+    puts("Using TBB");
     if(count < 1)
         count = tbb::task_scheduler_init::automatic;
     tsi = new TSI_INIT(tsi_count = count);
