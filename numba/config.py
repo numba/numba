@@ -261,6 +261,10 @@ class _EnvReloader(object):
         # Disable jit for debugging
         DISABLE_JIT = _readenv("NUMBA_DISABLE_JIT", int, 0)
 
+        # use Intel TBB for parallel execution scheduling
+        # TODO: sort this out
+        NUMBA_ENABLE_TBB = _readenv("NUMBA_ENABLE_TBB", int, 1)
+
         # CUDA Configs
 
         # Force CUDA compute capability to a specific version

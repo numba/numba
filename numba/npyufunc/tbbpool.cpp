@@ -37,12 +37,12 @@ add_task(void *fn, void *args, void *dims, void *steps, void *data) {
 #define _DEBUG 0
 
 static void
-parallel_for_1d(void *fn, char **args, size_t *dimensions, size_t *steps, void *data,
+parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *data,
                 size_t inner_ndim, size_t array_count, size_t)
 {
     static bool printed = false;
     if(!printed) {
-        puts("Using parallel_for_1d");
+        puts("Using parallel_for");
         printed = true;
     }
 
@@ -189,8 +189,8 @@ MOD_INIT(workqueue) {
                            PyLong_FromVoidPtr((void*)&ready));
     PyObject_SetAttrString(m, "add_task",
                            PyLong_FromVoidPtr((void*)&add_task));
-    PyObject_SetAttrString(m, "parallel_for_1d",
-                           PyLong_FromVoidPtr((void*)&parallel_for_1d));
+    PyObject_SetAttrString(m, "parallel_for",
+                           PyLong_FromVoidPtr((void*)&parallel_for));
     PyObject_SetAttrString(m, "do_scheduling_signed",
                            PyLong_FromVoidPtr((void*)&do_scheduling_signed));
     PyObject_SetAttrString(m, "do_scheduling_unsigned",

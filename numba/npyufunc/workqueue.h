@@ -54,5 +54,5 @@ void ready(void);
 
  */
 static void
-parallel_for_1d(void *fn, char **args, size_t *dims, size_t *steps, void *data,\
-                size_t inner_ndim, size_t array_count, size_t NUM_THREADS);
+parallel_for(void *fn, char **args, size_t *dims, size_t *steps, void *data,\
+            size_t inner_ndim, size_t array_count, size_t NUM_THREADS);

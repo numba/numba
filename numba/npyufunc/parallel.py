@@ -318,17 +318,18 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
     array_count = len(sig.args) + 1
 
     _PARALLEL_FOR = os.getenv('NUMBA_USE_PARFOR', False)
+
     if(_PARALLEL_FOR):
-        parallel_for_1d_ty = lc.Type.function(lc.Type.void(),
+        parallel_for_ty = lc.Type.function(lc.Type.void(),
                                               [byte_ptr_t] * 5 + [intp_t,] * 3)
-        parallel_for_1d = mod.get_or_insert_function(parallel_for_1d_ty,
-                                                     name='numba_parallel_for_1d')
+        parallel_for = mod.get_or_insert_function(parallel_for_ty,
+                                                     name='numba_parallel_for')
 
         # Note: the runtime address is taken and used as a constant in the function.
         fnptr = ctx.get_constant(types.uintp, innerfunc).inttoptr(byte_ptr_t)
         innerargs = [as_void_ptr(x) for x
                     in [args, dimensions, steps, data]]
-        builder.call(parallel_for_1d, [fnptr] + innerargs +
+        builder.call(parallel_for, [fnptr] + innerargs +
                      [intp_t(x) for x in (inner_ndim, array_count, NUM_THREADS)])
     else:
 
@@ -436,7 +437,7 @@ def _init():
     ll.add_symbol('numba_add_task', lib.add_task)
     ll.add_symbol('numba_synchronize', lib.synchronize)
     ll.add_symbol('numba_ready', lib.ready)
-    ll.add_symbol('numba_parallel_for_1d', lib.parallel_for_1d)
+    ll.add_symbol('numba_parallel_for', lib.parallel_for)
     ll.add_symbol('do_scheduling_signed', lib.do_scheduling_signed)
     ll.add_symbol('do_scheduling_unsigned', lib.do_scheduling_unsigned)
 
