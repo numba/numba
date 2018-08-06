@@ -914,6 +914,28 @@ if numpy_version >= (1, 9):
 #----------------------------------------------------------------------------
 # Element-wise computations
 
+@overload(np.tri)
+def np_tri(m, n=None, k=0, dtype=np.float64):
+
+    def np_tri_impl(m, n=None, k=0, dtype=np.float64):
+
+        if n is None:
+            n = m
+
+        out = np.empty((m, n))
+
+        for i in range(m):
+            m_max = min(max(0, i + k + 1), n)
+            out[i, :m_max] = 1
+            out[i, m_max:] = 0
+
+        #out = out.astype(dtype)
+
+        return out
+
+    return np_tri_impl
+
+
 def _np_round_intrinsic(tp):
     # np.round() always rounds half to even
     return "llvm.rint.f%d" % (tp.bitwidth,)

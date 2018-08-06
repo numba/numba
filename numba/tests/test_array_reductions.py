@@ -122,6 +122,10 @@ def array_percentile_global(arr, q):
 def array_nanpercentile_global(arr, q):
     return np.nanpercentile(arr, q)
 
+def array_tri_global(m, n=None, k=0, dtype=np.float):
+    return np.tri(m, n, k, dtype)
+
+
 def base_test_arrays(dtype):
     if dtype == np.bool_:
         def factory(n):
@@ -417,6 +421,26 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         element_pool = (1, -1, np.nan, np.inf, -np.inf)
         for a in _array_combinations(element_pool):
             check(a, q, abs_tol=1e-14)  # 'eps' fails, tbd...
+
+    def test_tri(self):
+        pyfunc = array_tri_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for k in range(-20, 20):
+            expected = pyfunc(5, 6, k)
+            got = cfunc(5, 6, k)
+            self.assertPreciseEqual(expected, got)
+
+        expected = pyfunc(1, 1, 0)
+        got = cfunc(1, 1, 0)
+        self.assertPreciseEqual(expected, got)
+
+        # expected = pyfunc(7, k=3)
+        # got = cfunc(7, k=3)
+        # self.assertPreciseEqual(expected, got)
+
+
+
 
     @unittest.skipUnless(np_version >= (1, 10), "percentile needs Numpy 1.10+")
     def test_percentile_basic(self):
