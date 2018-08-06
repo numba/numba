@@ -689,6 +689,10 @@ def _get_const_index_expr(kernel_defs, func_ir, index_var):
     """
     try:
         require(isinstance(index_var, ir.Var))
+        # case where the index is a const itself in outer function
+        var_const =  guard(ir_utils.find_const, func_ir, index_var)
+        if var_const is not None:
+            return var_const
         # match definition inner_var = unary(index_var)
         var_def_list = kernel_defs[index_var.name]
         require(len(var_def_list) == 1)
