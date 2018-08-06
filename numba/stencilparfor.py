@@ -17,7 +17,7 @@ from numba.typing import signature
 from numba import ir_utils, ir, utils, config, typing
 from numba.ir_utils import (get_call_table, mk_unique_var,
                             compile_to_numba_ir, replace_arg_nodes, guard,
-                            find_callname)
+                            find_callname, require)
 from numba.six import exec_
 
 
@@ -426,6 +426,12 @@ class StencilPass(object):
                     else:
                         if hasattr(index_list, 'name') and index_list.name in tuple_table:
                             index_list = tuple_table[index_list.name]
+                    # indices can be inferred as constant in simple expressions
+                    # like -c where c is constant
+                    # handled here since this is a common stencil index pattern
+                    kernel_defs = ir_utils.build_definitions(stencil_blocks)
+                    index_list = [_get_const_index_expr(
+                        kernel_defs, self.func_ir, v) for v in index_list]
                     if index_offsets:
                         index_list = self._add_index_offsets(index_list,
                                     list(index_offsets), new_body, scope, loc)
@@ -674,3 +680,26 @@ class DummyPipeline(object):
         self.typemap = None
         self.return_type = None
         self.calltypes = None
+
+
+def _get_const_index_expr(kernel_defs, func_ir, index_var):
+    """
+    infer index_var as constant if it is of the form -c where c is a constant
+    in the outer function. index_var is assumed to be inside stencil kernel
+    """
+    try:
+        # match definition inner_var = unary(index_var)
+        var_def_list = kernel_defs[index_var.name]
+        require(len(var_def_list) == 1)
+        var_def = var_def_list[0]
+        require(isinstance(var_def, ir.Expr) and var_def.op == 'unary')
+        inner_var = var_def.value
+        # return -c as constant
+        const_val = ir_utils.find_const(func_ir, inner_var)
+        if var_def.fn == '+':
+            return const_val
+        elif var_def.fn == '-':
+            return -const_val
+    except ir_utils.GuardException:
+        return index_var
+    return index_var
