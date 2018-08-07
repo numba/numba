@@ -38,7 +38,6 @@ NUM_THREADS = get_thread_count()
 class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
     def build(self, cres, sig):
         _launch_threads()
-        _init()
 
         # Buider wrapper for ufunc entry point
         ctx = cres.target_context
@@ -221,7 +220,6 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
         Returns (dtype numbers, function ptr, EnvironmentObject)
         """
         _launch_threads()
-        _init()
 
         # Build wrapper for ufunc entry point
         ptr, env, wrapper_name = build_gufunc_wrapper(self.py_func, cres, self.sin, self.sout,
@@ -412,27 +410,34 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
 
 # ---------------------------------------------------------------------------
 
+_is_initialized = False
 
 def _launch_threads():
     """
     Initialize work queues and workers
     """
-    from . import workqueue as lib
-    from ctypes import CFUNCTYPE, c_int
-
-    launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
-    launch_threads(NUM_THREADS)
-
-
-_is_initialized = False
-
-def _init():
-    from . import workqueue as lib
-    from ctypes import CFUNCTYPE, c_void_p
 
     global _is_initialized
     if _is_initialized:
         return
+
+    t = config.NUMBA_THREADING_LAYER
+    lib = None
+    try:
+        if t.lower().startswith("tbb"):
+            from . import tbbpool as lib
+        elif t.lower().startswith("omp"):
+            from . import omppool as lib
+        elif not t.lower().startswith("workqueue"):
+            raise ValueError("Unknown value of NUMBA_THREADING_LAYER")
+        t = None
+    finally:
+        if t:
+            print("Cannot not load ", t, ", reverting to default threading layer")
+        if not lib:
+            from . import workqueue as lib
+
+    from ctypes import CFUNCTYPE, c_int
 
     ll.add_symbol('numba_add_task', lib.add_task)
     ll.add_symbol('numba_synchronize', lib.synchronize)
@@ -440,6 +445,9 @@ def _init():
     ll.add_symbol('numba_parallel_for', lib.parallel_for)
     ll.add_symbol('do_scheduling_signed', lib.do_scheduling_signed)
     ll.add_symbol('do_scheduling_unsigned', lib.do_scheduling_unsigned)
+
+    launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
+    launch_threads(NUM_THREADS)
 
     _is_initialized = True
 
