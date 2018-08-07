@@ -90,6 +90,7 @@ def get_ext_modules():
     # C API (include dirs, library dirs etc.)
     np_compile_args = np_misc.get_info('npymath')
 
+
     ext_dynfunc = Extension(name='numba._dynfunc',
                             sources=['numba/_dynfuncmod.c'],
                             extra_compile_args=CFLAGS,
@@ -135,6 +136,7 @@ def get_ext_modules():
                                             "numba/_pymodule.h"],
                                    **np_compile_args)
 
+
     # Search for Intel TBB, first check env var TBB_ROOT then conda locations
     tbb_root = os.getenv('TBB_ROOT')
     if not tbb_root:
@@ -149,6 +151,13 @@ def get_ext_modules():
     ext_npyufunc_workqueue_impls = []
 
     if tbb_root:
+        if sys.platform.startswith('win'):
+            cpp11flags = []
+            ompflags = ['-openmp']
+        else:
+            cpp11flags = ['-std=c++11']
+            ompflags = ['-fopenmp']
+
         print("Using Intel TBB from:", tbb_root)
         ext_npyufunc_tbb_workqueue = Extension(
             name='numba.npyufunc.tbb_workqueue',
@@ -164,6 +173,15 @@ def get_ext_modules():
             )
         ext_npyufunc_workqueue_impls.append(ext_npyufunc_tbb_workqueue)
 
+        ext_npyufunc_omppool = Extension( name='numba.npyufunc.omppool',
+                                    sources=['numba/npyufunc/omppool.cpp',
+                                            'numba/npyufunc/gufunc_scheduler.cpp'],
+                                    depends=['numba/npyufunc/workqueue.h'],
+                                    extra_compile_args=ompflags + cpp11flags)
+
+        ext_npyufunc_workqueue_impls.append(ext_npyufunc_omppool)
+
+
     # Build the Numba workqueue implementation irrespective of whether the TBB
     # version is built. Users can select a backend via env vars.
     ext_npyufunc_workqueue = Extension(
@@ -171,6 +189,7 @@ def get_ext_modules():
         sources=['numba/npyufunc/workqueue.c', 'numba/npyufunc/gufunc_scheduler.cpp'],
         depends=['numba/npyufunc/workqueue.h'])
     ext_npyufunc_workqueue_impls.append(ext_npyufunc_workqueue)
+
 
     ext_mviewbuf = Extension(name='numba.mviewbuf',
                              extra_link_args=install_name_tool_fixer,
@@ -199,6 +218,34 @@ def get_ext_modules():
                    ext_jitclass_box, ext_cuda_extras]
 
     ext_modules += ext_npyufunc_workqueue_impls
+
+
+    tbb_root = os.getenv('TBBROOT')
+    if not tbb_root:
+        path2check = [os.path.join(*sys.executable.split(os.sep)[:-2])]
+        path2check += [os.getenv(n) for n in ['CONDA_PREFIX', 'PREFIX']]
+        if sys.platform.startswith('win'):
+            path2check += [os.path.join(p, 'Library') for p in path2check]
+        for p in path2check:
+            if p and os.path.isfile(os.path.join(p, 'include', 'tbb', 'tbb.h')):
+                tbb_root = p  # the latest is used
+
+    if tbb_root:
+        print("Using TBBROOT=", tbb_root)
+        ext_npyufunc_tbb = Extension(
+            name='numba.npyufunc.tbbpool',
+            sources=['numba/npyufunc/tbbpool.cpp',
+                     'numba/npyufunc/gufunc_scheduler.cpp'],
+            depends=['numba/npyufunc/workqueue.h'],
+            include_dirs=[os.path.join(tbb_root, 'include')],
+            extra_compile_args = cpp11flags,
+            libraries   =['tbb'],
+            library_dirs=[os.path.join(tbb_root, 'lib', 'intel64', 'gcc4.4'),  # for Linux
+                          os.path.join(tbb_root, 'lib'),                       # for MacOS
+                          os.path.join(tbb_root, 'lib', 'intel64', 'vc_mt'),   # for Windows
+                         ],
+            )
+        ext_modules += [ext_npyufunc_tbb]
 
     return ext_modules
 

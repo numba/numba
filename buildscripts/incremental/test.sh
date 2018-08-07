@@ -22,7 +22,7 @@ export NUMBA_DEVELOPER_MODE=1
 export PYTHONFAULTHANDLER=1
 
 if [ "$TEST_TBB" == "yes" ]; then
-export NUMBA_ENABLE_TBB=1
+export NUMBA_THREADING_LAYER='tbbpool'
 fi
 
 unamestr=`uname`

@@ -36,6 +36,7 @@ def get_thread_count():
 
 NUM_THREADS = get_thread_count()
 
+
 def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
     """Wrap the original CPU ufunc/gufunc with a parallel dispatcher.
     This function will wrap gufuncs and ufuncs something like.
@@ -140,7 +141,6 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
 class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
     def build(self, cres, sig):
         _launch_threads()
-        _init()
 
         # Buider wrapper for ufunc entry point
         ctx = cres.target_context
@@ -181,7 +181,6 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
         Returns (dtype numbers, function ptr, EnvironmentObject)
         """
         _launch_threads()
-        _init()
 
         # Build wrapper for ufunc entry point
         ptr, env, wrapper_name = build_gufunc_wrapper(self.py_func, cres, self.sin, self.sout,
@@ -217,49 +216,51 @@ def build_gufunc_wrapper(py_func, cres, sin, sout, cache):
 # ---------------------------------------------------------------------------
 
 _backend_init_lock = RLock()
-
-def _load_backend():
-    if config.ENABLE_TBB != 0:
-        try:
-            from . import tbb_workqueue as lib
-        except ImportError:
-            msg = ("Intel TBB parallel back end was request but the module ",
-                   "could not be imported. Falling back to the Numba parallel "
-                   "back end")
-            warnings.warn(msg)
-            from . import workqueue as lib
-    else:
-        from . import workqueue as lib
-    return lib
-
-def _launch_threads():
-    """
-    Initialize work queues and workers
-    """
-    from ctypes import CFUNCTYPE, c_int
-
-    with _backend_init_lock:
-        lib = _load_backend()
-
-        launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
-        launch_threads(NUM_THREADS)
-
-
 _is_initialized = False
 
-def _init():
+def _launch_threads():
     with _backend_init_lock:
-        lib = _load_backend()
-
-        from ctypes import CFUNCTYPE, c_void_p
 
         global _is_initialized
         if _is_initialized:
             return
 
+        from ctypes import CFUNCTYPE, c_void_p
+
+        t = str(config.NUMBA_THREADING_LAYER)
+        lib = None
+        tbb_import_fail = False
+        try:
+            if t.lower().startswith("tbb"):
+                try:
+                    from . import tbbpool as lib
+                except ImportError:
+                    tbb_import_fail = True
+            elif t.lower().startswith("omp"):
+                try:
+                    from . import omppool as lib
+                except ImportError:
+                    tbb_import_fail = True
+            elif not t.lower().startswith("workqueue"):
+                msg = "Unknown value specified for NUMBA_THREADING_LAYER: %s"
+                raise ValueError(msg % t)
+        finally:
+            if not lib:
+                if tbb_import_fail:
+                    msg = ("Intel TBB parallel back end (%s) was request but the "
+                           "module could not be imported. Falling back to the "
+                           "Numba parallel back end")
+                warnings.warn(msg % t)
+                from . import workqueue as lib
+
+        from ctypes import CFUNCTYPE, c_int
+
         ll.add_symbol('numba_parallel_for', lib.parallel_for)
         ll.add_symbol('do_scheduling_signed', lib.do_scheduling_signed)
         ll.add_symbol('do_scheduling_unsigned', lib.do_scheduling_unsigned)
+
+        launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
+        launch_threads(NUM_THREADS)
 
         _is_initialized = True
 
