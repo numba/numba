@@ -929,8 +929,6 @@ def np_tri(m, n=None, k=0, dtype=np.float64):
             out[i, :m_max] = 1
             out[i, m_max:] = 0
 
-        #out = out.astype(dtype)
-
         return out
 
     return np_tri_impl

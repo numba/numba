@@ -449,15 +449,17 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         def _check(a):
-            for k in range(-20, 20):
+            for k in range(-10, 10):
                 expected = pyfunc(a, k)
                 got = cfunc(a, k)
-                print(a, k, expected, got)
                 self.assertPreciseEqual(expected, got)
 
         _check(np.ones((5, 6)))
         _check(np.ones((3, 4, 5, 6)))
         _check(np.ones(1))
+        _check(np.ones((1, 1, 1), dtype=np.float32))
+        _check(np.full((8, 9, 10), fill_value=3.142, dtype=np.float64))
+        _check(np.full((10, 5), fill_value=3, dtype=np.int8))
         #_check(np.array([]))
 
     def test_tril(self):
