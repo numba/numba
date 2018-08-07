@@ -452,11 +452,13 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             for k in range(-20, 20):
                 expected = pyfunc(a, k)
                 got = cfunc(a, k)
+                print(a, k, expected, got)
                 self.assertPreciseEqual(expected, got)
 
         _check(np.ones((5, 6)))
         _check(np.ones((3, 4, 5, 6)))
-        #_check(np.ones(1))
+        _check(np.ones(1))
+        #_check(np.array([]))
 
     def test_tril(self):
         self._triangular_matrix_test(array_tril_global)

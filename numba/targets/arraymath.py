@@ -947,20 +947,29 @@ def my_tril(m, k=0):
         mask = np.tri(m.shape[-2], n=m.shape[-1], k=k).astype(np.uint)
 
         multiple = np.prod(np.array(m.shape[:-2]))
-
         out = np.empty(multiple * len(mask.flat))
 
         for i in range(multiple):
             out[i * len(mask.flat): (i + 1) * len(mask.flat)] = mask.flat
 
         mask_ = out.reshape(m.shape)
-
         return np.where(mask_, m, np.zeros_like(m, dtype=m.dtype))
 
-    if m.ndim == 2:
-        return np_tril_impl
+    def np_tril_impl_1d(m, k=0):
+        if k >= 0:
+            out = m.reshape(1, 1)
+        else:
+            out = np.array([0], dtype=m.dtype).reshape(1, 1)
+        return out
 
-    if m.ndim > 2:
+    # def np_triu_impl_empty(m, k=0):
+    #     return np.array([], dtype=m.dtype).reshape(0, 0)
+
+    if m.ndim == 1:
+        return np_tril_impl_1d
+    elif m.ndim == 2:
+        return np_tril_impl
+    else:
         return np_tril_multi_impl
 
 
@@ -975,20 +984,29 @@ def my_triu(m, k=0):
         mask = np.tri(m.shape[-2], n=m.shape[-1], k=k-1).astype(np.uint)
 
         multiple = np.prod(np.array(m.shape[:-2]))
-
         out = np.empty(multiple * len(mask.flat))
 
         for i in range(multiple):
             out[i * len(mask.flat): (i + 1) * len(mask.flat)] = mask.flat
 
         mask_ = out.reshape(m.shape)
-
         return np.where(mask_, np.zeros_like(m, dtype=m.dtype), m)
 
-    if m.ndim == 2:
-        return np_triu_impl
+    def np_triu_impl_1d(m, k=0):
+        if k <= 0:
+            out = m.reshape(1, 1)
+        else:
+            out = np.array([0], dtype=m.dtype).reshape(1, 1)
+        return out
+    #
+    # def np_triu_impl_empty(m, k=0):
+    #     return np.array([], dtype=m.dtype).reshape(0, 0)
 
-    if m.ndim > 2:
+    if m.ndim == 1:
+        return np_triu_impl_1d
+    elif m.ndim == 2:
+        return np_triu_impl
+    else:
         return np_triu_multi_impl
 
 
