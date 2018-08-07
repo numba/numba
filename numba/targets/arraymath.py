@@ -915,7 +915,7 @@ if numpy_version >= (1, 9):
 # Element-wise computations
 
 @overload(np.tri)
-def np_tri(m, n=None, k=0, dtype=np.float64):
+def np_tri(M, N=None, k=0, dtype=np.float64):
 
     @register_jitable
     def _tri_impl(shape, k, dtype):
@@ -928,13 +928,13 @@ def np_tri(m, n=None, k=0, dtype=np.float64):
 
         return out
 
-    def np_tri_impl(m, n=None, k=0, dtype=np.float64):
-        return _tri_impl((m, n), k, dtype)
+    def np_tri_impl(M, N=None, k=0, dtype=np.float64):
+        return _tri_impl((M, N), k, dtype)
 
-    def np_tri_impl_no_n(m, n=None, k=0, dtype=np.float64):
-        return _tri_impl((m, m), k, dtype)
+    def np_tri_impl_no_n(M, N=None, k=0, dtype=np.float64):
+        return _tri_impl((M, M), k, dtype)
 
-    if n in (None, types.none):
+    if N in (None, types.none):
         return np_tri_impl_no_n
     else:
         return np_tri_impl
@@ -944,11 +944,11 @@ def np_tri(m, n=None, k=0, dtype=np.float64):
 def my_tril(m, k=0):
 
     def np_tril_impl(m, k=0):
-        mask = np.tri(m.shape[-2], n=m.shape[-1], k=k).astype(np.uint)
+        mask = np.tri(m.shape[-2], N=m.shape[-1], k=k).astype(np.uint)
         return np.where(mask, m, np.zeros_like(m, dtype=m.dtype))
 
     def np_tril_multi_impl(m, k=0):
-        mask = np.tri(m.shape[-2], n=m.shape[-1], k=k).astype(np.uint)
+        mask = np.tri(m.shape[-2], N=m.shape[-1], k=k).astype(np.uint)
 
         multiple = np.prod(np.array(m.shape[:-2]))
         out = np.empty(multiple * len(mask.flat))
