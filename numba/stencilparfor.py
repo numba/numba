@@ -166,7 +166,7 @@ class StencilPass(object):
             parfor_vars.append(parfor_var)
 
         start_lengths, end_lengths = self._replace_stencil_accesses(
-             stencil_blocks, parfor_vars, in_args, index_offsets, stencil_func,
+             stencil_ir, parfor_vars, in_args, index_offsets, stencil_func,
              arg_to_arr_dict)
 
         if config.DEBUG_ARRAY_OPT == 1:
@@ -350,12 +350,13 @@ class StencilPass(object):
         ret_var = block.body[-2].value.value
         return ret_var
 
-    def _replace_stencil_accesses(self, stencil_blocks, parfor_vars, in_args,
+    def _replace_stencil_accesses(self, stencil_ir, parfor_vars, in_args,
                                   index_offsets, stencil_func, arg_to_arr_dict):
         """ Convert relative indexing in the stencil kernel to standard indexing
             by adding the loop index variables to the corresponding dimensions
             of the array index tuples.
         """
+        stencil_blocks = stencil_ir.blocks
         in_arr = in_args[0]
         in_arg_names = [x.name for x in in_args]
 
@@ -429,9 +430,9 @@ class StencilPass(object):
                     # indices can be inferred as constant in simple expressions
                     # like -c where c is constant
                     # handled here since this is a common stencil index pattern
-                    kernel_defs = ir_utils.build_definitions(stencil_blocks)
+                    stencil_ir._definitions = ir_utils.build_definitions(stencil_blocks)
                     index_list = [_get_const_index_expr(
-                        kernel_defs, self.func_ir, v) for v in index_list]
+                        stencil_ir, self.func_ir, v) for v in index_list]
                     if index_offsets:
                         index_list = self._add_index_offsets(index_list,
                                     list(index_offsets), new_body, scope, loc)
@@ -682,7 +683,7 @@ class DummyPipeline(object):
         self.calltypes = None
 
 
-def _get_const_index_expr(kernel_defs, func_ir, index_var):
+def _get_const_index_expr(stencil_ir, func_ir, index_var):
     """
     infer index_var as constant if it is of the form -c where c is a constant
     in the outer function. index_var is assumed to be inside stencil kernel
@@ -693,17 +694,16 @@ def _get_const_index_expr(kernel_defs, func_ir, index_var):
         var_const =  guard(ir_utils.find_const, func_ir, index_var)
         if var_const is not None:
             return var_const
-        # match definition inner_var = unary(index_var)
-        var_def_list = kernel_defs[index_var.name]
-        require(len(var_def_list) == 1)
-        var_def = var_def_list[0]
-        require(isinstance(var_def, ir.Expr) and var_def.op == 'unary')
-        inner_var = var_def.value
+        # get index definition
+        index_def = ir_utils.get_definition(stencil_ir, index_var)
+        # match inner_var = unary(index_var)
+        require(isinstance(index_def, ir.Expr) and index_def.op == 'unary')
+        inner_var = index_def.value
         # return -c as constant
         const_val = ir_utils.find_const(func_ir, inner_var)
-        if var_def.fn == '+':
+        if index_def.fn == '+':
             return const_val
-        elif var_def.fn == '-':
+        elif index_def.fn == '-':
             return -const_val
     except ir_utils.GuardException:
         return index_var
