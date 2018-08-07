@@ -13,6 +13,8 @@ from __future__ import print_function, absolute_import
 
 import sys
 import os
+import warnings
+from threading import RLock
 
 import numpy as np
 
@@ -412,36 +414,55 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
 
 # ---------------------------------------------------------------------------
 
+_backend_init_lock = RLock()
+
+def _load_backend():
+    if config.ENABLE_TBB != 0:
+        try:
+            from . import tbb_workqueue as lib
+        except ImportError:
+            msg = ("Intel TBB parallel back end was request but the module ",
+                   "could not be imported. Falling back to the Numba parallel "
+                   "back end")
+            warnings.warn(msg)
+            from . import workqueue as lib
+    else:
+        from . import workqueue as lib
+    return lib
 
 def _launch_threads():
     """
     Initialize work queues and workers
     """
-    from . import workqueue as lib
     from ctypes import CFUNCTYPE, c_int
 
-    launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
-    launch_threads(NUM_THREADS)
+    with _backend_init_lock:
+        lib = _load_backend()
+
+        launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
+        launch_threads(NUM_THREADS)
 
 
 _is_initialized = False
 
 def _init():
-    from . import workqueue as lib
-    from ctypes import CFUNCTYPE, c_void_p
+    with _backend_init_lock:
+        lib = _load_backend()
 
-    global _is_initialized
-    if _is_initialized:
-        return
+        from ctypes import CFUNCTYPE, c_void_p
 
-    ll.add_symbol('numba_add_task', lib.add_task)
-    ll.add_symbol('numba_synchronize', lib.synchronize)
-    ll.add_symbol('numba_ready', lib.ready)
-    ll.add_symbol('numba_parallel_for', lib.parallel_for)
-    ll.add_symbol('do_scheduling_signed', lib.do_scheduling_signed)
-    ll.add_symbol('do_scheduling_unsigned', lib.do_scheduling_unsigned)
+        global _is_initialized
+        if _is_initialized:
+            return
 
-    _is_initialized = True
+        ll.add_symbol('numba_add_task', lib.add_task)
+        ll.add_symbol('numba_synchronize', lib.synchronize)
+        ll.add_symbol('numba_ready', lib.ready)
+        ll.add_symbol('numba_parallel_for', lib.parallel_for)
+        ll.add_symbol('do_scheduling_signed', lib.do_scheduling_signed)
+        ll.add_symbol('do_scheduling_unsigned', lib.do_scheduling_unsigned)
+
+        _is_initialized = True
 
 
 _DYLD_WORKAROUND_SET = 'NUMBA_DYLD_WORKAROUND' in os.environ

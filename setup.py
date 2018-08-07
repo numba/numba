@@ -135,7 +135,8 @@ def get_ext_modules():
                                             "numba/_pymodule.h"],
                                    **np_compile_args)
 
-    tbb_root = os.getenv('TBBROOT')
+    # Search for Intel TBB, first check env var TBB_ROOT then conda locations
+    tbb_root = os.getenv('TBB_ROOT')
     if not tbb_root:
         path2check = [os.path.join(*sys.executable.split(os.sep)[:-2])]
         path2check += [os.getenv(n) for n in ['CONDA_PREFIX', 'PREFIX']]
@@ -145,10 +146,12 @@ def get_ext_modules():
             if p and os.path.isfile(os.path.join(p, 'include', 'tbb', 'tbb.h')):
                 tbb_root = p  # the latest is used
 
+    ext_npyufunc_workqueue_impls = []
+
     if tbb_root:
-        print("Using TBBROOT=", tbb_root)
-        ext_npyufunc_workqueue = Extension(
-            name='numba.npyufunc.workqueue',
+        print("Using Intel TBB from:", tbb_root)
+        ext_npyufunc_tbb_workqueue = Extension(
+            name='numba.npyufunc.tbb_workqueue',
             sources=['numba/npyufunc/tbbpool.cpp', 'numba/npyufunc/gufunc_scheduler.cpp'],
             depends=['numba/npyufunc/workqueue.h'],
             include_dirs=[os.path.join(tbb_root, 'include')],
@@ -159,11 +162,15 @@ def get_ext_modules():
                           os.path.join(tbb_root, 'lib', 'intel64', 'vc_mt'),   # for Windows
                          ],
             )
-    else:
-        ext_npyufunc_workqueue = Extension(
-            name='numba.npyufunc.workqueue',
-            sources=['numba/npyufunc/workqueue.c', 'numba/npyufunc/gufunc_scheduler.cpp'],
-            depends=['numba/npyufunc/workqueue.h'])
+        ext_npyufunc_workqueue_impls.append(ext_npyufunc_tbb_workqueue)
+
+    # Build the Numba workqueue implementation irrespective of whether the TBB
+    # version is built. Users can select a backend via env vars.
+    ext_npyufunc_workqueue = Extension(
+        name='numba.npyufunc.workqueue',
+        sources=['numba/npyufunc/workqueue.c', 'numba/npyufunc/gufunc_scheduler.cpp'],
+        depends=['numba/npyufunc/workqueue.h'])
+    ext_npyufunc_workqueue_impls.append(ext_npyufunc_workqueue)
 
     ext_mviewbuf = Extension(name='numba.mviewbuf',
                              extra_link_args=install_name_tool_fixer,
@@ -187,10 +194,11 @@ def get_ext_modules():
                                 depends=['numba/_pymodule.h'],
                                 include_dirs=["numba"])
 
-    ext_modules = [ext_dynfunc, ext_dispatcher,
-                   ext_helperlib, ext_typeconv,
-                   ext_npyufunc_ufunc, ext_npyufunc_workqueue, ext_mviewbuf,
-                   ext_nrt_python, ext_jitclass_box, ext_cuda_extras]
+    ext_modules = [ext_dynfunc, ext_dispatcher, ext_helperlib, ext_typeconv,
+                   ext_npyufunc_ufunc, ext_mviewbuf, ext_nrt_python,
+                   ext_jitclass_box, ext_cuda_extras]
+
+    ext_modules += ext_npyufunc_workqueue_impls
 
     return ext_modules
 

@@ -278,3 +278,11 @@ Threading Control
 
    *Default value:* The number of CPU cores on the system as determined at run
    time, this can be accessed via ``numba.config.NUMBA_DEFAULT_NUM_THREADS``.
+
+.. envvar:: NUMBA_ENABLE_TBB
+
+   If set to non-zero the thread pool for the parallel CPU target will use Intel
+   TBB to manage concurrent execution. If this option is used,
+   :envvar:`NUMBA_NUM_THREADS` has no effect as TBB will manage and optimize
+   the use of thread based system resources.
+

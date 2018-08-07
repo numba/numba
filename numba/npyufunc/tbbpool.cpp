@@ -41,7 +41,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
                 size_t inner_ndim, size_t array_count, size_t)
 {
     static bool printed = false;
-    if(!printed) {
+    if(!printed && _DEBUG) {
         puts("Using parallel_for");
         printed = true;
     }
@@ -120,7 +120,10 @@ void ignore_blocking_terminate_assertion( const char*, int, const char*, const c
 void ignore_assertion( const char*, int, const char*, const char * ) {}
 
 static void prepare_fork(void) {
-    puts("Suspending TBB: prepare fork");
+    if(_DEBUG)
+    {
+        puts("Suspending TBB: prepare fork");
+    }
     if(tsi) {
         assertion_handler_type orig = tbb::set_assertion_handler(ignore_blocking_terminate_assertion);
         TSI_TERMINATE(tsi);
@@ -129,7 +132,10 @@ static void prepare_fork(void) {
 }
 
 static void reset_after_fork(void) {
-    puts("Resuming TBB: after fork");
+    if(_DEBUG)
+    {
+        puts("Resuming TBB: after fork");
+    }
     if(tsi)
         tsi->initialize(tsi_count);
 }
@@ -138,7 +144,10 @@ static void unload_tbb(void) {
     if(tsi) {
         delete tg;
         tg = NULL;
-        puts("Unloading TBB");
+        if(_DEBUG)
+        {
+            puts("Unloading TBB");
+        }
         assertion_handler_type orig = tbb::set_assertion_handler(ignore_assertion);
         TSI_TERMINATE(tsi);
         tbb::set_assertion_handler(orig);
@@ -148,7 +157,10 @@ static void unload_tbb(void) {
 }
 
 static void launch_threads(int count) {
-    puts("Using TBB");
+    if(_DEBUG)
+    {
+        puts("Using TBB");
+    }
     if(tsi)
         return;
     if(count < 1)
@@ -169,9 +181,9 @@ static void synchronize(void) {
 static void ready(void) {
 }
 
-MOD_INIT(workqueue) {
+MOD_INIT(tbb_workqueue) {
     PyObject *m;
-    MOD_DEF(m, "workqueue", "No docs", NULL)
+    MOD_DEF(m, "tbb_workqueue", "No docs", NULL)
     if (m == NULL)
         return MOD_ERROR_VAL;
 #if PY_MAJOR_VERSION >= 3
