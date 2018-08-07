@@ -428,18 +428,34 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         for a in _array_combinations(element_pool):
             check(a, q, abs_tol=1e-14)  # 'eps' fails, tbd...
 
-    def test_tri(self):
+    def test_tri_basic(self):
         pyfunc = array_tri_global
         cfunc = jit(nopython=True)(pyfunc)
 
-        for k in range(-20, 20):
+        for k in range(-10, 10):
             expected = pyfunc(5, 6, k)
             got = cfunc(5, 6, k)
             self.assertPreciseEqual(expected, got)
 
+        # edge case
         expected = pyfunc(1, 1, 0)
         got = cfunc(1, 1, 0)
         self.assertPreciseEqual(expected, got)
+
+    def test_tri_no_second_arg(self):
+        pyfunc = array_tri_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for k in range(-10, 10):
+            expected = pyfunc(5, k=k)
+            got = cfunc(5, k=k)
+            self.assertPreciseEqual(expected, got)
+
+        # edge case
+        expected = pyfunc(1, k=0)
+        got = cfunc(1, k=0)
+        self.assertPreciseEqual(expected, got)
+
 
         # expected = pyfunc(7, k=3)
         # got = cfunc(7, k=3)

@@ -918,10 +918,6 @@ if numpy_version >= (1, 9):
 def np_tri(m, n=None, k=0, dtype=np.float64):
 
     def np_tri_impl(m, n=None, k=0, dtype=np.float64):
-
-        if n is None:
-            n = m
-
         out = np.empty((m, n))
 
         for i in range(m):
@@ -931,7 +927,20 @@ def np_tri(m, n=None, k=0, dtype=np.float64):
 
         return out
 
-    return np_tri_impl
+    def np_tri_impl_no_n(m, n=None, k=0, dtype=np.float64):
+        out = np.empty((m, m))
+
+        for i in range(m):
+            m_max = min(max(0, i + k + 1), m)
+            out[i, :m_max] = 1
+            out[i, m_max:] = 0
+
+        return out
+
+    if n in (None, types.none):
+        return np_tri_impl_no_n
+    else:
+        return np_tri_impl
 
 
 @overload(np.tril)
