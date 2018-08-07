@@ -17,7 +17,7 @@ from numba.typing import signature
 from numba import ir_utils, ir, utils, config, typing
 from numba.ir_utils import (get_call_table, mk_unique_var,
                             compile_to_numba_ir, replace_arg_nodes, guard,
-                            find_callname, require)
+                            find_callname, require, find_const, GuardException)
 from numba.six import exec_
 
 
@@ -691,20 +691,53 @@ def _get_const_index_expr(stencil_ir, func_ir, index_var):
     try:
         require(isinstance(index_var, ir.Var))
         # case where the index is a const itself in outer function
-        var_const =  guard(ir_utils.find_const, func_ir, index_var)
+        var_const =  guard(_get_const_two_irs, stencil_ir, func_ir, index_var)
         if var_const is not None:
             return var_const
         # get index definition
         index_def = ir_utils.get_definition(stencil_ir, index_var)
         # match inner_var = unary(index_var)
-        require(isinstance(index_def, ir.Expr) and index_def.op == 'unary')
-        inner_var = index_def.value
-        # return -c as constant
-        const_val = ir_utils.find_const(func_ir, inner_var)
-        if index_def.fn == '+':
-            return const_val
-        elif index_def.fn == '-':
-            return -const_val
-    except ir_utils.GuardException:
+        var_const = guard(
+            _get_const_unary_expr, stencil_ir, func_ir, index_def)
+        if var_const is not None:
+            return var_const
+        # match inner_var = arg1 + arg2
+        var_const = guard(
+            _get_const_binary_expr, stencil_ir, func_ir, index_def)
+        if var_const is not None:
+            return var_const
+
+    except GuardException:
         return index_var
     return index_var
+
+def _get_const_two_irs(ir1, ir2, var):
+    """get constant in either of two IRs if available
+    otherwise, throw GuardException
+    """
+    var_const = guard(find_const, ir1, var)
+    if var_const is not None:
+        return var_const
+    var_const = guard(find_const, ir2, var)
+    if var_const is not None:
+        return var_const
+    raise GuardException
+
+def _get_const_unary_expr(stencil_ir, func_ir, index_def):
+    """evaluate constant unary expr if possible
+    otherwise, raise GuardException
+    """
+    require(isinstance(index_def, ir.Expr) and index_def.op == 'unary')
+    inner_var = index_def.value
+    # return -c as constant
+    const_val = _get_const_two_irs(stencil_ir, func_ir, inner_var)
+    return eval("{}{}".format(index_def.fn, const_val))
+
+def _get_const_binary_expr(stencil_ir, func_ir, index_def):
+    """evaluate constant binary expr if possible
+    otherwise, raise GuardException
+    """
+    require(isinstance(index_def, ir.Expr) and index_def.op == 'binop')
+    arg1 = _get_const_two_irs(stencil_ir, func_ir, index_def.lhs)
+    arg2 = _get_const_two_irs(stencil_ir, func_ir, index_def.rhs)
+    return eval("{}{}{}".format(arg1, index_def.fn, arg2))

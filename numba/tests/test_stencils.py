@@ -434,11 +434,19 @@ class TestStencil(TestStencilBase):
         constant from a unary expr. Otherwise, this would raise an error since
         neighborhood length is not specified.
         """
-        def test_impl(n):
+        def test_impl1(n):
             A = np.arange(n)
             B = np.zeros(n)
             c = 1
             numba.stencil(lambda a,c : 0.3 * (a[-c] + a[0] + a[c]))(
+                                                                   A, c, out=B)
+            return B
+
+        def test_impl2(n):
+            A = np.arange(n)
+            B = np.zeros(n)
+            c = 2
+            numba.stencil(lambda a,c : 0.3 * (a[1-c] + a[0] + a[c-1]))(
                                                                    A, c, out=B)
             return B
 
@@ -452,11 +460,14 @@ class TestStencil(TestStencilBase):
 
         n = 100
         # constant inference is only possible in parallel path
-        cpfunc = self.compile_parallel(test_impl, (types.intp,))
+        cpfunc1 = self.compile_parallel(test_impl1, (types.intp,))
+        cpfunc2 = self.compile_parallel(test_impl2, (types.intp,))
         expected = test_impl_seq(n)
         # parfor result
-        parfor_output = cpfunc.entry_point(n)
-        np.testing.assert_almost_equal(parfor_output, expected, decimal=3)
+        parfor_output1 = cpfunc1.entry_point(n)
+        parfor_output2 = cpfunc2.entry_point(n)
+        np.testing.assert_almost_equal(parfor_output1, expected, decimal=3)
+        np.testing.assert_almost_equal(parfor_output2, expected, decimal=3)
 
     @skip_unsupported
     @tag('important')
