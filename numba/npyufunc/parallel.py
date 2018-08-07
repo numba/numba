@@ -250,7 +250,7 @@ def _launch_threads():
                     msg = ("Intel TBB parallel back end (%s) was request but the "
                            "module could not be imported. Falling back to the "
                            "Numba parallel back end")
-                warnings.warn(msg % t)
+                    warnings.warn(msg % t)
                 from . import workqueue as lib
 
         from ctypes import CFUNCTYPE, c_int
