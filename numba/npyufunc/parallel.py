@@ -36,171 +36,9 @@ def get_thread_count():
 
 NUM_THREADS = get_thread_count()
 
-
-class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
-    def build(self, cres, sig):
-        _launch_threads()
-        _init()
-
-        # Buider wrapper for ufunc entry point
-        ctx = cres.target_context
-        signature = cres.signature
-        library = cres.library
-        fname = cres.fndesc.llvm_func_name
-
-        ptr = build_ufunc_wrapper(library, ctx, fname, signature, cres)
-        # Get dtypes
-        dtypenums = [np.dtype(a.name).num for a in signature.args]
-        dtypenums.append(np.dtype(signature.return_type.name).num)
-        keepalive = ()
-        return dtypenums, ptr, keepalive
-
-
-def build_ufunc_wrapper(library, ctx, fname, signature, cres):
-    innerfunc = ufuncbuilder.build_ufunc_wrapper(library, ctx, fname,
-                                                 signature, objmode=False,
-                                                 cres=cres)
-    return build_ufunc_kernel(library, ctx, innerfunc, signature)
-
-
-def build_ufunc_kernel(library, ctx, innerfunc, sig):
-    """Wrap the original CPU ufunc with a parallel dispatcher.
-
-    Args
-    ----
-    ctx
-        numba's codegen context
-
-    innerfunc
-        llvm function of the original CPU ufunc
-
-    sig
-        type signature of the ufunc
-
-    Details
-    -------
-
-    Generate a function of the following signature:
-
-    void ufunc_kernel(char **args, npy_intp *dimensions, npy_intp* steps,
-                      void* data)
-
-    Divide the work equally across all threads and let the last thread take all
-    the left over.
-
-
-    """
-    # Declare types and function
-    byte_t = lc.Type.int(8)
-    byte_ptr_t = lc.Type.pointer(byte_t)
-
-    intp_t = ctx.get_value_type(types.intp)
-
-    fnty = lc.Type.function(lc.Type.void(), [lc.Type.pointer(byte_ptr_t),
-                                             lc.Type.pointer(intp_t),
-                                             lc.Type.pointer(intp_t),
-                                             byte_ptr_t])
-    wrapperlib = ctx.codegen().create_library('parallelufuncwrapper')
-    mod = wrapperlib.create_ir_module('parallel.ufunc.wrapper')
-    lfunc = mod.add_function(fnty, name=".kernel." + str(innerfunc))
-
-    bb_entry = lfunc.append_basic_block('')
-
-    # Function body starts
-    builder = lc.Builder(bb_entry)
-
-    args, dimensions, steps, data = lfunc.args
-
-    # Release the GIL (and ensure we have the GIL)
-    # Note: numpy ufunc may not always release the GIL; thus,
-    #       we need to ensure we have the GIL.
-    pyapi = ctx.get_python_api(builder)
-    gil_state = pyapi.gil_ensure()
-    thread_state = pyapi.save_thread()
-
-    as_void_ptr = lambda arg: builder.bitcast(arg, byte_ptr_t)
-
-    # Array count is input signature plus 1 (due to output array)
-    array_count = len(sig.args) + 1
-
-    parallel_for_ty = lc.Type.function(lc.Type.void(),
-                                            [byte_ptr_t] * 5 + [intp_t,] * 3)
-    parallel_for = mod.get_or_insert_function(parallel_for_ty,
-                                                    name='numba_parallel_for')
-
-    # Note: the runtime address is taken and used as a constant in the function.
-    fnptr = ctx.get_constant(types.uintp, innerfunc).inttoptr(byte_ptr_t)
-    innerargs = [as_void_ptr(x) for x
-                in [args, dimensions, steps, data]]
-    builder.call(parallel_for, [fnptr] + innerargs +
-                    [intp_t(x) for x in (len(sig.args), array_count,
-                                        NUM_THREADS)])
-
-    # Work is done. Reacquire the GIL
-    pyapi.restore_thread(thread_state)
-    pyapi.gil_release(gil_state)
-
-    builder.ret_void()
-
-    # Link and compile
-    wrapperlib.add_ir_module(mod)
-    wrapperlib.add_linking_library(library)
-    return wrapperlib.get_pointer_to_function(lfunc.name)
-
-
-# ---------------------------------------------------------------------------
-
-class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
-    def __init__(self, py_func, signature, identity=None, cache=False,
-                 targetoptions={}):
-        # Force nopython mode
-        targetoptions.update(dict(nopython=True))
-        super(ParallelGUFuncBuilder, self).__init__(py_func=py_func,
-                                                    signature=signature,
-                                                    identity=identity,
-                                                    cache=cache,
-                                                    targetoptions=targetoptions)
-
-    def build(self, cres):
-        """
-        Returns (dtype numbers, function ptr, EnvironmentObject)
-        """
-        _launch_threads()
-        _init()
-
-        # Build wrapper for ufunc entry point
-        ptr, env, wrapper_name = build_gufunc_wrapper(self.py_func, cres, self.sin, self.sout,
-                                        cache=self.cache)
-
-        # Get dtypes
-        dtypenums = []
-        for a in cres.signature.args:
-            if isinstance(a, types.Array):
-                ty = a.dtype
-            else:
-                ty = a
-            dtypenums.append(as_dtype(ty).num)
-
-        return dtypenums, ptr, env
-
-
-def build_gufunc_wrapper(py_func, cres, sin, sout, cache):
-    library = cres.library
-    ctx = cres.target_context
-    signature = cres.signature
-    innerfunc, env, wrapper_name = ufuncbuilder.build_gufunc_wrapper(py_func, cres, sin, sout,
-                                                       cache=cache)
-    sym_in = set(sym for term in sin for sym in term)
-    sym_out = set(sym for term in sout for sym in term)
-    inner_ndim = len(sym_in | sym_out)
-
-    ptr, name = build_gufunc_kernel(library, ctx, innerfunc, signature, inner_ndim)
-
-    return ptr, env, name
-
-
 def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
-    """Wrap the original CPU gufunc with a parallel dispatcher.
+    """Wrap the original CPU ufunc/gufunc with a parallel dispatcher.
+    This function will wrap gufuncs and ufuncs something like.
 
     Args
     ----
@@ -214,20 +52,32 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
         type signature of the gufunc
 
     inner_ndim
-        inner dimension of the gufunc
+        inner dimension of the gufunc (this is len(sig.args) in the case of a
+        ufunc)
 
     Details
     -------
 
-    Generate a function of the following signature:
+    The kernel signature looks like this:
 
-    void ufunc_kernel(char **args, npy_intp *dimensions, npy_intp* steps,
-                      void* data)
+    void kernel(char **args, npy_intp *dimensions, npy_intp* steps, void* data)
 
-    Divide the work equally across all threads and let the last thread take all
-    the left over.
+    args - the input arrays + output arrays
+    dimensions - the dimensions of the arrays
+    steps - the step size for the array (this is like sizeof(type))
+    data - any additional data
 
+    The parallel backend then stages multiple calls to this kernel concurrently
+    across a number of threads. Practically, for each item of work, the backend
+    duplicates `dimensions` and adjusts the first entry to reflect the size of
+    the item of work, it also forms up an array of pointers into the args for
+    offsets to read/write from/to with respect to its position in the items of
+    work. This allows the same kernel to be used for each item of work, with
+    simply adjusted reads/writes/domain sizes and is safe by virtue of the
+    domain partitioning.
 
+    NOTE: The execution backend is passed the requested thread count, but it can
+    choose to ignore it (TBB)!
     """
     # Declare types and function
     byte_t = lc.Type.int(8)
@@ -239,7 +89,7 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
                                              lc.Type.pointer(intp_t),
                                              lc.Type.pointer(intp_t),
                                              byte_ptr_t])
-    wrapperlib = ctx.codegen().create_library('parallelufuncwrapper')
+    wrapperlib = ctx.codegen().create_library('parallelgufuncwrapper')
     mod = wrapperlib.create_ir_module('parallel.gufunc.wrapper')
     lfunc = mod.add_function(fnty, name=".kernel." + str(innerfunc))
 
@@ -284,6 +134,85 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
     wrapperlib.add_linking_library(library)
     return wrapperlib.get_pointer_to_function(lfunc.name), lfunc.name
 
+
+# ------------------------------------------------------------------------------
+
+class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
+    def build(self, cres, sig):
+        _launch_threads()
+        _init()
+
+        # Buider wrapper for ufunc entry point
+        ctx = cres.target_context
+        signature = cres.signature
+        library = cres.library
+        fname = cres.fndesc.llvm_func_name
+
+        ptr = build_ufunc_wrapper(library, ctx, fname, signature, cres)
+        # Get dtypes
+        dtypenums = [np.dtype(a.name).num for a in signature.args]
+        dtypenums.append(np.dtype(signature.return_type.name).num)
+        keepalive = ()
+        return dtypenums, ptr, keepalive
+
+
+def build_ufunc_wrapper(library, ctx, fname, signature, cres):
+    innerfunc = ufuncbuilder.build_ufunc_wrapper(library, ctx, fname,
+                                                 signature, objmode=False,
+                                                 cres=cres)
+    ptr, name = build_gufunc_kernel(library, ctx, innerfunc, signature, len(signature.args))
+    return ptr
+
+# ---------------------------------------------------------------------------
+
+class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
+    def __init__(self, py_func, signature, identity=None, cache=False,
+                 targetoptions={}):
+        # Force nopython mode
+        targetoptions.update(dict(nopython=True))
+        super(ParallelGUFuncBuilder, self).__init__(py_func=py_func,
+                                                    signature=signature,
+                                                    identity=identity,
+                                                    cache=cache,
+                                                    targetoptions=targetoptions)
+
+    def build(self, cres):
+        """
+        Returns (dtype numbers, function ptr, EnvironmentObject)
+        """
+        _launch_threads()
+        _init()
+
+        # Build wrapper for ufunc entry point
+        ptr, env, wrapper_name = build_gufunc_wrapper(self.py_func, cres, self.sin, self.sout,
+                                        cache=self.cache)
+
+        # Get dtypes
+        dtypenums = []
+        for a in cres.signature.args:
+            if isinstance(a, types.Array):
+                ty = a.dtype
+            else:
+                ty = a
+            dtypenums.append(as_dtype(ty).num)
+
+        return dtypenums, ptr, env
+
+# This is not a member of the ParallelGUFuncBuilder function because it is
+# called without an enclosing instance from parfors
+def build_gufunc_wrapper(py_func, cres, sin, sout, cache):
+    library = cres.library
+    ctx = cres.target_context
+    signature = cres.signature
+    innerfunc, env, wrapper_name = ufuncbuilder.build_gufunc_wrapper(py_func, cres, sin, sout,
+                                                       cache=cache)
+    sym_in = set(sym for term in sin for sym in term)
+    sym_out = set(sym for term in sout for sym in term)
+    inner_ndim = len(sym_in | sym_out)
+
+    ptr, name = build_gufunc_kernel(library, ctx, innerfunc, signature, inner_ndim)
+
+    return ptr, env, name
 
 # ---------------------------------------------------------------------------
 
