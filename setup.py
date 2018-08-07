@@ -138,8 +138,8 @@ def get_ext_modules():
     # Search for Intel TBB, first check env var TBB_ROOT then conda locations
     tbb_root = os.getenv('TBB_ROOT')
     if not tbb_root:
-        path2check = [os.path.join(*sys.executable.split(os.sep)[:-2])]
-        path2check += [os.getenv(n) for n in ['CONDA_PREFIX', 'PREFIX']]
+        path2check = [os.path.split(os.path.split(sys.executable)[0])[0]]
+        path2check += [os.getenv(n, '') for n in ['CONDA_PREFIX', 'PREFIX']]
         if sys.platform.startswith('win'):
             path2check += [os.path.join(p, 'Library') for p in path2check]
         for p in path2check:
