@@ -447,19 +447,14 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         for k in range(-10, 10):
-            expected = pyfunc(5, k=k)
-            got = cfunc(5, k=k)
+            expected = pyfunc(7, k=k)
+            got = cfunc(7, k=k)
             self.assertPreciseEqual(expected, got)
 
         # edge case
         expected = pyfunc(1, k=0)
         got = cfunc(1, k=0)
         self.assertPreciseEqual(expected, got)
-
-
-        # expected = pyfunc(7, k=3)
-        # got = cfunc(7, k=3)
-        # self.assertPreciseEqual(expected, got)
 
     def _triangular_matrix_test(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)

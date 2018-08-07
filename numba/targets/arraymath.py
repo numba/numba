@@ -917,25 +917,22 @@ if numpy_version >= (1, 9):
 @overload(np.tri)
 def np_tri(m, n=None, k=0, dtype=np.float64):
 
-    def np_tri_impl(m, n=None, k=0, dtype=np.float64):
-        out = np.empty((m, n))
+    @register_jitable
+    def _tri_impl(shape, k, dtype):
+        out = np.empty(shape)
 
-        for i in range(m):
-            m_max = min(max(0, i + k + 1), n)
+        for i in range(shape[0]):
+            m_max = min(max(0, i + k + 1), shape[1])
             out[i, :m_max] = 1
             out[i, m_max:] = 0
 
         return out
+
+    def np_tri_impl(m, n=None, k=0, dtype=np.float64):
+        return _tri_impl((m, n), k, dtype)
 
     def np_tri_impl_no_n(m, n=None, k=0, dtype=np.float64):
-        out = np.empty((m, m))
-
-        for i in range(m):
-            m_max = min(max(0, i + k + 1), m)
-            out[i, :m_max] = 1
-            out[i, m_max:] = 0
-
-        return out
+        return _tri_impl((m, m), k, dtype)
 
     if n in (None, types.none):
         return np_tri_impl_no_n
