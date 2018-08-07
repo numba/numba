@@ -118,80 +118,23 @@ def build_ufunc_kernel(library, ctx, innerfunc, sig):
     gil_state = pyapi.gil_ensure()
     thread_state = pyapi.save_thread()
 
-    # Distribute work
-    total = builder.load(dimensions)
-    ncpu = lc.Constant.int(total.type, NUM_THREADS)
-
-    count = builder.udiv(total, ncpu)
-
-    count_list = []
-    remain = total
-
-    for i in range(NUM_THREADS):
-        space = builder.alloca(intp_t)
-        count_list.append(space)
-
-        if i == NUM_THREADS - 1:
-            # Last thread takes all leftover
-            builder.store(remain, space)
-        else:
-            builder.store(count, space)
-            remain = builder.sub(remain, count)
+    as_void_ptr = lambda arg: builder.bitcast(arg, byte_ptr_t)
 
     # Array count is input signature plus 1 (due to output array)
     array_count = len(sig.args) + 1
 
-    # Get the increment step for each array
-    steps_list = []
-    for i in range(array_count):
-        ptr = builder.gep(steps, [lc.Constant.int(lc.Type.int(), i)])
-        step = builder.load(ptr)
-        steps_list.append(step)
-
-    # Get the array argument set for each thread
-    args_list = []
-    for i in range(NUM_THREADS):
-        space = builder.alloca(byte_ptr_t,
-                               size=lc.Constant.int(lc.Type.int(), array_count))
-        args_list.append(space)
-
-        for j in range(array_count):
-            # For each array, compute subarray pointer
-            dst = builder.gep(space, [lc.Constant.int(lc.Type.int(), j)])
-            src = builder.gep(args, [lc.Constant.int(lc.Type.int(), j)])
-
-            baseptr = builder.load(src)
-            base = builder.ptrtoint(baseptr, intp_t)
-            multiplier = lc.Constant.int(count.type, i)
-            offset = builder.mul(steps_list[j], builder.mul(count, multiplier))
-            addr = builder.inttoptr(builder.add(base, offset), baseptr.type)
-
-            builder.store(addr, dst)
-
-    # Declare external functions
-    add_task_ty = lc.Type.function(lc.Type.void(), [byte_ptr_t] * 5)
-    empty_fnty = lc.Type.function(lc.Type.void(), ())
-    add_task = mod.get_or_insert_function(add_task_ty, name='numba_add_task')
-    synchronize = mod.get_or_insert_function(empty_fnty,
-                                             name='numba_synchronize')
-    ready = mod.get_or_insert_function(empty_fnty, name='numba_ready')
-
-    # Add tasks for queue; one per thread
-    as_void_ptr = lambda arg: builder.bitcast(arg, byte_ptr_t)
+    parallel_for_ty = lc.Type.function(lc.Type.void(),
+                                            [byte_ptr_t] * 5 + [intp_t,] * 3)
+    parallel_for = mod.get_or_insert_function(parallel_for_ty,
+                                                    name='numba_parallel_for')
 
     # Note: the runtime address is taken and used as a constant in the function.
     fnptr = ctx.get_constant(types.uintp, innerfunc).inttoptr(byte_ptr_t)
-    for each_args, each_dims in zip(args_list, count_list):
-        innerargs = [as_void_ptr(x) for x
-                     in [each_args, each_dims, steps, data]]
-
-        builder.call(add_task, [fnptr] + innerargs)
-
-    # Signal worker that we are ready
-    builder.call(ready, ())
-
-    # Wait for workers
-    builder.call(synchronize, ())
+    innerargs = [as_void_ptr(x) for x
+                in [args, dimensions, steps, data]]
+    builder.call(parallel_for, [fnptr] + innerargs +
+                    [intp_t(x) for x in (len(sig.args), array_count,
+                                        NUM_THREADS)])
 
     # Work is done. Reacquire the GIL
     pyapi.restore_thread(thread_state)
@@ -319,87 +262,17 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
     # Array count is input signature plus 1 (due to output array)
     array_count = len(sig.args) + 1
 
-    _PARALLEL_FOR = os.getenv('NUMBA_USE_PARFOR', False)
+    parallel_for_ty = lc.Type.function(lc.Type.void(),
+                                            [byte_ptr_t] * 5 + [intp_t,] * 3)
+    parallel_for = mod.get_or_insert_function(parallel_for_ty,
+                                                    name='numba_parallel_for')
 
-    if(_PARALLEL_FOR):
-        parallel_for_ty = lc.Type.function(lc.Type.void(),
-                                              [byte_ptr_t] * 5 + [intp_t,] * 3)
-        parallel_for = mod.get_or_insert_function(parallel_for_ty,
-                                                     name='numba_parallel_for')
-
-        # Note: the runtime address is taken and used as a constant in the function.
-        fnptr = ctx.get_constant(types.uintp, innerfunc).inttoptr(byte_ptr_t)
-        innerargs = [as_void_ptr(x) for x
-                    in [args, dimensions, steps, data]]
-        builder.call(parallel_for, [fnptr] + innerargs +
-                     [intp_t(x) for x in (inner_ndim, array_count, NUM_THREADS)])
-    else:
-
-        # Distribute work
-        total = builder.load(dimensions)
-        ncpu = lc.Constant.int(total.type, NUM_THREADS)
-
-        count = builder.udiv(total, ncpu)
-
-        count_list = []
-        remain = total
-
-        # Declare external functions
-        add_task_ty = lc.Type.function(lc.Type.void(), [byte_ptr_t] * 5)
-        empty_fnty = lc.Type.function(lc.Type.void(), ())
-
-        # insert external functions
-        add_task = mod.get_or_insert_function(add_task_ty, name='numba_add_task')
-        synchronize = mod.get_or_insert_function(empty_fnty,
-                                                name='numba_synchronize')
-        ready = mod.get_or_insert_function(empty_fnty, name='numba_ready')
-
-
-        for i in range(NUM_THREADS):
-            count_list = cgutils.alloca_once(builder, intp_t, size=inner_ndim + 1)
-            cgutils.memcpy(builder, count_list, dimensions,
-                        count=lc.Constant.int(intp_t, inner_ndim + 1))
-
-            if i == NUM_THREADS - 1:
-                # Last thread takes all leftover
-                builder.store(remain, count_list)
-            else:
-                builder.store(count, count_list)
-                remain = builder.sub(remain, count)
-
-            # Get the array argument set for each thread
-            args_list = builder.alloca(byte_ptr_t,
-                                size=lc.Constant.int(lc.Type.int(), array_count))
-
-            for j in range(array_count):
-                # For each array, compute subarray pointer
-                dst = builder.gep(args_list, [lc.Constant.int(lc.Type.int(), j)])
-
-                src = builder.gep(args, [lc.Constant.int(lc.Type.int(), j)])
-                baseptr = builder.load(src)
-
-                base = builder.ptrtoint(baseptr, intp_t)
-                multiplier = lc.Constant.int(count.type, i)
-
-                ptr = builder.gep(steps, [lc.Constant.int(lc.Type.int(), j)])
-                step = builder.load(ptr)
-
-                offset = builder.mul(step, builder.mul(count, multiplier))
-                addr = builder.inttoptr(builder.add(base, offset), baseptr.type)
-
-                builder.store(addr, dst)
-
-            # Add tasks for queue; one per thread
-            # Note: the runtime address is taken and used as a constant in the function.
-            fnptr = ctx.get_constant(types.uintp, innerfunc).inttoptr(byte_ptr_t)
-            innerargs = [as_void_ptr(x) for x
-                        in [args_list, count_list, steps, data]]
-            builder.call(add_task, [fnptr] + innerargs)
-
-        # Signal worker that we are ready
-        builder.call(ready, ())
-        # Wait for workers
-        builder.call(synchronize, ())
+    # Note: the runtime address is taken and used as a constant in the function.
+    fnptr = ctx.get_constant(types.uintp, innerfunc).inttoptr(byte_ptr_t)
+    innerargs = [as_void_ptr(x) for x
+                in [args, dimensions, steps, data]]
+    builder.call(parallel_for, [fnptr] + innerargs +
+                    [intp_t(x) for x in (inner_ndim, array_count, NUM_THREADS)])
 
     # Release the GIL
     pyapi.restore_thread(thread_state)
@@ -455,9 +328,6 @@ def _init():
         if _is_initialized:
             return
 
-        ll.add_symbol('numba_add_task', lib.add_task)
-        ll.add_symbol('numba_synchronize', lib.synchronize)
-        ll.add_symbol('numba_ready', lib.ready)
         ll.add_symbol('numba_parallel_for', lib.parallel_for)
         ll.add_symbol('do_scheduling_signed', lib.do_scheduling_signed)
         ll.add_symbol('do_scheduling_unsigned', lib.do_scheduling_unsigned)

@@ -226,6 +226,7 @@ queue_state_wait(Queue *queue, int old, int repl)
 }
 
 // break on this for debug
+void debug_marker(void);
 void debug_marker() {};
 
 // this complies to a launchable function from `add_task` like:
@@ -251,7 +252,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     const size_t arg_len = (inner_ndim + 1);
     size_t i, j, count, remain, total;
 
-    ptrdiff_t offset, addr;
+    ptrdiff_t offset;
     char * base;
 
     size_t step;
@@ -331,7 +332,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
                 printf("-->Got base %p\n", (void *)base);
                 printf("-->Got step %ld\n", step);
                 printf("-->Got offset %ld\n", offset);
-                printf("-->Got addr %p\n", (void *)addr);
+                printf("-->Got addr %p\n", (void *)array_arg_space[j]);
             }
         }
 
