@@ -21,6 +21,10 @@ export NUMBA_DEVELOPER_MODE=1
 # enable the fault handler
 export PYTHONFAULTHANDLER=1
 
+if [ "$TEST_TBB" == "yes" ]; then
+export NUMBA_ENABLE_TBB=1
+fi
+
 unamestr=`uname`
 if [[ "$unamestr" == 'Linux' ]]; then
   SEGVCATCH=catchsegv

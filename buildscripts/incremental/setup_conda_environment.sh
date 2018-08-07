@@ -64,5 +64,7 @@ if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL sphinx_bootstrap_theme; fi
 if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi
 # Install SVML
 if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
+# Install Intel TBB parallel backend
+if [ "$TEST_TBB" == "yes" ]; then $CONDA_INSTALL tbb tbb-devel; fi
 
 if [ $PYTHON \< "3.0" ]; then $CONDA_INSTALL faulthandler; fi
