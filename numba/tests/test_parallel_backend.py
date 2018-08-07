@@ -19,7 +19,9 @@ def ufunc_foo(a, b):
 def gufunc_foo(a, b, out):
     out[0] = a + b
 
-@unittest.skip("TODO FIX AND RE-ENABLE")
+_threadsafe_backends = config.THREADING_LAYER in ('omppool', 'tbbpool')
+
+@unittest.skipUnless(_threadsafe_backends, "Threading layer not threadsafe")
 class TestParallelBackend(unittest.TestCase):
     """ These are like the numba.tests.test_threadsafety tests but designed
     instead to torture the parallel backend

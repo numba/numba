@@ -279,10 +279,14 @@ Threading Control
    *Default value:* The number of CPU cores on the system as determined at run
    time, this can be accessed via ``numba.config.NUMBA_DEFAULT_NUM_THREADS``.
 
-.. envvar:: NUMBA_ENABLE_TBB
+.. envvar:: NUMBA_THREADING_LAYER
 
-   If set to non-zero the thread pool for the parallel CPU target will use Intel
-   TBB to manage concurrent execution. If this option is used,
-   :envvar:`NUMBA_NUM_THREADS` has no effect as TBB will manage and optimize
-   the use of thread based system resources.
+   This environment variable controls the library used for concurrent execution
+   for the CPU parallel targets (``@vectorize(target='parallel')``, 
+   ``@guvectorize(target='parallel')``  and ``@njit(parallel=True)``). The 
+   variable type is string and by default is ``workqueue``, the Numba internal
+   threading library. Other valid values are:
+
+   * ``tbbpool`` - A threading layer backed by Intel TBB.
+   * ``omppool`` - A threading layer backed by OpenMP.
 

@@ -227,7 +227,7 @@ def _launch_threads():
 
         from ctypes import CFUNCTYPE, c_void_p
 
-        t = str(config.NUMBA_THREADING_LAYER)
+        t = str(config.THREADING_LAYER)
         lib = None
         tbb_import_fail = False
         try:
@@ -235,22 +235,22 @@ def _launch_threads():
                 try:
                     from . import tbbpool as lib
                 except ImportError:
-                    tbb_import_fail = True
+                    tbb_import_fail = 'Intel TBB'
             elif t.lower().startswith("omp"):
                 try:
                     from . import omppool as lib
                 except ImportError:
-                    tbb_import_fail = True
+                    tbb_import_fail = 'OpenMP'
             elif not t.lower().startswith("workqueue"):
                 msg = "Unknown value specified for NUMBA_THREADING_LAYER: %s"
                 raise ValueError(msg % t)
         finally:
             if not lib:
                 if tbb_import_fail:
-                    msg = ("Intel TBB parallel back end (%s) was request but the "
-                           "module could not be imported. Falling back to the "
-                           "Numba parallel back end")
-                    warnings.warn(msg % t)
+                    msg = ("The %s threading layer (%s) was requested but "
+                           "the module could not be imported. Falling back to "
+                           "the Numba threading layer.")
+                    warnings.warn(msg % (tbb_import_fail, t))
                 from . import workqueue as lib
 
         from ctypes import CFUNCTYPE, c_int
