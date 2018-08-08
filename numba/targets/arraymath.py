@@ -919,7 +919,7 @@ def np_tri(M, N=None, k=0):
 
     @register_jitable
     def _tri_impl(shape, k):
-        out = np.empty(shape, dtype=np.float64)
+        out = np.empty(shape, dtype=np.float64)  # numpy default dtype
 
         for i in range(shape[0]):
             m_max = min(max(0, i + k + 1), shape[1])
@@ -958,7 +958,7 @@ def _tile_mask(mask, shape):
 @register_jitable
 def _make_square(m):
     """
-    This is a facsimile of np.tile(m, (len(m), 1))
+    This is a facsimile of np.tile(m, (len(m), 1)) for a 1 dimensional array, m
     """
     assert m.ndim == 1
 
@@ -1017,11 +1017,6 @@ def my_triu(m, k=0):
         return np_triu_impl_2d
     else:
         return np_triu_impl_multi
-
-
-
-
-
 
 def _np_round_intrinsic(tp):
     # np.round() always rounds half to even

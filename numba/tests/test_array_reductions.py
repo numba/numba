@@ -433,28 +433,20 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         for k in range(-10, 10):
-            expected = pyfunc(5, 6, k)
-            got = cfunc(5, 6, k)
-            self.assertPreciseEqual(expected, got)
-
-        # edge case
-        expected = pyfunc(1, 1, 0)
-        got = cfunc(1, 1, 0)
-        self.assertPreciseEqual(expected, got)
+            for shape in (5, 6), (10, 5), (1, 1), (0, 1), (0, 0):
+                expected = pyfunc(*shape, k)
+                got = cfunc(*shape, k)
+                self.assertPreciseEqual(expected, got)
 
     def test_tri_no_second_arg(self):
         pyfunc = array_tri_global
         cfunc = jit(nopython=True)(pyfunc)
 
         for k in range(-10, 10):
-            expected = pyfunc(7, k=k)
-            got = cfunc(7, k=k)
-            self.assertPreciseEqual(expected, got)
-
-        # edge case
-        expected = pyfunc(1, k=0)
-        got = cfunc(1, k=0)
-        self.assertPreciseEqual(expected, got)
+            for N in range(0, 12):
+                expected = pyfunc(N, k=k)
+                got = cfunc(N, k=k)
+                self.assertPreciseEqual(expected, got)
 
     def _triangular_matrix_tests(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
