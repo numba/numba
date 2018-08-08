@@ -940,31 +940,46 @@ def np_tri(M, N=None, k=0):
         return np_tri_impl
 
 
+@register_jitable
+def _tile_mask(mask, m):
+    multiple = int(np.prod(np.array(m.shape[:-2])))
+    out = np.empty(multiple * len(mask.flat))
+
+    for i in range(multiple):
+        out[i * len(mask.flat): (i + 1) * len(mask.flat)] = mask.flat
+
+    return out.reshape(m.shape)
+
+
+@register_jitable
+def _make_2d(m):
+    assert m.ndim == 1
+
+    multiple = len(m)
+    out = np.empty((len(m), len(m)), dtype=m.dtype)
+
+    for i in range(multiple):
+        out[i * len(m): (i + 1) * len(m)] = m
+
+    return out
+
+
 @overload(np.tril)
 def my_tril(m, k=0):
 
     def np_tril_impl_1d(m, k=0):
-        if k >= 0:
-            out = m.reshape(1, 1)
-        else:
-            out = np.array([0], dtype=m.dtype).reshape(1, 1)
-        return out
+        m_2d = _make_2d(m)
+        return np_tril_impl_2d(m_2d, k)
 
+    @register_jitable
     def np_tril_impl_2d(m, k=0):
         mask = np.tri(m.shape[-2], N=m.shape[-1], k=k).astype(np.uint)
         return np.where(mask, m, np.zeros_like(m, dtype=m.dtype))
 
     def np_tril_impl_multi(m, k=0):
         mask = np.tri(m.shape[-2], N=m.shape[-1], k=k).astype(np.uint)
-
-        multiple = int(np.prod(np.array(m.shape[:-2])))
-        out = np.empty(multiple * len(mask.flat))
-
-        for i in range(multiple):
-            out[i * len(mask.flat): (i + 1) * len(mask.flat)] = mask.flat
-
-        mask_ = out.reshape(m.shape)
-        return np.where(mask_, m, np.zeros_like(m, dtype=m.dtype))
+        tiled_mask = _tile_mask(mask, m)
+        return np.where(tiled_mask, m, np.zeros_like(m, dtype=m.dtype))
 
     if m.ndim == 1:
         return np_tril_impl_1d
@@ -978,27 +993,18 @@ def my_tril(m, k=0):
 def my_triu(m, k=0):
 
     def np_triu_impl_1d(m, k=0):
-        if k <= 0:
-            out = m.reshape(1, 1)
-        else:
-            out = np.array([0], dtype=m.dtype).reshape(1, 1)
-        return out
+        m_2d = _make_2d(m)
+        return np_triu_impl_2d(m_2d, k)
 
+    @register_jitable
     def np_triu_impl_2d(m, k=0):
         mask = np.tri(m.shape[-2], N=m.shape[-1], k=k-1).astype(np.uint)
         return np.where(mask, np.zeros_like(m, dtype=m.dtype), m)
 
     def np_triu_impl_multi(m, k=0):
         mask = np.tri(m.shape[-2], N=m.shape[-1], k=k-1).astype(np.uint)
-
-        multiple = int(np.prod(np.array(m.shape[:-2])))
-        out = np.empty(multiple * len(mask.flat))
-
-        for i in range(multiple):
-            out[i * len(mask.flat): (i + 1) * len(mask.flat)] = mask.flat
-
-        mask_ = out.reshape(m.shape)
-        return np.where(mask_, np.zeros_like(m, dtype=m.dtype), m)
+        tiled_mask = _tile_mask(mask, m)
+        return np.where(tiled_mask, np.zeros_like(m, dtype=m.dtype), m)
 
     if m.ndim == 1:
         return np_triu_impl_1d
