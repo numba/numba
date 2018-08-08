@@ -950,7 +950,7 @@ def my_tril(m, k=0):
     def np_tril_multi_impl(m, k=0):
         mask = np.tri(m.shape[-2], N=m.shape[-1], k=k).astype(np.uint)
 
-        multiple = np.prod(np.array(m.shape[:-2]))
+        multiple = int(np.prod(np.array(m.shape[:-2])))
         out = np.empty(multiple * len(mask.flat))
 
         for i in range(multiple):
@@ -981,13 +981,13 @@ def my_tril(m, k=0):
 def my_triu(m, k=0):
 
     def np_triu_impl(m, k=0):
-        mask = np.tri(m.shape[-2], n=m.shape[-1], k=k-1).astype(np.uint)
+        mask = np.tri(m.shape[-2], N=m.shape[-1], k=k-1).astype(np.uint)
         return np.where(mask, np.zeros_like(m, dtype=m.dtype), m)
 
     def np_triu_multi_impl(m, k=0):
-        mask = np.tri(m.shape[-2], n=m.shape[-1], k=k-1).astype(np.uint)
+        mask = np.tri(m.shape[-2], N=m.shape[-1], k=k-1).astype(np.uint)
 
-        multiple = np.prod(np.array(m.shape[:-2]))
+        multiple = int(np.prod(np.array(m.shape[:-2])))
         out = np.empty(multiple * len(mask.flat))
 
         for i in range(multiple):
