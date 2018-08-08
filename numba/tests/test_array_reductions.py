@@ -456,7 +456,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         got = cfunc(1, k=0)
         self.assertPreciseEqual(expected, got)
 
-    def _triangular_matrix_test(self, pyfunc):
+    def _triangular_matrix_tests(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
 
         def _check(a):
@@ -471,14 +471,24 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         _check(np.ones((1, 1, 1), dtype=np.float32))
         _check(np.full((8, 9, 10), fill_value=3.142, dtype=np.float64))
         _check(np.full((10, 5), fill_value=3, dtype=np.int8))
-        #_check(np.array([]))
+
+    def _triangular_matrix_empty_array_tests(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+        a = np.array([])
+        for k in range(-10, 10):
+            expected = pyfunc(a, k)
+            got = cfunc(a, k)
+            print(expected)
+            print(got)
+            self.assertPreciseEqual(expected, got.squeeze())
 
     def test_tril(self):
-        self._triangular_matrix_test(array_tril_global)
+        self._triangular_matrix_tests(array_tril_global)
+        #self._triangular_matrix_empty_array_tests(array_tril_global)
 
     def test_triu(self):
-        self._triangular_matrix_test(array_triu_global)
-
+        self._triangular_matrix_tests(array_triu_global)
+        #self._triangular_matrix_empty_array_tests(array_tril_global)
 
 
 
