@@ -952,14 +952,17 @@ def _tile_mask(mask, m):
 
 
 @register_jitable
-def _make_2d(m):
+def _make_square(m):
+    """
+    This is a facsimile of np.tile(m, (len(m), 1))
+    """
     assert m.ndim == 1
 
-    multiple = len(m)
-    out = np.empty((len(m), len(m)), dtype=m.dtype)
+    len_m = len(m)
+    out = np.empty((len_m, len_m), dtype=m.dtype)
 
-    for i in range(multiple):
-        out[i * len(m): (i + 1) * len(m)] = m
+    for i in range(len_m):
+        out[i] = m
 
     return out
 
@@ -968,7 +971,7 @@ def _make_2d(m):
 def my_tril(m, k=0):
 
     def np_tril_impl_1d(m, k=0):
-        m_2d = _make_2d(m)
+        m_2d = _make_square(m)
         return np_tril_impl_2d(m_2d, k)
 
     @register_jitable
@@ -993,7 +996,7 @@ def my_tril(m, k=0):
 def my_triu(m, k=0):
 
     def np_triu_impl_1d(m, k=0):
-        m_2d = _make_2d(m)
+        m_2d = _make_square(m)
         return np_triu_impl_2d(m_2d, k)
 
     @register_jitable
