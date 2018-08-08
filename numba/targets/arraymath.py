@@ -939,17 +939,21 @@ def np_tri(M, N=None, k=0):
     else:
         return np_tri_impl
 
-
 @register_jitable
-def _tile_mask(mask, m):
-    multiple = int(np.prod(np.array(m.shape[:-2])))
+def _tile_mask(mask, shape):
+    """
+    Tiles a mask of shape (m, n) into a target shape (a, b, ... m, n).
+    """
+    assert len(shape) > 2
+    assert shape[-2:] == mask.shape
+
+    multiple = int(np.prod(np.array(shape[:-2])))
     out = np.empty(multiple * len(mask.flat))
 
     for i in range(multiple):
         out[i * len(mask.flat): (i + 1) * len(mask.flat)] = mask.flat
 
-    return out.reshape(m.shape)
-
+    return out.reshape(shape)
 
 @register_jitable
 def _make_square(m):
@@ -966,7 +970,6 @@ def _make_square(m):
 
     return out
 
-
 @overload(np.tril)
 def my_tril(m, k=0):
 
@@ -981,7 +984,7 @@ def my_tril(m, k=0):
 
     def np_tril_impl_multi(m, k=0):
         mask = np.tri(m.shape[-2], N=m.shape[-1], k=k).astype(np.uint)
-        tiled_mask = _tile_mask(mask, m)
+        tiled_mask = _tile_mask(mask, m.shape)
         return np.where(tiled_mask, m, np.zeros_like(m, dtype=m.dtype))
 
     if m.ndim == 1:
@@ -990,7 +993,6 @@ def my_tril(m, k=0):
         return np_tril_impl_2d
     else:
         return np_tril_impl_multi
-
 
 @overload(np.triu)
 def my_triu(m, k=0):
@@ -1006,7 +1008,7 @@ def my_triu(m, k=0):
 
     def np_triu_impl_multi(m, k=0):
         mask = np.tri(m.shape[-2], N=m.shape[-1], k=k-1).astype(np.uint)
-        tiled_mask = _tile_mask(mask, m)
+        tiled_mask = _tile_mask(mask, m.shape)
         return np.where(tiled_mask, np.zeros_like(m, dtype=m.dtype), m)
 
     if m.ndim == 1:
