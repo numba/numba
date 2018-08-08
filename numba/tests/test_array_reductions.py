@@ -122,8 +122,8 @@ def array_percentile_global(arr, q):
 def array_nanpercentile_global(arr, q):
     return np.nanpercentile(arr, q)
 
-def array_tri_global(M, N=None, k=0, dtype=np.float):
-    return np.tri(M, N, k, dtype)
+def array_tri_global(M, N=None, k=0):
+    return np.tri(M, N, k)
 
 def array_tril_global(m, k=0):
     return np.tril(m, k)

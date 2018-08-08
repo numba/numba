@@ -915,11 +915,11 @@ if numpy_version >= (1, 9):
 # Element-wise computations
 
 @overload(np.tri)
-def np_tri(M, N=None, k=0, dtype=np.float64):
+def np_tri(M, N=None, k=0):
 
     @register_jitable
-    def _tri_impl(shape, k, dtype):
-        out = np.empty(shape)
+    def _tri_impl(shape, k):
+        out = np.empty(shape, dtype=np.float64)
 
         for i in range(shape[0]):
             m_max = min(max(0, i + k + 1), shape[1])
@@ -928,11 +928,11 @@ def np_tri(M, N=None, k=0, dtype=np.float64):
 
         return out
 
-    def np_tri_impl(M, N=None, k=0, dtype=np.float64):
-        return _tri_impl((M, N), k, dtype)
+    def np_tri_impl(M, N=None, k=0):
+        return _tri_impl((M, N), k)
 
-    def np_tri_impl_no_n(M, N=None, k=0, dtype=np.float64):
-        return _tri_impl((M, M), k, dtype)
+    def np_tri_impl_no_n(M, N=None, k=0):
+        return _tri_impl((M, M), k)
 
     if N in (None, types.none):
         return np_tri_impl_no_n
