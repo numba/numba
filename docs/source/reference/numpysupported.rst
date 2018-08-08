@@ -289,6 +289,9 @@ The following top-level functions are supported:
 * :func:`numpy.stack`
 * :func:`numpy.take` (only the 2 first arguments)
 * :func:`numpy.transpose`
+* :func:`numpy.tri` (only the 3 first arguments)
+* :func:`numpy.tril`
+* :func:`numpy.triu`
 * :func:`numpy.unique` (only the first argument)
 * :func:`numpy.vstack`
 * :func:`numpy.where`
