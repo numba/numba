@@ -943,11 +943,18 @@ def np_tri(M, N=None, k=0):
 @overload(np.tril)
 def my_tril(m, k=0):
 
-    def np_tril_impl(m, k=0):
+    def np_tril_impl_1d(m, k=0):
+        if k >= 0:
+            out = m.reshape(1, 1)
+        else:
+            out = np.array([0], dtype=m.dtype).reshape(1, 1)
+        return out
+
+    def np_tril_impl_2d(m, k=0):
         mask = np.tri(m.shape[-2], N=m.shape[-1], k=k).astype(np.uint)
         return np.where(mask, m, np.zeros_like(m, dtype=m.dtype))
 
-    def np_tril_multi_impl(m, k=0):
+    def np_tril_impl_multi(m, k=0):
         mask = np.tri(m.shape[-2], N=m.shape[-1], k=k).astype(np.uint)
 
         multiple = int(np.prod(np.array(m.shape[:-2])))
@@ -959,32 +966,29 @@ def my_tril(m, k=0):
         mask_ = out.reshape(m.shape)
         return np.where(mask_, m, np.zeros_like(m, dtype=m.dtype))
 
-    def np_tril_impl_1d(m, k=0):
-        if k >= 0:
-            out = m.reshape(1, 1)
-        else:
-            out = np.array([0], dtype=m.dtype).reshape(1, 1)
-        return out
-
-    # def np_triu_impl_empty(m, k=0):
-    #     return np.array([], dtype=m.dtype).reshape(0, 0)
-
     if m.ndim == 1:
         return np_tril_impl_1d
     elif m.ndim == 2:
-        return np_tril_impl
+        return np_tril_impl_2d
     else:
-        return np_tril_multi_impl
+        return np_tril_impl_multi
 
 
 @overload(np.triu)
 def my_triu(m, k=0):
 
-    def np_triu_impl(m, k=0):
+    def np_triu_impl_1d(m, k=0):
+        if k <= 0:
+            out = m.reshape(1, 1)
+        else:
+            out = np.array([0], dtype=m.dtype).reshape(1, 1)
+        return out
+
+    def np_triu_impl_2d(m, k=0):
         mask = np.tri(m.shape[-2], N=m.shape[-1], k=k-1).astype(np.uint)
         return np.where(mask, np.zeros_like(m, dtype=m.dtype), m)
 
-    def np_triu_multi_impl(m, k=0):
+    def np_triu_impl_multi(m, k=0):
         mask = np.tri(m.shape[-2], N=m.shape[-1], k=k-1).astype(np.uint)
 
         multiple = int(np.prod(np.array(m.shape[:-2])))
@@ -996,22 +1000,12 @@ def my_triu(m, k=0):
         mask_ = out.reshape(m.shape)
         return np.where(mask_, np.zeros_like(m, dtype=m.dtype), m)
 
-    def np_triu_impl_1d(m, k=0):
-        if k <= 0:
-            out = m.reshape(1, 1)
-        else:
-            out = np.array([0], dtype=m.dtype).reshape(1, 1)
-        return out
-    #
-    # def np_triu_impl_empty(m, k=0):
-    #     return np.array([], dtype=m.dtype).reshape(0, 0)
-
     if m.ndim == 1:
         return np_triu_impl_1d
     elif m.ndim == 2:
-        return np_triu_impl
+        return np_triu_impl_2d
     else:
-        return np_triu_multi_impl
+        return np_triu_impl_multi
 
 
 
