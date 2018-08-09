@@ -466,15 +466,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         _check(np.full(9, fill_value=7.5))
         _check(np.array([]))
 
-    def _triangular_matrix_tests_non_int_offset(self, pyfunc):
-        cfunc = jit(nopython=True)(pyfunc)
-        a = np.ones((5, 6))
-
-        for k in -1.4, 1.9:
-            expected = pyfunc(a, k)
-            got = cfunc(a, k)
-            self.assertPreciseEqual(expected, got)
-
     def test_tril(self):
         pyfunc = array_tril_global
         self._triangular_matrix_tests(pyfunc)
