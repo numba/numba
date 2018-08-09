@@ -104,7 +104,7 @@ def ptx_cmem_arylike(context, builder, sig, args):
 
     constvals = [
         context.get_constant(types.byte, i)
-        for i in arr.flatten(order='A').data.tobytes()
+        for i in arr.tobytes(order='A')
     ]
     constary = lc.Constant.array(Type.int(8), constvals)
 
