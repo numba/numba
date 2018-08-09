@@ -97,14 +97,14 @@ def compute_dead_maps(cfg, blocks, live_map, var_def_map):
     escaping_dead_map = defaultdict(set)
     # all vars that should be deleted within this block
     internal_dead_map = defaultdict(set)
-    # all vars that should be delted after the function exit
+    # all vars that should be deleted after the function exit
     exit_dead_map = defaultdict(set)
 
     for offset, ir_block in blocks.items():
         # live vars WITHIN the block will include all the locally
         # defined variables
         cur_live_set = live_map[offset] | var_def_map[offset]
-        # vars alive alive in the outgoing blocks
+        # vars alive in the outgoing blocks
         outgoing_live_map = dict((out_blk, live_map[out_blk])
                                  for out_blk, _data in cfg.successors(offset))
         # vars to keep alive for the terminator
@@ -115,7 +115,7 @@ def compute_dead_maps(cfg, blocks, live_map, var_def_map):
                                   set())
         # include variables used in terminator
         combined_liveset |= terminator_liveset
-        # vars that are dead within the block beacuse they are not
+        # vars that are dead within the block because they are not
         # propagated to any outgoing blocks
         internal_set = cur_live_set - combined_liveset
         internal_dead_map[offset] = internal_set

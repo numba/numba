@@ -368,7 +368,8 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         # assert lifted function is native
         self.assertTrue(loopcres.fndesc.native)
 
-    def test_no_iteration(self):
+    def test_no_iteration_w_redef(self):
+        # redefinition of res in the loop with no use of res prevents lifting
         from numba import jit
 
         @jit(forceobj=True)
@@ -378,11 +379,41 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
                 res = i
             return res
 
+        # loop count = 0, loop won't lift or execute
+        self.assertEqual(test.py_func(-1), test(-1))
+
+        # loop count = 0, loop won't lift but will execute
+        self.assertEqual(test.py_func(1), test(1))
+
+    def test_no_iteration(self):
+        from numba import jit
+
+        @jit(forceobj=True)
+        def test(n):
+            res = 0
+            for i in range(n):
+                res += i
+            return res
+
         # loop count = 0
         self.assertEqual(test.py_func(-1), test(-1))
 
         # loop count = 1
         self.assertEqual(test.py_func(1), test(1))
+
+    def test_define_in_loop_body(self):
+        # tests a definition in a loop that leaves the loop is liftable
+        from numba import jit
+
+        @jit(forceobj=True)
+        def test(n):
+            for i in range(n):
+                res = i
+            return res
+
+        # loop count = 1
+        self.assertEqual(test.py_func(1), test(1))
+
 
     def test_invalid_argument(self):
         """Test a problem caused by invalid discovery of loop argument

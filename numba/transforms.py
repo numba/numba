@@ -11,7 +11,7 @@ from numba import ir, errors, ir_utils
 from numba.analysis import compute_use_defs
 
 
-def _extract_loop_lifting_candidates(cfg, blocks):
+def _extract_loop_lifting_candidates(cfg, blocks, livemap):
     """
     Returns a list of loops that are candidate for loop lifting
     """
@@ -43,8 +43,43 @@ def _extract_loop_lifting_candidates(cfg, blocks):
                         return False
         return True
 
+    def cannot_redefine(loop):
+        # if a var that is live at the input is redefined in the loop but not
+        # used its not possible to determine if it is live at the end, depends
+        # if the loop actually runs, reject this
+        local_block_ids = set(loop.body) | set(loop.entries) | set(loop.exits)
+        lpblk = {}
+        for k in local_block_ids:
+            lpblk[k] = blocks[k]
+        bodyblk = {}
+        for k in loop.body:
+            bodyblk[k] = blocks[k]
+
+        used_vars = set()
+        defs = compute_use_defs(bodyblk)
+        for vs in defs.usemap.values():
+            used_vars |= vs
+        used_vars = set([x for x in used_vars if not x.startswith('$')])
+
+        def_vars = set()
+        defs = compute_use_defs(lpblk)
+        for vs in defs.defmap.values():
+            def_vars |= vs
+        def_vars = set([x for x in def_vars if not x.startswith('$')])
+
+        [callfrom] = loop.entries
+        inputs = livemap[callfrom]
+        an_exit = next(iter(loop.exits))
+        [(returnto, _)] = cfg.successors(an_exit)
+        outputs = livemap[returnto]
+        stat = True
+        for x in (inputs & outputs & def_vars):
+            stat &= x in used_vars
+        return stat
+
     return [loop for loop in find_top_level_loops(cfg)
-            if same_exit_point(loop) and one_entry(loop) and cannot_yield(loop)]
+            if same_exit_point(loop) and one_entry(loop) and cannot_yield(loop)
+            and cannot_redefine(loop)]
 
 
 _loop_lift_info = namedtuple('loop_lift_info',
@@ -55,7 +90,7 @@ def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
     """
     Returns information on looplifting candidates.
     """
-    loops = _extract_loop_lifting_candidates(cfg, blocks)
+    loops = _extract_loop_lifting_candidates(cfg, blocks, livemap)
     loopinfos = []
     for loop in loops:
         [callfrom] = loop.entries   # requirement checked earlier
@@ -73,12 +108,16 @@ def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
             loopblocks[k] = blocks[k]
 
         used_vars = set()
-        for vs in compute_use_defs(loopblocks).usemap.values():
+        def_vars = set()
+        defs = compute_use_defs(loopblocks)
+        for vs in defs.usemap.values():
             used_vars |= vs
+        for vs in defs.defmap.values():
+            def_vars |= vs
 
         # note: sorted for stable ordering
-        inputs = sorted(set(inputs) & used_vars)
-        outputs = sorted(set(outputs) & used_vars)
+        inputs = sorted(set(inputs) & (used_vars))
+        outputs = sorted(set(outputs) & (used_vars | def_vars))
 
         lli = _loop_lift_info(loop=loop, inputs=inputs, outputs=outputs,
                               callfrom=callfrom, returnto=returnto)
