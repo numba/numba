@@ -1194,11 +1194,15 @@ def canonicalize_array_math(func_ir, typemap, calltypes, typingctx):
                 if rhs.op == 'call' and rhs.func.name in saved_arr_arg:
                     # add array as first arg
                     arr = saved_arr_arg[rhs.func.name]
-                    rhs.args = [arr] + rhs.args
                     # update call type signature to include array arg
                     old_sig = calltypes.pop(rhs)
+                    # argsort requires kws for typing so sig.args can't be used
+                    # reusing sig.args since some types become Const in sig
+                    argtyps = old_sig.args[:len(rhs.args)]
+                    kwtyps = {name: typemap[v.name] for name, v in rhs.kws}
                     calltypes[rhs] = typemap[rhs.func.name].get_call_type(
-                        typingctx, [typemap[arr.name]] + list(old_sig.args), {})
+                        typingctx, [typemap[arr.name]] + list(argtyps), kwtyps)
+                    rhs.args = [arr] + rhs.args
 
             new_body.append(stmt)
         block.body = new_body
