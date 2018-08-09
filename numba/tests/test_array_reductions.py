@@ -434,8 +434,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         for k in range(-10, 10):
             for shape in (5, 6), (10, 5), (1, 1), (0, 1), (0, 0):
-                expected = pyfunc(*shape, k)
-                got = cfunc(*shape, k)
+                expected = pyfunc(*shape, k=k)
+                got = cfunc(*shape, k=k)
                 self.assertPreciseEqual(expected, got)
 
     def test_tri_no_second_arg(self):
@@ -478,23 +478,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_tril(self):
         pyfunc = array_tril_global
         self._triangular_matrix_tests(pyfunc)
-        self._triangular_matrix_tests_non_int_offset(pyfunc)
 
     def test_triu(self):
         pyfunc = array_triu_global
         self._triangular_matrix_tests(pyfunc)
-
-        # self._triangular_matrix_tests_non_int_offset(pyfunc)
-
-        # the above test fails with k=1.9, but numpy behaviour is unreasonable,
-        # stemming from the following line in twodim_base.py
-        #
-        # arange(-k, M-k, dtype=_min_int(-k, M - k))
-        #
-        # since k has not been explicitly cast to int, you end up with:
-        #
-        # np.arange(-0.9, 4.1, dtype=np.int8)
-        # >>> array([0, 0, 0, 0, 0], dtype=int8)
 
     @unittest.skipUnless(np_version >= (1, 10), "percentile needs Numpy 1.10+")
     def test_percentile_basic(self):
