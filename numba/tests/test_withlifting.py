@@ -130,6 +130,19 @@ def liftcall4():
             pass
 
 
+def lift_undefiend():
+    with undefined_global_var:
+        pass
+
+
+
+bogus_contextmanager = object()
+
+def lift_invalid():
+    with bogus_contextmanager:
+        pass
+
+
 class TestWithFinding(TestCase):
     def check_num_of_with(self, func, expect_count):
         the_ir = get_func_ir(func)
@@ -240,6 +253,33 @@ class TestLiftCall(BaseTestWithLifting):
         # Known error.  We only support one context manager per function
         # for body that are lifted.
         self.assertIn("re-entrant", str(raises.exception))
+
+
+class TestBogusContext(BaseTestWithLifting):
+    def test_undefined_global(self):
+        the_ir = get_func_ir(lift_undefiend)
+
+        with self.assertRaises(errors.CompilerError) as raises:
+            with_lifting(
+                the_ir, self.typingctx, self.targetctx, self.flags, locals={},
+            )
+        self.assertIn(
+            "Undefined variable used as contextmanager",
+            str(raises.exception),
+            )
+
+    def test_invalid(self):
+        the_ir = get_func_ir(lift_invalid)
+
+        with self.assertRaises(errors.CompilerError) as raises:
+            with_lifting(
+                the_ir, self.typingctx, self.targetctx, self.flags, locals={},
+            )
+        self.assertIn(
+            "Unsupported use of contextmanager",
+            str(raises.exception),
+            )
+
 
 
 if __name__ == '__main__':

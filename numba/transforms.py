@@ -315,11 +315,22 @@ def _get_with_contextmanager(func_ir, blocks, blk_start):
                     "Illegal use of context-manager. ",
                     loc=stmt.loc,
                     )
-            return dfn.value
+            ctxobj = dfn.value
+            if ctxobj is ir.UNDEFINED:
+                raise errors.CompilerError(
+                    "Undefined variable used as contextmanager",
+                    loc=blocks[blk_start].loc,
+                    )
+            if not hasattr(ctxobj, 'mutate_with_body'):
+                raise errors.CompilerError(
+                    "Unsupported use of contextmanager",
+                    loc=blocks[blk_start].loc,
+                    )
+            return ctxobj
     # No
     raise errors.CompilerError(
         "malformed with-context usage",
-        loc=blocks[blk_start],
+        loc=blocks[blk_start].loc,
         )
 
 
