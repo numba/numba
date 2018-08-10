@@ -469,7 +469,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             got = cfunc(x)
             self.assertPreciseEqual(expected, got)
 
-        # non integer input array
+        # non-integer input array
         for x in np.linspace(3, 10, 5), np.array([1.2, np.nan, np.inf, -np.inf]):
             expected = pyfunc(x)
             got = cfunc(x)
