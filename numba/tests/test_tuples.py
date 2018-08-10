@@ -7,7 +7,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba import jit, types, errors
+from numba import jit, types, errors, utils
 from .support import TestCase, MemoryLeakMixin, tag
 
 
@@ -94,9 +94,6 @@ def identity(tup):
 
 def index_method_usecase(tup, value):
     return tup.index(value)
-
-def build_tuple_unpack(tup):
-    return (1, *tup)
 
 
 class TestTupleReturn(TestCase):
@@ -505,9 +502,11 @@ class TestMethods(TestCase):
 
 class TestTupleBuildUnpack(TestCase):
 
+    @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
     def test_build_unpack(self):
         def check(p):
-            pyfunc = build_tuple_unpack
+            # using eval here since Python 2 doesn't even support the syntax
+            pyfunc = eval("lambda a: (1, *a)")
             cfunc = jit(nopython=True)(pyfunc)
             self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
