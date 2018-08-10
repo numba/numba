@@ -770,7 +770,7 @@ class AutoJitCUDAKernel(CUDAKernelBase):
                 kernel.bind()
         return kernel
 
-    def inspect_llvm(self, compute_capability=None, signature=None):
+    def inspect_llvm(self, signature=None, compute_capability=None):
         '''
         Return the LLVM IR for all signatures encountered thus far, or the LLVM
         IR for a specific signature and compute_capability if given.
@@ -782,7 +782,7 @@ class AutoJitCUDAKernel(CUDAKernelBase):
             return dict((sig, defn.inspect_llvm())
                         for sig, defn in self.definitions.items())
 
-    def inspect_asm(self, compute_capability=None, signature=None):
+    def inspect_asm(self, signature=None, compute_capability=None):
         '''
         Return the generated assembly code for all signatures encountered thus
         far, or the LLVM IR for a specific signature and compute_capability
