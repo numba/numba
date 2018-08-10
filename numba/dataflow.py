@@ -358,13 +358,20 @@ class DataFlowAnalysis(object):
             info.append(inst, func=func, vararg=vararg, res=res)
             info.push(res)
 
-    def op_BUILD_TUPLE_UNPACK_WITH_CALL(self, info, inst):
+    def _build_tuple_unpack(self, info, inst):
         # Builds tuple from other tuples on the stack
         tuples = list(reversed([info.pop() for _ in range(inst.arg)]))
         temps = [info.make_temp() for _ in range(len(tuples) - 1)]
         info.append(inst, tuples=tuples, temps=temps)
         # The result is in the last temp var
         info.push(temps[-1])
+
+    def op_BUILD_TUPLE_UNPACK_WITH_CALL(self, info, inst):
+        # just unpack the input tuple, call inst will be handled afterwards
+        self._build_tuple_unpack(info, inst)
+
+    def op_BUILD_TUPLE_UNPACK(self, info, inst):
+        self._build_tuple_unpack(info, inst)
 
     def op_BUILD_CONST_KEY_MAP(self, info, inst):
         keys = info.pop()

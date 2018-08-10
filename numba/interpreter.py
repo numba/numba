@@ -671,12 +671,19 @@ class Interpreter(object):
             expr = ir.Expr.call(func, [], [], loc=self.loc, vararg=vararg)
             self.store(expr, res)
 
-    def op_BUILD_TUPLE_UNPACK_WITH_CALL(self, inst, tuples, temps):
+    def _build_tuple_unpack(self, inst, tuples, temps):
         first = self.get(tuples[0])
         for other, tmp in zip(map(self.get, tuples[1:]), temps):
             out = ir.Expr.binop(fn='+', lhs=first, rhs=other, loc=self.loc)
             self.store(out, tmp)
             first = tmp
+
+    def op_BUILD_TUPLE_UNPACK_WITH_CALL(self, inst, tuples, temps):
+        # just unpack the input tuple, call inst will be handled afterwards
+        self._build_tuple_unpack(inst, tuples, temps)
+
+    def op_BUILD_TUPLE_UNPACK(self, inst, tuples, temps):
+        self._build_tuple_unpack(inst, tuples, temps)
 
     def op_BUILD_CONST_KEY_MAP(self, inst, keys, keytmps, values, res):
         # Unpack the constant key-tuple and reused build_map which takes
