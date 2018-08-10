@@ -95,6 +95,9 @@ def identity(tup):
 def index_method_usecase(tup, value):
     return tup.index(value)
 
+def build_tuple_unpack(tup):
+    return (1, *tup)
+
 
 class TestTupleReturn(TestCase):
 
@@ -499,6 +502,19 @@ class TestMethods(TestCase):
         msg = 'tuple.index(x): x not in tuple'
         self.assertEqual(msg, str(raises.exception))
 
+
+class TestTupleBuildUnpack(TestCase):
+
+    def test_build_unpack(self):
+        def check(p):
+            pyfunc = build_tuple_unpack
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        # Homogeneous
+        check((4, 5))
+        # Heterogeneous
+        check((4, 5.5))
 
 if __name__ == '__main__':
     unittest.main()
