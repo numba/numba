@@ -327,6 +327,14 @@ class TestArrayAnalysis(TestCase):
                                asserts=[self.with_assert('A', 'B'),
                                         self.without_assert('C', 'D')])
 
+        def test_tup_arg(T):
+            T2 = T
+            return T2[0]
+
+        int_arr_typ = types.Array(types.intp, 1, 'C')
+        self._compile_and_test(test_tup_arg,
+            (types.Tuple((int_arr_typ, int_arr_typ)),), asserts=None)
+
         T = namedtuple("T", ['a','b'])
         def test_namedtuple(n):
             r = T(n, n)
