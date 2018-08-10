@@ -500,7 +500,7 @@ class TestMethods(TestCase):
         self.assertEqual(msg, str(raises.exception))
 
 
-class TestTupleBuildUnpack(TestCase):
+class TestTupleBuild(TestCase):
 
     @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
     def test_build_unpack(self):
@@ -514,6 +514,18 @@ class TestTupleBuildUnpack(TestCase):
         check((4, 5))
         # Heterogeneous
         check((4, 5.5))
+
+    def test_tuple_constructor(self):
+        def check(pyfunc, arg):
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(arg), pyfunc(arg))
+
+        # empty
+        check(lambda _: tuple(), ())
+        # Homogeneous
+        check(lambda a: tuple(a), (4, 5))
+        # Heterogeneous
+        check(lambda a: tuple(a), (4, 5.5))
 
 if __name__ == '__main__':
     unittest.main()
