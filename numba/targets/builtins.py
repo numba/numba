@@ -329,6 +329,17 @@ def sized_bool(context, builder, sig, args):
     else:
         return cgutils.false_bit
 
+@lower_builtin(tuple)
+def lower_empty_tuple(context, builder, sig, args):
+    retty = sig.return_type
+    res = context.get_constant_undef(retty)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+@lower_builtin(tuple, types.BaseTuple)
+def lower_tuple(context, builder, sig, args):
+    val, = args
+    return impl_ret_untracked(context, builder, sig.return_type, val)
+
 # -----------------------------------------------------------------------------
 
 def get_type_max_value(typ):
