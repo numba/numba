@@ -438,15 +438,19 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                 got = cfunc(*shape, k=k)
                 self.assertPreciseEqual(expected, got)
 
-    def test_tri_no_second_arg(self):
-        pyfunc = array_tri_global
-        cfunc = jit(nopython=True)(pyfunc)
-
+        # no second arg
         for k in range(-10, 10):
             for N in range(0, 12):
                 expected = pyfunc(N, k=k)
                 got = cfunc(N, k=k)
                 self.assertPreciseEqual(expected, got)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(5, 6, k=1.5)
+        self.assertEqual("k must be an integer", str(raises.exception))
 
     def _triangular_matrix_tests(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
@@ -466,13 +470,19 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         _check(np.full(9, fill_value=7.5))
         _check(np.array([]))
 
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        a = np.ones((5, 6))
+        with self.assertRaises(ValueError) as raises:
+            cfunc(a, k=1.5)
+        self.assertEqual("k must be an integer", str(raises.exception))
+
     def test_tril(self):
-        pyfunc = array_tril_global
-        self._triangular_matrix_tests(pyfunc)
+        self._triangular_matrix_tests(array_tril_global)
 
     def test_triu(self):
-        pyfunc = array_triu_global
-        self._triangular_matrix_tests(pyfunc)
+        self._triangular_matrix_tests(array_triu_global)
 
     @unittest.skipUnless(np_version >= (1, 10), "percentile needs Numpy 1.10+")
     def test_percentile_basic(self):

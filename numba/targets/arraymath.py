@@ -917,6 +917,17 @@ if numpy_version >= (1, 9):
 @overload(np.tri)
 def np_tri(M, N=None, k=0):
 
+    # numpy behaviour is unexpected and unreasonable in the case where k is not
+    # an integer: for example, the following assertion fails:
+    #
+    #   assert np.tri(5, 6, k=-2.8).shape == (5, 6)
+    #
+    # rather than try to replicate, we explicitly require k to be an integer.
+    if not isinstance(k, types.Integer):
+        def _abort_mission(*args):
+            raise ValueError('k must be an integer')
+        return _abort_mission
+
     @register_jitable
     def _tri_impl(shape, k):
         out = np.empty(shape, dtype=np.float64)  # numpy default dtype
@@ -940,9 +951,10 @@ def np_tri(M, N=None, k=0):
         return np_tri_impl
 
 @register_jitable
-def _tile_mask(mask, shape):
+def _tessellate_mask(mask, shape):
     """
-    Tiles a mask of shape (m, n) into a target shape (a, b, ... m, n).
+    Takes a mask array of shape (m, n) and tessellates it into
+    a multi-dimensional shape (a, b, ... m, n).
     """
     assert len(shape) > 2
     assert shape[-2:] == mask.shape
@@ -958,7 +970,8 @@ def _tile_mask(mask, shape):
 @register_jitable
 def _make_square(m):
     """
-    This is a facsimile of np.tile(m, (len(m), 1)) for a 1 dimensional array, m
+    Takes a 1d array and tiles it to form a square matrix
+    - i.e. a facsimile of np.tile(m, (len(m), 1))
     """
     assert m.ndim == 1
 
@@ -973,19 +986,26 @@ def _make_square(m):
 @overload(np.tril)
 def my_tril(m, k=0):
 
+    # numpy behaviour is unexpected and unreasonable in the case where k is not
+    # an integer; rather than try to replicate, we explicitly require k to be an integer.
+    if not isinstance(k, types.Integer):
+        def _abort_mission(*args):
+            raise ValueError('k must be an integer')
+        return _abort_mission
+
     def np_tril_impl_1d(m, k=0):
         m_2d = _make_square(m)
-        return np_tril_impl_2d(m_2d, int(k))
+        return np_tril_impl_2d(m_2d, k)
 
     @register_jitable
     def np_tril_impl_2d(m, k=0):
-        mask = np.tri(m.shape[-2], N=m.shape[-1], k=int(k)).astype(np.uint)
+        mask = np.tri(m.shape[-2], N=m.shape[-1], k=k).astype(np.uint)
         return np.where(mask, m, np.zeros_like(m, dtype=m.dtype))
 
     def np_tril_impl_multi(m, k=0):
-        mask = np.tri(m.shape[-2], N=m.shape[-1], k=int(k)).astype(np.uint)
-        tiled_mask = _tile_mask(mask, m.shape)
-        return np.where(tiled_mask, m, np.zeros_like(m, dtype=m.dtype))
+        mask = np.tri(m.shape[-2], N=m.shape[-1], k=k).astype(np.uint)
+        tessellated_mask = _tessellate_mask(mask, m.shape)
+        return np.where(tessellated_mask, m, np.zeros_like(m, dtype=m.dtype))
 
     if m.ndim == 1:
         return np_tril_impl_1d
@@ -997,19 +1017,30 @@ def my_tril(m, k=0):
 @overload(np.triu)
 def my_triu(m, k=0):
 
+    # numpy behaviour is unexpected and unreasonable in the case where k is not
+    # an integer: for example, observe that the following outputs all zeros:
+    #
+    #   np.triu(np.ones((5, 6)), k=1.9)
+    #
+    # rather than try to replicate, we explicitly require k to be an integer.
+    if not isinstance(k, types.Integer):
+        def _abort_mission(*args):
+            raise ValueError('k must be an integer')
+        return _abort_mission
+
     def np_triu_impl_1d(m, k=0):
         m_2d = _make_square(m)
         return np_triu_impl_2d(m_2d, int(k))
 
     @register_jitable
     def np_triu_impl_2d(m, k=0):
-        mask = np.tri(m.shape[-2], N=m.shape[-1], k=int(k)-1).astype(np.uint)
+        mask = np.tri(m.shape[-2], N=m.shape[-1], k=k-1).astype(np.uint)
         return np.where(mask, np.zeros_like(m, dtype=m.dtype), m)
 
     def np_triu_impl_multi(m, k=0):
-        mask = np.tri(m.shape[-2], N=m.shape[-1], k=int(k)-1).astype(np.uint)
-        tiled_mask = _tile_mask(mask, m.shape)
-        return np.where(tiled_mask, np.zeros_like(m, dtype=m.dtype), m)
+        mask = np.tri(m.shape[-2], N=m.shape[-1], k=k-1).astype(np.uint)
+        tessellated_mask = _tessellate_mask(mask, m.shape)
+        return np.where(tessellated_mask, np.zeros_like(m, dtype=m.dtype), m)
 
     if m.ndim == 1:
         return np_triu_impl_1d
