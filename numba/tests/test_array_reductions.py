@@ -122,6 +122,9 @@ def array_percentile_global(arr, q):
 def array_nanpercentile_global(arr, q):
     return np.nanpercentile(arr, q)
 
+def array_vander_global(arr, N=None, increasing=False):
+    return np.vander(arr, N, increasing)
+
 def base_test_arrays(dtype):
     if dtype == np.bool_:
         def factory(n):
@@ -434,6 +437,63 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_nanmedian_basic(self):
         pyfunc = array_nanmedian_global
         self.check_median_basic(pyfunc, self._array_variations)
+
+    def test_vander_basic(self):
+        pyfunc = array_vander_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.array([1, 2, 3, 5])
+
+        # N supplied and increasing defaulted
+        for N in range(10):
+            expected = pyfunc(x, N)
+            got = cfunc(x, N)
+            self.assertPreciseEqual(expected, got)
+
+        # N and increasing supplied
+        for N in range(10):
+            for increasing in True, False:
+                expected = pyfunc(x, N, increasing)
+                got = cfunc(x, N, increasing)
+                self.assertPreciseEqual(expected, got)
+
+        # N defaulted and increasing supplied
+        for increasing in True, False:
+            expected = pyfunc(x, increasing=increasing)
+            got = cfunc(x, increasing=increasing)
+            self.assertPreciseEqual(expected, got)
+
+        # N and increasing defaulted
+        for x in np.arange(4), np.array([]):
+            expected = pyfunc(x)
+            got = cfunc(x)
+            self.assertPreciseEqual(expected, got)
+
+        # non integer input array
+        for x in np.linspace(3, 10, 5), np.array([1.2, np.nan, np.inf, -np.inf]):
+            expected = pyfunc(x)
+            got = cfunc(x)
+            self.assertPreciseEqual(expected, got, abs_tol='eps')
+
+        # non-array input
+        for x in [0, 1, 2, 3], (4, 5, 6, 7):
+            expected = pyfunc(x)
+            got = cfunc(x)
+            self.assertPreciseEqual(expected, got)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertRaises(TypeError) as raises:
+            N = 1.1
+            cfunc(x, N)
+        self.assertEqual("an integer is required", str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            N = 3
+            x = np.arange(27).reshape(3, 3, 3)
+            cfunc(x, N)
+        self.assertEqual("x must be a one-dimensional array or sequence.", str(raises.exception))
 
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)

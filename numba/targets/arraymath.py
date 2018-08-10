@@ -914,6 +914,58 @@ if numpy_version >= (1, 9):
 #----------------------------------------------------------------------------
 # Element-wise computations
 
+@overload(np.vander)
+def np_vander(x, N=None, increasing=False):
+
+    if N not in (None, types.none):
+        if not isinstance(N, types.Integer):
+            def _abort_mission(*args):
+                raise TypeError('an integer is required')
+            return _abort_mission
+
+    @register_jitable
+    def _np_vander(x, N, increasing):
+
+        if x.ndim > 1:
+            raise ValueError('x must be a one-dimensional array or sequence.')
+
+        m = len(x)
+        out = np.empty((m, N), dtype=x.dtype)
+
+        if increasing:
+            for i in range(N):
+                out[:, i] = x ** i
+        else:
+            for i in range(N):
+                out[:, (N - i - 1)] = x ** i
+
+        return out
+
+    def np_vander_impl(x, N=None, increasing=False):
+        return _np_vander(x, N, increasing)
+
+    def np_vander_x_seq_impl(x, N=None, increasing=False):
+        x = np.array(x)
+        return _np_vander(x, N, increasing)
+
+    def np_vander_no_n_impl(x, N=None, increasing=False):
+        return _np_vander(x, len(x), increasing)
+
+    def np_vander_no_n_x_seq_impl(x, N=None, increasing=False):
+        x = np.array(x)
+        return _np_vander(x, len(x), increasing)
+
+    if N in (None, types.none):
+        if isinstance(x, types.Array):
+            return np_vander_no_n_impl
+        elif isinstance(x, (types.Tuple, types.Sequence)):
+            return np_vander_no_n_x_seq_impl
+    else:
+        if isinstance(x, types.Array):
+            return np_vander_impl
+        elif isinstance(x, (types.Tuple, types.Sequence)):
+            return np_vander_x_seq_impl
+
 def _np_round_intrinsic(tp):
     # np.round() always rounds half to even
     return "llvm.rint.f%d" % (tp.bitwidth,)
