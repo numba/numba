@@ -174,9 +174,25 @@ def ifelse_usecase4(x, y):
     if x == y:
         return 1
 
+
 def ternary_ifelse_usecase1(x, y):
     return True if x > y else False
 
+
+def double_infinite_loop(x, y):
+    L = x
+    i = y
+
+    while True:
+        while True:
+            if i == L - 1:
+                break
+            i += 1
+        i += 1
+        if i >= L:
+            break
+
+    return i, L
 
 class TestFlowControl(TestCase):
 
@@ -346,6 +362,13 @@ class TestFlowControl(TestCase):
     @tag('important')
     def test_ternary_ifelse1_npm(self):
         self.test_ternary_ifelse1(flags=no_pyobj_flags)
+
+    def test_double_infinite_loop(self, flags=enable_pyobj_flags):
+        self.run_test(double_infinite_loop, [10], [0],
+                      flags=flags)
+
+    def test_double_infinite_loop_npm(self):
+        self.test_double_infinite_loop(flags=no_pyobj_flags)
 
 
 class TestCFGraph(TestCase):
