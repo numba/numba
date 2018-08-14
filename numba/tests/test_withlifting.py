@@ -264,7 +264,7 @@ class TestBogusContext(BaseTestWithLifting):
                 the_ir, self.typingctx, self.targetctx, self.flags, locals={},
             )
         self.assertIn(
-            "Undefined variable used as contextmanager",
+            "Undefined variable used as context manager",
             str(raises.exception),
             )
 
@@ -276,7 +276,7 @@ class TestBogusContext(BaseTestWithLifting):
                 the_ir, self.typingctx, self.targetctx, self.flags, locals={},
             )
         self.assertIn(
-            "Unsupported use of contextmanager",
+            "Unsupported context manager in use",
             str(raises.exception),
             )
 
