@@ -869,7 +869,7 @@ def load_module_image(context, image):
     """
     image must be a pointer
     """
-    logsz = os.environ.get('NUMBAPRO_CUDA_LOG_SIZE', 1024)
+    logsz = int(os.environ.get('NUMBAPRO_CUDA_LOG_SIZE', 1024))
 
     jitinfo = (c_char * logsz)()
     jiterrors = (c_char * logsz)()
@@ -1664,6 +1664,22 @@ def device_memory_size(devmem):
     return sz
 
 
+def _is_datetime_dtype(obj):
+    """Returns True if the obj.dtype is datetime64 or timedelta64
+    """
+    dtype = getattr(obj, 'dtype', None)
+    return dtype is not None and dtype.char in 'Mm'
+
+
+def _workaround_for_datetime(obj):
+    """Workaround for numpy#4983: buffer protocol doesn't support
+    datetime64 or timedelta64.
+    """
+    if _is_datetime_dtype(obj):
+        obj = obj.view(np.int64)
+    return obj
+
+
 def host_pointer(obj):
     """
     NOTE: The underlying data pointer from the host data buffer is used and
@@ -1673,12 +1689,14 @@ def host_pointer(obj):
     if isinstance(obj, (int, long)):
         return obj
 
-    forcewritable = isinstance(obj, np.void)
+    forcewritable = isinstance(obj, np.void) or _is_datetime_dtype(obj)
+    obj = _workaround_for_datetime(obj)
     return mviewbuf.memoryview_get_buffer(obj, forcewritable)
 
 
 def host_memory_extents(obj):
     "Returns (start, end) the start and end pointer of the array (half open)."
+    obj = _workaround_for_datetime(obj)
     return mviewbuf.memoryview_get_extents(obj)
 
 

@@ -4,6 +4,7 @@ User Manual
 
 .. toctree::
 
+   5minguide.rst
    overview.rst
    installing.rst
    jit.rst
