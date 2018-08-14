@@ -318,12 +318,12 @@ def _get_with_contextmanager(func_ir, blocks, blk_start):
             ctxobj = dfn.value
             if ctxobj is ir.UNDEFINED:
                 raise errors.CompilerError(
-                    "Undefined variable used as contextmanager",
+                    "Undefined variable used as context manager",
                     loc=blocks[blk_start].loc,
                     )
             if not hasattr(ctxobj, 'mutate_with_body'):
                 raise errors.CompilerError(
-                    "Unsupported use of contextmanager",
+                    "Unsupported context manager in use",
                     loc=blocks[blk_start].loc,
                     )
             return ctxobj
