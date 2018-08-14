@@ -33,6 +33,9 @@ from .numpy_support import carray, farray, from_dtype
 # Re-export jitclass
 from .jitclass import jitclass
 
+# Initialize withcontexts
+import numba.withcontexts
+
 # Keep this for backward compatibility.
 test = runtests.main
 
