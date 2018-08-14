@@ -778,7 +778,8 @@ class BaseContext(object):
     def get_dummy_type(self):
         return GENERIC_POINTER
 
-    def compile_subroutine_no_cache(self, builder, impl, sig, locals={}, flags=None):
+    def _compile_subroutine_no_cache(self, builder, impl, sig, locals={},
+                                     flags=None):
         """
         Invoke the compiler to compile a function to be used inside a
         nopython function, but without generating code to call that
@@ -802,26 +803,31 @@ class BaseContext(object):
                                          locals=locals)
         return cres
 
-    def compile_subroutine(self, builder, impl, sig, locals={}):
+    def compile_subroutine(self, builder, impl, sig, locals={}, flags=None,
+                           caching=True):
         """
         Compile the function *impl* for the given *sig* (in nopython mode).
         Return a placeholder object that's callable from another Numba
         function.
         """
         cache_key = (impl.__code__, sig, type(self.error_model))
-        if impl.__closure__:
-            # XXX This obviously won't work if a cell's value is
-            # unhashable.
-            cache_key += tuple(c.cell_contents for c in impl.__closure__)
-        cached = self.cached_internal_func.get(cache_key)
+        if not caching:
+            cached = None
+        else:
+            if impl.__closure__:
+                # XXX This obviously won't work if a cell's value is
+                # unhashable.
+                cache_key += tuple(c.cell_contents for c in impl.__closure__)
+            cached = self.cached_internal_func.get(cache_key)
         if cached is None:
-            cres = self.compile_subroutine_no_cache(builder, impl, sig,
-                                                    locals=locals)
+            cres = self._compile_subroutine_no_cache(builder, impl, sig,
+                                                     locals=locals,
+                                                     flags=flags)
             lib = cres.library
             ty = types.NumbaFunction(cres.fndesc, sig)
             self.cached_internal_func[cache_key] = ty, lib
-        else:
-            ty, lib = cached
+
+        ty, lib = self.cached_internal_func[cache_key]
         # Allow inlining the function inside callers.
         self.codelib_stack[-1].add_linking_library(lib)
         return ty
