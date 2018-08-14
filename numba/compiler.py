@@ -1000,7 +1000,12 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
         inline=flags.forceinline, noalias=flags.noalias)
 
     lower = lowering.Lower(targetctx, library, fndesc, interp)
-    lower.lower()
+    try:
+        targetctx.push_current_library(library)
+        lower.lower()
+    finally:
+        targetctx.pop_current_library()
+
     if not flags.no_cpython_wrapper:
         lower.create_cpython_wrapper(flags.release_gil)
     env = lower.env

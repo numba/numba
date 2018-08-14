@@ -19,6 +19,8 @@ class TestCompileCache(unittest.TestCase):
     def _context_builder_sig_args(self):
         typing_context = typing.Context()
         context = cpu.CPUContext(typing_context)
+        lib = context.codegen().create_library('testing')
+        context.push_current_library(lib)
         module = lc.Module("test_module")
 
         sig = typing.signature(types.int32, types.int32)
@@ -43,7 +45,7 @@ class TestCompileCache(unittest.TestCase):
 
         # Ensure the cache is empty to begin with
         self.assertEqual(0, len(context.cached_internal_func))
-        
+
         # After one compile, it should contain one entry
         context.compile_internal(builder, times2, sig, args)
         self.assertEqual(1, len(context.cached_internal_func))
@@ -67,7 +69,7 @@ class TestCompileCache(unittest.TestCase):
         assert function2.is_declaration
         entry_block2 = function2.append_basic_block('entry')
         builder2 = lc.Builder(entry_block2)
-        
+
         # Ensure that the same function with a different signature does not
         # reuse an entry from the cache in error
         context.compile_internal(builder2, times3, sig2, args2)

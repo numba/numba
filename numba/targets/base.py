@@ -221,6 +221,9 @@ class BaseContext(object):
     # the function descriptor
     fndesc = None
 
+    # current library stack
+    codelib_stack = []
+
     def __init__(self, typing_context):
         _load_global_helpers()
 
@@ -797,9 +800,6 @@ class BaseContext(object):
                                          impl, sig.args,
                                          sig.return_type, flags,
                                          locals=locals)
-
-        # Allow inlining the function inside callers.
-        codegen.add_linking_library(cres.library)
         return cres
 
     def compile_subroutine(self, builder, impl, sig, locals={}):
@@ -813,12 +813,17 @@ class BaseContext(object):
             # XXX This obviously won't work if a cell's value is
             # unhashable.
             cache_key += tuple(c.cell_contents for c in impl.__closure__)
-        ty = self.cached_internal_func.get(cache_key)
-        if ty is None:
+        cached = self.cached_internal_func.get(cache_key)
+        if cached is None:
             cres = self.compile_subroutine_no_cache(builder, impl, sig,
                                                     locals=locals)
+            lib = cres.library
             ty = types.NumbaFunction(cres.fndesc, sig)
-            self.cached_internal_func[cache_key] = ty
+            self.cached_internal_func[cache_key] = ty, lib
+        else:
+            ty, lib = cached
+        # Allow inlining the function inside callers.
+        self.codelib_stack[-1].add_linking_library(lib)
         return ty
 
     def compile_internal(self, builder, impl, sig, args, locals={}):
@@ -1061,6 +1066,12 @@ class BaseContext(object):
         """Create a LLVM module
         """
         return lc.Module(name)
+
+    def push_current_library(self, lib):
+        self.codelib_stack.append(lib)
+
+    def pop_current_library(self):
+        self.codelib_stack.pop()
 
 
 class _wrap_impl(object):
