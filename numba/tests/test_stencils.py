@@ -450,12 +450,23 @@ class TestStencil(TestStencilBase):
                                                                    A, c, out=B)
             return B
 
+        # recursive expr case
         def test_impl3(n):
             A = np.arange(n)
             B = np.zeros(n)
             c = 2
             numba.stencil(lambda a,c : 0.3 * (a[-c+1] + a[0] + a[c-1]))(
                                                                    A, c, out=B)
+            return B
+
+        # multi-constant case
+        def test_impl4(n):
+            A = np.arange(n)
+            B = np.zeros(n)
+            d = 1
+            c = 2
+            numba.stencil(lambda a,c,d : 0.3 * (a[-c+d] + a[0] + a[c-d]))(
+                                                                A, c, d, out=B)
             return B
 
         def test_impl_seq(n):
@@ -471,14 +482,17 @@ class TestStencil(TestStencilBase):
         cpfunc1 = self.compile_parallel(test_impl1, (types.intp,))
         cpfunc2 = self.compile_parallel(test_impl2, (types.intp,))
         cpfunc3 = self.compile_parallel(test_impl3, (types.intp,))
+        cpfunc4 = self.compile_parallel(test_impl4, (types.intp,))
         expected = test_impl_seq(n)
         # parfor result
         parfor_output1 = cpfunc1.entry_point(n)
         parfor_output2 = cpfunc2.entry_point(n)
         parfor_output3 = cpfunc3.entry_point(n)
+        parfor_output4 = cpfunc4.entry_point(n)
         np.testing.assert_almost_equal(parfor_output1, expected, decimal=3)
         np.testing.assert_almost_equal(parfor_output2, expected, decimal=3)
         np.testing.assert_almost_equal(parfor_output3, expected, decimal=3)
+        np.testing.assert_almost_equal(parfor_output4, expected, decimal=3)
 
     @skip_unsupported
     @tag('important')
