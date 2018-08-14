@@ -685,31 +685,38 @@ class DummyPipeline(object):
 
 def _get_const_index_expr(stencil_ir, func_ir, index_var):
     """
-    infer index_var as constant if it is of the form -c where c is a constant
-    in the outer function. index_var is assumed to be inside stencil kernel
+    infer index_var as constant if it is of a expression form like c-1 where c
+    is a constant in the outer function.
+    index_var is assumed to be inside stencil kernel
     """
-    try:
-        require(isinstance(index_var, ir.Var))
-        # case where the index is a const itself in outer function
-        var_const =  guard(_get_const_two_irs, stencil_ir, func_ir, index_var)
-        if var_const is not None:
-            return var_const
-        # get index definition
-        index_def = ir_utils.get_definition(stencil_ir, index_var)
-        # match inner_var = unary(index_var)
-        var_const = guard(
-            _get_const_unary_expr, stencil_ir, func_ir, index_def)
-        if var_const is not None:
-            return var_const
-        # match inner_var = arg1 + arg2
-        var_const = guard(
-            _get_const_binary_expr, stencil_ir, func_ir, index_def)
-        if var_const is not None:
-            return var_const
-
-    except GuardException:
-        return index_var
+    const_val = guard(
+        _get_const_index_expr_inner, stencil_ir, func_ir, index_var)
+    if const_val is not None:
+        return const_val
     return index_var
+
+def _get_const_index_expr_inner(stencil_ir, func_ir, index_var):
+    """inner constant inference function that calls constant, unary and binary
+    cases.
+    """
+    require(isinstance(index_var, ir.Var))
+    # case where the index is a const itself in outer function
+    var_const =  guard(_get_const_two_irs, stencil_ir, func_ir, index_var)
+    if var_const is not None:
+        return var_const
+    # get index definition
+    index_def = ir_utils.get_definition(stencil_ir, index_var)
+    # match inner_var = unary(index_var)
+    var_const = guard(
+        _get_const_unary_expr, stencil_ir, func_ir, index_def)
+    if var_const is not None:
+        return var_const
+    # match inner_var = arg1 + arg2
+    var_const = guard(
+        _get_const_binary_expr, stencil_ir, func_ir, index_def)
+    if var_const is not None:
+        return var_const
+    raise GuardException
 
 def _get_const_two_irs(ir1, ir2, var):
     """get constant in either of two IRs if available
@@ -730,7 +737,7 @@ def _get_const_unary_expr(stencil_ir, func_ir, index_def):
     require(isinstance(index_def, ir.Expr) and index_def.op == 'unary')
     inner_var = index_def.value
     # return -c as constant
-    const_val = _get_const_two_irs(stencil_ir, func_ir, inner_var)
+    const_val = _get_const_index_expr_inner(stencil_ir, func_ir, inner_var)
     return eval("{}{}".format(index_def.fn, const_val))
 
 def _get_const_binary_expr(stencil_ir, func_ir, index_def):
@@ -738,6 +745,6 @@ def _get_const_binary_expr(stencil_ir, func_ir, index_def):
     otherwise, raise GuardException
     """
     require(isinstance(index_def, ir.Expr) and index_def.op == 'binop')
-    arg1 = _get_const_two_irs(stencil_ir, func_ir, index_def.lhs)
-    arg2 = _get_const_two_irs(stencil_ir, func_ir, index_def.rhs)
+    arg1 = _get_const_index_expr_inner(stencil_ir, func_ir, index_def.lhs)
+    arg2 = _get_const_index_expr_inner(stencil_ir, func_ir, index_def.rhs)
     return eval("{}{}{}".format(arg1, index_def.fn, arg2))
