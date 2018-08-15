@@ -999,19 +999,15 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
         interp, typemap, restype, calltypes, mangler=targetctx.mangler,
         inline=flags.forceinline, noalias=flags.noalias)
 
-    lower = lowering.Lower(targetctx, library, fndesc, interp)
-    try:
-        targetctx.push_current_library(library)
+    with targetctx.push_code_library(library):
+        lower = lowering.Lower(targetctx, library, fndesc, interp)
         lower.lower()
-    finally:
-        targetctx.pop_current_library()
-
-    if not flags.no_cpython_wrapper:
-        lower.create_cpython_wrapper(flags.release_gil)
-    env = lower.env
-    call_helper = lower.call_helper
-    has_dynamic_globals = lower.has_dynamic_globals
-    del lower
+        if not flags.no_cpython_wrapper:
+            lower.create_cpython_wrapper(flags.release_gil)
+        env = lower.env
+        call_helper = lower.call_helper
+        has_dynamic_globals = lower.has_dynamic_globals
+        del lower
 
     if flags.no_compile:
         return _LowerResult(fndesc, call_helper, cfunc=None, env=env,

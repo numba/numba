@@ -5,6 +5,7 @@ import copy
 import os
 import sys
 from itertools import permutations, takewhile
+from contextlib import contextmanager
 
 import numpy as np
 
@@ -829,7 +830,7 @@ class BaseContext(object):
 
         ty, lib = self.cached_internal_func[cache_key]
         # Allow inlining the function inside callers.
-        self.codelib_stack[-1].add_linking_library(lib)
+        self.active_code_library.add_linking_library(lib)
         return ty
 
     def compile_internal(self, builder, impl, sig, args, locals={}):
@@ -1073,11 +1074,21 @@ class BaseContext(object):
         """
         return lc.Module(name)
 
-    def push_current_library(self, lib):
-        self.codelib_stack.append(lib)
+    @property
+    def active_code_library(self):
+        """Get the active code library
+        """
+        return self.codelib_stack[-1]
 
-    def pop_current_library(self):
-        self.codelib_stack.pop()
+    @contextmanager
+    def push_code_library(self, lib):
+        """Push the active code library for the context
+        """
+        self.codelib_stack.append(lib)
+        try:
+            yield
+        finally:
+            self.codelib_stack.pop()
 
 
 class _wrap_impl(object):
