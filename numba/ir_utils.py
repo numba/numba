@@ -648,6 +648,7 @@ def is_pure(rhs, lives, call_table):
     return True
 
 alias_analysis_extensions = {}
+alias_func_extensions = {}
 
 def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                                                             arg_aliases=None):
@@ -693,6 +694,9 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                     if fdef is None:
                         continue
                     fname, fmod = fdef
+                    if fdef in alias_func_extensions:
+                        alias_func = alias_func_extensions[fdef]
+                        alias_func(lhs, expr.args, alias_map, arg_aliases)
                     if fmod == 'numpy' and fname in np_alias_funcs:
                         _add_alias(lhs, expr.args[0].name, alias_map, arg_aliases)
                     if isinstance(fmod, ir.Var) and fname in np_alias_funcs:
