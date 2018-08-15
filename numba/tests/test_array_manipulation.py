@@ -655,7 +655,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         def _assert_raises(arr, val):
             with self.assertRaises(ValueError) as raises:
                 cfunc(arr, val)
-            self.assertEqual("unable to safely conform val to a.dtype", str(raises.exception))
+            self.assertEqual("Unable to safely conform val to a.dtype", str(raises.exception))
 
         arr = np.zeros((3, 3), dtype=np.int32)
         val = np.nan
@@ -686,9 +686,8 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
 
         for a in np.array([]), np.ones(5):
-            with self.assertRaises(ValueError) as raises:
-                cfunc(a, val)
-            self.assertEqual("array must be at least 2-d", str(raises.exception))
+            with self.assertRaises(TypingError):
+                cfunc(a, val)  # Array must be at least 2-d; catch this at compile time
 
         with self.assertRaises(ValueError) as raises:
             a = np.zeros((3, 3, 4))

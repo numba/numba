@@ -961,7 +961,7 @@ def _check_val_int(a, val):
 
     # check finite values are within bounds
     if np.any(~np.isfinite(val)) or np.any(val < v_min) or np.any(val > v_max):
-        raise ValueError('unable to safely conform val to a.dtype')
+        raise ValueError('Unable to safely conform val to a.dtype')
 
 @register_jitable
 def _check_val_float(a, val):
@@ -972,13 +972,10 @@ def _check_val_float(a, val):
     # check finite values are within bounds
     finite_vals = val[np.isfinite(val)]
     if np.any(finite_vals < v_min) or np.any(finite_vals > v_max):
-        raise ValueError('unable to safely conform val to a.dtype')
+        raise ValueError('Unable to safely conform val to a.dtype')
 
 @overload(np.fill_diagonal)
 def np_fill_diagonal(a, val, wrap=False):
-
-    def _abort_mission(*args):
-        raise ValueError("array must be at least 2-d")
 
     def fill_diagonal_impl_scalar_val(a, val, wrap=False):
         _fill_diagonal_scalar(a, val, wrap)
@@ -1019,36 +1016,35 @@ def np_fill_diagonal(a, val, wrap=False):
         _check_val_float(a, val)
         _fill_diagonal(a, val, wrap)
 
-    if a.ndim < 2:
-        return _abort_mission
+    if a.ndim > 1:
 
-    # the following can be simplified after #3088; until then, employ
-    # a basic mechanism for catching cases where val is of a type/value
-    # which cannot safely be cast to a.dtype
+        # the following can be simplified after #3088; until then, employ
+        # a basic mechanism for catching cases where val is of a type/value
+        # which cannot safely be cast to a.dtype
 
-    if isinstance(val, (types.Float, types.Integer, types.Boolean)):
-        if isinstance(a.dtype, types.Integer):
-            return fill_diagonal_impl_scalar_val_a_int
-        elif isinstance(a.dtype, types.Float):
-            return fill_diagonal_impl_scalar_val_a_float
-        else:
-            return fill_diagonal_impl_scalar_val
+        if isinstance(val, (types.Float, types.Integer, types.Boolean)):
+            if isinstance(a.dtype, types.Integer):
+                return fill_diagonal_impl_scalar_val_a_int
+            elif isinstance(a.dtype, types.Float):
+                return fill_diagonal_impl_scalar_val_a_float
+            else:
+                return fill_diagonal_impl_scalar_val
 
-    elif isinstance(val, (types.Tuple, types.Sequence)):
-        if isinstance(a.dtype, types.Integer):
-            return fill_diagonal_impl_seq_val_a_int
-        elif isinstance(a.dtype, types.Float):
-            return fill_diagonal_impl_seq_val_a_float
-        else:
-            return fill_diagonal_impl_seq_val
+        elif isinstance(val, (types.Tuple, types.Sequence)):
+            if isinstance(a.dtype, types.Integer):
+                return fill_diagonal_impl_seq_val_a_int
+            elif isinstance(a.dtype, types.Float):
+                return fill_diagonal_impl_seq_val_a_float
+            else:
+                return fill_diagonal_impl_seq_val
 
-    elif isinstance(val, types.Array):
-        if isinstance(a.dtype, types.Integer):
-            return fill_diagonal_impl_array_val_check_a_int
-        elif isinstance(a.dtype, types.Float):
-            return fill_diagonal_impl_array_val_check_a_float
-        else:
-            return fill_diagonal_impl_array_val
+        elif isinstance(val, types.Array):
+            if isinstance(a.dtype, types.Integer):
+                return fill_diagonal_impl_array_val_check_a_int
+            elif isinstance(a.dtype, types.Float):
+                return fill_diagonal_impl_array_val_check_a_float
+            else:
+                return fill_diagonal_impl_array_val
 
 def _np_round_intrinsic(tp):
     # np.round() always rounds half to even
