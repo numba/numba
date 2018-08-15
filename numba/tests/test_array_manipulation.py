@@ -128,7 +128,7 @@ def bad_float_index(arr):
     return arr[1, 2.0]
 
 
-def numpy_fill_diagonal(arr, val, wrap=True):
+def numpy_fill_diagonal(arr, val, wrap=False):
     return np.fill_diagonal(arr, val, wrap)
 
 
