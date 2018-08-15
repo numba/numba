@@ -619,13 +619,24 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             yield -np.inf
             yield True
             yield np.arange(4)
-            yield np.arange(54).reshape(9, 3, 2, 1)
             yield (4,)
             yield [8, 9]
+            yield np.arange(54).reshape(9, 3, 2, 1)  # contiguous C
+            yield np.asfortranarray(np.arange(9).reshape(3, 3))  # contiguous F
+            yield np.arange(9).reshape(3, 3)[::-1]  # non-contiguous
 
+        # contiguous arrays
         def _multi_dimensional_array_variations(n):
             for shape in _shape_variations(n):
                 yield np.zeros(shape, dtype=np.float64)
+                yield np.asfortranarray(np.ones(shape, dtype=np.float64))
+
+        # non-contiguous arrays
+        def _multi_dimensional_array_variations_strided(n):
+            for shape in _shape_variations(n):
+                tmp = np.zeros(tuple([x * 2 for x in shape]), dtype=np.float64)
+                slicer = tuple(slice(0, x * 2, 2) for x in shape)
+                yield tmp[slicer]
 
         def _check_fill_diagonal(arr, val):
             for wrap in None, True, False:
@@ -642,6 +653,10 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                 self.assertPreciseEqual(a, b)
 
         for arr in _multi_dimensional_array_variations(3):
+            for val in _val_variations():
+                _check_fill_diagonal(arr, val)
+
+        for arr in _multi_dimensional_array_variations_strided(3):
             for val in _val_variations():
                 _check_fill_diagonal(arr, val)
 
