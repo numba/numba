@@ -5,21 +5,21 @@ dist: trusty
 
 matrix:
     include:
-        # Longest build first
         # Parametrize the conda env name so multiple builds can
         # work with multiple environments on the same machine in parallel.
+        # Try and cover all supported pythons and NumPy's in some combination
         - os: osx
-          env: PYTHON=3.6 NUMPY=1.12 BUILD_DOC=yes CONDA_ENV=travisci
-        - env: PYTHON=3.5 NUMPY=1.11 RUN_COVERAGE=yes CONDA_ENV=travisci
-        - env: PYTHON=3.6 NUMPY=1.12 BUILD_DOC=yes CONDA_ENV=travisci
-        - env: PYTHON=3.6 NUMPY=1.13 CONDA_ENV=travisci
-        - env: PYTHON=3.6 NUMPY=1.14 CONDA_ENV=travisci
-        - env: PYTHON=3.6 NUMPY=1.14 CONDA_ENV=travisci TEST_SVML=yes
+          env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci BUILD_DOC=yes
+        - env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci
+        - env: PYTHON=2.7 NUMPY=1.15 CONDA_ENV=travisci
+        - env: PYTHON=2.7 NUMPY=1.9  CONDA_ENV=travisci
         - env: PYTHON=3.5 NUMPY=1.10 CONDA_ENV=travisci
-        - env: PYTHON=2.7 NUMPY=1.9 CONDA_ENV=travisci
-        - env: PYTHON=2.7 NUMPY=1.14 CONDA_ENV=travisci
-        - env: PYTHON=3.7 NUMPY=1.14 CONDA_ENV=travisci USE_C3I_TEST_CHANNEL=yes
-        - env: PYTHON=3.6 NUMPY=1.14 CONDA_ENV=travisci VANILLA_INSTALL=yes
+        - env: PYTHON=3.5 NUMPY=1.11 CONDA_ENV=travisci RUN_COVERAGE=yes
+        - env: PYTHON=3.6 NUMPY=1.12 CONDA_ENV=travisci BUILD_DOC=yes
+        - env: PYTHON=3.6 NUMPY=1.13 CONDA_ENV=travisci
+        - env: PYTHON=3.7 NUMPY=1.14 CONDA_ENV=travisci
+        - env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci TEST_SVML=yes
+        - env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci VANILLA_INSTALL=yes
 
 branches:
     only:
