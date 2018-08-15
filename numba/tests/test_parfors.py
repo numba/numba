@@ -530,6 +530,10 @@ class TestParfors(TestParforsBase):
         self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
         self.assertTrue(countArrays(test_impl, (types.intp,)) == 0)
 
+        pcfunc = self.compile_parallel(test_impl, (types.int64,))
+        with self.assertRaises(ValueError) as e:
+            pcfunc(0)
+
     @skip_unsupported
     @tag('important')
     def test_blackscholes(self):
