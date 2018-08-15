@@ -974,77 +974,50 @@ def _check_val_float(a, val):
     if np.any(finite_vals < v_min) or np.any(finite_vals > v_max):
         raise ValueError('Unable to safely conform val to a.dtype')
 
+# no check performed, needed for pathway where no check is required
+_check_nop = register_jitable(lambda x, y: x)
+
+def _asarray(x):
+    pass
+
+@overload(_asarray)
+def _asarray_impl(x):
+    if isinstance(x, types.Array):
+        return lambda x: x
+    elif isinstance(x, (types.Sequence, types.Tuple)):
+        return lambda x: np.array(x)
+    elif isinstance(x, (types.Float, types.Integer, types.Boolean)):
+        ty = as_dtype(x)
+        return lambda x: np.array([x], dtype=ty)
+
 @overload(np.fill_diagonal)
 def np_fill_diagonal(a, val, wrap=False):
 
-    def fill_diagonal_impl_scalar_val(a, val, wrap=False):
-        _fill_diagonal_scalar(a, val, wrap)
-
-    def fill_diagonal_impl_scalar_val_a_int(a, val, wrap=False):
-        _check_val_int(a, np.array([val]))
-        _fill_diagonal_scalar(a, val, wrap)
-
-    def fill_diagonal_impl_scalar_val_a_float(a, val, wrap=False):
-        _check_val_float(a, np.array([val]))
-        _fill_diagonal_scalar(a, val, wrap)
-
-    def fill_diagonal_impl_seq_val(a, val, wrap=False):
-        val = np.array(val).flatten()
-        _fill_diagonal(a, val, wrap)
-
-    def fill_diagonal_impl_seq_val_a_int(a, val, wrap=False):
-        val = np.array(val).flatten()
-        _check_val_int(a, val)
-        _fill_diagonal(a, val, wrap)
-
-    def fill_diagonal_impl_seq_val_a_float(a, val, wrap=False):
-        val = np.array(val).flatten()
-        _check_val_float(a, val)
-        _fill_diagonal(a, val, wrap)
-
-    def fill_diagonal_impl_array_val(a, val, wrap=False):
-        val = val.flatten()
-        _fill_diagonal(a, val, wrap)
-
-    def fill_diagonal_impl_array_val_check_a_int(a, val, wrap=False):
-        val = val.flatten()
-        _check_val_int(a, val)
-        _fill_diagonal(a, val, wrap)
-
-    def fill_diagonal_impl_array_val_check_a_float(a, val, wrap=False):
-        val = val.flatten()
-        _check_val_float(a, val)
-        _fill_diagonal(a, val, wrap)
-
     if a.ndim > 1:
-
         # the following can be simplified after #3088; until then, employ
         # a basic mechanism for catching cases where val is of a type/value
         # which cannot safely be cast to a.dtype
+        if isinstance(a.dtype, types.Integer):
+            checker = _check_val_int
+        elif isinstance(a.dtype, types.Float):
+            checker = _check_val_float
+        else:
+            checker = _check_nop
+
+        def scalar_impl(a, val, wrap=False):
+            tmpval = _asarray(val).flatten()
+            checker(a, tmpval)
+            _fill_diagonal_scalar(a, val, wrap)
+
+        def non_scalar_impl(a, val, wrap=False):
+            tmpval = _asarray(val).flatten()
+            checker(a, tmpval)
+            _fill_diagonal(a, tmpval, wrap)
 
         if isinstance(val, (types.Float, types.Integer, types.Boolean)):
-            if isinstance(a.dtype, types.Integer):
-                return fill_diagonal_impl_scalar_val_a_int
-            elif isinstance(a.dtype, types.Float):
-                return fill_diagonal_impl_scalar_val_a_float
-            else:
-                return fill_diagonal_impl_scalar_val
-
-        elif isinstance(val, (types.Tuple, types.Sequence)):
-            if isinstance(a.dtype, types.Integer):
-                return fill_diagonal_impl_seq_val_a_int
-            elif isinstance(a.dtype, types.Float):
-                return fill_diagonal_impl_seq_val_a_float
-            else:
-                return fill_diagonal_impl_seq_val
-
-        elif isinstance(val, types.Array):
-            if isinstance(a.dtype, types.Integer):
-                return fill_diagonal_impl_array_val_check_a_int
-            elif isinstance(a.dtype, types.Float):
-                return fill_diagonal_impl_array_val_check_a_float
-            else:
-                return fill_diagonal_impl_array_val
+            return scalar_impl
+        elif isinstance(val, (types.Tuple, types.Sequence, types.Array)):
+            return non_scalar_impl
 
 def _np_round_intrinsic(tp):
     # np.round() always rounds half to even
