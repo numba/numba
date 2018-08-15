@@ -1026,14 +1026,16 @@ def py_lowering_stage(targetctx, library, interp, flags):
     fndesc = funcdesc.PythonFunctionDescriptor.from_object_mode_function(
         interp
         )
-    lower = objmode.PyLower(targetctx, library, fndesc, interp)
-    lower.lower()
-    if not flags.no_cpython_wrapper:
-        lower.create_cpython_wrapper()
-    env = lower.env
-    call_helper = lower.call_helper
-    has_dynamic_globals = lower.has_dynamic_globals
-    del lower
+
+    with targetctx.push_code_library(library):
+        lower = objmode.PyLower(targetctx, library, fndesc, interp)
+        lower.lower()
+        if not flags.no_cpython_wrapper:
+            lower.create_cpython_wrapper()
+        env = lower.env
+        call_helper = lower.call_helper
+        has_dynamic_globals = lower.has_dynamic_globals
+        del lower
 
     if flags.no_compile:
         return _LowerResult(fndesc, call_helper, cfunc=None, env=env,

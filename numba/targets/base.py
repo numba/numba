@@ -222,9 +222,6 @@ class BaseContext(object):
     # the function descriptor
     fndesc = None
 
-    # current library stack
-    codelib_stack = []
-
     def __init__(self, typing_context):
         _load_global_helpers()
 
@@ -244,6 +241,7 @@ class BaseContext(object):
         self.special_ops = {}
         self.cached_internal_func = {}
         self._pid = None
+        self._codelib_stack = []
 
         self.data_model_manager = datamodel.default_manager
 
@@ -1078,17 +1076,17 @@ class BaseContext(object):
     def active_code_library(self):
         """Get the active code library
         """
-        return self.codelib_stack[-1]
+        return self._codelib_stack[-1]
 
     @contextmanager
     def push_code_library(self, lib):
         """Push the active code library for the context
         """
-        self.codelib_stack.append(lib)
+        self._codelib_stack.append(lib)
         try:
             yield
         finally:
-            self.codelib_stack.pop()
+            self._codelib_stack.pop()
 
 
 class _wrap_impl(object):
