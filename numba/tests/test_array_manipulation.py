@@ -645,6 +645,12 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             for val in _val_variations():
                 _check_fill_diagonal(arr, val)
 
+        # non-numeric input arrays
+        arr = np.array([True] * 9).reshape(3, 3)
+        _check_fill_diagonal(arr, False)
+        _check_fill_diagonal(arr, [False, True, False])
+        _check_fill_diagonal(arr, np.array([True, False, True]))
+
     def _fill_diagonal_handle_unsafe_type_coercion(self):
         pyfunc = numpy_fill_diagonal
         cfunc = jit(nopython=True)(pyfunc)
