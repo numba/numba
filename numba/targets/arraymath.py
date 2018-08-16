@@ -914,6 +914,17 @@ if numpy_version >= (1, 9):
 #----------------------------------------------------------------------------
 # Element-wise computations
 
+@register_jitable
+def _tri_impl(shape, k):
+    out = np.empty(shape, dtype=np.float64)  # numpy default dtype
+
+    for i in range(shape[0]):
+        m_max = min(max(0, i + k + 1), shape[1])
+        out[i, :m_max] = 1
+        out[i, m_max:] = 0
+
+    return out
+
 @overload(np.tri)
 def np_tri(N, M=None, k=0):
 
@@ -924,20 +935,7 @@ def np_tri(N, M=None, k=0):
     #
     # rather than try to replicate, we explicitly require k to be an integer.
     if not isinstance(k, types.Integer):
-        def _abort_mission(*args):
-            raise ValueError('k must be an integer')
-        return _abort_mission
-
-    @register_jitable
-    def _tri_impl(shape, k):
-        out = np.empty(shape, dtype=np.float64)  # numpy default dtype
-
-        for i in range(shape[0]):
-            m_max = min(max(0, i + k + 1), shape[1])
-            out[i, :m_max] = 1
-            out[i, m_max:] = 0
-
-        return out
+        raise TypeError('k must be an integer')
 
     def np_tri_impl(N, M=None, k=0):
         return _tri_impl((N, M), k)
