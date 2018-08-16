@@ -588,6 +588,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         def _array_variations(a):
             yield a
+            yield a.T.copy()  # fails unless copied - different strides :: [foo] [bar]
 
             if len(a.flat) > 0:
 
