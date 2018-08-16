@@ -915,7 +915,7 @@ if numpy_version >= (1, 9):
 # Element-wise computations
 
 @overload(np.tri)
-def np_tri(M, N=None, k=0):
+def np_tri(N, M=None, k=0):
 
     # numpy behaviour is unexpected and unreasonable in the case where k is not
     # an integer: for example, the following assertion fails:
@@ -939,14 +939,14 @@ def np_tri(M, N=None, k=0):
 
         return out
 
-    def np_tri_impl(M, N=None, k=0):
-        return _tri_impl((M, N), k)
+    def np_tri_impl(N, M=None, k=0):
+        return _tri_impl((N, M), k)
 
-    def np_tri_impl_no_n(M, N=None, k=0):
-        return _tri_impl((M, M), k)
+    def np_tri_impl_no_m(N, M=None, k=0):
+        return _tri_impl((N, N), k)
 
-    if N in (None, types.none):
-        return np_tri_impl_no_n
+    if M in (None, types.none):
+        return np_tri_impl_no_m
     else:
         return np_tri_impl
 
@@ -999,11 +999,11 @@ def my_tril(m, k=0):
 
     @register_jitable
     def np_tril_impl_2d(m, k=0):
-        mask = np.tri(m.shape[-2], N=m.shape[-1], k=k).astype(np.uint)
+        mask = np.tri(m.shape[-2], M=m.shape[-1], k=k).astype(np.uint)
         return np.where(mask, m, np.zeros_like(m, dtype=m.dtype))
 
     def np_tril_impl_multi(m, k=0):
-        mask = np.tri(m.shape[-2], N=m.shape[-1], k=k).astype(np.uint)
+        mask = np.tri(m.shape[-2], M=m.shape[-1], k=k).astype(np.uint)
         tessellated_mask = _tessellate_mask(mask, m.shape)
         return np.where(tessellated_mask, m, np.zeros_like(m, dtype=m.dtype))
 
@@ -1034,11 +1034,11 @@ def my_triu(m, k=0):
 
     @register_jitable
     def np_triu_impl_2d(m, k=0):
-        mask = np.tri(m.shape[-2], N=m.shape[-1], k=k-1).astype(np.uint)
+        mask = np.tri(m.shape[-2], M=m.shape[-1], k=k-1).astype(np.uint)
         return np.where(mask, np.zeros_like(m, dtype=m.dtype), m)
 
     def np_triu_impl_multi(m, k=0):
-        mask = np.tri(m.shape[-2], N=m.shape[-1], k=k-1).astype(np.uint)
+        mask = np.tri(m.shape[-2], M=m.shape[-1], k=k-1).astype(np.uint)
         tessellated_mask = _tessellate_mask(mask, m.shape)
         return np.where(tessellated_mask, np.zeros_like(m, dtype=m.dtype), m)
 
