@@ -1018,6 +1018,8 @@ def np_fill_diagonal(a, val, wrap=False):
             return scalar_impl
         elif isinstance(val, (types.Tuple, types.Sequence, types.Array)):
             return non_scalar_impl
+    else:
+        raise TypeError("Array must be at least 2-d")
 
 def _np_round_intrinsic(tp):
     # np.round() always rounds half to even
