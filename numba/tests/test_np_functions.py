@@ -579,21 +579,38 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # Exceptions leak references
         self.disable_leak_check()
 
-        with self.assertRaises(ValueError) as raises:
+        with self.assertTypingError() as raises:
             cfunc(5, 6, k=1.5)
-        self.assertEqual("k must be an integer", str(raises.exception))
+        assert "k must be an integer" in str(raises.exception)
 
     def _triangular_matrix_tests(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
 
+        def _array_variations(a):
+            yield a
+
+            if len(a.flat) > 0:
+
+                # reshape (preserving size)
+                shape = list(a.shape)
+                np.random.shuffle(shape)
+                yield a.reshape(shape)
+
+                # random floats of transpose of a shape
+                yield np.random.randn(len(a.flat)).reshape(a.T.shape)
+
+                # random floats of a shape
+                yield np.random.choice(np.arange(len(a.flat)), len(a.flat)).reshape(a.shape)
+
         def _check(a):
-            for k in range(-10, 10):
-                expected = pyfunc(a, k)
-                got = cfunc(a, k)
-                self.assertPreciseEqual(expected, got)
+            for arr in _array_variations(a):
+                for k in range(-10, 10):
+                    expected = pyfunc(arr, k)
+                    got = cfunc(arr, k)
+                    self.assertPreciseEqual(expected, got)
 
         _check(np.ones((5, 6)))
-        _check(np.ones((3, 4, 5, 6)))
+        _check(np.arange(360).reshape(3, 4, 5, 6))
         _check(np.ones(1))
         _check(np.ones((1, 1, 1), dtype=np.float32))
         _check(np.full((8, 9, 10), fill_value=3.142, dtype=np.float64))
@@ -608,9 +625,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
 
         a = np.ones((5, 6))
-        with self.assertRaises(ValueError) as raises:
+        with self.assertTypingError() as raises:
             cfunc(a, k=1.5)
-        self.assertEqual("k must be an integer", str(raises.exception))
+        assert "k must be an integer" in str(raises.exception)
 
     def test_tril(self):
         pyfunc = tril
