@@ -928,12 +928,7 @@ def _tri_impl(shape, k):
 @overload(np.tri)
 def np_tri(N, M=None, k=0):
 
-    # numpy behaviour is unexpected and unreasonable in the case where k is not
-    # an integer: for example, the following assertion fails:
-    #
-    #   assert np.tri(5, 6, k=-2.8).shape == (5, 6)
-    #
-    # rather than try to replicate, we explicitly require k to be an integer.
+    # we require k to be integer, unlike numpy
     if not isinstance(k, types.Integer):
         raise TypeError('k must be an integer')
 
@@ -984,8 +979,7 @@ def _make_square(m):
 @overload(np.tril)
 def my_tril(m, k=0):
 
-    # numpy behaviour is unexpected and unreasonable in the case where k is not
-    # an integer; rather than try to replicate, we explicitly require k to be an integer.
+    # we require k to be integer, unlike numpy
     if not isinstance(k, types.Integer):
         raise TypeError('k must be an integer')
 
@@ -1013,12 +1007,7 @@ def my_tril(m, k=0):
 @overload(np.triu)
 def my_triu(m, k=0):
 
-    # numpy behaviour is unexpected and unreasonable in the case where k is not
-    # an integer: for example, observe that the following outputs all zeros:
-    #
-    #   np.triu(np.ones((5, 6)), k=1.9)
-    #
-    # rather than try to replicate, we explicitly require k to be an integer.
+    # we require k to be integer, unlike numpy
     if not isinstance(k, types.Integer):
         raise TypeError('k must be an integer')
 
