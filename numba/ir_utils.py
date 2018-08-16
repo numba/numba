@@ -648,6 +648,7 @@ def is_pure(rhs, lives, call_table):
     return True
 
 alias_analysis_extensions = {}
+alias_func_extensions = {}
 
 def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                                                             arg_aliases=None):
@@ -693,6 +694,9 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                     if fdef is None:
                         continue
                     fname, fmod = fdef
+                    if fdef in alias_func_extensions:
+                        alias_func = alias_func_extensions[fdef]
+                        alias_func(lhs, expr.args, alias_map, arg_aliases)
                     if fmod == 'numpy' and fname in np_alias_funcs:
                         _add_alias(lhs, expr.args[0].name, alias_map, arg_aliases)
                     if isinstance(fmod, ir.Var) and fname in np_alias_funcs:
@@ -1671,6 +1675,7 @@ def set_index_var_of_get_setitem(stmt, new_index):
         raise ValueError("getitem or setitem node expected but received {}".format(
                      stmt))
 
+
 def is_namedtuple_class(c):
     """check if c is a namedtuple class"""
     if not isinstance(c, type):
@@ -1687,6 +1692,73 @@ def is_namedtuple_class(c):
     if not isinstance(fields, tuple):
         return False
     return all(isinstance(f, str) for f in fields)
+
+
+def fill_block_with_call(newblock, callee, label_next, inputs, outputs):
+    """Fill *newblock* to call *callee* with arguments listed in *inputs*.
+    The returned values are unwraped into variables in *outputs*.
+    The block would then jump to *label_next*.
+    """
+    scope = newblock.scope
+    loc = newblock.loc
+
+    fn = ir.Const(value=callee, loc=loc)
+    fnvar = scope.make_temp(loc=loc)
+    newblock.append(ir.Assign(target=fnvar, value=fn, loc=loc))
+    # call
+    args = [scope.get_exact(name) for name in inputs]
+    callexpr = ir.Expr.call(func=fnvar, args=args, kws=(), loc=loc)
+    callres = scope.make_temp(loc=loc)
+    newblock.append(ir.Assign(target=callres, value=callexpr, loc=loc))
+    # unpack return value
+    for i, out in enumerate(outputs):
+        target = scope.get_exact(out)
+        getitem = ir.Expr.static_getitem(value=callres, index=i,
+                                         index_var=None, loc=loc)
+        newblock.append(ir.Assign(target=target, value=getitem, loc=loc))
+    # jump to next block
+    newblock.append(ir.Jump(target=label_next, loc=loc))
+    return newblock
+
+
+def fill_callee_prologue(block, inputs, label_next):
+    """
+    Fill a new block *block* that unwraps arguments using names in *inputs* and
+    then jumps to *label_next*.
+
+    Expected to use with *fill_block_with_call()*
+    """
+    scope = block.scope
+    loc = block.loc
+    # load args
+    args = [ir.Arg(name=k, index=i, loc=loc)
+            for i, k in enumerate(inputs)]
+    for aname, aval in zip(inputs, args):
+        tmp = ir.Var(scope=scope, name=aname, loc=loc)
+        block.append(ir.Assign(target=tmp, value=aval, loc=loc))
+    # jump to loop entry
+    block.append(ir.Jump(target=label_next, loc=loc))
+    return block
+
+
+def fill_callee_epilogue(block, outputs):
+    """
+    Fill a new block *block* to prepare the return values.
+    This block is the last block of the function.
+
+    Expected to use with *fill_block_with_call()*
+    """
+    scope = block.scope
+    loc = block.loc
+    # prepare tuples to return
+    vals = [scope.get_exact(name=name) for name in outputs]
+    tupexpr = ir.Expr.build_tuple(items=vals, loc=loc)
+    tup = scope.make_temp(loc=loc)
+    block.append(ir.Assign(target=tup, value=tupexpr, loc=loc))
+    # return
+    block.append(ir.Return(value=tup, loc=loc))
+    return block
+
 
 def raise_on_unsupported_feature(func_ir):
     """

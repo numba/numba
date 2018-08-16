@@ -20,6 +20,7 @@ import functools
 import copy
 import warnings
 import logging
+from itertools import product
 from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
                     c_void_p, c_float)
 import contextlib
@@ -92,16 +93,16 @@ def find_driver():
     if sys.platform == 'win32':
         dlloader = ctypes.WinDLL
         dldir = ['\\windows\\system32']
-        dlname = 'nvcuda.dll'
+        dlnames = ['nvcuda.dll']
     elif sys.platform == 'darwin':
         dlloader = ctypes.CDLL
         dldir = ['/usr/local/cuda/lib']
-        dlname = 'libcuda.dylib'
+        dlnames = ['libcuda.dylib']
     else:
         # Assume to be *nix like
         dlloader = ctypes.CDLL
         dldir = ['/usr/lib', '/usr/lib64']
-        dlname = 'libcuda.so'
+        dlnames = ['libcuda.so', 'libcuda.so.1']
 
     if envpath is not None:
         try:
@@ -117,7 +118,8 @@ def find_driver():
     else:
         # First search for the name in the default library path.
         # If that is not found, try the specific path.
-        candidates = [dlname] + [os.path.join(x, dlname) for x in dldir]
+        candidates = dlnames + [os.path.join(x, y)
+                                for x, y in product(dldir, dlnames)]
 
     # Load the driver; Collect driver error information
     path_not_exist = []

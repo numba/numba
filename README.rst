@@ -54,9 +54,9 @@ development environments.  To create a new environment for Numba development::
 To select the installed version, append "=VERSION" to the package name,
 where, "VERSION" is the version number.  For example::
 
-   $ conda create -p ~/dev/mynumba python=2.7 numpy=1.9 llvmlite
+   $ conda create -p ~/dev/mynumba python=2.7 numpy=1.11 llvmlite
 
-to use Python 2.7 and Numpy 1.9.
+to use Python 2.7 and Numpy 1.11.
 
 If you need CUDA support, you should also install the CUDA toolkit::
 
