@@ -989,9 +989,7 @@ def my_tril(m, k=0):
     # numpy behaviour is unexpected and unreasonable in the case where k is not
     # an integer; rather than try to replicate, we explicitly require k to be an integer.
     if not isinstance(k, types.Integer):
-        def _abort_mission(*args):
-            raise ValueError('k must be an integer')
-        return _abort_mission
+        raise TypeError('k must be an integer')
 
     def np_tril_impl_1d(m, k=0):
         m_2d = _make_square(m)
@@ -1024,9 +1022,7 @@ def my_triu(m, k=0):
     #
     # rather than try to replicate, we explicitly require k to be an integer.
     if not isinstance(k, types.Integer):
-        def _abort_mission(*args):
-            raise ValueError('k must be an integer')
-        return _abort_mission
+        raise TypeError('k must be an integer')
 
     def np_triu_impl_1d(m, k=0):
         m_2d = _make_square(m)
