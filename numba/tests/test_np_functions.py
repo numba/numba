@@ -198,7 +198,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_types = [typeof(v) for v in x_values]
         check(x_types, x_values, ulps=2)
 
-
     def test_angle(self, flags=no_pyobj_flags):
         """
         Tests the angle() function.
@@ -237,7 +236,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_values = np.array(x_values)
         x_types = [types.complex64, types.complex128]
         check(x_types, x_values)
-
 
     def diff_arrays(self):
         """
@@ -586,37 +584,33 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def _triangular_matrix_tests(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
 
-        def _array_variations(a):
-            yield a
-            yield a.T.copy()  # fails unless copied - different strides :: [foo] [bar]
+        def _check(arr):
+            for k in range(-10, 10):
+                expected = pyfunc(arr, k)
+                got = cfunc(arr, k)
+                self.assertPreciseEqual(expected, got)
 
-            if len(a.flat) > 0:
+        def check_odd(a):
+            _check(a)
+            a = a.reshape((9, 7))
+            _check(a)
+            a = a.reshape((7, 1, 3, 3))
+            _check(a)
+            _check(a.T.copy())  # fails unless copied - strides different
 
-                # reshape (preserving size)
-                shape = list(a.shape)
-                np.random.shuffle(shape)
-                yield a.reshape(shape)
+        def check_even(a):
+            _check(a)
+            a = a.reshape((4, 16))
+            _check(a)
+            a = a.reshape((4, 2, 2, 4))
+            _check(a)
+            _check(a.T.copy())  # fails unless copied - strides different
 
-                # random floats of transpose of a shape
-                yield np.random.randn(len(a.flat)).reshape(a.T.shape)
+        check_odd(np.arange(63) + 10.5)
+        check_even(np.arange(64) + 10.5)
 
-                # random floats of a shape
-                yield np.random.choice(np.arange(len(a.flat)), len(a.flat)).reshape(a.shape)
-
-        def _check(a):
-            for arr in _array_variations(a):
-                for k in range(-10, 10):
-                    expected = pyfunc(arr, k)
-                    got = cfunc(arr, k)
-                    self.assertPreciseEqual(expected, got)
-
-        _check(np.ones((5, 6)))
+        # edge cases
         _check(np.arange(360).reshape(3, 4, 5, 6))
-        _check(np.ones(1))
-        _check(np.ones((1, 1, 1), dtype=np.float32))
-        _check(np.full((8, 9, 10), fill_value=3.142, dtype=np.float64))
-        _check(np.full((10, 5), fill_value=3, dtype=np.int8))
-        _check(np.full(9, fill_value=7.5))
         _check(np.array([]))
 
     def _triangular_matrix_exceptions(self, pyfunc):
@@ -630,15 +624,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(a, k=1.5)
         assert "k must be an integer" in str(raises.exception)
 
-    def test_tril(self):
-        pyfunc = tril
-        self._triangular_matrix_tests(pyfunc)
-        self._triangular_matrix_exceptions(pyfunc)
+    def test_tril_basic(self):
+        self._triangular_matrix_tests(tril)
 
-    def test_triu(self):
-        pyfunc = triu
-        self._triangular_matrix_tests(pyfunc)
-        self._triangular_matrix_exceptions(pyfunc)
+    def test_triu_basic(self):
+        self._triangular_matrix_tests(triu)
+
+    def test_tril_exceptions(self):
+        self._triangular_matrix_exceptions(tril)
+
+    def test_triu_exceptions(self):
+        self._triangular_matrix_exceptions(triu)
 
 
 class TestNPMachineParameters(TestCase):
