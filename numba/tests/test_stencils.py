@@ -494,6 +494,20 @@ class TestStencil(TestStencilBase):
         np.testing.assert_almost_equal(parfor_output3, expected, decimal=3)
         np.testing.assert_almost_equal(parfor_output4, expected, decimal=3)
 
+        # check error in regular Python path
+        with self.assertRaises(ValueError) as e:
+            test_impl4(4)
+
+        self.assertIn("stencil kernel index is not constant, "
+                      "'neighborhood' option required", str(e.exception))
+        # check error in njit path
+        # TODO: ValueError should be thrown instead of LoweringError
+        with self.assertRaises(LoweringError) as e:
+            njit(test_impl4)(4)
+
+        self.assertIn("stencil kernel index is not constant, "
+                      "'neighborhood' option required", str(e.exception))
+
     @skip_unsupported
     @tag('important')
     def test_stencil_parallel_off(self):
