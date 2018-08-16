@@ -1019,7 +1019,8 @@ def np_fill_diagonal(a, val, wrap=False):
         elif isinstance(val, (types.Tuple, types.Sequence, types.Array)):
             return non_scalar_impl
     else:
-        raise TypeError("Array must be at least 2-d")
+        msg = "The first argument must be at least 2-D (found %s-D)" % a.ndim
+        raise TypingError(msg)
 
 def _np_round_intrinsic(tp):
     # np.round() always rounds half to even
