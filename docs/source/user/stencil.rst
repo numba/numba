@@ -127,8 +127,10 @@ simple expressions if possible. For example::
 
     @njit(parallel=True)
     def stencil_test(A):
-       c = 2
-       return stencil(lambda a, c, d2: 0.3 * (a[-c+1] + a[0] + a[c-1]))(A, c)
+        c = 2
+        B = stencil(
+            lambda a, c: 0.3 * (a[-c+1] + a[0] + a[c-1]))(A, c)
+        return B
 
 
 Stencil decorator options
