@@ -122,16 +122,6 @@ def array_percentile_global(arr, q):
 def array_nanpercentile_global(arr, q):
     return np.nanpercentile(arr, q)
 
-def array_tri_global(M, N=None, k=0):
-    return np.tri(M, N, k)
-
-def array_tril_global(m, k=0):
-    return np.tril(m, k)
-
-def array_triu_global(m, k=0):
-    return np.triu(m, k)
-
-
 def base_test_arrays(dtype):
     if dtype == np.bool_:
         def factory(n):
@@ -427,62 +417,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         element_pool = (1, -1, np.nan, np.inf, -np.inf)
         for a in _array_combinations(element_pool):
             check(a, q, abs_tol=1e-14)  # 'eps' fails, tbd...
-
-    def test_tri_basic(self):
-        pyfunc = array_tri_global
-        cfunc = jit(nopython=True)(pyfunc)
-
-        for k in range(-10, 10):
-            for shape in (5, 6), (10, 5), (1, 1), (0, 1), (0, 0):
-                expected = pyfunc(*shape, k=k)
-                got = cfunc(*shape, k=k)
-                self.assertPreciseEqual(expected, got)
-
-        # no second arg
-        for k in range(-10, 10):
-            for N in range(0, 12):
-                expected = pyfunc(N, k=k)
-                got = cfunc(N, k=k)
-                self.assertPreciseEqual(expected, got)
-
-        # Exceptions leak references
-        self.disable_leak_check()
-
-        with self.assertRaises(ValueError) as raises:
-            cfunc(5, 6, k=1.5)
-        self.assertEqual("k must be an integer", str(raises.exception))
-
-    def _triangular_matrix_tests(self, pyfunc):
-        cfunc = jit(nopython=True)(pyfunc)
-
-        def _check(a):
-            for k in range(-10, 10):
-                expected = pyfunc(a, k)
-                got = cfunc(a, k)
-                self.assertPreciseEqual(expected, got)
-
-        _check(np.ones((5, 6)))
-        _check(np.ones((3, 4, 5, 6)))
-        _check(np.ones(1))
-        _check(np.ones((1, 1, 1), dtype=np.float32))
-        _check(np.full((8, 9, 10), fill_value=3.142, dtype=np.float64))
-        _check(np.full((10, 5), fill_value=3, dtype=np.int8))
-        _check(np.full(9, fill_value=7.5))
-        _check(np.array([]))
-
-        # Exceptions leak references
-        self.disable_leak_check()
-
-        a = np.ones((5, 6))
-        with self.assertRaises(ValueError) as raises:
-            cfunc(a, k=1.5)
-        self.assertEqual("k must be an integer", str(raises.exception))
-
-    def test_tril(self):
-        self._triangular_matrix_tests(array_tril_global)
-
-    def test_triu(self):
-        self._triangular_matrix_tests(array_triu_global)
 
     @unittest.skipUnless(np_version >= (1, 10), "percentile needs Numpy 1.10+")
     def test_percentile_basic(self):

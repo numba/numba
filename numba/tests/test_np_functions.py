@@ -12,7 +12,7 @@ from numba.compiler import compile_isolated, Flags, utils
 from numba import jit, typeof, types
 from numba.numpy_support import version as np_version
 from numba.errors import TypingError
-from .support import TestCase, CompilationCache
+from .support import TestCase, CompilationCache, MemoryLeakMixin
 
 no_pyobj_flags = Flags()
 no_pyobj_flags.set("nrt")
@@ -72,13 +72,23 @@ def correlate(a, v):
 def convolve(a, v):
     return np.convolve(a, v)
 
+def tri(M, N=None, k=0):
+    return np.tri(M, N, k)
 
-class TestNPFunctions(TestCase):
+def tril(m, k=0):
+    return np.tril(m, k)
+
+def triu(m, k=0):
+    return np.triu(m, k)
+
+
+class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
     """
 
     def setUp(self):
+        super(TestNPFunctions, self).setUp()
         self.ccache = CompilationCache()
         self.rnd = np.random.RandomState(42)
 
@@ -263,10 +273,18 @@ class TestNPFunctions(TestCase):
                 got = cfunc(arr, n)
                 self.assertPreciseEqual(expected, got)
 
+    def test_diff2_exceptions(self):
+        pyfunc = diff2
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
         # 0-dim array
         arr = np.array(42)
         with self.assertTypingError():
             cfunc(arr, 1)
+
         # Invalid `n`
         arr = np.arange(10)
         for n in (-1, -2, -42):
@@ -291,6 +309,13 @@ class TestNPFunctions(TestCase):
             got = cfunc(seq)
             self.assertPreciseEqual(expected, got)
 
+    def test_bincount1_exceptions(self):
+        pyfunc = bincount1
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
         # Negative input
         with self.assertRaises(ValueError) as raises:
             cfunc([2, -1])
@@ -307,6 +332,13 @@ class TestNPFunctions(TestCase):
                 expected = pyfunc(seq, weights)
                 got = cfunc(seq, weights)
                 self.assertPreciseEqual(expected, got)
+
+    def test_bincount2_exceptions(self):
+        pyfunc = bincount2
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
 
         # Negative input
         with self.assertRaises(ValueError) as raises:
@@ -506,6 +538,11 @@ class TestNPFunctions(TestCase):
 
     def test_convolve(self):
         self._test_correlate_convolve(convolve)
+
+    def test_convolve_exceptions(self):
+        # Exceptions leak references
+        self.disable_leak_check()
+
         # convolve raises if either array has a 0 dimension
         _a = np.ones(shape=(0,))
         _b = np.arange(5)
@@ -517,6 +554,73 @@ class TestNPFunctions(TestCase):
                 self.assertIn("'a' cannot be empty", str(raises.exception))
             else:
                 self.assertIn("'v' cannot be empty", str(raises.exception))
+
+    def test_tri_basic(self):
+        pyfunc = tri
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for k in range(-10, 10):
+            for shape in (5, 6), (10, 5), (1, 1), (0, 1), (0, 0):
+                expected = pyfunc(*shape, k=k)
+                got = cfunc(*shape, k=k)
+                self.assertPreciseEqual(expected, got)
+
+        # no second arg
+        for k in range(-10, 10):
+            for N in range(0, 12):
+                expected = pyfunc(N, k=k)
+                got = cfunc(N, k=k)
+                self.assertPreciseEqual(expected, got)
+
+    def test_tri_exceptions(self):
+        pyfunc = tri
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(5, 6, k=1.5)
+        self.assertEqual("k must be an integer", str(raises.exception))
+
+    def _triangular_matrix_tests(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def _check(a):
+            for k in range(-10, 10):
+                expected = pyfunc(a, k)
+                got = cfunc(a, k)
+                self.assertPreciseEqual(expected, got)
+
+        _check(np.ones((5, 6)))
+        _check(np.ones((3, 4, 5, 6)))
+        _check(np.ones(1))
+        _check(np.ones((1, 1, 1), dtype=np.float32))
+        _check(np.full((8, 9, 10), fill_value=3.142, dtype=np.float64))
+        _check(np.full((10, 5), fill_value=3, dtype=np.int8))
+        _check(np.full(9, fill_value=7.5))
+        _check(np.array([]))
+
+    def _triangular_matrix_exceptions(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        a = np.ones((5, 6))
+        with self.assertRaises(ValueError) as raises:
+            cfunc(a, k=1.5)
+        self.assertEqual("k must be an integer", str(raises.exception))
+
+    def test_tril(self):
+        pyfunc = tril
+        self._triangular_matrix_tests(pyfunc)
+        self._triangular_matrix_exceptions(pyfunc)
+
+    def test_triu(self):
+        pyfunc = triu
+        self._triangular_matrix_tests(pyfunc)
+        self._triangular_matrix_exceptions(pyfunc)
 
 
 class TestNPMachineParameters(TestCase):
