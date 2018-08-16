@@ -944,23 +944,6 @@ def np_tri(N, M=None, k=0):
         return np_tri_impl
 
 @register_jitable
-def _tessellate_mask(mask, shape):
-    """
-    Takes a mask array of shape (m, n) and tessellates it into
-    a multi-dimensional shape (a, b, ... m, n).
-    """
-    assert len(shape) > 2
-    assert shape[-2:] == mask.shape
-
-    multiple = int(np.prod(np.array(shape[:-2])))
-    out = np.empty(multiple * len(mask.flat))
-
-    for i in range(multiple):
-        out[i * len(mask.flat): (i + 1) * len(mask.flat)] = mask.flat
-
-    return out.reshape(shape)
-
-@register_jitable
 def _make_square(m):
     """
     Takes a 1d array and tiles it to form a square matrix
@@ -994,8 +977,12 @@ def my_tril(m, k=0):
 
     def np_tril_impl_multi(m, k=0):
         mask = np.tri(m.shape[-2], M=m.shape[-1], k=k).astype(np.uint)
-        tessellated_mask = _tessellate_mask(mask, m.shape)
-        return np.where(tessellated_mask, m, np.zeros_like(m, dtype=m.dtype))
+        idx = np.ndindex(m.shape[:-2])
+        z = np.empty_like(m)
+        zero_opt = np.zeros_like(mask, dtype=m.dtype)
+        for sel in idx:
+            z[sel] = np.where(mask, m[sel], zero_opt)
+        return z
 
     if m.ndim == 1:
         return np_tril_impl_1d
@@ -1022,8 +1009,12 @@ def my_triu(m, k=0):
 
     def np_triu_impl_multi(m, k=0):
         mask = np.tri(m.shape[-2], M=m.shape[-1], k=k-1).astype(np.uint)
-        tessellated_mask = _tessellate_mask(mask, m.shape)
-        return np.where(tessellated_mask, np.zeros_like(m, dtype=m.dtype), m)
+        idx = np.ndindex(m.shape[:-2])
+        z = np.empty_like(m)
+        zero_opt = np.zeros_like(mask, dtype=m.dtype)
+        for sel in idx:
+            z[sel] = np.where(mask, zero_opt, m[sel])
+        return z
 
     if m.ndim == 1:
         return np_triu_impl_1d

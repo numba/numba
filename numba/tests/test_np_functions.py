@@ -612,6 +612,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # edge cases
         _check(np.arange(360).reshape(3, 4, 5, 6))
         _check(np.array([]))
+        _check(np.arange(9).reshape((3, 3))[::-1])
+        # _check(np.arange(9).reshape((3, 3), order='F'))  # fails - strides different
 
     def _triangular_matrix_exceptions(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
