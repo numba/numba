@@ -11,8 +11,7 @@ from llvmlite import ir as lir
 
 import numba
 from numba.six import exec_
-from numba import (ir, types, typing, config, analysis, utils, cgutils,
-    rewrites, postproc)
+from numba import ir, types, typing, config, analysis, utils, cgutils, rewrites
 from numba.typing.templates import signature, infer_global, AbstractTemplate
 from numba.targets.imputils import impl_ret_untracked
 from numba.analysis import (compute_live_map, compute_use_defs,
@@ -1574,6 +1573,7 @@ def get_ir_of_code(glbls, fcode):
     inline_pass = numba.inline_closurecall.InlineClosureCallPass(
         ir, numba.targets.cpu.ParallelOptions(False))
     inline_pass.run()
+    from numba import postproc
     post_proc = postproc.PostProcessor(ir)
     post_proc.run()
     return ir
