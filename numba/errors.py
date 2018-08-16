@@ -33,6 +33,12 @@ class PerformanceWarning(NumbaWarning):
     """
 
 
+class ParallelSafetyWarning(RuntimeWarning):
+    """
+    Warning category for when an operation in a prange
+    might not have parallel semantics.
+    """
+
 # These are needed in the color formatting of errors setup
 
 @six.add_metaclass(abc.ABCMeta)

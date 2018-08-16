@@ -13,7 +13,7 @@ from numba import config
 from numba.annotations import type_annotations
 from numba.ir_utils import (copy_propagate, apply_copy_propagate,
                             get_name_var_table, remove_dels, remove_dead,
-                            remove_call_handlers)
+                            remove_call_handlers, alias_func_extensions)
 from numba import ir
 from numba import unittest_support as unittest
 import numpy as np
@@ -31,6 +31,13 @@ def test_will_propagate(b, z, w):
 
 def null_func(a,b,c,d):
     False
+
+@numba.njit
+def dummy_aliased_func(A):
+    return A
+
+def alias_ext_dummy_func(lhs_name, args, alias_map, arg_aliases):
+    numba.ir_utils._add_alias(lhs_name, args[0].name, alias_map, arg_aliases)
 
 def findLhsAssign(func_ir, var):
     for label, block in func_ir.blocks.items():
@@ -185,6 +192,21 @@ class TestRemoveDead(unittest.TestCase):
             B[i,0] = 3
 
         self.run_array_index_test(func)
+
+    def test_alias_func_ext(self):
+        def func(A, i):
+            B = dummy_aliased_func(A)
+            B[i, 0] = 3
+
+        # save global state
+        old_ext_handlers = alias_func_extensions.copy()
+        try:
+            alias_func_extensions[('dummy_aliased_func',
+                'numba.tests.test_remove_dead')] = alias_ext_dummy_func
+            self.run_array_index_test(func)
+        finally:
+            # recover global state
+            numba.ir_utils.alias_func_extensions = old_ext_handlers
 
 if __name__ == "__main__":
     unittest.main()
