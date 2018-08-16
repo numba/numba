@@ -441,7 +441,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             all_bins = [bins1, bins2]
             xs = [values]
 
-
         # 2-ary digitize()
         for bins in all_bins:
             bins.sort()
@@ -578,8 +577,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
 
         with self.assertTypingError() as raises:
-            cfunc(5, 6, k=1.5)
-        assert "k must be an integer" in str(raises.exception)
+            for k in 1.5, True, np.inf:
+                cfunc(5, 6, k=k)
+                assert "k must be an integer" in str(raises.exception)
 
     def _triangular_matrix_tests(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
@@ -607,7 +607,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             _check(a.T.copy())  # fails unless copied - strides different
 
         check_odd(np.arange(63) + 10.5)
-        check_even(np.arange(64) + 10.5)
+        check_even(np.arange(64) - 10.5)
 
         # edge cases
         _check(np.arange(360).reshape(3, 4, 5, 6))
@@ -627,11 +627,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_tril_basic(self):
         self._triangular_matrix_tests(tril)
 
-    def test_triu_basic(self):
-        self._triangular_matrix_tests(triu)
-
     def test_tril_exceptions(self):
         self._triangular_matrix_exceptions(tril)
+
+    def test_triu_basic(self):
+        self._triangular_matrix_tests(triu)
 
     def test_triu_exceptions(self):
         self._triangular_matrix_exceptions(triu)
