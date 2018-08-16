@@ -188,7 +188,7 @@ class MinimalCallConv(BaseCallConv):
         builder.store(retval, retptr)
         self._return_errcode_raw(builder, RETCODE_OK)
 
-    def return_user_exc(self, builder, exc, exc_args=None):
+    def return_user_exc(self, builder, exc, exc_args=None, loc=None):
         if exc is not None and not issubclass(exc, BaseException):
             raise TypeError("exc should be None or exception class, got %r"
                             % (exc,))
@@ -196,13 +196,17 @@ class MinimalCallConv(BaseCallConv):
             raise TypeError("exc_args should be None or tuple, got %r"
                             % (exc_args,))
 
-        loc = errors.loc_info.get('loc', None)
-        if loc is not None:
-            loc_line = 'File "%s", line %d, ' % (loc.filename, loc.line)
-            if exc_args is None or len(exc_args) < 1:
-                exc_args = (loc_line,)
-            else:
-                exc_args = ('%s\n%s' % (exc_args[0], loc_line),) + exc_args[1:]
+        if exc is not None: # is None if doing reraise
+            # if no location provided try and find one
+            if loc is None:
+                loc = errors.loc_info.get('loc', None)
+
+            if loc is not None:
+                fmtloc = (loc.strformat(),)
+                if exc_args is None:
+                    exc_args = fmtloc
+                else:
+                    exc_args += fmtloc
 
         call_helper = self._get_call_helper(builder)
         exc_id = call_helper._add_exception(exc, exc_args)
@@ -338,7 +342,7 @@ class CPUCallConv(BaseCallConv):
         builder.store(retval, retptr)
         self._return_errcode_raw(builder, RETCODE_OK)
 
-    def return_user_exc(self, builder, exc, exc_args=None):
+    def return_user_exc(self, builder, exc, exc_args=None, loc=None):
         if exc is not None and not issubclass(exc, BaseException):
             raise TypeError("exc should be None or exception class, got %r"
                             % (exc,))
@@ -346,13 +350,17 @@ class CPUCallConv(BaseCallConv):
             raise TypeError("exc_args should be None or tuple, got %r"
                             % (exc_args,))
 
-        loc = errors.loc_info.get('loc', None)
-        if loc is not None:
-            loc_line = 'File "%s", line %d, ' % (loc.filename, loc.line)
-            if exc_args is None or len(exc_args) < 1:
-                exc_args = (loc_line,)
-            else:
-                exc_args = ('%s\n%s' % (exc_args[0], loc_line),) + exc_args[1:]
+        if exc is not None: # is None if doing reraise
+            # if no loc given try and find one
+            if loc is None:
+                loc = errors.loc_info.get('loc', None)
+
+            if loc is not None:
+                fmtloc = (loc.strformat(),)
+                if exc_args is None:
+                    exc_args = fmtloc
+                else:
+                    exc_args += fmtloc
 
         pyapi = self.context.get_python_api(builder)
         # Build excinfo struct

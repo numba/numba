@@ -76,21 +76,52 @@ class TestRaising(TestCase):
             cfunc(a, 2)
         self.assertEqual(str(cm.exception), "tuple index out of range")
 
+    def _check_exception_rewrite(self, exception, pyfunc, mustcontain=None):
+        # checks that the Numba exception rewriting mech has been triggered
+        excstr = str(exception)
+        if isinstance(pyfunc, str):
+            name = pyfunc
+        else:
+            name = pyfunc.__name__
+        self.assertIn(name, excstr)
+        self.assertIn('File', excstr)
+        self.assertIn('test_exceptions.py', excstr)
+        self.assertIn('line', excstr)
+        if mustcontain is not None:
+            self.assertIn(mustcontain, excstr)
+
     def check_raise_class(self, flags):
         pyfunc = raise_class(MyError)
         cres = compile_isolated(pyfunc, (types.int32,), flags=flags)
         cfunc = cres.entry_point
         self.assertEqual(cfunc(0), 0)
 
+        if flags == force_pyobj_flags:
+            objmode = True
+        else:
+            objmode = False
+
         with self.assertRaises(MyError) as cm:
             cfunc(1)
-        self.assertEqual(cm.exception.args, ())
+
+        if objmode:
+            self.assertEqual(cm.exception.args, ())
+        else:
+            self._check_exception_rewrite(cm.exception, pyfunc)
+
         with self.assertRaises(ValueError) as cm:
             cfunc(2)
-        self.assertEqual(cm.exception.args, ())
+        if objmode:
+            self.assertEqual(cm.exception.args, ())
+        else:
+            self._check_exception_rewrite(cm.exception, pyfunc)
+
         with self.assertRaises(np.linalg.LinAlgError) as cm:
             cfunc(3)
-        self.assertEqual(cm.exception.args, ())
+        if objmode:
+            self.assertEqual(cm.exception.args, ())
+        else:
+            self._check_exception_rewrite(cm.exception, pyfunc)
 
     @tag('important')
     def test_raise_class_nopython(self):
@@ -105,15 +136,26 @@ class TestRaising(TestCase):
         cfunc = cres.entry_point
         self.assertEqual(cfunc(0), 0)
 
+        if flags == force_pyobj_flags:
+            objmode = True
+        else:
+            objmode = False
+
         with self.assertRaises(MyError) as cm:
             cfunc(1)
-        self.assertEqual(cm.exception.args, ("some message", 1))
+        self.assertEqual(cm.exception.args[:2], ("some message", 1))
+        if not objmode:
+            self._check_exception_rewrite(cm.exception, pyfunc)
         with self.assertRaises(ValueError) as cm:
             cfunc(2)
-        self.assertEqual(cm.exception.args, ("some message", 2))
+        self.assertEqual(cm.exception.args[:2], ("some message", 2))
+        if not objmode:
+            self._check_exception_rewrite(cm.exception, pyfunc)
         with self.assertRaises(np.linalg.LinAlgError) as cm:
             cfunc(3)
-        self.assertEqual(cm.exception.args, ("some message", 3))
+        self.assertEqual(cm.exception.args[:2], ("some message", 3))
+        if not objmode:
+            self._check_exception_rewrite(cm.exception, pyfunc)
 
     def test_raise_instance_objmode(self):
         self.check_raise_instance(flags=force_pyobj_flags)
@@ -130,15 +172,28 @@ class TestRaising(TestCase):
         inner_cfunc = jit(**jit_args)(inner_pyfunc)
         cfunc = jit(**jit_args)(outer_function(inner_cfunc))
 
+        if jit_args.get('forceobj', False):
+            objmode = True
+        else:
+            objmode = False
+
         with self.assertRaises(MyError) as cm:
             cfunc(1)
-        self.assertEqual(cm.exception.args, ("some message", 1))
+        self.assertEqual(cm.exception.args[:2], ("some message", 1))
+        if not objmode:
+            self._check_exception_rewrite(cm.exception, inner_pyfunc)
+
         with self.assertRaises(ValueError) as cm:
             cfunc(2)
-        self.assertEqual(cm.exception.args, ("some message", 2))
+        self.assertEqual(cm.exception.args[:2], ("some message", 2))
+        if not objmode:
+            self._check_exception_rewrite(cm.exception, inner_pyfunc)
+
         with self.assertRaises(OtherError) as cm:
             cfunc(3)
-        self.assertEqual(cm.exception.args, ("bar", 3))
+        self.assertEqual(cm.exception.args[:2], ("bar", 3))
+        if not objmode:
+            self._check_exception_rewrite(cm.exception, 'outer')
 
     def test_raise_nested(self):
         self.check_raise_nested(forceobj=True)
@@ -190,7 +245,10 @@ class TestRaising(TestCase):
         cfunc(1)
         with self.assertRaises(AssertionError) as cm:
             cfunc(2)
-        self.assertEqual(str(cm.exception), "bar")
+        if flags == no_pyobj_flags:
+            self._check_exception_rewrite(cm.exception, pyfunc, "bar")
+        else:
+            self.assertEqual(str(cm.exception), "bar")
 
     def test_assert_statement_objmode(self):
         self.check_assert_statement(flags=force_pyobj_flags)
