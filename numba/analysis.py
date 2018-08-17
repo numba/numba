@@ -63,7 +63,7 @@ def compute_live_map(cfg, blocks, var_use_map, var_def_map):
     """
     live_map = {}
     for offset in blocks.keys():
-        live_map[offset] = var_use_map[offset]
+        live_map[offset] = set(var_use_map[offset])
 
     def fix_point_progress():
         return tuple(len(v) for v in live_map.values())
