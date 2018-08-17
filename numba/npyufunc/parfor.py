@@ -46,7 +46,10 @@ def _lower_parfor_parallel(lowerer, parfor):
     targetctx = lowerer.context
     # We copy the typemap here because for race condition variable we'll
     # update their type to array so they can be updated by the gufunc.
-    typemap = copy.copy(lowerer.fndesc.typemap)
+    orig_typemap = lowerer.fndesc.typemap
+    # replace original typemap with copy and restore the original at the end.
+    lowerer.fndesc.typemap = copy.copy(orig_typemap)
+    typemap = lowerer.fndesc.typemap
     varmap = lowerer.varmap
 
     if config.DEBUG_ARRAY_OPT:
@@ -247,7 +250,8 @@ def _lower_parfor_parallel(lowerer, parfor):
         func_args,
         redargstartdim,
         func_sig,
-        parfor.races)
+        parfor.races,
+        typemap)
     if config.DEBUG_ARRAY_OPT:
         print("gu_signature = ", gu_signature)
 
@@ -345,7 +349,34 @@ def _lower_parfor_parallel(lowerer, parfor):
 
                 # generate code for combining reduction variable with thread output
                 for inst in parfor_reddict[name][1]:
+                    # If we have a case where a parfor body has an array reduction like A += B
+                    # and A and B have different data types then the reduction in the parallel
+                    # region will operate on those differeing types.  However, here, after the
+                    # parallel region, we are summing across the reduction array and that is
+                    # guaranteed to have the same data type so we need to change the reduction
+                    # nodes so that the right-hand sides have a type equal to the reduction-type
+                    # and therefore the left-hand side.
+                    if isinstance(inst, ir.Assign):
+                        rhs = inst.value
+                        # We probably need to generalize this since it only does substitutions in
+                        # inplace_ginops.
+                        if isinstance(rhs, ir.Expr) and rhs.op == 'inplace_binop' and rhs.rhs.name == init_var.name:
+                            # Get calltype of rhs.
+                            ct = lowerer.fndesc.calltypes[rhs]
+                            assert(len(ct.args) == 2)
+                            # Create new arg types replace the second arg type with the reduction var type.
+                            ctargs = (ct.args[0], redvar_typ)
+                            # Update the signature of the call.
+                            ct = ct.replace(args=ctargs)
+                            # Remove so we can re-insrt since calltypes is unique dict.
+                            lowerer.fndesc.calltypes.pop(rhs)
+                            # Add calltype back in for the expr with updated signature.
+                            lowerer.fndesc.calltypes[rhs] = ct
                     lowerer.lower_inst(inst)
+
+    # Restore the original typemap of the function that was replaced temporarily at the
+    # Beginning of this function.
+    lowerer.fndesc.typemap = orig_typemap
 
 # A work-around to prevent circular imports
 lowering.lower_extensions[parfor.Parfor] = _lower_parfor_parallel
@@ -358,17 +389,18 @@ def _create_shape_signature(
         args,
         redargstartdim,
         func_sig,
-        races):
+        races,
+        typemap):
     '''Create shape signature for GUFunc
     '''
     if config.DEBUG_ARRAY_OPT:
         print("_create_shape_signature", num_inputs, num_reductions, args, redargstartdim)
         for i in args[1:]:
-            print("argument", i, type(i), get_shape_classes(i))
+            print("argument", i, type(i), get_shape_classes(i, typemap=typemap))
 
     num_inouts = len(args) - num_reductions
     # maximum class number for array shapes
-    classes = [get_shape_classes(var) if var not in races else (-1,) for var in args[1:]]
+    classes = [get_shape_classes(var, typemap=typemap) if var not in races else (-1,) for var in args[1:]]
     class_set = set()
     for _class in classes:
         if _class:
@@ -1163,9 +1195,8 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     # followed by other arguments
     for i in range(num_args):
         arg = all_args[i]
-#        aty = expr_arg_types[i]
         var = expr_args[i]
-        aty = outer_sig.args[i + 1]  # skip first argument sched
+        aty = expr_arg_types[i]
         dst = builder.gep(args, [context.get_constant(types.intp, i + 1)])
         if i >= ninouts:  # reduction variables
             ary = context.make_array(aty)(context, builder, arg)
