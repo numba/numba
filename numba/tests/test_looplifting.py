@@ -302,6 +302,10 @@ class TestLoopLiftingAnnotate(TestCase):
 
 
 class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
+    def assert_has_lifted(self, jitted, loopcount):
+        lifted = jitted.overloads[jitted.signatures[0]].lifted
+        self.assertEqual(len(lifted), loopcount)
+
     def test_issue_734(self):
         from numba import jit, void, int32, double
 
@@ -369,7 +373,8 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         self.assertTrue(loopcres.fndesc.native)
 
     def test_no_iteration_w_redef(self):
-        # redefinition of res in the loop with no use of res prevents lifting
+        # redefinition of res in the loop with no use of res should not
+        # prevent lifting
         from numba import jit
 
         @jit(forceobj=True)
@@ -379,11 +384,12 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
                 res = i
             return res
 
-        # loop count = 0, loop won't lift or execute
+        # loop count = 1, loop lift but loop body not execute
         self.assertEqual(test.py_func(-1), test(-1))
-
-        # loop count = 0, loop won't lift but will execute
+        self.assert_has_lifted(test, loopcount=1)
+        # loop count = 1, loop won't lift and will execute
         self.assertEqual(test.py_func(1), test(1))
+        self.assert_has_lifted(test, loopcount=1)
 
     def test_no_iteration(self):
         from numba import jit
@@ -395,11 +401,12 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
                 res += i
             return res
 
-        # loop count = 0
+        # loop count = 1
         self.assertEqual(test.py_func(-1), test(-1))
-
+        self.assert_has_lifted(test, loopcount=1)
         # loop count = 1
         self.assertEqual(test.py_func(1), test(1))
+        self.assert_has_lifted(test, loopcount=1)
 
     def test_define_in_loop_body(self):
         # tests a definition in a loop that leaves the loop is liftable
@@ -413,7 +420,7 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
 
         # loop count = 1
         self.assertEqual(test.py_func(1), test(1))
-
+        self.assert_has_lifted(test, loopcount=1)
 
     def test_invalid_argument(self):
         """Test a problem caused by invalid discovery of loop argument
@@ -443,7 +450,6 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         arg = np.arange(10)
         self.assertEqual(test.py_func(arg), test(arg))
 
-
     def test_conditionally_defined_in_loop(self):
         from numba import jit
         @jit(forceobj=True)
@@ -454,7 +460,10 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
                 if i > 0:
                    x = 6
                 y += x
+            return y, x
+
         self.assertEqual(test.py_func(), test())
+        self.assert_has_lifted(test, loopcount=1)
 
     def test_stack_offset_error_when_has_no_return(self):
         from numba import jit
@@ -522,7 +531,6 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(*args), cfoo(*args))
         # Ensure that is really a new overload for the lifted loop
         self.assertEqual(len(lifted.signatures), 2)
-
 
 
 if __name__ == '__main__':
