@@ -570,31 +570,49 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             arr[arr > 0.7] = float('nan')
             return arr
 
-        def check_arr(arr):
-            x = np.zeros_like(arr, dtype=np.float64)
-            y = np.copy(x)
+        layouts = cycle(['C', 'F', 'A'])
+        _types = [np.int32, np.int64, np.float32, np.float64, np.complex64,
+                  np.complex128]
+
+        np.random.seed(42)
+
+        def check_arr(arr, layout=False):
+            np.random.shuffle(_types)
+            if layout != False:
+                x = np.zeros_like(arr, dtype=_types[0], order=layout)
+                y = np.zeros_like(arr, dtype=_types[1], order=layout)
+                arr = arr.copy(order=layout)
+            else:
+                x = np.zeros_like(arr, dtype=_types[0], order=next(layouts))
+                y = np.zeros_like(arr, dtype=_types[1], order=next(layouts))
             x.fill(4)
             y.fill(9)
             cres = compile_isolated(pyfunc, (typeof(arr), typeof(x), typeof(y)))
             expected = pyfunc(arr, x, y)
             got = cres.entry_point(arr, x, y)
             # Contiguity of result varies accross Numpy versions, only
-            # check contents.
-            self.assertEqual(got.dtype, expected.dtype)
-            np.testing.assert_array_equal(got, expected)
+            # check contents. NumPy 1.11+ seems to stabilize.
+            if numpy_version < (1, 11):
+                self.assertEqual(got.dtype, expected.dtype)
+                np.testing.assert_array_equal(got, expected)
+            else:
+                self.assertPreciseEqual(got, expected)
 
         def check_scal(scal):
             x = 4
             y = 5
+            np.random.shuffle(_types)
+            x = _types[0](4)
+            y = _types[1](5)
             cres = compile_isolated(pyfunc, (typeof(scal), typeof(x), typeof(y)))
             expected = pyfunc(scal, x, y)
             got = cres.entry_point(scal, x, y)
             self.assertPreciseEqual(got, expected)
 
-        arr = np.int16([1, 0, -1, 0])
-        check_arr(arr)
-        arr = np.bool_([1, 0, 1])
-        check_arr(arr)
+            arr = np.int16([1, 0, -1, 0])
+            check_arr(arr)
+            arr = np.bool_([1, 0, 1])
+            check_arr(arr)
 
         arr = fac(24)
         check_arr(arr)
@@ -604,6 +622,11 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check_arr(arr.reshape((2, 3, 4)))
         check_arr(arr.reshape((2, 3, 4)).T)
         check_arr(arr.reshape((2, 3, 4))[::2])
+
+        check_arr(arr.reshape((2, 3, 4)), layout='F')
+        check_arr(arr.reshape((2, 3, 4)).T, layout='F')
+        check_arr(arr.reshape((2, 3, 4))[::2], layout='F')
+
         for v in (0.0, 1.5, float('nan')):
             arr = np.array([v]).reshape(())
             check_arr(arr)

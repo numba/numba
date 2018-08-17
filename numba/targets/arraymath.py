@@ -1124,13 +1124,17 @@ def array_where(context, builder, sig, args):
     np.where(array, array, array)
     """
     layouts = set(a.layout for a in sig.args)
-    if layouts == set('C'):
+
+    npty = np.promote_types(as_dtype(sig.args[1].dtype),
+                            as_dtype(sig.args[2].dtype))
+
+    if layouts == set('C') or layouts == set('F'):
         # Faster implementation for C-contiguous arrays
         def where_impl(cond, x, y):
             shape = cond.shape
             if x.shape != shape or y.shape != shape:
                 raise ValueError("all inputs should have the same shape")
-            res = np.empty_like(x)
+            res = np.empty_like(x, dtype=npty)
             cf = cond.flat
             xf = x.flat
             yf = y.flat
@@ -1139,12 +1143,11 @@ def array_where(context, builder, sig, args):
                 rf[i] = xf[i] if cf[i] else yf[i]
             return res
     else:
-
         def where_impl(cond, x, y):
             shape = cond.shape
             if x.shape != shape or y.shape != shape:
                 raise ValueError("all inputs should have the same shape")
-            res = np.empty_like(x)
+            res = np.empty(cond.shape, dtype=npty)
             for idx, c in np.ndenumerate(cond):
                 res[idx] = x[idx] if c else y[idx]
             return res
