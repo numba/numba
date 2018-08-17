@@ -116,7 +116,7 @@ def make_function_type(cfnptr):
     # void* return type is a int/long on 32 bit platforms and an int on 64 bit
     # platforms, explicit conversion to a int64 should match.
     if cret == types.voidptr:
-        cret = types.intp
+        cret = types.uintp
     if sys.platform == 'win32' and not cfnptr._flags_ & ctypes._FUNCFLAG_CDECL:
         # 'stdcall' calling convention under Windows
         cconv = 'x86_stdcallcc'
