@@ -113,9 +113,10 @@ def make_function_type(cfnptr):
     cargs = [from_ctypes(a)
              for a in cfnptr.argtypes]
     cret = from_ctypes(cfnptr.restype)
-    # void* return type is implicitly converted to intp to match python
+    # void* return type is a int/long on 32 bit platforms and an int on 64 bit
+    # platforms, explicit conversion to a int64 should match.
     if cret == types.voidptr:
-        cret = types.intp
+        cret = types.int64
     if sys.platform == 'win32' and not cfnptr._flags_ & ctypes._FUNCFLAG_CDECL:
         # 'stdcall' calling convention under Windows
         cconv = 'x86_stdcallcc'
