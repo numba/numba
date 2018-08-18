@@ -588,7 +588,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for k in range(-10, 10):
                 expected = pyfunc(arr, k)
                 got = cfunc(arr, k)
-                self.assertPreciseEqual(expected, got)
+                # TODO: Contiguity of result not consistent
+                self.assertEqual(got.dtype, expected.dtype)
+                np.testing.assert_array_equal(got, expected)
 
         def check_odd(a):
             _check(a)
@@ -596,7 +598,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             _check(a)
             a = a.reshape((7, 1, 3, 3))
             _check(a)
-            _check(a.T.copy())  # fails unless copied - strides different
+            _check(a.T)
 
         def check_even(a):
             _check(a)
@@ -604,7 +606,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             _check(a)
             a = a.reshape((4, 2, 2, 4))
             _check(a)
-            _check(a.T.copy())  # fails unless copied - strides different
+            _check(a.T)
 
         check_odd(np.arange(63) + 10.5)
         check_even(np.arange(64) - 10.5)
@@ -613,7 +615,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check(np.arange(360).reshape(3, 4, 5, 6))
         _check(np.array([]))
         _check(np.arange(9).reshape((3, 3))[::-1])
-        # _check(np.arange(9).reshape((3, 3), order='F'))  # fails - strides different
+        _check(np.arange(9).reshape((3, 3), order='F'))
+
+        arr = (np.arange(64) - 10.5).reshape((4, 2, 2, 4))
+        _check(arr)
+        _check(np.asfortranarray(arr))
 
     def _triangular_matrix_exceptions(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
