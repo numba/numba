@@ -585,20 +585,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         x = np.arange(5) - 0.5
 
-        with self.assertTypingError() as raises:
-            for N in 1.1, True, np.inf, [1, 2]:
+        def _check(N):
+            with self.assertTypingError() as raises:
                 cfunc(x, N=N)
-                assert "Second argument N must be None or an integer" in str(raises.exception)
+            assert "Second argument N must be None or an integer" in str(raises.exception)
+
+        for N in 1.1, True, np.inf, [1, 2]:
+            _check(N)
 
         with self.assertRaises(ValueError) as raises:
             cfunc(x, N=-1)
-            assert "Negative dimensions are not allowed" in str(raises.exception)
+        assert "Negative dimensions are not allowed" in str(raises.exception)
 
         with self.assertRaises(ValueError) as raises:
-            for shape in (9, 3), (3, 3, 3):
-                x = np.arange(27).reshape(shape)
-                cfunc(x)
-                self.assertEqual("x must be a one-dimensional array or sequence.", str(raises.exception))
+            x = np.arange(27).reshape((3, 3, 3))
+            cfunc(x)
+        self.assertEqual("x must be a one-dimensional array or sequence.", str(raises.exception))
 
 
 class TestNPMachineParameters(TestCase):
