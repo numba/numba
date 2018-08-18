@@ -914,32 +914,30 @@ if numpy_version >= (1, 9):
 #----------------------------------------------------------------------------
 # Element-wise computations
 
+@register_jitable
+def _np_vander(x, N, increasing):
+    if x.ndim > 1:
+        raise ValueError('x must be a one-dimensional array or sequence.')
+    if N < 0:
+        raise ValueError('Negative dimensions are not allowed')
+
+    out = np.empty((len(x), N), dtype=x.dtype)
+
+    if increasing:
+        for i in range(N):
+            out[:, i] = x ** i
+    else:
+        for i in range(N):
+            out[:, (N - i - 1)] = x ** i
+
+    return out
+
 @overload(np.vander)
 def np_vander(x, N=None, increasing=False):
 
     if N not in (None, types.none):
         if not isinstance(N, types.Integer):
-            def _abort_mission(*args):
-                raise TypeError('an integer is required')
-            return _abort_mission
-
-    @register_jitable
-    def _np_vander(x, N, increasing):
-
-        if x.ndim > 1:
-            raise ValueError('x must be a one-dimensional array or sequence.')
-
-        m = len(x)
-        out = np.empty((m, N), dtype=x.dtype)
-
-        if increasing:
-            for i in range(N):
-                out[:, i] = x ** i
-        else:
-            for i in range(N):
-                out[:, (N - i - 1)] = x ** i
-
-        return out
+            raise TypingError('Second argument N must be None or an integer')
 
     def np_vander_impl(x, N=None, increasing=False):
         return _np_vander(x, N, increasing)
