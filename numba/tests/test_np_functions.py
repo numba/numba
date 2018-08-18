@@ -576,10 +576,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # Exceptions leak references
         self.disable_leak_check()
 
-        with self.assertTypingError() as raises:
-            for k in 1.5, True, np.inf:
+        def _check(k):
+            with self.assertTypingError() as raises:
                 cfunc(5, 6, k=k)
-                assert "k must be an integer" in str(raises.exception)
+            assert "k must be an integer" in str(raises.exception)
+
+        for k in 1.5, True, np.inf, [1, 2]:
+            _check(k)
 
     def _triangular_matrix_tests(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
