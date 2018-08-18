@@ -72,15 +72,6 @@ def correlate(a, v):
 def convolve(a, v):
     return np.convolve(a, v)
 
-def tri(M, N=None, k=0):
-    return np.tri(M, N, k)
-
-def tril(m, k=0):
-    return np.tril(m, k)
-
-def triu(m, k=0):
-    return np.triu(m, k)
-
 def np_vander(x, N=None, increasing=False):
     return np.vander(x, N, increasing)
 
