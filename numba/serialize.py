@@ -4,7 +4,7 @@ Serialization support for compiled functions.
 
 from __future__ import print_function, division, absolute_import
 
-import imp
+import importlib
 import marshal
 import sys
 from types import FunctionType, ModuleType
@@ -72,7 +72,7 @@ def _reduce_code(code):
     """
     Reduce a code object to picklable components.
     """
-    return marshal.version, imp.get_magic(), marshal.dumps(code)
+    return marshal.version, importlib.util.MAGIC_NUMBER, marshal.dumps(code)
 
 def _dummy_closure(x):
     """
