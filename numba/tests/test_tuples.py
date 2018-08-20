@@ -546,7 +546,7 @@ class TestTupleBuild(TestCase):
         # Heterogeneous
         check((4, 5.5))
 
-    @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
+    @unittest.skipIf(utils.PYVERSION < (3, 6), "needs Python 3.6+")
     def test_build_unpack_call_more(self):
         def check(p):
             # using eval here since Python 2 doesn't even support the syntax
