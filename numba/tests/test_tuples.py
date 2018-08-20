@@ -515,6 +515,53 @@ class TestTupleBuild(TestCase):
         # Heterogeneous
         check((4, 5.5))
 
+
+    @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
+    def test_build_unpack_more(self):
+        def check(p):
+            # using eval here since Python 2 doesn't even support the syntax
+            pyfunc = eval("lambda a: (1, *a, (1, 2), *a)")
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        # Homogeneous
+        check((4, 5))
+        # Heterogeneous
+        check((4, 5.5))
+
+
+    @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
+    def test_build_unpack_call(self):
+        def check(p):
+            # using eval here since Python 2 doesn't even support the syntax
+            @jit
+            def inner(*args):
+                return args
+            pyfunc = eval("lambda a: inner(1, *a)", locals())
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        # Homogeneous
+        check((4, 5))
+        # Heterogeneous
+        check((4, 5.5))
+
+    @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
+    def test_build_unpack_call_more(self):
+        def check(p):
+            # using eval here since Python 2 doesn't even support the syntax
+            @jit
+            def inner(*args):
+                return args
+            pyfunc = eval("lambda a: inner(1, *a, *(1, 2), *a)", locals())
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        # Homogeneous
+        check((4, 5))
+        # Heterogeneous
+        check((4, 5.5))
+
     def test_tuple_constructor(self):
         def check(pyfunc, arg):
             cfunc = jit(nopython=True)(pyfunc)
