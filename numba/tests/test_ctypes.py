@@ -245,11 +245,11 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
             return ptr
 
         # Compile it
-        cres = compile_isolated(pyfunc, [types.intp[::1]])
+        cres = compile_isolated(pyfunc, [types.uintp[::1]])
         cfunc = cres.entry_point
 
         # Setup inputs
-        arr_got = np.zeros(1, dtype=np.intp)
+        arr_got = np.zeros(1, dtype=np.uintp)
         arr_expect = arr_got.copy()
 
         # Run functions
