@@ -711,7 +711,7 @@ class DataFlowAnalysis(object):
             if MAKE_CLOSURE:
                 closure = info.pop()
             if num_annotations > 0:
-                annotations = info.pop() 
+                annotations = info.pop()
             if num_kwdefaults > 0:
                 kwdefaults = []
                 for i in range(num_kwdefaults):
@@ -734,7 +734,7 @@ class DataFlowAnalysis(object):
             if inst.arg & 0x1:
                 defaults = info.pop()
         res = info.make_temp()
-        info.append(inst, name=name, code=code, closure=closure, annotations=annotations, 
+        info.append(inst, name=name, code=code, closure=closure, annotations=annotations,
                     kwdefaults=kwdefaults, defaults=defaults, res=res)
         info.push(res)
 
