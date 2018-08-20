@@ -233,7 +233,6 @@ def _launch_threads():
         try:
             if t.lower().startswith("tbb"):
                 try:
-                    import pdb; pdb.set_trace()
                     from . import tbbpool as lib
                 except ImportError:
                     backend_import_fail = 'Intel TBB'
