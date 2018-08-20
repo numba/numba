@@ -158,10 +158,6 @@ static void unload_tbb(void) {
 }
 
 static void launch_threads(int count) {
-    if(_DEBUG)
-    {
-        puts("Using TBB");
-    }
     if(tsi)
         return;
     puts("Using TBB");

@@ -137,8 +137,10 @@ def get_ext_modules():
                                    **np_compile_args)
 
 
-    # Search for Intel TBB, first check env var TBB_ROOT then conda locations
-    tbb_root = os.getenv('TBB_ROOT')
+    ext_npyufunc_workqueue_impls = []
+
+    # Search for Intel TBB, first check env var TBBROOT then conda locations
+    tbb_root = os.getenv('TBBROOT')
     if not tbb_root:
         path2check = [os.path.split(os.path.split(sys.executable)[0])[0]]
         path2check += [os.getenv(n, '') for n in ['CONDA_PREFIX', 'PREFIX']]
@@ -148,23 +150,22 @@ def get_ext_modules():
             if p and os.path.isfile(os.path.join(p, 'include', 'tbb', 'tbb.h')):
                 tbb_root = p  # the latest is used
 
-    ext_npyufunc_workqueue_impls = []
+
+    if sys.platform.startswith('win'):
+        cpp11flags = []
+        ompflags = ['-openmp']
+    else:
+        cpp11flags = ['-std=c++11']
+        ompflags = ['-fopenmp']
 
     if tbb_root:
-        if sys.platform.startswith('win'):
-            cpp11flags = []
-            ompflags = ['-openmp']
-        else:
-            cpp11flags = ['-std=c++11']
-            ompflags = ['-fopenmp']
-
         print("Using Intel TBB from:", tbb_root)
         ext_npyufunc_tbb_workqueue = Extension(
-            name='numba.npyufunc.tbb_workqueue',
+            name='numba.npyufunc.tbbpool',
             sources=['numba/npyufunc/tbbpool.cpp', 'numba/npyufunc/gufunc_scheduler.cpp'],
             depends=['numba/npyufunc/workqueue.h'],
             include_dirs=[os.path.join(tbb_root, 'include')],
-            extra_compile_args=[] if sys.platform.startswith('win') else ['-std=c++11'],
+            extra_compile_args=cpp11flags,
             libraries   =['tbb'],
             library_dirs=[os.path.join(tbb_root, 'lib', 'intel64', 'gcc4.4'),  # for Linux
                           os.path.join(tbb_root, 'lib'),                       # for MacOS
@@ -173,13 +174,14 @@ def get_ext_modules():
             )
         ext_npyufunc_workqueue_impls.append(ext_npyufunc_tbb_workqueue)
 
-        ext_npyufunc_omppool = Extension( name='numba.npyufunc.omppool',
-                                    sources=['numba/npyufunc/omppool.cpp',
-                                            'numba/npyufunc/gufunc_scheduler.cpp'],
-                                    depends=['numba/npyufunc/workqueue.h'],
-                                    extra_compile_args=ompflags + cpp11flags)
+    # OpenMP backed work queue
+    ext_npyufunc_omppool = Extension( name='numba.npyufunc.omppool',
+                                sources=['numba/npyufunc/omppool.cpp',
+                                        'numba/npyufunc/gufunc_scheduler.cpp'],
+                                depends=['numba/npyufunc/workqueue.h'],
+                                extra_compile_args=ompflags + cpp11flags)
 
-        ext_npyufunc_workqueue_impls.append(ext_npyufunc_omppool)
+    ext_npyufunc_workqueue_impls.append(ext_npyufunc_omppool)
 
 
     # Build the Numba workqueue implementation irrespective of whether the TBB
@@ -218,34 +220,6 @@ def get_ext_modules():
                    ext_jitclass_box, ext_cuda_extras]
 
     ext_modules += ext_npyufunc_workqueue_impls
-
-
-    tbb_root = os.getenv('TBBROOT')
-    if not tbb_root:
-        path2check = [os.path.join(*sys.executable.split(os.sep)[:-2])]
-        path2check += [os.getenv(n) for n in ['CONDA_PREFIX', 'PREFIX']]
-        if sys.platform.startswith('win'):
-            path2check += [os.path.join(p, 'Library') for p in path2check]
-        for p in path2check:
-            if p and os.path.isfile(os.path.join(p, 'include', 'tbb', 'tbb.h')):
-                tbb_root = p  # the latest is used
-
-    if tbb_root:
-        print("Using TBBROOT=", tbb_root)
-        ext_npyufunc_tbb = Extension(
-            name='numba.npyufunc.tbbpool',
-            sources=['numba/npyufunc/tbbpool.cpp',
-                     'numba/npyufunc/gufunc_scheduler.cpp'],
-            depends=['numba/npyufunc/workqueue.h'],
-            include_dirs=[os.path.join(tbb_root, 'include')],
-            extra_compile_args = cpp11flags,
-            libraries   =['tbb'],
-            library_dirs=[os.path.join(tbb_root, 'lib', 'intel64', 'gcc4.4'),  # for Linux
-                          os.path.join(tbb_root, 'lib'),                       # for MacOS
-                          os.path.join(tbb_root, 'lib', 'intel64', 'vc_mt'),   # for Windows
-                         ],
-            )
-        ext_modules += [ext_npyufunc_tbb]
 
     return ext_modules
 

@@ -229,28 +229,31 @@ def _launch_threads():
 
         t = str(config.THREADING_LAYER)
         lib = None
-        tbb_import_fail = False
+        backend_import_fail = False
         try:
             if t.lower().startswith("tbb"):
                 try:
+                    import pdb; pdb.set_trace()
                     from . import tbbpool as lib
                 except ImportError:
-                    tbb_import_fail = 'Intel TBB'
+                    backend_import_fail = 'Intel TBB'
             elif t.lower().startswith("omp"):
+                # TODO: Check that if MKL is present that it is a version that
+                # understands GNU OMP might be present
                 try:
                     from . import omppool as lib
                 except ImportError:
-                    tbb_import_fail = 'OpenMP'
+                    backend_import_fail = 'OpenMP'
             elif not t.lower().startswith("workqueue"):
                 msg = "Unknown value specified for NUMBA_THREADING_LAYER: %s"
                 raise ValueError(msg % t)
         finally:
             if not lib:
-                if tbb_import_fail:
+                if backend_import_fail:
                     msg = ("The %s threading layer (%s) was requested but "
                            "the module could not be imported. Falling back to "
                            "the Numba threading layer.")
-                    warnings.warn(msg % (tbb_import_fail, t))
+                    warnings.warn(msg % (backend_import_fail, t))
                 from . import workqueue as lib
 
         from ctypes import CFUNCTYPE, c_int
