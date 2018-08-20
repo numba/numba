@@ -29,7 +29,7 @@ branches:
         - travis
 
 before_install:
-    - test "$(uname)" == "Linux" && sudo apt-get install libc6-dev-i386
+    - if [ "$(uname)" == "Linux" ]; then sudo apt-get install libc6-dev-i386; fi
     - buildscripts/incremental/install_miniconda.sh
     - export PATH=$HOME/miniconda3/bin:$PATH
     - buildscripts/incremental/setup_conda_environment.sh
