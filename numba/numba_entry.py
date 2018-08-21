@@ -236,7 +236,7 @@ def get_sys_info():
             print(fmt % ("OpenMP Threading layer available", True))
         except ImportError as e:
             print(fmt % ("OpenMP Threading layer available", False))
-            print(fmt % ("+--> Disabled due too:",
+            print(fmt % ("+--> Disabled due to",
                          parse_error(e, 'omppool')))
 
 

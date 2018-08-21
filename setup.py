@@ -12,6 +12,7 @@ from distutils.spawn import spawn
 from distutils import sysconfig
 import sys
 import os
+import platform
 
 import versioneer
 
@@ -162,7 +163,10 @@ def get_ext_modules():
     else:
         cpp11flags = ['-std=c++11']
         ompcompileflags = ['-fopenmp']
-        omplinkflags = []
+        if platform.machine() == 'ppc64le':
+            omplinkflags = ['-fopenmp']
+        else:
+            omplinkflags = []
 
     if tbb_root:
         print("Using Intel TBB from:", tbb_root)
