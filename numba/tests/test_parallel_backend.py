@@ -10,7 +10,7 @@ import subprocess
 
 import numpy as np
 
-from numba import config
+from numba import config, utils
 from numba import unittest_support as unittest
 from numba import jit, vectorize, guvectorize
 
@@ -93,15 +93,12 @@ class vectorize_runner(runnable):
 class guvectorize_runner(runnable):
 
     def __call__(self):
-        def runner():
-            sig = ['(f4, f4, f4[:])']
-            cfunc = guvectorize(sig, '(),()->()', **self._options)(gufunc_foo)
-            a = b = np.random.random(10).astype(np.float32)
-            expected = ufunc_foo(a, b)
-            got = cfunc(a, b)
-            np.testing.assert_allclose(expected, got)
-        return runner
-
+        sig = ['(f4, f4, f4[:])']
+        cfunc = guvectorize(sig, '(),()->()', **self._options)(gufunc_foo)
+        a = b = np.random.random(10).astype(np.float32)
+        expected = ufunc_foo(a, b)
+        got = cfunc(a, b)
+        np.testing.assert_allclose(expected, got)
 
 def chooser(fnlist):
     for _ in range(10):
@@ -130,13 +127,20 @@ class _proc_class_impl(object):
         self._method = method
 
     def __call__(self, *args, **kwargs):
-        ctx = multiprocessing.get_context(self._method)
-        return ctx.Process(*args, **kwargs)
+        if utils.PYVERSION < (3, 0):
+            return multiprocessing.Process(*args, **kwargs)
+        else:
+            ctx = multiprocessing.get_context(self._method)
+            return ctx.Process(*args, **kwargs)
 
 
 thread_impl = compile_factory(_thread_class)
 spawn_proc_impl = compile_factory(_proc_class_impl('spawn'))
 fork_proc_impl = compile_factory(_proc_class_impl('fork'))
+
+# this is duplication as Py27, linux uses fork, windows uses spawn, it however
+# is kept like this so that when tests fail it's less confusing!
+default_proc_impl = compile_factory(_proc_class_impl('default'))
 
 
 class TestParallelBackendBase(TestCase):
@@ -153,9 +157,12 @@ class TestParallelBackendBase(TestCase):
                  guvectorize_runner(nopython=True),
                  guvectorize_runner(nopython=True, target='parallel'),
                  ]
+    if utils.PYVERSION < (3, 0):
+        parallelism = ['threading', 'multiprocessing_default', 'random']
+    else:
+        parallelism = ['threading', 'multiprocessing_fork',
+                       'multiprocessing_spawn', 'random']
 
-    parallelism = ['threading', 'multiprocessing_fork',
-                   'multiprocessing_spawn', 'random']
     runners = {'concurrent_jit': [jit_runner(nopython=True, parallel=True)],
                'concurrect_vectorize': [vectorize_runner(nopython=True, target='parallel')],
                'concurrent_guvectorize': [guvectorize_runner(nopython=True, target='parallel')],
@@ -172,8 +179,14 @@ class TestParallelBackendBase(TestCase):
                 fork_proc_impl(fnlist)
             elif parallelism == 'multiprocessing_spawn':
                 spawn_proc_impl(fnlist)
+            elif parallelism == 'multiprocessing_default':
+                default_proc_impl(fnlist)
             elif parallelism == 'random':
-                ps = [thread_impl, fork_proc_impl, spawn_proc_impl]
+                if utils.PYVERSION < (3, 0):
+                    ps = [thread_impl, default_proc_impl]
+                else:
+                    ps = [thread_impl, fork_proc_impl, spawn_proc_impl]
+
                 for _ in range(10):  # 10 is arbitrary
                     impl = random.choice(ps)
                     impl(fnlist)
