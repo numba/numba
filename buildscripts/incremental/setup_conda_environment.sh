@@ -42,7 +42,7 @@ fi
 # Install the compiler toolchain
 if [[ $(uname) == Linux ]]; then
     if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
-        $CONDA_INSTALL gcc_linux-32 gxx_linux-32
+        $CONDA_INSTALL ${EXTRA_CHANNELS} gcc_linux-32=7.3 gxx_linux-32=7.3
     else
         $CONDA_INSTALL gcc_linux-64 gxx_linux-64
     fi
