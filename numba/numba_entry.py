@@ -229,7 +229,7 @@ def get_sys_info():
             # might be a missing symbol due to e.g. tbb libraries missing
             print(fmt % ("TBB Threading layer available", False))
             print(fmt % ("+--> Disabled due to",
-                         parse_error(e.msg, 'tbbpool')))
+                         parse_error(e, 'tbbpool')))
 
         try:
             from numba.npyufunc import omppool
@@ -237,7 +237,7 @@ def get_sys_info():
         except ImportError as e:
             print(fmt % ("OpenMP Threading layer available", False))
             print(fmt % ("+--> Disabled due too:",
-                         parse_error(e.msg, 'omppool')))
+                         parse_error(e, 'omppool')))
 
 
         # Look for conda and conda information
