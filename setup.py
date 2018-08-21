@@ -153,10 +153,16 @@ def get_ext_modules():
 
     if sys.platform.startswith('win'):
         cpp11flags = []
-        ompflags = ['-openmp']
+        ompcompileflags = ['-openmp']
+        omplinkflags = []
+    elif sys.platform.startswith('darwin'):
+        cpp11flags = ['-std=c++11']
+        ompcompileflags = ['-fopenmp']
+        omplinkflags = ['-fopenmp=libomp']
     else:
         cpp11flags = ['-std=c++11']
-        ompflags = ['-fopenmp']
+        ompcompileflags = ['-fopenmp']
+        omplinkflags = []
 
     if tbb_root:
         print("Using Intel TBB from:", tbb_root)
@@ -179,7 +185,8 @@ def get_ext_modules():
                                 sources=['numba/npyufunc/omppool.cpp',
                                         'numba/npyufunc/gufunc_scheduler.cpp'],
                                 depends=['numba/npyufunc/workqueue.h'],
-                                extra_compile_args=ompflags + cpp11flags)
+                                extra_compile_args=ompcompileflags + cpp11flags,
+                                extra_link_args = omplinkflags)
 
     ext_npyufunc_workqueue_impls.append(ext_npyufunc_omppool)
 
