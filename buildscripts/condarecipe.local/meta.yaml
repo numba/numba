@@ -27,6 +27,7 @@ requirements:
     - llvmlite 0.25.*
     - funcsigs                 # [py27]
     - singledispatch           # [py27]
+    - tbb-devel                # [not (ppc64le or armv6l or armv7l or aarch64)]
   run:
     - python
     - numpy x.x
@@ -43,6 +44,7 @@ test:
     - ipython
     - setuptools
     - faulthandler             # [py27]
+    - tbb                      # [not (ppc64le or armv6l or armv7l or aarch64)]
     # Need these for AOT. Do not init msvc as it may not be present
     - {{ compiler('c') }}      # [not win]
     - {{ compiler('cxx') }}    # [not win]
