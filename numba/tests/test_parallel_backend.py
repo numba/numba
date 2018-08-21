@@ -4,6 +4,9 @@ Tests the parallel backend
 import threading
 import multiprocessing
 import random
+import os
+import sys
+import subprocess
 
 import numpy as np
 
@@ -11,10 +14,26 @@ from numba import config
 from numba import unittest_support as unittest
 from numba import jit, vectorize, guvectorize
 
-from .support import temp_directory, override_config
+from .support import temp_directory, override_config, TestCase
+
+# Check which backends are available.
+try:
+    from numba.npyufunc import tbbpool
+    _HAVE_TBB_POOL = True
+except ImportError:
+    _HAVE_TBB_POOL = False
+
+try:
+    from numba.npyufunc import omppool
+    _HAVE_OMP_POOL = True
+except ImportError:
+    _HAVE_OMP_POOL = False
+
+skip_no_omp = unittest.skipUnless(_HAVE_OMP_POOL, "OpenMP threadpool required")
+skip_no_tbb = unittest.skipUnless(_HAVE_TBB_POOL, "TBB threadpool required")
+
 
 # some functions to jit
-
 
 def foo(n, v):
     return np.ones(n) + v
@@ -102,8 +121,6 @@ def compile_factory(parallel_class):
 
 
 # workers
-_threadsafe_backends = config.THREADING_LAYER in ('omppool', 'tbbpool')
-
 _thread_class = threading.Thread
 
 
@@ -122,12 +139,7 @@ spawn_proc_impl = compile_factory(_proc_class_impl('spawn'))
 fork_proc_impl = compile_factory(_proc_class_impl('fork'))
 
 
-@unittest.skipUnless(_threadsafe_backends, "Threading layer not threadsafe")
-class TestParallelBackend(unittest.TestCase):
-    """ These are like the numba.tests.test_threadsafety tests but designed
-    instead to torture the parallel backend
-    """
-    np.random.seed(42)
+class TestParallelBackendBase(TestCase):
 
     all_impls = [jit_runner(nopython=True),
                  jit_runner(nopython=True, cache=True),
@@ -141,6 +153,15 @@ class TestParallelBackend(unittest.TestCase):
                  guvectorize_runner(nopython=True),
                  guvectorize_runner(nopython=True, target='parallel'),
                  ]
+
+    parallelism = ['threading', 'multiprocessing_fork',
+                   'multiprocessing_spawn', 'random']
+    runners = {'concurrent_jit': [jit_runner(nopython=True, parallel=True)],
+               'concurrect_vectorize': [vectorize_runner(nopython=True, target='parallel')],
+               'concurrent_guvectorize': [guvectorize_runner(nopython=True, target='parallel')],
+               'concurrent_mix_use': all_impls}
+
+    safe_backends = {'omppool', 'tbbpool'}
 
     def run_compile(self, fnlist, parallelism='threading'):
         self._cache_dir = temp_directory(self.__class__.__name__)
@@ -160,70 +181,89 @@ class TestParallelBackend(unittest.TestCase):
                 raise ValueError(
                     'Unknown parallelism supplied %s' % parallelism)
 
-    def test_threading_concurrent_vectorize(self):
-        self.run_compile([vectorize_runner(nopython=True, target='parallel')],
-                         parallelism='threading')
 
-    def test_threading_concurrent_jit(self):
-        self.run_compile([jit_runner(nopython=True, parallel=True)],
-                         parallelism='threading')
+_threadsafe_backends = config.THREADING_LAYER in ('omppool', 'tbbpool')
 
-    def test_threading_concurrent_guvectorize(self):
-        self.run_compile([guvectorize_runner(nopython=True,
-                                             target='parallel')],
-                         parallelism='threading')
 
-    def test_threading_concurrent_mix_use(self):
-        self.run_compile(self.all_impls, parallelism='threading')
+@unittest.skipUnless(_threadsafe_backends, "Threading layer not threadsafe")
+class TestParallelBackend(TestParallelBackendBase):
+    """ These are like the numba.tests.test_threadsafety tests but designed
+    instead to torture the parallel backend.
+    If a suitable backend is supplied via NUMBA_THREADING_LAYER these tests
+    can be run directly.
+    """
 
-    def test_multiprocessing_fork_concurrent_vectorize(self):
-        self.run_compile([vectorize_runner(nopython=True, target='parallel')],
-                         parallelism='multiprocessing_fork')
+    @classmethod
+    def generate(cls):
+        for p in cls.parallelism:
+            for name, impl in cls.runners.items():
+                def test_method(self):
+                    self.run_compile(impl, parallelism=p)
+                methname = "test_" + p + '_' + name
+                setattr(cls, methname, test_method)
 
-    def test_multiprocessing_fork_concurrent_jit(self):
-        self.run_compile([jit_runner(nopython=True, parallel=True)],
-                         parallelism='multiprocessing_fork')
 
-    def test_multiprocessing_fork_concurrent_guvectorize(self):
-        self.run_compile([guvectorize_runner(nopython=True,
-                                             target='parallel')],
-                         parallelism='multiprocessing_fork')
+TestParallelBackend.generate()
 
-    def test_multiprocessing_fork_concurrent_mix_use(self):
-        self.run_compile(self.all_impls, parallelism='multiprocessing_fork')
 
-    def test_multiprocessing_spawn_concurrent_vectorize(self):
-        self.run_compile([vectorize_runner(nopython=True, target='parallel')],
-                         parallelism='multiprocessing_spawn')
+class TestSpecificBackend(TestParallelBackendBase):
+    """
+    This is quite contrived, for each test in the TestParallelBackend tests it
+    generates a test that will run the TestParallelBackend test in a new python
+    process with an environment modified to ensure a specific threadsafe backend
+    is used. This is with view of testing the backends independently and in an
+    isolated manner such that if they hang/crash/have issues, it doesn't kill
+    the test suite.
+    """
 
-    def test_multiprocessing_spawn_concurrent_jit(self):
-        self.run_compile([jit_runner(nopython=True, parallel=True)],
-                         parallelism='multiprocessing_spawn')
+    backends = {'tbbpool': skip_no_tbb,
+                'omppool': skip_no_omp}
 
-    def test_multiprocessing_spawn_concurrent_guvectorize(self):
-        self.run_compile([guvectorize_runner(nopython=True,
-                                             target='parallel')],
-                         parallelism='multiprocessing_spawn')
+    def run_cmd(self, cmdline, env):
+        popen = subprocess.Popen(cmdline,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE,
+                                 env=env)
+        # finish in 5 minutes or kill it
+        timeout = threading.Timer(5 * 60., popen.kill)
+        try:
+            timeout.start()
+            out, err = popen.communicate()
+            if popen.returncode != 0:
+                raise AssertionError("process failed with code %s: stderr follows\n%s\n"
+                                     % (popen.returncode, err.decode()))
+        finally:
+            timeout.cancel()
+        return out.decode(), err.decode()
 
-    def test_multiprocessing_fork_concurrent_mix_use(self):
-        self.run_compile(self.all_impls, parallelism='multiprocessing_spawn')
+    def run_test_in_separate_process(self, test, threading_layer):
+        env_copy = os.environ.copy()
+        env_copy['NUMBA_THREADING_LAYER'] = str(threading_layer)
+        print("Running %s with backend: %s" % (test, threading_layer))
+        cmdline = [sys.executable, "-m", "numba.runtests", test]
+        return self.run_cmd(cmdline, env_copy)
 
-    def test_random_concurrent_vectorize(self):
-        self.run_compile([vectorize_runner(nopython=True, target='parallel')],
-                         parallelism='random')
+    @classmethod
+    def _inject(cls, p, name, backend, backend_guard):
+        themod = cls.__module__
+        thecls = TestParallelBackend.__name__
+        methname = "test_" + p + '_' + name
+        injected_method = '%s.%s.%s' % (themod, thecls, methname)
 
-    def test_random_concurrent_jit(self):
-        self.run_compile([jit_runner(nopython=True, parallel=True)],
-                         parallelism='random')
+        def test_template(self):
+            self.run_test_in_separate_process(injected_method, backend)
+        injected_test = "test_%s_%s_%s" % (p, name, backend)
+        setattr(cls, injected_test, backend_guard(test_template))
 
-    def test_random_concurrent_guvectorize(self):
-        self.run_compile([guvectorize_runner(nopython=True,
-                                             target='parallel')],
-                         parallelism='random')
+    @classmethod
+    def generate(cls):
+        for backend, backend_guard in cls.backends.items():
+            for p in cls.parallelism:
+                for name in cls.runners.keys():
+                    cls._inject(p, name, backend, backend_guard)
 
-    def test_random_concurrent_mix_use(self):
-        for _ in range(5):
-            self.run_compile(self.all_impls, parallelism='random')
+
+TestSpecificBackend.generate()
 
 
 if __name__ == '__main__':
