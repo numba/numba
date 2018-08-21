@@ -17,8 +17,8 @@ requirements:
   # build and run dependencies are duplicated to avoid setuptools issues
   # when we also set install_requires in setup.py
   build:
-    - {{ compiler('c') }}
-    - {{ compiler('cxx') }}
+    - {{ compiler('c') }} # [not (armv6l or armv7l or aarch64)]
+    - {{ compiler('cxx') }} # [not (armv6l or armv7l or aarch64)]
   host:
     - python
     - numpy x.x
@@ -40,14 +40,15 @@ test:
     - jinja2
     # Required to test optional Numba features
     - cffi
-    - scipy
-    - ipython
+    # temporarily disable scipy testing on ARM, need to build out more packages
+    - scipy                    # [not (win or armv6l or armv7l)]
+    - ipython                  # [not (win or armv6l or armv7l)]
     - setuptools
     - faulthandler             # [py27]
     - tbb                      # [not (ppc64le or armv6l or armv7l or aarch64)]
     # Need these for AOT. Do not init msvc as it may not be present
-    - {{ compiler('c') }}      # [not win]
-    - {{ compiler('cxx') }}    # [not win]
+    - {{ compiler('c') }}      # [not (win or armv6l or armv7l or aarch64)]
+    - {{ compiler('cxx') }}    # [not (win or armv6l or armv7l or aarch64)]
   files:
     - mandel.py
 

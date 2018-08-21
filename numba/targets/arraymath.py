@@ -914,6 +914,114 @@ if numpy_version >= (1, 9):
 #----------------------------------------------------------------------------
 # Element-wise computations
 
+@register_jitable
+def _fill_diagonal_params(a, wrap):
+    if a.ndim == 2:
+        m = a.shape[0]
+        n = a.shape[1]
+        step = 1 + n
+        if wrap:
+            end = n * m
+        else:
+            end = n * min(m, n)
+    else:
+        shape = np.array(a.shape)
+
+        if not np.all(np.diff(shape) == 0):
+            raise ValueError("All dimensions of input must be of equal length")
+
+        step = 1 + (np.cumprod(shape[:-1])).sum()
+        end = shape.prod()
+
+    return end, step
+
+@register_jitable
+def _fill_diagonal_scalar(a, val, wrap):
+    end, step = _fill_diagonal_params(a, wrap)
+
+    for i in range(0, end, step):
+        a.flat[i] = val
+
+@register_jitable
+def _fill_diagonal(a, val, wrap):
+    end, step = _fill_diagonal_params(a, wrap)
+    ctr = 0
+    v_len = len(val)
+
+    for i in range(0, end, step):
+        a.flat[i] = val[ctr]
+        ctr += 1
+        ctr = ctr % v_len
+
+@register_jitable
+def _check_val_int(a, val):
+    iinfo = np.iinfo(a.dtype)
+    v_min = iinfo.min
+    v_max = iinfo.max
+
+    # check finite values are within bounds
+    if np.any(~np.isfinite(val)) or np.any(val < v_min) or np.any(val > v_max):
+        raise ValueError('Unable to safely conform val to a.dtype')
+
+@register_jitable
+def _check_val_float(a, val):
+    finfo = np.finfo(a.dtype)
+    v_min = finfo.min
+    v_max = finfo.max
+
+    # check finite values are within bounds
+    finite_vals = val[np.isfinite(val)]
+    if np.any(finite_vals < v_min) or np.any(finite_vals > v_max):
+        raise ValueError('Unable to safely conform val to a.dtype')
+
+# no check performed, needed for pathway where no check is required
+_check_nop = register_jitable(lambda x, y: x)
+
+def _asarray(x):
+    pass
+
+@overload(_asarray)
+def _asarray_impl(x):
+    if isinstance(x, types.Array):
+        return lambda x: x
+    elif isinstance(x, (types.Sequence, types.Tuple)):
+        return lambda x: np.array(x)
+    elif isinstance(x, (types.Float, types.Integer, types.Boolean)):
+        ty = as_dtype(x)
+        return lambda x: np.array([x], dtype=ty)
+
+@overload(np.fill_diagonal)
+def np_fill_diagonal(a, val, wrap=False):
+
+    if a.ndim > 1:
+        # the following can be simplified after #3088; until then, employ
+        # a basic mechanism for catching cases where val is of a type/value
+        # which cannot safely be cast to a.dtype
+        if isinstance(a.dtype, types.Integer):
+            checker = _check_val_int
+        elif isinstance(a.dtype, types.Float):
+            checker = _check_val_float
+        else:
+            checker = _check_nop
+
+        def scalar_impl(a, val, wrap=False):
+            tmpval = _asarray(val).flatten()
+            checker(a, tmpval)
+            _fill_diagonal_scalar(a, val, wrap)
+
+        def non_scalar_impl(a, val, wrap=False):
+            tmpval = _asarray(val).flatten()
+            checker(a, tmpval)
+            _fill_diagonal(a, tmpval, wrap)
+
+        if isinstance(val, (types.Float, types.Integer, types.Boolean)):
+            return scalar_impl
+        elif isinstance(val, (types.Tuple, types.Sequence, types.Array)):
+            return non_scalar_impl
+    else:
+        msg = "The first argument must be at least 2-D (found %s-D)" % a.ndim
+        raise TypingError(msg)
+
 def _np_round_intrinsic(tp):
     # np.round() always rounds half to even
     return "llvm.rint.f%d" % (tp.bitwidth,)

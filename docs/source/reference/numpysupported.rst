@@ -267,6 +267,7 @@ The following top-level functions are supported:
 * :func:`numpy.empty_like` (only the 2 first arguments)
 * :func:`numpy.expand_dims`
 * :func:`numpy.eye`
+* :func:`numpy.fill_diagonal`
 * :func:`numpy.flatten` (no order argument; 'C' order only)
 * :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full` (only the 3 first arguments)
@@ -425,13 +426,8 @@ Distributions
    Numba random generator.
 
 .. note::
-   The generator is not thread-safe when :ref:`releasing the GIL <jit-nogil>`.
-
-   Also, under Unix, if creating a child process using :func:`os.fork` or the
-   :mod:`multiprocessing` module, the child's random generator will inherit
-   the parent's state and will therefore produce the same sequence of
-   numbers (except when using the "forkserver" start method under Python 3.4
-   and later).
+   Since version 0.28.0, the generator is thread-safe and fork-safe.  Each
+   thread and each process will produce independent streams of random numbers.
 
 
 ``stride_tricks``

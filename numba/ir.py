@@ -570,6 +570,31 @@ class Yield(Inst):
         return [self.value]
 
 
+class EnterWith(Stmt):
+    """Enter a "with" context
+    """
+    def __init__(self, contextmanager, begin, end, loc):
+        """
+        Parameters
+        ----------
+        contextmanager : IR value
+        begin, end : int
+            The beginning and the ending offset of the with-body.
+        loc : int
+            Source location
+        """
+        self.contextmanager = contextmanager
+        self.begin = begin
+        self.end = end
+        self.loc = loc
+
+    def __str__(self):
+        return 'enter_with {}'.format(self.contextmanager)
+
+    def list_vars(self):
+        return [self.contextmanager]
+
+
 class Arg(object):
     def __init__(self, name, index, loc):
         self.name = name
@@ -880,6 +905,8 @@ class Block(object):
 
 
 class Loop(object):
+    """Describes a loop-block
+    """
     __slots__ = "entry", "exit"
 
     def __init__(self, entry, exit):
@@ -889,6 +916,20 @@ class Loop(object):
     def __repr__(self):
         args = self.entry, self.exit
         return "Loop(entry=%s, exit=%s)" % args
+
+
+class With(object):
+    """Describes a with-block
+    """
+    __slots__ = "entry", "exit"
+
+    def __init__(self, entry, exit):
+        self.entry = entry
+        self.exit = exit
+
+    def __repr__(self):
+        args = self.entry, self.exit
+        return "With(entry=%s, exit=%s)" % args
 
 
 class FunctionIR(object):
@@ -1012,4 +1053,8 @@ class FunctionIR(object):
 
 
 # A stub for undefined global reference
-UNDEFINED = object()
+class UndefinedType(object):
+    def __repr__(self):
+        return "Undefined"
+
+UNDEFINED = UndefinedType()

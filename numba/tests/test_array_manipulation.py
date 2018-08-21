@@ -128,6 +128,10 @@ def bad_float_index(arr):
     return arr[1, 2.0]
 
 
+def numpy_fill_diagonal(arr, val, wrap=False):
+    return np.fill_diagonal(arr, val, wrap)
+
+
 class TestArrayManipulation(MemoryLeakMixin, TestCase):
     """
     Check shape-changing operations on arrays.
@@ -584,6 +588,124 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                              (types.Array(types.float64, 2, 'C'),))
         self.assertIn('unsupported array index type float64',
                       str(raises.exception))
+
+    def test_fill_diagonal_basic(self):
+        pyfunc = numpy_fill_diagonal
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def _shape_variations(n):
+            # square
+            yield (n, n)
+            # tall and thin
+            yield (2 * n, n)
+            # short and fat
+            yield (n, 2 * n)
+            # a bit taller than wide; odd numbers of rows and cols
+            yield ((2 * n + 1), (2 * n - 1))
+            # 4d, all dimensions same
+            yield (n, n, n, n)
+            # weird edge case
+            yield (1, 1, 1)
+
+        def _val_variations():
+            yield 1
+            yield 3.142
+            yield np.nan
+            yield -np.inf
+            yield True
+            yield np.arange(4)
+            yield (4,)
+            yield [8, 9]
+            yield np.arange(54).reshape(9, 3, 2, 1)  # contiguous C
+            yield np.asfortranarray(np.arange(9).reshape(3, 3))  # contiguous F
+            yield np.arange(9).reshape(3, 3)[::-1]  # non-contiguous
+
+        # contiguous arrays
+        def _multi_dimensional_array_variations(n):
+            for shape in _shape_variations(n):
+                yield np.zeros(shape, dtype=np.float64)
+                yield np.asfortranarray(np.ones(shape, dtype=np.float64))
+
+        # non-contiguous arrays
+        def _multi_dimensional_array_variations_strided(n):
+            for shape in _shape_variations(n):
+                tmp = np.zeros(tuple([x * 2 for x in shape]), dtype=np.float64)
+                slicer = tuple(slice(0, x * 2, 2) for x in shape)
+                yield tmp[slicer]
+
+        def _check_fill_diagonal(arr, val):
+            for wrap in None, True, False:
+                a = arr.copy()
+                b = arr.copy()
+
+                if wrap is None:
+                    params = {}
+                else:
+                    params = {'wrap': wrap}
+
+                pyfunc(a, val, **params)
+                cfunc(b, val, **params)
+                self.assertPreciseEqual(a, b)
+
+        for arr in _multi_dimensional_array_variations(3):
+            for val in _val_variations():
+                _check_fill_diagonal(arr, val)
+
+        for arr in _multi_dimensional_array_variations_strided(3):
+            for val in _val_variations():
+                _check_fill_diagonal(arr, val)
+
+        # non-numeric input arrays
+        arr = np.array([True] * 9).reshape(3, 3)
+        _check_fill_diagonal(arr, False)
+        _check_fill_diagonal(arr, [False, True, False])
+        _check_fill_diagonal(arr, np.array([True, False, True]))
+
+    def test_fill_diagonal_exception_cases(self):
+        pyfunc = numpy_fill_diagonal
+        cfunc = jit(nopython=True)(pyfunc)
+        val = 1
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        # first argument unsupported number of dimensions
+        for a in np.array([]), np.ones(5):
+            with self.assertRaises(TypingError) as raises:
+                cfunc(a, val)
+            assert "The first argument must be at least 2-D" in str(raises.exception)
+
+        # multi-dimensional input where dimensions are not all equal
+        with self.assertRaises(ValueError) as raises:
+            a = np.zeros((3, 3, 4))
+            cfunc(a, val)
+            self.assertEqual("All dimensions of input must be of equal length", str(raises.exception))
+
+        # cases where val has incompatible type / value
+        def _assert_raises(arr, val):
+            with self.assertRaises(ValueError) as raises:
+                cfunc(arr, val)
+            self.assertEqual("Unable to safely conform val to a.dtype", str(raises.exception))
+
+        arr = np.zeros((3, 3), dtype=np.int32)
+        val = np.nan
+        _assert_raises(arr, val)
+
+        val = [3.3, np.inf]
+        _assert_raises(arr, val)
+
+        val = np.array([1, 2, 1e10], dtype=np.int64)
+        _assert_raises(arr, val)
+
+        arr = np.zeros((3, 3), dtype=np.float32)
+        val = [1.4, 2.6, -1e100]
+        _assert_raises(arr, val)
+
+        val = 1.1e100
+        _assert_raises(arr, val)
+
+        val = np.array([-1e100])
+        _assert_raises(arr, val)
 
 
 if __name__ == '__main__':

@@ -1188,6 +1188,16 @@ class TestParfors(TestParforsBase):
         # as a different name
         self.assertEqual(countArrayAllocs(test_impl, (types.intp,)), 1)
 
+    @skip_unsupported
+    def test_preparfor_canonicalize_kws(self):
+        # test canonicalize_array_math typing for calls with kw args
+        def test_impl(A):
+            return A.argsort() + 1
+
+        n = 211
+        A = np.arange(n)
+        self.check(test_impl, A)
+
 
 class TestPrangeBase(TestParforsBase):
 
@@ -1336,7 +1346,9 @@ class TestPrangeBase(TestParforsBase):
         cfunc = self.compile_njit(pyfunc, sig)
 
         # compile the prange injected function
-        cpfunc = self.compile_parallel(pfunc, sig)
+        with warnings.catch_warnings(record=True) as raised_warnings:
+            warnings.simplefilter('always')
+            cpfunc = self.compile_parallel(pfunc, sig)
 
         # if check_fastmath is True then check fast instructions
         if check_fastmath:
@@ -1349,6 +1361,7 @@ class TestPrangeBase(TestParforsBase):
             kwargs = dict({'fastmath_pcres': fastcpfunc}, **kwargs)
 
         self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
+        return raised_warnings
 
 
 class TestPrange(TestPrangeBase):
@@ -1820,6 +1833,19 @@ class TestPrange(TestPrangeBase):
                   c[k] = i + j + k
             return b.sum()
         self.prange_tester(test_impl, 4)
+
+    @skip_unsupported
+    def test_parfor_race_1(self):
+        def test_impl(x, y):
+            for j in range(y):
+                k = x
+            return k
+        raised_warnings = self.prange_tester(test_impl, 10, 20)
+        warning_obj = raised_warnings[0]
+        expected_msg = ("Variable k used in parallel loop may be written to "
+                        "simultaneously by multiple workers and may result "
+                        "in non-deterministic or unintended results.")
+        self.assertIn(expected_msg, str(warning_obj.message))
 
 
 @x86_only
