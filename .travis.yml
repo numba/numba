@@ -20,8 +20,8 @@ matrix:
         - env: PYTHON=3.7 NUMPY=1.14 CONDA_ENV=travisci
         - env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci TEST_SVML=yes
         - env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci VANILLA_INSTALL=yes
-        - env: PYTHON=2.7 NUMPY=1.11 CONDA_ENV=travisci BITS32=yes
-        - env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci BITS32=yes
+        - env: PYTHON=2.7 NUMPY=1.11 CONDA_ENV=travisci BITS32=yes USE_C3I_TEST_CHANNEL=yes
+        - env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci BITS32=yes USE_C3I_TEST_CHANNEL=yes
 
 branches:
     only:
