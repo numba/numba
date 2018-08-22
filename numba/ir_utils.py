@@ -1569,6 +1569,13 @@ def get_ir_of_code(glbls, fcode):
             self.calltypes = None
     rewrites.rewrite_registry.apply('before-inference',
                                     DummyPipeline(ir), ir)
+    # call inline pass to handle cases like stencils and comprehensions
+    inline_pass = numba.inline_closurecall.InlineClosureCallPass(
+        ir, numba.targets.cpu.ParallelOptions(False))
+    inline_pass.run()
+    from numba import postproc
+    post_proc = postproc.PostProcessor(ir)
+    post_proc.run()
     return ir
 
 def replace_arg_nodes(block, args):
