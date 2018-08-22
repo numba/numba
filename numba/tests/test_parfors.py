@@ -1219,10 +1219,8 @@ class TestParfors(TestParforsBase):
     def test_two_d_array_reduction_with_float_sizes(self):
         def test_impl(n):
             shp = (2, 3)
-            size = shp[0] * shp[1]
             result1 = np.zeros(shp, np.float32)
-            tmp = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
-            tmp = tmp.reshape(shp)
+            tmp = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).reshape(shp)
 
             for i in numba.prange(n):
                 result1 += tmp
