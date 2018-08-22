@@ -1217,6 +1217,8 @@ class TestParfors(TestParforsBase):
 
     @skip_unsupported
     def test_two_d_array_reduction_with_float_sizes(self):
+        # result1 is float32 and tmp is float64.
+        # Tests reduction with differing dtypes.
         def test_impl(n):
             shp = (2, 3)
             result1 = np.zeros(shp, np.float32)
