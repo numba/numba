@@ -420,11 +420,23 @@ class ClassDataType(Type):
         super(ClassDataType, self).__init__(name)
 
 
-class ContextManager(Phantom):
+class ContextManager(Callable, Phantom):
     """
     An overly-simple ContextManager type that cannot be materialized.
     """
     def __init__(self, cm):
         self.cm = cm
         super(ContextManager, self).__init__("ContextManager({})".format(cm))
+
+    def get_call_signatures(self):
+        return (), True
+
+    def get_call_type(self, context, args, kws):
+        ## XXX
+        from numba import typing
+        posargs = list(args) + [v for k, v in sorted(kws.items())]
+        return typing.signature(self, *posargs)
+
+
+
 

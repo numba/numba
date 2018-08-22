@@ -774,7 +774,7 @@ class LiftedWith(LiftedCode):
             if self._can_compile:
                 self.compile(tuple(args))
 
-            signatures = [typing.signature(types.none, *args)]
+            signatures = [typing.signature(self._withlift_output_type, *args)]
             pysig = None
             func_name = self.py_func.__name__
             name = "CallTemplate({0})".format(func_name)

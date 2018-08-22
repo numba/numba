@@ -300,9 +300,10 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
             body_blocks.append(node)
 
         _legalize_with_head(blocks[blk_start])
-        cmkind = _get_with_contextmanager(func_ir, blocks, blk_start)
+        cmkind, extra = _get_with_contextmanager(func_ir, blocks, blk_start)
         sub = cmkind.mutate_with_body(func_ir, blocks, blk_start, blk_end,
-                                      body_blocks, dispatcher_factory)
+                                      body_blocks, dispatcher_factory,
+                                      extra)
         sub_irs.append(sub)
     if not sub_irs:
         # Unchanged
@@ -315,27 +316,42 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
 def _get_with_contextmanager(func_ir, blocks, blk_start):
     """Get the global object used for the context manager
     """
+    _illegal_cm_msg = "Illegal use of context-manager."
+
+    def get_var_dfn(var):
+        return func_ir.get_definition(var)
+
+    def get_ctxmgr_obj(dfn):
+        if isinstance(dfn, ir.Expr) and dfn.op == 'call':
+            args = [get_var_dfn(x) for x in dfn.args]
+            kws = {k: get_var_dfn(v) for k, v in dfn.kws}
+            extra = {'args': args, 'kwargs': kws}
+            dfn = func_ir.get_definition(dfn.func)
+        else:
+            extra = None
+
+        if isinstance(dfn, ir.Global):
+            ctxobj = dfn.value
+            if ctxobj is not ir.UNDEFINED:
+                return ctxobj, extra
+            raise errors.CompilerError(
+                "Undefined variable used as context manager",
+                loc=blocks[blk_start].loc,
+                )
+
+        raise errors.CompilerError(_illegal_cm_msg, loc=dfn.loc)
+
     for stmt in blocks[blk_start].body:
         if isinstance(stmt, ir.EnterWith):
             var_ref = stmt.contextmanager
             dfn = func_ir.get_definition(var_ref)
-            if not isinstance(dfn, ir.Global):
-                raise errors.CompilerError(
-                    "Illegal use of context-manager. ",
-                    loc=stmt.loc,
-                    )
-            ctxobj = dfn.value
-            if ctxobj is ir.UNDEFINED:
-                raise errors.CompilerError(
-                    "Undefined variable used as context manager",
-                    loc=blocks[blk_start].loc,
-                    )
+            ctxobj, extra = get_ctxmgr_obj(dfn)
             if not hasattr(ctxobj, 'mutate_with_body'):
                 raise errors.CompilerError(
                     "Unsupported context manager in use",
                     loc=blocks[blk_start].loc,
                     )
-            return ctxobj
+            return ctxobj, extra
     # No
     raise errors.CompilerError(
         "malformed with-context usage",

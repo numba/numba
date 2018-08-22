@@ -684,15 +684,25 @@ class Lower(BaseLower):
                 # Make Call
                 entry_pt = fnty.dispatcher.compile(tuple(argtypes))
                 callee = self.context.add_dynamic_addr(self.builder, id(entry_pt), info="with_objectmode")
-                self.pyapi.call_function_objargs(callee, argobjs)
+                ret_obj = self.pyapi.call_function_objargs(callee, argobjs)
+
+                # Fix output value
+                native = self.pyapi.to_native_value(fnty.dispatcher._withlift_output_type, ret_obj)
+                output = native.value
 
                 # Release objs
+                self.pyapi.decref(ret_obj)
                 for obj in argobjs:
                     self.pyapi.decref(obj)
 
+                # cleanup output
+                if callable(native.cleanup):
+                    native.cleanup()
+
                 # Release the GIL
                 self.pyapi.gil_release(gil_state)
-                return self.context.get_dummy_value()
+
+                return output
             argvals = self.fold_call_args(fnty, signature,
                                           expr.args, expr.vararg, expr.kws)
 

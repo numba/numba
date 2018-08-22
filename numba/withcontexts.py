@@ -1,5 +1,9 @@
-from numba import ir, ir_utils, types
+
+import sys
+from numba import ir, ir_utils, types, errors, sigutils
 from numba.typing.typeof import typeof_impl
+from numba.typing.templates import AbstractTemplate, infer, infer_global
+from numba.analysis import compute_use_defs
 
 
 class WithContext(object):
@@ -13,7 +17,7 @@ class WithContext(object):
         pass
 
     def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
-                         body_blocks, dispatcher_factory):
+                         body_blocks, dispatcher_factory, extra):
         """Mutate the *blocks* to implement this contextmanager.
 
         Parameters
@@ -56,7 +60,8 @@ class _ByPassContextType(WithContext):
     of the with-block.
     """
     def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
-                         body_blocks, dispatcher_factory):
+                         body_blocks, dispatcher_factory, extra):
+        assert extra is None
         # Determine variables that need forwarding
         vlt = func_ir.variable_lifetime
         inmap = {_get_var_parent(k): k for k in vlt.livemap[blk_start]}
@@ -75,7 +80,8 @@ class _CallContextType(WithContext):
     with-block as another function.
     """
     def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
-                         body_blocks, dispatcher_factory):
+                         body_blocks, dispatcher_factory, extra):
+        assert extra is None
         vlt = func_ir.variable_lifetime
         inputs = vlt.livemap[blk_start]
         outputs = vlt.livemap[blk_end]
@@ -107,8 +113,31 @@ call_context = _CallContextType()
 
 
 class _ObjModeContextType(WithContext):
+
+    def _legalize_args(self, extra, loc):
+        if extra is None:
+            return {}
+
+        if len(extra['args']) != 0:
+            raise errors.CompilerError(
+                "objectmode context doesn't take any positional arguments",
+                )
+        callkwargs = extra['kwargs']
+        typeanns = {}
+        for k, v in callkwargs.items():
+            if not isinstance(v, ir.Const) or not isinstance(v.value, str):
+                raise errors.CompileError(
+                    "objectmode context requires constants string for "
+                    "type annotation",
+                )
+
+            typeanns[k] = sigutils._parse_signature_string(v.value)
+
+        return typeanns
+
     def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
-                         body_blocks, dispatcher_factory):
+                         body_blocks, dispatcher_factory, extra):
+        typeanns = self._legalize_args(extra, loc=blocks[blk_start].loc)
         vlt = func_ir.variable_lifetime
         inputs = vlt.livemap[blk_start]
         # Note on subtract inputs:
@@ -116,6 +145,41 @@ class _ObjModeContextType(WithContext):
         # any output vars that are also in the inputs are not newly created.
         # Thus, we can simply remove them from consideration for outputs.
         outputs = vlt.livemap[blk_end] - inputs
+
+        for it in body_blocks:
+            blocks[it].dump()
+
+        print('typeanns', typeanns)
+        print(inputs, outputs, file=sys.stderr)
+        if True:
+            outputs = vlt.livemap[blk_end]
+
+            print(inputs, outputs, file=sys.stderr)
+            # ensure live variables are actually used in the blocks, else remove,
+            # saves having to create something valid to run through postproc
+            # to achieve similar
+            local_block_ids = set(body_blocks)
+            loopblocks = {}
+            for k in local_block_ids:
+                loopblocks[k] = blocks[k]
+
+            used_vars = set()
+            def_vars = set()
+            defs = compute_use_defs(loopblocks)
+            for vs in defs.usemap.values():
+                used_vars |= vs
+            for vs in defs.defmap.values():
+                def_vars |= vs
+            used_or_defined = used_vars | def_vars
+
+            # note: sorted for stable ordering
+            inputs = sorted(set(inputs) & used_or_defined)
+            outputs = sorted((set(outputs) & used_or_defined) & def_vars)
+            print(inputs, outputs, file=sys.stderr)
+        # raise ValueError((inputs, outputs))
+
+        # Determine types in the output tuple
+        outtup = types.Tuple([typeanns[v] for v in outputs])
 
         lifted_blks = {k: blocks[k] for k in body_blocks}
         _mutate_with_block_callee(lifted_blks, blk_start, blk_end,
@@ -130,6 +194,7 @@ class _ObjModeContextType(WithContext):
             )
 
         dispatcher = dispatcher_factory(lifted_ir, objectmode=True)
+        dispatcher._withlift_output_type = outtup
 
         newblk = _mutate_with_block_caller(
             dispatcher, blocks, blk_start, blk_end, inputs, outputs,
@@ -139,8 +204,20 @@ class _ObjModeContextType(WithContext):
         _clear_blocks(blocks, body_blocks)
         return dispatcher
 
+    def __call__(self, *args, **kwargs):
+        return self
+
 
 objmode_context = _ObjModeContextType()
+
+
+# @infer
+# class ObjmodeTemplate(AbstractTemplate):
+#     key = objmode_context
+#     def generic(self, arg, kws):
+#         raise ValueError("JOIFJIDSJFIOSDJO")
+
+# infer_global(objmode_context, types.Function(ObjmodeTemplate))
 
 
 def _bypass_with_context(blocks, blk_start, blk_end, forwardvars):

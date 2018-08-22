@@ -11,7 +11,7 @@ from numba import typing, errors
 from numba.targets.registry import cpu_target
 from numba.targets import cpu
 from numba.compiler import compile_ir, DEFAULT_FLAGS
-from numba import njit
+from numba import njit, typeof
 from .support import TestCase, captured_stdout
 
 
@@ -267,9 +267,13 @@ class TestLiftObj(TestCase):
             expect_res = pyfunc(*args)
             expect_out = stream.getvalue()
 
+         # avoid compiling during stdout-capturing for easier print-debugging
+        cfunc.compile(tuple(map(typeof, args)))
         with captured_stdout() as stream:
             got_res = cfunc(*args)
             got_out = stream.getvalue()
+        got_res = cfunc(*args)
+        got_out = stream.getvalue()
 
         self.assertEqual(expect_out, got_out)
         self.assertPreciseEqual(expect_res, got_res)
@@ -314,6 +318,33 @@ class TestLiftObj(TestCase):
             return x
 
         arg = 123
+        self.assert_equal_return_and_stdout(foo, arg)
+
+    def test_lift_objmode_return_simple(self):
+        def inverse(x):
+            print(x)
+            return 1 / x
+
+        def foo(x):
+            with objmode_context(y="float64"):
+                y = inverse(x)
+            return x, y
+
+        arg = 123
+        self.assert_equal_return_and_stdout(foo, arg)
+
+    def test_lift_objmode_return_array(self):
+        def inverse(x):
+            print(x)
+            return 1 / x
+
+        def foo(x):
+            with objmode_context(y="float64[:]", z="int64"):
+                y = inverse(x)
+                z = int(y[0])
+            return x, y, z
+
+        arg = np.arange(1, 10, dtype=np.float64)
         self.assert_equal_return_and_stdout(foo, arg)
 
 
