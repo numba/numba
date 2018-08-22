@@ -342,6 +342,14 @@ class TestArrayAnalysis(TestCase):
         self._compile_and_test(test_namedtuple, (types.intp,),
                                 equivs=[self.with_equiv('r', ('n', 'n'))],)
 
+        # np.where is tricky since it returns tuple of arrays
+        def test_np_where_tup_return(A):
+            c = np.where(A)
+            return len(c[0])
+
+        self._compile_and_test(test_np_where_tup_return,
+            (types.Array(types.intp, 1, 'C'),), asserts=None)
+
         def test_shape(A):
             (m, n) = A.shape
             B = np.ones((m, n))
