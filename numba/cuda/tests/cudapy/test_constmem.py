@@ -6,6 +6,8 @@ from numba import cuda
 from numba.cuda.testing import unittest, SerialMixin
 from numba.config import ENABLE_CUDASIM
 
+
+CONST_EMPTY = np.array([])
 CONST1D = np.arange(10, dtype=np.float64) / 2.
 CONST2D = np.asfortranarray(
     np.arange(100, dtype=np.int32).reshape(10, 10))
@@ -25,6 +27,14 @@ CONST_RECORD_ALIGN = np.array(
             ('z', np.uint8),
         ],
         align=True))
+
+
+def cuconstEmpty(A):
+    C = cuda.const.array_like(CONST_EMPTY)
+    i = cuda.grid(1)
+
+    # +1 or it'll be loaded & stored as a u32
+    A[i] = len(C)
 
 
 def cuconst(A):
@@ -78,6 +88,12 @@ class TestCudaConstantMemory(SerialMixin, unittest.TestCase):
                 'ld.const.f64',
                 jcuconst.ptx,
                 "as we're adding to it, load as a double")
+
+    def test_const_empty(self):
+        jcuconst = cuda.jit('void(float64[:])')(cuconstEmpty)
+        A = np.full(1, fill_value=-1, dtype=int)
+        jcuconst[1, 1](A)
+        self.assertTrue(np.all(A == 0))
 
     def test_const_array_2d(self):
         jcuconst2d = cuda.jit('void(int32[:,:])')(cuconst2d)
