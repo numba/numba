@@ -6,13 +6,16 @@ from numba import cuda
 from numba.cuda.testing import unittest, SerialMixin
 from numba.config import ENABLE_CUDASIM
 
-
 CONST_EMPTY = np.array([])
 CONST1D = np.arange(10, dtype=np.float64) / 2.
 CONST2D = np.asfortranarray(
     np.arange(100, dtype=np.int32).reshape(10, 10))
 CONST3D = ((np.arange(5 * 5 * 5, dtype=np.complex64).reshape(5, 5, 5) + 1j) /
            2j)
+
+CONST_RECORD_EMPTY = np.array(
+    [],
+    dtype=[('x', float), ('y', int)])
 CONST_RECORD = np.array(
     [(1.0, 2), (3.0, 4)],
     dtype=[('x', float), ('y', int)])
@@ -32,8 +35,6 @@ CONST_RECORD_ALIGN = np.array(
 def cuconstEmpty(A):
     C = cuda.const.array_like(CONST_EMPTY)
     i = cuda.grid(1)
-
-    # +1 or it'll be loaded & stored as a u32
     A[i] = len(C)
 
 
@@ -57,6 +58,12 @@ def cuconst3d(A):
     j = cuda.threadIdx.y
     k = cuda.threadIdx.z
     A[i, j, k] = C[i, j, k]
+
+
+def cuconstRecEmpty(A):
+    C = cuda.const.array_like(CONST_RECORD_EMPTY)
+    i = cuda.grid(1)
+    A[i] = len(C)
 
 
 def cuconstRec(A, B):
@@ -90,9 +97,9 @@ class TestCudaConstantMemory(SerialMixin, unittest.TestCase):
                 "as we're adding to it, load as a double")
 
     def test_const_empty(self):
-        jcuconst = cuda.jit('void(float64[:])')(cuconstEmpty)
+        jcuconstEmpty = cuda.jit('void(float64[:])')(cuconstEmpty)
         A = np.full(1, fill_value=-1, dtype=int)
-        jcuconst[1, 1](A)
+        jcuconstEmpty[1, 1](A)
         self.assertTrue(np.all(A == 0))
 
     def test_const_array_2d(self):
@@ -119,6 +126,11 @@ class TestCudaConstantMemory(SerialMixin, unittest.TestCase):
                 jcuconst3d.ptx,
                 "load the two halves of the complex as u32s")
 
+    def test_const_record_empty(self):
+        jcuconstRecEmpty = cuda.jit('void(float64[:])')(cuconstRecEmpty)
+        A = np.full(1, fill_value=-1, dtype=int)
+        jcuconstRecEmpty[1, 1](A)
+        self.assertTrue(np.all(A == 0))
 
     def test_const_record(self):
         A = np.zeros(2, dtype=float)
@@ -159,7 +171,6 @@ class TestCudaConstantMemory(SerialMixin, unittest.TestCase):
                 'ld.const.u8',
                 jcuconst.ptx,
                 'load the last byte by itself')
-
 
         jcuconst[2, 1](A, B, C, D, E)
         np.testing.assert_allclose(A, CONST_RECORD_ALIGN['a'])
