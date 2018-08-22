@@ -1053,4 +1053,8 @@ class FunctionIR(object):
 
 
 # A stub for undefined global reference
-UNDEFINED = object()
+class UndefinedType(object):
+    def __repr__(self):
+        return "Undefined"
+
+UNDEFINED = UndefinedType()

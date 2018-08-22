@@ -513,6 +513,9 @@ class Dispatcher(_DispatcherBase):
         }
     # A {uuid -> instance} mapping, for deserialization
     _memo = weakref.WeakValueDictionary()
+    # hold refs to last N functions deserialized, retaining them in _memo
+    # regardless of whether there is another reference
+    _recent = collections.deque(maxlen=config.FUNCTION_CACHE_SIZE)
     __uuid = None
     __numba__ = 'py_func'
 
@@ -623,6 +626,7 @@ class Dispatcher(_DispatcherBase):
         assert self.__uuid is None
         self.__uuid = u
         self._memo[u] = self
+        self._recent.append(self)
 
     def compile(self, sig):
         if not self._can_compile:

@@ -73,12 +73,17 @@ def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
             loopblocks[k] = blocks[k]
 
         used_vars = set()
-        for vs in compute_use_defs(loopblocks).usemap.values():
+        def_vars = set()
+        defs = compute_use_defs(loopblocks)
+        for vs in defs.usemap.values():
             used_vars |= vs
+        for vs in defs.defmap.values():
+            def_vars |= vs
+        used_or_defined = used_vars | def_vars
 
         # note: sorted for stable ordering
-        inputs = sorted(set(inputs) & used_vars)
-        outputs = sorted(set(outputs) & used_vars)
+        inputs = sorted(set(inputs) & used_or_defined)
+        outputs = sorted(set(outputs) & used_or_defined)
 
         lli = _loop_lift_info(loop=loop, inputs=inputs, outputs=outputs,
                               callfrom=callfrom, returnto=returnto)
@@ -286,7 +291,7 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
     blocks = func_ir.blocks.copy()
     withs = find_setupwiths(blocks)
     cfg = vlt.cfg
-    _legalize_withs_cfg(withs, cfg)
+    _legalize_withs_cfg(withs, cfg, blocks)
     # Remove the with blocks that are in the with-body
     sub_irs = []
     for (blk_start, blk_end) in withs:
@@ -315,10 +320,27 @@ def _get_with_contextmanager(func_ir, blocks, blk_start):
             var_ref = stmt.contextmanager
             dfn = func_ir.get_definition(var_ref)
             if not isinstance(dfn, ir.Global):
-                raise errors.CompilerError("Illegal use of context-manager. ")
-            return dfn.value
+                raise errors.CompilerError(
+                    "Illegal use of context-manager. ",
+                    loc=stmt.loc,
+                    )
+            ctxobj = dfn.value
+            if ctxobj is ir.UNDEFINED:
+                raise errors.CompilerError(
+                    "Undefined variable used as context manager",
+                    loc=blocks[blk_start].loc,
+                    )
+            if not hasattr(ctxobj, 'mutate_with_body'):
+                raise errors.CompilerError(
+                    "Unsupported context manager in use",
+                    loc=blocks[blk_start].loc,
+                    )
+            return ctxobj
     # No
-    raise errors.CompilerError("malformed with-context usage")
+    raise errors.CompilerError(
+        "malformed with-context usage",
+        loc=blocks[blk_start].loc,
+        )
 
 
 def _legalize_with_head(blk):
@@ -331,18 +353,21 @@ def _legalize_with_head(blk):
 
     if counters.pop(ir.EnterWith) != 1:
         raise errors.CompilerError(
-            "with's head-block must have exactly 1 ENTER_WITH"
+            "with's head-block must have exactly 1 ENTER_WITH",
+            loc=blk.loc,
             )
     if counters.pop(ir.Jump) != 1:
         raise errors.CompilerError(
-            "with's head-block must have exactly 1 JUMP"
+            "with's head-block must have exactly 1 JUMP",
+            loc=blk.loc,
             )
     # Can have any number of del
     counters.pop(ir.Del, None)
     # There MUST NOT be any other statements
     if counters:
         raise errors.CompilerError(
-            "illegal statements in with's head-block"
+            "illegal statements in with's head-block",
+            loc=blk.loc,
             )
 
 
@@ -363,7 +388,7 @@ def _cfg_nodes_in_region(cfg, region_begin, region_end):
     return region_nodes
 
 
-def _legalize_withs_cfg(withs, cfg):
+def _legalize_withs_cfg(withs, cfg, blocks):
     """Verify the CFG of the with-context(s).
     """
     doms = cfg.dominators()
@@ -371,12 +396,13 @@ def _legalize_withs_cfg(withs, cfg):
 
     # Verify that the with-context has no side-exits
     for s, e in withs:
+        loc = blocks[s]
         if s not in doms[e]:
             msg = "Entry of with-context not dominating the exit."
-            raise errors.CompilerError(msg)
+            raise errors.CompilerError(msg, loc=loc)
         if e not in postdoms[s]:
             msg = "Exit of with-context not post-dominating the entry."
-            raise errors.CompilerError(msg)
+            raise errors.CompilerError(msg, loc=loc)
 
 
 def find_setupwiths(blocks):

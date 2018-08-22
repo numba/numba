@@ -2031,10 +2031,12 @@ class TestLinalgCond(TestLinalgBase):
         # numba matches.
         with warnings.catch_warnings():
             a = np.array([[1.e308, 0], [0, 0.1]], dtype=np.float64)
-            warnings.simplefilter("error", RuntimeWarning)
-            self.assertRaisesRegexp(RuntimeWarning,
-                                    'overflow encountered in.*',
-                                    check, a)
+            if numpy_version < (1, 15):
+                # overflow warning is silenced in np >= 1.15
+                warnings.simplefilter("error", RuntimeWarning)
+                self.assertRaisesRegexp(RuntimeWarning,
+                                        'overflow encountered in.*',
+                                        check, a)
             warnings.simplefilter("ignore", RuntimeWarning)
             check(a)
 

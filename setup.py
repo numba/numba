@@ -207,7 +207,7 @@ packages = find_packages("numba", "numba")
 
 build_requires = ['numpy']
 
-install_requires = ['llvmlite>=0.24.0dev0', 'numpy']
+install_requires = ['llvmlite>=0.25.0dev0', 'numpy']
 if sys.version_info < (3, 4):
     install_requires.extend(['enum34', 'singledispatch'])
 if sys.version_info < (3, 3):
@@ -236,7 +236,6 @@ metadata = dict(
         "numba.annotations": ["*.html"],
         # Various test data
         "numba.cuda.tests.cudadrv.data": ["*.ptx"],
-        "numba.hsa.tests.hsadrv": ["*.brig"],
         "numba.tests": ["pycc_distutils_usecase/*.py"],
         # Some C files are needed by pycc
         "numba": ["*.c", "*.h"],

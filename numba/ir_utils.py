@@ -597,6 +597,7 @@ def has_no_side_effect(rhs, lives, call_table):
             call_list == [slice] or
             call_list == ['stencil', numba] or
             call_list == ['log', numpy] or
+            call_list == ['dtype', numpy] or
             call_list == [numba.array_analysis.wrap_index]):
             return True
         elif (isinstance(call_list[0], numba.extending._Intrinsic) and
@@ -647,6 +648,7 @@ def is_pure(rhs, lives, call_table):
     return True
 
 alias_analysis_extensions = {}
+alias_func_extensions = {}
 
 def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                                                             arg_aliases=None):
@@ -692,6 +694,9 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                     if fdef is None:
                         continue
                     fname, fmod = fdef
+                    if fdef in alias_func_extensions:
+                        alias_func = alias_func_extensions[fdef]
+                        alias_func(lhs, expr.args, alias_map, arg_aliases)
                     if fmod == 'numpy' and fname in np_alias_funcs:
                         _add_alias(lhs, expr.args[0].name, alias_map, arg_aliases)
                     if isinstance(fmod, ir.Var) and fname in np_alias_funcs:
@@ -1193,11 +1198,15 @@ def canonicalize_array_math(func_ir, typemap, calltypes, typingctx):
                 if rhs.op == 'call' and rhs.func.name in saved_arr_arg:
                     # add array as first arg
                     arr = saved_arr_arg[rhs.func.name]
-                    rhs.args = [arr] + rhs.args
                     # update call type signature to include array arg
                     old_sig = calltypes.pop(rhs)
+                    # argsort requires kws for typing so sig.args can't be used
+                    # reusing sig.args since some types become Const in sig
+                    argtyps = old_sig.args[:len(rhs.args)]
+                    kwtyps = {name: typemap[v.name] for name, v in rhs.kws}
                     calltypes[rhs] = typemap[rhs.func.name].get_call_type(
-                        typingctx, [typemap[arr.name]] + list(old_sig.args), {})
+                        typingctx, [typemap[arr.name]] + list(argtyps), kwtyps)
+                    rhs.args = [arr] + rhs.args
 
             new_body.append(stmt)
         block.body = new_body
@@ -1560,6 +1569,13 @@ def get_ir_of_code(glbls, fcode):
             self.calltypes = None
     rewrites.rewrite_registry.apply('before-inference',
                                     DummyPipeline(ir), ir)
+    # call inline pass to handle cases like stencils and comprehensions
+    inline_pass = numba.inline_closurecall.InlineClosureCallPass(
+        ir, numba.targets.cpu.ParallelOptions(False))
+    inline_pass.run()
+    from numba import postproc
+    post_proc = postproc.PostProcessor(ir)
+    post_proc.run()
     return ir
 
 def replace_arg_nodes(block, args):

@@ -143,6 +143,8 @@ class TestParforsBase(TestCase):
         np.testing.assert_almost_equal(njit_output, py_expected, **kwargs)
         np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
 
+        self.assertEqual(type(njit_output), type(parfor_output))
+
         self.check_scheduling(cpfunc, scheduler_type)
 
         # if requested check fastmath variant
@@ -1108,6 +1110,17 @@ class TestParfors(TestParforsBase):
         self.assertTrue(build_tuple_found)
 
     @skip_unsupported
+    def test_parfor_dtype_type(self):
+        # test array type replacement creates proper type
+        def test_impl(a):
+            for i in numba.prange(len(a)):
+                a[i] = a.dtype.type(0)
+            return a[4]
+
+        a = np.ones(10)
+        self.check(test_impl, a)
+
+    @skip_unsupported
     def test_parfor_array_access5(self):
         # one dim is slice in multi-dim access
         def test_impl(n):
@@ -1122,6 +1135,7 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countNonParforArrayAccesses(test_impl, (types.intp,)), 0)
 
     @skip_unsupported
+    @test_disabled # Test itself is problematic, see #3155
     def test_parfor_hoist_setitem(self):
         # Make sure that read of out is not hoisted.
         def test_impl(out):
@@ -1173,6 +1187,16 @@ class TestParfors(TestParforsBase):
         # the unsafe allocation should be found even though it is imported
         # as a different name
         self.assertEqual(countArrayAllocs(test_impl, (types.intp,)), 1)
+
+    @skip_unsupported
+    def test_preparfor_canonicalize_kws(self):
+        # test canonicalize_array_math typing for calls with kw args
+        def test_impl(A):
+            return A.argsort() + 1
+
+        n = 211
+        A = np.arange(n)
+        self.check(test_impl, A)
 
 
 class TestPrangeBase(TestParforsBase):
@@ -1322,7 +1346,9 @@ class TestPrangeBase(TestParforsBase):
         cfunc = self.compile_njit(pyfunc, sig)
 
         # compile the prange injected function
-        cpfunc = self.compile_parallel(pfunc, sig)
+        with warnings.catch_warnings(record=True) as raised_warnings:
+            warnings.simplefilter('always')
+            cpfunc = self.compile_parallel(pfunc, sig)
 
         # if check_fastmath is True then check fast instructions
         if check_fastmath:
@@ -1335,6 +1361,7 @@ class TestPrangeBase(TestParforsBase):
             kwargs = dict({'fastmath_pcres': fastcpfunc}, **kwargs)
 
         self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
+        return raised_warnings
 
 
 class TestPrange(TestPrangeBase):
@@ -1806,6 +1833,19 @@ class TestPrange(TestPrangeBase):
                   c[k] = i + j + k
             return b.sum()
         self.prange_tester(test_impl, 4)
+
+    @skip_unsupported
+    def test_parfor_race_1(self):
+        def test_impl(x, y):
+            for j in range(y):
+                k = x
+            return k
+        raised_warnings = self.prange_tester(test_impl, 10, 20)
+        warning_obj = raised_warnings[0]
+        expected_msg = ("Variable k used in parallel loop may be written to "
+                        "simultaneously by multiple workers and may result "
+                        "in non-deterministic or unintended results.")
+        self.assertIn(expected_msg, str(warning_obj.message))
 
 
 @x86_only

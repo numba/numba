@@ -254,18 +254,18 @@ class BaseContext(object):
     def resolve_static_setitem(self, target, index, value):
         assert not isinstance(index, types.Type), index
         args = target, index, value
-        kws = ()
+        kws = {}
         return self.resolve_function_type("static_setitem", args, kws)
 
     def resolve_setitem(self, target, index, value):
         assert isinstance(index, types.Type), index
         args = target, index, value
-        kws = ()
+        kws = {}
         return self.resolve_function_type("setitem", args, kws)
 
     def resolve_delitem(self, target, index):
         args = target, index
-        kws = ()
+        kws = {}
         return self.resolve_function_type("delitem", args, kws)
 
     def resolve_module_constants(self, typ, attr):

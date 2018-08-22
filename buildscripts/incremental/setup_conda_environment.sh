@@ -28,18 +28,20 @@ conda remove --all -q -y -n $CONDA_ENV
 
 conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip
 
+# Activate first
+set +v
+source activate $CONDA_ENV
+set -v
+
+# Install optional packages into activated env
 if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # Scipy, CFFI, jinja2, IPython and pygments are optional dependencies, but exercised in the test suite
     $CONDA_INSTALL ${EXTRA_CHANNELS} cffi scipy jinja2 ipython pygments
 fi
 
-set +v
-source activate $CONDA_ENV
-set -v
-
 # Install the compiler toolchain
 if [[ $(uname) == Linux ]]; then
-    if [[ "$CONDA_SUBDIR" == "linux-32" ]]; then
+    if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
         $CONDA_INSTALL gcc_linux-32 gxx_linux-32
     else
         $CONDA_INSTALL gcc_linux-64 gxx_linux-64

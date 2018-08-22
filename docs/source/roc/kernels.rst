@@ -12,9 +12,8 @@ in parallel by a group of hardware threads.  In some way, this is similar to
 the fine-grain scheduling is hidden from the programmer instead of programming
 with SIMD vectors as a data structure.  In HSA, the code you write will be
 executed by multiple threads at once (often hundreds or thousands).  Your
-solution will
-be modeled by defining a thread hierarchy of *grid*, *workgroup* and
-*workitem*.
+solution will be modelled by defining a thread hierarchy of *grid*, *workgroup*
+and *workitem*.
 
 Numba's HSA support exposes facilities to declare and manage this
 hierarchy of threads.
@@ -23,16 +22,17 @@ hierarchy of threads.
 Introduction for CUDA Programmers
 ==================================
 
-HSA execution model is similar to CUDA.  The main difference will be the
-shared memory model employed by HSA so that there are no device memory.  The
-GPU hardware uses the machine's main memory (or host memory in
-CUDA term) directly.  Therefore, you will not need ``to_device()`` and
-``copy_to_host()`` in HSA programming.
+HSA execution model is similar to CUDA. The memory model employed by HSA on ROC
+GPUs is also similar to that of CUDA. ROC GPUs have dedicated on GPU memory, 
+therefore the ``to_device()`` and ``copy_to_host()`` etc. are required as per
+CUDA.
 
 Here's a quick mapping of the CUDA terms to HSA:
-* workitem is CUDA threads
-* workgroup is CUDA thread block
-* grid is CUDA grid
+
+* A ``workitem`` is equivalent to a CUDA thread.
+* A ``workgroup`` is equivalent to a CUDA thread block.
+* A ``grid`` is equivalent to a CUDA grid.
+* A ``wavefront`` is equivalent to a CUDA ``warp``.
 
 
 Kernel declaration
@@ -53,7 +53,7 @@ code.  It gives it two fundamental characteristics:
 At first sight, writing a HSA kernel with Numba looks very much like
 writing a :term:`JIT function` for the CPU::
 
-    @hsa.jit
+    @roc.jit
     def increment_by_one(an_array):
         """
         Increment all array elements by one.
@@ -93,7 +93,7 @@ number of workitem needed by a kernel.  The workgroup size (i.e. number of
 workitem per workgroup) is often crucial:
 
 * On the software side, the workgroup size determines how many threads
-  share a given area of :ref:`shared memory <hsa-shared-memory>`.
+  share a given area of :ref:`shared memory <roc-shared-memory>`.
 * On the hardware side, the workgroup size must be large enough for full
    occupation of execution units.
 
@@ -120,17 +120,17 @@ is the same).
 One way is for the thread to determines its position in the grid and
 workgroup and manually compute the corresponding array position::
 
-    @hsa.jit
+    @roc.jit
     def increment_by_one(an_array):
         # workitem id in a 1D workgroup
-        tx = hsa.get_local_id(0)
+        tx = roc.get_local_id(0)
         # workgroup id in a 1D grid
-        ty = hsa.get_group_id(0)
+        ty = roc.get_group_id(0)
         # workgroup size, i.e. number of workitem per workgroup
-        bw = hsa.get_local_size(0)
+        bw = roc.get_local_size(0)
         # Compute flattened index inside the array
         pos = tx + ty * bw
-        # The above is equivalent to pos = hsa.get_global_id(0)
+        # The above is equivalent to pos = roc.get_global_id(0)
         if pos < an_array.size:  # Check array boundaries
             an_array[pos] += 1
 
@@ -142,15 +142,15 @@ workgroup and manually compute the corresponding array position::
 the sole purpose of knowing the geometry of the thread hierarchy and the
 position of the current workitem within that geometry.
 
-.. function:: numba.hsa.get_local_id(dim)
+.. function:: numba.roc.get_local_id(dim)
 
    Takes the index of the dimension being queried
 
    Returns local workitem ID in the the current workgroup for the given
    dimension. For 1D workgroup, the index is an integer spanning the range
-   from 0 inclusive to :func:`numba.hsa.get_local_size` exclusive.
+   from 0 inclusive to :func:`numba.roc.get_local_size` exclusive.
 
-.. function:: numba.hsa.get_local_size(dim)
+.. function:: numba.roc.get_local_size(dim)
 
    Takes the index of the dimension being queried
 
@@ -159,17 +159,17 @@ position of the current workitem within that geometry.
    This value is the same for all workitems in a given kernel,
    even if they belong to different workgroups (i.e. each workgroups is "full").
 
-.. function:: numba.hsa.get_group_id(dim)
+.. function:: numba.roc.get_group_id(dim)
 
    Takes the index of the dimension being queried
 
    Returns the workgroup ID in the grid of workgroup launched a kernel.
 
-.. function:: numba.hsa.get_global_id(dim)
+.. function:: numba.roc.get_global_id(dim)
 
    Takes the index of the dimension being queried
 
-   Returns the global workitem ID for the given dimension.  Unlike `numba.hsa
+   Returns the global workitem ID for the given dimension.  Unlike `numba.roc
    .get_local_id()`, this number is unique for all workitems in a grid.
 
 
