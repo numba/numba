@@ -2,10 +2,9 @@
 Talks and Tutorials
 ===================
 
-Note: This is a selection of talks and tutorials have been given by members of
-the Numba team as well as Numba users.  If you know of a Numba-related talk
-that we should include, please `open an issue
-<https://github.com/numba/numba/issues>`_.
+.. note:: This is a selection of talks and tutorials that have been given by members of
+    the Numba team as well as Numba users.  If you know of a Numba-related talk
+    that should be included on this list, please `open an issue <https://github.com/numba/numba/issues>`_.
 
 Talks on Numba
 --------------
