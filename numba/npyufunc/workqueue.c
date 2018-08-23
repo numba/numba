@@ -13,15 +13,16 @@ race condition.
 /* Windows */
 #include <windows.h>
 #include <process.h>
+#include <malloc.h>
 #define NUMBA_WINTHREAD
 #else
 /* PThread */
 #include <pthread.h>
 #include <unistd.h>
+#include <alloca.h>
 #define NUMBA_PTHREAD
 #endif
 
-#include <alloca.h>
 #include <string.h>
 #include <stddef.h>
 #include <stdio.h>

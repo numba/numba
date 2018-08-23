@@ -9,6 +9,10 @@ Threading layer on top of OpenMP.
 #include "../_pymodule.h"
 #include "gufunc_scheduler.h"
 
+#ifdef _MSC_VER
+#include <malloc.h>
+#endif
+
 static void
 add_task(void *fn, void *args, void *dims, void *steps, void *data) {
     puts("Running add_task() with omppool sequentially");
@@ -35,18 +39,20 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     //     data = <ir.Argument '.4' of type i8*>
 
     const size_t arg_len = (inner_ndim + 1);
+    // index variable in OpenMP 'for' statement must have signed integral type for MSVC
+    const ptrdiff_t size = (ptrdiff_t)dimensions[0];
 
     if(_DEBUG)
     {
-        printf("inner_ndim: %ld\n",inner_ndim);
-        printf("arg_len: %ld\n", arg_len);
-        printf("total: %ld\n", dimensions[0]);
+        printf("inner_ndim: %lu\n",inner_ndim);
+        printf("arg_len: %lu\n", arg_len);
+        printf("total: %ld\n", size);
         printf("dimensions: ");
         for(size_t j = 0; j < arg_len; j++)
-            printf("%ld, ", ((size_t *)dimensions)[j]);
+            printf("%lu, ", ((size_t *)dimensions)[j]);
         printf("\nsteps: ");
         for(size_t j = 0; j < array_count; j++)
-            printf("%ld, ", steps[j]);
+            printf("%lu, ", steps[j]);
         printf("\n*args: ");
         for(size_t j = 0; j < array_count; j++)
             printf("%p, ", (void *)args[j]);
@@ -54,7 +60,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     }
 
     #pragma omp parallel for
-    for(size_t r = 0; r < dimensions[0]; r++) {
+    for(ptrdiff_t r = 0; r < size; r++) {
         size_t * count_space = (size_t *)alloca(sizeof(size_t) * arg_len);
         char ** array_arg_space = (char**)alloca(sizeof(char*) * array_count);
         memcpy(count_space, dimensions, arg_len * sizeof(size_t));
@@ -77,9 +83,9 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 
             if(0&&_DEBUG)
             {
-                printf("Index %ld\n", j);
+                printf("Index %lu\n", j);
                 printf("-->Got base %p\n", (void *)base);
-                printf("-->Got step %ld\n", step);
+                printf("-->Got step %lu\n", step);
                 printf("-->Got offset %ld\n", offset);
                 printf("-->Got addr %p\n", (void *)array_arg_space[j]);
             }
