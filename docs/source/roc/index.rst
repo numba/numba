@@ -1,6 +1,8 @@
 
-Numba for HSA APUs
-==================
+.. _roc-index:
+
+Numba for AMD ROC GPUs
+======================
 
 .. toctree::
 
@@ -10,4 +12,5 @@ Numba for HSA APUs
    device-functions.rst
    intrinsics.rst
    device-management.rst
+   ufunc.rst
    examples.rst

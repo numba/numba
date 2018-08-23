@@ -418,3 +418,13 @@ class ClassDataType(Type):
         self.class_type = classtyp
         name = "data.{0}".format(self.class_type.name)
         super(ClassDataType, self).__init__(name)
+
+
+class ContextManager(Phantom):
+    """
+    An overly-simple ContextManager type that cannot be materialized.
+    """
+    def __init__(self, cm):
+        self.cm = cm
+        super(ContextManager, self).__init__("ContextManager({})".format(cm))
+

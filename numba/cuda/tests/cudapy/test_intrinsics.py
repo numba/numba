@@ -64,6 +64,10 @@ def simple_popc(ary, c):
     ary[0] = cuda.popc(c)
 
 
+def simple_fma(ary, a, b, c):
+    ary[0] = cuda.fma(a, b, c)
+
+
 def simple_brev(ary, c):
     ary[0] = cuda.brev(c)
 
@@ -263,6 +267,18 @@ class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
         ary = np.zeros(1, dtype=np.int32)
         compiled(ary, 0xF00000000000)
         self.assertEquals(ary[0], 4)
+
+    def test_fma_f4(self):
+        compiled = cuda.jit("void(f4[:], f4, f4, f4)")(simple_fma)
+        ary = np.zeros(1, dtype=np.float32)
+        compiled(ary, 2., 3., 4.)
+        np.testing.assert_allclose(ary[0], 2 * 3 + 4)
+
+    def test_fma_f8(self):
+        compiled = cuda.jit("void(f8[:], f8, f8, f8)")(simple_fma)
+        ary = np.zeros(1, dtype=np.float64)
+        compiled(ary, 2., 3., 4.)
+        np.testing.assert_allclose(ary[0], 2 * 3 + 4)
 
     def test_brev_u4(self):
         compiled = cuda.jit("void(uint32[:], uint32)")(simple_brev)

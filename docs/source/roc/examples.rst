@@ -3,7 +3,7 @@
 Examples
 ========
 
-.. _hsa-matmul:
+.. _roc-matmul:
 
 Matrix multiplication
 =====================
@@ -11,10 +11,10 @@ Matrix multiplication
 Here is a naive implementation of matrix multiplication using a HSA kernel::
 
 
-    @hsa.jit
+    @roc.jit
     def matmul(A, B, C):
-        i = hsa.get_global_id(0)
-        j = hsa.get_global_id(1)
+        i = roc.get_global_id(0)
+        j = roc.get_global_id(1)
 
         if i >= C.shape[0] or j >= C.shape[1]:
             return
@@ -26,37 +26,36 @@ Here is a naive implementation of matrix multiplication using a HSA kernel::
 
         C[i, j] = tmp
 
-
-
 This implementation is straightforward and intuitive but performs poorly,
 because the same matrix elements will be loaded multiple times from device
 memory, which is slow (some devices may have transparent data caches, but
 they may not be large enough to hold the entire inputs at once).
 
 It will be faster if we use a blocked algorithm to reduce accesses to the
-device memory.  HSA provides a fast :ref:`shared memory <hsa-shared-memory>`
-for workitems in a group to cooperately compute on a task.  The following
+device memory.  HSA provides a fast :ref:`shared memory <roc-shared-memory>`
+for workitems in a group to cooperatively compute on a task.  The following
 implements a faster version of the square matrix multiplication using shared
 memory::
 
 
     import numpy as np
-    from numba import hsa
+    from numba import roc
+    from numba import float32
+    from time import time as timer
 
+    blocksize = 16
+    gridsize = 16
 
-    blocksize = 20
-    gridsize = 20
-
-    @hsa.jit
+    @roc.jit('(float32[:,:], float32[:,:], float32[:,:])')
     def matmulfast(A, B, C):
-        x = hsa.get_global_id(0)
-        y = hsa.get_global_id(1)
+        x = roc.get_global_id(0)
+        y = roc.get_global_id(1)
 
-        tx = hsa.get_local_id(0)
-        ty = hsa.get_local_id(1)
+        tx = roc.get_local_id(0)
+        ty = roc.get_local_id(1)
 
-        sA = hsa.shared.array(shape=(blocksize, blocksize), dtype=float32)
-        sB = hsa.shared.array(shape=(blocksize, blocksize), dtype=float32)
+        sA = roc.shared.array(shape=(blocksize, blocksize), dtype=float32)
+        sB = roc.shared.array(shape=(blocksize, blocksize), dtype=float32)
 
         if x >= C.shape[0] or y >= C.shape[1]:
             return
@@ -68,12 +67,12 @@ memory::
             sA[tx, ty] = A[x, ty + i * blocksize]
             sB[tx, ty] = B[tx + i * blocksize, y]
             # wait for preload to end
-            hsa.barrier(1)
+            roc.barrier(1)
             # compute loop
             for j in range(blocksize):
                 tmp += sA[tx, j] * sB[j, ty]
             # wait for compute to end
-            hsa.barrier(1)
+            roc.barrier(1)
 
         C[x, y] = tmp
 
@@ -85,13 +84,13 @@ memory::
     griddim = gridsize, gridsize
     blockdim = blocksize, blocksize
 
-    with hsa.register(A, B, C):
+    with roc.register(A, B, C):
         ts = timer()
         matmulfast[griddim, blockdim](A, B, C)
         te = timer()
         print("1st GPU time:", te - ts)
 
-    with hsa.register(A, B, C):
+    with roc.register(A, B, C):
         ts = timer()
         matmulfast[griddim, blockdim](A, B, C)
         te = timer()
@@ -104,10 +103,10 @@ memory::
     np.testing.assert_allclose(ans, C, rtol=1e-5)
 
 
-Because the shared memory is a limited resources, the code preloads small
+Because the shared memory is a limited resource, the code preloads a small
 block at a time from the input arrays.  Then, it calls
-:func:`~numba.hsa.barrier` to wait until all threads have finished
-preloading and before doing the computation on the shared memory.
+:func:`~numba.roc.barrier` to wait until all threads have finished
+preloading before doing the computation on the shared memory.
 It synchronizes again after the computation to ensure all threads
 have finished with the data in shared memory before overwriting it
 in the next loop iteration.

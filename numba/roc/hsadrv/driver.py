@@ -1378,6 +1378,15 @@ class Stream(object):
             del self._callbacks[sig]
             ct += 1
 
+    @contextmanager
+    def auto_synchronize(self):
+        '''
+        A context manager that waits for all commands in this stream to execute
+        and commits any pending memory transfers upon exiting the context.
+        '''
+        yield self
+        self.synchronize()
+
 
 def _make_mem_finalizer(dtor):
     """

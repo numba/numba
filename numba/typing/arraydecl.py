@@ -695,14 +695,3 @@ for fName in ["var", "std"]:
 # Functions that return an index (intp)
 install_array_method("argmin", generic_index)
 install_array_method("argmax", generic_index)
-
-
-@infer
-class CmpOpEqArray(AbstractTemplate):
-    key = '=='
-
-    def generic(self, args, kws):
-        assert not kws
-        [va, vb] = args
-        if isinstance(va, types.Array) and va == vb:
-            return signature(va.copy(dtype=types.boolean), va, vb)
