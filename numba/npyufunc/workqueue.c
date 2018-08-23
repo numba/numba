@@ -247,7 +247,6 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     //     steps = <ir.Argument '.3' of type i64*>
     //     data = <ir.Argument '.4' of type i8*>
 
-    debug_marker();
     size_t * count_space = NULL;
     char ** array_arg_space = NULL;
     const size_t arg_len = (inner_ndim + 1);
@@ -258,6 +257,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 
     size_t step;
 
+    debug_marker();
 
     total = *((size_t *)dimensions);
     count = total / NUM_THREADS;

@@ -16,7 +16,8 @@ Threading layer on top of OpenMP.
 static void
 add_task(void *fn, void *args, void *dims, void *steps, void *data) {
     puts("Running add_task() with omppool sequentially");
-    auto func = reinterpret_cast<void (*)(void *args, void *dims, void *steps, void *data)>(fn);
+    typedef void (*func_ptr_t)(void *args, void *dims, void *steps, void *data);
+    func_ptr_t func = reinterpret_cast<func_ptr_t>(fn);
     func(args, dims, steps, data);
 }
 
@@ -26,7 +27,8 @@ static void
 parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *data,
                 size_t inner_ndim, size_t array_count, size_t)
 {
-    auto func = reinterpret_cast<void (*)(char **args, size_t *dims, size_t *steps, void *data)>(fn);
+    typedef void (*func_ptr_t)(char **args, size_t *dims, size_t *steps, void *data);
+    func_ptr_t func = reinterpret_cast<func_ptr_t>(fn);
     static bool printed = false;
     if(!printed) {
         puts("Using parallel_for");
