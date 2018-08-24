@@ -143,6 +143,12 @@ class Interpreter(object):
         # Get DFA block info
         self.dfainfo = self.dfa.infos[self.current_block_offset]
         self.assigner = Assigner()
+        # Check out-of-scope syntactic-block
+        while self.syntax_blocks:
+            if inst.offset >= self.syntax_blocks[-1].exit:
+                self.syntax_blocks.pop()
+            else:
+                break
 
     def _end_current_block(self):
         self._remove_unused_temporaries()
