@@ -29,6 +29,10 @@ try:
 except ImportError:
     _HAVE_OMP_POOL = False
 
+
+# Switch this to True to run fork() based tests, unsupported at present
+_DO_FORK_TESTS = False 
+
 skip_no_omp = unittest.skipUnless(_HAVE_OMP_POOL, "OpenMP threadpool required")
 skip_no_tbb = unittest.skipUnless(_HAVE_TBB_POOL, "TBB threadpool required")
 
@@ -157,11 +161,11 @@ class TestParallelBackendBase(TestCase):
                  guvectorize_runner(nopython=True),
                  guvectorize_runner(nopython=True, target='parallel'),
                  ]
-    if utils.PYVERSION < (3, 0):
-        parallelism = ['threading', 'multiprocessing_default', 'random']
-    else:
-        parallelism = ['threading', 'multiprocessing_fork',
-                       'multiprocessing_spawn', 'random']
+    parallelism = ['threading', 'random']
+    if utils.PYVERSION > (3, 0):
+        if _DO_FORK_TESTS and (not sys.platform.startswith('win')):
+            parallelism.append('multiprocessing_fork')
+
 
     runners = {'concurrent_jit': [jit_runner(nopython=True, parallel=True)],
                'concurrect_vectorize': [vectorize_runner(nopython=True, target='parallel')],
@@ -183,9 +187,13 @@ class TestParallelBackendBase(TestCase):
                 default_proc_impl(fnlist)
             elif parallelism == 'random':
                 if utils.PYVERSION < (3, 0):
-                    ps = [thread_impl, default_proc_impl]
+                    ps = [thread_impl]
+                    if _DO_FORK_TESTS: # Py2.7 linux can only fork() so disable for all
+                        ps.append(default_proc_impl)
                 else:
-                    ps = [thread_impl, fork_proc_impl, spawn_proc_impl]
+                    ps = [thread_impl, spawn_proc_impl]
+                    if _DO_FORK_TESTS:
+                        ps.append(fork_proc_impl)
 
                 for _ in range(10):  # 10 is arbitrary
                     impl = random.choice(ps)
