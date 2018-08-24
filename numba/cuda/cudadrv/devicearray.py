@@ -305,6 +305,21 @@ class DeviceNDArrayBase(object):
         desc = dict(shape=self.shape, strides=self.strides, dtype=self.dtype)
         return IpcArrayHandle(ipc_handle=ipch, array_desc=desc)
 
+    def view(self, dtype):
+        """Returns a new object by reinterpretting the dtype without making a
+        copy of the data.
+        """
+        dtype = np.dtype(dtype)
+        if dtype.itemsize != self.dtype.itemsize:
+            raise TypeError("new dtype itemsize doesn't match")
+        return DeviceNDArray(
+            shape=self.shape,
+            strides=self.strides,
+            dtype=dtype,
+            stream=self.stream,
+            gpu_data=self.gpu_data,
+            )
+
 
 class DeviceRecord(DeviceNDArrayBase):
     '''
