@@ -6,6 +6,9 @@ export NUMBA_DEVELOPER_MODE=1
 export NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING=1
 export PYTHONFAULTHANDLER=1
 
+# to print out TBB info
+export TBB_VERSION=1
+
 unamestr=`uname`
 if [[ "$unamestr" == 'Linux' ]]; then
   SEGVCATCH=catchsegv
