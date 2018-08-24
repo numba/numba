@@ -17,8 +17,9 @@ requirements:
   # build and run dependencies are duplicated to avoid setuptools issues
   # when we also set install_requires in setup.py
   build:
-    - {{ compiler('c') }} # [not (armv6l or armv7l or aarch64)]
-    - {{ compiler('cxx') }} # [not (armv6l or armv7l or aarch64)]
+    - {{ compiler('c') }}      # [not (armv6l or armv7l or aarch64)]
+    - {{ compiler('cxx') }}    # [not (armv6l or armv7l or aarch64)]
+    - llvm-openmp              # [osx]
   host:
     - python
     - numpy x.x
@@ -27,7 +28,6 @@ requirements:
     - llvmlite 0.25.*
     - funcsigs                 # [py27]
     - singledispatch           # [py27]
-    - llvm-openmp              # [osx]
     - tbb-devel                # [not (ppc64le or armv6l or armv7l or aarch64)]
   run:
     - python
