@@ -679,7 +679,7 @@ class TestGetItem(TestCase):
             cfunc = compile_func(a)
             for i, j in itertools.product(bounds, bounds):
                 x = cfunc(a, i, j)
-                self.assertPreciseEqual(pyfunc(a, i, j), cfunc(a, i, j))
+                np.testing.assert_equal(pyfunc(a, i, j), cfunc(a, i, j))
 
         run(np.arange(16, dtype='i4').reshape(4, 4))
         run(np.arange(27, dtype='i4').reshape(3, 3, 3))
