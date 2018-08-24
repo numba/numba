@@ -387,7 +387,7 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         # loop count = 1, loop lift but loop body not execute
         self.assertEqual(test.py_func(-1), test(-1))
         self.assert_has_lifted(test, loopcount=1)
-        # loop count = 1, loop won't lift and will execute
+        # loop count = 1, loop will lift and will execute
         self.assertEqual(test.py_func(1), test(1))
         self.assert_has_lifted(test, loopcount=1)
 
