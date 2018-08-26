@@ -268,7 +268,7 @@ Integer Intrinsics
 A subset of the CUDA Math API's integer intrinsics are available. For further
 documentation, including semantics, please refer to the `CUDA Toolkit
 documentation
-<docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__INTRINSIC__INT.html>`_.
+<https://docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__INTRINSIC__INT.html>`_.
 
 
 .. function:: numba.cuda.popc
@@ -314,7 +314,7 @@ intrinsics. Avoiding branches is a key way to improve CUDA performance, and
 using these intrinsics mean you don't have to rely on the ``nvcc`` optimizer
 identifying and removing branches. For further documentation, including
 semantics, please refer to the `relevant CUDA Toolkit documentation
-<docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions>`_.
+<https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions>`_.
 
 
 .. function:: numba.cuda.selp
