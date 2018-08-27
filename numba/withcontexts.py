@@ -1,5 +1,6 @@
 from numba import ir, ir_utils, types, errors, sigutils
 from numba.typing.typeof import typeof_impl
+from .transforms import find_region_inout_vars
 
 
 class WithContext(object):
@@ -81,8 +82,14 @@ class _CallContextType(WithContext):
                          body_blocks, dispatcher_factory, extra):
         assert extra is None
         vlt = func_ir.variable_lifetime
-        inputs = vlt.livemap[blk_start]
-        outputs = vlt.livemap[blk_end]
+
+        inputs, outputs = find_region_inout_vars(
+            blocks=blocks,
+            livemap=vlt.livemap,
+            callfrom=blk_start,
+            returnto=blk_end,
+            body_block_ids=set(body_blocks),
+            )
 
         lifted_blks = {k: blocks[k] for k in body_blocks}
         _mutate_with_block_callee(lifted_blks, blk_start, blk_end,
@@ -138,44 +145,14 @@ class _ObjModeContextType(WithContext):
                          body_blocks, dispatcher_factory, extra):
         typeanns = self._legalize_args(extra, loc=blocks[blk_start].loc)
         vlt = func_ir.variable_lifetime
-        inputs = vlt.livemap[blk_start]
-        # Note on subtract inputs:
-        # Since variables are versioned to unique name at each definition,
-        # any output vars that are also in the inputs are not newly created.
-        # Thus, we can simply remove them from consideration for outputs.
-        outputs = vlt.livemap[blk_end] - inputs
 
-        for it in body_blocks:
-            blocks[it].dump()
-
-        print('typeanns', typeanns)
-        print(inputs, outputs, file=sys.stderr)
-        if True:
-            outputs = vlt.livemap[blk_end]
-
-            print(inputs, outputs, file=sys.stderr)
-            # ensure live variables are actually used in the blocks, else remove,
-            # saves having to create something valid to run through postproc
-            # to achieve similar
-            local_block_ids = set(body_blocks)
-            loopblocks = {}
-            for k in local_block_ids:
-                loopblocks[k] = blocks[k]
-
-            used_vars = set()
-            def_vars = set()
-            defs = compute_use_defs(loopblocks)
-            for vs in defs.usemap.values():
-                used_vars |= vs
-            for vs in defs.defmap.values():
-                def_vars |= vs
-            used_or_defined = used_vars | def_vars
-
-            # note: sorted for stable ordering
-            inputs = sorted(set(inputs) & used_or_defined)
-            outputs = sorted((set(outputs) & used_or_defined) & def_vars)
-            print(inputs, outputs, file=sys.stderr)
-        # raise ValueError((inputs, outputs))
+        inputs, outputs = find_region_inout_vars(
+            blocks=blocks,
+            livemap=vlt.livemap,
+            callfrom=blk_start,
+            returnto=blk_end,
+            body_block_ids=set(body_blocks),
+            )
 
         # Determine types in the output tuple
         outtup = types.Tuple([typeanns[v] for v in outputs])

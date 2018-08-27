@@ -47,6 +47,34 @@ def _extract_loop_lifting_candidates(cfg, blocks):
             if same_exit_point(loop) and one_entry(loop) and cannot_yield(loop)]
 
 
+def find_region_inout_vars(blocks, livemap, callfrom, returnto, body_block_ids):
+    """Find input and output variables to a block region.
+    """
+    inputs = livemap[callfrom]
+    outputs = livemap[returnto]
+
+    # ensure live variables are actually used in the blocks, else remove,
+    # saves having to create something valid to run through postproc
+    # to achieve similar
+    loopblocks = {}
+    for k in body_block_ids:
+        loopblocks[k] = blocks[k]
+
+    used_vars = set()
+    def_vars = set()
+    defs = compute_use_defs(loopblocks)
+    for vs in defs.usemap.values():
+        used_vars |= vs
+    for vs in defs.defmap.values():
+        def_vars |= vs
+    used_or_defined = used_vars | def_vars
+
+    # note: sorted for stable ordering
+    inputs = sorted(set(inputs) & used_or_defined)
+    outputs = sorted(set(outputs) & used_or_defined & def_vars)
+    return inputs, outputs
+
+
 _loop_lift_info = namedtuple('loop_lift_info',
                              'loop,inputs,outputs,callfrom,returnto')
 
@@ -61,29 +89,15 @@ def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
         [callfrom] = loop.entries   # requirement checked earlier
         an_exit = next(iter(loop.exits))  # anyone of the exit block
         [(returnto, _)] = cfg.successors(an_exit)  # requirement checked earlier
-        inputs = livemap[callfrom]
-        outputs = livemap[returnto]
 
-        # ensure live variables are actually used in the blocks, else remove,
-        # saves having to create something valid to run through postproc
-        # to achieve similar
         local_block_ids = set(loop.body) | set(loop.entries) | set(loop.exits)
-        loopblocks = {}
-        for k in local_block_ids:
-            loopblocks[k] = blocks[k]
-
-        used_vars = set()
-        def_vars = set()
-        defs = compute_use_defs(loopblocks)
-        for vs in defs.usemap.values():
-            used_vars |= vs
-        for vs in defs.defmap.values():
-            def_vars |= vs
-        used_or_defined = used_vars | def_vars
-
-        # note: sorted for stable ordering
-        inputs = sorted(set(inputs) & used_or_defined)
-        outputs = sorted(set(outputs) & used_or_defined)
+        inputs, outputs = find_region_inout_vars(
+            blocks=blocks,
+            livemap=livemap,
+            callfrom=callfrom,
+            returnto=returnto,
+            body_block_ids=local_block_ids,
+        )
 
         lli = _loop_lift_info(loop=loop, inputs=inputs, outputs=outputs,
                               callfrom=callfrom, returnto=returnto)
