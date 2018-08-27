@@ -697,8 +697,8 @@ class Context(object):
         self._attempt_allocation(allocator)
 
         _memory_finalizer = _make_mem_finalizer(driver.cuMemFree, bytesize)
-        mem = MemoryPointer(weakref.proxy(self), ptr, bytesize,
-                            _memory_finalizer(self, ptr))
+        mem = RCPointer(weakref.proxy(self), ptr, bytesize,
+                        _memory_finalizer(self, ptr))
         self.allocations[ptr.value] = mem
         return mem.own()
 
@@ -1143,6 +1143,15 @@ class IpcHandle(object):
 
 
 class MemoryPointer(object):
+    """A memory pointer that owns the buffer with an optional finalizer.
+
+    When an instance is deleted, the finalizer will be called regardless
+    of the `.refct`.
+
+    An instance is created with `.refct=1`.  The buffer lifetime
+    is tied to the MemoryPointer instance's lifetime.  The finalizer is invoked
+    only if the MemoryPointer instance's lifetime ends.
+    """
     __cuda_memory__ = True
 
     def __init__(self, context, pointer, size, finalizer=None, owner=None):
@@ -1151,7 +1160,7 @@ class MemoryPointer(object):
         self.size = size
         self._cuda_memsize_ = size
         self.is_managed = finalizer is not None
-        self.refct = 0
+        self.refct = 1
         self.handle = self.device_pointer
         self._owner = owner
 
@@ -1206,6 +1215,19 @@ class MemoryPointer(object):
     @property
     def device_ctypes_pointer(self):
         return self.device_pointer
+
+
+class RCPointer(MemoryPointer):
+    """Modifies the ownership semantic of the MemoryPointer so that the
+    instance lifetime is directly tied to the number of references.
+
+    When `.refct` reaches zero, the finalizer is invoked.
+    """
+    def __init__(self, *args, **kwargs):
+        super(RCPointer, self).__init__(*args, **kwargs)
+        # Releease the self reference to the buffer, so that the finalizer
+        # is invoked if all the derived pointers are gone.
+        self.refct -= 1
 
 
 class MappedMemory(MemoryPointer):
