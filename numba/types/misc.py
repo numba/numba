@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from .abstract import *
 from .common import *
 from ..typeconv import Conversion
+from ..errors import TypingError
 
 
 class PyObject(Dummy):
@@ -429,9 +430,16 @@ class ContextManager(Callable, Phantom):
         super(ContextManager, self).__init__("ContextManager({})".format(cm))
 
     def get_call_signatures(self):
-        return (), True
+        if not self.cm.is_callable:
+            msg = "contextmanager {} is not callable".format(self.cm)
+            raise TypingError(msg)
+
+        return (), False
 
     def get_call_type(self, context, args, kws):
+        if not self.cm.is_callable:
+            msg = "contextmanager {} is not callable".format(self.cm)
+            raise TypingError(msg)
         ## XXX
         from numba import typing
         posargs = list(args) + [v for k, v in sorted(kws.items())]

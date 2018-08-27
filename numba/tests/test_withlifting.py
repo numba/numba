@@ -311,7 +311,7 @@ class TestLiftObj(TestCase):
             print(y)
 
         def foo(x):
-            with objmode_context:
+            with objmode_context():
                 y = 2 + x           # defined but unused outside
                 a = np.arange(y)    # defined but unused outside
                 bar(a)

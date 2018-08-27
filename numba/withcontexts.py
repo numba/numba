@@ -1,15 +1,13 @@
-
-import sys
 from numba import ir, ir_utils, types, errors, sigutils
 from numba.typing.typeof import typeof_impl
-from numba.typing.templates import AbstractTemplate, infer, infer_global
-from numba.analysis import compute_use_defs
 
 
 class WithContext(object):
     """A dummy object for use as contextmanager.
     This can be used as a contextmanager.
     """
+    is_callable = False
+
     def __enter__(self):
         pass
 
@@ -113,6 +111,7 @@ call_context = _CallContextType()
 
 
 class _ObjModeContextType(WithContext):
+    is_callable = True
 
     def _legalize_args(self, extra, loc):
         if extra is None:
@@ -209,15 +208,6 @@ class _ObjModeContextType(WithContext):
 
 
 objmode_context = _ObjModeContextType()
-
-
-# @infer
-# class ObjmodeTemplate(AbstractTemplate):
-#     key = objmode_context
-#     def generic(self, arg, kws):
-#         raise ValueError("JOIFJIDSJFIOSDJO")
-
-# infer_global(objmode_context, types.Function(ObjmodeTemplate))
 
 
 def _bypass_with_context(blocks, blk_start, blk_end, forwardvars):
