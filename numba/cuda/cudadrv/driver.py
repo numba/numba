@@ -697,8 +697,8 @@ class Context(object):
         self._attempt_allocation(allocator)
 
         _memory_finalizer = _make_mem_finalizer(driver.cuMemFree, bytesize)
-        mem = RCPointer(weakref.proxy(self), ptr, bytesize,
-                        _memory_finalizer(self, ptr))
+        mem = AutoFreePointer(weakref.proxy(self), ptr, bytesize,
+                              _memory_finalizer(self, ptr))
         self.allocations[ptr.value] = mem
         return mem.own()
 
@@ -1217,14 +1217,14 @@ class MemoryPointer(object):
         return self.device_pointer
 
 
-class RCPointer(MemoryPointer):
+class AutoFreePointer(MemoryPointer):
     """Modifies the ownership semantic of the MemoryPointer so that the
     instance lifetime is directly tied to the number of references.
 
     When `.refct` reaches zero, the finalizer is invoked.
     """
     def __init__(self, *args, **kwargs):
-        super(RCPointer, self).__init__(*args, **kwargs)
+        super(AutoFreePointer, self).__init__(*args, **kwargs)
         # Releease the self reference to the buffer, so that the finalizer
         # is invoked if all the derived pointers are gone.
         self.refct -= 1
