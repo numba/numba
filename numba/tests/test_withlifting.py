@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import copy
 import numpy as np
 
 from numba import unittest_support as unittest
@@ -12,7 +13,7 @@ from numba.targets.registry import cpu_target
 from numba.targets import cpu
 from numba.compiler import compile_ir, DEFAULT_FLAGS
 from numba import njit, typeof
-from .support import TestCase, captured_stdout
+from .support import MemoryLeak, TestCase, captured_stdout
 
 
 def get_func_ir(func):
@@ -137,8 +138,8 @@ def lift_undefiend():
         pass
 
 
-
 bogus_contextmanager = object()
+
 
 def lift_invalid():
     with bogus_contextmanager:
@@ -258,22 +259,22 @@ class TestLiftCall(BaseTestWithLifting):
         self.assertIn("re-entrant", str(raises.exception))
 
 
-class TestLiftObj(TestCase):
+class TestLiftObj(MemoryLeak, TestCase):
 
     def assert_equal_return_and_stdout(self, pyfunc, *args):
+        py_args = copy.deepcopy(args)
+        c_args = copy.deepcopy(args)
         cfunc = njit(pyfunc)
 
         with captured_stdout() as stream:
-            expect_res = pyfunc(*args)
+            expect_res = pyfunc(*py_args)
             expect_out = stream.getvalue()
 
-         # avoid compiling during stdout-capturing for easier print-debugging
-        cfunc.compile(tuple(map(typeof, args)))
+        # avoid compiling during stdout-capturing for easier print-debugging
+        cfunc.compile(tuple(map(typeof, c_args)))
         with captured_stdout() as stream:
-            got_res = cfunc(*args)
+            got_res = cfunc(*c_args)
             got_out = stream.getvalue()
-        got_res = cfunc(*args)
-        got_out = stream.getvalue()
 
         self.assertEqual(expect_out, got_out)
         self.assertPreciseEqual(expect_res, got_res)
@@ -345,6 +346,19 @@ class TestLiftObj(TestCase):
             return x, y, z
 
         arg = np.arange(1, 10, dtype=np.float64)
+        self.assert_equal_return_and_stdout(foo, arg)
+
+    def test_lift_objmode_using_list(self):
+        def foo(x):
+            with objmode_context(y="float64[:]"):
+                print(x)
+                x[0] = 4
+                print(x)
+                y0 = [1, 2, 3] + x
+                y = np.asarray([1 / i for i in y0])
+            return x, y
+
+        arg = [1, 2, 3]
         self.assert_equal_return_and_stdout(foo, arg)
 
 
