@@ -290,8 +290,8 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
     """
     from numba import postproc
 
-    def dispatcher_factory(func_ir, objectmode=False):
-        from numba.dispatcher import LiftedWith
+    def dispatcher_factory(func_ir, objectmode=False, **kwargs):
+        from numba.dispatcher import LiftedWith, ObjModeLiftedWith
 
         myflags = flags.copy()
         if objectmode:
@@ -299,7 +299,10 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
             myflags.enable_looplift = False
             # Lifted with-block uses object mode
             myflags.enable_pyobject = True
-        return LiftedWith(func_ir, typingctx, targetctx, myflags, locals)
+            cls = ObjModeLiftedWith
+        else:
+            cls = LiftedWith
+        return cls(func_ir, typingctx, targetctx, myflags, locals, **kwargs)
 
     postproc.PostProcessor(func_ir).run()
     assert func_ir.variable_lifetime

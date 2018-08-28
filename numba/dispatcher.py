@@ -756,6 +756,7 @@ class LiftedLoop(LiftedCode):
 
 
 class LiftedWith(LiftedCode):
+
     @property
     def _numba_type_(self):
         return types.Dispatcher(self)
@@ -767,22 +768,6 @@ class LiftedWith(LiftedCode):
 
         A (template, pysig, args, kws) tuple is returned.
         """
-        if self.flags.enable_pyobject:
-            assert not kws
-            args = [types.ffi_forced_object] * len(args)
-
-            if self._can_compile:
-                self.compile(tuple(args))
-
-            signatures = [typing.signature(self._withlift_output_type, *args)]
-            pysig = None
-            func_name = self.py_func.__name__
-            name = "CallTemplate({0})".format(func_name)
-            call_template = typing.make_concrete_template(
-                name, key=func_name, signatures=signatures)
-
-            return call_template, pysig, args, kws
-
         # Ensure an overload is available
         if self._can_compile:
             self.compile(tuple(args))
@@ -795,6 +780,42 @@ class LiftedWith(LiftedCode):
         # so avoid keeping a reference to `cfunc`.
         call_template = typing.make_concrete_template(
             name, key=func_name, signatures=self.nopython_signatures)
+        return call_template, pysig, args, kws
+
+
+class ObjModeLiftedWith(LiftedWith):
+    def __init__(self, *args, **kwargs):
+        self.output_types = kwargs.pop('output_types', None)
+        super(LiftedWith, self).__init__(*args, **kwargs)
+        if not self.flags.enable_pyobject:
+            raise ValueError("expecting `flags.enable_pyobject`")
+        if self.output_types is None:
+            raise TypeError('`output_types` must be provided')
+
+    @property
+    def _numba_type_(self):
+        return types.ObjModeDispatcher(self)
+
+    def get_call_template(self, args, kws):
+        """
+        Get a typing.ConcreteTemplate for this dispatcher and the given
+        *args* and *kws* types.  This enables the resolving of the return type.
+
+        A (template, pysig, args, kws) tuple is returned.
+        """
+        assert not kws
+        args = [types.ffi_forced_object] * len(args)
+
+        if self._can_compile:
+            self.compile(tuple(args))
+
+        signatures = [typing.signature(self.output_types, *args)]
+        pysig = None
+        func_name = self.py_func.__name__
+        name = "CallTemplate({0})".format(func_name)
+        call_template = typing.make_concrete_template(
+            name, key=func_name, signatures=signatures)
+
         return call_template, pysig, args, kws
 
 

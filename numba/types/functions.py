@@ -285,6 +285,13 @@ class Dispatcher(WeakType, Callable, Dummy):
         return self.get_overload(sig)
 
 
+class ObjModeDispatcher(Dispatcher):
+    """Dispatcher subclass that enters objectmode function.
+    """
+    pass
+
+
+
 class ExternalFunctionPointer(BaseFunction):
     """
     A pointer to a native function (e.g. exported via ctypes or cffi).

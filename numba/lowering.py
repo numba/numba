@@ -652,8 +652,6 @@ class Lower(BaseLower):
         impl(self.builder, argvals)
 
     def lower_call(self, resty, expr):
-        from . import dispatcher
-
         signature = self.fndesc.calltypes[expr]
         self.debug_print("# lower_call: expr = {0}".format(expr))
         if isinstance(signature.return_type, types.Phantom):
@@ -664,49 +662,53 @@ class Lower(BaseLower):
             argvals = expr.func.args
         else:
             fnty = self.typeof(expr.func.name)
-            if (isinstance(fnty, types.Dispatcher) and
-                    isinstance(fnty.dispatcher, dispatcher.LiftedWith) and
-                    fnty.dispatcher.flags.enable_pyobject):
-                self.init_pyapi()
-                # Acquire the GIL
-                gil_state = self.pyapi.gil_ensure()
-                # Fix types
-                argnames = [a.name for a in expr.args]
-                argtypes = [self.typeof(a) for a in argnames]
-                argvalues = [self.loadvar(a) for a in argnames]
-                for v, ty in zip(argvalues, argtypes):
-                    # Because .from_native_value steal the reference
-                    self.incref(ty, v)
 
-                argobjs = [self.pyapi.from_native_value(atyp, aval,
-                                                        self.env_manager)
-                           for atyp, aval in zip(argtypes, argvalues)]
-                # Make Call
-                entry_pt = fnty.dispatcher.compile(tuple(argtypes))
-                callee = self.context.add_dynamic_addr(self.builder, id(entry_pt), info="with_objectmode")
-                ret_obj = self.pyapi.call_function_objargs(callee, argobjs)
+            if not isinstance(fnty, types.ObjModeDispatcher):
+                argvals = self.fold_call_args(fnty, signature,
+                                              expr.args, expr.vararg, expr.kws)
 
-                # Fix output value
-                native = self.pyapi.to_native_value(fnty.dispatcher._withlift_output_type, ret_obj)
-                output = native.value
+        if isinstance(fnty, types.ObjModeDispatcher):
+            self.init_pyapi()
+            # Acquire the GIL
+            gil_state = self.pyapi.gil_ensure()
+            # Fix types
+            argnames = [a.name for a in expr.args]
+            argtypes = [self.typeof(a) for a in argnames]
+            argvalues = [self.loadvar(a) for a in argnames]
+            for v, ty in zip(argvalues, argtypes):
+                # Because .from_native_value steal the reference
+                self.incref(ty, v)
 
-                # Release objs
-                self.pyapi.decref(ret_obj)
-                for obj in argobjs:
-                    self.pyapi.decref(obj)
+            argobjs = [self.pyapi.from_native_value(atyp, aval,
+                                                    self.env_manager)
+                       for atyp, aval in zip(argtypes, argvalues)]
+            # Make Call
+            entry_pt = fnty.dispatcher.compile(tuple(argtypes))
+            callee = self.context.add_dynamic_addr(self.builder,
+                                                   id(entry_pt),
+                                                   info="with_objectmode")
+            ret_obj = self.pyapi.call_function_objargs(callee, argobjs)
 
-                # cleanup output
-                if callable(native.cleanup):
-                    native.cleanup()
+            # Fix output value
+            native = self.pyapi.to_native_value(fnty.dispatcher.output_types,
+                                                ret_obj)
+            output = native.value
 
-                # Release the GIL
-                self.pyapi.gil_release(gil_state)
+            # Release objs
+            self.pyapi.decref(ret_obj)
+            for obj in argobjs:
+                self.pyapi.decref(obj)
 
-                return output
-            argvals = self.fold_call_args(fnty, signature,
-                                          expr.args, expr.vararg, expr.kws)
+            # cleanup output
+            if callable(native.cleanup):
+                native.cleanup()
 
-        if isinstance(fnty, types.ExternalFunction):
+            # Release the GIL
+            self.pyapi.gil_release(gil_state)
+
+            res = output
+
+        elif isinstance(fnty, types.ExternalFunction):
             # Handle a named external function
             self.debug_print("# external function")
             fndesc = funcdesc.ExternalFunctionDescriptor(

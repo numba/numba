@@ -168,8 +168,8 @@ class _ObjModeContextType(WithContext):
             force_non_generator=True,
             )
 
-        dispatcher = dispatcher_factory(lifted_ir, objectmode=True)
-        dispatcher._withlift_output_type = outtup
+        dispatcher = dispatcher_factory(lifted_ir, objectmode=True,
+                                        output_types=outtup)
 
         newblk = _mutate_with_block_caller(
             dispatcher, blocks, blk_start, blk_end, inputs, outputs,
