@@ -176,6 +176,7 @@ class TestParallelBackendBase(TestCase):
                  ]
     parallelism = ['threading', 'random']
     if utils.PYVERSION > (3, 0):
+        parallelism.append('multiprocessing_spawn')
         if _FORK_TESTS_MASK:
             parallelism.append('multiprocessing_fork')
 
@@ -273,7 +274,6 @@ class TestSpecificBackend(TestParallelBackendBase):
     def run_test_in_separate_process(self, test, threading_layer):
         env_copy = os.environ.copy()
         env_copy['NUMBA_THREADING_LAYER'] = str(threading_layer)
-        print("Running %s with backend: %s" % (test, threading_layer))
         cmdline = [sys.executable, "-m", "numba.runtests", test]
         return self.run_cmd(cmdline, env_copy)
 
@@ -294,6 +294,9 @@ class TestSpecificBackend(TestParallelBackendBase):
         for backend, backend_guard in cls.backends.items():
             for p in cls.parallelism:
                 for name in cls.runners.keys():
+                    if (p == 'multiprocessing_fork' and backend == 'omp' and
+                    sys.platform.startswith('linux')):
+                        continue # GNU OpenMP is not fork safe
                     cls._inject(p, name, backend, backend_guard)
 
 
