@@ -185,7 +185,7 @@ class TestParallelBackendBase(TestCase):
                'concurrent_guvectorize': [guvectorize_runner(nopython=True, target='parallel')],
                'concurrent_mix_use': all_impls}
 
-    safe_backends = {'omppool', 'tbbpool'}
+    safe_backends = {'omp', 'tbb'}
 
     def run_compile(self, fnlist, parallelism='threading'):
         self._cache_dir = temp_directory(self.__class__.__name__)
@@ -216,7 +216,7 @@ class TestParallelBackendBase(TestCase):
                     'Unknown parallelism supplied %s' % parallelism)
 
 
-_threadsafe_backends = config.THREADING_LAYER in ('omppool', 'tbbpool')
+_threadsafe_backends = config.THREADING_LAYER in ('omp', 'tbb')
 
 
 @unittest.skipUnless(_threadsafe_backends, "Threading layer not threadsafe")
@@ -250,8 +250,8 @@ class TestSpecificBackend(TestParallelBackendBase):
     the test suite.
     """
 
-    backends = {'tbbpool': skip_no_tbb,
-                'omppool': skip_no_omp}
+    backends = {'tbb': skip_no_tbb,
+                'omp': skip_no_omp}
 
     def run_cmd(self, cmdline, env):
         popen = subprocess.Popen(cmdline,
@@ -304,6 +304,8 @@ TestSpecificBackend.generate()
 @skip_unless_gnu_omp
 class TestForkSafetyIssues(TestCase):
 
+    _DEBUG = False
+
     # sys path injection and separate usecase module to make sure everything
     # is importable by children of multiprocessing
     _here = os.path.dirname(__file__)
@@ -314,6 +316,7 @@ class TestForkSafetyIssues(TestCase):
     import multiprocessing
     import numpy as np
     from numba import njit
+    import numba
     import threading_backend_usecases
     import os
 
@@ -330,7 +333,7 @@ class TestForkSafetyIssues(TestCase):
     def run_cmd(self, cmdline, env=None):
         if env is None:
             env = os.environ.copy()
-            env['NUMBA_THREADING_LAYER'] = str("omppool")
+            env['NUMBA_THREADING_LAYER'] = str("omp")
         popen = subprocess.Popen(cmdline,
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE,
@@ -406,6 +409,8 @@ class TestForkSafetyIssues(TestCase):
         runme = self.template % body
         cmdline = [sys.executable, '-c', runme]
         out, err = self.run_cmd(cmdline)
+        if self._DEBUG:
+            print(out, err)
 
     @linux_only
     @skip_unless_py3
@@ -432,6 +437,7 @@ class TestForkSafetyIssues(TestCase):
             ctx = multiprocessing.get_context('fork')
             proc = ctx.Process(target = busy_func, args=(X, Y, q))
             proc.start()
+            proc.join()
 
             err = q.get()
             assert "Caught SIGTERM" in str(err)
@@ -439,6 +445,8 @@ class TestForkSafetyIssues(TestCase):
         runme = self.template % body
         cmdline = [sys.executable, '-c', runme]
         out, err = self.run_cmd(cmdline)
+        if self._DEBUG:
+            print(out, err)
 
     @skip_unless_py3
     def test_par_parent_mp_spawn_par_child_par_parent(self):
@@ -482,7 +490,8 @@ class TestForkSafetyIssues(TestCase):
         runme = self.template % body
         cmdline = [sys.executable, '-c', runme]
         out, err = self.run_cmd(cmdline)
-        print(out, err)
+        if self._DEBUG:
+            print(out, err)
 
     def test_serial_parent_implicit_mp_fork_par_child_then_par_parent(self):
         """
@@ -522,6 +531,8 @@ class TestForkSafetyIssues(TestCase):
         runme = self.template % body
         cmdline = [sys.executable, '-c', runme]
         out, err = self.run_cmd(cmdline)
+        if self._DEBUG:
+            print(out, err)
 
     @linux_only
     @skip_unless_py3
@@ -562,7 +573,8 @@ class TestForkSafetyIssues(TestCase):
         runme = self.template % body
         cmdline = [sys.executable, '-c', runme]
         out, err = self.run_cmd(cmdline)
-
+        if self._DEBUG:
+            print(out, err)
 
 if __name__ == '__main__':
     unittest.main()

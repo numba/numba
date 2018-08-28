@@ -494,10 +494,8 @@ class LoweringError(NumbaError):
     """
     An error occurred during lowering.
     """
-    def __init__(self, msg, loc):
-        self.msg = msg
-        self.loc = loc
-        super(LoweringError, self).__init__("%s\n%s" % (msg, loc.strformat()))
+    def __init__(self, msg, loc=None):
+        super(LoweringError, self).__init__(msg, loc=loc)
 
 
 class ForbiddenConstruct(LoweringError):

@@ -283,6 +283,7 @@ def _launch_threads():
             t = str(config.THREADING_LAYER).lower()
             namedbackends = ['tbb', 'omp', 'workqueue']
 
+            lib = None
             if t in namedbackends:
                 # Try and load the specific named backend
                 lib = select_known_backend(t)
