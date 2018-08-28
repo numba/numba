@@ -668,8 +668,12 @@ def _create_gufunc_for_parfor_body(
         arr = var + "_arr"
         parfor_redarrs.append(arr)
         redarraytype = redtyp_to_redarraytype(typemap[var])
-        typemap[arr] = redarraytype_to_sig(redarraytype)
         parfor_red_arg_types.append(redarraytype)
+        redarrsig = redarraytype_to_sig(redarraytype)
+        if arr in typemap:
+            assert(typemap[arr] == redarrsig)
+        else:
+            typemap[arr] = redarrsig
 
     # Reorder all the params so that inputs go first then outputs.
     parfor_params = parfor_inputs + parfor_outputs + parfor_redarrs

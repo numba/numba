@@ -1189,6 +1189,38 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countArrayAllocs(test_impl, (types.intp,)), 1)
 
     @skip_unsupported
+    def test_reduction_var_reuse(self):
+        # issue #3139
+        def test_impl(n):
+            acc = 0
+            for i in prange(n):
+                acc += 1
+
+            for i in prange(n):
+                acc += 2
+
+            return acc
+        self.check(test_impl, 16)
+
+    @skip_unsupported
+    def test_two_d_array_reduction_reuse(self):
+        def test_impl(n):
+            shp = (13, 17)
+            size = shp[0] * shp[1]
+            result1 = np.zeros(shp, np.int_)
+            tmp = np.arange(size).reshape(shp)
+
+            for i in numba.prange(n):
+                result1 += tmp
+                
+            for i in numba.prange(n):
+                result1 += tmp
+                
+            return result1
+
+        self.check(test_impl, 100)
+
+    @skip_unsupported
     def test_one_d_array_reduction(self):
         def test_impl(n):
             result = np.zeros(1, np.int_)
