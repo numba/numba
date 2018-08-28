@@ -17,6 +17,10 @@ from numba import jit, vectorize, guvectorize, njit
 
 from .support import temp_directory, override_config, TestCase
 
+from .test_parfors import skip_unsupported as parfors_skip_unsupported
+from .test_parfors import linux_only
+
+
 # Check which backends are available
 # TODO: Put this in a subprocess so the address space is kept clean
 try:
@@ -294,6 +298,7 @@ class TestSpecificBackend(TestParallelBackendBase):
 TestSpecificBackend.generate()
 
 
+@parfors_skip_unsupported # 32bit or windows py27 (not that this runs on windows)
 @skip_unless_gnu_omp
 class TestForkSafetyIssues(TestCase):
 
@@ -400,6 +405,7 @@ class TestForkSafetyIssues(TestCase):
         cmdline = [sys.executable, '-c', runme]
         out, err = self.run_cmd(cmdline)
 
+    @linux_only
     @skip_unless_py3
     def test_par_parent_explicit_mp_fork_par_child(self):
         """
@@ -515,6 +521,7 @@ class TestForkSafetyIssues(TestCase):
         cmdline = [sys.executable, '-c', runme]
         out, err = self.run_cmd(cmdline)
 
+    @linux_only
     @skip_unless_py3
     def test_serial_parent_explicit_mp_fork_par_child_then_par_parent(self):
         """
