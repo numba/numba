@@ -169,20 +169,25 @@ def get_ext_modules():
             omplinkflags = ['-fopenmp']
 
     if tbb_root:
-        print("Using Intel TBB from:", tbb_root)
-        ext_npyufunc_tbb_workqueue = Extension(
-            name='numba.npyufunc.tbbpool',
-            sources=['numba/npyufunc/tbbpool.cpp', 'numba/npyufunc/gufunc_scheduler.cpp'],
-            depends=['numba/npyufunc/workqueue.h'],
-            include_dirs=[os.path.join(tbb_root, 'include')],
-            extra_compile_args=cpp11flags,
-            libraries   =['tbb'],
-            library_dirs=[os.path.join(tbb_root, 'lib', 'intel64', 'gcc4.4'),  # for Linux
-                          os.path.join(tbb_root, 'lib'),                       # for MacOS
-                          os.path.join(tbb_root, 'lib', 'intel64', 'vc_mt'),   # for Windows
-                         ],
-            )
-        ext_npyufunc_workqueue_impls.append(ext_npyufunc_tbb_workqueue)
+        # Python 2 on windows has a VS dep which cannot handle sufficiently
+        # advanced C++ syntax to compile tbbpool.cpp.
+        tbb_unsupported = sys.platform.startswith('win') and \
+                          sys.version_info < (3, 0)
+        if not tbb_unsupported:
+            print("Using Intel TBB from:", tbb_root)
+            ext_npyufunc_tbb_workqueue = Extension(
+                name='numba.npyufunc.tbbpool',
+                sources=['numba/npyufunc/tbbpool.cpp', 'numba/npyufunc/gufunc_scheduler.cpp'],
+                depends=['numba/npyufunc/workqueue.h'],
+                include_dirs=[os.path.join(tbb_root, 'include')],
+                extra_compile_args=cpp11flags,
+                libraries   =['tbb'],
+                library_dirs=[os.path.join(tbb_root, 'lib', 'intel64', 'gcc4.4'),  # for Linux
+                            os.path.join(tbb_root, 'lib'),                       # for MacOS
+                            os.path.join(tbb_root, 'lib', 'intel64', 'vc_mt'),   # for Windows
+                            ],
+                )
+            ext_npyufunc_workqueue_impls.append(ext_npyufunc_tbb_workqueue)
 
     # OpenMP backed work queue
     ext_npyufunc_omppool = Extension( name='numba.npyufunc.omppool',
