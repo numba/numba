@@ -155,7 +155,10 @@ class _ObjModeContextType(WithContext):
             )
 
         # Determine types in the output tuple
-        outtup = types.Tuple([typeanns[v] for v in outputs])
+        def strip_var_ver(x):
+            return x.split('.', 1)[0]
+
+        outtup = types.Tuple([typeanns[strip_var_ver(v)] for v in outputs])
 
         lifted_blks = {k: blocks[k] for k in body_blocks}
         _mutate_with_block_callee(lifted_blks, blk_start, blk_end,

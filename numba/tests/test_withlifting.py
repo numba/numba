@@ -354,11 +354,29 @@ class TestLiftObj(MemoryLeak, TestCase):
                 print(x)
                 x[0] = 4
                 print(x)
-                y0 = [1, 2, 3] + x
-                y = np.asarray([1 / i for i in y0])
+                y = [1, 2, 3] + x
+                y = np.asarray([1 / i for i in y])
             return x, y
 
         arg = [1, 2, 3]
+        self.assert_equal_return_and_stdout(foo, arg)
+
+    def test_lift_objmode_var_redef(self):
+        def foo(x):
+            for x in range(x):
+                pass
+            if x:
+                x += 1
+            with objmode_context(x="intp"):
+                print(x)
+                x -= 1
+                print(x)
+                for i in range(x):
+                    x += i
+                    print(x)
+            return x
+
+        arg = 123
         self.assert_equal_return_and_stdout(foo, arg)
 
 
