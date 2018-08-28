@@ -11,6 +11,27 @@ Threading layer on top of OpenMP.
 
 #ifdef _MSC_VER
 #include <malloc.h>
+#else
+#include <pthread.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <signal.h>
+#endif
+
+#define _DEBUG 0
+#define _DEBUG_FORK 1
+
+// OpenMP vendor strings
+#if defined(_MSC_VER)
+#define _OMP_VENDOR "MS"
+#elif defined(__GNUC__)
+#define _OMP_VENDOR "GNU"
+#elif defined(__clang__)
+#define _OMP_VENDOR "Intel"
+#endif
+
+#if defined(__GNUC__)
+static pid_t parent_pid = 0; // 0 is not set, users can't own this anyway
 #endif
 
 static void
@@ -20,8 +41,6 @@ add_task(void *fn, void *args, void *dims, void *steps, void *data) {
     func_ptr_t func = reinterpret_cast<func_ptr_t>(fn);
     func(args, dims, steps, data);
 }
-
-#define _DEBUG 0
 
 static void
 parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *data,
@@ -34,6 +53,25 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
         puts("Using parallel_for");
         printed = true;
     }
+
+#if defined(__GNUC__)
+    // Handle GNU OpenMP not being forksafe...
+    // This checks if the pid set by the process that initialized this library
+    // matches the parent of this pid. If they do match this is a fork() from
+    // Python and not a spawn(), as spawn()s reinit the library. Forks are
+    // dangerous as GNU OpenMP is not forksafe, so warn then terminate.
+    if(_DEBUG_FORK)
+    {
+        printf("Registered parent pid=%d, my pid=%d, my parent pid=%d\n", parent_pid, getpid(), getppid());
+    }
+    if (parent_pid == getppid())
+    {
+        fprintf(stderr, "%s", "Terminating: fork() called from a process "
+        "already using GNU OpenMP, this is unsafe.\n");
+        raise(SIGTERM);
+        return;
+    }
+#endif
 
     //     args = <ir.Argument '.1' of type i8**>,
     //     dimensions = <ir.Argument '.2' of type i64*>
@@ -105,7 +143,15 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 }
 
 static void launch_threads(int count) {
+    // this must be called in a threadsafe region from Python
     static bool initialized = false;
+#ifdef __GNUC__
+    parent_pid = getpid(); // record the parent PID for use later
+    if(_DEBUG_FORK)
+    {
+        printf("Setting parent as %d\n", parent_pid);
+    }
+#endif
     if(initialized)
         return;
     puts("Using OpenMP");
@@ -140,7 +186,7 @@ MOD_INIT(omppool) {
                            PyLong_FromVoidPtr((void*)&do_scheduling_signed));
     PyObject_SetAttrString(m, "do_scheduling_unsigned",
                            PyLong_FromVoidPtr((void*)&do_scheduling_unsigned));
-
-
+    PyObject_SetAttrString(m, "openmp_vendor",
+                           PyString_FromString(_OMP_VENDOR));
     return MOD_SUCCESS_VAL(m);
 }

@@ -166,7 +166,7 @@ def get_ext_modules():
         if platform.machine() == 'ppc64le':
             omplinkflags = ['-fopenmp']
         else:
-            omplinkflags = []
+            omplinkflags = ['-fopenmp']
 
     if tbb_root:
         print("Using Intel TBB from:", tbb_root)
