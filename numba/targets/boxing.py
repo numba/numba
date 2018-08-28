@@ -1015,9 +1015,3 @@ def box_unsupported(typ, val, c):
     c.pyapi.err_set_string("PyExc_TypeError", msg)
     res = c.pyapi.get_null_object()
     return res
-
-
-@box(types.ContextManager)
-def box_contextmanager(typ, val, c):
-    return c.pyapi.make_none()
-

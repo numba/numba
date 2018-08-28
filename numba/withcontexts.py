@@ -161,7 +161,6 @@ class _ObjModeContextType(WithContext):
         _mutate_with_block_callee(lifted_blks, blk_start, blk_end,
                                   inputs, outputs)
 
-        # XXX: transform body-blocks to return the output variables
         lifted_ir = func_ir.derive(
             blocks=lifted_blks,
             arg_names=tuple(inputs),

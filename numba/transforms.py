@@ -295,7 +295,9 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
 
         myflags = flags.copy()
         if objectmode:
+            # Lifted with-block cannot looplift
             myflags.enable_looplift = False
+            # Lifted with-block uses object mode
             myflags.enable_pyobject = True
         return LiftedWith(func_ir, typingctx, targetctx, myflags, locals)
 
@@ -457,4 +459,3 @@ def find_setupwiths(blocks):
             known_ranges.append((s, e))
 
     return known_ranges
-

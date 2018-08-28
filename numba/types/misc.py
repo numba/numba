@@ -437,14 +437,11 @@ class ContextManager(Callable, Phantom):
         return (), False
 
     def get_call_type(self, context, args, kws):
+        from numba import typing
+
         if not self.cm.is_callable:
             msg = "contextmanager {} is not callable".format(self.cm)
             raise TypingError(msg)
-        ## XXX
-        from numba import typing
+
         posargs = list(args) + [v for k, v in sorted(kws.items())]
         return typing.signature(self, *posargs)
-
-
-
-
