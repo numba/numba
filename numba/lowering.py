@@ -659,13 +659,8 @@ class Lower(BaseLower):
 
         if isinstance(expr.func, ir.Intrinsic):
             fnty = expr.func.name
-            argvals = expr.func.args
         else:
             fnty = self.typeof(expr.func.name)
-
-            if not isinstance(fnty, types.ObjModeDispatcher):
-                argvals = self.fold_call_args(fnty, signature,
-                                              expr.args, expr.vararg, expr.kws)
 
         if isinstance(fnty, types.ObjModeDispatcher):
             self.init_pyapi()
@@ -711,6 +706,8 @@ class Lower(BaseLower):
         elif isinstance(fnty, types.ExternalFunction):
             # Handle a named external function
             self.debug_print("# external function")
+            argvals = self.fold_call_args(fnty, signature,
+                                          expr.args, expr.vararg, expr.kws)
             fndesc = funcdesc.ExternalFunctionDescriptor(
                 fnty.symbol, fnty.sig.return_type, fnty.sig.args)
             func = self.context.declare_external_function(self.builder.module,
@@ -721,11 +718,15 @@ class Lower(BaseLower):
         elif isinstance(fnty, types.NumbaFunction):
             # Handle a compiled Numba function
             self.debug_print("# calling numba function")
+            argvals = self.fold_call_args(fnty, signature,
+                                          expr.args, expr.vararg, expr.kws)
             res = self.context.call_internal(self.builder, fnty.fndesc,
                                              fnty.sig, argvals)
 
         elif isinstance(fnty, types.ExternalFunctionPointer):
             self.debug_print("# calling external function pointer")
+            argvals = self.fold_call_args(fnty, signature,
+                                          expr.args, expr.vararg, expr.kws)
             # Handle a C function pointer
             pointer = self.loadvar(expr.func.name)
             # If the external function pointer uses libpython
@@ -764,6 +765,8 @@ class Lower(BaseLower):
 
         elif isinstance(fnty, types.RecursiveCall):
             # Recursive call
+            argvals = self.fold_call_args(fnty, signature,
+                                          expr.args, expr.vararg, expr.kws)
             qualprefix = fnty.overloads[signature.args]
             mangler = self.context.mangler or default_mangler
             mangled_name = mangler(qualprefix, signature.args)
@@ -779,6 +782,12 @@ class Lower(BaseLower):
             # Normal function resolution
             self.debug_print("# calling normal function: {0}".format(fnty))
             self.debug_print("# signature: {0}".format(signature))
+            if (isinstance(expr.func, ir.Intrinsic) or
+                    isinstance(fnty, types.ObjModeDispatcher)):
+                argvals = expr.func.args
+            else:
+                argvals = self.fold_call_args(fnty, signature,
+                                              expr.args, expr.vararg, expr.kws)
             impl = self.context.get_function(fnty, signature)
             if signature.recvr:
                 # The "self" object is passed as the function object
