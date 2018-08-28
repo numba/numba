@@ -14,7 +14,8 @@ from __future__ import print_function, absolute_import
 import sys
 import os
 import warnings
-from threading import RLock
+from threading import RLock as threadRLock
+from multiprocessing import RLock as procRLock
 
 import numpy as np
 
@@ -215,56 +216,103 @@ def build_gufunc_wrapper(py_func, cres, sin, sout, cache):
 
 # ---------------------------------------------------------------------------
 
-_backend_init_lock = RLock()
+_backend_init_thread_lock = threadRLock()
+_backend_init_process_lock = procRLock()
 _is_initialized = False
 
 def _launch_threads():
-    with _backend_init_lock:
+    with _backend_init_process_lock:
+        with _backend_init_thread_lock:
 
-        global _is_initialized
-        if _is_initialized:
-            return
+            global _is_initialized
+            if _is_initialized:
+                return
 
-        from ctypes import CFUNCTYPE, c_void_p
+            from ctypes import CFUNCTYPE, c_void_p, c_int
 
-        t = str(config.THREADING_LAYER)
-        lib = None
-        backend_import_fail = False
-        try:
-            if t.lower().startswith("tbb"):
-                try:
-                    from . import tbbpool as lib
-                except ImportError:
-                    backend_import_fail = 'Intel TBB'
-            elif t.lower().startswith("omp"):
-                # TODO: Check that if MKL is present that it is a version that
-                # understands GNU OMP might be present
-                try:
-                    from . import omppool as lib
-                except ImportError:
-                    backend_import_fail = 'OpenMP'
-            elif not t.lower().startswith("workqueue"):
-                msg = "Unknown value specified for NUMBA_THREADING_LAYER: %s"
-                raise ValueError(msg % t)
-        finally:
-            if not lib:
-                if backend_import_fail:
-                    msg = ("The %s threading layer (%s) was requested but "
-                           "the module could not be imported. Falling back to "
-                           "the Numba threading layer.")
-                    warnings.warn(msg % (backend_import_fail, t))
-                from . import workqueue as lib
+            def select_known_backend(backend):
+                """
+                Loads a specific threading layer backend based on string
+                """
+                lib = None
+                if backend.startswith("tbb"):
+                    try:
+                        from . import tbbpool as lib
+                    except ImportError:
+                        pass
+                elif backend.startswith("omp"):
+                    # TODO: Check that if MKL is present that it is a version that
+                    # understands GNU OMP might be present
+                    try:
+                        from . import omppool as lib
+                    except ImportError:
+                        pass
+                elif backend.startswith("workqueue"):
+                      from . import workqueue as lib
+                else:
+                    msg = "Unknown value specified for threading layer: %s"
+                    raise ValueError(msg % backend)
+                return lib
 
-        from ctypes import CFUNCTYPE, c_int
+            def select_from_backends(backends):
+                """
+                Selects from presented backends and returns the first working
+                """
+                lib = None
+                for backend in backends:
+                    lib = select_known_backend(backend)
+                    if lib is not None:
+                        break
+                else:
+                    raise ValueError("No threading layer could be loaded.")
+                return lib
 
-        ll.add_symbol('numba_parallel_for', lib.parallel_for)
-        ll.add_symbol('do_scheduling_signed', lib.do_scheduling_signed)
-        ll.add_symbol('do_scheduling_unsigned', lib.do_scheduling_unsigned)
+            t = str(config.THREADING_LAYER).lower()
+            namedbackends = ['tbbpool', 'omppool', 'workqueue']
 
-        launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
-        launch_threads(NUM_THREADS)
+            if t in namedbackends:
+                # Try and load the specific named backend
+                lib = select_known_backend(t)
 
-        _is_initialized = True
+            elif t in ['threadsafe', 'forksafe', 'safe']:
+                # User wants a specific behaviour...
+                available = ['tbb']
+                if t == "safe":
+                    # "safe" is TBB, which is fork and threadsafe everywhere
+                    pass
+                elif t == "threadsafe":
+                    # omp is threadsafe everywhere
+                    available.append('omp')
+                elif t == "forksafe":
+                    # everywhere apart from linux (GNU OpenMP) has a guaranteed
+                    # forksafe OpenMP, as OpenMP has better performance, prefer
+                    # this to workqueue
+                    if platform.system() != 'Linux':
+                        available.append('omp')
+                    # workqueue is forksafe everywhere
+                    available.append('workqueue')
+                else:
+                    msg = "No threading layer available for purpose %s"
+                    raise ValueError(msg % t)
+                # select amongst available
+                lib = select_from_backends(available)
+
+            elif t == 'default':
+                # If default is supplied, try them in order, tbb, omp, workqueue
+                lib = select_from_backends(namedbackends)
+
+            # This should be unreachable, but just in case...
+            if lib is None:
+                raise ValueError("No threading layer could be loaded.")
+
+            ll.add_symbol('numba_parallel_for', lib.parallel_for)
+            ll.add_symbol('do_scheduling_signed', lib.do_scheduling_signed)
+            ll.add_symbol('do_scheduling_unsigned', lib.do_scheduling_unsigned)
+
+            launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
+            launch_threads(NUM_THREADS)
+
+            _is_initialized = True
 
 
 _DYLD_WORKAROUND_SET = 'NUMBA_DYLD_WORKAROUND' in os.environ

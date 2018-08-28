@@ -262,7 +262,7 @@ class _EnvReloader(object):
         DISABLE_JIT = _readenv("NUMBA_DISABLE_JIT", int, 0)
 
         # choose parallel backend to use
-        THREADING_LAYER = _readenv("NUMBA_THREADING_LAYER", str, 'workqueue')
+        THREADING_LAYER = _readenv("NUMBA_THREADING_LAYER", str, 'default')
 
         # CUDA Configs
 

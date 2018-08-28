@@ -143,7 +143,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 }
 
 static void launch_threads(int count) {
-    // this must be called in a threadsafe region from Python
+    // this must be called in a fork+thread safe region from Python
     static bool initialized = false;
 #ifdef __GNUC__
     parent_pid = getpid(); // record the parent PID for use later
