@@ -220,6 +220,19 @@ _backend_init_thread_lock = threadRLock()
 _backend_init_process_lock = procRLock()
 _is_initialized = False
 
+# this is set by _launch_threads
+_threading_layer = None
+
+def threading_layer():
+    """
+    Get the name of the threading layer in use for parallel CPU targets
+    """
+    if _threading_layer is None:
+        raise ValueError("Threading layer is not initialized.")
+    else:
+        return _threading_layer
+
+
 def _launch_threads():
     with _backend_init_process_lock:
         with _backend_init_thread_lock:
@@ -265,15 +278,15 @@ def _launch_threads():
                         break
                 else:
                     raise ValueError("No threading layer could be loaded.")
-                return lib
+                return lib, backend
 
             t = str(config.THREADING_LAYER).lower()
-            namedbackends = ['tbbpool', 'omppool', 'workqueue']
+            namedbackends = ['tbb', 'omp', 'workqueue']
 
             if t in namedbackends:
                 # Try and load the specific named backend
                 lib = select_known_backend(t)
-
+                libname = t
             elif t in ['threadsafe', 'forksafe', 'safe']:
                 # User wants a specific behaviour...
                 available = ['tbb']
@@ -295,11 +308,11 @@ def _launch_threads():
                     msg = "No threading layer available for purpose %s"
                     raise ValueError(msg % t)
                 # select amongst available
-                lib = select_from_backends(available)
+                lib, libname = select_from_backends(available)
 
             elif t == 'default':
                 # If default is supplied, try them in order, tbb, omp, workqueue
-                lib = select_from_backends(namedbackends)
+                lib, libname = select_from_backends(namedbackends)
 
             # This should be unreachable, but just in case...
             if lib is None:
@@ -311,6 +324,10 @@ def _launch_threads():
 
             launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
             launch_threads(NUM_THREADS)
+
+            # set library name so it can be queried
+            global _threading_layer
+            _threading_layer = libname
 
             _is_initialized = True
 
