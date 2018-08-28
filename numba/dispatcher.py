@@ -756,7 +756,6 @@ class LiftedLoop(LiftedCode):
 
 
 class LiftedWith(LiftedCode):
-
     @property
     def _numba_type_(self):
         return types.Dispatcher(self)

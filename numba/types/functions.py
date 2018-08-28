@@ -291,7 +291,6 @@ class ObjModeDispatcher(Dispatcher):
     pass
 
 
-
 class ExternalFunctionPointer(BaseFunction):
     """
     A pointer to a native function (e.g. exported via ctypes or cffi).

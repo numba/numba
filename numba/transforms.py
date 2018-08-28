@@ -338,9 +338,16 @@ def _get_with_contextmanager(func_ir, blocks, blk_start):
     _illegal_cm_msg = "Illegal use of context-manager."
 
     def get_var_dfn(var):
+        """Get the definition given a variable"""
         return func_ir.get_definition(var)
 
     def get_ctxmgr_obj(dfn):
+        """Return the context-manager object and extra info.
+
+        The extra contains the arguments if the context-manager is used
+        as a call.
+        """
+        # If the contextmanager used as a Call
         if isinstance(dfn, ir.Expr) and dfn.op == 'call':
             args = [get_var_dfn(x) for x in dfn.args]
             kws = {k: get_var_dfn(v) for k, v in dfn.kws}
@@ -349,6 +356,7 @@ def _get_with_contextmanager(func_ir, blocks, blk_start):
         else:
             extra = None
 
+        # Check the contextmanager object
         if isinstance(dfn, ir.Global):
             ctxobj = dfn.value
             if ctxobj is not ir.UNDEFINED:
