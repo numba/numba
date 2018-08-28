@@ -39,6 +39,8 @@ except ImportError:
 # Switch this to True to run fork() based tests, unsupported at present
 _DO_FORK_TESTS = True 
 
+_FORK_TESTS_MASK = _DO_FORK_TESTS and (not sys.platform.startswith('win'))
+
 skip_no_omp = unittest.skipUnless(_HAVE_OMP_POOL, "OpenMP threadpool required")
 skip_no_tbb = unittest.skipUnless(_HAVE_TBB_POOL, "TBB threadpool required")
 
@@ -174,7 +176,7 @@ class TestParallelBackendBase(TestCase):
                  ]
     parallelism = ['threading', 'random']
     if utils.PYVERSION > (3, 0):
-        if _DO_FORK_TESTS and (not sys.platform.startswith('win')):
+        if _FORK_TESTS_MASK:
             parallelism.append('multiprocessing_fork')
 
 
@@ -199,11 +201,11 @@ class TestParallelBackendBase(TestCase):
             elif parallelism == 'random':
                 if utils.PYVERSION < (3, 0):
                     ps = [thread_impl]
-                    if _DO_FORK_TESTS: # Py2.7 linux can only fork() so disable for all
+                    if _FORK_TESTS_MASK: # Py2.7 linux can only fork() so disable for all
                         ps.append(default_proc_impl)
                 else:
                     ps = [thread_impl, spawn_proc_impl]
-                    if _DO_FORK_TESTS:
+                    if _FORK_TESTS_MASK:
                         ps.append(fork_proc_impl)
 
                 for _ in range(10):  # 10 is arbitrary
