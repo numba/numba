@@ -88,6 +88,8 @@ if not _unsupported:
 
 class TestStencilBase(unittest.TestCase):
 
+    _numba_parallel_test_ = False
+
     def __init__(self, *args):
         # flags for njit()
         self.cflags = Flags()

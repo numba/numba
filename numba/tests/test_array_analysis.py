@@ -832,6 +832,13 @@ class TestArrayAnalysis(TestCase):
                                equivs=[self.with_equiv('a', 'c', 'e')],
                                asserts=None)
 
+class TestArrayAnalysisParallelRequired(TestCase):
+    """This is to just split out tests that need the parallel backend and
+    therefore serialised execution.
+    """
+
+    _numba_parallel_test_ = False
+
     @skip_unsupported
     def test_misc(self):
 

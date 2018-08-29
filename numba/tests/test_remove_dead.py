@@ -48,6 +48,9 @@ def findLhsAssign(func_ir, var):
     return False
 
 class TestRemoveDead(unittest.TestCase):
+
+    _numba_parallel_test_ = False
+
     def compile_parallel(self, func, arg_types):
         fast_pflags = Flags()
         fast_pflags.set('auto_parallel', cpu.ParallelOptions(True))
