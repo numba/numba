@@ -29,7 +29,6 @@ class _CompilerLock(object):
         @functools.wraps(func)
         def _acquire_compile_lock(*args, **kwargs):
             with self:
-                require_global_compiler_lock()
                 return func(*args, **kwargs)
         return _acquire_compile_lock
 
