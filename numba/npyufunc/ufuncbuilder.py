@@ -17,7 +17,7 @@ from . import _internal
 from .sigparse import parse_signature
 from .wrappers import build_ufunc_wrapper, build_gufunc_wrapper
 from numba.caching import FunctionCache, NullCache
-from numba.compiler import lock_compiler
+from numba.compiler_lock import global_compiler_lock
 
 
 class UFuncTargetOptions(TargetOptions):
@@ -97,7 +97,7 @@ class UFuncDispatcher(object):
                     self.overloads[cres.signature] = cres
 
         # Use cache and compiler in a critical section
-        with compiler.lock_compiler:
+        with global_compiler_lock:
             with store_overloads_on_success():
                 # attempt look up of existing
                 cres = self.cache.load_overload(sig, targetctx)
@@ -152,7 +152,7 @@ def _build_element_wise_ufunc_wrapper(cres, signature):
     library = cres.library
     fname = cres.fndesc.llvm_func_name
 
-    with compiler.lock_compiler:
+    with global_compiler_lock:
         ptr = build_ufunc_wrapper(library, ctx, fname, signature,
                                   cres.objectmode, cres)
 
@@ -220,7 +220,7 @@ class UFuncBuilder(_BaseUFuncBuilder):
         return _finalize_ufunc_signature(cres, args, return_type)
 
     def build_ufunc(self):
-        with lock_compiler:
+        with global_compiler_lock:
             dtypelist = []
             ptrlist = []
             if not self.nb_func:
@@ -287,32 +287,32 @@ class GUFuncBuilder(_BaseUFuncBuilder):
 
         return return_type(*args)
 
+    @global_compiler_lock
     def build_ufunc(self):
-        with lock_compiler:
-            dtypelist = []
-            ptrlist = []
-            if not self.nb_func:
-                raise TypeError("No definition")
+        dtypelist = []
+        ptrlist = []
+        if not self.nb_func:
+            raise TypeError("No definition")
 
-            # Get signature in the order they are added
-            keepalive = []
-            for sig in self._sigs:
-                cres = self._cres[sig]
-                dtypenums, ptr, env = self.build(cres)
-                dtypelist.append(dtypenums)
-                ptrlist.append(utils.longint(ptr))
-                keepalive.append((cres.library, env))
+        # Get signature in the order they are added
+        keepalive = []
+        for sig in self._sigs:
+            cres = self._cres[sig]
+            dtypenums, ptr, env = self.build(cres)
+            dtypelist.append(dtypenums)
+            ptrlist.append(utils.longint(ptr))
+            keepalive.append((cres.library, env))
 
-            datlist = [None] * len(ptrlist)
+        datlist = [None] * len(ptrlist)
 
-            inct = len(self.sin)
-            outct = len(self.sout)
+        inct = len(self.sin)
+        outct = len(self.sout)
 
-            # Pass envs to fromfuncsig to bind to the lifetime of the ufunc object
-            ufunc = _internal.fromfunc(self.py_func.__name__, self.py_func.__doc__,
-                                    ptrlist, dtypelist, inct, outct, datlist,
-                                    keepalive, self.identity, self.signature)
-            return ufunc
+        # Pass envs to fromfuncsig to bind to the lifetime of the ufunc object
+        ufunc = _internal.fromfunc(self.py_func.__name__, self.py_func.__doc__,
+                                ptrlist, dtypelist, inct, outct, datlist,
+                                keepalive, self.identity, self.signature)
+        return ufunc
 
     def build(self, cres):
         """
@@ -320,10 +320,9 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         """
         # Buider wrapper for ufunc entry point
         signature = cres.signature
-        with compiler.lock_compiler:
-            ptr, env, wrapper_name = build_gufunc_wrapper(self.py_func, cres,
-                                                          self.sin, self.sout,
-                                                          cache=self.cache)
+        ptr, env, wrapper_name = build_gufunc_wrapper(self.py_func, cres,
+                                                      self.sin, self.sout,
+                                                      cache=self.cache)
 
         # Get dtypes
         dtypenums = []

@@ -6,6 +6,7 @@ import sys
 import warnings
 import traceback
 import threading
+import functools
 from .tracing import event
 
 from numba import (bytecode, interpreter, funcdesc, postproc,
@@ -17,12 +18,10 @@ from numba.parfor import PreParforPass, ParforPass, Parfor
 from numba.inline_closurecall import InlineClosureCallPass
 from numba.errors import CompilerError
 from numba.ir_utils import raise_on_unsupported_feature
+from numba.compiler_lock import global_compiler_lock
 
 # terminal color markup
 _termcolor = errors.termcolor()
-
-# Lock for the preventing multiple compiler execution
-lock_compiler = threading.RLock()
 
 
 class Flags(utils.ConfigOptions):
@@ -235,34 +234,34 @@ class _PipelineManager(object):
         exc.args = (newmsg,)
         return exc
 
+    @global_compiler_lock
     def run(self, status):
-        with lock_compiler:
-            assert self._finalized, "PM must be finalized before run()"
-            for pipeline_name in self.pipeline_order:
-                event(pipeline_name)
-                is_final_pipeline = pipeline_name == self.pipeline_order[-1]
-                for stage, stage_name in self.pipeline_stages[pipeline_name]:
-                    try:
-                        event(stage_name)
-                        stage()
-                    except _EarlyPipelineCompletion as e:
-                        return e.result
-                    except BaseException as e:
-                        msg = "Failed in %s mode pipeline (step: %s)" % \
-                            (pipeline_name, stage_name)
-                        patched_exception = self._patch_error(msg, e)
-                        # No more fallback pipelines?
-                        if is_final_pipeline:
-                            raise patched_exception
-                        # Go to next fallback pipeline
-                        else:
-                            status.fail_reason = patched_exception
-                            break
-                else:
-                    return None
+        assert self._finalized, "PM must be finalized before run()"
+        for pipeline_name in self.pipeline_order:
+            event(pipeline_name)
+            is_final_pipeline = pipeline_name == self.pipeline_order[-1]
+            for stage, stage_name in self.pipeline_stages[pipeline_name]:
+                try:
+                    event(stage_name)
+                    stage()
+                except _EarlyPipelineCompletion as e:
+                    return e.result
+                except BaseException as e:
+                    msg = "Failed in %s mode pipeline (step: %s)" % \
+                        (pipeline_name, stage_name)
+                    patched_exception = self._patch_error(msg, e)
+                    # No more fallback pipelines?
+                    if is_final_pipeline:
+                        raise patched_exception
+                    # Go to next fallback pipeline
+                    else:
+                        status.fail_reason = patched_exception
+                        break
+            else:
+                return None
 
-            # TODO save all error information
-            raise CompilerError("All pipelines have failed")
+        # TODO save all error information
+        raise CompilerError("All pipelines have failed")
 
 
 class BasePipeline(object):

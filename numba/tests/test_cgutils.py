@@ -10,7 +10,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba import cgutils, types, typing
-from numba.compiler import lock_compiler
+from numba.compiler_lock import global_compiler_lock
 from numba.targets import cpu
 from .support import TestCase
 
@@ -29,7 +29,6 @@ class StructureTestCase(TestCase):
 
     @contextlib.contextmanager
     def compile_function(self, nargs):
-
         llvm_fnty = lc.Type.function(machine_int, [machine_int] * nargs)
         ctypes_fnty = ctypes.CFUNCTYPE(ctypes.c_size_t,
                                     * (ctypes.c_size_t,) * nargs)
@@ -43,14 +42,14 @@ class StructureTestCase(TestCase):
 
         first = [True]
 
+        @global_compiler_lock
         def call_func(*args):
-            with lock_compiler:
-                codegen = self.context.codegen()
-                library = codegen.create_library("test_module.%s" % self.id())
-                library.add_ir_module(module)
-                cptr = library.get_pointer_to_function(function.name)
-                cfunc = ctypes_fnty(cptr)
-                return cfunc(*args)
+            codegen = self.context.codegen()
+            library = codegen.create_library("test_module.%s" % self.id())
+            library.add_ir_module(module)
+            cptr = library.get_pointer_to_function(function.name)
+            cfunc = ctypes_fnty(cptr)
+            return cfunc(*args)
 
         yield self.context, builder, function.args, call_func
 
