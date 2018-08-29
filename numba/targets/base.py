@@ -15,6 +15,7 @@ import llvmlite.binding as ll
 
 from numba import types, utils, cgutils, typing, funcdesc, debuginfo
 from numba import _dynfunc, _helperlib
+from numba.compiler_lock import global_compiler_lock
 from numba.pythonapi import PythonAPI
 from . import arrayobj, builtins, imputils
 from .imputils import (user_function, user_generator,
@@ -785,7 +786,8 @@ class BaseContext(object):
         """
         # Compile
         from numba import compiler
-        with compiler.lock_compiler:
+
+        with global_compiler_lock:
             codegen = self.codegen()
             library = codegen.create_library(impl.__name__)
             if flags is None:

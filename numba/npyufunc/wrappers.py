@@ -4,6 +4,7 @@ import numpy as np
 from llvmlite.llvmpy.core import Type, Builder, ICMP_EQ, Constant
 
 from numba import types, cgutils, compiler
+from numba.compiler_lock import global_compiler_lock
 from ..caching import make_library_cache, NullCache
 
 
@@ -399,23 +400,23 @@ class _GufuncWrapper(object):
         library.add_ir_module(wrapper_module)
         library.add_linking_library(self.library)
 
+    @global_compiler_lock
     def build(self):
         # Use cache and compiler in a critical section
-        with compiler.lock_compiler:
-            wrapperlib = self.cache.load_overload(self.cres.signature, self.cres.target_context)
-            wrapper_name = "__gufunc__." + self.fndesc.mangled_name
+        wrapperlib = self.cache.load_overload(self.cres.signature, self.cres.target_context)
+        wrapper_name = "__gufunc__." + self.fndesc.mangled_name
 
-            if wrapperlib is None:
-                # Create library and enable caching
-                wrapperlib = self.context.codegen().create_library(str(self))
-                wrapperlib.enable_object_caching()
-                # Build wrapper
-                self._build_wrapper(wrapperlib, wrapper_name)
-                # Cache
-                self.cache.save_overload(self.cres.signature, wrapperlib)
-            # Finalize and get function pointer
-            ptr = wrapperlib.get_pointer_to_function(wrapper_name)
-            return ptr, self.env, wrapper_name
+        if wrapperlib is None:
+            # Create library and enable caching
+            wrapperlib = self.context.codegen().create_library(str(self))
+            wrapperlib.enable_object_caching()
+            # Build wrapper
+            self._build_wrapper(wrapperlib, wrapper_name)
+            # Cache
+            self.cache.save_overload(self.cres.signature, wrapperlib)
+        # Finalize and get function pointer
+        ptr = wrapperlib.get_pointer_to_function(wrapper_name)
+        return ptr, self.env, wrapper_name
 
     def gen_loop_body(self, builder, pyapi, func, args):
         status, retval = self.call_conv.call_function(

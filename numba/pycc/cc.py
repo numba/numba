@@ -9,7 +9,7 @@ import sys
 import tempfile
 
 from numba import sigutils, typing
-from numba.compiler import lock_compiler
+from numba.compiler_lock import global_compiler_lock
 from .compiler import ModuleCompiler, ExportEntry
 from .platform import Toolchain
 
@@ -188,43 +188,43 @@ class CC(object):
                                                   extra_cflags=extra_cflags)
         return objects
 
+    @global_compiler_lock
     def _compile_object_files(self, build_dir):
-        with lock_compiler:
-            compiler = ModuleCompiler(self._export_entries, self._basename,
-                                    self._use_nrt, cpu_name=self._target_cpu)
-            compiler.external_init_function = self._init_function
-            temp_obj = os.path.join(build_dir,
-                                    os.path.splitext(self._output_file)[0] + '.o')
-            log.info("generating LLVM code for '%s' into %s",
-                    self._basename, temp_obj)
-            compiler.write_native_object(temp_obj, wrap=True)
-            return [temp_obj], compiler.dll_exports
+        compiler = ModuleCompiler(self._export_entries, self._basename,
+                                self._use_nrt, cpu_name=self._target_cpu)
+        compiler.external_init_function = self._init_function
+        temp_obj = os.path.join(build_dir,
+                                os.path.splitext(self._output_file)[0] + '.o')
+        log.info("generating LLVM code for '%s' into %s",
+                self._basename, temp_obj)
+        compiler.write_native_object(temp_obj, wrap=True)
+        return [temp_obj], compiler.dll_exports
 
+    @global_compiler_lock
     def compile(self):
         """
         Compile the extension module.
         """
-        with lock_compiler:
-            self._toolchain.verbose = self.verbose
-            build_dir = tempfile.mkdtemp(prefix='pycc-build-%s-' % self._basename)
+        self._toolchain.verbose = self.verbose
+        build_dir = tempfile.mkdtemp(prefix='pycc-build-%s-' % self._basename)
 
-            # Compile object file
-            objects, dll_exports = self._compile_object_files(build_dir)
+        # Compile object file
+        objects, dll_exports = self._compile_object_files(build_dir)
 
-            # Compile mixins
-            objects += self._compile_mixins(build_dir)
+        # Compile mixins
+        objects += self._compile_mixins(build_dir)
 
-            # Then create shared library
-            extra_ldflags = self._get_extra_ldflags()
-            output_dll = os.path.join(self._output_dir, self._output_file)
-            libraries = self._toolchain.get_python_libraries()
-            library_dirs = self._toolchain.get_python_library_dirs()
-            self._toolchain.link_shared(output_dll, objects,
-                                        libraries, library_dirs,
-                                        export_symbols=dll_exports,
-                                        extra_ldflags=extra_ldflags)
+        # Then create shared library
+        extra_ldflags = self._get_extra_ldflags()
+        output_dll = os.path.join(self._output_dir, self._output_file)
+        libraries = self._toolchain.get_python_libraries()
+        library_dirs = self._toolchain.get_python_library_dirs()
+        self._toolchain.link_shared(output_dll, objects,
+                                    libraries, library_dirs,
+                                    export_symbols=dll_exports,
+                                    extra_ldflags=extra_ldflags)
 
-            shutil.rmtree(build_dir)
+        shutil.rmtree(build_dir)
 
     def distutils_extension(self, **kwargs):
         """
