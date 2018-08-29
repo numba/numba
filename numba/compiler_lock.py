@@ -6,11 +6,14 @@ import functools
 class _CompilerLock(object):
     def __init__(self):
         self._lock = threading.RLock()
+        self._locked = False
 
     def acquire(self):
         self._lock.acquire()
+        self._locked = True
 
     def release(self):
+        self._locked = False
         self._lock.release()
 
     def __enter__(self):
@@ -20,7 +23,7 @@ class _CompilerLock(object):
         self.release()
 
     def is_locked(self):
-        return self._lock._is_owned()
+        return self._locked
 
     def __call__(self, func):
         @functools.wraps(func)
