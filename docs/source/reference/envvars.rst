@@ -287,6 +287,7 @@ Threading Control
    variable type is string and by default is ``workqueue``, the Numba internal
    threading library. Other valid values are:
 
-   * ``tbbpool`` - A threading layer backed by Intel TBB.
-   * ``omppool`` - A threading layer backed by OpenMP.
+   * ``tbb`` - A threading layer backed by Intel TBB.
+   * ``omp`` - A threading layer backed by OpenMP.
+   * ``workqueue`` - A threading layer backed by OS native threads.
 
