@@ -17,20 +17,20 @@ JIT-compiled::
    def f(g, x):
        return g(x) + g(-x)
 
-   result = f(my_g_function, 1)
+   result = f(jitted_g_function, 1)
 
 However, dispatching with arguments that are functions has extra overhead.
 If this matters for your application, you can also use a factory function to 
 capture the function argument in a closure::
 
    def make_f(g):
-       # Note: a new f() is compiled each time make_f() is called!
+       # Note: a new f() is created each time make_f() is called!
        @jit(nopython=True)
        def f(x):
            return g(x) + g(-x)
        return f
 
-   f = make_f(my_g_function)
+   f = make_f(jitted_g_function)
    result = f(1)
 
 Improving the dispatch performance of functions in Numba is an ongoing task.
