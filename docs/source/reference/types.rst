@@ -103,6 +103,8 @@ the beginning or the end of the index specification::
 Miscellaneous Types
 -------------------
 
+There are some non-numerical types that do not fit into the other categories.
+
 ===================   =================================================
 Type name(s)          Comments
 ===================   =================================================
