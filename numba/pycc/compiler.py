@@ -11,7 +11,7 @@ import llvmlite.llvmpy.core as lc
 from numba import cgutils
 from numba.utils import IS_PY3
 from . import llvm_types as lt
-from numba.compiler import compile_extra, Flags
+from numba.compiler import compile_extra, Flags, lock_compiler
 from numba.targets.registry import cpu_target
 from numba.runtime import nrtdynmod
 
@@ -128,61 +128,62 @@ class _ModuleCompiler(object):
         """Read all the exported functions/modules in the translator
         environment, and join them into a single LLVM module.
         """
-        self.exported_function_types = {}
-        self.function_environments = {}
-        self.environment_gvs = {}
+        with lock_compiler:
+            self.exported_function_types = {}
+            self.function_environments = {}
+            self.environment_gvs = {}
 
-        codegen = self.context.codegen()
-        library = codegen.create_library(self.module_name)
+            codegen = self.context.codegen()
+            library = codegen.create_library(self.module_name)
 
-        # Generate IR for all exported functions
-        flags = Flags()
-        flags.set("no_compile")
-        if not self.export_python_wrap:
-            flags.set("no_cpython_wrapper")
-        if self.use_nrt:
-            flags.set("nrt")
-            # Compile NRT helpers
-            nrt_module, _ = nrtdynmod.create_nrt_module(self.context)
-            library.add_ir_module(nrt_module)
+            # Generate IR for all exported functions
+            flags = Flags()
+            flags.set("no_compile")
+            if not self.export_python_wrap:
+                flags.set("no_cpython_wrapper")
+            if self.use_nrt:
+                flags.set("nrt")
+                # Compile NRT helpers
+                nrt_module, _ = nrtdynmod.create_nrt_module(self.context)
+                library.add_ir_module(nrt_module)
 
-        for entry in self.export_entries:
-            cres = compile_extra(self.typing_context, self.context,
-                                 entry.function,
-                                 entry.signature.args,
-                                 entry.signature.return_type, flags,
-                                 locals={}, library=library)
+            for entry in self.export_entries:
+                cres = compile_extra(self.typing_context, self.context,
+                                    entry.function,
+                                    entry.signature.args,
+                                    entry.signature.return_type, flags,
+                                    locals={}, library=library)
 
-            func_name = cres.fndesc.llvm_func_name
-            llvm_func = cres.library.get_function(func_name)
+                func_name = cres.fndesc.llvm_func_name
+                llvm_func = cres.library.get_function(func_name)
+
+                if self.export_python_wrap:
+                    llvm_func.linkage = lc.LINKAGE_INTERNAL
+                    wrappername = cres.fndesc.llvm_cpython_wrapper_name
+                    wrapper = cres.library.get_function(wrappername)
+                    wrapper.name = self._mangle_method_symbol(entry.symbol)
+                    wrapper.linkage = lc.LINKAGE_EXTERNAL
+                    fnty = cres.target_context.call_conv.get_function_type(
+                        cres.fndesc.restype, cres.fndesc.argtypes)
+                    self.exported_function_types[entry] = fnty
+                    self.function_environments[entry] = cres.environment
+                    self.environment_gvs[entry] = cres.fndesc.env_name
+                else:
+                    llvm_func.name = entry.symbol
+                    self.dll_exports.append(entry.symbol)
 
             if self.export_python_wrap:
-                llvm_func.linkage = lc.LINKAGE_INTERNAL
-                wrappername = cres.fndesc.llvm_cpython_wrapper_name
-                wrapper = cres.library.get_function(wrappername)
-                wrapper.name = self._mangle_method_symbol(entry.symbol)
-                wrapper.linkage = lc.LINKAGE_EXTERNAL
-                fnty = cres.target_context.call_conv.get_function_type(
-                    cres.fndesc.restype, cres.fndesc.argtypes)
-                self.exported_function_types[entry] = fnty
-                self.function_environments[entry] = cres.environment
-                self.environment_gvs[entry] = cres.fndesc.env_name
-            else:
-                llvm_func.name = entry.symbol
-                self.dll_exports.append(entry.symbol)
+                wrapper_module = library.create_ir_module("wrapper")
+                self._emit_python_wrapper(wrapper_module)
+                library.add_ir_module(wrapper_module)
 
-        if self.export_python_wrap:
-            wrapper_module = library.create_ir_module("wrapper")
-            self._emit_python_wrapper(wrapper_module)
-            library.add_ir_module(wrapper_module)
+            # Hide all functions in the DLL except those explicitly exported
+            library.finalize()
+            for fn in library.get_defined_functions():
+                if fn.name not in self.dll_exports:
+                    fn.visibility = "hidden"
 
-        # Hide all functions in the DLL except those explicitly exported
-        library.finalize()
-        for fn in library.get_defined_functions():
-            if fn.name not in self.dll_exports:
-                fn.visibility = "hidden"
-
-        return library
+            return library
 
     def write_llvm_bitcode(self, output, wrap=False, **kws):
         self.export_python_wrap = wrap

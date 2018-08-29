@@ -785,22 +785,22 @@ class BaseContext(object):
         """
         # Compile
         from numba import compiler
+        with compiler.lock_compiler:
+            codegen = self.codegen()
+            library = codegen.create_library(impl.__name__)
+            if flags is None:
+                flags = compiler.Flags()
+            flags.set('no_compile')
+            flags.set('no_cpython_wrapper')
+            cres = compiler.compile_internal(self.typing_context, self,
+                                            library,
+                                            impl, sig.args,
+                                            sig.return_type, flags,
+                                            locals=locals)
 
-        codegen = self.codegen()
-        library = codegen.create_library(impl.__name__)
-        if flags is None:
-            flags = compiler.Flags()
-        flags.set('no_compile')
-        flags.set('no_cpython_wrapper')
-        cres = compiler.compile_internal(self.typing_context, self,
-                                         library,
-                                         impl, sig.args,
-                                         sig.return_type, flags,
-                                         locals=locals)
-
-        # Allow inlining the function inside callers.
-        codegen.add_linking_library(cres.library)
-        return cres
+            # Allow inlining the function inside callers.
+            codegen.add_linking_library(cres.library)
+            return cres
 
     def compile_subroutine(self, builder, impl, sig, locals={}):
         """

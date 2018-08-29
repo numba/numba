@@ -156,7 +156,7 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
     # Register the contexts in case for nested @jit or @overload calls
     with cpu_target.nested_context(typingctx, targetctx):
         return compile_extra(typingctx, targetctx, func, args, return_type,
-                             flags, locals)
+                            flags, locals)
 
 
 def run_frontend(func):
@@ -236,32 +236,33 @@ class _PipelineManager(object):
         return exc
 
     def run(self, status):
-        assert self._finalized, "PM must be finalized before run()"
-        for pipeline_name in self.pipeline_order:
-            event(pipeline_name)
-            is_final_pipeline = pipeline_name == self.pipeline_order[-1]
-            for stage, stage_name in self.pipeline_stages[pipeline_name]:
-                try:
-                    event(stage_name)
-                    stage()
-                except _EarlyPipelineCompletion as e:
-                    return e.result
-                except BaseException as e:
-                    msg = "Failed in %s mode pipeline (step: %s)" % \
-                        (pipeline_name, stage_name)
-                    patched_exception = self._patch_error(msg, e)
-                    # No more fallback pipelines?
-                    if is_final_pipeline:
-                        raise patched_exception
-                    # Go to next fallback pipeline
-                    else:
-                        status.fail_reason = patched_exception
-                        break
-            else:
-                return None
+        with lock_compiler:
+            assert self._finalized, "PM must be finalized before run()"
+            for pipeline_name in self.pipeline_order:
+                event(pipeline_name)
+                is_final_pipeline = pipeline_name == self.pipeline_order[-1]
+                for stage, stage_name in self.pipeline_stages[pipeline_name]:
+                    try:
+                        event(stage_name)
+                        stage()
+                    except _EarlyPipelineCompletion as e:
+                        return e.result
+                    except BaseException as e:
+                        msg = "Failed in %s mode pipeline (step: %s)" % \
+                            (pipeline_name, stage_name)
+                        patched_exception = self._patch_error(msg, e)
+                        # No more fallback pipelines?
+                        if is_final_pipeline:
+                            raise patched_exception
+                        # Go to next fallback pipeline
+                        else:
+                            status.fail_reason = patched_exception
+                            break
+                else:
+                    return None
 
-        # TODO save all error information
-        raise CompilerError("All pipelines have failed")
+            # TODO save all error information
+            raise CompilerError("All pipelines have failed")
 
 
 class BasePipeline(object):

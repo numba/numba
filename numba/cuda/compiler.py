@@ -22,7 +22,7 @@ from .api import get_current_device
 from .args import wrap_arg
 
 
-_cuda_compiler_lock = threading.RLock()
+_cuda_compiler_lock = compiler.lock_compiler
 
 
 def nonthreadsafe(fn):

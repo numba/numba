@@ -207,6 +207,8 @@ class CodeLibrary(object):
         Finalization involves various stages of code optimization and
         linking.
         """
+        from numba.compiler import lock_compiler
+        assert lock_compiler._is_owned()
         # Report any LLVM-related problems to the user
         self._codegen._check_llvm_bugs()
 
