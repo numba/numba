@@ -12,6 +12,7 @@ from numba.utils import cached_property
 from numba.targets import callconv, codegen, externals, intrinsics, listobj, setobj
 from .options import TargetOptions
 from numba.runtime import rtsys
+from numba.compiler_lock import global_compiler_lock
 from . import fastmathpass
 
 # Keep those structures in sync with _dynfunc.c.
@@ -37,6 +38,7 @@ class CPUContext(BaseContext):
     def create_module(self, name):
         return self._internal_codegen._create_empty_module(name)
 
+    @global_compiler_lock
     def init(self):
         self.is32bit = (utils.MACHINE_BITS == 32)
         self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
