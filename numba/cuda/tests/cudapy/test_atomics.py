@@ -250,9 +250,9 @@ class TestCudaAtomics(SerialMixin, unittest.TestCase):
                 self.assertIn('atom.add.f64', asm)
         else:
             if shared:
-                self.assertIn('atom.shared.cas.f64', asm)
+                self.assertIn('atom.shared.cas.b64', asm)
             else:
-                self.assertIn('atom.cas.f64', asm)
+                self.assertIn('atom.cas.b64', asm)
 
     @skip_unless_cc_50
     def test_atomic_add_double(self):
