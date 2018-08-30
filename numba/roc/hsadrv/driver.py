@@ -452,6 +452,14 @@ class Agent(HsaWrapper):
     def mempools(self):
         return self._mempools
 
+    @property
+    def wavebits(self):
+        """
+        log2(wavefront_size)
+        """
+        # assume wavefront_size will always be a power of 2
+        return bin(self.wavefront_size)[::-1].index('1')
+
     def _initialize_regions(self):
         region_ids = []
 
