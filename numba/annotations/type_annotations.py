@@ -1,6 +1,6 @@
 from __future__ import print_function, absolute_import
 
-from collections import Mapping, defaultdict, OrderedDict
+from collections import defaultdict, OrderedDict
 from contextlib import closing
 import copy
 import inspect
@@ -12,6 +12,13 @@ import textwrap
 from numba.io_support import StringIO
 from numba import ir
 import numba.dispatcher
+from numba.config import PYVERSION
+
+
+if PYVERSION >= (3, 3):
+    from collections.abc import Mapping
+else:
+    from collections import Mapping
 
 
 class SourceLines(Mapping):

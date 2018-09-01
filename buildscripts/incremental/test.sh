@@ -23,7 +23,11 @@ export PYTHONFAULTHANDLER=1
 
 unamestr=`uname`
 if [[ "$unamestr" == 'Linux' ]]; then
-  SEGVCATCH=catchsegv
+    if [[ "${BITS32}" == "yes" ]]; then
+        SEGVCATCH=""
+    else
+        SEGVCATCH=catchsegv
+    fi
 elif [[ "$unamestr" == 'Darwin' ]]; then
   SEGVCATCH=""
 else

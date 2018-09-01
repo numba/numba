@@ -1,6 +1,6 @@
 from __future__ import print_function, absolute_import
 
-from collections import defaultdict, Sequence
+from collections import defaultdict
 import types as pytypes
 import weakref
 import threading
@@ -13,6 +13,12 @@ from . import templates
 from .typeof import typeof, Purpose
 
 from numba import utils
+from numba.config import PYVERSION
+
+if PYVERSION >= (3, 3):
+    from collections.abc import Sequence
+else:
+    from collections import Sequence
 
 
 class Rating(object):
@@ -254,18 +260,18 @@ class BaseContext(object):
     def resolve_static_setitem(self, target, index, value):
         assert not isinstance(index, types.Type), index
         args = target, index, value
-        kws = ()
+        kws = {}
         return self.resolve_function_type("static_setitem", args, kws)
 
     def resolve_setitem(self, target, index, value):
         assert isinstance(index, types.Type), index
         args = target, index, value
-        kws = ()
+        kws = {}
         return self.resolve_function_type("setitem", args, kws)
 
     def resolve_delitem(self, target, index):
         args = target, index
-        kws = ()
+        kws = {}
         return self.resolve_function_type("delitem", args, kws)
 
     def resolve_module_constants(self, typ, attr):

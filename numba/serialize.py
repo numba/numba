@@ -4,7 +4,15 @@ Serialization support for compiled functions.
 
 from __future__ import print_function, division, absolute_import
 
-import imp
+from .utils import PYVERSION
+
+# `imp` deprecated since Py3.4, use `importlib` as replacement since Py3.1
+if PYVERSION < (3, 1):
+    from imp import get_magic as _get_magic
+    bc_magic = _get_magic()
+else:
+    from importlib.util import MAGIC_NUMBER as bc_magic
+
 import marshal
 import sys
 from types import FunctionType, ModuleType
@@ -72,7 +80,7 @@ def _reduce_code(code):
     """
     Reduce a code object to picklable components.
     """
-    return marshal.version, imp.get_magic(), marshal.dumps(code)
+    return marshal.version, bc_magic, marshal.dumps(code)
 
 def _dummy_closure(x):
     """
@@ -106,7 +114,7 @@ def _rebuild_code(marshal_version, bytecode_magic, marshalled):
         raise RuntimeError("incompatible marshal version: "
                            "interpreter has %r, marshalled code has %r"
                            % (marshal.version, marshal_version))
-    if imp.get_magic() != bytecode_magic:
+    if bc_magic != bytecode_magic:
         raise RuntimeError("incompatible bytecode version")
     return marshal.loads(marshalled)
 

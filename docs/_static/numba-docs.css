@@ -1,0 +1,36 @@
+h1, .h1 {
+    font-size: 42px;
+}
+
+h2, .h2 {
+    font-size: 34px;
+}
+
+h3, .h3 {
+    font-size: 26px;
+}
+
+
+body {
+    font-size: 14px;
+}
+
+.navbar-brand {
+    font-size: 30px;
+}
+
+.navbar-brand img {
+    height: 135%;
+}
+
+@media (min-width: 768px) {
+    .container {
+        width: 700px;
+    }
+}
+
+@media (min-width: 992px) {
+    .container {
+        width: 930px;
+    }
+}

@@ -143,6 +143,8 @@ class TestParforsBase(TestCase):
         np.testing.assert_almost_equal(njit_output, py_expected, **kwargs)
         np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
 
+        self.assertEqual(type(njit_output), type(parfor_output))
+
         self.check_scheduling(cpfunc, scheduler_type)
 
         # if requested check fastmath variant
@@ -1108,6 +1110,17 @@ class TestParfors(TestParforsBase):
         self.assertTrue(build_tuple_found)
 
     @skip_unsupported
+    def test_parfor_dtype_type(self):
+        # test array type replacement creates proper type
+        def test_impl(a):
+            for i in numba.prange(len(a)):
+                a[i] = a.dtype.type(0)
+            return a[4]
+
+        a = np.ones(10)
+        self.check(test_impl, a)
+
+    @skip_unsupported
     def test_parfor_array_access5(self):
         # one dim is slice in multi-dim access
         def test_impl(n):
@@ -1122,6 +1135,7 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countNonParforArrayAccesses(test_impl, (types.intp,)), 0)
 
     @skip_unsupported
+    @test_disabled # Test itself is problematic, see #3155
     def test_parfor_hoist_setitem(self):
         # Make sure that read of out is not hoisted.
         def test_impl(out):
@@ -1173,6 +1187,118 @@ class TestParfors(TestParforsBase):
         # the unsafe allocation should be found even though it is imported
         # as a different name
         self.assertEqual(countArrayAllocs(test_impl, (types.intp,)), 1)
+
+    @skip_unsupported
+    def test_reduction_var_reuse(self):
+        # issue #3139
+        def test_impl(n):
+            acc = 0
+            for i in prange(n):
+                acc += 1
+
+            for i in prange(n):
+                acc += 2
+
+            return acc
+        self.check(test_impl, 16)
+
+    @skip_unsupported
+    def test_two_d_array_reduction_reuse(self):
+        def test_impl(n):
+            shp = (13, 17)
+            size = shp[0] * shp[1]
+            result1 = np.zeros(shp, np.int_)
+            tmp = np.arange(size).reshape(shp)
+
+            for i in numba.prange(n):
+                result1 += tmp
+                
+            for i in numba.prange(n):
+                result1 += tmp
+                
+            return result1
+
+        self.check(test_impl, 100)
+
+    @skip_unsupported
+    def test_one_d_array_reduction(self):
+        def test_impl(n):
+            result = np.zeros(1, np.int_)
+
+            for i in numba.prange(n):
+                result += np.array([i], np.int_)
+
+            return result
+
+        self.check(test_impl, 100)
+
+    @skip_unsupported
+    def test_two_d_array_reduction(self):
+        def test_impl(n):
+            shp = (13, 17)
+            size = shp[0] * shp[1]
+            result1 = np.zeros(shp, np.int_)
+            tmp = np.arange(size).reshape(shp)
+
+            for i in numba.prange(n):
+                result1 += tmp
+
+            return result1
+
+        self.check(test_impl, 100)
+
+    @skip_unsupported
+    def test_two_d_array_reduction_with_float_sizes(self):
+        # result1 is float32 and tmp is float64.
+        # Tests reduction with differing dtypes.
+        def test_impl(n):
+            shp = (2, 3)
+            result1 = np.zeros(shp, np.float32)
+            tmp = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).reshape(shp)
+
+            for i in numba.prange(n):
+                result1 += tmp
+
+            return result1
+
+        self.check(test_impl, 100)
+
+    @skip_unsupported
+    def test_two_d_array_reduction_prod(self):
+        def test_impl(n):
+            shp = (13, 17)
+            result1 = 2 * np.ones(shp, np.int_)
+            tmp = 2 * np.ones_like(result1)
+
+            for i in numba.prange(n):
+                result1 *= tmp
+
+            return result1
+
+        self.check(test_impl, 100)
+
+    @skip_unsupported
+    def test_three_d_array_reduction(self):
+        def test_impl(n):
+            shp = (3, 2, 7)
+            result1 = np.zeros(shp, np.int_)
+
+            for i in numba.prange(n):
+                result1 += np.ones(shp, np.int_)
+
+            return result1
+
+        self.check(test_impl, 100)
+
+    @skip_unsupported
+    def test_preparfor_canonicalize_kws(self):
+        # test canonicalize_array_math typing for calls with kw args
+        def test_impl(A):
+            return A.argsort() + 1
+
+        n = 211
+        A = np.arange(n)
+        self.check(test_impl, A)
 
 
 class TestPrangeBase(TestParforsBase):
@@ -1322,7 +1448,9 @@ class TestPrangeBase(TestParforsBase):
         cfunc = self.compile_njit(pyfunc, sig)
 
         # compile the prange injected function
-        cpfunc = self.compile_parallel(pfunc, sig)
+        with warnings.catch_warnings(record=True) as raised_warnings:
+            warnings.simplefilter('always')
+            cpfunc = self.compile_parallel(pfunc, sig)
 
         # if check_fastmath is True then check fast instructions
         if check_fastmath:
@@ -1335,6 +1463,7 @@ class TestPrangeBase(TestParforsBase):
             kwargs = dict({'fastmath_pcres': fastcpfunc}, **kwargs)
 
         self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
+        return raised_warnings
 
 
 class TestPrange(TestPrangeBase):
@@ -1806,6 +1935,19 @@ class TestPrange(TestPrangeBase):
                   c[k] = i + j + k
             return b.sum()
         self.prange_tester(test_impl, 4)
+
+    @skip_unsupported
+    def test_parfor_race_1(self):
+        def test_impl(x, y):
+            for j in range(y):
+                k = x
+            return k
+        raised_warnings = self.prange_tester(test_impl, 10, 20)
+        warning_obj = raised_warnings[0]
+        expected_msg = ("Variable k used in parallel loop may be written to "
+                        "simultaneously by multiple workers and may result "
+                        "in non-deterministic or unintended results.")
+        self.assertIn(expected_msg, str(warning_obj.message))
 
 
 @x86_only

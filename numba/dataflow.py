@@ -358,13 +358,20 @@ class DataFlowAnalysis(object):
             info.append(inst, func=func, vararg=vararg, res=res)
             info.push(res)
 
-    def op_BUILD_TUPLE_UNPACK_WITH_CALL(self, info, inst):
+    def _build_tuple_unpack(self, info, inst):
         # Builds tuple from other tuples on the stack
         tuples = list(reversed([info.pop() for _ in range(inst.arg)]))
         temps = [info.make_temp() for _ in range(len(tuples) - 1)]
         info.append(inst, tuples=tuples, temps=temps)
         # The result is in the last temp var
         info.push(temps[-1])
+
+    def op_BUILD_TUPLE_UNPACK_WITH_CALL(self, info, inst):
+        # just unpack the input tuple, call inst will be handled afterwards
+        self._build_tuple_unpack(info, inst)
+
+    def op_BUILD_TUPLE_UNPACK(self, info, inst):
+        self._build_tuple_unpack(info, inst)
 
     def op_BUILD_CONST_KEY_MAP(self, info, inst):
         keys = info.pop()
@@ -668,6 +675,28 @@ class DataFlowAnalysis(object):
         self.add_syntax_block(info, LoopBlock())
         info.append(inst)
 
+    def op_SETUP_WITH(self, info, inst):
+        cm = info.pop()    # the context-manager
+        self.add_syntax_block(info, WithBlock())
+        yielded = info.make_temp()
+        info.push(yielded)
+        info.append(inst, contextmanager=cm)
+
+    def op_WITH_CLEANUP(self, info, inst):
+        """
+        Note: py2 only opcode
+        """
+        info.append(inst)
+
+    def op_WITH_CLEANUP_START(self, info, inst):
+        info.append(inst)
+
+    def op_WITH_CLEANUP_FINISH(self, info, inst):
+        info.append(inst)
+
+    def op_END_FINALLY(self, info, inst):
+        info.append(inst)
+
     def op_POP_BLOCK(self, info, inst):
         block = self.pop_syntax_block(info)
         info.append(inst)
@@ -704,7 +733,7 @@ class DataFlowAnalysis(object):
             if MAKE_CLOSURE:
                 closure = info.pop()
             if num_annotations > 0:
-                annotations = info.pop() 
+                annotations = info.pop()
             if num_kwdefaults > 0:
                 kwdefaults = []
                 for i in range(num_kwdefaults):
@@ -727,7 +756,7 @@ class DataFlowAnalysis(object):
             if inst.arg & 0x1:
                 defaults = info.pop()
         res = info.make_temp()
-        info.append(inst, name=name, code=code, closure=closure, annotations=annotations, 
+        info.append(inst, name=name, code=code, closure=closure, annotations=annotations,
                     kwdefaults=kwdefaults, defaults=defaults, res=res)
         info.push(res)
 
@@ -753,6 +782,13 @@ class DataFlowAnalysis(object):
 
 
 class LoopBlock(object):
+    __slots__ = ('stack_offset',)
+
+    def __init__(self):
+        self.stack_offset = None
+
+
+class WithBlock(object):
     __slots__ = ('stack_offset',)
 
     def __init__(self):

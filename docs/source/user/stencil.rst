@@ -7,7 +7,7 @@
 Using the ``@stencil`` decorator
 ================================
 
-Stencils are a common computational pattern in which array elements 
+Stencils are a common computational pattern in which array elements
 are updated according to some fixed pattern called the stencil kernel.
 Numba provides the ``@stencil`` decorator so that users may
 easily specify a stencil kernel and Numba then generates the looping
@@ -21,7 +21,7 @@ Basic usage
 ===========
 
 An example use of the ``@stencil`` decorator::
- 
+
    from numba import stencil
 
    @stencil
@@ -38,8 +38,8 @@ Conceptually, the stencil kernel is run once for each element in the
 output array.  The return value from the stencil kernel is the value
 written into the output array for that particular element.
 
-The parameter ``a`` represents the input array over which the 
-kernel is applied.  
+The parameter ``a`` represents the input array over which the
+kernel is applied.
 Indexing into this array takes place with respect to the current element
 of the output array being processed.  For example, if element ``(x, y)``
 is being processed then ``a[0, 0]`` in the stencil kernel corresponds to
@@ -48,9 +48,9 @@ kernel corresponds to ``a[x - 1, y + 1]`` in the input array.
 
 Depending on the specified kernel, the kernel may not be applicable to the
 borders of the output array as this may cause the input array to be
-accessed out-of-bounds.  The way in which the stencil decorator handles 
-this situation is dependent upon which :ref:`stencil-mode` is selected.  
-The default mode is for the stencil decorator to set the border elements 
+accessed out-of-bounds.  The way in which the stencil decorator handles
+this situation is dependent upon which :ref:`stencil-mode` is selected.
+The default mode is for the stencil decorator to set the border elements
 of the output array to zero.
 
 To invoke a stencil on an input array, call the stencil as if it were
@@ -105,13 +105,13 @@ all such input array arguments.
 Kernel shape inference and border handling
 ==========================================
 
-In the above example and in most cases, the array indexing in the 
+In the above example and in most cases, the array indexing in the
 stencil kernel will exclusively use ``Integer`` literals.
 In such cases, the stencil decorator is able to analyze the stencil
 kernel to determine its size.  In the above example, the stencil
 decorator determines that the kernel is ``3 x 3`` in shape since indices
 ``-1`` to ``1`` are used for both the first and second dimensions.  Note that
-the stencil decorator also correctly handles non-symmetric and 
+the stencil decorator also correctly handles non-symmetric and
 non-square stencil kernels.
 
 Based on the size of the stencil kernel, the stencil decorator is
@@ -122,11 +122,21 @@ of the output array.  In the above example, points ``-1`` and ``+1`` are
 accessed in each dimension and thus the output array has a border
 of size one in all dimensions.
 
+The parallel mode is able to infer kernel indices as constants from
+simple expressions if possible. For example::
+
+    @njit(parallel=True)
+    def stencil_test(A):
+        c = 2
+        B = stencil(
+            lambda a, c: 0.3 * (a[-c+1] + a[0] + a[c-1]))(A, c)
+        return B
+
 
 Stencil decorator options
 =========================
 
-While the stencil decorator may be augmented in the future to 
+While the stencil decorator may be augmented in the future to
 provide additional mechanisms for border handling, at the moment
 the stencil decorator currently supports only one option.
 
@@ -138,7 +148,7 @@ the stencil decorator currently supports only one option.
 Sometimes it may be inconvenient to write the stencil kernel
 exclusively with ``Integer`` literals.  For example, let us say we
 would like to compute the trailing 30-day moving average of a
-time series of data.  One could write 
+time series of data.  One could write
 ``(a[-29] + a[-28] + ... + a[-1] + a[0]) / 30`` but the stencil
 decorator offers a more concise form using the ``neighborhood``
 option::
@@ -176,7 +186,7 @@ to a constant value, as specified by the ``cval`` parameter.
 
 The optional cval parameter defaults to zero but can be set to any
 desired value, which is then used for the border of the output array
-if the mode parameter is set to ``constant``.  The cval parameter is 
+if the mode parameter is set to ``constant``.  The cval parameter is
 ignored in all other modes.  The type of the cval parameter must match
 the return type of the stencil kernel.  If the user wishes the output
 array to be constructed from a particular type then they should ensure
@@ -206,7 +216,7 @@ The stencil decorator returns a callable object of type ``StencilFunc``.
 ``StencilFunc`` objects contains a number of attributes but the only one of
 potential interest to users is the ``neighborhood`` attribute.
 If the ``neighborhood`` option was passed to the stencil decorator then
-the provided neighborhood is stored in this attribute.  Else, upon 
+the provided neighborhood is stored in this attribute.  Else, upon
 first execution or compilation, the system calculates the neighborhood
 as described above and then stores the computed neighborhood into this
 attribute.  A user may then inspect the attribute if they wish to verify
@@ -226,8 +236,8 @@ also include the following optional parameter.
 -------
 
 The optional ``out`` parameter is added to every stencil function
-generated by Numba.  If specified, the ``out`` parameter tells 
-Numba that the user is providing their own pre-allocated array 
+generated by Numba.  If specified, the ``out`` parameter tells
+Numba that the user is providing their own pre-allocated array
 to be used for the output of the stencil.  In this case, the
 stencil function will not allocate its own output array.
 Users should assure that the return type of the stencil kernel can

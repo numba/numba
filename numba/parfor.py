@@ -431,7 +431,8 @@ class Parfor(ir.Expr, ir.Stmt):
             equiv_set,
             pattern,
             flags,
-            no_sequential_lowering=False):
+            no_sequential_lowering=False,
+            races=set()):
         super(Parfor, self).__init__(
             op='parfor',
             loc=loc
@@ -455,6 +456,7 @@ class Parfor(ir.Expr, ir.Stmt):
         # if True, this parfor shouldn't be lowered sequentially even with the
         # sequential lowering option
         self.no_sequential_lowering = no_sequential_lowering
+        self.races = races
         if config.DEBUG_ARRAY_OPT_STATS:
             fmt = 'Parallel for-loop #{} is produced from pattern \'{}\' at {}'
             print(fmt.format(
@@ -481,8 +483,23 @@ class Parfor(ir.Expr, ir.Stmt):
 
         return all_uses
 
-    def get_shape_classes(self, var):
-        return self.equiv_set.get_shape_classes(var)
+    def get_shape_classes(self, var, typemap=None):
+        """get the shape classes for a given variable.
+        If a typemap is specified then use it for type resolution
+        """
+        # We get shape classes from the equivalence set but that
+        # keeps its own typemap at a time prior to lowering.  So
+        # if something is added during lowering then we can pass
+        # in a type map to use.  We temporarily replace the
+        # equivalence set typemap, do the work and then restore
+        # the original on the way out.
+        if typemap is not None:
+            save_typemap = self.equiv_set.typemap
+            self.equiv_set.typemap = typemap
+        res = self.equiv_set.get_shape_classes(var)
+        if typemap is not None:
+            self.equiv_set.typemap = save_typemap
+        return res
 
     def dump(self, file=None):
         file = file or sys.stdout
@@ -578,10 +595,17 @@ class PreParforPass(object):
                             break
                     elif (isinstance(expr, ir.Expr) and expr.op == 'getattr' and
                           expr.attr == 'dtype'):
-                        # Replace getattr call "A.dtype" with the actual type itself.
-                        # This helps remove superfulous dependencies from parfor.
+                        # Replace getattr call "A.dtype" with numpy.dtype(<actual type>).
+                        # This helps remove superfluous dependencies from parfor.
                         typ = self.typemap[expr.value.name]
                         if isinstance(typ, types.npytypes.Array):
+                            # Convert A.dtype to four statements.
+                            # 1) Get numpy global.
+                            # 2) Create var for known type of array, e.g., numpy.float64
+                            # 3) Get dtype function from numpy module.
+                            # 4) Create var for numpy.dtype(var from #2).
+
+                            # Create var for numpy module.
                             dtype = typ.dtype
                             scope = block.scope
                             loc = instr.loc
@@ -589,18 +613,46 @@ class PreParforPass(object):
                             self.typemap[g_np_var.name] = types.misc.Module(numpy)
                             g_np = ir.Global('np', numpy, loc)
                             g_np_assign = ir.Assign(g_np, g_np_var, loc)
+
+                            # Create var for type infered type of the array, e.g., numpy.float64.
                             typ_var = ir.Var(scope, mk_unique_var("$np_typ_var"), loc)
-                            self.typemap[typ_var.name] = types.DType(dtype)
+                            self.typemap[typ_var.name] = types.functions.NumberClass(dtype)
                             dtype_str = str(dtype)
                             if dtype_str == 'bool':
                                 dtype_str = 'bool_'
                             np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
                             typ_var_assign = ir.Assign(np_typ_getattr, typ_var, loc)
-                            instr.value = typ_var
+
+                            # Get the dtype function from the numpy module.
+                            dtype_attr_var = ir.Var(scope, mk_unique_var("$dtype_attr_var"), loc)
+                            temp = find_template(numpy.dtype)
+                            tfunc = numba.types.Function(temp)
+                            tfunc.get_call_type(self.typingctx, (self.typemap[typ_var.name],), {})
+                            self.typemap[dtype_attr_var.name] = types.functions.Function(temp)
+                            dtype_attr_getattr = ir.Expr.getattr(g_np_var, 'dtype', loc)
+                            dtype_attr_assign = ir.Assign(dtype_attr_getattr, dtype_attr_var, loc)
+
+                            # Call numpy.dtype on the statically coded type two steps above.
+                            dtype_var = ir.Var(scope, mk_unique_var("$dtype_var"), loc)
+                            self.typemap[dtype_var.name] = types.npytypes.DType(dtype)
+                            dtype_getattr = ir.Expr.call(dtype_attr_var, [typ_var], (), loc)
+                            dtype_assign = ir.Assign(dtype_getattr, dtype_var, loc)
+                            self.calltypes[dtype_getattr] = signature(
+                                self.typemap[dtype_var.name], self.typemap[typ_var.name])
+
+                            # The original A.dtype rhs is replaced with result of this call.
+                            instr.value = dtype_var
+                            # Add statements to body of the code.
+                            block.body.insert(0, dtype_assign)
+                            block.body.insert(0, dtype_attr_assign)
                             block.body.insert(0, typ_var_assign)
                             block.body.insert(0, g_np_assign)
                             break
 
+def find_template(op):
+    for ft in numba.typing.templates.builtin_registry.functions:
+        if ft.key == op:
+            return ft
 
 class ParforPass(object):
 
@@ -859,6 +911,17 @@ class ParforPass(object):
                     # Add an empty block to the end of loop body
                     end_label = next_label()
                     loop_body[end_label] = ir.Block(scope, loc)
+
+                    # Detect races in the prange.
+                    # Races are defs in the parfor body that are live at the exit block.
+                    bodydefs = set()
+                    for bl in body_labels:
+                        bodydefs = bodydefs.union(usedefs.defmap[bl])
+                    exit_lives = set()
+                    for bl in loop.exits:
+                        exit_lives = exit_lives.union(live_map[bl])
+                    races = bodydefs.intersection(exit_lives)
+
                     # replace jumps to header block with the end block
                     for l in body_labels:
                         last_inst = loop_body[l].body[-1]
@@ -1015,7 +1078,7 @@ class ParforPass(object):
                                     orig_index_var if mask_indices else index_var,
                                     equiv_set,
                                     ("prange", loop_kind),
-                                    self.flags)
+                                    self.flags, races=races)
                     # add parfor to entry block's jump target
                     jump = blocks[entry].body[-1]
                     jump.target = list(loop.exits)[0]
@@ -2005,7 +2068,7 @@ def get_parfor_params(blocks, options_fusion):
             dummy_block.body = block.body[:i]
             before_defs = compute_use_defs({0: dummy_block}).defmap[0]
             pre_defs |= before_defs
-            parfor.params = get_parfor_params_inner(parfor, pre_defs, options_fusion)
+            parfor.params = get_parfor_params_inner(parfor, pre_defs, options_fusion) | parfor.races
             parfor_ids.add(parfor.id)
 
         pre_defs |= all_defs[label]
