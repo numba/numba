@@ -565,24 +565,26 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 yield (n, -1 * n)
                 yield (-1 * m, -1 * n)
 
-        for k in range(-10, 10):
+        def check(N, params):
+            expected = pyfunc(N, **params)
+            got = cfunc(N, **params)
+            self.assertPreciseEqual(expected, got)
+
+        for k in itertools.chain.from_iterable(([None], range(-10, 10))):
             for shape in shape_variations():
                 N, M = shape
 
-                # no second arg
-                expected = pyfunc(N, k=k)
-                got = cfunc(N, k=k)
-                self.assertPreciseEqual(expected, got)
+                if k is None:
+                    params = {}
+                else:
+                    params = {'k': k}
 
-                # second arg provided and None
-                expected = pyfunc(N, M=None, k=k)
-                got = cfunc(N, M=None, k=k)
-                self.assertPreciseEqual(expected, got)
+                # second argument M not supplied
+                check(N, params)
 
-                # second arg provided and not None
-                expected = pyfunc(N, M=M, k=k)
-                got = cfunc(N, M=M, k=k)
-                self.assertPreciseEqual(expected, got)
+                # second argument M supplied
+                params['M'] = M
+                check(N, params)
 
     def test_tri_exceptions(self):
         pyfunc = tri
@@ -603,9 +605,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         def _check(arr):
-            for k in range(-10, 10):
-                expected = pyfunc(arr, k)
-                got = cfunc(arr, k)
+            for k in itertools.chain.from_iterable(([None], range(-10, 10))):
+                if k is None:
+                    params = {}
+                else:
+                    params = {'k': k}
+                expected = pyfunc(arr, **params)
+                got = cfunc(arr, **params)
                 # TODO: Contiguity of result not consistent with numpy
                 self.assertEqual(got.dtype, expected.dtype)
                 np.testing.assert_array_equal(got, expected)
