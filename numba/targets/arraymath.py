@@ -915,7 +915,8 @@ if numpy_version >= (1, 9):
 # Building matrices
 
 @register_jitable
-def _tri_impl(shape, k):
+def _tri_impl(N, M, k):
+    shape = max(0, N), max(0, M)  # numpy floors each dimension at 0
     out = np.empty(shape, dtype=np.float64)  # numpy default dtype
 
     for i in range(shape[0]):
@@ -925,10 +926,6 @@ def _tri_impl(shape, k):
 
     return out
 
-@register_jitable
-def _floor_dimensions(N, M):
-    return max(0, N), max(0, M)
-
 @overload(np.tri)
 def np_tri(N, M=None, k=0):
 
@@ -936,18 +933,12 @@ def np_tri(N, M=None, k=0):
     if not isinstance(k, types.Integer):
         raise TypeError('k must be an integer')
 
-    def np_tri_impl(N, M=None, k=0):
-        shape = _floor_dimensions(N, M)
-        return _tri_impl(shape, k)
+    def tri_impl(N, M=None, k=0):
+        if M is None:
+            M = N
+        return _tri_impl(N, M, k)
 
-    def np_tri_impl_no_m(N, M=None, k=0):
-        shape = _floor_dimensions(N, N)
-        return _tri_impl(shape, k)
-
-    if M in (None, types.none):
-        return np_tri_impl_no_m
-    else:
-        return np_tri_impl
+    return tri_impl
 
 @register_jitable
 def _make_square(m):
