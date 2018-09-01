@@ -72,8 +72,8 @@ def correlate(a, v):
 def convolve(a, v):
     return np.convolve(a, v)
 
-def tri(M, N=None, k=0):
-    return np.tri(M, N, k)
+def tri(N, M=None, k=0):
+    return np.tri(N, M, k)
 
 def tril(m, k=0):
     return np.tril(m, k)
@@ -558,15 +558,21 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         for k in range(-10, 10):
             for shape in (5, 6), (10, 5), (1, 1), (0, 1), (0, 0):
-                expected = pyfunc(*shape, k=k)
-                got = cfunc(*shape, k=k)
-                self.assertPreciseEqual(expected, got)
+                N, M = shape
 
-        # no second arg
-        for k in range(-10, 10):
-            for N in range(0, 12):
+                # no second arg
                 expected = pyfunc(N, k=k)
                 got = cfunc(N, k=k)
+                self.assertPreciseEqual(expected, got)
+
+                # second arg provided and None
+                expected = pyfunc(N, M=None, k=k)
+                got = cfunc(N, M=None, k=k)
+                self.assertPreciseEqual(expected, got)
+
+                # second arg provided and not None
+                expected = pyfunc(N, M=M, k=k)
+                got = cfunc(N, M=M, k=k)
                 self.assertPreciseEqual(expected, got)
 
     def test_tri_exceptions(self):

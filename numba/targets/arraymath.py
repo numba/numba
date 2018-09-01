@@ -912,7 +912,7 @@ if numpy_version >= (1, 9):
         return nanmedian_impl
 
 #----------------------------------------------------------------------------
-# Element-wise computations
+# Building matrices
 
 @register_jitable
 def _tri_impl(shape, k):
@@ -1022,6 +1022,9 @@ def my_triu(m, k=0):
         return np_triu_impl_2d
     else:
         return np_triu_impl_multi
+
+#----------------------------------------------------------------------------
+# Element-wise computations
 
 @register_jitable
 def _fill_diagonal_params(a, wrap):
