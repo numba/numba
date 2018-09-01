@@ -556,8 +556,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         pyfunc = tri
         cfunc = jit(nopython=True)(pyfunc)
 
-        for k in range(-10, 10):
+        def shape_variations():
             for shape in (5, 6), (10, 5), (1, 1), (0, 1), (0, 0):
+                m, n = shape
+                yield (m, n)
+                # one or both shape dimensions negative
+                yield (-1 * m, n)
+                yield (n, -1 * n)
+                yield (-1 * m, -1 * n)
+
+        for k in range(-10, 10):
+            for shape in shape_variations():
                 N, M = shape
 
                 # no second arg
@@ -597,7 +606,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for k in range(-10, 10):
                 expected = pyfunc(arr, k)
                 got = cfunc(arr, k)
-                # TODO: Contiguity of result not consistent
+                # TODO: Contiguity of result not consistent with numpy
                 self.assertEqual(got.dtype, expected.dtype)
                 np.testing.assert_array_equal(got, expected)
 
