@@ -556,35 +556,43 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         pyfunc = tri
         cfunc = jit(nopython=True)(pyfunc)
 
-        def shape_variations():
-            for shape in (5, 6), (10, 5), (1, 1), (0, 1), (0, 0):
-                m, n = shape
-                yield (m, n)
-                # one or both shape dimensions negative
-                yield (-1 * m, n)
-                yield (n, -1 * n)
-                yield (-1 * m, -1 * n)
+        def n_variations():
+            return np.arange(-4, 8)  # number of rows
 
-        def check(N, params):
-            expected = pyfunc(N, **params)
-            got = cfunc(N, **params)
+        def m_variations():
+            return itertools.chain.from_iterable(([None], range(-5, 9)))  # number of columns
+
+        def k_variations():
+            return np.arange(-10, 10)  # offset
+
+        def _check(params):
+            expected = pyfunc(**params)
+            got = cfunc(**params)
             self.assertPreciseEqual(expected, got)
 
-        for k in itertools.chain.from_iterable(([None], range(-10, 10))):
-            for shape in shape_variations():
-                N, M = shape
+        # N supplied, M and k defaulted
+        for n in n_variations():
+            params = {'N': n}
+            _check(params)
 
-                if k is None:
-                    params = {}
-                else:
-                    params = {'k': k}
+        # N and M supplied, k defaulted
+        for n in n_variations():
+            for m in m_variations():
+                params = {'N': n, 'M': m}
+                _check(params)
 
-                # second argument M not supplied
-                check(N, params)
+        # N and k supplied, M defaulted
+        for n in n_variations():
+            for k in k_variations():
+                params = {'N': n, 'k': k}
+                _check(params)
 
-                # second argument M supplied
-                params['M'] = M
-                check(N, params)
+        # N, M and k supplied
+        for n in n_variations():
+            for k in k_variations():
+                for m in m_variations():
+                    params = {'N': n, 'M': m, 'k': k}
+                    _check(params)
 
     def test_tri_exceptions(self):
         pyfunc = tri
