@@ -912,7 +912,7 @@ if numpy_version >= (1, 9):
         return nanmedian_impl
 
 #----------------------------------------------------------------------------
-# Element-wise computations
+# Building matrices
 
 @register_jitable
 def _np_vander(x, N, increasing):
@@ -940,14 +940,14 @@ def np_vander(x, N=None, increasing=False):
             raise TypingError('Second argument N must be None or an integer')
 
     def np_vander_impl(x, N=None, increasing=False):
-        return _np_vander(x, N, increasing)
+        return _np_vander(x.astype(dtype), N, increasing)
 
     def np_vander_x_seq_impl(x, N=None, increasing=False):
         x = np.array(x)
         return _np_vander(x, N, increasing)
 
     def np_vander_no_n_impl(x, N=None, increasing=False):
-        return _np_vander(x, len(x), increasing)
+        return _np_vander(x.astype(dtype), len(x), increasing)
 
     def np_vander_no_n_x_seq_impl(x, N=None, increasing=False):
         x = np.array(x)
@@ -955,14 +955,21 @@ def np_vander(x, N=None, increasing=False):
 
     if N in (None, types.none):
         if isinstance(x, types.Array):
+            x_dt = as_dtype(x.dtype)
+            dtype = np.promote_types(x_dt, int)
             return np_vander_no_n_impl
         elif isinstance(x, (types.Tuple, types.Sequence)):
             return np_vander_no_n_x_seq_impl
     else:
         if isinstance(x, types.Array):
+            x_dt = as_dtype(x.dtype)
+            dtype = np.promote_types(x_dt, int)
             return np_vander_impl
         elif isinstance(x, (types.Tuple, types.Sequence)):
             return np_vander_x_seq_impl
+
+#----------------------------------------------------------------------------
+# Element-wise computations
 
 @register_jitable
 def _fill_diagonal_params(a, wrap):

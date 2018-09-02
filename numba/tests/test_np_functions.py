@@ -550,26 +550,47 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         pyfunc = np_vander
         cfunc = jit(nopython=True)(pyfunc)
 
+        def _check_output(params):
+            expected = pyfunc(**params)
+            got = cfunc(**params)
+            self.assertPreciseEqual(expected, got)
+
         def _check(x):
-            N_choices = [-1, None, 0, 1, 2, 3, 4, 5]
-            increasing_choices = [None, True, False]
+            n_choices = [None, 0, 1, 2, 5, 10]
+            increasing_choices = [True, False]
 
-            for N, increasing in itertools.product(N_choices, increasing_choices):
-                params = {}
-                if N != -1:
-                    params['N'] = N
-                if increasing is not None:
-                    params['increasing'] = increasing
+            # N and increasing defaulted
+            params = {'x': x}
+            _check_output(params)
 
-                expected = pyfunc(x, **params)
-                got = cfunc(x, **params)
-                self.assertPreciseEqual(expected, got)
+            # N provided and increasing defaulted
+            for n in n_choices:
+                params = {'x': x, 'N': n}
+                _check_output(params)
+
+            # increasing provided and N defaulted:
+            for increasing in increasing_choices:
+                params = {'x': x, 'increasing': increasing}
+                _check_output(params)
+
+            # both n and increasing supplied
+            for n in n_choices:
+                for increasing in increasing_choices:
+                    params = {'x': x, 'N': n, 'increasing': increasing}
+                    _check_output(params)
 
         _check(np.array([1, 2, 3, 5]))
         _check(np.arange(7) - 10.5)
         _check(np.linspace(3, 10, 5))
         _check(np.array([1.2, np.nan, np.inf, -np.inf]))
         _check(np.array([]))
+
+        # boolean array
+        _check(np.array([True, False, True]))
+
+        # cycle through dtypes to check type promotion a la numpy
+        for dtype in np.int32, np.int64, np.float32, np.float64:
+            _check(np.arange(10, dtype=dtype))
 
         # non array inputs
         _check([0, 1, 2, 3])
