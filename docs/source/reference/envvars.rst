@@ -235,6 +235,20 @@ Compilation options
         portable code (portable within the same architecture and OS),
         simply set ``NUMBA_CPU_NAME=generic``.
 
+.. envvar:: NUMBA_FUNCTION_CACHE_SIZE
+
+    Override the size of the function cache for retaining recently
+    deserialized functions in memory.  In systems like
+    `Dask <http://dask.pydata.org>`_, it is common for functions to be deserialized
+    multiple times.  Numba will cache functions as long as there is a
+    reference somewhere in the interpreter.  This cache size variable controls
+    how many functions that are no longer referenced will also be retained,
+    just in case they show up in the future.  The implementation of this is
+    not a true LRU, but the large size of the cache should be sufficient for
+    most situations.
+
+    *Default value:* 128
+
 
 GPU support
 -----------

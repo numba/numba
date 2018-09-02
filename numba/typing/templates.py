@@ -573,7 +573,7 @@ def make_overload_method_template(typ, attr, overload_func):
                                             base=_OverloadMethodTemplate)
 
 
-def bound_function(template_key):
+def bound_function(template_key, support_literals=False):
     """
     Wrap an AttributeTemplate resolve_* method to allow it to
     resolve an instance method's signature rather than a instance attribute.
@@ -601,6 +601,7 @@ def bound_function(template_key):
                         sig.recvr = ty
                     return sig
 
+            MethodTemplate.support_literals = support_literals
             return types.BoundFunction(MethodTemplate, ty)
         return attribute_resolver
     return wrapper

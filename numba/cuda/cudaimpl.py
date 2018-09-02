@@ -377,6 +377,11 @@ def ptx_popc(context, builder, sig, args):
     return builder.ctpop(args[0])
 
 
+@lower(stubs.fma, types.Any, types.Any, types.Any)
+def ptx_fma(context, builder, sig, args):
+    return builder.fma(*args)
+
+
 @lower(stubs.brev, types.u4)
 def ptx_brev_u4(context, builder, sig, args):
     # FIXME the llvm.bitreverse.i32 intrinsic isn't supported by nvcc

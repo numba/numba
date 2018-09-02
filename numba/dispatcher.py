@@ -10,14 +10,13 @@ import sys
 import uuid
 import weakref
 
-import numba
 from numba import _dispatcher, compiler, utils, types, config, errors
 from numba.typeconv.rules import default_type_manager
 from numba import sigutils, serialize, typing
 from numba.typing.templates import fold_arguments
-from numba.typing.typeof import Purpose, typeof, typeof_impl
+from numba.typing.typeof import Purpose, typeof
 from numba.bytecode import get_code_object
-from numba.six import create_bound_method, next, reraise
+from numba.six import create_bound_method, reraise
 from .caching import NullCache, FunctionCache
 
 
@@ -514,6 +513,9 @@ class Dispatcher(_DispatcherBase):
         }
     # A {uuid -> instance} mapping, for deserialization
     _memo = weakref.WeakValueDictionary()
+    # hold refs to last N functions deserialized, retaining them in _memo
+    # regardless of whether there is another reference
+    _recent = collections.deque(maxlen=config.FUNCTION_CACHE_SIZE)
     __uuid = None
     __numba__ = 'py_func'
 
@@ -624,6 +626,7 @@ class Dispatcher(_DispatcherBase):
         assert self.__uuid is None
         self.__uuid = u
         self._memo[u] = self
+        self._recent.append(self)
 
     def compile(self, sig):
         if not self._can_compile:
@@ -681,9 +684,9 @@ class Dispatcher(_DispatcherBase):
             )
 
 
-class LiftedLoop(_DispatcherBase):
+class LiftedCode(_DispatcherBase):
     """
-    Implementation of the hidden dispatcher objects used for lifted loop
+    Implementation of the hidden dispatcher objects used for lifted code
     (a lifted loop is really compiled as a separate function).
     """
     _fold_args = False
@@ -707,6 +710,11 @@ class LiftedLoop(_DispatcherBase):
         """
         return self.func_ir.loc.line
 
+    def _pre_compile(self, args, return_type, flags):
+        """Pre-compile actions
+        """
+        pass
+
     def compile(self, sig):
         # Use cache and compiler in a critical section
         with compiler.lock_compiler:
@@ -722,7 +730,8 @@ class LiftedLoop(_DispatcherBase):
                 if existing is not None:
                     return existing.entry_point
 
-                assert not flags.enable_looplift, "Enable looplift flags is on"
+                self._pre_compile(args, return_type, flags)
+
                 # Clone IR to avoid mutation in rewrite pass
                 cloned_func_ir = self.func_ir.copy()
                 cres = compiler.compile_ir(typingctx=self.typingctx,
@@ -739,6 +748,38 @@ class LiftedLoop(_DispatcherBase):
 
                 self.add_overload(cres)
                 return cres.entry_point
+
+
+class LiftedLoop(LiftedCode):
+    def _pre_compile(self, args, return_type, flags):
+        assert not flags.enable_looplift, "Enable looplift flags is on"
+
+
+class LiftedWith(LiftedCode):
+    @property
+    def _numba_type_(self):
+        return types.Dispatcher(self)
+
+    def get_call_template(self, args, kws):
+        """
+        Get a typing.ConcreteTemplate for this dispatcher and the given
+        *args* and *kws* types.  This enables the resolving of the return type.
+
+        A (template, pysig, args, kws) tuple is returned.
+        """
+        # Ensure an overload is available
+        if self._can_compile:
+            self.compile(tuple(args))
+
+        pysig = None
+        # Create function type for typing
+        func_name = self.py_func.__name__
+        name = "CallTemplate({0})".format(func_name)
+        # The `key` isn't really used except for diagnosis here,
+        # so avoid keeping a reference to `cfunc`.
+        call_template = typing.make_concrete_template(
+            name, key=func_name, signatures=self.nopython_signatures)
+        return call_template, pysig, args, kws
 
 
 # Initialize typeof machinery

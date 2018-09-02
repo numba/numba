@@ -298,3 +298,6 @@ def _autogenerate():
 
 
 _autogenerate()
+
+def setup(app):
+    app.add_stylesheet("numba-docs.css")

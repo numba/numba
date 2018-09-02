@@ -7,6 +7,8 @@ import sys
 import threading
 import warnings
 
+import numpy as np
+
 from numba import ctypes_support as ctypes
 from numba import config, compiler, types, sigutils
 from numba.typing.templates import AbstractTemplate, ConcreteTemplate
@@ -225,18 +227,6 @@ class ExternFunction(object):
         self.sig = sig
 
 
-def _compute_thread_per_block(kernel, tpb):
-    if tpb != 0:
-        return tpb
-
-    else:
-        try:
-            tpb = kernel.autotune.best()
-        except ValueError:
-            warnings.warn('Could not autotune, using default tpb of 128')
-            tpb = 128
-
-        return tpb
 
 class ForAll(object):
     def __init__(self, kernel, ntasks, tpb, stream, sharedmem):
@@ -252,12 +242,44 @@ class ForAll(object):
         else:
             kernel = self.kernel
 
-        tpb = _compute_thread_per_block(kernel, self.thread_per_block)
+        tpb = self._compute_thread_per_block(kernel)
         tpbm1 = tpb - 1
         blkct = (self.ntasks + tpbm1) // tpb
 
         return kernel.configure(blkct, tpb, stream=self.stream,
                                 sharedmem=self.sharedmem)(*args)
+
+    def _compute_thread_per_block(self, kernel):
+        tpb = self.thread_per_block
+        # Prefer user-specified config
+        if tpb != 0:
+            return tpb
+        # Else, ask the driver to give a good cofnig
+        else:
+            ctx = get_context()
+            kwargs = dict(
+                func=kernel._func.get(),
+                b2d_func=lambda tpb: 0,
+                memsize=self.sharedmem,
+                blocksizelimit=1024,
+            )
+            try:
+                # Raises from the driver if the feature is unavailable
+                _, tpb = ctx.get_max_potential_block_size(**kwargs)
+            except AttributeError:
+                # Fallback to table-based approach.
+                tpb = self._fallback_autotune_best(kernel)
+                raise
+            return tpb
+
+    def _fallback_autotune_best(self, kernel):
+        try:
+            tpb = kernel.autotune.best()
+        except ValueError:
+            warnings.warn('Could not autotune, using default tpb of 128')
+            tpb = 128
+
+        return tpb
 
 
 class CUDAKernelBase(object):
@@ -653,6 +675,9 @@ class CUDAKernel(CUDAKernelBase):
             kernelargs.append(ctypes.c_double(val.real))
             kernelargs.append(ctypes.c_double(val.imag))
 
+        elif isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
+            kernelargs.append(ctypes.c_int64(val.view(np.int64)))
+
         elif isinstance(ty, types.Record):
             devrec = wrap_arg(val).to_device(retr, stream)
             kernelargs.append(devrec)
@@ -660,10 +685,10 @@ class CUDAKernel(CUDAKernelBase):
         else:
             raise NotImplementedError(ty, val)
 
-
     @property
     def autotune(self):
         """Return the autotuner object associated with this kernel."""
+        warnings.warn(_deprec_warn_msg.format('autotune'), DeprecationWarning)
         has_autotune = hasattr(self, '_autotune')
         if has_autotune and self._autotune.dynsmem == self.sharedmem:
             return self._autotune
@@ -680,8 +705,13 @@ class CUDAKernel(CUDAKernelBase):
         number of warps that can be active on the multiprocessor at once.
         Calculate the theoretical occupancy of the kernel given the
         current configuration."""
+        warnings.warn(_deprec_warn_msg.format('occupancy'), DeprecationWarning)
         thread_per_block = reduce(operator.mul, self.blockdim, 1)
         return self.autotune.closest(thread_per_block)
+
+
+_deprec_warn_msg = ("The .{} attribute is is deprecated and will be "
+                    "removed in a future release")
 
 
 class AutoJitCUDAKernel(CUDAKernelBase):

@@ -20,6 +20,7 @@ import functools
 import copy
 import warnings
 import logging
+from itertools import product
 from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
                     c_void_p, c_float)
 import contextlib
@@ -92,16 +93,16 @@ def find_driver():
     if sys.platform == 'win32':
         dlloader = ctypes.WinDLL
         dldir = ['\\windows\\system32']
-        dlname = 'nvcuda.dll'
+        dlnames = ['nvcuda.dll']
     elif sys.platform == 'darwin':
         dlloader = ctypes.CDLL
         dldir = ['/usr/local/cuda/lib']
-        dlname = 'libcuda.dylib'
+        dlnames = ['libcuda.dylib']
     else:
         # Assume to be *nix like
         dlloader = ctypes.CDLL
         dldir = ['/usr/lib', '/usr/lib64']
-        dlname = 'libcuda.so'
+        dlnames = ['libcuda.so', 'libcuda.so.1']
 
     if envpath is not None:
         try:
@@ -117,7 +118,8 @@ def find_driver():
     else:
         # First search for the name in the default library path.
         # If that is not found, try the specific path.
-        candidates = [dlname] + [os.path.join(x, dlname) for x in dldir]
+        candidates = dlnames + [os.path.join(x, y)
+                                for x, y in product(dldir, dlnames)]
 
     # Load the driver; Collect driver error information
     path_not_exist = []
@@ -695,8 +697,8 @@ class Context(object):
         self._attempt_allocation(allocator)
 
         _memory_finalizer = _make_mem_finalizer(driver.cuMemFree, bytesize)
-        mem = MemoryPointer(weakref.proxy(self), ptr, bytesize,
-                            _memory_finalizer(self, ptr))
+        mem = AutoFreePointer(weakref.proxy(self), ptr, bytesize,
+                              _memory_finalizer(self, ptr))
         self.allocations[ptr.value] = mem
         return mem.own()
 
@@ -869,7 +871,7 @@ def load_module_image(context, image):
     """
     image must be a pointer
     """
-    logsz = os.environ.get('NUMBAPRO_CUDA_LOG_SIZE', 1024)
+    logsz = int(os.environ.get('NUMBAPRO_CUDA_LOG_SIZE', 1024))
 
     jitinfo = (c_char * logsz)()
     jiterrors = (c_char * logsz)()
@@ -1141,6 +1143,15 @@ class IpcHandle(object):
 
 
 class MemoryPointer(object):
+    """A memory pointer that owns the buffer with an optional finalizer.
+
+    When an instance is deleted, the finalizer will be called regardless
+    of the `.refct`.
+
+    An instance is created with `.refct=1`.  The buffer lifetime
+    is tied to the MemoryPointer instance's lifetime.  The finalizer is invoked
+    only if the MemoryPointer instance's lifetime ends.
+    """
     __cuda_memory__ = True
 
     def __init__(self, context, pointer, size, finalizer=None, owner=None):
@@ -1149,7 +1160,7 @@ class MemoryPointer(object):
         self.size = size
         self._cuda_memsize_ = size
         self.is_managed = finalizer is not None
-        self.refct = 0
+        self.refct = 1
         self.handle = self.device_pointer
         self._owner = owner
 
@@ -1204,6 +1215,19 @@ class MemoryPointer(object):
     @property
     def device_ctypes_pointer(self):
         return self.device_pointer
+
+
+class AutoFreePointer(MemoryPointer):
+    """Modifies the ownership semantic of the MemoryPointer so that the
+    instance lifetime is directly tied to the number of references.
+
+    When `.refct` reaches zero, the finalizer is invoked.
+    """
+    def __init__(self, *args, **kwargs):
+        super(AutoFreePointer, self).__init__(*args, **kwargs)
+        # Releease the self reference to the buffer, so that the finalizer
+        # is invoked if all the derived pointers are gone.
+        self.refct -= 1
 
 
 class MappedMemory(MemoryPointer):
@@ -1664,6 +1688,22 @@ def device_memory_size(devmem):
     return sz
 
 
+def _is_datetime_dtype(obj):
+    """Returns True if the obj.dtype is datetime64 or timedelta64
+    """
+    dtype = getattr(obj, 'dtype', None)
+    return dtype is not None and dtype.char in 'Mm'
+
+
+def _workaround_for_datetime(obj):
+    """Workaround for numpy#4983: buffer protocol doesn't support
+    datetime64 or timedelta64.
+    """
+    if _is_datetime_dtype(obj):
+        obj = obj.view(np.int64)
+    return obj
+
+
 def host_pointer(obj):
     """
     NOTE: The underlying data pointer from the host data buffer is used and
@@ -1673,12 +1713,14 @@ def host_pointer(obj):
     if isinstance(obj, (int, long)):
         return obj
 
-    forcewritable = isinstance(obj, np.void)
+    forcewritable = isinstance(obj, np.void) or _is_datetime_dtype(obj)
+    obj = _workaround_for_datetime(obj)
     return mviewbuf.memoryview_get_buffer(obj, forcewritable)
 
 
 def host_memory_extents(obj):
     "Returns (start, end) the start and end pointer of the array (half open)."
+    obj = _workaround_for_datetime(obj)
     return mviewbuf.memoryview_get_extents(obj)
 
 

@@ -14,7 +14,7 @@ import weakref
 import logging
 from contextlib import contextmanager
 
-from collections import Sequence, defaultdict, deque
+from collections import defaultdict, deque
 from numba.utils import total_ordering
 from numba import mviewbuf
 from numba import utils
@@ -23,6 +23,12 @@ from .error import HsaSupportError, HsaDriverError, HsaApiError
 from . import enums, enums_ext, drvapi
 from numba.utils import longint as long
 import numpy as np
+
+
+if config.PYVERSION >= (3, 3):
+    from collections.abc import Sequence
+else:
+    from collections import Sequence
 
 
 _logger = logging.getLogger(__name__)
@@ -445,6 +451,14 @@ class Agent(HsaWrapper):
     @property
     def mempools(self):
         return self._mempools
+
+    @property
+    def wavebits(self):
+        """
+        log2(wavefront_size)
+        """
+        # assume wavefront_size will always be a power of 2
+        return bin(self.wavefront_size)[::-1].index('1')
 
     def _initialize_regions(self):
         region_ids = []
@@ -1377,6 +1391,15 @@ class Stream(object):
                 cb()
             del self._callbacks[sig]
             ct += 1
+
+    @contextmanager
+    def auto_synchronize(self):
+        '''
+        A context manager that waits for all commands in this stream to execute
+        and commits any pending memory transfers upon exiting the context.
+        '''
+        yield self
+        self.synchronize()
 
 
 def _make_mem_finalizer(dtor):

@@ -3,12 +3,11 @@ from __future__ import print_function, absolute_import
 from collections import namedtuple
 import ctypes
 import enum
-import sys
 
 import numpy as np
 
 from numba import numpy_support, types, utils, smartarray
-from numba import ir, errors
+from numba import errors
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -213,3 +212,4 @@ def _typeof_ndarray(val, c):
 def typeof_array(val, c):
     arrty = typeof_impl(val.get('host'), c)
     return types.SmartArrayType(arrty.dtype, arrty.ndim, arrty.layout, type(val))
+

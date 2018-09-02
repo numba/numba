@@ -11,9 +11,9 @@ environment:
   matrix:
     # Since appveyor is quite slow, we only use a single configuration
     # and a subset of the test suite (see test_script below)
-    - PYTHON: "3.6"
+    - PYTHON: "3.7"
       ARCH: "64"
-      NUMPY: "1.14"
+      NUMPY: "1.15"
       CONDA_ENV: testenv
 
 init:
