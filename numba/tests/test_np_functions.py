@@ -584,15 +584,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check(np.linspace(3, 10, 5))
         _check(np.array([1.2, np.nan, np.inf, -np.inf]))
         _check(np.array([]))
+        _check(np.arange(-5, 5) - 0.3)
 
-        # boolean array
+        # # boolean array
         _check(np.array([True, False, True]))
+        _check(np.array([True] * 5 + [False] * 4))
 
         # cycle through dtypes to check type promotion a la numpy
         for dtype in np.int32, np.int64, np.float32, np.float64:
             _check(np.arange(10, dtype=dtype))
 
-        # non array inputs
+        # # non array inputs
         _check([0, 1, 2, 3])
         _check((4, 5, 6, 7))
         _check((0.0, 1.0, 2.0))
