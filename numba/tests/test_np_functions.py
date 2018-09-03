@@ -556,7 +556,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(expected, got)
 
         def _check(x):
-            n_choices = [None, 0, 1, 2, 5, 10]
+            n_choices = [None, 0, 1, 2, 3, 4]
             increasing_choices = [True, False]
 
             # N and increasing defaulted
@@ -595,7 +595,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # non array inputs
         _check([0, 1, 2, 3])
         _check((4, 5, 6, 7))
+        _check((0.0, 1.0, 2.0))
         _check(())
+
+        # edge cases
+        _check((3, 4.444, 3.142))
+        _check((True, False, 4))
 
     def test_vander_exceptions(self):
         pyfunc = np_vander
