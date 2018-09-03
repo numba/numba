@@ -915,22 +915,25 @@ if numpy_version >= (1, 9):
 # Building matrices
 
 @register_jitable
-def _np_vander(x, N, increasing):
+def _np_vander(x, N, increasing, out):
     if x.ndim > 1:
         raise ValueError('x must be a one-dimensional array or sequence.')
     if N < 0:
         raise ValueError('Negative dimensions are not allowed')
 
-    out = np.empty((len(x), N), dtype=x.dtype)
-
     if increasing:
         for i in range(N):
-            out[:, i] = x ** i
+            if i == 0:
+                out[:, i] = 1
+            else:
+                out[:, i] = np.multiply(x, out[:, i - 1])
     else:
         for i in range(N):
-            out[:, (N - i - 1)] = x ** i
-
-    return out
+            idx = (N - i - 1)
+            if i == 0:
+                out[:, idx] = 1
+            else:
+                out[:, idx] = np.multiply(x, out[:, (idx + 1)])
 
 @overload(np.vander)
 def np_vander(x, N=None, increasing=False):
@@ -940,18 +943,28 @@ def np_vander(x, N=None, increasing=False):
             raise TypingError('Second argument N must be None or an integer')
 
     def np_vander_impl(x, N=None, increasing=False):
-        return _np_vander(x.astype(dtype), N, increasing)
+        out = np.empty((len(x), N), dtype=dtype)
+        _np_vander(x, N, increasing, out)
+        return out
 
     def np_vander_x_seq_impl(x, N=None, increasing=False):
-        x = np.array(x)
-        return _np_vander(x, N, increasing)
+        x_arr = np.array(x)
+        out = np.empty((len(x), N), dtype=x_arr.dtype)
+        _np_vander(x_arr, N, increasing, out)
+        return out
 
     def np_vander_no_n_impl(x, N=None, increasing=False):
-        return _np_vander(x.astype(dtype), len(x), increasing)
+        len_x = len(x)
+        out = np.empty((len_x, len_x), dtype=dtype)
+        _np_vander(x, len_x, increasing, out)
+        return out
 
     def np_vander_no_n_x_seq_impl(x, N=None, increasing=False):
-        x = np.array(x)
-        return _np_vander(x, len(x), increasing)
+        x_arr = np.array(x)
+        len_x = len(x)
+        out = np.empty((len_x, len_x), dtype=x_arr.dtype)
+        _np_vander(x_arr, len_x, increasing, out)
+        return out
 
     if N in (None, types.none):
         if isinstance(x, types.Array):

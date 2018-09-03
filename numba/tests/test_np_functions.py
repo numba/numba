@@ -594,7 +594,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for dtype in np.int32, np.int64, np.float32, np.float64:
             _check(np.arange(10, dtype=dtype))
 
-        # # non array inputs
+        # non array inputs
         _check([0, 1, 2, 3])
         _check((4, 5, 6, 7))
         _check((0.0, 1.0, 2.0))
