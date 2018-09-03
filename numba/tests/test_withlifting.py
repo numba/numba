@@ -16,6 +16,15 @@ from numba import njit, typeof
 from .support import MemoryLeak, TestCase, captured_stdout
 
 
+try:
+    import scipy
+except ImportError:
+    scipy = None
+
+_msg = "SciPy needed for test"
+skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
+
+
 def get_func_ir(func):
     func_id = FunctionIdentity.from_function(func)
     bc = ByteCode(func_id=func_id)
@@ -379,6 +388,250 @@ class TestLiftObj(MemoryLeak, TestCase):
         arg = 123
         self.assert_equal_return_and_stdout(foo, arg)
 
+    def test_case01_mutate_list_ahead_of_ctx(self):
+        def foo(x, z):
+            x[2] = z
+
+            with objmode_context():
+                # should print [1, 2, 15] but prints [1, 2, 3]
+                print(x)
+
+            with objmode_context():
+                x[2] = 2 * z
+                # should print [1, 2, 30] but prints [1, 2, 15]
+                print(x)
+
+            return x
+
+        self.assert_equal_return_and_stdout(foo, [1,2,3], 15)
+
+    def test_case02_mutate_array_ahead_of_ctx(self):
+        def foo(x, z):
+            x[2] = z
+
+            with objmode_context():
+                # should print [1, 2, 15]
+                print(x)
+
+            with objmode_context():
+                x[2] = 2 * z
+                # should print [1, 2, 30]
+                print(x)
+
+            return x
+
+        x = np.array([1, 2, 3])
+        self.assert_equal_return_and_stdout(foo, x, 15)
+
+    def test_case03_create_and_mutate(self):
+        def foo(x):
+            with objmode_context(y='List(int64)'):
+                y = [1, 2, 3]
+            with objmode_context(y='List(int64)'):
+                y[2] = 10
+            return y
+        self.assert_equal_return_and_stdout(foo, 1)
+
+    def test_case04_bogus_variable_type_info(self):
+
+        def foo(x):
+            # should specifying nonsense type info be considered valid?
+            with objmode_context(k="float64[:]"):
+                print(x)
+            return x
+
+        x = np.array([1, 2, 3])
+        self.assert_equal_return_and_stdout(foo, x)
+
+    def test_case05_bogus_type_info(self):
+        def foo(x):
+            # should specifying the wrong type info be considered valid? z is complex
+            with objmode_context(z="float64[:]"):
+                z = x + 1.j
+            return z
+
+        x = np.array([1, 2, 3])
+        self.assert_equal_return_and_stdout(foo, x)
+
+    def test_case06_double_objmode(self):
+        def foo(x):
+            # would nested ctx in the same scope ever make sense? Is this
+            # pattern useful?
+            with objmode_context():
+                #with npmmode_context(): not implemented yet
+                    with objmode_context():
+                        print(x)
+            return x
+        x = np.array([1, 2, 3])
+        self.assert_equal_return_and_stdout(foo, x)
+
+    def test_case07_mystery_key_error(self):
+        # this raises a key error
+        def foo(x):
+            with objmode_context():
+                t = {'a': x}
+            return x, t
+        x = np.array([1, 2, 3])
+        self.assert_equal_return_and_stdout(foo, x)
+
+    @unittest.skip("segfaults")
+    def test_case08_raise_from_external(self):
+        # this segfaults, expect its because the dict needs to raise as '2' is
+        # not in the keys until a later loop (looking for `d['0']` works fine).
+        d = dict()
+
+        def foo(x):
+            for i in range(len(x)):
+                with objmode_context():
+                    k = str(i)
+                    v = x[i]
+                    d[k] = v
+                    print(d['2'])
+            return x
+
+        x = np.array([1, 2, 3])
+        self.assert_equal_return_and_stdout(foo, x)
+
+    def test_case09_explicit_raise(self):
+        # Gives:
+        # AssertionError: Failed in nopython mode pipeline (step: Handle with contexts)
+        # ending offset is not a label
+        # which is correct, but could a more friendly explanation appear?
+        def foo(x):
+            with objmode_context():
+                raise ValueError()
+            return x
+
+        x = np.array([1, 2, 3])
+        njit(foo)(x)
+
+    def test_case10_mutate_across_contexts(self):
+        # should this work?
+        def foo(x):
+            with objmode_context(y='List(int64)'):
+                y = [1, 2, 3]
+            with objmode_context(y='List(int64)'):
+                y[2] = 10
+            return y
+
+        x = np.array([1, 2, 3])
+        self.assert_equal_return_and_stdout(foo, x)
+
+    def test_case11_define_function_in_context(self):
+        # should this work? `make_function` opcode not supported
+        def foo(x):
+            with objmode_context():
+                def bar(y):
+                    return y + 1
+            return x
+
+        x = np.array([1, 2, 3])
+        self.assert_equal_return_and_stdout(foo, x)
+
+    def test_case12_njit_inside_a_objmode_ctx(self):
+        # this works locally but not inside this test, probably due to the way
+        # compilation is being done
+        def bar(y):
+            return y + 1
+
+        def foo(x):
+            with objmode_context(y='int64[:]'):
+                y = njit(bar)(x)
+            return x + y
+
+        x = np.array([1, 2, 3])
+        self.assert_equal_return_and_stdout(foo, x)
+
+    def test_case13_branch_to_objmode_ctx(self):
+        # gives:
+        # dataflow.py:57: RuntimeWarning: inconsistent stack offset for block(offset:44, outgoing: [], incoming: [28, 36])
+        def foo(x, wobj):
+            if wobj:
+                with objmode_context(y='int64[:]'):
+                    y = x + 1
+            else:
+                y = x + 2
+
+            return x + y
+
+        x = np.array([1, 2, 3])
+        self.assert_equal_return_and_stdout(foo, x, True)
+
+    def test_case14_return_direct_from_objmode_ctx(self):
+        # fails with:
+        # AssertionError: Failed in nopython mode pipeline (step: Handle with contexts)
+        # ending offset is not a label
+        def foo(x):
+            with objmode_context(x='int64[:]'):
+                return x
+        x = np.array([1, 2, 3]) 
+        self.assert_equal_return_and_stdout(foo, x)
+
+    def test_case15_close_over_objmode_ctx(self):
+        #Fails with Unsupported constraint encountered: enter_with $phi8.1
+        def foo(x):
+            j = 10
+            def bar(x):
+                with objmode_context(x='int64[:]'):
+                    print(x)
+                    return x + j
+            return bar(x) + 2
+        x = np.array([1, 2, 3]) 
+        self.assert_equal_return_and_stdout(foo, x)
+
+    @skip_unless_scipy
+    def test_case16_scipy_call_in_objmode_ctx(self):
+        from scipy import sparse as sp
+        def foo(x):
+            with objmode_context(x='int64[:]', k='int64'):
+                print(x)
+                spx = sp.csr_matrix(x)
+                k = spx[0, 0]
+            return k
+        x = np.array([1, 2, 3]) 
+        self.assert_equal_return_and_stdout(foo, x)
+
+    def test_case17_print_own_bytecode(self):
+        import dis
+        def foo(x):
+            with objmode_context():
+                dis.dis(foo)
+        x = np.array([1, 2, 3]) 
+        self.assert_equal_return_and_stdout(foo, x)
+
+    @unittest.skip("segfaults")
+    def test_case18_njitfunc_passed_to_objmode_ctx(self):
+        # segfaults
+        def foo(func, x):
+            with objmode_context():
+                func(x[0])
+
+        x = np.array([1, 2, 3])
+        fn = njit(lambda z: z + 5)
+        self.assert_equal_return_and_stdout(foo, fn, x)
+
+    def test_case19_recursion(self):
+        # the error message is "Exit of with-context not post-dominating the entry."
+        # which is valid *but* not hugely user friendly.
+        def foo(x):
+            with objmode_context():
+                if x == 0:
+                    return 7
+            ret = foo(x - 1)
+            return ret
+        x = np.array([1, 2, 3])
+        self.assert_equal_return_and_stdout(foo, x)
+
+    def test_case20_rng_works_ok(self):
+        def foo(x):
+            np.random.seed(0)
+            y = np.random.rand()
+            with objmode_context(z = "float64"):
+                z = np.random.rand()
+            return x + z
+
+        x = np.array([1, 2, 3])
+        self.assert_equal_return_and_stdout(foo, x)
 
 class TestBogusContext(BaseTestWithLifting):
     def test_undefined_global(self):
