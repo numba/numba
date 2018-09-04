@@ -140,18 +140,24 @@ def get_ext_modules():
 
     ext_npyufunc_workqueue_impls = []
 
-    # Search for Intel TBB, first check env var TBBROOT then conda locations
-    tbb_root = os.getenv('TBBROOT')
-    if not tbb_root:
+    def check_file_at_path(path2file):
+        found = None
         path2check = [os.path.split(os.path.split(sys.executable)[0])[0]]
         path2check += [os.getenv(n, '') for n in ['CONDA_PREFIX', 'PREFIX']]
         if sys.platform.startswith('win'):
             path2check += [os.path.join(p, 'Library') for p in path2check]
         for p in path2check:
-            if p and os.path.isfile(os.path.join(p, 'include', 'tbb', 'tbb.h')):
-                tbb_root = p  # the latest is used
+            if p and os.path.isfile(os.path.join(p, path2file)):
+                found = p  # the latest is used
+        return found
 
 
+    # Search for Intel TBB, first check env var TBBROOT then conda locations
+    tbb_root = os.getenv('TBBROOT')
+    if not tbb_root:
+        tbb_root = check_file_at_path(os.path.join('include', 'tbb', 'tbb.h'))
+
+    have_openmp = True
     if sys.platform.startswith('win'):
         cpp11flags = []
         ompcompileflags = ['-openmp']
@@ -160,6 +166,7 @@ def get_ext_modules():
         cpp11flags = ['-std=c++11']
         ompcompileflags = ['-fopenmp']
         omplinkflags = ['-fopenmp=libomp']
+        have_openmp = check_file_at_path(os.path.join('include', 'omp.h'))
     else:
         cpp11flags = ['-std=c++11']
         ompcompileflags = ['-fopenmp']
@@ -189,15 +196,16 @@ def get_ext_modules():
                 )
             ext_npyufunc_workqueue_impls.append(ext_npyufunc_tbb_workqueue)
 
-    # OpenMP backed work queue
-    ext_npyufunc_omppool = Extension( name='numba.npyufunc.omppool',
-                                sources=['numba/npyufunc/omppool.cpp',
-                                        'numba/npyufunc/gufunc_scheduler.cpp'],
-                                depends=['numba/npyufunc/workqueue.h'],
-                                extra_compile_args=ompcompileflags + cpp11flags,
-                                extra_link_args = omplinkflags)
+    if have_openmp:
+        # OpenMP backed work queue
+        ext_npyufunc_omppool = Extension( name='numba.npyufunc.omppool',
+                                    sources=['numba/npyufunc/omppool.cpp',
+                                            'numba/npyufunc/gufunc_scheduler.cpp'],
+                                    depends=['numba/npyufunc/workqueue.h'],
+                                    extra_compile_args=ompcompileflags + cpp11flags,
+                                    extra_link_args = omplinkflags)
 
-    ext_npyufunc_workqueue_impls.append(ext_npyufunc_omppool)
+        ext_npyufunc_workqueue_impls.append(ext_npyufunc_omppool)
 
 
     # Build the Numba workqueue implementation irrespective of whether the TBB
