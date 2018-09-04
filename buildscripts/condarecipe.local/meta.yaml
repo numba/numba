@@ -29,7 +29,7 @@ requirements:
     - funcsigs                 # [py27]
     - singledispatch           # [py27]
     # TBB devel version is to match TBB libs
-    - tbb-devel >=2018.0.5     # [not (armv6l or armv7l or aarch64)]
+    - tbb-devel >=2018.0.5     # [not ((armv6l or armv7l or aarch64) or (win and py27))]
   run:
     - python
     - numpy x.x
@@ -40,7 +40,7 @@ requirements:
   run_constrained:
     # If TBB is present it must be at least this version from Anaconda due to
     # build flag issues triggering UB
-    - tbb >=2018.0.5
+    - tbb >=2018.0.5           # [not ((armv6l or armv7l or aarch64) or (win and py27))]
 test:
   requires:
     - jinja2
@@ -51,7 +51,7 @@ test:
     - ipython                  # [not (armv6l or armv7l)]
     - setuptools
     - faulthandler             # [py27]
-    - tbb  >=2018.0.5          # [not (armv6l or armv7l or aarch64)]
+    - tbb  >=2018.0.5          # [not ((armv6l or armv7l or aarch64) or (win and py27))]
     - llvm-openmp              # [osx]
     # Need these for AOT. Do not init msvc as it may not be present
     - {{ compiler('c') }}      # [not (win or armv6l or armv7l or aarch64)]
