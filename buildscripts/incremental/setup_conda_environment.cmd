@@ -26,5 +26,6 @@ if "%BUILD_DOC%" == "yes" (%CONDA_INSTALL% sphinx pygments)
 if "%BUILD_DOC%" == "yes" (%PIP_INSTALL% sphinx_bootstrap_theme)
 @rem Install dependencies for code coverage (codecov.io)
 if "%RUN_COVERAGE%" == "yes" (%PIP_INSTALL% codecov)
-
+@rem Install TBB
+%CONDA_INSTALL% tbb tbb-devel
 if %errorlevel% neq 0 exit /b %errorlevel%
