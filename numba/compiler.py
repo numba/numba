@@ -5,8 +5,6 @@ from collections import namedtuple, defaultdict
 import sys
 import warnings
 import traceback
-import threading
-import functools
 from .tracing import event
 
 from numba import (bytecode, interpreter, funcdesc, postproc,

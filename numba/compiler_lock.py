@@ -49,5 +49,5 @@ global_compiler_lock = _CompilerLock()
 def require_global_compiler_lock():
     """Sentry that checks the global_compiler_lock is acquired.
     """
-    # Use assert to allow turning off this checks
+    # Use assert to allow turning off this check
     assert global_compiler_lock.is_locked()
