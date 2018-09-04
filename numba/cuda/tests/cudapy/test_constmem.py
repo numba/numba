@@ -138,11 +138,21 @@ class TestCudaConstantMemory(SerialMixin, unittest.TestCase):
         jcuconst = cuda.jit(cuconstRec).specialize(A, B)
 
         if not ENABLE_CUDASIM:
-            self.assertIn(
+            if not any(c in jcuconst.ptx for c in [
+                # a vector load: the compiler fuses the load
+                # of the x and y fields into a single instruction!
                 'ld.const.v2.u64',
-                jcuconst.ptx,
-                "the compiler realises it doesn't even need to " \
-                "interpret the bytes as float!")
+
+                # for some reason Win64 / Py3 / CUDA 9.1 decides
+                # to do two u32 loads, and shifts and ors the
+                # values to get the float `x` field, then uses
+                # another ld.const.u32 to load the int `y` as
+                # a 32-bit value!
+                'ld.const.u32',
+            ]):
+                raise AssertionError(
+                    "the compiler should realise it doesn't " \
+                    "need to interpret the bytes as float!")
 
         jcuconst[2, 1](A, B)
         np.testing.assert_allclose(A, CONST_RECORD['x'])

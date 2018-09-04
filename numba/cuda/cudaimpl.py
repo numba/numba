@@ -2,6 +2,7 @@ from __future__ import print_function, absolute_import, division
 
 from functools import reduce
 import operator
+import six
 
 from llvmlite.llvmpy.core import Type
 import llvmlite.llvmpy.core as lc
@@ -104,7 +105,7 @@ def ptx_cmem_arylike(context, builder, sig, args):
 
     constvals = [
         context.get_constant(types.byte, i)
-        for i in arr.tobytes(order='A')
+        for i in six.iterbytes(arr.tobytes(order='A'))
     ]
     constary = lc.Constant.array(Type.int(8), constvals)
 
