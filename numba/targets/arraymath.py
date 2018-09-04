@@ -916,6 +916,17 @@ if numpy_version >= (1, 9):
 
 @register_jitable
 def _np_vander(x, N, increasing, out):
+    """
+    Generate an N-column Vandermonde matrix from a supplied 1-dimensional
+    array, x, and store in an output matrix, out, which is assumed to be
+    of the required dtype.
+
+    Values are accumulated using np.multiply to match the floating point
+    precision behaviour of numpy.vander.
+    """
+    m, n = out.shape
+    assert m == len(x)
+    assert n == N
 
     if increasing:
         for i in range(N):
@@ -932,7 +943,7 @@ def _np_vander(x, N, increasing, out):
                 out[:, idx] = np.multiply(x, out[:, (idx + 1)])
 
 @register_jitable
-def _check_vander_params(x, N, dtype=None):
+def _check_vander_params(x, N):
     if x.ndim > 1:
         raise ValueError('x must be a one-dimensional array or sequence.')
     if N < 0:
@@ -948,7 +959,10 @@ def np_vander(x, N=None, increasing=False):
     def np_vander_impl(x, N=None, increasing=False):
         if N is None:
             N = len(x)
-        _check_vander_params(x, N)
+
+        _check_vander_params(x, N)  # fail early if params invalid
+
+        # allocate output matrix using dtype determined in closure
         out = np.empty((len(x), int(N)), dtype=dtype)
         _np_vander(x, N, increasing, out)
         return out
@@ -956,15 +970,18 @@ def np_vander(x, N=None, increasing=False):
     def np_vander_seq_impl(x, N=None, increasing=False):
         if N is None:
             N = len(x)
+
         x_arr = np.array(x)
-        _check_vander_params(x_arr, N)
+        _check_vander_params(x_arr, N)  # fail early if params invalid
+
+        # allocate output matrix using dtype inferred when x_arr was created
         out = np.empty((len(x), int(N)), dtype=x_arr.dtype)
         _np_vander(x_arr, N, increasing, out)
         return out
 
     if isinstance(x, types.Array):
         x_dt = as_dtype(x.dtype)
-        dtype = np.promote_types(x_dt, int)
+        dtype = np.promote_types(x_dt, int)  # replicate numpy behaviour w.r.t. type promotion
         return np_vander_impl
     elif isinstance(x, (types.Tuple, types.Sequence)):
         return np_vander_seq_impl

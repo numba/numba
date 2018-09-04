@@ -587,7 +587,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check(np.arange(-5, 5) - 0.3)
 
         # # boolean array
-        _check(np.array([True, False, True]))
         _check(np.array([True] * 5 + [False] * 4))
 
         # cycle through dtypes to check type promotion a la numpy
@@ -613,28 +612,28 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         x = np.arange(5) - 0.5
 
-        def _check(N):
+        def _check_n(N):
             with self.assertTypingError() as raises:
                 cfunc(x, N=N)
             assert "Second argument N must be None or an integer" in str(raises.exception)
 
         for N in 1.1, True, np.inf, [1, 2]:
-            _check(N)
+            _check_n(N)
 
         with self.assertRaises(ValueError) as raises:
             cfunc(x, N=-1)
         assert "Negative dimensions are not allowed" in str(raises.exception)
 
-        with self.assertRaises(ValueError) as raises:
-            x = np.arange(27).reshape((3, 3, 3))
-            cfunc(x)
-        self.assertEqual("x must be a one-dimensional array or sequence.", str(raises.exception))
+        def _check_1d(x):
+            with self.assertRaises(ValueError) as raises:
+                cfunc(x)
+            self.assertEqual("x must be a one-dimensional array or sequence.", str(raises.exception))
 
-        with self.assertRaises(ValueError) as raises:
-            x = ((2, 3), (4, 5))
-            cfunc(x)
-        self.assertEqual("x must be a one-dimensional array or sequence.", str(raises.exception))
+        x = np.arange(27).reshape((3, 3, 3))
+        _check_1d(x)
 
+        x = ((2, 3), (4, 5))
+        _check_1d(x)
 
 
 class TestNPMachineParameters(TestCase):
