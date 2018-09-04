@@ -225,18 +225,25 @@ class TestParallelBackend(TestParallelBackendBase):
     """ These are like the numba.tests.test_threadsafety tests but designed
     instead to torture the parallel backend.
     If a suitable backend is supplied via NUMBA_THREADING_LAYER these tests
-    can be run directly.
+    can be run directly. This test class cannot be run using the multiprocessing
+    option to the test runner (i.e. `./runtests -m`) as daemon processes cannot
+    have children.
     """
 
     @classmethod
     def generate(cls):
         for p in cls.parallelism:
             for name, impl in cls.runners.items():
-                def test_method(self):
-                    self.run_compile(impl, parallelism=p)
                 methname = "test_" + p + '_' + name
+                def test_method(self):
+                    selfproc = multiprocessing.current_process()
+                    # daemonized processes cannot have children
+                    if selfproc.daemon:
+                        _msg = 'daemonized processes cannot have children'
+                        self.skipTest(_msg)
+                    else:
+                        self.run_compile(impl, parallelism=p)
                 setattr(cls, methname, test_method)
-
 
 TestParallelBackend.generate()
 
