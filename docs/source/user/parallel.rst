@@ -8,7 +8,7 @@ Automatic parallelization with ``@jit``
 =======================================
 
 Setting the :ref:`parallel_jit_option` option for :func:`~numba.jit` enables
-an experimental Numba feature that attempts to automatically parallelize and
+a Numba transformation pass that attempts to automatically parallelize and
 perform other optimizations on (part of) a function. At the moment, this
 feature only works on CPUs.
 
@@ -73,10 +73,11 @@ parallel semantics and for which we attempt to parallelize.
 Explicit Parallel Loops
 ========================
 
-Another experimental feature of this module is support for explicit parallel
-loops. One can use Numba's ``prange`` instead of ``range`` to specify that a
-loop can be parallelized. The user is required to make sure that the loop does
-not have cross iteration dependencies except for supported reductions.
+Another feature of this code transformation pass is support for explicit
+parallel loops. One can use Numba's ``prange`` instead of ``range`` to specify
+that a loop can be parallelized. The user is required to make sure that the
+loop does not have cross iteration dependencies except for supported
+reductions.
 
 A reduction is inferred automatically if a variable is updated by a binary
 function/operator using its previous value in the loop body. The initial value
