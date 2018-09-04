@@ -314,6 +314,9 @@ def _launch_threads():
             elif t == 'default':
                 # If default is supplied, try them in order, tbb, omp, workqueue
                 lib, libname = select_from_backends(namedbackends)
+            else:
+                msg = "The threading layer request %s is unknown to Numba."
+                raise ValueError(msg % t)
 
             # This should be unreachable, but just in case...
             if lib is None:
