@@ -48,6 +48,8 @@ if [[ $(uname) == Linux ]]; then
     fi
 elif  [[ $(uname) == Darwin ]]; then
     $CONDA_INSTALL clang_osx-64 clangxx_osx-64
+    # Install llvm-openmp on OSX too
+    $CONDA_INSTALL llvm-openmp
 fi
 
 # Install latest llvmlite build
