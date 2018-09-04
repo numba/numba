@@ -239,6 +239,14 @@ def get_sys_info():
             print(fmt % ("+--> Disabled due to",
                          parse_error(e, 'omppool')))
 
+        try:
+            from numba.npyufunc import workqueue
+            print(fmt % ("Workqueue Threading layer available", True))
+        except ImportError as e:
+            print(fmt % ("Workqueue Threading layer available", False))
+            print(fmt % ("+--> Disabled due to",
+                         parse_error(e, 'workqueue')))
+
         # look for numba env vars that are set
         print("")
         print("__Numba Environment Variable Information__")
