@@ -10,7 +10,7 @@ matrix:
         # Try and cover all supported pythons and NumPy's in some combination
         - os: osx
           env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci BUILD_DOC=yes
-        - env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci
+        - env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci THREADING_LAYER=tbb
         - env: PYTHON=2.7 NUMPY=1.15 CONDA_ENV=travisci
         - env: PYTHON=2.7 NUMPY=1.9  CONDA_ENV=travisci
         - env: PYTHON=3.5 NUMPY=1.10 CONDA_ENV=travisci
@@ -22,7 +22,8 @@ matrix:
         - env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci VANILLA_INSTALL=yes
         - env: PYTHON=2.7 NUMPY=1.11 CONDA_ENV=travisci BITS32=yes
         - env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci BITS32=yes
-        - env: PYTHON=3.7 NUMPY=1.14 CONDA_ENV=travisci TEST_TBB=yes
+        - env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci THREADING_LAYER=omp
+        - env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci THREADING_LAYER=workqueue
 
 
 branches:

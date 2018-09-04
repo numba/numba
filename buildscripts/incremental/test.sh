@@ -21,8 +21,18 @@ export NUMBA_DEVELOPER_MODE=1
 # enable the fault handler
 export PYTHONFAULTHANDLER=1
 
-if [ "$TEST_TBB" == "yes" ]; then
-export NUMBA_THREADING_LAYER='tbbpool'
+# set known threading layers
+THREADING_LAYERS=(
+"workqueue"
+"omp"
+"tbb"
+)
+
+if [[ "${THREADING_LAYERS[@]}" =~ "${TEST_THREADING}" ]]; then
+    export NUMBA_THREADING_LAYER="$TEST_THREADING"
+else
+    echo "Error: ${TEST_THREADING} is not a valid value for TEST_THREADING."
+    exit 1
 fi
 
 unamestr=`uname`
