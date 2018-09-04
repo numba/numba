@@ -630,6 +630,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(x)
         self.assertEqual("x must be a one-dimensional array or sequence.", str(raises.exception))
 
+        with self.assertRaises(ValueError) as raises:
+            x = ((2, 3), (4, 5))
+            cfunc(x)
+        self.assertEqual("x must be a one-dimensional array or sequence.", str(raises.exception))
+
+
 
 class TestNPMachineParameters(TestCase):
     # tests np.finfo, np.iinfo, np.MachAr

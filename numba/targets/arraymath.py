@@ -916,10 +916,6 @@ if numpy_version >= (1, 9):
 
 @register_jitable
 def _np_vander(x, N, increasing, out):
-    if x.ndim > 1:
-        raise ValueError('x must be a one-dimensional array or sequence.')
-    if N < 0:
-        raise ValueError('Negative dimensions are not allowed')
 
     if increasing:
         for i in range(N):
@@ -935,6 +931,13 @@ def _np_vander(x, N, increasing, out):
             else:
                 out[:, idx] = np.multiply(x, out[:, (idx + 1)])
 
+@register_jitable
+def _check_vander_params(x, N, dtype=None):
+    if x.ndim > 1:
+        raise ValueError('x must be a one-dimensional array or sequence.')
+    if N < 0:
+        raise ValueError('Negative dimensions are not allowed')
+
 @overload(np.vander)
 def np_vander(x, N=None, increasing=False):
 
@@ -943,43 +946,28 @@ def np_vander(x, N=None, increasing=False):
             raise TypingError('Second argument N must be None or an integer')
 
     def np_vander_impl(x, N=None, increasing=False):
-        out = np.empty((len(x), N), dtype=dtype)
+        if N is None:
+            N = len(x)
+        _check_vander_params(x, N)
+        out = np.empty((len(x), int(N)), dtype=dtype)
         _np_vander(x, N, increasing, out)
         return out
 
-    def np_vander_x_seq_impl(x, N=None, increasing=False):
+    def np_vander_seq_impl(x, N=None, increasing=False):
+        if N is None:
+            N = len(x)
         x_arr = np.array(x)
-        out = np.empty((len(x), N), dtype=x_arr.dtype)
+        _check_vander_params(x_arr, N)
+        out = np.empty((len(x), int(N)), dtype=x_arr.dtype)
         _np_vander(x_arr, N, increasing, out)
         return out
 
-    def np_vander_no_n_impl(x, N=None, increasing=False):
-        len_x = len(x)
-        out = np.empty((len_x, len_x), dtype=dtype)
-        _np_vander(x, len_x, increasing, out)
-        return out
-
-    def np_vander_no_n_x_seq_impl(x, N=None, increasing=False):
-        x_arr = np.array(x)
-        len_x = len(x)
-        out = np.empty((len_x, len_x), dtype=x_arr.dtype)
-        _np_vander(x_arr, len_x, increasing, out)
-        return out
-
-    if N in (None, types.none):
-        if isinstance(x, types.Array):
-            x_dt = as_dtype(x.dtype)
-            dtype = np.promote_types(x_dt, int)
-            return np_vander_no_n_impl
-        elif isinstance(x, (types.Tuple, types.Sequence)):
-            return np_vander_no_n_x_seq_impl
-    else:
-        if isinstance(x, types.Array):
-            x_dt = as_dtype(x.dtype)
-            dtype = np.promote_types(x_dt, int)
-            return np_vander_impl
-        elif isinstance(x, (types.Tuple, types.Sequence)):
-            return np_vander_x_seq_impl
+    if isinstance(x, types.Array):
+        x_dt = as_dtype(x.dtype)
+        dtype = np.promote_types(x_dt, int)
+        return np_vander_impl
+    elif isinstance(x, (types.Tuple, types.Sequence)):
+        return np_vander_seq_impl
 
 #----------------------------------------------------------------------------
 # Element-wise computations
