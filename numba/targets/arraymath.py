@@ -918,8 +918,8 @@ if numpy_version >= (1, 9):
 def _np_vander(x, N, increasing, out):
     """
     Generate an N-column Vandermonde matrix from a supplied 1-dimensional
-    array, x, and store in an output matrix, out, which is assumed to be
-    of the required dtype.
+    array, x. Store results in an output matrix, out, which is assumed to
+    be of the required dtype.
 
     Values are accumulated using np.multiply to match the floating point
     precision behaviour of numpy.vander.
@@ -933,14 +933,13 @@ def _np_vander(x, N, increasing, out):
             if i == 0:
                 out[:, i] = 1
             else:
-                out[:, i] = np.multiply(x, out[:, i - 1])
+                out[:, i] = np.multiply(x, out[:, (i - 1)])
     else:
-        for i in range(N):
-            idx = (N - i - 1)
-            if i == 0:
-                out[:, idx] = 1
+        for i in range(N - 1, -1, -1):
+            if i == N - 1:
+                out[:, i] = 1
             else:
-                out[:, idx] = np.multiply(x, out[:, (idx + 1)])
+                out[:, i] = np.multiply(x, out[:, (i + 1)])
 
 @register_jitable
 def _check_vander_params(x, N):
@@ -960,10 +959,11 @@ def np_vander(x, N=None, increasing=False):
         if N is None:
             N = len(x)
 
-        _check_vander_params(x, N)  # fail early if params invalid
+        _check_vander_params(x, N)
 
         # allocate output matrix using dtype determined in closure
         out = np.empty((len(x), int(N)), dtype=dtype)
+
         _np_vander(x, N, increasing, out)
         return out
 
@@ -972,10 +972,11 @@ def np_vander(x, N=None, increasing=False):
             N = len(x)
 
         x_arr = np.array(x)
-        _check_vander_params(x_arr, N)  # fail early if params invalid
+        _check_vander_params(x_arr, N)
 
         # allocate output matrix using dtype inferred when x_arr was created
         out = np.empty((len(x), int(N)), dtype=x_arr.dtype)
+
         _np_vander(x_arr, N, increasing, out)
         return out
 
