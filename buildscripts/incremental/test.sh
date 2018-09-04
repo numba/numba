@@ -30,9 +30,9 @@ THREADING_LAYERS=(
 
 if [[ "${THREADING_LAYERS[@]}" =~ "${TEST_THREADING}" ]]; then
     export NUMBA_THREADING_LAYER="$TEST_THREADING"
+    echo "INFO: Threading layer set as: $TEST_THREADING"
 else
-    echo "Error: ${TEST_THREADING} is not a valid value for TEST_THREADING."
-    exit 1
+    echo "INFO: Threading layer not explicitly set."
 fi
 
 unamestr=`uname`
