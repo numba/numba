@@ -239,6 +239,16 @@ def get_sys_info():
             print(fmt % ("+--> Disabled due to",
                          parse_error(e, 'omppool')))
 
+        # look for numba env vars that are set
+        print("")
+        print("__Numba Environment Variable Information__")
+        _envvar_found = False
+        for k, v in os.environ.items():
+            if k.startswith('NUMBA_'):
+                print(fmt % (k, v))
+                _envvar_found = True
+        if not _envvar_found:
+            print("None set.")
 
         # Look for conda and conda information
         print("")
