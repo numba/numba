@@ -8,7 +8,6 @@ import os
 import sys
 import subprocess
 import signal
-import faulthandler
 
 from numba import config, utils
 if utils.PYVERSION >= (3, 0):
@@ -128,7 +127,8 @@ class guvectorize_runner(runnable):
         np.testing.assert_allclose(expected, got)
 
 def chooser(fnlist, **kwargs):
-    faulthandler.enable()
+    if utils.PYVERSION >= (3, 0):
+        faulthandler.enable()
     q = kwargs.get('queue')
     try:
         for _ in range(10):
@@ -223,7 +223,9 @@ class TestParallelBackendBase(TestCase):
         parallelism.append('multiprocessing_default')
 
 
-    runners = {'concurrent_jit': [jit_runner(nopython=True, parallel=True)],
+    runners = {'concurrent_jit': [jit_runner(nopython=True,
+                                             parallel=(not _parfors_unsupported)
+                                             )],
                'concurrect_vectorize': [vectorize_runner(nopython=True, target='parallel')],
                'concurrent_guvectorize': [guvectorize_runner(nopython=True, target='parallel')],
                'concurrent_mix_use': all_impls}
