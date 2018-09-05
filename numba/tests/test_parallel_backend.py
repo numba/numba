@@ -174,7 +174,7 @@ def _get_mp_classes(method):
         queue = multiprocessing.Queue
     else:
         if method == 'default':
-            method = 'fork'
+            method = None
         ctx = multiprocessing.get_context(method)
         proc = _proc_class_impl(method)
         queue = ctx.Queue
