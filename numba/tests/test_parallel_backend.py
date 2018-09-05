@@ -44,7 +44,6 @@ except ImportError:
 # Switch this to True to run fork() based tests, unsupported at present
 _DO_FORK_TESTS = True 
 
-_FORK_TESTS_MASK = _DO_FORK_TESTS and (not sys.platform.startswith('win'))
 
 skip_no_omp = unittest.skipUnless(_HAVE_OMP_POOL, "OpenMP threadpool required")
 skip_no_tbb = unittest.skipUnless(_HAVE_TBB_POOL, "TBB threadpool required")
@@ -55,10 +54,12 @@ skip_unless_gnu_omp = unittest.skipUnless(_gnuomp, "GNU OpenMP only tests")
 skip_unless_py3 = unittest.skipUnless(utils.PYVERSION >= (3, 0),
                                       "Test runs on Python 3 only")
 
+_windows = sys.platform.startswith('win')
 _windows_py27 = (sys.platform.startswith('win32') and
                  sys.version_info[:2] == (2, 7))
 _32bit = sys.maxsize <= 2 ** 32
 _parfors_unsupported = _32bit or _windows_py27
+_FORK_TESTS_MASK = _DO_FORK_TESTS and not _windows
 
 # some functions to jit
 
@@ -186,7 +187,8 @@ def _get_mp_classes(method):
 
 thread_impl = compile_factory(_thread_class, t_queue.Queue)
 spawn_proc_impl = compile_factory(*_get_mp_classes('spawn'))
-fork_proc_impl = compile_factory(*_get_mp_classes('fork'))
+if not _windows:
+    fork_proc_impl = compile_factory(*_get_mp_classes('fork'))
 
 # this is duplication as Py27, linux uses fork, windows uses spawn, it however
 # is kept like this so that when tests fail it's less confusing!
