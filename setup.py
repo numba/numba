@@ -141,22 +141,37 @@ def get_ext_modules():
     ext_npyufunc_workqueue_impls = []
 
     def check_file_at_path(path2file):
+        """
+        Takes a list as a path, a single glob (*) is permitted as an entry which
+        indicates that expansion at this location is required (i.e. version
+        might not be known).
+        """
         found = None
         path2check = [os.path.split(os.path.split(sys.executable)[0])[0]]
         path2check += [os.getenv(n, '') for n in ['CONDA_PREFIX', 'PREFIX']]
         if sys.platform.startswith('win'):
             path2check += [os.path.join(p, 'Library') for p in path2check]
         for p in path2check:
-            if p and os.path.isfile(os.path.join(p, path2file)):
-                found = p  # the latest is used
+            if p:
+                if '*' in path2file:
+                    globloc = path2file.index('*')
+                    searchroot = os.path.join(*path2file[:globloc])
+                    potential_locs = os.listdir(os.path.join(p, searchroot))
+                    searchfor = path2file[globloc + 1:]
+                    for x in potential_locs:
+                        potpath = os.path.join(p, searchroot, x, *searchfor)
+                        if os.path.isfile(potpath):
+                            found = p  # the latest is used
+                elif os.path.isfile(os.path.join(p, *path2file)):
+                    found = p  # the latest is used
         return found
-
 
     # Search for Intel TBB, first check env var TBBROOT then conda locations
     tbb_root = os.getenv('TBBROOT')
     if not tbb_root:
-        tbb_root = check_file_at_path(os.path.join('include', 'tbb', 'tbb.h'))
+        tbb_root = check_file_at_path(['include', 'tbb', 'tbb.h'])
 
+    # Set various flags for use in TBB and openmp. On OSX, also find OpenMP!
     have_openmp = True
     if sys.platform.startswith('win'):
         cpp11flags = []
@@ -166,7 +181,8 @@ def get_ext_modules():
         cpp11flags = ['-std=c++11']
         ompcompileflags = ['-fopenmp']
         omplinkflags = ['-fopenmp=libomp']
-        have_openmp = check_file_at_path(os.path.join('include', 'omp.h'))
+        omppath = ['lib', 'clang', '*', 'include', 'omp.h']
+        have_openmp = check_file_at_path(omppath)
     else:
         cpp11flags = ['-std=c++11']
         ompcompileflags = ['-fopenmp']
@@ -190,8 +206,11 @@ def get_ext_modules():
                         ],
             )
         ext_npyufunc_workqueue_impls.append(ext_npyufunc_tbb_workqueue)
+    else:
+        print("TBB not found")
 
     if have_openmp:
+        print("Using OpenMP from:", have_openmp)
         # OpenMP backed work queue
         ext_npyufunc_omppool = Extension( name='numba.npyufunc.omppool',
                                     sources=['numba/npyufunc/omppool.cpp',
@@ -201,7 +220,8 @@ def get_ext_modules():
                                     extra_link_args = omplinkflags)
 
         ext_npyufunc_workqueue_impls.append(ext_npyufunc_omppool)
-
+    else:
+        print("OpenMP not found")
 
     # Build the Numba workqueue implementation irrespective of whether the TBB
     # version is built. Users can select a backend via env vars.

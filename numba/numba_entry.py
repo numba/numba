@@ -210,7 +210,7 @@ def get_sys_info():
         # Check which threading backends are available.
         print("")
         print("__Threading Layer Information__")
-        def parse_error(msg, backend):
+        def parse_error(e, backend):
             # parses a linux based error message, this is to provide feedback
             # and hide user paths etc
             try:
