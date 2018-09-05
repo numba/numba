@@ -26,7 +26,6 @@ from .support import temp_directory, override_config, TestCase, tag
 from .test_parfors import skip_unsupported as parfors_skip_unsupported
 from .test_parfors import linux_only
 
-
 # Check which backends are available
 # TODO: Put this in a subprocess so the address space is kept clean
 try:
@@ -55,6 +54,11 @@ skip_unless_gnu_omp = unittest.skipUnless(_gnuomp, "GNU OpenMP only tests")
 
 skip_unless_py3 = unittest.skipUnless(utils.PYVERSION >= (3, 0),
                                       "Test runs on Python 3 only")
+
+_windows_py27 = (sys.platform.startswith('win32') and
+                 sys.version_info[:2] == (2, 7))
+_32bit = sys.maxsize <= 2 ** 32
+_parfors_unsupported = _32bit or _windows_py27
 
 # some functions to jit
 
@@ -194,15 +198,19 @@ class TestParallelBackendBase(TestCase):
     all_impls = [jit_runner(nopython=True),
                  jit_runner(nopython=True, cache=True),
                  jit_runner(nopython=True, nogil=True),
-                 jit_runner(nopython=True, parallel=True),
                  linalg_runner(nopython=True),
                  linalg_runner(nopython=True, nogil=True),
-                 linalg_runner(nopython=True, parallel=True),
                  vectorize_runner(nopython=True),
                  vectorize_runner(nopython=True, target='parallel'),
                  guvectorize_runner(nopython=True),
                  guvectorize_runner(nopython=True, target='parallel'),
                  ]
+
+    if not _parfors_unsupported:
+        parfor_impls = [jit_runner(nopython=True, parallel=True),
+                        linalg_runner(nopython=True, parallel=True),]
+        all_impls.extend(parfor_impls) 
+
     parallelism = ['threading', 'random']
     if utils.PYVERSION > (3, 0):
         parallelism.append('multiprocessing_spawn')

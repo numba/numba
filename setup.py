@@ -156,7 +156,10 @@ def get_ext_modules():
                 if '*' in path2file:
                     globloc = path2file.index('*')
                     searchroot = os.path.join(*path2file[:globloc])
-                    potential_locs = os.listdir(os.path.join(p, searchroot))
+                    try:
+                        potential_locs = os.listdir(os.path.join(p, searchroot))
+                    except BaseException:
+                        continue
                     searchfor = path2file[globloc + 1:]
                     for x in potential_locs:
                         potpath = os.path.join(p, searchroot, x, *searchfor)
