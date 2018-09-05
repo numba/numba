@@ -188,6 +188,7 @@ thread_impl = compile_factory(_thread_class, t_queue.Queue)
 spawn_proc_impl = compile_factory(*_get_mp_classes('spawn'))
 if not _windows:
     fork_proc_impl = compile_factory(*_get_mp_classes('fork'))
+    forkserver_proc_impl = compile_factory(*_get_mp_classes('forkserver'))
 
 # this is duplication as Py27, linux uses fork, windows uses spawn, it however
 # is kept like this so that when tests fail it's less confusing!
@@ -217,6 +218,7 @@ class TestParallelBackendBase(TestCase):
         parallelism.append('multiprocessing_spawn')
         if _HAVE_OS_FORK:
             parallelism.append('multiprocessing_fork')
+            parallelism.append('multiprocessing_forkserver')
     else:
         parallelism.append('multiprocessing_default')
 
@@ -235,6 +237,8 @@ class TestParallelBackendBase(TestCase):
                 thread_impl(fnlist)
             elif parallelism == 'multiprocessing_fork':
                 fork_proc_impl(fnlist)
+            elif parallelism == 'multiprocessing_forkserver':
+                forkserver_proc_impl(fnlist)
             elif parallelism == 'multiprocessing_spawn':
                 spawn_proc_impl(fnlist)
             elif parallelism == 'multiprocessing_default':
