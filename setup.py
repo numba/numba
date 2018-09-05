@@ -182,8 +182,14 @@ def get_ext_modules():
         omplinkflags = []
     elif sys.platform.startswith('darwin'):
         cpp11flags = ['-std=c++11']
+        # This is a bit unusual but necessary...
+        # llvm (clang) OpenMP is used for headers etc at compile time
+        # Intel OpenMP (libiomp5) provides the link library.
+        # They are binary compatible and may not safely coexist in a process, as
+        # libiomp5 is more prevalent and often linked in for NumPy it is used
+        # here!
         ompcompileflags = ['-fopenmp']
-        omplinkflags = ['-fopenmp=libomp']
+        omplinkflags = ['-fopenmp=libiomp5']
         omppath = ['lib', 'clang', '*', 'include', 'omp.h']
         have_openmp = check_file_at_path(omppath)
     else:

@@ -19,7 +19,9 @@ requirements:
   build:
     - {{ compiler('c') }}      # [not (armv6l or armv7l or aarch64)]
     - {{ compiler('cxx') }}    # [not (armv6l or armv7l or aarch64)]
+    # both of these are needed on osx, llvm for the headers, Intel for the lib
     - llvm-openmp              # [osx]
+    - intel-openmp             # [osx]
   host:
     - python
     - numpy x.x
@@ -52,7 +54,7 @@ test:
     - setuptools
     - faulthandler             # [py27]
     - tbb  >=2018.0.5          # [not ((armv6l or armv7l or aarch64) or (win and py27))]
-    - llvm-openmp              # [osx]
+    - intel-openmp             # [osx]
     # Need these for AOT. Do not init msvc as it may not be present
     - {{ compiler('c') }}      # [not (win or armv6l or armv7l or aarch64)]
     - {{ compiler('cxx') }}    # [not (win or armv6l or armv7l or aarch64)]
