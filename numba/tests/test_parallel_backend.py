@@ -8,14 +8,20 @@ import os
 import sys
 import subprocess
 import signal
+import faulthandler
+
+from numba import config, utils
+if utils.PYVERSION >= (3, 0):
+    import queue as t_queue
+else:
+    import Queue as t_queue
 
 import numpy as np
 
-from numba import config, utils
 from numba import unittest_support as unittest
 from numba import jit, vectorize, guvectorize, njit
 
-from .support import temp_directory, override_config, TestCase
+from .support import temp_directory, override_config, TestCase, tag
 
 from .test_parfors import skip_unsupported as parfors_skip_unsupported
 from .test_parfors import linux_only
@@ -117,26 +123,38 @@ class guvectorize_runner(runnable):
         got = cfunc(a, b)
         np.testing.assert_allclose(expected, got)
 
-def chooser(fnlist):
-    for _ in range(10):
-        fn = random.choice(fnlist)
-        fn()
+def chooser(fnlist, **kwargs):
+    faulthandler.enable()
+    q = kwargs.get('queue')
+    try:
+        for _ in range(10):
+            fn = random.choice(fnlist)
+            fn()
+    except BaseException as e:
+        q.put(e)
 
 
-def compile_factory(parallel_class):
+def compile_factory(parallel_class, queue_impl):
     def run_compile(fnlist):
-        ths = [parallel_class(target=chooser, args=(fnlist,))
+        q = queue_impl()
+        kws = {'queue': q}
+        print(parallel_class)
+        ths = [parallel_class(target=chooser, args=(fnlist,), kwargs=kws)
                for i in range(4)]
         for th in ths:
             th.start()
         for th in ths:
             th.join()
+        if not q.empty():
+            errors = []
+            while not q.empty():
+                errors.append(q.get(False))
+            _msg = "Error(s) occurred in delegated runner:\n%s"
+            raise RuntimeError(_msg % '\n'.join([repr(x) for x in errors]))
     return run_compile
-
 
 # workers
 _thread_class = threading.Thread
-
 
 class _proc_class_impl(object):
 
@@ -150,14 +168,25 @@ class _proc_class_impl(object):
             ctx = multiprocessing.get_context(self._method)
             return ctx.Process(*args, **kwargs)
 
+def _get_mp_classes(method):
+    if utils.PYVERSION < (3, 0):
+        proc = _proc_class_impl(method)
+        queue = multiprocessing.Queue
+    else:
+        if method == 'default':
+            method = 'fork'
+        ctx = multiprocessing.get_context(method)
+        proc = _proc_class_impl(method)
+        queue = ctx.Queue
+    return proc, queue
 
-thread_impl = compile_factory(_thread_class)
-spawn_proc_impl = compile_factory(_proc_class_impl('spawn'))
-fork_proc_impl = compile_factory(_proc_class_impl('fork'))
+thread_impl = compile_factory(_thread_class, t_queue.Queue)
+spawn_proc_impl = compile_factory(*_get_mp_classes('spawn'))
+fork_proc_impl = compile_factory(*_get_mp_classes('fork'))
 
 # this is duplication as Py27, linux uses fork, windows uses spawn, it however
 # is kept like this so that when tests fail it's less confusing!
-default_proc_impl = compile_factory(_proc_class_impl('default'))
+default_proc_impl = compile_factory(*_get_mp_classes('default'))
 
 
 class TestParallelBackendBase(TestCase):
@@ -235,15 +264,17 @@ class TestParallelBackend(TestParallelBackendBase):
         for p in cls.parallelism:
             for name, impl in cls.runners.items():
                 methname = "test_" + p + '_' + name
-                def test_method(self):
-                    selfproc = multiprocessing.current_process()
-                    # daemonized processes cannot have children
-                    if selfproc.daemon:
-                        _msg = 'daemonized processes cannot have children'
-                        self.skipTest(_msg)
-                    else:
-                        self.run_compile(impl, parallelism=p)
-                setattr(cls, methname, test_method)
+                def methgen(impl, p):
+                    def test_method(self):
+                        selfproc = multiprocessing.current_process()
+                        # daemonized processes cannot have children
+                        if selfproc.daemon:
+                            _msg = 'daemonized processes cannot have children'
+                            self.skipTest(_msg)
+                        else:
+                            self.run_compile(impl, parallelism=p)
+                    return test_method
+                setattr(cls, methname, methgen(impl, p))
 
 TestParallelBackend.generate()
 
@@ -257,6 +288,7 @@ class TestSpecificBackend(TestParallelBackendBase):
     isolated manner such that if they hang/crash/have issues, it doesn't kill
     the test suite.
     """
+    _DEBUG = True
 
     backends = {'tbb': skip_no_tbb,
                 'omp': skip_no_omp}
@@ -274,9 +306,10 @@ class TestSpecificBackend(TestParallelBackendBase):
             if popen.returncode != 0:
                 raise AssertionError("process failed with code %s: stderr follows\n%s\n"
                                      % (popen.returncode, err.decode()))
+            return out.decode(), err.decode()
         finally:
             timeout.cancel()
-        return out.decode(), err.decode()
+        return None, None
 
     def run_test_in_separate_process(self, test, threading_layer):
         env_copy = os.environ.copy()
@@ -292,9 +325,13 @@ class TestSpecificBackend(TestParallelBackendBase):
         injected_method = '%s.%s.%s' % (themod, thecls, methname)
 
         def test_template(self):
-            self.run_test_in_separate_process(injected_method, backend)
+            o, e =self.run_test_in_separate_process(injected_method, backend)
+            if self._DEBUG:
+                print(o, e)
         injected_test = "test_%s_%s_%s" % (p, name, backend)
-        setattr(cls, injected_test, backend_guard(test_template))
+        # Mark as important for appveyor
+        setattr(cls, injected_test,
+                tag("important")(backend_guard(test_template)))
 
     @classmethod
     def generate(cls):
