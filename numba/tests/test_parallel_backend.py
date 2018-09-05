@@ -40,11 +40,7 @@ try:
 except ImportError:
     _HAVE_OMP_POOL = False
 
-
-# Switch this to True to run fork() based tests, unsupported at present
-_DO_FORK_TESTS = True 
-
-
+# test skipping decorators
 skip_no_omp = unittest.skipUnless(_HAVE_OMP_POOL, "OpenMP threadpool required")
 skip_no_tbb = unittest.skipUnless(_HAVE_TBB_POOL, "TBB threadpool required")
 
@@ -55,11 +51,14 @@ skip_unless_py3 = unittest.skipUnless(utils.PYVERSION >= (3, 0),
                                       "Test runs on Python 3 only")
 
 _windows = sys.platform.startswith('win')
+_osx = sys.platform.startswith('darwin')
 _windows_py27 = (sys.platform.startswith('win32') and
                  sys.version_info[:2] == (2, 7))
 _32bit = sys.maxsize <= 2 ** 32
 _parfors_unsupported = _32bit or _windows_py27
-_FORK_TESTS_MASK = _DO_FORK_TESTS and not _windows
+
+_HAVE_OS_FORK = not _windows
+
 
 # some functions to jit
 
@@ -216,8 +215,10 @@ class TestParallelBackendBase(TestCase):
     parallelism = ['threading', 'random']
     if utils.PYVERSION > (3, 0):
         parallelism.append('multiprocessing_spawn')
-        if _FORK_TESTS_MASK:
+        if _HAVE_OS_FORK:
             parallelism.append('multiprocessing_fork')
+    else:
+        parallelism.append('multiprocessing_default')
 
 
     runners = {'concurrent_jit': [jit_runner(nopython=True, parallel=True)],
@@ -240,12 +241,10 @@ class TestParallelBackendBase(TestCase):
                 default_proc_impl(fnlist)
             elif parallelism == 'random':
                 if utils.PYVERSION < (3, 0):
-                    ps = [thread_impl]
-                    if _FORK_TESTS_MASK: # Py2.7 linux can only fork() so disable for all
-                        ps.append(default_proc_impl)
+                    ps = [thread_impl, default_proc_impl]
                 else:
                     ps = [thread_impl, spawn_proc_impl]
-                    if _FORK_TESTS_MASK:
+                    if _HAVE_OS_FORK:
                         ps.append(fork_proc_impl)
 
                 for _ in range(10):  # 10 is arbitrary
@@ -256,10 +255,9 @@ class TestParallelBackendBase(TestCase):
                     'Unknown parallelism supplied %s' % parallelism)
 
 
-_threadsafe_backends = config.THREADING_LAYER in ('omp', 'tbb')
+_specific_backends = config.THREADING_LAYER in ('omp', 'tbb', 'workqueue')
 
-
-@unittest.skipUnless(_threadsafe_backends, "Threading layer not threadsafe")
+@unittest.skipUnless(_specific_backends, "Threading layer not explicit")
 class TestParallelBackend(TestParallelBackendBase):
     """ These are like the numba.tests.test_threadsafety tests but designed
     instead to torture the parallel backend.
@@ -269,6 +267,9 @@ class TestParallelBackend(TestParallelBackendBase):
     have children.
     """
 
+    # NOTE: All tests are generated based on what a platform supports concurrent
+    # execution wise from Python, irrespective of whether the native libraries
+    # can actually handle the behaviour present.
     @classmethod
     def generate(cls):
         for p in cls.parallelism:
@@ -288,7 +289,6 @@ class TestParallelBackend(TestParallelBackendBase):
 
 TestParallelBackend.generate()
 
-
 class TestSpecificBackend(TestParallelBackendBase):
     """
     This is quite contrived, for each test in the TestParallelBackend tests it
@@ -301,7 +301,8 @@ class TestSpecificBackend(TestParallelBackendBase):
     _DEBUG = True
 
     backends = {'tbb': skip_no_tbb,
-                'omp': skip_no_omp}
+                'omp': skip_no_omp,
+                'workqueue': unittest.skipIf(False, '')}
 
     def run_cmd(self, cmdline, env):
         popen = subprocess.Popen(cmdline,
@@ -348,9 +349,19 @@ class TestSpecificBackend(TestParallelBackendBase):
         for backend, backend_guard in cls.backends.items():
             for p in cls.parallelism:
                 for name in cls.runners.keys():
-                    if (p == 'multiprocessing_fork' and backend == 'omp' and
-                    sys.platform.startswith('linux')):
-                        continue # GNU OpenMP is not fork safe
+                    # handle known problem cases...
+
+                    # GNU OpenMP is not fork safe
+                    if (p in ('multiprocessing_fork', 'random') and
+                        backend == 'omp' and
+                        sys.platform.startswith('linux')):
+                        continue
+
+                    # workqueue is not thread safe
+                    if (p in ('threading', 'random') and
+                        backend == 'workqueue'):
+                        continue
+
                     cls._inject(p, name, backend, backend_guard)
 
 

@@ -41,5 +41,5 @@ test_script:
   # Run a subset of the test suite, as AppVeyor is quite slow.
   # %CMD_IN_ENV% is needed for distutils/setuptools-based tests
   # on certain build configurations.
-  - "%CMD_IN_ENV% python -m numba.tests.test_runtests
+  - "%CMD_IN_ENV% python -m numba.tests.test_runtests"
   - "%CMD_IN_ENV% python runtests.py -b --tags important"
