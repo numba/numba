@@ -161,8 +161,8 @@ Does Numba automatically parallelize code?
 It can, in some cases:
 
 * Ufuncs and gufuncs with the ``target="parallel"`` option will run on multiple threads.
-* The experimental ``parallel=True`` option to ``@jit`` will attempt to optimize
-  array operations and run them in parallel.  It also adds support for ``prange()`` to
+* The ``parallel=True`` option to ``@jit`` will attempt to optimize array
+  operations and run them in parallel.  It also adds support for ``prange()`` to
   explicitly parallelize a loop.
 
 You can also manually run computations on multiple threads yourself and use
