@@ -13,7 +13,6 @@ numba -s
 python -m numba.tests.test_runtests
 
 @rem Run the whole test suite
-set TESTS_TO_RUN="numba.tests.test_parallel_backend"
 python -m numba.runtests -b -m -- %TESTS_TO_RUN%
 
 if errorlevel 1 exit 1

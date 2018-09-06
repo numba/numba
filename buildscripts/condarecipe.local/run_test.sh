@@ -33,6 +33,5 @@ numba -s
 python -m numba.tests.test_runtests
 
 # Run the whole test suite
-TESTS_TO_RUN="numba.tests.test_parallel_backend"
 echo "Running: $SEGVCATCH python -m numba.runtests -b -m $TEST_NPROCS -- $TESTS_TO_RUN"
 $SEGVCATCH python -m numba.runtests -b -m $TEST_NPROCS -- $TESTS_TO_RUN
