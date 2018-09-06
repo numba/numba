@@ -68,7 +68,8 @@ def foo(n, v):
 
 def linalg(n, v):
     np.random.seed(42)
-    return np.linalg.eig(np.ones((n, n)))[1] + np.random.random(n) + v
+    x = np.dot(np.ones((n, n)), np.ones((n, n)))
+    return x + np.random.random(n) + v
 
 
 def ufunc_foo(a, b):
