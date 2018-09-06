@@ -439,7 +439,7 @@ def _legalize_withs_cfg(withs, cfg, blocks):
 
     # Verify that the with-context has no side-exits
     for s, e in withs:
-        loc = blocks[s]
+        loc = blocks[s].loc
         if s not in doms[e]:
             msg = "Entry of with-context not dominating the exit."
             raise errors.CompilerError(msg, loc=loc)
