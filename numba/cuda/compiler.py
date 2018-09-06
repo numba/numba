@@ -13,6 +13,7 @@ from numba import ctypes_support as ctypes
 from numba import config, compiler, types, sigutils
 from numba.typing.templates import AbstractTemplate, ConcreteTemplate
 from numba import funcdesc, typing, utils, serialize
+from numba.compiler_lock import global_compiler_lock
 
 from .cudadrv.autotune import AutoTuner
 from .cudadrv.devices import get_context
@@ -22,25 +23,7 @@ from .api import get_current_device
 from .args import wrap_arg
 
 
-_cuda_compiler_lock = threading.RLock()
-
-
-def nonthreadsafe(fn):
-    """
-    Wraps a function to prevent multiple threads from executing it in parallel
-    due to LLVM is not threadsafe.
-    This is preferred over contextmanager due to llvm.Module.__del__ being
-    non-threadsafe and it is cumbersome to manually keep track of when it is
-    triggered.
-    """
-    @wraps(fn)
-    def core(*args, **kwargs):
-        with _cuda_compiler_lock:
-            return fn(*args, **kwargs)
-    return core
-
-
-@nonthreadsafe
+@global_compiler_lock
 def compile_cuda(pyfunc, return_type, args, debug, inline):
     # First compilation will trigger the initialization of the CUDA backend.
     from .descriptor import CUDATargetDesc
@@ -72,7 +55,7 @@ def compile_cuda(pyfunc, return_type, args, debug, inline):
     return cres
 
 
-@nonthreadsafe
+@global_compiler_lock
 def compile_kernel(pyfunc, args, link, debug=False, inline=False,
                    fastmath=False, extensions=[]):
     cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=inline)

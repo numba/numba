@@ -15,6 +15,7 @@ import llvmlite.binding as ll
 
 from numba import types, utils, cgutils, typing, funcdesc, debuginfo
 from numba import _dynfunc, _helperlib
+from numba.compiler_lock import global_compiler_lock
 from numba.pythonapi import PythonAPI
 from . import arrayobj, builtins, imputils
 from .imputils import (user_function, user_generator,
@@ -786,21 +787,22 @@ class BaseContext(object):
         # Compile
         from numba import compiler
 
-        codegen = self.codegen()
-        library = codegen.create_library(impl.__name__)
-        if flags is None:
-            flags = compiler.Flags()
-        flags.set('no_compile')
-        flags.set('no_cpython_wrapper')
-        cres = compiler.compile_internal(self.typing_context, self,
-                                         library,
-                                         impl, sig.args,
-                                         sig.return_type, flags,
-                                         locals=locals)
+        with global_compiler_lock:
+            codegen = self.codegen()
+            library = codegen.create_library(impl.__name__)
+            if flags is None:
+                flags = compiler.Flags()
+            flags.set('no_compile')
+            flags.set('no_cpython_wrapper')
+            cres = compiler.compile_internal(self.typing_context, self,
+                                            library,
+                                            impl, sig.args,
+                                            sig.return_type, flags,
+                                            locals=locals)
 
-        # Allow inlining the function inside callers.
-        codegen.add_linking_library(cres.library)
-        return cres
+            # Allow inlining the function inside callers.
+            codegen.add_linking_library(cres.library)
+            return cres
 
     def compile_subroutine(self, builder, impl, sig, locals={}):
         """
