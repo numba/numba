@@ -40,6 +40,12 @@ try:
 except ImportError:
     _HAVE_OMP_POOL = False
 
+try:
+    import scipy.linalg.cython_lapack
+    _HAVE_LAPACK = True
+except ImportError:
+    _HAVE_LAPACK = False
+
 # test skipping decorators
 skip_no_omp = unittest.skipUnless(_HAVE_OMP_POOL, "OpenMP threadpool required")
 skip_no_tbb = unittest.skipUnless(_HAVE_TBB_POOL, "TBB threadpool required")
@@ -65,11 +71,16 @@ _HAVE_OS_FORK = not _windows
 def foo(n, v):
     return np.ones(n) + v
 
-
-def linalg(n, v):
-    np.random.seed(42)
-    x = np.dot(np.ones((n, n)), np.ones((n, n)))
-    return x + np.random.random(n) + v
+if _HAVE_LAPACK:
+    def linalg(n, v):
+        np.random.seed(42)
+        x = np.dot(np.ones((n, n)), np.ones((n, n)))
+        return x + np.random.random(n) + v
+else:
+    def linalg(n, v):
+        np.random.seed(42)
+        x = np.trace(np.ones((n, n)))
+        return x + np.random.random(n) + v
 
 
 def ufunc_foo(a, b):
