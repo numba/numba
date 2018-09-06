@@ -12,6 +12,7 @@ import signal
 from numba import config, utils
 if utils.PYVERSION >= (3, 0):
     import queue as t_queue
+    import faulthandler
 else:
     import Queue as t_queue
 
@@ -67,7 +68,7 @@ def foo(n, v):
 
 def linalg(n, v):
     np.random.seed(42)
-    return np.linalg.cond(np.random.random((10, 10))) + np.ones(n) + v
+    return np.linalg.eig(np.ones((n, n)))[1] + np.random.random(n) + v
 
 
 def ufunc_foo(a, b):
@@ -127,10 +128,10 @@ class guvectorize_runner(runnable):
         np.testing.assert_allclose(expected, got)
 
 def chooser(fnlist, **kwargs):
-    if utils.PYVERSION >= (3, 0):
-        faulthandler.enable()
     q = kwargs.get('queue')
     try:
+        if utils.PYVERSION >= (3, 0):
+            faulthandler.enable()
         for _ in range(10):
             fn = random.choice(fnlist)
             fn()
@@ -142,7 +143,6 @@ def compile_factory(parallel_class, queue_impl):
     def run_compile(fnlist):
         q = queue_impl()
         kws = {'queue': q}
-        print(parallel_class)
         ths = [parallel_class(target=chooser, args=(fnlist,), kwargs=kws)
                for i in range(4)]
         for th in ths:
@@ -252,6 +252,7 @@ class TestParallelBackendBase(TestCase):
                     ps = [thread_impl, spawn_proc_impl]
                     if _HAVE_OS_FORK:
                         ps.append(fork_proc_impl)
+                        ps.append(forkserver_proc_impl)
 
                 for _ in range(10):  # 10 is arbitrary
                     impl = random.choice(ps)
@@ -342,9 +343,12 @@ class TestSpecificBackend(TestParallelBackendBase):
         injected_method = '%s.%s.%s' % (themod, thecls, methname)
 
         def test_template(self):
-            o, e =self.run_test_in_separate_process(injected_method, backend)
+            o, e = self.run_test_in_separate_process(injected_method, backend)
             if self._DEBUG:
-                print(o, e)
+                print('stdout:\n "%s"\n stderr:\n "%s"' % (o, e))
+            self.assertIn('OK', e)
+            self.assertTrue('FAIL' not in e)
+            self.assertTrue('ERROR' not in e)
         injected_test = "test_%s_%s_%s" % (p, name, backend)
         # Mark as important for appveyor
         setattr(cls, injected_test,
