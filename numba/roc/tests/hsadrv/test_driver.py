@@ -55,6 +55,12 @@ class TestAgents(unittest.TestCase):
                 queue = agent.create_queue_multi(2 ** 5)
                 self.assertIsInstance(queue, Queue)
 
+    def test_agent_wavebits(self):
+        for agent in roc.agents:
+            if agent.is_component:
+                if agent.name.decode() in ['gfx803', 'gfx900']:
+                    self.assertEqual(agent.wavebits, 6)
+
 
 class _TestBase(unittest.TestCase):
     def setUp(self):

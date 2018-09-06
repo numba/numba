@@ -20,3 +20,4 @@ User Manual
    troubleshoot.rst
    faq.rst
    examples.rst
+   talks.rst

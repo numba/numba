@@ -327,12 +327,28 @@ class TestArrayAnalysis(TestCase):
                                asserts=[self.with_assert('A', 'B'),
                                         self.without_assert('C', 'D')])
 
+        def test_tup_arg(T):
+            T2 = T
+            return T2[0]
+
+        int_arr_typ = types.Array(types.intp, 1, 'C')
+        self._compile_and_test(test_tup_arg,
+            (types.Tuple((int_arr_typ, int_arr_typ)),), asserts=None)
+
         T = namedtuple("T", ['a','b'])
         def test_namedtuple(n):
             r = T(n, n)
             return r[0]
         self._compile_and_test(test_namedtuple, (types.intp,),
                                 equivs=[self.with_equiv('r', ('n', 'n'))],)
+
+        # np.where is tricky since it returns tuple of arrays
+        def test_np_where_tup_return(A):
+            c = np.where(A)
+            return len(c[0])
+
+        self._compile_and_test(test_np_where_tup_return,
+            (types.Array(types.intp, 1, 'C'),), asserts=None)
 
         def test_shape(A):
             (m, n) = A.shape

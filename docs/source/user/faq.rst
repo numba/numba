@@ -10,26 +10,30 @@ Programming
 Can I pass a function as an argument to a jitted function?
 ----------------------------------------------------------
 
-You can't, but in many cases you can use a closure to emulate it.
-For example, this example::
+As of Numba 0.39, you can, so long as the function argument has also been
+JIT-compiled::
 
    @jit(nopython=True)
    def f(g, x):
        return g(x) + g(-x)
 
-   result = f(my_g_function, 1)
+   result = f(jitted_g_function, 1)
 
-could be rewritten using a factory function::
+However, dispatching with arguments that are functions has extra overhead.
+If this matters for your application, you can also use a factory function to 
+capture the function argument in a closure::
 
    def make_f(g):
-       # Note: a new f() is compiled each time make_f() is called!
+       # Note: a new f() is created each time make_f() is called!
        @jit(nopython=True)
        def f(x):
            return g(x) + g(-x)
        return f
 
-   f = make_f(my_g_function)
+   f = make_f(jitted_g_function)
    result = f(1)
+
+Improving the dispatch performance of functions in Numba is an ongoing task.
 
 Numba doesn't seem to care when I modify a global variable
 ----------------------------------------------------------
@@ -157,8 +161,8 @@ Does Numba automatically parallelize code?
 It can, in some cases:
 
 * Ufuncs and gufuncs with the ``target="parallel"`` option will run on multiple threads.
-* The experimental ``parallel=True`` option to ``@jit`` will attempt to optimize
-  array operations and run them in parallel.  It also adds support for ``prange()`` to
+* The ``parallel=True`` option to ``@jit`` will attempt to optimize array
+  operations and run them in parallel.  It also adds support for ``prange()`` to
   explicitly parallelize a loop.
 
 You can also manually run computations on multiple threads yourself and use

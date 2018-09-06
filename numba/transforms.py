@@ -73,12 +73,17 @@ def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
             loopblocks[k] = blocks[k]
 
         used_vars = set()
-        for vs in compute_use_defs(loopblocks).usemap.values():
+        def_vars = set()
+        defs = compute_use_defs(loopblocks)
+        for vs in defs.usemap.values():
             used_vars |= vs
+        for vs in defs.defmap.values():
+            def_vars |= vs
+        used_or_defined = used_vars | def_vars
 
         # note: sorted for stable ordering
-        inputs = sorted(set(inputs) & used_vars)
-        outputs = sorted(set(outputs) & used_vars)
+        inputs = sorted(set(inputs) & used_or_defined)
+        outputs = sorted(set(outputs) & used_or_defined)
 
         lli = _loop_lift_info(loop=loop, inputs=inputs, outputs=outputs,
                               callfrom=callfrom, returnto=returnto)
