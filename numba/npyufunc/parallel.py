@@ -13,6 +13,7 @@ from __future__ import print_function, absolute_import
 
 import sys
 import os
+import platform
 import warnings
 from threading import RLock as threadRLock
 from multiprocessing import RLock as procRLock
@@ -277,50 +278,87 @@ def _launch_threads():
                     if lib is not None:
                         break
                 else:
-                    raise ValueError("No threading layer could be loaded.")
+                    backend = ''
                 return lib, backend
 
             t = str(config.THREADING_LAYER).lower()
             namedbackends = ['tbb', 'omp', 'workqueue']
 
             lib = None
+            _IS_OSX = platform.system() == "Darwin"
+            _IS_LINUX = platform.system() == "Linux"
+            err_helpers = dict()
+            err_helpers['TBB'] = ("Intel TBB is required, try:\n"
+                                  "$ conda/pip install tbb")
+            err_helpers['OMP_OSX'] = ("Intel OpenMP is required, try:\n"
+                                  "$ conda/pip install intel-openmp")
+            requirements = []
+
+            def raise_with_hint(required):
+                errmsg = "No threading layer could be loaded.\n%s"
+                hintmsg = "HINT:\n%s"
+                if len(required) == 0:
+                    hint = ''
+                if len(required) == 1:
+                    hint = hintmsg % err_helpers[required[0]]
+                if len(required) > 1:
+                    options = 'OR\n'.join([err_helpers[x] for x in required])
+                    hint = hintmsg % ("One of: %s" % options)
+                raise ValueError(errmsg % hint)
+
             if t in namedbackends:
                 # Try and load the specific named backend
                 lib = select_known_backend(t)
+                if not lib:
+                    # something is missing preventing a valid backend from
+                    # loading, set requirements for hinting
+                    if t == 'tbb':
+                        requirements.append('TBB')
+                    elif t == 'omp' and _IS_OSX:
+                        requirements.append('OSX_OMP')
                 libname = t
             elif t in ['threadsafe', 'forksafe', 'safe']:
                 # User wants a specific behaviour...
                 available = ['tbb']
+                requirements.append('TBB')
                 if t == "safe":
                     # "safe" is TBB, which is fork and threadsafe everywhere
                     pass
                 elif t == "threadsafe":
+                    if _IS_OSX:
+                        requirements.append('OSX_OMP')
                     # omp is threadsafe everywhere
                     available.append('omp')
                 elif t == "forksafe":
                     # everywhere apart from linux (GNU OpenMP) has a guaranteed
                     # forksafe OpenMP, as OpenMP has better performance, prefer
                     # this to workqueue
-                    if platform.system() != 'Linux':
+                    if not _IS_LINUX:
                         available.append('omp')
+                    if _IS_OSX:
+                        requirements.append('OSX_OMP')
                     # workqueue is forksafe everywhere
                     available.append('workqueue')
-                else:
+                else: # unreachable
                     msg = "No threading layer available for purpose %s"
                     raise ValueError(msg % t)
                 # select amongst available
                 lib, libname = select_from_backends(available)
-
             elif t == 'default':
                 # If default is supplied, try them in order, tbb, omp, workqueue
                 lib, libname = select_from_backends(namedbackends)
+                if not lib:
+                    # set requirements for hinting
+                    requirements.append('TBB')
+                    if _IS_OSX:
+                        requirements.append('OSX_OMP')
             else:
                 msg = "The threading layer requested '%s' is unknown to Numba."
                 raise ValueError(msg % t)
 
-            # This should be unreachable, but just in case...
-            if lib is None:
-                raise ValueError("No threading layer could be loaded.")
+            # No lib found, raise and hint
+            if not lib:
+                raise_with_hint(requirements)
 
             ll.add_symbol('numba_parallel_for', lib.parallel_for)
             ll.add_symbol('do_scheduling_signed', lib.do_scheduling_signed)
