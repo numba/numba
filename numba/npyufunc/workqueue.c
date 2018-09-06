@@ -30,6 +30,8 @@ race condition.
 #include "../_pymodule.h"
 #include "gufunc_scheduler.h"
 
+#define _DEBUG 0
+
 /* As the thread-pool isn't inherited by children,
    free the task-queue, too. */
 static void reset_after_fork(void);
@@ -234,8 +236,6 @@ void debug_marker() {};
 // add_task(nopfn, NULL, NULL, NULL, NULL)
 // useful if you want to limit the number of threads locally
 void nopfn(void *args, void *dims, void *steps, void *data) {};
-
-#define _DEBUG 0
 
 static void
 parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *data,

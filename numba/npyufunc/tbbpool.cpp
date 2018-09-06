@@ -22,6 +22,9 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 #endif
 #endif
 
+#define _DEBUG 0
+#define _TRACE_SPLIT 0
+
 static tbb::task_group *tg = NULL;
 static tbb::task_scheduler_init *tsi = NULL;
 static int tsi_count = 0;
@@ -33,8 +36,6 @@ add_task(void *fn, void *args, void *dims, void *steps, void *data) {
         func(args, dims, steps, data);
     });
 }
-
-#define _DEBUG 0
 
 static void
 parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *data,
@@ -53,7 +54,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 
     const size_t arg_len = (inner_ndim + 1);
 
-    if(_DEBUG)
+    if(_DEBUG && _TRACE_SPLIT)
     {
         printf("inner_ndim: %lu\n",inner_ndim);
         printf("arg_len: %lu\n", arg_len);
@@ -77,7 +78,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
         memcpy(count_space, dimensions, arg_len * sizeof(size_t));
         count_space[0] = range.size();
 
-        if(_DEBUG)
+        if(_DEBUG && _TRACE_SPLIT > 1)
         {
             printf("THREAD %p:", count_space);
             printf("count_space: ");
@@ -92,7 +93,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
             ptrdiff_t offset = step * range.begin();
             array_arg_space[j] = base + offset;
 
-            if(0&&_DEBUG)
+            if(_DEBUG && _TRACE_SPLIT > 2)
             {
                 printf("Index %ld\n", j);
                 printf("-->Got base %p\n", (void *)base);
@@ -102,7 +103,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
             }
         }
 
-        if(_DEBUG)
+        if(_DEBUG && _TRACE_SPLIT > 2)
         {
             printf("array_arg_space: ");
             for(size_t j = 0; j < array_count; j++)
@@ -160,7 +161,8 @@ static void unload_tbb(void) {
 static void launch_threads(int count) {
     if(tsi)
         return;
-    puts("Using TBB");
+    if(_DEBUG)
+        puts("Using TBB");
     if(count < 1)
         count = tbb::task_scheduler_init::automatic;
     tsi = new TSI_INIT(tsi_count = count);

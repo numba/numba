@@ -208,7 +208,7 @@ def get_ext_modules():
             depends=['numba/npyufunc/workqueue.h'],
             include_dirs=[os.path.join(tbb_root, 'include')],
             extra_compile_args=cpp11flags,
-            libraries   =['tbb'],
+            libraries   =['tbb'],  # TODO: if --debug or -g, use 'tbb_debug'
             library_dirs=[os.path.join(tbb_root, 'lib', 'intel64', 'gcc4.4'),  # for Linux
                         os.path.join(tbb_root, 'lib'),                       # for MacOS
                         os.path.join(tbb_root, 'lib', 'intel64', 'vc_mt'),   # for Windows
