@@ -79,8 +79,8 @@ if _HAVE_LAPACK:
 else:
     def linalg(n, v):
         np.random.seed(42)
-        x = np.trace(np.ones((n, n)))
-        return x + np.random.random(n) + v
+        # no way to trigger MKL without the lapack bindings.
+        return np.random.random(n) + v
 
 
 def ufunc_foo(a, b):
