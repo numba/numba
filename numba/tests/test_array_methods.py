@@ -609,10 +609,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             got = cres.entry_point(scal, x, y)
             self.assertPreciseEqual(got, expected)
 
-            arr = np.int16([1, 0, -1, 0])
-            check_arr(arr)
-            arr = np.bool_([1, 0, 1])
-            check_arr(arr)
+        arr = np.int16([1, 0, -1, 0])
+        check_arr(arr)
+        arr = np.bool_([1, 0, 1])
+        check_arr(arr)
 
         arr = fac(24)
         check_arr(arr)
