@@ -290,7 +290,7 @@ def _launch_threads():
             err_helpers = dict()
             err_helpers['TBB'] = ("Intel TBB is required, try:\n"
                                   "$ conda/pip install tbb")
-            err_helpers['OMP_OSX'] = ("Intel OpenMP is required, try:\n"
+            err_helpers['OSX_OMP'] = ("Intel OpenMP is required, try:\n"
                                   "$ conda/pip install intel-openmp")
             requirements = []
 
@@ -302,8 +302,8 @@ def _launch_threads():
                 if len(required) == 1:
                     hint = hintmsg % err_helpers[required[0]]
                 if len(required) > 1:
-                    options = 'OR\n'.join([err_helpers[x] for x in required])
-                    hint = hintmsg % ("One of: %s" % options)
+                    options = '\nOR\n'.join([err_helpers[x] for x in required])
+                    hint = hintmsg % ("One of:\n%s" % options)
                 raise ValueError(errmsg % hint)
 
             if t in namedbackends:
