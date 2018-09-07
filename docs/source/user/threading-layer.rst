@@ -23,7 +23,7 @@ There are three threading layers available and they are named as follows:
 
 * ``tbb`` - A threading layer backed by Intel TBB.
 * ``omp`` - A threading layer backed by OpenMP.
-* ``workqueue`` - A threading layer backed by OS native threads.
+* ``workqueue`` -A simple built-in work-sharing task scheduler.
 
 In practice, the only threading layer guaranteed to be present is ``workqueue``.
 The ``omp`` layer requires the presence of a suitable OpenMP runtime library.
