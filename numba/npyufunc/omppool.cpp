@@ -35,7 +35,8 @@ static pid_t parent_pid = 0; // 0 is not set, users can't own this anyway
 #endif
 
 static void
-add_task(void *fn, void *args, void *dims, void *steps, void *data) {
+add_task(void *fn, void *args, void *dims, void *steps, void *data)
+{
     puts("Running add_task() with omppool sequentially");
     typedef void (*func_ptr_t)(void *args, void *dims, void *steps, void *data);
     func_ptr_t func = reinterpret_cast<func_ptr_t>(fn);
@@ -44,12 +45,13 @@ add_task(void *fn, void *args, void *dims, void *steps, void *data) {
 
 static void
 parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *data,
-                size_t inner_ndim, size_t array_count)
+             size_t inner_ndim, size_t array_count)
 {
     typedef void (*func_ptr_t)(char **args, size_t *dims, size_t *steps, void *data);
     func_ptr_t func = reinterpret_cast<func_ptr_t>(fn);
     static bool printed = false;
-    if(!printed && _DEBUG) {
+    if(!printed && _DEBUG)
+    {
         puts("Using parallel_for");
         printed = true;
     }
@@ -100,7 +102,8 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     }
 
     #pragma omp parallel for
-    for(ptrdiff_t r = 0; r < size; r++) {
+    for(ptrdiff_t r = 0; r < size; r++)
+    {
         size_t * count_space = (size_t *)alloca(sizeof(size_t) * arg_len);
         char ** array_arg_space = (char**)alloca(sizeof(char*) * array_count);
         memcpy(count_space, dimensions, arg_len * sizeof(size_t));
@@ -142,7 +145,8 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     }
 }
 
-static void launch_threads(int count) {
+static void launch_threads(int count)
+{
     // this must be called in a fork+thread safe region from Python
     static bool initialized = false;
 #ifdef __GNUC__
@@ -161,13 +165,16 @@ static void launch_threads(int count) {
     omp_set_num_threads(count);
 }
 
-static void synchronize(void) {
+static void synchronize(void)
+{
 }
 
-static void ready(void) {
+static void ready(void)
+{
 }
 
-MOD_INIT(omppool) {
+MOD_INIT(omppool)
+{
     PyObject *m;
     MOD_DEF(m, "omppool", "No docs", NULL)
     if (m == NULL)

@@ -34,14 +34,14 @@ void synchronize(void);
 static
 void ready(void);
 
-/* parallel for loop with 1d tiling. 
+/* parallel for loop with 1d tiling.
 
  Args:
 
  fn - function pointer to the gufunc
 
  These are from the Python: args, dimensions, steps, data = lfunc.args
- args - gufunc args 
+ args - gufunc args
  dims - gufunc dims
  steps - gufunc steps
  data - gufunc data
@@ -53,4 +53,4 @@ void ready(void);
  */
 static void
 parallel_for(void *fn, char **args, size_t *dims, size_t *steps, void *data,\
-            size_t inner_ndim, size_t array_count);
+             size_t inner_ndim, size_t array_count);

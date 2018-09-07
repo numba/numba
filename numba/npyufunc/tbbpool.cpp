@@ -11,12 +11,12 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 #include "gufunc_scheduler.h"
 
 #if TBB_INTERFACE_VERSION >= 9106
-    #define TSI_INIT(count) tbb::task_scheduler_init(count)
-    #define TSI_TERMINATE(tsi) tsi->blocking_terminate(std::nothrow)
+#define TSI_INIT(count) tbb::task_scheduler_init(count)
+#define TSI_TERMINATE(tsi) tsi->blocking_terminate(std::nothrow)
 #else
 #if __TBB_SUPPORTS_WORKERS_WAITING_IN_TERMINATE
-    #define TSI_INIT(count) tbb::task_scheduler_init(count, 0, /*blocking termination*/true)
-    #define TSI_TERMINATE(tsi) tsi->terminate()
+#define TSI_INIT(count) tbb::task_scheduler_init(count, 0, /*blocking termination*/true)
+#define TSI_TERMINATE(tsi) tsi->terminate()
 #else
 #error This version of TBB does not support blocking terminate
 #endif
@@ -30,8 +30,10 @@ static tbb::task_scheduler_init *tsi = NULL;
 static int tsi_count = 0;
 
 static void
-add_task(void *fn, void *args, void *dims, void *steps, void *data) {
-    tg->run([=]{
+add_task(void *fn, void *args, void *dims, void *steps, void *data)
+{
+    tg->run([=]
+    {
         auto func = reinterpret_cast<void (*)(void *args, void *dims, void *steps, void *data)>(fn);
         func(args, dims, steps, data);
     });
@@ -39,10 +41,11 @@ add_task(void *fn, void *args, void *dims, void *steps, void *data) {
 
 static void
 parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *data,
-                size_t inner_ndim, size_t array_count)
+             size_t inner_ndim, size_t array_count)
 {
     static bool printed = false;
-    if(!printed && _DEBUG) {
+    if(!printed && _DEBUG)
+    {
         puts("Using parallel_for");
         printed = true;
     }
@@ -72,7 +75,8 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     }
 
     using range_t = tbb::blocked_range<size_t>;
-    tbb::parallel_for(range_t(0, dimensions[0]), [=](const range_t &range) {
+    tbb::parallel_for(range_t(0, dimensions[0]), [=](const range_t &range)
+    {
         size_t * count_space = (size_t *)alloca(sizeof(size_t) * arg_len);
         char ** array_arg_space = (char**)alloca(sizeof(char*) * array_count);
         memcpy(count_space, dimensions, arg_len * sizeof(size_t));
@@ -115,25 +119,29 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     });
 }
 
-void ignore_blocking_terminate_assertion( const char*, int, const char*, const char * ) {
+void ignore_blocking_terminate_assertion( const char*, int, const char*, const char * )
+{
     tbb::internal::runtime_warning("Unable to wait for threads to shut down before fork(). It can break multithreading in child process\n");
 }
 
 void ignore_assertion( const char*, int, const char*, const char * ) {}
 
-static void prepare_fork(void) {
+static void prepare_fork(void)
+{
     if(_DEBUG)
     {
         puts("Suspending TBB: prepare fork");
     }
-    if(tsi) {
+    if(tsi)
+    {
         assertion_handler_type orig = tbb::set_assertion_handler(ignore_blocking_terminate_assertion);
         TSI_TERMINATE(tsi);
         tbb::set_assertion_handler(orig);
     }
 }
 
-static void reset_after_fork(void) {
+static void reset_after_fork(void)
+{
     if(_DEBUG)
     {
         puts("Resuming TBB: after fork");
@@ -142,8 +150,10 @@ static void reset_after_fork(void) {
         tsi->initialize(tsi_count);
 }
 
-static void unload_tbb(void) {
-    if(tsi) {
+static void unload_tbb(void)
+{
+    if(tsi)
+    {
         delete tg;
         tg = NULL;
         if(_DEBUG)
@@ -158,7 +168,8 @@ static void unload_tbb(void) {
     }
 }
 
-static void launch_threads(int count) {
+static void launch_threads(int count)
+{
     if(tsi)
         return;
     if(_DEBUG)
@@ -167,29 +178,33 @@ static void launch_threads(int count) {
         count = tbb::task_scheduler_init::automatic;
     tsi = new TSI_INIT(tsi_count = count);
     tg = new tbb::task_group;
-    tg->run([]{}); // start creating threads asynchronously
+    tg->run([] {}); // start creating threads asynchronously
 
 #ifndef _MSC_VER
     pthread_atfork(prepare_fork, reset_after_fork, reset_after_fork);
 #endif
 }
 
-static void synchronize(void) {
+static void synchronize(void)
+{
     tg->wait();
 }
 
-static void ready(void) {
+static void ready(void)
+{
 }
 
 
-MOD_INIT(tbbpool) {
+MOD_INIT(tbbpool)
+{
     PyObject *m;
     MOD_DEF(m, "tbbpool", "No docs", NULL)
     if (m == NULL)
         return MOD_ERROR_VAL;
 #if PY_MAJOR_VERSION >= 3
     PyModuleDef *md = PyModule_GetDef(m);
-    if (md) {
+    if (md)
+    {
         md->m_free = (freefunc)unload_tbb;
     }
 #endif
