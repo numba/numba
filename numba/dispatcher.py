@@ -628,35 +628,34 @@ class Dispatcher(_DispatcherBase):
         self._memo[u] = self
         self._recent.append(self)
 
+    @compiler.global_compiler_lock
     def compile(self, sig):
         if not self._can_compile:
             raise RuntimeError("compilation disabled")
-        # Use cache and compiler in a critical section
-        with compiler.lock_compiler:
-            # Use counter to track recursion compilation depth
-            with self._compiling_counter:
-                args, return_type = sigutils.normalize_signature(sig)
-                # Don't recompile if signature already exists
-                existing = self.overloads.get(tuple(args))
-                if existing is not None:
-                    return existing.entry_point
+        # Use counter to track recursion compilation depth
+        with self._compiling_counter:
+            args, return_type = sigutils.normalize_signature(sig)
+            # Don't recompile if signature already exists
+            existing = self.overloads.get(tuple(args))
+            if existing is not None:
+                return existing.entry_point
 
-                # Try to load from disk cache
-                cres = self._cache.load_overload(sig, self.targetctx)
-                if cres is not None:
-                    self._cache_hits[sig] += 1
-                    # XXX fold this in add_overload()? (also see compiler.py)
-                    if not cres.objectmode and not cres.interpmode:
-                        self.targetctx.insert_user_function(cres.entry_point,
-                                                    cres.fndesc, [cres.library])
-                    self.add_overload(cres)
-                    return cres.entry_point
-
-                self._cache_misses[sig] += 1
-                cres = self._compiler.compile(args, return_type)
+            # Try to load from disk cache
+            cres = self._cache.load_overload(sig, self.targetctx)
+            if cres is not None:
+                self._cache_hits[sig] += 1
+                # XXX fold this in add_overload()? (also see compiler.py)
+                if not cres.objectmode and not cres.interpmode:
+                    self.targetctx.insert_user_function(cres.entry_point,
+                                                cres.fndesc, [cres.library])
                 self.add_overload(cres)
-                self._cache.save_overload(sig, cres)
                 return cres.entry_point
+
+            self._cache_misses[sig] += 1
+            cres = self._compiler.compile(args, return_type)
+            self.add_overload(cres)
+            self._cache.save_overload(sig, cres)
+            return cres.entry_point
 
     def recompile(self):
         """
@@ -715,39 +714,38 @@ class LiftedCode(_DispatcherBase):
         """
         pass
 
+    @compiler.global_compiler_lock
     def compile(self, sig):
-        # Use cache and compiler in a critical section
-        with compiler.lock_compiler:
-            # Use counter to track recursion compilation depth
-            with self._compiling_counter:
-                # XXX this is mostly duplicated from Dispatcher.
-                flags = self.flags
-                args, return_type = sigutils.normalize_signature(sig)
+        # Use counter to track recursion compilation depth
+        with self._compiling_counter:
+            # XXX this is mostly duplicated from Dispatcher.
+            flags = self.flags
+            args, return_type = sigutils.normalize_signature(sig)
 
-                # Don't recompile if signature already exists
-                # (e.g. if another thread compiled it before we got the lock)
-                existing = self.overloads.get(tuple(args))
-                if existing is not None:
-                    return existing.entry_point
+            # Don't recompile if signature already exists
+            # (e.g. if another thread compiled it before we got the lock)
+            existing = self.overloads.get(tuple(args))
+            if existing is not None:
+                return existing.entry_point
 
-                self._pre_compile(args, return_type, flags)
+            self._pre_compile(args, return_type, flags)
 
-                # Clone IR to avoid mutation in rewrite pass
-                cloned_func_ir = self.func_ir.copy()
-                cres = compiler.compile_ir(typingctx=self.typingctx,
-                                           targetctx=self.targetctx,
-                                           func_ir=cloned_func_ir,
-                                           args=args, return_type=return_type,
-                                           flags=flags, locals=self.locals,
-                                           lifted=(),
-                                           lifted_from=self.lifted_from)
+            # Clone IR to avoid mutation in rewrite pass
+            cloned_func_ir = self.func_ir.copy()
+            cres = compiler.compile_ir(typingctx=self.typingctx,
+                                        targetctx=self.targetctx,
+                                        func_ir=cloned_func_ir,
+                                        args=args, return_type=return_type,
+                                        flags=flags, locals=self.locals,
+                                        lifted=(),
+                                        lifted_from=self.lifted_from)
 
-                # Check typing error if object mode is used
-                if cres.typing_error is not None and not flags.enable_pyobject:
-                    raise cres.typing_error
+            # Check typing error if object mode is used
+            if cres.typing_error is not None and not flags.enable_pyobject:
+                raise cres.typing_error
 
-                self.add_overload(cres)
-                return cres.entry_point
+            self.add_overload(cres)
+            return cres.entry_point
 
 
 class LiftedLoop(LiftedCode):

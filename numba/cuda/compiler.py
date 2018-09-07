@@ -13,6 +13,7 @@ from numba import ctypes_support as ctypes
 from numba import config, compiler, types, sigutils
 from numba.typing.templates import AbstractTemplate, ConcreteTemplate
 from numba import funcdesc, typing, utils, serialize
+from numba.compiler_lock import global_compiler_lock
 
 from .cudadrv.autotune import AutoTuner
 from .cudadrv.devices import get_context
@@ -22,25 +23,7 @@ from .api import get_current_device
 from .args import wrap_arg
 
 
-_cuda_compiler_lock = threading.RLock()
-
-
-def nonthreadsafe(fn):
-    """
-    Wraps a function to prevent multiple threads from executing it in parallel
-    due to LLVM is not threadsafe.
-    This is preferred over contextmanager due to llvm.Module.__del__ being
-    non-threadsafe and it is cumbersome to manually keep track of when it is
-    triggered.
-    """
-    @wraps(fn)
-    def core(*args, **kwargs):
-        with _cuda_compiler_lock:
-            return fn(*args, **kwargs)
-    return core
-
-
-@nonthreadsafe
+@global_compiler_lock
 def compile_cuda(pyfunc, return_type, args, debug, inline):
     # First compilation will trigger the initialization of the CUDA backend.
     from .descriptor import CUDATargetDesc
@@ -72,7 +55,7 @@ def compile_cuda(pyfunc, return_type, args, debug, inline):
     return cres
 
 
-@nonthreadsafe
+@global_compiler_lock
 def compile_kernel(pyfunc, args, link, debug=False, inline=False,
                    fastmath=False, extensions=[]):
     cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=inline)
@@ -718,7 +701,8 @@ class AutoJitCUDAKernel(CUDAKernelBase):
     '''
     CUDA Kernel object. When called, the kernel object will specialize itself
     for the given arguments (if no suitable specialized version already exists)
-    and launch on the device associated with the current context.
+    & compute capability, and launch on the device associated with the current
+    context.
 
     Kernel objects are not to be constructed by the user, but instead are
     created using the :func:`numba.cuda.jit` decorator.
@@ -727,7 +711,10 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         super(AutoJitCUDAKernel, self).__init__()
         self.py_func = func
         self.bind = bind
+
+        # keyed by a `(compute capability, args)` tuple
         self.definitions = {}
+
         self.targetoptions = targetoptions
 
         # defensive copy
@@ -784,35 +771,39 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         '''
         argtypes, return_type = sigutils.normalize_signature(sig)
         assert return_type is None
-        kernel = self.definitions.get(argtypes)
+        cc = get_current_device().compute_capability
+        kernel = self.definitions.get((cc, argtypes))
         if kernel is None:
             if 'link' not in self.targetoptions:
                 self.targetoptions['link'] = ()
             kernel = compile_kernel(self.py_func, argtypes,
                                     **self.targetoptions)
-            self.definitions[argtypes] = kernel
+            self.definitions[(cc, argtypes)] = kernel
             if self.bind:
                 kernel.bind()
         return kernel
 
-    def inspect_llvm(self, signature=None):
+    def inspect_llvm(self, signature=None, compute_capability=None):
         '''
         Return the LLVM IR for all signatures encountered thus far, or the LLVM
-        IR for a specific signature if given.
+        IR for a specific signature and compute_capability if given.
         '''
+        cc = compute_capability or get_current_device().compute_capability
         if signature is not None:
-            return self.definitions[signature].inspect_llvm()
+            return self.definitions[(cc, signature)].inspect_llvm()
         else:
             return dict((sig, defn.inspect_llvm())
                         for sig, defn in self.definitions.items())
 
-    def inspect_asm(self, signature=None):
+    def inspect_asm(self, signature=None, compute_capability=None):
         '''
         Return the generated assembly code for all signatures encountered thus
-        far, or the LLVM IR for a specific signature if given.
+        far, or the LLVM IR for a specific signature and compute_capability
+        if given.
         '''
+        cc = compute_capability or get_current_device().compute_capability
         if signature is not None:
-            return self.definitions[signature].inspect_asm()
+            return self.definitions[(cc, signature)].inspect_asm()
         else:
             return dict((sig, defn.inspect_asm())
                         for sig, defn in self.definitions.items())
@@ -826,7 +817,7 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         if file is None:
             file = sys.stdout
 
-        for ver, defn in utils.iteritems(self.definitions):
+        for _, defn in utils.iteritems(self.definitions):
             defn.inspect_types(file=file)
 
     @classmethod
@@ -842,7 +833,7 @@ class AutoJitCUDAKernel(CUDAKernelBase):
     def __reduce__(self):
         """
         Reduce the instance for serialization.
-        Compiled definitions are serialized in PTX form.
+        Compiled definitions are discarded.
         """
         glbls = serialize._get_function_globals_for_reduction(self.py_func)
         func_reduced = serialize._reduce_function(self.py_func, glbls)
