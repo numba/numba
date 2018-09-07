@@ -126,10 +126,12 @@ class _ObjModeContextType(WithContext):
     Python function, which will then be executed by the interpreter.
 
     Use this as a function that takes keyword arguments only.
-    The argument names must corresponds to the output variable from the
+    The argument names must correspond to the output variables from the
     with-block.  Their respective values are strings representing the expected
-    types.
-
+    types.  When exiting the with-context, the output variables are casted
+    to the expected nopython types according to the annotation.  This process
+    is the same as passing Python objects into arguments of a nopython
+    function.
 
     Example::
 
