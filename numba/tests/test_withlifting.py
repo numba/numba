@@ -458,7 +458,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             cfoo(x)
         self.assertIn(
-            "Invalid type annotation on non-outgoing variables: {'k'}",
+            "Invalid type annotation on non-outgoing variables",
             str(raises.exception),
             )
 
@@ -503,11 +503,10 @@ class TestLiftObj(MemoryLeak, TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             cfoo(x)
         self.assertIn(
-            "missing type annotation on outgoing variables: {'t'}",
+            "missing type annotation on outgoing variables",
             str(raises.exception),
             )
 
-    @unittest.skip("segfaults")
     def test_case08_raise_from_external(self):
         # this segfaults, expect its because the dict needs to raise as '2' is
         # not in the keys until a later loop (looking for `d['0']` works fine).
@@ -523,7 +522,9 @@ class TestLiftObj(MemoryLeak, TestCase):
             return x
 
         x = np.array([1, 2, 3])
-        self.assert_equal_return_and_stdout(foo, x)
+        cfoo = njit(foo)
+        cfoo(x)
+        raise # TODO: handle exception
 
     def test_case09_explicit_raise(self):
         def foo(x):
@@ -585,6 +586,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         )
 
     def test_case12_njit_inside_a_objmode_ctx(self):
+        # TODO: is this still the cases?
         # this works locally but not inside this test, probably due to the way
         # compilation is being done
         def bar(y):
