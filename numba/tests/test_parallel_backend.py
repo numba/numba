@@ -205,6 +205,9 @@ default_proc_impl = compile_factory(*_get_mp_classes('default'))
 
 
 class TestParallelBackendBase(TestCase):
+    """
+    Base class for testing the parallel backends
+    """
 
     all_impls = [jit_runner(nopython=True),
                  jit_runner(nopython=True, cache=True),
@@ -387,12 +390,10 @@ class TestSpecificBackend(TestParallelBackendBase):
 TestSpecificBackend.generate()
 
 
-@parfors_skip_unsupported # 32bit or windows py27 (not that this runs on windows)
-@skip_unless_gnu_omp
-class TestForkSafetyIssues(TestCase):
-
-    _DEBUG = False
-
+class ThreadLayerTestHelper(TestCase):
+    """
+    Helper class for running an isolated piece of code based on a template
+    """
     # sys path injection and separate usecase module to make sure everything
     # is importable by children of multiprocessing
     _here = os.path.dirname(__file__)
@@ -436,6 +437,53 @@ class TestForkSafetyIssues(TestCase):
         finally:
             timeout.cancel()
         return out.decode(), err.decode()
+
+
+class TestThreadingLayerSelection(ThreadLayerTestHelper):
+    """
+    Checks that numba.threading_layer() reports correctly.
+    """
+    _DEBUG = False
+
+    backends = {'tbb': skip_no_tbb,
+                'omp': skip_no_omp,
+                'workqueue': unittest.skipIf(False, '')}
+
+    @classmethod
+    def _inject(cls, backend, backend_guard):
+
+        def test_template(self):
+            body = """if 1:
+                X = np.arange(1000000.)
+                Y = np.arange(1000000.)
+                Z = busy_func(X, Y)
+                assert numba.threading_layer() == '%s'
+            """
+            runme = self.template % (body % backend)
+            cmdline = [sys.executable, '-c', runme]
+            env = os.environ.copy()
+            env['NUMBA_THREADING_LAYER'] = str(backend)
+            out, err = self.run_cmd(cmdline, env=env)
+            if self._DEBUG:
+                print(out, err)
+        injected_test = "test_threading_layer_selector_%s" % backend
+        setattr(cls, injected_test,
+                        tag("important")(backend_guard(test_template)))
+
+    @classmethod
+    def generate(cls):
+        for backend, backend_guard in cls.backends.items():
+            cls._inject(backend, backend_guard)
+
+TestThreadingLayerSelection.generate()
+
+@parfors_skip_unsupported # 32bit or windows py27 (not that this runs on windows)
+@skip_unless_gnu_omp
+class TestForkSafetyIssues(ThreadLayerTestHelper):
+    """
+    Checks Numba's behaviour in various situations involving GNU OpenMP and fork
+    """
+    _DEBUG = False
 
     def test_check_threading_layer_is_gnu(self):
         runme = """if 1:
