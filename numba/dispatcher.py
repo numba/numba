@@ -822,9 +822,17 @@ class ObjModeLiftedWith(LiftedWith):
     def _legalize_arg_types(self, args):
         for i, a in enumerate(args, start=1):
             if isinstance(a, types.List):
-                msg = 'does not support list type for argument {}'
+                msg = (
+                    'Does not support list type inputs into '
+                    'with-context for arg {}'
+                )
                 raise errors.TypingError(msg.format(i))
-
+            elif isinstance(a, types.Dispatcher):
+                msg = (
+                    'Does not support function type inputs into '
+                    'with-context for arg {}'
+                )
+                raise errors.TypingError(msg.format(i))
 
 
 # Initialize typeof machinery

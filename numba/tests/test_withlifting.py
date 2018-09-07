@@ -273,7 +273,16 @@ def expected_failure_for_list_arg(fn):
     def core(self, *args, **kwargs):
         with self.assertRaises(errors.TypingError) as raises:
             fn(self, *args, **kwargs)
-        self.assertIn('does not support list type for argument',
+        self.assertIn('Does not support list type',
+                      str(raises.exception))
+    return core
+
+
+def expected_failure_for_function_arg(fn):
+    def core(self, *args, **kwargs):
+        with self.assertRaises(errors.TypingError) as raises:
+            fn(self, *args, **kwargs)
+        self.assertIn('Does not support function type',
                       str(raises.exception))
     return core
 
@@ -677,9 +686,8 @@ class TestLiftObj(MemoryLeak, TestCase):
         x = np.array([1, 2, 3])
         self.assert_equal_return_and_stdout(foo, x)
 
-    @unittest.skip("segfaults")
+    @expected_failure_for_function_arg
     def test_case18_njitfunc_passed_to_objmode_ctx(self):
-        # segfaults
         def foo(func, x):
             with objmode_context():
                 func(x[0])
