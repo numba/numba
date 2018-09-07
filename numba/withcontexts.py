@@ -118,23 +118,20 @@ call_context = _CallContextType()
 
 
 class _ObjModeContextType(WithContext):
-    """Warning: this feature is experimental.  The supported features may
-    change with or without notice.
-
-    A contextmanager to be used inside jitted functions to enter
+    """Creates a contextmanager to be used inside jitted functions to enter
     *object-mode* for using interpreter features.  The body of the with-context
     is lifted into a function that is compiled into *object-mode*.  This
     transformation process is limitated and cannot process all possible
     Python code.  However, users can wrap complicated logic in another
-    Python function.
+    Python function, which will then be executed by the interpreter.
 
     Use this as a function that takes keyword arguments only.
     The argument names must corresponds to the output variable from the
     with-block.  Their respective values are strings representing the expected
     types.
 
-    Example
-    -------
+
+    Example::
 
         import numpy as np
         from numba import njit, objmode
@@ -151,10 +148,21 @@ class _ObjModeContextType(WithContext):
                 y += bar(x)
             return y
 
-    Note
-    ----
-    When used outside of no-python mode, the context-manager has no
-    effect.
+    .. note:: Known limitation:
+
+        - with-block cannot use incoming list object.
+        - with-block cannot use incoming function object.
+        - with-block cannot ``yield``, ``break``, ``return`` or ``raise`` such that
+        the execution will leave the with-block immediately.
+        - the ``objmode()`` function must be directly referenced as a global.
+        i.e. ``with numba.objmode():`` doesn't work.
+
+    .. note:: When used outside of no-python mode, the context-manager has no
+        effect.
+
+    .. warning:: This feature is experimental.  The supported features may
+        change with or without notice.
+
     """
     is_callable = True
 

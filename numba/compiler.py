@@ -9,7 +9,7 @@ import threading
 from .tracing import event
 
 from numba import (bytecode, interpreter, funcdesc, postproc,
-                   typing, typeinfer, lowering, objmode, utils, config,
+                   typing, typeinfer, lowering, pylowering, utils, config,
                    errors, types, ir, rewrites, transforms)
 from numba.targets import cpu, callconv
 from numba.annotations import type_annotations
@@ -1047,7 +1047,7 @@ def py_lowering_stage(targetctx, library, interp, flags):
     fndesc = funcdesc.PythonFunctionDescriptor.from_object_mode_function(
         interp
         )
-    lower = objmode.PyLower(targetctx, library, fndesc, interp)
+    lower = pylowering.PyLower(targetctx, library, fndesc, interp)
     lower.lower()
     if not flags.no_cpython_wrapper:
         lower.create_cpython_wrapper()

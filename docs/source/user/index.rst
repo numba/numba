@@ -15,6 +15,7 @@ User Manual
    pycc.rst
    parallel.rst
    stencil.rst
+   withobjmode.rst
    performance-tips.rst
    troubleshoot.rst
    faq.rst
