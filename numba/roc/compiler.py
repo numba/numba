@@ -16,8 +16,9 @@ from .hsadrv import devicearray
 from numba.typing.templates import AbstractTemplate
 from numba import ctypes_support as ctypes
 from numba import config
+from numba.compiler_lock import global_compiler_lock
 
-
+@global_compiler_lock
 def compile_hsa(pyfunc, return_type, args, debug):
     # First compilation will trigger the initialization of the HSA backend.
     from .descriptor import HSATargetDesc
