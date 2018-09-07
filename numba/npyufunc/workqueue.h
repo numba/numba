@@ -49,10 +49,8 @@ void ready(void);
  inner_ndim - inner dimension of the gufunc
  array_count - the number of arrays in the signature (Python: len(sig.args) + 1)
  the +1 is for the output array.
- 
- NUM_THREADS - the number of threads to use
 
  */
 static void
 parallel_for(void *fn, char **args, size_t *dims, size_t *steps, void *data,\
-            size_t inner_ndim, size_t array_count, size_t NUM_THREADS);
+            size_t inner_ndim, size_t array_count);

@@ -212,6 +212,7 @@ typedef struct
 static Queue *queues = NULL;
 static int queue_count;
 static int queue_pivot = 0;
+static int NUM_THREADS = -1;
 
 static void
 queue_state_wait(Queue *queue, int old, int repl)
@@ -239,7 +240,7 @@ void nopfn(void *args, void *dims, void *steps, void *data) {};
 
 static void
 parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *data,
-                size_t inner_ndim, size_t array_count, size_t NUM_THREADS)
+                size_t inner_ndim, size_t array_count)
 {
 
     //     args = <ir.Argument '.1' of type i8**>,
@@ -401,8 +402,9 @@ static void launch_threads(int count)
         /* If queues are not yet allocated,
            create them, one for each thread. */
         int i;
-        size_t sz = sizeof(Queue) * count;
+        NUM_THREADS = count; // set for use in parallel_for
 
+        size_t sz = sizeof(Queue) * count;
         queues = malloc(sz);     /* this memory will leak */
         /* Note this initializes the state to IDLE */
         memset(queues, 0, sz);
@@ -438,6 +440,7 @@ static void reset_after_fork(void)
 {
     free(queues);
     queues = NULL;
+    NUM_THREADS = -1;
 }
 
 MOD_INIT(workqueue)

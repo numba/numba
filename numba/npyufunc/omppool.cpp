@@ -44,7 +44,7 @@ add_task(void *fn, void *args, void *dims, void *steps, void *data) {
 
 static void
 parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *data,
-                size_t inner_ndim, size_t array_count, size_t)
+                size_t inner_ndim, size_t array_count)
 {
     typedef void (*func_ptr_t)(char **args, size_t *dims, size_t *steps, void *data);
     func_ptr_t func = reinterpret_cast<func_ptr_t>(fn);

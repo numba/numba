@@ -116,7 +116,7 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
     array_count = len(sig.args) + 1
 
     parallel_for_ty = lc.Type.function(lc.Type.void(),
-                                            [byte_ptr_t] * 5 + [intp_t,] * 3)
+                                            [byte_ptr_t] * 5 + [intp_t,] * 2)
     parallel_for = mod.get_or_insert_function(parallel_for_ty,
                                                     name='numba_parallel_for')
 
@@ -125,7 +125,7 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
     innerargs = [as_void_ptr(x) for x
                 in [args, dimensions, steps, data]]
     builder.call(parallel_for, [fnptr] + innerargs +
-                    [intp_t(x) for x in (inner_ndim, array_count, NUM_THREADS)])
+                    [intp_t(x) for x in (inner_ndim, array_count)])
 
     # Release the GIL
     pyapi.restore_thread(thread_state)
