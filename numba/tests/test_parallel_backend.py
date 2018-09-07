@@ -1,3 +1,6 @@
+# -*- coding: utf8 -*-
+from __future__ import print_function, absolute_import
+
 """
 Tests the parallel backend
 """
@@ -408,11 +411,11 @@ class ThreadLayerTestHelper(TestCase):
     """
     # sys path injection and separate usecase module to make sure everything
     # is importable by children of multiprocessing
-    _here = os.path.dirname(__file__)
+    _here = "%r" % os.path.dirname(__file__)
 
     template = """if 1:
     import sys
-    sys.path.insert(0, "%s")
+    sys.path.insert(0, "%(here)r")
     import multiprocessing
     import numpy as np
     from numba import njit
@@ -432,7 +435,7 @@ class ThreadLayerTestHelper(TestCase):
 
     if __name__ == "__main__":
         the_test()
-    """ % _here
+    """ % {'here': _here}
 
     def run_cmd(self, cmdline, env=None):
         if env is None:
