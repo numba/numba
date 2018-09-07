@@ -459,6 +459,7 @@ class ThreadLayerTestHelper(TestCase):
         return out.decode(), err.decode()
 
 
+@parfors_skip_unsupported
 class TestThreadingLayerSelection(ThreadLayerTestHelper):
     """
     Checks that numba.threading_layer() reports correctly.
