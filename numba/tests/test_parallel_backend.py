@@ -71,6 +71,7 @@ _HAVE_OS_FORK = not _windows
 def foo(n, v):
     return np.ones(n) + v
 
+
 if _HAVE_LAPACK:
     def linalg(n, v):
         x = np.dot(np.ones((n, n)), np.ones((n, n)))
@@ -136,6 +137,7 @@ class guvectorize_runner(runnable):
         got = cfunc(a, b)
         np.testing.assert_allclose(expected, got)
 
+
 def chooser(fnlist, **kwargs):
     q = kwargs.get('queue')
     try:
@@ -166,8 +168,10 @@ def compile_factory(parallel_class, queue_impl):
             raise RuntimeError(_msg % '\n'.join([repr(x) for x in errors]))
     return run_compile
 
+
 # workers
 _thread_class = threading.Thread
+
 
 class _proc_class_impl(object):
 
@@ -181,6 +185,7 @@ class _proc_class_impl(object):
             ctx = multiprocessing.get_context(self._method)
             return ctx.Process(*args, **kwargs)
 
+
 def _get_mp_classes(method):
     if utils.PYVERSION < (3, 0):
         proc = _proc_class_impl(method)
@@ -192,6 +197,7 @@ def _get_mp_classes(method):
         proc = _proc_class_impl(method)
         queue = ctx.Queue
     return proc, queue
+
 
 thread_impl = compile_factory(_thread_class, t_queue.Queue)
 spawn_proc_impl = compile_factory(*_get_mp_classes('spawn'))
@@ -222,8 +228,8 @@ class TestParallelBackendBase(TestCase):
 
     if not _parfors_unsupported:
         parfor_impls = [jit_runner(nopython=True, parallel=True),
-                        linalg_runner(nopython=True, parallel=True),]
-        all_impls.extend(parfor_impls) 
+                        linalg_runner(nopython=True, parallel=True), ]
+        all_impls.extend(parfor_impls)
 
     parallelism = ['threading', 'random']
     if utils.PYVERSION > (3, 0):
@@ -234,12 +240,13 @@ class TestParallelBackendBase(TestCase):
     else:
         parallelism.append('multiprocessing_default')
 
-
     runners = {'concurrent_jit': [jit_runner(nopython=True,
                                              parallel=(not _parfors_unsupported)
                                              )],
-               'concurrect_vectorize': [vectorize_runner(nopython=True, target='parallel')],
-               'concurrent_guvectorize': [guvectorize_runner(nopython=True, target='parallel')],
+               'concurrect_vectorize':
+                   [vectorize_runner(nopython=True, target='parallel')],
+               'concurrent_guvectorize':
+                   [guvectorize_runner(nopython=True, target='parallel')],
                'concurrent_mix_use': all_impls}
 
     safe_backends = {'omp', 'tbb'}
@@ -276,6 +283,7 @@ class TestParallelBackendBase(TestCase):
 
 _specific_backends = config.THREADING_LAYER in ('omp', 'tbb', 'workqueue')
 
+
 @unittest.skipUnless(_specific_backends, "Threading layer not explicit")
 class TestParallelBackend(TestParallelBackendBase):
     """ These are like the numba.tests.test_threadsafety tests but designed
@@ -294,6 +302,7 @@ class TestParallelBackend(TestParallelBackendBase):
         for p in cls.parallelism:
             for name, impl in cls.runners.items():
                 methname = "test_" + p + '_' + name
+
                 def methgen(impl, p):
                     def test_method(self):
                         selfproc = multiprocessing.current_process()
@@ -306,7 +315,9 @@ class TestParallelBackend(TestParallelBackendBase):
                     return test_method
                 setattr(cls, methname, methgen(impl, p))
 
+
 TestParallelBackend.generate()
+
 
 class TestSpecificBackend(TestParallelBackendBase):
     """
@@ -334,8 +345,9 @@ class TestSpecificBackend(TestParallelBackendBase):
             timeout.start()
             out, err = popen.communicate()
             if popen.returncode != 0:
-                raise AssertionError("process failed with code %s: stderr follows\n%s\n"
-                                     % (popen.returncode, err.decode()))
+                raise AssertionError(
+                    "process failed with code %s: stderr follows\n%s\n" %
+                    (popen.returncode, err.decode()))
             return out.decode(), err.decode()
         finally:
             timeout.cancel()
@@ -376,12 +388,12 @@ class TestSpecificBackend(TestParallelBackendBase):
                     # GNU OpenMP is not fork safe
                     if (p in ('multiprocessing_fork', 'random') and
                         backend == 'omp' and
-                        sys.platform.startswith('linux')):
+                            sys.platform.startswith('linux')):
                         continue
 
                     # workqueue is not thread safe
                     if (p in ('threading', 'random') and
-                        backend == 'workqueue'):
+                            backend == 'workqueue'):
                         continue
 
                     cls._inject(p, name, backend, backend_guard)
@@ -432,8 +444,9 @@ class ThreadLayerTestHelper(TestCase):
             timeout.start()
             out, err = popen.communicate()
             if popen.returncode != 0:
-                raise AssertionError("process failed with code %s: stderr follows\n%s\n"
-                                     % (popen.returncode, err.decode()))
+                raise AssertionError(
+                    "process failed with code %s: stderr follows\n%s\n" %
+                    (popen.returncode, err.decode()))
         finally:
             timeout.cancel()
         return out.decode(), err.decode()
@@ -468,16 +481,19 @@ class TestThreadingLayerSelection(ThreadLayerTestHelper):
                 print(out, err)
         injected_test = "test_threading_layer_selector_%s" % backend
         setattr(cls, injected_test,
-                        tag("important")(backend_guard(test_template)))
+                tag("important")(backend_guard(test_template)))
 
     @classmethod
     def generate(cls):
         for backend, backend_guard in cls.backends.items():
             cls._inject(backend, backend_guard)
 
+
 TestThreadingLayerSelection.generate()
 
-@parfors_skip_unsupported # 32bit or windows py27 (not that this runs on windows)
+
+# 32bit or windows py27 (not that this runs on windows)
+@parfors_skip_unsupported
 @skip_unless_gnu_omp
 class TestForkSafetyIssues(ThreadLayerTestHelper):
     """
@@ -710,6 +726,7 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
         out, err = self.run_cmd(cmdline)
         if self._DEBUG:
             print(out, err)
+
 
 if __name__ == '__main__':
     unittest.main()
