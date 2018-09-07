@@ -118,12 +118,20 @@ call_context = _CallContextType()
 
 
 class _ObjModeContextType(WithContext):
-    """A contextmanager to be used inside jitted functions to enter
+    """Warning: this feature is experimental.  The supported features may
+    change with or without notice.
+
+    A contextmanager to be used inside jitted functions to enter
     *object-mode* for using interpreter features.  The body of the with-context
     is lifted into a function that is compiled into *object-mode*.  This
     transformation process is limitated and cannot process all possible
     Python code.  However, users can wrap complicated logic in another
     Python function.
+
+    Use this as a function that takes keyword arguments only.
+    The argument names must corresponds to the output variable from the
+    with-block.  Their respective values are strings representing the expected
+    types.
 
     Example
     -------
@@ -132,6 +140,7 @@ class _ObjModeContextType(WithContext):
         from numba import njit, objmode
 
         def bar(x):
+            # This code is executed by the interpreter.
             return np.asarray(list(reversed(x.tolist()))
 
         @njit
@@ -141,10 +150,18 @@ class _ObjModeContextType(WithContext):
                 # this region is executed by object-mode.
                 y += bar(x)
             return y
+
+    Note
+    ----
+    When used outside of no-python mode, the context-manager has no
+    effect.
     """
     is_callable = True
 
     def _legalize_args(self, extra, loc):
+        """
+        Legalize arguments to the context-manager
+        """
         if extra is None:
             return {}
 
@@ -225,6 +242,7 @@ class _ObjModeContextType(WithContext):
         return dispatcher
 
     def __call__(self, *args, **kwargs):
+        # No effect when used in pure-python
         return self
 
 

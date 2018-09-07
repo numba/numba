@@ -304,14 +304,16 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
             cls = LiftedWith
         return cls(func_ir, typingctx, targetctx, myflags, locals, **kwargs)
 
-    postproc.PostProcessor(func_ir).run()
+    postproc.PostProcessor(func_ir).run()  # ensure we have variable lifetime
     assert func_ir.variable_lifetime
     vlt = func_ir.variable_lifetime
     blocks = func_ir.blocks.copy()
+    # find where with-contexts regions are
     withs = find_setupwiths(blocks)
     cfg = vlt.cfg
     _legalize_withs_cfg(withs, cfg, blocks)
-    # Remove the with blocks that are in the with-body
+    # For each with-regions, mutate them according to
+    # the kind of contextmanager
     sub_irs = []
     for (blk_start, blk_end) in withs:
         body_blocks = []
@@ -319,7 +321,9 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
             body_blocks.append(node)
 
         _legalize_with_head(blocks[blk_start])
+        # Find the contextmanager
         cmkind, extra = _get_with_contextmanager(func_ir, blocks, blk_start)
+        # Mutate the body and get new IR
         sub = cmkind.mutate_with_body(func_ir, blocks, blk_start, blk_end,
                                       body_blocks, dispatcher_factory,
                                       extra)
@@ -368,6 +372,7 @@ def _get_with_contextmanager(func_ir, blocks, blk_start):
 
         raise errors.CompilerError(_illegal_cm_msg, loc=dfn.loc)
 
+    # Scan the start of the with-region for the contextmanager
     for stmt in blocks[blk_start].body:
         if isinstance(stmt, ir.EnterWith):
             var_ref = stmt.contextmanager
@@ -379,7 +384,7 @@ def _get_with_contextmanager(func_ir, blocks, blk_start):
                     loc=blocks[blk_start].loc,
                     )
             return ctxobj, extra
-    # No
+    # No contextmanager found?
     raise errors.CompilerError(
         "malformed with-context usage",
         loc=blocks[blk_start].loc,
@@ -454,7 +459,9 @@ def _legalize_withs_cfg(withs, cfg, blocks):
 
 
 def find_setupwiths(blocks):
-    """Find all top-level with
+    """Find all top-level with.
+
+    Returns a list of ranges for the with-regions.
     """
     def find_ranges(blocks):
         for blk in blocks.values():
