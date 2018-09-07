@@ -19,7 +19,7 @@ Threading layer on top of OpenMP.
 #endif
 
 #define _DEBUG 0
-#define _DEBUG_FORK 1
+#define _DEBUG_FORK 0
 
 // OpenMP vendor strings
 #if defined(_MSC_VER)
@@ -49,7 +49,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     typedef void (*func_ptr_t)(char **args, size_t *dims, size_t *steps, void *data);
     func_ptr_t func = reinterpret_cast<func_ptr_t>(fn);
     static bool printed = false;
-    if(!printed) {
+    if(!printed && _DEBUG) {
         puts("Using parallel_for");
         printed = true;
     }
@@ -67,7 +67,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     if (parent_pid == getppid())
     {
         fprintf(stderr, "%s", "Terminating: fork() called from a process "
-        "already using GNU OpenMP, this is unsafe.\n");
+                "already using GNU OpenMP, this is unsafe.\n");
         raise(SIGTERM);
         return;
     }
@@ -154,7 +154,8 @@ static void launch_threads(int count) {
 #endif
     if(initialized)
         return;
-    puts("Using OpenMP");
+    if(_DEBUG)
+        puts("Using OpenMP");
     if(count < 1)
         return;
     omp_set_num_threads(count);
