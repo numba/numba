@@ -3,7 +3,7 @@ from __future__ import print_function, absolute_import, division
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import roc, intp
+from numba import roc, intp, int32
 
 
 @roc.jit(device=True)
@@ -158,43 +158,48 @@ def shuffle_up(val, width):
     res = roc.ds_permute(idx, val)
     return res
 
-@roc.jit(device=True)
-def shuf_wave_inclusive_scan(val):
-    tid = roc.get_local_id(0)
-    lane = tid & (_WARPSIZE - 1)
+def make_inclusive_scan(dtype):
+    @roc.jit(device=True)
+    def shuf_wave_inclusive_scan(val):
+        tid = roc.get_local_id(0)
+        lane = tid & (_WARPSIZE - 1)
 
-    roc.wavebarrier()
-    shuf = shuffle_up(val, 1)
-    if lane >= 1:
-        val += shuf
+        roc.wavebarrier()
+        shuf = shuffle_up(val, 1)
+        if lane >= 1:
+            val = dtype(val + shuf)
 
-    roc.wavebarrier()
-    shuf = shuffle_up(val, 2)
-    if lane >= 2:
-        val += shuf
+        roc.wavebarrier()
+        shuf = shuffle_up(val, 2)
+        if lane >= 2:
+            val = dtype(val + shuf)
 
-    roc.wavebarrier()
-    shuf = shuffle_up(val, 4)
-    if lane >= 4:
-        val += shuf
+        roc.wavebarrier()
+        shuf = shuffle_up(val, 4)
+        if lane >= 4:
+            val = dtype(val + shuf)
 
-    roc.wavebarrier()
-    shuf = shuffle_up(val, 8)
-    if lane >= 8:
-        val += shuf
+        roc.wavebarrier()
+        shuf = shuffle_up(val, 8)
+        if lane >= 8:
+            val = dtype(val + shuf)
 
-    roc.wavebarrier()
-    shuf = shuffle_up(val, 16)
-    if lane >= 16:
-        val += shuf
+        roc.wavebarrier()
+        shuf = shuffle_up(val, 16)
+        if lane >= 16:
+            val = dtype(val + shuf)
 
-    roc.wavebarrier()
-    shuf = shuffle_up(val, 32)
-    if lane >= 32:
-        val += shuf
+        roc.wavebarrier()
+        shuf = shuffle_up(val, 32)
+        if lane >= 32:
+            val = dtype(val + shuf)
 
-    roc.wavebarrier()
-    return val
+        roc.wavebarrier()
+        return val
+    return shuf_wave_inclusive_scan
+
+
+shuf_wave_inclusive_scan_int32 = make_inclusive_scan(int32)
 
 
 @roc.jit(device=True)
@@ -212,7 +217,7 @@ def shuf_device_inclusive_scan(data, temp):
     warpid = tid >> 6
 
     # Scan warps in parallel
-    warp_scan_res = shuf_wave_inclusive_scan(data)
+    warp_scan_res = shuf_wave_inclusive_scan_int32(data)
 
     roc.barrier()
 
@@ -224,7 +229,7 @@ def shuf_device_inclusive_scan(data, temp):
 
     # Scan the partial sum by first wave
     if warpid == 0:
-        shuf_wave_inclusive_scan(temp[lane])
+        shuf_wave_inclusive_scan_int32(temp[lane])
 
     roc.barrier()
 
@@ -396,10 +401,10 @@ class TestShuffleScan(unittest.TestCase):
             tid = roc.get_local_id(0)
             out[tid] = roc.ds_permute(inp[tid], mask[tid])
 
-        inp = np.arange(64, dtype=np.intp)
+        inp = np.arange(64, dtype=np.int32)
         np.random.seed(0)
         for i in range(10):
-            mask = np.random.randint(0, inp.size, inp.size).astype(np.uint32)
+            mask = np.random.randint(0, inp.size, inp.size).astype(np.int32)
             out = np.zeros_like(inp)
             foo[1, 64](inp, mask, out)
         np.testing.assert_equal(inp[mask], out)
@@ -410,7 +415,7 @@ class TestShuffleScan(unittest.TestCase):
             gid = roc.get_global_id(0)
             out[gid] = shuffle_up(inp[gid], 1)
 
-        inp = np.arange(128, dtype=np.intp)
+        inp = np.arange(128, dtype=np.int32)
         out = np.zeros_like(inp)
         foo[1, 128](inp, out)
 
@@ -425,9 +430,9 @@ class TestShuffleScan(unittest.TestCase):
         @roc.jit
         def foo(inp, out):
             gid = roc.get_global_id(0)
-            out[gid] = shuf_wave_inclusive_scan(inp[gid])
+            out[gid] = shuf_wave_inclusive_scan_int32(inp[gid])
 
-        inp = np.arange(64, dtype=np.intp)
+        inp = np.arange(64, dtype=np.int32)
         out = np.zeros_like(inp)
         foo[1, 64](inp, out)
         np.testing.assert_equal(inp.cumsum(), out)
@@ -436,10 +441,10 @@ class TestShuffleScan(unittest.TestCase):
         @roc.jit
         def foo(inp, out):
             gid = roc.get_global_id(0)
-            temp = roc.shared.array(2, dtype=intp)
+            temp = roc.shared.array(2, dtype=int32)
             out[gid] = shuf_device_inclusive_scan(inp[gid], temp)
 
-        inp = np.arange(128, dtype=np.intp)
+        inp = np.arange(128, dtype=np.int32)
         out = np.zeros_like(inp)
 
         foo[1, inp.size](inp, out)
