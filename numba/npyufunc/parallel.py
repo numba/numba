@@ -27,6 +27,7 @@ from numba.npyufunc import ufuncbuilder
 from numba.numpy_support import as_dtype
 from numba import types, utils, cgutils, config
 
+
 def get_thread_count():
     """
     Gets the available thread count.
@@ -35,6 +36,7 @@ def get_thread_count():
     if t < 1:
         raise ValueError("Number of threads specified must be > 0.")
     return t
+
 
 NUM_THREADS = get_thread_count()
 
@@ -110,22 +112,23 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
     gil_state = pyapi.gil_ensure()
     thread_state = pyapi.save_thread()
 
-    as_void_ptr = lambda arg: builder.bitcast(arg, byte_ptr_t)
+    def as_void_ptr(arg): return builder.bitcast(arg, byte_ptr_t)
 
     # Array count is input signature plus 1 (due to output array)
     array_count = len(sig.args) + 1
 
     parallel_for_ty = lc.Type.function(lc.Type.void(),
-                                            [byte_ptr_t] * 5 + [intp_t,] * 2)
+                                       [byte_ptr_t] * 5 + [intp_t, ] * 2)
     parallel_for = mod.get_or_insert_function(parallel_for_ty,
-                                                    name='numba_parallel_for')
+                                              name='numba_parallel_for')
 
-    # Note: the runtime address is taken and used as a constant in the function.
+    # Note: the runtime address is taken and used as a constant in the
+    # function.
     fnptr = ctx.get_constant(types.uintp, innerfunc).inttoptr(byte_ptr_t)
     innerargs = [as_void_ptr(x) for x
-                in [args, dimensions, steps, data]]
+                 in [args, dimensions, steps, data]]
     builder.call(parallel_for, [fnptr] + innerargs +
-                    [intp_t(x) for x in (inner_ndim, array_count)])
+                 [intp_t(x) for x in (inner_ndim, array_count)])
 
     # Release the GIL
     pyapi.restore_thread(thread_state)
@@ -162,21 +165,26 @@ def build_ufunc_wrapper(library, ctx, fname, signature, cres):
     innerfunc = ufuncbuilder.build_ufunc_wrapper(library, ctx, fname,
                                                  signature, objmode=False,
                                                  cres=cres)
-    ptr, name = build_gufunc_kernel(library, ctx, innerfunc, signature, len(signature.args))
+    ptr, name = build_gufunc_kernel(library, ctx, innerfunc, signature,
+                                    len(signature.args))
     return ptr
 
 # ---------------------------------------------------------------------------
+
 
 class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
     def __init__(self, py_func, signature, identity=None, cache=False,
                  targetoptions={}):
         # Force nopython mode
         targetoptions.update(dict(nopython=True))
-        super(ParallelGUFuncBuilder, self).__init__(py_func=py_func,
-                                                    signature=signature,
-                                                    identity=identity,
-                                                    cache=cache,
-                                                    targetoptions=targetoptions)
+        super(
+            ParallelGUFuncBuilder,
+            self).__init__(
+            py_func=py_func,
+            signature=signature,
+            identity=identity,
+            cache=cache,
+            targetoptions=targetoptions)
 
     def build(self, cres):
         """
@@ -185,8 +193,8 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
         _launch_threads()
 
         # Build wrapper for ufunc entry point
-        ptr, env, wrapper_name = build_gufunc_wrapper(self.py_func, cres, self.sin, self.sout,
-                                        cache=self.cache)
+        ptr, env, wrapper_name = build_gufunc_wrapper(
+            self.py_func, cres, self.sin, self.sout, cache=self.cache)
 
         # Get dtypes
         dtypenums = []
@@ -201,21 +209,25 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
 
 # This is not a member of the ParallelGUFuncBuilder function because it is
 # called without an enclosing instance from parfors
+
+
 def build_gufunc_wrapper(py_func, cres, sin, sout, cache):
     library = cres.library
     ctx = cres.target_context
     signature = cres.signature
-    innerfunc, env, wrapper_name = ufuncbuilder.build_gufunc_wrapper(py_func, cres, sin, sout,
-                                                       cache=cache)
+    innerfunc, env, wrapper_name = ufuncbuilder.build_gufunc_wrapper(
+        py_func, cres, sin, sout, cache=cache)
     sym_in = set(sym for term in sin for sym in term)
     sym_out = set(sym for term in sout for sym in term)
     inner_ndim = len(sym_in | sym_out)
 
-    ptr, name = build_gufunc_kernel(library, ctx, innerfunc, signature, inner_ndim)
+    ptr, name = build_gufunc_kernel(
+        library, ctx, innerfunc, signature, inner_ndim)
 
     return ptr, env, name
 
 # ---------------------------------------------------------------------------
+
 
 _backend_init_thread_lock = threadRLock()
 _backend_init_process_lock = procRLock()
@@ -223,6 +235,7 @@ _is_initialized = False
 
 # this is set by _launch_threads
 _threading_layer = None
+
 
 def threading_layer():
     """
@@ -262,7 +275,7 @@ def _launch_threads():
                     except ImportError:
                         pass
                 elif backend.startswith("workqueue"):
-                      from . import workqueue as lib
+                    from . import workqueue as lib
                 else:
                     msg = "Unknown value specified for threading layer: %s"
                     raise ValueError(msg % backend)
@@ -291,7 +304,7 @@ def _launch_threads():
             err_helpers['TBB'] = ("Intel TBB is required, try:\n"
                                   "$ conda/pip install tbb")
             err_helpers['OSX_OMP'] = ("Intel OpenMP is required, try:\n"
-                                  "$ conda/pip install intel-openmp")
+                                      "$ conda/pip install intel-openmp")
             requirements = []
 
             def raise_with_hint(required):
@@ -339,13 +352,14 @@ def _launch_threads():
                         requirements.append('OSX_OMP')
                     # workqueue is forksafe everywhere
                     available.append('workqueue')
-                else: # unreachable
+                else:  # unreachable
                     msg = "No threading layer available for purpose %s"
                     raise ValueError(msg % t)
                 # select amongst available
                 lib, libname = select_from_backends(available)
             elif t == 'default':
-                # If default is supplied, try them in order, tbb, omp, workqueue
+                # If default is supplied, try them in order, tbb, omp,
+                # workqueue
                 lib, libname = select_from_backends(namedbackends)
                 if not lib:
                     # set requirements for hinting
