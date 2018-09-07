@@ -683,25 +683,43 @@ class Lower(BaseLower):
                                                    id(entry_pt),
                                                    info="with_objectmode")
             ret_obj = self.pyapi.call_function_objargs(callee, argobjs)
+            has_exception = cgutils.is_null(self.builder, ret_obj)
+            with self. builder.if_else(has_exception) as (then, orelse):
+                # Handles exception
+                # This branch must exit the function
+                with then:
+                    # Clean arg
+                    for obj in argobjs:
+                        self.pyapi.decref(obj)
 
-            # Fix output value
-            native = self.pyapi.to_native_value(fnty.dispatcher.output_types,
-                                                ret_obj)
-            output = native.value
+                    # Release the GIL
+                    self.pyapi.gil_release(gil_state)
 
-            # Release objs
-            self.pyapi.decref(ret_obj)
-            for obj in argobjs:
-                self.pyapi.decref(obj)
+                    # Return and signal exception
+                    self.call_conv.return_exc(self.builder)
 
-            # cleanup output
-            if callable(native.cleanup):
-                native.cleanup()
+                # Handles normal return
+                with orelse:
+                    # Fix output value
+                    native = self.pyapi.to_native_value(
+                        fnty.dispatcher.output_types,
+                        ret_obj,
+                        )
+                    output = native.value
 
-            # Release the GIL
-            self.pyapi.gil_release(gil_state)
+                    # Release objs
+                    self.pyapi.decref(ret_obj)
+                    for obj in argobjs:
+                        self.pyapi.decref(obj)
 
-            res = output
+                    # cleanup output
+                    if callable(native.cleanup):
+                        native.cleanup()
+
+                    # Release the GIL
+                    self.pyapi.gil_release(gil_state)
+
+                    res = output
 
         elif isinstance(fnty, types.ExternalFunction):
             # Handle a named external function

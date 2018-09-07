@@ -523,8 +523,9 @@ class TestLiftObj(MemoryLeak, TestCase):
 
         x = np.array([1, 2, 3])
         cfoo = njit(foo)
-        cfoo(x)
-        raise # TODO: handle exception
+        with self.assertRaises(KeyError) as raises:
+            cfoo(x)
+        self.assertEqual(str(raises.exception), "'2'")
 
     def test_case09_explicit_raise(self):
         def foo(x):
