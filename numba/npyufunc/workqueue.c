@@ -402,9 +402,10 @@ static void launch_threads(int count)
         /* If queues are not yet allocated,
            create them, one for each thread. */
         int i;
-        NUM_THREADS = count; /* set for use in parallel_for */
-
         size_t sz = sizeof(Queue) * count;
+
+        /* set for use in parallel_for */
+        NUM_THREADS = count;
         queues = malloc(sz);     /* this memory will leak */
         /* Note this initializes the state to IDLE */
         memset(queues, 0, sz);
