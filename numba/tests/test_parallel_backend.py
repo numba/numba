@@ -417,7 +417,11 @@ class ThreadLayerTestHelper(TestCase):
     import numpy as np
     from numba import njit
     import numba
-    import threading_backend_usecases
+    try:
+        import threading_backend_usecases
+    except ImportError as e:
+        print("DEBUG:", sys.path)
+        raise e
     import os
 
     sigterm_handler = threading_backend_usecases.sigterm_handler
