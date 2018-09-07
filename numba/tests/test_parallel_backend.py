@@ -73,14 +73,12 @@ def foo(n, v):
 
 if _HAVE_LAPACK:
     def linalg(n, v):
-        np.random.seed(42)
         x = np.dot(np.ones((n, n)), np.ones((n, n)))
-        return x + np.random.random(n) + v
+        return x + np.arange(n) + v
 else:
     def linalg(n, v):
-        np.random.seed(42)
         # no way to trigger MKL without the lapack bindings.
-        return np.random.random(n) + v
+        return np.arange(n) + v
 
 
 def ufunc_foo(a, b):
@@ -115,8 +113,7 @@ class linalg_runner(runnable):
         b = 10
         expected = linalg(a, b)
         got = cfunc(a, b)
-        # broken, fork safe?
-        # np.testing.assert_allclose(expected, got)
+        np.testing.assert_allclose(expected, got)
 
 
 class vectorize_runner(runnable):
