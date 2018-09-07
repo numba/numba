@@ -441,10 +441,15 @@ def _legalize_withs_cfg(withs, cfg, blocks):
     for s, e in withs:
         loc = blocks[s].loc
         if s not in doms[e]:
+            # Not sure what condition can trigger this error.
             msg = "Entry of with-context not dominating the exit."
             raise errors.CompilerError(msg, loc=loc)
         if e not in postdoms[s]:
-            msg = "Exit of with-context not post-dominating the entry."
+            msg = (
+                "Does not support with-context that contain branches "
+                "(i.e. break/return/raise) that can leave the with-context. "
+                "Details: exit of with-context not post-dominating the entry. "
+            )
             raise errors.CompilerError(msg, loc=loc)
 
 
@@ -465,8 +470,13 @@ def find_setupwiths(blocks):
     known_ranges = []
     for s, e in sorted(find_ranges(blocks)):
         if not previously_occurred(s, known_ranges):
+            if e not in blocks:
+                # this's possible if there's an exit path in the with-block
+                raise errors.CompilerError(
+                    'unsupported controlflow due to return/raise '
+                    'statements inside with block'
+                    )
             assert s in blocks, 'starting offset is not a label'
-            assert e in blocks, 'ending offset is not a label'
             known_ranges.append((s, e))
 
     return known_ranges

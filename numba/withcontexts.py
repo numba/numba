@@ -158,7 +158,25 @@ class _ObjModeContextType(WithContext):
         def strip_var_ver(x):
             return x.split('.', 1)[0]
 
-        outtup = types.Tuple([typeanns[strip_var_ver(v)] for v in outputs])
+        stripped_outs = list(map(strip_var_ver, outputs))
+
+        # Verify that only outputs are annotated
+        extra_annotated = set(typeanns) - set(stripped_outs)
+        if extra_annotated:
+            msg = (
+                'Invalid type annotation on non-outgoing variables: {}.'
+                'Suggestion: remove annotation of the listed variables'
+            )
+            raise errors.TypingError(msg.format(extra_annotated))
+
+        # Verify that all outputs are annotated
+        not_annotated = set(stripped_outs) - set(typeanns)
+        if not_annotated:
+            msg = 'missing type annotation on outgoing variables: {}'
+            raise errors.TypingError(msg.format(not_annotated))
+
+        # Get output types
+        outtup = types.Tuple([typeanns[v] for v in stripped_outs])
 
         lifted_blks = {k: blocks[k] for k in body_blocks}
         _mutate_with_block_callee(lifted_blks, blk_start, blk_end,

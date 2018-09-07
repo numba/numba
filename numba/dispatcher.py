@@ -803,6 +803,8 @@ class ObjModeLiftedWith(LiftedWith):
         A (template, pysig, args, kws) tuple is returned.
         """
         assert not kws
+        self._legalize_arg_types(args)
+        # Coerce to object mode
         args = [types.ffi_forced_object] * len(args)
 
         if self._can_compile:
@@ -816,6 +818,13 @@ class ObjModeLiftedWith(LiftedWith):
             name, key=func_name, signatures=signatures)
 
         return call_template, pysig, args, kws
+
+    def _legalize_arg_types(self, args):
+        for i, a in enumerate(args, start=1):
+            if isinstance(a, types.List):
+                msg = 'does not support list type for argument {}'
+                raise errors.TypingError(msg.format(i))
+
 
 
 # Initialize typeof machinery

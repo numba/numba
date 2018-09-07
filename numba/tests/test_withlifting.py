@@ -268,6 +268,15 @@ class TestLiftCall(BaseTestWithLifting):
         self.assertIn("re-entrant", str(raises.exception))
 
 
+def expected_failure_for_list_arg(fn):
+    def core(self, *args, **kwargs):
+        with self.assertRaises(errors.TypingError) as raises:
+            fn(self, *args, **kwargs)
+        self.assertIn('does not support list type for argument',
+                      str(raises.exception))
+    return core
+
+
 class TestLiftObj(MemoryLeak, TestCase):
 
     def assert_equal_return_and_stdout(self, pyfunc, *args):
@@ -357,6 +366,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         arg = np.arange(1, 10, dtype=np.float64)
         self.assert_equal_return_and_stdout(foo, arg)
 
+    @expected_failure_for_list_arg
     def test_lift_objmode_using_list(self):
         def foo(x):
             with objmode_context(y="float64[:]"):
@@ -388,6 +398,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         arg = 123
         self.assert_equal_return_and_stdout(foo, arg)
 
+    @expected_failure_for_list_arg
     def test_case01_mutate_list_ahead_of_ctx(self):
         def foo(x, z):
             x[2] = z
@@ -403,7 +414,7 @@ class TestLiftObj(MemoryLeak, TestCase):
 
             return x
 
-        self.assert_equal_return_and_stdout(foo, [1,2,3], 15)
+        self.assert_equal_return_and_stdout(foo, [1, 2, 3], 15)
 
     def test_case02_mutate_array_ahead_of_ctx(self):
         def foo(x, z):
@@ -423,11 +434,12 @@ class TestLiftObj(MemoryLeak, TestCase):
         x = np.array([1, 2, 3])
         self.assert_equal_return_and_stdout(foo, x, 15)
 
+    @expected_failure_for_list_arg
     def test_case03_create_and_mutate(self):
         def foo(x):
             with objmode_context(y='List(int64)'):
                 y = [1, 2, 3]
-            with objmode_context(y='List(int64)'):
+            with objmode_context():
                 y[2] = 10
             return y
         self.assert_equal_return_and_stdout(foo, 1)
@@ -441,17 +453,31 @@ class TestLiftObj(MemoryLeak, TestCase):
             return x
 
         x = np.array([1, 2, 3])
-        self.assert_equal_return_and_stdout(foo, x)
+        cfoo = njit(foo)
+        with self.assertRaises(errors.TypingError) as raises:
+            cfoo(x)
+        self.assertIn(
+            "Invalid type annotation on non-outgoing variables: {'k'}",
+            str(raises.exception),
+            )
 
     def test_case05_bogus_type_info(self):
         def foo(x):
-            # should specifying the wrong type info be considered valid? z is complex
+            # should specifying the wrong type info be considered valid?
+            # z is complex.
+            # Note: for now, we will coerce
             with objmode_context(z="float64[:]"):
                 z = x + 1.j
             return z
 
         x = np.array([1, 2, 3])
-        self.assert_equal_return_and_stdout(foo, x)
+        cfoo = njit(foo)
+        got = cfoo(x)
+        expected = foo(x)
+        # They don't match because of njit coerced the output to float64[:]
+        self.assertFalse(np.all(got == expected))
+        self.assertEqual(got.dtype, np.float64)
+        self.assertEqual(expected.dtype, np.complex128)
 
     def test_case06_double_objmode(self):
         def foo(x):
@@ -472,7 +498,13 @@ class TestLiftObj(MemoryLeak, TestCase):
                 t = {'a': x}
             return x, t
         x = np.array([1, 2, 3])
-        self.assert_equal_return_and_stdout(foo, x)
+        cfoo = njit(foo)
+        with self.assertRaises(errors.TypingError) as raises:
+            cfoo(x)
+        self.assertIn(
+            "missing type annotation on outgoing variables: {'t'}",
+            str(raises.exception),
+            )
 
     @unittest.skip("segfaults")
     def test_case08_raise_from_external(self):
@@ -493,24 +525,41 @@ class TestLiftObj(MemoryLeak, TestCase):
         self.assert_equal_return_and_stdout(foo, x)
 
     def test_case09_explicit_raise(self):
-        # Gives:
-        # AssertionError: Failed in nopython mode pipeline (step: Handle with contexts)
-        # ending offset is not a label
-        # which is correct, but could a more friendly explanation appear?
         def foo(x):
             with objmode_context():
                 raise ValueError()
             return x
 
         x = np.array([1, 2, 3])
-        njit(foo)(x)
+        cfoo = njit(foo)
+        with self.assertRaises(errors.CompilerError) as raises:
+            cfoo(x)
+        self.assertIn(
+            ('unsupported controlflow due to return/raise statements inside '
+             'with block'),
+            str(raises.exception),
+        )
 
+    @expected_failure_for_list_arg
     def test_case10_mutate_across_contexts(self):
-        # should this work?
+        # This shouldn't work due to using List as input.
         def foo(x):
             with objmode_context(y='List(int64)'):
                 y = [1, 2, 3]
-            with objmode_context(y='List(int64)'):
+            with objmode_context():
+                y[2] = 10
+            return y
+
+        x = np.array([1, 2, 3])
+        self.assert_equal_return_and_stdout(foo, x)
+
+    def test_case10_mutate_array_across_contexts(self):
+        # Sub-case of case-10.
+        def foo(x):
+            with objmode_context(y='int64[:]'):
+                y = np.asarray([1, 2, 3])
+            with objmode_context():
+                # Note: `y` is not an output.
                 y[2] = 10
             return y
 
@@ -518,7 +567,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         self.assert_equal_return_and_stdout(foo, x)
 
     def test_case11_define_function_in_context(self):
-        # should this work? `make_function` opcode not supported
+        # should this work? no, `make_function` opcode not supported
         def foo(x):
             with objmode_context():
                 def bar(y):
@@ -526,7 +575,13 @@ class TestLiftObj(MemoryLeak, TestCase):
             return x
 
         x = np.array([1, 2, 3])
-        self.assert_equal_return_and_stdout(foo, x)
+        cfoo = njit(foo)
+        with self.assertRaises(errors.TypingError) as raises:
+            cfoo(x)
+        self.assertIn(
+            'op code: make_function',
+            str(raises.exception),
+        )
 
     def test_case12_njit_inside_a_objmode_ctx(self):
         # this works locally but not inside this test, probably due to the way
@@ -564,39 +619,51 @@ class TestLiftObj(MemoryLeak, TestCase):
         def foo(x):
             with objmode_context(x='int64[:]'):
                 return x
-        x = np.array([1, 2, 3]) 
-        self.assert_equal_return_and_stdout(foo, x)
+        x = np.array([1, 2, 3])
+        cfoo = njit(foo)
+        with self.assertRaises(errors.CompilerError) as raises:
+            cfoo(x)
+        self.assertIn(
+            ('unsupported controlflow due to return/raise statements inside '
+             'with block'),
+            str(raises.exception),
+        )
 
+    # No easy way to handle this yet.
+    @unittest.expectedFailure
     def test_case15_close_over_objmode_ctx(self):
-        #Fails with Unsupported constraint encountered: enter_with $phi8.1
+        # Fails with Unsupported constraint encountered: enter_with $phi8.1
         def foo(x):
             j = 10
+
             def bar(x):
                 with objmode_context(x='int64[:]'):
                     print(x)
                     return x + j
             return bar(x) + 2
-        x = np.array([1, 2, 3]) 
+        x = np.array([1, 2, 3])
         self.assert_equal_return_and_stdout(foo, x)
 
     @skip_unless_scipy
     def test_case16_scipy_call_in_objmode_ctx(self):
         from scipy import sparse as sp
+
         def foo(x):
-            with objmode_context(x='int64[:]', k='int64'):
+            with objmode_context(k='int64'):
                 print(x)
                 spx = sp.csr_matrix(x)
                 k = spx[0, 0]
             return k
-        x = np.array([1, 2, 3]) 
+        x = np.array([1, 2, 3])
         self.assert_equal_return_and_stdout(foo, x)
 
     def test_case17_print_own_bytecode(self):
         import dis
+
         def foo(x):
             with objmode_context():
                 dis.dis(foo)
-        x = np.array([1, 2, 3]) 
+        x = np.array([1, 2, 3])
         self.assert_equal_return_and_stdout(foo, x)
 
     @unittest.skip("segfaults")
@@ -611,8 +678,6 @@ class TestLiftObj(MemoryLeak, TestCase):
         self.assert_equal_return_and_stdout(foo, fn, x)
 
     def test_case19_recursion(self):
-        # the error message is "Exit of with-context not post-dominating the entry."
-        # which is valid *but* not hugely user friendly.
         def foo(x):
             with objmode_context():
                 if x == 0:
@@ -620,18 +685,23 @@ class TestLiftObj(MemoryLeak, TestCase):
             ret = foo(x - 1)
             return ret
         x = np.array([1, 2, 3])
-        self.assert_equal_return_and_stdout(foo, x)
+        cfoo = njit(foo)
+        with self.assertRaises(errors.CompilerError) as raises:
+            cfoo(x)
+        msg = "Does not support with-context that contain branches"
+        self.assertIn(msg, str(raises.exception))
 
     def test_case20_rng_works_ok(self):
         def foo(x):
             np.random.seed(0)
             y = np.random.rand()
-            with objmode_context(z = "float64"):
+            with objmode_context(z="float64"):
                 z = np.random.rand()
             return x + z
 
         x = np.array([1, 2, 3])
         self.assert_equal_return_and_stdout(foo, x)
+
 
 class TestBogusContext(BaseTestWithLifting):
     def test_undefined_global(self):
