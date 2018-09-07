@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import copy
+import warnings
 import numpy as np
 
 from numba import unittest_support as unittest
@@ -598,8 +599,8 @@ class TestLiftObj(MemoryLeak, TestCase):
         self.assert_equal_return_and_stdout(foo, x)
 
     def test_case13_branch_to_objmode_ctx(self):
-        # gives:
-        # dataflow.py:57: RuntimeWarning: inconsistent stack offset for block(offset:44, outgoing: [], incoming: [28, 36])
+        # Checks for warning in dataflow.py due to mishandled stack offset
+        # dataflow.py:57: RuntimeWarning: inconsistent stack offset ...
         def foo(x, wobj):
             if wobj:
                 with objmode_context(y='int64[:]'):
@@ -610,7 +611,14 @@ class TestLiftObj(MemoryLeak, TestCase):
             return x + y
 
         x = np.array([1, 2, 3])
-        self.assert_equal_return_and_stdout(foo, x, True)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always", RuntimeWarning)
+            self.assert_equal_return_and_stdout(foo, x, True)
+        # Assert no warnings from dataflow.py
+        for each in w:
+            self.assertFalse(each.filename.endswith('dataflow.py'),
+                             msg='there were warnings in dataflow.py')
 
     def test_case14_return_direct_from_objmode_ctx(self):
         # fails with:
