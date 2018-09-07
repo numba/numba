@@ -276,8 +276,8 @@ class TestParallelBackendBase(TestCase):
                         ps.append(fork_proc_impl)
                         ps.append(forkserver_proc_impl)
 
-                for _ in range(10):  # 10 is arbitrary
-                    impl = random.choice(ps)
+                random.shuffle(ps)
+                for impl in ps:
                     impl(fnlist)
             else:
                 raise ValueError(
