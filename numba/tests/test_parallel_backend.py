@@ -317,7 +317,7 @@ class TestSpecificBackend(TestParallelBackendBase):
     isolated manner such that if they hang/crash/have issues, it doesn't kill
     the test suite.
     """
-    _DEBUG = True
+    _DEBUG = False
 
     backends = {'tbb': skip_no_tbb,
                 'omp': skip_no_omp,
