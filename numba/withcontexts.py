@@ -118,6 +118,30 @@ call_context = _CallContextType()
 
 
 class _ObjModeContextType(WithContext):
+    """A contextmanager to be used inside jitted functions to enter
+    *object-mode* for using interpreter features.  The body of the with-context
+    is lifted into a function that is compiled into *object-mode*.  This
+    transformation process is limitated and cannot process all possible
+    Python code.  However, users can wrap complicated logic in another
+    Python function.
+
+    Example
+    -------
+
+        import numpy as np
+        from numba import njit, objmode
+
+        def bar(x):
+            return np.asarray(list(reversed(x.tolist()))
+
+        @njit
+        def foo():
+            x = np.arange(5)
+            with objmode(y='intp[:]'):  # annotate return type
+                # this region is executed by object-mode.
+                y += bar(x)
+            return y
+    """
     is_callable = True
 
     def _legalize_args(self, extra, loc):

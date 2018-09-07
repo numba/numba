@@ -13,7 +13,7 @@ from numba import typing, errors
 from numba.targets.registry import cpu_target
 from numba.targets import cpu
 from numba.compiler import compile_ir, DEFAULT_FLAGS
-from numba import njit, typeof
+from numba import njit, typeof, objmode
 from .support import MemoryLeak, TestCase, captured_stdout
 
 
@@ -713,6 +713,21 @@ class TestLiftObj(MemoryLeak, TestCase):
         x = np.array([1, 2, 3])
         self.assert_equal_return_and_stdout(foo, x)
 
+    def test_example01(self):
+        # Example from _ObjModeContextType.__doc__
+        def bar(x):
+            return np.asarray(list(reversed(x.tolist())))
+
+        @njit
+        def foo():
+            x = np.arange(5)
+            with objmode(y='intp[:]'):  # annotate return type
+                # this region is executed by object-mode.
+                y = x + bar(x)
+            return y
+
+        self.assertPreciseEqual(foo(), foo.py_func())
+        self.assertIs(objmode, objmode_context)
 
 class TestBogusContext(BaseTestWithLifting):
     def test_undefined_global(self):
