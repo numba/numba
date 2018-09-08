@@ -4,7 +4,6 @@ import warnings
 import functools
 import locale
 import weakref
-from collections import defaultdict
 import ctypes
 
 import llvmlite.llvmpy.core as lc
@@ -15,6 +14,7 @@ import llvmlite.ir as llvmir
 from numba import config, utils, cgutils
 from numba.runtime.nrtopt import remove_redundant_nrt_refct
 from numba.runtime import rtsys
+from numba.compiler_lock import require_global_compiler_lock
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
                       'i886', 'i986'])
@@ -207,6 +207,8 @@ class CodeLibrary(object):
         Finalization involves various stages of code optimization and
         linking.
         """
+        require_global_compiler_lock()
+
         # Report any LLVM-related problems to the user
         self._codegen._check_llvm_bugs()
 

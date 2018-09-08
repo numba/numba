@@ -5,7 +5,6 @@ from collections import namedtuple, defaultdict
 import sys
 import warnings
 import traceback
-import threading
 from .tracing import event
 
 from numba import (bytecode, interpreter, funcdesc, postproc,
@@ -17,12 +16,10 @@ from numba.parfor import PreParforPass, ParforPass, Parfor
 from numba.inline_closurecall import InlineClosureCallPass
 from numba.errors import CompilerError
 from numba.ir_utils import raise_on_unsupported_feature
+from numba.compiler_lock import global_compiler_lock
 
 # terminal color markup
 _termcolor = errors.termcolor()
-
-# Lock for the preventing multiple compiler execution
-lock_compiler = threading.RLock()
 
 
 class Flags(utils.ConfigOptions):
@@ -156,7 +153,7 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
     # Register the contexts in case for nested @jit or @overload calls
     with cpu_target.nested_context(typingctx, targetctx):
         return compile_extra(typingctx, targetctx, func, args, return_type,
-                             flags, locals)
+                            flags, locals)
 
 
 def run_frontend(func):
@@ -235,6 +232,7 @@ class _PipelineManager(object):
         exc.args = (newmsg,)
         return exc
 
+    @global_compiler_lock
     def run(self, status):
         assert self._finalized, "PM must be finalized before run()"
         for pipeline_name in self.pipeline_order:

@@ -295,6 +295,7 @@ The following top-level functions are supported:
 * :func:`numpy.tril` (second argument ``k`` must be an integer)
 * :func:`numpy.triu` (second argument ``k`` must be an integer)
 * :func:`numpy.unique` (only the first argument)
+* :func:`numpy.vander`
 * :func:`numpy.vstack`
 * :func:`numpy.where`
 * :func:`numpy.zeros` (only the 2 first arguments)

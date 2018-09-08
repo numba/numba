@@ -1133,18 +1133,22 @@ class Where(AbstractTemplate):
             return signature(retty, ary)
 
         elif len(args) == 3:
-            # NOTE: contrary to Numpy, we only support homogeneous arguments
             cond, x, y = args
+            retdty = from_dtype(np.promote_types(
+                        as_dtype(getattr(args[1], 'dtype', args[1])),
+                        as_dtype(getattr(args[2], 'dtype', args[2]))))
             if isinstance(cond, types.Array):
                 # array where()
-                if (cond.ndim == x.ndim == y.ndim and
-                    x.dtype == y.dtype):
-                    retty = types.Array(x.dtype, x.ndim, x.layout)
+                if (cond.ndim == x.ndim == y.ndim):
+                    if x.layout == y.layout == cond.layout:
+                        retty = types.Array(retdty, x.ndim, x.layout)
+                    else:
+                        retty = types.Array(retdty, x.ndim, 'C')
                     return signature(retty, *args)
             else:
                 # scalar where()
-                if not isinstance(x, types.Array) and x == y:
-                    retty = types.Array(x, 0, 'C')
+                if not isinstance(x, types.Array):
+                    retty = types.Array(retdty, 0, 'C')
                     return signature(retty, *args)
 
 

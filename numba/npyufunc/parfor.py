@@ -1161,7 +1161,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                     types.intp, debug_flag)])
 
     # Get the LLVM vars for the Numba IR reduction array vars.
-    redarrs = [lowerer.loadvar(x.name) for x in list(redarrdict.values())]
+    redarrs = [lowerer.loadvar(redarrdict[x].name) for x in redvars]
 
     nredvars = len(redvars)
     ninouts = len(expr_args) - nredvars

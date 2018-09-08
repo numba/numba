@@ -17,6 +17,7 @@ import llvmlite.binding as ll
 import numba.unittest_support as unittest
 from numba import utils
 from numba.targets.codegen import JITCPUCodegen
+from numba.compiler_lock import global_compiler_lock
 from .support import TestCase
 
 
@@ -55,10 +56,12 @@ class JITCPUCodegenTestCase(TestCase):
     """
 
     def setUp(self):
+        global_compiler_lock.acquire()
         self.codegen = JITCPUCodegen('test_codegen')
 
     def tearDown(self):
         del self.codegen
+        global_compiler_lock.release()
 
     def compile_module(self, asm, linking_asm=None):
         library = self.codegen.create_library('compiled_module')
