@@ -915,6 +915,112 @@ if numpy_version >= (1, 9):
 # Building matrices
 
 @register_jitable
+def _tri_impl(N, M, k):
+    shape = max(0, N), max(0, M)  # numpy floors each dimension at 0
+    out = np.empty(shape, dtype=np.float64)  # numpy default dtype
+
+    for i in range(shape[0]):
+        m_max = min(max(0, i + k + 1), shape[1])
+        out[i, :m_max] = 1
+        out[i, m_max:] = 0
+
+    return out
+
+@overload(np.tri)
+def np_tri(N, M=None, k=0):
+
+    # we require k to be integer, unlike numpy
+    if not isinstance(k, types.Integer):
+        raise TypeError('k must be an integer')
+
+    def tri_impl(N, M=None, k=0):
+        if M is None:
+            M = N
+        return _tri_impl(N, M, k)
+
+    return tri_impl
+
+@register_jitable
+def _make_square(m):
+    """
+    Takes a 1d array and tiles it to form a square matrix
+    - i.e. a facsimile of np.tile(m, (len(m), 1))
+    """
+    assert m.ndim == 1
+
+    len_m = len(m)
+    out = np.empty((len_m, len_m), dtype=m.dtype)
+
+    for i in range(len_m):
+        out[i] = m
+
+    return out
+
+@register_jitable
+def np_tril_impl_2d(m, k=0):
+    mask = np.tri(m.shape[-2], M=m.shape[-1], k=k).astype(np.uint)
+    return np.where(mask, m, np.zeros_like(m, dtype=m.dtype))
+
+@overload(np.tril)
+def my_tril(m, k=0):
+
+    # we require k to be integer, unlike numpy
+    if not isinstance(k, types.Integer):
+        raise TypeError('k must be an integer')
+
+    def np_tril_impl_1d(m, k=0):
+        m_2d = _make_square(m)
+        return np_tril_impl_2d(m_2d, k)
+
+    def np_tril_impl_multi(m, k=0):
+        mask = np.tri(m.shape[-2], M=m.shape[-1], k=k).astype(np.uint)
+        idx = np.ndindex(m.shape[:-2])
+        z = np.empty_like(m)
+        zero_opt = np.zeros_like(mask, dtype=m.dtype)
+        for sel in idx:
+            z[sel] = np.where(mask, m[sel], zero_opt)
+        return z
+
+    if m.ndim == 1:
+        return np_tril_impl_1d
+    elif m.ndim == 2:
+        return np_tril_impl_2d
+    else:
+        return np_tril_impl_multi
+
+@register_jitable
+def np_triu_impl_2d(m, k=0):
+    mask = np.tri(m.shape[-2], M=m.shape[-1], k=k-1).astype(np.uint)
+    return np.where(mask, np.zeros_like(m, dtype=m.dtype), m)
+
+@overload(np.triu)
+def my_triu(m, k=0):
+
+    # we require k to be integer, unlike numpy
+    if not isinstance(k, types.Integer):
+        raise TypeError('k must be an integer')
+
+    def np_triu_impl_1d(m, k=0):
+        m_2d = _make_square(m)
+        return np_triu_impl_2d(m_2d, k)
+
+    def np_triu_impl_multi(m, k=0):
+        mask = np.tri(m.shape[-2], M=m.shape[-1], k=k-1).astype(np.uint)
+        idx = np.ndindex(m.shape[:-2])
+        z = np.empty_like(m)
+        zero_opt = np.zeros_like(mask, dtype=m.dtype)
+        for sel in idx:
+            z[sel] = np.where(mask, zero_opt, m[sel])
+        return z
+
+    if m.ndim == 1:
+        return np_triu_impl_1d
+    elif m.ndim == 2:
+        return np_triu_impl_2d
+    else:
+        return np_triu_impl_multi
+
+@register_jitable
 def _np_vander(x, N, increasing, out):
     """
     Generate an N-column Vandermonde matrix from a supplied 1-dimensional

@@ -72,6 +72,15 @@ def correlate(a, v):
 def convolve(a, v):
     return np.convolve(a, v)
 
+def tri(N, M=None, k=0):
+    return np.tri(N, M, k)
+
+def tril(m, k=0):
+    return np.tril(m, k)
+
+def triu(m, k=0):
+    return np.triu(m, k)
+
 def np_vander(x, N=None, increasing=False):
     return np.vander(x, N, increasing)
 
@@ -634,6 +643,130 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         x = ((2, 3), (4, 5))
         _check_1d(x)
+
+    def test_tri_basic(self):
+        pyfunc = tri
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def n_variations():
+            return np.arange(-4, 8)  # number of rows
+
+        def m_variations():
+            return itertools.chain.from_iterable(([None], range(-5, 9)))  # number of columns
+
+        def k_variations():
+            return np.arange(-10, 10)  # offset
+
+        def _check(params):
+            expected = pyfunc(**params)
+            got = cfunc(**params)
+            self.assertPreciseEqual(expected, got)
+
+        # N supplied, M and k defaulted
+        for n in n_variations():
+            params = {'N': n}
+            _check(params)
+
+        # N and M supplied, k defaulted
+        for n in n_variations():
+            for m in m_variations():
+                params = {'N': n, 'M': m}
+                _check(params)
+
+        # N and k supplied, M defaulted
+        for n in n_variations():
+            for k in k_variations():
+                params = {'N': n, 'k': k}
+                _check(params)
+
+        # N, M and k supplied
+        for n in n_variations():
+            for k in k_variations():
+                for m in m_variations():
+                    params = {'N': n, 'M': m, 'k': k}
+                    _check(params)
+
+    def test_tri_exceptions(self):
+        pyfunc = tri
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        def _check(k):
+            with self.assertTypingError() as raises:
+                cfunc(5, 6, k=k)
+            assert "k must be an integer" in str(raises.exception)
+
+        for k in 1.5, True, np.inf, [1, 2]:
+            _check(k)
+
+    def _triangular_matrix_tests(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def _check(arr):
+            for k in itertools.chain.from_iterable(([None], range(-10, 10))):
+                if k is None:
+                    params = {}
+                else:
+                    params = {'k': k}
+                expected = pyfunc(arr, **params)
+                got = cfunc(arr, **params)
+                # TODO: Contiguity of result not consistent with numpy
+                self.assertEqual(got.dtype, expected.dtype)
+                np.testing.assert_array_equal(got, expected)
+
+        def check_odd(a):
+            _check(a)
+            a = a.reshape((9, 7))
+            _check(a)
+            a = a.reshape((7, 1, 3, 3))
+            _check(a)
+            _check(a.T)
+
+        def check_even(a):
+            _check(a)
+            a = a.reshape((4, 16))
+            _check(a)
+            a = a.reshape((4, 2, 2, 4))
+            _check(a)
+            _check(a.T)
+
+        check_odd(np.arange(63) + 10.5)
+        check_even(np.arange(64) - 10.5)
+
+        # edge cases
+        _check(np.arange(360).reshape(3, 4, 5, 6))
+        _check(np.array([]))
+        _check(np.arange(9).reshape((3, 3))[::-1])
+        _check(np.arange(9).reshape((3, 3), order='F'))
+
+        arr = (np.arange(64) - 10.5).reshape((4, 2, 2, 4))
+        _check(arr)
+        _check(np.asfortranarray(arr))
+
+    def _triangular_matrix_exceptions(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        a = np.ones((5, 6))
+        with self.assertTypingError() as raises:
+            cfunc(a, k=1.5)
+        assert "k must be an integer" in str(raises.exception)
+
+    def test_tril_basic(self):
+        self._triangular_matrix_tests(tril)
+
+    def test_tril_exceptions(self):
+        self._triangular_matrix_exceptions(tril)
+
+    def test_triu_basic(self):
+        self._triangular_matrix_tests(triu)
+
+    def test_triu_exceptions(self):
+        self._triangular_matrix_exceptions(triu)
 
 
 class TestNPMachineParameters(TestCase):
