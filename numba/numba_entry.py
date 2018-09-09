@@ -11,6 +11,7 @@ def get_sys_info():
     # function which then exits.
     import platform
     import json
+    import multiprocessing
     from numba import config
     from numba import cuda as cu
     from numba.cuda import cudadrv
@@ -26,15 +27,57 @@ def get_sys_info():
     from subprocess import check_output, CalledProcessError
 
     try:
-        fmt = "%-35s : %-s"
+        fmt = "%-45s : %-s"
         print("-" * 80)
         print("__Time Stamp__")
         print(datetime.utcnow())
         print("")
 
         print("__Hardware Information__")
+        system_name = platform.system()
         print(fmt % ("Machine", platform.machine()))
         print(fmt % ("CPU Name", llvmbind.get_host_cpu_name()))
+        if system_name == 'Linux':
+            strmatch = 'Cpus_allowed'
+            try:
+                loc = '/proc/self/status'
+                with open(loc, 'rt') as f:
+                    proc_stat = f.read().splitlines()
+                    for x in proc_stat:
+                        if x.startswith(strmatch):
+                            if x.startswith('%s:' % strmatch):
+                                hexnum = '0x%s' % x.split(':')[1].strip()
+                                acc_cpus = int(hexnum, 16)
+                                _n = str(bin(acc_cpus).count('1'))
+                                print(fmt % ("Number of accessible CPU cores",
+                                                _n))
+                            elif x.startswith('%s_list:' % strmatch):
+                                _a = x.split(':')[1].strip()
+                                print(fmt % ("Listed accessible CPUs cores",
+                                                _a))
+            except BaseException:
+                print(fmt % ("CPU count", multiprocessing.cpu_count()))
+            # See if CFS is in place
+            # https://www.kernel.org/doc/Documentation/scheduler/sched-bwc.txt
+            try:
+                def scrape_lines(loc):
+                    with open(loc, 'rt') as f:
+                        return f.read().splitlines()
+                loc = '/sys/fs/cgroup/cpuacct/cpu.cfs_period_us'
+                cfs_period = int(scrape_lines(loc)[0])
+                loc = '/sys/fs/cgroup/cpuacct/cpu.cfs_quota_us'
+                cfs_quota = int(scrape_lines(loc)[0])
+                if cfs_quota == -1:
+                    print(fmt % ("CFS restrictions", "None"))
+                else:
+                    runtime_amount = float(cfs_quota)/float(cfs_period)
+                    print(fmt % ("CFS restrictions (CPUs worth of runtime)",
+                                 runtime_amount))
+            except BaseException:
+                print(fmt % ("CFS restrictions", 'Information not available'))
+        else:
+            print(fmt % ("CPU count", multiprocessing.cpu_count()))
+
         try:
             featuremap = llvmbind.get_host_cpu_features()
         except RuntimeError:
@@ -50,7 +93,6 @@ def get_sys_info():
         print("__OS Information__")
         print(fmt % ("Platform", platform.platform(aliased=True)))
         print(fmt % ("Release", platform.release()))
-        system_name = platform.system()
         print(fmt % ("System Name", system_name))
         print(fmt % ("Version", platform.version()))
         try:
