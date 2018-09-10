@@ -16,6 +16,9 @@ def vector_add(a, b):
 
 
 class TestParallelLowWorkCount(unittest.TestCase):
+
+    _numba_parallel_test_ = False
+
     def test_low_workcount(self):
         # build parallel native code ufunc
         pv = Vectorize(vector_add, target='parallel')

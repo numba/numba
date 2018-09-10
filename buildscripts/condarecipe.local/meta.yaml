@@ -17,8 +17,11 @@ requirements:
   # build and run dependencies are duplicated to avoid setuptools issues
   # when we also set install_requires in setup.py
   build:
-    - {{ compiler('c') }} # [not (armv6l or armv7l or aarch64)]
-    - {{ compiler('cxx') }} # [not (armv6l or armv7l or aarch64)]
+    - {{ compiler('c') }}      # [not (armv6l or armv7l or aarch64)]
+    - {{ compiler('cxx') }}    # [not (armv6l or armv7l or aarch64)]
+    # both of these are needed on osx, llvm for the headers, Intel for the lib
+    - llvm-openmp              # [osx]
+    - intel-openmp             # [osx]
   host:
     - python
     - numpy x.x
@@ -27,6 +30,8 @@ requirements:
     - llvmlite 0.25.*
     - funcsigs                 # [py27]
     - singledispatch           # [py27]
+    # TBB devel version is to match TBB libs
+    - tbb-devel >=2018.0.5     # [not ((armv6l or armv7l or aarch64) or (win and py27))]
   run:
     - python
     - numpy x.x
@@ -34,6 +39,10 @@ requirements:
     - llvmlite 0.25.*
     - funcsigs                 # [py27]
     - singledispatch           # [py27]
+  run_constrained:
+    # If TBB is present it must be at least this version from Anaconda due to
+    # build flag issues triggering UB
+    - tbb >=2018.0.5           # [not ((armv6l or armv7l or aarch64) or (win and py27))]
 test:
   requires:
     - jinja2
@@ -44,6 +53,8 @@ test:
     - ipython                  # [not (armv6l or armv7l)]
     - setuptools
     - faulthandler             # [py27]
+    - tbb  >=2018.0.5          # [not ((armv6l or armv7l or aarch64) or (win and py27))]
+    - intel-openmp             # [osx]
     # Need these for AOT. Do not init msvc as it may not be present
     - {{ compiler('c') }}      # [not (win or armv6l or armv7l or aarch64)]
     - {{ compiler('cxx') }}    # [not (win or armv6l or armv7l or aarch64)]

@@ -278,3 +278,24 @@ Threading Control
 
    *Default value:* The number of CPU cores on the system as determined at run
    time, this can be accessed via ``numba.config.NUMBA_DEFAULT_NUM_THREADS``.
+
+.. envvar:: NUMBA_THREADING_LAYER
+
+   This environment variable controls the library used for concurrent execution
+   for the CPU parallel targets (``@vectorize(target='parallel')``, 
+   ``@guvectorize(target='parallel')``  and ``@njit(parallel=True)``). The 
+   variable type is string and by default is ``default`` which will select a
+   threading layer based on what is available in the runtime. The valid values
+   are (for more information about these see
+   :ref:`the threading layer documentation <numba-threading-layer>`):
+
+   * ``default`` - select a threading layer based on what is available in the
+     current runtime.
+   * ``safe`` - select a threading layer that is both fork and thread safe
+     (requires the TBB package).
+   * ``forksafe`` - select a threading layer that is fork safe.
+   * ``threadsafe`` - select a threading layer that is thread safe.
+   * ``tbb`` - A threading layer backed by Intel TBB.
+   * ``omp`` - A threading layer backed by OpenMP.
+   * ``workqueue`` - A simple built-in work-sharing task scheduler.
+

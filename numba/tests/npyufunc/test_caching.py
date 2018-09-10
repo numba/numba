@@ -19,6 +19,8 @@ class UfuncCacheTest(BaseCacheTest):
     Since the cache stats is not exposed by ufunc, we test by looking at the
     cache debug log.
     """
+    _numba_parallel_test_ = False
+
     here = os.path.dirname(__file__)
     usecases_file = os.path.join(here, "cache_usecases.py")
     modname = "ufunc_caching_test_fodder"

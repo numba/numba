@@ -1,48 +1,54 @@
 /*
-Implement parallel vectorize workqueue on top of Intel TBB.
+Threading layer on top of OpenMP.
 */
 
-#define TBB_PREVIEW_WAITING_FOR_WORKERS 1
-#include <tbb/tbb.h>
+#include <omp.h>
 #include <string.h>
 #include <stdio.h>
 #include "workqueue.h"
 #include "../_pymodule.h"
 #include "gufunc_scheduler.h"
 
-#if TBB_INTERFACE_VERSION >= 9106
-#define TSI_INIT(count) tbb::task_scheduler_init(count)
-#define TSI_TERMINATE(tsi) tsi->blocking_terminate(std::nothrow)
+#ifdef _MSC_VER
+#include <malloc.h>
 #else
-#if __TBB_SUPPORTS_WORKERS_WAITING_IN_TERMINATE
-#define TSI_INIT(count) tbb::task_scheduler_init(count, 0, /*blocking termination*/true)
-#define TSI_TERMINATE(tsi) tsi->terminate()
-#else
-#error This version of TBB does not support blocking terminate
-#endif
+#include <pthread.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <signal.h>
 #endif
 
 #define _DEBUG 0
-#define _TRACE_SPLIT 0
+#define _DEBUG_FORK 0
 
-static tbb::task_group *tg = NULL;
-static tbb::task_scheduler_init *tsi = NULL;
-static int tsi_count = 0;
+// OpenMP vendor strings
+#if defined(_MSC_VER)
+#define _OMP_VENDOR "MS"
+#elif defined(__GNUC__)
+#define _OMP_VENDOR "GNU"
+#elif defined(__clang__)
+#define _OMP_VENDOR "Intel"
+#endif
+
+#if defined(__GNUC__)
+static pid_t parent_pid = 0; // 0 is not set, users can't own this anyway
+#endif
 
 static void
 add_task(void *fn, void *args, void *dims, void *steps, void *data)
 {
-    tg->run([=]
-    {
-        auto func = reinterpret_cast<void (*)(void *args, void *dims, void *steps, void *data)>(fn);
-        func(args, dims, steps, data);
-    });
+    puts("Running add_task() with omppool sequentially");
+    typedef void (*func_ptr_t)(void *args, void *dims, void *steps, void *data);
+    func_ptr_t func = reinterpret_cast<func_ptr_t>(fn);
+    func(args, dims, steps, data);
 }
 
 static void
 parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *data,
              size_t inner_ndim, size_t array_count)
 {
+    typedef void (*func_ptr_t)(char **args, size_t *dims, size_t *steps, void *data);
+    func_ptr_t func = reinterpret_cast<func_ptr_t>(fn);
     static bool printed = false;
     if(!printed && _DEBUG)
     {
@@ -50,18 +56,39 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
         printed = true;
     }
 
+#if defined(__GNUC__)
+    // Handle GNU OpenMP not being forksafe...
+    // This checks if the pid set by the process that initialized this library
+    // matches the parent of this pid. If they do match this is a fork() from
+    // Python and not a spawn(), as spawn()s reinit the library. Forks are
+    // dangerous as GNU OpenMP is not forksafe, so warn then terminate.
+    if(_DEBUG_FORK)
+    {
+        printf("Registered parent pid=%d, my pid=%d, my parent pid=%d\n", parent_pid, getpid(), getppid());
+    }
+    if (parent_pid == getppid())
+    {
+        fprintf(stderr, "%s", "Terminating: fork() called from a process "
+                "already using GNU OpenMP, this is unsafe.\n");
+        raise(SIGTERM);
+        return;
+    }
+#endif
+
     //     args = <ir.Argument '.1' of type i8**>,
     //     dimensions = <ir.Argument '.2' of type i64*>
     //     steps = <ir.Argument '.3' of type i64*>
     //     data = <ir.Argument '.4' of type i8*>
 
     const size_t arg_len = (inner_ndim + 1);
+    // index variable in OpenMP 'for' statement must have signed integral type for MSVC
+    const ptrdiff_t size = (ptrdiff_t)dimensions[0];
 
-    if(_DEBUG && _TRACE_SPLIT)
+    if(_DEBUG)
     {
         printf("inner_ndim: %lu\n",inner_ndim);
         printf("arg_len: %lu\n", arg_len);
-        printf("total: %lu\n", dimensions[0]);
+        printf("total: %ld\n", size);
         printf("dimensions: ");
         for(size_t j = 0; j < arg_len; j++)
             printf("%lu, ", ((size_t *)dimensions)[j]);
@@ -74,32 +101,32 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
         printf("\n");
     }
 
-    using range_t = tbb::blocked_range<size_t>;
-    tbb::parallel_for(range_t(0, dimensions[0]), [=](const range_t &range)
+    #pragma omp parallel for
+    for(ptrdiff_t r = 0; r < size; r++)
     {
         size_t * count_space = (size_t *)alloca(sizeof(size_t) * arg_len);
         char ** array_arg_space = (char**)alloca(sizeof(char*) * array_count);
         memcpy(count_space, dimensions, arg_len * sizeof(size_t));
-        count_space[0] = range.size();
+        count_space[0] = 1;
 
-        if(_DEBUG && _TRACE_SPLIT > 1)
+        if(_DEBUG)
         {
             printf("THREAD %p:", count_space);
             printf("count_space: ");
             for(size_t j = 0; j < arg_len; j++)
-                printf("%lu, ", count_space[j]);
+                printf("%ld, ", count_space[j]);
             printf("\n");
         }
         for(size_t j = 0; j < array_count; j++)
         {
             char * base = args[j];
             size_t step = steps[j];
-            ptrdiff_t offset = step * range.begin();
+            ptrdiff_t offset = step * r;
             array_arg_space[j] = base + offset;
 
-            if(_DEBUG && _TRACE_SPLIT > 2)
+            if(0&&_DEBUG)
             {
-                printf("Index %ld\n", j);
+                printf("Index %lu\n", j);
                 printf("-->Got base %p\n", (void *)base);
                 printf("-->Got step %lu\n", step);
                 printf("-->Got offset %ld\n", offset);
@@ -107,107 +134,51 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
             }
         }
 
-        if(_DEBUG && _TRACE_SPLIT > 2)
+        if(_DEBUG)
         {
             printf("array_arg_space: ");
             for(size_t j = 0; j < array_count; j++)
                 printf("%p, ", (void *)array_arg_space[j]);
             printf("\n");
         }
-        auto func = reinterpret_cast<void (*)(char **args, size_t *dims, size_t *steps, void *data)>(fn);
         func(array_arg_space, count_space, steps, data);
-    });
-}
-
-void ignore_blocking_terminate_assertion( const char*, int, const char*, const char * )
-{
-    tbb::internal::runtime_warning("Unable to wait for threads to shut down before fork(). It can break multithreading in child process\n");
-}
-
-void ignore_assertion( const char*, int, const char*, const char * ) {}
-
-static void prepare_fork(void)
-{
-    if(_DEBUG)
-    {
-        puts("Suspending TBB: prepare fork");
-    }
-    if(tsi)
-    {
-        assertion_handler_type orig = tbb::set_assertion_handler(ignore_blocking_terminate_assertion);
-        TSI_TERMINATE(tsi);
-        tbb::set_assertion_handler(orig);
-    }
-}
-
-static void reset_after_fork(void)
-{
-    if(_DEBUG)
-    {
-        puts("Resuming TBB: after fork");
-    }
-    if(tsi)
-        tsi->initialize(tsi_count);
-}
-
-static void unload_tbb(void)
-{
-    if(tsi)
-    {
-        delete tg;
-        tg = NULL;
-        if(_DEBUG)
-        {
-            puts("Unloading TBB");
-        }
-        assertion_handler_type orig = tbb::set_assertion_handler(ignore_assertion);
-        tsi->terminate(); // no blocking terminate is needed here
-        tbb::set_assertion_handler(orig);
-        delete tsi;
-        tsi = NULL;
     }
 }
 
 static void launch_threads(int count)
 {
-    if(tsi)
+    // this must be called in a fork+thread safe region from Python
+    static bool initialized = false;
+#ifdef __GNUC__
+    parent_pid = getpid(); // record the parent PID for use later
+    if(_DEBUG_FORK)
+    {
+        printf("Setting parent as %d\n", parent_pid);
+    }
+#endif
+    if(initialized)
         return;
     if(_DEBUG)
-        puts("Using TBB");
+        puts("Using OpenMP");
     if(count < 1)
-        count = tbb::task_scheduler_init::automatic;
-    tsi = new TSI_INIT(tsi_count = count);
-    tg = new tbb::task_group;
-    tg->run([] {}); // start creating threads asynchronously
-
-#ifndef _MSC_VER
-    pthread_atfork(prepare_fork, reset_after_fork, reset_after_fork);
-#endif
+        return;
+    omp_set_num_threads(count);
 }
 
 static void synchronize(void)
 {
-    tg->wait();
 }
 
 static void ready(void)
 {
 }
 
-
-MOD_INIT(tbbpool)
+MOD_INIT(omppool)
 {
     PyObject *m;
-    MOD_DEF(m, "tbbpool", "No docs", NULL)
+    MOD_DEF(m, "omppool", "No docs", NULL)
     if (m == NULL)
         return MOD_ERROR_VAL;
-#if PY_MAJOR_VERSION >= 3
-    PyModuleDef *md = PyModule_GetDef(m);
-    if (md)
-    {
-        md->m_free = (freefunc)unload_tbb;
-    }
-#endif
 
     PyObject_SetAttrString(m, "launch_threads",
                            PyLong_FromVoidPtr((void*)&launch_threads));
@@ -223,7 +194,7 @@ MOD_INIT(tbbpool)
                            PyLong_FromVoidPtr((void*)&do_scheduling_signed));
     PyObject_SetAttrString(m, "do_scheduling_unsigned",
                            PyLong_FromVoidPtr((void*)&do_scheduling_unsigned));
-
-
+    PyObject_SetAttrString(m, "openmp_vendor",
+                           PyString_FromString(_OMP_VENDOR));
     return MOD_SUCCESS_VAL(m);
 }

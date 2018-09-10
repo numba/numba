@@ -247,7 +247,58 @@ def get_sys_info():
         print(fmt % ("SVML state, config.USING_SVML", config.USING_SVML))
         print(fmt % ("SVML library found and loaded", have_svml_library))
         print(fmt % ("llvmlite using SVML patched LLVM", llvm_svml_patched))
-        print(fmt % ("SVML operational:", svml_operational))
+        print(fmt % ("SVML operational", svml_operational))
+
+        # Check which threading backends are available.
+        print("")
+        print("__Threading Layer Information__")
+        def parse_error(e, backend):
+            # parses a linux based error message, this is to provide feedback
+            # and hide user paths etc
+            try:
+                path, problem, symbol =  [x.strip() for x in e.msg.split(':')]
+                extn_dso = os.path.split(path)[1]
+                if backend in extn_dso:
+                    return "%s: %s" % (problem, symbol)
+            except BaseException:
+                pass
+            return "Unknown import problem."
+
+        try:
+            from numba.npyufunc import tbbpool
+            print(fmt % ("TBB Threading layer available", True))
+        except ImportError as e:
+            # might be a missing symbol due to e.g. tbb libraries missing
+            print(fmt % ("TBB Threading layer available", False))
+            print(fmt % ("+--> Disabled due to",
+                         parse_error(e, 'tbbpool')))
+
+        try:
+            from numba.npyufunc import omppool
+            print(fmt % ("OpenMP Threading layer available", True))
+        except ImportError as e:
+            print(fmt % ("OpenMP Threading layer available", False))
+            print(fmt % ("+--> Disabled due to",
+                         parse_error(e, 'omppool')))
+
+        try:
+            from numba.npyufunc import workqueue
+            print(fmt % ("Workqueue Threading layer available", True))
+        except ImportError as e:
+            print(fmt % ("Workqueue Threading layer available", False))
+            print(fmt % ("+--> Disabled due to",
+                         parse_error(e, 'workqueue')))
+
+        # look for numba env vars that are set
+        print("")
+        print("__Numba Environment Variable Information__")
+        _envvar_found = False
+        for k, v in os.environ.items():
+            if k.startswith('NUMBA_'):
+                print(fmt % (k, v))
+                _envvar_found = True
+        if not _envvar_found:
+            print("None set.")
 
         # Look for conda and conda information
         print("")

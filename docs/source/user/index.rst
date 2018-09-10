@@ -16,6 +16,7 @@ User Manual
    parallel.rst
    stencil.rst
    performance-tips.rst
+   threading-layer.rst
    troubleshoot.rst
    faq.rst
    examples.rst

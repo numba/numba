@@ -10,22 +10,27 @@ race condition.
 */
 
 #ifdef _MSC_VER
-    /* Windows */
-    #include <windows.h>
-    #include <process.h>
-    #define NUMBA_WINTHREAD
+/* Windows */
+#include <windows.h>
+#include <process.h>
+#include <malloc.h>
+#define NUMBA_WINTHREAD
 #else
-    /* PThread */
-    #include <pthread.h>
-    #include <unistd.h>
-    #define NUMBA_PTHREAD
+/* PThread */
+#include <pthread.h>
+#include <unistd.h>
+#include <alloca.h>
+#define NUMBA_PTHREAD
 #endif
 
 #include <string.h>
+#include <stddef.h>
 #include <stdio.h>
 #include "workqueue.h"
 #include "../_pymodule.h"
 #include "gufunc_scheduler.h"
+
+#define _DEBUG 0
 
 /* As the thread-pool isn't inherited by children,
    free the task-queue, too. */
@@ -34,7 +39,8 @@ static void reset_after_fork(void);
 /* PThread */
 #ifdef NUMBA_PTHREAD
 
-typedef struct {
+typedef struct
+{
     pthread_cond_t cond;
     pthread_mutex_t mutex;
 } queue_condition_t;
@@ -93,7 +99,8 @@ numba_new_thread(void *worker, void *arg)
 
     status = pthread_create(&th, &attr, worker, arg);
 
-    if (status != 0){
+    if (status != 0)
+    {
         return NULL;
     }
 
@@ -106,7 +113,8 @@ numba_new_thread(void *worker, void *arg)
 /* Win Thread */
 #ifdef NUMBA_WINTHREAD
 
-typedef struct {
+typedef struct
+{
     CONDITION_VARIABLE cv;
     CRITICAL_SECTION cs;
 } queue_condition_t;
@@ -144,7 +152,8 @@ queue_condition_wait(queue_condition_t *qc)
 }
 
 /* Adapted from Python/thread_nt.h */
-typedef struct {
+typedef struct
+{
     void (*func)(void*);
     void *arg;
 } callobj;
@@ -186,12 +195,14 @@ numba_new_thread(void *worker, void *arg)
 
 #endif
 
-typedef struct Task{
+typedef struct Task
+{
     void (*func)(void *args, void *dims, void *steps, void *data);
     void *args, *dims, *steps, *data;
 } Task;
 
-typedef struct {
+typedef struct
+{
     queue_condition_t cond;
     int state;
     Task task;
@@ -201,6 +212,7 @@ typedef struct {
 static Queue *queues = NULL;
 static int queue_count;
 static int queue_pivot = 0;
+static int NUM_THREADS = -1;
 
 static void
 queue_state_wait(Queue *queue, int old, int repl)
@@ -208,7 +220,8 @@ queue_state_wait(Queue *queue, int old, int repl)
     queue_condition_t *cond = &queue->cond;
 
     queue_condition_lock(cond);
-    while (queue->state != old) {
+    while (queue->state != old)
+    {
         queue_condition_wait(cond);
     }
     queue->state = repl;
@@ -216,8 +229,133 @@ queue_state_wait(Queue *queue, int old, int repl)
     queue_condition_unlock(cond);
 }
 
+// break on this for debug
+void debug_marker(void);
+void debug_marker() {};
+
+// this complies to a launchable function from `add_task` like:
+// add_task(nopfn, NULL, NULL, NULL, NULL)
+// useful if you want to limit the number of threads locally
+void nopfn(void *args, void *dims, void *steps, void *data) {};
+
 static void
-add_task(void *fn, void *args, void *dims, void *steps, void *data) {
+parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *data,
+             size_t inner_ndim, size_t array_count)
+{
+
+    //     args = <ir.Argument '.1' of type i8**>,
+    //     dimensions = <ir.Argument '.2' of type i64*>
+    //     steps = <ir.Argument '.3' of type i64*>
+    //     data = <ir.Argument '.4' of type i8*>
+
+    size_t * count_space = NULL;
+    char ** array_arg_space = NULL;
+    const size_t arg_len = (inner_ndim + 1);
+    size_t i, j, count, remain, total;
+
+    ptrdiff_t offset;
+    char * base;
+
+    size_t step;
+
+    debug_marker();
+
+    total = *((size_t *)dimensions);
+    count = total / NUM_THREADS;
+    remain = total;
+
+    if(_DEBUG)
+    {
+        printf("inner_ndim: %ld\n",inner_ndim);
+        printf("arg_len: %ld\n", arg_len);
+        printf("total: %ld\n", total);
+        printf("count: %ld\n", count);
+
+        printf("dimensions: ");
+        for(j = 0; j < arg_len; j++)
+        {
+            printf("%ld, ", ((size_t *)dimensions)[j]);
+        }
+        printf("\n");
+
+        printf("steps: ");
+        for(j = 0; j < array_count; j++)
+        {
+            printf("%ld, ", steps[j]);
+        }
+        printf("\n");
+
+        printf("*args: ");
+        for(j = 0; j < array_count; j++)
+        {
+            printf("%p, ", (void *)args[j]);
+        }
+    }
+
+
+    for (i = 0; i < NUM_THREADS; i++)
+    {
+        count_space = (size_t *)alloca(sizeof(size_t) * arg_len);
+        memcpy(count_space, dimensions, arg_len * sizeof(size_t));
+        if(i == NUM_THREADS - 1)
+        {
+            // Last thread takes all leftover
+            count_space[0] = remain;
+        }
+        else
+        {
+            count_space[0] = count;
+            remain = remain - count;
+        }
+
+        if(_DEBUG)
+        {
+            printf("\n=================== THREAD %ld ===================\n", i);
+            printf("\ncount_space: ");
+            for(j = 0; j < arg_len; j++)
+            {
+                printf("%ld, ", count_space[j]);
+            }
+            printf("\n");
+        }
+
+        array_arg_space = alloca(sizeof(char*) * array_count);
+
+        for(j = 0; j < array_count; j++)
+        {
+            base = args[j];
+            step = steps[j];
+            offset = step * count * i;
+            array_arg_space[j] = (char *)(base + offset);
+
+            if(_DEBUG)
+            {
+                printf("Index %ld\n", j);
+                printf("-->Got base %p\n", (void *)base);
+                printf("-->Got step %ld\n", step);
+                printf("-->Got offset %ld\n", offset);
+                printf("-->Got addr %p\n", (void *)array_arg_space[j]);
+            }
+        }
+
+        if(_DEBUG)
+        {
+            printf("\narray_arg_space: ");
+            for(j = 0; j < array_count; j++)
+            {
+                printf("%p, ", (void *)array_arg_space[j]);
+            }
+        }
+        add_task(fn, (void *)array_arg_space, (void *)count_space, steps, data);
+    }
+
+    ready();
+    synchronize();
+}
+
+static void
+add_task(void *fn, void *args, void *dims, void *steps, void *data)
+{
     void (*func)(void *args, void *dims, void *steps, void *data) = fn;
 
     Queue *queue = &queues[queue_pivot];
@@ -230,17 +368,20 @@ add_task(void *fn, void *args, void *dims, void *steps, void *data) {
     task->data = data;
 
     /* Move pivot */
-    if ( ++queue_pivot == queue_count ) {
+    if ( ++queue_pivot == queue_count )
+    {
         queue_pivot = 0;
     }
 }
 
 static
-void thread_worker(void *arg) {
+void thread_worker(void *arg)
+{
     Queue *queue = (Queue*)arg;
     Task *task;
 
-    while (1) {
+    while (1)
+    {
         /* Wait for the queue to be in READY state (i.e. for some task
          * to need running), and switch it to RUNNING.
          */
@@ -254,35 +395,44 @@ void thread_worker(void *arg) {
     }
 }
 
-static void launch_threads(int count) {
-    if (!queues) {
+static void launch_threads(int count)
+{
+    if (!queues)
+    {
         /* If queues are not yet allocated,
            create them, one for each thread. */
         int i;
         size_t sz = sizeof(Queue) * count;
 
+        /* set for use in parallel_for */
+        NUM_THREADS = count;
         queues = malloc(sz);     /* this memory will leak */
         /* Note this initializes the state to IDLE */
         memset(queues, 0, sz);
         queue_count = count;
 
-        for (i = 0; i < count; ++i) {
+        for (i = 0; i < count; ++i)
+        {
             queue_condition_init(&queues[i].cond);
             numba_new_thread(thread_worker, &queues[i]);
         }
     }
 }
 
-static void synchronize(void) {
+static void synchronize(void)
+{
     int i;
-    for (i = 0; i < queue_count; ++i) {
+    for (i = 0; i < queue_count; ++i)
+    {
         queue_state_wait(&queues[i], DONE, IDLE);
     }
 }
 
-static void ready(void) {
+static void ready(void)
+{
     int i;
-    for (i = 0; i < queue_count; ++i) {
+    for (i = 0; i < queue_count; ++i)
+    {
         queue_state_wait(&queues[i], IDLE, READY);
     }
 }
@@ -291,9 +441,11 @@ static void reset_after_fork(void)
 {
     free(queues);
     queues = NULL;
+    NUM_THREADS = -1;
 }
 
-MOD_INIT(workqueue) {
+MOD_INIT(workqueue)
+{
     PyObject *m;
     MOD_DEF(m, "workqueue", "No docs", NULL)
     if (m == NULL)
@@ -307,6 +459,8 @@ MOD_INIT(workqueue) {
                            PyLong_FromVoidPtr(&ready));
     PyObject_SetAttrString(m, "add_task",
                            PyLong_FromVoidPtr(&add_task));
+    PyObject_SetAttrString(m, "parallel_for",
+                           PyLong_FromVoidPtr(&parallel_for));
     PyObject_SetAttrString(m, "do_scheduling_signed",
                            PyLong_FromVoidPtr(&do_scheduling_signed));
     PyObject_SetAttrString(m, "do_scheduling_unsigned",

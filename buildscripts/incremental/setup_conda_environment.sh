@@ -48,6 +48,8 @@ if [[ $(uname) == Linux ]]; then
     fi
 elif  [[ $(uname) == Darwin ]]; then
     $CONDA_INSTALL clang_osx-64 clangxx_osx-64
+    # Install llvm-openmp and intel-openmp on OSX too
+    $CONDA_INSTALL llvm-openmp intel-openmp
 fi
 
 # Install latest llvmlite build
@@ -64,5 +66,7 @@ if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL sphinx_bootstrap_theme; fi
 if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi
 # Install SVML
 if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
-
+# Install Intel TBB parallel backend
+if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL tbb tbb-devel; fi
+# install the faulthandler for Python 2.x
 if [ $PYTHON \< "3.0" ]; then $CONDA_INSTALL faulthandler; fi

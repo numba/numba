@@ -230,6 +230,9 @@ class TestSlicedArrayAttr(MemoryLeakMixin, unittest.TestCase):
 
 
 class TestArrayCTypes(MemoryLeakMixin, TestCase):
+
+    _numba_parallel_test_ = False
+
     def test_array_ctypes_data(self):
         pyfunc = array_ctypes_data
         cfunc = njit(pyfunc)

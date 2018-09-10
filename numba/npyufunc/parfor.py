@@ -1036,7 +1036,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     library = lowerer.library
 
     from .parallel import (ParallelGUFuncBuilder, build_gufunc_wrapper,
-                           get_thread_count, _launch_threads, _init)
+                           get_thread_count, _launch_threads)
 
     if config.DEBUG_ARRAY_OPT:
         print("make_parallel_loop")
@@ -1055,7 +1055,6 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
 
     # These are necessary for build_gufunc_wrapper to find external symbols
     _launch_threads()
-    _init()
 
     wrapper_ptr, env, wrapper_name = build_gufunc_wrapper(llvm_func, cres, sin,
                                                           sout, {})

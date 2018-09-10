@@ -242,6 +242,8 @@ class TestListComprehension(TestCase):
 
 class TestArrayComprehension(unittest.TestCase):
 
+    _numba_parallel_test_ = False
+
     def check(self, pyfunc, *args, **kwargs):
         """A generic check function that run both pyfunc, and jitted pyfunc,
         and compare results."""

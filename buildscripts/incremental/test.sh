@@ -21,6 +21,22 @@ export NUMBA_DEVELOPER_MODE=1
 # enable the fault handler
 export PYTHONFAULTHANDLER=1
 
+# deal with threading layers
+if [ -z ${TEST_THREADING+x} ]; then
+    echo "INFO: Threading layer not explicitly set."
+else
+    case "${TEST_THREADING}" in "workqueue"|"omp"|"tbb")
+        export NUMBA_THREADING_LAYER="$TEST_THREADING"
+        echo "INFO: Threading layer set as: $TEST_THREADING"
+        ;;
+        *)
+        echo "INFO: Threading layer explicitly set to bad value: $TEST_THREADING."
+        exit 1
+        ;;
+    esac
+fi
+
+
 unamestr=`uname`
 if [[ "$unamestr" == 'Linux' ]]; then
     if [[ "${BITS32}" == "yes" ]]; then
