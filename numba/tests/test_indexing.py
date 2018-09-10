@@ -813,7 +813,7 @@ class TestSetItem(TestCase):
 
         # Mismatching input size and slice length
         with self.assertRaises(ValueError):
-            cfunc(np.zeros_like(arg), arg, 0, 0, 1)
+            cfunc(np.zeros_like(arg, dtype=np.int32), arg, 0, 0, 1)
 
     def check_1d_slicing_set_sequence(self, flags, seqty, seq):
         """

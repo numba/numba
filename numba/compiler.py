@@ -8,7 +8,7 @@ import traceback
 from .tracing import event
 
 from numba import (bytecode, interpreter, funcdesc, postproc,
-                   typing, typeinfer, lowering, objmode, utils, config,
+                   typing, typeinfer, lowering, pylowering, utils, config,
                    errors, types, ir, rewrites, transforms)
 from numba.targets import cpu, callconv
 from numba.annotations import type_annotations
@@ -428,7 +428,7 @@ class BasePipeline(object):
                               lifted=tuple(loops), lifted_from=None)
             return cres
 
-    def frontend_withlift(self):
+    def stage_frontend_withlift(self):
         """
         Extract with-contexts
         """
@@ -466,7 +466,6 @@ class BasePipeline(object):
         """
         Type inference and legalization
         """
-        self.frontend_withlift()
         with self.fallback_context('Function "%s" failed type inference'
                                    % (self.func_id.func_name,)):
             # Type inference
@@ -773,11 +772,15 @@ class BasePipeline(object):
         """
         pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
 
+    def add_with_handling_stage(self, pm):
+        pm.add_stage(self.stage_frontend_withlift, "Handle with contexts")
+
     def define_nopython_pipeline(self, pm, name='nopython'):
         """Add the nopython-mode pipeline to the pipeline manager
         """
         pm.create_pipeline(name)
         self.add_preprocessing_stage(pm)
+        self.add_with_handling_stage(pm)
         self.add_pre_typing_stage(pm)
         self.add_typing_stage(pm)
         self.add_optimization_stage(pm)
@@ -1042,7 +1045,7 @@ def py_lowering_stage(targetctx, library, interp, flags):
     fndesc = funcdesc.PythonFunctionDescriptor.from_object_mode_function(
         interp
         )
-    lower = objmode.PyLower(targetctx, library, fndesc, interp)
+    lower = pylowering.PyLower(targetctx, library, fndesc, interp)
     lower.lower()
     if not flags.no_cpython_wrapper:
         lower.create_cpython_wrapper()

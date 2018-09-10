@@ -35,6 +35,7 @@ from .jitclass import jitclass
 
 # Initialize withcontexts
 import numba.withcontexts
+from numba.withcontexts import objmode_context as objmode
 
 # Keep this for backward compatibility.
 test = runtests.main
@@ -53,6 +54,7 @@ __all__ = """
     prange
     stencil
     vectorize
+    objmode
     """.split() + types.__all__ + errors.__all__
 
 
