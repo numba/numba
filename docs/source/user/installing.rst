@@ -89,38 +89,38 @@ Then:
 See the `roc-examples <https://github.com/numba/roc-examples>`_ repository for
 sample notebooks.
 
+.. Hide this until we have the conda packages available
+    Installing on Linux ARMv7 Platforms
+    -----------------------------------
 
-Installing on Linux ARMv7 Platforms
------------------------------------
+    `Berryconda <https://https://github.com/jjhelmus/berryconda>`_ is a
+    conda-based Python distribution for the Raspberry Pi.  We are now uploading
+    packages to the ``numba`` channel on Anaconda Cloud for ARMv7-based boards,
+    which currently incudes the the Raspberry Pi 2 and 3, but not the Pi 1 or
+    Zero.  These can be installed using conda from the `numba` channel::
 
-`Berryconda <https://https://github.com/jjhelmus/berryconda>`_ is a
-conda-based Python distribution for the Raspberry Pi.  We are now uploading
-packages to the ``numba`` channel on Anaconda Cloud for ARMv7-based boards,
-which currently incudes the the Raspberry Pi 2 and 3, but not the Pi 1 or
-Zero.  These can be installed using conda from the `numba` channel::
+        $ conda install -c numba numba
 
-    $ conda install -c numba numba
-
-Berryconda and Numba may work on other Linux-based ARMv7 systems, but this has
-not been tested.
+    Berryconda and Numba may work on other Linux-based ARMv7 systems, but this has
+    not been tested.
 
 
-Installing on Linux ARMv8 (AArch64) Platforms
----------------------------------------------
+    Installing on Linux ARMv8 (AArch64) Platforms
+    ---------------------------------------------
 
-Although many ARMv8 platforms are likely to require building Numba from
-source, we do build and test conda packages on the `NVIDIA Jetson TX2
-<https://www.nvidia.com/en-us/autonomous-machines/embedded-systems-dev-kits-modules/>`_.
-These packages rely on an infrequently updated port of Berryconda to ARMv8
-called `Jetconda <https://github.com/seibert/jetconda/releases>`_.  Jetconda
-is built on Ubuntu 16.04 running on the Jetson TX2, although the packages may
-work on other ARMv8 systems running Ubuntu 16.04.  Once Jetconda is installed,
-Numba can be installed from the ``numba`` channel
+    Although many ARMv8 platforms are likely to require building Numba from
+    source, we do build and test conda packages on the `NVIDIA Jetson TX2
+    <https://www.nvidia.com/en-us/autonomous-machines/embedded-systems-dev-kits-modules/>`_.
+    These packages rely on an infrequently updated port of Berryconda to ARMv8
+    called `Jetconda <https://github.com/seibert/jetconda/releases>`_.  Jetconda
+    is built on Ubuntu 16.04 running on the Jetson TX2, although the packages may
+    work on other ARMv8 systems running Ubuntu 16.04.  Once Jetconda is installed,
+    Numba can be installed from the ``numba`` channel
 
-    $ conda install -c numba numba
+        $ conda install -c numba numba
 
-To enable CUDA support on the TX2, set the ``NUMBAPRO`` environment variables
-as described above.
+    To enable CUDA support on the TX2, set the ``NUMBAPRO`` environment variables
+    as described above.
 
 
 .. _numba-source-install-instructions:
