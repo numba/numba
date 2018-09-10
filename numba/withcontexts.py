@@ -154,10 +154,10 @@ class _ObjModeContextType(WithContext):
 
         - with-block cannot use incoming list object.
         - with-block cannot use incoming function object.
-        - with-block cannot ``yield``, ``break``, ``return`` or ``raise`` such that
-        the execution will leave the with-block immediately.
-        - the ``objmode()`` function must be directly referenced as a global.
-        i.e. ``with numba.objmode():`` doesn't work.
+        - with-block cannot ``yield``, ``break``, ``return`` or ``raise`` \
+          such that the execution will leave the with-block immediately.
+        - the ``objmode()`` function must be directly referenced as a global. \
+          i.e. ``with numba.objmode():`` doesn't work.
 
     .. note:: When used outside of no-python mode, the context-manager has no
         effect.
