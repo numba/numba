@@ -475,19 +475,20 @@ class TestLiftObj(MemoryLeak, TestCase):
         def foo(x):
             # should specifying the wrong type info be considered valid?
             # z is complex.
-            # Note: for now, we will coerce
+            # Note: for now, we will coerce for scalar and raise for array
             with objmode_context(z="float64[:]"):
                 z = x + 1.j
             return z
 
         x = np.array([1, 2, 3])
         cfoo = njit(foo)
-        got = cfoo(x)
-        expected = foo(x)
-        # They don't match because of njit coerced the output to float64[:]
-        self.assertFalse(np.all(got == expected))
-        self.assertEqual(got.dtype, np.float64)
-        self.assertEqual(expected.dtype, np.complex128)
+        with self.assertRaises(TypeError) as raises:
+            got = cfoo(x)
+        self.assertIn(
+            ("can't unbox array from PyObject into native value."
+             "  The object maybe of a different type"),
+            str(raises.exception),
+        )
 
     def test_case06_double_objmode(self):
         def foo(x):
@@ -569,7 +570,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         # Sub-case of case-10.
         def foo(x):
             with objmode_context(y='int64[:]'):
-                y = np.asarray([1, 2, 3])
+                y = np.asarray([1, 2, 3], dtype='int64')
             with objmode_context():
                 # Note: `y` is not an output.
                 y[2] = 10
@@ -604,7 +605,7 @@ class TestLiftObj(MemoryLeak, TestCase):
 
         def foo(x):
             with objmode_context(y='int64[:]'):
-                y = njit(bar)(x)
+                y = njit(bar)(x).astype('int64')
             return x + y
 
         x = np.array([1, 2, 3])
@@ -616,13 +617,13 @@ class TestLiftObj(MemoryLeak, TestCase):
         def foo(x, wobj):
             if wobj:
                 with objmode_context(y='int64[:]'):
-                    y = x + 1
+                    y = (x + 1).astype('int64')
             else:
                 y = x + 2
 
             return x + y
 
-        x = np.array([1, 2, 3])
+        x = np.array([1, 2, 3], dtype='int64')
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always", RuntimeWarning)

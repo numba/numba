@@ -719,6 +719,10 @@ class Lower(BaseLower):
                     # Release the GIL
                     self.pyapi.gil_release(gil_state)
 
+                    # Error during unboxing
+                    with self.builder.if_then(native.is_error):
+                        self.call_conv.return_exc(self.builder)
+
                     res = output
 
         elif isinstance(fnty, types.ExternalFunction):

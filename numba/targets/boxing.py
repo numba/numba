@@ -395,7 +395,17 @@ def unbox_array(typ, obj, c):
         errcode = c.pyapi.nrt_adapt_ndarray_from_python(obj, ptr)
     else:
         errcode = c.pyapi.numba_array_adaptor(obj, ptr)
-    failed = cgutils.is_not_null(c.builder, errcode)
+    
+    # TODO: here we have minimal typechecking by the itemsize.
+    #       need to do better
+    expected_itemsize = numpy_support.as_dtype(typ.dtype).itemsize
+    expected_itemsize = nativeary.itemsize.type(expected_itemsize)
+    itemsize_mismatch = c.builder.icmp_unsigned('!=', nativeary.itemsize, expected_itemsize)
+    
+    failed = c.builder.or_(
+        cgutils.is_not_null(c.builder, errcode),
+        itemsize_mismatch,
+    )
     # Handle error
     with c.builder.if_then(failed, likely=False):
         c.pyapi.err_set_string("PyExc_TypeError",
