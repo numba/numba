@@ -395,13 +395,22 @@ def unbox_array(typ, obj, c):
         errcode = c.pyapi.nrt_adapt_ndarray_from_python(obj, ptr)
     else:
         errcode = c.pyapi.numba_array_adaptor(obj, ptr)
-    
+
     # TODO: here we have minimal typechecking by the itemsize.
     #       need to do better
-    expected_itemsize = numpy_support.as_dtype(typ.dtype).itemsize
-    expected_itemsize = nativeary.itemsize.type(expected_itemsize)
-    itemsize_mismatch = c.builder.icmp_unsigned('!=', nativeary.itemsize, expected_itemsize)
-    
+    try:
+        expected_itemsize = numpy_support.as_dtype(typ.dtype).itemsize
+    except NotImplementedError:
+        # Don't check types that can't be `as_dtype()`-ed
+        itemsize_mismatch = cgutils.false_bit
+    else:
+        expected_itemsize = nativeary.itemsize.type(expected_itemsize)
+        itemsize_mismatch = c.builder.icmp_unsigned(
+            '!=',
+            nativeary.itemsize,
+            expected_itemsize,
+            )
+
     failed = c.builder.or_(
         cgutils.is_not_null(c.builder, errcode),
         itemsize_mismatch,
