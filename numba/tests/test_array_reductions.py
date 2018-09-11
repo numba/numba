@@ -537,6 +537,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_aggregation_magnitude(array_cumsum)
         self.check_aggregation_magnitude(array_cumsum_global)
 
+    @unittest.skipUnless(np_version >= (1, 12), "nancumprod needs Numpy 1.12+")
     def test_nancumsum_magnitude(self):
         self.check_aggregation_magnitude(array_nancumsum, is_prod=True)
 
@@ -548,6 +549,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_aggregation_magnitude(array_cumprod, is_prod=True)
         self.check_aggregation_magnitude(array_cumprod_global, is_prod=True)
 
+    @unittest.skipUnless(np_version >= (1, 12), "nancumprod needs Numpy 1.12+")
     def test_nancumprod_magnitude(self):
         self.check_aggregation_magnitude(array_nancumprod, is_prod=True)
 
