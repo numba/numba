@@ -31,5 +31,5 @@ jobs:
     - script: |
         call activate %CONDA_ENV%
         python -m numba.tests.test_runtests
-        python runtests.py -b --tags important
+        python runtests.py -m 2 -b --tags important
       displayName: 'Test'
