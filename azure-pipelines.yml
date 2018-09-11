@@ -3,7 +3,7 @@ pool:
 
 steps:
 - script: |
-    if [ "$(uname)" == "Linux" ]; then sudo apt-get install libc6-dev-i386; fi
+    if [ "$(uname)" == "Linux" ]; then sudo apt-get install -y libc6-dev-i386; fi
     echo "Installing Miniconda"
     buildscripts/incremental/install_miniconda.sh
     export PATH=$HOME/miniconda3/bin:$PATH
