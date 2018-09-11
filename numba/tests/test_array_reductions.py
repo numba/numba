@@ -686,8 +686,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             reduction_funcs += [array_nanmean, array_nanstd, array_nanvar]
         if np_version >= (1, 10):
             reduction_funcs += [array_nanprod]
-        if np_version >= (1, 12):
-            reduction_funcs += [array_nancumprod, array_nancumsum]
+        # if np_version >= (1, 12):
+        #    reduction_funcs += [array_nancumprod, array_nancumsum]
 
         dtypes_to_test = [np.int32, np.float32, np.bool_, np.complex64]
 
