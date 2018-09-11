@@ -18,6 +18,7 @@ jobs:
     - task: CondaEnvironment@1
       inputs:
         updateConda: no
+        packageSpecs: 'python=3.6'
 
     - script: |
         buildscripts\\incremental\\setup_conda_environment.cmd
@@ -28,7 +29,6 @@ jobs:
       displayName: 'Build'
 
     - script: |
-        set CMD_IN_ENV "cmd /E:ON /V:ON /C .\buildscripts\appveyor\run_with_env.cmd"
-        %CMD_IN_ENV% python -m numba.tests.test_runtests
-        %CMD_IN_ENV% python runtests.py -b --tags important
+        cmd /E:ON /V:ON /C .\buildscripts\appveyor\run_with_env.cmd python -m numba.tests.test_runtests
+        cmd /E:ON /V:ON /C .\buildscripts\appveyor\run_with_env.cmd python runtests.py -b --tags important
       displayName: 'Test'
