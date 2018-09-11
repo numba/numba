@@ -19,10 +19,14 @@ steps:
     buildscripts/incremental/setup_conda_environment.sh
   displayName: 'Before Install'
 
-- script: buildscripts/incremental/build.sh
+- script: |
+    export PATH=$HOME/miniconda3/bin:$PATH
+    buildscripts/incremental/build.sh
   displayName: 'Build'
 
-- script: buildscripts/incremental/test.sh
+- script: |
+    export PATH=$HOME/miniconda3/bin:$PATH
+    buildscripts/incremental/test.sh
   displayName: 'Test'
 
 #after_success:
