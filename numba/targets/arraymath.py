@@ -665,25 +665,31 @@ def _replace_nan(a, nan_replacement_value):
 
     return out
 
+def get_typed_value(arr, val):
+    if isinstance(arr.dtype, types.Integer):
+        retty = types.intp
+    else:
+        retty = arr.dtype
+
+    return retty(val)
+
 if numpy_version >= (1, 12):
     @overload(np.nancumprod)
     def np_nancumprod(a):
-        if not isinstance(a, types.Array):
-            return
+        one = get_typed_value(a, 1)
 
         def nanprod_impl(arr):
-            dense_arr = _replace_nan(arr, 1)
+            dense_arr = _replace_nan(arr, one)
             return np.cumprod(dense_arr)
 
         return nanprod_impl
 
     @overload(np.nancumsum)
     def np_nancumsum(a):
-        if not isinstance(a, types.Array):
-            return
+        zero = get_typed_value(a, 0)
 
         def nanprod_impl(arr):
-            dense_arr = _replace_nan(arr, 0)
+            dense_arr = _replace_nan(arr, zero)
             return np.cumsum(dense_arr)
 
         return nanprod_impl
