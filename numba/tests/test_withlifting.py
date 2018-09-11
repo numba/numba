@@ -326,7 +326,7 @@ class TestLiftObj(MemoryLeak, TestCase):
             arr *= 2
 
         def foo(nelem):
-            arr = np.arange(nelem)
+            arr = np.arange(nelem).astype(np.int64)
             with objmode_context:
                 # arr is modified inplace inside bar()
                 bar(arr)
