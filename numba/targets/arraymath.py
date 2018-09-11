@@ -614,58 +614,55 @@ if numpy_version >= (1, 8):
 def np_nansum(a):
     if not isinstance(a, types.Array):
         return
-
-    if isinstance(a.dtype, types.Integer):  # not possible to encounter nan
-        return lambda x: np.sum(x)
+    if isinstance(a.dtype, types.Integer):
+        retty = types.intp
     else:
         retty = a.dtype
-        zero = retty(0)
-        isnan = get_isnan(a.dtype)
+    zero = retty(0)
+    isnan = get_isnan(a.dtype)
 
-        def nansum_impl(arr):
-            c = zero
-            for view in np.nditer(arr):
-                v = view.item()
-                if not isnan(v):
-                    c += v
-            return c
+    def nansum_impl(arr):
+        c = zero
+        for view in np.nditer(arr):
+            v = view.item()
+            if not isnan(v):
+                c += v
+        return c
 
-        return nansum_impl
+    return nansum_impl
 
 if numpy_version >= (1, 10):
     @overload(np.nanprod)
     def np_nanprod(a):
         if not isinstance(a, types.Array):
             return
-
-        if isinstance(a.dtype, types.Integer):  # not possible to encounter nan
-            return lambda x: np.prod(x)
+        if isinstance(a.dtype, types.Integer):
+            retty = types.intp
         else:
             retty = a.dtype
-            one = retty(1)
-            isnan = get_isnan(a.dtype)
+        one = retty(1)
+        isnan = get_isnan(a.dtype)
 
-            def nanprod_impl(arr):
-                c = one
-                for view in np.nditer(arr):
-                    v = view.item()
-                    if not isnan(v):
-                        c *= v
-                return c
+        def nanprod_impl(arr):
+            c = one
+            for view in np.nditer(arr):
+                v = view.item()
+                if not isnan(v):
+                    c *= v
+            return c
 
-            return nanprod_impl
+        return nanprod_impl
 
 @register_jitable
-def _replace_nan(a, val):
-    out = np.empty(a.size, dtype=a.dtype)
+def _replace_nan(a, nan_replacement_value):
+    out = np.empty_like(a)
 
-    # empirically faster than the equivalent np.where
-    for i in range(out.size):
-        a_i = a.flat[i]
-        if np.isnan(a_i):
-            out.flat[i] = val
+    for index, val in np.ndenumerate(a):
+        if np.isnan(val):
+            out[index] = nan_replacement_value
         else:
-            out.flat[i] = a_i
+            out[index] = val
+
     return out
 
 if numpy_version >= (1, 12):

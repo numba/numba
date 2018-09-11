@@ -627,7 +627,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(expected, got)
 
         def _set_some_values_to_nan(a):
-            p = a.size // 2  # about half
+            p = a.size // 2  # set approx half elements to NaN
             np.put(a, np.random.choice(range(a.size), p, replace=False), np.nan)
             return a
 
