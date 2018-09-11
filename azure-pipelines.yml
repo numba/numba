@@ -2,6 +2,7 @@ pool:
   vmImage: 'Ubuntu 16.04'
  
 strategy:
+  maxParallel: 10
   matrix:
     py37_np15_doc:
       PYTHON: '3.7'
