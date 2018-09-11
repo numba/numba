@@ -1,5 +1,13 @@
 pool:
   vmImage: 'Ubuntu 16.04'
+ 
+strategy:
+  matrix:
+    py37_np15_doc:
+      PYTHON: '3.7'
+      NUMPY: '1.15' 
+      CONDA_ENV: 'travisci
+      BUILD_DOC: 'yes'
 
 steps:
 - script: |
