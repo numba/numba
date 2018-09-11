@@ -110,6 +110,7 @@ Fixes:
 * PR #3241: Fix #3225.  Normalize 0nd array to scalar in typing of indexing code.
 * PR #3256: Fix #3251: Move imports of ABCs to collections.abc for Python >= 3.3
 * PR #3292: Fix issue3279.
+* PR #3302: Fix error due to mismatching dtype
 
 Documentation Updates:
 
