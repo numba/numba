@@ -29,11 +29,17 @@ def array_cumprod(arr):
 def array_cumprod_global(arr):
     return np.cumprod(arr)
 
+def array_nancumprod(arr):
+    return np.nancumprod(arr)
+
 def array_cumsum(arr):
     return arr.cumsum()
 
 def array_cumsum_global(arr):
     return np.cumsum(arr)
+
+def array_nancumsum(arr):
+    return np.nancumsum(arr)
 
 def array_sum(arr):
     return arr.sum()
@@ -531,6 +537,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_aggregation_magnitude(array_cumsum)
         self.check_aggregation_magnitude(array_cumsum_global)
 
+    def test_nancumsum_magnitude(self):
+        self.check_aggregation_magnitude(array_nancumsum, is_prod=True)
+
     def test_prod_magnitude(self):
         self.check_aggregation_magnitude(array_prod, is_prod=True)
         self.check_aggregation_magnitude(array_prod_global, is_prod=True)
@@ -538,6 +547,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_cumprod_magnitude(self):
         self.check_aggregation_magnitude(array_cumprod, is_prod=True)
         self.check_aggregation_magnitude(array_cumprod_global, is_prod=True)
+
+    def test_nancumprod_magnitude(self):
+        self.check_aggregation_magnitude(array_nancumprod, is_prod=True)
 
     def test_mean_magnitude(self):
         self.check_aggregation_magnitude(array_mean)
@@ -606,6 +618,45 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_mean_npdatetime(self):
         self.check_nptimedelta(array_mean)
 
+    def check_nan_cumulative(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a):
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+        def _set_some_values_to_nan(a):
+            p = a.size // 2  # about half
+            np.put(a, np.random.choice(range(a.size), p, replace=False), np.nan)
+            return a
+
+        def a_variations():
+            yield np.linspace(-1, 3, 60).reshape(3, 4, 5)
+            yield np.array([np.inf, 3, 4])
+            yield np.array([True, True, True, False])
+            yield np.arange(1, 10)
+            yield np.asfortranarray(np.arange(1, 64) - 33.3)
+            yield np.arange(1, 10, dtype=np.float32)[::-1]
+
+        for a in a_variations():
+            check(a)  # no nans
+            check(_set_some_values_to_nan(a.astype(np.float64)))  # about 50% nans
+
+        # edge cases
+        check(np.array([]))
+        check(np.full(10, np.nan))
+
+    @unittest.skipUnless(np_version >= (1, 12), "nancumprod needs Numpy 1.12+")
+    def test_nancumprod_basic(self):
+        self.check_cumulative(array_nancumprod)
+        self.check_nan_cumulative(array_nancumprod)
+
+    @unittest.skipUnless(np_version >= (1, 12), "nancumprod needs Numpy 1.12+")
+    def test_nancumsum_basic(self):
+        self.check_cumulative(array_nancumsum)
+        self.check_nan_cumulative(array_nancumsum)
+
     @classmethod
     def install_generated_tests(cls):
         # These form a testing product where each of the combinations are tested
@@ -633,6 +684,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             reduction_funcs += [array_nanmean, array_nanstd, array_nanvar]
         if np_version >= (1, 10):
             reduction_funcs += [array_nanprod]
+        if np_version >= (1, 12):
+            reduction_funcs += [array_nancumprod, array_nancumsum]
 
         dtypes_to_test = [np.int32, np.float32, np.bool_, np.complex64]
 

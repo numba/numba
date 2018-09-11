@@ -230,16 +230,18 @@ The following reduction functions are supported:
 
 * :func:`numpy.diff` (only the 2 first arguments)
 * :func:`numpy.median` (only the first argument)
+* :func:`numpy.nancumprod` (only the first argument, requires NumPy >= 1.12))
+* :func:`numpy.nancumsum` (only the first argument, requires NumPy >= 1.12))
 * :func:`numpy.nanmax` (only the first argument)
 * :func:`numpy.nanmean` (only the first argument)
 * :func:`numpy.nanmedian` (only the first argument)
 * :func:`numpy.nanmin` (only the first argument)
+* :func:`numpy.nanpercentile` (only the 2 first arguments, requires NumPy >= 1.11)
 * :func:`numpy.nanprod` (only the first argument)
 * :func:`numpy.nanstd` (only the first argument)
 * :func:`numpy.nansum` (only the first argument)
 * :func:`numpy.nanvar` (only the first argument)
 * :func:`numpy.percentile` (only the 2 first arguments, requires NumPy >= 1.10)
-* :func:`numpy.nanpercentile` (only the 2 first arguments, requires NumPy >= 1.11)
 
 Other functions
 ---------------

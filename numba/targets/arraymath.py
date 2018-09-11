@@ -278,10 +278,7 @@ def array_cumsum(context, builder, sig, args):
     zero = scalar_dtype(0)
 
     def array_cumsum_impl(arr):
-        size = 1
-        for i in arr.shape:
-            size = size * i
-        out = np.empty(size, dtype)
+        out = np.empty(arr.size, dtype)
         c = zero
         for idx, v in enumerate(arr.flat):
             c += v
@@ -292,8 +289,6 @@ def array_cumsum(context, builder, sig, args):
                                    locals=dict(c=scalar_dtype))
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-
-
 @lower_builtin(np.cumprod, types.Array)
 @lower_builtin("array.cumprod", types.Array)
 def array_cumprod(context, builder, sig, args):
@@ -301,10 +296,7 @@ def array_cumprod(context, builder, sig, args):
     dtype = as_dtype(scalar_dtype)
 
     def array_cumprod_impl(arr):
-        size = 1
-        for i in arr.shape:
-            size = size * i
-        out = np.empty(size, dtype)
+        out = np.empty(arr.size, dtype)
         c = 1
         for idx, v in enumerate(arr.flat):
             c *= v
@@ -622,42 +614,80 @@ if numpy_version >= (1, 8):
 def np_nansum(a):
     if not isinstance(a, types.Array):
         return
-    if isinstance(a.dtype, types.Integer):
-        retty = types.intp
+
+    if isinstance(a.dtype, types.Integer):  # not possible to encounter nan
+        return lambda x: np.sum(x)
     else:
         retty = a.dtype
-    zero = retty(0)
-    isnan = get_isnan(a.dtype)
+        zero = retty(0)
+        isnan = get_isnan(a.dtype)
 
-    def nansum_impl(arr):
-        c = zero
-        for view in np.nditer(arr):
-            v = view.item()
-            if not isnan(v):
-                c += v
-        return c
+        def nansum_impl(arr):
+            c = zero
+            for view in np.nditer(arr):
+                v = view.item()
+                if not isnan(v):
+                    c += v
+            return c
 
-    return nansum_impl
+        return nansum_impl
 
 if numpy_version >= (1, 10):
     @overload(np.nanprod)
     def np_nanprod(a):
         if not isinstance(a, types.Array):
             return
-        if isinstance(a.dtype, types.Integer):
-            retty = types.intp
+
+        if isinstance(a.dtype, types.Integer):  # not possible to encounter nan
+            return lambda x: np.prod(x)
         else:
             retty = a.dtype
-        one = retty(1)
-        isnan = get_isnan(a.dtype)
+            one = retty(1)
+            isnan = get_isnan(a.dtype)
+
+            def nanprod_impl(arr):
+                c = one
+                for view in np.nditer(arr):
+                    v = view.item()
+                    if not isnan(v):
+                        c *= v
+                return c
+
+            return nanprod_impl
+
+@register_jitable
+def _replace_nan(a, val):
+    out = np.empty(a.size, dtype=a.dtype)
+
+    # empirically faster than the equivalent np.where
+    for i in range(out.size):
+        a_i = a.flat[i]
+        if np.isnan(a_i):
+            out.flat[i] = val
+        else:
+            out.flat[i] = a_i
+    return out
+
+if numpy_version >= (1, 12):
+    @overload(np.nancumprod)
+    def np_nancumprod(a):
+        if not isinstance(a, types.Array):
+            return
 
         def nanprod_impl(arr):
-            c = one
-            for view in np.nditer(arr):
-                v = view.item()
-                if not isnan(v):
-                    c *= v
-            return c
+            dense_arr = _replace_nan(arr, 1)
+            return np.cumprod(dense_arr)
+
+        return nanprod_impl
+
+    @overload(np.nancumsum)
+    def np_nancumsum(a):
+        if not isinstance(a, types.Array):
+            return
+
+        def nanprod_impl(arr):
+            dense_arr = _replace_nan(arr, 0)
+            return np.cumsum(dense_arr)
 
         return nanprod_impl
 
