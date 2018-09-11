@@ -1,0 +1,31 @@
+parameters:
+  name: ''
+  vmImage: ''
+
+jobs:
+- job: ${{ parameters.name }}
+  pool: 
+    vmImage: ${{ parameters.vmImage }}
+  strategy:
+    maxParallel: 11
+    matrix:
+      py37_np15_doc:
+        PYTHON: '3.7'
+        NUMPY: '1.15' 
+        CONDA_ENV: 'testenv'
+
+  steps:
+    - task: CondaEnvironment@1
+    - script: |
+        buildscripts\\incremental\\setup_conda_environment.cmd
+      displayName: 'Before Install'
+
+    - script: |
+        buildscripts\\incremental\\build.cmd
+      displayName: 'Build'
+
+    - script: |
+        set CMD_IN_ENV "cmd /E:ON /V:ON /C .\\buildscripts\\appveyor\\run_with_env.cmd"
+        "%CMD_IN_ENV% python -m numba.tests.test_runtests"
+        "%CMD_IN_ENV% python runtests.py -b --tags important"
+      displayName: 'Test'

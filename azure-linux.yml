@@ -9,11 +9,6 @@ jobs:
   strategy:
     maxParallel: 11
     matrix:
-      py37_np15_doc:
-        PYTHON: '3.7'
-        NUMPY: '1.15' 
-        CONDA_ENV: 'travisci'
-        BUILD_DOC: 'yes'
       py37_np115_tbb:
         PYTHON: '3.7'
         NUMPY: '1.15'
