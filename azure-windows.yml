@@ -29,6 +29,7 @@ jobs:
       displayName: 'Build'
 
     - script: |
-        cmd /E:ON /V:ON /C .\buildscripts\appveyor\run_with_env.cmd python -m numba.tests.test_runtests
-        cmd /E:ON /V:ON /C .\buildscripts\appveyor\run_with_env.cmd python runtests.py -b --tags important
+        call activate %CONDA_ENV%
+        python -m numba.tests.test_runtests
+        python runtests.py -b --tags important
       displayName: 'Test'
