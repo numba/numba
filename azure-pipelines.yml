@@ -1,0 +1,19 @@
+pool:
+  vmImage: 'Ubuntu 16.04'
+
+steps:
+- script: |
+    if [ "$(uname)" == "Linux" ]; then sudo apt-get install libc6-dev-i386; fi
+    buildscripts/incremental/install_miniconda.sh
+    export PATH=$HOME/miniconda3/bin:$PATH
+    buildscripts/incremental/setup_conda_environment.sh
+  displayName: 'Before Install'
+
+- script: buildscripts/incremental/build.sh
+  displayName: 'Build'
+
+- script: buildscripts/incremental/test.sh
+  displayName: 'Test'
+
+#after_success:
+#    - buildscripts/incremental/after_success.sh
