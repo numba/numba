@@ -72,7 +72,7 @@ request from the Github interface.
 
 If you want, you can submit a pull request even when you haven't finished
 working.  This can be useful to gather feedback, or to stress your changes
-against the :ref:`continuous integration <travis_ci>` platorm.  In this
+against the :ref:`continuous integration <travis_ci>` platform.  In this
 case, please prepend ``[WIP]`` to your pull request's title.
 
 .. _buildenv:
@@ -80,7 +80,7 @@ case, please prepend ``[WIP]`` to your pull request's title.
 Build environment
 '''''''''''''''''
 
-Numba has a number of dependencies (mostly `numpy <http://www.numpy.org/>`_
+Numba has a number of dependencies (mostly `NumPy <http://www.numpy.org/>`_
 and `llvmlite <https://github.com/numba/llvmlite>`_) with non-trivial build
 instructions.  Unless you want to build those dependencies yourself, we
 recommend you use `conda <http://conda.pydata.org/miniconda.html>`_ to
@@ -94,11 +94,13 @@ of the llvmlite library::
 
 Then create an environment with the right dependencies::
 
-   $ conda create -n numbaenv python=3.6 llvmlite numpy scipy
+   $ conda create -n numbaenv python=3.6 llvmlite numpy scipy jinja2 cffi
 
 .. note::
    This installs an environment based on Python 3.6, but you can of course
-   choose another version supported by Numba.
+   choose another version supported by Numba.  To test additional features,
+   you may also need to install ``tbb`` and/or ``llvm-openmp`` and 
+   ``intel-openmp``.
 
 To activate the environment for the current shell session::
 
@@ -221,11 +223,12 @@ Platform support
 ''''''''''''''''
 
 Every commit to the master branch is automatically tested on all of the
-platform Numba supports.  This includes ARMv7, ARMv8, POWER8, as well as both
+platforms Numba supports.  This includes ARMv7, ARMv8, POWER8, as well as both
 AMD and NVIDIA GPUs.  The build system however is internal to Anaconda, so we
-also use `Travis CI <https://travis-ci.org/numba/numba>`_ to provide public
-continuous integration information for as many combinations as can be
-supported by the service.  Travis automatically tests all pull requests on OS
+also use `Travis CI <https://travis-ci.org/numba/numba>`_ and 
+`AppVeyor <https://ci.appveyor.com/project/seibert/numba-j46mi>`_ to provide 
+public continuous integration information for as many combinations as can be
+supported by the service.  Travis CI automatically tests all pull requests on OS
 X and Linux, as well as a sampling of different Python and NumPy versions.  If
 you see problems on platforms you are unfamiliar with, feel free to ask for
 help in your pull request.  The Numba core developers can help diagnose

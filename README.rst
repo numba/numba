@@ -25,14 +25,14 @@ Dependencies
 ============
 
 * llvmlite
-* numpy (version 1.9 or higher)
+* NumPy (version 1.9 or higher)
 * funcsigs (for Python 2)
 
 
 Installing
 ==========
 
-The easiest way to install numba and get updates is by using the Anaconda
+The easiest way to install Numba and get updates is by using the Anaconda
 Distribution: https://www.anaconda.com/download
 
 ::
@@ -50,17 +50,19 @@ http://numba.pydata.org/numba-doc/latest/index.html
 Mailing Lists
 =============
 
-Join the numba mailing list numba-users@continuum.io:
+Join the Numba mailing list numba-users@continuum.io:
 https://groups.google.com/a/continuum.io/d/forum/numba-users
 
-or access it through the Gmane mirror:
-http://news.gmane.org/gmane.comp.python.numba.user
-
 Some old archives are at: http://librelist.com/browser/numba/
-
 
 
 Continuous Integration
 ======================
 
-https://travis-ci.org/numba/numba
+.. image:: https://travis-ci.org/numba/numba.svg?branch=master
+    :target: https://travis-ci.org/numba/numba
+    :alt: Travis CI
+
+.. image:: https://ci.appveyor.com/api/projects/status/klm0dk21innm33mi?svg=true)
+    :target: https://ci.appveyor.com/project/seibert/numba-j46mi
+    :alt: AppVeyor

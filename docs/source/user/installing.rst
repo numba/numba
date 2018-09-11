@@ -42,8 +42,8 @@ Note that Numba, like Anaconda, only supports PPC in 64-bit little-endian mode.
 
 To enable CUDA GPU support for Numba, install the latest `graphics drivers from
 NVIDIA <https://www.nvidia.com/Download/index.aspx>`_ for your platform.
-(Note that the open source Nouveau drivers shipped by default with Ubuntu do
-not support CUDA.).  Then install the ``cudatoolkit`` package::
+(Note that the open source Nouveau drivers shipped by default with many Linux
+distributions do not support CUDA.)  Then install the ``cudatoolkit`` package::
 
     $ conda install cudatoolkit
 
@@ -59,7 +59,7 @@ Binary wheels for Windows, Mac, and Linux are also available from `PyPI
     $ pip install numba
 
 This will download all of the needed dependencies as well.  You do not need to
-have *LLVM* installed to use Numba (in fact, Numba will ignore all LLVM
+have LLVM installed to use Numba (in fact, Numba will ignore all LLVM
 versions installed on the system) as the required components are bundled into
 the llvmlite wheel.
 
@@ -68,9 +68,9 @@ To use CUDA with Numba installed by `pip`, you need to install the `CUDA SDK
 set the following environment variables so Numba can locate the required
 libraries:
 
-  * ``NUMBAPRO_CUDA_DRIVER`` - Path to the CUDA driver shared library file
-  * ``NUMBAPRO_NVVM`` - Path to the CUDA libNVVM shared library file
-  * ``NUMBAPRO_LIBDEVICE`` - Path to the CUDA libNVVM libdevice *directory* which contains .bc files
+* ``NUMBAPRO_CUDA_DRIVER`` - Path to the CUDA driver shared library file
+* ``NUMBAPRO_NVVM`` - Path to the CUDA libNVVM shared library file
+* ``NUMBAPRO_LIBDEVICE`` - Path to the CUDA libNVVM libdevice *directory* which contains .bc files
 
 
 Enabling AMD ROCm GPU Support
@@ -97,7 +97,7 @@ sample notebooks.
     conda-based Python distribution for the Raspberry Pi.  We are now uploading
     packages to the ``numba`` channel on Anaconda Cloud for ARMv7-based boards,
     which currently incudes the the Raspberry Pi 2 and 3, but not the Pi 1 or
-    Zero.  These can be installed using conda from the `numba` channel::
+    Zero.  These can be installed using conda from the ``numba`` channel::
 
         $ conda install -c numba numba
 
@@ -115,7 +115,7 @@ sample notebooks.
     called `Jetconda <https://github.com/seibert/jetconda/releases>`_.  Jetconda
     is built on Ubuntu 16.04 running on the Jetson TX2, although the packages may
     work on other ARMv8 systems running Ubuntu 16.04.  Once Jetconda is installed,
-    Numba can be installed from the ``numba`` channel
+    Numba can be installed from the ``numba`` channel::
 
         $ conda install -c numba numba
 
@@ -145,8 +145,11 @@ Once that is completed, you can download the latest Numba source code from
 Source archives of the latest release can also be found on
 `PyPI <https://pypi.org/project/numba/>`_.  In addition to ``llvmlite``, you will also need:
 
-  * A C compiler compatible with your Python installation
-  * `Numpy <http://www.numpy.org/>`_
+* A C compiler compatible with your Python installation.  If you are using
+  Anaconda, you can install the Linux compiler conda packages ``gcc_linux-64`` 
+  and ``gxx_linux-64``, or macOS packages ``clang_osx-64`` and
+  ``clangxx_osx-64``.
+* `NumPy <http://www.numpy.org/>`_
 
 Then you can build and install Numba from the top level of the source tree::
 
