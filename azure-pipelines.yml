@@ -9,70 +9,70 @@ strategy:
       CONDA_ENV: 'travisci'
       BUILD_DOC: 'yes'
     py37_np115_tbb:
-      PYTHON='3.7'
-      NUMPY='1.15'
-      CONDA_ENV=travisci
-      TEST_THREADING='tbb'
+      PYTHON:'3.7'
+      NUMPY:'1.15'
+      CONDA_ENV:travisci
+      TEST_THREADING:'tbb'
     py27_np115:  
-      PYTHON='2.7'
-      NUMPY='1.15'
-      CONDA_ENV=travisci
+      PYTHON:'2.7'
+      NUMPY:'1.15'
+      CONDA_ENV:travisci
     py27_np19:
-      PYTHON='2.7'
-      NUMPY='1.9' 
-      CONDA_ENV=travisci
+      PYTHON:'2.7'
+      NUMPY:'1.9' 
+      CONDA_ENV:travisci
     py35_np110:      
-      PYTHON='3.5'
-      NUMPY='1.10'
-      CONDA_ENV=travisci
+      PYTHON:'3.5'
+      NUMPY:'1.10'
+      CONDA_ENV:travisci
     py35_np111_cov:      
-      PYTHON='3.5'
-      NUMPY='1.11'
-      CONDA_ENV=travisci
-      RUN_COVERAGE=yes
+      PYTHON:'3.5'
+      NUMPY:'1.11'
+      CONDA_ENV:travisci
+      RUN_COVERAGE:yes
     py36_np112_doc:      
-      PYTHON='3.6'
-      NUMPY='1.12'
-      CONDA_ENV=travisci
-      BUILD_DOC=yes
+      PYTHON:'3.6'
+      NUMPY:'1.12'
+      CONDA_ENV:travisci
+      BUILD_DOC:yes
     py36_np113:
-      PYTHON='3.6'
-      NUMPY='1.13'
-      CONDA_ENV=travisci
+      PYTHON:'3.6'
+      NUMPY:'1.13'
+      CONDA_ENV:travisci
     py37_np114:
-      PYTHON='3.7'
-      NUMPY='1.14'
-      CONDA_ENV=travisci
+      PYTHON:'3.7'
+      NUMPY:'1.14'
+      CONDA_ENV:travisci
     py37_np115_svml:
-      PYTHON='3.7'
-      NUMPY='1.15'
-      CONDA_ENV=travisci
-      TEST_SVML=yes
+      PYTHON:'3.7'
+      NUMPY:'1.15'
+      CONDA_ENV:travisci
+      TEST_SVML:yes
     py37_np115_vanilla:
-      PYTHON='3.7'
-      NUMPY='1.15'
-      CONDA_ENV=travisci
-      VANILLA_INSTALL=yes
+      PYTHON:'3.7'
+      NUMPY:'1.15'
+      CONDA_ENV:travisci
+      VANILLA_INSTALL:yes
     py27_np111_32bit:
-      PYTHON='2.7'
-      NUMPY='1.11'
-      CONDA_ENV=travisci
-      BITS32=yes
+      PYTHON:'2.7'
+      NUMPY:'1.11'
+      CONDA_ENV:travisci
+      BITS32:yes
     py37_np115_32bit:
-      PYTHON='3.7'
-      NUMPY='1.15'
-      CONDA_ENV=travisci
-      BITS32=yes
+      PYTHON:'3.7'
+      NUMPY:'1.15'
+      CONDA_ENV:travisci
+      BITS32:yes
     py37_np115_omp:
-      PYTHON='3.7'
-      NUMPY='1.15'
-      CONDA_ENV=travisci
-      TEST_THREADING=omp
+      PYTHON:'3.7'
+      NUMPY:'1.15'
+      CONDA_ENV:travisci
+      TEST_THREADING:omp
     py37_np115_workqueue:      
-      PYTHON='3.7'
-      NUMPY='1.15'
-      CONDA_ENV=travisci
-      TEST_THREADING=workqueue
+      PYTHON:'3.7'
+      NUMPY:'1.15'
+      CONDA_ENV:travisci
+      TEST_THREADING:workqueue
 
 steps:
 - script: |
