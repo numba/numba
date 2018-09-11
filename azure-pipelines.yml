@@ -4,8 +4,10 @@ pool:
 steps:
 - script: |
     if [ "$(uname)" == "Linux" ]; then sudo apt-get install libc6-dev-i386; fi
+    echo "Installing Miniconda"
     buildscripts/incremental/install_miniconda.sh
     export PATH=$HOME/miniconda3/bin:$PATH
+    echo "Setting up Conda environment"
     buildscripts/incremental/setup_conda_environment.sh
   displayName: 'Before Install'
 
