@@ -1,3 +1,149 @@
+Version 0.40.0
+--------------
+
+This release adds a number of major features:
+
+* A new GPU backend: kernels for AMD GPUs can now be compiled using the ROCm
+  driver on Linux.
+* The thread pool implementation used by Numba for automatic multithreading
+  is configurable to use TBB, OpenMP, or the old "workqueue" implementation.
+  (TBB is likely to become the preferred default in a future release.)
+* New documentation on thread and fork-safety with Numba, along with overall
+  improvements in thread-safety.
+* Experimental support for executing a block of code inside a nopython mode
+  function in object mode.
+* Parallel loops now allow arrays as reduction variables
+* CUDA improvements: FMA, faster float64 atomics on supporting hardware, 
+  records in const memory, and improved datatime dtype support
+* More NumPy functions: vander, tri, triu, tril, fill_diagonal
+
+
+General Enhancements:
+
+* PR #3017: Add facility to support with-contexts
+* PR #3033: Add support for multidimensional CFFI arrays
+* PR #3122: Add inliner to object mode pipeline
+* PR #3127: Support for reductions on arrays.
+* PR #3145: Support for np.fill_diagonal
+* PR #3151: Keep a queue of references to last N deserialized functions.  Fixes #3026
+* PR #3154: Support use of list() if typeable.
+* PR #3166: Objmode with-block
+* PR #3179: Updates for llvmlite 0.25
+* PR #3181: Support function extension in alias analysis
+* PR #3189: Support literal constants in typing of object methods
+* PR #3190: Support passing closures as literal values in typing
+* PR #3199: Support inferring stencil index as constant in simple unary expressions
+* PR #3202: Threading layer backend refactor/rewrite/reinvention!
+* PR #3209: Support for np.tri, np.tril and np.triu
+* PR #3211: Handle unpacking in building tuple (BUILD_TUPLE_UNPACK opcode)
+* PR #3212: Support for np.vander
+* PR #3227: Add NumPy 1.15 support
+* PR #3272: Add MemInfo_data to runtime._nrt_python.c_helpers
+* PR #3273: Refactor. Removing thread-local-storage based context nesting.
+* PR #3278: compiler threadsafety lockdown
+* PR #3291: Add CPU count and CFS restrictions info to numba -s.
+
+CUDA Enhancements:
+
+* PR #3152: Use cuda driver api to get best blocksize for best occupancy
+* PR #3165: Add FMA intrinsic support
+* PR #3172: Use float64 add Atomics, Where Available
+* PR #3186: Support Records in CUDA Const Memory
+* PR #3191: CUDA: fix log size
+* PR #3198: Fix GPU datetime timedelta types usage
+* PR #3221: Support datetime/timedelta scalar argument to a CUDA kernel.
+* PR #3259: Add DeviceNDArray.view method to reinterpret data as a different type.
+
+ROCm Enhancements:
+
+* PR #3023: Support for AMDGCN/ROCm.
+* PR #3108: Add ROC info to `numba -s` output.
+* PR #3176: Move ROC vectorize init to npyufunc
+* PR #3177: Add auto_synchronize support to ROC stream
+* PR #3178: Update ROC target documentation.
+* PR #3294: Add compiler lock to ROC compilation path.
+* PR #3280: Add wavebits property to the HSA Agent.
+* PR #3281: Fix ds_permute types and add tests
+
+Continuous Integration / Testing:
+
+* PR #3091: Remove old recipes, switch to test config based on env var.
+* PR #3094: Add higher ULP tolerance for products in complex space.
+* PR #3096: Set exit on error in incremental scripts
+* PR #3109: Add skip to test needing jinja2 if no jinja2.
+* PR #3125: Skip cudasim only tests
+* PR #3126: add slack, drop flowdock
+* PR #3147: Improve error message for arg type unsupported during typing.
+* PR #3128: Fix recipe/build for jetson tx2/ARM
+* PR #3167: In build script activate env before installing.
+* PR #3180: Add skip to broken test.
+* PR #3216: Fix libcuda.so loading in some container setup
+* PR #3224: Switch to new Gitter notification webhook URL and encrypt it
+* PR #3235: Add 32bit Travis CI jobs
+* PR #3257: This adds scipy/ipython back into windows conda test phase.
+
+Fixes:
+
+* PR #3038: Fix random integer generation to match results from NumPy.
+* PR #3045: Fix #3027 - Numba reassigns sys.stdout
+* PR #3059: Handler for known LoweringErrors.
+* PR #3060: Adjust attribute error for NumPy functions.
+* PR #3067: Abort simulator threads on exception in thread block.
+* PR #3079: Implement +/-(types.boolean) Fix #2624
+* PR #3080: Compute np.var and np.std correctly for complex types.
+* PR #3088: Fix #3066 (array.dtype.type in prange)
+* PR #3089: Fix invalid ParallelAccelerator hoisting issue.
+* PR #3136: Fix #3135 (lowering error)
+* PR #3137: Fix for issue3103 (race condition detection)
+* PR #3142: Fix Issue #3139 (parfors reuse of reduction variable across prange blocks)
+* PR #3148: Remove dead array equal @infer code
+* PR #3153: Fix canonicalize_array_math typing for calls with kw args
+* PR #3156: Fixes issue with missing pygments in testing and adds guards.
+* PR #3168: Py37 bytes output fix.
+* PR #3171: Fix #3146.  Fix CFUNCTYPE void* return-type handling
+* PR #3193: Fix setitem/getitem resolvers
+* PR #3222: Fix #3214.  Mishandling of POP_BLOCK in while True loop.
+* PR #3230: Fixes liveness analysis issue in looplifting
+* PR #3233: Fix return type difference for 32bit ctypes.c_void_p
+* PR #3234: Fix types and layout for `np.where`.
+* PR #3237: Fix DeprecationWarning about imp module
+* PR #3241: Fix #3225.  Normalize 0nd array to scalar in typing of indexing code.
+* PR #3256: Fix #3251: Move imports of ABCs to collections.abc for Python >= 3.3
+* PR #3292: Fix issue3279.
+* PR #3302: Fix error due to mismatching dtype
+
+Documentation Updates:
+
+* PR #3104: Workaround for #3098 (test_optional_unpack Heisenbug)
+* PR #3132: Adds an ~5 minute guide to Numba.
+* PR #3194: Fix docs RE: np.random generator fork/thread safety
+* PR #3242: Page with Numba talks and tutorial links
+* PR #3258: Allow users to choose the type of issue they are reporting.
+* PR #3260: Fixed broken link
+* PR #3266: Fix cuda pointer ownership problem with user/externally allocated pointer
+* PR #3269: Tweak typography with CSS
+* PR #3270: Update FAQ for functions passed as arguments
+* PR #3274: Update installation instructions
+* PR #3275: Note pyobject and voidptr are types in docs
+* PR #3288: Do not need to call parallel optimizations "experimental" anymore
+
+Contributors:
+
+* Alex Ford
+* Anthony Bisulco
+* Ehsan Totoni (core dev)
+* Leonard Lausen
+* Matthew Petroff
+* Nick White
+* Ray Donnelly
+* rjenc29
+* Siu Kwan Lam (core dev)
+* Stan Seibert (core dev)
+* Stuart Archibald (core dev)
+* Stuart Reynolds
+* Todd A. Anderson (core dev)
+
+
 Version 0.39.0
 --------------
 
