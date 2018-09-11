@@ -16,7 +16,6 @@ jobs:
 
   steps:
     - task: CondaEnvironment@1
-      updateConda: yes
 
     - script: |
         buildscripts\\incremental\\setup_conda_environment.cmd
