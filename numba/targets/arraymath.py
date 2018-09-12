@@ -653,46 +653,59 @@ if numpy_version >= (1, 10):
 
         return nanprod_impl
 
-@register_jitable
-def _replace_nan(a, nan_replacement_value):
-    out = np.empty_like(a)
-
-    for index, val in np.ndenumerate(a):
-        if np.isnan(val):
-            out[index] = nan_replacement_value
+def get_return_type(a):
+    if isinstance(a.dtype, types.Integer):
+        a_dt = as_dtype(a.dtype)
+        if np.iinfo(a_dt).min == 0:
+            retty = types.uintp
         else:
-            out[index] = val
-
-    return out
-
-def get_typed_value(arr, val):
-    if isinstance(arr.dtype, types.Integer):
+            retty = types.intp
+    elif isinstance(a.dtype, types.Boolean):
         retty = types.intp
     else:
-        retty = arr.dtype
-
-    return retty(val)
+        retty = a.dtype
+    return retty
 
 if numpy_version >= (1, 12):
     @overload(np.nancumprod)
     def np_nancumprod(a):
-        one = get_typed_value(a, 1)
+        if not isinstance(a, types.Array):
+            return
 
-        def nanprod_impl(arr):
-            dense_arr = _replace_nan(arr, one)
-            return np.cumprod(dense_arr)
+        retty = get_return_type(a)
+        is_nan = get_isnan(retty)
+        one = retty(1)
 
-        return nanprod_impl
+        def nancumprod_impl(arr):
+            out = np.empty(arr.size, retty)
+            c = one
+            for idx, v in enumerate(arr.flat):
+                if ~is_nan(v):
+                    c *= v
+                out[idx] = c
+            return out
+
+        return nancumprod_impl
 
     @overload(np.nancumsum)
     def np_nancumsum(a):
-        zero = get_typed_value(a, 0)
+        if not isinstance(a, types.Array):
+            return
 
-        def nanprod_impl(arr):
-            dense_arr = _replace_nan(arr, zero)
-            return np.cumsum(dense_arr)
+        retty = get_return_type(a)
+        is_nan = get_isnan(retty)
+        zero = retty(0)
 
-        return nanprod_impl
+        def nancumsum_impl(arr):
+            out = np.empty(arr.size, retty)
+            c = zero
+            for idx, v in enumerate(arr.flat):
+                if ~is_nan(v):
+                    c += v
+                out[idx] = c
+            return out
+
+        return nancumsum_impl
 
 #----------------------------------------------------------------------------
 # Median and partitioning
