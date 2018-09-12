@@ -9,7 +9,11 @@ jobs:
   strategy:
     maxParallel: 11
     matrix:
-      py37_np15_doc:
+      py27_np15:
+        PYTHON: '2.7'
+        NUMPY: '1.15' 
+        CONDA_ENV: 'testenv'
+      py37_np15:
         PYTHON: '3.7'
         NUMPY: '1.15' 
         CONDA_ENV: 'testenv'

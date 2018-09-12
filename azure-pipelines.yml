@@ -1,13 +1,13 @@
 jobs:
-#- template: azure-macos.yml
-#  parameters:
-#    name: macOS
-#    vmImage: xcode9-macos10.13
+- template: azure-macos.yml
+  parameters:
+    name: macOS
+    vmImage: xcode9-macos10.13
 
-#- template: azure-linux.yml
-#  parameters:
-#    name: Linux
-#    vmImage: ubuntu-1604
+- template: azure-linux.yml
+  parameters:
+    name: Linux
+    vmImage: ubuntu-1604
 
 - template: azure-windows.yml
   parameters:
