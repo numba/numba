@@ -1,17 +1,17 @@
 jobs:
-- template: azure-macos.yml
+- template: buildscripts/azure/azure-macos.yml
   parameters:
     name: macOS
     vmImage: xcode9-macos10.13
-- template: azure-linux.yml
+- template: buildscripts/azure/azure-linux.yml
   parameters:
     name: Linux
     vmImage: ubuntu-16.04
-- template: azure-windows.yml
+- template: buildscripts/azure/azure-windows.yml
   parameters:
     name: Windows
     vmImage: vs2017-win2017
-- template: azure-windows-py27.yml
+- template: buildscripts/azure/azure-windows-py27.yml
   parameters:
     name: WindowsPy27
     vmImage: vs2017-win2017
