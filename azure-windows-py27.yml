@@ -28,6 +28,7 @@ jobs:
 
     - script: |
         buildscripts\\incremental\\setup_conda_environment.cmd
+        conda remove -y tbb tbb-devel
       displayName: 'Before Install'
 
     - script: |
@@ -36,7 +37,6 @@ jobs:
 
     - script: |
         call activate %CONDA_ENV%
-        conda remove -y tbb tbb-devel
         python -m numba.tests.test_runtests
         python runtests.py -m 2 -b -- numba.tests
       displayName: 'Test'
