@@ -28,6 +28,7 @@ jobs:
 
     - script: |
         buildscripts\\incremental\\setup_conda_environment.cmd
+        call activate %CONDA_ENV%
         conda remove -y tbb tbb-devel
       displayName: 'Before Install'
 
