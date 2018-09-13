@@ -30,6 +30,8 @@ jobs:
 
     - script: |
         call activate %CONDA_ENV%
+        # One of the tbb tests is failing on Azure.  Removing tbb from testing
+        # until we can figure out why
         conda remove -y tbb tbb-devel
         python -m numba.tests.test_runtests
         python runtests.py -m 2 -b -- numba.tests

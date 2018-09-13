@@ -1,4 +1,7 @@
 jobs:
+# Mac and Linux could potentially use the same template
+# except it isn't clear how to use a different build matrix
+# for each, so for now they are separate
 - template: buildscripts/azure/azure-macos.yml
   parameters:
     name: macOS
@@ -7,6 +10,10 @@ jobs:
   parameters:
     name: Linux
     vmImage: ubuntu-16.04
+
+# Windows Python 2.7 needs VC 9.0 installed, and not sure
+# how to make that a conditional task, so for now these are
+# separate templates as well
 - template: buildscripts/azure/azure-windows.yml
   parameters:
     name: Windows
