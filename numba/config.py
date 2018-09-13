@@ -302,10 +302,18 @@ class _EnvReloader(object):
         NUMBA_NUM_THREADS = _readenv("NUMBA_NUM_THREADS", int,
                                      NUMBA_DEFAULT_NUM_THREADS)
 
+        # Profiling support
+
+        # Indicates if a profiler detected. Only VTune can be detected for now
+        RUNNING_UNDER_PROFILER = 'VS_PROFILER' in os.environ
+
+        # Enables jit events in LLVM in order to support profiling of dynamic code
+        ENABLE_PROFILING = _readenv("NUMBA_ENABLE_PROFILING", int, int(RUNNING_UNDER_PROFILER))
+
         # Debug Info
 
         # The default value for the `debug` flag
-        DEBUGINFO_DEFAULT = _readenv("NUMBA_DEBUGINFO", int, 0)
+        DEBUGINFO_DEFAULT = _readenv("NUMBA_DEBUGINFO", int, ENABLE_PROFILING)
         CUDA_DEBUGINFO_DEFAULT = _readenv("NUMBA_CUDA_DEBUGINFO", int, 0)
 
         # Inject the configuration values into the module globals
