@@ -926,6 +926,29 @@ def _partition_in_place(temp_arry, kth):
         _select(temp_arry, kth, low, high)
 
 
+@register_jitable
+def np_partition_impl_inner(a, kth_array):
+    out = np.empty_like(a)
+
+    idx = np.ndindex(a.shape[:-1])
+    for s in idx:
+        data = a[s].copy()
+        mask = np.isnan(data)
+
+        dense = data[~mask]
+        nans = data[mask]
+
+        for kth in kth_array:
+            if kth < len(dense):
+                _partition_in_place(dense, kth)  # TODO: pass last k in as lower bound?
+
+        out[s] = np.hstack((dense, nans))
+
+    return out
+
+
+
+
 @overload(np.partition)
 def np_partition(a, kth):
 
@@ -946,24 +969,26 @@ def np_partition(a, kth):
 
         # flat of axis is None
 
+    if not isinstance(kth, (types.Array, types.Sequence)):
+        if not isinstance(kth, types.Integer):
+            raise TypeError('Partition index must be integer')
+
     def np_partition_impl(a, kth):
+        kth_array = _asarray(kth)
 
-        out = np.empty_like(a)
+        # require all kth's to be in (-a.shape[-1], a.shape[-1])
+        for k in kth_array:
+            if not abs(k) < a.shape[-1]:
+                raise ValueError("kth out of bounds")
 
-        idx = np.ndindex(a.shape[:-1])
-        for s in idx:
-            data = a[s].copy()
-            mask = np.isnan(data)
+        # switch any negative kth's to equivalent positive
+        condition = kth_array >= 0
+        kth_array = np.where(condition, kth_array, a.shape[-1] + kth_array)
 
-            dense = data[~mask]
-            nans = data[mask]
+        # get sorted unique kth's
+        kth_array = np.unique(kth_array)
 
-            if kth < len(dense):
-                _partition_in_place(dense, kth)
-
-            out[s] = np.hstack((dense, nans))
-
-        return out
+        return np_partition_impl_inner(a, kth_array)
 
     return np_partition_impl
 

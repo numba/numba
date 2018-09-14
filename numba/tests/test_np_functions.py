@@ -777,18 +777,48 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         for j in range(10, 30):
             for i in range(1, j - 2):
-                for func in [cfunc]:
-                    d = np.arange(j)
-                    np.random.shuffle(d)
-                    d = d % np.random.randint(2, 30)
-                    idx = np.random.randint(d.size)
-                    for kth in [0, idx, i, i + 1]:
-                        tgt = np.sort(d)[kth]
-                        print(d, kth)
-                        self.assertPreciseEqual(func(d, kth)[kth], tgt)
+                d = np.arange(j)
+                np.random.shuffle(d)
+                d = d % np.random.randint(2, 30)
+                idx = np.random.randint(d.size)
+                kth = [0, idx, i, i + 1, -idx, -i]  # include some negative kth's
+                tgt = np.sort(d)[kth]
+                self.assertPreciseEqual(cfunc(d, kth)[kth], tgt)
 
+    def test_partition_exception_out_of_range(self):
+        pyfunc = partition
+        cfunc = jit(nopython=True)(pyfunc)
 
+        # Exceptions leak references
+        self.disable_leak_check()
 
+        # Test out of range values in kth raise an error
+        a = np.arange(10)
+
+        def _check(a, kth):
+            with self.assertRaises(ValueError) as e:
+                cfunc(a, kth)
+            assert str(e.exception) == "kth out of bounds"
+
+        _check(a, 10)
+        _check(a, -11)
+        _check(a, (3, 30))
+
+    def test_partition_exception_integer(self):
+        pyfunc = partition
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        a = np.arange(10)
+
+        def _check(a, kth):
+            with self.assertTypingError() as raises:
+                cfunc(a, kth)
+            self.assertIn("Partition index must be integer", str(raises.exception))
+
+        _check(a, 9.0)
 
     def test_partition_basic_1d_no_axis(self):
         pyfunc = partition
