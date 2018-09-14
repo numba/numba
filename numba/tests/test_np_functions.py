@@ -804,7 +804,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check(a, -11)
         _check(a, (3, 30))
 
-    def test_partition_exception_integer(self):
+    def test_partition_exception_non_integer_kth(self):
         pyfunc = partition
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -819,78 +819,186 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertIn("Partition index must be integer", str(raises.exception))
 
         _check(a, 9.0)
+        #_check(a, (3.3, 4.4))  # TODO: how to check for this?
 
-    def test_partition_basic_1d_no_axis(self):
+    def test_partition_empty_array(self):
+        pyfunc = partition
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # check axis handling for multidimensional empty arrays
+        a = np.array([])
+        a.shape = (3, 2, 1, 0)
+
+        expected = pyfunc(a, 0)
+        got = cfunc(a, 0)
+
+        self.assertPreciseEqual(expected, got)
+
+    def test_partition_basic(self):
+        pyfunc = partition
+        cfunc = jit(nopython=True)(pyfunc)
+
+        d = np.array([])
+        got = cfunc(d, 0)
+        self.assertPreciseEqual(d, got)
+
+        d = np.ones(1)
+        got = cfunc(d, 0)
+        self.assertPreciseEqual(d, got)
+
+        # kth not modified
+        kth = np.array([30, 15, 5])
+        okth = kth.copy()
+        cfunc(np.arange(40), kth)
+        self.assertPreciseEqual(kth, okth)
+
+        for r in ([2, 1], [1, 2], [1, 1]):
+            d = np.array(r)
+            tgt = np.sort(d)
+            self.assertPreciseEqual(cfunc(d, 0)[0], tgt[0])
+            self.assertPreciseEqual(cfunc(d, 1)[1], tgt[1])
+
+        for r in ([3, 2, 1], [1, 2, 3], [2, 1, 3], [2, 3, 1],
+                  [1, 1, 1], [1, 2, 2], [2, 2, 1], [1, 2, 1]):
+            d = np.array(r)
+            tgt = np.sort(d)
+            self.assertPreciseEqual(cfunc(d, 0)[0], tgt[0])
+            self.assertPreciseEqual(cfunc(d, 1)[1], tgt[1])
+            self.assertPreciseEqual(cfunc(d, 2)[2], tgt[2])
+
+        d = np.ones(50)
+        self.assertPreciseEqual(cfunc(d, 0), d)
+
+        # sorted
+        d = np.arange(49)
+        self.assertEqual(cfunc(d, 5)[5], 5)
+        self.assertEqual(cfunc(d, 15)[15], 15)
+
+        # rsorted
+        d = np.arange(47)[::-1]
+        self.assertEqual(cfunc(d, 6)[6], 6)
+        self.assertEqual(cfunc(d, 16)[16], 16)
+        self.assertPreciseEqual(cfunc(d, -6), cfunc(d, 41))
+        self.assertPreciseEqual(cfunc(d, -16), cfunc(d, 31))
+
+        # median of 3 killer, O(n^2) on pure median 3 pivot quickselect
+        # exercises the median of median of 5 code used to keep O(n)
+        d = np.arange(1000000)
+        x = np.roll(d, d.size // 2)
+        mid = x.size // 2 + 1
+        self.assertEqual(cfunc(x, mid)[mid], mid)
+        d = np.arange(1000001)
+        x = np.roll(d, d.size // 2 + 1)
+        mid = x.size // 2 + 1
+        self.assertEqual(cfunc(x, mid)[mid], mid)
+
+        # max
+        d = np.ones(10)
+        d[1] = 4
+        self.assertEqual(cfunc(d, (2, -1))[-1], 4)
+        self.assertEqual(cfunc(d, (2, -1))[2], 1)
+        d[1] = np.nan
+        assert np.isnan(cfunc(d, (2, -1))[-1])
+
+        # equal elements
+        d = np.arange(47) % 7
+        tgt = np.sort(np.arange(47) % 7)
+        np.random.shuffle(d)
+        for i in range(d.size):
+            self.assertEqual(cfunc(d, i)[i], tgt[i])
+
+        d = np.array([0, 1, 2, 3, 4, 5, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+                      7, 7, 7, 7, 7, 9])
+        kth = [0, 3, 19, 20]
+        self.assertEqual(tuple(cfunc(d, kth)[kth]), (0, 3, 7, 7))
+
+        td = [(dt, s) for dt in [np.int32, np.float32] for s in (9, 16)]
+        for dt, s in td:
+            d = np.arange(s, dtype=dt)
+            np.random.shuffle(d)
+            d1 = np.tile(np.arange(s, dtype=dt), (4, 1))
+            map(np.random.shuffle, d1)
+            for i in range(d.size):
+                p = cfunc(d, i)
+                self.assertEqual(p[i], i)
+                # all before are smaller
+                np.testing.assert_array_less(p[:i], p[i])
+                # all after are larger
+                np.testing.assert_array_less(p[i], p[i + 1:])
+
+    def assert_partitioned(self, d, kth):
+        prev = 0
+        for k in np.sort(kth):
+            np.testing.assert_array_less(d[prev:k], d[k], err_msg='kth %d' % k)
+            assert (d[k:] >= d[k]).all(), "kth %d, %r not greater equal %d" % (k, d[k:], d[k])
+            prev = k + 1
+
+    def test_partition_iterative(self):
+        pyfunc = partition
+        cfunc = jit(nopython=True)(pyfunc)
+
+        d = np.array([3, 4, 2, 1])
+        p = cfunc(d, (0, 3))
+        self.assert_partitioned(p, (0, 3))
+        self.assert_partitioned(d[np.argpartition(d, (0, 3))], (0, 3))
+
+        self.assertPreciseEqual(p, cfunc(d, (-3, -1)))
+
+        d = np.arange(17)
+        np.random.shuffle(d)
+        self.assertPreciseEqual(np.arange(17), cfunc(d, list(range(d.size))))
+
+        # test unsorted kth
+        d = np.arange(17)
+        np.random.shuffle(d)
+        keys = np.array([1, 3, 8, -2])
+        np.random.shuffle(d)
+        p = cfunc(d, keys)
+        self.assert_partitioned(p, keys)
+        np.random.shuffle(keys)
+        self.assertPreciseEqual(cfunc(d, keys), p)
+
+        # equal kth
+        d = np.arange(20)[::-1]
+        self.assert_partitioned(cfunc(d, [5] * 4), [5])
+        self.assert_partitioned(cfunc(d, [5] * 4 + [6, 13]), [5] * 4 + [6, 13])
+
+    def test_partition_multi_dim(self):
         pyfunc = partition
         cfunc = jit(nopython=True)(pyfunc)
 
         def check(a, kth):
-            print(a, kth)
-
             expected = pyfunc(a, kth)
             got = cfunc(a, kth)
-
-            # print(expected)
-            # print(got)
-
             assert expected.shape == got.shape
             assert expected.dtype == got.dtype
+            self.assertPreciseEqual(expected[:, :, kth], got[:, :, kth])
 
-            a_sorted = np.sort(a)
-            if np.isnan(a_sorted.flat[kth]):
-                assert np.isnan(got.flat[kth])
-            else:
-                print(a_sorted.flatten())
-                print(got.flatten())
-                assert a_sorted.flat[kth] == got.flat[kth]
+        def a_variations(a):
+            yield a
+            yield a.T
+            yield np.asfortranarray(a)
+            yield np.full_like(a, fill_value=np.nan)
+            yield np.full_like(a, fill_value=np.inf)
 
-            # if np.isnan(expected[kth]):
-            #     assert np.isnan(got[kth])
-            # else:
-            #     assert expected[kth] == got[kth]
-            #     sorted_a = np.sort(a.flat)
-            #     assert sorted_a.flat[kth] == expected.flat[kth]
-            #     assert sorted_a.flat[kth] == got.flat[kth]
-            #     assert np.all(got.flat[:kth] <= got.flat[kth])
-
-        def a_variations_1d(a):
-            # Sorted, reversed, random, many duplicates, many NaNs, all NaNs
-            yield a
-            a = a[::-1].copy()
-            yield a
-            np.random.shuffle(a)
-            yield a
-            a[a % 4 >= 1] = 3.5
-            yield a
-            a[a % 4 >= 2] = np.nan
-            yield a
-            a[-1] = -np.inf
-            yield a
-            a[:] = np.nan
-            yield a
-
-        def k_variations(n):
-            return range(1, n)  # why does 0 fail?  what about negative k?
-
-        n = 10
-        a = np.arange(n, dtype=np.float64)
-        for a in a_variations_1d(a):
-            for k in k_variations(n):
-                check(a, k)
-
-        n = 48
-        a = np.linspace(1, 10, n)
+        a = np.linspace(1, 10, 48)
         a[4:7] = np.nan
         a[8] = -np.inf
         a[9] = np.inf
         a = a.reshape((4, 3, 4))
-        for k in 1, 2, 3:
-            check(a, k)
-            check(a.T, k)
-            check(np.asfortranarray(a), k)
-            check(a[::-1], k)
 
+        for arr in a_variations(a):
+            for k in range(-3, 3):
+                check(arr, k)
 
+    def test_mega(self):
+        self.test_partition_multi_dim()
+        self.test_partition_basic()
+        self.test_partition_empty_array()
+        self.test_partition_exception_non_integer_kth()
+        self.test_partition_exception_out_of_range()
+        self.test_partition_fuzz()
+        self.test_partition_iterative()
 
 
 class TestNPMachineParameters(TestCase):
