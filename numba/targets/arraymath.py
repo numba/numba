@@ -911,20 +911,21 @@ if numpy_version >= (1, 9):
 
         return nanmedian_impl
 
-
 @register_jitable
-def _partition_in_place(temp_arry, kth):
+def _partition_in_place(temp_arry, kth, low=0):
     """
-    Updates temp_arry in-place
+    Partitions temp_arry[low:] in-place such that the kth
+    item is at the index location it would be if temp_arry
+    were sorted.
+
+    Assumes temp_arry has no NaNs.
     """
-    low = 0
     high = len(temp_arry) - 1
 
     if kth and kth & 1 == 0:
          _select_two(temp_arry, kth - 1, low, high)
     else:
         _select(temp_arry, kth, low, high)
-
 
 @register_jitable
 def np_partition_impl_inner(a, kth_array):
@@ -938,9 +939,11 @@ def np_partition_impl_inner(a, kth_array):
         dense = data[~mask]
         nans = data[mask]
 
+        low = 0
         for kth in kth_array:
             if kth < len(dense):
-                _partition_in_place(dense, kth)  # TODO: pass last k in as lower bound?
+                _partition_in_place(dense, kth, low)
+                low = kth  # narrow span of subsequent partition
 
         out[s] = np.hstack((dense, nans))
 
@@ -948,11 +951,22 @@ def np_partition_impl_inner(a, kth_array):
 
 @register_jitable
 def valid_kths(a, kth):
+    """
+    Returns a sorted, unique array of kth values which serve
+    as indexers for partitioning the input array a.
+
+    If the absolute value of any of the provided values
+    is greater than a.shape[-1], then an exception is raised.
+
+    Values less than 0 then are transformed to equivalent
+    positive index values.
+    """
     kth_array = _asarray(kth)
-    out = np.empty_like(kth_array)
 
     if np.any(np.abs(kth_array) >= a.shape[-1]):
         raise ValueError("kth out of bounds")
+
+    out = np.empty_like(kth_array)
 
     for index, val in np.ndenumerate(kth_array):
         if val < 0:
@@ -961,7 +975,6 @@ def valid_kths(a, kth):
             out[index] = val
 
     return np.unique(out)
-
 
 @overload(np.partition)
 def np_partition(a, kth):

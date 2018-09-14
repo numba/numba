@@ -970,8 +970,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def check(a, kth):
             expected = pyfunc(a, kth)
             got = cfunc(a, kth)
-            assert expected.shape == got.shape
-            assert expected.dtype == got.dtype
             self.assertPreciseEqual(expected[:, :, kth], got[:, :, kth])
 
         def a_variations(a):
@@ -991,14 +989,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for k in range(-3, 3):
                 check(arr, k)
 
-    def test_mega(self):
-        self.test_partition_multi_dim()
-        self.test_partition_basic()
-        self.test_partition_empty_array()
-        self.test_partition_exception_non_integer_kth()
-        self.test_partition_exception_out_of_range()
-        self.test_partition_fuzz()
-        self.test_partition_iterative()
+    # def test_mega(self):
+    #     self.test_partition_multi_dim()
+    #     self.test_partition_basic()
+    #     self.test_partition_empty_array()
+    #     self.test_partition_exception_non_integer_kth()
+    #     self.test_partition_exception_out_of_range()
+    #     self.test_partition_fuzz()
+    #     self.test_partition_iterative()
 
 
 class TestNPMachineParameters(TestCase):
