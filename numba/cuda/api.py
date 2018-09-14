@@ -162,7 +162,7 @@ def mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0,
 
 @contextlib.contextmanager
 @require_context
-def open_ipc_array(handle, shape, dtype, strides=None):
+def open_ipc_array(handle, shape, dtype, strides=None, offset=0):
     """
     A context manager that opens a IPC *handle* (*CUipcMemHandle*) that is
     represented as a sequence of bytes (e.g. *bytes*, tuple of int)
@@ -180,7 +180,7 @@ def open_ipc_array(handle, shape, dtype, strides=None):
     # manually recreate the IPC mem handle
     handle = driver.drvapi.cu_ipc_mem_handle(*handle)
     # use *IpcHandle* to open the IPC memory
-    ipchandle = driver.IpcHandle(None, handle, size)
+    ipchandle = driver.IpcHandle(None, handle, size, offset=offset)
     yield ipchandle.open_array(current_context(), shape=shape,
                                strides=strides, dtype=dtype)
     ipchandle.close()
