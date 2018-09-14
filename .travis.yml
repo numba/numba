@@ -23,6 +23,11 @@ matrix:
         - env: PYTHON=2.7 NUMPY=1.11 CONDA_ENV=travisci BITS32=yes
         - env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci BITS32=yes
 
+branches:
+    only:
+        - master
+        - travis
+
 before_install:
     - if [ "$(uname)" == "Linux" ]; then sudo apt-get install libc6-dev-i386; fi
     - buildscripts/incremental/install_miniconda.sh

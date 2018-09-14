@@ -912,22 +912,6 @@ if numpy_version >= (1, 9):
         return nanmedian_impl
 
 @register_jitable
-def _partition_in_place(temp_arry, kth, low=0):
-    """
-    Partitions temp_arry[low:] in-place such that the kth
-    item is at the index location it would be if temp_arry
-    were sorted.
-
-    Assumes temp_arry has no NaNs.
-    """
-    high = len(temp_arry) - 1
-
-    if kth and kth & 1 == 0:
-         _select_two(temp_arry, kth - 1, low, high)
-    else:
-        _select(temp_arry, kth, low, high)
-
-@register_jitable
 def np_partition_impl_inner(a, kth_array):
     out = np.empty_like(a)
 
@@ -940,9 +924,10 @@ def np_partition_impl_inner(a, kth_array):
         nans = data[mask]
 
         low = 0
+        high = len(dense) - 1
         for kth in kth_array:
             if kth < len(dense):
-                _partition_in_place(dense, kth, low)
+                _select(dense, kth, low, high)
                 low = kth  # narrow span of subsequent partition
 
         out[s] = np.hstack((dense, nans))
@@ -953,7 +938,7 @@ def np_partition_impl_inner(a, kth_array):
 def valid_kths(a, kth):
     """
     Returns a sorted, unique array of kth values which serve
-    as indexers for partitioning the input array a.
+    as indexers for partitioning the input array, a.
 
     If the absolute value of any of the provided values
     is greater than a.shape[-1], then an exception is raised.
@@ -979,7 +964,10 @@ def valid_kths(a, kth):
 @overload(np.partition)
 def np_partition(a, kth):
 
-    if not isinstance(kth, (types.Array, types.Sequence)):
+    if isinstance(kth, (types.Array, types.Sequence)):
+        if not isinstance(kth.dtype, types.Integer):
+            raise TypeError('Partition index must be integer')
+    else:
         if not isinstance(kth, types.Integer):
             raise TypeError('Partition index must be integer')
 
@@ -987,7 +975,8 @@ def np_partition(a, kth):
         if len(a.flat) == 0:
             return a.copy()
         else:
-            return np_partition_impl_inner(a, valid_kths(a, kth))
+            kth_array = valid_kths(a, kth)
+            return np_partition_impl_inner(a, kth_array)
 
     return np_partition_impl
 

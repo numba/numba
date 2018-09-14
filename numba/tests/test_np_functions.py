@@ -819,7 +819,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertIn("Partition index must be integer", str(raises.exception))
 
         _check(a, 9.0)
-        #_check(a, (3.3, 4.4))  # TODO: how to check for this?
+        _check(a, (3.3, 4.4))
 
     def test_partition_empty_array(self):
         pyfunc = partition
@@ -988,15 +988,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for arr in a_variations(a):
             for k in range(-3, 3):
                 check(arr, k)
-
-    # def test_mega(self):
-    #     self.test_partition_multi_dim()
-    #     self.test_partition_basic()
-    #     self.test_partition_empty_array()
-    #     self.test_partition_exception_non_integer_kth()
-    #     self.test_partition_exception_out_of_range()
-    #     self.test_partition_fuzz()
-    #     self.test_partition_iterative()
 
 
 class TestNPMachineParameters(TestCase):
